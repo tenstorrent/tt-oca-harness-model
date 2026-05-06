@@ -1,0 +1,52 @@
+# Toolchain
+RISCV_PREFIX ?= riscv64-unknown-elf-
+CC = $(RISCV_PREFIX)gcc
+OBJCOPY = $(RISCV_PREFIX)objcopy
+OBJDUMP = $(RISCV_PREFIX)objdump
+
+# Architecture
+#ARCH = rv32i_zicsr
+ARCH = rv32i
+ABI = ilp32
+
+# Compiler flags
+CFLAGS = -march=$(ARCH) -mabi=$(ABI) -mno-relax
+CFLAGS += -O0 -g
+CFLAGS += -Wall -Wextra
+CFLAGS += -ffreestanding -nostdlib -nostartfiles
+CFLAGS += $(EXTRA_CFLAGS)
+
+# Linker flags
+LDFLAGS = -march=$(ARCH) -mabi=$(ABI) -mno-relax
+LDFLAGS += -nostdlib -nostartfiles
+LDFLAGS += -T link.ld
+LDFLAGS += -Wl,--no-relax,--print-memory-usage
+
+# VP settings
+VP = ../../../vp/build/bin/sep-vp
+VP_FLAGS = ../../../vp/src/platform/sep/accellera_config.ini
+DEBUG_PORT ?= 5005
+GDB = gdb-multiarch
+
+.PHONY: sim dump debug gdb
+
+
+dump: $(TARGET)
+	$(OBJDUMP) -D $(TARGET) > $(TARGET).dump
+	$(OBJDUMP) -t $(TARGET) > $(TARGET).sym
+
+sim: $(TARGET)
+	$(VP) $(VP_FLAGS) $(TARGET)
+
+debug: $(TARGET)
+	@echo "Starting sep-vp in debug mode on port $(DEBUG_PORT)..."
+	@echo "Connect with GDB using: make gdb"
+	gdb --args $(VP) $(VP_FLAGS) --gdb-tcp-port $(DEBUG_PORT) --gdb $(TARGET)
+
+gdb: $(TARGET)
+	@echo "Connecting to sep-vp on port $(DEBUG_PORT)..."
+	$(GDB) $(TARGET) \
+		-ex "target remote localhost:$(DEBUG_PORT)" \
+		-ex "set architecture riscv:rv32"
+
+

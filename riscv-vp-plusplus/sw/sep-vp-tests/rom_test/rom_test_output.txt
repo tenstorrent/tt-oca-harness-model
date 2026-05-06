@@ -1,0 +1,23 @@
+
+        SystemC 3.0.1-Accellera --- Dec  3 2025 19:53:52
+        Copyright (c) 1996-2024 by all Contributors,
+        ALL RIGHTS RESERVED
+[0 s] [INFO 2] [GPIO] [gpio::gpio_ip] - GPIO single-pin module constructor - is_strap=0
+
+[0 s] [DEBUG 3] [GPIO] [gpio::register_callbacks] - Registered callbacks - DATA_CTRL offset=0 (0x0), CONTROL offset=4 (0x10)
+
+[0 s] [INFO 2] [GPIO] [gpio::gpio_ip] - GPIO single-pin module constructor completed
+
+[DEBUG] GPIO module instantiated with loopback
+[0 s] [trace 3] [hmac::hmac_ip] - Entered hmac_ip
+[0 s] [INFO 1] [hmac::hmac_ip] - Initializing HMAC IP with memory_size=8192
+
+[0 s] [INFO 1] [hmac::hmac_ip] - Registers initialized to reset values
+
+[0 s] [INFO 1] [hmac::hmac_ip] - Interrupt and alert ports initialized
+
+[0 s] [INFO 1] [hmac::hmac_ip] - HMAC IP initialization complete (log_verbosity=2)
+
+[DEBUG] GPIO loopback bridge connected
+[0 s] [DEBUG 2] [hmac.update_interrupt_outputs_on_reset::update_interrupt_outputs] - Updating interrupts: done=0 fifo_empty=0 err=0
+

@@ -1,0 +1,26 @@
+{
+  "//": "==========================================================================",
+  "//": "SPI Controller Default Configuration",
+  "//": "==========================================================================",
+  "//": "This configuration file defines default parameters for the SPI Controller IP.",
+  "//": "Values match the datasheet specifications.",
+  "//": "",
+  "//": "Usage:",
+  "//": "  ./bin/out config/spi_controller_default.json",
+  "//": "",
+  "//": "Hierarchical Path Format:",
+  "//": "  testbench.spi_controller_dut.<parameter_name>",
+  "//": "==========================================================================",
+  "testbench": {
+    "spi_controller_dut": {
+      "NumCS": 1,
+      "TxDepth": 72,
+      "RxDepth": 64,
+      "ByteOrder": true,
+      "CmdDepth": 4,
+      "ClkPeriodNs": 10.0,
+      "TimeKeeperQuantumNs": 1000.0,
+      "log_verbosity": 1
+    }
+  }
+}

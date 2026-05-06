@@ -1,0 +1,29 @@
+{
+    "xlen"       : 32,
+    "nmi_vec"    : "0x01000e00",
+    "enable_zfh" : "true",
+    "enable_zba" : "true",
+    "enable_zbb" : "true",
+    "abi_names"  : "true",
+    "enable_A"   : "true",
+    "enable_B"   : "true",
+    "enable_C"   : "true",
+    "enable_D"   : "true",
+    "enable_F"   : "true",
+    "enable_I"   : "true",
+    "enable_M"   : "true",
+    "enable_S"   : "true",
+    "enable_U"   : "true",
+    "enable_V"   : "true",
+
+    "csr" : {
+        "mrac" : {
+            "number" : "0x7c0",
+            "exists" : "true",
+            "reset"  : "0x0",
+            "mask"   : "0xffffffff",
+            "comment": "VeeR EL2 PMA control — stub, writes accepted and ignored in VP"
+        }
+    }
+}
+~           

@@ -1,0 +1,22 @@
+{
+  "//": "==========================================================================",
+  "//": "SPI Controller Large FIFO Configuration",
+  "//": "==========================================================================",
+  "//": "Configuration with larger FIFOs for high-throughput scenarios.",
+  "//": "Useful for testing large data transfers and FIFO stall conditions.",
+  "//": "",
+  "//": "Usage:",
+  "//": "  ./bin/out config/spi_controller_large_fifo.json",
+  "//": "==========================================================================",
+  "testbench": {
+    "spi_controller_dut": {
+      "NumCS": 1,
+      "TxDepth": 128,
+      "RxDepth": 128,
+      "ByteOrder": true,
+      "CmdDepth": 8,
+      "ClkPeriodNs": 10.0,
+      "TimeKeeperQuantumNs": 1000.0
+    }
+  }
+}

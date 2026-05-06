@@ -1,0 +1,3787 @@
+<model format="7">
+  <creationVersion>2024.03</creationVersion>
+  <creationTimestamp>2026-02-03 17:33:17.770 UTC</creationTimestamp>
+  <name>pka_model</name>
+  <vsSolutionUUID>1214CBBE-3046-4D7A-A1DB-F401D4C7540B</vsSolutionUUID>
+  <vsProjectUUID>90FB3282-5873-4659-894B-C0983B713835</vsProjectUUID>
+  <testVsProjectUUID>2B4745C5-1D76-4C7D-B2BD-2EE77FBC5704</testVsProjectUUID>
+  <baseClass>sc_core::sc_module</baseClass>
+  <companyName>example.org</companyName>
+  <libraryName>mylibrary</libraryName>
+  <version>1.0</version>
+  <documentation>This empty model example contains no predefined interfaces or registers.
+It allows full flexibility in defining arbitrary components as it generates a minimal SystemC skeleton.</documentation>
+  <includes/>
+  <templateSearchPaths>
+    <path>@BASE_DIR@/Templates</path>
+  </templateSearchPaths>
+  <librarySearchPaths>
+    <path>${SNPS_VP_IPDIR}/TLMModelingLibrary/library.tlmclib</path>
+  </librarySearchPaths>
+  <baseHeader>SystemC/include/@MODEL_NAME@Base.h</baseHeader>
+  <derivedHeader>SystemC/include/@MODEL_NAME@.h</derivedHeader>
+  <derivedSource>SystemC/src/@MODEL_NAME@.cc</derivedSource>
+  <pctImportScript>Tool/PCT/@MODEL_NAME@_import.tcl</pctImportScript>
+  <pctUserPreImportScript>Tool/PCT/@MODEL_NAME@_import_user_pre.tcl</pctUserPreImportScript>
+  <pctUserPostImportScript>Tool/PCT/@MODEL_NAME@_import_user_post.tcl</pctUserPostImportScript>
+  <pctCallbackScript>Tool/PCT/@MODEL_NAME@_callback.tcl</pctCallbackScript>
+  <pctBuildScript>Tool/PCT/@MODEL_NAME@_build.tcl</pctBuildScript>
+  <testMakefileLinux>Tests/Unittests/Makefile.@MODEL_NAME@.linux</testMakefileLinux>
+  <testMakefileWindows>Tests/Unittests/Makefile.@MODEL_NAME@.windows</testMakefileWindows>
+  <testMakefileWindowsUser>Tests/Unittests/Makefile.@MODEL_NAME@.windows.user</testMakefileWindowsUser>
+  <testMakefileLinuxUser>Tests/Unittests/Makefile.@MODEL_NAME@.linux.user</testMakefileLinuxUser>
+  <documentationFilename>Documentation/@MODEL_NAME@.xml</documentationFilename>
+  <htmlDocumentationFilename>Documentation/@MODEL_NAME@.html</htmlDocumentationFilename>
+  <cssDocumentationFilename>Documentation/style.css</cssDocumentationFilename>
+  <buildSpecification>
+    <configurations>
+      <configuration>
+        <target>${model.name}</target>
+        <sources>
+          <conditionalString>${model.derived_source_filename}</conditionalString>
+        </sources>
+        <testSources/>
+        <headers>
+          <conditionalString>${model.derived_header_filename}</conditionalString>
+        </headers>
+        <templateInstances/>
+        <defines>
+          <conditionalString>SYNOPSYS_SYSTEMC</conditionalString>
+        </defines>
+        <includePath/>
+        <testIncludePath/>
+        <cxxFlags/>
+        <libraries/>
+        <testLibraries/>
+        <libraryPath/>
+        <testLibraryPath/>
+        <linkFlags/>
+        <testLinkFlags/>
+        <exportSources/>
+        <exportHeaders>
+          <conditionalString>${model.derived_header_filename}</conditionalString>
+        </exportHeaders>
+        <exportDefines/>
+        <exportIncludePath/>
+        <exportCXXFlags/>
+        <exportLibraries>
+          <conditionalString>${model.name}</conditionalString>
+        </exportLibraries>
+        <exportLibraryPath>
+          <conditionalString>${base_dir}/SystemC/${build_configuration.libprefix}-${compiler}/${build_configuration.name}</conditionalString>
+        </exportLibraryPath>
+        <exportLinkFlags/>
+        <incompatibleCompilers/>
+        <testDynamicLibraryPath/>
+        <primitiveChannelPayloadHeaders/>
+        <templateFallbackLibraries/>
+        <localDynamicLibrarySearchPath/>
+        <dynamicLibrarySearchPath/>
+        <componentHelpers/>
+        <packageFiles/>
+        <simulationFiles/>
+        <envVariables/>
+        <pathEnvVariables/>
+        <testEnvVariables/>
+        <infrastructureParameters/>
+        <name>FastBuild</name>
+        <type>DynamicLoadLibrary</type>
+        <conditionalConfigurations/>
+        <strip>false</strip>
+        <debug>false</debug>
+        <optimize>true</optimize>
+        <assertions>false</assertions>
+        <rebuildAllowed>false</rebuildAllowed>
+        <testBuildEnabled>true</testBuildEnabled>
+        <testRunEnabled>false</testRunEnabled>
+        <isDefault>true</isDefault>
+        <isActive>false</isActive>
+        <reuseComponentBuildInTest>true</reuseComponentBuildInTest>
+        <exposeCoverageHelperParameter>true</exposeCoverageHelperParameter>
+        <includeInIPLibrary>true</includeInIPLibrary>
+        <useBuildInnoRuntime>false</useBuildInnoRuntime>
+        <usePackageInnoRuntime>false</usePackageInnoRuntime>
+        <packageHeaders>false</packageHeaders>
+        <derivedBuildSettingsOverrides class="derivedBuildSettingsOverrides">
+          <sources/>
+          <testSources/>
+          <headers/>
+          <templateInstances/>
+          <defines/>
+          <includePath/>
+          <testIncludePath/>
+          <cxxFlags/>
+          <libraries/>
+          <testLibraries/>
+          <libraryPath/>
+          <testLibraryPath/>
+          <linkFlags/>
+          <testLinkFlags/>
+          <exportSources/>
+          <exportHeaders/>
+          <exportDefines/>
+          <exportIncludePath/>
+          <exportCXXFlags/>
+          <exportLibraries/>
+          <exportLibraryPath/>
+          <exportLinkFlags/>
+          <incompatibleCompilers/>
+          <testDynamicLibraryPath/>
+          <primitiveChannelPayloadHeaders/>
+          <templateFallbackLibraries/>
+          <localDynamicLibrarySearchPath/>
+          <dynamicLibrarySearchPath/>
+          <componentHelpers/>
+          <packageFiles/>
+          <simulationFiles/>
+          <envVariables/>
+          <pathEnvVariables/>
+          <testEnvVariables/>
+          <infrastructureParameters/>
+        </derivedBuildSettingsOverrides>
+      </configuration>
+    </configurations>
+    <defaultBuildConfiguration class="configuration" reference="/model/buildSpecification/configurations/configuration"/>
+  </buildSpecification>
+  <stylesheetSearchPaths/>
+  <extraGeneratedFiles/>
+  <parameters>
+    <parameter>
+      <name>F_W_MemoryMix</name>
+      <type>UnsignedInt</type>
+      <defaultValue>0</defaultValue>
+      <documentation>Sets the type of memory used for F/W storage to be pure RAM, pure ROM, or a mixture of RAM and ROM.</documentation>
+    </parameter>
+    <parameter>
+      <name>F_W_RamMemorySize</name>
+      <type>UnsignedInt</type>
+      <defaultValue>11</defaultValue>
+      <documentation>Sets the size of the F/W RAM memory. NOTE: Total F/W memory limited to 4096 32-bit words. If F/W Memory Mix is set for mixed F/W RAM and ROM, must limit both F/W RAM Memory Size and F/W ROM Memory Size each to 2048 words or less.</documentation>
+    </parameter>
+    <parameter>
+      <name>F_W_RomMemorySize</name>
+      <type>UnsignedInt</type>
+      <defaultValue>11</defaultValue>
+      <documentation>Sets the size of the F/W ROM memory. NOTE: Total F/W memory limited to 4096 32-bit words. If F/W Memory Mix is set for mixed F/W RAM and ROM, must limit both F/W RAM Memory Size and F/W ROM Memory Size each to 2048 words or less.</documentation>
+    </parameter>
+    <parameter>
+      <name>EnableBankswitchA</name>
+      <type>Bool</type>
+      <defaultValue>1</defaultValue>
+      <documentation>Enable 1 additional shadow bank on data memory A. NOTE: Data memory A bankswitching must be enabled in order to add the ECC- Shamir and ECC-521 Shamir F/W components.</documentation>
+    </parameter>
+    <parameter>
+      <name>Include_RSA_Functions</name>
+      <type>Bool</type>
+      <defaultValue>0</defaultValue>
+      <documentation>Includes or eliminates RSA F/W functions.</documentation>
+    </parameter>
+  </parameters>
+  <templateParameters/>
+  <constructorParameters/>
+  <interfaces>
+    <interface>
+      <name>p_reset</name>
+      <type>sc_core::sc_in&lt;bool&gt;</type>
+      <protocol>Reset</protocol>
+      <role>slave</role>
+      <category>Reset</category>
+      <attributes>
+        <attribute>
+          <attributeType>ActiveLevel</attributeType>
+          <attributeValue>false</attributeValue>
+        </attribute>
+      </attributes>
+      <protocolEngine class="instance">
+        <modelingObject>reset_slave_engine</modelingObject>
+        <name>dummy</name>
+        <modelingObjectSpecifier vendor="Synopsys" library="Protocols" name="reset_slave_engine" version="1.0"/>
+        <attributes>
+          <instanceAttribute>
+            <name>active_level</name>
+            <parent class="instance" reference="/model/interfaces/interface/protocolEngine"/>
+            <type>bool</type>
+            <kind>ConstAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+        </attributes>
+        <callbacks>
+          <instanceCallback>
+            <name>reset_enter</name>
+            <parent class="instance" reference="/model/interfaces/interface/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>true</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>reset_exit</name>
+            <parent class="instance" reference="/model/interfaces/interface/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>true</visible>
+          </instanceCallback>
+        </callbacks>
+        <behaviors/>
+        <arguments/>
+        <children/>
+        <base>false</base>
+      </protocolEngine>
+      <mockup class="instance">
+        <modelingObject>reset_master_engine</modelingObject>
+        <name>dummy</name>
+        <modelingObjectSpecifier vendor="Synopsys" library="Protocols" name="reset_master_engine" version="1.0"/>
+        <attributes>
+          <instanceAttribute>
+            <name>mode</name>
+            <parent class="instance" reference="/model/interfaces/interface/mockup"/>
+            <type>reset_engine_mode</type>
+            <kind>ConstAttribute</kind>
+            <objectReference></objectReference>
+            <value>DURATION</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>active_level</name>
+            <parent class="instance" reference="/model/interfaces/interface/mockup"/>
+            <type>bool</type>
+            <kind>ConstAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>duration</name>
+            <parent class="instance" reference="/model/interfaces/interface/mockup"/>
+            <type>sc_core::sc_time</type>
+            <kind>ValueAttribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>enabled</name>
+            <parent class="instance" reference="/model/interfaces/interface/mockup"/>
+            <type>bool</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>enable_debug_trigger</name>
+            <parent class="instance" reference="/model/interfaces/interface/mockup"/>
+            <type>bool</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+        </attributes>
+        <callbacks/>
+        <behaviors>
+          <instanceBehavior>
+            <name>start_reset_pulse</name>
+            <parent class="instance" reference="/model/interfaces/interface/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>do_reset_pulse</name>
+            <parent class="instance" reference="/model/interfaces/interface/mockup"/>
+          </instanceBehavior>
+        </behaviors>
+        <arguments/>
+        <children/>
+        <base>false</base>
+      </mockup>
+      <parameters/>
+    </interface>
+    <interface>
+      <name>p_intr</name>
+      <type>sc_core::sc_out&lt;bool&gt;</type>
+      <protocol>Interrupt</protocol>
+      <role>master</role>
+      <attributes>
+        <attribute>
+          <attributeType>ActiveLevel</attributeType>
+          <attributeValue></attributeValue>
+        </attribute>
+      </attributes>
+      <protocolEngine class="instance">
+        <modelingObject>interrupt_master_engine</modelingObject>
+        <name>dummy</name>
+        <modelingObjectSpecifier vendor="Synopsys" library="Protocols" name="interrupt_master_engine" version="1.0"/>
+        <attributes>
+          <instanceAttribute>
+            <name>active_level</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/protocolEngine"/>
+            <type>bool</type>
+            <kind>ConstAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>enable</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/protocolEngine"/>
+            <type>bool</type>
+            <kind>ValueAttribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>decodable</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/protocolEngine"/>
+            <type>bool</type>
+            <kind>ExportAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+        </attributes>
+        <callbacks/>
+        <behaviors/>
+        <arguments/>
+        <children/>
+        <base>false</base>
+      </protocolEngine>
+      <mockup class="instance">
+        <modelingObject>interrupt_slave_engine</modelingObject>
+        <name>dummy</name>
+        <modelingObjectSpecifier vendor="Synopsys" library="Protocols" name="interrupt_slave_engine" version="1.0"/>
+        <attributes>
+          <instanceAttribute>
+            <name>active_level</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/mockup"/>
+            <type>bool</type>
+            <kind>ConstAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>enabled</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/mockup"/>
+            <type>bool</type>
+            <kind>ProtectedValueAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>decodable</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/mockup"/>
+            <type>bool</type>
+            <kind>ExportAttribute</kind>
+            <objectReference></objectReference>
+            <value>true</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+        </attributes>
+        <callbacks>
+          <instanceCallback>
+            <name>interrupt_enter</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>true</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>interrupt_exit</name>
+            <parent class="instance" reference="/model/interfaces/interface[2]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>true</visible>
+          </instanceCallback>
+        </callbacks>
+        <behaviors/>
+        <arguments/>
+        <children/>
+        <base>false</base>
+      </mockup>
+      <parameters/>
+    </interface>
+    <interface>
+      <name>p_mem_socket</name>
+      <type>scml2::ft_target_socket&lt;32&gt;</type>
+      <protocol>TLM2</protocol>
+      <role>target</role>
+      <category>Memory</category>
+      <width>32</width>
+      <attributes>
+        <attribute>
+          <attributeType>ActiveLevel</attributeType>
+          <attributeValue></attributeValue>
+        </attribute>
+      </attributes>
+      <protocolEngine class="instance">
+        <modelingObject>tlm2_ft_target_port_pe</modelingObject>
+        <name>dummy</name>
+        <modelingObjectSpecifier vendor="Synopsys" library="Protocols" name="tlm2_ft_target_port_pe" version="1.0"/>
+        <attributes>
+          <instanceAttribute>
+            <name>abstraction</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>tlm2_ft_mode</type>
+            <kind>ValueAttribute</kind>
+            <objectReference></objectReference>
+            <value>LT</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>intercepts</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>tlm2_target_intercept_base</type>
+            <kind>ValueAttribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity>0</quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>protocol</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>std::string</type>
+            <kind>ProtectedAttribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>read_capacity</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>write_capacity</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>total_capacity</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>rd_cmd_accept_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>rd_data_trigger_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>wr_cmd_accept_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>wr_data_accept_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>wr_rsp_trigger_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>req_accept_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>collect_databeats</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>bool</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>dba_supported</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>bool</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>clock_port</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>sc_core::sc_in&lt;bool&gt;&amp;</type>
+            <kind>Attribute</kind>
+            <objectReference>interface/clock_slave</objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>bus_width</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>unsigned int</type>
+            <kind>ProtectedAttribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>invoke_timing_cbks</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>invoke_behavior_cbks</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>consume_annotated_time</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>bool</type>
+            <kind>ConstAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>preferAbsoluteAddressing</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type>bool</type>
+            <kind>ExportAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>target_locations_override</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <type></type>
+            <kind>AttributeStruct</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity>0</quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+        </attributes>
+        <callbacks>
+          <instanceCallback>
+            <name>b_transport</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>nb_transport_fw</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>transport_dbg</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>get_direct_mem_ptr</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>clock_changed</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_addr_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_last_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_last_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_addr_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_rsp_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_rsp_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_last_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_last_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_addr_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_addr_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+        </callbacks>
+        <behaviors>
+          <instanceBehavior>
+            <name>clock_cycles_to_time</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>get_event_id</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>update_transaction</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>invalidate_direct_mem_ptr</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>nb_transport_bw</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+          </instanceBehavior>
+        </behaviors>
+        <arguments>
+          <instanceArgument>
+            <name>BUSWIDTH</name>
+            <value>@BUSWIDTH@</value>
+            <parent class="instance" reference="/model/interfaces/interface[3]/protocolEngine"/>
+          </instanceArgument>
+        </arguments>
+        <children/>
+        <base>false</base>
+      </protocolEngine>
+      <mockup class="instance">
+        <modelingObject>tlm2_ft_initiator_port_pe</modelingObject>
+        <name>dummy</name>
+        <modelingObjectSpecifier vendor="Synopsys" library="Protocols" name="tlm2_ft_initiator_port_pe" version="1.0"/>
+        <attributes>
+          <instanceAttribute>
+            <name>abstraction</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>tlm2_ft_mode</type>
+            <kind>ValueAttribute</kind>
+            <objectReference></objectReference>
+            <value>LT</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>read_capacity</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>write_capacity</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>total_capacity</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>rd_data_accept_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>wr_data_trigger_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>wr_rsp_accept_cycles</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>handle_tkeep</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>dba_supported</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>max_beats</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>protocol</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>std::string</type>
+            <kind>ProtectedAttribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>bus_width</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>unsigned int</type>
+            <kind>ProtectedAttribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>clock_port</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>sc_core::sc_in&lt;bool&gt;&amp;</type>
+            <kind>Attribute</kind>
+            <objectReference>interface/clock_slave</objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>dmi_enabled</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>bool</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>consume_annotated_time</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>bool</type>
+            <kind>ConstAttribute</kind>
+            <objectReference></objectReference>
+            <value>false</value>
+            <quantity></quantity>
+            <values/>
+            <visible>true</visible>
+            <children/>
+          </instanceAttribute>
+          <instanceAttribute>
+            <name>invoke_timing_cbks</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <type>int</type>
+            <kind>Attribute</kind>
+            <objectReference></objectReference>
+            <value></value>
+            <quantity></quantity>
+            <values/>
+            <visible>false</visible>
+            <children/>
+          </instanceAttribute>
+        </attributes>
+        <callbacks>
+          <instanceCallback>
+            <name>nb_transport_bw</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>invalidate_direct_mem_ptr</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>true</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>clock_changed</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_addr_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_last_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_last_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_data_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>rd_addr_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_rsp_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_rsp_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_last_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_last_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_data_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_addr_end</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+          <instanceCallback>
+            <name>wr_addr_start</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+            <kind>CallbackIgnore</kind>
+            <enabled>false</enabled>
+            <visible>false</visible>
+          </instanceCallback>
+        </callbacks>
+        <behaviors>
+          <instanceBehavior>
+            <name>b_transport</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>nb_transport_fw</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>transport_dbg</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>get_direct_mem_ptr</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>clock_cycles_to_time</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>get_event_id</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>alloc_and_init_trans</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>send_transaction</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+          <instanceBehavior>
+            <name>update_transaction</name>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceBehavior>
+        </behaviors>
+        <arguments>
+          <instanceArgument>
+            <name>BUSWIDTH</name>
+            <value>@BUSWIDTH@</value>
+            <parent class="instance" reference="/model/interfaces/interface[3]/mockup"/>
+          </instanceArgument>
+        </arguments>
+        <children/>
+        <base>false</base>
+      </mockup>
+      <protocolModeAttribute class="instanceAttribute" reference="/model/interfaces/interface[3]/protocolEngine/attributes/instanceAttribute"/>
+      <parameters/>
+    </interface>
+  </interfaces>
+  <powerdomains/>
+  <tasks/>
+  <versionLabels/>
+  <memories>
+    <memory>
+      <name>sep_pka</name>
+      <dataType>unsigned int</dataType>
+      <size>0x8000</size>
+      <origin>0x0</origin>
+      <documentation>Control/Configuration/Status registers</documentation>
+      <children>
+        <register>
+          <name>CTRL</name>
+          <origin>0x0</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Main Control register</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>PARTIAL_RADIX</name>
+              <startBit>0</startBit>
+              <endBit>7</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Selects a partial field from within the base radix.
+The bits operate as a kind of mask, allowing a sub-portion of the full radix to be performed.
+They operate by enabling only that number of words of the operand to be processed.
+An example for an instance with a 32-bit memory word; if the CTRL_BASE_RADIX bits are set to 2 to indicate a 256-bit operand size, and the PARTIAL_RADIX bits are set to 5, then 5 words of the 8 word operand will be processed. In effect, limiting the operand radix to 5/8 * 256 or 160 bits.
+The PARTIAL_RADIX bits are the only bits in this register that are sensitive to the configured ALU width.
+ - If the ALU width is 32 bits, set this field to 17 to enable Mersenne M-521 mode (ceiling(521/32) = 17).
+ - If the ALU width is 64 bits, set this field to 18 to enable Mersenne M-521 mode (ceiling(521/64)*(64/32) = 18).
+ - If the ALU width is 128 bits, set this field to 20 to enable Mersenne M-521 mode (ceiling(521/128)*(128/32) = 20).</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>BASE_RADIX</name>
+              <startBit>8</startBit>
+              <endBit>10</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Sets the size of the base operand size (radix).
+The maximum size of this field is dictated by the actual parameterized hardware configuration.
+   2 = 256-bit
+   3 = 512-bit
+   4 = 1024-bit
+   5 = 2048-bit
+   6 = 4096-bit
+   others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>M521_MODE</name>
+              <startBit>16</startBit>
+              <endBit>20</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Sets operating to Mersenne M-521.
+Set field to 9 for M-521 mode. Set to 0 for all other operation sizes!
+This field is only present in specific configurations.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>STOP_RQST</name>
+              <startBit>27</startBit>
+              <endBit>27</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Requests PKA to halt at the next instruction boundary.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>GO</name>
+              <startBit>31</startBit>
+              <endBit>31</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Starts the PKA operating on the current data and command set.
+The PKA will begin executing instructions from the firmware address indicated in the ENTRY_PNT.ADDR field.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>ENTRY_PNT</name>
+          <origin>0x4</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Program entry point</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>ADDR</name>
+              <startBit>0</startBit>
+              <endBit>11</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates the start instruction of the function to be executed.
+This register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register will be updated as the PKA is executing and will point at the next instruction to fetch when the PKA has stopped. This can be used in conjunction with either the CTRL.STOP_RQST bit or the watchdog register to run the PKA in a debug mode.
+The address is a word index relative to the start of firmware memory.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>RTN_CODE</name>
+          <origin>0x8</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Program return code register</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>STOP_REASON</name>
+              <startBit>16</startBit>
+              <endBit>23</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates why the PKA stopped.
+If the PKA stopped due to a normal HALT instruction, this will indicate as 0. Any other reason will receive a non-0 value.
+This field will be static and stable after the PKA has finished executing a program and will remain so until the PKA is restarted again.
+If the PKA has finished an operation with the STOP_REASON other than 0, an abnormal stop condition has occurred. Under an abnormal stop condition, it is important to clear the STACK_PNTR register prior to starting any new operation. Additionally if any of the optional bankswitch registers are present, they must be set to 0 after an abnormal stop condition as well.
+NOTE: This latter requirement of clearing all existing bankswitch registers MUST be done prior to loading any new data!
+   0 = Normal stop
+   1 = Invalid op-code
+   2 = Stack underflow
+   3 = Stack overflow
+   4 = Watchdog
+   5 = Host request (CTRL.STOP_RQST)
+   6 = Reserved
+   7 = Reserved
+   8 = Memory port collision
+   9 = Reserved
+   others = reserved for firmware</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>DPA_EN</name>
+              <startBit>27</startBit>
+              <endBit>27</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates that the core is capable of operating in TA and/or DPA mode.
+If ELP_CLUE_SIDE_CHANNEL_MODE configuration setting is enabled at build-time, then this bit reflects the logical inverse of the I_dpa_disable I/O port. In other words, if ELP_CLUE_DPA_MODE is enabled and the I_dpa_disable port is driven to 0, this bit will read back as 1.
+Conversely, if either ELP_CLUE_SIDE_CHANNEL_MODE is disabled, or ELP_CLUE_SIDE_CHANNEL_MODE is enabled and the I_dpa_disable I/O port is driven to 1, this bit will read back as 0.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>ZERO</name>
+              <startBit>28</startBit>
+              <endBit>28</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates the state of the zero flag in the sequencer.
+Note: This bit is readable and also writable through the FLAGS.Z bit.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>IRQ</name>
+              <startBit>30</startBit>
+              <endBit>30</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates when the PKA has completed its task.
+It is a R/O reflection of the STAT.IRQ bit.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>BUSY</name>
+              <startBit>31</startBit>
+              <endBit>31</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates that the PKA is actively executing a program.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>BUILD_CONFIG</name>
+          <origin>0xc</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Contains the static build-time parameter enumerations.
+Current cores use a type-2 format.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>BANK_SW_A</name>
+              <startBit>0</startBit>
+              <endBit>1</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates how many bankswitch regions are present within A region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>BANK_SW_B</name>
+              <startBit>2</startBit>
+              <endBit>3</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates how many bankswitch regions are present within B region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>BANK_SW_C</name>
+              <startBit>4</startBit>
+              <endBit>5</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates how many bankswitch regions are present within C region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>BANK_SW_D</name>
+              <startBit>6</startBit>
+              <endBit>7</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates how many bankswitch regions are present within D region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>FW_RAM_SIZE</name>
+              <startBit>8</startBit>
+              <endBit>10</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Indicates size of RAM F/W storage:
+0 = No F/W RAM
+1 = 256 words
+2 = 512 words
+3 = 1024 words
+4 = 2048 words
+5 = 4096 words
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>FW_ROM_SIZE</name>
+              <startBit>11</startBit>
+              <endBit>13</endBit>
+              <resetValue>0x4</resetValue>
+              <documentation>Indicates size of ROM F/W storage:
+0 = No F/W ROM
+1 = 256 words
+2 = 512 words
+3 = 1024 words
+4 = 2048 words
+5 = 4096 words
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>ECC_MAX</name>
+              <startBit>14</startBit>
+              <endBit>15</endBit>
+              <resetValue>0x3</resetValue>
+              <documentation>Indicates maximum ECC operation size which may be performed:
+0 = ECC ops not supported
+1 = 256 bits
+2 = 512 bits
+3 = 1024 bits
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>RSA_MAX</name>
+              <startBit>16</startBit>
+              <endBit>18</endBit>
+              <resetValue>0x4</resetValue>
+              <documentation>Indicates maximum RSA operation size which may be performed:
+0 = RSA ops not supported
+1 = 512 bits
+2 = 1024 bits
+3 = 2048 bits
+4 = 4096 bits
+others = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>ALU_WIDTH</name>
+              <startBit>19</startBit>
+              <endBit>20</endBit>
+              <resetValue>0x2</resetValue>
+              <documentation>Indicates width of the ALU:
+0 = 32 bits
+1 = 64 bits
+2 = 128 bits
+3 = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>TA_DPA_SUPPORT</name>
+              <startBit>21</startBit>
+              <endBit>22</endBit>
+              <resetValue>0x2</resetValue>
+              <documentation>Indicates TA/DPA countermeasure support:
+0 = No countermeasure support
+1 = TA support
+2 = DPA/TA support
+3 = reserved</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>FORMAT_TYPE</name>
+              <startBit>30</startBit>
+              <endBit>31</endBit>
+              <resetValue>0x2</resetValue>
+              <documentation>Indicates a type-2 register format. Other types are reserved.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>STACK_PNTR</name>
+          <origin>0x10</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates depth of the function stack at any point in time.
+The stack pointer can be cleared by writing a 0 to this register while the PKA is stopped.
+Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>PNTR</name>
+              <startBit>0</startBit>
+              <endBit>11</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Stack pointer</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>INSTR_SINCE_GO</name>
+          <origin>0x14</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates number of instructions the PKA has executed since the last CTRL.GO was issued.
+This register is automatically cleared at the next assertion of CTRL.GO and retains its value after the execution has stopped.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>INSTRS</name>
+              <startBit>0</startBit>
+              <endBit>31</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Instructions executed since CTRL.GO asserted</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>CONFIG</name>
+          <origin>0x1c</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Sets configuration state within the PKA.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>ALT_ACCESS</name>
+              <startBit>0</startBit>
+              <endBit>0</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Used to prevent the synthesizer from removing what would otherwise be a W/O memory.
+This register bit is never set in normal modes of operation and not intended to be written by the end user.
+This bit only exists in the optional DPA-hardened configurations and primarily exists for synthesis purposes.
+Test use only!
+   0 = Normal C-memory access
+   1 = Switch the C-memory read/write-access slot to the DPA shadow memory.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>ENDIAN_SWAP</name>
+              <startBit>26</startBit>
+              <endBit>26</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Cause the data memory regions to be endian swapped on transfer in or out of core.
+Setting this bit converts each 32-bit word to big-endian format. The location of the each byte within the word are reversed, however the word order remains the same as its little endian counterpart. Only data written or read by the host to/from blocks A, B, C, and D are affected by this register setting. Access to the control/status registers and firmware area are unaffected regardless of the bit&apos;s setting.
+   0 = No Byte Lane Swap (little endian)
+   1 = Byte Lane Swap (big endian)</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>STAT</name>
+          <origin>0x20</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Used to monitor and acknowledge PKA interrupts.
+The STAT.IRQ bit is used indicate when the PKA has completed its task. If the CTRL.IRQ_EN bit is set, the STAT.IRQ bit will generate an external interrupt while it is asserted by the underlying engine.
+The STAT.IRQ bit will remain asserted until the STAT.IRQ bit is written with a 1.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>DONE</name>
+              <startBit>30</startBit>
+              <endBit>30</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>W1 = Acknowledge existing interrupt
+W0 = NOP
+R1 = Unacknowledged interrupt exists
+R0 = No unacknowledged interrupt exists</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>ClearOnWrite1</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>FLAGS</name>
+          <origin>0x24</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates the settings of the PKA&apos;s flags at any point in time.
+Any of the flags can be set or cleared by writing a 1 or 0 to the appropriate bit in this register while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+The User Flags can be examined, set or cleared under firmware control for various firmware-defined purposes. They can also be read or written by host S/W. From usage point-of-view, they are typically used to select various features or options in certain F/W loads.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>Z</name>
+              <startBit>0</startBit>
+              <endBit>0</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Zero flag</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>M</name>
+              <startBit>1</startBit>
+              <endBit>1</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Memory-test flag</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>B</name>
+              <startBit>2</startBit>
+              <endBit>2</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Borrow flag</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>C</name>
+              <startBit>3</startBit>
+              <endBit>3</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Carry flag</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>F0</name>
+              <startBit>4</startBit>
+              <endBit>4</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>User flag 0</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>F1</name>
+              <startBit>5</startBit>
+              <endBit>5</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>User flag 1</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>F2</name>
+              <startBit>6</startBit>
+              <endBit>6</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>User flag 2</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>F3</name>
+              <startBit>7</startBit>
+              <endBit>7</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>User flag 3</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>WATCHDOG</name>
+          <origin>0x28</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Used to provide a bounded limit on the number of instructions the PKA will execute after the assertion of CTRL.GO.
+This register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+When a CTRL.GO is issued, the WATCHDOG register value is copied into a down-counter which is decremented every time an instruction is executed. If this down-counter reaches a value of 0, the watchdog will stop the PKA and issue a RTN_CODE.STOP_REASON value of 4.
+HINT: In order to set this to a meaningful value, the user must have an idea how long an operation might take under normal circumstances. The INSTR_SINCE_GO register can be used to get an indication of a normal value for this register. A suggestion might be to take the longest INSTR_SINCE_GO value seen for a particular function/operation and triple or quadruple the number before writing it to the watchdog register for that class of operation.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>RELOAD</name>
+              <startBit>0</startBit>
+              <endBit>31</endBit>
+              <resetValue>0xffffffff</resetValue>
+              <documentation>Watchdog reload value</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>CYCLES_SINCE_GO</name>
+          <origin>0x2c</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates the number of clock cycles that have elapsed since the last CTRL.GO was issued.
+This register is cleared on assertion of CTRL.GO and holds its value after the execution has stopped.
+This register can be used to profile specific programs with the PKA.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>CYCLES</name>
+              <startBit>0</startBit>
+              <endBit>31</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Clock cycles since CTRL.GO asserted</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>ReadOnlyIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>INDEX_I</name>
+          <origin>0x30</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates the value of the I index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>INDEX</name>
+              <startBit>0</startBit>
+              <endBit>15</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Index register I</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>INDEX_J</name>
+          <origin>0x34</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates the value of the J index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>INDEX</name>
+              <startBit>0</startBit>
+              <endBit>15</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Index register J</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>INDEX_K</name>
+          <origin>0x38</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates the value of the K index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>INDEX</name>
+              <startBit>0</startBit>
+              <endBit>15</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Index register K</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>INDEX_L</name>
+          <origin>0x3c</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Indicates the value of the L index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>INDEX</name>
+              <startBit>0</startBit>
+              <endBit>15</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>Index register L</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>IRQ_EN</name>
+          <origin>0x40</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Gates the STAT.IRQ signal to the core&apos;s external interrupt port.
+NOTE: The IRQ_EN bit acts directly to gate the STAT.IRQ bit to the O_irq port. The O_irq signal can be removed by clearing the IRQ_EN signal, however this will leave the STAT.IRQ bit still active. The correct method for clearing an interrupt is to write a 1 to the STAT.IRQ bit in the STAT register.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>IE</name>
+              <startBit>30</startBit>
+              <endBit>30</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>0 = Disable interrupt signal at O_irq
+1 = Enable STAT.IRQ to generate an interrupt signal at O_irq</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>JMP_PROB</name>
+          <origin>0x44</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>Sets probability of executing a dummy operation in the Modexp and/or PMult operation.
+If JMP_PROB register is set to 0 (0%), no dummy operations will be performed during Modexp and/or PMult and the PKA will execute the function at its highest possible performance. However, the fact that there is different execution timing between a 0 and 1 bit in the exponent and/or key can be detected by Timing Analysis attacks (TA) and/or Simple Power Analysis attacks (SPA).
+If JMP_PROB is set to 0x1FFF (100%), every 0 bit in the exponent (for Modexp) and/or key (for PMult) will result in a dummy operation, indistinguishable from the processing of a 1 bit. This obviously slows the performance of the engine for these functions but provides protection against timing side-channel attacks.
+The JMP_PROB register can be used to dial in any amount of TA/SPA protection by setting the value to between 0 and 0x1FFF. For example, if the register is set to 0x7FF (i.e.: 0x1FFF/4), this will result in, on average, 25% of the 0 bits executing a dummy operation and 75% skipping the dummy operation. Which F/W execution path is chosen by the PKA is a function of the internal random number generator and cannot be predicted externally. The approximate performance penalty associated with dialing up non-0 values can be scaled by the percentage of TA/SPA resistance dialed in with this register and the rule-of-thumb.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>PROB</name>
+              <startBit>0</startBit>
+              <endBit>12</endBit>
+              <resetValue>0x0</resetValue>
+              <documentation>13&apos;h1FFF = 100% probability
+0 = 0% probability
+Other = 100% * Other/13&apos;h1FFF probability</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>JMP_PROB_LFSR</name>
+          <origin>0x48</origin>
+          <quantity></quantity>
+          <spacing></spacing>
+          <resetValue></resetValue>
+          <resetMask></resetMask>
+          <documentation>The JMP_PROB_LFSR probability LFSR seed register is used to initialize the probability LFSR.
+The LFSR will be re-initialized to this value unless the host attempts to write a 0. In case a 0 is written by the host, internal logic will trap the 0 and substitute a value of 1. (LFSRs enter lock-up if set to 0.)
+This register is not normally written by the host S/W.</documentation>
+          <readBehavior>None</readBehavior>
+          <writeBehavior>None</writeBehavior>
+          <restriction>None</restriction>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>INIT</name>
+              <startBit>0</startBit>
+              <endBit>12</endBit>
+              <resetValue>0x1</resetValue>
+              <documentation>Seed to write to probability LFSR.&gt;br&gt;The seed must be between 0 and 0x1FFF.
+NOTE: A seed of 0 will automatically be detected by the PKA H/W and written as 1 to prevent LFSR lockup.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>BANK_SW_A</name>
+          <origin>0x50</origin>
+          <quantity>1</quantity>
+          <resetValue>0</resetValue>
+          <documentation>Shows and/or sets value of the A bank switches. The bank switch register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA. Bank switching allows the PKA to have access to more internal data storage, though not all accessible at one time. The data is accessed by the F/W switching to that bank while the program is running (via op-codes) and/or when the host is writing or reading data (via this register). This register is configuration dependent. If the configuration does not include this feature, the bits will be R/O and will show up as 0 when read. Architecturally, configurations can support 0 (i.e.: no bank switching), 1, or 2 bits of bank switching, allowing for 1, 2 or 4 banks of data for any of the register memories. However, this feature is only required for specific F/W programs. At this time, only Weierstrass ECC Shamir and Weierstrass ECC-521 Shamir require A to support bank switching. NOTE: The F/W should set this register to 0, if present, prior to loading new data!</documentation>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>BANK_SW</name>
+              <startBit>0</startBit>
+              <endBit>1</endBit>
+              <documentation>Currently selected bank in region A</documentation>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>rsvd</name>
+              <startBit>2</startBit>
+              <endBit>31</endBit>
+              <documentation>reserved</documentation>
+              <restriction>ReservedIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>BANK_SW_B</name>
+          <origin>0x54</origin>
+          <quantity>1</quantity>
+          <resetValue>0</resetValue>
+          <documentation>Shows and/or sets value of the B bank switches. The bank switch register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA. Bank switching allows the PKA to have access to more internal data storage, though not all accessible at one time. The data is accessed by the F/W switching to that bank while the program is running (via op-codes) and/or when the host is writing or reading data (via this register). This register is configuration dependent. If the configuration does not include this feature, the bits will be R/O and will show up as 0 when read. Architecturally, configurations can support 0 (i.e.: no bank switching), 1, or 2 bits of bank switching, allowing for 1, 2 or 4 banks of data for any of the register memories. However, this feature is only required for specific F/W programs. At this time, no F/W components require region B to support bank switching. NOTE: The F/W should set this register to 0, if present, prior to loading new data!</documentation>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>BANK_SW</name>
+              <startBit>0</startBit>
+              <endBit>1</endBit>
+              <documentation>Currently selected bank in region B</documentation>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>rsvd</name>
+              <startBit>2</startBit>
+              <endBit>31</endBit>
+              <documentation>reserved</documentation>
+              <restriction>ReservedIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>BANK_SW_C</name>
+          <origin>0x58</origin>
+          <quantity>1</quantity>
+          <resetValue>0</resetValue>
+          <documentation>Shows and/or sets value of the C bank switches. The bank switch register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA. Bank switching allows the PKA to have access to more internal data storage, though not all accessible at one time. The data is accessed by the F/W switching to that bank while the program is running (via op-codes) and/or when the host is writing or reading data (via this register). This register is configuration dependent. If the configuration does not include this feature, the bits will be R/O and will show up as 0 when read. Architecturally, configurations can support 0 (i.e.: no bank switching), 1, or 2 bits of bank switching, allowing for 1, 2 or 4 banks of data for any of the register memories. However, this feature is only required for specific F/W programs. At this time, no F/W components require region B to support bank switching. NOTE: The F/W should set this register to 0, if present, prior to loading new data!</documentation>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>BANK_SW</name>
+              <startBit>0</startBit>
+              <endBit>1</endBit>
+              <documentation>Currently selected bank in region C</documentation>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>rsvd</name>
+              <startBit>2</startBit>
+              <endBit>31</endBit>
+              <documentation>reserved</documentation>
+              <restriction>ReservedIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <register>
+          <name>BANK_SW_D</name>
+          <origin>0x5c</origin>
+          <quantity>1</quantity>
+          <resetValue>0</resetValue>
+          <documentation>Shows and/or sets value of the D bank switches. The bank switch register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA. Bank switching allows the PKA to have access to more internal data storage, though not all accessible at one time. The data is accessed by the F/W switching to that bank while the program is running (via op-codes) and/or when the host is writing or reading data (via this register). This register is configuration dependent. If the configuration does not include this feature, the bits will be R/O and will show up as 0 when read. Architecturally, configurations can support 0 (i.e.: no bank switching), 1, or 2 bits of bank switching, allowing for 1, 2 or 4 banks of data for any of the register memories. However, this feature is only required for specific F/W programs. At this time, no F/W components require region B to support bank switching. NOTE: The F/W should set this register to 0, if present, prior to loading new data!</documentation>
+          <dataType>unsigned int</dataType>
+          <bitfields>
+            <bitfield>
+              <name>BANK_SW</name>
+              <startBit>0</startBit>
+              <endBit>1</endBit>
+              <documentation>Currently selected bank in region D</documentation>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+            <bitfield>
+              <name>rsvd</name>
+              <startBit>2</startBit>
+              <endBit>31</endBit>
+              <documentation>reserved</documentation>
+              <restriction>ReservedIgnore</restriction>
+              <enums/>
+              <bitfields/>
+            </bitfield>
+          </bitfields>
+        </register>
+        <memoryAlias>
+          <name>bank_A</name>
+          <parent class="memory" reference="/model/memories/memory"/>
+          <origin>0x400</origin>
+          <size>0x400</size>
+          <documentation>Operand memory region A. This region holds the virtual large data registers for region A. This region starts at location 0x400. The length of this region is configuration dependent and may be sparsely populated. The region-s maximum length is 0x400 bytes.</documentation>
+          <customWriteBehavior>Transport</customWriteBehavior>
+          <children/>
+        </memoryAlias>
+        <memoryAlias>
+          <name>bank_B</name>
+          <parent class="memory" reference="/model/memories/memory"/>
+          <origin>0x800</origin>
+          <size>1024</size>
+          <documentation>Operand memory region B. This region holds the virtual large data registers for region B. This region starts at location 0x800. The length of this region is configuration dependent and may be sparsely populated. The region-s maximum length is 0x400 bytes.</documentation>
+          <customWriteBehavior>Transport</customWriteBehavior>
+          <children/>
+        </memoryAlias>
+        <memoryAlias>
+          <name>bank_C</name>
+          <parent class="memory" reference="/model/memories/memory"/>
+          <origin>0xC00</origin>
+          <size>1024</size>
+          <documentation>Operand memory region C. This region holds the virtual large data registers for region C. This region starts at location 0xC00. The length of this region is configuration dependent and may be sparsely populated. The region-s maximum length is 0x400 bytes.</documentation>
+          <customWriteBehavior>Transport</customWriteBehavior>
+          <children/>
+        </memoryAlias>
+        <memoryAlias>
+          <name>bank_D</name>
+          <parent class="memory" reference="/model/memories/memory"/>
+          <origin>0x1000</origin>
+          <size>2048</size>
+          <documentation>Operand memory region D. This region holds the virtual large data registers for region D. This region starts at location 0x1000. The length of this region is configuration dependent and may be sparsely populated. The region-s maximum length is 0x800 bytes.</documentation>
+          <customWriteBehavior>Transport</customWriteBehavior>
+          <children/>
+        </memoryAlias>
+        <memoryAlias>
+          <name>pka_fw</name>
+          <parent class="memory" reference="/model/memories/memory"/>
+          <origin>0x4000</origin>
+          <size>16384</size>
+          <documentation>F/W memory area This region is configuration dependent If the configuration has been selected for pure RAM or pure ROM, this region is devoted to that single memory type. If the configuration has been selected for mixed RAM/ROM, then the RAM will be at the base of this region (0x4000) and the ROM start halfway up the region at 0x6000. The length of the areas in this region are configuration dependent and may be sparsely populated.</documentation>
+          <customWriteBehavior>Transport</customWriteBehavior>
+          <children/>
+        </memoryAlias>
+      </children>
+    </memory>
+  </memories>
+  <instances>
+    <instance>
+      <modelingObject>router</modelingObject>
+      <name>p_mem_socket_router</name>
+      <modelingObjectSpecifier vendor="Synopsys" library="ModelingObjects" name="router"/>
+      <attributes>
+        <instanceAttribute>
+          <name>bound_on</name>
+          <parent class="instance" reference="/model/instances/instance"/>
+          <type>binder</type>
+          <kind>ConstAttribute</kind>
+          <objectReference></objectReference>
+          <value>p_mem_socket_protocol_engine</value>
+          <quantity></quantity>
+          <values/>
+          <visible>true</visible>
+          <children/>
+        </instanceAttribute>
+        <instanceAttribute>
+          <name>mappings</name>
+          <parent class="instance" reference="/model/instances/instance"/>
+          <type></type>
+          <kind>AttributeStruct</kind>
+          <objectReference></objectReference>
+          <value></value>
+          <quantity>1</quantity>
+          <values/>
+          <visible>true</visible>
+          <children>
+            <instanceAttribute>
+              <name>mappings</name>
+              <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]"/>
+              <type></type>
+              <kind>AttributeStruct</kind>
+              <objectReference></objectReference>
+              <value></value>
+              <quantity></quantity>
+              <values/>
+              <visible>true</visible>
+              <children>
+                <instanceAttribute>
+                  <name>base</name>
+                  <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]/children/instanceAttribute"/>
+                  <type>unsigned long long</type>
+                  <kind>ValueAttribute</kind>
+                  <objectReference></objectReference>
+                  <value>0x0</value>
+                  <quantity></quantity>
+                  <values/>
+                  <visible>true</visible>
+                  <children/>
+                </instanceAttribute>
+                <instanceAttribute>
+                  <name>size</name>
+                  <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]/children/instanceAttribute"/>
+                  <type>unsigned long long</type>
+                  <kind>ValueAttribute</kind>
+                  <objectReference></objectReference>
+                  <value>sep_pka.get_size()*sep_pka.get_width()</value>
+                  <quantity></quantity>
+                  <values/>
+                  <visible>true</visible>
+                  <children/>
+                </instanceAttribute>
+                <instanceAttribute>
+                  <name>destination</name>
+                  <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]/children/instanceAttribute"/>
+                  <type>scml2::mappable_if &amp;</type>
+                  <kind>ValueAttribute</kind>
+                  <objectReference></objectReference>
+                  <value>sep_pka</value>
+                  <quantity></quantity>
+                  <values/>
+                  <visible>true</visible>
+                  <children/>
+                </instanceAttribute>
+                <instanceAttribute>
+                  <name>offset</name>
+                  <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]/children/instanceAttribute"/>
+                  <type>unsigned long long</type>
+                  <kind>ValueAttribute</kind>
+                  <objectReference></objectReference>
+                  <value></value>
+                  <quantity></quantity>
+                  <values/>
+                  <visible>true</visible>
+                  <children/>
+                </instanceAttribute>
+                <instanceAttribute>
+                  <name>type</name>
+                  <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]/children/instanceAttribute"/>
+                  <type></type>
+                  <kind>ValueAttribute</kind>
+                  <objectReference></objectReference>
+                  <value>RW</value>
+                  <quantity></quantity>
+                  <values/>
+                  <visible>true</visible>
+                  <children/>
+                </instanceAttribute>
+                <instanceAttribute>
+                  <name>active</name>
+                  <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]/children/instanceAttribute"/>
+                  <type>bool</type>
+                  <kind>ValueAttribute</kind>
+                  <objectReference></objectReference>
+                  <value>true</value>
+                  <quantity></quantity>
+                  <values/>
+                  <visible>true</visible>
+                  <children/>
+                </instanceAttribute>
+                <instanceAttribute>
+                  <name>name</name>
+                  <parent class="instanceAttribute" reference="/model/instances/instance/attributes/instanceAttribute[2]/children/instanceAttribute"/>
+                  <type>std::string</type>
+                  <kind>ConstAttribute</kind>
+                  <objectReference></objectReference>
+                  <value></value>
+                  <quantity></quantity>
+                  <values/>
+                  <visible>true</visible>
+                  <children/>
+                </instanceAttribute>
+              </children>
+            </instanceAttribute>
+          </children>
+        </instanceAttribute>
+      </attributes>
+      <callbacks>
+        <instanceCallback>
+          <name>Callback</name>
+          <parent class="instance" reference="/model/instances/instance"/>
+          <kind>CallbackIgnore</kind>
+          <enabled>false</enabled>
+          <visible>true</visible>
+        </instanceCallback>
+        <instanceCallback>
+          <name>DebugCallback</name>
+          <parent class="instance" reference="/model/instances/instance"/>
+          <kind>CallbackIgnore</kind>
+          <enabled>false</enabled>
+          <visible>true</visible>
+        </instanceCallback>
+      </callbacks>
+      <behaviors/>
+      <arguments>
+        <instanceArgument>
+          <name>Type</name>
+          <value>unsigned int</value>
+          <parent class="instance" reference="/model/instances/instance"/>
+        </instanceArgument>
+      </arguments>
+      <children/>
+      <base>false</base>
+    </instance>
+  </instances>
+  <buildingBlocks/>
+  <enumDefinitions/>
+  <buildingBlockAttributes/>
+  <importMergeState>
+    <oldModel format="7">
+      <creationVersion>2024.03</creationVersion>
+      <creationTimestamp>2026-02-03 17:33:17.770 UTC</creationTimestamp>
+      <name>pka_model</name>
+      <vsSolutionUUID>1214CBBE-3046-4D7A-A1DB-F401D4C7540B</vsSolutionUUID>
+      <vsProjectUUID>90FB3282-5873-4659-894B-C0983B713835</vsProjectUUID>
+      <testVsProjectUUID>2B4745C5-1D76-4C7D-B2BD-2EE77FBC5704</testVsProjectUUID>
+      <baseClass>sc_core::sc_module</baseClass>
+      <documentation>This empty model example contains no predefined interfaces or registers.
+It allows full flexibility in defining arbitrary components as it generates a minimal SystemC skeleton.</documentation>
+      <includes/>
+      <templateSearchPaths>
+        <path>@BASE_DIR@/Templates</path>
+      </templateSearchPaths>
+      <librarySearchPaths>
+        <path>${SNPS_VP_IPDIR}/TLMModelingLibrary/library.tlmclib</path>
+      </librarySearchPaths>
+      <baseHeader>SystemC/include/@MODEL_NAME@Base.h</baseHeader>
+      <derivedHeader>SystemC/include/@MODEL_NAME@.h</derivedHeader>
+      <derivedSource>SystemC/src/@MODEL_NAME@.cc</derivedSource>
+      <pctImportScript>Tool/PCT/@MODEL_NAME@_import.tcl</pctImportScript>
+      <pctUserPreImportScript>Tool/PCT/@MODEL_NAME@_import_user_pre.tcl</pctUserPreImportScript>
+      <pctUserPostImportScript>Tool/PCT/@MODEL_NAME@_import_user_post.tcl</pctUserPostImportScript>
+      <pctCallbackScript>Tool/PCT/@MODEL_NAME@_callback.tcl</pctCallbackScript>
+      <pctBuildScript>Tool/PCT/@MODEL_NAME@_build.tcl</pctBuildScript>
+      <testMakefileLinux>Tests/Unittests/Makefile.@MODEL_NAME@.linux</testMakefileLinux>
+      <testMakefileWindows>Tests/Unittests/Makefile.@MODEL_NAME@.windows</testMakefileWindows>
+      <testMakefileWindowsUser>Tests/Unittests/Makefile.@MODEL_NAME@.windows.user</testMakefileWindowsUser>
+      <testMakefileLinuxUser>Tests/Unittests/Makefile.@MODEL_NAME@.linux.user</testMakefileLinuxUser>
+      <documentationFilename>Documentation/@MODEL_NAME@.xml</documentationFilename>
+      <htmlDocumentationFilename>Documentation/@MODEL_NAME@.html</htmlDocumentationFilename>
+      <cssDocumentationFilename>Documentation/style.css</cssDocumentationFilename>
+      <buildSpecification>
+        <configurations>
+          <configuration>
+            <target>${model.name}</target>
+            <sources>
+              <conditionalString>${model.derived_source_filename}</conditionalString>
+            </sources>
+            <testSources/>
+            <headers>
+              <conditionalString>${model.derived_header_filename}</conditionalString>
+            </headers>
+            <templateInstances/>
+            <defines/>
+            <includePath/>
+            <testIncludePath/>
+            <cxxFlags/>
+            <libraries/>
+            <testLibraries/>
+            <libraryPath/>
+            <testLibraryPath/>
+            <linkFlags/>
+            <testLinkFlags/>
+            <exportSources/>
+            <exportHeaders>
+              <conditionalString>${model.derived_header_filename}</conditionalString>
+            </exportHeaders>
+            <exportDefines/>
+            <exportIncludePath/>
+            <exportCXXFlags/>
+            <exportLibraries>
+              <conditionalString>${model.name}</conditionalString>
+            </exportLibraries>
+            <exportLibraryPath>
+              <conditionalString>${base_dir}/SystemC/${build_configuration.libprefix}-${compiler}/${build_configuration.name}</conditionalString>
+            </exportLibraryPath>
+            <exportLinkFlags/>
+            <incompatibleCompilers/>
+            <testDynamicLibraryPath/>
+            <primitiveChannelPayloadHeaders/>
+            <templateFallbackLibraries/>
+            <localDynamicLibrarySearchPath/>
+            <dynamicLibrarySearchPath/>
+            <componentHelpers/>
+            <packageFiles/>
+            <simulationFiles/>
+            <envVariables/>
+            <pathEnvVariables/>
+            <testEnvVariables/>
+            <infrastructureParameters/>
+            <name>FastBuild</name>
+            <type>DynamicLoadLibrary</type>
+            <conditionalConfigurations/>
+            <strip>false</strip>
+            <debug>false</debug>
+            <optimize>true</optimize>
+            <assertions>false</assertions>
+            <rebuildAllowed>false</rebuildAllowed>
+            <testBuildEnabled>true</testBuildEnabled>
+            <testRunEnabled>false</testRunEnabled>
+            <isDefault>true</isDefault>
+            <isActive>false</isActive>
+            <reuseComponentBuildInTest>true</reuseComponentBuildInTest>
+            <exposeCoverageHelperParameter>true</exposeCoverageHelperParameter>
+            <includeInIPLibrary>true</includeInIPLibrary>
+            <useBuildInnoRuntime>false</useBuildInnoRuntime>
+            <usePackageInnoRuntime>false</usePackageInnoRuntime>
+            <packageHeaders>false</packageHeaders>
+            <derivedBuildSettingsOverrides class="derivedBuildSettingsOverrides">
+              <sources/>
+              <testSources/>
+              <headers/>
+              <templateInstances/>
+              <defines/>
+              <includePath/>
+              <testIncludePath/>
+              <cxxFlags/>
+              <libraries/>
+              <testLibraries/>
+              <libraryPath/>
+              <testLibraryPath/>
+              <linkFlags/>
+              <testLinkFlags/>
+              <exportSources/>
+              <exportHeaders/>
+              <exportDefines/>
+              <exportIncludePath/>
+              <exportCXXFlags/>
+              <exportLibraries/>
+              <exportLibraryPath/>
+              <exportLinkFlags/>
+              <incompatibleCompilers/>
+              <testDynamicLibraryPath/>
+              <primitiveChannelPayloadHeaders/>
+              <templateFallbackLibraries/>
+              <localDynamicLibrarySearchPath/>
+              <dynamicLibrarySearchPath/>
+              <componentHelpers/>
+              <packageFiles/>
+              <simulationFiles/>
+              <envVariables/>
+              <pathEnvVariables/>
+              <testEnvVariables/>
+              <infrastructureParameters/>
+            </derivedBuildSettingsOverrides>
+          </configuration>
+        </configurations>
+        <defaultBuildConfiguration class="configuration" reference="/model/importMergeState/oldModel/buildSpecification/configurations/configuration"/>
+      </buildSpecification>
+      <stylesheetSearchPaths/>
+      <extraGeneratedFiles/>
+      <parameters/>
+      <templateParameters/>
+      <constructorParameters/>
+      <interfaces/>
+      <powerdomains/>
+      <tasks/>
+      <versionLabels/>
+      <memories/>
+      <instances/>
+      <buildingBlocks/>
+      <enumDefinitions/>
+      <buildingBlockAttributes/>
+      <systemCImportProject>false</systemCImportProject>
+      <layeredSystemCImportProject>false</layeredSystemCImportProject>
+      <tlmModelingObjectProject>false</tlmModelingObjectProject>
+      <processVSProject>true</processVSProject>
+      <processTestVSUserProject>true</processTestVSUserProject>
+      <processTestVSSolution>true</processTestVSSolution>
+      <processTestVSProject>true</processTestVSProject>
+      <processVS1429Project>true</processVS1429Project>
+      <processTestVS1429UserProject>true</processTestVS1429UserProject>
+      <processTestVS1429Solution>true</processTestVS1429Solution>
+      <processTestVS1429Project>true</processTestVS1429Project>
+      <processVS1434Project>true</processVS1434Project>
+      <processTestVS1434UserProject>true</processTestVS1434UserProject>
+      <processTestVS1434Solution>true</processTestVS1434Solution>
+      <processTestVS1434Project>true</processTestVS1434Project>
+      <processTestMakefileWindows>true</processTestMakefileWindows>
+      <processTestMakefileLinux>true</processTestMakefileLinux>
+      <processTestHarness>true</processTestHarness>
+      <processTest>true</processTest>
+      <processPCTBuildScript>true</processPCTBuildScript>
+      <processPCTCallbackScript>true</processPCTCallbackScript>
+      <processPCTImportScript>true</processPCTImportScript>
+      <processPCTDynamicLoadAdapter>true</processPCTDynamicLoadAdapter>
+      <processModelResourceFile>true</processModelResourceFile>
+      <processMirrorDerivedHeader>true</processMirrorDerivedHeader>
+      <processMirrorBaseHeader>true</processMirrorBaseHeader>
+      <processDocumentation>true</processDocumentation>
+      <processHTMLDocumentation>true</processHTMLDocumentation>
+      <processDocumentationCSS>true</processDocumentationCSS>
+      <processDerivedSource>true</processDerivedSource>
+      <processDerivedHeader>true</processDerivedHeader>
+      <processCoverageDerivedHeader>true</processCoverageDerivedHeader>
+      <processCoverageBaseHeader>true</processCoverageBaseHeader>
+      <processBaseHeader>true</processBaseHeader>
+      <processBaseSource>true</processBaseSource>
+      <libraryPackagedItems/>
+      <testPackagedItems/>
+      <internalPackagedItems/>
+      <extensibleTlmPackagedItems/>
+      <ipLibraryPackageInfos/>
+      <buildObjects/>
+      <prioritizedCommonSettings/>
+      <nextLevelCommonSettings/>
+      <extraGeneratedFileOverwriteOverrides/>
+      <importLayers/>
+      <previousImportLayers/>
+      <importLayerSpecifications/>
+      <designSpecification class="DesignSpecification">
+        <requirements/>
+        <testClasses/>
+      </designSpecification>
+    </oldModel>
+    <newModel>
+      <name>sep_pka</name>
+      <companyName>example.org</companyName>
+      <libraryName>mylibrary</libraryName>
+      <version>1.0</version>
+      <includes/>
+      <templateSearchPaths/>
+      <librarySearchPaths/>
+      <buildSpecification>
+        <configurations/>
+      </buildSpecification>
+      <stylesheetSearchPaths/>
+      <extraGeneratedFiles/>
+      <parameters/>
+      <templateParameters/>
+      <constructorParameters/>
+      <interfaces/>
+      <powerdomains/>
+      <tasks/>
+      <versionLabels/>
+      <memories>
+        <memory>
+          <name>sep_pka</name>
+          <dataType>unsigned int</dataType>
+          <size>0x4c</size>
+          <origin>0x0</origin>
+          <documentation>Control/Configuration/Status registers</documentation>
+          <children>
+            <register>
+              <name>CTRL</name>
+              <origin>0x0</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Main Control register</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>PARTIAL_RADIX</name>
+                  <startBit>0</startBit>
+                  <endBit>7</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Selects a partial field from within the base radix.
+The bits operate as a kind of mask, allowing a sub-portion of the full radix to be performed.
+They operate by enabling only that number of words of the operand to be processed.
+An example for an instance with a 32-bit memory word; if the CTRL_BASE_RADIX bits are set to 2 to indicate a 256-bit operand size, and the PARTIAL_RADIX bits are set to 5, then 5 words of the 8 word operand will be processed. In effect, limiting the operand radix to 5/8 * 256 or 160 bits.
+The PARTIAL_RADIX bits are the only bits in this register that are sensitive to the configured ALU width.
+ - If the ALU width is 32 bits, set this field to 17 to enable Mersenne M-521 mode (ceiling(521/32) = 17).
+ - If the ALU width is 64 bits, set this field to 18 to enable Mersenne M-521 mode (ceiling(521/64)*(64/32) = 18).
+ - If the ALU width is 128 bits, set this field to 20 to enable Mersenne M-521 mode (ceiling(521/128)*(128/32) = 20).</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>BASE_RADIX</name>
+                  <startBit>8</startBit>
+                  <endBit>10</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Sets the size of the base operand size (radix).
+The maximum size of this field is dictated by the actual parameterized hardware configuration.
+   2 = 256-bit
+   3 = 512-bit
+   4 = 1024-bit
+   5 = 2048-bit
+   6 = 4096-bit
+   others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>M521_MODE</name>
+                  <startBit>16</startBit>
+                  <endBit>20</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Sets operating to Mersenne M-521.
+Set field to 9 for M-521 mode. Set to 0 for all other operation sizes!
+This field is only present in specific configurations.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>STOP_RQST</name>
+                  <startBit>27</startBit>
+                  <endBit>27</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Requests PKA to halt at the next instruction boundary.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>GO</name>
+                  <startBit>31</startBit>
+                  <endBit>31</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Starts the PKA operating on the current data and command set.
+The PKA will begin executing instructions from the firmware address indicated in the ENTRY_PNT.ADDR field.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>ENTRY_PNT</name>
+              <origin>0x4</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Program entry point</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>ADDR</name>
+                  <startBit>0</startBit>
+                  <endBit>11</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates the start instruction of the function to be executed.
+This register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register will be updated as the PKA is executing and will point at the next instruction to fetch when the PKA has stopped. This can be used in conjunction with either the CTRL.STOP_RQST bit or the watchdog register to run the PKA in a debug mode.
+The address is a word index relative to the start of firmware memory.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>RTN_CODE</name>
+              <origin>0x8</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Program return code register</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>STOP_REASON</name>
+                  <startBit>16</startBit>
+                  <endBit>23</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates why the PKA stopped.
+If the PKA stopped due to a normal HALT instruction, this will indicate as 0. Any other reason will receive a non-0 value.
+This field will be static and stable after the PKA has finished executing a program and will remain so until the PKA is restarted again.
+If the PKA has finished an operation with the STOP_REASON other than 0, an abnormal stop condition has occurred. Under an abnormal stop condition, it is important to clear the STACK_PNTR register prior to starting any new operation. Additionally if any of the optional bankswitch registers are present, they must be set to 0 after an abnormal stop condition as well.
+NOTE: This latter requirement of clearing all existing bankswitch registers MUST be done prior to loading any new data!
+   0 = Normal stop
+   1 = Invalid op-code
+   2 = Stack underflow
+   3 = Stack overflow
+   4 = Watchdog
+   5 = Host request (CTRL.STOP_RQST)
+   6 = Reserved
+   7 = Reserved
+   8 = Memory port collision
+   9 = Reserved
+   others = reserved for firmware</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>DPA_EN</name>
+                  <startBit>27</startBit>
+                  <endBit>27</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates that the core is capable of operating in TA and/or DPA mode.
+If ELP_CLUE_SIDE_CHANNEL_MODE configuration setting is enabled at build-time, then this bit reflects the logical inverse of the I_dpa_disable I/O port. In other words, if ELP_CLUE_DPA_MODE is enabled and the I_dpa_disable port is driven to 0, this bit will read back as 1.
+Conversely, if either ELP_CLUE_SIDE_CHANNEL_MODE is disabled, or ELP_CLUE_SIDE_CHANNEL_MODE is enabled and the I_dpa_disable I/O port is driven to 1, this bit will read back as 0.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>ZERO</name>
+                  <startBit>28</startBit>
+                  <endBit>28</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates the state of the zero flag in the sequencer.
+Note: This bit is readable and also writable through the FLAGS.Z bit.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>IRQ</name>
+                  <startBit>30</startBit>
+                  <endBit>30</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates when the PKA has completed its task.
+It is a R/O reflection of the STAT.IRQ bit.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>BUSY</name>
+                  <startBit>31</startBit>
+                  <endBit>31</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates that the PKA is actively executing a program.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>BUILD_CONFIG</name>
+              <origin>0xc</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Contains the static build-time parameter enumerations.
+Current cores use a type-2 format.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>BANK_SW_A</name>
+                  <startBit>0</startBit>
+                  <endBit>1</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates how many bankswitch regions are present within A region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>BANK_SW_B</name>
+                  <startBit>2</startBit>
+                  <endBit>3</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates how many bankswitch regions are present within B region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>BANK_SW_C</name>
+                  <startBit>4</startBit>
+                  <endBit>5</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates how many bankswitch regions are present within C region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>BANK_SW_D</name>
+                  <startBit>6</startBit>
+                  <endBit>7</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates how many bankswitch regions are present within D region.
+0 = 1 bank (only primary, no alternate)
+1 = 2 banks (primary and 1 alternate)
+2 = 4 banks (primary and 3 alternates)
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>FW_RAM_SIZE</name>
+                  <startBit>8</startBit>
+                  <endBit>10</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Indicates size of RAM F/W storage:
+0 = No F/W RAM
+1 = 256 words
+2 = 512 words
+3 = 1024 words
+4 = 2048 words
+5 = 4096 words
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>FW_ROM_SIZE</name>
+                  <startBit>11</startBit>
+                  <endBit>13</endBit>
+                  <resetValue>0x4</resetValue>
+                  <documentation>Indicates size of ROM F/W storage:
+0 = No F/W ROM
+1 = 256 words
+2 = 512 words
+3 = 1024 words
+4 = 2048 words
+5 = 4096 words
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>ECC_MAX</name>
+                  <startBit>14</startBit>
+                  <endBit>15</endBit>
+                  <resetValue>0x3</resetValue>
+                  <documentation>Indicates maximum ECC operation size which may be performed:
+0 = ECC ops not supported
+1 = 256 bits
+2 = 512 bits
+3 = 1024 bits
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>RSA_MAX</name>
+                  <startBit>16</startBit>
+                  <endBit>18</endBit>
+                  <resetValue>0x4</resetValue>
+                  <documentation>Indicates maximum RSA operation size which may be performed:
+0 = RSA ops not supported
+1 = 512 bits
+2 = 1024 bits
+3 = 2048 bits
+4 = 4096 bits
+others = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>ALU_WIDTH</name>
+                  <startBit>19</startBit>
+                  <endBit>20</endBit>
+                  <resetValue>0x2</resetValue>
+                  <documentation>Indicates width of the ALU:
+0 = 32 bits
+1 = 64 bits
+2 = 128 bits
+3 = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>TA_DPA_SUPPORT</name>
+                  <startBit>21</startBit>
+                  <endBit>22</endBit>
+                  <resetValue>0x2</resetValue>
+                  <documentation>Indicates TA/DPA countermeasure support:
+0 = No countermeasure support
+1 = TA support
+2 = DPA/TA support
+3 = reserved</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>FORMAT_TYPE</name>
+                  <startBit>30</startBit>
+                  <endBit>31</endBit>
+                  <resetValue>0x2</resetValue>
+                  <documentation>Indicates a type-2 register format. Other types are reserved.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>STACK_PNTR</name>
+              <origin>0x10</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates depth of the function stack at any point in time.
+The stack pointer can be cleared by writing a 0 to this register while the PKA is stopped.
+Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>PNTR</name>
+                  <startBit>0</startBit>
+                  <endBit>11</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Stack pointer</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>INSTR_SINCE_GO</name>
+              <origin>0x14</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates number of instructions the PKA has executed since the last CTRL.GO was issued.
+This register is automatically cleared at the next assertion of CTRL.GO and retains its value after the execution has stopped.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>INSTRS</name>
+                  <startBit>0</startBit>
+                  <endBit>31</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Instructions executed since CTRL.GO asserted</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>CONFIG</name>
+              <origin>0x1c</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Sets configuration state within the PKA.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>ALT_ACCESS</name>
+                  <startBit>0</startBit>
+                  <endBit>0</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Used to prevent the synthesizer from removing what would otherwise be a W/O memory.
+This register bit is never set in normal modes of operation and not intended to be written by the end user.
+This bit only exists in the optional DPA-hardened configurations and primarily exists for synthesis purposes.
+Test use only!
+   0 = Normal C-memory access
+   1 = Switch the C-memory read/write-access slot to the DPA shadow memory.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>ENDIAN_SWAP</name>
+                  <startBit>26</startBit>
+                  <endBit>26</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Cause the data memory regions to be endian swapped on transfer in or out of core.
+Setting this bit converts each 32-bit word to big-endian format. The location of the each byte within the word are reversed, however the word order remains the same as its little endian counterpart. Only data written or read by the host to/from blocks A, B, C, and D are affected by this register setting. Access to the control/status registers and firmware area are unaffected regardless of the bit&apos;s setting.
+   0 = No Byte Lane Swap (little endian)
+   1 = Byte Lane Swap (big endian)</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>STAT</name>
+              <origin>0x20</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Used to monitor and acknowledge PKA interrupts.
+The STAT.IRQ bit is used indicate when the PKA has completed its task. If the CTRL.IRQ_EN bit is set, the STAT.IRQ bit will generate an external interrupt while it is asserted by the underlying engine.
+The STAT.IRQ bit will remain asserted until the STAT.IRQ bit is written with a 1.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>DONE</name>
+                  <startBit>30</startBit>
+                  <endBit>30</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>W1 = Acknowledge existing interrupt
+W0 = NOP
+R1 = Unacknowledged interrupt exists
+R0 = No unacknowledged interrupt exists</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>ClearOnWrite1</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>FLAGS</name>
+              <origin>0x24</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates the settings of the PKA&apos;s flags at any point in time.
+Any of the flags can be set or cleared by writing a 1 or 0 to the appropriate bit in this register while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+The User Flags can be examined, set or cleared under firmware control for various firmware-defined purposes. They can also be read or written by host S/W. From usage point-of-view, they are typically used to select various features or options in certain F/W loads.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>Z</name>
+                  <startBit>0</startBit>
+                  <endBit>0</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Zero flag</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>M</name>
+                  <startBit>1</startBit>
+                  <endBit>1</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Memory-test flag</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>B</name>
+                  <startBit>2</startBit>
+                  <endBit>2</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Borrow flag</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>C</name>
+                  <startBit>3</startBit>
+                  <endBit>3</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Carry flag</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>F0</name>
+                  <startBit>4</startBit>
+                  <endBit>4</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>User flag 0</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>F1</name>
+                  <startBit>5</startBit>
+                  <endBit>5</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>User flag 1</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>F2</name>
+                  <startBit>6</startBit>
+                  <endBit>6</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>User flag 2</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+                <bitfield>
+                  <name>F3</name>
+                  <startBit>7</startBit>
+                  <endBit>7</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>User flag 3</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>WATCHDOG</name>
+              <origin>0x28</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Used to provide a bounded limit on the number of instructions the PKA will execute after the assertion of CTRL.GO.
+This register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+When a CTRL.GO is issued, the WATCHDOG register value is copied into a down-counter which is decremented every time an instruction is executed. If this down-counter reaches a value of 0, the watchdog will stop the PKA and issue a RTN_CODE.STOP_REASON value of 4.
+HINT: In order to set this to a meaningful value, the user must have an idea how long an operation might take under normal circumstances. The INSTR_SINCE_GO register can be used to get an indication of a normal value for this register. A suggestion might be to take the longest INSTR_SINCE_GO value seen for a particular function/operation and triple or quadruple the number before writing it to the watchdog register for that class of operation.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>RELOAD</name>
+                  <startBit>0</startBit>
+                  <endBit>31</endBit>
+                  <resetValue>0xffffffff</resetValue>
+                  <documentation>Watchdog reload value</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>CYCLES_SINCE_GO</name>
+              <origin>0x2c</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates the number of clock cycles that have elapsed since the last CTRL.GO was issued.
+This register is cleared on assertion of CTRL.GO and holds its value after the execution has stopped.
+This register can be used to profile specific programs with the PKA.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>CYCLES</name>
+                  <startBit>0</startBit>
+                  <endBit>31</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Clock cycles since CTRL.GO asserted</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>ReadOnlyIgnore</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>INDEX_I</name>
+              <origin>0x30</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates the value of the I index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>INDEX</name>
+                  <startBit>0</startBit>
+                  <endBit>15</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Index register I</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>INDEX_J</name>
+              <origin>0x34</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates the value of the J index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>INDEX</name>
+                  <startBit>0</startBit>
+                  <endBit>15</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Index register J</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>INDEX_K</name>
+              <origin>0x38</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates the value of the K index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>INDEX</name>
+                  <startBit>0</startBit>
+                  <endBit>15</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Index register K</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>INDEX_L</name>
+              <origin>0x3c</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Indicates the value of the L index register at any point in time.
+The index register can only be written while the PKA is stopped. Writes at any other time will be ignored by the PKA.
+This register should be set to 0 prior to starting new PKA operations unless a function specifically requests otherwise. Consult the F/W documentation for more details.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>INDEX</name>
+                  <startBit>0</startBit>
+                  <endBit>15</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>Index register L</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>IRQ_EN</name>
+              <origin>0x40</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Gates the STAT.IRQ signal to the core&apos;s external interrupt port.
+NOTE: The IRQ_EN bit acts directly to gate the STAT.IRQ bit to the O_irq port. The O_irq signal can be removed by clearing the IRQ_EN signal, however this will leave the STAT.IRQ bit still active. The correct method for clearing an interrupt is to write a 1 to the STAT.IRQ bit in the STAT register.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>IE</name>
+                  <startBit>30</startBit>
+                  <endBit>30</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>0 = Disable interrupt signal at O_irq
+1 = Enable STAT.IRQ to generate an interrupt signal at O_irq</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>JMP_PROB</name>
+              <origin>0x44</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>Sets probability of executing a dummy operation in the Modexp and/or PMult operation.
+If JMP_PROB register is set to 0 (0%), no dummy operations will be performed during Modexp and/or PMult and the PKA will execute the function at its highest possible performance. However, the fact that there is different execution timing between a 0 and 1 bit in the exponent and/or key can be detected by Timing Analysis attacks (TA) and/or Simple Power Analysis attacks (SPA).
+If JMP_PROB is set to 0x1FFF (100%), every 0 bit in the exponent (for Modexp) and/or key (for PMult) will result in a dummy operation, indistinguishable from the processing of a 1 bit. This obviously slows the performance of the engine for these functions but provides protection against timing side-channel attacks.
+The JMP_PROB register can be used to dial in any amount of TA/SPA protection by setting the value to between 0 and 0x1FFF. For example, if the register is set to 0x7FF (i.e.: 0x1FFF/4), this will result in, on average, 25% of the 0 bits executing a dummy operation and 75% skipping the dummy operation. Which F/W execution path is chosen by the PKA is a function of the internal random number generator and cannot be predicted externally. The approximate performance penalty associated with dialing up non-0 values can be scaled by the percentage of TA/SPA resistance dialed in with this register and the rule-of-thumb.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>PROB</name>
+                  <startBit>0</startBit>
+                  <endBit>12</endBit>
+                  <resetValue>0x0</resetValue>
+                  <documentation>13&apos;h1FFF = 100% probability
+0 = 0% probability
+Other = 100% * Other/13&apos;h1FFF probability</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+            <register>
+              <name>JMP_PROB_LFSR</name>
+              <origin>0x48</origin>
+              <quantity></quantity>
+              <spacing></spacing>
+              <resetValue></resetValue>
+              <resetMask></resetMask>
+              <documentation>The JMP_PROB_LFSR probability LFSR seed register is used to initialize the probability LFSR.
+The LFSR will be re-initialized to this value unless the host attempts to write a 0. In case a 0 is written by the host, internal logic will trap the 0 and substitute a value of 1. (LFSRs enter lock-up if set to 0.)
+This register is not normally written by the host S/W.</documentation>
+              <readBehavior>None</readBehavior>
+              <writeBehavior>None</writeBehavior>
+              <restriction>None</restriction>
+              <dataType>unsigned int</dataType>
+              <bitfields>
+                <bitfield>
+                  <name>INIT</name>
+                  <startBit>0</startBit>
+                  <endBit>12</endBit>
+                  <resetValue>0x1</resetValue>
+                  <documentation>Seed to write to probability LFSR.&gt;br&gt;The seed must be between 0 and 0x1FFF.
+NOTE: A seed of 0 will automatically be detected by the PKA H/W and written as 1 to prevent LFSR lockup.</documentation>
+                  <readBehavior>None</readBehavior>
+                  <writeBehavior>None</writeBehavior>
+                  <restriction>None</restriction>
+                  <enums/>
+                  <bitfields/>
+                </bitfield>
+              </bitfields>
+            </register>
+          </children>
+        </memory>
+      </memories>
+      <instances/>
+      <buildingBlocks/>
+      <enumDefinitions/>
+      <buildingBlockAttributes/>
+      <systemCImportProject>false</systemCImportProject>
+      <layeredSystemCImportProject>false</layeredSystemCImportProject>
+      <tlmModelingObjectProject>false</tlmModelingObjectProject>
+      <processVSProject>true</processVSProject>
+      <processTestVSUserProject>true</processTestVSUserProject>
+      <processTestVSSolution>true</processTestVSSolution>
+      <processTestVSProject>true</processTestVSProject>
+      <processVS1429Project>true</processVS1429Project>
+      <processTestVS1429UserProject>true</processTestVS1429UserProject>
+      <processTestVS1429Solution>true</processTestVS1429Solution>
+      <processTestVS1429Project>true</processTestVS1429Project>
+      <processVS1434Project>true</processVS1434Project>
+      <processTestVS1434UserProject>true</processTestVS1434UserProject>
+      <processTestVS1434Solution>true</processTestVS1434Solution>
+      <processTestVS1434Project>true</processTestVS1434Project>
+      <processTestMakefileWindows>true</processTestMakefileWindows>
+      <processTestMakefileLinux>true</processTestMakefileLinux>
+      <processTestHarness>true</processTestHarness>
+      <processTest>true</processTest>
+      <processPCTBuildScript>true</processPCTBuildScript>
+      <processPCTCallbackScript>true</processPCTCallbackScript>
+      <processPCTImportScript>true</processPCTImportScript>
+      <processPCTDynamicLoadAdapter>true</processPCTDynamicLoadAdapter>
+      <processModelResourceFile>true</processModelResourceFile>
+      <processMirrorDerivedHeader>true</processMirrorDerivedHeader>
+      <processMirrorBaseHeader>true</processMirrorBaseHeader>
+      <processDocumentation>true</processDocumentation>
+      <processHTMLDocumentation>true</processHTMLDocumentation>
+      <processDocumentationCSS>true</processDocumentationCSS>
+      <processDerivedSource>true</processDerivedSource>
+      <processDerivedHeader>true</processDerivedHeader>
+      <processCoverageDerivedHeader>true</processCoverageDerivedHeader>
+      <processCoverageBaseHeader>true</processCoverageBaseHeader>
+      <processBaseHeader>true</processBaseHeader>
+      <processBaseSource>true</processBaseSource>
+      <libraryPackagedItems/>
+      <testPackagedItems/>
+      <internalPackagedItems/>
+      <extensibleTlmPackagedItems/>
+      <ipLibraryPackageInfos/>
+      <buildObjects/>
+      <prioritizedCommonSettings/>
+      <nextLevelCommonSettings/>
+      <extraGeneratedFileOverwriteOverrides/>
+      <importLayers/>
+      <previousImportLayers/>
+      <importLayerSpecifications/>
+      <designSpecification class="DesignSpecification">
+        <requirements/>
+        <testClasses/>
+      </designSpecification>
+    </newModel>
+    <pendingChanges/>
+  </importMergeState>
+  <modelMergeState>
+    <pendingChanges/>
+  </modelMergeState>
+  <systemCImportProject>false</systemCImportProject>
+  <layeredSystemCImportProject>false</layeredSystemCImportProject>
+  <tlmModelingObjectProject>false</tlmModelingObjectProject>
+  <processVSProject>true</processVSProject>
+  <processTestVSUserProject>true</processTestVSUserProject>
+  <processTestVSSolution>true</processTestVSSolution>
+  <processTestVSProject>true</processTestVSProject>
+  <processVS1429Project>true</processVS1429Project>
+  <processTestVS1429UserProject>true</processTestVS1429UserProject>
+  <processTestVS1429Solution>true</processTestVS1429Solution>
+  <processTestVS1429Project>true</processTestVS1429Project>
+  <processVS1434Project>true</processVS1434Project>
+  <processTestVS1434UserProject>true</processTestVS1434UserProject>
+  <processTestVS1434Solution>true</processTestVS1434Solution>
+  <processTestVS1434Project>true</processTestVS1434Project>
+  <processTestMakefileWindows>true</processTestMakefileWindows>
+  <processTestMakefileLinux>true</processTestMakefileLinux>
+  <processTestHarness>false</processTestHarness>
+  <processTest>true</processTest>
+  <processPCTBuildScript>true</processPCTBuildScript>
+  <processPCTCallbackScript>true</processPCTCallbackScript>
+  <processPCTImportScript>true</processPCTImportScript>
+  <processPCTDynamicLoadAdapter>true</processPCTDynamicLoadAdapter>
+  <processModelResourceFile>true</processModelResourceFile>
+  <processMirrorDerivedHeader>true</processMirrorDerivedHeader>
+  <processMirrorBaseHeader>false</processMirrorBaseHeader>
+  <processDocumentation>true</processDocumentation>
+  <processHTMLDocumentation>true</processHTMLDocumentation>
+  <processDocumentationCSS>true</processDocumentationCSS>
+  <processDerivedSource>true</processDerivedSource>
+  <processDerivedHeader>true</processDerivedHeader>
+  <processCoverageDerivedHeader>true</processCoverageDerivedHeader>
+  <processCoverageBaseHeader>true</processCoverageBaseHeader>
+  <processBaseHeader>false</processBaseHeader>
+  <processBaseSource>false</processBaseSource>
+  <libraryPackagedItems/>
+  <testPackagedItems/>
+  <internalPackagedItems/>
+  <extensibleTlmPackagedItems/>
+  <ipLibraryPackageInfos/>
+  <buildObjects/>
+  <prioritizedCommonSettings/>
+  <nextLevelCommonSettings/>
+  <extraGeneratedFileOverwriteOverrides/>
+  <importLayers/>
+  <previousImportLayers/>
+  <importLayerSpecifications/>
+  <designSpecification class="DesignSpecification">
+    <requirements/>
+    <testClasses/>
+  </designSpecification>
+</model>

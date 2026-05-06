@@ -1,0 +1,1329 @@
+[NOTE]
+======
+*Nested Address Maps/Register Files:* This register map contains multiple instances of the following components:
+
+* *key_entry_rf*: 32 instance(s)
+  ** Base Address: 0xD000
+  ** Address Increment: 0x40 per instance
+  ** Address Pattern: Instance N is at base address + (N × 0x40)
+
+  NOTE: The register map shown below applies to all 32 instances of key_entry_rf.
+
+*Register Arrays:* This register map contains the following register arrays:
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD000
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD040
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD080
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD0C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD100
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD140
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD180
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD1C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD200
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD240
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD280
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD2C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD300
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD340
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD380
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD3C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD400
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD440
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD480
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD4C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD500
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD540
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD580
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD5C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD600
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD640
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD680
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD6C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD700
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD740
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD780
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *WORD*: 16 registers
+  ** Base Address: 0xD7C0
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *CTRL*: 32 registers
+  ** Base Address: 0xD800
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE0*: 12 registers
+  ** Base Address: 0x18000
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE1*: 12 registers
+  ** Base Address: 0x18030
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE0*: 8 registers
+  ** Base Address: 0x19000
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE1*: 8 registers
+  ** Base Address: 0x19020
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE0*: 8 registers
+  ** Base Address: 0x1A000
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE1*: 8 registers
+  ** Base Address: 0x1A020
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE0*: 8 registers
+  ** Base Address: 0x1B000
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+* *KEY_SHARE1*: 8 registers
+  ** Base Address: 0x1B020
+  ** Address Increment: 0x4 per register
+  ** Address Pattern: Register N is at base address + (N × 0x4)
+
+======
+[cols="1,1,1,3", options="header"]
+.Register Map
+|===
+| Address | Name | Access | Description
+| 0xD000 - 0xD03C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD040 - 0xD07C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD080 - 0xD0BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD0C0 - 0xD0FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD100 - 0xD13C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD140 - 0xD17C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD180 - 0xD1BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD1C0 - 0xD1FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD200 - 0xD23C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD240 - 0xD27C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD280 - 0xD2BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD2C0 - 0xD2FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD300 - 0xD33C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD340 - 0xD37C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD380 - 0xD3BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD3C0 - 0xD3FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD400 - 0xD43C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD440 - 0xD47C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD480 - 0xD4BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD4C0 - 0xD4FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD500 - 0xD53C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD540 - 0xD57C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD580 - 0xD5BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD5C0 - 0xD5FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD600 - 0xD63C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD640 - 0xD67C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD680 - 0xD6BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD6C0 - 0xD6FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD700 - 0xD73C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD740 - 0xD77C | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD780 - 0xD7BC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD7C0 - 0xD7FC | WORD[16] | RW a| One 32-bit word of a key entry (512-bit key = 16 words). No reset; powers up random.
+| 0xD800 - 0xD87C | CTRL[32] | RW a| Per-slot control: lock bits (W1S), Extend, Dest_valid, Last_dword
+| 0xD880 | KPV_SCRAMBLER_KEY | RW a| 32-bit key for KPV key entry scrambling. No reset; powers up random. Locked when KPV_SCRAMBLER_CTRL.LOCK=1.
+| 0xD884 | KPV_SCRAMBLER_CTRL | RW a| KPV scrambler enable and lock. Reset to 0 on KM reset. LOCK is write-one-only.
+| 0xE000 | VERSION | R a| Hardware version register (semantic versioning: major.minor.patch)
+| 0xE004 | CTRL | R a| Control register (reserved for future use)
+| 0xE008 | SOFT_RST_CODE | RW a| Software reset code register. Write 0x53525354 ('SRST') to trigger soft reset. Any other value has no effect.
+| 0xE00C | IRQ_STATUS | RW a| Interrupt status register. Sticky bits cleared by writing 1.
+| 0xE010 | IRQ_ENABLE | RW a| Interrupt enable/mask register
+| 0xE014 | SCRAMBLER_KEY | RW a| 32-bit scrambler key for SRAM address/data scrambling. When locked: writes ignored, reads return 0. No reset; powers up random.
+| 0xE018 | SCRAMBLER_CTRL | RW a| Scrambler control register
+| 0xE01C | SRAM_LOCK | RW a| SRAM write-lock bits. Bit[i]=1 locks region i (512 bytes each, 32 regions). Write-1-only: writing 1 sets the bit, writing 0 has no effect. Cleared only by full reset.
+| 0xE020 | IRQ_SET | W a| Interrupt set register. Write 1 to trigger corresponding interrupt (for ISR testing). Write-only, reads return 0.
+| 0xE024 | SRAM_WRITE_LOCK_VIOLATION | RW a| Which SRAM region(s) had write attempts while locked. Bit[i]=region i. Sticky, write 1 to clear each bit.
+| 0xE028 | RECOVERABLE_ERR | RW a| Recoverable error status. Firmware writes 1 to set (after recovering in ISR), writes 0 to clear (e.g. when SEP requests clear). Drives recoverable error event output.
+| 0xE030 | OTP_LIFE_CYCLE | R a| Life cycle state. 8-bit (4-bit value differentially encoded). Read-through from OTP port; no reset.
+| 0xE034 | OTP_DEMOTION_STATE | R a| Demotion state. 2-bit, differentially encoded. Read-through from OTP port; no reset.
+| 0xE038 | OTP_CHIPLET_UID_0 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE03C | OTP_CHIPLET_UID_1 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE040 | OTP_CHIPLET_UID_2 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE044 | OTP_CHIPLET_UID_3 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE048 | OTP_CHIPLET_UID_4 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE04C | OTP_CHIPLET_UID_5 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE050 | OTP_CHIPLET_UID_6 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE054 | OTP_CHIPLET_UID_7 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE058 | OTP_CHIPLET_UID_8 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE05C | OTP_CHIPLET_UID_9 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE060 | OTP_CHIPLET_UID_10 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE064 | OTP_CHIPLET_UID_11 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE068 | OTP_CHIPLET_UID_12 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE06C | OTP_CHIPLET_UID_13 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE070 | OTP_CHIPLET_UID_14 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE074 | OTP_CHIPLET_UID_15 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE078 | OTP_CHIPLET_UID_16 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE07C | OTP_CHIPLET_UID_17 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE080 | OTP_CHIPLET_UID_18 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE084 | OTP_CHIPLET_UID_19 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE088 | OTP_CHIPLET_UID_20 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE08C | OTP_CHIPLET_UID_21 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE090 | OTP_CHIPLET_UID_22 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE094 | OTP_CHIPLET_UID_23 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE098 | OTP_CHIPLET_UID_24 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE09C | OTP_CHIPLET_UID_25 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE0A0 | OTP_CHIPLET_UID_26 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE0A4 | OTP_CHIPLET_UID_27 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE0A8 | OTP_CHIPLET_UID_28 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE0AC | OTP_CHIPLET_UID_29 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE0B0 | OTP_CHIPLET_UID_30 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE0B4 | OTP_CHIPLET_UID_31 | R a| One byte of Device Unique Identifier (256 bits total across 32 regs). Read-through from OTP port; no reset.
+| 0xE0B8 | IRQ_ENTRY_ADDR | RW a| Effective IRQ entry address for subsequent interrupts. Writable while unlocked; any 32-bit value accepted.
+| 0xE0BC | IRQ_ENTRY_LOCK | RW a| Write-one-only lock for IRQ_ENTRY_ADDR. Separate readable register; cleared only on KM reset.
+| 0xE100 | VUART_TX | RW a| Virtual UART transmit register. Write a byte to send to testbench. DATA_VALID is set on write and self-clears.
+| 0xE104 | VUART_RX | R a| Virtual UART receive register. Testbench writes bytes here for firmware to read.
+| 0xE108 | VUART_STATUS | R a| Virtual UART status register for flow control
+| 0xE110 | TB_RESULT | RW a| Test result register. Firmware writes 0=fail, 1=pass.
+| 0xE114 | TB_SIGNATURE | RW a| Test completion signature. Firmware writes 0x600D600D (pass) or 0xBADBADBA (fail).
+| 0xE118 | TB_ERRCODE | RW a| Test error code register. Firmware writes optional error code for debugging.
+| 0xE11C | TB_SUBTEST | RW a| Current subtest number register. Firmware increments for each subtest.
+| 0xE120 | TB_CMD | RW a| Testbench command register. Firmware writes command, testbench reads and clears.
+| 0xE124 | TB_CMD_ARG | RW a| Testbench command argument register. Firmware writes optional argument.
+| 0xE128 | TB_CMD_STATUS | RW a| Testbench command status register. Testbench writes status, firmware reads.
+| 0xE12C | TB_CMD_RESULT | R a| Testbench command result register. Testbench writes result value.
+| 0xE1FC | DEBUG | R a| Debug register with known constant value for verification
+| 0xF000 | DATA | R a| One word of random data. Read triggers request or returns prefetch. Writes return SLVERR. No reset.
+| 0xF004 | CFG | RW a| Configuration: PREFETCH enable, TIMEOUT cycles for active CPU read.
+| 0xF008 | STATUS | RW a| Status: DRBG_READY, PREFETCHED, TIMEOUT_ERR (W1C), STREAM_ERR (W1C), COUNT_BAD, COUNT_GOOD.
+| 0xF00C | PREFETCH_DATA | R a| Prefetched word (read-only, for debugging). Cleared when PREFETCH=0. No reset; power-up undefined.
+| 0x10000 | KM_WRITE_DATA | W a| Write data to outbound FIFO (KM→SEP messages)
+| 0x10004 | KM_WRITE_SEPARATOR | RW a| Write 1 to set message separator on next outbound (KM→SEP) write. Cleared by hardware when that write completes.
+| 0x10008 | KM_READ_DATA | R a| Read data from inbound FIFO (SEP→KM messages)
+| 0x1000C | KM_STATUS | RW a| FIFO status information
+| 0x10010 | KM_IRQ_STATUS | RW a| Interrupt status register
+| 0x10014 | KM_IRQ_ENABLE | RW a| Interrupt enable register for KM CPU
+| 0x10018 | KM_CTRL | RW a| Control register for mailbox behavior configuration
+| 0x18000 - 0x1802C | KEY_SHARE0[12] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x18030 - 0x1805C | KEY_SHARE1[12] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x18060 | KEY_CTRL | RW a| Key control register. Writing KEY_VALID=1 asserts the sideload
+valid signal to the OTBN core.
+| 0x19000 - 0x1901C | KEY_SHARE0[8] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x19020 - 0x1903C | KEY_SHARE1[8] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x19040 | KEY_CTRL | RW a| Key control register. Writing KEY_VALID=1 asserts the sideload
+valid signal to the AES core.
+| 0x1A000 - 0x1A01C | KEY_SHARE0[8] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x1A020 - 0x1A03C | KEY_SHARE1[8] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x1A040 | KEY_CTRL | RW a| Key control register. Writing KEY_VALID=1 asserts the sideload
+valid signal to the KMAC core.
+| 0x1B000 - 0x1B01C | KEY_SHARE0[8] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x1B020 - 0x1B03C | KEY_SHARE1[8] | W a| One 32-bit word of key data. Write-only; reads return 0.
+No reset; powers up with undefined value.
+| 0x1B040 | KEY_CTRL | RW a| Key control register. Writing KEY_VALID=1 asserts the sideload
+valid signal to the HMAC core.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.WORD[16] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | RW | - a| 32-bit key data word. No reset for security; power-up value undefined.
+Actual storage is in km_kpv_regfile; CSR field is a protocol placeholder.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.CTRL[32] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:21 | `rsvd_31_21` | R | 0x0 a| Reserved
+| 20:17 | `last_dword` | RW | 0x0 a| Last valid key word index [0,15]. Hardware returns 0 for reads beyond this.
+| 16:9 | `dest_valid` | RW | 0x0 a| Which crypto block may consume this key. Firmware enforced.
+| 8:7 | `rsvd_8_7` | R | 0x0 a| Reserved
+| 6:4 | `extend` | RW | 0x0 a| Zero-indexed number of additional slots for wide keys. Firmware enforced.
+| 3 | `rsvd_3` | R | 0x0 a| Reserved
+| 2 | `unlock_sep` | RW | 0x0 a| Allows SEP (KPVLP) to write this slot when lock_write==0. Read-any, write-1-only.
+| 1 | `lock_use` | RW | 0x0 a| Prevents KM read of this key entry data until reset. Read-any, write-1-only.
+| 0 | `lock_write` | RW | 0x0 a| Prevents KM write to this key entry data and control until reset. Read-any, write-1-only.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KPV_SCRAMBLER_KEY Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `key` | RW | - a| Scrambler key. No reset for security. HW clears to 0 on wipe via hwclr (FR-0000-143).
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KPV_SCRAMBLER_CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:2 | `rsvd` | R | 0x0 a| Reserved
+| 1 | `lock` | RW | 0x0 a| Write-one-only. When 1, key and ENABLE cannot be modified until KM reset.
+| 0 | `enable` | RW | 0x0 a| 1 = scramble key entry data on write, descramble on read; 0 = passthrough.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.VERSION Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:24 | `rsvd` | R | 0x0 a| Reserved; must read as zero
+| 23:16 | `major` | R | 0x1 a| Major version number
+| 15:8 | `minor` | R | 0x0 a| Minor version number
+| 7:0 | `patch` | R | 0x0 a| Patch version number
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `rsvd` | R | 0x0 a| Reserved
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.SOFT_RST_CODE Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `code` | RW | 0x0 a| 32-bit reset code. Write 0x53525354 to trigger soft reset.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.IRQ_STATUS Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7 | `wipe_state` | RW | 0x0 a| Wipe state event (rising edge of wipe_state input). Sticky, write 1 to clear.
+| 6 | `drbg_err` | RW | 0x0 a| DRBG Sampler error (timeout or AXI-Stream error). Sticky, write 1 to clear.
+| 5 | `axi_decerr` | RW | 0x0 a| AXI DECERR (decode error) response detected on CPU bus transaction. Sticky, write 1 to clear.
+| 4 | `axi_slverr` | RW | 0x0 a| AXI SLVERR (slave error) response detected on CPU bus transaction. Sticky, write 1 to clear.
+| 3 | `sram_write_lock_err` | RW | 0x0 a| SRAM write attempt to a write-locked region detected. Sticky, write 1 to clear.
+| 2 | `rom_write_err` | RW | 0x0 a| ROM write attempt detected (ROM is read-only). Sticky, write 1 to clear.
+| 1 | `sram_parity_err` | RW | 0x0 a| SRAM parity error detected. Sticky, write 1 to clear.
+| 0 | `rom_parity_err` | RW | 0x0 a| ROM parity error detected. Sticky, write 1 to clear.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.IRQ_ENABLE Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7 | `wipe_state_en` | RW | 0x0 a| Enable wipe state interrupt
+| 6 | `drbg_err_en` | RW | 0x0 a| Enable DRBG Sampler error interrupt
+| 5 | `axi_decerr_en` | RW | 0x0 a| Enable AXI DECERR error interrupt
+| 4 | `axi_slverr_en` | RW | 0x0 a| Enable AXI SLVERR error interrupt
+| 3 | `sram_write_lock_en` | RW | 0x0 a| Enable SRAM write-lock violation interrupt
+| 2 | `rom_write_en` | RW | 0x0 a| Enable ROM write error interrupt
+| 1 | `sram_parity_en` | RW | 0x0 a| Enable SRAM parity error interrupt
+| 0 | `rom_parity_en` | RW | 0x0 a| Enable ROM parity error interrupt
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.SCRAMBLER_KEY Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `key` | RW | - a| Scrambler key value. Not readable when SCRAMBLER_CTRL.LOCK=1 (returns 0). No reset for security; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.SCRAMBLER_CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:2 | `rsvd` | R | 0x0 a| Reserved
+| 1 | `lock` | RW | 0x0 a| Lock scrambler key and enable bit. Once set, key and enable cannot be modified until reset. Write-once (0->1 only). Security requirement: prevents disabling scrambling after key provisioning.
+| 0 | `enable` | RW | 0x0 a| Enable SRAM scrambling. When 0, data passes through unmodified. Locked when LOCK=1 (security requirement).
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.SRAM_LOCK Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `lock_bits` | RW | 0x0 a| One bit per 512-byte SRAM region. Region 0 = 0x4000-0x41FF, region 31 = 0x7E00-0x7FFF. Write 1 to lock; 0 has no effect.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.IRQ_SET Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | W | 0x0 a| Reserved (write-only; reads trigger SLVERR via err_if_bad_rw)
+| 7 | `wipe_state_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.WIPE_STATE (triggers wipe state interrupt for testing)
+| 6 | `drbg_err_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.DRBG_ERR (triggers DRBG Sampler interrupt for testing)
+| 5 | `axi_decerr_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.AXI_DECERR (triggers AXI DECERR interrupt for testing)
+| 4 | `axi_slverr_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.AXI_SLVERR (triggers AXI SLVERR interrupt for testing)
+| 3 | `sram_write_lock_err_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.SRAM_WRITE_LOCK_ERR (triggers SRAM write-lock interrupt for testing)
+| 2 | `rom_write_err_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.ROM_WRITE_ERR (triggers ROM write interrupt for testing)
+| 1 | `sram_parity_err_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.SRAM_PARITY_ERR (triggers SRAM parity interrupt for testing)
+| 0 | `rom_parity_err_set` | W | 0x0 a| Write 1 to set IRQ_STATUS.ROM_PARITY_ERR (triggers ROM parity interrupt for testing)
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.SRAM_WRITE_LOCK_VIOLATION Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `violation_bits` | RW | 0x0 a| Bit[i]=1 if region i had attempted write while locked. Sticky, write 1 to clear each bit.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.RECOVERABLE_ERR Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:1 | `rsvd` | R | 0x0 a| Reserved
+| 0 | `recoverable_err` | RW | 0x0 a| 1 = recoverable fault occurred and was handled by ISR; 0 = clear. Write 1 to set, write 0 to clear.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_LIFE_CYCLE Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit life cycle state from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_DEMOTION_STATE Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:4 | `rsvd` | R | 0x0 a| Reserved
+| 3:2 | `demote_2_value` | R | - a| 2-bit demotion 2 state from OTP. No reset; power-up value undefined.
+| 1:0 | `demote_1_value` | R | - a| 2-bit demotion 1 state from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_0 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_1 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_2 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_3 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_4 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_5 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_6 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_7 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_8 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_9 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_10 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_11 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_12 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_13 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_14 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_15 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_16 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_17 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_18 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_19 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_20 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_21 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_22 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_23 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_24 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_25 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_26 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_27 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_28 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_29 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_30 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.OTP_CHIPLET_UID_31 Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:8 | `rsvd` | R | 0x0 a| Reserved
+| 7:0 | `value` | R | - a| 8-bit UID byte from OTP. No reset; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.IRQ_ENTRY_ADDR Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `addr` | RW | 0x10 a| IRQ handler entry PC. Reset matches ROM vector at 0x10. When locked, SW writes do not update storage.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.IRQ_ENTRY_LOCK Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:1 | `rsvd` | R | 0x0 a| Reserved; reads as zero.
+| 0 | `lock` | RW | 0x0 a| Write 1 to set; write 0 has no effect; sticky until reset.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.VUART_TX Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31 | `data_valid` | RW | 0x0 a| Data valid strobe. Set by firmware on write, cleared by hardware after one cycle.
+| 30:8 | `rsvd0` | R | 0x0 a| Reserved
+| 7:0 | `tx_byte` | RW | 0x0 a| Byte to transmit (write to send character to testbench)
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.VUART_RX Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31 | `data_valid` | R | 0x0 a| RX data valid. Set by testbench, cleared by firmware read.
+| 30:8 | `rsvd0` | R | 0x0 a| Reserved
+| 7:0 | `rx_byte` | R | 0x0 a| Received byte from testbench
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.VUART_STATUS Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:3 | `rsvd` | R | 0x0 a| Reserved
+| 2 | `print_enable` | R | 0x0 a| Enable VUART printing. Set by testbench to enable printf output. Disabled by default to save simulation time.
+| 1 | `rx_valid` | R | 0x0 a| RX has valid data available
+| 0 | `tx_ready` | R | 0x1 a| TX ready to accept data (always 1 in simulation)
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_RESULT Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `result` | RW | 0x0 a| Test result: 0=fail, 1=pass
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_SIGNATURE Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `signature` | RW | 0x0 a| Completion signature value
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_ERRCODE Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `errcode` | RW | 0x0 a| Error code value
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_SUBTEST Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `subtest` | RW | 0x0 a| Current subtest number
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_CMD Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `cmd` | RW | 0x0 a| Command code (0=NOP, 1=ROM_PARITY_EN, 2=ROM_PARITY_DIS, 3=SRAM_PARITY_EN, 4=SRAM_PARITY_DIS)
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_CMD_ARG Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `arg` | RW | 0x0 a| Command argument value
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_CMD_STATUS Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `status` | RW | 0x0 a| Command status: 0=IDLE, 1=ACK, 0xFFFFFFFF=ERR
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.TB_CMD_RESULT Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `result` | R | 0x0 a| Command result value
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.DEBUG Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `magic` | R | 0xCAFEBEEF a| Magic constant: 0xCAFEBEEF
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.DATA Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | R | - a| 32-bit random data from DRBG. No reset for security; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.CFG Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:16 | `timeout` | RW | 0x100 a| Cycles to wait for DRBG on active CPU read; 0 = disable. Default 256.
+| 15:1 | `rsvd` | RW | 0x0 a| Reserved
+| 0 | `prefetch` | RW | 0x0 a| Enable prefetch. When 0, prefetch data register is cleared.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.STATUS Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:16 | `count_good` | R | 0x0 a| Successful words transferred to CPU. Saturates at 0xFFFF.
+| 15:8 | `count_bad` | R | 0x0 a| Failed transactions (timeout or error). Saturates at 0xFF.
+| 7:4 | `rsvd` | R | 0x0 a| Reserved
+| 3 | `stream_err` | RW | 0x0 a| Set when there is an error on the DRBG AXI-Stream interface (e.g. TVALID deasserted before TREADY). Write 1 to clear.
+| 2 | `timeout_err` | RW | 0x0 a| Set when a DRBG read from the KM CPU times out. Write 1 to clear.
+| 1 | `prefetched` | R | 0x0 a| Prefetched data available
+| 0 | `drbg_ready` | R | 0x0 a| TVALID asserted from DRBG
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.PREFETCH_DATA Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | R | - a| Prefetched 32-bit random data. No reset for security; power-up value undefined.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KM_WRITE_DATA Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | 0x0 a| 32-bit data word to write to outbound FIFO
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KM_WRITE_SEPARATOR Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:1 | `rsvd` | R | 0x0 a| Reserved
+| 0 | `set` | RW | 0x0 a| Write 1 to set message separator on next outbound write. Cleared by hardware when that write completes.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KM_READ_DATA Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | R | 0x0 a| 32-bit data word read from inbound FIFO
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KM_STATUS Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:26 | `rsvd` | R | 0x0 a| Reserved
+| 25 | `outbound_separator` | R | 0x0 a| Message separator: 1 if the last word read from outbound FIFO had the separator bit set (last word of message). Read-only, not sticky.
+| 24 | `inbound_separator` | R | 0x0 a| Message separator: 1 if the last word read from inbound FIFO had the separator bit set (last word of message). Read-only, not sticky.
+| 23 | `outbound_underflow` | RW | 0x0 a| Outbound FIFO underflow detected (read attempted when empty). Sticky, write 1 to clear.
+| 22 | `inbound_underflow` | RW | 0x0 a| Inbound FIFO underflow detected (read attempted when empty). Sticky, write 1 to clear.
+| 21 | `outbound_overflow` | RW | 0x0 a| Outbound FIFO overflow detected (write attempted when full). Sticky, write 1 to clear.
+| 20 | `inbound_overflow` | RW | 0x0 a| Inbound FIFO overflow detected (write attempted when full). Sticky, write 1 to clear.
+| 19:12 | `outbound_depth` | R | 0x0 a| Outbound FIFO fill level (number of words in FIFO)
+| 11:4 | `inbound_depth` | R | 0x0 a| Inbound FIFO fill level (number of words in FIFO)
+| 3 | `outbound_full` | R | 0x0 a| Outbound FIFO is full (cannot write more data)
+| 2 | `outbound_empty` | R | 0x1 a| Outbound FIFO is empty (no data available for SEP to read)
+| 1 | `inbound_full` | R | 0x0 a| Inbound FIFO is full
+| 0 | `inbound_empty` | R | 0x1 a| Inbound FIFO is empty (no data available for KM to read)
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KM_IRQ_STATUS Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:5 | `rsvd` | R | 0x0 a| Reserved
+| 4 | `flushed_by_sep` | RW | 0x0 a| SEP performed a mailbox flush. Sticky, write 1 to clear.
+| 3 | `inbound_underflow` | RW | 0x0 a| Inbound FIFO underflow detected. Sticky, write 1 to clear.
+| 2 | `outbound_overflow` | RW | 0x0 a| Outbound FIFO overflow detected. Sticky, write 1 to clear.
+| 1 | `outbound_write_space_avail` | R | 0x0 a| Outbound FIFO has space available for KM to write (level-sensitive). 1 = space available, 0 = full.
+| 0 | `inbound_read_data_avail` | R | 0x0 a| Inbound FIFO has data available for KM to read (level-sensitive). 1 = data available, 0 = empty.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KM_IRQ_ENABLE Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:5 | `rsvd` | R | 0x0 a| Reserved
+| 4 | `flushed_by_sep_en` | RW | 0x0 a| Enable interrupt to KM when SEP performs a mailbox flush
+| 3 | `inbound_underflow_en` | RW | 0x0 a| Enable interrupt to KM when inbound FIFO underflow is detected
+| 2 | `outbound_overflow_en` | RW | 0x0 a| Enable interrupt to KM when outbound FIFO overflow is detected
+| 1 | `outbound_write_space_avail_en` | RW | 0x0 a| Enable interrupt to KM when outbound FIFO has space available (KM->SEP messages)
+| 0 | `inbound_read_data_avail_en` | RW | 0x0 a| Enable interrupt to KM when inbound FIFO has data available (SEP->KM messages)
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KM_CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:3 | `rsvd` | R | 0x0 a| Reserved
+| 2 | `flush` | RW | 0x0 a| Write 1 to flush all mailbox FIFOs (inbound and outbound). Cleared by hardware when flush completes.
+| 1 | `inbound_underflow_resp` | RW | 0x0 a| Response type for inbound FIFO underflow: 0=SLVERR (default), 1=OKAY
+| 0 | `outbound_overflow_resp` | RW | 0x0 a| Response type for outbound FIFO overflow: 0=SLVERR (default), 1=OKAY
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE0[12] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE1[12] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:1 | `rsvd` | R | 0x0 a| Reserved
+| 0 | `key_valid` | RW | 0x0 a| When 1, asserts keymgr_key_i.valid to indicate key is loaded.
+Write 0 to invalidate the current key.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE0[8] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE1[8] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:1 | `rsvd` | R | 0x0 a| Reserved
+| 0 | `key_valid` | RW | 0x0 a| When 1, asserts keymgr_key_i.valid to indicate key is loaded.
+Write 0 to invalidate the current key.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE0[8] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE1[8] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:1 | `rsvd` | R | 0x0 a| Reserved
+| 0 | `key_valid` | RW | 0x0 a| When 1, asserts keymgr_key_i.valid to indicate key is loaded.
+Write 0 to invalidate the current key.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE0[8] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_SHARE1[8] Register Array
+|===
+| Bits | Field | Access | Reset | Description
+| 31:0 | `data` | W | - a| 32-bit key data word. Write-only for security.
+|===
+
+[cols="1,1,1,1,3", options="header"]
+.KEY_CTRL Register
+|===
+| Bits | Field | Access | Reset | Description
+| 31:1 | `rsvd` | R | 0x0 a| Reserved
+| 0 | `key_valid` | RW | 0x0 a| When 1, asserts keymgr_key_i.valid to indicate key is loaded.
+Write 0 to invalidate the current key.
+|===

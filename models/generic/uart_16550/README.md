@@ -1,0 +1,220 @@
+# README — UART 16550 SystemC Model & Unit Test
+
+This document explains how to set up and run the UART 16550 SystemC model with a standalone unit-test bench.
+
+**Tested on:** Ubuntu 22.04 LTS
+
+---
+
+## A. Prerequisites
+
+### A1. Base tools (Linux)
+- C++17 compatible compiler (g++ 7 or later)
+- Other build tools:
+```bash
+sudo apt-get update
+sudo apt-get install -y g++ cmake make autoconf doxygen graphviz lcov gnome-terminal python3 python3-pip
+python3 -m pip install --user colorama
+```
+
+### A2. Dependencies (download, build, install)
+1. **SystemC 2.3.3+** — <https://www.accellera.org/downloads/standards/systemc>
+
+2. **Accellera CCI (Configuration, Control and Inspection)** — <https://www.accellera.org/downloads/standards/cci>
+
+This project supports Accellera CCI for runtime configuration via JSON files (see `config/uart_default.json`). The model uses CCI parameters for configurable settings such as the TimeKeeper quantum. Additionally, a lightweight internal CSML register helper library is built from `utils/csml/` for register management.
+
+**NOTE (SystemC rpath):**  
+Prefer setting `LD_LIBRARY_PATH` at runtime (see A3), or configure an install rpath in your CMake if you package binaries.
+
+### A3. Environment setup
+Add the following to your `~/.bashrc` (adjust paths):
+```bash
+# SystemC
+export SYSTEMC_HOME=/home/USER/systemc-2.3.3
+export LD_LIBRARY_PATH="${SYSTEMC_HOME}/lib-linux64:${LD_LIBRARY_PATH}"
+```
+Reload your shell or run: `source ~/.bashrc`
+
+---
+
+## B. Directory Structure
+
+```
+uart_16550/
+.
+├── CMakeLists.txt
+├── config
+│   └── uart_default.json
+├── docs
+│   ├── Uart_16550_design_doc.md
+│   └── UART_test_plan.md
+├── Doxyfile.in
+├── model
+│   ├── inc
+│   │   ├── terminal_if.h
+│   │   ├── thread_safe_queue_channel.h
+│   │   ├── uart_base.h
+│   │   ├── uart.h
+│   │   ├── uart_log_adapter.h
+│   │   ├── uart_register.h
+│   │   ├── uart_terminal_ui.h
+│   │   └── uart_with_terminal.h
+│   └── src
+│       ├── thread_safe_queue_channel.cpp
+│       ├── uart_base.cpp
+│       ├── uart.cpp
+│       ├── uart_terminal_client.py
+│       └── uart_terminal_ui.cpp
+├── README.md
+└── tests
+    ├── inc
+    │   ├── terminal_test.h
+    │   ├── uart_basetest.h
+    │   └── uart_test.h
+    └── src
+        ├── terminal_test.cpp
+        ├── top.cpp
+        ├── uart_basetest.cpp
+        └── uart_test.cpp
+---
+
+## C. Build & Run the UART 16550 Model
+
+From the project root:
+
+```bash
+mkdir -p build
+cd build
+```
+
+### C1. Debug build
+```bash
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make
+```
+### C2. Clean the build directory
+```bash
+make clean
+```
+
+### C3. Release build
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make
+```
+
+### C4. ASAN build (AddressSanitizer)
+Memory error detection with AddressSanitizer for finding memory leaks, buffer overflows, and use-after-free bugs.
+```bash
+cmake -DCMAKE_BUILD_TYPE=ASAN ..
+make
+./asan/uart_test
+```
+
+### C5. Coverage build
+> Requires your CMake project to define a `Coverage` build-type and a `coverage` target.
+```bash
+cmake -DCMAKE_BUILD_TYPE=Coverage ..
+make coverage
+# Open report:
+xdg-open coverage/html/index.html  # or: firefox coverage/html/index.html
+```
+
+### C6. Static Analysis (cppcheck)
+Run static code analysis on the model code:
+```bash
+# From any build directory
+make uart_cppcheck
+cat cppcheck_report.txt
+```
+
+### C7. Run Tests
+
+The project includes two separate testbenches:
+
+#### C7.1. UART Model Test (`uart_test`)
+Tests the UART IP core functionality including registers, FIFOs, interrupts, and loopback modes.
+
+```bash
+# run directly
+./debug/uart_test    # Debug build
+./release/uart_test  # Release build
+./asan/uart_test     # ASAN build
+```
+
+**What it tests:**
+- Register access (RBR, THR, IER, IIR, FCR, LSR, etc.)
+- FIFO operations with various trigger levels
+- Interrupt generation and priority
+- Loopback modes (internal and line loopback)
+- Overrun error handling
+
+#### C7.2. Terminal Model Test (`terminal_test`)
+Interactive test for the terminal UI model with echo capability.
+
+```bash
+./debug/terminal_test    # Debug build
+./release/terminal_test  # Release build
+./asan/terminal_test     # ASAN build
+```
+
+**What it does:**
+- Auto-spawns an gnome-terminal window with the terminal client
+- Sends a welcome message to the terminal
+- Echoes back any characters you type in the terminal
+- Validates bidirectional communication between UART and terminal
+
+**Usage:**
+1. Run the executable
+2. An gnome-terminal window will appear
+3. Type characters in the gnome-terminal window
+4. Characters will be echoed back in the terminal and printed to the console
+5. Press Ctrl+C to stop the test
+
+---
+
+## D. Logs
+
+- **Logging backend**: CSML-based logger (`CsmlLogger`) via `model/src/uart.cpp`.
+- **Verbosity**: DEBUG build enables more verbose logs; Release is quieter.
+- **Default sink**: Console (stdout). No log files are created by default.
+
+---
+
+## E. Doxygen Documentation
+
+This project includes API documentation generated by Doxygen, using `README.md` as the main page.
+
+**Prerequisites:**
+- Doxygen (required) - installed via `sudo apt-get install doxygen`
+- Graphviz (optional) - for class diagrams and dependency graphs
+
+**Generate documentation:**
+
+From the build directory:
+```bash
+cd build
+make docs
+# or alternatively:
+cmake --build . --target docs
+```
+
+**View the generated HTML:**
+```bash
+xdg-open docs/html/index.html  # or: firefox docs/html/index.html
+```
+
+**Note:** If Graphviz is not installed, documentation will still be generated but without UML diagrams. The CMake configuration automatically detects Graphviz availability.
+
+
+---
+
+## F. Troubleshooting (Quick tips)
+
+- **libsystemc.so not found**: Verify `LD_LIBRARY_PATH` includes `${SYSTEMC_HOME}/lib-linux64`.
+- **Coverage target missing**: Only available with `-DCMAKE_BUILD_TYPE=Coverage` and lcov/genhtml installed.
+- **C++17 errors**: Ensure your compiler supports C++17 and CMake is using it (see `CMakeLists.txt`).
+- **SystemC not found**: Ensure `SYSTEMC_HOME` is set and points to a valid SystemC install; see `find_package(SystemC)` fallback in `CMakeLists.txt`.
+- **UART Terminal UI client**: Requires `gnome-terminal`, `python3`, and `colorama`. If the client doesn’t appear, check DISPLAY and that the server listens on the expected port.
+---

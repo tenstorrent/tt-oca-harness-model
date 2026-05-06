@@ -1,0 +1,36 @@
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/whisper.cpp.o whisper.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/IntRegs.cpp.o IntRegs.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/CsRegs.cpp.o CsRegs.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/FpRegs.cpp.o FpRegs.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/instforms.cpp.o instforms.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Memory.cpp.o Memory.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Hart.cpp.o Hart.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/InstEntry.cpp.o InstEntry.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Triggers.cpp.o Triggers.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/PerfRegs.cpp.o PerfRegs.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/gdb.cpp.o gdb.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/HartConfig.cpp.o HartConfig.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Server.cpp.o Server.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Interactive.cpp.o Interactive.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/decode.cpp.o decode.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/disas.cpp.o disas.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Syscall.cpp.o Syscall.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/PmaManager.cpp.o PmaManager.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/DecodedInst.cpp.o DecodedInst.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/snapshot.cpp.o snapshot.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/PmpManager.cpp.o PmpManager.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/VirtMem.cpp.o VirtMem.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Core.cpp.o Core.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/System.cpp.o System.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Cache.cpp.o Cache.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/Tlb.cpp.o Tlb.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/VecRegs.cpp.o VecRegs.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/vector.cpp.o vector.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/wideint.cpp.o wideint.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/float.cpp.o float.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/bitmanip.cpp.o bitmanip.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/amo.cpp.o amo.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/SparseMem.cpp.o SparseMem.cpp
+g++  -MMD -MP -mtune=native -std=c++17 -O3 -isystem /usr/lib/x86_64-linux-gnu -I. -fPIC -pedantic -Wall -Wextra -c -o build-Linux/InstProfile.cpp.o InstProfile.cpp
+ar cr build-Linux/librvcore.a build-Linux/IntRegs.cpp.o build-Linux/CsRegs.cpp.o build-Linux/FpRegs.cpp.o build-Linux/instforms.cpp.o build-Linux/Memory.cpp.o build-Linux/Hart.cpp.o build-Linux/InstEntry.cpp.o build-Linux/Triggers.cpp.o build-Linux/PerfRegs.cpp.o build-Linux/gdb.cpp.o build-Linux/HartConfig.cpp.o build-Linux/Server.cpp.o build-Linux/Interactive.cpp.o build-Linux/decode.cpp.o build-Linux/disas.cpp.o build-Linux/Syscall.cpp.o build-Linux/PmaManager.cpp.o build-Linux/DecodedInst.cpp.o build-Linux/snapshot.cpp.o build-Linux/PmpManager.cpp.o build-Linux/VirtMem.cpp.o build-Linux/Core.cpp.o build-Linux/System.cpp.o build-Linux/Cache.cpp.o build-Linux/Tlb.cpp.o build-Linux/VecRegs.cpp.o build-Linux/vector.cpp.o build-Linux/wideint.cpp.o build-Linux/float.cpp.o build-Linux/bitmanip.cpp.o build-Linux/amo.cpp.o build-Linux/SparseMem.cpp.o build-Linux/InstProfile.cpp.o
+g++ -o build-Linux/whisper build-Linux/whisper.cpp.o build-Linux/librvcore.a  -l:libboost_program_options.a -lpthread -lz -static-libstdc++ -lstdc++fs

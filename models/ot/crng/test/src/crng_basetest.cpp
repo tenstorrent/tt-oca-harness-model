@@ -1,0 +1,27 @@
+#include "crng_basetest.h"
+
+crng_basetest::Register_Property_t reg_map[24] = {
+{crng_basetest::INTR_STATE_OFFSET, crng_basetest::INTR_STATE_READ, crng_basetest::INTR_STATE_WRITE, crng_basetest::INTR_STATE_RESET, "INTR_STATE"}, 
+{crng_basetest::INTR_ENABLE_OFFSET, crng_basetest::INTR_ENABLE_READ, crng_basetest::INTR_ENABLE_WRITE, crng_basetest::INTR_ENABLE_RESET, "INTR_ENABLE"}, 
+{crng_basetest::INTR_TEST_OFFSET, crng_basetest::INTR_TEST_READ, crng_basetest::INTR_TEST_WRITE, crng_basetest::INTR_TEST_RESET, "INTR_TEST"}, 
+{crng_basetest::ALERT_TEST_OFFSET, crng_basetest::ALERT_TEST_READ, crng_basetest::ALERT_TEST_WRITE, crng_basetest::ALERT_TEST_RESET, "ALERT_TEST"}, 
+{crng_basetest::REGWEN_OFFSET, crng_basetest::REGWEN_READ, crng_basetest::REGWEN_WRITE, crng_basetest::REGWEN_RESET, "REGWEN"}, 
+{crng_basetest::CTRL_OFFSET, crng_basetest::CTRL_READ, crng_basetest::CTRL_WRITE, crng_basetest::CTRL_RESET, "CTRL"}, 
+{crng_basetest::CMD_REQ_OFFSET, crng_basetest::CMD_REQ_READ, crng_basetest::CMD_REQ_WRITE, crng_basetest::CMD_REQ_RESET, "CMD_REQ"}, 
+{crng_basetest::RESEED_INTERVAL_OFFSET, crng_basetest::RESEED_INTERVAL_READ, crng_basetest::RESEED_INTERVAL_WRITE, crng_basetest::RESEED_INTERVAL_RESET, "RESEED_INTERVAL"}, 
+{crng_basetest::RESEED_COUNTER_0_OFFSET, crng_basetest::RESEED_COUNTER_0_READ, crng_basetest::RESEED_COUNTER_0_WRITE, crng_basetest::RESEED_COUNTER_0_RESET, "RESEED_COUNTER_0"}, 
+{crng_basetest::RESEED_COUNTER_1_OFFSET, crng_basetest::RESEED_COUNTER_1_READ, crng_basetest::RESEED_COUNTER_1_WRITE, crng_basetest::RESEED_COUNTER_1_RESET, "RESEED_COUNTER_1"}, 
+{crng_basetest::RESEED_COUNTER_2_OFFSET, crng_basetest::RESEED_COUNTER_2_READ, crng_basetest::RESEED_COUNTER_2_WRITE, crng_basetest::RESEED_COUNTER_2_RESET, "RESEED_COUNTER_2"}, 
+{crng_basetest::SW_CMD_STS_OFFSET, crng_basetest::SW_CMD_STS_READ, crng_basetest::SW_CMD_STS_WRITE, crng_basetest::SW_CMD_STS_RESET, "SW_CMD_STS"}, 
+{crng_basetest::GENBITS_VLD_OFFSET, crng_basetest::GENBITS_VLD_READ, crng_basetest::GENBITS_VLD_WRITE, crng_basetest::GENBITS_VLD_RESET, "GENBITS_VLD"}, 
+{crng_basetest::GENBITS_OFFSET, crng_basetest::GENBITS_READ, crng_basetest::GENBITS_WRITE, crng_basetest::GENBITS_RESET, "GENBITS"}, 
+{crng_basetest::INT_STATE_READ_ENABLE_OFFSET, crng_basetest::INT_STATE_READ_ENABLE_READ, crng_basetest::INT_STATE_READ_ENABLE_WRITE, crng_basetest::INT_STATE_READ_ENABLE_RESET, "INT_STATE_READ_ENABLE"}, 
+{crng_basetest::INT_STATE_READ_ENABLE_REGWEN_OFFSET, crng_basetest::INT_STATE_READ_ENABLE_REGWEN_READ, crng_basetest::INT_STATE_READ_ENABLE_REGWEN_WRITE, crng_basetest::INT_STATE_READ_ENABLE_REGWEN_RESET, "INT_STATE_READ_ENABLE_REGWEN"}, 
+{crng_basetest::INT_STATE_NUM_OFFSET, crng_basetest::INT_STATE_NUM_READ, crng_basetest::INT_STATE_NUM_WRITE, crng_basetest::INT_STATE_NUM_RESET, "INT_STATE_NUM"}, 
+{crng_basetest::INT_STATE_VAL_OFFSET, crng_basetest::INT_STATE_VAL_READ, crng_basetest::INT_STATE_VAL_WRITE, crng_basetest::INT_STATE_VAL_RESET, "INT_STATE_VAL"}, 
+{crng_basetest::FIPS_FORCE_OFFSET, crng_basetest::FIPS_FORCE_READ, crng_basetest::FIPS_FORCE_WRITE, crng_basetest::FIPS_FORCE_RESET, "FIPS_FORCE"}, 
+{crng_basetest::HW_EXC_STS_OFFSET, crng_basetest::HW_EXC_STS_READ, crng_basetest::HW_EXC_STS_WRITE, crng_basetest::HW_EXC_STS_RESET, "HW_EXC_STS"}, 
+{crng_basetest::RECOV_ALERT_STS_OFFSET, crng_basetest::RECOV_ALERT_STS_READ, crng_basetest::RECOV_ALERT_STS_WRITE, crng_basetest::RECOV_ALERT_STS_RESET, "RECOV_ALERT_STS"}, 
+{crng_basetest::ERR_CODE_OFFSET, crng_basetest::ERR_CODE_READ, crng_basetest::ERR_CODE_WRITE, crng_basetest::ERR_CODE_RESET, "ERR_CODE"}, 
+{crng_basetest::ERR_CODE_TEST_OFFSET, crng_basetest::ERR_CODE_TEST_READ, crng_basetest::ERR_CODE_TEST_WRITE, crng_basetest::ERR_CODE_TEST_RESET, "ERR_CODE_TEST"}, 
+{crng_basetest::MAIN_SM_STATE_OFFSET, crng_basetest::MAIN_SM_STATE_READ, crng_basetest::MAIN_SM_STATE_WRITE, crng_basetest::MAIN_SM_STATE_RESET, "MAIN_SM_STATE"}};
