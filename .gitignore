@@ -1,0 +1,51 @@
+# CMake build directories
+build/
+build_*/
+
+# Compiled object files
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Executables
+*.out
+*.exe
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+Testing/
+
+# Coverage reports
+coverage-report/
+*.gcda
+*.gcno
+*.lcov
+*.info
+
+# Compiler / linker artifacts
+*.d
+*.dSYM/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# clangd / Microsoft C/C++ language-server caches — auto-generated, per-user.
+.cache/
+.ccls-cache/
+
+# compile_commands.json symlinks pointing into build/ — recreated by the
+# build (see CMake's CMAKE_EXPORT_COMPILE_COMMANDS).
+**/peripherals/*/compile_commands.json
+
+# macOS
+.DS_Store
