@@ -1,38 +1,57 @@
 # Release Information
 
-- Version: 2.0
-- Release date: 06-May-2026
-- Release name: Phase II release
+- Version: 2.1
+- Release date: 29-May-2026
+- Release name: release_2.0
 
 # Release Details
 
- Includes the following models:
-  - RISC-V core model (VeeR/EL2)
-  - Memories: SRAM, ROM, ITCM, DTCM
-  - Interconnect and interrupt controllers: SimpleBus, PLIC, CLINT, AV BUS
-  - Reset and infrastructure: Reset generation unit (RSU), stdout device
-  - Peripherals: DMA, UART, GPIO, HMAC, KMAC, OTBN, CSRNG/CRNG, AES, SPI controller, Key Manager, EDN, Entropy Source, Mailbox, AON Timer, SEP Efuse/OTP, Lifecycle Controller, xSPI Controller + Flash 
-  - Integration stubs used by the subsystem: EDN request/response stubs, Reset Generation Unit, OTP key request stub, keymgr dummy, KMAC entropy/keymgr stubs, AES EDN/keymgr stubs, SPI device stub, I2C device stub, GPIO loopback bridge
+## Included Models
 
-- Testing status:
-  - All models are unit tested.
-  - System-level tests under `riscv-vp-plusplus/sw/sep-vp-tests` run successfully on the VP.
-  - System-level DV tests under `riscv-vp-plusplus/sw/tt-tests` run successfully on the VP.
+- RISC-V core model (VeeR EL2)
+- Memories: SRAM, ROM, ITCM, DTCM
+- Interconnect and interrupt controllers: SimpleBus, PLIC, CLINT
+- Reset and infrastructure: Reset generation unit (RSU), stdout device
+- Peripherals: DMA, UART, GPIO, HMAC, KMAC, OTBN, CSRNG, AES, SPI controller(Open Titan), SPI Flash(SFDP Profile 1 commands), Key Manager, EDN, Entropy Source, Mailbox, AON Timer, SEP Efuse/OTP, Lifecycle Controller
+- Integration stubs/Adapters: OTP key request stub, Mailbox host stub, GPIO loopback bridge, MailboxBridge, dma_sys_bus_adapter
 
 
-# Issues fixed
+## Testing Status
 
-- None Reported 
+- All peripheral models are unit tested
+- Firmware tests written by Vayavya under `sw/sep-vp-tests/` run successfully on the VP
+- TT firmware tests under `sw/tt-oca-hw-main/dv/sep/tests/` run successfully on the VP
+- TT firmware tests under `sw/tt-oca-hw-main/fw/sep/tests/` 
+   -Tests exercising the current sep models run successfully on the VP 
+   -Tests exercising the sep models which are currently not part of the VP are not tested.
 
+---
+
+# Issues Fixed
+None
+---
 
 # Current Limitations
 
-- GCC/toolchain compatibility constraints:
-  - Tested compiler versions for this release:
-    - GCC 11.4.0 (Accellera flow) -- The code base compiles successfully
-    - GCC 9.5.0 (Synopsys Virtualizer toolchain) -- The codebase compiles successfully with the Synopsys toolchain
-  - Accellera SystemC 3.0.1 is validated with GCC 9.x (e.g., 9.4.0) and GCC 11.x (e.g., 11.4.0).
-  - xSPI controller test `spi_sanity_cadence.c` does not pass. This test requires additional models (for example SPI mux and clock divider) that are not part of Phase II.
-  - xSPI reset and JEDEC reset are not supported by the SPI flash model, therefore these reset flows have not been validated.
-  - For models without DV tests (for example Key Manager), only unit-level testing has been performed.
-- Synopsys Virtualizer support will be part fo the next release.
+- **Unmodeled IPs**: Tests referencing the following will fail or produce no output:
+  - `sep_outbound_filter`
+  - `PIC` (Platform Interrupt Controller)
+  - `sep_cpu_ctrl`, `sep_reset_ctrl`
+  - `local_master_alias_remap_ctrl`
+  - `och_sep_cdns_spi_ctrl`, `och_sep_spi_mux_ctrl`
+- **Key Manager**: unit-level testing only (no DV tests)
+- **Compiler versions tested**:
+  - GCC 11.4.0, C++17 (Accellera flow)
+  - GCC 9.5.0, C++17 (Accellera flow)
+  - GCC 11.2, C++20 (Accellera flow)
+
+
+# GCC and C++ Compatibility
+
+| CXX_STD  | Compiler                    | SYSTEMC_API| Status         |
+|----------|-----------------------------|------------|----------------|
+| c++17    | gcc-toolset-9 (GCC 9.2)     | cxx201703L |  OK            |
+| c++17    | system GCC 8.5              | cxx201703L |  OK            |
+| c++20    | gcc-toolset-11 (GCC 11.2)   | cxx202002L |  OK            |
+| c++20    | system GCC 8.5              | cxx201709L |  Not Supported |
+| c++20    | gcc-toolset-9 (GCC 9.2)     | cxx201709L |  Not Supported |

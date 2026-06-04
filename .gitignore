@@ -19,7 +19,7 @@
 **/obj_nocci/
 **/bin/
 # Exception: firmware standalone scripts in tt-oca-hw-main/bin/ must be tracked
-!riscv-vp-plusplus/sw/tt-oca-hw-main/bin/
+!sw/tt-oca-hw-main/bin
 **/lib/
 
 # -----------------------------------------------------------------------------
@@ -203,7 +203,7 @@
 #------------------------------------------------------------------------------
 # Excpetion got softfloat build files
 #------------------------------------------------------------------------------
-!models/veer-iss/VeeR-ISS/softfloat/build
+!sep/peripherals/cpu/VeeR-ISS/softfloat/build
 
 # =============================================================================
 # End of .gitignore

@@ -1,0 +1,3 @@
+[submodule "sep/utils/csml"]
+	path = sep/utils/csml
+	url = git@github.com:Vayavya-Labs/CSML.git
