@@ -1,0 +1,22 @@
+{
+  "//": "==========================================================================",
+  "//": "SPI Controller Multi-Device Configuration",
+  "//": "==========================================================================",
+  "//": "Configuration for testing with multiple SPI devices (2 chip selects).",
+  "//": "This is useful for multi-device switching and CSID validation tests.",
+  "//": "",
+  "//": "Usage:",
+  "//": "  ./bin/out config/spi_controller_multi_device.json",
+  "//": "==========================================================================",
+  "testbench": {
+    "spi_controller_dut": {
+      "NumCS": 2,
+      "TxDepth": 72,
+      "RxDepth": 64,
+      "ByteOrder": true,
+      "CmdDepth": 4,
+      "ClkPeriodNs": 10.0,
+      "TimeKeeperQuantumNs": 1000.0
+    }
+  }
+}

@@ -1,0 +1,15 @@
+Upstream: https://github.com/ics-jku/riscv-vp-plusplus.git
+Ref requested: master
+Resolved commit: e70336423359a28eb4397fc7621673e680ea3a22
+Vendored on: 2025-10-07T11:04:16Z
+
+Submodules (path / SHA / state):
+ 1ddef3950485f10f32500edabe20198f3d90c8b9 env/gd32/vp-breadboard/LuaBridge3 (3.0-beta1-140-g1ddef39)
+ b996fc911bf2df225e1b3a66e3da195c8326ee0d env/gd32/vp-breadboard/LuaBridge3/ThirdParty/googletest (release-1.8.0-2867-gb996fc91)
+ 7257f34d89fddfefeedc70cc2023a29851d6d517 env/gd32/vp-breadboard/LuaBridge3/ThirdParty/luau (0.506-1-g7257f34)
+ 5120609e6e81974acd3a2e9704e74e32b770ef6f vp/src/core/common/gdb-mc/libgdb/mpc (0.9.0-16-g5120609)
+ e48ce9011ca64a7298086e2a01a4cc2b5b04716c vp/src/platform/hifive/vbb-protocol (heads/master)
+ b00d425b38c195bfc2ad31f4d0cc2a94fc58ab6b vp/src/platform/hwitl/virtual-bus (b00d425)
+ 38b8a2c61aafe40de44296bee0c9c28ac4e80b01 vp/src/vendor/systemc (2.3.3)
+ 081a5bc6f415cddd0b7e8684829a1f3663c1426c vp/tests (081a5bc)
+ 798aa244f6445faae0618a03a72c831ab85c2763 vp/tests/libgdb/ptest (heads/master)
