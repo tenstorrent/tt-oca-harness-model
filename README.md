@@ -16,9 +16,9 @@ tenstorrent_sep/
 ├── cmake/                        ← shared CMake modules (FindSystemC, FindCCI, etc.)
 ├── sep/                          ← all SEP IP peripheral models
 │   ├── peripherals/              ← individual IP models (aes, hmac, uart, otbn, …)
-│   │   └── cpu/                  ← VeeR EL2 ISS + TLM wrapper
+│   ├── cpu/                      ← VeeR EL2 ISS + TLM wrapper
 │   └── utils/
-│       ├── csml/                 ← SystemC Model Library (CCI params, logging)
+│       ├── csml/                 ← Core SystemC Model Library (Registers modelling, CCI params, logging)
 │       └── paged-memory/         ← PagedMemory header-only sparse storage engine
 ├── vp/                           ← VP platform (wires all models into a complete VP)
 │   ├── configure_vp.sh           ← configure CMake + export build env
@@ -140,6 +140,7 @@ git clone git@github.com:tenstorrent/tt-oca-sim.git
 cd tt-oca-sim
 git submodule update --init --recursive
 ```
+> **Note:** Ensure that your GitHub SSH keys are configured correctly, as the CSML submodule uses SSH for cloning.
 
 **Build:**
 

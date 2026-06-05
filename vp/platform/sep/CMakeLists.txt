@@ -29,9 +29,9 @@ find_package(OpenSSL REQUIRED)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/AVBbus/model/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/entropy_src/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/edn/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/cpu/VeeR-ISS/
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/cpu/VeeR-ISS/softfloat/source/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/cpu/VeeR-ISSTlm/model/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISS/
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISS/softfloat/source/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISSTlm/model/inc
   )
   if(CCI_FOUND)
     include_directories(${CCI_INCLUDE_DIR})

@@ -103,7 +103,7 @@ target_include_directories(veeriss_model
 	VeeR-ISS
 	VeeR-ISS/softfloat/source/include
 	VeeR-ISSTlm/model/inc
-	${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+	${CMAKE_CURRENT_SOURCE_DIR}/../utils/csml/inc
 	)
 # -----------------------------------------------------------------------------
 # External Dependencies (SystemC and CCI)

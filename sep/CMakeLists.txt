@@ -41,6 +41,10 @@ set(_SEP_GENERIC
   rom
 )
 
+message(STATUS "Configuring CPU models...")
+add_subdirectory(cpu/VeeR-ISS/softfloat)
+add_subdirectory(cpu)
+
 message(STATUS "Configuring OpenTitan models...")
 
 set(_SEP_OT
@@ -61,8 +65,6 @@ set(_SEP_OT
   AVBbus
   entropy_src
   edn
-  cpu
-  cpu/VeeR-ISS/softfloat
 )
 
 foreach(_p IN LISTS _SEP_GENERIC _SEP_OT)
