@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 460" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#37474F"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#E65100"/>
+    </marker>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="hw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E3F2FD"/>
+      <stop offset="100%" stop-color="#BBDEFB"/>
+    </linearGradient>
+    <linearGradient id="sw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFF3E0"/>
+      <stop offset="100%" stop-color="#FFCC80"/>
+    </linearGradient>
+  </defs>
+
+  <text x="500" y="32" font-size="18" font-weight="700" fill="#0D47A1" text-anchor="middle">CLINT Interrupt Lifecycle — 4-Stage Pipeline</text>
+  <text x="500" y="52" font-size="11" fill="#546E7A" text-anchor="middle">Stages 1–3 are inside the CLINT.   Stage 4 is software (trap handler / ISR).</text>
+
+  <rect x="20"  y="80"  width="780" height="280" rx="6" ry="6" fill="#F5FAFE" stroke="#90CAF9" stroke-dasharray="4 3" stroke-width="1.2"/>
+  <text x="40"  y="100" font-size="11" font-weight="700" fill="#1565C0">CLINT (hardware / SystemC model)</text>
+
+  <rect x="820" y="80"  width="160" height="280" rx="6" ry="6" fill="#FFF8F0" stroke="#FFB74D" stroke-dasharray="4 3" stroke-width="1.2"/>
+  <text x="840" y="100" font-size="11" font-weight="700" fill="#E65100">Software (CPU)</text>
+
+  <!-- Stage 1: Tick / Write -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="130" width="220" height="200" rx="8" ry="8" fill="url(#hw)" stroke="#1565C0" stroke-width="2"/>
+  </g>
+  <circle cx="62" cy="152" r="14" fill="#1565C0"/>
+  <text x="62" y="157" font-size="14" font-weight="700" fill="white" text-anchor="middle">1</text>
+  <text x="170" y="156" font-size="14" font-weight="700" fill="#0D47A1" text-anchor="middle">Tick / Write</text>
+  <line x1="55" y1="172" x2="245" y2="172" stroke="#90CAF9"/>
+  <text x="150" y="195" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">MTIME += 1</text>
+  <text x="150" y="212" font-size="10" fill="#546E7A" text-anchor="middle" font-style="italic">every tick_period_ns</text>
+  <text x="150" y="240" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle">— or —</text>
+  <text x="150" y="262" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">MSIP[h] ← 1</text>
+  <text x="150" y="278" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">MTIMECMP[h] ← v</text>
+  <text x="150" y="306" font-size="9.5" fill="#546E7A" text-anchor="middle" font-style="italic">(state mutation)</text>
+
+  <line x1="260" y1="230" x2="300" y2="230" stroke="#37474F" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Stage 2: Compare / Latch -->
+  <g filter="url(#shadow)">
+    <rect x="300" y="130" width="220" height="200" rx="8" ry="8" fill="url(#hw)" stroke="#1565C0" stroke-width="2"/>
+  </g>
+  <circle cx="322" cy="152" r="14" fill="#1565C0"/>
+  <text x="322" y="157" font-size="14" font-weight="700" fill="white" text-anchor="middle">2</text>
+  <text x="420" y="156" font-size="14" font-weight="700" fill="#0D47A1" text-anchor="middle">Compare / Latch</text>
+  <line x1="315" y1="172" x2="505" y2="172" stroke="#90CAF9"/>
+  <text x="410" y="200" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">recompute_event_</text>
+  <text x="410" y="218" font-size="10" fill="#37474F" text-anchor="middle">posted at SC_ZERO_TIME</text>
+  <text x="410" y="248" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">mtip_lvl = MTIME ≥ MTIMECMP[h]</text>
+  <text x="410" y="266" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">msip_lvl = MSIP[h].bit[0]</text>
+  <text x="410" y="294" font-size="9.5" fill="#546E7A" text-anchor="middle" font-style="italic">(per-hart, idempotent)</text>
+
+  <line x1="520" y1="230" x2="560" y2="230" stroke="#37474F" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Stage 3: Drive line -->
+  <g filter="url(#shadow)">
+    <rect x="560" y="130" width="220" height="200" rx="8" ry="8" fill="url(#hw)" stroke="#1565C0" stroke-width="2"/>
+  </g>
+  <circle cx="582" cy="152" r="14" fill="#1565C0"/>
+  <text x="582" y="157" font-size="14" font-weight="700" fill="white" text-anchor="middle">3</text>
+  <text x="680" y="156" font-size="14" font-weight="700" fill="#0D47A1" text-anchor="middle">Drive line</text>
+  <line x1="575" y1="172" x2="765" y2="172" stroke="#90CAF9"/>
+  <text x="670" y="195" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">mtip_o[h] ← mtip_lvl</text>
+  <text x="670" y="213" font-size="11" font-weight="600" fill="#1A237E" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">msip_o[h] ← msip_lvl</text>
+  <text x="670" y="240" font-size="10" fill="#37474F" text-anchor="middle">single-driver:</text>
+  <text x="670" y="254" font-size="10" fill="#37474F" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">output_method</text>
+  <text x="670" y="278" font-size="10" fill="#37474F" text-anchor="middle">writes only on level change</text>
+  <text x="670" y="306" font-size="9.5" fill="#546E7A" text-anchor="middle" font-style="italic">(crosses HW/SW boundary)</text>
+
+  <line x1="780" y1="230" x2="820" y2="230" stroke="#37474F" stroke-width="1.6" marker-end="url(#arrow)"/>
+
+  <!-- Stage 4: Trap & service -->
+  <g filter="url(#shadow)">
+    <rect x="820" y="130" width="160" height="200" rx="8" ry="8" fill="url(#sw)" stroke="#E65100" stroke-width="2"/>
+  </g>
+  <circle cx="842" cy="152" r="14" fill="#E65100"/>
+  <text x="842" y="157" font-size="14" font-weight="700" fill="white" text-anchor="middle">4</text>
+  <text x="900" y="156" font-size="14" font-weight="700" fill="#BF360C" text-anchor="middle">Trap &amp; service</text>
+  <line x1="835" y1="172" x2="970" y2="172" stroke="#FFB74D"/>
+  <text x="900" y="194" font-size="10" fill="#37474F" text-anchor="middle">mip.MTIP / mip.MSIP</text>
+  <text x="900" y="208" font-size="10" fill="#37474F" text-anchor="middle">causes machine trap</text>
+  <text x="900" y="232" font-size="10" fill="#37474F" text-anchor="middle">ISR runs:</text>
+  <text x="900" y="248" font-size="10" fill="#37474F" text-anchor="middle">  MTIMECMP[h] ← next</text>
+  <text x="900" y="262" font-size="10" fill="#37474F" text-anchor="middle">  or  MSIP[h] ← 0</text>
+  <text x="900" y="290" font-size="10" fill="#37474F" text-anchor="middle">trap returns</text>
+  <text x="900" y="312" font-size="9.5" fill="#546E7A" text-anchor="middle" font-style="italic">(level falls automatically)</text>
+
+  <!-- Re-arm feedback path -->
+  <path d="M 900,330 C 900,415 360,415 240,330" stroke="#E65100" stroke-width="1.6" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowOrange)"/>
+  <text x="570" y="410" font-size="10.5" fill="#BF360C" text-anchor="middle" font-style="italic">software write to MTIMECMP[h] / MSIP[h]  →  level recomputed  (cycle repeats)</text>
+
+  <!-- Legend -->
+  <g transform="translate(20,425)" font-size="11" fill="#37474F">
+    <rect x="0" y="0" width="16" height="11" fill="url(#hw)" stroke="#1565C0"/>
+    <text x="22" y="10">CLINT stage</text>
+    <rect x="120" y="0" width="16" height="11" fill="url(#sw)" stroke="#E65100"/>
+    <text x="142" y="10">software stage</text>
+    <line x1="270" y1="6" x2="295" y2="6" stroke="#37474F" stroke-width="1.6" marker-end="url(#arrow)"/>
+    <text x="300" y="10">data flow</text>
+    <line x1="370" y1="6" x2="395" y2="6" stroke="#E65100" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#arrowOrange)"/>
+    <text x="400" y="10">re-arm path</text>
+  </g>
+</svg>
