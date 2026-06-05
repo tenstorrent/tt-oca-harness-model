@@ -70,7 +70,7 @@ subdirs(platform)
 #   make clean-workdir  — built-in clean + remove bin/platform/models artifacts;
 #                         keeps Makefile/CMakeCache so you can rebuild in-place
 set(_sep_root "${CMAKE_CURRENT_SOURCE_DIR}/..")
-set(_softfloat_make "${_sep_root}/sep/peripherals/cpu/VeeR-ISS/softfloat/build/RISCV-GCC")
+set(_softfloat_make "${_sep_root}/sep/cpu/VeeR-ISS/softfloat/build/RISCV-GCC")
 
 add_custom_target(clean-workdir
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean
