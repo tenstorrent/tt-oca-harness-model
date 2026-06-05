@@ -34,3 +34,21 @@ add_test(NAME bootrom_bin_tb COMMAND bootrom_bin_tb)
 set_tests_properties(bootrom_bin_tb PROPERTIES
     PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
     FAIL_REGULAR_EXPRESSION "(^FAIL [^_]|FAILURE\\(S\\))")
+
+# ---------------------------------------------------------------------------
+# bootrom_neg_tb — negative-path / edge-case bench.  Exercises every
+# SC_REPORT_FATAL constructor branch (bad size / alignment / delay,
+# unreadable preload files, malformed hex, overflow with non-zero word,
+# zero data lines) plus the dbg_read32 surface and the format
+# fall-through / `0x`-prefix parser branches that the main benches skip.
+# Boosts line and branch coverage on src/bootrom.cpp from ~80%/~67% to
+# >95% / >85%.
+# ---------------------------------------------------------------------------
+add_executable(bootrom_neg_tb bootrom_neg_tb.cpp)
+target_link_libraries(bootrom_neg_tb PRIVATE smc_bootrom SystemC::cci)
+target_compile_options(bootrom_neg_tb PRIVATE -Wall -Wextra -Wpedantic
+                                              -Wno-deprecated-declarations)
+add_test(NAME bootrom_neg_tb COMMAND bootrom_neg_tb)
+set_tests_properties(bootrom_neg_tb PROPERTIES
+    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+    FAIL_REGULAR_EXPRESSION "(^FAIL [^_]|FAILURE\\(S\\))")

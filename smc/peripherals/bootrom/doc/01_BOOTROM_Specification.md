@@ -1,9 +1,11 @@
-# SEP Boot ROM — Functional Specification
+# SMC Boot ROM — Functional Specification
 
 **Document**: `01_BOOTROM_Specification.md`
 **Module**: `smc::bootrom` (SystemC/TLM-2.0 Loosely-Timed model, CCI-parameterised)
-**Spec base**: `tt-oca-hw/meta/registers/rdl/sep_boot_rom.rdl`
-**Status**: Frozen for SEP bring-up; tracks the cocotb conformance suite under
+**IP family**: SMC IP library (sister to `smc::plic`, `smc::clint`)
+**Spec base**: `tt-oca-hw/meta/registers/rdl/sep_boot_rom.rdl` (authoritative
+            read-only `mem`-block contract; see §1)
+**Status**: Frozen for SMC bring-up; tracks the cocotb conformance suite under
             `tt-oca-hw/dv/oss/shims/sep/memories/tests/conformance/`
 **Companion docs**:
   - `02_BOOTROM_LowLevel_Design.md` — internal SystemC implementation
@@ -33,19 +35,38 @@
 
 ## 1. Purpose & scope
 
-The **SEP Boot ROM** is a non-volatile, preloaded, read-only memory that
-holds the first instructions executed by the SEP (Secure Entry
-Processor) after reset. It is functionally trivial — software cannot
-modify it — but it is on the critical bring-up path: a bug in the
-preload pipeline manifests as "the SEP refuses to boot", which is one
-of the hardest classes of platform failure to debug in simulation.
+The **SMC Boot ROM** is a non-volatile, preloaded, read-only memory in
+the System Management Controller (SMC) IP library. It holds the
+immutable first-stage boot loader (and the public root-of-trust
+signature roots) that the SMC Rocket RV64GC CPU cluster fetches after
+cold reset — it is the only SMC region addressable before the
+alias / M-mode remap is programmed (see `doc/01_SMC_Architecture.md` §6).
+It is functionally trivial — software cannot modify it — but it is on
+the critical bring-up path: a bug in the preload pipeline manifests as
+"the core refuses to boot", which is one of the hardest classes of
+platform failure to debug in simulation.
+
+The model is a **generic, role-agnostic read-only `mem` block**. The
+same `smc::bootrom` is instantiated wherever a preloaded ROM is needed:
+the SMC CPU-cluster boot ROM, and — because the two are structurally
+identical — the SEP (Secure Enclave Processor) boot ROM. Everything
+role-specific (size, contents, base address) is supplied through CCI
+presets, so a single model serves every boot-ROM instance on the
+platform.
+
+Because there is no separate `smc_boot_rom.rdl`, this model is
+**specified and validated against the authoritative read-only `mem`
+contract that does exist** — `sep_boot_rom.rdl` and its cocotb
+conformance suite. That RDL declares a plain 64-bit `mem` with
+`sw=r, hw=r`; the contract is identical for any SMC-fabric boot ROM,
+which is exactly why one model covers both roles.
 
 This specification defines the **externally-observable behaviour** of
-the SEP Boot ROM SystemC model: configuration, memory map, access
+the SMC Boot ROM SystemC model: configuration, memory map, access
 semantics, error responses, reset, and bus contract. It is the contract
 that:
 
-- The SEP core fetches its very first instruction against,
+- The CPU cluster fetches its very first instruction against,
 - The cocotb conformance suite measures, and
 - Any future RTL or platform integration treats as authoritative.
 
@@ -76,7 +97,7 @@ any naturally-aligned `{1, 2, 4, 8}`-byte width.
 
 | Feature                            | Value / behaviour                                            |
 |------------------------------------|--------------------------------------------------------------|
-| Standard                           | OCA SEP boot ROM; structurally identical to a `mem` block in RDL |
+| Standard                           | OCA SMC boot ROM; structurally identical to a `mem` block in RDL (SEP-compatible) |
 | Size                               | 64 KiB (default; configurable via CCI `size_bytes`)          |
 | Native word width                  | 64 bits (matches `regwidth = memwidth = 64` in the RDL)      |
 | Supported access widths            | 1, 2, 4, 8 bytes (naturally aligned)                         |
@@ -109,13 +130,13 @@ mutable so simulations can sweep bus speeds without rebuilding.
 Override before construction via the CCI broker:
 
 ```cpp
-broker.set_preset_cci_value("sep.bootrom.size_bytes",
+broker.set_preset_cci_value("smc.bootrom.size_bytes",
                             cci::cci_value(uint64_t(0x10000)));
-broker.set_preset_cci_value("sep.bootrom.init_file",
+broker.set_preset_cci_value("smc.bootrom.init_file",
                             cci::cci_value(std::string("bootrom.hex")));
-broker.set_preset_cci_value("sep.bootrom.init_file_format",
+broker.set_preset_cci_value("smc.bootrom.init_file_format",
                             cci::cci_value(std::string("hex")));
-broker.set_preset_cci_value("sep.bootrom.access_delay_ns",
+broker.set_preset_cci_value("smc.bootrom.access_delay_ns",
                             cci::cci_value(2.0));
 ```
 
@@ -169,11 +190,11 @@ be mutated through the bus, exactly as the underlying RDL declares
 
 Three properties make this trivial-looking IP non-trivial in practice:
 
-1. **Preload format coupling.** The SEP bring-up flow uses two
+1. **Preload format coupling.** The SMC bring-up flow uses two
    different preload formats — raw binary `.img` and ASCII hex `.hex` —
    depending on which point in the pipeline the image was emitted.
    Both must be supported, and both must produce **byte-identical**
-   in-memory images so the SEP core sees the same instruction bytes
+   in-memory images so the fetching core sees the same instruction bytes
    regardless of which format the integrator chose.
 2. **Sparse-non-zero overflow tolerance.** Hex preload files generated
    by the SMC tooling are often sized for a larger ROM than the one
@@ -187,7 +208,7 @@ Three properties make this trivial-looking IP non-trivial in practice:
    `test_rom_write_ignored` asserts that a write to the ROM must
    **return `rvalid` (TLM_OK_RESPONSE)** *and* leave the contents
    unchanged. Returning a bus error on a write would be incorrect — it
-   would deadlock the SEP boot path. The model therefore distinguishes
+   would deadlock the CPU-cluster boot path. The model therefore distinguishes
    write-ignore (in-range writes; OK + no-mutation) from real bus
    errors (out-of-window, misaligned, unsupported width).
 
@@ -239,7 +260,7 @@ A write at byte offset `O` with width `W` and in-range `O + W ≤ size_bytes`:
 | Subsequent read       | Returns the unchanged preloaded value       |
 
 This is the only IP in the SMC suite whose write path is a no-op-by-
-design rather than an error path; the firmware driver and the SEP
+design rather than an error path; the firmware driver and the SMC
 fabric must see `rvalid` so the bus does not stall.
 
 ### 8.3 Preload contract
@@ -443,6 +464,7 @@ None. All behaviour matches the RDL and the cocotb conformance suite.
 | Version | Date       | Author        | Notes                                                                                           |
 |---------|------------|---------------|-------------------------------------------------------------------------------------------------|
 | 1.0     | 2026-05-26 | SMC modelling | Initial release — matches `sep_boot_rom.rdl` and the SEP cocotb conformance suite (C2/C3/C4).   |
+| 1.1     | 2026-06-01 | SMC modelling | Reframed as the generic **SMC Boot ROM** model (SMC CPU-cluster boot path; SEP role-compatible). No behavioural change. |
 
 ---
 
@@ -464,6 +486,11 @@ None. All behaviour matches the RDL and the cocotb conformance suite.
   `tt-oca-hw/meta/registers/rdl/sep_boot_rom.rdl`.
 - **CCI** — SystemC Configuration, Control and Inspection (Accellera
   cci-1.0.0). Provides the `cci_param<T>` interface used here.
+- **SMC** — System Management Controller; the RV64GC management complex
+  whose IP library this model belongs to.
+- **SEP** — Secure Enclave Processor; a separate secure core whose boot
+  ROM is structurally identical and is served by the same `smc::bootrom`
+  model with SEP-specific CCI presets.
 - **SC_REPORT_FATAL** — SystemC's mechanism for reporting an
   unrecoverable configuration error during elaboration.
 

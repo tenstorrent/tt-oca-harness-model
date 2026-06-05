@@ -1,0 +1,48 @@
+---
+description: Build everything in this repo with C++20 to match the C++20-built SystemC/CCI
+alwaysApply: true
+---
+
+# C++20 build standard
+
+All C++ in this repository **must be compiled with C++20**. The local
+Accellera SystemC and CCI installs are built with C++20, and SystemC's ABI is
+keyed per language standard (`sc_api_version_*_cxx202002L`). Compiling consumers
+with any other standard breaks linking with an undefined `sc_api_version_*`
+symbol.
+
+## Reference toolchain (C++20)
+
+- SystemC: `/Users/pdroy/local/systemc-3.0.2-cxx20`
+- CCI:     `/Users/pdroy/local/cci-cxx20`
+
+## When configuring CMake / running tests
+
+Force C++20 and point at the C++20 installs:
+
+```bash
+SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
+CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+cmake -S . -B build -DSMC_CXX_STANDARD=20 -DCCI_HOME=/Users/pdroy/local/cci-cxx20
+```
+
+The `smc/cmake/SmcSystemCStd.cmake` helper auto-detects the standard from the
+linked SystemC, so pointing at the C++20 install already yields C++20; pass
+`-DSMC_CXX_STANDARD=20` to be explicit. Never hard-code a different standard.
+
+## When writing CMakeLists.txt
+
+```cmake
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+```
+
+Prefer including `SmcSystemCStd` and calling `smc_detect_systemc_cxx_std()`
+(which resolves to C++20 against this toolchain) over hard-coding the value.
+
+## Source code
+
+Write portable C++ that is clean under C++20 (also C++17/23). Do not use
+constructs removed/deprecated by C++20 (e.g. `std::result_of`, `std::is_pod`,
+throwing `std::allocator`).

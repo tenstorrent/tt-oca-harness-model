@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate all three Boot ROM PDF documents from their Markdown sources.
+# Regenerate all three Scratchpad RAM PDF documents from their Markdown sources.
 #
 # Usage:  ./doc/build_docs.sh
 #
@@ -23,9 +23,9 @@ if [[ ! -x "${CHROME}" ]]; then
 fi
 
 for entry in \
-  "01_BOOTROM_Specification|SMC Boot ROM — Functional Specification" \
-  "02_BOOTROM_LowLevel_Design|SEP Boot ROM — Low-Level Design" \
-  "03_BOOTROM_Test_Plan|SEP Boot ROM — Test Plan"
+  "01_SCRATCHPAD_RAM_Specification|SMC Scratchpad RAM — Functional Specification" \
+  "02_SCRATCHPAD_RAM_LowLevel_Design|SMC Scratchpad RAM — Low-Level Design" \
+  "03_SCRATCHPAD_RAM_Test_Plan|SMC Scratchpad RAM — Test Plan"
 do
   base="${entry%%|*}"
   title="${entry##*|}"
@@ -38,6 +38,7 @@ do
     -t html5 -s --embed-resources --standalone \
     --css "${CSS}" \
     --metadata title="${title}" \
+    --toc --toc-depth=3 \
     -o "${tmp}"
 
   "${CHROME}" \

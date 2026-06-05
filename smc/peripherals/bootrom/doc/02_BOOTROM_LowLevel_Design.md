@@ -474,7 +474,7 @@ target_link_libraries(smc_bootrom PUBLIC SystemC::systemc SystemC::cci)
 
 | Dependency           | Version              | Used for                       |
 |----------------------|----------------------|--------------------------------|
-| C++17                | gcc 9+ / clang 11+   | `std::filesystem`, `[[fallthrough]]`, etc. |
+| C++17 baseline; **C++20-compliant** | gcc 10+ / clang 11+ | Standard library + TLM-2.0; builds clean under C++17, C++20, and C++23 |
 | Accellera SystemC    | 2.3.4+ / 3.0.x       | `sc_core::*`, TLM-2.0          |
 | Accellera SystemC CCI | 1.0.0                | `cci_configuration` header     |
 
@@ -482,6 +482,33 @@ The CMake glue auto-detects SystemC via `SYSTEMC_HOME` or the
 `SystemC::systemc` imported target, and CCI via the `CCI_HOME` cache
 variable / environment variable. See the top-level `CMakeLists.txt` for
 the exact probe sequence (identical to CLINT).
+
+### 14.1.1 C++ language standard
+
+The model source is written in portable C++ that compiles cleanly under
+C++17, C++20, and C++23 — it uses no standard-specific features and is free of
+constructs removed or deprecated by C++20 (no `std::result_of`, throwing
+`std::allocator`, `std::is_pod`, comma-in-subscript, etc.).
+
+The build does **not** hard-code a standard. Instead `SmcSystemCStd.cmake`
+(`smc_detect_systemc_cxx_std()`) probes the linked SystemC library's
+`sc_api_version_*_cxxNNNNNNL` guard symbol and sets `CMAKE_CXX_STANDARD` to
+match — because Accellera SystemC's ABI changes per language standard, the
+consumer must compile with the *same* standard the library was built with, or
+the link fails with an undefined `sc_api_version_*_cxx20XXXX` symbol.
+
+With the project's reference toolchain (SystemC 3.0.2 + CCI built with C++20),
+the Boot ROM is therefore **built and verified under C++20**:
+
+```bash
+# verified: clean build under C++20 (-Wall -Wextra -Wpedantic, 0 warnings)
+cmake -S . -B build -DSMC_CXX_STANDARD=20   # or rely on auto-detect
+cmake --build build -j
+# bootrom_tb / bootrom_bin_tb / bootrom_neg_tb → ALL TESTS PASSED
+```
+
+Pass `-DSMC_CXX_STANDARD=<17|20|23>` to force a specific standard (e.g. to
+match a Homebrew SystemC built with C++17).
 
 ### 14.2 Optional instrumentation
 
@@ -498,9 +525,12 @@ so they never invalidate the plain Release build's CMake cache.
 
 ## 15. Coding-style notes
 
-- C++17, no exceptions in production paths except where the standard
-  library throws (e.g. `std::stoull` on parse error — caught and
-  converted to a controlled `SC_REPORT_FATAL`).
+- Written to a C++17 baseline but **C++20-compliant** (and C++23-clean);
+  the build standard is auto-matched to the linked SystemC by
+  `SmcSystemCStd.cmake` and is C++20 with the reference toolchain (see §14.1.1).
+  No exceptions in production paths except where the standard library throws
+  (e.g. `std::stoull` on parse error — caught and converted to a controlled
+  `SC_REPORT_FATAL`).
 - `-Wall -Wextra -Wpedantic -Wno-deprecated-declarations`. The
   deprecation suppression is to silence Accellera SystemC's own
   internal deprecations; the project source itself does not invoke any

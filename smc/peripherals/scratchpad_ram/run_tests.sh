@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build (if needed) and run the SEP Boot ROM SystemC test bench.
+# Build (if needed) and run the SMC Scratchpad RAM SystemC test benches.
 #
 # Usage:
 #   ./run_tests.sh                # incremental build + run  (Release)
@@ -144,7 +144,8 @@ fi
 echo ">> Building with -j${JOBS}"
 cmake --build "${BUILD_DIR}" -j "${JOBS}"
 
-TB_BIN="${BUILD_DIR}/test/bootrom_tb"
+TB_BIN="${BUILD_DIR}/test/scratchpad_ram_tb"
+NEG_TB_BIN="${BUILD_DIR}/test/scratchpad_ram_neg_tb"
 if [[ ! -x "${TB_BIN}" ]]; then
     echo "ERROR: test binary not found at ${TB_BIN}" >&2
     exit 1
@@ -185,6 +186,7 @@ if (( USE_ASAN )); then
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
     ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
+    [[ -x "${NEG_TB_BIN}" ]] && ASAN_OPTIONS="${_ASAN_OPTS}" "${NEG_TB_BIN}" || true
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -211,29 +213,19 @@ elif (( USE_COVERAGE )); then
     echo ""
 
     HTML_DIR="${BUILD_DIR}/coverage-report"
-    BIN_TB_BIN="${BUILD_DIR}/test/bootrom_bin_tb"
-    NEG_TB_BIN="${BUILD_DIR}/test/bootrom_neg_tb"
     SOURCES=(
-        "${SCRIPT_DIR}/src/bootrom.cpp"
-        "${SCRIPT_DIR}/test/bootrom_tb.cpp"
-        "${SCRIPT_DIR}/test/bootrom_bin_tb.cpp"
-        "${SCRIPT_DIR}/test/bootrom_neg_tb.cpp"
+        "${SCRIPT_DIR}/src/scratchpad_ram.cpp"
+        "${SCRIPT_DIR}/test/scratchpad_ram_tb.cpp"
+        "${SCRIPT_DIR}/test/scratchpad_ram_neg_tb.cpp"
     )
 
     if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
-        PROFRAW="${BUILD_DIR}/bootrom_tb.profraw"
-        BIN_PROFRAW="${BUILD_DIR}/bootrom_bin_tb.profraw"
-        NEG_PROFRAW="${BUILD_DIR}/bootrom_neg_tb.profraw"
-        PROFDATA="${BUILD_DIR}/bootrom_combined.profdata"
+        PROFRAW="${BUILD_DIR}/scratchpad_ram_tb.profraw"
+        NEG_PROFRAW="${BUILD_DIR}/scratchpad_ram_neg_tb.profraw"
+        PROFDATA="${BUILD_DIR}/scratchpad_ram_combined.profdata"
 
         LLVM_PROFILE_FILE="${PROFRAW}" "${TB_BIN}"
         echo ""
-        if [[ -x "${BIN_TB_BIN}" ]]; then
-            echo ">> Running with ${COVERAGE_TOOL} coverage instrumentation: ${BIN_TB_BIN}"
-            echo ""
-            LLVM_PROFILE_FILE="${BIN_PROFRAW}" "${BIN_TB_BIN}"
-            echo ""
-        fi
         if [[ -x "${NEG_TB_BIN}" ]]; then
             echo ">> Running with ${COVERAGE_TOOL} coverage instrumentation: ${NEG_TB_BIN}"
             echo ""
@@ -248,15 +240,12 @@ elif (( USE_COVERAGE )); then
             exit 1
         fi
 
-        # Merge profiles from all test binaries into one combined profdata.
         _PROFRAW_ARGS=("${PROFRAW}")
-        [[ -f "${BIN_PROFRAW}" ]] && _PROFRAW_ARGS+=("${BIN_PROFRAW}")
         [[ -f "${NEG_PROFRAW}" ]] && _PROFRAW_ARGS+=("${NEG_PROFRAW}")
         echo ">> Merging profile data (${PROFDATA_CMD}) …"
         ${PROFDATA_CMD} merge -sparse "${_PROFRAW_ARGS[@]}" -o "${PROFDATA}"
 
         _OBJECT_ARGS=()
-        [[ -x "${BIN_TB_BIN}" ]] && _OBJECT_ARGS+=("-object=${BIN_TB_BIN}")
         [[ -x "${NEG_TB_BIN}" ]] && _OBJECT_ARGS+=("-object=${NEG_TB_BIN}")
 
         echo ""
@@ -267,11 +256,11 @@ elif (( USE_COVERAGE )); then
             "${SOURCES[@]}"
 
         echo ""
-        echo "===== Uncovered lines in bootrom.cpp ====="
+        echo "===== Uncovered lines in scratchpad_ram.cpp ====="
         ${COV_CMD} show "${TB_BIN}" \
             "${_OBJECT_ARGS[@]}" \
             -instr-profile="${PROFDATA}" \
-            -sources "${SCRIPT_DIR}/src/bootrom.cpp" \
+            -sources "${SCRIPT_DIR}/src/scratchpad_ram.cpp" \
             -format=text \
             -show-line-counts-or-regions \
             | grep -E "^\s+[0-9]+\|[[:space:]]+0\|" \
@@ -287,7 +276,6 @@ elif (( USE_COVERAGE )); then
 
     else
         "${TB_BIN}"
-        [[ -x "${BIN_TB_BIN}" ]] && "${BIN_TB_BIN}"
         [[ -x "${NEG_TB_BIN}" ]] && "${NEG_TB_BIN}"
         echo ""
         if command -v gcovr &>/dev/null; then
@@ -332,4 +320,9 @@ elif (( USE_CTEST )); then
 else
     echo ">> Running ${TB_BIN}"
     "${TB_BIN}"
+    if [[ -x "${NEG_TB_BIN}" ]]; then
+        echo ""
+        echo ">> Running ${NEG_TB_BIN}"
+        "${NEG_TB_BIN}"
+    fi
 fi

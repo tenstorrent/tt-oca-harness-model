@@ -1,9 +1,15 @@
-# SEP Boot ROM — SystemC / TLM-2.0 Loosely-Timed Model
+# SMC Boot ROM — SystemC / TLM-2.0 Loosely-Timed Model
 
-A standards-compliant SEP (Secure Entry Processor) **Boot ROM** modelled
-in Accellera SystemC 2.3.x / 3.0 + TLM-2.0 (Loosely-Timed) and
-parameterised through SystemC CCI 1.0. Implements the SEP boot-ROM
-described by:
+A standards-compliant **SMC Boot ROM** modelled in Accellera SystemC
+2.3.x / 3.0 + TLM-2.0 (Loosely-Timed) and parameterised through SystemC
+CCI 1.0. It is a generic, role-agnostic read-only `mem` block in the SMC
+IP library: the same `smc::bootrom` backs the SMC CPU-cluster boot path
+and — being structurally identical — the SEP (Secure Enclave Processor)
+boot ROM, with the role selected entirely through CCI presets.
+
+Because there is no separate `smc_boot_rom.rdl`, the model is specified
+and validated against the authoritative read-only `mem` contract that
+does exist:
 
 - `tt-oca-hw/meta/registers/rdl/sep_boot_rom.rdl` — authoritative
   memory map (`mem`, 64-bit wide, software read-only).
@@ -17,7 +23,7 @@ described by:
   hex preload (one 64-bit big-endian ASCII word per line).
 
 The model is a drop-in `SC_MODULE` that the rest of the SMC SystemC IP
-library wires up exactly as for the PLIC and CLINT. It runs the SEP
+library wires up exactly as for the PLIC and CLINT. It runs the boot
 firmware's preload pipeline unmodified — pass an `.img` or `.hex` file
 through the `init_file` CCI param and the ROM exposes the correct bytes
 at offset 0.
@@ -63,7 +69,7 @@ SC_MODULE(bootrom) {
 };
 ```
 
-`bootrom_cfg` defaults match the SEP boot ROM declaration from the RDL:
+`bootrom_cfg` defaults match the read-only `mem` declaration from the RDL:
 
 | Field              | Default     | Note                                              |
 |--------------------|-------------|---------------------------------------------------|
@@ -76,11 +82,11 @@ All four are exposed as CCI parameters (the first three immutable, the
 last mutable). Set them via the CCI broker before constructing:
 
 ```cpp
-broker.set_preset_cci_value("sep.bootrom.init_file",
+broker.set_preset_cci_value("smc.bootrom.init_file",
                             cci::cci_value(std::string("bootrom.hex")));
-broker.set_preset_cci_value("sep.bootrom.init_file_format",
+broker.set_preset_cci_value("smc.bootrom.init_file_format",
                             cci::cci_value(std::string("hex")));
-broker.set_preset_cci_value("sep.bootrom.access_delay_ns",
+broker.set_preset_cci_value("smc.bootrom.access_delay_ns",
                             cci::cci_value(2.0));
 ```
 

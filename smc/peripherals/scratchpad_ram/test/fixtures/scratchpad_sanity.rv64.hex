@@ -1,0 +1,24 @@
+# SMC Scratchpad RAM sanity preload — SystemC test fixture.
+#
+# One 64-bit word per line in big-endian ASCII hex (MSB first).
+# Blank lines and `#`-prefixed comments are ignored, matching the upstream
+# hex format produced by the SMC tooling.
+#
+# A preload is optional for a scratchpad (it normally cold-boots to zero);
+# this fixture lets the test bench verify the preload pipeline and read-back.
+#
+# Word 0
+0011223344556677
+# Word 1
+8899aabbccddeeff
+# Word 2
+0123456789abcdef
+# Word 3
+fedcba9876543210
+# Words 4..6: zero padding (also implicit; exercises the parser's
+# blank-data-word path).
+0000000000000000
+0000000000000000
+0000000000000000
+# Word 7: sentinel — verifies sparse non-zero placement at offset > 0.
+0000deadbeef1234
