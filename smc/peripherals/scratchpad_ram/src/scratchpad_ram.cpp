@@ -32,6 +32,11 @@ std::string to_lower(std::string s)
 }
 
 /// True iff @p s ends with @p suffix (case-insensitive).
+///
+/// Used by resolve_format() to pick the preload format from the file name when
+/// `init_file_format == "auto"`: a `.img` / `.bin` suffix (in any letter case,
+/// e.g. ".IMG", ".Bin") selects the raw-binary loader, otherwise the hex
+/// loader is used.
 bool ends_with_ci(const std::string& s, const std::string& suffix)
 {
     if (suffix.size() > s.size()) return false;

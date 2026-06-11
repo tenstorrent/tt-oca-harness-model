@@ -15,6 +15,10 @@
 1. [Purpose & scope](#1-purpose--scope)
 2. [Source layout](#2-source-layout)
 3. [Module structure](#3-module-structure)
+   - [3.1 Ports](#31-ports)
+   - [3.2 Public methods (API)](#32-public-methods-api)
+   - [3.3 Internal methods and SC processes](#33-internal-methods-and-sc-processes)
+   - [3.4 File-local helpers](#34-file-local-helpers-pliccpp-anonymous-namespace)
 4. [TLM-2.0 interface implementation](#4-tlm-20-interface-implementation)
 5. [Register decode](#5-register-decode)
 6. [Internal data structures](#6-internal-data-structures)
@@ -197,6 +201,59 @@ Why each choice on this list:
   the delay is not structural; it can be legitimately adjusted between
   transactions (e.g. to model different fabric speeds for regression
   sets) without breaking any invariant.
+
+### 3.1 Ports
+
+| Port         | Type                                          | Dir    | Purpose |
+|--------------|-----------------------------------------------|--------|---------|
+| `reg_socket` | `tlm_utils::simple_target_socket<plic>`       | target | AXI4-Lite-style TLM-2.0 register access. |
+| `src_in[i]`  | `sc_core::sc_vector<sc_core::sc_in<bool>>`    | in     | Interrupt source `i` (→ source ID `i+1`); active-high, level-sensitive; sized from `num_sources`. |
+| `ctx_out[c]` | `sc_core::sc_vector<sc_core::sc_out<bool>>`   | out    | Interrupt output for context `c`; active-high; sized from `num_contexts`. |
+| `rst_n_i`    | `sc_core::sc_in<bool>`                        | in     | Active-low synchronous reset. |
+
+### 3.2 Public methods (API)
+
+| Method | Signature | Purpose |
+|--------|-----------|---------|
+| constructor      | `plic(sc_module_name, plic_cfg = {})` | Build, resolve CCI, size vectors/ports, register callbacks/processes (see §3 ctor + §7). |
+| `dbg_priority`   | `uint32_t dbg_priority(unsigned src) const` | Back-door read of a source's 3-bit priority (0 if OOR). |
+| `dbg_pending`    | `bool dbg_pending(unsigned src) const` | Back-door query of a source's pending bit. |
+| `dbg_enable`     | `bool dbg_enable(unsigned ctx, unsigned src) const` | Back-door query of the `(ctx,src)` enable bit. |
+| `dbg_threshold`  | `uint32_t dbg_threshold(unsigned ctx) const` | Back-door read of a context's 3-bit threshold. |
+| `dbg_claim_top`  | `uint32_t dbg_claim_top(unsigned ctx) const` | Top eligible pending source for `ctx` **without** claiming (§8, §12). |
+| `dump_state`     | `void dump_state(std::ostream& = std::cout) const` | Human-readable snapshot of all PLIC state. |
+
+### 3.3 Internal methods and SC processes
+
+| Member | Signature | Kind | Purpose |
+|--------|-----------|------|---------|
+| `b_transport`        | `void b_transport(tlm::tlm_generic_payload&, sc_core::sc_time&)` | TLM b_transport callback | Blocking register access; a CLAIM read has the `claim()` side effect (§4). |
+| `transport_dbg`      | `unsigned int transport_dbg(tlm::tlm_generic_payload&)` | TLM transport_dbg callback | Side-effect-free back-door access (CLAIM read does not claim) (§4, §12). |
+| `reset_proc`         | `void reset_proc()` | **`SC_METHOD`** (sensitive to `rst_n_i`) | Zero all registers on assertion; recompute to deassert `ctx_out` (§9). |
+| `src_method`         | `void src_method()` | **`SC_METHOD`** (sensitive to `src_in`) | Latch rising-edge source events into `pending_` (§8). |
+| `output_method`      | `void output_method()` | **`SC_METHOD`** (driven by `recompute_event_`) | **Sole driver** of all `ctx_out[*]` (§7). |
+| `schedule_recompute` | `void schedule_recompute()` | private helper | Post `recompute_event_` at `SC_ZERO_TIME` (§7). |
+| `reg_read`           | `bool reg_read(uint64_t off, uint32_t& data)` | private helper | Decode a 32-bit register read; CLAIM read calls `claim()` (§5). |
+| `reg_write`          | `bool reg_write(uint64_t off, uint32_t data)` | private helper | Decode a 32-bit register write; CLAIM/COMPLETE write calls `complete()` (§5). |
+| `claim`              | `uint32_t claim(unsigned ctx)` | private helper | Atomically claim the top eligible source for `ctx` (§8). |
+| `complete`           | `void complete(unsigned ctx, uint32_t src)` | private helper | Clear in-flight latch; re-arm `pending_` if line still high (§8). |
+| `best_pending`       | `uint32_t best_pending(unsigned ctx) const` | private helper | Highest-priority eligible source for `ctx`; low-ID tie-break (§8). |
+
+> **Processes/threads:** the model registers exactly **three** SC processes —
+> `reset_proc`, `src_method`, and `output_method`, all `SC_METHOD`. There are
+> **no** `SC_THREAD` / `SC_CTHREAD` processes. `output_method` is the **only**
+> writer of the `ctx_out` signals; every other path mutates internal state and
+> calls `schedule_recompute()`, satisfying SystemC 3.0's single-driver rule
+> (§7).
+
+### 3.4 File-local helpers (`plic.cpp` anonymous namespace)
+
+| Symbol | Definition | Purpose |
+|--------|------------|---------|
+| `PRIORITY_MASK`  | `constexpr unsigned PRIORITY_MASK = 0x7u` | 3-bit mask applied to PRIORITY writes (values 0..7). |
+| `THRESHOLD_MASK` | `constexpr unsigned THRESHOLD_MASK = 0x7u` | 3-bit mask applied to THRESHOLD writes (values 0..7). |
+| `word_index`     | `inline unsigned word_index(unsigned src)` | Index of the 32-bit enable/pending word for source `src` (`src >> 5`). |
+| `bit_mask`       | `inline uint32_t bit_mask(unsigned src)` | Single-bit mask for source `src` within its word (`1u << (src & 0x1F)`). |
 
 ---
 

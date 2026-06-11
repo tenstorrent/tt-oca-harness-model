@@ -16,6 +16,13 @@
 1. [Purpose & scope](#purpose-scope)
 2. [Source layout](#source-layout)
 3. [Module structure](#module-structure)
+   - [3.1 Declaration order matters](#31-declaration-order-matters)
+   - [3.2 `clint_cfg` vs CCI](#32-clint_cfg-vs-cci)
+   - [3.3 CCI parameter catalogue](#33-cci-parameter-catalogue)
+   - [3.4 Ports](#34-ports)
+   - [3.5 Public methods (API)](#35-public-methods-api)
+   - [3.6 Internal methods and SC processes](#36-internal-methods-and-sc-processes)
+   - [3.7 File-local helpers](#37-file-local-helpers-clintcpp-anonymous-namespace)
 4. [TLM-2.0 interface implementation](#tlm-2.0-interface-implementation)
 5. [Register decode](#register-decode)
 6. [Internal data structures](#internal-data-structures)
@@ -198,6 +205,54 @@ All parameters carry a free-form description string (visible via
 `cci_param_handle::get_description()`) and a small set of metadata
 key/value pairs (`add_metadata("rdl_dimension", …)`, `add_metadata("unit",
 …)`, etc.) so introspection tools can show provenance and units.
+
+### 3.4 Ports
+
+| Port         | Type                                                | Dir    | Purpose |
+|--------------|-----------------------------------------------------|--------|---------|
+| `reg_socket` | `tlm_utils::simple_target_socket<clint>`            | target | TLM-2.0 register access (AXI4-Lite-style initiator). |
+| `msip_o[h]`  | `sc_core::sc_vector<sc_core::sc_out<bool>>`         | out    | Machine software interrupt for hart `h`; sized from `num_harts`. |
+| `mtip_o[h]`  | `sc_core::sc_vector<sc_core::sc_out<bool>>`         | out    | Machine timer interrupt for hart `h` (level: `MTIME ≥ MTIMECMP[h]`). |
+| `rst_n_i`    | `sc_core::sc_in<bool>`                              | in     | Active-low synchronous reset. |
+
+### 3.5 Public methods (API)
+
+| Method | Signature | Purpose |
+|--------|-----------|---------|
+| constructor     | `clint(sc_module_name, clint_cfg = {})` | Build, resolve CCI, size vectors/ports, register callbacks/processes (see §3 ctor + §7). |
+| `dbg_mtime`     | `uint64_t dbg_mtime() const` | Back-door read of the global MTIME counter. |
+| `dbg_mtimecmp`  | `uint64_t dbg_mtimecmp(unsigned hart) const` | Back-door read of `MTIMECMP[hart]`. |
+| `dbg_msip`      | `uint32_t dbg_msip(unsigned hart) const` | Back-door read of `MSIP[hart]` (0 or 1). |
+| `dbg_mtip`      | `bool dbg_mtip(unsigned hart) const` | Compute `MTIME ≥ MTIMECMP[hart]` without touching state. |
+| `dbg_set_mtime` | `void dbg_set_mtime(uint64_t value)` | Test-only: force MTIME and trigger a recompute (§12). |
+| `dump_state`    | `void dump_state(std::ostream& = std::cout) const` | Human-readable snapshot of CLINT state. |
+
+### 3.6 Internal methods and SC processes
+
+| Member | Signature | Kind | Purpose |
+|--------|-----------|------|---------|
+| `b_transport`        | `void b_transport(tlm::tlm_generic_payload&, sc_core::sc_time&)` | TLM b_transport callback | Blocking register read/write data path (§4). |
+| `transport_dbg`      | `unsigned int transport_dbg(tlm::tlm_generic_payload&)` | TLM transport_dbg callback | Side-effect-free back-door register access (§4, §12). |
+| `reset_proc`         | `void reset_proc()` | **`SC_METHOD`** (sensitive to `rst_n_i`) | Zero MTIME/MSIP, set MTIMECMP=max on assertion; recompute (§9). |
+| `tick_method`        | `void tick_method()` | **`SC_METHOD`** (driven by `tick_event_`) | Increment MTIME, re-arm next tick, recompute (§8, §10). |
+| `output_method`      | `void output_method()` | **`SC_METHOD`** (driven by `recompute_event_`) | **Sole driver** of `msip_o[*]` / `mtip_o[*]` (§7). |
+| `schedule_recompute` | `void schedule_recompute()` | private helper | Post `recompute_event_` at `SC_ZERO_TIME` (§7). |
+| `reg_read`           | `bool reg_read(uint64_t off, unsigned access_size, uint32_t& data_lo, uint32_t& data_hi) const` | private helper | Decode a register read; false if out-of-window (§5). |
+| `reg_write`          | `bool reg_write(uint64_t off, unsigned access_size, uint32_t data_lo, uint32_t data_hi)` | private helper | Decode a register write; false if out-of-window (§5). |
+
+> **Processes/threads:** the model registers exactly **three** SC processes —
+> `reset_proc`, `tick_method`, and `output_method`, all `SC_METHOD`. There are
+> **no** `SC_THREAD` / `SC_CTHREAD` processes. `output_method` is the **only**
+> writer of the `msip_o`/`mtip_o` signals; every other path mutates internal
+> state and calls `schedule_recompute()`, satisfying SystemC 3.0's
+> single-driver rule (§7).
+
+### 3.7 File-local helpers (`clint.cpp` anonymous namespace)
+
+| Symbol | Definition | Purpose |
+|--------|------------|---------|
+| `MSIP_BIT_MASK`        | `constexpr uint32_t MSIP_BIT_MASK = 0x1u` | MSIP write mask — only bit[0] is the IPI; bits[31:1] RAZ/WI per `clint.rdl`. |
+| `MTIMECMP_RESET_VALUE` | `constexpr uint64_t MTIMECMP_RESET_VALUE = UINT64_MAX` | Post-reset MTIMECMP so MTIP is deasserted until firmware programs a comparator. |
 
 ---
 

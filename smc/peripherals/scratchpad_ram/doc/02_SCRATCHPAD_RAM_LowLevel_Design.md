@@ -12,6 +12,10 @@
 1. [Overview](#overview)
 2. [File layout](#file-layout)
 3. [Class structure](#class-structure)
+   - [3.1 Ports](#31-ports)
+   - [3.2 Public methods (API)](#32-public-methods-api)
+   - [3.3 Internal methods and SC processes](#33-internal-methods-and-sc-processes)
+   - [3.4 File-local helpers](#34-file-local-helpers-scratchpad_ramcpp-anonymous-namespace)
 4. [CCI parameter scaffolding](#cci-parameter-scaffolding)
 5. [Construction sequence](#construction-sequence)
 6. [`b_transport` data path](#b_transport-data-path)
@@ -85,6 +89,54 @@ private:
 partitions, but that is a physical-implementation detail invisible at the
 transaction level — a flat array is functionally identical.
 
+### 3.1 Ports
+
+| Port         | Type                                              | Dir    | Purpose |
+|--------------|---------------------------------------------------|--------|---------|
+| `reg_socket` | `tlm_utils::simple_target_socket<scratchpad_ram>` | target | TLM-2.0 read/write access (AXI / AXI-Lite / TileLink-style initiator). |
+| `rst_n_i`    | `sc_core::sc_in<bool>`                            | in     | Active-low reset. No-op for SRAM contents; kept for IP-suite symmetry. |
+
+### 3.2 Public methods (API)
+
+| Method | Signature | Purpose |
+|--------|-----------|---------|
+| constructor   | `scratchpad_ram(sc_module_name, scratchpad_ram_cfg = {})` | Build, validate config, allocate + optionally preload, register callbacks/process (see §5). |
+| `dbg_read64`  | `uint64_t dbg_read64(uint64_t off) const` | Back-door aligned 64-bit read; returns 0 if OOB/unaligned. ECC-bypassing, no delay. |
+| `dbg_read32`  | `uint32_t dbg_read32(uint64_t off) const` | Back-door aligned 32-bit read; returns 0 if OOB/unaligned. |
+| `dbg_load_bytes` | `unsigned dbg_load_bytes(uint64_t off, const uint8_t* ptr, unsigned len)` | Commit `len` bytes into `data_`; clears ECC flags on touched words; returns bytes written (0 if OOB). |
+| `dbg_inject_ecc_error` | `void dbg_inject_ecc_error(uint64_t off, bool correctable)` | Inject a SECDED error on the covering word (no-op if `ecc_enabled == false` or OOB). |
+| `dbg_clear_ecc_errors` | `void dbg_clear_ecc_errors()` | Drop all injected ECC error flags. |
+| `size_bytes`  | `uint64_t size_bytes() const` | CCI-resolved total RAM size. |
+| `ecc_enabled` | `bool ecc_enabled() const` | CCI-resolved ECC-enable flag. |
+| `dump_state`  | `void dump_state(std::ostream& = std::cout) const` | Human-readable config + first 32 bytes of contents. |
+
+### 3.3 Internal methods and SC processes
+
+| Member | Signature | Kind | Purpose |
+|--------|-----------|------|---------|
+| `b_transport`     | `void b_transport(tlm::tlm_generic_payload&, sc_core::sc_time&)` | TLM b_transport callback | The blocking read/write data path (§6). |
+| `transport_dbg`   | `unsigned int transport_dbg(tlm::tlm_generic_payload&)` | TLM transport_dbg callback | Zero-delay, ECC-bypassing back-door read/write (§9). |
+| `reset_proc`      | `void reset_proc()` | **`SC_METHOD`** (sensitive to `rst_n_i`, `dont_initialize()`) | Reset handler; empty body — SRAM retains contents (§11). |
+| `ecc_check`       | `int ecc_check(uint64_t off, unsigned len, bool scrub)` | private helper | Classify ECC status over `[off,off+len)`: 0 clean / 1 correctable (scrub on read) / 2 uncorrectable (§8). |
+| `ecc_clear_range` | `void ecc_clear_range(uint64_t off, unsigned len)` | private helper | Drop ECC flags on covered words after a write re-encodes them (§8). |
+| `resolve_format`  | `static std::string resolve_format(const std::string& format, const std::string& path)` | static helper | Resolve `"auto"` to `"hex"`/`"bin"` from the filename suffix (§10). |
+| `load_preload`    | `void load_preload(std::vector<uint8_t>&) const` | private helper | Parse the preload image into `data_`; `SC_REPORT_FATAL` on error (§10). |
+| `parse_hex_line`  | `static bool parse_hex_line(const std::string& line, uint64_t& value, bool& consumed)` | static helper | Parse one hex preload line; `consumed=false` for blank/comment lines (§10). |
+
+> **Processes/threads:** the model registers exactly **one** SC process —
+> `reset_proc` (`SC_METHOD`). There are **no** `SC_THREAD` / `SC_CTHREAD`
+> processes: all bus activity is driven synchronously through the
+> `b_transport` / `transport_dbg` socket callbacks.
+
+### 3.4 File-local helpers (`scratchpad_ram.cpp` anonymous namespace)
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `to_lower`           | `std::string to_lower(std::string s)` | Lowercase copy for case-insensitive matching. |
+| `ends_with_ci`       | `bool ends_with_ci(const std::string& s, const std::string& suffix)` | Case-insensitive suffix test; used by `resolve_format` to spot `.img`/`.bin`. |
+| `is_supported_width` | `constexpr bool is_supported_width(unsigned len)` | True for `len ∈ {1,2,4,8}`. |
+| `is_aligned`         | `constexpr bool is_aligned(uint64_t addr, unsigned len)` | True iff `addr` is naturally aligned to `len`. |
+
 ---
 
 ## 4. CCI parameter scaffolding
@@ -112,6 +164,76 @@ Each parameter carries provenance metadata (`rtl_source`, `valid_values`,
 7. Register `b_transport` / `transport_dbg`.
 8. Register `reset_proc` (SC_METHOD on `rst_n_i`, `dont_initialize()`).
 9. Emit an `SC_REPORT_INFO` banner with the resolved configuration.
+
+The constructor below realises that sequence (CCI description strings trimmed
+to `"…"` for readability; see `src/scratchpad_ram.cpp` for the full text):
+
+```cpp
+scratchpad_ram::scratchpad_ram(sc_core::sc_module_name name,
+                               scratchpad_ram_cfg cfg)
+    : sc_core::sc_module(name)
+    // (1) CCI params constructed first (declared before the public ports).
+    //     cfg.* values are the DEFAULTS; broker presets override them.
+    , size_bytes_p_      ("size_bytes",       cfg.size_bytes,        "…")
+    , init_file_p_       ("init_file",        cfg.init_file,         "…")
+    , init_file_format_p_("init_file_format", cfg.init_file_format,  "…")
+    , access_delay_ns_p_ ("access_delay_ns",  cfg.access_delay_ns,   "…")
+    , ecc_enabled_p_     ("ecc_enabled",      cfg.ecc_enabled,       "…")
+    , reg_socket("reg_socket")
+    , rst_n_i   ("rst_n_i")
+    , cfg_(cfg)
+{
+    // (2) Sync cfg_ with the (possibly preset-overridden) CCI values so the
+    //     rest of the constructor sees consistent data.
+    cfg_.size_bytes       = size_bytes_p_.get_value();
+    cfg_.init_file        = init_file_p_.get_value();
+    cfg_.init_file_format = init_file_format_p_.get_value();
+    cfg_.access_delay_ns  = access_delay_ns_p_.get_value();
+    cfg_.ecc_enabled      = ecc_enabled_p_.get_value();
+
+    // (3) Provenance metadata for introspection tools.
+    size_bytes_p_.add_metadata("rtl_source",
+        cci::cci_value(std::string("WithScratchpadWithECC(size=0x10000)")));
+    init_file_format_p_.add_metadata("valid_values",
+        cci::cci_value(std::string("hex|bin|auto")));
+    ecc_enabled_p_.add_metadata("ecc_code", cci::cci_value(std::string("SECDED")));
+    // … (further default_KiB / unit / tlm_phase metadata) …
+
+    // (4) Validate — fail loud at elaboration, not at first transaction.
+    if (cfg_.size_bytes == 0)
+        SC_REPORT_FATAL(name, "scratchpad_ram size_bytes must be non-zero");
+    if ((cfg_.size_bytes % scratchpad_ram_cfg::WORD_BYTES) != 0)
+        SC_REPORT_FATAL(name,
+            "scratchpad_ram size_bytes must be a multiple of 8 (native word width)");
+    if (cfg_.access_delay_ns < 0.0)
+        SC_REPORT_FATAL(name, "scratchpad_ram access_delay_ns must be >= 0");
+
+    // (5) Allocate (zero-filled = cold-boot SRAM) and optionally preload.
+    data_.assign(cfg_.size_bytes, 0);
+    if (!cfg_.init_file.empty())
+        load_preload(data_);                 // SC_REPORT_FATAL on error
+
+    // (6) Cache the time-typed delay; re-cached on every b_transport so a
+    //     CCI mutation takes effect on the next access.
+    access_delay_ = sc_core::sc_time(cfg_.access_delay_ns, sc_core::SC_NS);
+
+    // (7) Register the TLM target-socket callbacks.
+    reg_socket.register_b_transport  (this, &scratchpad_ram::b_transport);
+    reg_socket.register_transport_dbg(this, &scratchpad_ram::transport_dbg);
+
+    // (8) Reset method (logging-only; SRAM retains its contents).
+    SC_METHOD(reset_proc);
+    sensitive << rst_n_i;
+    dont_initialize();
+
+    // (9) Human-readable "instantiated with …" banner.
+    SC_REPORT_INFO(name, /* size_bytes / init_file / format / delay / ecc */ …);
+}
+```
+
+As in the Boot ROM, the ordering is load-bearing: CCI values must be resolved
+(2) before validation (4), the size must be known before allocation (5), and
+the callbacks must be registered (7) before elaboration ends.
 
 ---
 

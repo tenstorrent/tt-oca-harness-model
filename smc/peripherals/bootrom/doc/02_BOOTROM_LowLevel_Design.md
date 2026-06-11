@@ -13,6 +13,10 @@
 1. [Scope](#scope)
 2. [Source-tree layout](#source-tree-layout)
 3. [Module structure](#module-structure)
+   - [3.1 Ports](#31-ports)
+   - [3.2 Public methods (API)](#32-public-methods-api)
+   - [3.3 Internal methods and SC processes](#33-internal-methods-and-sc-processes)
+   - [3.4 File-local helpers](#34-file-local-helpers-bootromcpp-anonymous-namespace)
 4. [CCI parameter catalogue](#cci-parameter-catalogue)
 5. [Constructor walkthrough](#constructor-walkthrough)
 6. [Internal data structures](#internal-data-structures)
@@ -116,6 +120,50 @@ configuration, not part of the bus contract. They sit ahead of every
 public port so that the C++ rule "members are initialised in
 declaration order" guarantees the CCI broker has already resolved
 `size_bytes` by the time `data_` is sized.
+
+### 3.1 Ports
+
+| Port         | Type                                          | Dir    | Purpose |
+|--------------|-----------------------------------------------|--------|---------|
+| `reg_socket` | `tlm_utils::simple_target_socket<bootrom>`    | target | TLM-2.0 read access (AXI / AXI-Lite-style initiator; typically the SEP core fetch port). |
+| `rst_n_i`    | `sc_core::sc_in<bool>`                        | in     | Active-low reset. No-op for a ROM (no mutable state); kept for IP-suite symmetry. |
+
+### 3.2 Public methods (API)
+
+| Method | Signature | Purpose |
+|--------|-----------|---------|
+| constructor      | `bootrom(sc_module_name, bootrom_cfg = {})` | Build, validate config, size + optionally preload `data_`, register callbacks/process (see §5). |
+| `dbg_read64`     | `uint64_t dbg_read64(uint64_t off) const` | Back-door aligned 64-bit read; returns 0 if OOB/unaligned. No bus delay. |
+| `dbg_read32`     | `uint32_t dbg_read32(uint64_t off) const` | Back-door aligned 32-bit read; returns 0 if OOB/unaligned. |
+| `size_bytes`     | `uint64_t size_bytes() const` | CCI-resolved total ROM size. |
+| `dbg_load_bytes` | `unsigned dbg_load_bytes(uint64_t off, const uint8_t* ptr, unsigned len)` | Test-bench helper: copy `len` bytes into `data_`; returns bytes written (0 if OOB). |
+| `dump_state`     | `void dump_state(std::ostream& = std::cout) const` | Human-readable config + first 32 bytes of contents. |
+
+### 3.3 Internal methods and SC processes
+
+| Member | Signature | Kind | Purpose |
+|--------|-----------|------|---------|
+| `b_transport`    | `void b_transport(tlm::tlm_generic_payload&, sc_core::sc_time&)` | TLM b_transport callback | Blocking read path; writes are silently ignored (§7). |
+| `transport_dbg`  | `unsigned int transport_dbg(tlm::tlm_generic_payload&)` | TLM transport_dbg callback | Zero-delay back-door read; same write-ignore contract (§7, §9). |
+| `reset_proc`     | `void reset_proc()` | **`SC_METHOD`** (sensitive to `rst_n_i`) | Logs reset events; no state to clear (§10). |
+| `resolve_format` | `static std::string resolve_format(const std::string& format, const std::string& path)` | static helper | Resolve `"auto"` to `"hex"`/`"bin"` from the filename suffix (§8). |
+| `load_preload`   | `void load_preload(std::vector<uint8_t>&) const` | private helper | Parse the preload image into `data_`; `SC_REPORT_FATAL` on error (§8). |
+| `parse_hex_line` | `static bool parse_hex_line(const std::string& line, uint64_t& value, bool& consumed)` | static helper | Parse one hex preload line; `consumed=false` for blank/comment lines (§8). |
+
+> **Processes/threads:** the model registers exactly **one** SC process —
+> `reset_proc` (`SC_METHOD`), which only logs. There are **no** `SC_THREAD` /
+> `SC_CTHREAD` processes and no output signals to drive: all bus activity is
+> driven synchronously through the `b_transport` / `transport_dbg` socket
+> callbacks.
+
+### 3.4 File-local helpers (`bootrom.cpp` anonymous namespace)
+
+| Function | Signature | Purpose |
+|----------|-----------|---------|
+| `to_lower`           | `std::string to_lower(std::string s)` | Lowercase copy for case-insensitive matching. |
+| `ends_with_ci`       | `bool ends_with_ci(const std::string& s, const std::string& suffix)` | Case-insensitive suffix test; used by `resolve_format` to spot `.img`/`.bin`. |
+| `is_supported_width` | `constexpr bool is_supported_width(unsigned len)` | True for `len ∈ {1,2,4,8}`. |
+| `is_aligned`         | `constexpr bool is_aligned(uint64_t addr, unsigned len)` | True iff `addr` is naturally aligned to `len`. |
 
 ---
 
