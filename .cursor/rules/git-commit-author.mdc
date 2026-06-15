@@ -1,0 +1,44 @@
+---
+description: Git commit/push authorship convention for this repository
+alwaysApply: true
+---
+
+# Commit & push authorship
+
+All commits in this repository must be authored by **pdroy@tenstorrent.com**.
+Never attribute commits to Cursor or any AI agent.
+
+## Rules
+
+- The commit **author and committer** must be `Pragnajit Datta Roy <pdroy@tenstorrent.com>`.
+- **Do NOT** add a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer (or any
+  AI/agent co-author trailer) to commit messages.
+- Before any `git push`, verify the commits being pushed have the correct author.
+
+## How to enforce
+
+Set the identity once (already the repo default):
+
+```bash
+git config user.name  "Pragnajit Datta Roy"
+git config user.email "pdroy@tenstorrent.com"
+```
+
+If a commit is created with a stray `Co-authored-by: Cursor` trailer, strip it
+before pushing:
+
+```bash
+# Last commit only:
+git commit --amend --no-edit
+
+# Strip the trailer from the last N unpushed commits (N = range vs origin/main):
+FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f \
+  --msg-filter 'sed "/^Co-authored-by: Cursor <cursoragent@cursor.com>$/d"' \
+  origin/main..HEAD
+```
+
+Verify before pushing:
+
+```bash
+git log origin/main..HEAD --format='%an <%ae> | %s'   # author must be pdroy@tenstorrent.com
+```
