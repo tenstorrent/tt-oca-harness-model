@@ -53,7 +53,7 @@ registered with CTest.
 | # | Test | Checks |
 |---|------|--------|
 | 1 | Constructor guard rails | `num_subsystems = 0` and `= 33`, `ref_clk_period_ns < 0`, `access_delay_ns < 0` each raise `SC_REPORT_FATAL`. |
-| 2 | TLM error taxonomy | Non-word width, misaligned, streaming-width mismatch, byte-enable, out-of-window, bad command → the canonical responses (spec §9). |
+| 2 | TLM error taxonomy | Non-word width, misaligned, streaming-width mismatch, byte-enable, out-of-window, bad command → the canonical responses (spec §10). |
 | 3 | RAZ/WI hole | A read/write of an unmapped offset returns `TLM_OK_RESPONSE` with zero data. |
 | 4 | `transport_dbg` | Malformed accesses return 0; a valid write/read round-trips. |
 

@@ -50,7 +50,7 @@ avoid spurious value-changed events on the 32 struct signals.
 
 `derive()` is a pure function of the current input ports, the JTAG override
 bundle, and `flr_cool_n_`.  It reproduces the `smc_reset_ctrl.sv` combinational
-equations exactly (see spec §4) but **abstracts the timing elements**:
+equations exactly (see spec §5) but **abstracts the timing elements**:
 
 | RTL element                                 | LT abstraction         |
 |---------------------------------------------|------------------------|
