@@ -3,7 +3,7 @@
  * @file scratchpad_ram.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the SMC Scratchpad RAM.
  *
- * This module is a **cycle-approximate, transaction-level model** of the
+ * This module is a **loosely-timed, transaction-level model** of the
  * on-chip scratchpad RAM instantiated in the System Management Controller
  * (SMC) CPU cluster of the OCA hardware platform.  It is intended for
  * software bring-up, integration testing, and early firmware development —

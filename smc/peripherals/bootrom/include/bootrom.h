@@ -3,7 +3,7 @@
  * @file bootrom.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the SEP Boot ROM.
  *
- * This module is a **cycle-approximate, transaction-level model** of the
+ * This module is a **loosely-timed, transaction-level model** of the
  * boot ROM instantiated in the SEP (Secure Entry Processor) sub-system of
  * the OCA hardware platform.  It is intended for software bring-up,
  * integration testing, and early firmware development — not for

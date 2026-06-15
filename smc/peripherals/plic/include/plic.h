@@ -3,7 +3,7 @@
  * @file plic.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the SMC PLIC.
  *
- * This module is a **cycle-approximate, transaction-level model** of the
+ * This module is a **loosely-timed, transaction-level model** of the
  * RISC-V Platform-Level Interrupt Controller (PLIC) as instantiated in the
  * SMC chip.  It is intended for software bring-up, integration testing, and
  * early firmware development — not for micro-architectural timing analysis.

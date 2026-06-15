@@ -3,7 +3,7 @@
  * @file reset_unit.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the SMC Reset Unit.
  *
- * This module is a **cycle-approximate, transaction-level model** of the
+ * This module is a **loosely-timed, transaction-level model** of the
  * System Management Controller (SMC) Reset Unit instantiated in the OCA
  * hardware platform.  It is intended for software bring-up, integration
  * testing, and early firmware development — not for micro-architectural
