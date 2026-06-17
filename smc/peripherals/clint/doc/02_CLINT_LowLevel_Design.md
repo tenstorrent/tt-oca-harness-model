@@ -23,6 +23,7 @@
    - [3.5 Public methods (API)](#35-public-methods-api)
    - [3.6 Internal methods and SC processes](#36-internal-methods-and-sc-processes)
    - [3.7 File-local helpers](#37-file-local-helpers-clintcpp-anonymous-namespace)
+   - [3.8 Function call flow](#38-function-call-flow)
 4. [TLM-2.0 interface implementation](#tlm-2.0-interface-implementation)
 5. [Register decode](#register-decode)
 6. [Internal data structures](#internal-data-structures)
@@ -253,6 +254,33 @@ key/value pairs (`add_metadata("rdl_dimension", …)`, `add_metadata("unit",
 |--------|------------|---------|
 | `MSIP_BIT_MASK`        | `constexpr uint32_t MSIP_BIT_MASK = 0x1u` | MSIP write mask — only bit[0] is the IPI; bits[31:1] RAZ/WI per `clint.rdl`. |
 | `MTIMECMP_RESET_VALUE` | `constexpr uint64_t MTIMECMP_RESET_VALUE = UINT64_MAX` | Post-reset MTIMECMP so MTIP is deasserted until firmware programs a comparator. |
+
+### 3.8 Function call flow
+
+The diagram below shows how the SC processes, TLM callbacks, and helpers call
+one another at run time. Every state-changing path converges on
+`schedule_recompute()`, which fires `recompute_event_` at `SC_ZERO_TIME`; its
+sole consumer is `output_method()`, the only writer of `msip_o[]` / `mtip_o[]`.
+The full process / event topology is detailed in §7.
+
+![CLINT SystemC function-call flow: register writes, reset_proc, tick_method and dbg_set_mtime all converge on schedule_recompute() then recompute_event_ then output_method() (the sole driver of msip_o[] / mtip_o[]).](figures/04_call_flow.svg)
+
+**Reading the flow:**
+
+1. **Register access** &#8212; `b_transport()` validates and decodes via
+   `reg_read()` / `reg_write()`; a write that changes state calls
+   `schedule_recompute()`, and `b_transport()` annotates `delay += access_delay_`
+   (`transport_dbg()` does not).
+2. **Timer** &#8212; `tick_event_` runs `tick_method()` (`SC_METHOD`), which does
+   `MTIME += 1`, re-notifies `tick_event_` for the next period, and calls
+   `schedule_recompute()`.
+3. **Reset** &#8212; `rst_n_i` runs `reset_proc()` (`SC_METHOD`), which clears the
+   registers, re-arms `tick_event_`, and calls `schedule_recompute()`.
+4. **Debug** &#8212; `dbg_set_mtime()` mutates `MTIME` and calls
+   `schedule_recompute()`.
+5. `schedule_recompute()` &#8594; `recompute_event_.notify(SC_ZERO_TIME)` &#8594;
+   `output_method()` (sole driver), which writes `msip_o[]` / `mtip_o[]` as
+   levels, idempotently via the per-hart cache.
 
 ---
 

@@ -422,11 +422,110 @@ STATE_MACHINE = r"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+# ----------------------------------------------------------------------
+# 4. Function-call flow (SystemC run-time call graph)
+# ----------------------------------------------------------------------
+CALL_FLOW = r"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 620" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    .trig rect { fill:#fce8cd; stroke:#c47f1a; }
+    .fn   rect { fill:#d8e6ff; stroke:#2b6cb0; }
+    .ev   rect { fill:#ece0fb; stroke:#7c3aed; }
+    .drv  rect { fill:#cdeccf; stroke:#2f855a; }
+    .hlp  rect { fill:#eceff1; stroke:#607d8b; }
+    rect { rx:7; stroke-width:1.5; }
+    .t   { font-size:12.5px; fill:#10243e; text-anchor:middle; }
+    .code{ font-family:"DejaVu Sans Mono",monospace; font-weight:bold; }
+    .sub { font-size:10px; fill:#3a4a5a; text-anchor:middle; }
+    .lbl { font-size:10px; fill:#6b4a12; text-anchor:middle; font-style:italic;
+           paint-order:stroke; stroke:#ffffff; stroke-width:5px; stroke-linejoin:round; }
+    .edge{ fill:none; stroke:#555; stroke-width:1.5; marker-end:url(#a); }
+    .dash{ stroke-dasharray:5,4; }
+  </style>
+
+  <text x="470" y="30" font-size="18" font-weight="bold" fill="#10243e" text-anchor="middle">PLIC &#8212; SystemC function-call flow</text>
+
+  <!-- Triggers -->
+  <g class="trig">
+    <rect x="14"  y="56" width="250" height="50"/>
+    <rect x="322" y="56" width="180" height="50"/>
+    <rect x="560" y="56" width="150" height="50"/>
+  </g>
+  <text class="t code" x="139" y="77">TLM initiator</text>
+  <text class="t code" x="139" y="94" font-size="10.5">b_transport() / transport_dbg()</text>
+  <text class="t code" x="412" y="78">src_in[] change</text>
+  <text class="sub" x="412" y="95">(interrupt source lines)</text>
+  <text class="t" x="635" y="78">input pin</text>
+  <text class="sub code" x="635" y="95">rst_n_i</text>
+
+  <!-- Handlers -->
+  <g class="fn">
+    <rect x="14"  y="150" width="250" height="68"/>
+    <rect x="322" y="150" width="180" height="68"/>
+    <rect x="560" y="150" width="150" height="68"/>
+  </g>
+  <text class="t" x="139" y="170">validate &#8594; decode</text>
+  <text class="sub code" x="139" y="188">reg_read() / reg_write()</text>
+  <text class="sub code" x="139" y="204">CLAIM&#8594;claim(); COMPLETE&#8594;complete()</text>
+  <text class="t code" x="412" y="178">src_method()</text>
+  <text class="sub" x="412" y="196">latch pending (rising edge)</text>
+  <text class="t code" x="635" y="178">reset_proc()</text>
+  <text class="sub" x="635" y="196">clear all state</text>
+
+  <!-- Spine -->
+  <g class="fn"><rect x="330" y="312" width="240" height="46"/></g>
+  <text class="t code" x="450" y="339">schedule_recompute()</text>
+  <g class="ev"><rect x="268" y="400" width="344" height="44"/></g>
+  <text class="t code" x="440" y="427" font-size="11.5">recompute_event_.notify(SC_ZERO_TIME)</text>
+  <g class="drv"><rect x="290" y="486" width="320" height="62"/></g>
+  <text class="t code" x="450" y="510">output_method()  &#9664; SOLE DRIVER</text>
+  <text class="sub" x="450" y="528">writes ctx_out[0..N-1]</text>
+  <text class="sub" x="450" y="542">(MEIP / SEIP per hart)</text>
+  <g class="hlp"><rect x="648" y="494" width="150" height="44"/></g>
+  <text class="t code" x="723" y="521" font-size="11.5">best_pending(c)</text>
+
+  <!-- Edges -->
+  <path class="edge" d="M139,106 L139,150"/>
+  <path class="edge" d="M139,218 L139,335 L330,335"/>
+  <text class="lbl" x="215" y="328">on state change</text>
+  <path class="edge" d="M412,106 L412,150"/>
+  <path class="edge" d="M412,218 L412,312"/>
+  <path class="edge" d="M635,106 L635,150"/>
+  <path class="edge" d="M635,218 L635,335 L570,335"/>
+  <path class="edge" d="M450,358 L444,400"/>
+  <path class="edge" d="M440,444 L450,486"/>
+  <path class="edge dash" d="M610,512 L648,514"/>
+  <text class="lbl" x="629" y="504">per ctx</text>
+
+  <!-- Legend -->
+  <g font-size="10.5" fill="#10243e">
+    <rect x="20" y="566" width="16" height="12" rx="3" fill="#fce8cd" stroke="#c47f1a"/>
+    <text x="42" y="576">trigger / event source</text>
+    <rect x="200" y="566" width="16" height="12" rx="3" fill="#d8e6ff" stroke="#2b6cb0"/>
+    <text x="222" y="576">method / function</text>
+    <rect x="360" y="566" width="16" height="12" rx="3" fill="#ece0fb" stroke="#7c3aed"/>
+    <text x="382" y="576">sc_event notify</text>
+    <rect x="510" y="566" width="16" height="12" rx="3" fill="#cdeccf" stroke="#2f855a"/>
+    <text x="532" y="576">sole sc_out driver</text>
+    <rect x="690" y="566" width="16" height="12" rx="3" fill="#eceff1" stroke="#607d8b"/>
+    <text x="712" y="576">pure helper</text>
+  </g>
+  <text x="20" y="600" font-size="10.5" fill="#3a4a5a">Single-driver rule: src_method / reset_proc / register writes / claim() / complete() all call schedule_recompute() &#8594;</text>
+  <text x="20" y="614" font-size="10.5" fill="#3a4a5a">recompute_event_ &#8594; output_method(), the only writer of ctx_out[]. b_transport adds access_delay_; transport_dbg does not.</text>
+</svg>
+"""
+
+
 def main() -> None:
     files = {
         "01_block_diagram.svg": BLOCK_DIAGRAM,
         "02_pipeline.svg":      PIPELINE,
         "03_state_machine.svg": STATE_MACHINE,
+        "04_call_flow.svg":     CALL_FLOW,
     }
     for name, content in files.items():
         # The strings above use Python escape sequences (\u2192 etc.) so we

@@ -17,6 +17,7 @@
    - [3.2 Public methods (API)](#32-public-methods-api)
    - [3.3 Internal methods and SC processes](#33-internal-methods-and-sc-processes)
    - [3.4 File-local helpers](#34-file-local-helpers-bootromcpp-anonymous-namespace)
+   - [3.5 Function call flow](#35-function-call-flow)
 4. [CCI parameter catalogue](#cci-parameter-catalogue)
 5. [Constructor walkthrough](#constructor-walkthrough)
 6. [Internal data structures](#internal-data-structures)
@@ -164,6 +165,31 @@ declaration order" guarantees the CCI broker has already resolved
 | `ends_with_ci`       | `bool ends_with_ci(const std::string& s, const std::string& suffix)` | Case-insensitive suffix test; used by `resolve_format` to spot `.img`/`.bin`. |
 | `is_supported_width` | `constexpr bool is_supported_width(unsigned len)` | True for `len ∈ {1,2,4,8}`. |
 | `is_aligned`         | `constexpr bool is_aligned(uint64_t addr, unsigned len)` | True iff `addr` is naturally aligned to `len`. |
+
+### 3.5 Function call flow
+
+The Boot ROM has **no output ports and no recompute spine** — it is a passive
+TLM target that serves reads from a preloaded `data_` image. The diagram below
+shows the two phases: *elaboration* (the constructor fills `data_`) and
+*run time* (the socket callbacks serve reads).
+
+![Boot ROM SystemC function-call flow: the constructor preloads the data_ ROM image; at run time b_transport / transport_dbg serve reads (writes are discarded) and reset_proc is an empty binding hook.](figures/call_flow.svg)
+
+**Reading the flow:**
+
+1. **Elaboration** &#8212; `bootrom()` &#8594; (if `init_file` is set) `load_preload()`
+   &#8594; `resolve_format()` + `parse_hex_line()` &#8594; fills `data_`. The
+   constructor also registers the TLM callbacks and `SC_METHOD(reset_proc)`.
+2. **Read** &#8212; TLM initiator &#8594; `b_transport()` validates
+   width/alignment/streaming/byte-enables/window, then copies `data_[addr..]`
+   and annotates `delay += access_delay_`. Writes return `TLM_OK` but are
+   discarded (the ROM is read-only).
+3. **Back-door** &#8212; `transport_dbg()` is a zero-delay read of `data_`; the
+   debug API (`dbg_read32`/`dbg_read64`/`dbg_load_bytes`) accesses `data_`
+   directly.
+4. **Reset** &#8212; `reset_proc()` (`SC_METHOD` on `rst_n_i`) has an empty body;
+   `data_` is immutable so there is nothing to clear (it is a binding hook /
+   extension point).
 
 ---
 

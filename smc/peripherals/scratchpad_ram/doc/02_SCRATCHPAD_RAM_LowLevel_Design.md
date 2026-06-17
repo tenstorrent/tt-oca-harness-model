@@ -16,6 +16,7 @@
    - [3.2 Public methods (API)](#32-public-methods-api)
    - [3.3 Internal methods and SC processes](#33-internal-methods-and-sc-processes)
    - [3.4 File-local helpers](#34-file-local-helpers-scratchpad_ramcpp-anonymous-namespace)
+   - [3.5 Function call flow](#35-function-call-flow)
 4. [CCI parameter scaffolding](#cci-parameter-scaffolding)
 5. [Construction sequence](#construction-sequence)
 6. [`b_transport` data path](#b_transport-data-path)
@@ -136,6 +137,33 @@ transaction level — a flat array is functionally identical.
 | `ends_with_ci`       | `bool ends_with_ci(const std::string& s, const std::string& suffix)` | Case-insensitive suffix test; used by `resolve_format` to spot `.img`/`.bin`. |
 | `is_supported_width` | `constexpr bool is_supported_width(unsigned len)` | True for `len ∈ {1,2,4,8}`. |
 | `is_aligned`         | `constexpr bool is_aligned(uint64_t addr, unsigned len)` | True iff `addr` is naturally aligned to `len`. |
+
+### 3.5 Function call flow
+
+Like the Boot ROM, the scratchpad RAM has **no output ports and no recompute
+spine** — it is a passive TLM target over a `data_` SRAM array. Unlike the ROM
+it is **read/write** and adds a SECDED **ECC fault map** (`ecc_errors_`). The
+diagram below shows elaboration (the constructor fills `data_`) and run time
+(reads/writes against `data_` plus the ECC side-channel).
+
+![Scratchpad RAM SystemC function-call flow: the constructor preloads the data_ SRAM array; b_transport reads/writes data_ with SECDED ECC (ecc_errors_ fault map); reset_proc retains contents on reset.](figures/call_flow.svg)
+
+**Reading the flow:**
+
+1. **Elaboration** &#8212; `scratchpad_ram()` &#8594; (if `init_file` is set)
+   `load_preload()` &#8594; fills `data_`. The constructor also registers the
+   TLM callbacks and `SC_METHOD(reset_proc)`.
+2. **Read/write** &#8212; TLM initiator &#8594; `b_transport()` validates and
+   honours byte-enables, then reads or writes `data_`. A read calls
+   `ecc_check(scrub=true)` (uncorrectable &#8594; `TLM_GENERIC_ERROR`,
+   correctable &#8594; repaired/scrubbed); a write commits to `data_` and calls
+   `ecc_clear_range()` to re-encode ECC. Both touch the `ecc_errors_` fault map.
+   `delay += access_delay_`.
+3. **Back-door / debug** &#8212; `transport_dbg()` is a zero-delay read/write of
+   `data_` with **no ECC side effects**; `dbg_inject_ecc_error()` /
+   `dbg_clear_ecc_errors()` mutate `ecc_errors_` directly.
+4. **Reset** &#8212; `reset_proc()` (`SC_METHOD` on `rst_n_i`) has an empty body;
+   SRAM contents survive reset (only RTL bus pipeline registers reset).
 
 ---
 

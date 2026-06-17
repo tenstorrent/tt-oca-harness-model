@@ -19,6 +19,7 @@
    - [3.2 Public methods (API)](#32-public-methods-api)
    - [3.3 Internal methods and SC processes](#33-internal-methods-and-sc-processes)
    - [3.4 File-local helpers](#34-file-local-helpers-pliccpp-anonymous-namespace)
+   - [3.5 Function call flow](#35-function-call-flow)
 4. [TLM-2.0 interface implementation](#4-tlm-20-interface-implementation)
 5. [Register decode](#5-register-decode)
 6. [Internal data structures](#6-internal-data-structures)
@@ -254,6 +255,33 @@ Why each choice on this list:
 | `THRESHOLD_MASK` | `constexpr unsigned THRESHOLD_MASK = 0x7u` | 3-bit mask applied to THRESHOLD writes (values 0..7). |
 | `word_index`     | `inline unsigned word_index(unsigned src)` | Index of the 32-bit enable/pending word for source `src` (`src >> 5`). |
 | `bit_mask`       | `inline uint32_t bit_mask(unsigned src)` | Single-bit mask for source `src` within its word (`1u << (src & 0x1F)`). |
+
+### 3.5 Function call flow
+
+The diagram below shows how the SC processes, TLM callbacks, and helpers call
+one another at run time. As in the CLINT / Reset Unit models, every
+state-changing path converges on `schedule_recompute()`, which fires
+`recompute_event_` at `SC_ZERO_TIME`; its sole consumer is `output_method()`,
+the only writer of `ctx_out[]`. The full process / event topology is detailed
+in §7.
+
+![PLIC SystemC function-call flow: register access, src_method and reset_proc all converge on schedule_recompute() then recompute_event_ then output_method() (the sole driver of ctx_out[], via best_pending()).](figures/04_call_flow.svg)
+
+**Reading the flow:**
+
+1. **Register access** &#8212; `b_transport()` validates and decodes via
+   `reg_read()` / `reg_write()`; a CLAIM read calls `claim()`, a COMPLETE write
+   calls `complete()`. State-changing accesses call `schedule_recompute()` and
+   `b_transport()` annotates `delay += access_delay_` (`transport_dbg()` does
+   not).
+2. **Source lines** &#8212; a `src_in[]` change runs `src_method()`
+   (`SC_METHOD`), which latches pending bits on a rising edge and calls
+   `schedule_recompute()`.
+3. **Reset** &#8212; `rst_n_i` runs `reset_proc()` (`SC_METHOD`), which clears
+   all state and calls `schedule_recompute()`.
+4. `schedule_recompute()` &#8594; `recompute_event_.notify(SC_ZERO_TIME)` &#8594;
+   `output_method()` (sole driver), which calls `best_pending()` per context and
+   writes `ctx_out[0..N-1]` (the MEIP/SEIP lines).
 
 ---
 

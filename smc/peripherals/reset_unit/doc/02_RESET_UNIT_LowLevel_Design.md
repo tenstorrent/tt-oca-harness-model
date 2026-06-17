@@ -212,6 +212,37 @@ single-driver rule and mirrors the PLIC / CLINT models.  Output writes are
 **idempotent** for the per-subsystem bundles (cached in `ss_ctrl_cache_`) to
 avoid spurious value-changed events on the 32 struct signals.
 
+### Function call flow
+
+The diagram below shows how the SC processes, TLM callbacks, and helper
+functions call one another at run time. Every state-changing path converges on
+`schedule_recompute()`, which fires `recompute_event_` at `SC_ZERO_TIME`; the
+sole consumer of that event is `output_method()`, the only writer of any
+output port.
+
+![Reset Unit SystemC function-call flow: every state-changing path converges on schedule_recompute() then recompute_event_ then output_method() (the sole sc_out driver).](figures/02_call_flow.svg)
+
+**Reading the flow:**
+
+1. **Input-pin change** &#8594; `input_method()` &#8594; (on a `cfg_flr_pf_active_i`
+   rising edge: set `isolate_req_smc_reg_` and `flr_kick()`) &#8594;
+   `process_state_change()`.
+2. **Register access** &#8594; `b_transport()` validates width/alignment/streaming/
+   byte-enables/window, then `reg_read()` / `reg_write()`; a write calls
+   `schedule_recompute()` and `b_transport()` annotates `delay += access_delay_`.
+   `transport_dbg()` shares the decode but adds no delay.
+3. **JTAG override** &#8594; `set_jtag_ctrl()` stores the bundle and calls
+   `process_state_change()`.
+4. **FLR pulse** &#8594; `flr_kick()` schedules `flr_assert_event_` /
+   `flr_deassert_event_`; when they fire, `flr_assert_method()` /
+   `flr_deassert_method()` toggle `flr_cool_n_` and call `process_state_change()`.
+5. **Elaboration** &#8594; `start_of_simulation()` seeds `prev_primary_n_` /
+   `prev_cold_n_` via `derive()` and posts the first `recompute_event_`.
+6. `process_state_change()` runs `derive()`, clears the primary/cold register
+   groups on a reset-assert edge, then `schedule_recompute()` &#8594;
+   `recompute_event_.notify(SC_ZERO_TIME)` &#8594; `output_method()` (re-runs
+   `derive()` and writes every `sc_out`).
+
 ---
 
 ## 5. Reset derivation (`derive()`)

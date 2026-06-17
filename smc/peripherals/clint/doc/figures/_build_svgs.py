@@ -420,11 +420,111 @@ STATE_MACHINE = r"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+# ----------------------------------------------------------------------
+# 4. Function-call flow (SystemC run-time call graph)
+# ----------------------------------------------------------------------
+CALL_FLOW = r"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 610" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 Z" fill="#555"/>
+    </marker>
+  </defs>
+  <style>
+    .trig rect { fill:#fce8cd; stroke:#c47f1a; }
+    .fn   rect { fill:#d8e6ff; stroke:#2b6cb0; }
+    .ev   rect { fill:#ece0fb; stroke:#7c3aed; }
+    .drv  rect { fill:#cdeccf; stroke:#2f855a; }
+    rect { rx:7; stroke-width:1.5; }
+    .t   { font-size:12.5px; fill:#10243e; text-anchor:middle; }
+    .code{ font-family:"DejaVu Sans Mono",monospace; font-weight:bold; }
+    .sub { font-size:10px; fill:#3a4a5a; text-anchor:middle; }
+    .lbl { font-size:10px; fill:#6b4a12; text-anchor:middle; font-style:italic;
+           paint-order:stroke; stroke:#ffffff; stroke-width:5px; stroke-linejoin:round; }
+    .edge{ fill:none; stroke:#555; stroke-width:1.5; marker-end:url(#a); }
+  </style>
+
+  <text x="470" y="30" font-size="18" font-weight="bold" fill="#10243e" text-anchor="middle">CLINT &#8212; SystemC function-call flow</text>
+
+  <!-- Triggers -->
+  <g class="trig">
+    <rect x="14"  y="56" width="250" height="50"/>
+    <rect x="322" y="56" width="150" height="50"/>
+    <rect x="512" y="56" width="150" height="50"/>
+    <rect x="705" y="56" width="210" height="50"/>
+  </g>
+  <text class="t code" x="139" y="77">TLM initiator</text>
+  <text class="t code" x="139" y="94" font-size="10.5">b_transport() / transport_dbg()</text>
+  <text class="t" x="397" y="78">input pin</text>
+  <text class="sub code" x="397" y="95">rst_n_i</text>
+  <text class="t code" x="587" y="82">tick_event_</text>
+  <text class="sub" x="587" y="98">(timer, period_ns)</text>
+  <text class="t code" x="810" y="82">dbg_set_mtime()</text>
+  <text class="sub" x="810" y="98">(test / debug)</text>
+
+  <!-- Handlers -->
+  <g class="fn">
+    <rect x="14"  y="150" width="250" height="54"/>
+    <rect x="322" y="150" width="150" height="54"/>
+    <rect x="512" y="150" width="150" height="54"/>
+  </g>
+  <text class="t" x="139" y="171">validate &#8594; decode</text>
+  <text class="sub code" x="139" y="189">reg_read() / reg_write()</text>
+  <text class="t code" x="397" y="173">reset_proc()</text>
+  <text class="sub" x="397" y="190">clear regs; re-arm tick</text>
+  <text class="t code" x="587" y="173">tick_method()</text>
+  <text class="sub" x="587" y="190">MTIME += 1</text>
+
+  <!-- Spine -->
+  <g class="fn"><rect x="330" y="298" width="240" height="46"/></g>
+  <text class="t code" x="450" y="325">schedule_recompute()</text>
+  <g class="ev"><rect x="268" y="386" width="344" height="44"/></g>
+  <text class="t code" x="440" y="413" font-size="11.5">recompute_event_.notify(SC_ZERO_TIME)</text>
+  <g class="drv"><rect x="300" y="472" width="300" height="62"/></g>
+  <text class="t code" x="450" y="496">output_method()  &#9664; SOLE DRIVER</text>
+  <text class="sub" x="450" y="514">writes msip_o[] / mtip_o[]</text>
+  <text class="sub" x="450" y="528">(level, idempotent via cache)</text>
+
+  <!-- Edges -->
+  <path class="edge" d="M139,106 L139,150"/>
+  <path class="edge" d="M139,204 L139,321 L330,321"/>
+  <text class="lbl" x="212" y="314">reg_write() (on change)</text>
+  <path class="edge" d="M397,106 L397,150"/>
+  <path class="edge" d="M397,204 L397,298"/>
+  <path class="edge" d="M587,106 L587,150"/>
+  <path class="edge" d="M587,204 L587,321 L570,321"/>
+  <!-- tick re-arm self loop -->
+  <path class="edge" d="M662,178 L688,178 L688,70 L664,70"/>
+  <text class="lbl" x="616" y="130">re-arm tick_event_</text>
+  <!-- dbg -->
+  <path class="edge" d="M810,106 L810,335 L570,335"/>
+  <text class="lbl" x="690" y="328">dbg_set_mtime()</text>
+  <!-- spine verticals -->
+  <path class="edge" d="M450,344 L444,386"/>
+  <path class="edge" d="M440,430 L450,472"/>
+
+  <!-- Legend -->
+  <g font-size="10.5" fill="#10243e">
+    <rect x="20" y="556" width="16" height="12" rx="3" fill="#fce8cd" stroke="#c47f1a"/>
+    <text x="42" y="566">trigger / event source</text>
+    <rect x="200" y="556" width="16" height="12" rx="3" fill="#d8e6ff" stroke="#2b6cb0"/>
+    <text x="222" y="566">method / function</text>
+    <rect x="360" y="556" width="16" height="12" rx="3" fill="#ece0fb" stroke="#7c3aed"/>
+    <text x="382" y="566">sc_event notify</text>
+    <rect x="510" y="556" width="16" height="12" rx="3" fill="#cdeccf" stroke="#2f855a"/>
+    <text x="532" y="566">sole sc_out driver</text>
+  </g>
+  <text x="20" y="590" font-size="10.5" fill="#3a4a5a">Single-driver rule: reset_proc / tick_method / register writes / dbg_set_mtime all call schedule_recompute() &#8594;</text>
+  <text x="20" y="604" font-size="10.5" fill="#3a4a5a">recompute_event_ &#8594; output_method(), the only writer of msip_o[]/mtip_o[]. b_transport adds access_delay_; transport_dbg does not.</text>
+</svg>
+"""
+
+
 def main() -> None:
     files = {
         "01_block_diagram.svg": BLOCK_DIAGRAM,
         "02_pipeline.svg":      PIPELINE,
         "03_state_machine.svg": STATE_MACHINE,
+        "04_call_flow.svg":     CALL_FLOW,
     }
     for name, content in files.items():
         # The strings above use Python escape sequences (\u2192 etc.) so we
