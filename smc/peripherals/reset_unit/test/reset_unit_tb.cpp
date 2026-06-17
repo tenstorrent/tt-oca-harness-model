@@ -516,6 +516,150 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] dump_state contains expected fields\n";
 
+        // ------------------------------------------------------------------
+        // 18. Full register read/write sweep (region/branch coverage):
+        //     exercise every reg_read / reg_write case not hit above.
+        // ------------------------------------------------------------------
+        // SS_CRITICAL_HOLD: RW round-trip.
+        drv.write(reset_unit_cfg::SS_CRITICAL_HOLD, 0x0F0F0F0Fu);
+        EXPECT_EQ(uint32_t(0x0F0F0F0Fu), drv.read(reset_unit_cfg::SS_CRITICAL_HOLD));
+        // SS_FORCE_TO_REF_CLK: read back (was written in §4).
+        drv.write(reset_unit_cfg::SS_FORCE_TO_REF_CLK, 0x00000003u);
+        EXPECT_EQ(uint32_t(0x00000003u), drv.read(reset_unit_cfg::SS_FORCE_TO_REF_CLK));
+        // SYNC_REG read-back path.
+        drv.write(reset_unit_cfg::SYNC_REG, 0x1u);
+        EXPECT_EQ(uint32_t(0x1u), drv.read(reset_unit_cfg::SYNC_REG));
+        drv.write(reset_unit_cfg::SYNC_REG, 0x0u);
+        // ISOLATE_REQ_PINEN_REG / ISOLATE_REQ_SMCEN_REG read-back.
+        drv.write(reset_unit_cfg::ISOLATE_REQ_PINEN_REG, 0x00000055u);
+        EXPECT_EQ(uint32_t(0x00000055u), drv.read(reset_unit_cfg::ISOLATE_REQ_PINEN_REG));
+        drv.write(reset_unit_cfg::ISOLATE_REQ_SMCEN_REG, 0x000000AAu);
+        EXPECT_EQ(uint32_t(0x000000AAu), drv.read(reset_unit_cfg::ISOLATE_REQ_SMCEN_REG));
+        drv.write(reset_unit_cfg::ISOLATE_REQ_PINEN_REG, 0);
+        drv.write(reset_unit_cfg::ISOLATE_REQ_SMCEN_REG, 0);
+        // ISOLATE_REQ_FLR_RESET_COUNTER_VALUE read-back.
+        drv.write(reset_unit_cfg::ISOLATE_REQ_FLR_RESET_COUNTER_VALUE, 9);
+        EXPECT_EQ(uint32_t(9), drv.read(reset_unit_cfg::ISOLATE_REQ_FLR_RESET_COUNTER_VALUE));
+        // SS_RESET_COMPLETE: HW-driven, reflects the input port.
+        ss_reset_complete.write(0x000000A5u);
+        settle();
+        EXPECT_EQ(uint32_t(0x000000A5u), drv.read(reset_unit_cfg::SS_RESET_COMPLETE));
+        std::cout << "  [PASS] register read/write sweep\n";
+
+        // ------------------------------------------------------------------
+        // 19. SS_COLD_RESET_LOCK (woset) write-protects SS_COLD_RESET_N;
+        //     read-only registers ignore writes (no-op write paths).
+        // ------------------------------------------------------------------
+        drv.write(reset_unit_cfg::SS_COLD_RESET_N, 0x00000000u);
+        drv.write(reset_unit_cfg::SS_COLD_RESET_LOCK, 0x0000000Fu); // woset low nibble
+        EXPECT_EQ(uint32_t(0x0000000Fu), drv.read(reset_unit_cfg::SS_COLD_RESET_LOCK));
+        drv.write(reset_unit_cfg::SS_COLD_RESET_N, 0xFFFFFFFFu);    // [3:0] protected
+        EXPECT_EQ(uint32_t(0xFFFFFFF0u), drv.read(reset_unit_cfg::SS_COLD_RESET_N));
+        // Read-only registers: writes are silently ignored.
+        drv.write(reset_unit_cfg::SS_RESET_COMPLETE, 0xFFFFFFFFu);
+        EXPECT_EQ(uint32_t(0x000000A5u), drv.read(reset_unit_cfg::SS_RESET_COMPLETE));
+        drv.write(reset_unit_cfg::STRAPS_LO, 0xDEADBEEFu);
+        EXPECT_EQ(uint32_t(0x12345678u), drv.read(reset_unit_cfg::STRAPS_LO));
+        drv.write(reset_unit_cfg::STRAPS_HI, 0xDEADBEEFu);
+        EXPECT_EQ(uint32_t(0xCAFEF00Du), drv.read(reset_unit_cfg::STRAPS_HI));
+        drv.write(reset_unit_cfg::ISOLATE_REQ_VIS, 0xFFFFFFFFu); // RO no-op
+        std::cout << "  [PASS] SS_COLD_RESET_LOCK woset + read-only write no-ops\n";
+
+        // ------------------------------------------------------------------
+        // 20. JTAG override plane: fuse / cool / core / per-subsystem cold.
+        //     Exercises the override ternaries in derive() / output_method.
+        // ------------------------------------------------------------------
+        {
+            smc::jtag_reset_ctrl jall;
+            jall.fuse_reset_n_ovrd = true; jall.fuse_reset_n_val = false; // force fuse
+            jall.cool_reset_n_ovrd = true; jall.cool_reset_n_val = false; // force cool
+            jall.core_reset_n_ovrd = true; jall.core_reset_n_val = false; // force core
+            jall.ss_cold_reset_n_ovrd = 0x0000000Fu;
+            jall.ss_cold_reset_n_val  = 0x00000005u; // SS0,SS2 high; SS1,SS3 low
+            dut.set_jtag_ctrl(jall);
+            settle();
+            EXPECT_TRUE(dut.jtag_ctrl().cool_reset_n_ovrd); // back-door accessor
+            EXPECT_EQ(uint32_t(0x0000000Fu), dut.jtag_ctrl().ss_cold_reset_n_ovrd);
+            EXPECT_TRUE(!core_smc.read());            // core forced asserted
+            EXPECT_TRUE(!cool_no.read());             // cool forced asserted (jtag)
+            EXPECT_TRUE(!primary_smc.read());         // cool override gates primary
+            EXPECT_TRUE(dut.dbg_ss_reset_ctrl(0).cold_reset_n);   // bit0 of 0x5
+            EXPECT_TRUE(!dut.dbg_ss_reset_ctrl(1).cold_reset_n);  // bit1 forced low
+            EXPECT_TRUE(dut.dbg_ss_reset_ctrl(2).cold_reset_n);   // bit2 of 0x5
+            // ISOLATE_REQ_VIS cool_n_out (bit8) reflects the forced-low cool reset.
+            EXPECT_EQ(uint32_t(0), drv.read(reset_unit_cfg::ISOLATE_REQ_VIS) & (1u << 8));
+            dut.set_jtag_ctrl(smc::jtag_reset_ctrl{}); // clear overrides
+            settle();
+            EXPECT_TRUE(cool_no.read());
+        }
+        std::cout << "  [PASS] JTAG fuse/cool/core/ss-cold override plane\n";
+
+        // ------------------------------------------------------------------
+        // 21. clear_cold_regs with the isolate pin HIGH: PINEN reset is
+        //     qualified, so ISOLATE_REQ_PINEN_REG is retained across cold reset.
+        // ------------------------------------------------------------------
+        drv.write(reset_unit_cfg::ISOLATE_REQ_PINEN_REG, 0x000000FFu);
+        drv.write(reset_unit_cfg::ISOLATE_REQ_REG,       0x0000AB00u);
+        isolate_pin.write(true);
+        settle();
+        rst_cold_n.write(false);   // cold reset asserted while isolate pin high
+        settle();
+        rst_cold_n.write(true);
+        isolate_pin.write(false);
+        settle();
+        // PINEN retained (pin was high); other cold-domain regs cleared.
+        EXPECT_EQ(uint32_t(0x000000FFu), drv.read(reset_unit_cfg::ISOLATE_REQ_PINEN_REG));
+        EXPECT_EQ(uint32_t(0), drv.read(reset_unit_cfg::ISOLATE_REQ_REG));
+        drv.write(reset_unit_cfg::ISOLATE_REQ_PINEN_REG, 0);
+        settle();
+        std::cout << "  [PASS] cold reset retains PINEN when isolate pin high\n";
+
+        // ------------------------------------------------------------------
+        // 22. FLR with reset-duration counter == 0: flr_kick returns early,
+        //     no rst_cool_no pulse is generated.
+        // ------------------------------------------------------------------
+        drv.write(reset_unit_cfg::ISOLATE_REQ_FLR_RESET_COUNTER_VALUE, 0);
+        drv.write(reset_unit_cfg::ISOLATE_REQ_FLR_COUNTER_VALUE, 3);
+        settle();
+        EXPECT_TRUE(cool_no.read());
+        cfg_flr.write(true);       // rising edge → flr_kick (early return, no pulse)
+        settle();
+        EXPECT_EQ(uint32_t(1), drv.read(reset_unit_cfg::ISOLATE_REQ_SMC_REG) & 1u);
+        sc_core::wait(60, SC_NS);
+        EXPECT_TRUE(cool_no.read()); // still de-asserted: no pulse was scheduled
+        cfg_flr.write(false);
+        drv.write(reset_unit_cfg::ISOLATE_REQ_SMC_REG, 0x1u); // clear latch
+        settle();
+        std::cout << "  [PASS] FLR with reset-counter 0 suppresses cool pulse\n";
+
+        // ------------------------------------------------------------------
+        // 23. reset_ctrl_t stream + sc_trace overloads (header coverage).
+        // ------------------------------------------------------------------
+        {
+            std::ostringstream os;
+            os << dut.dbg_ss_reset_ctrl(2);
+            EXPECT_TRUE(os.str().find("cold_n=") != std::string::npos);
+
+            auto* tf = sc_core::sc_create_vcd_trace_file("/tmp/reset_unit_cov_trace");
+            smc::reset_ctrl_t rc = dut.dbg_ss_reset_ctrl(2);
+            smc::sc_trace(tf, rc, "rc");
+            sc_core::sc_close_vcd_trace_file(tf);
+        }
+        std::cout << "  [PASS] reset_ctrl_t operator<< + sc_trace\n";
+
+        // ------------------------------------------------------------------
+        // 24. Back-door API bounds guards (out-of-window / out-of-range).
+        // ------------------------------------------------------------------
+        EXPECT_EQ(uint32_t(0), dut.dbg_read(reset_unit_cfg::WINDOW_SIZE));      // off >= window ⇒ RAZ
+        EXPECT_EQ(uint32_t(0), dut.dbg_read(reset_unit_cfg::WINDOW_SIZE + 0x40));
+        {
+            // Out-of-range subsystem index returns a default-constructed bundle.
+            const smc::reset_ctrl_t oob = dut.dbg_ss_reset_ctrl(dut.num_subsystems());
+            EXPECT_TRUE(oob.warm_reset_n);      // default reset value
+            EXPECT_TRUE(!oob.cold_reset_n);
+        }
+        std::cout << "  [PASS] back-door bounds guards\n";
+
         if (g_failures == 0) std::cout << "\nALL TESTS PASSED\n";
         else                 std::cout << "\n" << g_failures << " FAILURE(S)\n";
         sc_core::sc_stop();
