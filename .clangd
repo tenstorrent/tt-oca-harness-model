@@ -1,0 +1,4 @@
+CompileFlags:
+  # Point clangd at the CMake-generated compile_commands.json so it knows the
+  # include paths (SystemC, cpu_cluster) and C++20 flags for the fabric model.
+  CompilationDatabase: /localdev/rmalhotra/tt-oca-sim/smc/smc_fabric/build
