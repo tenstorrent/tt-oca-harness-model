@@ -87,7 +87,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Build CCI ${{ env.CCI_VERSION }}
         if: steps.cache-cci.outputs.cache-hit != 'true'
@@ -104,6 +104,7 @@ jobs:
             -DCMAKE_CXX_STANDARD_REQUIRED=ON \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=${{ env.CCI_HOME }} \
+            -DCMAKE_INSTALL_LIBDIR=lib \
             -DSYSTEMCCCI_BUILD_TESTS=OFF \
             -DBUILD_SHARED_LIBS=OFF
           cmake --build build -j$(nproc)
@@ -212,7 +213,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Configure VP
         # SYSTEMC_HOME and CCI_HOME come from the workflow-level env block and
@@ -329,7 +330,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run all SEP peripheral tests
         env:
@@ -379,7 +380,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run SMC peripheral tests
         env:
