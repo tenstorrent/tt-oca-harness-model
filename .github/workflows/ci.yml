@@ -99,6 +99,51 @@ jobs:
             https://github.com/accellera-official/cci/releases/download/v${{ env.CCI_VERSION }}/cci_v${{ env.CCI_VERSION }}.tar.gz
           tar zxf cci_v${{ env.CCI_VERSION }}.tar.gz
           cd cci_v${{ env.CCI_VERSION }}
+
+          # ── Patch CCI 1.0.1 for GCC 11 + C++20 (cci_value_iterator) ──────────
+          # cci_value_iterator inherits value_type from std::iterator<> which is
+          # deprecated in C++17 and removed in C++23. GCC 11 C++20 evaluates
+          # the concept requires { typename T::value_type } by SFINAE; accessing
+          # std::iterator<>::value_type (deprecated) inside that requires-expression
+          # makes the concept unsatisfied, so indirectly_readable_traits<> has no
+          # value_type → hard error in cci_broker_manager/cci_broker_handle.
+          # Fix: declare value_type directly (typedef T value_type) instead of
+          # going through the deprecated base class typedef chain.
+          python3 - <<'PYEOF'
+import pathlib, os
+
+def find_file(name):
+    for root, dirs, files in os.walk('.'):
+        if name in files:
+            return pathlib.Path(root) / name
+    return None
+
+p = find_file('cci_value.h')
+if p is None:
+    print("WARNING: cci_value.h not found – skipping patch")
+else:
+    src = p.read_text()
+    old = 'typedef typename base_type::value_type      value_type;'
+    new = 'typedef T value_type; // C++20: direct typedef (std::iterator<> deprecated in base_type)'
+    if old in src:
+        p.write_text(src.replace(old, new, 1))
+        print(f"Patched {p}")
+    elif 'typedef T value_type' in src:
+        print(f"{p}: already has direct value_type typedef, skipping")
+    else:
+        # Try alternative whitespace
+        import re
+        src2, n = re.subn(
+            r'typedef\s+typename\s+base_type::value_type\s+value_type\s*;',
+            'typedef T value_type; // C++20: direct typedef',
+            src, count=1)
+        if n:
+            p.write_text(src2)
+            print(f"Patched {p} (regex fallback)")
+        else:
+            print(f"WARNING: value_type pattern not found in {p} – check CCI version")
+PYEOF
+
           mkdir objdir && cd objdir
           # RapidJSON is cloned to RAPIDJSON_DIR; the CCI configure script
           # checks for ${with_json}/include/rapidjson/document.h, so pass the
@@ -107,7 +152,7 @@ jobs:
             --with-systemc=${{ env.SYSTEMC_HOME }} \
             --with-json=${{ env.RAPIDJSON_DIR }} \
             --prefix=${{ env.CCI_HOME }} \
-            CXXFLAGS="-std=c++${{ env.CXX_STD }}"
+            CXXFLAGS="-std=c++${{ env.CXX_STD }} -Wno-deprecated-declarations"
           make -j$(nproc)
           make install
 
