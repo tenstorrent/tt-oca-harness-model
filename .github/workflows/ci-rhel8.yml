@@ -477,7 +477,8 @@ jobs:
             ${{ env.GCC_TOOLSET }}-gcc-c++ \
             cmake git \
             boost-devel \
-            gcovr
+            python3-pip
+          pip3 install --quiet gcovr
 
       - name: Activate GCC Toolset 12
         run: |
@@ -544,7 +545,8 @@ jobs:
           dnf install -y \
             ${{ env.GCC_TOOLSET }}-gcc-c++ \
             cmake git \
-            gcovr
+            python3-pip
+          pip3 install --quiet gcovr
 
       - name: Activate GCC Toolset 12
         run: |
