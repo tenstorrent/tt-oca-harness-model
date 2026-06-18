@@ -2,9 +2,12 @@
 #
 # Jobs
 # ─────────────────────────────────────────────────────────────────────────────
-#  build-deps      Build + cache SystemC 3.0.2 and CCI 1.0.1 from source.
+#  build-deps      Build + cache SystemC 3.0.2 and CCI 1.0.2 from source.
 #                  Cache key includes OS + compiler + C++ standard, so
-#                  subsequent runs skip the 4-minute build entirely.
+#                  subsequent runs skip the build entirely.
+#                  CCI 1.0.2 is built with CMake; it bundles RapidJSON so no
+#                  separate clone is needed.  The cci_value_iterator C++20
+#                  regression present in 1.0.1 is fixed in 1.0.2.
 #
 #  sep-vp          Build the sep-vp executable (needs build-deps cache).
 #
@@ -31,10 +34,9 @@ on:
 
 env:
   SYSTEMC_VERSION: "3.0.2"
-  CCI_VERSION:     "1.0.1"
+  CCI_VERSION:     "1.0.2"
   SYSTEMC_HOME:    /home/runner/local/systemc-3.0.2
-  CCI_HOME:        /home/runner/local/cci-1.0.1
-  RAPIDJSON_DIR:   /home/runner/local/rapidjson
+  CCI_HOME:        /home/runner/local/cci-1.0.2
   CXX_STD:         "20"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -49,7 +51,7 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y g++ make autoconf
+          sudo apt-get install -y g++ make autoconf cmake
 
       # ── SystemC ────────────────────────────────────────────────────────────
       - name: Cache SystemC ${{ env.SYSTEMC_VERSION }}
@@ -75,7 +77,11 @@ jobs:
           make -j$(nproc)
           make install
 
-      # ── CCI ────────────────────────────────────────────────────────────────
+      # ── CCI 1.0.2 (CMake build, RapidJSON bundled) ─────────────────────────
+      # CCI 1.0.2 (Oct 2025) fixes the cci_value_iterator C++20 regression
+      # present in 1.0.1 where value_type was inherited from std::iterator<>
+      # (deprecated/inaccessible in GCC 11 C++20 concept checks).
+      # RapidJSON is bundled inside the 1.0.2 tarball — no separate clone.
       - name: Cache CCI ${{ env.CCI_VERSION }}
         id: cache-cci
         uses: actions/cache@v4
@@ -83,78 +89,25 @@ jobs:
           path: ${{ env.CCI_HOME }}
           key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
 
-      - name: Clone RapidJSON (CCI dependency)
-        if: steps.cache-cci.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth=1 https://github.com/Tencent/rapidjson.git \
-            ${{ env.RAPIDJSON_DIR }}
-
       - name: Build CCI ${{ env.CCI_VERSION }}
         if: steps.cache-cci.outputs.cache-hit != 'true'
         env:
-          LD_LIBRARY_PATH: ${{ env.SYSTEMC_HOME }}/lib-linux64
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
         run: |
           cd /tmp
           wget -q \
             https://github.com/accellera-official/cci/releases/download/v${{ env.CCI_VERSION }}/cci_v${{ env.CCI_VERSION }}.tar.gz
           tar zxf cci_v${{ env.CCI_VERSION }}.tar.gz
           cd cci_v${{ env.CCI_VERSION }}
-
-          # ── Patch CCI 1.0.1 for GCC 11 + C++20 (cci_value_iterator) ──────────
-          # cci_value_iterator inherits value_type from std::iterator<> which is
-          # deprecated in C++17 and removed in C++23. GCC 11 C++20 evaluates
-          # the concept requires { typename T::value_type } by SFINAE; accessing
-          # std::iterator<>::value_type (deprecated) inside that requires-expression
-          # makes the concept unsatisfied, so indirectly_readable_traits<> has no
-          # value_type → hard error in cci_broker_manager/cci_broker_handle.
-          # Fix: declare value_type directly (typedef T value_type) instead of
-          # going through the deprecated base class typedef chain.
-          python3 - <<'PYEOF'
-import pathlib, os
-
-def find_file(name):
-    for root, dirs, files in os.walk('.'):
-        if name in files:
-            return pathlib.Path(root) / name
-    return None
-
-p = find_file('cci_value.h')
-if p is None:
-    print("WARNING: cci_value.h not found – skipping patch")
-else:
-    src = p.read_text()
-    old = 'typedef typename base_type::value_type      value_type;'
-    new = 'typedef T value_type; // C++20: direct typedef (std::iterator<> deprecated in base_type)'
-    if old in src:
-        p.write_text(src.replace(old, new, 1))
-        print(f"Patched {p}")
-    elif 'typedef T value_type' in src:
-        print(f"{p}: already has direct value_type typedef, skipping")
-    else:
-        # Try alternative whitespace
-        import re
-        src2, n = re.subn(
-            r'typedef\s+typename\s+base_type::value_type\s+value_type\s*;',
-            'typedef T value_type; // C++20: direct typedef',
-            src, count=1)
-        if n:
-            p.write_text(src2)
-            print(f"Patched {p} (regex fallback)")
-        else:
-            print(f"WARNING: value_type pattern not found in {p} – check CCI version")
-PYEOF
-
-          mkdir objdir && cd objdir
-          # RapidJSON is cloned to RAPIDJSON_DIR; the CCI configure script
-          # checks for ${with_json}/include/rapidjson/document.h, so pass the
-          # clone root (not a subdirectory).
-          ../configure \
-            --with-systemc=${{ env.SYSTEMC_HOME }} \
-            --with-json=${{ env.RAPIDJSON_DIR }} \
-            --prefix=${{ env.CCI_HOME }} \
-            CXXFLAGS="-std=c++${{ env.CXX_STD }} -Wno-deprecated-declarations"
-          make -j$(nproc)
-          make install
+          cmake -S . -B build \
+            -DCMAKE_CXX_STANDARD=${{ env.CXX_STD }} \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${{ env.CCI_HOME }} \
+            -DSYSTEMCCCI_BUILD_TESTS=OFF \
+            -DBUILD_SHARED_LIBS=OFF
+          cmake --build build -j$(nproc)
+          cmake --install build
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Job 2 — build sep-vp
