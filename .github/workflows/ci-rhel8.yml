@@ -67,7 +67,6 @@ jobs:
         run: |
           dnf install -y \
             ${{ env.GCC_TOOLSET }}-gcc-c++ \
-            ${{ env.GCC_TOOLSET }}-make \
             cmake make \
             autoconf automake libtool \
             wget tar gzip perl-IPC-Cmd
