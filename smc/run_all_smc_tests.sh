@@ -230,11 +230,16 @@ for entry in "${IPS[@]}"; do
     else                       fail; echo; rel_label="FAIL"; OVERALL_PASS=false; fi
 
     # 2. ASAN build + run
-    printf "  ASAN build    ... "
-    run_stage "${src_dir}" "${plog}/asan_run.log" --asan "${CLEAN_FLAG[@]+"${CLEAN_FLAG[@]}"}"
-    rc=$?
-    if [[ $rc -eq 0 ]]; then pass; echo; asan_label="PASS"
-    else                      fail; echo; asan_label="FAIL"; OVERALL_PASS=false; fi
+    if [[ "${SKIP_ASAN:-0}" == "1" ]]; then
+      printf "  ASAN build    ... SKIP (SKIP_ASAN=1)\n"
+      asan_label="SKIP"
+    else
+      printf "  ASAN build    ... "
+      run_stage "${src_dir}" "${plog}/asan_run.log" --asan "${CLEAN_FLAG[@]+"${CLEAN_FLAG[@]}"}"
+      rc=$?
+      if [[ $rc -eq 0 ]]; then pass; echo; asan_label="PASS"
+      else                      fail; echo; asan_label="FAIL"; OVERALL_PASS=false; fi
+    fi
 
     # 3. Coverage build + report
     printf "  Coverage      ... "

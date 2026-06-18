@@ -488,9 +488,10 @@ jobs:
           CCI_HOME:         ${{ env.CCI_HOME }}
           BOOST_ROOT:       ${{ env.BOOST_HOME }}
           OPENSSL_ROOT:     ${{ env.OPENSSL3_HOME }}
-          # CMake's FindOpenSSL reads OPENSSL_ROOT_DIR from environment;
-          # run_all_peripherals.sh also forwards it via -DOPENSSL_ROOT_DIR.
           OPENSSL_ROOT_DIR: ${{ env.OPENSSL3_HOME }}
+          # ASAN runtime (libasan_preinit.o) is not packaged in gcc-toolset-12
+          # on AlmaLinux 8.  ASAN is covered by the Ubuntu CI; skip it here.
+          SKIP_ASAN:        "1"
         run: sep/peripherals/run_all_peripherals.sh
 
       - name: Upload test logs
@@ -564,6 +565,9 @@ jobs:
           SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
           CCI_HOME:     ${{ env.CCI_HOME }}
           BOOST_ROOT:   ${{ env.BOOST_HOME }}
+          # ASAN runtime (libasan_preinit.o) is not packaged in gcc-toolset-12
+          # on AlmaLinux 8.  ASAN is covered by the Ubuntu CI; skip it here.
+          SKIP_ASAN:    "1"
         run: |
           smc/run_all_smc_tests.sh \
             bootrom clint i3c_controller plic reset_unit scratchpad_ram
@@ -625,6 +629,9 @@ jobs:
       - name: Run SMC Fabric tests
         env:
           SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          # ASAN runtime (libasan_preinit.o) is not packaged in gcc-toolset-12
+          # on AlmaLinux 8.  ASAN is covered by the Ubuntu CI; skip it here.
+          SKIP_ASAN:    "1"
         run: |
           smc/run_all_smc_tests.sh smc_fabric
 

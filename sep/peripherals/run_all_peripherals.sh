@@ -299,11 +299,16 @@ for name in "${PERIPHERALS[@]}"; do
                              || { fail; echo; release_label="FAIL"; OVERALL_PASS=false; }
 
   # 2. ASAN build
-  printf "  ASAN build    ... "
-  build_peripheral "${name}" "ASAN" "${plog}/asan_build.log"
-  asan_status=$?
-  [ $asan_status -eq 0 ] && { pass; echo; asan_label="PASS"; } \
-                          || { fail; echo; asan_label="FAIL"; OVERALL_PASS=false; }
+  if [[ "${SKIP_ASAN:-0}" == "1" ]]; then
+    printf "  ASAN build    ... SKIP (SKIP_ASAN=1)\n"
+    asan_label="SKIP"
+  else
+    printf "  ASAN build    ... "
+    build_peripheral "${name}" "ASAN" "${plog}/asan_build.log"
+    asan_status=$?
+    [ $asan_status -eq 0 ] && { pass; echo; asan_label="PASS"; } \
+                            || { fail; echo; asan_label="FAIL"; OVERALL_PASS=false; }
+  fi
 
   # 3. Coverage build + report
   printf "  Coverage      ... "
