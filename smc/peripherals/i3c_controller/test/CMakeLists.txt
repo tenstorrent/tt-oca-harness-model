@@ -27,3 +27,20 @@ add_test(NAME i3c_controller_neg_tb COMMAND i3c_controller_neg_tb)
 set_tests_properties(i3c_controller_neg_tb PROPERTIES
     PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
     FAIL_REGULAR_EXPRESSION "(^FAIL [^_]|FAILURE\\(S\\))")
+
+# ---------------------------------------------------------------------------
+# i3c_controller_cov_tb -- coverage-completion bench: CCC read, bus-model
+# NACK/error variants, RX/TX/cmd/resp queue overflow, HC_CONTROL.ABORT,
+# SOFT_RST + individual queue resets, HC-level irq, PIO threshold interrupts,
+# DCT_SECTION_OFFSET RW, STBY_CR registers, PIO_CONTROL, inject_ibi/
+# set_bus_model OOR, dump_state, transport_dbg DCT, dbg_read snapshot,
+# xfer_method chaining, partial read.  Brings line coverage above 95 %.
+# ---------------------------------------------------------------------------
+add_executable(i3c_controller_cov_tb i3c_controller_cov_tb.cpp)
+target_link_libraries(i3c_controller_cov_tb PRIVATE smc_i3c_controller SystemC::cci)
+target_compile_options(i3c_controller_cov_tb PRIVATE -Wall -Wextra -Wpedantic
+                                                     -Wno-deprecated-declarations)
+add_test(NAME i3c_controller_cov_tb COMMAND i3c_controller_cov_tb)
+set_tests_properties(i3c_controller_cov_tb PROPERTIES
+    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+    FAIL_REGULAR_EXPRESSION "(^FAIL [^_]|FAILURE\\(S\\))")
