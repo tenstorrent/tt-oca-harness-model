@@ -56,7 +56,11 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
   auto *ptr = trans.get_data_ptr();
   auto len = trans.get_data_length();
 
-	{
+	// Guard the hex-dump string building behind the verbosity threshold. Without this,
+	// the ostringstream construction and format loop run on EVERY transaction
+	// (every fetch/load/store) even though CSML_DEBUG(5) suppresses the actual emission at
+	// the configured verbosity. These unesscesary loop passes make the whole sim crawl.
+	if (logger.getMaxVerbosity() >= 5) {
 		std::ostringstream oss;
 		const auto dump_len = std::min<unsigned>(len, 16);
 		for (unsigned i = 0; i < dump_len; ++i) {
@@ -82,7 +86,7 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
     }
   } else if(cmd == tlm::TLM_READ_COMMAND) {
       m_mem.readBytes(addr, ptr, len);
-		{
+		if (logger.getMaxVerbosity() >= 5) {
 			std::ostringstream oss;
 			const auto dump_len = std::min<unsigned>(len, 16);
 			for (unsigned i = 0; i < dump_len; ++i) {
