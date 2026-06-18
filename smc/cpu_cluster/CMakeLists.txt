@@ -182,12 +182,12 @@ if(SMC_BUILD_PLIC_INTEGRATION)
     message(STATUS "CCI_HOME = ${CCI_HOME}")
 
     find_library(CCI_CONFIG_LIB
-        NAMES cci-config
+        NAMES cci cci-config
         HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
         NO_DEFAULT_PATH
         REQUIRED)
     find_library(CCI_INSPECTION_LIB
-        NAMES cci-inspection
+        NAMES cci cci-inspection
         HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
         NO_DEFAULT_PATH
         REQUIRED)

@@ -97,12 +97,12 @@ endif()
 # `lib64/` (most Linux distros), and accept either `.so` (Linux) or
 # `.dylib` (macOS) by letting find_library pick the right extension.
 find_library(CCI_CONFIG_LIB
-    NAMES cci-config
+    NAMES cci cci-config
     HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
     NO_DEFAULT_PATH
     REQUIRED)
 find_library(CCI_INSPECTION_LIB
-    NAMES cci-inspection
+    NAMES cci cci-inspection
     HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
     NO_DEFAULT_PATH
     REQUIRED)

@@ -94,22 +94,21 @@ if(NOT EXISTS "${CCI_HOME}/include/cci_configuration")
         "Set -DCCI_HOME=<path> or export CCI_HOME.")
 endif()
 add_library(SystemC::cci INTERFACE IMPORTED)
-# Resolve the correct dynamic-library extension per platform.  Both the
-# CLINT and PLIC CMakeLists hard-code .dylib because they are macOS-first;
-# we replicate the pattern here so the build matches.  On Linux, point
-# CCI_HOME at a build prefix that has libcci-config.so / libcci-inspection.so
-# in lib/, and override INTERFACE_LINK_LIBRARIES via cmake -D.
-if(APPLE)
-    set_target_properties(SystemC::cci PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${CCI_HOME}/include"
-        INTERFACE_LINK_LIBRARIES
-            "${CCI_HOME}/lib/libcci-config.dylib;${CCI_HOME}/lib/libcci-inspection.dylib")
-else()
-    set_target_properties(SystemC::cci PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${CCI_HOME}/include"
-        INTERFACE_LINK_LIBRARIES
-            "${CCI_HOME}/lib/libcci-config.so;${CCI_HOME}/lib/libcci-inspection.so")
-endif()
+# find_library handles CCI >= 1.0 (single libcci) and CCI < 1.0
+# (split libcci-config + libcci-inspection), on macOS and Linux.
+find_library(CCI_CONFIG_LIB
+    NAMES cci cci-config
+    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64" "${CCI_HOME}/lib-linux64"
+          "${CCI_HOME}/lib-macosx" "${CCI_HOME}/lib-macosarm64"
+    NO_DEFAULT_PATH REQUIRED)
+find_library(CCI_INSPECTION_LIB
+    NAMES cci cci-inspection
+    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64" "${CCI_HOME}/lib-linux64"
+          "${CCI_HOME}/lib-macosx" "${CCI_HOME}/lib-macosarm64"
+    NO_DEFAULT_PATH REQUIRED)
+set_target_properties(SystemC::cci PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${CCI_HOME}/include"
+    INTERFACE_LINK_LIBRARIES       "${CCI_CONFIG_LIB};${CCI_INSPECTION_LIB}")
 
 if(NOT TARGET SystemC::systemc)
     if(DEFINED ENV{SYSTEMC_HOME})
