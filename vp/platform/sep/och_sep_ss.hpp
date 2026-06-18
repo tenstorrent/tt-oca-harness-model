@@ -57,9 +57,9 @@ public:
     static constexpr unsigned int INIT_COUNT = 4;
     // Targets: sram, rom, plic, clint, dma, uart, gpio, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
-    //          keymgr_kpvlp, efuse, lc_ctrl, avbbus, entropy_src,
-    //          edn,  (PLIC is internal to VeeRISSTlm; reset_ctrl removed)
-    static constexpr unsigned int TARG_COUNT = 25;
+    //          keymgr_kpvlp, efuse, lc_ctrl, avbbus, entropy_src, edn,
+    //          sep_scratch, outbound_filter  (PLIC is internal to VeeRISSTlm)
+    static constexpr unsigned int TARG_COUNT = 27;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -117,6 +117,8 @@ private:
     SEPMemory*                        rom                = nullptr;
     SEPMemory*                        itcm               = nullptr;
     SEPMemory*                        dtcm               = nullptr;
+    SEPMemory*                        sep_scratch        = nullptr;  // functional stub (RW)
+    SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
@@ -387,6 +389,9 @@ inline void och_sep_ss::create_modules() {
     rom             = new SEPMemory("rom", true);
     itcm            = new SEPMemory("itcm", false);
     dtcm            = new SEPMemory("dtcm", false);
+    // Functional RW stubs (no behavioral model) for boot ROM early init.
+    sep_scratch     = new SEPMemory("sep_scratch", false);
+    outbound_filter = new SEPMemory("outbound_filter", false);
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
@@ -457,6 +462,8 @@ inline void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.avbbus_start_addr,      opt.avbbus_end_addr,      *avbbus);
         bus->ports[it++] = new PortMapping(opt.entropy_src_start_addr, opt.entropy_src_end_addr, *entropy_src);
         bus->ports[it++] = new PortMapping(opt.edn_start_addr,         opt.edn_end_addr,         *edn);
+        bus->ports[it++] = new PortMapping(opt.sep_scratch_start_addr,     opt.sep_scratch_end_addr,     *sep_scratch);
+        bus->ports[it++] = new PortMapping(opt.outbound_filter_start_addr, opt.outbound_filter_end_addr, *outbound_filter);
     }
     bus->mapping_complete();
 
@@ -499,6 +506,8 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(avbbus->target_socket);
         bus->isocks[it++].bind(entropy_src->target_socket);
         bus->isocks[it++].bind(edn->target_socket);
+        bus->isocks[it++].bind(sep_scratch->tsock);
+        bus->isocks[it++].bind(outbound_filter->tsock);
     }
 
     // UART
