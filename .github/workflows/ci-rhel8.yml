@@ -34,9 +34,11 @@ env:
   SYSTEMC_VERSION:  "3.0.2"
   CCI_VERSION:      "1.0.2"
   OPENSSL3_VERSION: "3.3.2"
+  BOOST_VERSION:    "1.84.0"
   SYSTEMC_HOME:     /home/runner/local/systemc-3.0.2
   CCI_HOME:         /home/runner/local/cci-1.0.2
   OPENSSL3_HOME:    /home/runner/local/openssl-3.3.2
+  BOOST_HOME:       /home/runner/local/boost-1.84.0
   CXX_STD:          "20"
   GCC_TOOLSET:      "gcc-toolset-12"
 
@@ -50,7 +52,7 @@ jobs:
 # Job 1 — build and cache SystemC + OpenSSL 3 + CCI on RHEL 8
 # ─────────────────────────────────────────────────────────────────────────────
   build-deps-rhel8:
-    name: Build SystemC + OpenSSL 3 + CCI (RHEL 8)
+    name: Build SystemC + OpenSSL 3 + Boost 1.84 + CCI (RHEL 8)
     runs-on: ubuntu-22.04
     container:
       image: almalinux:8
@@ -65,8 +67,11 @@ jobs:
 
       - name: Install build tools
         run: |
+          # Use the full gcc-toolset-12 meta-package: it includes gcc-c++ plus
+          # the ASAN runtime (libasan_preinit.o, -lasan) that gcc-toolset-12-gcc-c++
+          # alone does not pull in on AlmaLinux 8.
           dnf install -y \
-            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            ${{ env.GCC_TOOLSET }} \
             cmake make \
             autoconf automake libtool \
             wget tar gzip perl-IPC-Cmd
@@ -111,6 +116,36 @@ jobs:
           make -j$(nproc)
           make install
 
+      # ── Boost 1.84 ─────────────────────────────────────────────────────────
+      # RHEL 8 ships Boost 1.66 which uses std::allocator::allocate(n, hint) —
+      # an overload removed in C++20.  Build Boost 1.84 (C++20-clean) from
+      # source.  CCI is also built against this Boost to avoid ODR issues.
+      - name: Cache Boost ${{ env.BOOST_VERSION }} (RHEL 8)
+        id: cache-boost-rhel8
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_HOME }}
+          key: boost-${{ env.BOOST_VERSION }}-rhel8
+
+      - name: Build Boost ${{ env.BOOST_VERSION }}
+        if: steps.cache-boost-rhel8.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$(dirname ${{ env.BOOST_HOME }})"
+          cd /tmp
+          BOOST_UNDER="boost_$(echo ${{ env.BOOST_VERSION }} | tr . _)"
+          wget -q "https://archives.boost.io/release/${{ env.BOOST_VERSION }}/source/${BOOST_UNDER}.tar.gz"
+          tar zxf "${BOOST_UNDER}.tar.gz"
+          cd "${BOOST_UNDER}"
+          ./bootstrap.sh --prefix=${{ env.BOOST_HOME }}
+          ./b2 install \
+            --with-atomic --with-chrono --with-date_time --with-filesystem \
+            --with-iostreams --with-log --with-program_options --with-regex \
+            --with-system --with-thread \
+            link=static threading=multi variant=release \
+            cxxstd=17 \
+            -j$(nproc) \
+            > /tmp/boost-build.log 2>&1 || { tail -30 /tmp/boost-build.log; exit 1; }
+
       # ── OpenSSL 3 ──────────────────────────────────────────────────────────
       # RHEL 8 ships OpenSSL 1.1.1.  The kmac peripheral uses EVP_MAC and
       # openssl/core_names.h which require OpenSSL >= 3.0.  Build from source.
@@ -144,7 +179,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Build CCI ${{ env.CCI_VERSION }}
         if: steps.cache-cci-rhel8.outputs.cache-hit != 'true'
@@ -163,6 +198,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX=${{ env.CCI_HOME }} \
             -DCMAKE_INSTALL_LIBDIR=lib \
+            -DBOOST_ROOT=${{ env.BOOST_HOME }} \
+            -DBoost_NO_SYSTEM_PATHS=ON \
             -DSYSTEMCCCI_BUILD_TESTS=OFF \
             -DBUILD_SHARED_LIBS=OFF
           cmake --build build -j$(nproc)
@@ -189,9 +226,8 @@ jobs:
       - name: Install build dependencies
         run: |
           dnf install -y \
-            ${{ env.GCC_TOOLSET }}-gcc-c++ \
-            cmake git python3 \
-            boost-devel
+            ${{ env.GCC_TOOLSET }} \
+            cmake git python3
 
       - name: Activate GCC Toolset 12
         run: |
@@ -281,6 +317,12 @@ jobs:
           path: ${{ env.SYSTEMC_HOME }}
           key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
 
+      - name: Restore Boost cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_HOME }}
+          key: boost-${{ env.BOOST_VERSION }}-rhel8
+
       - name: Restore OpenSSL 3 cache
         uses: actions/cache@v4
         with:
@@ -291,7 +333,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Configure VP
         env:
@@ -299,6 +341,7 @@ jobs:
           CMAKE_CXX_STANDARD:  ${{ env.CXX_STD }}
           SYSTEMC_HOME:        ${{ env.SYSTEMC_HOME }}
           CCI_HOME:            ${{ env.CCI_HOME }}
+          BOOST_ROOT:          ${{ env.BOOST_HOME }}
           OPENSSL_ROOT:        ${{ env.OPENSSL3_HOME }}
         run: cd vp && ./configure_vp.sh
 
@@ -329,9 +372,8 @@ jobs:
       - name: Install build dependencies
         run: |
           dnf install -y \
-            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            ${{ env.GCC_TOOLSET }} \
             cmake git python3 \
-            boost-devel \
             lcov
 
       - name: Activate GCC Toolset 12
@@ -422,6 +464,12 @@ jobs:
           path: ${{ env.SYSTEMC_HOME }}
           key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
 
+      - name: Restore Boost cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_HOME }}
+          key: boost-${{ env.BOOST_VERSION }}-rhel8
+
       - name: Restore OpenSSL 3 cache
         uses: actions/cache@v4
         with:
@@ -432,12 +480,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run all SEP peripheral tests
         env:
           SYSTEMC_HOME:     ${{ env.SYSTEMC_HOME }}
           CCI_HOME:         ${{ env.CCI_HOME }}
+          BOOST_ROOT:       ${{ env.BOOST_HOME }}
           OPENSSL_ROOT:     ${{ env.OPENSSL3_HOME }}
           # CMake's FindOpenSSL reads OPENSSL_ROOT_DIR from environment;
           # run_all_peripherals.sh also forwards it via -DOPENSSL_ROOT_DIR.
@@ -474,9 +523,8 @@ jobs:
       - name: Install build dependencies
         run: |
           dnf install -y \
-            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            ${{ env.GCC_TOOLSET }} \
             cmake git \
-            boost-devel \
             python3-pip
           pip3 install --quiet gcovr
 
@@ -499,16 +547,23 @@ jobs:
           path: ${{ env.SYSTEMC_HOME }}
           key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
 
+      - name: Restore Boost cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_HOME }}
+          key: boost-${{ env.BOOST_VERSION }}-rhel8
+
       - name: Restore CCI cache
         uses: actions/cache@v4
         with:
           path: ${{ env.CCI_HOME }}
-          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+          key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
 
       - name: Run SMC peripheral tests
         env:
           SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
           CCI_HOME:     ${{ env.CCI_HOME }}
+          BOOST_ROOT:   ${{ env.BOOST_HOME }}
         run: |
           smc/run_all_smc_tests.sh \
             bootrom clint i3c_controller plic reset_unit scratchpad_ram
@@ -543,7 +598,7 @@ jobs:
       - name: Install build dependencies
         run: |
           dnf install -y \
-            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            ${{ env.GCC_TOOLSET }} \
             cmake git \
             python3-pip
           pip3 install --quiet gcovr
