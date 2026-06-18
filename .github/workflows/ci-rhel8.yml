@@ -227,7 +227,8 @@ jobs:
         run: |
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
-            cmake git python3
+            cmake git python3 \
+            zlib-devel readline-devel
 
       - name: Activate GCC Toolset 12
         run: |
@@ -374,6 +375,7 @@ jobs:
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
             cmake git python3 \
+            zlib-devel readline-devel \
             lcov
 
       - name: Activate GCC Toolset 12
