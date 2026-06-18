@@ -1,0 +1,438 @@
+# CI for tt-oca-sim (Open Chiplet Atlas Virtual Platform)
+#
+# Jobs
+# ─────────────────────────────────────────────────────────────────────────────
+#  build-deps      Build + cache SystemC 3.0.2 and CCI 1.0.1 from source.
+#                  Cache key includes OS + compiler + C++ standard, so
+#                  subsequent runs skip the 4-minute build entirely.
+#
+#  sep-vp          Build the sep-vp executable (needs build-deps cache).
+#
+#  sep-unit-tests  Run every SEP peripheral unit test via
+#                  sep/peripherals/run_all_peripherals.sh (needs build-deps).
+#
+#  smc-unit-tests  Run every SMC peripheral unit test via each
+#                  smc/peripherals/<ip>/run_tests.sh (needs build-deps).
+#                  The cpu_cluster is skipped — it requires the Tenstorrent-
+#                  internal Whisper ISS (WHISPER_HOME); enable it locally once
+#                  WHISPER_HOME is available.
+#
+#  smc-fabric-tests  Build and run the SMC Fabric SystemC/TLM-2.0 testbench
+#                    via smc/smc_fabric/run_tests.sh (needs build-deps).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  SYSTEMC_VERSION: "3.0.2"
+  CCI_VERSION:     "1.0.1"
+  SYSTEMC_HOME:    /home/runner/local/systemc-3.0.2
+  CCI_HOME:        /home/runner/local/cci-1.0.1
+  RAPIDJSON_DIR:   /home/runner/local/rapidjson
+  CXX_STD:         "20"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 1 — build and cache SystemC + CCI
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  build-deps:
+    name: Build SystemC + CCI
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ make autoconf
+
+      # ── SystemC ────────────────────────────────────────────────────────────
+      - name: Cache SystemC ${{ env.SYSTEMC_VERSION }}
+        id: cache-sc
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Build SystemC ${{ env.SYSTEMC_VERSION }}
+        if: steps.cache-sc.outputs.cache-hit != 'true'
+        run: |
+          cd /tmp
+          wget -q \
+            https://github.com/accellera-official/systemc/archive/refs/tags/${{ env.SYSTEMC_VERSION }}.tar.gz
+          tar zxf ${{ env.SYSTEMC_VERSION }}.tar.gz
+          cd systemc-${{ env.SYSTEMC_VERSION }}
+          touch docs/DEVELOPMENT.md
+          mkdir objdir && cd objdir
+          ../configure \
+            --prefix=${{ env.SYSTEMC_HOME }} \
+            CXXFLAGS="-std=c++${{ env.CXX_STD }}"
+          make -j$(nproc)
+          make install
+
+      # ── CCI ────────────────────────────────────────────────────────────────
+      - name: Cache CCI ${{ env.CCI_VERSION }}
+        id: cache-cci
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Clone RapidJSON (CCI dependency)
+        if: steps.cache-cci.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth=1 https://github.com/Tencent/rapidjson.git \
+            ${{ env.RAPIDJSON_DIR }}
+
+      - name: Build CCI ${{ env.CCI_VERSION }}
+        if: steps.cache-cci.outputs.cache-hit != 'true'
+        env:
+          LD_LIBRARY_PATH: ${{ env.SYSTEMC_HOME }}/lib-linux64
+        run: |
+          cd /tmp
+          wget -q \
+            https://github.com/accellera-official/cci/releases/download/v${{ env.CCI_VERSION }}/cci_v${{ env.CCI_VERSION }}.tar.gz
+          tar zxf cci_v${{ env.CCI_VERSION }}.tar.gz
+          cd cci_v${{ env.CCI_VERSION }}
+          mkdir objdir && cd objdir
+          ../configure \
+            --with-systemc=${{ env.SYSTEMC_HOME }} \
+            --with-json=${{ env.RAPIDJSON_DIR }}/rapidjson \
+            --prefix=${{ env.CCI_HOME }} \
+            CXXFLAGS="-std=c++${{ env.CXX_STD }}"
+          make -j$(nproc)
+          make install
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 2 — build sep-vp
+# ─────────────────────────────────────────────────────────────────────────────
+  sep-vp:
+    name: Build sep-vp
+    runs-on: ubuntu-22.04
+    needs: build-deps
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake \
+            libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
+            libssl-dev
+
+      # The csml submodule is owned by Vayavya-Labs and cannot be patched via PR.
+      # These two minimal fixes are required for C++20 conformance and are
+      # pending upstream merge. Apply them here until the vendor ships the fix.
+      - name: Patch CSML for C++20 (pending Vayavya-Labs/CSML upstream merge)
+        run: |
+          python3 - <<'PYEOF'
+          import re, pathlib
+
+          # ── csml_report.h: replace ambiguous multi-overload set ──────────────
+          rh = pathlib.Path("sep/utils/csml/inc/csml_report.h")
+          src = rh.read_text()
+          old = (
+              'template<class... va_args>\n'
+              'std::string form_report_string(std::string arg1, va_args... args);\n'
+              '\n'
+              'template<class T, class U>\n'
+              'inline std::string form_report_string(T arg1, U arg2)\n'
+              '{\n'
+              '   return form_report_string(arg1) + form_report_string(arg2);\n'
+              '}\n'
+              '\n'
+              'template<class T, class... va_args>\n'
+              'inline std::string form_report_string(T arg1, va_args... args)\n'
+              '{\n'
+              '  return form_report_string(arg1) + form_report_string(args...);\n'
+              '}\n'
+              '\n'
+              'template<class... va_args>\n'
+              'inline std::string form_report_string(std::string arg1, va_args... args)\n'
+              '{\n'
+              '  return arg1 + form_report_string(args...);\n'
+              '}'
+          )
+          new = (
+              'template<class First, class Second, class... Rest>\n'
+              'inline std::string form_report_string(First first, Second second, Rest... rest)\n'
+              '{\n'
+              '  return form_report_string(first) + form_report_string(second, rest...);\n'
+              '}'
+          )
+          assert old in src, "csml_report.h patch target not found – check submodule version"
+          rh.write_text(src.replace(old, new))
+          print("Patched csml_report.h")
+
+          # ── csml_register.h: add Clang stack-depth pragma ────────────────────
+          rg = pathlib.Path("sep/utils/csml/inc/csml_register.h")
+          src = rg.read_text()
+          before = 'template <class T, unsigned int Quantity>\nclass csml_reg_vector\n{'
+          after_end = '};\n\ntemplate <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          guarded_before = (
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic push\n'
+              '#pragma clang diagnostic ignored "-Wstack-exhausted"\n'
+              '#endif\n\n'
+              + before
+          )
+          guarded_end = (
+              '};\n\n'
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic pop\n'
+              '#endif\n\n'
+              'template <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          )
+          if before not in src:
+              print("csml_register.h: pragma already applied, skipping")
+          else:
+              src = src.replace(before, guarded_before)
+              src = src.replace(after_end, guarded_end, 1)
+              rg.write_text(src)
+              print("Patched csml_register.h")
+          PYEOF
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Configure VP
+        # SYSTEMC_HOME and CCI_HOME come from the workflow-level env block and
+        # are picked up by configure_vp.sh's auto-discovery (no explicit export
+        # needed — the script honours existing env vars before probing).
+        env:
+          CMAKE_BUILD_TYPE:    Release
+          CMAKE_CXX_STANDARD:  ${{ env.CXX_STD }}
+          SYSTEMC_HOME:        ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:            ${{ env.CCI_HOME }}
+        run: cd vp && ./configure_vp.sh
+
+      - name: Build sep-vp
+        run: make sep-vp -C vp/build -j$(nproc)
+
+      - name: Verify binary exists
+        run: test -x vp/build/bin/sep-vp
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 3 — SEP peripheral unit tests
+# ─────────────────────────────────────────────────────────────────────────────
+  sep-unit-tests:
+    name: SEP peripheral unit tests
+    runs-on: ubuntu-22.04
+    needs: build-deps
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake lcov \
+            libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
+            libssl-dev
+
+      - name: Patch CSML for C++20 (pending Vayavya-Labs/CSML upstream merge)
+        run: |
+          python3 - <<'PYEOF'
+          import re, pathlib
+
+          rh = pathlib.Path("sep/utils/csml/inc/csml_report.h")
+          src = rh.read_text()
+          old = (
+              'template<class... va_args>\n'
+              'std::string form_report_string(std::string arg1, va_args... args);\n'
+              '\n'
+              'template<class T, class U>\n'
+              'inline std::string form_report_string(T arg1, U arg2)\n'
+              '{\n'
+              '   return form_report_string(arg1) + form_report_string(arg2);\n'
+              '}\n'
+              '\n'
+              'template<class T, class... va_args>\n'
+              'inline std::string form_report_string(T arg1, va_args... args)\n'
+              '{\n'
+              '  return form_report_string(arg1) + form_report_string(args...);\n'
+              '}\n'
+              '\n'
+              'template<class... va_args>\n'
+              'inline std::string form_report_string(std::string arg1, va_args... args)\n'
+              '{\n'
+              '  return arg1 + form_report_string(args...);\n'
+              '}'
+          )
+          new = (
+              'template<class First, class Second, class... Rest>\n'
+              'inline std::string form_report_string(First first, Second second, Rest... rest)\n'
+              '{\n'
+              '  return form_report_string(first) + form_report_string(second, rest...);\n'
+              '}'
+          )
+          assert old in src, "csml_report.h patch target not found – check submodule version"
+          rh.write_text(src.replace(old, new))
+          print("Patched csml_report.h")
+
+          rg = pathlib.Path("sep/utils/csml/inc/csml_register.h")
+          src = rg.read_text()
+          before = 'template <class T, unsigned int Quantity>\nclass csml_reg_vector\n{'
+          after_end = '};\n\ntemplate <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          guarded_before = (
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic push\n'
+              '#pragma clang diagnostic ignored "-Wstack-exhausted"\n'
+              '#endif\n\n'
+              + before
+          )
+          guarded_end = (
+              '};\n\n'
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic pop\n'
+              '#endif\n\n'
+              'template <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          )
+          if before not in src:
+              print("csml_register.h: pragma already applied, skipping")
+          else:
+              src = src.replace(before, guarded_before)
+              src = src.replace(after_end, guarded_end, 1)
+              rg.write_text(src)
+              print("Patched csml_register.h")
+          PYEOF
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Run all SEP peripheral tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+        run: sep/peripherals/run_all_peripherals.sh
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sep-peripheral-logs
+          path: sep/peripherals/logs/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 4 — SMC peripheral unit tests
+# Runs through the run_all_smc_tests.sh orchestrator (Release + ASAN +
+# Coverage + CTest) for all peripherals under smc/peripherals/.
+# cpu_cluster is not in the orchestrator — it requires the Tenstorrent-
+# internal Whisper ISS (WHISPER_HOME).
+# ─────────────────────────────────────────────────────────────────────────────
+  smc-unit-tests:
+    name: SMC peripheral unit tests
+    runs-on: ubuntu-22.04
+    needs: build-deps
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake gcovr \
+            libboost-iostreams-dev libboost-program-options-dev libboost-log-dev
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Run SMC peripheral tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+        run: |
+          smc/run_all_smc_tests.sh \
+            bootrom clint i3c_controller plic reset_unit scratchpad_ram
+
+      - name: Upload SMC peripheral test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-peripheral-logs
+          path: smc/logs/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 5 — SMC Fabric unit tests
+# Runs through the run_all_smc_tests.sh orchestrator (Release + ASAN +
+# Coverage + CTest) for smc_fabric.
+# ─────────────────────────────────────────────────────────────────────────────
+  smc-fabric-tests:
+    name: SMC Fabric unit tests
+    runs-on: ubuntu-22.04
+    needs: build-deps
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake gcovr
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Run SMC Fabric tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+        run: |
+          smc/run_all_smc_tests.sh smc_fabric
+
+      - name: Upload SMC Fabric test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-fabric-logs
+          path: smc/logs/
+          retention-days: 7
