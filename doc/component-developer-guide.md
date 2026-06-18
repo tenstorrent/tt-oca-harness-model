@@ -2,9 +2,23 @@
 title: Component Developer Guide
 ---
 
-**Audience:** Engineers who develop, test, and contribute to SystemC/TLM IP models and virtual-platform projects.
+**Audience:** Engineers who develop, test, and contribute to SystemC/TLM IP models
+and virtual-platform projects in the `tt-oca-sim` repository — the Tenstorrent
+**Open Chiplet Atlas (OCA)** Virtual Platform.
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-06-18
+
+### Repository context
+
+`tt-oca-sim` provides SystemC/TLM-2.0 simulation for two subsystems defined in
+the **Open Chiplet Atlas Harness (OCAH)** hardware specification:
+
+- **SMC** (`smc/`) — System Management Controller: the per-chiplet RISC-V management
+  engine (PLIC, CLINT, CPU cluster, bootrom, reset unit, I3C, scratchpad). Defined in
+  OCAH Ch. 6.
+- **SEP** (`sep/`) — Secure Enclave Processor: the per-chiplet OpenTitan-derived
+  security enclave (AES, HMAC, KMAC, OTBN, Key Manager, Lifecycle Controller, …),
+  including a full runnable Virtual Platform (`sep-vp`).
 
 ---
 
@@ -26,12 +40,13 @@ Work in the appropriate area of the tree:
 
 | Change type | Typical location |
 |-------------|------------------|
-| New or updated IP model | `<subsystem>/peripherals/<ip>/` |
-| IP documentation | `<subsystem>/peripherals/<ip>/doc/` |
-| Subsystem architecture / test plan | `doc/` |
+| New or updated SEP IP model | `sep/peripherals/<ip>/` |
+| New or updated SMC IP model | `smc/peripherals/<ip>/` or `smc/cpu_cluster/` |
+| IP documentation | `<subsystem>/peripherals/<ip>/doc/` or `doc/` |
+| SMC architecture / test plan | `doc/01_SMC_Architecture.md`, `doc/02_SMC_IP_LowLevel_Design.md`, `doc/03_SMC_Test_Plan.md` |
 | Shared tooling | `scripts/` |
-| VP integration / platform | `<vp-repo>/vp/src/platform/` |
-| Firmware / DV test | `<vp-repo>/sw/` |
+| VP integration / platform | `vp/platform/` |
+| Firmware / DV test | `sw/` |
 
 ```bash
 # Stage your changes

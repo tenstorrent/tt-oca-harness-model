@@ -1,54 +1,166 @@
-# Tenstorrent SEP
+# tt-oca-sim — Open Chiplet Atlas Virtual Platform
 
-## Overview
+## What is Open Chiplet Atlas?
 
-SystemC/TLM-based Virtual Platform (VP) for the Tenstorrent OCH SEP (Secure Enclave Processor). Models OpenTitan-derived IP peripherals and integrates a RISC-V VeeR EL2 core via a custom TLM wrapper.
+**Open Chiplet Atlas (OCA)** is Tenstorrent's chiplet-based System-in-Package (SiP)
+architecture. It defines a standardized framework for building multi-chiplet systems
+where multiple specialized silicon dies are co-packaged and communicate through a
+common, well-specified set of interfaces and protocols.
 
-The platform supports two SystemC backends:
-- **Accellera** — standalone `sep-vp` executable
+The **Open Chiplet Atlas Harness (OCAH)** is the hardware specification that governs
+every OCA-compliant chiplet. The "harness" is the infrastructure layer present in
+every chiplet — common subsystems, AXI fabric topology, inter-chiplet protocols
+(OCCP, OCTS), security boundaries, and management interfaces that all chiplets must
+implement to be OCAH-compliant.
+
+---
+
+## SMC and SEP in the Open Chiplet Harness
+
+Every OCA chiplet integrates two mandatory management subsystems defined in the OCAH
+hardware specification:
+
+### System Management Controller (SMC) — OCAH Ch. 6
+
+The **SMC** is the per-chiplet management engine: a small, firmware-driven RISC-V
+microcontroller cluster (1–4 Rocket RV64GC cores) that owns every aspect of
+chiplet bring-up and runtime management. It is the "service processor" of the
+chiplet, handling everything the compute fabric must not do itself:
+
+| Function | Detail |
+|----------|--------|
+| Clock & voltage management | PLLs, AVS (Adaptive Voltage Scaling), power state transitions |
+| Reset management | Cold / cool / FLR / watchdog reset trees |
+| Hardware bring-up | Boot ROM, eFuse/OTP, strap sampling |
+| Inter-chiplet communication | 32-channel mailboxes, OCCP protocol, OCTS time-sync |
+| Security fabric | Inbound/outbound AXI filters (×16), address remap, protection bits |
+| System monitoring | PVT sensors, telemetry (ATB sinks), log engine |
+| Interrupt management | PLIC (332 sources), CLINT, per-core WDTs, BEUs |
+| Debug | RISC-V Debug Module, JTAG-to-AXI bridge |
+
+In a multi-chiplet SiP the **primary** chiplet's SMC additionally orchestrates
+secondary chiplets (reset sequencing, firmware distribution, telemetry aggregation)
+via the OCCP protocol over I3C.
+
+### Secure Enclave Processor (SEP) — OCAH Ch. SEP
+
+The **SEP** is the per-chiplet security subsystem — an OpenTitan-derived secure
+enclave with a RISC-V VeeR EL2 core. It is isolated from the main compute fabric
+and communicates with the SMC exclusively through an AXI4 port and a dedicated
+mailbox interface. The SEP is responsible for all security-sensitive operations
+that must be isolated from untrusted software:
+
+| Function | Detail |
+|----------|--------|
+| Cryptographic engines | AES-256, HMAC-SHA-2, KMAC, OTBN (big-number co-processor), CSRNG, Entropy Source, EDN |
+| Key management | Key Manager, lifecycle-controlled key derivation, eFuse/OTP interface |
+| Lifecycle control | Lifecycle Controller (ROM_EXT → DEV → PROD → RMA states) |
+| Secure DMA | Isolated DMA with inbound/outbound filters |
+| Secure boot | Verifies SMC firmware and compute firmware signatures |
+| Mailbox | Host-facing and SMC-facing secure communication channels |
+| AON timer | Always-on watchdog and reset arbitration |
+
+The SMC provides the SEP with a dedicated AXI port (`sep_axi_in`) and shares
+interrupt lines via mailbox doorbell IRQs. In the full chiplet, the SMC acts as
+the trusted proxy through which the host interacts with the SEP.
+
+---
+
+## This Repository
+
+`tt-oca-sim` provides **SystemC/TLM-2.0 virtual platform simulation** for both
+OCAH subsystems:
+
+| Subsystem | What is provided |
+|-----------|-----------------|
+| **SEP** | Full, runnable Virtual Platform (`sep-vp`) — models all SEP peripherals, runs actual RISC-V VeeR EL2 firmware, used for pre-silicon DV and firmware development |
+| **SMC** | SystemC TLM-2.0 IP model library — individual models for each SMC peripheral (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, I3C, …), with unit tests and documentation |
 
 ---
 
 ## Directory Structure
 
 ```
-tenstorrent_sep/
-├── cmake/                        ← shared CMake modules (FindSystemC, FindCCI, etc.)
-├── sep/                          ← all SEP IP peripheral models
-│   ├── peripherals/              ← individual IP models (aes, hmac, uart, otbn, …)
-│   ├── cpu/                      ← VeeR EL2 ISS + TLM wrapper
+tt-oca-sim/
+├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI)
+├── sep/                           ← SEP IP peripheral models
+│   ├── peripherals/               ← individual IP models
+│   │   ├── aes/                   ← AES-256 engine
+│   │   ├── aon_timer/             ← Always-On timer / watchdog
+│   │   ├── csrng/                 ← Cryptographically Secure RNG
+│   │   ├── edn/                   ← Entropy Distribution Network
+│   │   ├── efuse/                 ← eFuse/OTP controller
+│   │   ├── entropy_src/           ← Entropy Source
+│   │   ├── gpio/                  ← GPIO controller
+│   │   ├── hmac/                  ← HMAC-SHA-2 engine
+│   │   ├── key_manager/           ← Key Manager (lifecycle-aware)
+│   │   ├── kmac/                  ← KMAC / SHA-3 engine
+│   │   ├── lifecycle_ctrl/        ← Lifecycle Controller
+│   │   ├── mailbox/               ← Secure mailbox (host ↔ SEP)
+│   │   ├── otbn/                  ← OpenTitan Big-Number co-processor
+│   │   ├── secure_dma/            ← Isolated DMA engine
+│   │   ├── sep_memory/            ← SRAM / ROM models
+│   │   ├── spi_controller/        ← SPI controller (OpenTitan)
+│   │   ├── spi_flash/             ← SPI flash model (SFDP Profile 1)
+│   │   └── uart_16550/            ← UART 16550
+│   ├── cpu/                       ← VeeR EL2 ISS + TLM-2.0 wrapper
 │   └── utils/
-│       ├── csml/                 ← Core SystemC Model Library (Registers modelling, CCI params, logging)
-│       └── paged-memory/         ← PagedMemory header-only sparse storage engine
-├── vp/                           ← VP platform (wires all models into a complete VP)
-│   ├── configure_vp.sh           ← configure CMake + export build env
+│       ├── csml/                  ← Core SystemC Model Library (submodule — Vayavya CSML)
+│       └── paged-memory/          ← PagedMemory header-only sparse storage engine
+├── smc/                           ← SMC IP model library
+│   ├── peripherals/               ← SMC peripheral models
+│   │   ├── bootrom/               ← 64 KB Boot ROM
+│   │   ├── clint/                 ← RISC-V CLINT (mtime, MSIP, MTIMECMP)
+│   │   ├── i3c_controller/        ← MIPI I3C HCI v1.2 controller (×6 in HW)
+│   │   ├── plic/                  ← RISC-V PLIC (332 interrupt sources)
+│   │   ├── reset_unit/            ← Reset generation unit (cold / cool / FLR)
+│   │   └── scratchpad_ram/        ← 1 MiB scratchpad SRAM (32 banks)
+│   ├── cpu_cluster/               ← SMC CPU cluster (1–4 RV64GC, Whisper ISS)
+│   └── cmake/
+│       └── SmcSystemCStd.cmake    ← auto-detects SystemC C++ standard
+├── vp/                            ← SEP Virtual Platform
+│   ├── configure_vp.sh            ← configure CMake + export build env
 │   ├── CMakeLists.txt
 │   └── platform/
-│       ├── infra/                ← RISC-V VP infrastructure (bus, PLIC, CLINT, ELF loader)
-│       └── sep/                  ← SEP platform wiring (och_sep_ss)
-│           ├── main.cpp          ← sc_main entry point
-│           ├── och_sep_ss.hpp    ← top-level platform module
-│           ├── inc/              ← SEP-specific headers (Args, memory map, mailbox)
-│           ├── config/           ← runtime config files (.ini, .json)
-├── sw/                           ← firmware and software tests
-│   ├── sep-vp-tests/             ← standalone VP firmware tests (gpio, hmac, spi, …)
-│   └── tt-oca-hw-main/           ← TT firmware tests and build infrastructure
-│       ├── bin/sep_fw_standalone.sh  ← build + run script for TT tests
-│       └── fw/sep/tests/         ← TT test sources + run_test.sh / run_all_tests.sh
-├── Makefile                      ← convenience shortcut for building the VP
-├── LICENSE
-└── LICENSE.riscv-vp-plusplus     ← upstream MIT license attribution
+│       ├── infra/                 ← bus, PLIC, CLINT, ELF loader
+│       └── sep/                   ← SEP platform wiring (och_sep_ss)
+│           ├── main.cpp           ← sc_main entry point
+│           ├── och_sep_ss.hpp     ← top-level SEP platform module
+│           ├── inc/               ← SEP-specific headers (Args, memory map)
+│           └── config/
+│               ├── accellera_config.ini   ← CCI runtime parameters
+│               └── veeriss_config.json    ← VeeR EL2 ISS configuration
+├── sw/                            ← Firmware and DV tests
+│   ├── sep-vp-tests/              ← Vayavya peripheral verification tests
+│   └── tt-oca-hw-main/            ← TT DV + firmware test suites
+│       ├── bin/sep_fw_standalone.sh
+│       ├── dv/sep/tests/          ← DV test ELFs
+│       └── fw/sep/tests/          ← Firmware test suite
+├── doc/                           ← Architecture and design documentation
+│   ├── 01_SMC_Architecture.md/.pdf
+│   ├── 02_SMC_IP_LowLevel_Design.md/.pdf
+│   ├── 03_SMC_Test_Plan.md/.pdf
+│   ├── 04_SMC_VP_Exit_Criteria.md/.pdf
+│   ├── component-developer-guide.md/.pdf
+│   ├── maintainer-guide.md/.pdf
+│   └── SystemC_Virtual_Platform_Customer_Guide.md/.pdf
+├── scripts/
+│   ├── md-to-pdf.sh               ← Markdown → PDF (pandoc + Chrome headless)
+│   └── md-pdf.css
+├── Makefile                       ← top-level: sep-vp, submodule-init, clean
+├── RELEASE_NOTES.md
+└── LICENSE
 ```
 
 ---
 
-## Flow
+## Building the SEP VP
 
 ### Dependencies
 
 - **CMake** 3.24+
-- **C++ compiler** with C++17 (GCC 9+) or C++20 (GCC 11+)
-- **SystemC** 3.0.1
+- **C++ compiler**: GCC 9+ (C++17) or GCC 11+ (C++20)
+- **SystemC** 3.0.2
 - **CCI** 1.0.1
 - **Boost** (`iostreams`, `program_options`, `log`)
 - **OpenSSL** (for HMAC, KMAC, CSRNG crypto models)
@@ -64,16 +176,16 @@ sudo apt install -y g++ make cmake autoconf \
     libssl-dev libvncserver-dev doxygen graphviz
 ```
 
-#### 2. SystemC 3.0.1
+#### 2. SystemC 3.0.2
 
 ```bash
 cd ~/Downloads
-wget https://github.com/accellera-official/systemc/archive/refs/tags/3.0.1.tar.gz
-tar zxvf 3.0.1.tar.gz && cd systemc-3.0.1
+wget https://github.com/accellera-official/systemc/archive/refs/tags/3.0.2.tar.gz
+tar zxvf 3.0.2.tar.gz && cd systemc-3.0.2
 mkdir objdir && cd objdir
-sudo mkdir -p /usr/lib/systemc-3.0.1
+sudo mkdir -p /usr/local/systemc-3.0.2
 touch ../docs/DEVELOPMENT.md   # workaround for known bug
-../configure --prefix=/usr/lib/systemc-3.0.1
+../configure --prefix=/usr/local/systemc-3.0.2 CXXFLAGS="-std=c++20"
 make && sudo make install
 ```
 
@@ -89,47 +201,21 @@ cd ~/Downloads && git clone https://github.com/Tencent/rapidjson.git
 cd ~/Downloads
 wget https://github.com/accellera-official/cci/releases/download/v1.0.1/cci_v1.0.1.tar.gz
 tar zxvf cci_v1.0.1.tar.gz && cd cci_v1.0.1
-sudo mkdir -p /usr/lib/cci-1.0.1
+sudo mkdir -p /usr/local/cci-1.0.1
 mkdir objdir && cd objdir
-export LD_LIBRARY_PATH=/usr/lib/systemc-3.0.1/lib-linux64/
+export LD_LIBRARY_PATH=/usr/local/systemc-3.0.2/lib-linux64/
 ../configure \
-  --with-systemc=/usr/lib/systemc-3.0.1/ \
+  --with-systemc=/usr/local/systemc-3.0.2/ \
   --with-json=/home/$USER/Downloads/rapidjson/rapidjson \
-  --prefix=/usr/lib/cci-1.0.1
+  --prefix=/usr/local/cci-1.0.1 \
+  CXXFLAGS="-std=c++20"
 make && sudo make install
 ```
 
-> **C++20 note:** CCI 1.0.1 requires a patch for C++20 builds (GCC 11+). Apply before
-> building: change `typedef void value_type;` to the concrete type in
-> `src/cci/core/cci_value.h` at the two locations marked with `// TODO`.
-```bash
-# C++20 compatibility patch (required for GCC 11+ / -std=c++20)
-+# CCI 1.0.1 relies on iterator traits that are stricter in C++20; update the
-+# value_type typedefs so the iterator types satisfy std::iterator_traits.
-+apply_patch <<'PATCH'
-+--- a/src/cci/core/cci_value.h
-++++ b/src/cci/core/cci_value.h
-+@@ -764,7 +764,7 @@
-+   template<typename U> friend class cci_impl::value_iterator_impl;
-+   typedef cci_impl::value_ptr<cci_value_map_elem_cref> proxy_ptr;
-+ 
-+-  typedef void value_type; // TODO: add  explicit value_type 
-++  typedef cci_value_map_elem_cref value_type; // TODO: add  explicit value_type 
-+ public:
-+   typedef cci_value_map_elem_cref const_reference;
-+   typedef cci_value_map_elem_ref  reference;
-+@@ -791,7 +791,7 @@
-+ {
-+   template<typename U> friend class cci_impl::value_iterator_impl;
-+   typedef cci_impl::value_ptr<cci_value_map_elem_ref> proxy_ptr;
-+-  typedef void value_type; // TODO: add  explicit value_type
-++  typedef cci_value_map_elem_ref value_type; // TODO: add  explicit value_type
-+ public:
-+   typedef cci_value_map_elem_cref const_reference;
-+   typedef cci_value_map_elem_ref  reference;
-+PATCH
-+
-```
+> **C++20 note:** CCI 1.0.1 requires a patch for C++20 builds (GCC 11+). In
+> `src/cci/core/cci_value.h`, change both `typedef void value_type;` lines
+> (marked `// TODO`) to the concrete iterator type. See the RELEASE_NOTES for
+> the exact patch.
 
 ### Configure & Build
 
@@ -140,85 +226,48 @@ git clone git@github.com:tenstorrent/tt-oca-sim.git
 cd tt-oca-sim
 git submodule update --init --recursive
 ```
-> **Note:** Ensure that your GitHub SSH keys are configured correctly, as the CSML submodule uses SSH for cloning.
+
+> **Note:** GitHub SSH keys must be configured — the CSML submodule uses SSH.
 
 **Build:**
 
 Edit **`vp/configure_vp.sh`** to set `SYSTEMC_HOME`, `CCI_HOME`, `BOOST_ROOT`,
-`OPENSSL_ROOT` to your install paths, then run:
+and `OPENSSL_ROOT` to your install paths, then:
 
 ```bash
 cd vp && ./configure_vp.sh && cd build && make sep-vp
 ```
 
-Override defaults on the command line:
+Override on the command line:
 
 ```bash
-cd vp && CMAKE_BUILD_TYPE=Release ./configure_vp.sh && cd build && make sep-vp
+CMAKE_BUILD_TYPE=Release CMAKE_CXX_STANDARD=20 cd vp && ./configure_vp.sh && cd build && make sep-vp
+```
+
+Or from the repo root:
+
+```bash
+SYSTEMC_HOME=/path/to/systemc make sep-vp
 ```
 
 Output binary: `vp/build/bin/sep-vp`
+
+**C++ standard note:** The `smc/cmake/SmcSystemCStd.cmake` helper probes the
+linked SystemC library and automatically sets `CMAKE_CXX_STANDARD` to match.
+Point `SYSTEMC_HOME` at the SystemC build compiled with the standard you intend
+to use — mismatches fail at link time with an `sc_api_version_*` undefined symbol.
+
+---
+
+## Running the SEP VP
 
 ### Runtime Configuration
 
 **`vp/platform/sep/config/accellera_config.ini`** — CCI parameters for all models
 (verbosity, algorithm selection, eFuse values, etc.)
 
-**`vp/platform/sep/config/veeriss_config.json`** — VeeR ISS configuration
-(XLEN, NMI vector, extensions, ICCM/DCCM layout, CSR overrides).
-Referenced from the INI via `och_sep_ss1.configFile`.
-vp/platform/sep/config/veeriss_config.json
-
-```bash
-{
-    "xlen"       : 32,
-    "nmi_vec"    : "0x01000e00",
-
-    "iccm": {
-        "region": "0xc",
-        "offset": "0x00000000",
-        "size":   "0x00040000"
-    },
-    "dccm": {
-        "region": "0xc",
-        "offset": "0x00040000",
-        "size":   "0x00020000"
-    },
-
-    "memory_mapped_registers": {
-        "address":  "0xc0080000",
-        "size":     "0x00006000",
-        "internal": "false"
-    },
-
-    "enable_zfh" : "true",
-    "enable_zba" : "true",
-    "enable_zbb" : "true",
-    "abi_names"  : "true",
-    "enable_A"   : "true",
-    "enable_B"   : "true",
-    "enable_C"   : "true",
-    "enable_D"   : "true",
-    "enable_F"   : "true",
-    "enable_I"   : "true",
-    "enable_M"   : "true",
-    "enable_S"   : "true",
-    "enable_U"   : "true",
-    "enable_V"   : "true",
-
-    "csr" : {
-        "mrac" : {
-            "number" : "0x7c0",
-            "exists" : "true",
-            "reset"  : "0x0",
-            "mask"   : "0xffffffff",
-            "comment": "VeeR EL2 PMA control — stub, writes accepted and ignored in VP"
-        }
-    }
-}
-```
-
-### Running the VP
+**`vp/platform/sep/config/veeriss_config.json`** — VeeR EL2 ISS configuration
+(XLEN, NMI vector, ICCM/DCCM layout, RISC-V extensions, CSR overrides).
 
 ```bash
 vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
@@ -226,8 +275,8 @@ vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
 
 ### sep-vp-tests (Vayavya peripheral verification)
 
-> Tests under `sw/sep-vp-tests/` were added by Vayavya to verify the correct functional
-> behavior of all modeled peripherals end-to-end from firmware on the VeeR EL2 core.
+> Tests under `sw/sep-vp-tests/` verify the functional behavior of all modeled
+> peripherals end-to-end from firmware running on the VeeR EL2 core.
 
 ```bash
 cd sw/sep-vp-tests/sep-gpio-test
@@ -237,10 +286,7 @@ make debug  # run with GDB enabled
 make gdb    # connect GDB (second terminal)
 ```
 
-### Firmware tests from Tenstorrent
-Refer to [Building and Running TT Firmware Tests](#building-and-running-tt-firmware-tests).
-
-### Peripheral Model Unit Tests
+### Peripheral Model Unit Tests (SEP)
 
 Each peripheral under `sep/peripherals/<ip>/` follows this layout:
 
@@ -249,10 +295,10 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
 ├── CMakeLists.txt
 ├── README.md
 ├── run_tests.sh
-├── include/              ← public headers
-├── src/                  ← implementation
-├── test/                 ← CTest-registered unit tests
-└── docs/
+├── include/
+├── src/
+├── test/
+└── doc/
     ├── 01_<IP>_Specification/
     ├── 02_<IP>_HighLevel_Design.md
     └── 03_<IP>_Test_Plan.md
@@ -268,28 +314,33 @@ cd sep/peripherals/<ip>
 ./run_tests.sh --docs       # doxygen docs
 ```
 
-Or manually:
-
-```bash
-mkdir build && cd build
-cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-make && ctest -V
-```
-
-`sep/peripherals/run_all_peripherals.sh` builds and runs all peripherals at once.
+`sep/peripherals/run_all_peripherals.sh` builds and runs all SEP peripherals at once.
 Logs are written to `sep/peripherals/logs/`.
 
----
+### Peripheral Model Unit Tests (SMC)
+
+```bash
+cd smc/peripherals/<ip>
+./run_tests.sh
+```
+
+The SMC CPU cluster test suite:
+
+```bash
+cd smc/cpu_cluster
+./run_tests.sh
+```
 
 ---
 
 ## Building and Running TT Firmware Tests
 
-`sw/tt-oca-hw-main/dv/sep/tests/` contains software/firmware DV tests from the TT hardware
-repository, verified on the SEP VP.
-`sw/tt-oca-hw-main/fw/sep/tests/` contains the main firmware test suite also verified on the SEP VP.
+`sw/tt-oca-hw-main/dv/sep/tests/` — DV tests from the TT hardware repository,
+verified on the SEP VP.
 
-TT tests are managed by `bin/sep_fw_standalone.sh` and are the same ELFs for both flows.
+`sw/tt-oca-hw-main/fw/sep/tests/` — Main firmware test suite verified on the SEP VP.
+
+TT tests are managed by `bin/sep_fw_standalone.sh`.
 
 ### Toolchain
 
@@ -312,8 +363,8 @@ unzip ../riscv-gnu-toolchain-2025.01.20-rhel-8.10.zip
 # sep_fw_standalone.sh auto-detects it
 ```
 
-> `sw/tt-oca-hw-main/bin/setup_sep_test_env.sh` is TT's internal RHEL/UVM script — not
-> for VP firmware testing. Use `sep_fw_standalone.sh` instead.
+> `sw/tt-oca-hw-main/bin/setup_sep_test_env.sh` is TT's internal RHEL/UVM script —
+> not for VP firmware testing. Use `sep_fw_standalone.sh` instead.
 
 ### One-time setup
 
@@ -322,7 +373,7 @@ cd sw/tt-oca-hw-main
 bin/sep_fw_standalone.sh setup
 ```
 
-### Build tests (common to both flows)
+### Build tests
 
 ```bash
 bin/sep_fw_standalone.sh build-all          # build all dv/sep/tests/
@@ -369,18 +420,17 @@ cd sw/tt-oca-hw-main/fw/sep/tests
 ```
 
 ### Linker script for dv/sep/tests
-
 The original `dv/sep/tests/common/exec_from_tcms.ld` used outdated RTL simulation
 addresses (`ITCM=0x01000000`, `DTCM=0x0`). TT advised that the correct reference is
 `fw/sep/tests/common/exec_from_tcms.ld` which uses VP addresses (`ITCM=0xC0000000`,
 `DTCM=0xC0040000`). Vayavya created `dv/sep/tests/common/exec_from_tcms_vp.ld` as a
-copy and all `dv/sep/tests/` are linked against it via `common.mk`.
+copy; all `dv/sep/tests/` link against it via `common.mk`.
 
 ### VP firmware test notes
 
 **`sep_outbound_filter_init()`** has been commented out in all firmware tests under
-`fw/sep/tests/`. This function initializes the SEP outbound filter which is not modeled
-in the VP.
+`fw/sep/tests/`. This function initializes the SEP outbound filter which is not
+modeled in the VP.
 
 The following IPs are **not modeled** in the VP. Tests that exercise them will fail:
 
@@ -394,8 +444,8 @@ The following IPs are **not modeled** in the VP. Tests that exercise them will f
 The following tests under `sw/tt-oca-hw-main/dv/sep/tests/` were added by Vayavya:
 
 | Test | Purpose |
-|---|---|
-| `interrupt_test` | Verifies PLIC/CLINT interrupt controller behavior — triggers machine software interrupt (MSIP) via CLINT, timer interrupt (MTIP), and synchronous exception; confirms the VeeR EL2 trap handler dispatches and returns correctly. Check the test code which also references the boot/startup code pattern for this test. |
+|------|---------|
+| `interrupt_test` | Verifies PLIC/CLINT interrupt controller behavior — triggers MSIP via CLINT, timer interrupt (MTIP), and synchronous exception; confirms the VeeR EL2 trap handler dispatches and returns correctly |
 | `wdog_reset_test` | Verifies watchdog-triggered system reset — arms the AON timer watchdog bite threshold, waits for the bite to fire, and confirms the VP issues a full system reset and that the VeeR ISS restarts from the entry point with SRAM contents preserved across the reset |
 
 ### Troubleshooting
@@ -426,7 +476,7 @@ bin/sep_fw_standalone.sh picolibc  # picolibc only
 Selected via `algorithm_type` in `accellera_config.ini`
 
 | Value | Algorithm |
-|---|---|
+|-------|-----------|
 | `otbn_loop` | Loop algorithm |
 | `smoke` | Smoke test |
 | `p256_ecdsa` | P-256 ECDSA |
@@ -435,7 +485,7 @@ Selected via `algorithm_type` in `accellera_config.ini`
 
 ### Controlling Verbosity
 
-Each model's verbosity (0–5) via INI
+Each model's verbosity (0–5) via INI:
 
 ```ini
 och_sep_ss1.hmac.verbosity    : 1
@@ -446,9 +496,41 @@ och_sep_ss1.sram.verbosity    : 0
 ### Log Files
 
 | File | Generated by |
-|---|---|
+|------|-------------|
 | `och_sep_ss.log` | VP run (current directory) |
 | `veer_trace.log` | VeeR ISS instruction trace |
 | `veer_inst_freq.log` | VeeR ISS instruction frequency |
 
 Log file names can be changed via CCI parameters.
+
+---
+
+## GCC and C++ Compatibility
+
+| CXX_STD | Compiler | SYSTEMC_API | Status |
+|---------|----------|-------------|--------|
+| c++17 | gcc-toolset-9 (GCC 9.2) | cxx201703L | OK |
+| c++17 | system GCC 8.5 | cxx201703L | OK |
+| c++20 | gcc-toolset-11 (GCC 11.2) | cxx202002L | OK |
+| c++20 | system GCC 8.5 | cxx201709L | Not Supported |
+| c++20 | gcc-toolset-9 (GCC 9.2) | cxx201709L | Not Supported |
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| `doc/01_SMC_Architecture.md` | SMC subsystem architecture (OCAH Ch. 6 modeling view) |
+| `doc/02_SMC_IP_LowLevel_Design.md` | Low-level design for each SMC IP model |
+| `doc/03_SMC_Test_Plan.md` | SMC model verification plan |
+| `doc/04_SMC_VP_Exit_Criteria.md` | Exit criteria for SMC VP completion |
+| `doc/component-developer-guide.md` | Day-to-day contributor workflow |
+| `doc/maintainer-guide.md` | Repository maintenance guide |
+| `doc/SystemC_Virtual_Platform_Customer_Guide.md` | Customer-facing VP usage guide |
+
+PDF versions of all Markdown documents are generated with:
+
+```bash
+scripts/md-to-pdf.sh doc/
+```
