@@ -100,12 +100,12 @@ jobs:
           tar zxf cci_v${{ env.CCI_VERSION }}.tar.gz
           cd cci_v${{ env.CCI_VERSION }}
           mkdir objdir && cd objdir
-          # RapidJSON is cloned to RAPIDJSON_DIR; its headers live at
-          # RAPIDJSON_DIR/include/rapidjson/.  CCI configure --with-json expects
-          # the directory that *contains* the rapidjson/ header subdirectory.
+          # RapidJSON is cloned to RAPIDJSON_DIR; the CCI configure script
+          # checks for ${with_json}/include/rapidjson/document.h, so pass the
+          # clone root (not a subdirectory).
           ../configure \
             --with-systemc=${{ env.SYSTEMC_HOME }} \
-            --with-json=${{ env.RAPIDJSON_DIR }}/include \
+            --with-json=${{ env.RAPIDJSON_DIR }} \
             --prefix=${{ env.CCI_HOME }} \
             CXXFLAGS="-std=c++${{ env.CXX_STD }}"
           make -j$(nproc)
