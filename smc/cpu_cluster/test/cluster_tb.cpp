@@ -15,6 +15,9 @@
 #include "plic.h"
 #endif
 
+#include <cci_configuration>
+#include <cci/utils/consuming_broker.h>
+
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -747,6 +750,70 @@ struct cluster_tb_top : sc_core::sc_module
             pass("CPU-Control register file");
         }
 
+        // --- ctrl negative paths + CSR edge cases (coverage) ------------------
+        {
+            ctrl.write32(0x040, 0xFu);
+
+            EXPECT_EQ(ctrl.read32(0x050), 0u);
+            ctrl.write32(0x050, 0xDEADBEEFu);
+            EXPECT_EQ(ctrl.read32(0x050), 0u);
+
+            (void)ctrl.read64(0x020);
+            EXPECT_EQ(ctrl.last_response(), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+
+            EXPECT_EQ(ctrl.read64(0x000), cluster.reset_vector_n(0));
+            EXPECT_EQ(cluster.reset_vector_n(99), 0u);
+
+            ctrl.write32(0x104, 0x12345678u);
+            ctrl.write32(0x108, 0x02000000u);
+            EXPECT_EQ(ctrl.read32(0x104), 0x12345678u);
+            EXPECT_EQ(ctrl.read32(0x108), 0x02000000u);
+
+            const uint32_t lb = ctrl.read32(0x100);
+            ctrl.write32(0x100, 0xFFFFFFFFu);
+            EXPECT_EQ(ctrl.read32(0x100), lb);
+
+            cluster.set_mem_repair_status(0x42u);
+            EXPECT_EQ(ctrl.read32(0x208), 0x42u);
+
+            cluster.inject_nmi(99);
+            cluster.inject_nmi(0, 0x42u);
+
+            auto& h0 = cluster.hart(0);
+            {
+                smc_test::stderr_guard quiet_whisper;
+                EXPECT_FALSE(cluster.load_elf({"/nonexistent/smc_cluster_test.elf"}));
+                EXPECT_FALSE(h0.load_elf({"/nonexistent/smc_cluster_test.elf"}));
+            }
+            h0.inject_nmi(0x11u);
+            uint64_t junk = 0;
+            EXPECT_FALSE(h0.mem_read(0, 3, junk));
+            EXPECT_FALSE(h0.mem_write(0, 3, 0));
+
+            ctrl.write32(0x040, 0x0u);
+            wait(sc_core::sc_time(50, sc_core::SC_US));
+            ctrl.write32(0x040, 0xFu);
+            wait(sc_core::sc_time(50, sc_core::SC_US));
+
+            pass("CPU-Control negative paths and CSR edge cases");
+        }
+
+        // --- batch step + data-path error (coverage) --------------------------
+        {
+            ctrl.write32(0x040, 0x1u);
+            auto& h = cluster.hart(0);
+            h.reset();
+            smc_test::smc_master m(h);
+
+            EXPECT_TRUE(h.step(10) >= 1u);
+
+            bus_data.fail_next = true;
+            EXPECT_FALSE(m.read32(0x90000000ULL));
+            bus_data.fail_next = false;
+
+            pass("batch step and data-path TLM error handling");
+        }
+
         wd.cancel();
         if (g_failures == 0) {
             std::cout << "\nALL TESTS PASSED\n";
@@ -772,9 +839,7 @@ int sc_main(int, char**)
         std::cout << "  [PASS] smoke: Whisper System constructs\n";
     }
 
-#ifdef SMC_HAVE_PLIC
     cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
-#endif
 
     cluster_tb_top top("tb");
     sc_core::sc_start();

@@ -46,14 +46,50 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <fcntl.h>
 #include <map>
 #include <string>
+#include <unistd.h>
 
 #include "smc_cpu_cluster.h"
 #include "iss_hart.h"
 #include "smc_axi_extension.h"
 
 namespace smc_test {
+
+// ---------------------------------------------------------------------------
+// stderr_guard: temporarily redirect stderr (e.g. Whisper load_elf errors
+// on intentional negative-path tests).
+// ---------------------------------------------------------------------------
+class stderr_guard
+{
+public:
+    explicit stderr_guard(const char* sink = "/dev/null")
+    {
+        saved_fd_ = dup(STDERR_FILENO);
+        if (saved_fd_ >= 0) {
+            const int null_fd = open(sink, O_WRONLY);
+            if (null_fd >= 0) {
+                dup2(null_fd, STDERR_FILENO);
+                close(null_fd);
+            }
+        }
+    }
+
+    ~stderr_guard()
+    {
+        if (saved_fd_ >= 0) {
+            dup2(saved_fd_, STDERR_FILENO);
+            close(saved_fd_);
+        }
+    }
+
+    stderr_guard(const stderr_guard&)            = delete;
+    stderr_guard& operator=(const stderr_guard&) = delete;
+
+private:
+    int saved_fd_ = -1;
+};
 
 // ---------------------------------------------------------------------------
 // CSR numbers used across tests (RISC-V Privileged Spec).
@@ -88,6 +124,7 @@ class TlmRamStub : public sc_core::sc_module
 {
 public:
     tlm_utils::simple_target_socket<TlmRamStub, 64> socket{"socket"};
+    bool fail_next = false;
 
     SC_HAS_PROCESS(TlmRamStub);
     explicit TlmRamStub(sc_core::sc_module_name n) : sc_module(n)
@@ -96,6 +133,11 @@ public:
     }
     void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time&)
     {
+        if (fail_next) {
+            fail_next = false;
+            trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+            return;
+        }
         if (trans.get_command() == tlm::TLM_READ_COMMAND) {
             std::memset(trans.get_data_ptr(), 0, trans.get_data_length());
         }
@@ -305,7 +347,11 @@ public:
     uint64_t read64(uint64_t addr)        { uint64_t v=0; rw(tlm::TLM_READ_COMMAND,  addr, &v, 8); return v; }
     void     write64(uint64_t addr, uint64_t v) { rw(tlm::TLM_WRITE_COMMAND, addr, &v, 8); }
 
+    tlm::tlm_response_status last_response() const { return last_response_; }
+
 private:
+    tlm::tlm_response_status last_response_ = tlm::TLM_OK_RESPONSE;
+
     void rw(tlm::tlm_command cmd, uint64_t addr, void* data, unsigned len)
     {
         tlm::tlm_generic_payload trans;
@@ -320,6 +366,7 @@ private:
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
         sc_core::sc_time delay(0, sc_core::SC_NS);
         socket->b_transport(trans, delay);
+        last_response_ = trans.get_response_status();
     }
 };
 

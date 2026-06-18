@@ -34,14 +34,14 @@ set_tests_properties(cluster_tb PROPERTIES
     TIMEOUT 120)
 
 # §A.4 coverage (gcovr over include/ + src/)
-if(SMC_ENABLE_COVERAGE)
+if(ENABLE_COVERAGE)
     find_program(GCOVR_EXECUTABLE gcovr)
     if(GCOVR_EXECUTABLE)
         add_custom_target(coverage
             COMMAND ${CMAKE_COMMAND} -E make_directory coverage
             COMMAND ${GCOVR_EXECUTABLE}
                     --root "${CMAKE_SOURCE_DIR}"
-                    --filter "${CMAKE_SOURCE_DIR}/(include|src)/.*"
+                    --filter "${CMAKE_SOURCE_DIR}/src/.*"
                     --html-details "coverage/index.html"
                     --print-summary
                     --exclude-throw-branches
@@ -51,7 +51,7 @@ if(SMC_ENABLE_COVERAGE)
             COMMENT "Generating coverage report (build/coverage/index.html)"
             VERBATIM)
     else()
-        message(WARNING "SMC_ENABLE_COVERAGE=ON but gcovr was not found in PATH; "
+        message(WARNING "ENABLE_COVERAGE=ON but gcovr was not found in PATH; "
                         "the `coverage` target will not be created.")
     endif()
 endif()

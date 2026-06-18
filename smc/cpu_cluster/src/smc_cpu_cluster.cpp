@@ -25,41 +25,76 @@
 namespace smc {
 
 // ===========================================================================
-// Constructor
+// Constructors
 // ===========================================================================
+smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name)
+    : smc_cpu_cluster(name, config{}) // LCOV_EXCL_LINE
+{
+}
+
 smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
                                  const config& cfg)
     : sc_core::sc_module(name)
-    , cfg_(cfg)
+    , num_harts_p_("num_harts", cfg.num_harts,
+                   "Number of RV64GC harts (1..4).")
+    , hart_id_base_p_("hart_id_base", cfg.hart_id_base,
+                      "First MHARTID assigned to hart 0.")
+    , reset_pc_p_("reset_pc", cfg.reset_pc,
+                  "Default reset vector for each hart.")
+    , mem_size_p_("mem_size", cfg.mem_size,
+                  "Whisper address-space size in bytes.")
+    , fast_mem_lo_p_("fast_mem_lo", cfg.fast_mem_lo,
+                     "Lower bound of the internal fast-mem window.")
+    , fast_mem_hi_p_("fast_mem_hi", cfg.fast_mem_hi,
+                     "Upper bound of the internal fast-mem window.")
+    , mmio_lo_p_("mmio_lo", cfg.mmio_lo,
+                 "Lower bound of the mmio socket carve-out (§3.6).")
+    , mmio_hi_p_("mmio_hi", cfg.mmio_hi,
+                 "Upper bound of the mmio socket carve-out.")
+    , isa_p_("isa", cfg.isa,
+             "Whisper ISA configuration string (e.g. rv64imafdc).")
+    , quantum_ns_p_("quantum_ns", cfg.quantum_ns,
+                    "TLM LT global quantum in nanoseconds.")
+    , quantum_insts_p_("quantum_insts", cfg.quantum_insts,
+                       "Instructions retired per step(K) slice.")
+    , amo_lock_detect_p_("amo_lock_detect", cfg.amo_lock_detect,
+                         "Assert smc_axi_extension prot[3] on AMO/LR-SC.")
+    , source_id_p_("source_id", cfg.source_id,
+                   "smc_axi_extension source_id on outgoing transactions.")
+    , ctrl_size_bytes_p_("ctrl_size_bytes", cfg.ctrl_size_bytes,
+                         "Size of the CPU-Control register window (§3.8).")
+    , local_base_default_p_("local_base_default", cfg.local_base_default,
+                            "Reset value of the RO LOCAL_BASE register.")
     , qk_(cfg.num_harts)
 {
+    const unsigned nh = num_harts_p_.get_value();
+
     // ----- 1. Allocate the fast-memory window -------------------------------
-    if (cfg_.fast_mem_hi > cfg_.fast_mem_lo) {
-        mem_buf_.assign(cfg_.fast_mem_hi - cfg_.fast_mem_lo, 0);
+    if (fast_mem_hi_p_.get_value() > fast_mem_lo_p_.get_value()) {
+        mem_buf_.assign(fast_mem_hi_p_.get_value() - fast_mem_lo_p_.get_value(), 0);
     }
 
     // ----- 2. Initialise sc_vector ports / events ---------------------------
-    irq_sw   .init(cfg_.num_harts);
-    irq_timer.init(cfg_.num_harts);
-    irq_ext  .init(cfg_.num_harts);
-    wfi_event_       .init(cfg_.num_harts);
-    core_enable_event_.init(cfg_.num_harts);
+    irq_sw   .init(nh);
+    irq_timer.init(nh);
+    irq_ext  .init(nh);
+    wfi_event_       .init(nh);
+    core_enable_event_.init(nh);
 
     // ----- 3. ctrl target socket --------------------------------------------
     ctrl.register_b_transport(this, &smc_cpu_cluster::ctrl_b_transport);
 
     // ----- 4. CPU-Control register file: defaults --------------------------
-    regs_.reset_vector.fill(cfg_.reset_pc);
-    regs_.core_enable = (cfg_.num_harts >= 32) ? ~0u
-                                               : ((1u << cfg_.num_harts) - 1u);
-    regs_.local_base  = static_cast<uint32_t>(cfg_.local_base_default);
+    regs_.reset_vector.fill(reset_pc_p_.get_value());
+    regs_.core_enable = (nh >= 32) ? ~0u : ((1u << nh) - 1u);
+    regs_.local_base  = static_cast<uint32_t>(local_base_default_p_.get_value());
 
     // ----- 5. Construct the shared Whisper System ---------------------------
     whisper_sys_ = std::make_unique<WdRiscv::System<uint64_t>>(
         /*coreCount   */ 1u,
-        /*hartsPerCore*/ cfg_.num_harts,
-        /*hartIdOffset*/ cfg_.num_harts,
-        /*memSize     */ cfg_.mem_size,
+        /*hartsPerCore*/ nh,
+        /*hartIdOffset*/ nh,
+        /*memSize     */ mem_size_p_.get_value(),
         /*pageSize    */ size_t(4096));
 
     // ----- 6. Register memory callbacks BEFORE backends or ELF load ---------
@@ -74,21 +109,21 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
 
     // ----- 7. Quantum keepers -----------------------------------------------
     tlm_utils::tlm_quantumkeeper::set_global_quantum(
-        sc_core::sc_time(double(cfg_.quantum_ns), sc_core::SC_NS));
+        sc_core::sc_time(double(quantum_ns_p_.get_value()), sc_core::SC_NS));
     for (auto& qk : qk_) {
         qk.reset();
     }
 
     // ----- 8. Per-hart backends + processes ---------------------------------
-    harts_.reserve(cfg_.num_harts);
-    for (unsigned i = 0; i < cfg_.num_harts; ++i) {
+    harts_.reserve(nh);
+    for (unsigned i = 0; i < nh; ++i) {
         iss_hart_config hcfg;
         hcfg.hart_index = i;
-        hcfg.num_harts  = cfg_.num_harts;
-        hcfg.hart_id    = cfg_.hart_id_base + i;
-        hcfg.reset_pc   = cfg_.reset_pc;
-        hcfg.isa        = cfg_.isa;
-        hcfg.mem_size   = cfg_.mem_size;
+        hcfg.num_harts  = nh;
+        hcfg.hart_id    = hart_id_base_p_.get_value() + i;
+        hcfg.reset_pc   = reset_pc_p_.get_value();
+        hcfg.isa        = isa_p_.get_value();
+        hcfg.mem_size   = mem_size_p_.get_value();
 
         harts_.emplace_back(
             std::make_unique<iss_backend_whisper>(*whisper_sys_, hcfg));
@@ -192,7 +227,7 @@ void smc_cpu_cluster::hart_thread(unsigned i)
         current_hart_ = i;
 
         // §3.5 batch step: K instructions per kernel yield.
-        const unsigned retired = hart.step(cfg_.quantum_insts);
+        const unsigned retired = hart.step(quantum_insts_p_.get_value());
 
         // Notional 1 ns per retired instruction in LT mode.  When `retired`
         // is zero (e.g. the hart parked itself on WFI mid-batch) we still
@@ -232,10 +267,10 @@ void smc_cpu_cluster::irq_aggregator(unsigned i)
 // ===========================================================================
 bool smc_cpu_cluster::mem_read_cb(uint64_t addr, unsigned size, uint64_t& data)
 {
-    if (addr >= cfg_.fast_mem_lo &&
-        addr + size <= cfg_.fast_mem_hi)
+    if (addr >= fast_mem_lo_p_.get_value() &&
+        addr + size <= fast_mem_hi_p_.get_value())
     {
-        const size_t off = size_t(addr - cfg_.fast_mem_lo);
+        const size_t off = size_t(addr - fast_mem_lo_p_.get_value());
         data = 0;
         for (unsigned k = 0; k < size; ++k) {
             data |= (uint64_t(mem_buf_[off + k]) << (8 * k));
@@ -247,10 +282,10 @@ bool smc_cpu_cluster::mem_read_cb(uint64_t addr, unsigned size, uint64_t& data)
 
 bool smc_cpu_cluster::mem_write_cb(uint64_t addr, unsigned size, uint64_t data)
 {
-    if (addr >= cfg_.fast_mem_lo &&
-        addr + size <= cfg_.fast_mem_hi)
+    if (addr >= fast_mem_lo_p_.get_value() &&
+        addr + size <= fast_mem_hi_p_.get_value())
     {
-        const size_t off = size_t(addr - cfg_.fast_mem_lo);
+        const size_t off = size_t(addr - fast_mem_lo_p_.get_value());
         for (unsigned k = 0; k < size; ++k) {
             mem_buf_[off + k] = uint8_t((data >> (8 * k)) & 0xFF);
         }
@@ -266,8 +301,8 @@ bool smc_cpu_cluster::mem_write_cb(uint64_t addr, unsigned size, uint64_t data)
 tlm_utils::simple_initiator_socket<smc_cpu_cluster, 64>*
 smc_cpu_cluster::pick_socket(uint64_t addr)
 {
-    if (cfg_.mmio_lo < cfg_.mmio_hi
-        && addr >= cfg_.mmio_lo && addr < cfg_.mmio_hi) {
+    if (mmio_lo_p_.get_value() < mmio_hi_p_.get_value()
+        && addr >= mmio_lo_p_.get_value() && addr < mmio_hi_p_.get_value()) {
         return &mmio;
     }
     return &data;
@@ -302,7 +337,7 @@ bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
     //   * `set_extension(ptr)` transfers ownership to the gp.
     //   * On gp destruction the ext is auto-deleted.
     auto* ext = new smc_axi_extension();
-    ext->source_id = cfg_.source_id;
+    ext->source_id = source_id_p_.get_value();
     ext->axi_id    = uint16_t(current_hart_);
     // Privilege drives prot[2]; current_priv() returns the live U/S/M
     // value, NOT a snapshot from the previous retired instruction.
@@ -310,7 +345,7 @@ bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
     ext->set_priv(priv != 0);     // 0 == U, anything else == privileged
     ext->set_secure(false);       // SMC does not model secure mode yet
     ext->set_fetch(false);        // see header note: fetch routed via data
-    if (cfg_.amo_lock_detect) {
+    if (amo_lock_detect_p_.get_value()) {
         // §3.10 AMO/LR-SC detection.  The MEM_CALLBACKS interface does not
         // tell us whether this access is the data side of an AMO, so we
         // approximate by inspecting the most recently retired instruction.
@@ -358,7 +393,7 @@ bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
 void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
                                        sc_core::sc_time& /*delay*/)
 {
-    const uint64_t off  = trans.get_address() % cfg_.ctrl_size_bytes;
+    const uint64_t off  = trans.get_address() % ctrl_size_bytes_p_.get_value();
     const unsigned len  = trans.get_data_length();
     uint8_t* const ptr  = trans.get_data_ptr();
 
@@ -450,7 +485,7 @@ void smc_cpu_cluster::apply_core_enable(uint32_t new_value)
     const uint32_t old_value = regs_.core_enable;
     regs_.core_enable        = new_value;
 
-    for (unsigned i = 0; i < cfg_.num_harts; ++i) {
+    for (unsigned i = 0; i < num_harts_p_.get_value(); ++i) {
         const bool was_en = (old_value & (1u << i)) != 0;
         const bool is_en  = (new_value & (1u << i)) != 0;
         if (!was_en && is_en) {

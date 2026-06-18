@@ -7,20 +7,23 @@
 #   ./run_tests.sh --ctest        # run via ctest instead of executing the binary
 #   ./run_tests.sh --asan         # build with AddressSanitizer; run and report errors
 #                                 #   Linux: also enables LeakSanitizer (detect_leaks=1)
-#   ./run_tests.sh --coverage     # build with -DSMC_ENABLE_COVERAGE=ON; run ctest;
+#   ./run_tests.sh --coverage     # build with -DENABLE_COVERAGE=ON; run ctest;
 #                                 #   then build the `coverage` target (gcovr HTML + summary)
 #
 # The --asan and --coverage modes use isolated build directories
 # (build_asan/ and cov_build/) so they never clobber a plain Release build.
 #
-# Environment:
+# Environment (or put exports in deps.env — see deps.env.example):
 #   SYSTEMC_HOME  Path to a SystemC install (must contain include/systemc.h).
 #                 If unset the script probes common Linux (/usr/local, /usr)
 #                 and macOS (Homebrew) locations.  REQUIRED by CMakeLists.txt.
-#   WHISPER_HOME  Path to a built Whisper source tree containing
-#                 build-<uname>/librvcore.a.  REQUIRED by CMakeLists.txt.
+#   WHISPER_HOME  Path to a Whisper source tree (GNUmakefile).  If unset the
+#                 script probes common locations; if build-<uname>/librvcore.a
+#                 is missing it runs Whisper's make automatically.
+#   WHISPER_SKIP_BUILD  Set to 1 to skip the automatic Whisper build step.
 #   BOOST_DIR     Path to a Boost install containing include/boost/version.hpp.
-#                 REQUIRED by CMakeLists.txt.
+#                 Used for cpu_cluster and passed as BOOST_ROOT when building
+#                 Whisper.  REQUIRED by CMakeLists.txt.
 #   BUILD_TYPE    CMake build type (default: Release; Debug for --coverage).
 #   JOBS          Parallel build jobs (default: all available cores).
 
@@ -68,10 +71,19 @@ if (( USE_ASAN )); then
 elif (( USE_COVERAGE )); then
     BUILD_DIR="${SCRIPT_DIR}/cov_build"
     BUILD_TYPE="Debug"
-    CMAKE_EXTRA=(-DSMC_ENABLE_COVERAGE=ON)
+    CMAKE_EXTRA=(-DENABLE_COVERAGE=ON)
 else
     BUILD_DIR="${SCRIPT_DIR}/build"
     CMAKE_EXTRA=()
+fi
+
+# ---------------------------------------------------------------------------
+# Optional local overrides (not checked in).  Copy paths from a teammate or
+# set exports in your shell profile.
+# ---------------------------------------------------------------------------
+if [[ -f "${SCRIPT_DIR}/deps.env" ]]; then
+    # shellcheck disable=SC1091
+    source "${SCRIPT_DIR}/deps.env"
 fi
 
 # ---------------------------------------------------------------------------
@@ -98,46 +110,17 @@ if [[ -z "${SYSTEMC_HOME:-}" ]]; then
 fi
 
 if [[ -z "${SYSTEMC_HOME:-}" ]]; then
-    echo "ERROR: SYSTEMC_HOME not set and SystemC headers not found in any" >&2
-    echo "  well-known location.  CMakeLists.txt requires this.  Set e.g.:" >&2
+    echo "ERROR: SYSTEMC_HOME not set and SystemC headers not found." >&2
+    echo "  Install Accellera SystemC (C++20) and set:" >&2
     echo "    export SYSTEMC_HOME=/path/to/systemc" >&2
+    echo "  Or create ${SCRIPT_DIR}/deps.env with that export (see deps.env.example)." >&2
     exit 1
 fi
 echo ">> Using SYSTEMC_HOME=${SYSTEMC_HOME}"
 
 # ---------------------------------------------------------------------------
-# Locate Whisper.  Whisper's GNUmakefile names its build directory after
-# `uname -s`, so we look for build-Linux/ on Linux and build-Darwin/ on
-# macOS.  An explicit WHISPER_BUILD_DIR env var (or the same on the cmake
-# line) overrides for unusual layouts.
-# ---------------------------------------------------------------------------
-: "${WHISPER_BUILD_DIR:=build-$(uname -s)}"
-export WHISPER_BUILD_DIR
-
-if [[ -z "${WHISPER_HOME:-}" ]]; then
-    for _candidate in \
-        /opt/whisper \
-        /usr/local/whisper \
-        "${HOME}/whisper" \
-        "${HOME}/src/whisper"
-    do
-        if [[ -f "${_candidate}/${WHISPER_BUILD_DIR}/librvcore.a" ]]; then
-            export WHISPER_HOME="${_candidate}"
-            break
-        fi
-    done
-fi
-
-if [[ -z "${WHISPER_HOME:-}" ]]; then
-    echo "ERROR: WHISPER_HOME not set and librvcore.a not found in any" >&2
-    echo "  well-known location.  CMakeLists.txt requires this.  Set e.g.:" >&2
-    echo "    export WHISPER_HOME=/path/to/whisper" >&2
-    exit 1
-fi
-echo ">> Using WHISPER_HOME=${WHISPER_HOME}"
-
-# ---------------------------------------------------------------------------
-# Locate Boost (must contain include/boost/version.hpp)
+# Locate Boost (must contain include/boost/version.hpp).  Whisper's GNUmakefile
+# reads BOOST_ROOT at compile time, so resolve Boost before Whisper.
 # ---------------------------------------------------------------------------
 if [[ -z "${BOOST_DIR:-}" ]]; then
     for _candidate in \
@@ -153,18 +136,94 @@ if [[ -z "${BOOST_DIR:-}" ]]; then
 fi
 
 if [[ -z "${BOOST_DIR:-}" ]]; then
-    echo "ERROR: BOOST_DIR not set and Boost headers not found in any" >&2
-    echo "  well-known location.  CMakeLists.txt requires this.  Set e.g.:" >&2
+    echo "ERROR: BOOST_DIR not set and Boost headers not found." >&2
+    echo "  Install Boost >= 1.74 and set:" >&2
     echo "    export BOOST_DIR=/path/to/boost" >&2
+    echo "  Or create ${SCRIPT_DIR}/deps.env with that export (see deps.env.example)." >&2
     exit 1
 fi
 echo ">> Using BOOST_DIR=${BOOST_DIR}"
 
+# ---------------------------------------------------------------------------
+# Locate Whisper and build static archives when missing.
+# Whisper's GNUmakefile names its build directory after `uname -s`, so we
+# look for build-Linux/ on Linux and build-Darwin/ on macOS.  An explicit
+# WHISPER_BUILD_DIR env var (or the same on the cmake line) overrides for
+# unusual layouts.
+# ---------------------------------------------------------------------------
+: "${WHISPER_BUILD_DIR:=build-$(uname -s)}"
+export WHISPER_BUILD_DIR
+
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+
+_whisper_is_source_tree() {
+    [[ -f "$1/GNUmakefile" ]]
+}
+
+_whisper_artifacts_ready() {
+    local _root="$1"
+    [[ -f "${_root}/${WHISPER_BUILD_DIR}/librvcore.a" ]] &&
+    [[ -f "${_root}/virtual_memory/libvirtual_memory.a" ]] &&
+    [[ -f "${_root}/pci/libpci.a" ]] &&
+    [[ -f "${_root}/third_party/softfloat/build/RISCV-GCC/softfloat.a" ]]
+}
+
+if [[ -z "${WHISPER_HOME:-}" ]] || ! _whisper_is_source_tree "${WHISPER_HOME}"; then
+    for _candidate in \
+        "${WHISPER_HOME:-}" \
+        /opt/whisper \
+        /usr/local/whisper \
+        "${REPO_ROOT}/../whisper/whisper" \
+        "${REPO_ROOT}/../whisper" \
+        "${HOME}/whisper/whisper" \
+        "${HOME}/whisper" \
+        "${HOME}/src/whisper/whisper" \
+        "${HOME}/src/whisper"
+    do
+        [[ -n "${_candidate}" ]] || continue
+        if _whisper_artifacts_ready "${_candidate}" || _whisper_is_source_tree "${_candidate}"; then
+            export WHISPER_HOME="${_candidate}"
+            break
+        fi
+    done
+fi
+
+if [[ -z "${WHISPER_HOME:-}" ]] || ! _whisper_is_source_tree "${WHISPER_HOME}"; then
+    echo "ERROR: WHISPER_HOME not set and no Whisper source tree found." >&2
+    echo "  Clone Whisper next to this repo or set WHISPER_HOME:" >&2
+    echo "    git clone <whisper-repo-url> ${REPO_ROOT}/../whisper/whisper" >&2
+    echo "    export WHISPER_HOME=/path/to/whisper   # directory with GNUmakefile" >&2
+    echo "  Or add WHISPER_HOME=... to ${SCRIPT_DIR}/deps.env (see deps.env.example)." >&2
+    exit 1
+fi
+echo ">> Using WHISPER_HOME=${WHISPER_HOME}"
+
+if ! _whisper_artifacts_ready "${WHISPER_HOME}"; then
+    if [[ "${WHISPER_SKIP_BUILD:-0}" == "1" ]]; then
+        echo "ERROR: Whisper artifacts missing under ${WHISPER_HOME}/${WHISPER_BUILD_DIR}/" >&2
+        echo "  (unset WHISPER_SKIP_BUILD or build Whisper manually)" >&2
+        exit 1
+    fi
+    echo ">> Whisper not built yet; building in ${WHISPER_HOME}"
+    echo "   (MEM_CALLBACKS=1, C++20, BOOST_ROOT=${BOOST_DIR})"
+    (
+        cd "${WHISPER_HOME}"
+        export BOOST_ROOT="${BOOST_DIR}"
+        make -j"${JOBS}" MEM_CALLBACKS=1 CXX_STD=c++20 \
+            "${WHISPER_BUILD_DIR}/librvcore.a" \
+            "${WHISPER_BUILD_DIR}/whisper"
+    )
+    if ! _whisper_artifacts_ready "${WHISPER_HOME}"; then
+        echo "ERROR: Whisper build finished but required archives are still missing." >&2
+        echo "  Expected under ${WHISPER_HOME}/${WHISPER_BUILD_DIR}/ and subdirs." >&2
+        exit 1
+    fi
+    echo ">> Whisper build complete"
+fi
+
 # CCI (needed when SMC_BUILD_PLIC_INTEGRATION=ON and for cluster_tb PLIC phases).
 if [[ -z "${CCI_HOME:-}" ]]; then
     for _candidate in \
-        /localdev/rmalhotra/cci-install \
-        /Users/pdroy/cci \
         /usr/local/cci \
         /opt/homebrew/opt/systemc-cci
     do
