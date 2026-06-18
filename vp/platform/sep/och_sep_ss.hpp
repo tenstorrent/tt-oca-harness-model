@@ -360,6 +360,12 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     if (opt.entry_point.available)
         entry_point = opt.entry_point.value;
     try {
+        // Boot ROM: code (.text/.metadata) is linked at 0x10040000. The ISS fetches
+        // all instructions via TLM callbacks, so populating the read-only `rom` model
+        // here makes boot-from-ROM work. load_executable_image filters PT_LOAD segments
+        // by address range, so only ROM-resident segments land here; load_data bypasses
+        // the read-only flag for one-time init. No-op for ELFs without a ROM segment.
+        loader.load_executable_image(*rom,  opt.rom_size,   opt.rom_start_addr);
         loader.load_executable_image(*itcm, 0x20000, opt.itcm_start_addr);
         loader.load_executable_image(*dtcm, 0x10000, opt.dtcm_start_addr);
         loader.load_executable_image(*sram, opt.sram_size, opt.sram_start_addr);
