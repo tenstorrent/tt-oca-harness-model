@@ -35,7 +35,6 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   if(NOT DEFINED BUILD_TESTS)
     option(BUILD_TESTS "Build CRNG test executables" ON)
   endif()
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
 endif()
 
 # -----------------------------------------------------------------------------
@@ -111,6 +110,11 @@ find_package(OpenSSL REQUIRED)
 # -----------------------------------------------------------------------------
 include(FindCCI)
 include(FindSystemC)
+
+# csml must be added after SystemC::systemc target is created
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
+endif()
 
 if(CCI_FOUND)
   include_directories(${CCI_INCLUDE_DIR})

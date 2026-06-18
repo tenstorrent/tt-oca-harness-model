@@ -2320,19 +2320,28 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         return false;
       }
 
-      // EVP_DigestFinalXOF extracts initial output block (up to rate size)
-      // This function can be called multiple times via RUN command for extended
-      // output
+      // EVP_DigestFinalXOF may only be called ONCE per context, and SHAKE/cSHAKE
+      // output is a single continuous, deterministic byte stream.  Generate a
+      // generous buffered output here in one call, expose the first rate-sized
+      // block through the STATE window, and let successive RUN commands advance
+      // the window through this buffer (matching hardware "squeeze more"
+      // semantics where each RUN reveals the next sequential output block).
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
-      if (EVP_DigestFinalXOF(ctx, digest_buffer, rate_bytes) != 1) {
+      if (EVP_DigestFinalXOF(ctx, xof_full_output, sizeof(xof_full_output)) !=
+          1) {
         CSML_ERROR(1, logger)
             << "OpenSSL EVP_DigestFinalXOF failed for SHAKE/cSHAKE";
         return false;
       }
 
+      xof_total_length = sizeof(xof_full_output);
+      xof_output_offset = 0;
+
+      std::memcpy(digest_buffer, xof_full_output, rate_bytes);
       digest_size = rate_bytes;
       CSML_INFO(2, logger) << "SHAKE/cSHAKE initial output finalized: "
-                           << digest_size << " bytes (rate)";
+                           << digest_size << " bytes (rate), "
+                           << xof_total_length << " bytes buffered for RUN";
     }
 
     // If EnMasking=1, generate two random shares such that share0 XOR share1 =
@@ -2515,16 +2524,33 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
                            << xof_output_offset << ", showing " << bytes_to_copy
                            << " bytes (total=" << xof_total_length << ")";
     } else {
-      // Non-KMAC XOF (SHAKE/cSHAKE): use EVP_DigestFinalXOF continuation
-      EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
-      if (EVP_DigestFinalXOF(ctx, digest_buffer, rate_bytes) != 1) {
-        CSML_ERROR(1, logger) << "OpenSSL EVP_DigestFinalXOF failed for RUN";
+      // Non-KMAC XOF (SHAKE/cSHAKE): advance the STATE window through the
+      // buffered XOF output generated during PROCESS.  EVP_DigestFinalXOF cannot
+      // be called a second time on the same context, so we slice the next
+      // rate-sized block out of xof_full_output (each RUN exposes the next
+      // sequential output block, matching hardware squeeze semantics).
+      xof_output_offset += rate_bytes;
+
+      if (xof_output_offset >= xof_total_length) {
+        CSML_ERROR(1, logger)
+            << "RUN command: extended output exhausted at offset "
+            << xof_output_offset << " (buffered " << xof_total_length
+            << " bytes)";
+        ERR_CODE = 0x08000000 | 0x31; // SwCmdSequence: no more output
+        INTR_STATE.kmac_err = 1;
+        update_fsm_state(KmacState::ERROR);
         return false;
       }
 
-      digest_size = rate_bytes;
-      CSML_INFO(2, logger) << "RUN: extended output block generated: "
-                           << digest_size << " bytes";
+      size_t bytes_remaining = xof_total_length - xof_output_offset;
+      size_t bytes_to_copy =
+          std::min(static_cast<size_t>(rate_bytes), bytes_remaining);
+      std::memcpy(digest_buffer, xof_full_output + xof_output_offset,
+                  bytes_to_copy);
+      digest_size = static_cast<unsigned int>(bytes_to_copy);
+      CSML_INFO(2, logger) << "RUN: advanced SHAKE/cSHAKE STATE window to offset "
+                           << xof_output_offset << ", showing " << bytes_to_copy
+                           << " bytes (buffered " << xof_total_length << ")";
     }
 
     // If EnMasking=1, regenerate two random shares for the new output block

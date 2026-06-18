@@ -46,6 +46,11 @@ find_package(OpenSSL REQUIRED)
 
   target_compile_options(sep-vp PRIVATE -ftemplate-depth=8192)
 
+  target_link_directories(sep-vp PRIVATE
+    ${Boost_LIBRARY_DIR_RELEASE}
+    ${Boost_LIBRARY_DIR_DEBUG}
+  )
+
   target_link_libraries(sep-vp
     softfloat
     platform-infra
@@ -75,12 +80,9 @@ find_package(OpenSSL REQUIRED)
     entropy_src_model
     edn_model
     veeriss_model
-    -lz
-    -lpthread
-    -ldl
-    -lboost_iostreams
-    -lboost_program_options
-    -lboost_system
+    z
+    pthread
+    dl
   )
 
   if(CCI_FOUND)

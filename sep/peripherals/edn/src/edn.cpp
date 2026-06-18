@@ -1365,6 +1365,7 @@ bool edn_ip::handle_write_ALERT_TEST(uint32_t value)
         // Schedule driver update to restore status-driven alert logic
         m_alert_update_event.notify(SC_ZERO_TIME);
     }
+    // LCOV_EXCL_STOP
 
     return true;  // Accept write (does not store, write-only)
 }

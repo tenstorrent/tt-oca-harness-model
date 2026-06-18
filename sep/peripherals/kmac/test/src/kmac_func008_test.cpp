@@ -152,21 +152,54 @@ static void get_lc_ctrl_digest(kmac_app_if* app_channel, uint32_t* share0, uint3
 
 /**
  * @brief Compute reference cSHAKE128 digest using OpenSSL
- * @param prefix Prefix string (e.g., "LC_CTRL")
+ * @param prefix Customization string S (e.g., "LC_CTRL")
  * @param message Message data
  * @param msg_len Message length in bytes
  * @param output Output buffer (32 bytes for 256-bit output)
  *
- * Computes reference cSHAKE128 digest for verification purposes.
+ * Computes a reference cSHAKE128 digest per NIST SP 800-185 with function-name
+ * N = "" and customization string S = prefix, exactly mirroring the model's
+ * application-interface construction:
+ *   cSHAKE128(X, 256, "", S) = SHAKE128(bytepad(encode_string("") ||
+ *                                                encode_string(S), 168) || X)
+ * OpenSSL has no native cSHAKE, so we prepend the bytepadded prefix block and
+ * use plain SHAKE128.  (A naive SHAKE128(prefix || message) is NOT cSHAKE and
+ * will not match the hardware/model output.)
  */
 static void compute_cshake128_reference(const char* prefix, const uint8_t* message,
                                          size_t msg_len, uint8_t* output)
 {
+    const size_t rate = 168;  // cSHAKE128 rate in bytes
+
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     const EVP_MD* md = EVP_shake128();
-
     EVP_DigestInit_ex(ctx, md, nullptr);
-    EVP_DigestUpdate(ctx, prefix, strlen(prefix));
+
+    // Build encode_string("") || encode_string(S)
+    size_t custom_len = strlen(prefix);
+    uint8_t prefix_block[64];
+    size_t prefix_len = 0;
+    // encode_string("") = left_encode(0) = 0x01 0x00
+    prefix_block[prefix_len++] = 0x01;
+    prefix_block[prefix_len++] = 0x00;
+    // encode_string(S) = left_encode(len*8) || S
+    prefix_block[prefix_len++] = 0x01;
+    prefix_block[prefix_len++] = (uint8_t)(custom_len * 8);
+    std::memcpy(prefix_block + prefix_len, prefix, custom_len);
+    prefix_len += custom_len;
+
+    // bytepad(prefix_block, rate) = left_encode(rate) || prefix_block || 0x00...
+    uint8_t bytepadded[168];
+    size_t offset = 0;
+    bytepadded[offset++] = 0x01;
+    bytepadded[offset++] = (uint8_t)(rate & 0xFF);
+    std::memcpy(bytepadded + offset, prefix_block, prefix_len);
+    offset += prefix_len;
+    while (offset < rate) {
+        bytepadded[offset++] = 0x00;
+    }
+
+    EVP_DigestUpdate(ctx, bytepadded, rate);
     EVP_DigestUpdate(ctx, message, msg_len);
     EVP_DigestFinalXOF(ctx, output, 32);  // 256-bit output
 
@@ -256,9 +289,13 @@ void test_app_lc_ctrl_cshake128_operation(kmac_test* test)
                                << std::setw(8) << digest[7]
                                << std::dec;
 
-    // Compute reference cSHAKE128 digest with "LC_CTRL" prefix
+    // Compute reference cSHAKE128 digest with "LC_CTRL" customization string.
+    // The model absorbs the 3 full 64-bit beats sent above (24 bytes, including
+    // the trailing zero padding of the message), so the reference must hash the
+    // same 24 bytes rather than just strlen(test_msg).
     uint8_t reference[32];
-    compute_cshake128_reference("LC_CTRL", (const uint8_t*)test_msg, msg_len, reference);
+    compute_cshake128_reference("LC_CTRL", (const uint8_t*)data_words,
+                                3 * sizeof(uint64_t), reference);
 
     CSML_INFO(2, test_logger) << "Reference digest computed with prefix 'LC_CTRL'";
 

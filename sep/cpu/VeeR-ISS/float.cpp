@@ -18,7 +18,9 @@
 
 #include <cfenv>
 #include <cmath>
+#if defined(__x86_64__) || defined(__i386__)
 #include <emmintrin.h>
+#endif
 #include <array>
 #include "Hart.hpp"
 #include "instforms.hpp"

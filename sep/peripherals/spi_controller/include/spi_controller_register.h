@@ -25,6 +25,17 @@
 #include<systemc.h>
 #include "csml_register.h"
 
+// macOS <math.h> (pulled in transitively by SystemC) defines OVERFLOW and
+// UNDERFLOW as preprocessor macros (#define OVERFLOW 3, #define UNDERFLOW 4),
+// which collide with the register bitfield members named OVERFLOW/UNDERFLOW
+// below.  Undefine them so the member names are treated as plain identifiers.
+#ifdef OVERFLOW
+#undef OVERFLOW
+#endif
+#ifdef UNDERFLOW
+#undef UNDERFLOW
+#endif
+
 /**
  * @namespace spi_controller
  * @brief SPI Controller register type namespace

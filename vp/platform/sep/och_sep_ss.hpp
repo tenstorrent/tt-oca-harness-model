@@ -317,7 +317,7 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
             return;
     }
 
-    tlm::tlm_global_quantum::instance().set(sc_core::sc_time(globalQuantumNs.get_param_value(), sc_core::SC_NS));
+    tlm::tlm_global_quantum::instance().set(sc_core::sc_time(static_cast<double>(globalQuantumNs.get_param_value()), sc_core::SC_NS));
 
     create_modules();
 

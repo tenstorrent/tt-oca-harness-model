@@ -258,8 +258,11 @@ private:
      */
     unsigned int digest_size;
 
-    /// @brief Full XOF output buffer for extended output (KMAC/SHAKE RUN commands)
-    uint8_t xof_full_output[512];
+    /// @brief Full XOF output buffer for extended output (KMAC/SHAKE RUN commands).
+    /// Sized to hold multiple rate-sized blocks so successive RUN commands can
+    /// window through a single EVP_DigestFinalXOF result (EVP_DigestFinalXOF may
+    /// only be called once per context).
+    uint8_t xof_full_output[4096];
 
     /// @brief Current offset in xof_full_output for RUN command slicing
     size_t xof_output_offset;

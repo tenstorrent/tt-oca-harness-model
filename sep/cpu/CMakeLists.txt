@@ -43,6 +43,9 @@ endif()
 
 # Find threading library (required by SystemC)
 find_package(Threads REQUIRED)
+if(NOT TARGET Boost::headers)
+  find_package(Boost REQUIRED)
+endif()
 
 # -----------------------------------------------------------------------------
 # Sources
@@ -131,7 +134,10 @@ target_compile_definitions(veeriss_model PUBLIC
   ISA=rv32imc
 )
 
-target_link_libraries(veeriss_model PRIVATE softfloat PUBLIC SystemC::systemc pthread z pthread stdc++fs)
+target_link_libraries(veeriss_model PRIVATE softfloat PUBLIC SystemC::systemc pthread z Boost::headers)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_link_libraries(veeriss_model PUBLIC stdc++fs)
+endif()
 # -----------------------------------------------------------------------------
 # Print status information
 # -----------------------------------------------------------------------------

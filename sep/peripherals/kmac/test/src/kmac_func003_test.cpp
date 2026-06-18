@@ -499,14 +499,18 @@ static bool compute_cshake_reference_blocks(bool use_cshake256,
         return false;
     }
 
-    // Generate output in blocks
-    size_t offset = 0;
+    // cSHAKE is an XOF: its output is a single continuous, deterministic byte
+    // stream, so squeezing blocks of sizes s0, s1, ... produces exactly the same
+    // bytes as one finalize of length (s0 + s1 + ...).  EVP_DigestFinalXOF may
+    // only be called ONCE per context (a second call fails), so we sum the block
+    // sizes and finalize once into the contiguous output buffer.
+    size_t total_len = 0;
     for (size_t i = 0; i < num_blocks; i++) {
-        if (EVP_DigestFinalXOF(ctx, output + offset, block_sizes[i]) != 1) {
-            EVP_MD_CTX_free(ctx);
-            return false;
-        }
-        offset += block_sizes[i];
+        total_len += block_sizes[i];
+    }
+    if (EVP_DigestFinalXOF(ctx, output, total_len) != 1) {
+        EVP_MD_CTX_free(ctx);
+        return false;
     }
 
     EVP_MD_CTX_free(ctx);
