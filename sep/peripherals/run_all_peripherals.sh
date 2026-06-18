@@ -131,6 +131,7 @@ build_peripheral() {
       -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}" \
       -DSYSTEMC_HOME="${SYSTEMC_HOME:-}" \
       ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"} \
+      ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
       -DBUILD_TESTS=ON 2>&1
 
     cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1
@@ -227,6 +228,7 @@ LCOV_WRAP
       -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}" \
       -DSYSTEMC_HOME="${SYSTEMC_HOME:-}" \
       ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"} \
+      ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
       ${thread_cache_arg:+"${thread_cache_arg}"} \
       ${linker_extra_flags:+"${linker_extra_flags}"} \
       -DBUILD_TESTS=ON 2>&1

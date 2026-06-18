@@ -1,0 +1,581 @@
+# CI for tt-oca-sim — RHEL 8 compatibility
+#
+# Runs the same five job groups as ci.yml but inside an almalinux:8 container
+# (binary-compatible with RHEL 8).  Key differences vs the Ubuntu workflow:
+#
+#  • Package manager : dnf with EPEL + PowerTools repos
+#  • C++ compiler    : GCC 12 via gcc-toolset-12 (SCL)
+#    Default GCC on RHEL 8 is 8.5 which does not support C++20.
+#  • OpenSSL         : Built from source (3.3.x) because RHEL 8 ships 1.1.1
+#    and the kmac peripheral requires EVP_MAC / openssl/core_names.h (≥ 3.0).
+#  • Library paths   : /usr/lib64  (not /usr/lib/x86_64-linux-gnu as on Ubuntu)
+#
+# Cache keys include the "-rhel8" suffix to avoid mixing with Ubuntu caches
+# (runner.os is "Linux" for both since containers share the Ubuntu host).
+#
+# Jobs
+# ─────────────────────────────────────────────────────────────────────────────
+#  build-deps-rhel8      Build + cache SystemC 3.0.2, OpenSSL 3.3.x, CCI 1.0.2
+#  sep-vp-rhel8          Build the sep-vp binary
+#  sep-unit-tests-rhel8  Run SEP peripheral unit tests
+#  smc-unit-tests-rhel8  Run SMC peripheral unit tests
+#  smc-fabric-tests-rhel8  Run SMC Fabric tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: CI (RHEL 8)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, rhel8-support]
+
+env:
+  SYSTEMC_VERSION:  "3.0.2"
+  CCI_VERSION:      "1.0.2"
+  OPENSSL3_VERSION: "3.3.2"
+  SYSTEMC_HOME:     /home/runner/local/systemc-3.0.2
+  CCI_HOME:         /home/runner/local/cci-1.0.2
+  OPENSSL3_HOME:    /home/runner/local/openssl-3.3.2
+  CXX_STD:          "20"
+  GCC_TOOLSET:      "gcc-toolset-12"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reusable step fragments (referenced via YAML anchors, not supported in GHA —
+# shared setup is duplicated per job intentionally to keep each job standalone)
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 1 — build and cache SystemC + OpenSSL 3 + CCI on RHEL 8
+# ─────────────────────────────────────────────────────────────────────────────
+  build-deps-rhel8:
+    name: Build SystemC + OpenSSL 3 + CCI (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build tools
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            ${{ env.GCC_TOOLSET }}-make \
+            cmake make \
+            autoconf automake libtool \
+            wget tar gzip perl-IPC-Cmd
+
+      # Activate GCC toolset 12 for all subsequent steps in this job
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Verify toolchain (GCC 12 required for C++20)
+        run: |
+          gcc  --version
+          g++  --version
+          cmake --version
+
+      # ── SystemC ────────────────────────────────────────────────────────────
+      - name: Cache SystemC ${{ env.SYSTEMC_VERSION }} (RHEL 8)
+        id: cache-sc-rhel8
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Build SystemC ${{ env.SYSTEMC_VERSION }}
+        if: steps.cache-sc-rhel8.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$(dirname ${{ env.SYSTEMC_HOME }})"
+          cd /tmp
+          wget -q \
+            https://github.com/accellera-official/systemc/archive/refs/tags/${{ env.SYSTEMC_VERSION }}.tar.gz
+          tar zxf ${{ env.SYSTEMC_VERSION }}.tar.gz
+          cd systemc-${{ env.SYSTEMC_VERSION }}
+          touch docs/DEVELOPMENT.md
+          mkdir objdir && cd objdir
+          ../configure \
+            --prefix=${{ env.SYSTEMC_HOME }} \
+            CXXFLAGS="-std=c++${{ env.CXX_STD }}"
+          make -j$(nproc)
+          make install
+
+      # ── OpenSSL 3 ──────────────────────────────────────────────────────────
+      # RHEL 8 ships OpenSSL 1.1.1.  The kmac peripheral uses EVP_MAC and
+      # openssl/core_names.h which require OpenSSL >= 3.0.  Build from source.
+      - name: Cache OpenSSL ${{ env.OPENSSL3_VERSION }} (RHEL 8)
+        id: cache-ssl-rhel8
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENSSL3_HOME }}
+          key: openssl-${{ env.OPENSSL3_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Build OpenSSL ${{ env.OPENSSL3_VERSION }}
+        if: steps.cache-ssl-rhel8.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$(dirname ${{ env.OPENSSL3_HOME }})"
+          cd /tmp
+          wget -q \
+            https://github.com/openssl/openssl/releases/download/openssl-${{ env.OPENSSL3_VERSION }}/openssl-${{ env.OPENSSL3_VERSION }}.tar.gz
+          tar zxf openssl-${{ env.OPENSSL3_VERSION }}.tar.gz
+          cd openssl-${{ env.OPENSSL3_VERSION }}
+          ./Configure \
+            --prefix=${{ env.OPENSSL3_HOME }} \
+            --openssldir=${{ env.OPENSSL3_HOME }}/ssl \
+            no-shared \
+            linux-x86_64
+          make -j$(nproc)
+          make install_sw
+
+      # ── CCI 1.0.2 ──────────────────────────────────────────────────────────
+      - name: Cache CCI ${{ env.CCI_VERSION }} (RHEL 8)
+        id: cache-cci-rhel8
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Build CCI ${{ env.CCI_VERSION }}
+        if: steps.cache-cci-rhel8.outputs.cache-hit != 'true'
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+        run: |
+          mkdir -p "$(dirname ${{ env.CCI_HOME }})"
+          cd /tmp
+          wget -q \
+            https://github.com/accellera-official/cci/releases/download/v${{ env.CCI_VERSION }}/cci_v${{ env.CCI_VERSION }}.tar.gz
+          tar zxf cci_v${{ env.CCI_VERSION }}.tar.gz
+          cd cci_v${{ env.CCI_VERSION }}
+          cmake -S . -B build \
+            -DCMAKE_CXX_STANDARD=${{ env.CXX_STD }} \
+            -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=${{ env.CCI_HOME }} \
+            -DCMAKE_INSTALL_LIBDIR=lib \
+            -DSYSTEMCCCI_BUILD_TESTS=OFF \
+            -DBUILD_SHARED_LIBS=OFF
+          cmake --build build -j$(nproc)
+          cmake --install build
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 2 — build sep-vp on RHEL 8
+# ─────────────────────────────────────────────────────────────────────────────
+  sep-vp-rhel8:
+    name: Build sep-vp (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+    needs: build-deps-rhel8
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            cmake git python3 \
+            boost-devel
+
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Patch CSML for C++20 (pending Vayavya-Labs/CSML upstream merge)
+        run: |
+          python3 - <<'PYEOF'
+          import re, pathlib
+
+          # ── csml_report.h: replace ambiguous multi-overload set ──────────────
+          rh = pathlib.Path("sep/utils/csml/inc/csml_report.h")
+          src = rh.read_text()
+          old = (
+              'template<class... va_args>\n'
+              'std::string form_report_string(std::string arg1, va_args... args);\n'
+              '\n'
+              'template<class T, class U>\n'
+              'inline std::string form_report_string(T arg1, U arg2)\n'
+              '{\n'
+              '   return form_report_string(arg1) + form_report_string(arg2);\n'
+              '}\n'
+              '\n'
+              'template<class T, class... va_args>\n'
+              'inline std::string form_report_string(T arg1, va_args... args)\n'
+              '{\n'
+              '  return form_report_string(arg1) + form_report_string(args...);\n'
+              '}\n'
+              '\n'
+              'template<class... va_args>\n'
+              'inline std::string form_report_string(std::string arg1, va_args... args)\n'
+              '{\n'
+              '  return arg1 + form_report_string(args...);\n'
+              '}'
+          )
+          new = (
+              'template<class First, class Second, class... Rest>\n'
+              'inline std::string form_report_string(First first, Second second, Rest... rest)\n'
+              '{\n'
+              '  return form_report_string(first) + form_report_string(second, rest...);\n'
+              '}'
+          )
+          assert old in src, "csml_report.h patch target not found – check submodule version"
+          rh.write_text(src.replace(old, new))
+          print("Patched csml_report.h")
+
+          # ── csml_register.h: add Clang stack-depth pragma ────────────────────
+          rg = pathlib.Path("sep/utils/csml/inc/csml_register.h")
+          src = rg.read_text()
+          before = 'template <class T, unsigned int Quantity>\nclass csml_reg_vector\n{'
+          after_end = '};\n\ntemplate <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          guarded_before = (
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic push\n'
+              '#pragma clang diagnostic ignored "-Wstack-exhausted"\n'
+              '#endif\n\n'
+              + before
+          )
+          guarded_end = (
+              '};\n\n'
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic pop\n'
+              '#endif\n\n'
+              'template <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          )
+          if before not in src:
+              print("csml_register.h: pragma already applied, skipping")
+          else:
+              src = src.replace(before, guarded_before)
+              src = src.replace(after_end, guarded_end, 1)
+              rg.write_text(src)
+              print("Patched csml_register.h")
+          PYEOF
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore OpenSSL 3 cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENSSL3_HOME }}
+          key: openssl-${{ env.OPENSSL3_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Configure VP
+        env:
+          CMAKE_BUILD_TYPE:    Release
+          CMAKE_CXX_STANDARD:  ${{ env.CXX_STD }}
+          SYSTEMC_HOME:        ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:            ${{ env.CCI_HOME }}
+          OPENSSL_ROOT:        ${{ env.OPENSSL3_HOME }}
+        run: cd vp && ./configure_vp.sh
+
+      - name: Build sep-vp
+        run: make sep-vp -C vp/build -j$(nproc)
+
+      - name: Verify binary exists
+        run: test -x vp/build/bin/sep-vp
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 3 — SEP peripheral unit tests on RHEL 8
+# ─────────────────────────────────────────────────────────────────────────────
+  sep-unit-tests-rhel8:
+    name: SEP peripheral unit tests (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+    needs: build-deps-rhel8
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            cmake git python3 \
+            boost-devel \
+            lcov
+
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+          # Point lcov/gcov at the toolset's gcov binary
+          echo "GCOV=$(which gcov)"                      >> "$GITHUB_ENV"
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Patch CSML for C++20 (pending Vayavya-Labs/CSML upstream merge)
+        run: |
+          python3 - <<'PYEOF'
+          import re, pathlib
+
+          rh = pathlib.Path("sep/utils/csml/inc/csml_report.h")
+          src = rh.read_text()
+          old = (
+              'template<class... va_args>\n'
+              'std::string form_report_string(std::string arg1, va_args... args);\n'
+              '\n'
+              'template<class T, class U>\n'
+              'inline std::string form_report_string(T arg1, U arg2)\n'
+              '{\n'
+              '   return form_report_string(arg1) + form_report_string(arg2);\n'
+              '}\n'
+              '\n'
+              'template<class T, class... va_args>\n'
+              'inline std::string form_report_string(T arg1, va_args... args)\n'
+              '{\n'
+              '  return form_report_string(arg1) + form_report_string(args...);\n'
+              '}\n'
+              '\n'
+              'template<class... va_args>\n'
+              'inline std::string form_report_string(std::string arg1, va_args... args)\n'
+              '{\n'
+              '  return arg1 + form_report_string(args...);\n'
+              '}'
+          )
+          new = (
+              'template<class First, class Second, class... Rest>\n'
+              'inline std::string form_report_string(First first, Second second, Rest... rest)\n'
+              '{\n'
+              '  return form_report_string(first) + form_report_string(second, rest...);\n'
+              '}'
+          )
+          assert old in src, "csml_report.h patch target not found – check submodule version"
+          rh.write_text(src.replace(old, new))
+          print("Patched csml_report.h")
+
+          rg = pathlib.Path("sep/utils/csml/inc/csml_register.h")
+          src = rg.read_text()
+          before = 'template <class T, unsigned int Quantity>\nclass csml_reg_vector\n{'
+          after_end = '};\n\ntemplate <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          guarded_before = (
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic push\n'
+              '#pragma clang diagnostic ignored "-Wstack-exhausted"\n'
+              '#endif\n\n'
+              + before
+          )
+          guarded_end = (
+              '};\n\n'
+              '#if defined(__clang__)\n'
+              '#pragma clang diagnostic pop\n'
+              '#endif\n\n'
+              'template <class T, unsigned int Quantity1, unsigned int Quantity2>'
+          )
+          if before not in src:
+              print("csml_register.h: pragma already applied, skipping")
+          else:
+              src = src.replace(before, guarded_before)
+              src = src.replace(after_end, guarded_end, 1)
+              rg.write_text(src)
+              print("Patched csml_register.h")
+          PYEOF
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore OpenSSL 3 cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENSSL3_HOME }}
+          key: openssl-${{ env.OPENSSL3_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Run all SEP peripheral tests
+        env:
+          SYSTEMC_HOME:     ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:         ${{ env.CCI_HOME }}
+          OPENSSL_ROOT:     ${{ env.OPENSSL3_HOME }}
+          # CMake's FindOpenSSL reads OPENSSL_ROOT_DIR from environment;
+          # run_all_peripherals.sh also forwards it via -DOPENSSL_ROOT_DIR.
+          OPENSSL_ROOT_DIR: ${{ env.OPENSSL3_HOME }}
+        run: sep/peripherals/run_all_peripherals.sh
+
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sep-peripheral-logs-rhel8
+          path: sep/peripherals/logs/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 4 — SMC peripheral unit tests on RHEL 8
+# SMC peripherals use CCI but not OpenSSL — no custom OpenSSL needed here.
+# ─────────────────────────────────────────────────────────────────────────────
+  smc-unit-tests-rhel8:
+    name: SMC peripheral unit tests (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+    needs: build-deps-rhel8
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            cmake git \
+            boost-devel \
+            gcovr
+
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-rhel8-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Run SMC peripheral tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+        run: |
+          smc/run_all_smc_tests.sh \
+            bootrom clint i3c_controller plic reset_unit scratchpad_ram
+
+      - name: Upload SMC peripheral test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-peripheral-logs-rhel8
+          path: smc/logs/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 5 — SMC Fabric unit tests on RHEL 8
+# smc_fabric depends only on SystemC (no CCI, no OpenSSL).
+# ─────────────────────────────────────────────────────────────────────────────
+  smc-fabric-tests-rhel8:
+    name: SMC Fabric unit tests (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+    needs: build-deps-rhel8
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }}-gcc-c++ \
+            cmake git \
+            gcovr
+
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Run SMC Fabric tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+        run: |
+          smc/run_all_smc_tests.sh smc_fabric
+
+      - name: Upload SMC Fabric test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-fabric-logs-rhel8
+          path: smc/logs/
+          retention-days: 7
