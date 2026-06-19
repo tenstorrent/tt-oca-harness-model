@@ -63,10 +63,7 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
                    "smc_axi_extension source_id on outgoing transactions.")
     , ctrl_size_bytes_p_("ctrl_size_bytes", cfg.ctrl_size_bytes,
                          "Size of the CPU-Control register window (§3.8).")
-    , local_base_default_p_("local_base_default", cfg.local_base_default,
-                            "Reset value of the RO LOCAL_BASE register.")
-    , qk_(cfg.num_harts)
-{
+    , qk_(num_harts_p_.get_value())
     const unsigned nh = num_harts_p_.get_value();
 
     // ----- 1. Allocate the fast-memory window -------------------------------
