@@ -390,7 +390,12 @@ bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
 void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
                                        sc_core::sc_time& /*delay*/)
 {
-    const uint64_t off  = trans.get_address() % ctrl_size_bytes_p_.get_value();
+    const uint64_t ctrl_size = ctrl_size_bytes_p_.get_value();
+    if (ctrl_size == 0) {
+        trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        return;
+    }
+    const uint64_t off  = trans.get_address() % ctrl_size;
     const unsigned len  = trans.get_data_length();
     uint8_t* const ptr  = trans.get_data_ptr();
 
