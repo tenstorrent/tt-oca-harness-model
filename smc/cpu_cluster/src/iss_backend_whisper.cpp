@@ -50,7 +50,7 @@ iss_backend_whisper::iss_backend_whisper(WdRiscv::System<uint64_t>& sys,
 {
     hart_ = sys_.ithHart(cfg_.hart_index);
     if (!hart_) {
-        throw std::runtime_error(
+        throw std::runtime_error( // LCOV_EXCL_LINE
             "iss_backend_whisper: invalid hart index " +
             std::to_string(cfg_.hart_index));
     }

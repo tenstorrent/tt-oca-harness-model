@@ -1,6 +1,6 @@
 # SMC CPU Cluster — Detailed Test Plan
 
-**Document**: `04_CPU_Cluster_Test_Plan.md`
+**Document**: `03_CPU_Cluster_Test_Plan.md`
 **Module under test (MUT)**: `smc::smc_cpu_cluster` (`cpu_cluster/include/`, `cpu_cluster/src/`)
 **Reference test bench**: `cpu_cluster/test/cluster_tb.cpp` (single self-checking binary, `plic_tb` style)
 **Status**: Active — `cluster_tb` passes on SystemC 2.3.4 / GCC 11+ / Linux x86_64
@@ -321,7 +321,7 @@ are flagged.
 | F28 | 3.10 | `prot[2]` set when `current_priv() != User`                             | smc_axi_extension                      |
 | F29 | A.1  | Self-checking runner (no GoogleTest)                                    | `cluster_tb` + `sc_main` smoke          |
 | F30 | A.3  | Common helpers in `smc_test_utils.h`                                    | `cluster_tb`                           |
-| F31 | A.4  | Coverage instrumentation via `-DSMC_ENABLE_COVERAGE=ON`                 | `coverage` custom target               |
+| F31 | A.4  | Coverage instrumentation via `-DENABLE_COVERAGE=ON`                     | `coverage` custom target               |
 | F32 | A.5  | Zero SystemC warnings; `Watchdog`                                       | `cluster_tb` (120 ms)                  |
 | F33 | A.6  | Regression via `run_tests.sh` / optional CTest                          | `run_tests.sh`, `test/CMakeLists.txt`  |
 | F34 | 3.7  | PLIC `ctx_out` → `irq_ext` → `MIP[MEIP]` → trap                         | PLIC CPU→PLIC→CPU                      |
@@ -462,9 +462,9 @@ When integrated with `gcov` / `llvm-cov`, the targets are:
 
 | Metric         | Target  | Current baseline (`libsmc/cpu/`)            |
 |----------------|---------|---------------------------------------------|
-| Line coverage  | ≥ 95 %  | 87.1 % (316 / 363) — see §B.3 in plan       |
-| Function cov.  | ≥ 95 %  | 85.2 % (46 / 54)                            |
-| Branch cov.    | ≥ 90 %  | 76.3 % (180 / 236)                          |
+| Line coverage  | ≥ 95 %  | 97.1 % (`src/`, `./run_tests.sh --coverage`) |
+| Function cov.  | ≥ 95 %  | 95.5 %                                       |
+| Branch cov.    | ≥ 90 %  | 88.8 %                                       |
 
 The lift to the §A.4 targets is gated on the §13 follow-up items —
 mostly negative-path coverage in `ctrl_b_transport()` and
@@ -656,7 +656,7 @@ The S-mode context leg and multi-hart PLIC topology remain open.
 **Environment**: SystemC 2.3.4 Accellera + CCI 1.0 (PLIC),
 GCC 11+ (C++20), Linux x86_64
 **Wall-clock**: ~8 s (`./run_tests.sh --clean`)
-**Coverage**: refresh with `./run_tests.sh --coverage` (baseline TBD post-consolidation)
+**Coverage**: 97.1 % line coverage on `src/` (`./run_tests.sh --coverage`)
 **Build flags**: `SMC_BUILD_PLIC_INTEGRATION=ON` (default), `CCI_HOME` required for PLIC phase
 
 ---

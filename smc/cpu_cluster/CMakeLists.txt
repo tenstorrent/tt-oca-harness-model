@@ -130,18 +130,68 @@ if(BOOST_PROGRAM_OPTIONS_LIB)
 endif()
 
 # ---------------------------------------------------------------------------
-# Code-coverage option (per 03_SMC_Test_Plan.pdf §A.4)
-# Build with `cmake -DSMC_ENABLE_COVERAGE=ON ..` to enable.
-# Then `cmake --build .  --target coverage` runs gcovr after `ctest`.
+# Optional instrumentation (component-developer-guide § IP model conventions)
+#   cmake ... -DENABLE_ASAN=ON      → AddressSanitizer
+#   cmake ... -DENABLE_COVERAGE=ON  → gcov (GCC) or LLVM coverage (Clang)
 # ---------------------------------------------------------------------------
-option(SMC_ENABLE_COVERAGE "Enable C++ line/branch coverage (gcov + gcovr)" OFF)
-if(SMC_ENABLE_COVERAGE)
-    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        message(FATAL_ERROR "SMC_ENABLE_COVERAGE requires GCC or Clang")
+option(ENABLE_ASAN     "Build with AddressSanitizer"     OFF)
+option(ENABLE_COVERAGE "Build with source-level coverage" OFF)
+
+if(ENABLE_ASAN AND ENABLE_COVERAGE)
+    message(FATAL_ERROR
+        "ENABLE_ASAN and ENABLE_COVERAGE cannot both be ON.")
+endif()
+if(ENABLE_ASAN)
+    message(STATUS "AddressSanitizer enabled")
+    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+    add_link_options   (-fsanitize=address)
+endif()
+if(ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+        message(STATUS "LLVM source-based coverage enabled (Clang)")
+        add_compile_options(-fprofile-instr-generate -fcoverage-mapping -g)
+        add_link_options   (-fprofile-instr-generate)
+        file(WRITE "${CMAKE_BINARY_DIR}/coverage_tool.txt" "llvm")
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        message(STATUS "gcov coverage enabled (GCC)")
+        add_compile_options(--coverage -g -O0 -fprofile-arcs -ftest-coverage)
+        add_link_options   (--coverage)
+        file(WRITE "${CMAKE_BINARY_DIR}/coverage_tool.txt" "gcov")
+    else()
+        message(FATAL_ERROR "ENABLE_COVERAGE requires GCC or Clang.")
     endif()
-    add_compile_options(-O0 -g --coverage -fprofile-arcs -ftest-coverage)
-    add_link_options(--coverage)
-    message(STATUS "Coverage instrumentation: ON")
+endif()
+
+# ---------------------------------------------------------------------------
+# SystemC CCI (required — smc_cpu_cluster exposes cci_param configuration)
+# ---------------------------------------------------------------------------
+if(DEFINED ENV{CCI_HOME})
+    set(CCI_HOME "$ENV{CCI_HOME}" CACHE PATH "Path to SystemC CCI install")
+endif()
+if(NOT CCI_HOME OR NOT EXISTS "${CCI_HOME}/include/cci_configuration")
+    message(FATAL_ERROR
+        "CCI not found at CCI_HOME=${CCI_HOME}. "
+        "Set -DCCI_HOME=<path> or export CCI_HOME (must contain "
+        "include/cci_configuration and lib[64]/libcci-config.{so,dylib}).")
+endif()
+message(STATUS "CCI_HOME = ${CCI_HOME}")
+
+find_library(CCI_CONFIG_LIB
+    NAMES cci cci-config
+    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
+    NO_DEFAULT_PATH
+    REQUIRED)
+find_library(CCI_INSPECTION_LIB
+    NAMES cci cci-inspection
+    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
+    NO_DEFAULT_PATH
+    REQUIRED)
+
+if(NOT TARGET SystemC::cci)
+    add_library(SystemC::cci INTERFACE IMPORTED GLOBAL)
+    set_target_properties(SystemC::cci PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${CCI_HOME}/include"
+        INTERFACE_LINK_LIBRARIES      "${CCI_CONFIG_LIB};${CCI_INSPECTION_LIB}")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -168,34 +218,6 @@ if(SMC_BUILD_PLIC_INTEGRATION)
             "SMC_BUILD_PLIC_INTEGRATION=ON but PLIC sources not found at "
             "${SMC_PLIC_DIR}/src/plic.cpp.  Set -DSMC_PLIC_DIR=<path>.")
     endif()
-
-    # CCI discovery: -DCCI_HOME=<path>  OR  env CCI_HOME=<path>.
-    if(DEFINED ENV{CCI_HOME})
-        set(CCI_HOME "$ENV{CCI_HOME}" CACHE PATH "Path to SystemC CCI install")
-    endif()
-    if(NOT CCI_HOME OR NOT EXISTS "${CCI_HOME}/include/cci_configuration")
-        message(FATAL_ERROR
-            "SMC_BUILD_PLIC_INTEGRATION=ON but CCI not found at CCI_HOME=${CCI_HOME}. "
-            "Set -DCCI_HOME=<path> or export CCI_HOME (must contain "
-            "include/cci_configuration and lib[64]/libcci-config.{so,dylib}).")
-    endif()
-    message(STATUS "CCI_HOME = ${CCI_HOME}")
-
-    find_library(CCI_CONFIG_LIB
-        NAMES cci cci-config
-        HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
-        NO_DEFAULT_PATH
-        REQUIRED)
-    find_library(CCI_INSPECTION_LIB
-        NAMES cci cci-inspection
-        HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
-        NO_DEFAULT_PATH
-        REQUIRED)
-
-    add_library(SystemC::cci INTERFACE IMPORTED GLOBAL)
-    set_target_properties(SystemC::cci PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${CCI_HOME}/include"
-        INTERFACE_LINK_LIBRARIES      "${CCI_CONFIG_LIB};${CCI_INSPECTION_LIB}")
 
     # Compile the PLIC IP directly into a sibling static library.  This
     # avoids pulling in the PLIC's own CMakeLists (which has its own
@@ -243,6 +265,7 @@ target_link_libraries(smc_cpu_cluster
     PUBLIC
         whisper::whisper
         SystemC::systemc
+        SystemC::cci
         boost::headers
 )
 

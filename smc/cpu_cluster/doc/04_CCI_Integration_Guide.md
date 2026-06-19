@@ -1,13 +1,13 @@
 # SystemC CCI — What It Is, Why It Matters, and How to Use It in the SMC CPU Cluster
 
-**Document:** 05_CCI_Integration_Guide.md
+**Document:** 04_CCI_Integration_Guide.md
 **Project:** SMC CPU Cluster (SystemC/TLM-2.0 Loosely-Timed Model)
 **Standard Referenced:** SystemC CCI 1.0 LRM (Accellera, June 2018)
 **Companion docs:**
   - `01_SMC_Architecture.pdf` §3 — IP role and configuration parameters
   - `02_SMC_IP_LowLevel_Design.pdf` §3 — TLM interface, register map,
     AXI extension contract, `iss_hart` debug API
-  - `04_CPU_Cluster_Test_Plan.md` — verification strategy and the
+  - `03_CPU_Cluster_Test_Plan.md` — verification strategy and the
     GoogleTest binaries that benefit from CCI-driven sweeps
 
 ---

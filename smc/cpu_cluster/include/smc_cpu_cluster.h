@@ -40,6 +40,8 @@
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm_utils/tlm_quantumkeeper.h>
 
+#include <cci_configuration>
+
 #include <array>
 #include <cstdint>
 #include <memory>
@@ -116,6 +118,7 @@ public:
 
     // -- Construction --------------------------------------------------------
     SC_HAS_PROCESS(smc_cpu_cluster);
+    explicit smc_cpu_cluster(sc_core::sc_module_name name);
     smc_cpu_cluster(sc_core::sc_module_name name, const config& cfg);
     ~smc_cpu_cluster() override;
 
@@ -123,7 +126,7 @@ public:
     bool load_elf(const std::vector<std::string>& elf_paths);
 
     // -- §3.9 debug API -----------------------------------------------------
-    unsigned                   num_harts() const { return cfg_.num_harts; }
+    unsigned                   num_harts() const { return num_harts_p_.get_value(); }
     iss_hart&                  hart(unsigned i);
     const iss_hart&            hart(unsigned i) const;
     WdRiscv::System<uint64_t>& whisper_system();
@@ -139,6 +142,25 @@ public:
     uint32_t disable_sram_autoinit() const { return regs_.disable_sram_autoinit; }
 
 private:
+    // -- CCI configuration (Phase 1 — defaults match struct config; broker
+    //    presets override before construction).  Declared before processes so
+    //    elaboration order matches the PLIC IP pattern.
+    cci::cci_param<unsigned, cci::CCI_IMMUTABLE_PARAM> num_harts_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> hart_id_base_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> reset_pc_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> mem_size_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> fast_mem_lo_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> fast_mem_hi_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> mmio_lo_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> mmio_hi_p_;
+    cci::cci_param<std::string, cci::CCI_IMMUTABLE_PARAM> isa_p_;
+    cci::cci_param<uint64_t>                            quantum_ns_p_;
+    cci::cci_param<unsigned>                             quantum_insts_p_;
+    cci::cci_param<bool>                                 amo_lock_detect_p_;
+    cci::cci_param<uint16_t>                             source_id_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> ctrl_size_bytes_p_;
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> local_base_default_p_;
+
     // -- Processes -----------------------------------------------------------
     void hart_thread(unsigned i);       // SC_THREAD: step loop
     void irq_aggregator(unsigned i);    // SC_METHOD: signals -> MIP
@@ -162,7 +184,6 @@ private:
     void apply_core_enable(uint32_t new_value);
 
     // -- State ---------------------------------------------------------------
-    config                                            cfg_;
     std::unique_ptr<WdRiscv::System<uint64_t>>        whisper_sys_;
     std::vector<std::unique_ptr<iss_backend_whisper>> harts_;
     sc_core::sc_vector<sc_core::sc_event>             wfi_event_      {"wfi_event"};
