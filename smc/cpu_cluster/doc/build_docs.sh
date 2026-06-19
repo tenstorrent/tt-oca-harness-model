@@ -69,6 +69,11 @@ do
     --no-margins \
     "file://${tmp}" 2>&1 | grep -v "^$" | tail -1 || true
 
+  if [[ ! -s "${pdf}" ]]; then
+    echo "ERROR: failed to generate ${pdf} (Chrome/Chromium print-to-pdf failed)." >&2
+    exit 1
+  fi
+
   rm -f "${tmp}"
   echo "   => ${pdf}"
 done
