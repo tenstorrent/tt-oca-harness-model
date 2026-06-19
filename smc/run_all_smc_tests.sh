@@ -23,6 +23,14 @@
 #   CCI_HOME       Path to an Accellera CCI install.  Required for the
 #                  peripherals under smc/peripherals/; not needed for
 #                  smc_fabric (which only links against SystemC).
+#   WHISPER_HOME   Path to a built Tenstorrent Whisper RISC-V ISS tree
+#                  (must contain build-<OS>/librvcore.a).  When set and the
+#                  archive exists, cpu_cluster is automatically included in
+#                  the test run.  When unset or the archive is missing,
+#                  cpu_cluster is silently skipped — CI is not affected.
+#   BOOST_DIR      Path to a Boost install (include/boost/version.hpp).
+#                  Used by cpu_cluster; also accepted as BOOST_ROOT for
+#                  compatibility with the CI/VP configure scripts.
 #   JOBS           Parallel build jobs (default: all available cores).
 
 set -uo pipefail
@@ -95,6 +103,30 @@ if [[ -z "${CCI_HOME:-}" ]]; then
     done
 fi
 
+# ── Locate Whisper (optional — enables cpu_cluster) ───────────────────────────
+_WHISPER_OS_DIR="build-$(uname -s)"
+_WHISPER_OK=false
+if [[ -n "${WHISPER_HOME:-}" ]] && \
+   [[ -f "${WHISPER_HOME}/${_WHISPER_OS_DIR}/librvcore.a" ]]; then
+    _WHISPER_OK=true
+fi
+
+# ── Locate Boost (used by cpu_cluster; accept BOOST_ROOT alias from CI/VP) ───
+if [[ -z "${BOOST_DIR:-}" ]]; then
+    BOOST_DIR="${BOOST_ROOT:-}"
+fi
+if [[ -z "${BOOST_DIR:-}" ]]; then
+    for _c in \
+        "${HOME}/local/boost-1.84.0" \
+        "${HOME}/local/boost" \
+        /opt/homebrew \
+        /usr/local \
+        /usr
+    do
+        [[ -f "${_c}/include/boost/version.hpp" ]] && { export BOOST_DIR="${_c}"; break; }
+    done
+fi
+
 echo ""
 if [[ -n "${SYSTEMC_HOME:-}" ]]; then
     echo "  SYSTEMC_HOME = ${SYSTEMC_HOME}"
@@ -105,6 +137,16 @@ if [[ -n "${CCI_HOME:-}" ]]; then
     echo "  CCI_HOME     = ${CCI_HOME}"
 else
     printf "  ${YELLOW}warning: CCI_HOME not found — peripheral builds may fail${NC}\n" >&2
+fi
+if $_WHISPER_OK; then
+    echo "  WHISPER_HOME = ${WHISPER_HOME}  (cpu_cluster ENABLED)"
+    if [[ -n "${BOOST_DIR:-}" ]]; then
+        echo "  BOOST_DIR    = ${BOOST_DIR}"
+    else
+        printf "  ${YELLOW}warning: BOOST_DIR not found — cpu_cluster build may fail${NC}\n" >&2
+    fi
+else
+    printf "  ${YELLOW}cpu_cluster SKIPPED (WHISPER_HOME not set or librvcore.a not found)${NC}\n" >&2
 fi
 echo ""
 
@@ -121,6 +163,12 @@ ALL_IPS=(
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
 )
+
+# cpu_cluster requires Whisper (Tenstorrent internal); only include when
+# WHISPER_HOME is set and the archive has been built.
+if $_WHISPER_OK; then
+    ALL_IPS+=("cpu_cluster:${SCRIPT_DIR}/cpu_cluster")
+fi
 
 # ── Filter by command-line IP names ──────────────────────────────────────────
 if [[ $# -gt 0 ]]; then
