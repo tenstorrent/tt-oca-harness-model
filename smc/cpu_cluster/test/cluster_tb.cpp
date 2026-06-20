@@ -10,8 +10,6 @@
 #include <tlm_utils/simple_target_socket.h>
 
 #ifdef SMC_HAVE_PLIC
-#include <cci_configuration>
-#include <cci/utils/consuming_broker.h>
 #include "plic.h"
 #endif
 
@@ -369,11 +367,28 @@ struct cluster_tb_top : sc_core::sc_module
     static constexpr uint64_t RESET_PC = 0x80;
 
     smc::smc_cpu_cluster::config cfg_;
+    smc::smc_cpu_cluster::config strap_cfg_;
     smc::smc_cpu_cluster           cluster;
+    smc::smc_cpu_cluster           def_ctor_cluster;
+    smc::smc_cpu_cluster           strap_cluster;
     smc_test::TlmRamStub           bus_data;
     InspectingRamStub              bus_mmio;
     smc_test::TlmRamStub           bus_ifetch;
     smc_test::ctrl_initiator       ctrl;
+    smc_test::TlmRamStub           def_data;
+    smc_test::TlmRamStub           def_mmio;
+    smc_test::TlmRamStub           def_ifetch;
+    smc_test::ctrl_initiator       def_ctrl;
+    InspectingRamStub              strap_data;
+    smc_test::CapturingRamStub       strap_mmio;
+    smc_test::TlmRamStub           strap_ifetch;
+    smc_test::ctrl_initiator       strap_ctrl;
+    sc_core::sc_signal<bool>       def_irq_sw;
+    sc_core::sc_signal<bool>       def_irq_timer;
+    sc_core::sc_signal<bool>       def_irq_ext;
+    sc_core::sc_signal<bool>       strap_irq_sw;
+    sc_core::sc_signal<bool>       strap_irq_timer;
+    sc_core::sc_signal<bool>       strap_irq_ext;
 
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_sw;
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_timer;
@@ -399,11 +414,34 @@ struct cluster_tb_top : sc_core::sc_module
     explicit cluster_tb_top(sc_core::sc_module_name n)
         : sc_module(n)
         , cfg_(smc_test::make_default_cluster_cfg(NHARTS, RESET_PC))
+        , strap_cfg_([] {
+              auto c = smc_test::make_default_cluster_cfg(1, RESET_PC);
+              c.mmio_lo         = c.mmio_hi = 0x80000000ULL;
+              c.fast_mem_lo     = c.fast_mem_hi = 0;
+              c.amo_lock_detect = false;
+              return c;
+          }())
         , cluster("cluster", cfg_)
+        , def_ctor_cluster("def_ctor_cluster")
+        , strap_cluster("strap_cluster", strap_cfg_)
         , bus_data("bus_data")
         , bus_mmio("bus_mmio")
         , bus_ifetch("bus_ifetch")
         , ctrl("ctrl")
+        , def_data("def_data")
+        , def_mmio("def_mmio")
+        , def_ifetch("def_ifetch")
+        , def_ctrl("def_ctrl")
+        , strap_data("strap_data")
+        , strap_mmio("strap_mmio")
+        , strap_ifetch("strap_ifetch")
+        , strap_ctrl("strap_ctrl")
+        , def_irq_sw("def_irq_sw")
+        , def_irq_timer("def_irq_timer")
+        , def_irq_ext("def_irq_ext")
+        , strap_irq_sw("strap_irq_sw")
+        , strap_irq_timer("strap_irq_timer")
+        , strap_irq_ext("strap_irq_ext")
         , sig_sw("sig_sw", NHARTS)
         , sig_timer("sig_timer", NHARTS)
         , sig_ext("sig_ext", NHARTS)
@@ -433,6 +471,32 @@ struct cluster_tb_top : sc_core::sc_module
 #endif
         cluster.ifetch.bind(bus_ifetch.socket);
         ctrl.socket.bind(cluster.ctrl);
+
+        def_ctor_cluster.data.bind(def_data.socket);
+        def_ctor_cluster.mmio.bind(def_mmio.socket);
+        def_ctor_cluster.ifetch.bind(def_ifetch.socket);
+        def_ctrl.socket.bind(def_ctor_cluster.ctrl);
+        def_irq_sw.write(false);
+        def_irq_timer.write(false);
+        def_irq_ext.write(false);
+        def_ctor_cluster.irq_sw[0](def_irq_sw);
+        def_ctor_cluster.irq_timer[0](def_irq_timer);
+        def_ctor_cluster.irq_ext[0](def_irq_ext);
+        def_ctor_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
+        def_ctrl.write32(0x040, 0u);
+
+        strap_cluster.data.bind(strap_data.socket);
+        strap_cluster.mmio.bind(strap_mmio.socket);
+        strap_cluster.ifetch.bind(strap_ifetch.socket);
+        strap_ctrl.socket.bind(strap_cluster.ctrl);
+        strap_irq_sw.write(false);
+        strap_irq_timer.write(false);
+        strap_irq_ext.write(false);
+        strap_cluster.irq_sw[0](strap_irq_sw);
+        strap_cluster.irq_timer[0](strap_irq_timer);
+        strap_cluster.irq_ext[0](strap_irq_ext);
+        strap_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
+        strap_ctrl.write32(0x040, 0u);
 
         scratchpad.rst_n_i.bind(sram_rst_n);
         sram_rst_n.write(true);
@@ -480,6 +544,48 @@ struct cluster_tb_top : sc_core::sc_module
 
         // Unit tests drive hart 0 only; park the others to avoid stray TLM traffic.
         ctrl.write32(0x040, 0x1u);
+
+        // --- default ctor, const hart, config straps (N6/N7) ------------------
+        {
+            EXPECT_EQ(def_ctor_cluster.num_harts(), 1u);
+            const smc::iss_hart& ch = def_ctor_cluster.hart(0);
+            EXPECT_EQ(ch.read_csr(smc_test::CSR_MHARTID), 0u);
+
+            auto& sh = strap_cluster.hart(0);
+            sh.reset();
+            smc_test::smc_master sm(sh);
+            constexpr uint64_t MMIO = 0x80000100ULL;
+
+            ASSERT_TRUE(sm.write32(0x200, 0x11112222u));
+            EXPECT_EQ(strap_data.read_le(0x200, 4), 0x11112222u);
+
+            strap_data.saw_extension = false;
+            strap_data.last_locked   = false;
+            ASSERT_TRUE(sm.write32(MMIO, 0x33334444u));
+            EXPECT_EQ(strap_data.read_le(MMIO, 4), 0x33334444u);
+            EXPECT_EQ(strap_mmio.mem.count(MMIO), 0u);
+            EXPECT_TRUE(strap_data.saw_extension);
+            EXPECT_FALSE(strap_data.last_locked);
+
+            constexpr uint32_t OP_AMOSWAP_W = 0x0811202Fu;
+            sh.mem_write(RESET_PC + 0, 4, smc_test::OP_ADDI_X1_X0_5);
+            sh.mem_write(RESET_PC + 4, 4, smc_test::OP_ADDI_X2_X0_10);
+            sh.mem_write(RESET_PC + 8, 4, OP_AMOSWAP_W);
+            sh.mem_write(RESET_PC + 12, 4, smc_test::OP_J_SELF);
+            sh.set_reset_pc(RESET_PC);
+            sh.reset();
+            strap_ctrl.write32(0x040, 0x1u);
+            strap_data.saw_extension = false;
+            strap_data.last_locked   = false;
+            sh.step();
+            sh.step();
+            sh.step();
+            ASSERT_TRUE(sm.write32(MMIO + 0x400, 0xBEEFu));
+            EXPECT_TRUE(strap_data.saw_extension);
+            EXPECT_FALSE(strap_data.last_locked);
+
+            pass("default ctor, const hart, and config straps");
+        }
 
         // --- 4-hart construction ------------------------------------------------
         EXPECT_EQ(cluster.num_harts(), NHARTS);
@@ -732,6 +838,10 @@ struct cluster_tb_top : sc_core::sc_module
 
             ctrl.write64(0x000, ALT_VECTOR);
             EXPECT_EQ(cluster.reset_vector_n(0), ALT_VECTOR);
+            ctrl.write64(0x008, 0x280ULL);
+            EXPECT_EQ(cluster.reset_vector_n(1), 0x280ULL);
+            cluster.hart(1).reset();
+            EXPECT_EQ(cluster.hart(1).get_pc(), 0x280ULL);
             EXPECT_EQ(ctrl.read32(0x100), uint32_t(cfg_.local_base_default));
 
             cluster.set_init_mem_done(true);
@@ -812,6 +922,24 @@ struct cluster_tb_top : sc_core::sc_module
             bus_data.fail_next = false;
 
             pass("batch step and data-path TLM error handling");
+        }
+
+        // --- CORE_ENABLE park and NMI wake (coverage) -------------------------
+        {
+            ctrl.write32(0x040, 0x1u);
+            wait(sc_core::sc_time(10, sc_core::SC_MS));
+            const uint64_t pc_running = cluster.hart(0).get_pc();
+            ctrl.write32(0x040, 0x0u);
+            wait(sc_core::sc_time(20, sc_core::SC_MS));
+            EXPECT_EQ(cluster.hart(0).get_pc(), pc_running);
+
+            ctrl.write32(0x040, 0x1u);
+            wait(sc_core::sc_time(10, sc_core::SC_MS));
+            cluster.inject_nmi(0, 0x5u);
+            wait(sc_core::sc_time(2, sc_core::SC_MS));
+            EXPECT_FALSE(cluster.hart(0).is_wfi());
+
+            pass("CORE_ENABLE park and NMI wake");
         }
 
         wd.cancel();

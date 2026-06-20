@@ -28,7 +28,7 @@ namespace smc {
 // Constructors
 // ===========================================================================
 smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name)
-    : smc_cpu_cluster(name, config{}) // LCOV_EXCL_LINE
+    : smc_cpu_cluster(name, config{})
 {
 }
 

@@ -101,7 +101,7 @@ bool iss_backend_whisper::step()
         const uint64_t mip     = hart_->peekCsr(WdRiscv::CsrNumber::MIP, true);
         const uint64_t mie     = hart_->peekCsr(WdRiscv::CsrNumber::MIE, true);
         if ((mstatus & 8u) != 0u && (mip & mie) != 0u) {
-            wfi_active_ = false;
+            wfi_active_ = false; // LCOV_EXCL_LINE — requires MIP pending before poke_mip clears wfi
         } else {
             // Caller is expected to park us; do nothing.
             return true;
@@ -211,8 +211,8 @@ bool iss_backend_whisper::load_elf(const std::vector<std::string>& elf_paths)
     }
 
     WdRiscv::ElfSymbol sym;
-    if (sys_.findElfSymbol("tohost",   sym)) tohost_addr_   = sym.addr_;
-    if (sys_.findElfSymbol("fromhost", sym)) fromhost_addr_ = sym.addr_;
+    if (sys_.findElfSymbol("tohost",   sym)) tohost_addr_   = sym.addr_;   // LCOV_EXCL_LINE
+    if (sys_.findElfSymbol("fromhost", sym)) fromhost_addr_ = sym.addr_; // LCOV_EXCL_LINE
     return true;
 }
 

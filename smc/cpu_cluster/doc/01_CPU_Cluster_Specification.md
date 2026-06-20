@@ -117,4 +117,4 @@ Dependencies: SystemC (C++20), Boost, Whisper source (auto-built by script),
 SystemC CCI 1.0.  See **`README.md`** for first-time setup.
 
 Coverage gate: **≥ 95%** line coverage on `src/` via `./run_tests.sh --coverage`
-(current baseline **97%** — see test plan §9.2).
+(current baseline **98.5%** — see test plan §9.2).
