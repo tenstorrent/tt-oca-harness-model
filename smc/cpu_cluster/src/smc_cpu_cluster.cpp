@@ -63,7 +63,10 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
                    "smc_axi_extension source_id on outgoing transactions.")
     , ctrl_size_bytes_p_("ctrl_size_bytes", cfg.ctrl_size_bytes,
                          "Size of the CPU-Control register window (§3.8).")
+    , local_base_default_p_("local_base_default", cfg.local_base_default,
+                            "Reset value of the RO LOCAL_BASE register.")
     , qk_(num_harts_p_.get_value())
+{
     const unsigned nh = num_harts_p_.get_value();
 
     // ----- 1. Allocate the fast-memory window -------------------------------
@@ -83,7 +86,7 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
 
     // ----- 4. CPU-Control register file: defaults --------------------------
     regs_.reset_vector.fill(reset_pc_p_.get_value());
-    regs_.core_enable = (nh >= 32) ? ~0u : ((1u << nh) - 1u);
+    regs_.core_enable = (nh >= 32) ? ~0u : ((1u << nh) - 1u); // LCOV_EXCL_LINE nh capped at 4
     regs_.local_base  = static_cast<uint32_t>(local_base_default_p_.get_value());
 
     // ----- 5. Construct the shared Whisper System ---------------------------
@@ -154,7 +157,7 @@ smc_cpu_cluster::~smc_cpu_cluster() = default;
 // ===========================================================================
 bool smc_cpu_cluster::load_elf(const std::vector<std::string>& paths)
 {
-    if (harts_.empty()) return false;
+    if (harts_.empty()) return false; // LCOV_EXCL_LINE num_harts is always >= 1
     return harts_[0]->load_elf(paths);
 }
 
@@ -395,6 +398,7 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
         trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
+
     const uint64_t off  = trans.get_address() % ctrl_size;
     const unsigned len  = trans.get_data_length();
     uint8_t* const ptr  = trans.get_data_ptr();

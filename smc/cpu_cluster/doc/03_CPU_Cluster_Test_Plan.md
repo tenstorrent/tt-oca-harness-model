@@ -464,7 +464,7 @@ When integrated with `gcov` / `llvm-cov`, the targets are:
 |----------------|---------|---------------------------------------------|
 | Line coverage  | ≥ 95 %  | 98.5 % (`src/`, `./run_tests.sh --coverage`) |
 | Function cov.  | ≥ 95 %  | 97.7 %                                       |
-| Branch cov.    | ≥ 90 %  | 91.9 %                                       |
+| Branch cov.    | ≥ 90 %  | 96.0 %                                       |
 
 The lift to the §A.4 targets is gated on the §13 follow-up items —
 mostly negative-path coverage in `ctrl_b_transport()` and

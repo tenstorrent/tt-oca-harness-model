@@ -137,7 +137,7 @@ unsigned iss_backend_whisper::step(unsigned n)
     unsigned retired = 0;
     for (unsigned k = 0; k < n; ++k) {
         if (wfi_active_)         break;
-        if (!step())             break;
+        if (!step())             break; // LCOV_EXCL_LINE step() always returns true today
         ++retired;
     }
     return retired;

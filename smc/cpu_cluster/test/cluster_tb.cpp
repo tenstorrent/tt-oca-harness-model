@@ -368,9 +368,13 @@ struct cluster_tb_top : sc_core::sc_module
 
     smc::smc_cpu_cluster::config cfg_;
     smc::smc_cpu_cluster::config strap_cfg_;
+    smc::smc_cpu_cluster::config quantum_zero_cfg_;
+    smc::smc_cpu_cluster::config offset_mem_cfg_;
     smc::smc_cpu_cluster           cluster;
     smc::smc_cpu_cluster           def_ctor_cluster;
     smc::smc_cpu_cluster           strap_cluster;
+    smc::smc_cpu_cluster           quantum_zero_cluster;
+    smc::smc_cpu_cluster           offset_mem_cluster;
     smc_test::TlmRamStub           bus_data;
     InspectingRamStub              bus_mmio;
     smc_test::TlmRamStub           bus_ifetch;
@@ -383,6 +387,20 @@ struct cluster_tb_top : sc_core::sc_module
     smc_test::CapturingRamStub       strap_mmio;
     smc_test::TlmRamStub           strap_ifetch;
     smc_test::ctrl_initiator       strap_ctrl;
+    smc_test::TlmRamStub           qzero_data;
+    smc_test::TlmRamStub           qzero_mmio;
+    smc_test::TlmRamStub           qzero_ifetch;
+    smc_test::ctrl_initiator       qzero_ctrl;
+    smc_test::TlmRamStub           offmem_data;
+    smc_test::TlmRamStub           offmem_mmio;
+    smc_test::TlmRamStub           offmem_ifetch;
+    smc_test::ctrl_initiator       offmem_ctrl;
+    sc_core::sc_signal<bool>       offmem_irq_sw;
+    sc_core::sc_signal<bool>       offmem_irq_timer;
+    sc_core::sc_signal<bool>       offmem_irq_ext;
+    sc_core::sc_signal<bool>       qzero_irq_sw;
+    sc_core::sc_signal<bool>       qzero_irq_timer;
+    sc_core::sc_signal<bool>       qzero_irq_ext;
     sc_core::sc_signal<bool>       def_irq_sw;
     sc_core::sc_signal<bool>       def_irq_timer;
     sc_core::sc_signal<bool>       def_irq_ext;
@@ -421,9 +439,22 @@ struct cluster_tb_top : sc_core::sc_module
               c.amo_lock_detect = false;
               return c;
           }())
+        , quantum_zero_cfg_([] {
+              auto c = smc_test::make_default_cluster_cfg(1, RESET_PC);
+              c.quantum_insts = 0;
+              return c;
+          }())
+        , offset_mem_cfg_([] {
+              auto c = smc_test::make_default_cluster_cfg(1, RESET_PC);
+              c.fast_mem_lo = 0x1000;
+              c.fast_mem_hi = 0x2000;
+              return c;
+          }())
         , cluster("cluster", cfg_)
         , def_ctor_cluster("def_ctor_cluster")
         , strap_cluster("strap_cluster", strap_cfg_)
+        , quantum_zero_cluster("quantum_zero_cluster", quantum_zero_cfg_)
+        , offset_mem_cluster("offset_mem_cluster", offset_mem_cfg_)
         , bus_data("bus_data")
         , bus_mmio("bus_mmio")
         , bus_ifetch("bus_ifetch")
@@ -436,6 +467,20 @@ struct cluster_tb_top : sc_core::sc_module
         , strap_mmio("strap_mmio")
         , strap_ifetch("strap_ifetch")
         , strap_ctrl("strap_ctrl")
+        , qzero_data("qzero_data")
+        , qzero_mmio("qzero_mmio")
+        , qzero_ifetch("qzero_ifetch")
+        , qzero_ctrl("qzero_ctrl")
+        , offmem_data("offmem_data")
+        , offmem_mmio("offmem_mmio")
+        , offmem_ifetch("offmem_ifetch")
+        , offmem_ctrl("offmem_ctrl")
+        , offmem_irq_sw("offmem_irq_sw")
+        , offmem_irq_timer("offmem_irq_timer")
+        , offmem_irq_ext("offmem_irq_ext")
+        , qzero_irq_sw("qzero_irq_sw")
+        , qzero_irq_timer("qzero_irq_timer")
+        , qzero_irq_ext("qzero_irq_ext")
         , def_irq_sw("def_irq_sw")
         , def_irq_timer("def_irq_timer")
         , def_irq_ext("def_irq_ext")
@@ -498,6 +543,32 @@ struct cluster_tb_top : sc_core::sc_module
         strap_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         strap_ctrl.write32(0x040, 0u);
 
+        quantum_zero_cluster.data.bind(qzero_data.socket);
+        quantum_zero_cluster.mmio.bind(qzero_mmio.socket);
+        quantum_zero_cluster.ifetch.bind(qzero_ifetch.socket);
+        qzero_ctrl.socket.bind(quantum_zero_cluster.ctrl);
+        qzero_irq_sw.write(false);
+        qzero_irq_timer.write(false);
+        qzero_irq_ext.write(false);
+        quantum_zero_cluster.irq_sw[0](qzero_irq_sw);
+        quantum_zero_cluster.irq_timer[0](qzero_irq_timer);
+        quantum_zero_cluster.irq_ext[0](qzero_irq_ext);
+        quantum_zero_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
+        qzero_ctrl.write32(0x040, 0u);
+
+        offset_mem_cluster.data.bind(offmem_data.socket);
+        offset_mem_cluster.mmio.bind(offmem_mmio.socket);
+        offset_mem_cluster.ifetch.bind(offmem_ifetch.socket);
+        offmem_ctrl.socket.bind(offset_mem_cluster.ctrl);
+        offmem_irq_sw.write(false);
+        offmem_irq_timer.write(false);
+        offmem_irq_ext.write(false);
+        offset_mem_cluster.irq_sw[0](offmem_irq_sw);
+        offset_mem_cluster.irq_timer[0](offmem_irq_timer);
+        offset_mem_cluster.irq_ext[0](offmem_irq_ext);
+        offset_mem_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
+        offmem_ctrl.write32(0x040, 0u);
+
         scratchpad.rst_n_i.bind(sram_rst_n);
         sram_rst_n.write(true);
 
@@ -550,6 +621,11 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_EQ(def_ctor_cluster.num_harts(), 1u);
             const smc::iss_hart& ch = def_ctor_cluster.hart(0);
             EXPECT_EQ(ch.read_csr(smc_test::CSR_MHARTID), 0u);
+            def_ctrl.write64(0x008, 0x999ULL);
+            EXPECT_EQ(def_ctor_cluster.reset_vector_n(1), 0x999ULL);
+            const uint64_t rv0 = def_ctor_cluster.reset_vector_n(0);
+            def_ctor_cluster.hart(0).reset();
+            EXPECT_EQ(def_ctor_cluster.hart(0).get_pc(), rv0);
 
             auto& sh = strap_cluster.hart(0);
             sh.reset();
@@ -675,6 +751,25 @@ struct cluster_tb_top : sc_core::sc_module
             ASSERT_EQ(h.last_commit().opcode, OP_AMOSWAP_W);
             ASSERT_TRUE(m.write32(MMIO + 0x200, 0xFEEDF00Du));
             EXPECT_TRUE(bus_mmio.last_locked);
+
+            h.mem_write(0x80, 4, smc_test::OP_LR_D);
+            h.mem_write(0x84, 4, smc_test::OP_J_SELF);
+            h.set_reset_pc(0x80);
+            h.reset();
+            bus_mmio.saw_extension = false;
+            bus_mmio.last_locked   = false;
+            h.step();
+            ASSERT_TRUE(m.write32(MMIO + 0x300, 0x12345678u));
+            EXPECT_TRUE(bus_mmio.last_locked);
+
+            h.mem_write(0x80, 4, smc_test::OP_SC_D);
+            h.mem_write(0x84, 4, smc_test::OP_J_SELF);
+            h.set_reset_pc(0x80);
+            h.reset();
+            bus_mmio.last_locked = false;
+            h.step();
+            ASSERT_TRUE(m.write32(MMIO + 0x400, 0xBEEFu));
+            EXPECT_TRUE(bus_mmio.last_locked);
             pass("smc_axi_extension on MMIO transactions");
         }
 
@@ -699,6 +794,7 @@ struct cluster_tb_top : sc_core::sc_module
             h.step();
             const uint64_t pc_after_wfi = h.get_pc();
             EXPECT_TRUE(h.is_wfi());
+            EXPECT_EQ(h.step(10), 0u);
             h.step();
             EXPECT_EQ(h.get_pc(), pc_after_wfi);
             h.poke_mip(smc_test::MIP_MTIP);
@@ -747,6 +843,12 @@ struct cluster_tb_top : sc_core::sc_module
             sig_ext[2].write(false);
             wait(sc_core::sc_time(100, sc_core::SC_NS));
             EXPECT_TRUE(cluster.hart(3).is_wfi());
+            sig_sw[3].write(true);
+            wait(sc_core::sc_time(2000, sc_core::SC_NS));
+            EXPECT_NE(cluster.hart(3).read_csr(smc_test::CSR_MIP) & smc_test::MIP_MSIP, 0u);
+            EXPECT_FALSE(cluster.hart(3).is_wfi());
+            sig_sw[3].write(false);
+            wait(sc_core::sc_time(100, sc_core::SC_NS));
             (void)pc0_at_park;
             (void)pc1_at_park;
             pass("IRQ aggregator and WFI wake");
@@ -842,6 +944,14 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_EQ(cluster.reset_vector_n(1), 0x280ULL);
             cluster.hart(1).reset();
             EXPECT_EQ(cluster.hart(1).get_pc(), 0x280ULL);
+            ctrl.write64(0x010, 0x300ULL);
+            EXPECT_EQ(cluster.reset_vector_n(2), 0x300ULL);
+            cluster.hart(2).reset();
+            EXPECT_EQ(cluster.hart(2).get_pc(), 0x300ULL);
+            ctrl.write64(0x018, 0x380ULL);
+            EXPECT_EQ(cluster.reset_vector_n(3), 0x380ULL);
+            cluster.hart(3).reset();
+            EXPECT_EQ(cluster.hart(3).get_pc(), 0x380ULL);
             EXPECT_EQ(ctrl.read32(0x100), uint32_t(cfg_.local_base_default));
 
             cluster.set_init_mem_done(true);
@@ -940,6 +1050,56 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_FALSE(cluster.hart(0).is_wfi());
 
             pass("CORE_ENABLE park and NMI wake");
+        }
+
+        // --- branch coverage: ctrl lengths, fast-mem edge, batch step ---------
+        {
+            ctrl.write32(0x040, 0x0u);
+            wait(sc_core::sc_time(10, sc_core::SC_MS));
+
+            uint8_t byte_buf[2] = {0xAB, 0xCD};
+            ctrl.write_bytes(0x104, 1, byte_buf);
+            EXPECT_EQ(ctrl.read32(0x104), 0xABu);
+            ctrl.write_bytes(0x104, 2, byte_buf);
+            EXPECT_EQ(ctrl.read32(0x104), 0xCDABu);
+            ctrl.write32(0x104, 0x12345678u);
+
+            uint8_t rv_buf[8] = {};
+            ctrl.read_bytes(0x000, 8, rv_buf);
+            EXPECT_EQ(ctrl.read64(0x000), cluster.reset_vector_n(0));
+
+            uint8_t wide32[5] = {1, 2, 3, 4, 5};
+            uint8_t wide32_read[5] = {};
+            ctrl.read_bytes(0x104, 5, wide32_read);
+            uint8_t wide64[9] = {};
+            ctrl.read_bytes(0x000, 9, wide64);
+            ctrl.write_bytes(0x104, 5, wide32);
+            EXPECT_EQ(ctrl.read32(0x104), 0x04030201u);
+            const uint8_t rv_patch[9] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99};
+            ctrl.write_bytes(0x000, 9, rv_patch);
+            EXPECT_EQ(cluster.reset_vector_n(0), 0x8877665544332211ULL);
+
+            auto& off_h = offset_mem_cluster.hart(0);
+            off_h.reset();
+            smc_test::smc_master off_m(off_h);
+            EXPECT_EQ(off_m.read32(0x500), 0u);
+            ASSERT_TRUE(off_m.write32(0x1000, 0xCAFEBABEu));
+            EXPECT_EQ(off_m.read32(0x1000), 0xCAFEBABEu);
+
+            auto& h = cluster.hart(0);
+            h.reset();
+            smc_test::smc_master m(h);
+            ASSERT_TRUE(m.write64(0xFFF8, 0x0123456789ABCDEFULL));
+            EXPECT_EQ(m.read64(0xFFF8), 0x0123456789ABCDEFULL);
+            EXPECT_EQ(m.read64(0xFFF9), 0ULL);
+            ASSERT_TRUE(m.write64(0xFFF9, 0xAABBCCDDEEFF0011ULL));
+            EXPECT_EQ(m.read64(0xFFF9), 0ULL);
+
+            qzero_ctrl.write32(0x040, 0x1u);
+            wait(sc_core::sc_time(5, sc_core::SC_MS));
+
+            ctrl.write32(0x040, 0x1u);
+            pass("ctrl access widths, fast-mem edge, and batch step branches");
         }
 
         wd.cancel();

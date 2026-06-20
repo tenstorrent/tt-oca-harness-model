@@ -116,6 +116,8 @@ inline constexpr uint32_t OP_CSRW_MIE_0      = 0x30401073u; // csrrw x0, mie, x0
 inline constexpr uint32_t OP_ADDI_X1_X0_5    = 0x00500093u; // addi x1, x0, 5
 inline constexpr uint32_t OP_ADDI_X2_X0_10   = 0x00a00113u; // addi x2, x0, 10
 inline constexpr uint32_t OP_J_SELF          = 0x0000006Fu; // jal x0, 0  (j .)
+inline constexpr uint32_t OP_LR_D             = 0x1000202Fu; // lr.d x0, (x0)
+inline constexpr uint32_t OP_SC_D             = 0x1800202Fu; // sc.d x0, x0, (x0)
 
 // ---------------------------------------------------------------------------
 // TlmRamStub: TLM target that responds OK to anything; zero-fills reads.
@@ -346,6 +348,10 @@ public:
     void     write32(uint64_t addr, uint32_t v) { rw(tlm::TLM_WRITE_COMMAND, addr, &v, 4); }
     uint64_t read64(uint64_t addr)        { uint64_t v=0; rw(tlm::TLM_READ_COMMAND,  addr, &v, 8); return v; }
     void     write64(uint64_t addr, uint64_t v) { rw(tlm::TLM_WRITE_COMMAND, addr, &v, 8); }
+    void     read_bytes(uint64_t addr, unsigned len, void* data)
+        { rw(tlm::TLM_READ_COMMAND, addr, data, len); }
+    void     write_bytes(uint64_t addr, unsigned len, const void* data)
+        { rw(tlm::TLM_WRITE_COMMAND, addr, const_cast<void*>(data), len); }
 
     tlm::tlm_response_status last_response() const { return last_response_; }
 

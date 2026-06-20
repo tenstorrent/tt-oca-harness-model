@@ -7,8 +7,8 @@
 #   ./run_tests.sh --ctest        # run via ctest instead of executing the binary
 #   ./run_tests.sh --asan         # build with AddressSanitizer; run and report errors
 #                                 #   Linux: also enables LeakSanitizer (detect_leaks=1)
-#   ./run_tests.sh --coverage     # build with -DENABLE_COVERAGE=ON; run ctest;
-#                                 #   then build the `coverage` target (gcovr HTML + summary)
+#   ./run_tests.sh --coverage     # build with -DENABLE_COVERAGE=ON; run cluster_tb;
+#                                 #   GCC: gcovr HTML report; Clang: llvm-cov via profile
 #
 # The --asan and --coverage modes use isolated build directories
 # (build_asan/ and cov_build/) so they never clobber a plain Release build.
@@ -291,6 +291,23 @@ if [[ ! -x "${TB_BIN}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Helper: find a versioned LLVM tool (llvm-profdata, llvm-cov, …).
+# ---------------------------------------------------------------------------
+_find_llvm_tool() {
+    local base="$1"
+    if command -v "${base}" &>/dev/null; then echo "${base}"; return; fi
+    if command -v xcrun &>/dev/null && xcrun "${base}" --version &>/dev/null 2>&1; then
+        echo "xcrun ${base}"; return
+    fi
+    for _v in 20 19 18 17 16 15 14 13; do
+        if command -v "${base}-${_v}" &>/dev/null; then
+            echo "${base}-${_v}"; return
+        fi
+    done
+    echo ""
+}
+
+# ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
 if (( USE_ASAN )); then
@@ -328,25 +345,65 @@ if (( USE_ASAN )); then
     exit "${TB_EXIT}"
 
 elif (( USE_COVERAGE )); then
+    COVERAGE_TOOL="$(cat "${BUILD_DIR}/coverage_tool.txt" 2>/dev/null || echo "llvm")"
+    HTML_DIR="${BUILD_DIR}/coverage"
+    SOURCES=(
+        "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp"
+        "${SCRIPT_DIR}/src/iss_backend_whisper.cpp"
+    )
+
     echo ""
-    echo ">> Running with gcov coverage instrumentation: ${TB_BIN}"
-    echo ""
-    "${TB_BIN}"
+    echo ">> Running with ${COVERAGE_TOOL} coverage instrumentation: ${TB_BIN}"
     echo ""
 
-    if ! command -v gcovr &>/dev/null; then
-        echo "WARNING: gcovr not found in PATH; cannot render coverage report." >&2
-        echo "  Install with: pip install gcovr" >&2
-        exit 0
+    if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
+        PROFRAW="${BUILD_DIR}/cluster_tb.profraw"
+        PROFDATA="${BUILD_DIR}/cluster_tb.profdata"
+
+        LLVM_PROFILE_FILE="${PROFRAW}" "${TB_BIN}"
+        echo ""
+
+        PROFDATA_CMD="$(_find_llvm_tool llvm-profdata)"
+        COV_CMD="$(_find_llvm_tool llvm-cov)"
+        if [[ -z "${PROFDATA_CMD}" || -z "${COV_CMD}" ]]; then
+            echo "ERROR: llvm-profdata / llvm-cov not found." >&2
+            echo "  macOS : installed with Xcode command-line tools" >&2
+            echo "  Linux : sudo apt install llvm  (or llvm-18, etc.)" >&2
+            exit 1
+        fi
+
+        echo ">> Merging profile data (${PROFDATA_CMD}) …"
+        ${PROFDATA_CMD} merge -sparse "${PROFRAW}" -o "${PROFDATA}"
+
+        echo ""
+        echo "===== Line coverage summary (llvm-cov) ====="
+        ${COV_CMD} report "${TB_BIN}" \
+            -instr-profile="${PROFDATA}" \
+            "${SOURCES[@]}"
+
+        mkdir -p "${HTML_DIR}"
+        ${COV_CMD} show "${TB_BIN}" \
+            -instr-profile="${PROFDATA}" \
+            "${SOURCES[@]}" \
+            -format=html \
+            -output-dir="${HTML_DIR}" \
+            -show-line-counts-or-regions 2>/dev/null || true
+    else
+        "${TB_BIN}"
+        echo ""
+
+        if command -v gcovr &>/dev/null; then
+            echo ">> Building the 'coverage' target (gcovr)"
+            cmake --build "${BUILD_DIR}" --target coverage
+        else
+            echo "WARNING: gcovr not found in PATH; cannot render coverage report." >&2
+            echo "  Install with: pip install gcovr" >&2
+        fi
     fi
 
-    echo ">> Building the 'coverage' target (gcovr)"
-    cmake --build "${BUILD_DIR}" --target coverage
-
-    HTML_REPORT="${BUILD_DIR}/coverage/index.html"
-    if [[ -f "${HTML_REPORT}" ]]; then
+    if [[ -f "${HTML_DIR}/index.html" ]]; then
         echo ""
-        echo ">> HTML coverage report: ${HTML_REPORT}"
+        echo ">> HTML coverage report: ${HTML_DIR}/index.html"
     fi
 
 elif (( USE_CTEST )); then
