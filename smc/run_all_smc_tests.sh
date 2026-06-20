@@ -23,6 +23,8 @@
 #   CCI_HOME       Path to an Accellera CCI install.  Required for the
 #                  peripherals under smc/peripherals/; not needed for
 #                  smc_fabric (which only links against SystemC).
+#   WHISPER_HOME   Whisper source tree with build-<uname>/librvcore.a (cpu_cluster).
+#   BOOST_DIR      Boost install (cpu_cluster).
 #   JOBS           Parallel build jobs (default: all available cores).
 
 set -uo pipefail
@@ -108,6 +110,39 @@ else
 fi
 echo ""
 
+# ── Optional: Whisper + Boost for cpu_cluster ───────────────────────────────
+WHISPER_BUILD_DIR="${WHISPER_BUILD_DIR:-build-$(uname -s)}"
+if [[ -z "${WHISPER_HOME:-}" ]]; then
+    REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+    for _w in \
+        "${REPO_ROOT}/../whisper/whisper" \
+        "${REPO_ROOT}/../whisper" \
+        "${HOME}/whisper/whisper" \
+        "${HOME}/whisper"
+    do
+        [[ -f "${_w}/${WHISPER_BUILD_DIR}/librvcore.a" ]] && { export WHISPER_HOME="${_w}"; break; }
+    done
+fi
+_cpu_cluster_ready=false
+if [[ -n "${WHISPER_HOME:-}" && -f "${WHISPER_HOME}/${WHISPER_BUILD_DIR}/librvcore.a" ]]; then
+    if [[ -n "${BOOST_DIR:-}" && -f "${BOOST_DIR}/include/boost/version.hpp" ]]; then
+        _cpu_cluster_ready=true
+    elif [[ -z "${BOOST_DIR:-}" ]]; then
+        for _b in \
+            "${HOME}/local/boost" \
+            /usr/local/boost \
+            /opt/homebrew/opt/boost
+        do
+            [[ -f "${_b}/include/boost/version.hpp" ]] && { export BOOST_DIR="${_b}"; _cpu_cluster_ready=true; break; }
+        done
+    fi
+fi
+if [[ "${_cpu_cluster_ready}" == true ]]; then
+    echo "  WHISPER_HOME = ${WHISPER_HOME}"
+    echo "  BOOST_DIR    = ${BOOST_DIR}"
+    echo ""
+fi
+
 # ── IP registry ───────────────────────────────────────────────────────────────
 # Format: "display_name:src_dir"
 # smc_fabric is listed last; it does not use CCI and its run_tests.sh will
@@ -121,6 +156,9 @@ ALL_IPS=(
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
 )
+if [[ "${_cpu_cluster_ready}" == true ]]; then
+    ALL_IPS+=("cpu_cluster:${SCRIPT_DIR}/cpu_cluster")
+fi
 
 # ── Filter by command-line IP names ──────────────────────────────────────────
 if [[ $# -gt 0 ]]; then

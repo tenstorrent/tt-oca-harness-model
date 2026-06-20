@@ -346,7 +346,7 @@ if (( USE_ASAN )); then
 
 elif (( USE_COVERAGE )); then
     COVERAGE_TOOL="$(cat "${BUILD_DIR}/coverage_tool.txt" 2>/dev/null || echo "llvm")"
-    HTML_DIR="${BUILD_DIR}/coverage"
+    HTML_DIR="${BUILD_DIR}/coverage-report"
     SOURCES=(
         "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp"
         "${SCRIPT_DIR}/src/iss_backend_whisper.cpp"
@@ -376,10 +376,20 @@ elif (( USE_COVERAGE )); then
         ${PROFDATA_CMD} merge -sparse "${PROFRAW}" -o "${PROFDATA}"
 
         echo ""
-        echo "===== Line coverage summary (llvm-cov) ====="
+        echo "===== Line coverage summary ====="
         ${COV_CMD} report "${TB_BIN}" \
             -instr-profile="${PROFDATA}" \
             "${SOURCES[@]}"
+
+        echo ""
+        echo "===== Uncovered lines in smc_cpu_cluster.cpp ====="
+        ${COV_CMD} show "${TB_BIN}" \
+            -instr-profile="${PROFDATA}" \
+            -sources "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
+            -format=text \
+            -show-line-counts-or-regions \
+            | grep -E '^[[:space:]]+[0-9]+\|[[:space:]]+0\|' \
+            || echo "(none — full coverage)"
 
         mkdir -p "${HTML_DIR}"
         ${COV_CMD} show "${TB_BIN}" \
@@ -393,11 +403,51 @@ elif (( USE_COVERAGE )); then
         echo ""
 
         if command -v gcovr &>/dev/null; then
-            echo ">> Building the 'coverage' target (gcovr)"
-            cmake --build "${BUILD_DIR}" --target coverage
+            echo "===== Line coverage summary (gcovr) ====="
+            gcovr \
+                --root "${SCRIPT_DIR}" \
+                --object-directory "${BUILD_DIR}" \
+                --filter "${SCRIPT_DIR}/src/" \
+                --exclude-throw-branches \
+                --exclude-unreachable-branches \
+                --print-summary
+
+            echo ""
+            echo "===== Uncovered lines in smc_cpu_cluster.cpp ====="
+            gcovr \
+                --root "${SCRIPT_DIR}" \
+                --object-directory "${BUILD_DIR}" \
+                --filter "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
+                --txt \
+                | grep -E '^[[:space:]]+[0-9]+:[[:space:]]+0:' \
+                || echo "(none — full coverage)"
+
+            mkdir -p "${HTML_DIR}"
+            gcovr \
+                --root "${SCRIPT_DIR}" \
+                --object-directory "${BUILD_DIR}" \
+                --filter "${SCRIPT_DIR}/src/" \
+                --exclude-throw-branches \
+                --exclude-unreachable-branches \
+                --html --html-details \
+                -o "${HTML_DIR}/index.html" 2>/dev/null || true
+
+        elif command -v lcov &>/dev/null && command -v genhtml &>/dev/null; then
+            INFO="${BUILD_DIR}/coverage.info"
+            lcov --capture \
+                 --directory "${BUILD_DIR}" \
+                 --output-file "${INFO}" \
+                 --quiet
+            lcov --remove "${INFO}" '/usr/*' "${BUILD_DIR}/*" \
+                 --output-file "${INFO}" --quiet
+            echo "===== Line coverage summary (lcov) ====="
+            lcov --list "${INFO}"
+            mkdir -p "${HTML_DIR}"
+            genhtml "${INFO}" --output-directory "${HTML_DIR}" --quiet
         else
-            echo "WARNING: gcovr not found in PATH; cannot render coverage report." >&2
-            echo "  Install with: pip install gcovr" >&2
+            echo "WARNING: neither gcovr nor lcov/genhtml found." >&2
+            echo "  Install one for a coverage report:" >&2
+            echo "    pip install gcovr   OR   sudo apt install lcov" >&2
         fi
     fi
 
