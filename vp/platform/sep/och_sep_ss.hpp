@@ -58,8 +58,8 @@ public:
     // Targets: sram, rom, plic, clint, dma, uart, gpio, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
     //          keymgr_kpvlp, efuse, lc_ctrl, avbbus, entropy_src, edn,
-    //          sep_scratch, outbound_filter  (PLIC is internal to VeeRISSTlm)
-    static constexpr unsigned int TARG_COUNT = 27;
+    //          sep_scratch, outbound_filter, smc_global  (PLIC is internal to VeeRISSTlm)
+    static constexpr unsigned int TARG_COUNT = 28;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -119,6 +119,7 @@ private:
     SEPMemory*                        dtcm               = nullptr;
     SEPMemory*                        sep_scratch        = nullptr;  // functional stub (RW)
     SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
+    SEPMemory*                        smc_global         = nullptr;  // functional stub (RW)
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
@@ -392,6 +393,8 @@ inline void och_sep_ss::create_modules() {
     // Functional RW stubs (no behavioral model) for boot ROM early init.
     sep_scratch     = new SEPMemory("sep_scratch", false);
     outbound_filter = new SEPMemory("outbound_filter", false);
+    // SMC global window stub (SEP↔SMC AXI path); RW backing store, no SMC behavior.
+    smc_global      = new SEPMemory("smc_global", false);
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
@@ -464,6 +467,7 @@ inline void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.edn_start_addr,         opt.edn_end_addr,         *edn);
         bus->ports[it++] = new PortMapping(opt.sep_scratch_start_addr,     opt.sep_scratch_end_addr,     *sep_scratch);
         bus->ports[it++] = new PortMapping(opt.outbound_filter_start_addr, opt.outbound_filter_end_addr, *outbound_filter);
+        bus->ports[it++] = new PortMapping(opt.smc_global_start_addr,      opt.smc_global_end_addr,      *smc_global);
     }
     bus->mapping_complete();
 
@@ -508,6 +512,7 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(edn->target_socket);
         bus->isocks[it++].bind(sep_scratch->tsock);
         bus->isocks[it++].bind(outbound_filter->tsock);
+        bus->isocks[it++].bind(smc_global->tsock);
     }
 
     // UART
