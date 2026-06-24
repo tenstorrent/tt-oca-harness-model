@@ -7,6 +7,7 @@
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm.h>
 #include "sep_memory.h"
+#include "sep_virt_console.h"
 #include "secure_dma.h"
 #include "uart_with_terminal.h"
 #include "gpio.h"
@@ -95,6 +96,7 @@ public:
         delete avbbus;
         delete entropy_src;
         delete edn;
+        delete sim_out;  // destructor flushes any buffered, unterminated SIM_OUT line
         delete spi_device;
         delete spi_controller;
         delete keymgr;
@@ -120,6 +122,7 @@ private:
     SEPMemory*                        sep_scratch        = nullptr;  // functional stub (RW)
     SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
     SEPMemory*                        smc_global         = nullptr;  // functional stub (RW)
+    SimVirtConsole*                   sim_out            = nullptr;  // SIM_OUT bootcode console (taps sep_scratch)
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
@@ -449,6 +452,7 @@ inline void och_sep_ss::create_modules() {
     outbound_filter = new SEPMemory("outbound_filter", false);
     // SMC global window stub (SEP↔SMC AXI path); RW backing store, no SMC behavior.
     smc_global      = new SEPMemory("smc_global", false);
+    sim_out         = new SimVirtConsole("sim_out");
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
@@ -567,6 +571,21 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(sep_scratch->tsock);
         bus->isocks[it++].bind(outbound_filter->tsock);
         bus->isocks[it++].bind(smc_global->tsock);
+
+        // SIM_OUT: observe bootcode simput* writes to SEP_SCRATCH_COLD_SCRATCH_2 on the
+        // sep_scratch stub and decode them to the console with a SIM_OUT header. The bus
+        // delivers region-local offsets, so COLD_SCRATCH_2 (0x10802010) is offset 0x10.
+        // Observation-only — the register keeps normal R/W semantics. When the
+        // console is disabled via its `enable` param, no tap is installed.
+        if (sim_out->enabled()) {
+            constexpr uint64_t COLD_SCRATCH_2_OFFSET = 0x10;  // SEP_SCRATCH_COLD_SCRATCH_2__REG_OFFSET
+            sep_scratch->setWriteTap(
+                [this](uint64_t offset, const uint8_t* data, unsigned len) {
+                    if (offset == COLD_SCRATCH_2_OFFSET && len >= 4) {
+                        sim_out->on_bytes(offset, data, len);
+                    }
+                });
+        }
     }
 
     // UART
