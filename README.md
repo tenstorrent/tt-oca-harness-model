@@ -51,7 +51,7 @@ tenstorrent_sep/
 - **SystemC** 3.0.1
 - **CCI** 1.0.1
 - **Boost** (`iostreams`, `program_options`, `log`)
-- **OpenSSL** (for HMAC, KMAC, CSRNG crypto models)
+- **OpenSSL** (for HMAC, KMAC, CSRNG crypto models) — tested on Ubuntu with **3.2.1** and **3.5.2**; on RHEL with **3.0.13**
 
 ### Installation
 
@@ -145,16 +145,23 @@ git submodule update --init --recursive
 **Build:**
 
 Edit **`vp/configure_vp.sh`** to set `SYSTEMC_HOME`, `CCI_HOME`, `BOOST_ROOT`,
-`OPENSSL_ROOT` to your install paths, then run:
+and `OPENSSL_ROOT` to install paths according to the `CMAKE_CXX_STANDARD`(default-17 or 20), then run:
 
 ```bash
-cd vp && ./configure_vp.sh && cd build && make sep-vp
+cd vp
+source configure_vp.sh
+cd build
+make sep-vp
 ```
 
 Override defaults on the command line:
 
 ```bash
-cd vp && CMAKE_BUILD_TYPE=Release ./configure_vp.sh && cd build && make sep-vp
+cd vp
+CMAKE_BUILD_TYPE=Release
+source configure_vp.sh
+cd build
+make sep-vp
 ```
 
 Output binary: `vp/build/bin/sep-vp`
@@ -258,7 +265,12 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
     └── 03_<IP>_Test_Plan.md
 ```
 
+Edit **`vp/configure_vp.sh`** to set `SYSTEMC_HOME`, `CCI_HOME`, `BOOST_ROOT`,
+and `OPENSSL_ROOT` to install paths according to the `CMAKE_CXX_STANDARD`(typically 17 or 20)
+
 ```bash
+CMAKE_CXX_STANDARD=20 # Optional step to override the default setting of C++17
+source configure_vp.sh
 cd sep/peripherals/<ip>
 ./run_tests.sh              # build + run
 ./run_tests.sh --asan       # with AddressSanitizer
@@ -271,6 +283,8 @@ cd sep/peripherals/<ip>
 Or manually:
 
 ```bash
+CMAKE_CXX_STANDARD=20 # Optional step to override the default setting of C++17
+source configure_vp.sh
 mkdir build && cd build
 cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 make && ctest -V
@@ -452,3 +466,47 @@ och_sep_ss1.sram.verbosity    : 0
 | `veer_inst_freq.log` | VeeR ISS instruction frequency |
 
 Log file names can be changed via CCI parameters.
+
+
+### Compiler Selection
+
+Use a GCC version that supports the C++ standard selected via `CMAKE_CXX_STANDARD` in `vp/configure_vp.sh`.
+
+On **RHEL 8**, GCC Toolsets can be used to select a newer compiler. For example, to build with GCC 11:
+
+```bash
+# Open a shell with GCC 11 on PATH
+scl enable gcc-toolset-11 bash
+
+cd vp
+export CMAKE_CXX_STANDARD=20
+source configure_vp.sh
+cd build && make sep-vp
+```
+
+Alternatively, point CMake to the desired compiler explicitly:
+
+```bash
+export PATH="/opt/rh/gcc-toolset-11/root/usr/bin:$PATH"
+export CC=/opt/rh/gcc-toolset-11/root/usr/bin/gcc
+export CXX=/opt/rh/gcc-toolset-11/root/usr/bin/g++
+```
+
+On **Ubuntu**, install the required compiler package (for example, `g++-11`) and either ensure it appears first on `PATH` or set `CC` and `CXX` before running `configure_vp.sh`:
+
+```bash
+export CC=gcc-11
+export CXX=g++-11
+```
+
+Verify the active compiler:
+
+```bash
+g++ --version
+```
+
+Verify the compiler selected by CMake:
+
+```bash
+grep CMAKE_CXX_COMPILER build/CMakeCache.txt
+```
