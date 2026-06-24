@@ -258,9 +258,12 @@ coverage-report/
 
 
 #------------------------------------------------------------------------------
-# Excpetion got softfloat build files
+# Exception for softfloat source build files (Makefile + platform.h only)
 #------------------------------------------------------------------------------
 !sep/cpu/VeeR-ISS/softfloat/build
+!sep/cpu/VeeR-ISS/softfloat/build/**/
+!sep/cpu/VeeR-ISS/softfloat/build/**/Makefile
+!sep/cpu/VeeR-ISS/softfloat/build/**/platform.h
 
 # =============================================================================
 # End of .gitignore
