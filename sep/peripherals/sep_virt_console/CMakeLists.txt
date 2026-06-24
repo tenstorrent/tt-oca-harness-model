@@ -4,7 +4,13 @@ project(sep_virt_console LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
-set(CMAKE_CXX_STANDARD 17)
+# Inherit the C++ standard from the parent VP build (which may select 17 or 20). Only
+# default it when this component is configured standalone. Forcing a fixed standard here
+# would mismatch the SystemC API-version guard (sc_api_version_*_cxxNNNNNNL) against the
+# SystemC library the VP links, causing an undefined-reference link error.
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options(-Wall -Wextra -Wno-unused-parameter)
 add_compile_definitions(SC_ALLOW_DEPRECATED_IEEE_API)
