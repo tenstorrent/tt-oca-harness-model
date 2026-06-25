@@ -23,10 +23,6 @@
 #   CCI_HOME       Path to an Accellera CCI install.  Required for the
 #                  peripherals under smc/peripherals/; not needed for
 #                  smc_fabric (which only links against SystemC).
-<<<<<<< HEAD
-#   WHISPER_HOME   Whisper source tree with build-<uname>/librvcore.a (cpu_cluster).
-#   BOOST_DIR      Boost install (cpu_cluster).
-=======
 #   WHISPER_HOME   Path to a built Tenstorrent Whisper RISC-V ISS tree
 #                  (must contain build-<OS>/librvcore.a).  When set and the
 #                  archive exists, cpu_cluster is automatically included in
@@ -35,7 +31,6 @@
 #   BOOST_DIR      Path to a Boost install (include/boost/version.hpp).
 #                  Used by cpu_cluster; also accepted as BOOST_ROOT for
 #                  compatibility with the CI/VP configure scripts.
->>>>>>> origin/main
 #   JOBS           Parallel build jobs (default: all available cores).
 
 set -uo pipefail

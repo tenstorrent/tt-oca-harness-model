@@ -7,14 +7,9 @@
 #   ./run_tests.sh --ctest        # run via ctest instead of executing the binary
 #   ./run_tests.sh --asan         # build with AddressSanitizer; run and report errors
 #                                 #   Linux: also enables LeakSanitizer (detect_leaks=1)
-<<<<<<< HEAD
-#   ./run_tests.sh --coverage     # build with -DENABLE_COVERAGE=ON; run cluster_tb;
-#                                 #   GCC: gcovr HTML report; Clang: llvm-cov via profile
-=======
 #   ./run_tests.sh --coverage     # build with coverage; run and print line report
 #                                 #   Clang/AppleClang: LLVM instrumented coverage
 #                                 #   GCC: gcov  (requires gcovr or lcov+genhtml)
->>>>>>> origin/main
 #
 # The --asan and --coverage modes use isolated build directories
 # (build_asan/ and build_cov/) so they never clobber a plain Release build.
@@ -223,11 +218,7 @@ if [[ ! -x "${TB_BIN}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-<<<<<<< HEAD
 # Helper: find a versioned LLVM tool (llvm-profdata, llvm-cov, …).
-=======
-# Helper: find a versioned LLVM tool
->>>>>>> origin/main
 # ---------------------------------------------------------------------------
 _find_llvm_tool() {
     local base="$1"
@@ -282,21 +273,11 @@ if (( USE_ASAN )); then
 
 elif (( USE_COVERAGE )); then
     COVERAGE_TOOL="$(cat "${BUILD_DIR}/coverage_tool.txt" 2>/dev/null || echo "llvm")"
-<<<<<<< HEAD
-    HTML_DIR="${BUILD_DIR}/coverage-report"
-    SOURCES=(
-        "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp"
-        "${SCRIPT_DIR}/src/iss_backend_whisper.cpp"
-    )
-=======
->>>>>>> origin/main
 
     echo ""
     echo ">> Running with ${COVERAGE_TOOL} coverage instrumentation: ${TB_BIN}"
     echo ""
 
-<<<<<<< HEAD
-=======
     HTML_DIR="${BUILD_DIR}/coverage-report"
     SOURCES=(
         "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp"
@@ -305,7 +286,6 @@ elif (( USE_COVERAGE )); then
     )
 
     # ---- LLVM instrumented coverage (Clang / AppleClang) ------------------
->>>>>>> origin/main
     if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
         PROFRAW="${BUILD_DIR}/cluster_tb.profraw"
         PROFDATA="${BUILD_DIR}/cluster_tb.profdata"
@@ -338,27 +318,17 @@ elif (( USE_COVERAGE )); then
             -sources "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
             -format=text \
             -show-line-counts-or-regions \
-<<<<<<< HEAD
             | grep -E '^[[:space:]]+[0-9]+\|[[:space:]]+0\|' \
             || echo "(none — full coverage)"
 
-        mkdir -p "${HTML_DIR}"
-=======
-            | grep -E "^\s+[0-9]+\|[[:space:]]+0\|" \
-            || echo "(none — full coverage)"
-
->>>>>>> origin/main
         ${COV_CMD} show "${TB_BIN}" \
             -instr-profile="${PROFDATA}" \
             "${SOURCES[@]}" \
             -format=html \
             -output-dir="${HTML_DIR}" \
             -show-line-counts-or-regions 2>/dev/null || true
-<<<<<<< HEAD
-=======
 
     # ---- gcov coverage (GCC) -----------------------------------------------
->>>>>>> origin/main
     else
         "${TB_BIN}"
         echo ""
@@ -366,52 +336,27 @@ elif (( USE_COVERAGE )); then
         if command -v gcovr &>/dev/null; then
             echo "===== Line coverage summary (gcovr) ====="
             gcovr \
-<<<<<<< HEAD
-                --root "${SCRIPT_DIR}" \
-                --object-directory "${BUILD_DIR}" \
-                --filter "${SCRIPT_DIR}/src/" \
-                --exclude-throw-branches \
-                --exclude-unreachable-branches \
-                --print-summary
-=======
                 --root "${SCRIPT_DIR}/src" \
                 --object-directory "${BUILD_DIR}" \
                 --filter "${SCRIPT_DIR}/src/" \
                 --filter "${SCRIPT_DIR}/test/"
->>>>>>> origin/main
 
             echo ""
             echo "===== Uncovered lines in smc_cpu_cluster.cpp ====="
             gcovr \
-<<<<<<< HEAD
-                --root "${SCRIPT_DIR}" \
+                --root "${SCRIPT_DIR}/src" \
                 --object-directory "${BUILD_DIR}" \
                 --filter "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
                 --txt \
                 | grep -E '^[[:space:]]+[0-9]+:[[:space:]]+0:' \
-=======
-                --root "${SCRIPT_DIR}/src" \
-                --object-directory "${BUILD_DIR}" \
-                --filter "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
-                --txt \
-                | grep -E "^\s+[0-9]+: +0:" \
->>>>>>> origin/main
                 || echo "(none — full coverage)"
 
             mkdir -p "${HTML_DIR}"
             gcovr \
-<<<<<<< HEAD
-                --root "${SCRIPT_DIR}" \
-                --object-directory "${BUILD_DIR}" \
-                --filter "${SCRIPT_DIR}/src/" \
-                --exclude-throw-branches \
-                --exclude-unreachable-branches \
-=======
                 --root "${SCRIPT_DIR}/src" \
                 --object-directory "${BUILD_DIR}" \
                 --filter "${SCRIPT_DIR}/src/" \
                 --filter "${SCRIPT_DIR}/test/" \
->>>>>>> origin/main
                 --html --html-details \
                 -o "${HTML_DIR}/index.html" 2>/dev/null || true
 
