@@ -67,8 +67,17 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
 endif()
 
+if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g -O0 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+  add_compile_definitions(CSML_DEFAULT_VERBOSITY=2)
+  message(STATUS "key_manager: ASAN build - AddressSanitizer enabled")
+endif()
+
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
 endif()
 
@@ -81,7 +90,8 @@ include(FindCCI)
 include(FindSystemC)
 
 # OpenSSL (required for RAND_bytes DRBG fallback in keymgr_tt.cpp)
-find_package(OpenSSL REQUIRED)
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 if(OpenSSL_FOUND)
   message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
 else()
@@ -158,9 +168,9 @@ if(BUILD_TESTS)
     add_custom_target(coverage
       COMMAND ./bin/key_manager_testbench
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
+      COMMAND lcov --ignore-errors inconsistent,unsupported,format,mismatch --capture --directory . --output-file coverage/coverage.info
+      COMMAND lcov --ignore-errors inconsistent,unsupported,format,mismatch --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file coverage/coverage_filtered.info
+      COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category coverage/coverage_filtered.info --output-directory coverage/html
       COMMAND ${CMAKE_COMMAND} -E echo "Coverage report: coverage/html/index.html"
     )
     add_dependencies(coverage key_manager_testbench)

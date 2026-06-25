@@ -559,7 +559,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                     CSML_ERROR(0, logger) << "[SPI_HOST] TX FIFO underflow: "
                         << "no data after watermark event (watermark not reached). Segment requires "
                         << bytes_needed << " bytes, only " << byte_idx << " available." << std::endl;
-                    ERROR_STATUS.UNDERFLOW = 1;
+                    ERROR_STATUS.underflow = 1;
                     update_error_interrupt_state();
                     set_fsm_state(fsm_state_e::IDLE);
                     update_event_interrupt_state();
@@ -1266,7 +1266,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
                 << "In TLM LT atomic model, software must ensure sufficient RX space before CMD write. "
                 << "Setting ERROR_STATUS.OVERFLOW" << std::endl;
 
-            ERROR_STATUS.OVERFLOW = 1;
+            ERROR_STATUS.overflow = 1;
             update_error_interrupt_state();
 
             return false;  // Reject command
@@ -1361,7 +1361,7 @@ bool spi_controller_ip::handle_write_TXDATA(uint32_t value, uint8_t byte_enable,
     // Check if TX FIFO is full
     if (is_tx_fifo_full()) {
         CSML_ERROR(0, logger) << "[SPI_HOST/TXDATA ERROR] TX FIFO overflow - FIFO is full. Setting ERROR_STATUS.OVERFLOW" << std::endl;
-        ERROR_STATUS.OVERFLOW = 1;
+        ERROR_STATUS.overflow = 1;
         update_error_interrupt_state();
         return false;
     }
@@ -1389,7 +1389,7 @@ bool spi_controller_ip::handle_read_RXDATA(uint32_t& value, uint32_t mask)
     if (is_rx_fifo_empty()) {
         CSML_WARN(1, logger) << "  [WARNING] RX FIFO underflow - FIFO is empty, returning 0" << std::endl;
         value = 0;
-        ERROR_STATUS.UNDERFLOW = 1;
+        ERROR_STATUS.underflow = 1;
         update_error_interrupt_state();
         return true;
     }

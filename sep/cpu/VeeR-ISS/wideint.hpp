@@ -1535,4 +1535,35 @@ namespace WdRiscv
   inline Int1024 operator ^ (Int1024 a, Int1024 b)
   { a ^= b; return a; }
 
+  /// Wide-type make_unsigned/make_signed. libc++ forbids specializing std traits.
+  template<typename T>
+  struct make_unsigned : std::make_unsigned<T> {};
+
+  template<typename T>
+  struct make_signed : std::make_signed<T> {};
+
+  template<> struct make_unsigned<Int128>   { using type = Uint128; };
+  template<> struct make_unsigned<Int256>   { using type = Uint256; };
+  template<> struct make_unsigned<Int512>   { using type = Uint512; };
+  template<> struct make_unsigned<Int1024>  { using type = Uint1024; };
+  template<> struct make_unsigned<Uint128>  { using type = Uint128; };
+  template<> struct make_unsigned<Uint256>  { using type = Uint256; };
+  template<> struct make_unsigned<Uint512>  { using type = Uint512; };
+  template<> struct make_unsigned<Uint1024> { using type = Uint1024; };
+
+  template<> struct make_signed<Uint128>   { using type = Int128; };
+  template<> struct make_signed<Uint256>   { using type = Int256; };
+  template<> struct make_signed<Uint512>   { using type = Int512; };
+  template<> struct make_signed<Uint1024>  { using type = Int1024; };
+  template<> struct make_signed<Int128>    { using type = Int128; };
+  template<> struct make_signed<Int256>    { using type = Int256; };
+  template<> struct make_signed<Int512>    { using type = Int512; };
+  template<> struct make_signed<Int1024>   { using type = Int1024; };
+
+  template<typename T>
+  using make_unsigned_t = typename make_unsigned<T>::type;
+
+  template<typename T>
+  using make_signed_t = typename make_signed<T>::type;
+
 }

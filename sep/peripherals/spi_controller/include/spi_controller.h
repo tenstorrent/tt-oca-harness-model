@@ -1,3 +1,5 @@
+#pragma once
+
 /**
  * @file spi_controller.h
  * @brief Main SPI Controller TLM model class definition

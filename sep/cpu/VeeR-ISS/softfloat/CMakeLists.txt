@@ -6,7 +6,11 @@ project(MyProject C)
 # ==============================
 set(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(SPECIALIZE_TYPE "RISCV")
-set(SOFTFLOAT_MAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/RISCV-GCC")
+if(APPLE)
+  set(SOFTFLOAT_MAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/Darwin-GCC")
+else()
+  set(SOFTFLOAT_MAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build/RISCV-GCC")
+endif()
 
 # ==============================
 # Step 1: Call existing Makefile
@@ -43,5 +47,5 @@ add_dependencies(softfloat build_softfloat)
 # ==============================
 target_include_directories(softfloat INTERFACE
     ${SOURCE_DIR}/source/include
-    ${SOURCE_DIR}//source/${SPECIALIZE_TYPE}
+    ${SOURCE_DIR}/source/${SPECIALIZE_TYPE}
 )

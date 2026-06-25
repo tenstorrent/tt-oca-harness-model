@@ -548,8 +548,8 @@ static void test_dword15()
     d.set_quad_enable_requirement(QER_BIT1_SR2_OP35);
     TEST_ASSERT(d.get_quad_enable_requirement() == QER_BIT1_SR2_OP35, "QER = Bit 1 of SR2 (via 35h)");
 
-    // Overflow: 10 & 0x7 = 2 = QER_BIT6_SR1_REG
-    d.set_quad_enable_requirement(static_cast<sfdp_qer_e>(10));
+    // Overflow: 10 & 0x7 = 2 = QER_BIT6_SR1_REG (raw bits, not enum — UBSan-safe)
+    d.set_qer(10);
     TEST_ASSERT(d.get_quad_enable_requirement() == QER_BIT6_SR1_REG, "QER overflow masked (10 -> 2)");
 
     d.set_0_4_4_mode_support(true);
@@ -700,7 +700,7 @@ static void test_utility_functions()
     TEST_ASSERT(addr_mode_to_string(ADDR_3_BYTE_ONLY)  == "3-Byte Only",        "addr_mode ADDR_3_BYTE_ONLY");
     TEST_ASSERT(addr_mode_to_string(ADDR_3_OR_4_BYTE)  == "3-Byte or 4-Byte",   "addr_mode ADDR_3_OR_4_BYTE");
     TEST_ASSERT(addr_mode_to_string(ADDR_4_BYTE_ONLY)  == "4-Byte Only",         "addr_mode ADDR_4_BYTE_ONLY");
-    TEST_ASSERT(addr_mode_to_string(static_cast<sfdp_addr_mode_e>(99)) == "Unknown", "addr_mode invalid = Unknown");
+    TEST_ASSERT(addr_mode_to_string(static_cast<uint8_t>(99)) == "Unknown", "addr_mode invalid = Unknown");
 
     TEST_ASSERT(qer_to_string(QER_NONE_OR_HOLD)    == "None or HOLD",             "qer QER_NONE_OR_HOLD");
     TEST_ASSERT(qer_to_string(QER_BIT1_SR2_REG)    == "Bit 1 of SR2",             "qer QER_BIT1_SR2_REG");
@@ -708,7 +708,7 @@ static void test_utility_functions()
     TEST_ASSERT(qer_to_string(QER_BIT7_SR2_OP3E)   == "Bit 7 of SR2 (via 3Eh)",   "qer QER_BIT7_SR2_OP3E");
     TEST_ASSERT(qer_to_string(QER_BIT1_SR2_NO_CLR) == "Bit 1 of SR2 (no clear)",  "qer QER_BIT1_SR2_NO_CLR");
     TEST_ASSERT(qer_to_string(QER_BIT1_SR2_OP35)   == "Bit 1 of SR2 (via 35h)",   "qer QER_BIT1_SR2_OP35");
-    TEST_ASSERT(qer_to_string(static_cast<sfdp_qer_e>(99)) == "Unknown",           "qer invalid = Unknown");
+    TEST_ASSERT(qer_to_string(static_cast<uint8_t>(99)) == "Unknown",           "qer invalid = Unknown");
 }
 
 // ============================================================================

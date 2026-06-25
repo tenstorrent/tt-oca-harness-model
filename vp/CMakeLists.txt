@@ -12,9 +12,12 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug)
 endif()
 
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ standard for VP build (17 or 20)")
-set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE BOOL "" FORCE)
-set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "" FORCE)
+# Default only when not passed via -DCMAKE_CXX_STANDARD=… on the cmake command line.
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter -Wpedantic")
 set(CMAKE_CXX_FLAGS_DEBUG "-g3")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
@@ -26,7 +29,7 @@ if(POLICY CMP0167)
   cmake_policy(SET CMP0167 NEW)
 endif()
 
-find_package(Boost REQUIRED COMPONENTS iostreams program_options log)
+find_package(Boost REQUIRED COMPONENTS iostreams program_options)
 
 include(FindCCI)
 if(CCI_FOUND)
@@ -70,16 +73,19 @@ subdirs(platform)
 #   make clean-workdir  — built-in clean + remove bin/platform/models artifacts;
 #                         keeps Makefile/CMakeCache so you can rebuild in-place
 set(_sep_root "${CMAKE_CURRENT_SOURCE_DIR}/..")
-set(_softfloat_make "${_sep_root}/sep/cpu/VeeR-ISS/softfloat/build/RISCV-GCC")
+set(_softfloat_riscv "${_sep_root}/sep/cpu/VeeR-ISS/softfloat/build/RISCV-GCC")
+set(_softfloat_darwin "${_sep_root}/sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC")
 
 add_custom_target(clean-workdir
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target clean
   COMMAND ${CMAKE_COMMAND}
           -DCMAKE_BINARY_DIR=${CMAKE_BINARY_DIR}
           -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/SafeCleanBuildDir.cmake
-  COMMAND /bin/sh -c "[ -f '${_softfloat_make}/Makefile' ] && $(MAKE) -C '${_softfloat_make}' clean || true"
+  COMMAND /bin/sh -c "[ -f '${_softfloat_riscv}/Makefile' ] && $(MAKE) -C '${_softfloat_riscv}' clean || true"
+  COMMAND /bin/sh -c "[ -f '${_softfloat_darwin}/Makefile' ] && $(MAKE) -C '${_softfloat_darwin}' clean || true"
   COMMENT "Clean VP build artifacts (keep CMake configure files) and softfloat"
   VERBATIM
 )
 unset(_sep_root)
-unset(_softfloat_make)
+unset(_softfloat_riscv)
+unset(_softfloat_darwin)

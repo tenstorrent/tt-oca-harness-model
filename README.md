@@ -144,10 +144,15 @@ git submodule update --init --recursive
 
 **Build:**
 
-Edit **`vp/configure_vp.sh`** to set `SYSTEMC_HOME`, `CCI_HOME`, `BOOST_ROOT`,
-and `OPENSSL_ROOT` to install paths according to the `CMAKE_CXX_STANDARD`(default-17 or 20), then run:
+Export install paths for your machine and C++ standard (see **`vp/vp_build_env.sh`**), then build:
 
 ```bash
+export SYSTEMC_HOME_C17=/path/to/installs_c17
+export CCI_HOME_C17=/path/to/installs_c17
+export OPENSSL_ROOT_C17=/path/to/installs_c17/openssl-3.0.13
+export BOOST_ROOT_C17=/path/to/installs_c17/boost-1.84.0
+export CMAKE_CXX_STANDARD=17
+
 cd vp
 source configure_vp.sh
 cd build
@@ -265,12 +270,11 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
     └── 03_<IP>_Test_Plan.md
 ```
 
-Edit **`vp/configure_vp.sh`** to set `SYSTEMC_HOME`, `CCI_HOME`, `BOOST_ROOT`,
-and `OPENSSL_ROOT` to install paths according to the `CMAKE_CXX_STANDARD`(typically 17 or 20)
+Export the same `*_C17` / `*_C20` install paths as for the VP build (see **`vp/vp_build_env.sh`**), then:
 
 ```bash
-CMAKE_CXX_STANDARD=20 # Optional step to override the default setting of C++17
-source configure_vp.sh
+export CMAKE_CXX_STANDARD=17   # or 20 — must match your SystemC/OpenSSL/Boost prefix
+source ../../vp/configure_vp.sh   # from repo root: source vp/configure_vp.sh
 cd sep/peripherals/<ip>
 ./run_tests.sh              # build + run
 ./run_tests.sh --asan       # with AddressSanitizer

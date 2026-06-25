@@ -14,7 +14,7 @@
 // STRING CONVERSION
 // ============================================================================
 
-std::string addr_mode_to_string(sfdp_addr_mode_e mode)
+std::string addr_mode_to_string(uint8_t mode)
 {
     switch (mode) {
         case ADDR_3_BYTE_ONLY: return "3-Byte Only";
@@ -24,7 +24,7 @@ std::string addr_mode_to_string(sfdp_addr_mode_e mode)
     }
 }
 
-std::string qer_to_string(sfdp_qer_e qer)
+std::string qer_to_string(uint8_t qer)
 {
     switch (qer) {
         case QER_NONE_OR_HOLD:    return "None or HOLD";
@@ -346,7 +346,7 @@ void print_sfdp_tree(const sfdp_header_t&           header,
 
     // DWORD 15
     std::cout << "├── DWORD 15: Quad Enable & Advanced Features\n";
-    std::cout << "│   ├── Quad Enable:        " << qer_to_string(table.get_dword15().get_quad_enable_requirement()) << "\n";
+    std::cout << "│   ├── Quad Enable:        " << qer_to_string((table.get_dword15().value >> 20) & 0x7u) << "\n";
     std::cout << "│   ├── 0-4-4 Mode:         "
               << (table.get_dword15().get_0_4_4_mode_support() ? "Supported" : "Not Supported") << "\n";
     std::cout << "│   ├── 4-4-4 Enable Seq:   0x" << std::hex << std::setw(2) << std::setfill('0')

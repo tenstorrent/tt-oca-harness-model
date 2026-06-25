@@ -111,6 +111,8 @@ target_include_directories(veeriss_model
 include(FindCCI)
 include(FindSystemC)
 
+find_package(Boost REQUIRED COMPONENTS program_options)
+
 # Add CCI include directory if found
 if(CCI_FOUND)
   include_directories(${CCI_INCLUDE_DIR})
@@ -119,11 +121,13 @@ endif()
 target_compile_options(veeriss_model PRIVATE
   -MMD
   -MP
-  -mtune=native
   -Wall
   -Wextra
   -fPIC
 )
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(veeriss_model PRIVATE -mtune=native)
+endif()
 
 target_compile_definitions(veeriss_model PUBLIC
   SOFT_FLOAT
@@ -131,7 +135,10 @@ target_compile_definitions(veeriss_model PUBLIC
   ISA=rv32imc
 )
 
-target_link_libraries(veeriss_model PRIVATE softfloat PUBLIC SystemC::systemc pthread z pthread stdc++fs)
+target_link_libraries(veeriss_model PRIVATE softfloat Boost::headers Boost::program_options PUBLIC SystemC::systemc Threads::Threads z)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_link_libraries(veeriss_model PRIVATE stdc++fs)
+endif()
 # -----------------------------------------------------------------------------
 # Print status information
 # -----------------------------------------------------------------------------

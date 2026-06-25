@@ -84,7 +84,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g --coverage -fprofile-arcs -ftest-coverage ${WFLAG}")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "entropy_src: Coverage build enabled")
 endif()
@@ -101,7 +102,8 @@ if(CCI_FOUND)
 endif()
 
 # Find OpenSSL library
-find_package(OpenSSL REQUIRED)
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 
 # Find threading library (required by SystemC)
 find_package(Threads REQUIRED)
@@ -157,9 +159,9 @@ if(BUILD_TESTS)
         COMMAND ${LCOV_PATH} --zerocounters --directory .
         COMMAND ./bin/entropy_src_testbench
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-        COMMAND ${LCOV_PATH} --capture --directory . --output-file coverage/coverage.info
-        COMMAND ${LCOV_PATH} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-        COMMAND ${GENHTML_PATH} coverage/coverage_filtered.info --output-directory coverage/html
+        COMMAND ${LCOV_PATH} --ignore-errors inconsistent,unsupported,format,mismatch --capture --directory . --output-file coverage/coverage.info
+        COMMAND ${LCOV_PATH} --ignore-errors inconsistent,unsupported,format,mismatch --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
+        COMMAND ${GENHTML_PATH} --ignore-errors inconsistent,unsupported,format,corrupt,category coverage/coverage_filtered.info --output-directory coverage/html
         COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Generating coverage report..."

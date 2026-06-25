@@ -41,7 +41,14 @@ find_package(SystemC CONFIG QUIET HINTS ${_sc_pkg_hints})
 
 # Try "SystemCLanguage" cmake config (alternate export name used by some installs).
 if(NOT TARGET SystemC::systemc)
-  find_package(SystemCLanguage QUIET HINTS ${_sc_pkg_hints})
+  if(DEFINED SYSTEMC_HOME AND NOT "${SYSTEMC_HOME}" STREQUAL "")
+    find_package(SystemCLanguage CONFIG QUIET
+      PATHS "${SYSTEMC_HOME}/lib/cmake/SystemCLanguage"
+      NO_DEFAULT_PATH)
+  endif()
+  if(NOT TARGET SystemCLanguage::systemc)
+    find_package(SystemCLanguage QUIET HINTS ${_sc_pkg_hints})
+  endif()
 endif()
 
 unset(_sc_pkg_hints)

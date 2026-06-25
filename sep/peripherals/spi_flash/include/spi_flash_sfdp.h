@@ -488,11 +488,11 @@ struct dword_15_t : public dword_base_t {
     void set_0_4_4_supported(bool s)       { s ? (value |= (1u<<9))  : (value &= ~(1u<<9)); }
     void set_0_4_4_exit_method(uint8_t m)  { value = (value & ~(0x3Fu<<10))  | ((m & 0x3Fu)<<10); }
     void set_0_4_4_entry_method(uint8_t m) { value = (value & ~(0xFu<<16))   | ((m & 0xFu)<<16); }
-    void set_qer(sfdp_qer_e qer)           { value = (value & ~(0x7u<<20))   | ((qer & 0x7u)<<20); }
+    void set_qer(uint8_t qer)                { value = (value & ~(0x7u<<20))   | ((qer & 0x7u)<<20); }
     void set_hold_wp_disable(bool s)       { s ? (value |= (1u<<23)) : (value &= ~(1u<<23)); }
 
     // Aliases
-    void set_quad_enable_requirement(sfdp_qer_e q) { set_qer(q); }
+    void set_quad_enable_requirement(sfdp_qer_e q) { set_qer(static_cast<uint8_t>(q)); }
     void set_0_4_4_mode_support(bool s)            { set_0_4_4_supported(s); }
 
     uint8_t    get_4_4_4_disable_sequence()   const { return value & 0xFu; }

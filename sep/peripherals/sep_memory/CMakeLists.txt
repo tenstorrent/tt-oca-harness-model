@@ -34,6 +34,8 @@ endif()
 include(FindCCI)
 include(FindSystemC)
 
+find_package(Boost REQUIRED COMPONENTS iostreams)
+
 if(CCI_FOUND)
   include_directories(${CCI_INCLUDE_DIR})
 endif()
@@ -59,7 +61,7 @@ add_library(sep_memory_model STATIC ${SRAM_SRCS})
 
 target_include_directories(sep_memory_model PUBLIC ${SRAM_ROM_INCLUDES})
 
-target_link_libraries(sep_memory_model PUBLIC csml_logger SystemC::systemc)
+target_link_libraries(sep_memory_model PUBLIC csml_logger SystemC::systemc Boost::iostreams)
 if(CCI_FOUND)
   target_link_libraries(sep_memory_model PUBLIC ${CCI_LIBRARIES})
 endif()

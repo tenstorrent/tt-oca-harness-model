@@ -91,7 +91,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "SPI Flash: Coverage build enabled")
 endif()
@@ -241,9 +242,9 @@ if(BUILD_TESTS)
     add_custom_target(coverage
       ${COVERAGE_CMDS}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
+      COMMAND lcov --ignore-errors inconsistent,unsupported,format,mismatch --capture --directory . --output-file coverage/coverage.info
+      COMMAND lcov --ignore-errors inconsistent,unsupported,format,mismatch --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
+      COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category coverage/coverage_filtered.info --output-directory coverage/html
       COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
     )
     if(TARGET spi_flash_test)

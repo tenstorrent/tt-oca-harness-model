@@ -18,7 +18,11 @@
 
 #include <cfenv>
 #include <cmath>
-#include <emmintrin.h>
+#ifndef SOFT_FLOAT
+# if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+#  include <emmintrin.h>
+# endif
+#endif
 #include <array>
 #include "Hart.hpp"
 #include "instforms.hpp"
@@ -338,10 +342,13 @@ setSimulatorRoundingMode(RoundingMode mode)
 void
 clearSimulatorFpFlags()
 {
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
   uint32_t val = _mm_getcsr();
   val &= ~uint32_t(0x3f);
   _mm_setcsr(val);
-  // std::feclearexcept(FE_ALL_EXCEPT);
+#else
+  std::feclearexcept(FE_ALL_EXCEPT);
+#endif
 }
 
 #endif
