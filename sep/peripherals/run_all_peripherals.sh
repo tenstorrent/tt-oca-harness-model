@@ -131,6 +131,7 @@ build_peripheral() {
       -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}" \
       -DSYSTEMC_HOME="${SYSTEMC_HOME:-}" \
       ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"} \
+      ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
       -DBUILD_TESTS=ON 2>&1
 
     cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1
@@ -227,6 +228,7 @@ LCOV_WRAP
       -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}" \
       -DSYSTEMC_HOME="${SYSTEMC_HOME:-}" \
       ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"} \
+      ${OPENSSL_ROOT_DIR:+-DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"} \
       ${thread_cache_arg:+"${thread_cache_arg}"} \
       ${linker_extra_flags:+"${linker_extra_flags}"} \
       -DBUILD_TESTS=ON 2>&1
@@ -297,11 +299,16 @@ for name in "${PERIPHERALS[@]}"; do
                              || { fail; echo; release_label="FAIL"; OVERALL_PASS=false; }
 
   # 2. ASAN build
-  printf "  ASAN build    ... "
-  build_peripheral "${name}" "ASAN" "${plog}/asan_build.log"
-  asan_status=$?
-  [ $asan_status -eq 0 ] && { pass; echo; asan_label="PASS"; } \
-                          || { fail; echo; asan_label="FAIL"; OVERALL_PASS=false; }
+  if [[ "${SKIP_ASAN:-0}" == "1" ]]; then
+    printf "  ASAN build    ... SKIP (SKIP_ASAN=1)\n"
+    asan_label="SKIP"
+  else
+    printf "  ASAN build    ... "
+    build_peripheral "${name}" "ASAN" "${plog}/asan_build.log"
+    asan_status=$?
+    [ $asan_status -eq 0 ] && { pass; echo; asan_label="PASS"; } \
+                            || { fail; echo; asan_label="FAIL"; OVERALL_PASS=false; }
+  fi
 
   # 3. Coverage build + report
   printf "  Coverage      ... "

@@ -20,6 +20,16 @@
 #   OPENSSL_ROOT        OpenSSL install prefix  (must contain include/openssl/ssl.h)
 #   CMAKE_BUILD_TYPE    Debug | Release          (default: Debug)
 #   CMAKE_CXX_STANDARD  17 | 20                 (default: 20)
+#
+# PLATFORM NOTES
+#   macOS    : Homebrew paths are probed automatically.
+#   Ubuntu   : System paths (/usr, /usr/local) are probed.  Install:
+#                sudo apt install libboost-dev libssl-dev
+#   RHEL 8   : Default GCC 8 does NOT support C++20.  Enable GCC 12 first:
+#                scl enable gcc-toolset-12 bash
+#              Then run this script.  The kmac peripheral requires OpenSSL ≥ 3.0
+#              (RHEL 8 ships 1.1.1).  Build OpenSSL 3 from source or install
+#              it to ~/local/openssl-3 and set OPENSSL_ROOT before running.
 
 set -euo pipefail
 
@@ -123,12 +133,16 @@ find_prefix SYSTEMC_HOME "SystemC" "include/systemc.h" \
   /opt/local/libexec/systemc
 
 find_prefix CCI_HOME "CCI" "include/cci_configuration" \
+  "${HOME}/local/cci-1.0.2" \
   "${HOME}/local/cci-1.0.1" \
   "${HOME}/local/cci" \
+  "${HOME}/cci-1.0.2" \
   "${HOME}/cci-1.0.1" \
   "${HOME}/cci" \
+  /usr/local/cci-1.0.2 \
   /usr/local/cci-1.0.1 \
   /usr/local/cci \
+  /usr/lib/cci-1.0.2 \
   /usr/lib/cci-1.0.1 \
   /usr/lib/cci \
   /opt/homebrew/opt/systemc-cci \
@@ -145,6 +159,11 @@ find_prefix BOOST_ROOT "Boost" "include/boost/version.hpp" \
   /opt/local
 
 find_prefix OPENSSL_ROOT "OpenSSL" "include/openssl/ssl.h" \
+  "${HOME}/local/openssl-3.3.2" \
+  "${HOME}/local/openssl-3.3" \
+  "${HOME}/local/openssl-3.0" \
+  "${HOME}/local/openssl-3" \
+  "${HOME}/local/openssl" \
   /usr \
   /usr/local \
   "${HOME}/local/openssl" \
@@ -155,6 +174,21 @@ find_prefix OPENSSL_ROOT "OpenSSL" "include/openssl/ssl.h" \
   /opt/local
 
 echo ""
+
+# ---------------------------------------------------------------------------
+# GCC version guard: C++20 requires GCC 10 or later
+# ---------------------------------------------------------------------------
+if command -v g++ >/dev/null 2>&1; then
+  _gxx_major=$(g++ -dumpversion 2>/dev/null | cut -d. -f1)
+  if [[ "${CMAKE_CXX_STANDARD}" == "20" ]] && \
+     [[ "${_gxx_major}" =~ ^[0-9]+$ ]] && \
+     (( _gxx_major < 10 )); then
+    echo "warning: g++ ${_gxx_major} detected; C++20 requires GCC ≥ 10." >&2
+    echo "  RHEL 8 : scl enable gcc-toolset-12 bash && ./configure_vp.sh" >&2
+    echo "  Ubuntu  : sudo apt install g++-12 && CXX=g++-12 ./configure_vp.sh" >&2
+    echo "" >&2
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # Parse trailing cmake args
@@ -173,7 +207,9 @@ done
 # ---------------------------------------------------------------------------
 export OPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR:-${OPENSSL_ROOT}}"
 export SYSTEMC_HOME CCI_HOME OPENSSL_ROOT BOOST_ROOT
-export BOOST_INC="${BOOST_ROOT}/include" BOOST_LIB="${BOOST_ROOT}/lib"
+export BOOST_INC="${BOOST_ROOT}/include"
+# Use libdir() so BOOST_LIB resolves to lib64 on RHEL/Fedora, lib on others.
+export BOOST_LIB="$(libdir "${BOOST_ROOT}")"
 export OPENSSL_INC="${OPENSSL_ROOT}/include"
 if [[ -d "${OPENSSL_ROOT_DIR}/lib64" ]]; then
   export OPENSSL_LIB="${OPENSSL_ROOT_DIR}/lib64"

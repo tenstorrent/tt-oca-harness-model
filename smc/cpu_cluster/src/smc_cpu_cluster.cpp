@@ -64,7 +64,11 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
     , ctrl_size_bytes_p_("ctrl_size_bytes", cfg.ctrl_size_bytes,
                          "Size of the CPU-Control register window (§3.8).")
     , local_base_default_p_("local_base_default", cfg.local_base_default,
+<<<<<<< HEAD
                             "Reset value of the RO LOCAL_BASE register.")
+=======
+                            "LOCAL_BASE reset value reported via the ctrl socket (§3.8).")
+>>>>>>> origin/main
     , qk_(num_harts_p_.get_value())
 {
     const unsigned nh = num_harts_p_.get_value();
