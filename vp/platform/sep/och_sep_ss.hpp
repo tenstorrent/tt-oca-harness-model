@@ -284,6 +284,18 @@ private:
     ArgsCSML*              argsCSML      = nullptr;
     csml_param<uint64_t>   globalQuantumNs;
 
+    // Boot straps latched by the (emulated) SMC reset unit, exposed as CCI params
+    // so the ROM boot mode is selectable at invocation (accellera_config.ini) with
+    // no rebuild. The seed block composes these into STRAPS_LO/STRAPS_HI words and
+    // writes them to the smc_global stub at offsets 0x2090/0x2094, matching the
+    // SEP<->SMC contract in fw/sep/bootcode/include/sep_smc_interface.h. Defaults
+    // are all false (= Secondary chiplet, status reporting enabled, refclk).
+    csml_param<bool>       strap_primary_chiplet;       // STRAPS_LO[25]
+    csml_param<bool>       strap_boot_recovery;         // STRAPS_HI[23]
+    csml_param<bool>       strap_rotate_update;         // STRAPS_HI[29]
+    csml_param<bool>       strap_status_report_disable; // STRAPS_LO[21]
+    csml_param<bool>       strap_bl0_pll_clk;           // STRAPS_HI[24]
+
     // =========================================================================
     // Methods
     // =========================================================================
@@ -301,6 +313,11 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , unused_irq_signal("unused_irq_signal")
     , plic_inputs(PLIC_NUM_INTERRUPTS, &unused_irq_signal)
     , globalQuantumNs("globalQuantumNs", 10)
+    , strap_primary_chiplet("smc.primary_chiplet", false)
+    , strap_boot_recovery("smc.boot_recovery", false)
+    , strap_rotate_update("smc.rotate_update", false)
+    , strap_status_report_disable("smc.status_report_disable", false)
+    , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
 {
     argsCSML = new ArgsCSML(opt);
     Args& args = opt;
@@ -436,6 +453,25 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         const uint32_t dft_status = 0x3u;  // MEM_REPAIR_DONE | MEM_REPAIR_SUCCESS
         smc_global->load_data(reinterpret_cast<const char*>(&dft_status),
                               SMC_DFT_CTRL_STATUS, sizeof(dft_status));
+
+        // Reset-unit latched boot straps (STRAPS_LO/HI), composed from CCI params so
+        // the ROM boot mode is invocation-selectable. init_straps() reads these
+        // (fw/sep/bootcode/src/boot_straps.c): STRAPS_LO[25]=primary_chiplet selects
+        // Primary (SPI boot) vs Secondary (wait for SMC manifest). Bit positions per
+        // sep_smc_interface.h; HI bits are relative to the STRAPS_HI word.
+        constexpr uint64_t SMC_STRAPS_LO = 0x2090;  // SMC_STRAPS_LO_OFFSET
+        constexpr uint64_t SMC_STRAPS_HI = 0x2094;  // SMC_STRAPS_HI_OFFSET
+        uint32_t straps_lo = 0u;
+        uint32_t straps_hi = 0u;
+        if (strap_primary_chiplet.get_param_value())       straps_lo |= (1u << 25);
+        if (strap_status_report_disable.get_param_value()) straps_lo |= (1u << 21);
+        if (strap_boot_recovery.get_param_value())         straps_hi |= (1u << 23);
+        if (strap_bl0_pll_clk.get_param_value())           straps_hi |= (1u << 24);
+        if (strap_rotate_update.get_param_value())         straps_hi |= (1u << 29);
+        smc_global->load_data(reinterpret_cast<const char*>(&straps_lo),
+                              SMC_STRAPS_LO, sizeof(straps_lo));
+        smc_global->load_data(reinterpret_cast<const char*>(&straps_hi),
+                              SMC_STRAPS_HI, sizeof(straps_hi));
     }
 
     unused_irq_signal.write(false);
