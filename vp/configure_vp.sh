@@ -6,8 +6,9 @@
 #   CMAKE_CXX_STANDARD=20 source ./configure_vp.sh
 #   ./configure_vp.sh -- -DFOO=bar
 #
-# Edit install paths below. Defaults: CMAKE_BUILD_TYPE=Debug, CMAKE_CXX_STANDARD=17.
+# Edit install paths below. Defaults: CMAKE_BUILD_TYPE=Debug, CMAKE_CXX_STANDARD=20.
 # Pre-set env vars override the paths (e.g. SYSTEMC_HOME=/other source ./configure_vp.sh).
+# Paths are exported so FindCCI/FindSystemC ($ENV{CCI_HOME}) work when you run cmake manually.
 
 _vp_configure_sourced=false
 if [ -n "${BASH_VERSION:-}" ]; then
@@ -35,10 +36,10 @@ unset _vp_configure_sh
 # ---------------------------------------------------------------------------
 # Install paths — edit for your machine
 # ---------------------------------------------------------------------------
-: "${SYSTEMC_HOME:=/usr/local/systemc301}"
-: "${CCI_HOME:=/usr/local/cci}"
-: "${OPENSSL_ROOT:=/usr}"
-: "${BOOST_ROOT:=/usr}"
+: "${SYSTEMC_HOME:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20}"
+: "${CCI_HOME:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20}"
+: "${OPENSSL_ROOT:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20/openssl-3.0.13}"
+: "${BOOST_ROOT:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20/boost-1.84.0}"
 
 : "${CMAKE_BUILD_TYPE:=Debug}"
 : "${CMAKE_CXX_STANDARD:=20}"
@@ -59,6 +60,7 @@ done
 source "${VP_DIR}/vp_build_env.sh"
 vp_export_build_paths || exit 1
 
+export SYSTEMC_HOME CCI_HOME OPENSSL_ROOT BOOST_ROOT
 export CMAKE_BUILD_TYPE CMAKE_CXX_STANDARD
 
 if [[ -z "${VP_CONFIGURE_QUIET:-}" ]]; then
