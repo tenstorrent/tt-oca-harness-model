@@ -66,6 +66,9 @@ endif()
     unset(_sc_aliased)
   endif()
 
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
+
 subdirs(platform)
 
 # Safe clean from the CMake build directory (vp/build).

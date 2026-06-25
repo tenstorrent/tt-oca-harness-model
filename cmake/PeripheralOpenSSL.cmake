@@ -18,6 +18,12 @@ macro(peripheral_find_openssl)
     elseif(EXISTS "${_peripheral_ossl_root}/lib64/libssl.so")
       set(OPENSSL_SSL_LIBRARY "${_peripheral_ossl_root}/lib64/libssl.so" CACHE FILEPATH "" FORCE)
       set(OPENSSL_CRYPTO_LIBRARY "${_peripheral_ossl_root}/lib64/libcrypto.so" CACHE FILEPATH "" FORCE)
+    elseif(CMAKE_LIBRARY_ARCHITECTURE AND
+           EXISTS "${_peripheral_ossl_root}/lib/${CMAKE_LIBRARY_ARCHITECTURE}/libssl.so")
+      set(OPENSSL_SSL_LIBRARY
+          "${_peripheral_ossl_root}/lib/${CMAKE_LIBRARY_ARCHITECTURE}/libssl.so" CACHE FILEPATH "" FORCE)
+      set(OPENSSL_CRYPTO_LIBRARY
+          "${_peripheral_ossl_root}/lib/${CMAKE_LIBRARY_ARCHITECTURE}/libcrypto.so" CACHE FILEPATH "" FORCE)
     else()
       set(OPENSSL_SSL_LIBRARY "${_peripheral_ossl_root}/lib/libssl.so" CACHE FILEPATH "" FORCE)
       set(OPENSSL_CRYPTO_LIBRARY "${_peripheral_ossl_root}/lib/libcrypto.so" CACHE FILEPATH "" FORCE)

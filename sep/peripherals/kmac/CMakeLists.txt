@@ -182,9 +182,9 @@ if(BUILD_TESTS)
     add_custom_target(coverage
       COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench ../config/accellera_config.ini
       COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --ignore-errors inconsistent,unsupported,format,mismatch --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --ignore-errors inconsistent,unsupported,format,mismatch --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category coverage/coverage_filtered.info --output-directory coverage/html
+      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
+      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
+      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
       COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
     )
     add_dependencies(coverage kmac_testbench)

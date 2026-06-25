@@ -35,13 +35,13 @@ unset _vp_configure_sh
 # ---------------------------------------------------------------------------
 # Install paths — edit for your machine
 # ---------------------------------------------------------------------------
-: "${SYSTEMC_HOME:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c17}"
-: "${CCI_HOME:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c17}"
-: "${OPENSSL_ROOT:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c17/openssl-3.0.13}"
-: "${BOOST_ROOT:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c17/boost-1.84.0}"
+: "${SYSTEMC_HOME:=/usr/local/systemc301}"
+: "${CCI_HOME:=/usr/local/cci}"
+: "${OPENSSL_ROOT:=/usr}"
+: "${BOOST_ROOT:=/usr}"
 
 : "${CMAKE_BUILD_TYPE:=Debug}"
-: "${CMAKE_CXX_STANDARD:=17}"
+: "${CMAKE_CXX_STANDARD:=20}"
 
 CMAKE_EXTRA=()
 while [[ $# -gt 0 ]]; do
@@ -71,7 +71,7 @@ if "${_vp_configure_sourced}"; then
 fi
 unset _vp_configure_sourced
 
-BUILD_DIR="${VP_DIR}/build_${CMAKE_CXX_STANDARD}"
+BUILD_DIR="${VP_DIR}/build"
 CMAKE_ARGS=(
   -S "${VP_DIR}" -B "${BUILD_DIR}"
   -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
@@ -96,4 +96,4 @@ else
   cmake "${CMAKE_ARGS[@]}"
 fi
 echo "Configured ${BUILD_DIR}"
-echo " cd build_${CMAKE_CXX_STANDARD} && make sep-vp"
+echo " cd build && make sep-vp"

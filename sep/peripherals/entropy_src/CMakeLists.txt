@@ -159,9 +159,9 @@ if(BUILD_TESTS)
         COMMAND ${LCOV_PATH} --zerocounters --directory .
         COMMAND ./bin/entropy_src_testbench
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-        COMMAND ${LCOV_PATH} --ignore-errors inconsistent,unsupported,format,mismatch --capture --directory . --output-file coverage/coverage.info
-        COMMAND ${LCOV_PATH} --ignore-errors inconsistent,unsupported,format,mismatch --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-        COMMAND ${GENHTML_PATH} --ignore-errors inconsistent,unsupported,format,corrupt,category coverage/coverage_filtered.info --output-directory coverage/html
+        COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
+        COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
+        COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
         COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         COMMENT "Generating coverage report..."
