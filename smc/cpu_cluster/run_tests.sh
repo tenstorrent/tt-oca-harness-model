@@ -1,29 +1,31 @@
 #!/usr/bin/env bash
-# Build (if needed) and run the SMC CPU Cluster SystemC test suite.
+# Build (if needed) and run the SMC cpu_cluster SystemC test bench.
 #
 # Usage:
-#   ./run_tests.sh                # incremental build + run cluster_tb (Release)
+#   ./run_tests.sh                # incremental build + run  (Release)
 #   ./run_tests.sh --clean        # wipe build/ first, then configure/build/run
 #   ./run_tests.sh --ctest        # run via ctest instead of executing the binary
 #   ./run_tests.sh --asan         # build with AddressSanitizer; run and report errors
 #                                 #   Linux: also enables LeakSanitizer (detect_leaks=1)
-#   ./run_tests.sh --coverage     # build with -DENABLE_COVERAGE=ON; run ctest;
-#                                 #   then build the `coverage` target (gcovr HTML + summary)
+#   ./run_tests.sh --coverage     # build with coverage; run and print line report
+#                                 #   Clang/AppleClang: LLVM instrumented coverage
+#                                 #   GCC: gcov  (requires gcovr or lcov+genhtml)
 #
 # The --asan and --coverage modes use isolated build directories
-# (build_asan/ and cov_build/) so they never clobber a plain Release build.
+# (build_asan/ and build_cov/) so they never clobber a plain Release build.
 #
-# Environment (or put exports in deps.env — see deps.env.example):
-#   SYSTEMC_HOME  Path to a SystemC install (must contain include/systemc.h).
-#                 If unset the script probes common Linux (/usr/local, /usr)
-#                 and macOS (Homebrew) locations.  REQUIRED by CMakeLists.txt.
-#   WHISPER_HOME  Path to a Whisper source tree (GNUmakefile).  If unset the
-#                 script probes common locations; if build-<uname>/librvcore.a
-#                 is missing it runs Whisper's make automatically.
-#   WHISPER_SKIP_BUILD  Set to 1 to skip the automatic Whisper build step.
+# Environment:
+#   WHISPER_HOME  Path to a Whisper RISC-V ISS source/build tree.  Must
+#                 contain build-<OS>/librvcore.a (build with
+#                 make MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20).
+#   SYSTEMC_HOME  Path to an Accellera SystemC install.  If unset the script
+#                 probes common macOS (Homebrew) and Linux (/usr/local, /usr)
+#                 locations.
+#   CCI_HOME      Path to an Accellera CCI install.  Required — cpu_cluster
+#                 exposes cci_param configuration.
 #   BOOST_DIR     Path to a Boost install containing include/boost/version.hpp.
-#                 Used for cpu_cluster and passed as BOOST_ROOT when building
-#                 Whisper.  REQUIRED by CMakeLists.txt.
+#                 If unset the script probes common locations and also falls
+#                 back to BOOST_ROOT (set by CI/configure_vp.sh).
 #   BUILD_TYPE    CMake build type (default: Release; Debug for --coverage).
 #   JOBS          Parallel build jobs (default: all available cores).
 
@@ -48,7 +50,7 @@ for arg in "$@"; do
         --asan)     USE_ASAN=1 ;;
         --coverage) USE_COVERAGE=1 ;;
         -h|--help)
-            sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -63,37 +65,40 @@ if (( USE_ASAN && USE_COVERAGE )); then
     exit 2
 fi
 
-# Choose an isolated build directory for each instrumented mode so different
-# compiler flags never invalidate each other's CMakeCache.
 if (( USE_ASAN )); then
     BUILD_DIR="${SCRIPT_DIR}/build_asan"
-    CMAKE_EXTRA=(-DENABLE_ASAN=ON)
+    CMAKE_EXTRA="-DENABLE_ASAN=ON"
 elif (( USE_COVERAGE )); then
-    BUILD_DIR="${SCRIPT_DIR}/cov_build"
+    BUILD_DIR="${SCRIPT_DIR}/build_cov"
     BUILD_TYPE="Debug"
-    CMAKE_EXTRA=(-DENABLE_COVERAGE=ON)
+    CMAKE_EXTRA="-DENABLE_COVERAGE=ON"
 else
     BUILD_DIR="${SCRIPT_DIR}/build"
-    CMAKE_EXTRA=()
+    CMAKE_EXTRA=""
 fi
 
 # ---------------------------------------------------------------------------
-# Optional local overrides (not checked in).  Copy paths from a teammate or
-# set exports in your shell profile.
+# Locate Whisper ISS  (required — FATAL if missing)
 # ---------------------------------------------------------------------------
-if [[ -f "${SCRIPT_DIR}/deps.env" ]]; then
-    # shellcheck disable=SC1091
-    source "${SCRIPT_DIR}/deps.env"
+WHISPER_OS_DIR="build-${OS}"
+if [[ -z "${WHISPER_HOME:-}" ]] || \
+   [[ ! -f "${WHISPER_HOME}/${WHISPER_OS_DIR}/librvcore.a" ]]; then
+    echo "ERROR: WHISPER_HOME must point to a built Whisper tree containing" >&2
+    echo "       ${WHISPER_OS_DIR}/librvcore.a" >&2
+    echo "       Build Whisper first:" >&2
+    echo "         cd \$WHISPER_HOME && make MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20" >&2
+    if [[ -n "${WHISPER_HOME:-}" ]]; then
+        echo "       WHISPER_HOME is set to '${WHISPER_HOME}' but the archive was not found." >&2
+    else
+        echo "       Export WHISPER_HOME before running this script." >&2
+    fi
+    exit 1
 fi
+echo ">> Using WHISPER_HOME=${WHISPER_HOME}"
+export WHISPER_HOME
 
 # ---------------------------------------------------------------------------
 # Locate SystemC
-# Probe well-known prefix directories so the user doesn't have to set
-# SYSTEMC_HOME on a freshly-cloned machine.  Covers:
-#   macOS Homebrew arm64 : /opt/homebrew/opt/systemc
-#   macOS Homebrew x86   : /usr/local/opt/systemc
-#   Linux manual install : /usr/local  (./configure --prefix=/usr/local)
-#   Linux system package : /usr
 # ---------------------------------------------------------------------------
 if [[ -z "${SYSTEMC_HOME:-}" ]]; then
     for _candidate in \
@@ -102,160 +107,72 @@ if [[ -z "${SYSTEMC_HOME:-}" ]]; then
         /usr/local \
         /usr
     do
-        if [[ -f "${_candidate}/include/systemc.h" ]]; then
+        if [[ -f "${_candidate}/include/systemc.h" ]] || \
+           [[ -f "${_candidate}/lib/libsystemc.a" ]] || \
+           [[ -f "${_candidate}/lib64/libsystemc.a" ]]; then
             export SYSTEMC_HOME="${_candidate}"
             break
         fi
     done
 fi
 
-if [[ -z "${SYSTEMC_HOME:-}" ]]; then
-    echo "ERROR: SYSTEMC_HOME not set and SystemC headers not found." >&2
-    echo "  Install Accellera SystemC (C++20) and set:" >&2
-    echo "    export SYSTEMC_HOME=/path/to/systemc" >&2
-    echo "  Or create ${SCRIPT_DIR}/deps.env with that export (see deps.env.example)." >&2
-    exit 1
+if [[ -n "${SYSTEMC_HOME:-}" ]]; then
+    echo ">> Using SYSTEMC_HOME=${SYSTEMC_HOME}"
+else
+    echo ">> SYSTEMC_HOME not set; relying on CMake-installed SystemC::systemc"
 fi
-echo ">> Using SYSTEMC_HOME=${SYSTEMC_HOME}"
 
 # ---------------------------------------------------------------------------
-# Locate Boost (must contain include/boost/version.hpp).  Whisper's GNUmakefile
-# reads BOOST_ROOT at compile time, so resolve Boost before Whisper.
+# Locate CCI
 # ---------------------------------------------------------------------------
-if [[ -z "${BOOST_DIR:-}" ]]; then
-    for _candidate in \
-        /opt/homebrew/opt/boost \
-        /usr/local \
-        /usr
-    do
-        if [[ -f "${_candidate}/include/boost/version.hpp" ]]; then
-            export BOOST_DIR="${_candidate}"
-            break
-        fi
-    done
-fi
-
-if [[ -z "${BOOST_DIR:-}" ]]; then
-    echo "ERROR: BOOST_DIR not set and Boost headers not found." >&2
-    echo "  Install Boost >= 1.74 and set:" >&2
-    echo "    export BOOST_DIR=/path/to/boost" >&2
-    echo "  Or create ${SCRIPT_DIR}/deps.env with that export (see deps.env.example)." >&2
-    exit 1
-fi
-echo ">> Using BOOST_DIR=${BOOST_DIR}"
-
-# ---------------------------------------------------------------------------
-# Locate Whisper and build static archives when missing.
-# Whisper's GNUmakefile names its build directory after `uname -s`, so we
-# look for build-Linux/ on Linux and build-Darwin/ on macOS.  An explicit
-# WHISPER_BUILD_DIR env var (or the same on the cmake line) overrides for
-# unusual layouts.
-# ---------------------------------------------------------------------------
-: "${WHISPER_BUILD_DIR:=build-$(uname -s)}"
-export WHISPER_BUILD_DIR
-
-REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-
-_whisper_is_source_tree() {
-    [[ -f "$1/GNUmakefile" ]]
-}
-
-_whisper_artifacts_ready() {
-    local _root="$1"
-    [[ -f "${_root}/${WHISPER_BUILD_DIR}/librvcore.a" ]] &&
-    [[ -f "${_root}/virtual_memory/libvirtual_memory.a" ]] &&
-    [[ -f "${_root}/pci/libpci.a" ]] &&
-    [[ -f "${_root}/third_party/softfloat/build/RISCV-GCC/softfloat.a" ]]
-}
-
-if [[ -z "${WHISPER_HOME:-}" ]] || ! _whisper_is_source_tree "${WHISPER_HOME}"; then
-    for _candidate in \
-        "${WHISPER_HOME:-}" \
-        /opt/whisper \
-        /usr/local/whisper \
-        "${REPO_ROOT}/../whisper/whisper" \
-        "${REPO_ROOT}/../whisper" \
-        "${HOME}/whisper/whisper" \
-        "${HOME}/whisper" \
-        "${HOME}/src/whisper/whisper" \
-        "${HOME}/src/whisper"
-    do
-        [[ -n "${_candidate}" ]] || continue
-        if _whisper_artifacts_ready "${_candidate}" || _whisper_is_source_tree "${_candidate}"; then
-            export WHISPER_HOME="${_candidate}"
-            break
-        fi
-    done
-fi
-
-if [[ -z "${WHISPER_HOME:-}" ]] || ! _whisper_is_source_tree "${WHISPER_HOME}"; then
-    echo "ERROR: WHISPER_HOME not set and no Whisper source tree found." >&2
-    echo "  Clone Whisper next to this repo or set WHISPER_HOME:" >&2
-    echo "    git clone <whisper-repo-url> ${REPO_ROOT}/../whisper/whisper" >&2
-    echo "    export WHISPER_HOME=/path/to/whisper   # directory with GNUmakefile" >&2
-    echo "  Or add WHISPER_HOME=... to ${SCRIPT_DIR}/deps.env (see deps.env.example)." >&2
-    exit 1
-fi
-echo ">> Using WHISPER_HOME=${WHISPER_HOME}"
-
-if ! _whisper_artifacts_ready "${WHISPER_HOME}"; then
-    if [[ "${WHISPER_SKIP_BUILD:-0}" == "1" ]]; then
-        echo "ERROR: Whisper artifacts missing under ${WHISPER_HOME}/${WHISPER_BUILD_DIR}/" >&2
-        echo "  (unset WHISPER_SKIP_BUILD or build Whisper manually)" >&2
-        exit 1
-    fi
-    echo ">> Whisper not built yet; building in ${WHISPER_HOME}"
-    echo "   (MEM_CALLBACKS=1, C++20, BOOST_ROOT=${BOOST_DIR})"
-    (
-        cd "${WHISPER_HOME}"
-        export BOOST_ROOT="${BOOST_DIR}"
-        make -j"${JOBS}" MEM_CALLBACKS=1 CXX_STD=c++20 \
-            "${WHISPER_BUILD_DIR}/librvcore.a" \
-            "${WHISPER_BUILD_DIR}/whisper"
-    )
-    if ! _whisper_artifacts_ready "${WHISPER_HOME}"; then
-        echo "ERROR: Whisper build finished but required archives are still missing." >&2
-        echo "  Expected under ${WHISPER_HOME}/${WHISPER_BUILD_DIR}/ and subdirs." >&2
-        exit 1
-    fi
-    echo ">> Whisper build complete"
-fi
-
-# CCI (needed when SMC_BUILD_PLIC_INTEGRATION=ON and for cluster_tb PLIC phases).
 if [[ -z "${CCI_HOME:-}" ]]; then
     for _candidate in \
+        "${HOME}/local/cci-cxx20" \
+        "${HOME}/local/cci-1.0.2" \
+        "${HOME}/local/cci-1.0.1" \
+        "${HOME}/local/cci" \
         /usr/local/cci \
-        /opt/homebrew/opt/systemc-cci
+        /opt/homebrew/opt/systemc-cci \
+        /usr/local/opt/systemc-cci
     do
-        if [[ -f "${_candidate}/include/cci_configuration" ]]; then
-            export CCI_HOME="${_candidate}"
-            break
-        fi
+        [[ -d "${_candidate}/include/cci_configuration" ]] && { export CCI_HOME="${_candidate}"; break; }
     done
 fi
+
 if [[ -n "${CCI_HOME:-}" ]]; then
     echo ">> Using CCI_HOME=${CCI_HOME}"
     if [[ "${OS}" == "Darwin" ]]; then
-        export DYLD_LIBRARY_PATH="${CCI_HOME}/lib64:${CCI_HOME}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}"
+        export DYLD_LIBRARY_PATH="${CCI_HOME}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}"
     else
-        export LD_LIBRARY_PATH="${CCI_HOME}/lib64:${CCI_HOME}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+        export LD_LIBRARY_PATH="${CCI_HOME}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
     fi
-fi
-
-# Make SystemC's shared lib visible to the loader at run time.
-if [[ "${OS}" == "Darwin" ]]; then
-    export DYLD_LIBRARY_PATH="${SYSTEMC_HOME}/lib64:${SYSTEMC_HOME}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}"
 else
-    export LD_LIBRARY_PATH="${SYSTEMC_HOME}/lib64:${SYSTEMC_HOME}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+    echo ">> CCI_HOME not set; CCI libs must be in the system library path"
 fi
 
-# Boost program_options may also be a shared lib.
-if [[ -d "${BOOST_DIR}/lib" ]]; then
-    if [[ "${OS}" == "Darwin" ]]; then
-        export DYLD_LIBRARY_PATH="${BOOST_DIR}/lib${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}"
-    else
-        export LD_LIBRARY_PATH="${BOOST_DIR}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-    fi
+# ---------------------------------------------------------------------------
+# Locate Boost  (cmake var BOOST_DIR; also accept BOOST_ROOT from CI/VP)
+# ---------------------------------------------------------------------------
+if [[ -z "${BOOST_DIR:-}" ]]; then
+    BOOST_DIR="${BOOST_ROOT:-}"
+fi
+if [[ -z "${BOOST_DIR:-}" ]]; then
+    for _candidate in \
+        "${HOME}/local/boost-1.84.0" \
+        "${HOME}/local/boost" \
+        /opt/homebrew \
+        /usr/local \
+        /usr
+    do
+        [[ -f "${_candidate}/include/boost/version.hpp" ]] && { BOOST_DIR="${_candidate}"; break; }
+    done
+fi
+
+if [[ -n "${BOOST_DIR:-}" ]]; then
+    echo ">> Using BOOST_DIR=${BOOST_DIR}"
+    export BOOST_DIR
+else
+    echo ">> BOOST_DIR not set; CMake will fail unless Boost is in a system path" >&2
 fi
 
 # ---------------------------------------------------------------------------
@@ -271,7 +188,9 @@ if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
     # shellcheck disable=SC2086
     cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
           -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-          "${CMAKE_EXTRA[@]}" \
+          ${CMAKE_EXTRA} \
+          -DWHISPER_HOME="${WHISPER_HOME}" \
+          ${BOOST_DIR:+-DBOOST_DIR="${BOOST_DIR}"} \
           ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"}
 fi
 
@@ -282,6 +201,14 @@ echo ">> Building with -j${JOBS}"
 cmake --build "${BUILD_DIR}" -j "${JOBS}"
 
 # ---------------------------------------------------------------------------
+# Refresh compile_commands.json symlink at the IP root for IDE navigation
+# ---------------------------------------------------------------------------
+if [[ -f "${BUILD_DIR}/compile_commands.json" ]]; then
+    ln -sf "$(basename "${BUILD_DIR}")/compile_commands.json" \
+           "${SCRIPT_DIR}/compile_commands.json"
+fi
+
+# ---------------------------------------------------------------------------
 # Locate test binary
 # ---------------------------------------------------------------------------
 TB_BIN="${BUILD_DIR}/test/cluster_tb"
@@ -289,6 +216,23 @@ if [[ ! -x "${TB_BIN}" ]]; then
     echo "ERROR: test binary not found at ${TB_BIN}" >&2
     exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# Helper: find a versioned LLVM tool
+# ---------------------------------------------------------------------------
+_find_llvm_tool() {
+    local base="$1"
+    if command -v "${base}" &>/dev/null; then echo "${base}"; return; fi
+    if command -v xcrun &>/dev/null && xcrun "${base}" --version &>/dev/null 2>&1; then
+        echo "xcrun ${base}"; return
+    fi
+    for _v in 20 19 18 17 16 15 14 13; do
+        if command -v "${base}-${_v}" &>/dev/null; then
+            echo "${base}-${_v}"; return
+        fi
+    done
+    echo ""
+}
 
 # ---------------------------------------------------------------------------
 # Run
@@ -328,25 +272,116 @@ if (( USE_ASAN )); then
     exit "${TB_EXIT}"
 
 elif (( USE_COVERAGE )); then
+    COVERAGE_TOOL="$(cat "${BUILD_DIR}/coverage_tool.txt" 2>/dev/null || echo "llvm")"
+
     echo ""
-    echo ">> Running with gcov coverage instrumentation: ${TB_BIN}"
-    echo ""
-    "${TB_BIN}"
+    echo ">> Running with ${COVERAGE_TOOL} coverage instrumentation: ${TB_BIN}"
     echo ""
 
-    if ! command -v gcovr &>/dev/null; then
-        echo "WARNING: gcovr not found in PATH; cannot render coverage report." >&2
-        echo "  Install with: pip install gcovr" >&2
-        exit 0
+    HTML_DIR="${BUILD_DIR}/coverage-report"
+    SOURCES=(
+        "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp"
+        "${SCRIPT_DIR}/src/iss_backend_whisper.cpp"
+        "${SCRIPT_DIR}/test/cluster_tb.cpp"
+    )
+
+    # ---- LLVM instrumented coverage (Clang / AppleClang) ------------------
+    if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
+        PROFRAW="${BUILD_DIR}/cluster_tb.profraw"
+        PROFDATA="${BUILD_DIR}/cluster_tb.profdata"
+
+        LLVM_PROFILE_FILE="${PROFRAW}" "${TB_BIN}"
+        echo ""
+
+        PROFDATA_CMD="$(_find_llvm_tool llvm-profdata)"
+        COV_CMD="$(_find_llvm_tool llvm-cov)"
+        if [[ -z "${PROFDATA_CMD}" || -z "${COV_CMD}" ]]; then
+            echo "ERROR: llvm-profdata / llvm-cov not found." >&2
+            echo "  macOS : installed with Xcode command-line tools" >&2
+            echo "  Linux : sudo apt install llvm  (or llvm-18, etc.)" >&2
+            exit 1
+        fi
+
+        echo ">> Merging profile data (${PROFDATA_CMD}) …"
+        ${PROFDATA_CMD} merge -sparse "${PROFRAW}" -o "${PROFDATA}"
+
+        echo ""
+        echo "===== Line coverage summary ====="
+        ${COV_CMD} report "${TB_BIN}" \
+            -instr-profile="${PROFDATA}" \
+            "${SOURCES[@]}"
+
+        echo ""
+        echo "===== Uncovered lines in smc_cpu_cluster.cpp ====="
+        ${COV_CMD} show "${TB_BIN}" \
+            -instr-profile="${PROFDATA}" \
+            -sources "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
+            -format=text \
+            -show-line-counts-or-regions \
+            | grep -E "^\s+[0-9]+\|[[:space:]]+0\|" \
+            || echo "(none — full coverage)"
+
+        ${COV_CMD} show "${TB_BIN}" \
+            -instr-profile="${PROFDATA}" \
+            "${SOURCES[@]}" \
+            -format=html \
+            -output-dir="${HTML_DIR}" \
+            -show-line-counts-or-regions 2>/dev/null || true
+
+    # ---- gcov coverage (GCC) -----------------------------------------------
+    else
+        "${TB_BIN}"
+        echo ""
+
+        if command -v gcovr &>/dev/null; then
+            echo "===== Line coverage summary (gcovr) ====="
+            gcovr \
+                --root "${SCRIPT_DIR}/src" \
+                --object-directory "${BUILD_DIR}" \
+                --filter "${SCRIPT_DIR}/src/" \
+                --filter "${SCRIPT_DIR}/test/"
+
+            echo ""
+            echo "===== Uncovered lines in smc_cpu_cluster.cpp ====="
+            gcovr \
+                --root "${SCRIPT_DIR}/src" \
+                --object-directory "${BUILD_DIR}" \
+                --filter "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
+                --txt \
+                | grep -E "^\s+[0-9]+: +0:" \
+                || echo "(none — full coverage)"
+
+            mkdir -p "${HTML_DIR}"
+            gcovr \
+                --root "${SCRIPT_DIR}/src" \
+                --object-directory "${BUILD_DIR}" \
+                --filter "${SCRIPT_DIR}/src/" \
+                --filter "${SCRIPT_DIR}/test/" \
+                --html --html-details \
+                -o "${HTML_DIR}/index.html" 2>/dev/null || true
+
+        elif command -v lcov &>/dev/null && command -v genhtml &>/dev/null; then
+            INFO="${BUILD_DIR}/coverage.info"
+            lcov --capture \
+                 --directory "${BUILD_DIR}" \
+                 --output-file "${INFO}" \
+                 --quiet
+            lcov --remove "${INFO}" '/usr/*' "${BUILD_DIR}/*" \
+                 --output-file "${INFO}" --quiet
+            echo "===== Line coverage summary (lcov) ====="
+            lcov --list "${INFO}"
+            mkdir -p "${HTML_DIR}"
+            genhtml "${INFO}" --output-directory "${HTML_DIR}" --quiet
+        else
+            echo "WARNING: neither gcovr nor lcov/genhtml found." >&2
+            echo "  Install one for a coverage report:" >&2
+            echo "    pip install gcovr   OR   sudo apt install lcov" >&2
+        fi
     fi
 
-    echo ">> Building the 'coverage' target (gcovr)"
-    cmake --build "${BUILD_DIR}" --target coverage
-
-    HTML_REPORT="${BUILD_DIR}/coverage/index.html"
-    if [[ -f "${HTML_REPORT}" ]]; then
+    if [[ -f "${HTML_DIR}/index.html" ]]; then
         echo ""
-        echo ">> HTML coverage report: ${HTML_REPORT}"
+        echo ">> HTML coverage report: ${HTML_DIR}/index.html"
     fi
 
 elif (( USE_CTEST )); then
