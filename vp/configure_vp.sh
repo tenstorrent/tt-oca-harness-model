@@ -36,10 +36,10 @@ unset _vp_configure_sh
 # ---------------------------------------------------------------------------
 # Install paths — edit for your machine
 # ---------------------------------------------------------------------------
-: "${SYSTEMC_HOME:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20}"
-: "${CCI_HOME:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20}"
-: "${OPENSSL_ROOT:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20/openssl-3.0.13}"
-: "${BOOST_ROOT:=/Users/ctr-mharshavardhana/Vayavyalabs/Installs/installs_c20/boost-1.84.0}"
+: "${SYSTEMC_HOME:=/}"
+: "${CCI_HOME:=/}"
+: "${OPENSSL_ROOT:=/}"
+: "${BOOST_ROOT:=/}"
 
 : "${CMAKE_BUILD_TYPE:=Debug}"
 : "${CMAKE_CXX_STANDARD:=20}"
