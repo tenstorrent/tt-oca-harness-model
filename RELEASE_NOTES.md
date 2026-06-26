@@ -18,18 +18,27 @@
 
 ## Testing Status
 
+Tested on:
+- Ubuntu 22.04 LTS
+- RHEL 8.10
+- macOS 26.5.1 (Tahoe)
+
+Compiler versions tested:
+- GCC 11.4.0, C++17 (Accellera flow)
+- GCC 9.5.0, C++17 (Accellera flow)
+- GCC 11.2, C++20 (Accellera flow)
+
 - All peripheral models are unit tested
 - Firmware tests written by Vayavya under `sw/sep-vp-tests/` run successfully on the VP
 - TT firmware tests under `sw/tt-oca-hw-main/dv/sep/tests/` run successfully on the VP
-- TT firmware tests under `sw/tt-oca-hw-main/fw/sep/tests/` 
-   -Tests exercising the current sep models run successfully on the VP 
-   -Tests exercising the sep models which are currently not part of the VP are not tested.
+- TT firmware tests under `sw/tt-oca-hw-main/fw/sep/tests/`
+  - Tests exercising the current sep models run successfully on the VP
+  - Tests exercising the sep models which are currently not part of the VP are not tested.
 
 ---
 
 # Issues Fixed
 None
----
 
 # Current Limitations
 
@@ -40,10 +49,6 @@ None
   - `local_master_alias_remap_ctrl`
   - `och_sep_cdns_spi_ctrl`, `och_sep_spi_mux_ctrl`
 - **Key Manager**: unit-level testing only (no DV tests)
-- **Compiler versions tested**:
-  - GCC 11.4.0, C++17 (Accellera flow)
-  - GCC 9.5.0, C++17 (Accellera flow)
-  - GCC 11.2, C++20 (Accellera flow)
 
 
 # GCC and C++ Compatibility

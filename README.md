@@ -4,8 +4,7 @@
 
 SystemC/TLM-based Virtual Platform (VP) for the Tenstorrent OCH SEP (Secure Enclave Processor). Models OpenTitan-derived IP peripherals and integrates a RISC-V VeeR EL2 core via a custom TLM wrapper.
 
-The platform supports two SystemC backends:
-- **Accellera** — standalone `sep-vp` executable
+The platform uses the **Accellera** SystemC backend: a standalone `sep-vp` executable built from the SEP peripheral models and VeeR EL2 core.
 
 ---
 
@@ -16,12 +15,14 @@ tenstorrent_sep/
 ├── cmake/                        ← shared CMake modules (FindSystemC, FindCCI, etc.)
 ├── sep/                          ← all SEP IP peripheral models
 │   ├── peripherals/              ← individual IP models (aes, hmac, uart, otbn, …)
+│   │   └── run_all_peripherals.sh  ← batch peripheral tests; sources vp/configure_vp.sh (env only)
 │   ├── cpu/                      ← VeeR EL2 ISS + TLM wrapper
 │   └── utils/
 │       ├── csml/                 ← Core SystemC Model Library (Registers modelling, CCI params, logging)
 │       └── paged-memory/         ← PagedMemory header-only sparse storage engine
 ├── vp/                           ← VP platform (wires all models into a complete VP)
-│   ├── configure_vp.sh           ← configure CMake + export build env
+│   ├── configure_vp.sh           ← install paths; `./configure_vp.sh` runs cmake, `source` exports env only
+│   ├── vp_build_env.sh           ← derived paths (BOOST_LIB, LD_LIBRARY_PATH, …); sourced by configure_vp.sh
 │   ├── CMakeLists.txt
 │   └── platform/
 │       ├── infra/                ← RISC-V VP infrastructure (bus, PLIC, CLINT, ELF loader)
@@ -36,6 +37,7 @@ tenstorrent_sep/
 │       ├── bin/sep_fw_standalone.sh  ← build + run script for TT tests
 │       └── fw/sep/tests/         ← TT test sources + run_test.sh / run_all_tests.sh
 ├── Makefile                      ← convenience shortcut for building the VP
+├── RELEASE_NOTES.md              ← release version, testing status, limitations
 ├── LICENSE
 └── LICENSE.riscv-vp-plusplus     ← upstream MIT license attribution
 ```
@@ -47,20 +49,22 @@ tenstorrent_sep/
 ### Dependencies
 
 - **CMake** 3.24+
-- **C++ compiler** with C++17 (GCC 9+) or C++20 (GCC 11+)
+- **C++ compiler** with C++20 (default; GCC 11+) or C++17 (GCC 9+)
 - **SystemC** 3.0.1
 - **CCI** 1.0.1
-- **Boost** (`iostreams`, `program_options`, `log`)
-- **OpenSSL** (for HMAC, KMAC, CSRNG crypto models) — tested on Ubuntu with **3.2.1** and **3.5.2**; on RHEL with **3.0.13**
+- **Boost** **1.84.0** (`iostreams`, `program_options`, `regex`)
+- **OpenSSL** (for HMAC, KMAC, CSRNG crypto models) — tested on **macOS** and **RHEL** with **3.0.13**; on Ubuntu with **3.2.1** and **3.5.2**
 
 ### Installation
 
-#### 1. System packages
+The OCH SEP VP has been tested on **Ubuntu**, **RHEL**, and **macOS**. The step-by-step installation examples below are for **Ubuntu** (`apt` packages and typical Linux install paths).
+
+#### 1. System packages (Ubuntu)
 
 ```bash
 sudo apt-get update
 sudo apt install -y g++ make cmake autoconf \
-    libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
+    libboost-iostreams-dev libboost-program-options-dev libboost-regex-dev \
     libssl-dev libvncserver-dev doxygen graphviz
 ```
 
@@ -85,11 +89,18 @@ cd ~/Downloads && git clone https://github.com/Tencent/rapidjson.git
 
 #### 4. CCI 1.0.1
 
+Download and extract (all builds):
+
 ```bash
 cd ~/Downloads
 wget https://github.com/accellera-official/cci/releases/download/v1.0.1/cci_v1.0.1.tar.gz
 tar zxvf cci_v1.0.1.tar.gz && cd cci_v1.0.1
 sudo mkdir -p /usr/lib/cci-1.0.1
+```
+
+**C++17 (GCC 9+):** configure and install from the CCI source tree:
+
+```bash
 mkdir objdir && cd objdir
 export LD_LIBRARY_PATH=/usr/lib/systemc-3.0.1/lib-linux64/
 ../configure \
@@ -99,36 +110,45 @@ export LD_LIBRARY_PATH=/usr/lib/systemc-3.0.1/lib-linux64/
 make && sudo make install
 ```
 
-> **C++20 note:** CCI 1.0.1 requires a patch for C++20 builds (GCC 11+). Apply before
-> building: change `typedef void value_type;` to the concrete type in
-> `src/cci/core/cci_value.h` at the two locations marked with `// TODO`.
+**C++20 (GCC 11+):** CCI 1.0.1 needs a source patch *before* `mkdir objdir` / `../configure`.
+The stock headers use `typedef void value_type;` in two iterator types; C++20 requires a
+concrete type for `std::iterator_traits`. Without the patch, CCI fails to compile with
+`-std=c++20`.
+
+Apply the patch from the CCI source root (`~/Downloads/cci_v1.0.1`), then run the same
+configure/install commands as C++17 above:
+
 ```bash
-# C++20 compatibility patch (required for GCC 11+ / -std=c++20)
-+# CCI 1.0.1 relies on iterator traits that are stricter in C++20; update the
-+# value_type typedefs so the iterator types satisfy std::iterator_traits.
-+apply_patch <<'PATCH'
-+--- a/src/cci/core/cci_value.h
-++++ b/src/cci/core/cci_value.h
-+@@ -764,7 +764,7 @@
-+   template<typename U> friend class cci_impl::value_iterator_impl;
-+   typedef cci_impl::value_ptr<cci_value_map_elem_cref> proxy_ptr;
-+ 
-+-  typedef void value_type; // TODO: add  explicit value_type 
-++  typedef cci_value_map_elem_cref value_type; // TODO: add  explicit value_type 
-+ public:
-+   typedef cci_value_map_elem_cref const_reference;
-+   typedef cci_value_map_elem_ref  reference;
-+@@ -791,7 +791,7 @@
-+ {
-+   template<typename U> friend class cci_impl::value_iterator_impl;
-+   typedef cci_impl::value_ptr<cci_value_map_elem_ref> proxy_ptr;
-+-  typedef void value_type; // TODO: add  explicit value_type
-++  typedef cci_value_map_elem_ref value_type; // TODO: add  explicit value_type
-+ public:
-+   typedef cci_value_map_elem_cref const_reference;
-+   typedef cci_value_map_elem_ref  reference;
-+PATCH
-+
+cd ~/Downloads/cci_v1.0.1
+patch -p1 <<'PATCH'
+--- a/src/cci/core/cci_value.h
++++ b/src/cci/core/cci_value.h
+@@ -764,7 +764,7 @@
+   template<typename U> friend class cci_impl::value_iterator_impl;
+   typedef cci_impl::value_ptr<cci_value_map_elem_cref> proxy_ptr;
+ 
+-  typedef void value_type; // TODO: add  explicit value_type 
++  typedef cci_value_map_elem_cref value_type; // TODO: add  explicit value_type 
+ public:
+   typedef cci_value_map_elem_cref const_reference;
+   typedef cci_value_map_elem_ref  reference;
+@@ -791,7 +791,7 @@
+ {
+   template<typename U> friend class cci_impl::value_iterator_impl;
+   typedef cci_impl::value_ptr<cci_value_map_elem_ref> proxy_ptr;
+-  typedef void value_type; // TODO: add  explicit value_type
++  typedef cci_value_map_elem_ref value_type; // TODO: add  explicit value_type
+ public:
+   typedef cci_value_map_elem_cref const_reference;
+   typedef cci_value_map_elem_ref  reference;
+PATCH
+mkdir objdir && cd objdir
+export LD_LIBRARY_PATH=/usr/lib/systemc-3.0.1/lib-linux64/
+../configure \
+  --with-systemc=/usr/lib/systemc-3.0.1/ \
+  --with-json=/home/$USER/Downloads/rapidjson/rapidjson \
+  --prefix=/usr/lib/cci-1.0.1
+make && sudo make install
 ```
 
 ### Configure & Build
@@ -140,34 +160,38 @@ git clone git@github.com:tenstorrent/tt-oca-sim.git
 cd tt-oca-sim
 git submodule update --init --recursive
 ```
+
 > **Note:** Ensure that your GitHub SSH keys are configured correctly, as the CSML submodule uses SSH for cloning.
 
 **Build:**
 
-Export install paths for your machine and C++ standard (see **`vp/vp_build_env.sh`**), then build:
+1. Edit **`vp/configure_vp.sh`** and set `SYSTEMC_HOME`, `CCI_HOME`, `OPENSSL_ROOT`, and
+   `BOOST_ROOT` to your install prefix (use a C++20 SystemC tree when
+   `CMAKE_CXX_STANDARD=20`, the default).
+2. Configure and build — no `source` step required; `./configure_vp.sh` passes all paths to
+   CMake via `-D` flags and creates **`vp/build/`**:
 
 ```bash
-export SYSTEMC_HOME_C17=/path/to/installs_c17
-export CCI_HOME_C17=/path/to/installs_c17
-export OPENSSL_ROOT_C17=/path/to/installs_c17/openssl-3.0.13
-export BOOST_ROOT_C17=/path/to/installs_c17/boost-1.84.0
-export CMAKE_CXX_STANDARD=17
-
+unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
 cd vp
-source configure_vp.sh
+./configure_vp.sh
 cd build
 make sep-vp
 ```
 
-Override defaults on the command line:
+Override defaults on the command line (examples):
 
 ```bash
+unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
 cd vp
-CMAKE_BUILD_TYPE=Release
-source configure_vp.sh
-cd build
-make sep-vp
+CMAKE_BUILD_TYPE=Release ./configure_vp.sh
+cd build && make sep-vp
 ```
+
+Optional: **`source vp/configure_vp.sh`** (from repo root) or **`source ./configure_vp.sh`**
+(after `cd vp`) only if you need install paths exported in your shell (for example manual
+`cmake` in a peripheral directory, or debugging). It is **not** required for the VP
+configure/build steps above — use **`./configure_vp.sh`** there instead.
 
 Output binary: `vp/build/bin/sep-vp`
 
@@ -179,9 +203,10 @@ Output binary: `vp/build/bin/sep-vp`
 **`vp/platform/sep/config/veeriss_config.json`** — VeeR ISS configuration
 (XLEN, NMI vector, extensions, ICCM/DCCM layout, CSR overrides).
 Referenced from the INI via `och_sep_ss1.configFile`.
-vp/platform/sep/config/veeriss_config.json
 
-```bash
+`vp/platform/sep/config/veeriss_config.json`:
+
+```json
 {
     "xlen"       : 32,
     "nmi_vec"    : "0x01000e00",
@@ -250,6 +275,7 @@ make gdb    # connect GDB (second terminal)
 ```
 
 ### Firmware tests from Tenstorrent
+
 Refer to [Building and Running TT Firmware Tests](#building-and-running-tt-firmware-tests).
 
 ### Peripheral Model Unit Tests
@@ -270,12 +296,21 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
     └── 03_<IP>_Test_Plan.md
 ```
 
-Export the same `*_C17` / `*_C20` install paths as for the VP build (see **`vp/vp_build_env.sh`**), then:
+Peripheral standalone builds need the same install paths as the VP (`SYSTEMC_HOME`, `CCI_HOME`,
+`OPENSSL_ROOT`, `BOOST_ROOT`). Two ways to set them:
+
+1. **`source vp/configure_vp.sh`** (from repo root) or **`source ../../vp/configure_vp.sh`**
+   (from `sep/peripherals/<ip>/`) — exports paths via `vp_build_env.sh`; does **not** run cmake
+   when sourced.
+2. **`sep/peripherals/run_all_peripherals.sh`** — calls `setup_build_env()`, which sets
+   `VP_CONFIGURE_QUIET=1` and **`source`s `../../vp/configure_vp.sh`** (same export-only
+   behavior), then passes those paths to each peripheral's cmake via `CMAKE_EXTRA_ARGS`.
+
+Single peripheral (`run_tests.sh`):
 
 ```bash
-export CMAKE_CXX_STANDARD=17   # or 20 — must match your SystemC/OpenSSL/Boost prefix
-source ../../vp/configure_vp.sh   # from repo root: source vp/configure_vp.sh
 cd sep/peripherals/<ip>
+source ../../vp/configure_vp.sh   # export env only; from sep/peripherals/<ip>/
 ./run_tests.sh              # build + run
 ./run_tests.sh --asan       # with AddressSanitizer
 ./run_tests.sh --coverage   # with lcov coverage report
@@ -284,20 +319,25 @@ cd sep/peripherals/<ip>
 ./run_tests.sh --docs       # doxygen docs
 ```
 
-Or manually:
+All peripherals (sources `vp/configure_vp.sh` internally — no manual `source` needed):
 
 ```bash
-CMAKE_CXX_STANDARD=20 # Optional step to override the default setting of C++17
-source configure_vp.sh
-mkdir build && cd build
+cd sep/peripherals
+./run_all_peripherals.sh              # debug / asan / coverage / ctest for each model
+./run_all_peripherals.sh --clean      # clean build dirs first
+./run_all_peripherals.sh aes hmac     # subset only
+```
+
+Or manual cmake (after **`source ../../vp/configure_vp.sh`** from `sep/peripherals/<ip>/`):
+
+```bash
+cd sep/peripherals/<ip>
+mkdir -p build && cd build
 cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 make && ctest -V
 ```
 
-`sep/peripherals/run_all_peripherals.sh` builds and runs all peripherals at once.
-Logs are written to `sep/peripherals/logs/`.
-
----
+Logs from `run_all_peripherals.sh` are written to `sep/peripherals/logs/`.
 
 ---
 
@@ -471,7 +511,6 @@ och_sep_ss1.sram.verbosity    : 0
 
 Log file names can be changed via CCI parameters.
 
-
 ### Compiler Selection
 
 Use a GCC version that supports the C++ standard selected via `CMAKE_CXX_STANDARD` in `vp/configure_vp.sh`.
@@ -482,9 +521,10 @@ On **RHEL 8**, GCC Toolsets can be used to select a newer compiler. For example,
 # Open a shell with GCC 11 on PATH
 scl enable gcc-toolset-11 bash
 
+unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
+
 cd vp
-export CMAKE_CXX_STANDARD=20
-source configure_vp.sh
+CMAKE_CXX_STANDARD=20 ./configure_vp.sh
 cd build && make sep-vp
 ```
 
