@@ -124,8 +124,22 @@ python3 ../../sep/peripherals/uart_16550/src/uart_terminal_client.py \
 
 ### Prerequisites
 
+**Ubuntu:**
+
 ```bash
 sudo apt-get install gdb-multiarch
+```
+
+**Note:** The remote debugger binary name varies by platform:
+
+- **Ubuntu:** `gdb-multiarch`
+- **RHEL:** May be provided by a different package or toolchain.
+- **macOS:** Typically the GDB binary installed with the RISC-V toolchain or via Homebrew.
+
+Create a symbolic link named `gdb-multiarch` that points to the appropriate RISC-V GDB executable on your system. For example:
+
+```bash
+ln -s /path/to/riscv-gdb /path/to/gdb-multiarch
 ```
 
 ### Enabling GDB in the VP
