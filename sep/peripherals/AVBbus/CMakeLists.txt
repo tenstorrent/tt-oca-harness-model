@@ -61,7 +61,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
 endif()
 
 # -----------------------------------------------------------------------------

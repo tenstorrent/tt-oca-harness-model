@@ -41,7 +41,9 @@ public:
     void test_demote_1_w1s();
     void test_demote_1_lock();
     void test_demote_2_w1s();
+    void test_demote_2_lock();
     void test_invalid_state();
     void test_rma_chiplet_state();
     void test_secure_tm();
+    void test_security_disable();
 };

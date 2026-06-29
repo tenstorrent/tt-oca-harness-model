@@ -2469,7 +2469,7 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         m_test->register_read_32(csrng_basetest::INTR_STATE_OFFSET, intr_state_after);
         wait(10, SC_NS);
 
-        bool intr_state_after_set = (intr_state_after & 0x2) != 0;
+        //bool intr_state_after_set = (intr_state_after & 0x2) != 0;
         CSML_INFO(2, logger) << "INTR_STATE after command completion: 0x" << std::hex << intr_state_after;
 
         // Note: INTR_STATE[1] may remain set until explicitly cleared

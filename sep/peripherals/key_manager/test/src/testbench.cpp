@@ -21,6 +21,7 @@ extern int key_manager_func010_test(key_manager_test*, key_manager_model*, testb
 extern int key_manager_func011_test(key_manager_test*, key_manager_model*, testbench*);
 extern int key_manager_func012_test(key_manager_test*, key_manager_model*, testbench*);
 extern int key_manager_func013_test(key_manager_test*, key_manager_model*, testbench*);
+extern int key_manager_func014_test(key_manager_test*, key_manager_model*, testbench*);
 
 testbench::testbench(sc_module_name name)
   : sc_module(name),
@@ -83,6 +84,7 @@ void testbench::run_tests()
     (key_manager_func011_test(test, dut, this) == 0) ? pass++ : fail++;
     (key_manager_func012_test(test, dut, this) == 0) ? pass++ : fail++;
     (key_manager_func013_test(test, dut, this) == 0) ? pass++ : fail++;
+    (key_manager_func014_test(test, dut, this) == 0) ? pass++ : fail++;
 
     // Summary
     CSML_INFO(1, logger) << "========================================";

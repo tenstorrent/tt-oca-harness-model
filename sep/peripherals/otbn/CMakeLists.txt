@@ -84,7 +84,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG} -Werror -Wno-unused-function")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "OTBN: Release build - errors only, optimized")
 endif()
 
@@ -199,14 +199,12 @@ if(BUILD_TESTS)
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Keep only model/ directory in coverage, exclude everything else
+    # Multi-algorithm coverage: run the binary once per algorithm, merge results.
+    # Delegates to run_tests.sh --no-build (binary already built above).
     add_custom_target(coverage
-      COMMAND ./bin/otbn_test
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh --coverage --no-build
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at build/coverage/coverage/html/index.html"
     )
     add_dependencies(coverage otbn_test)
   endif()

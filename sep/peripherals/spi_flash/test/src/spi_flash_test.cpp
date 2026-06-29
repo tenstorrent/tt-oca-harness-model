@@ -1318,6 +1318,167 @@ static void test_model_constructor_sfdp()
 }
 
 // ============================================================================
+// D. Flash model — backdoor load/save file I/O
+// ============================================================================
+static void test_model_backdoor_file_io()
+{
+    TEST_SECTION("D. Model: backdoor load/save file I/O");
+
+    // Clean up first in case leftover exists
+    std::remove(spi_flash_model::BACKDOOR_FILE_PATH);
+
+    // Test 1: load from non-existent file
+    {
+        spi_flash_model m(256);
+        bool ok = m.load_memory_from_file();
+        TEST_ASSERT(ok == false, "load_memory_from_file returns false for missing file");
+    }
+
+    // Test 2: save to file and load it back
+    {
+        spi_flash_model m(256);
+        m.write_byte(0, 0x11);
+        m.write_byte(1, 0x22);
+        m.write_byte(255, 0xAA);
+        
+        bool ok = m.save_memory_to_file();
+        TEST_ASSERT(ok == true, "save_memory_to_file returns true on success");
+
+        // Verify file was written
+        std::ifstream f(spi_flash_model::BACKDOOR_FILE_PATH, std::ios::binary);
+        TEST_ASSERT(f.is_open(), "backdoor bin file exists");
+        f.close();
+
+        // Load into another model
+        spi_flash_model m2(256);
+        TEST_ASSERT(m2.read_byte(0) == 0xFF, "new model memory initially blank");
+        
+        ok = m2.load_memory_from_file();
+        TEST_ASSERT(ok == true, "load_memory_from_file returns true for existing file");
+        TEST_ASSERT(m2.read_byte(0) == 0x11, "loaded byte 0 matches");
+        TEST_ASSERT(m2.read_byte(1) == 0x22, "loaded byte 1 matches");
+        TEST_ASSERT(m2.read_byte(255) == 0xAA, "loaded byte 255 matches");
+    }
+
+    // Test 3: empty file handling
+    {
+        std::ofstream f(spi_flash_model::BACKDOOR_FILE_PATH, std::ios::binary | std::ios::trunc);
+        f.close();
+
+        spi_flash_model m(256);
+        bool ok = m.load_memory_from_file();
+        TEST_ASSERT(ok == false, "load_memory_from_file returns false for empty file");
+    }
+
+    // Clean up
+    std::remove(spi_flash_model::BACKDOOR_FILE_PATH);
+}
+
+// ============================================================================
+// D. Flash model — update_sfdp_rom
+// ============================================================================
+static void test_model_update_sfdp_rom()
+{
+    TEST_SECTION("D. Model: update_sfdp_rom");
+
+    spi_flash_model m(8u * 1024 * 1024);
+    
+    // Get density before change
+    std::vector<uint8_t> raw1(192, 0x00);
+    m.process_command(spi_flash_opcodes::READ_SFDP, 0x00, raw1);
+    
+    // Modify basic table
+    jedec_basic_table_t* tbl = m.get_basic_table();
+    tbl->set_density(16u * 1024 * 1024 * 8u); // Change from 8MB to 16MB density
+    
+    m.update_sfdp_rom();
+
+    std::vector<uint8_t> raw2(192, 0x00);
+    m.process_command(spi_flash_opcodes::READ_SFDP, 0x00, raw2);
+
+    sfdp_header_t ph; sfdp_parameter_header_t pp; jedec_basic_table_t pt;
+    bool ok = parse_sfdp_from_bytes(raw2, ph, pp, pt);
+    TEST_ASSERT(ok == true, "parse updated SFDP succeeds");
+    TEST_ASSERT(pt.get_density() == 16u * 1024 * 1024 * 8u, "SFDP density updated successfully");
+}
+
+// ============================================================================
+// D. Flash model — Chip Erase Guards
+// ============================================================================
+static void test_model_chip_erase_guards()
+{
+    TEST_SECTION("D. Model: chip erase guards");
+
+    spi_flash_model m(256);
+    m.write_byte(0, 0x55);
+
+    // Test 1: chip erase without WEL fails
+    std::vector<uint8_t> rx;
+    bool ok = m.process_command(spi_flash_opcodes::CHIP_ERASE, 0, rx);
+    TEST_ASSERT(ok == true, "CHIP_ERASE returns true");
+    TEST_ASSERT(m.read_byte(0) == 0x55, "Memory not erased without WEL");
+
+    // Test 2: chip erase while suspended fails
+    m.process_command(spi_flash_opcodes::WRITE_ENABLE, 0, rx);
+    m.process_command(spi_flash_opcodes::SUSPEND_75, 0, rx);
+    m.process_command(spi_flash_opcodes::CHIP_ERASE, 0, rx);
+    TEST_ASSERT(m.read_byte(0) == 0x55, "Memory not erased when suspended");
+
+    // Test 3: resume then chip erase works
+    m.process_command(spi_flash_opcodes::RESUME_7A, 0, rx);
+    m.process_command(spi_flash_opcodes::WRITE_ENABLE, 0, rx);
+    m.process_command(spi_flash_opcodes::CHIP_ERASE, 0, rx);
+    TEST_ASSERT(m.read_byte(0) == 0xFF, "Memory erased after resume + WREN");
+}
+
+// ============================================================================
+// D. Flash model — Large Density (>2Gbit)
+// ============================================================================
+static void test_model_large_density()
+{
+    TEST_SECTION("D. Model: large density (>2Gbit) SFDP encoding");
+
+    dword_2_t d;
+    // Set density to 4 Gbits (4 * 1024 * 1024 * 1024 bits = 0x100000000ULL)
+    uint64_t bits = 4ULL * 1024 * 1024 * 1024;
+    d.set_density(bits);
+    TEST_ASSERT(d.get_density() == bits, "Large density correctly round-tripped");
+}
+
+// ============================================================================
+// B. SFDP ROM edge cases
+// ============================================================================
+static void test_sfdp_rom_edge_cases()
+{
+    TEST_SECTION("B. SFDP ROM edge cases");
+
+    sfdp_rom_t rom;
+    
+    // Test 1: load beyond 512 bytes triggers resize
+    std::vector<uint8_t> data = {0xAA, 0xBB, 0xCC};
+    rom.load(600, data);
+    TEST_ASSERT(rom.read_byte(600) == 0xAA, "ROM resize and read byte 600");
+    TEST_ASSERT(rom.read_byte(601) == 0xBB, "ROM resize and read byte 601");
+    TEST_ASSERT(rom.read_byte(602) == 0xCC, "ROM resize and read byte 602");
+
+    // Test 2: OOB read returns 0xFF
+    TEST_ASSERT(rom.read_byte(9999) == 0xFF, "ROM OOB read returns 0xFF");
+}
+
+// ============================================================================
+// D. Flash model — unknown/invalid opcode
+// ============================================================================
+static void test_model_unknown_opcode()
+{
+    TEST_SECTION("D. Model: unknown opcode handling");
+
+    spi_flash_model m(256);
+    std::vector<uint8_t> rx;
+    bool ok = m.process_command(0xAA, 0, rx);
+    TEST_ASSERT(ok == false, "Unknown opcode 0xAA returns false");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -1348,6 +1509,7 @@ int main()
     // --- B: Table / ROM ---
     test_jedec_table_integration();
     test_sfdp_rom();
+    test_sfdp_rom_edge_cases();
 
     // --- C: Utilities + parser ---
     test_utility_functions();
@@ -1369,6 +1531,11 @@ int main()
     test_model_missing_erase_granularities();
     test_model_backdoor_rw();
     test_model_constructor_sfdp();
+    test_model_backdoor_file_io();
+    test_model_update_sfdp_rom();
+    test_model_chip_erase_guards();
+    test_model_large_density();
+    test_model_unknown_opcode();
 
     // --- Summary ---
     std::cout << "\n========================================\n";

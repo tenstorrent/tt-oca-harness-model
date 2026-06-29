@@ -64,7 +64,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
@@ -137,6 +137,7 @@ set(TEST_SRCS
   test/src/key_manager_func011_test.cpp
   test/src/key_manager_func012_test.cpp
   test/src/key_manager_func013_test.cpp
+  test/src/key_manager_func014_test.cpp
   test/src/testbench.cpp
 )
 

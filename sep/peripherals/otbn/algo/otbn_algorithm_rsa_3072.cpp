@@ -27,8 +27,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
     CSML_INFO(1, logger) << "[OTBN RSA-3072] Starting execution";
 
     if (m_dmem_size < DMEM_INOUT_OFFSET + RSA3072_BYTES) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Insufficient DMEM size ("
-                              << m_dmem_size << " bytes)";
+        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes)";
         return ERROR;
     }
 

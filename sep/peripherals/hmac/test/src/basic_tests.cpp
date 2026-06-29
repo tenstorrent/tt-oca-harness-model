@@ -62,23 +62,11 @@ void testbench::test_read_write_registers()
 
     test->assert_equal(write_val, read_val, "CFG read-write test");
 
-    // Test 4: CMD register (WO - command register)
-    CSML_INFO(1, logger) << "\n--- Test 1.4: CMD register (offset 0x14) ---" << std::endl;
-    write_val = 0x00000001;  // hash_start command
-    read_val = 0;
+    // DIGEST and MSG_LENGTH are only writable when the engine is IDLE; run these
+    // before the CMD hash_start test which transitions to PROCESSING.
 
-    CSML_INFO(1, logger) << "Writing 0x" << std::hex << write_val << std::dec
-              << " to CMD register..." << std::endl;
-    test->write_register_32(hmac_basetest::CMD_OFFSET, write_val);
-    wait(5, SC_NS);
-
-    CSML_INFO(1, logger) << "Reading back from CMD register..." << std::endl;
-    test->read_register_32(hmac_basetest::CMD_OFFSET, read_val);
-    wait(5, SC_NS);
-    CSML_INFO(1, logger) << "CMD is write-only, read returns 0x" << std::hex << read_val << std::dec << std::endl;
-
-    // Test 5: DIGEST registers (RW - for context switching)
-    CSML_INFO(1, logger) << "\n--- Test 1.5: DIGEST[0] register (offset 0xA4) ---" << std::endl;
+    // Test 4: DIGEST registers (RW - for context switching)
+    CSML_INFO(1, logger) << "\n--- Test 1.4: DIGEST[0] register (offset 0xA4) ---" << std::endl;
     write_val = 0x12345678;
     read_val = 0;
 
@@ -93,8 +81,8 @@ void testbench::test_read_write_registers()
 
     test->assert_equal(write_val, read_val, "DIGEST[0] read-write test");
 
-    // Test 6: MSG_LENGTH_LOWER (RW)
-    CSML_INFO(1, logger) << "\n--- Test 1.6: MSG_LENGTH_LOWER register (offset 0xE4) ---" << std::endl;
+    // Test 5: MSG_LENGTH_LOWER (RW)
+    CSML_INFO(1, logger) << "\n--- Test 1.5: MSG_LENGTH_LOWER register (offset 0xE4) ---" << std::endl;
     write_val = 0xABCDEF01;
     read_val = 0;
 
@@ -109,8 +97,8 @@ void testbench::test_read_write_registers()
 
     test->assert_equal(write_val, read_val, "MSG_LENGTH_LOWER read-write test");
 
-    // Test 7: MSG_LENGTH_UPPER (RW)
-    CSML_INFO(1, logger) << "\n--- Test 1.7: MSG_LENGTH_UPPER register (offset 0xE8) ---" << std::endl;
+    // Test 6: MSG_LENGTH_UPPER (RW)
+    CSML_INFO(1, logger) << "\n--- Test 1.6: MSG_LENGTH_UPPER register (offset 0xE8) ---" << std::endl;
     write_val = 0x23456789;
     read_val = 0;
 
@@ -124,6 +112,21 @@ void testbench::test_read_write_registers()
     wait(5, SC_NS);
 
     test->assert_equal(write_val, read_val, "MSG_LENGTH_UPPER read-write test");
+
+    // Test 7: CMD register (WO - command register)
+    CSML_INFO(1, logger) << "\n--- Test 1.7: CMD register (offset 0x14) ---" << std::endl;
+    write_val = 0x00000001;  // hash_start command
+    read_val = 0;
+
+    CSML_INFO(1, logger) << "Writing 0x" << std::hex << write_val << std::dec
+              << " to CMD register..." << std::endl;
+    test->write_register_32(hmac_basetest::CMD_OFFSET, write_val);
+    wait(5, SC_NS);
+
+    CSML_INFO(1, logger) << "Reading back from CMD register..." << std::endl;
+    test->read_register_32(hmac_basetest::CMD_OFFSET, read_val);
+    wait(5, SC_NS);
+    CSML_INFO(1, logger) << "CMD is write-only, read returns 0x" << std::hex << read_val << std::dec << std::endl;
 }
 
 void testbench::test_read_only_registers()

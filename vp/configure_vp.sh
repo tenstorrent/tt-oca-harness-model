@@ -36,10 +36,10 @@ unset _vp_configure_sh
 # ---------------------------------------------------------------------------
 # Install paths — edit for your machine
 # ---------------------------------------------------------------------------
-: "${SYSTEMC_HOME:=/}"
-: "${CCI_HOME:=/}"
-: "${OPENSSL_ROOT:=/}"
-: "${BOOST_ROOT:=/}"
+: "${SYSTEMC_HOME:=/opt/systemc-3.0.1}"
+: "${CCI_HOME:=/opt/cci-1.0.2}"
+: "${OPENSSL_ROOT:=/usr}"
+: "${BOOST_ROOT:=/usr}"
 
 : "${CMAKE_BUILD_TYPE:=Debug}"
 : "${CMAKE_CXX_STANDARD:=20}"

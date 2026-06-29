@@ -400,9 +400,9 @@ class ERROR_ENABLE_type : public csml_reg<N>
       Reserved1(reg_name + ".Reserved1", *this, 13, 3),
       CMDINVAL(reg_name + ".CMDINVAL", *this, 12, 1),
       Reserved2(reg_name + ".Reserved2", *this, 9, 3),
-      underflow(reg_name + ".UNDERFLOW", *this, 8, 1),
+      underflow(reg_name + ".underflow", *this, 8, 1),
       Reserved3(reg_name + ".Reserved3", *this, 5, 3),
-      overflow(reg_name + ".OVERFLOW", *this, 4, 1),
+      overflow(reg_name + ".overflow", *this, 4, 1),
       Reserved4(reg_name + ".Reserved4", *this, 1, 3),
       CMDBUSY(reg_name + ".CMDBUSY", *this, 0, 1)
     {
@@ -447,9 +447,9 @@ class ERROR_STATUS_type : public csml_reg<N>
       Reserved2(reg_name + ".Reserved2", *this, 13, 3),
       CMDINVAL(reg_name + ".CMDINVAL", *this, 12, 1),
       Reserved3(reg_name + ".Reserved3", *this, 9, 3),
-      underflow(reg_name + ".UNDERFLOW", *this, 8, 1),
+      underflow(reg_name + ".underflow", *this, 8, 1),
       Reserved4(reg_name + ".Reserved4", *this, 5, 3),
-      overflow(reg_name + ".OVERFLOW", *this, 4, 1),
+      overflow(reg_name + ".overflow", *this, 4, 1),
       Reserved5(reg_name + ".Reserved5", *this, 1, 3),
       CMDBUSY(reg_name + ".CMDBUSY", *this, 0, 1)
     {

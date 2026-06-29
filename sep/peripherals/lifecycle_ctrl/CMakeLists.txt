@@ -61,7 +61,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
@@ -130,13 +130,12 @@ if(BUILD_TESTS)
   target_link_libraries(lifecycle_ctrl_test PRIVATE lifecycle_ctrl_model)
 
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    # Multi-config coverage: run the binary once per lifecycle state combination,
+    # merge results. Delegates to run_tests.sh --no-build (binary already built above).
     add_custom_target(coverage
-      COMMAND ./bin/lifecycle_ctrl_test
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh --coverage --no-build
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at build/coverage/coverage/html/index.html"
     )
     add_dependencies(coverage lifecycle_ctrl_test)
   endif()

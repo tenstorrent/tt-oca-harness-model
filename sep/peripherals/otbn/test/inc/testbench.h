@@ -249,6 +249,10 @@ public:
     void test_dmem_protected_region_enforcement();    // DMEM protected 1 KiB region enforcement (algorithm vs host)
     void test_recoverable_alert_pulse();              // Recoverable alert pulse behavior validation
     void test_rsa2048_algorithm_execution_key_enabled();
+    void test_secwipe_with_intr_enabled();       // Cover secwipe interrupt-enable paths
+    void test_keymgr_key_programming();           // Cover keymgr_b_transport paths
+    void load_p256_test_data();                   // Load P256 ECDSA test vectors into DMEM
+    void test_p256_ecdsa_execution();             // P256 ECDSA signature verify happy path
     // ==================================================================
     // SUMMATION ALGORITHM TEST
     // ==================================================================

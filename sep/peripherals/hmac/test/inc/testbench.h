@@ -161,6 +161,7 @@ private:
     void test_block_boundary_message();
     void test_maximum_length_transfer();
     void test_context_save_basic();
+    void test_hash_stop_sync_fifo_drain();
     void test_context_sha_en_disable_clear();
 
     // Helper functions

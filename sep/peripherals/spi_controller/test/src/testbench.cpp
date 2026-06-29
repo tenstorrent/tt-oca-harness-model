@@ -143,6 +143,19 @@ void testbench::run_tests()
     test_func009_command_queue_depth();
     test_func010_dma_trigger();
 
+    CSML_INFO(1, logger) << "\n========================================" << std::endl
+                         << "Starting Code Coverage Targeted Tests" << std::endl
+                         << "========================================\n" << std::endl;
+
+    test_coverage_big_endian_byte_order();
+    test_coverage_intr_test_edge_cases();
+    test_coverage_event_enable_immediate_trigger();
+    test_coverage_spien_reenable_queued_commands();
+    test_coverage_reset_with_queued_commands();
+    test_coverage_signal_update_during_reset();
+    test_coverage_fifo_overflow_underflow();
+
+
     // Print final test summary
     CSML_INFO(1, logger) << "\n========================================" << std::endl
                          << "       TEST SUITE SUMMARY" << std::endl

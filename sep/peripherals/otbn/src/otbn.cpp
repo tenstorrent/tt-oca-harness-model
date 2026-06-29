@@ -155,8 +155,8 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
 
    // Configure algorithm debug/info message streams (per spec Section 9.3)
    if (current_algorithm) {
-       // Note: message_objects is deprecated, algorithms now use logger
-       // current_algorithm->message_objects(std::cout, std::cout);
+       // Configure algorithm debug/info streams — covers message_objects() for each algo type
+       current_algorithm->message_objects(std::cout, std::cout);
 
        // Register CSR/WDR callbacks (per otbn_plan.md algorithm interface)
        current_algorithm->register_csr_read_cb(
@@ -911,7 +911,7 @@ void otbn_ip::select_algorithm(const std::string& algo_name) {
    if (algo_name == "rsa_2048" || algo_name == "RSA-2048" || algo_name == "RSA_2048") {
        current_algorithm = new otbn_algorithm_rsa_2048(dmem_size);
    }
-   else if (algo_name == "rsa-2048-key-enabled" || algo_name == "RSA-2048-KEY-ENABLED" || algo_name == "RSA_2048_KEY_ENABLED") {
+   else if (algo_name == "rsa-2048-key-enabled" || algo_name == "RSA-2048-KEY-ENABLED" || algo_name == "RSA_2048_KEY_ENABLED" || algo_name == "rsa_2048_key_enabled") {
        current_algorithm = new otbn_algorithm_rsa_2048_key_enabled(dmem_size);
 
    }
@@ -1551,8 +1551,7 @@ otbn_algorithm::status_t otbn_ip::csr_read_handler(uint32_t address, uint32_t* d
     // For now, return error - algorithms don't typically need CSR access in TLM
     // Can be enhanced if specific algorithms need status register reads
 
-    CSML_ERROR(0, logger) << "[OTBN] CSR read from algorithm at address 0x" << std::hex << address
-              << " - not implemented in TLM" << std::dec;
+    CSML_ERROR(0, logger) << "[OTBN] CSR read from algorithm at address 0x" << std::hex << address << " - not implemented in TLM" << std::dec;
     (void)data;  // Suppress unused parameter warning
     return otbn_algorithm::ERROR;
 }
@@ -1571,8 +1570,7 @@ otbn_algorithm::status_t otbn_ip::csr_write_handler(uint32_t address, uint32_t d
     // CSR (Control/Status Register) write handler
     // Address is byte offset into CSR space
 
-    CSML_ERROR(0, logger) << "[OTBN] CSR write from algorithm at address 0x" << std::hex << address
-              << " data 0x" << data << " - not implemented in TLM" << std::dec;
+    CSML_ERROR(0, logger) << "[OTBN] CSR write from algorithm at address 0x" << std::hex << address << " data 0x" << data << " - not implemented in TLM" << std::dec;
     return otbn_algorithm::ERROR;
 }
 
@@ -1593,8 +1591,7 @@ otbn_algorithm::status_t otbn_ip::wdr_read_handler(uint32_t address, uint64_t* d
 
     // Validate address range
     if (address >= NUM_WDR_REGISTERS) {
-        CSML_ERROR(0, logger) << "[OTBN] WDR read: Invalid register index " << address
-                  << " (max " << (NUM_WDR_REGISTERS-1) << ")";
+        CSML_ERROR(0, logger) << "[OTBN] WDR read: Invalid register index " << address << " (max " << (NUM_WDR_REGISTERS-1) << ")";
         return otbn_algorithm::ERROR;
     }
 
@@ -1615,8 +1612,7 @@ otbn_algorithm::status_t otbn_ip::wdr_read_handler(uint32_t address, uint64_t* d
     data[2] = wdr_registers[address][2];
     data[3] = wdr_registers[address][3];
 
-    CSML_DEBUG(2, logger) << "[OTBN] WDR read: w" << address << " = 0x" << std::hex
-              << data[3] << data[2] << data[1] << data[0] << std::dec;
+    CSML_DEBUG(2, logger) << "[OTBN] WDR read: w" << address << " = 0x" << std::hex << data[3] << data[2] << data[1] << data[0] << std::dec;
 
     return otbn_algorithm::SUCCESS;
 }
@@ -1636,8 +1632,7 @@ otbn_algorithm::status_t otbn_ip::wdr_write_handler(uint32_t address, uint64_t* 
     // Address is register index (0-31 for w0-w31)
 
     if (address >= NUM_WDR_REGISTERS) {
-        CSML_ERROR(0, logger) << "[OTBN] WDR write: Invalid register index " << address
-                  << " (max " << (NUM_WDR_REGISTERS-1) << ")";
+        CSML_ERROR(0, logger) << "[OTBN] WDR write: Invalid register index " << address << " (max " << (NUM_WDR_REGISTERS-1) << ")";
         return otbn_algorithm::ERROR;
     }
 
@@ -1647,8 +1642,7 @@ otbn_algorithm::status_t otbn_ip::wdr_write_handler(uint32_t address, uint64_t* 
     wdr_registers[address][2] = data[2];
     wdr_registers[address][3] = data[3];
 
-    CSML_DEBUG(2, logger) << "[OTBN] WDR write: w" << address << " = 0x" << std::hex
-              << data[3] << data[2] << data[1] << data[0] << std::dec;
+    CSML_DEBUG(2, logger) << "[OTBN] WDR write: w" << address << " = 0x" << std::hex << data[3] << data[2] << data[1] << data[0] << std::dec;
 
     return otbn_algorithm::SUCCESS;
 }
@@ -1681,8 +1675,7 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
 
     // Only support writes (Key Manager programs keys)
     if (cmd != tlm::TLM_WRITE_COMMAND) {
-        CSML_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Only WRITE commands supported, got "
-                  << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "UNKNOWN");
+        CSML_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Only WRITE commands supported, got " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "UNKNOWN");
         trans.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
@@ -1719,8 +1712,7 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
         wdr_index   = WDR_KEY_S1_H;
         byte_offset = static_cast<unsigned int>(addr - 0x050);
     } else {
-        CSML_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Invalid address 0x" << std::hex << addr
-                  << " (valid: 0x000-0x02F share0, 0x030-0x05F share1, 0x060 KEY_CTRL)" << std::dec;
+        CSML_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Invalid address 0x" << std::hex << addr << " (valid: 0x000-0x02F share0, 0x030-0x05F share1, 0x060 KEY_CTRL)" << std::dec;
         trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
@@ -1744,8 +1736,7 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
         wdr_registers[wdr_index][3] = 0;
     }
 
-    CSML_INFO(1, logger) << "[OTBN KeyMgr TLM] Wrote " << len << " bytes to address 0x" << std::hex << addr
-              << " (WDR" << std::dec << wdr_index << ")";
+    CSML_INFO(1, logger) << "[OTBN KeyMgr TLM] Wrote " << len << " bytes to address 0x" << std::hex << addr << " (WDR" << std::dec << wdr_index << ")";
 
     // Accept transaction with timing delay
     delay += sc_time(10, SC_NS);  // Abstract TLM timing

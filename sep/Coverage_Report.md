@@ -6,23 +6,23 @@ Coverage results were obtained using the `Coverage` CMake build type and the `ma
 ---
 
 ## AES
-- Lines: 92.7% (820 / 885)
+- Lines: 92.6% (818 / 883)
 - Functions: 94.4% (68 / 72)
 
 ## AON Timer
-- Lines: 98.5% (649 / 659)
+- Lines: 98.5% (655 / 665)
 - Functions: 98.8% (81 / 82)
 
 ## CSRNG
-- Lines: 91.7% (1066 / 1163)
+- Lines: 92.2% (1066 / 1156)
 - Functions: 96.5% (109 / 113)
 
 ## EDN
 - Lines: 93.2% (670 / 719)
-- Functions: 100% (54 / 54)
+- Functions: 100.0% (54 / 54)
 
 ## EFUSE
-- Lines: 91.8% (536 / 584)
+- Lines: 91.8% (539 / 587)
 - Functions: 75.4% (49 / 65)
 
 ## Entropy SRC
@@ -34,40 +34,40 @@ Coverage results were obtained using the `Coverage` CMake build type and the `ma
 - Functions: 87.5% (28 / 32)
 
 ## HMAC
-- Lines: 88.7% (867/977)
-- Functions: 91.5% (65/71)
+- Lines: 92.1% (898 / 975)
+- Functions: 97.2% (69 / 71)
 
 ## Key Manager
-- Lines: 88.5% (820 / 927)
-- Functions: 89.4% (110 / 123)
+- Lines: 98.0% (908 / 927)
+- Functions: 97.6% (120 / 123)
 
 ## KMAC
-- Lines: 91.8% (1685 / 1836)
+- Lines: 92.2% (1450 / 1572)
 - Functions: 97.1% (67 / 69)
 
 ## LC Ctrl
-- Lines: 81.9% (86 / 105)
+- Lines: 98.1% (103 / 105)
 - Functions: 100.0% (12 / 12)
 
 ## Mailbox
 - Lines: 98.0% (348 / 355)
 - Functions: 100.0% (60 / 60)
 
-## OTBN *(some algorithms are currently not covered by tests)*
-- Lines: 59.6% (715 / 1200)
-- Functions: 61.7% (82 / 133)
+## OTBN *(otbn co-processor registers are not covered)*
+- Lines: 86.7% (1092 / 1260)
+- Functions: 90.9% (130 / 143)
 
 ## Secure DMA
-- Lines: 81.8% (1518 / 1855)
+- Lines: 92.2% (1447 / 1569)
 - Functions: 97.7% (128 / 131)
 
 ## SPI Controller
-- Lines: 88.7% (771 / 869)
-- Functions: 100.0% (64 / 64)
+- Lines: 96.6% (757 / 784)
+- Functions: 100.0% (78 / 78)
 
 ## SPI Flash
-- Lines: 88.9% (505 / 568)
-- Functions: 97.8% (226 / 231)
+- Lines: 97.9% (557 / 569)
+- Functions: 99.1% (229 / 231)
 
 ## UART
 - Lines: 97.7% (506 / 518)

@@ -34,9 +34,9 @@ secure_dma_test::secure_dma_test(sc_module_name name)
       alert_fatal_fault_i("alert_fatal_fault_i"),
       clk_o("clk_o"),
       rst_no("rst_no"),
+      logger(),
       m_inject_ot_read_bus_error_once(false),
-      m_inject_ot_write_bus_error_once(false),
-      logger() {
+      m_inject_ot_write_bus_error_once(false) {
 
   // Initialize CSML logger
   logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);

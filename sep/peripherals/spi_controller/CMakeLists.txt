@@ -82,7 +82,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "SPI Controller: Release build - errors only, optimized")
 endif()
 
@@ -144,6 +144,7 @@ set(TEST_SRCS
   test/src/test_func008.cpp
   test/src/test_func009.cpp
   test/src/test_func010.cpp
+  test/src/test_coverage.cpp
 )
 
 # -----------------------------------------------------------------------------

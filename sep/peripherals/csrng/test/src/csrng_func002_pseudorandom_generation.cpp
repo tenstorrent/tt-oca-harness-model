@@ -89,9 +89,9 @@ bool wait_genbits_vld(csrng_test* test, uint32_t timeout_us = 10000) {
  * Compares two 128-bit blocks word by word. Used to verify that
  * consecutive GENERATE operations produce unique random data.
  */
-bool blocks_differ(const std::array<uint32_t, 4>& a, const std::array<uint32_t, 4>& b) {
+/*bool blocks_differ(const std::array<uint32_t, 4>& a, const std::array<uint32_t, 4>& b) {
     return (a[0] != b[0]) || (a[1] != b[1]) || (a[2] != b[2]) || (a[3] != b[3]);
-}
+}*/
 
 /**
  * @brief Perform basic randomness check on generated data
@@ -106,7 +106,7 @@ bool blocks_differ(const std::array<uint32_t, 4>& a, const std::array<uint32_t, 
  * Note: This is NOT a cryptographic randomness test. It only detects
  * catastrophic failures like stuck-at faults.
  */
-bool basic_randomness_check(const std::array<uint32_t, 4>& block) {
+/*bool basic_randomness_check(const std::array<uint32_t, 4>& block) {
     // Check for all zeros
     if (block[0] == 0 && block[1] == 0 && block[2] == 0 && block[3] == 0) {
         return false;
@@ -130,7 +130,7 @@ bool basic_randomness_check(const std::array<uint32_t, 4>& block) {
 
     // Allow 30-70% bit density (very loose check)
     return (bit_count >= 38 && bit_count <= 90);
-}
+}*/
 
 /**
  * @brief Build CMD_REQ header for GENERATE command
