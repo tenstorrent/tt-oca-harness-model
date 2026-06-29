@@ -218,7 +218,7 @@ if [[ ! -x "${TB_BIN}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Helper: find a versioned LLVM tool
+# Helper: find a versioned LLVM tool (llvm-profdata, llvm-cov, …).
 # ---------------------------------------------------------------------------
 _find_llvm_tool() {
     local base="$1"
@@ -318,7 +318,7 @@ elif (( USE_COVERAGE )); then
             -sources "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
             -format=text \
             -show-line-counts-or-regions \
-            | grep -E "^\s+[0-9]+\|[[:space:]]+0\|" \
+            | grep -E '^[[:space:]]+[0-9]+\|[[:space:]]+0\|' \
             || echo "(none — full coverage)"
 
         ${COV_CMD} show "${TB_BIN}" \
@@ -348,7 +348,7 @@ elif (( USE_COVERAGE )); then
                 --object-directory "${BUILD_DIR}" \
                 --filter "${SCRIPT_DIR}/src/smc_cpu_cluster.cpp" \
                 --txt \
-                | grep -E "^\s+[0-9]+: +0:" \
+                | grep -E '^[[:space:]]+[0-9]+:[[:space:]]+0:' \
                 || echo "(none — full coverage)"
 
             mkdir -p "${HTML_DIR}"

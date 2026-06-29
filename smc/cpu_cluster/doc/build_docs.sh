@@ -61,13 +61,17 @@ do
     --toc --toc-depth=3 \
     -o "${tmp}"
 
-  "${CHROME}" \
+  if ! "${CHROME}" \
     --headless=new --disable-gpu --no-sandbox \
     --print-to-pdf="${pdf}" \
     --print-to-pdf-no-header \
     --run-all-compositor-stages-before-draw \
     --no-margins \
-    "file://${tmp}" 2>&1 | grep -v "^$" | tail -1 || true
+    "file://${tmp}"; then
+    echo "ERROR: Chrome/Chromium failed to generate ${pdf}" >&2
+    rm -f "${tmp}" "${pdf}"
+    exit 1
+  fi
 
   if [[ ! -s "${pdf}" ]]; then
     echo "ERROR: failed to generate ${pdf} (Chrome/Chromium print-to-pdf failed)." >&2
@@ -75,6 +79,10 @@ do
   fi
 
   rm -f "${tmp}"
+  if [[ ! -s "${pdf}" ]]; then
+    echo "ERROR: ${pdf} is missing or empty after Chrome print." >&2
+    exit 1
+  fi
   echo "   => ${pdf}"
 done
 

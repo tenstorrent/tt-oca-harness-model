@@ -474,7 +474,7 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
   Tier-0/Tier-1 tests. Coverage instrumentation is enabled by
   `./run_tests.sh --coverage` (or `-DENABLE_COVERAGE=ON` at configure time);
   the `coverage` custom target renders gcovr HTML under `build/coverage/`.
-  Current baseline: **97.1 %** line coverage on `src/`.
+  Current baseline: **98.5 %** line coverage on `src/`.
 
 ---
 
@@ -496,4 +496,4 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 | PLIC CPU→PLIC→CPU + scratchpad TC-CPU-004/005 in `cluster_tb`          | ✅      |
 | Full PLIC IP matrix (separate from cluster integration)                | `plic_tb` |
 | CLINT IP MMIO (cluster IRQ wire stubs only in `cluster_tb`)            | future  |
-| Coverage via `-DENABLE_COVERAGE=ON` / `./run_tests.sh --coverage` §A.4   | ✅ (97.1 % line on `src/`) |
+| Coverage via `-DENABLE_COVERAGE=ON` / `./run_tests.sh --coverage` §A.4   | ✅ (98.5 % line on `src/`) |

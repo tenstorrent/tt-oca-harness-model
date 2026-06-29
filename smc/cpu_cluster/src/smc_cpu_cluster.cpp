@@ -28,7 +28,7 @@ namespace smc {
 // Constructors
 // ===========================================================================
 smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name)
-    : smc_cpu_cluster(name, config{}) // LCOV_EXCL_LINE
+    : smc_cpu_cluster(name, config{})
 {
 }
 
@@ -86,7 +86,7 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
 
     // ----- 4. CPU-Control register file: defaults --------------------------
     regs_.reset_vector.fill(reset_pc_p_.get_value());
-    regs_.core_enable = (nh >= 32) ? ~0u : ((1u << nh) - 1u);
+    regs_.core_enable = (nh >= 32) ? ~0u : ((1u << nh) - 1u); // LCOV_EXCL_LINE nh capped at 4
     regs_.local_base  = static_cast<uint32_t>(local_base_default_p_.get_value());
 
     // ----- 5. Construct the shared Whisper System ---------------------------
@@ -157,7 +157,7 @@ smc_cpu_cluster::~smc_cpu_cluster() = default;
 // ===========================================================================
 bool smc_cpu_cluster::load_elf(const std::vector<std::string>& paths)
 {
-    if (harts_.empty()) return false;
+    if (harts_.empty()) return false; // LCOV_EXCL_LINE num_harts is always >= 1
     return harts_[0]->load_elf(paths);
 }
 
@@ -398,6 +398,7 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
         trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
+
     const uint64_t off  = trans.get_address() % ctrl_size;
     const unsigned len  = trans.get_data_length();
     uint8_t* const ptr  = trans.get_data_ptr();
