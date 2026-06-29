@@ -97,6 +97,9 @@ public:
         delete entropy_src;
         delete edn;
         delete sim_out;  // destructor flushes any buffered, unterminated SIM_OUT line
+        delete sep_scratch;
+        delete outbound_filter;
+        delete smc_global;
         delete spi_device;
         delete spi_controller;
         delete keymgr;
