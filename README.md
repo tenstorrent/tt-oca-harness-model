@@ -450,6 +450,17 @@ The following IPs are **not modeled** in the VP. Tests that exercise them will f
   SMU configuration the SMC reads the register itself, so the console can be disabled via
   `och_sep_ss1.sim_out.enable : false`.
 
+- **SEP_STATUS production-status console** (`sep/peripherals/sep_status_report`): the SEP
+  bootcode also reports status on a *production* path — `report_status()` pushes encoded
+  32-bit status codes into a ring buffer in SMC SRAM that the SMC reads on silicon. The VP
+  observes those ring writes through an observation-only write-tap on the `smc_global` stub,
+  decodes each code (severity, firmware stage, value, and a symbolic `SEP_MSG_*` name
+  resolved at run time from `och_sep_ss1.sep_status.names_tsv`), and prints each as
+  `[<time>] [INFO <v>] [SEP_STATUS] - <stage> <SEVERITY> 0xVVVV <NAME>`. It never modifies
+  the ring or advances the consumer (`tail`) pointer, so it does not change firmware-observable
+  behavior. Disable via `och_sep_ss1.sep_status.enable : false` (e.g. once an SMC-emulation
+  model consumes the ring itself).
+
 ### Tests added by Vayavya
 
 The following tests under `sw/tt-oca-hw-main/dv/sep/tests/` were added by Vayavya:
