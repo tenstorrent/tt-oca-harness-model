@@ -7,6 +7,7 @@
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm.h>
 #include "sep_memory.h"
+#include "sep_virt_console.h"
 #include "secure_dma.h"
 #include "uart_with_terminal.h"
 #include "gpio.h"
@@ -57,9 +58,9 @@ public:
     static constexpr unsigned int INIT_COUNT = 4;
     // Targets: sram, rom, plic, clint, dma, uart, gpio, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
-    //          keymgr_kpvlp, efuse, lc_ctrl, avbbus, entropy_src,
-    //          edn,  (PLIC is internal to VeeRISSTlm; reset_ctrl removed)
-    static constexpr unsigned int TARG_COUNT = 25;
+    //          keymgr_kpvlp, efuse, lc_ctrl, avbbus, entropy_src, edn,
+    //          sep_scratch, outbound_filter, smc_global  (PLIC is internal to VeeRISSTlm)
+    static constexpr unsigned int TARG_COUNT = 28;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -95,6 +96,10 @@ public:
         delete avbbus;
         delete entropy_src;
         delete edn;
+        delete sim_out;  // destructor flushes any buffered, unterminated SIM_OUT line
+        delete sep_scratch;
+        delete outbound_filter;
+        delete smc_global;
         delete spi_device;
         delete spi_controller;
         delete keymgr;
@@ -117,6 +122,10 @@ private:
     SEPMemory*                        rom                = nullptr;
     SEPMemory*                        itcm               = nullptr;
     SEPMemory*                        dtcm               = nullptr;
+    SEPMemory*                        sep_scratch        = nullptr;  // functional stub (RW)
+    SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
+    SEPMemory*                        smc_global         = nullptr;  // functional stub (RW)
+    SimVirtConsole*                   sim_out            = nullptr;  // SIM_OUT bootcode console (taps sep_scratch)
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
@@ -360,6 +369,12 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     if (opt.entry_point.available)
         entry_point = opt.entry_point.value;
     try {
+        // Boot ROM: code (.text/.metadata) is linked at 0x10040000. The ISS fetches
+        // all instructions via TLM callbacks, so populating the read-only `rom` model
+        // here makes boot-from-ROM work. load_executable_image filters PT_LOAD segments
+        // by address range, so only ROM-resident segments land here; load_data bypasses
+        // the read-only flag for one-time init. No-op for ELFs without a ROM segment.
+        loader.load_executable_image(*rom,  opt.rom_size,   opt.rom_start_addr);
         loader.load_executable_image(*itcm, 0x20000, opt.itcm_start_addr);
         loader.load_executable_image(*dtcm, 0x10000, opt.dtcm_start_addr);
         loader.load_executable_image(*sram, opt.sram_size, opt.sram_start_addr);
@@ -367,6 +382,60 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         std::cerr << e.what() << std::endl;
         std::cerr << "Memory map: " << std::endl;
         return;
+    }
+
+    // -------------------------------------------------------------------------
+    // Seed the SMC->SEP boot handshake into the smc_global stub.
+    //
+    // The boot ROM coordinates with the SMC through the CPU_CTRL scratch
+    // registers and a status-report ring buffer in SMC SRAM. On real silicon the
+    // SMC firmware stages these before releasing SEP from reset; the VP models no
+    // SMC, so we present the same contract here. Without it the ROM hangs in
+    // init_status_reporting() spinning on STATUS_TO_SEP.BUFFER_READY
+    // (fw/sep/bootcode/src/status_ring.c) and never reaches manifest load.
+    //
+    // Offsets below are smc_global-local (the bus strips the 0x40000000 base).
+    // Layout mirrors fw/sep/bootcode/include/sep_smc_interface.h:
+    //   scratch[i] @ SMC_SCRATCH_BASE_OFFSET(0x10100) + (i << 3)
+    //   SMC SRAM   @ SMC_SRAM_OFFSET(0x60000), 1 MiB; scratch offsets are SRAM-relative
+    {
+        constexpr uint64_t SMC_SCRATCH_BASE = 0x10100;   // SMC_SCRATCH_BASE_OFFSET
+        constexpr uint64_t SMC_SRAM_OFF     = 0x60000;   // SMC_SRAM_OFFSET (window-local)
+        auto scratch_local = [](unsigned idx) -> uint64_t {
+            return SMC_SCRATCH_BASE + (static_cast<uint64_t>(idx) << 3);
+        };
+
+        // SMC SRAM regions staged by the (emulated) SMC, as SRAM-relative offsets.
+        const uint32_t status_ring_off = 0x1000;  // -> scratch[11] STATUS_BUFFER_ADDR
+        const uint32_t manifest_off    = 0x2000;  // -> scratch[8]  MANIFEST_ADDR
+
+        // scratch[9] STATUS_TO_SEP: all ready flags
+        // (SRAM_INIT|MANIFEST_READY|BUFFER_READY|SRAM_PROTECTED = 0xF). BUFFER_READY
+        // unblocks init_status_reporting(); MANIFEST_READY unblocks the SMC
+        // coordination probe and manifest-load retry loop.
+        const uint32_t status_to_sep = 0xFu;
+        smc_global->load_data(reinterpret_cast<const char*>(&status_to_sep),
+                              scratch_local(9),  sizeof(status_to_sep));
+        smc_global->load_data(reinterpret_cast<const char*>(&status_ring_off),
+                              scratch_local(11), sizeof(status_ring_off));
+        smc_global->load_data(reinterpret_cast<const char*>(&manifest_off),
+                              scratch_local(8),  sizeof(manifest_off));
+
+        // Valid (empty) status_ring_buffer at SMC SRAM + status_ring_off:
+        //   struct { uint32_t head, tail, num_entries; uint32_t entries[]; }
+        // head=tail=0, num_entries=64; entries[] read back as 0 (paged memory).
+        const uint32_t ring_hdr[3] = { 0u, 0u, 64u };  // head, tail, num_entries
+        smc_global->load_data(reinterpret_cast<const char*>(ring_hdr),
+                              SMC_SRAM_OFF + status_ring_off, sizeof(ring_hdr));
+
+        // DFT_CTRL_STATUS_SMU (SMC reg @ 0xF800): memory-repair / MBIST status. The ROM's
+        // dft_mem_repair_gate() (rom_main.c) halts with ROM_ERR_DFT_GATE_BLOCKED unless
+        // MEM_REPAIR_SUCCESS (bit 1) is set. Present REPAIR_DONE|REPAIR_SUCCESS (0x3) — the
+        // (emulated) SMC reports a clean memory-repair pass.
+        constexpr uint64_t SMC_DFT_CTRL_STATUS = 0xF800;  // SMC_DFT_CTRL_STATUS_SMU_OFFSET
+        const uint32_t dft_status = 0x3u;  // MEM_REPAIR_DONE | MEM_REPAIR_SUCCESS
+        smc_global->load_data(reinterpret_cast<const char*>(&dft_status),
+                              SMC_DFT_CTRL_STATUS, sizeof(dft_status));
     }
 
     unused_irq_signal.write(false);
@@ -381,6 +450,12 @@ inline void och_sep_ss::create_modules() {
     rom             = new SEPMemory("rom", true);
     itcm            = new SEPMemory("itcm", false);
     dtcm            = new SEPMemory("dtcm", false);
+    // Functional RW stubs (no behavioral model) for boot ROM early init.
+    sep_scratch     = new SEPMemory("sep_scratch", false);
+    outbound_filter = new SEPMemory("outbound_filter", false);
+    // SMC global window stub (SEP↔SMC AXI path); RW backing store, no SMC behavior.
+    smc_global      = new SEPMemory("smc_global", false);
+    sim_out         = new SimVirtConsole("sim_out");
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
@@ -451,6 +526,9 @@ inline void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.avbbus_start_addr,      opt.avbbus_end_addr,      *avbbus);
         bus->ports[it++] = new PortMapping(opt.entropy_src_start_addr, opt.entropy_src_end_addr, *entropy_src);
         bus->ports[it++] = new PortMapping(opt.edn_start_addr,         opt.edn_end_addr,         *edn);
+        bus->ports[it++] = new PortMapping(opt.sep_scratch_start_addr,     opt.sep_scratch_end_addr,     *sep_scratch);
+        bus->ports[it++] = new PortMapping(opt.outbound_filter_start_addr, opt.outbound_filter_end_addr, *outbound_filter);
+        bus->ports[it++] = new PortMapping(opt.smc_global_start_addr,      opt.smc_global_end_addr,      *smc_global);
     }
     bus->mapping_complete();
 
@@ -493,6 +571,24 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(avbbus->target_socket);
         bus->isocks[it++].bind(entropy_src->target_socket);
         bus->isocks[it++].bind(edn->target_socket);
+        bus->isocks[it++].bind(sep_scratch->tsock);
+        bus->isocks[it++].bind(outbound_filter->tsock);
+        bus->isocks[it++].bind(smc_global->tsock);
+
+        // SIM_OUT: observe bootcode simput* writes to SEP_SCRATCH_COLD_SCRATCH_2 on the
+        // sep_scratch stub and decode them to the console with a SIM_OUT header. The bus
+        // delivers region-local offsets, so COLD_SCRATCH_2 (0x10802010) is offset 0x10.
+        // Observation-only — the register keeps normal R/W semantics. When the
+        // console is disabled via its `enable` param, no tap is installed.
+        if (sim_out->enabled()) {
+            constexpr uint64_t COLD_SCRATCH_2_OFFSET = 0x10;  // SEP_SCRATCH_COLD_SCRATCH_2__REG_OFFSET
+            sep_scratch->setWriteTap(
+                [this, COLD_SCRATCH_2_OFFSET](uint64_t offset, const uint8_t* data, unsigned len) {
+                    if (offset == COLD_SCRATCH_2_OFFSET && len >= 4) {
+                        sim_out->on_bytes(offset, data, len);
+                    }
+                });
+        }
     }
 
     // UART

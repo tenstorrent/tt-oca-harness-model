@@ -39,6 +39,7 @@ set(_SEP_GENERIC
   uart_16550
   sep_memory
   rom
+  sep_virt_console
 )
 
 message(STATUS "Configuring CPU models...")
