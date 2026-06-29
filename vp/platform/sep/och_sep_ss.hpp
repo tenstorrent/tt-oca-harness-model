@@ -583,7 +583,7 @@ inline void och_sep_ss::module_bind() {
         if (sim_out->enabled()) {
             constexpr uint64_t COLD_SCRATCH_2_OFFSET = 0x10;  // SEP_SCRATCH_COLD_SCRATCH_2__REG_OFFSET
             sep_scratch->setWriteTap(
-                [this](uint64_t offset, const uint8_t* data, unsigned len) {
+                [this, COLD_SCRATCH_2_OFFSET](uint64_t offset, const uint8_t* data, unsigned len) {
                     if (offset == COLD_SCRATCH_2_OFFSET && len >= 4) {
                         sim_out->on_bytes(offset, data, len);
                     }
