@@ -44,23 +44,23 @@ Line coverage % from merged `lcov` reports (`make coverage` / `run_tests.sh --co
 
 | Peripheral      | RHEL 8.10 | macOS   | Ubuntu 22.04 |
 |-----------------|----------:|--------:|-------------:|
-| aes             | 91.9%     | 92.6%   | TBD          |
-| aon_timer       | 98.5%     | 98.1%   | TBD          |
-| csrng           | 91.4%     | 91.3%   | TBD          |
-| edn             | 92.6%     | 93.0%   | TBD          |
-| efuse           | 100.0%    | 100.0%  | TBD          |
-| entropy_src     | 89.8%     | 92.0%   | TBD          |
-| gpio            | 87.4%     | 87.5%   | TBD          |
-| hmac            | 91.7%     | 91.5%   | TBD          |
-| key_manager     | 97.8%     | 97.9%   | TBD          |
-| kmac            | 91.9%     | 92.2%   | TBD          |
-| lifecycle_ctrl  | 97.9%     | 97.5%   | TBD          |
-| mailbox         | 98.2%     | 97.3%   | TBD          |
-| otbn            | 91.5%     | 92.2%   | TBD          |
-| secure_dma      | 91.9%     | 92.1%   | TBD          |
-| spi_controller  | 96.1%     | 95.9%   | TBD          |
-| spi_flash       | 97.8%     | 98.4%   | TBD          |
-| uart_16550      | 97.4%     | 96.0%   | TBD          |
+| aes             | 91.9%     | 92.6%   | 92.6%        |
+| aon_timer       | 98.5%     | 98.1%   | 98.5%        |
+| csrng           | 91.4%     | 91.3%   | 92.2%        |
+| edn             | 92.6%     | 93.0%   | 93.2%        |
+| efuse           | 100.0%    | 100.0%  | 100.0%       |
+| entropy_src     | 89.8%     | 92.0%   | 91.4%        |
+| gpio            | 87.4%     | 87.5%   | 88.8%        |
+| hmac            | 91.7%     | 91.5%   | 92.1%        |
+| key_manager     | 97.8%     | 97.9%   | 98.0%        |
+| kmac            | 91.9%     | 92.2%   | 92.2%        |
+| lifecycle_ctrl  | 97.9%     | 97.5%   | 98.1%        |
+| mailbox         | 98.2%     | 97.3%   | 98.0%        |
+| otbn            | 91.5%     | 92.2%   | 91.9%        |
+| secure_dma      | 91.9%     | 92.1%   | 92.2%        |
+| spi_controller  | 96.1%     | 95.9%   | 96.6%        |
+| spi_flash       | 97.8%     | 98.4%   | 97.9%        |
+| uart_16550      | 97.4%     | 96.0%   | 97.7%        |
 
 **Notes**
 - RHEL: gcc/gcov; macOS: clang/llvm-prof + Homebrew `lcov`.
