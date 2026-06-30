@@ -6,7 +6,6 @@
 #   ./run_tests.sh --debug      # Debug build + run tests
 #   ./run_tests.sh --asan       # AddressSanitizer build + run tests
 #   ./run_tests.sh --coverage   # Coverage build + multi-config lcov HTML report
-#   ./run_tests.sh --coverage --jobs N  # cap parallel jobs (default: nproc)
 #   ./run_tests.sh --ctest      # Run via CTest with verbose output
 #   ./run_tests.sh --docs       # Build Doxygen documentation
 #   ./run_tests.sh --cppcheck   # Run cppcheck static analysis
@@ -24,7 +23,14 @@ RUN_DOCS=false
 RUN_CPPCHECK=false
 CLEAN=false
 NO_BUILD=false
-MAX_JOBS=$(nproc)
+# Linux: nproc; macOS: sysctl; fallback: getconf
+if command -v nproc >/dev/null 2>&1; then
+  MAX_JOBS=$(nproc)
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  MAX_JOBS=$(sysctl -n hw.ncpu)
+else
+  MAX_JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+fi
 
 # All lifecycle state combinations that exercise distinct code paths.
 # Each entry becomes one isolated parallel run with its own GCOV_PREFIX.
@@ -66,15 +72,16 @@ if ${CLEAN}; then
 fi
 
 # ---------------------------------------------------------------------------
-# Resolve tool paths
+# Build environment (SystemC, CCI, OpenSSL, Boost — same as run_all_peripherals.sh)
 # ---------------------------------------------------------------------------
-if [ -z "${SYSTEMC_HOME:-}" ]; then
-  for d in /usr/local/systemc301 /usr/local/systemc300 /usr/local/systemc; do
-    [ -d "$d" ] && { export SYSTEMC_HOME="$d"; break; }
-  done
-  [ -z "${SYSTEMC_HOME:-}" ] && echo "WARNING: SYSTEMC_HOME not set and no default path found."
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../setup_build_env.sh"
+peripheral_setup_build_env || exit 1
+
+if ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
+  echo "Removing stale cmake cache (install paths or C++ standard changed) ..."
+  rm -rf "${BUILD_DIR}"
 fi
-[ -z "${CCI_HOME:-}" ] && [ -d "/usr/local/cci" ] && export CCI_HOME="/usr/local/cci"
 
 # ---------------------------------------------------------------------------
 # Build
@@ -85,11 +92,10 @@ if ! ${NO_BUILD}; then
   cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     -DBUILD_TESTS=ON \
-    ${SYSTEMC_HOME:+-DSYSTEMC_HOME="${SYSTEMC_HOME}"} \
-    ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"}
+    "${CMAKE_EXTRA_ARGS[@]}"
 
   echo "==> Building ..."
-  cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
+  cmake --build "${BUILD_DIR}" --parallel "$(peripheral_parallel_jobs)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -123,10 +129,6 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
   INFO_DIR="${BUILD_DIR}/coverage"
   mkdir -p "${CONFIG_DIR}" "${INFO_DIR}"
 
-  # GCOV_PREFIX_STRIP = number of '/' in BUILD_DIR so stripped relative paths
-  # look like  CMakeFiles/lifecycle_ctrl_model.dir/src/...gcda  under WORK_DIR.
-  GCOV_STRIP=$(echo "${BUILD_DIR}" | tr -dc '/' | wc -c)
-
   # Detect lcov version: --ignore-errors flags only exist in lcov 2.x+
   LCOV_IGNORE=""
   GENHTML_IGNORE=""
@@ -135,6 +137,13 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
     LCOV_IGNORE="--ignore-errors inconsistent,unsupported,format,mismatch"
     GENHTML_IGNORE="--ignore-errors inconsistent,unsupported,format,corrupt,category"
   fi
+
+  find "${BUILD_DIR}" -name '*.gcda' -delete 2>/dev/null || true
+  lcov ${LCOV_IGNORE} --zerocounters --directory "${BUILD_DIR}" 2>/dev/null || true
+
+  # GCOV_PREFIX_STRIP = number of '/' in BUILD_DIR so stripped relative paths
+  # look like  CMakeFiles/lifecycle_ctrl_model.dir/src/...gcda  under WORK_DIR.
+  GCOV_STRIP=$(echo "${BUILD_DIR}" | tr -dc '/' | wc -c)
 
   # ---------------------------------------------------------------------------
   # Emit a .ini file for each lifecycle state combination.

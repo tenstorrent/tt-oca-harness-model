@@ -8,6 +8,8 @@ project(otbn LANGUAGES CXX)
 # Support both standalone and integrated builds
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 
 # Doxygen documentation
 find_package(Doxygen)
@@ -152,10 +154,12 @@ set(MODEL_SRCS
   algo/otbn_algorithm_p256_ecdsa.cpp
   algo/otbn_algorithm_smoke.cpp
   algo/otbn_algorithm_rsa_3072.cpp
+  algo/otbn_algorithm_callback_cov.cpp
 )
 
 set(TEST_SRCS
   test/src/testbench.cpp
+  test/src/test_coverage.cpp
   test/src/otbn_test.cpp
   test/src/otbn_basetest.cpp
 )
@@ -175,10 +179,8 @@ endif()
 
 # OTBN model library (always built)
 # Use STATIC library to match HMAC configuration
-add_library(otbn_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(otbn_model ${MODEL_SRCS})
 target_include_directories(otbn_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-target_compile_options(otbn_model PRIVATE -ftemplate-depth=8192)
 
 target_link_libraries(otbn_model PUBLIC
   csml_logger
@@ -192,16 +194,15 @@ target_link_libraries(otbn_model PUBLIC
 # OTBN test executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(otbn_test ${TEST_SRCS})
-  target_compile_options(otbn_test PRIVATE -ftemplate-depth=8192)
-  target_link_libraries(otbn_test PRIVATE otbn_model)
-
+  peripheral_link_test_to_model(otbn_test otbn_model)
   # -----------------------------------------------------------------------------
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Multi-algorithm coverage: run the binary once per algorithm, merge results.
-    # Delegates to run_tests.sh --no-build (binary already built above).
     add_custom_target(coverage
+      COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --zerocounters --directory ${CMAKE_BINARY_DIR}
+      COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR}
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake/PeripheralCoverageClean.cmake
       COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh --coverage --no-build
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at build/coverage/coverage/html/index.html"

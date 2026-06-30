@@ -44,8 +44,6 @@ find_package(OpenSSL REQUIRED)
     ${HEADERS}
   )
 
-  target_compile_options(sep-vp PRIVATE -ftemplate-depth=8192)
-
   target_link_libraries(sep-vp
     platform-infra
     Boost::iostreams

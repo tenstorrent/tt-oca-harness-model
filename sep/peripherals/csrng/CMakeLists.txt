@@ -4,6 +4,8 @@ project(csrng LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -158,7 +160,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # Model library
-add_library(csrng_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(csrng_model ${MODEL_SRCS})
 target_link_libraries(csrng_model PUBLIC SystemC::systemc Threads::Threads OpenSSL::SSL OpenSSL::Crypto csml_logger)
 if(CCI_FOUND)
   target_link_libraries(csrng_model PUBLIC ${CCI_LIBRARIES})
@@ -167,7 +169,8 @@ endif()
 if(BUILD_TESTS)
   # Testbench executable
   add_executable(csrng_testbench ${TEST_SRCS})
-  target_link_libraries(csrng_testbench PRIVATE csrng_model SystemC::systemc)
+  peripheral_link_test_to_model(csrng_testbench csrng_model)
+  target_link_libraries(csrng_testbench PRIVATE SystemC::systemc)
 
   # Set RPATH so the testbench binary finds SystemC and CCI at runtime.
   set_target_properties(csrng_testbench PROPERTIES
@@ -190,15 +193,7 @@ message(STATUS "Generated Project: csrng")
 # Coverage Target
 # -----------------------------------------------------------------------------
 if(BUILD_TESTS AND CMAKE_BUILD_TYPE STREQUAL "Coverage")
-  add_custom_target(coverage
-    COMMAND ./bin/csrng_testbench
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-    COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-    COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-    COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-  )
-  add_dependencies(coverage csrng_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET csrng_testbench)
 endif()
 
 # -----------------------------------------------------------------------------

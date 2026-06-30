@@ -7,6 +7,8 @@ project(key_manager LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -151,7 +153,7 @@ else()
   option(BUILD_TESTS "Build keymgr_tt test executable" OFF)
 endif()
 
-add_library(key_manager_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(key_manager_model ${MODEL_SRCS})
 target_include_directories(key_manager_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(key_manager_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::Crypto)
 if(CCI_FOUND)
@@ -160,21 +162,13 @@ endif()
 
 if(BUILD_TESTS)
   add_executable(key_manager_testbench ${TEST_SRCS})
-  target_link_libraries(key_manager_testbench PRIVATE key_manager_model)
+  peripheral_link_test_to_model(key_manager_testbench key_manager_model)
   if(CCI_FOUND)
     target_link_libraries(key_manager_testbench PRIVATE ${CCI_LIBRARIES})
   endif()
 
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    add_custom_target(coverage
-      COMMAND ./bin/key_manager_testbench
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report: coverage/html/index.html"
-    )
-    add_dependencies(coverage key_manager_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET key_manager_testbench)
   endif()
 
   enable_testing()

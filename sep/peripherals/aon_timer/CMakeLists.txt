@@ -7,6 +7,8 @@ project(aon_timer LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -138,7 +140,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # aon_timer model library (always built)
-add_library(aon_timer_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(aon_timer_model ${MODEL_SRCS})
 target_include_directories(aon_timer_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(aon_timer_model PUBLIC csml_logger SystemC::systemc Threads::Threads)
 if(CCI_FOUND)
@@ -148,8 +150,7 @@ endif()
 # aon_timer testbench executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(aon_timer_testbench ${TEST_SRCS})
-  target_link_libraries(aon_timer_testbench PRIVATE aon_timer_model)
-
+  peripheral_link_test_to_model(aon_timer_testbench aon_timer_model)
   # Set RPATH so the testbench binary finds SystemC and CCI at runtime.
   set(_rpath_dirs "$<TARGET_FILE_DIR:SystemC::systemc>")
   if(CCI_FOUND AND CCI_CONFIG_LIBRARY)
@@ -166,15 +167,7 @@ if(BUILD_TESTS)
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # Keep only model/ directory in coverage, exclude everything else
-    add_custom_target(coverage
-      COMMAND ./bin/aon_timer_testbench
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    )
-    add_dependencies(coverage aon_timer_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET aon_timer_testbench)
   endif()
 
   enable_testing()

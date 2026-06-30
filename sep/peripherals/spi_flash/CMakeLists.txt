@@ -8,6 +8,8 @@ project(spi_flash LANGUAGES CXX)
 # Support both standalone and integrated builds
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -163,12 +165,12 @@ endif()
 # spi_flash_test  links spi_flash_core only (no sc_main required)
 # spi_flash_sc_test links spi_flash_model (sc_main provided)
 # -----------------------------------------------------------------------------
-add_library(spi_flash_core STATIC ${MODEL_CORE_SRCS})
+peripheral_add_model_library(spi_flash_core ${MODEL_CORE_SRCS})
 target_include_directories(spi_flash_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-add_library(spi_flash_model STATIC ${MODEL_SC_SRCS})
+peripheral_add_model_library(spi_flash_model ${MODEL_SC_SRCS})
 target_include_directories(spi_flash_model PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../spi_controller/include
@@ -220,7 +222,8 @@ if(BUILD_TESTS)
     )
     # spi_flash_model propagates spi_flash_core (PUBLIC) but keeps csml/SystemC PRIVATE.
     # Explicitly link csml_logger and SystemC for the static lib symbol resolution + sc_main.
-    target_link_libraries(spi_flash_sc_test PRIVATE spi_flash_model csml_logger SystemC::systemc Threads::Threads)
+    peripheral_link_test_to_model(spi_flash_sc_test spi_flash_model)
+    target_link_libraries(spi_flash_sc_test PRIVATE csml_logger SystemC::systemc Threads::Threads)
 
     enable_testing()
     add_test(NAME spi_flash_sc_test COMMAND spi_flash_sc_test)
@@ -232,27 +235,19 @@ if(BUILD_TESTS)
   # Coverage target (runs both tests when coverage build)
   # ---------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    set(COVERAGE_CMDS
-      COMMAND ./bin/spi_flash_test
-    )
+    set(_spi_cov_cmds COMMAND ./bin/spi_flash_test)
     if(EXISTS ${SC_TEST_SRC})
-      list(APPEND COVERAGE_CMDS COMMAND ./bin/spi_flash_sc_test)
+      list(APPEND _spi_cov_cmds COMMAND ./bin/spi_flash_sc_test)
     endif()
-
-    add_custom_target(coverage
-      ${COVERAGE_CMDS}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    )
-    if(TARGET spi_flash_test)
-      add_dependencies(coverage spi_flash_test)
-    endif()
+    set(_spi_cov_deps)
     if(TARGET spi_flash_sc_test)
-      add_dependencies(coverage spi_flash_sc_test)
+      list(APPEND _spi_cov_deps spi_flash_sc_test)
     endif()
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET spi_flash_test
+      TEST_COMMANDS ${_spi_cov_cmds}
+      EXTRA_DEPENDS ${_spi_cov_deps}
+    )
   endif()
 
 endif()

@@ -8,6 +8,8 @@ project(spi_controller LANGUAGES CXX)
 # Support both standalone and integrated builds
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -161,29 +163,20 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # SPI Controller model library (always built)
-add_library(spi_controller_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(spi_controller_model ${MODEL_SRCS})
 target_include_directories(spi_controller_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(spi_controller_model PUBLIC csml_logger SystemC::systemc Threads::Threads ${CCI_LIBRARIES})
 
 # SPI Controller test executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(spi_controller_test ${TEST_SRCS})
-  target_link_libraries(spi_controller_test PRIVATE spi_controller_model)
-
+  peripheral_link_test_to_model(spi_controller_test spi_controller_model)
   # -----------------------------------------------------------------------------
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # Keep only model/ directory in coverage, exclude everything else
-    add_custom_target(coverage
-      COMMAND ./bin/spi_controller_test
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    )
-    add_dependencies(coverage spi_controller_test)
+    peripheral_add_coverage_target(PRIMARY_TARGET spi_controller_test)
   endif()
 
   # -----------------------------------------------------------------------------

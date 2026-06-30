@@ -7,6 +7,8 @@ project(secure_dma LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -141,7 +143,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # dma model library (always built)
-add_library(secure_dma_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(secure_dma_model ${MODEL_SRCS})
 target_include_directories(secure_dma_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(secure_dma_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::Crypto ${CCI_LIBRARIES})
 
@@ -163,22 +165,13 @@ if(BUILD_TESTS)
     test/src/test_dma_func_012.cpp
     ${TEST_BASE_SRCS}
   )
-  target_link_libraries(secure_dma_testbench PRIVATE secure_dma_model)
-
+  peripheral_link_test_to_model(secure_dma_testbench secure_dma_model)
   # -----------------------------------------------------------------------------
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # Keep only model/ directory in coverage, exclude everything else
-    add_custom_target(coverage
-      COMMAND ./bin/secure_dma_testbench
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    )
-    add_dependencies(coverage secure_dma_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET secure_dma_testbench)
   endif()
 
   enable_testing()

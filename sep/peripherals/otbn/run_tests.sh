@@ -7,7 +7,6 @@
 #   ./run_tests.sh --asan                      # AddressSanitizer build + run tests
 #   ./run_tests.sh --coverage                  # Coverage build + multi-algorithm lcov HTML report
 #   ./run_tests.sh --coverage --algos "rsa_2048 smoke"  # run a subset of algorithms
-#   ./run_tests.sh --coverage --jobs N         # cap parallel jobs (default: nproc)
 #   ./run_tests.sh --ctest                     # Run via CTest with verbose output
 #   ./run_tests.sh --docs                      # Build Doxygen documentation
 #   ./run_tests.sh --cppcheck                  # Run cppcheck static analysis
@@ -25,9 +24,17 @@ RUN_DOCS=false
 RUN_CPPCHECK=false
 CLEAN=false
 NO_BUILD=false
-MAX_JOBS=$(nproc)
+# Linux: nproc; macOS: sysctl; fallback: getconf
+if command -v nproc >/dev/null 2>&1; then
+  MAX_JOBS=$(nproc)
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  MAX_JOBS=$(sysctl -n hw.ncpu)
+else
+  MAX_JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+fi
 
 # All algorithms recognised by select_algorithm() in otbn.cpp.
+# callback_cov exercises CSR/WDR algorithm callbacks (coverage only).
 # unknown_algo exercises the default fallback branch.
 ALL_ALGOS=(
     rsa_2048
@@ -38,6 +45,7 @@ ALL_ALGOS=(
     otbn_loop
     rnd_test
     smoke
+    callback_cov
     unknown_algo
 )
 ALGOS=("${ALL_ALGOS[@]}")
@@ -69,15 +77,16 @@ if ${CLEAN}; then
 fi
 
 # ---------------------------------------------------------------------------
-# Resolve tool paths
+# Build environment (SystemC, CCI, OpenSSL, Boost — same as run_all_peripherals.sh)
 # ---------------------------------------------------------------------------
-if [ -z "${SYSTEMC_HOME:-}" ]; then
-  for d in /usr/local/systemc301 /usr/local/systemc300 /usr/local/systemc; do
-    [ -d "$d" ] && { export SYSTEMC_HOME="$d"; break; }
-  done
-  [ -z "${SYSTEMC_HOME:-}" ] && echo "WARNING: SYSTEMC_HOME not set and no default path found."
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../setup_build_env.sh"
+peripheral_setup_build_env || exit 1
+
+if ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
+  echo "Removing stale cmake cache (install paths or C++ standard changed) ..."
+  rm -rf "${BUILD_DIR}"
 fi
-[ -z "${CCI_HOME:-}" ] && [ -d "/usr/local/cci" ] && export CCI_HOME="/usr/local/cci"
 
 # ---------------------------------------------------------------------------
 # Build
@@ -88,11 +97,13 @@ if ! ${NO_BUILD}; then
   cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     -DBUILD_TESTS=ON \
-    ${SYSTEMC_HOME:+-DSYSTEMC_HOME="${SYSTEMC_HOME}"} \
-    ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"}
+    "${CMAKE_EXTRA_ARGS[@]}"
 
   echo "==> Building ..."
-  cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
+  if [ -z "${MAX_JOBS}" ]; then
+    MAX_JOBS="$(peripheral_parallel_jobs)"
+  fi
+  cmake --build "${BUILD_DIR}" --parallel "${MAX_JOBS}"
 fi
 
 # ---------------------------------------------------------------------------
@@ -126,9 +137,7 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
   INFO_DIR="${BUILD_DIR}/coverage"
   mkdir -p "${CONFIG_DIR}" "${INFO_DIR}"
 
-  # GCOV_PREFIX_STRIP = number of '/' in BUILD_DIR so stripped relative paths
-  # look like  CMakeFiles/otbn_model.dir/src/otbn.cpp.gcda  under WORK_DIR.
-  GCOV_STRIP=$(echo "${BUILD_DIR}" | tr -dc '/' | wc -c)
+  find "${BUILD_DIR}" -name '*.gcda' -delete 2>/dev/null || true
 
   # Detect lcov version: --ignore-errors flags only exist in lcov 2.x+
   LCOV_IGNORE=""
@@ -138,6 +147,12 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
     LCOV_IGNORE="--ignore-errors inconsistent,unsupported,format,mismatch"
     GENHTML_IGNORE="--ignore-errors inconsistent,unsupported,format,corrupt,category"
   fi
+
+  lcov ${LCOV_IGNORE} --zerocounters --directory "${BUILD_DIR}" 2>/dev/null || true
+
+  # GCOV_PREFIX_STRIP = number of '/' in BUILD_DIR so stripped relative paths
+  # look like  CMakeFiles/otbn_model.dir/src/otbn.cpp.gcda  under WORK_DIR.
+  GCOV_STRIP=$(echo "${BUILD_DIR}" | tr -dc '/' | wc -c)
 
   # Per-algorithm worker — runs in a subshell so it can be backgrounded
   run_one_algo() {

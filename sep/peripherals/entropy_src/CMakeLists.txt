@@ -8,6 +8,8 @@ project(entropy_src LANGUAGES CXX)
 # Support both standalone and integrated builds
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -138,38 +140,19 @@ else()
 endif()
 
 # Model library (always built)
-add_library(entropy_src_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(entropy_src_model ${MODEL_SRCS})
 target_include_directories(entropy_src_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(entropy_src_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::Crypto ${CCI_LIBRARIES})
 
 # Testbench executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(entropy_src_testbench ${TEST_SRCS})
-  target_link_libraries(entropy_src_testbench PRIVATE entropy_src_model)
-
+  peripheral_link_test_to_model(entropy_src_testbench entropy_src_model)
   enable_testing()
   add_test(NAME entropy_src_testbench COMMAND entropy_src_testbench)
 
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    find_program(LCOV_PATH lcov)
-    find_program(GENHTML_PATH genhtml)
-    
-    if(LCOV_PATH AND GENHTML_PATH)
-      add_custom_target(coverage
-        COMMAND ${LCOV_PATH} --zerocounters --directory .
-        COMMAND ./bin/entropy_src_testbench
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-        COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-        COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-        COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-        COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-        COMMENT "Generating coverage report..."
-      )
-      add_dependencies(coverage entropy_src_testbench)
-    else()
-      message(WARNING "lcov or genhtml not found; coverage target will not be available")
-    endif()
+    peripheral_add_coverage_target(PRIMARY_TARGET entropy_src_testbench)
   endif()
 endif()
 

@@ -7,6 +7,8 @@ project(mailbox LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -133,7 +135,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # mailbox model library (always built)
-add_library(mailbox_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(mailbox_model ${MODEL_SRCS})
 target_include_directories(mailbox_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(mailbox_model PUBLIC csml_logger SystemC::systemc Threads::Threads)
 if(CCI_FOUND)
@@ -143,8 +145,7 @@ endif()
 # mailbox testbench executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(mailbox_testbench ${TEST_SRCS})
-  target_link_libraries(mailbox_testbench PRIVATE mailbox_model)
-
+  peripheral_link_test_to_model(mailbox_testbench mailbox_model)
   # -----------------------------------------------------------------------------
   # CTest Integration
   # -----------------------------------------------------------------------------
@@ -156,15 +157,7 @@ endif()
 # Coverage Target
 # -----------------------------------------------------------------------------
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-  add_custom_target(coverage
-    COMMAND ./bin/mailbox_testbench
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-    COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-    COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-    COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-  )
-  add_dependencies(coverage mailbox_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET mailbox_testbench)
 endif()
 
 # -----------------------------------------------------------------------------

@@ -4,6 +4,8 @@ project(lifecycle_ctrl LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -118,7 +120,7 @@ set(TEST_SRCS
 # -----------------------------------------------------------------------------
 # Library target
 # -----------------------------------------------------------------------------
-add_library(lifecycle_ctrl_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(lifecycle_ctrl_model ${MODEL_SRCS})
 target_include_directories(lifecycle_ctrl_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(lifecycle_ctrl_model PUBLIC csml_logger SystemC::systemc Threads::Threads ${CCI_LIBRARIES})
 
@@ -127,12 +129,12 @@ target_link_libraries(lifecycle_ctrl_model PUBLIC csml_logger SystemC::systemc T
 # -----------------------------------------------------------------------------
 if(BUILD_TESTS)
   add_executable(lifecycle_ctrl_test ${TEST_SRCS})
-  target_link_libraries(lifecycle_ctrl_test PRIVATE lifecycle_ctrl_model)
-
+  peripheral_link_test_to_model(lifecycle_ctrl_test lifecycle_ctrl_model)
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Multi-config coverage: run the binary once per lifecycle state combination,
-    # merge results. Delegates to run_tests.sh --no-build (binary already built above).
     add_custom_target(coverage
+      COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --zerocounters --directory ${CMAKE_BINARY_DIR}
+      COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR}
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake/PeripheralCoverageClean.cmake
       COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh --coverage --no-build
       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
       COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at build/coverage/coverage/html/index.html"

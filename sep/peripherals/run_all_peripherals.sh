@@ -2,6 +2,11 @@
 # Run debug / asan / coverage / ctest for every peripheral model
 # (except sep_memory, cpu, and AVBbus which are excluded by design).
 #
+# Prerequisites: valid VP install paths (same as vp/configure_vp.sh).
+#   Edit vp/configure_vp.sh defaults or export SYSTEMC_HOME, CCI_HOME,
+#   OPENSSL_ROOT, BOOST_ROOT (and CMAKE_CXX_STANDARD if needed) before running.
+#   This script sources setup_build_env.sh → vp/configure_vp.sh automatically.
+#
 # Usage:
 #   ./run_all_peripherals.sh              # incremental build, run everything
 #   ./run_all_peripherals.sh --clean      # clean build directories first, then run everything
@@ -41,26 +46,9 @@ for arg in "$@"; do
 done
 
 # ── Resolve build environment (SystemC, OpenSSL, Boost) ─────────────────────
-setup_build_env() {
-  export VP_CONFIGURE_QUIET=1
-  set --
-  # shellcheck disable=SC1091
-  source "${SCRIPT_DIR}/../../vp/configure_vp.sh"
-
-  CMAKE_EXTRA_ARGS=(
-    -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}"
-    -DCMAKE_CXX_STANDARD_REQUIRED=ON
-    -DSYSTEMC_HOME="${SYSTEMC_HOME}"
-    -DCCI_HOME="${CCI_HOME}"
-    -DSystemCLanguage_DIR="${SYSTEMC_HOME}/lib/cmake/SystemCLanguage"
-    -DSystemCCCI_DIR="${CCI_HOME}/lib/cmake/SystemCCCI"
-    -DBOOST_ROOT="${BOOST_ROOT}" -DBoost_ROOT="${BOOST_ROOT}"
-    -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT}"
-    -DBoost_NO_SYSTEM_PATHS=ON -DBoost_NO_BOOST_CMAKE=ON
-  )
-}
-
-setup_build_env || exit 1
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/setup_build_env.sh"
+peripheral_setup_build_env || exit 1
 
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
@@ -84,21 +72,6 @@ if command -v lcov >/dev/null 2>&1; then
 fi
 
 # Drop stale cmake cache when install paths or C++ standard change.
-_peripheral_cache_stale() {
-  local cache="$1/CMakeCache.txt"
-  [[ -f "${cache}" ]] || return 1
-  local cached_sc cached_ssl cached_cci cached_std
-  cached_sc="$(grep -E '^SYSTEMC_HOME:' "${cache}" 2>/dev/null | sed 's/^SYSTEMC_HOME:[^=]*=//' || true)"
-  cached_ssl="$(grep -E '^OPENSSL_INCLUDE_DIR:' "${cache}" 2>/dev/null | sed 's/^OPENSSL_INCLUDE_DIR:[^=]*=//' || true)"
-  cached_cci="$(grep -E '^CCI_INCLUDE_DIR:' "${cache}" 2>/dev/null | sed 's/^CCI_INCLUDE_DIR:[^=]*=//' || true)"
-  cached_std="$(grep -E '^CMAKE_CXX_STANDARD:' "${cache}" 2>/dev/null | sed 's/^CMAKE_CXX_STANDARD:[^=]*=//' || true)"
-  [[ -n "${cached_sc}" && "${cached_sc}" != "${SYSTEMC_HOME}" ]] && return 0
-  [[ -n "${cached_ssl}" && "${cached_ssl}" != "${OPENSSL_INC}" ]] && return 0
-  [[ -n "${cached_cci}" && "${cached_cci}" != "${CCI_HOME}/include" ]] && return 0
-  [[ -n "${cached_std}" && "${cached_std}" != "${CMAKE_CXX_STANDARD}" ]] && return 0
-  return 1
-}
-
 # ── Helper: build one peripheral with one build type ─────────────────────────
 # Returns 0 on success, non-zero on failure.
 # Writes full output to $LOG_FILE.
@@ -119,7 +92,7 @@ build_peripheral() {
 
     if $CLEAN; then
       rm -rf "${build_dir}"
-    elif _peripheral_cache_stale "${build_dir}"; then
+    elif peripheral_cache_stale "${build_dir}"; then
       echo "    (removing stale cmake cache — install paths changed)"
       rm -rf "${build_dir}"
     fi
@@ -154,7 +127,7 @@ run_asan() {
 
     if $CLEAN; then
       rm -rf "${build_dir}"
-    elif _peripheral_cache_stale "${build_dir}"; then
+    elif peripheral_cache_stale "${build_dir}"; then
       echo "    (removing stale cmake cache — install paths changed)"
       rm -rf "${build_dir}"
     fi
@@ -228,7 +201,7 @@ run_coverage() {
 
     if $CLEAN; then
       rm -rf "${build_dir}"
-    elif _peripheral_cache_stale "${build_dir}"; then
+    elif peripheral_cache_stale "${build_dir}"; then
       echo "    (removing stale cmake cache — install paths changed)"
       rm -rf "${build_dir}"
     fi

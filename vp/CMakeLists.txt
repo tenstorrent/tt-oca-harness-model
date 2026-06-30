@@ -22,6 +22,10 @@ set(CMAKE_CXX_FLAGS "-Wall -Wextra -Wno-unused-parameter -Wpedantic")
 set(CMAKE_CXX_FLAGS_DEBUG "-g3")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
+# SC_HAS_PROCESS is still required for Synopsys Virtualizer; SystemC 3.x deprecates it
+# per IEEE 1666-2023 unless this compatibility define is set.
+add_compile_definitions(SC_ALLOW_DEPRECATED_IEEE_API)
+
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR})
 

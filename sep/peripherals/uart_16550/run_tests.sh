@@ -42,29 +42,21 @@ if ${CLEAN}; then
   rm -rf "${BUILD_DIR}"
 fi
 
-# Resolve SYSTEMC_HOME
-if [ -z "${SYSTEMC_HOME:-}" ]; then
-  if [ -d "/usr/local/systemc300" ]; then
-    export SYSTEMC_HOME="/usr/local/systemc300"
-  elif [ -d "/usr/local/systemc" ]; then
-    export SYSTEMC_HOME="/usr/local/systemc"
-  else
-    echo "WARNING: SYSTEMC_HOME not set and no default path found."
-  fi
-fi
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../setup_build_env.sh"
+peripheral_setup_build_env || exit 1
 
-# Resolve CCI_HOME
-if [ -z "${CCI_HOME:-}" ]; then
-  if [ -d "/usr/local/cci" ]; then
-    export CCI_HOME="/usr/local/cci"
-  fi
+if ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
+  echo "Removing stale cmake cache (install paths or C++ standard changed) ..."
+  rm -rf "${BUILD_DIR}"
 fi
 
 mkdir -p "${BUILD_DIR}"
 cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-  -DBUILD_TESTS=ON
-cmake --build "${BUILD_DIR}" --parallel "$(nproc)"
+  -DBUILD_TESTS=ON \
+  "${CMAKE_EXTRA_ARGS[@]}"
+cmake --build "${BUILD_DIR}" --parallel "$(peripheral_parallel_jobs)"
 
 echo ""
 if ${RUN_DOCS}; then

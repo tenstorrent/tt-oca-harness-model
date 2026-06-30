@@ -7,6 +7,8 @@ project(aes LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -155,7 +157,7 @@ file(GLOB_RECURSE TEST_SRCS  "test/src/*.cpp")
 # Targets
 # -----------------------------------------------------------------------------
 # Model library
-add_library(aes_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(aes_model ${MODEL_SRCS})
 target_link_libraries(aes_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(CCI_FOUND)
   target_link_libraries(aes_model PUBLIC ${CCI_LIBRARIES})
@@ -165,7 +167,8 @@ endif()
 if(BUILD_TESTS)
   # Testbench executable
   add_executable(aes_testbench ${TEST_SRCS})
-  target_link_libraries(aes_testbench PRIVATE aes_model csml_logger SystemC::systemc)
+  peripheral_link_test_to_model(aes_testbench aes_model)
+  target_link_libraries(aes_testbench PRIVATE csml_logger SystemC::systemc)
 
   # Set RPATH
 
@@ -183,15 +186,7 @@ message(STATUS "Generated Project: aes")
 # Coverage Target
 # -----------------------------------------------------------------------------
 if(BUILD_TESTS AND CMAKE_BUILD_TYPE STREQUAL "Coverage")
-  add_custom_target(coverage
-    COMMAND ./bin/aes_testbench
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-    COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-    COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-    COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-  )
-  add_dependencies(coverage aes_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET aes_testbench)
 endif()
 # -----------------------------------------------------------------------------
 # Static Analysis Target (cppcheck)

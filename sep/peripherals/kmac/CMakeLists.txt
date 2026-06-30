@@ -4,6 +4,8 @@ project(kmac LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -144,7 +146,7 @@ endif()
 # Targets
 # -----------------------------------------------------------------------------
 # Model library (always built)
-add_library(kmac_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(kmac_model ${MODEL_SRCS})
 target_include_directories(kmac_model PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
@@ -160,7 +162,8 @@ if(BUILD_TESTS)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
 
     add_executable(kmac_testbench ${TEST_SRCS})
-    target_link_libraries(kmac_testbench PRIVATE kmac_model SystemC::systemc OpenSSL::Crypto csml_logger)
+    peripheral_link_test_to_model(kmac_testbench kmac_model)
+    target_link_libraries(kmac_testbench PRIVATE SystemC::systemc OpenSSL::Crypto csml_logger)
 
   # Set RPATH so the testbench binary finds SystemC and CCI at runtime.
   set(_rpath_dirs "$<TARGET_FILE_DIR:SystemC::systemc>")
@@ -178,16 +181,11 @@ if(BUILD_TESTS)
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Keep only model/ directory in coverage, exclude everything else
-    add_custom_target(coverage
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench ../config/accellera_config.ini
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET kmac_testbench
+      TEST_COMMANDS
+        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench ../config/accellera_config.ini
     )
-    add_dependencies(coverage kmac_testbench)
   endif()
 
   enable_testing()
