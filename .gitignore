@@ -39,6 +39,9 @@ coverage-report/
 *.swo
 *~
 
+# Local dependency paths (see smc/peripherals/uart/deps.env.example)
+smc/peripherals/uart/deps.env
+
 # clangd / Microsoft C/C++ language-server caches — auto-generated, per-user.
 .cache/
 .ccls-cache/
