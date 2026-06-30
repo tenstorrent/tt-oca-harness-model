@@ -1,4 +1,4 @@
-# SMC CPU Cluster — Top-Level Architecture & Implementation
+# SMC CPU Cluster — Low-Level Design & Implementation
 
 > Companion document to `01_SMC_Architecture.pdf` (chiplet-level architecture)
 > and `02_SMC_IP_LowLevel_Design.pdf §3` (CPU cluster low-level design).
@@ -64,7 +64,7 @@ This document covers two layers:
 2. **CPU cluster view (§3 – §7)** — the architecture and implementation of
    `smc::smc_cpu_cluster`, the SystemC/TLM-2.0 model under `libsmc/cpu/`.
    This is the deliverable that the markdown documents in this directory
-   (`04_CPU_Cluster_Test_Plan.md`, `05_CCI_Integration_Guide.md`) verify.
+   (`03_CPU_Cluster_Test_Plan.md`, `04_CCI_Integration_Guide.md`) verify.
 
 The implementation uses the Tenstorrent **Whisper** ISS
 (`WdRiscv::System<uint64_t>` / `WdRiscv::Hart<uint64_t>`) as the sole
@@ -73,7 +73,7 @@ cluster does not call Whisper APIs directly.
 
 ### 1.1 Verification scope (what this IP proves)
 
-`04_CPU_Cluster_Test_Plan.md` and `test/cluster_tb` verify the **cluster
+`03_CPU_Cluster_Test_Plan.md` and `test/cluster_tb` verify the **cluster
 model** and **integration hooks** to peer IPs. They do not replace
 peripheral-IP or SoC-level plans.
 
@@ -357,7 +357,7 @@ Future / not-yet-wired (gated on peer IPs):
 |--------------|----------------|---------------|
 | in ← BEU     | `beu_nmi_in`   | Bus Error Unit |
 | in ← Debug   | `debug_irq_in` | Debug Module  |
-| in ← PLIC    | `irq_ext_s[i]` | PLIC (S-mode context) — see `04_CPU_Cluster_Test_Plan.md §13.1` |
+| in ← PLIC    | `irq_ext_s[i]` | PLIC (S-mode context) — see `03_CPU_Cluster_Test_Plan.md §13.1` |
 
 ### 3.3 Internal block view
 
@@ -484,7 +484,7 @@ CMakeLists.txt (cluster top-level)
                                   optionally builds the PLIC integration
                                   via SMC_BUILD_PLIC_INTEGRATION (default ON).
 
-test/                           ← see 04_CPU_Cluster_Test_Plan.md
+test/                           ← see 03_CPU_Cluster_Test_Plan.md
 ```
 
 ### 4.2 Component inventory
@@ -1154,7 +1154,7 @@ below.  Items left blocked on peer IPs are tabulated in §8.
 
 ## 8. Peer-IP integration status
 
-> Detail by individual IP is in `04_CPU_Cluster_Test_Plan.md §13`.  This
+> Detail by individual IP is in `03_CPU_Cluster_Test_Plan.md §13`.  This
 > table is the chiplet-level summary.
 
 **PLIC vs CLINT in verification:** the full **PLIC IP** matrix lives in
@@ -1168,7 +1168,7 @@ The **CLINT IP** is not modeled here; `cluster_tb` only toggles
 | `CLINT.msip_out[i]`           | `irq_sw[i]` (`sc_in<bool>`)                    | Cluster side ready; CLINT IP + MMIO out of scope for `cluster_tb` (wire stubs §8.6)                |
 | `CLINT.mtip_out[i]`            | `irq_timer[i]` (`sc_in<bool>`)                 | Cluster side ready; CLINT IP + MMIO out of scope for `cluster_tb` (wire stubs §8.6)                |
 | `PLIC.ctx_out[2*h + 0]`        | `irq_ext[i]` (`sc_in<bool>`)                   | **Integration green** (`cluster_tb` §8.7): CPU MMIO configures PLIC; TB drives `src_in`; firmware ISR claim/complete. Full PLIC matrix: `plic_tb`. S-mode context open. |
-| `PLIC.ctx_out[2*h + 1]`        | `irq_ext_s[i]` (planned port)                  | Open — see `04_CPU_Cluster_Test_Plan.md §13.1`                                                     |
+| `PLIC.ctx_out[2*h + 1]`        | `irq_ext_s[i]` (planned port)                  | Open — see `03_CPU_Cluster_Test_Plan.md §13.1`                                                     |
 | `PLIC.seip / claim-complete`   | shared with `irq_ext` + `mmio`                 | Open — folded into the S-mode leg above                                                            |
 | `BEU.nmi_out[i]`               | `beu_nmi_in[i]` (planned port; trivial to add) | Cluster has `iss_hart::inject_nmi(cause)` ready; awaiting BEU IP and the port                      |
 | `Debug Module → cluster`       | `debug_irq_in` (planned)                       | Awaiting Debug Module IP                                                                            |
@@ -1191,9 +1191,9 @@ input, with no changes to the cluster's own source.
   3.9 debug API, 3.10 sideband extension).
 - `03_SMC_Test_Plan.pdf §A.1 – A.6` and §B.3 — verification methodology
   and TC-CPU-001 .. 010 catalogue.
-- `04_CPU_Cluster_Test_Plan.md` — markdown test plan for this IP,
+- `03_CPU_Cluster_Test_Plan.md` — markdown test plan for this IP,
   including the §13.1 PLIC-integration status table.
-- `05_CCI_Integration_Guide.md` — adopting SystemC CCI for the cluster's
+- `04_CCI_Integration_Guide.md` — adopting SystemC CCI for the cluster's
   `config` parameters and how peer IPs (e.g. PLIC) expose `cci_param`s.
 - `peripherals/plic/README.md` — sibling IP (`plic_tb` = full PLIC matrix;
   `cluster_tb` = cluster ↔ PLIC integration only).

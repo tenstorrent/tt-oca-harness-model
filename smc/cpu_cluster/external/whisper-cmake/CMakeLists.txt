@@ -73,7 +73,9 @@ if(_nm_exe)
         OUTPUT_VARIABLE _rvcore_syms
         ERROR_QUIET
         OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if(_rvcore_syms MATCHES "(^|\n)[^\n]*\\bLZ4_[A-Za-z0-9_]+\\b")
+    # Match both legacy (LZ4_*) and frame (LZ4F_*) APIs from liblz4.
+    # Avoid \b -- CMake's regex engine does not treat it as a word boundary.
+    if(_rvcore_syms MATCHES "LZ4F_|LZ4_")
         set(_whisper_needs_lz4 ON)
     endif()
 endif()
@@ -125,6 +127,7 @@ if(_whisper_needs_lz4)
         NAMES lz4
         HINTS /opt/homebrew/lib
               /usr/local/lib
+              /usr/lib64
               /usr/lib
               /usr/lib/x86_64-linux-gnu
               /usr/lib/aarch64-linux-gnu
@@ -132,7 +135,7 @@ if(_whisper_needs_lz4)
     message(STATUS "    lz4            = ${WHISPER_LZ4_LIB}")
     list(APPEND _whisper_extra_libs "${WHISPER_LZ4_LIB}")
 else()
-    message(STATUS "    lz4            = (not needed - librvcore.a has no LZ4_* symbols)")
+    message(STATUS "    lz4            = (not needed - librvcore.a has no LZ4* symbols)")
 endif()
 
 add_library(whisper::whisper INTERFACE IMPORTED GLOBAL)

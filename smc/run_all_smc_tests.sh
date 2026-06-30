@@ -23,6 +23,14 @@
 #   CCI_HOME       Path to an Accellera CCI install.  Required for the
 #                  peripherals under smc/peripherals/; not needed for
 #                  smc_fabric (which only links against SystemC).
+#   WHISPER_HOME   Path to a built Tenstorrent Whisper RISC-V ISS tree
+#                  (must contain build-<OS>/librvcore.a).  When set and the
+#                  archive exists, cpu_cluster is automatically included in
+#                  the test run.  When unset or the archive is missing,
+#                  cpu_cluster is silently skipped — CI is not affected.
+#   BOOST_DIR      Path to a Boost install (include/boost/version.hpp).
+#                  Used by cpu_cluster; also accepted as BOOST_ROOT for
+#                  compatibility with the CI/VP configure scripts.
 #   JOBS           Parallel build jobs (default: all available cores).
 
 set -uo pipefail
@@ -95,6 +103,30 @@ if [[ -z "${CCI_HOME:-}" ]]; then
     done
 fi
 
+# ── Locate Whisper (optional — enables cpu_cluster) ───────────────────────────
+_WHISPER_OS_DIR="build-$(uname -s)"
+_WHISPER_OK=false
+if [[ -n "${WHISPER_HOME:-}" ]] && \
+   [[ -f "${WHISPER_HOME}/${_WHISPER_OS_DIR}/librvcore.a" ]]; then
+    _WHISPER_OK=true
+fi
+
+# ── Locate Boost (used by cpu_cluster; accept BOOST_ROOT alias from CI/VP) ───
+if [[ -z "${BOOST_DIR:-}" ]]; then
+    BOOST_DIR="${BOOST_ROOT:-}"
+fi
+if [[ -z "${BOOST_DIR:-}" ]]; then
+    for _c in \
+        "${HOME}/local/boost-1.84.0" \
+        "${HOME}/local/boost" \
+        /opt/homebrew \
+        /usr/local \
+        /usr
+    do
+        [[ -f "${_c}/include/boost/version.hpp" ]] && { export BOOST_DIR="${_c}"; break; }
+    done
+fi
+
 echo ""
 if [[ -n "${SYSTEMC_HOME:-}" ]]; then
     echo "  SYSTEMC_HOME = ${SYSTEMC_HOME}"
@@ -106,7 +138,50 @@ if [[ -n "${CCI_HOME:-}" ]]; then
 else
     printf "  ${YELLOW}warning: CCI_HOME not found — peripheral builds may fail${NC}\n" >&2
 fi
+if $_WHISPER_OK; then
+    echo "  WHISPER_HOME = ${WHISPER_HOME}  (cpu_cluster ENABLED)"
+    if [[ -n "${BOOST_DIR:-}" ]]; then
+        echo "  BOOST_DIR    = ${BOOST_DIR}"
+    else
+        printf "  ${YELLOW}warning: BOOST_DIR not found — cpu_cluster build may fail${NC}\n" >&2
+    fi
+else
+    printf "  ${YELLOW}cpu_cluster SKIPPED (WHISPER_HOME not set or librvcore.a not found)${NC}\n" >&2
+fi
 echo ""
+
+# ── Optional: Whisper + Boost for cpu_cluster ───────────────────────────────
+WHISPER_BUILD_DIR="${WHISPER_BUILD_DIR:-build-$(uname -s)}"
+if [[ -z "${WHISPER_HOME:-}" ]]; then
+    REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+    for _w in \
+        "${REPO_ROOT}/../whisper/whisper" \
+        "${REPO_ROOT}/../whisper" \
+        "${HOME}/whisper/whisper" \
+        "${HOME}/whisper"
+    do
+        [[ -f "${_w}/${WHISPER_BUILD_DIR}/librvcore.a" ]] && { export WHISPER_HOME="${_w}"; break; }
+    done
+fi
+_cpu_cluster_ready=false
+if [[ -n "${WHISPER_HOME:-}" && -f "${WHISPER_HOME}/${WHISPER_BUILD_DIR}/librvcore.a" ]]; then
+    if [[ -n "${BOOST_DIR:-}" && -f "${BOOST_DIR}/include/boost/version.hpp" ]]; then
+        _cpu_cluster_ready=true
+    elif [[ -z "${BOOST_DIR:-}" ]]; then
+        for _b in \
+            "${HOME}/local/boost" \
+            /usr/local/boost \
+            /opt/homebrew/opt/boost
+        do
+            [[ -f "${_b}/include/boost/version.hpp" ]] && { export BOOST_DIR="${_b}"; _cpu_cluster_ready=true; break; }
+        done
+    fi
+fi
+if [[ "${_cpu_cluster_ready}" == true ]]; then
+    echo "  WHISPER_HOME = ${WHISPER_HOME}"
+    echo "  BOOST_DIR    = ${BOOST_DIR}"
+    echo ""
+fi
 
 # ── IP registry ───────────────────────────────────────────────────────────────
 # Format: "display_name:src_dir"
@@ -121,6 +196,15 @@ ALL_IPS=(
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
 )
+if [[ "${_cpu_cluster_ready}" == true ]]; then
+    ALL_IPS+=("cpu_cluster:${SCRIPT_DIR}/cpu_cluster")
+fi
+
+# cpu_cluster requires Whisper (Tenstorrent internal); only include when
+# WHISPER_HOME is set and the archive has been built.
+if $_WHISPER_OK; then
+    ALL_IPS+=("cpu_cluster:${SCRIPT_DIR}/cpu_cluster")
+fi
 
 # ── Filter by command-line IP names ──────────────────────────────────────────
 if [[ $# -gt 0 ]]; then
@@ -230,11 +314,16 @@ for entry in "${IPS[@]}"; do
     else                       fail; echo; rel_label="FAIL"; OVERALL_PASS=false; fi
 
     # 2. ASAN build + run
-    printf "  ASAN build    ... "
-    run_stage "${src_dir}" "${plog}/asan_run.log" --asan "${CLEAN_FLAG[@]+"${CLEAN_FLAG[@]}"}"
-    rc=$?
-    if [[ $rc -eq 0 ]]; then pass; echo; asan_label="PASS"
-    else                      fail; echo; asan_label="FAIL"; OVERALL_PASS=false; fi
+    if [[ "${SKIP_ASAN:-0}" == "1" ]]; then
+      printf "  ASAN build    ... SKIP (SKIP_ASAN=1)\n"
+      asan_label="SKIP"
+    else
+      printf "  ASAN build    ... "
+      run_stage "${src_dir}" "${plog}/asan_run.log" --asan "${CLEAN_FLAG[@]+"${CLEAN_FLAG[@]}"}"
+      rc=$?
+      if [[ $rc -eq 0 ]]; then pass; echo; asan_label="PASS"
+      else                      fail; echo; asan_label="FAIL"; OVERALL_PASS=false; fi
+    fi
 
     # 3. Coverage build + report
     printf "  Coverage      ... "

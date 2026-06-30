@@ -8,15 +8,10 @@ simulator backend. Implements the cluster described in:
 - `doc/02_SMC_IP_LowLevel_Design.pdf` §3 — TLM interface, register map,
   IRQ aggregation, control-register file, and bus-bridge routing
 - `doc/03_SMC_Test_Plan.pdf` §A.1 / §A.6 — verification tier matrix
-- `doc/04_CPU_Cluster_Test_Plan.md` — IP-specific test plan (`cluster_tb`,
-  TC-CPU-001..010, PLIC CPU→PLIC→CPU, scratchpad INIT_MEM_DONE)
-- `doc/05_CCI_Integration_Guide.md` — adoption guide for SystemC CCI
-  parameter exposure (`smc_cpu_cluster::config` → broker-mediated
-  presets)
-- `doc/06_CPU_Cluster_Architecture.md` — markdown top-level architecture
-  & implementation reference: chiplet view, internal block view, class
-  / component / sequence diagrams, file layout, build-graph, and §3
-  conformance summary (Spike-free, Whisper-only)
+- `doc/01_CPU_Cluster_Specification.md` — IP specification (module boundary, config, requirements)
+- `doc/02_CPU_Cluster_LowLevel_Design.md` — architecture & implementation reference
+- `doc/03_CPU_Cluster_Test_Plan.md` — IP-specific test plan (`cluster_tb`, coverage ≥ 95%)
+- `doc/04_CCI_Integration_Guide.md` — SystemC CCI parameter guide (supplementary)
 
 The model is a drop-in `sc_module` that the rest of the SMC SystemC IP
 library (PLIC, CLINT, fabric, mailbox, …) can wire up exactly as
@@ -34,12 +29,13 @@ cpu_cluster/
 ├── README.md                          (this file)
 ├── run_tests.sh                       Build-and-test driver script
 ├── doc/
-│   ├── 01_SMC_Architecture.pdf        SMC-wide architecture (§3 covers CPU cluster)
-│   ├── 02_SMC_IP_LowLevel_Design.pdf  SMC-wide IP low-level design (§3 covers CPU cluster)
-│   ├── 03_SMC_Test_Plan.pdf           SMC-wide test plan (§A.1–A.6, §B.3 cover CPU cluster)
-│   ├── 04_CPU_Cluster_Test_Plan.md    IP-specific test plan (refines §B.3 TC-CPU-001..010)
-│   ├── 05_CCI_Integration_Guide.md    SystemC CCI adoption guide for `smc_cpu_cluster::config`
-│   └── figures/                       Block diagrams / pipeline SVGs
+│   ├── README.md                      Document index
+│   ├── build_docs.sh                  Markdown → PDF (pandoc + Chrome)
+│   ├── print.css                      PDF stylesheet
+│   ├── 01_CPU_Cluster_Specification.md
+│   ├── 02_CPU_Cluster_LowLevel_Design.md
+│   ├── 03_CPU_Cluster_Test_Plan.md
+│   └── 04_CCI_Integration_Guide.md    (supplementary — CCI adoption)
 ├── external/
 │   └── whisper-cmake/                 CMake wrapper for the pre-built Whisper archive
 ├── include/                           Public headers (same layout as peripherals/plic)
@@ -80,11 +76,14 @@ SC_MODULE(smc_cpu_cluster) {
     sc_vector<sc_in<bool>> irq_timer;
     sc_vector<sc_in<bool>> irq_ext;
 
-    explicit smc_cpu_cluster(sc_module_name, const config&);
+    explicit smc_cpu_cluster(sc_module_name name);
+    smc_cpu_cluster(sc_module_name name, const config& cfg);  // legacy; see doc/04 CCI
 };
 ```
 
-`config` defaults to the SMC values from §2.1 of the architecture:
+Configuration is exposed via **SystemC CCI 1.0** `cci_param` members (broker
+presets override defaults).  The `config` struct constructor remains for
+backward compatibility.
 
 | Field             | Default       | Note                                       |
 |-------------------|---------------|--------------------------------------------|
@@ -146,16 +145,28 @@ These satisfy `03_SMC_Test_Plan.pdf` §A.3 inspection requirements.
 ## Verification scope
 
 Regression is the self-checking bench `test/cluster_tb` (see
-`doc/04_CPU_Cluster_Test_Plan.md`). It verifies the **cluster wrapper** and
+`doc/03_CPU_Cluster_Test_Plan.md`). It verifies the **cluster wrapper** and
 **wiring to peer IPs**, not full SoC firmware or every peripheral matrix.
 
 | What | Where | In `cluster_tb`? |
 |------|--------|------------------|
 | PLIC IP matrix (sources, thresholds, claim rules) | `peripherals/plic` + `plic_tb` | Linked `plic.cpp` only; exhaustive cases stay in `plic_tb` |
-| **Cluster ↔ PLIC** (CPU MMIO, `irq_ext`, firmware ISR) | `04_CPU_Cluster_Test_Plan.md` §8.7 | **Yes** — CPU → PLIC → CPU |
+| **Cluster ↔ PLIC** (CPU MMIO, `irq_ext`, firmware ISR) | `03_CPU_Cluster_Test_Plan.md` §8.7 | **Yes** — CPU → PLIC → CPU |
 | CLINT IP (mtime / mtimecmp / MSIP MMIO) | `peripherals/clint` (future) | **No** — `irq_sw` / `irq_timer` wire stubs only (§8.6) |
 | Scratchpad map on `cluster.data` | Future fabric router | Init handshake only (`ScratchpadSramStub`, TC-CPU-004/005) |
 | Production `riscv_plic0.c` / full IRQ map | SMC firmware test plan | Open |
+
+---
+
+## Documentation
+
+Numbered docs under `doc/` follow the Component Developer Guide layout
+(`01` Specification, `02` LLD, `03` Test Plan). See `doc/README.md` for
+the index. Regenerate PDFs with:
+
+```bash
+./doc/build_docs.sh    # requires pandoc + Chrome/Chromium
+```
 
 ---
 
@@ -164,35 +175,219 @@ Regression is the self-checking bench `test/cluster_tb` (see
 The model needs:
 
 - Accellera SystemC ≥ 2.3.4 built with **C++20** (matches this project)
-- A pre-built Whisper tree containing `build-Linux/librvcore.a`
-- Boost ≥ 1.74 (header-only is sufficient; `program_options` shared
-  lib is linked when present)
-- Accellera SystemC CCI 1.0 when `SMC_BUILD_PLIC_INTEGRATION=ON` (default) --
-  providing
-  `include/cci_configuration` and `lib[64]/libcci-config.so` +
-  `lib[64]/libcci-inspection.so`.  Disable with
-  `-DSMC_BUILD_PLIC_INTEGRATION=OFF` if you don't have CCI.
+- A Whisper source tree (built automatically by `run_tests.sh` when needed)
+- Boost ≥ 1.74 (headers + `program_options` library for Whisper)
+- Accellera SystemC CCI 1.0 when `SMC_BUILD_PLIC_INTEGRATION=ON` (default)
+- `liblz4` development package (RHEL/CentOS: `lz4-devel`) for Whisper's
+  snapshot compression
 
-Set the environment variables before configuring:
+Nothing above is vendored in this repo — install once per machine (or use a
+shared prefix on NFS), record paths in `deps.env`, then use `./run_tests.sh`
+for day-to-day builds.
+
+### Quick start (after dependencies are installed)
 
 ```bash
-export SYSTEMC_HOME=/path/to/systemc            # contains include/systemc.h
-export WHISPER_HOME=/path/to/whisper-source     # contains build-Linux/librvcore.a
-export BOOST_DIR=/path/to/boost                 # contains include/boost/version.hpp
-export CCI_HOME=/path/to/systemc-cci-install    # contains include/cci_configuration
-                                                # (required when SMC_BUILD_PLIC_INTEGRATION=ON)
+cd smc/cpu_cluster
+cp deps.env.example deps.env    # first time only — edit the four paths
+./run_tests.sh
 ```
 
-Then:
+The script auto-builds Whisper when the static archives are missing.  You do
+**not** need to run `make` inside Whisper manually unless you prefer to.
+
+### First-time setup (new machine)
+
+Work through these steps once.  Pick an install prefix (examples use
+`$HOME/local/...`; a team shared tree under `/opt/...` works the same way).
+
+#### 0. Toolchain
+
+- **CMake** ≥ 3.20, **GCC** ≥ 11 with C++20 (GCC 13 / `gcc-toolset-13` on
+  RHEL is what we use in CI-like environments).
+- On RHEL 8: `sudo yum install cmake lz4-devel` and enable the devtoolset /
+  gcc-toolset you plan to compile with.
+
+#### 1. SystemC (C++20)
+
+Download [Accellera SystemC](https://accellera.org/downloads/) (2.3.4 or
+later), then build and install with C++20:
 
 ```bash
-cd cpu_cluster
+tar xf systemc-2.3.4.tar.gz && cd systemc-2.3.4
+cmake -S . -B build \
+      -DCMAKE_CXX_STANDARD=20 \
+      -DCMAKE_INSTALL_PREFIX="$HOME/local/systemc-2.3.4"
+cmake --build build -j"$(nproc)"
+cmake --install build
+```
+
+Verify: `$HOME/local/systemc-2.3.4/include/systemc.h` exists.
+
+> SystemC and every consumer (this repo, Whisper, CCI) must agree on the same
+> C++ standard.  Mixing a C++17 SystemC build with C++20 models causes link
+> errors on `sc_api_version_*` symbols.
+
+#### 2. Boost (≥ 1.74)
+
+Whisper compiles against Boost headers and links `boost_program_options`.
+
+**macOS (Homebrew):**
+
+```bash
+brew install boost
+# BOOST_DIR=/opt/homebrew/opt/boost  (Apple Silicon)
+```
+
+**Linux — recommended:** build Boost with the **same compiler** you use for
+Whisper and this repo.  The system `/usr/include/boost` package often fails
+when you compile with `gcc-toolset-13`:
+
+```bash
+wget https://archives.boost.io/release/1.84.0/source/boost_1_84_0.tar.gz
+tar xf boost_1_84_0.tar.gz && cd boost_1_84_0
+./bootstrap.sh --prefix="$HOME/local/boost-1.84.0"
+./b2 -j"$(nproc)" install
+```
+
+Verify: `$HOME/local/boost-1.84.0/include/boost/version.hpp` exists.
+
+#### 3. Whisper (source checkout)
+
+Whisper is a **separate** Tenstorrent repository (ask your team for the clone
+URL if it is not on the public internet).  Place it next to this repo or
+anywhere you like:
+
+```bash
+cd /path/to/parent/of/tt-oca-sim
+git clone <whisper-repo-url> whisper/whisper
+```
+
+Verify: `whisper/whisper/GNUmakefile` exists.
+
+`run_tests.sh` builds Whisper automatically (`MEM_CALLBACKS=1`, C++20,
+`BOOST_ROOT=$BOOST_DIR`) the first time you run it.  You only need the source
+tree plus Boost — not a pre-built `librvcore.a`.
+
+Suggested layout (auto-detected without setting `WHISPER_HOME`):
+
+```
+parent/
+├── tt-oca-sim/          ← this repo
+└── whisper/whisper/     ← GNUmakefile here
+```
+
+#### 4. SystemC CCI (PLIC integration tests)
+
+Required when `SMC_BUILD_PLIC_INTEGRATION=ON` (the default).  Clone and
+install [Accellera CCI](https://github.com/accellera-official/cci):
+
+```bash
+git clone https://github.com/accellera-official/cci.git
+cd cci
+cmake -S . -B build \
+      -DCMAKE_CXX_STANDARD=20 \
+      -DCMAKE_INSTALL_PREFIX="$HOME/local/cci-install"
+cmake --build build -j"$(nproc)"
+cmake --install build
+```
+
+Verify: `$HOME/local/cci-install/include/cci_configuration` and
+`lib64/libcci-config.so` exist.
+
+To skip CCI (cluster builds without the PLIC integration test):
+
+```bash
+cmake -S . -B build -DSMC_BUILD_PLIC_INTEGRATION=OFF
+```
+
+#### 5. Record paths (`deps.env`)
+
+Copy the example file and fill in **your** install prefixes:
+
+```bash
+cd smc/cpu_cluster
+cp deps.env.example deps.env
+```
+
+Edit `deps.env`:
+
+```bash
+export SYSTEMC_HOME=$HOME/local/systemc-2.3.4
+export BOOST_DIR=$HOME/local/boost-1.84.0
+export WHISPER_HOME=/path/to/whisper/whisper    # directory with GNUmakefile
+export CCI_HOME=$HOME/local/cci-install
+```
+
+`deps.env` is gitignored — each developer keeps their own copy.  Alternatively
+put the same `export` lines in your `~/.bashrc`.
+
+#### 6. Build and run
+
+```bash
+./run_tests.sh
+```
+
+On first run you should see `>> Whisper not built yet; building in ...` if
+Whisper has never been compiled on this machine.  Subsequent runs are
+incremental.
+
+### What the script auto-detects vs what you must install
+
+| Item | You install / clone | Script does |
+|------|---------------------|-------------|
+| SystemC | Yes (step 1) | Probes Homebrew, `/usr/local`, `/usr`; else uses `deps.env` |
+| Boost | Yes (step 2) | Same |
+| Whisper **source** | Yes (step 3) | **Builds** archives if missing |
+| CCI | Yes (step 4) | Probes `/usr/local/cci`, Homebrew; else uses `deps.env` |
+| `lz4` | OS package (`lz4-devel`) | CMake links it when Whisper was built with LZ4 |
+
+### Manual Whisper build (optional)
+
+`run_tests.sh` normally handles this.  To build Whisper yourself:
+
+```bash
+export WHISPER_HOME=/path/to/whisper-source
+export BOOST_ROOT=/path/to/boost    # same tree as BOOST_DIR
+
+cd "$WHISPER_HOME"
+make MEM_CALLBACKS=1 CXX_STD=c++20 \
+    build-$(uname -s)/librvcore.a build-$(uname -s)/whisper
+```
+
+| Knob | Why |
+|------|-----|
+| `MEM_CALLBACKS=1` | **Required.** The cluster memory bridge uses Whisper's callback API. |
+| `CXX_STD=c++20` | Match the C++20 standard this project and SystemC use. |
+| `BOOST_ROOT` | Whisper compiles against Boost headers; use a Boost tree compatible with your compiler (not always `/usr/include/boost`). |
+
+Whisper's default build enables LZ4 snapshot compression.  The CMake wrapper
+in `external/whisper-cmake/` links `liblz4` automatically when needed.
+Install `lz4-devel` on RHEL/CentOS if the link step cannot find it.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `SYSTEMC_HOME not set` | Complete README step 1; set path in `deps.env`. |
+| `BOOST_DIR not set` | Complete README step 2; on RHEL do not rely on `/usr/include/boost` with gcc-toolset — build Boost locally. |
+| `WHISPER_HOME not set and no Whisper source tree found` | Complete README step 3; clone to `../whisper/whisper` or set `WHISPER_HOME` in `deps.env`. |
+| Whisper compile errors in Boost headers | `BOOST_DIR` must match your compiler; rebuild Boost (step 2) and re-run `./run_tests.sh`. |
+| Link: `undefined reference to LZ4F_*` | `sudo yum install lz4-devel` (or equivalent), `./run_tests.sh --clean`. |
+| CMake: `CCI not found at CCI_HOME` | Complete README step 4, or `-DSMC_BUILD_PLIC_INTEGRATION=OFF`. |
+| Link: `sc_api_version_*` undefined | SystemC was not built with C++20 — rebuild SystemC (step 1) and wipe `build/`. |
+
+### Manual CMake (optional)
+
+If you prefer not to use the script, export the same environment variables and run:
+
+```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Or use the wrapper script (same style as `peripherals/plic/run_tests.sh`):
+### Script options
 
 ```bash
 ./run_tests.sh                # incremental build + run cluster_tb
@@ -277,8 +472,9 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
   thread leaves its wait-for-enable barrier.
 - **Verification hooks**: see the `hart(i).*` API and the included
   Tier-0/Tier-1 tests. Coverage instrumentation is enabled by
-  passing `-DSMC_ENABLE_COVERAGE=ON` at configure time and building
-  the `coverage` custom target after `ctest`.
+  `./run_tests.sh --coverage` (or `-DENABLE_COVERAGE=ON` at configure time);
+  the `coverage` custom target renders gcovr HTML under `build/coverage/`.
+  Current baseline: **98.5 %** line coverage on `src/`.
 
 ---
 
@@ -300,4 +496,4 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 | PLIC CPU→PLIC→CPU + scratchpad TC-CPU-004/005 in `cluster_tb`          | ✅      |
 | Full PLIC IP matrix (separate from cluster integration)                | `plic_tb` |
 | CLINT IP MMIO (cluster IRQ wire stubs only in `cluster_tb`)            | future  |
-| Coverage via `-DSMC_ENABLE_COVERAGE=ON` §A.4                            | ✅      |
+| Coverage via `-DENABLE_COVERAGE=ON` / `./run_tests.sh --coverage` §A.4   | ✅ (98.5 % line on `src/`) |

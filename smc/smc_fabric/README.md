@@ -46,7 +46,7 @@ smc_fabric/
 │   └── smc_fabric.cpp              Routing, remap, filter, CSR handlers
 ├── test/
 │   ├── CMakeLists.txt
-│   └── smc_fabric_tb.cpp           Self-checking test bench (13 scenarios)
+│   └── smc_fabric_tb.cpp           Self-checking test bench (24 scenarios)
 └── doc/
     ├── README.md                   Document index
     ├── build_docs.sh               Markdown → PDF (pandoc + Chrome)
@@ -177,7 +177,7 @@ to override. If pandoc is not on `PATH`, the script also probes
 
 ## Test bench
 
-`test/smc_fabric_tb.cpp` runs 13 self-checking scenarios:
+`test/smc_fabric_tb.cpp` runs 24 self-checking scenarios:
 
 | # | Coverage |
 |---|----------|
@@ -194,6 +194,17 @@ to override. If pandoc is not on `PATH`, the script also probes
 | 11 | Reset clears programmed tables |
 | 12 | M-mode / Xvisor output remap (bit-exact `offset[55:0]`) |
 | 13 | Filter CSR image read-back + `locked` freeze |
+| 14 | Alternate internal masters (jtag / data_accel / log) |
+| 15 | Testbench API + `LOCAL_BASE` / `REGION_SIZE` CSRs |
+| 16 | M-mode output remap via local-base aperture |
+| 17 | `PERIPH_EXT` decode (sys / sep direct) |
+| 18 | Deny-read poison trailing bytes |
+| 19 | Alias-remap CSR read-back + cacheable |
+| 20 | Output-remap 64-bit CSR write |
+| 21 | Filter edge cases (src_id, R/W-only, burst, OOB) |
+| 22 | Outbound-filter NS matching |
+| 23 | DMI denied on jtag / data_accel / log |
+| 24 | `no_addr_remap` bypasses output remap |
 
 Prints `ALL TESTS PASSED` on success; exits non-zero on any `EXPECT_*` failure.
 
@@ -203,7 +214,8 @@ Prints `ALL TESTS PASSED` on success; exits non-zero on any `EXPECT_*` failure.
 
 | Metric | Value |
 |--------|-------|
-| Test scenarios | 13/13 PASS |
+| Test scenarios | 24/24 PASS |
+| Line coverage (`smc_fabric.cpp`) | 98% (`./run_tests.sh --coverage`) |
 | Output remap | Bit-exact to `output_remap.sv` / `.rdl` |
 | Filter CSRs | Bit-exact to `filter_ctrl.rdl` |
 | Local/outbound split | Fixed 16 MB (`LOCAL_ALIAS_REGION_SIZE`) |

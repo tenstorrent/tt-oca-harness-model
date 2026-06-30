@@ -1,6 +1,6 @@
 # SMC CPU Cluster — Detailed Test Plan
 
-**Document**: `04_CPU_Cluster_Test_Plan.md`
+**Document**: `03_CPU_Cluster_Test_Plan.md`
 **Module under test (MUT)**: `smc::smc_cpu_cluster` (`cpu_cluster/include/`, `cpu_cluster/src/`)
 **Reference test bench**: `cpu_cluster/test/cluster_tb.cpp` (single self-checking binary, `plic_tb` style)
 **Status**: Active — `cluster_tb` passes on SystemC 2.3.4 / GCC 11+ / Linux x86_64
@@ -80,7 +80,7 @@ The CPU Cluster test plan must demonstrate that the SystemC model:
 - Back-door inspection through `iss_hart::*` debug accessors
   (`get_pc`, `read_csr`, `is_wfi`, `last_commit`, `current_priv`,
   `inject_nmi`).
-- Coverage instrumentation through `-DSMC_ENABLE_COVERAGE=ON`
+- Coverage instrumentation through `-DENABLE_COVERAGE=ON`
   (gcov + gcovr → HTML report + console summary).
 - §A.5 watchdog: `cluster_tb_top` carries a 120 ms simulated-time
   watchdog so a stuck WFI fail-stops with `SC_REPORT_FATAL`.
@@ -321,7 +321,7 @@ are flagged.
 | F28 | 3.10 | `prot[2]` set when `current_priv() != User`                             | smc_axi_extension                      |
 | F29 | A.1  | Self-checking runner (no GoogleTest)                                    | `cluster_tb` + `sc_main` smoke          |
 | F30 | A.3  | Common helpers in `smc_test_utils.h`                                    | `cluster_tb`                           |
-| F31 | A.4  | Coverage instrumentation via `-DSMC_ENABLE_COVERAGE=ON`                 | `coverage` custom target               |
+| F31 | A.4  | Coverage instrumentation via `-DENABLE_COVERAGE=ON`                     | `coverage` custom target               |
 | F32 | A.5  | Zero SystemC warnings; `Watchdog`                                       | `cluster_tb` (120 ms)                  |
 | F33 | A.6  | Regression via `run_tests.sh` / optional CTest                          | `run_tests.sh`, `test/CMakeLists.txt`  |
 | F34 | 3.7  | PLIC `ctx_out` → `irq_ext` → `MIP[MEIP]` → trap                         | PLIC CPU→PLIC→CPU                      |
@@ -462,9 +462,9 @@ When integrated with `gcov` / `llvm-cov`, the targets are:
 
 | Metric         | Target  | Current baseline (`libsmc/cpu/`)            |
 |----------------|---------|---------------------------------------------|
-| Line coverage  | ≥ 95 %  | 87.1 % (316 / 363) — see §B.3 in plan       |
-| Function cov.  | ≥ 95 %  | 85.2 % (46 / 54)                            |
-| Branch cov.    | ≥ 90 %  | 76.3 % (180 / 236)                          |
+| Line coverage  | ≥ 95 %  | 98.5 % (`src/`, `./run_tests.sh --coverage`) |
+| Function cov.  | ≥ 95 %  | 97.7 %                                       |
+| Branch cov.    | ≥ 90 %  | 96.0 %                                       |
 
 The lift to the §A.4 targets is gated on the §13 follow-up items —
 mostly negative-path coverage in `ctrl_b_transport()` and
@@ -494,12 +494,12 @@ the regression. Closure is reached when:
 | N1  | `ctrl` read with `length != 4` and `length != 8`                          | `TLM_BURST_ERROR_RESPONSE` (or fatal)      | Future (planned)        |
 | N2  | `ctrl` access outside the 8 KiB window (after modulo)                     | Handled by modulo; non-existent regs RAZ/WI | Future (planned)       |
 | N3  | Write to `LOCAL_BASE` / `INIT_MEM_DONE` / `MEM_REPAIR_STATUS` (RO)        | Silently dropped (no state change)         | CPU-Control phase (partial) |
-| N4  | `ELF` not found in `cluster.load_elf({...})`                              | Returns `false`; no SystemC report         | Future (planned)        |
+| N4  | `ELF` not found in `cluster.load_elf({...})`                              | Returns `false`; no SystemC report         | CPU-Control negative phase |
 | N5  | `cfg.num_harts == 0` or `> 4`                                              | `SC_REPORT_FATAL` at elaboration           | Future (planned)        |
-| N6  | `cfg.mmio_lo == cfg.mmio_hi` (MMIO disabled)                              | All non-fast-mem traffic egresses on `data`| Future (planned)        |
-| N7  | `cfg.fast_mem_lo >= cfg.fast_mem_hi`                                      | Fast-mem disabled; everything goes TLM     | Future (planned)        |
+| N6  | `cfg.mmio_lo == cfg.mmio_hi` (MMIO disabled)                              | All non-fast-mem traffic egresses on `data`| Config straps phase     |
+| N7  | `cfg.fast_mem_lo >= cfg.fast_mem_hi`                                      | Fast-mem disabled; everything goes TLM     | Config straps phase     |
 | N8  | AMO at a non-fast-mem address                                             | Whisper raises `STORE_ACC_FAULT` (cause 7) | smc_axi_extension phase (documented) |
-| N9  | NMI while hart is parked on `wfi_event_`                                  | Hart wakes; next `step()` lands on `nmiPc_`| Future `cluster_tb` phase |
+| N9  | NMI while hart is parked on `wfi_event_`                                  | Hart wakes; next `step()` lands on `nmiPc_`| CORE_ENABLE / NMI phase |
 | N10 | NMI while hart is parked on `core_enable_event_`                          | Hart stays parked; NMI pending until enable| Future (planned)        |
 | N11 | Concurrent IRQ + NMI                                                      | NMI wins on next `step()`                  | Future (planned)        |
 | N12 | `irq_aggregator` runs before `poke_mip()` settles (legacy ordering bug)   | `is_wfi()` snapshot must precede the poke  | IRQ aggregator phase (regression-pinned) |
@@ -656,7 +656,7 @@ The S-mode context leg and multi-hart PLIC topology remain open.
 **Environment**: SystemC 2.3.4 Accellera + CCI 1.0 (PLIC),
 GCC 11+ (C++20), Linux x86_64
 **Wall-clock**: ~8 s (`./run_tests.sh --clean`)
-**Coverage**: refresh with `./run_tests.sh --coverage` (baseline TBD post-consolidation)
+**Coverage**: 98.5 % line coverage on `src/` (`./run_tests.sh --coverage`)
 **Build flags**: `SMC_BUILD_PLIC_INTEGRATION=ON` (default), `CCI_HOME` required for PLIC phase
 
 ---

@@ -33,25 +33,39 @@ set_tests_properties(cluster_tb PROPERTIES
     FAIL_REGULAR_EXPRESSION "FAIL"
     TIMEOUT 120)
 
-# §A.4 coverage (gcovr over include/ + src/)
-if(SMC_ENABLE_COVERAGE)
-    find_program(GCOVR_EXECUTABLE gcovr)
-    if(GCOVR_EXECUTABLE)
+# §A.4 coverage: gcovr over src/ when built with GCC.  Clang uses LLVM
+# instrumentation (see top-level CMakeLists.txt) and llvm-cov via run_tests.sh.
+if(ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        find_program(GCOVR_EXECUTABLE gcovr)
+        if(GCOVR_EXECUTABLE)
+            add_custom_target(coverage
+                COMMAND ${CMAKE_COMMAND} -E make_directory coverage
+                COMMAND ${GCOVR_EXECUTABLE}
+                        --root "${CMAKE_SOURCE_DIR}"
+                        --filter "${CMAKE_SOURCE_DIR}/src/.*"
+                        --html-details "coverage/index.html"
+                        --print-summary
+                        --exclude-throw-branches
+                        --exclude-unreachable-branches
+                        .
+                WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+                COMMENT "Generating gcovr coverage report (build/coverage/index.html)"
+                VERBATIM)
+        else()
+            message(WARNING "ENABLE_COVERAGE=ON with GCC but gcovr was not found; "
+                            "creating stub `coverage` target.")
+            add_custom_target(coverage
+                COMMAND ${CMAKE_COMMAND} -E echo
+                    "gcovr not found; install gcovr or run ./run_tests.sh --coverage"
+                COMMENT "gcovr unavailable — stub coverage target"
+                VERBATIM)
+        endif()
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
         add_custom_target(coverage
-            COMMAND ${CMAKE_COMMAND} -E make_directory coverage
-            COMMAND ${GCOVR_EXECUTABLE}
-                    --root "${CMAKE_SOURCE_DIR}"
-                    --filter "${CMAKE_SOURCE_DIR}/(include|src)/.*"
-                    --html-details "coverage/index.html"
-                    --print-summary
-                    --exclude-throw-branches
-                    --exclude-unreachable-branches
-                    .
-            WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-            COMMENT "Generating coverage report (build/coverage/index.html)"
+            COMMAND ${CMAKE_COMMAND} -E echo
+                "Clang LLVM coverage: use ./run_tests.sh --coverage (llvm-cov, not gcovr)"
+            COMMENT "LLVM coverage — use run_tests.sh --coverage"
             VERBATIM)
-    else()
-        message(WARNING "SMC_ENABLE_COVERAGE=ON but gcovr was not found in PATH; "
-                        "the `coverage` target will not be created.")
     endif()
 endif()
