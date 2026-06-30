@@ -15,7 +15,8 @@ tenstorrent_sep/
 ├── cmake/                        ← shared CMake modules (FindSystemC, FindCCI, etc.)
 ├── sep/                          ← all SEP IP peripheral models
 │   ├── peripherals/              ← individual IP models (aes, hmac, uart, otbn, …)
-│   │   └── run_all_peripherals.sh  ← batch peripheral tests; sources vp/configure_vp.sh (env only)
+│   │   ├── setup_build_env.sh    ← shared env for run_tests.sh / run_all_peripherals.sh
+│   │   └── run_all_peripherals.sh  ← batch peripheral tests (sources vp/configure_vp.sh)
 │   ├── cpu/                      ← VeeR EL2 ISS + TLM wrapper
 │   └── utils/
 │       ├── csml/                 ← Core SystemC Model Library (Registers modelling, CCI params, logging)
@@ -268,10 +269,10 @@ vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
 
 ```bash
 cd sw/sep-vp-tests/sep-gpio-test
-make        # build ELF
-make sim    # run on VP
-make debug  # run with GDB enabled
-make gdb    # connect GDB (second terminal)
+make             # build ELF
+make sim         # run on VP
+make debug       # run with GDB enabled
+make gdb         # connect GDB (second terminal)
 ```
 
 ### Firmware tests from Tenstorrent
@@ -286,7 +287,7 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
 <ip>/
 ├── CMakeLists.txt
 ├── README.md
-├── run_tests.sh
+├── run_tests.sh          ← sources ../setup_build_env.sh (VP paths required)
 ├── include/              ← public headers
 ├── src/                  ← implementation
 ├── test/                 ← CTest-registered unit tests
@@ -296,44 +297,76 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
     └── 03_<IP>_Test_Plan.md
 ```
 
-Peripheral standalone builds need the same install paths as the VP (`SYSTEMC_HOME`, `CCI_HOME`,
-`OPENSSL_ROOT`, `BOOST_ROOT`). Two ways to set them:
+#### Build environment (required)
 
-1. **`source vp/configure_vp.sh`** (from repo root) or **`source ../../vp/configure_vp.sh`**
-   (from `sep/peripherals/<ip>/`) — exports paths via `vp_build_env.sh`; does **not** run cmake
-   when sourced.
-2. **`sep/peripherals/run_all_peripherals.sh`** — calls `setup_build_env()`, which sets
-   `VP_CONFIGURE_QUIET=1` and **`source`s `../../vp/configure_vp.sh`** (same export-only
-   behavior), then passes those paths to each peripheral's cmake via `CMAKE_EXTRA_ARGS`.
+Peripheral standalone builds use the **same install paths as the VP**: `SYSTEMC_HOME`, `CCI_HOME`,
+`OPENSSL_ROOT`, `BOOST_ROOT`, and (for SystemC 3.x) a matching `CMAKE_CXX_STANDARD`.
 
-Single peripheral (`run_tests.sh`):
+Every `run_tests.sh` and `run_all_peripherals.sh` **automatically** loads these via
+`sep/peripherals/setup_build_env.sh`, which quietly **`source`s `vp/configure_vp.sh`** and passes
+the resulting paths to cmake as `CMAKE_EXTRA_ARGS` (`SystemCLanguage_DIR`, `SystemCCCI_DIR`,
+OpenSSL/Boost roots, C++ standard, and stale-cache detection).
+
+**You must configure paths before running peripheral tests.** Either:
+
+1. **Edit `vp/configure_vp.sh`** — set the `:="${SYSTEMC_HOME:=…}"` defaults for your machine
+   (same block used for the VP build), **or**
+2. **Export the variables** in your shell or CI job before invoking tests, for example:
+
+```bash
+export SYSTEMC_HOME=/opt/systemc-3.0.1
+export CCI_HOME=/opt/cci-1.0.2
+export OPENSSL_ROOT=/usr                    # or a custom OpenSSL prefix
+export BOOST_ROOT=/usr                      # or a custom Boost prefix
+export CMAKE_CXX_STANDARD=17                # if SystemC was built with C++17
+```
+
+Pre-set environment variables override the defaults in `configure_vp.sh`. Match
+`CMAKE_CXX_STANDARD` to the C++ standard your SystemC install was built with (mismatch causes
+link errors such as missing `sc_api_version_*` symbols).
+
+Manual `source vp/configure_vp.sh` is **not** required when using `run_tests.sh` or
+`run_all_peripherals.sh` (they call `setup_build_env.sh` for you). Source it only for ad-hoc
+cmake from a peripheral directory.
+
+Single peripheral:
 
 ```bash
 cd sep/peripherals/<ip>
-source ../../vp/configure_vp.sh   # export env only; from sep/peripherals/<ip>/
-./run_tests.sh              # build + run
-./run_tests.sh --asan       # with AddressSanitizer
-./run_tests.sh --coverage   # with lcov coverage report
-./run_tests.sh --debug      # debug build
-./run_tests.sh --ctest      # ctest
-./run_tests.sh --docs       # doxygen docs
+./run_tests.sh                               # build + run (env loaded automatically)
+./run_tests.sh --asan                        # with AddressSanitizer
+./run_tests.sh --coverage                    # with lcov coverage report
+./run_tests.sh --coverage --clean            # recommended on macOS (see note below)
+./run_tests.sh --debug                       # debug build
+./run_tests.sh --ctest                       # ctest
+./run_tests.sh --docs                        # doxygen docs
 ```
 
-All peripherals (sources `vp/configure_vp.sh` internally — no manual `source` needed):
+All peripherals:
 
 ```bash
 cd sep/peripherals
-./run_all_peripherals.sh              # debug / asan / coverage / ctest for each model
-./run_all_peripherals.sh --clean      # clean build dirs first
-./run_all_peripherals.sh aes hmac     # subset only
+./run_all_peripherals.sh                     # debug / asan / coverage / ctest for each model
+./run_all_peripherals.sh --clean             # clean build dirs first
+./run_all_peripherals.sh --clean aes hmac    # subset only
 ```
 
-Or manual cmake (after **`source ../../vp/configure_vp.sh`** from `sep/peripherals/<ip>/`):
+**Coverage on macOS:** Use `--clean` when running coverage (`./run_tests.sh --coverage --clean` or
+`./run_all_peripherals.sh --clean`) so stale `.gcda` files from prior runs are removed before
+capture. Incremental coverage builds on Apple Clang can leave corrupt profile data and report falsely
+low percentages even when tests pass. Install `lcov` first on macOS (`brew install lcov`).
+
+Manual cmake (export env first — **`source ../../vp/configure_vp.sh`** from `sep/peripherals/<ip>/`):
 
 ```bash
 cd sep/peripherals/<ip>
+source ../../vp/configure_vp.sh              # export env only
 mkdir -p build && cd build
-cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug \
+  -DSYSTEMC_HOME="${SYSTEMC_HOME}" -DCCI_HOME="${CCI_HOME}" \
+  -DSystemCLanguage_DIR="${SYSTEMC_HOME}/lib/cmake/SystemCLanguage" \
+  -DSystemCCCI_DIR="${CCI_HOME}/lib/cmake/SystemCCCI" \
+  -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT}" -DBOOST_ROOT="${BOOST_ROOT}"
 make && ctest -V
 ```
 
@@ -393,8 +426,8 @@ ELFs: `sw/tt-oca-hw-main/dv/sep/tests/<test_name>/<test_name>.elf`
 ### Run tests
 
 ```bash
-bin/sep_fw_standalone.sh sim   aes_test     # run a built test on sep-vp
-bin/sep_fw_standalone.sh run   aes_test     # build + run in one shot
+bin/sep_fw_standalone.sh sim   aes_test  # run a built test on sep-vp
+bin/sep_fw_standalone.sh run   aes_test  # build + run in one shot
 ```
 
 ### GDB debug workflow
@@ -402,10 +435,10 @@ bin/sep_fw_standalone.sh run   aes_test     # build + run in one shot
 Enable GDB in the INI: `och_sep_ss1.gdb : true`
 
 ```bash
-bin/sep_fw_standalone.sh build-dbg aes_test   # build with -O0 -g
+bin/sep_fw_standalone.sh build-dbg aes_test  # build with -O0 -g
 
 # Terminal 1: VP acts as GDB server
-bin/sep_fw_standalone.sh debug aes_test        # default port 4000
+bin/sep_fw_standalone.sh debug aes_test      # default port 4000
 
 # Terminal 2: connect gdb-multiarch
 bin/sep_fw_standalone.sh gdb aes_test
@@ -416,14 +449,14 @@ bin/sep_fw_standalone.sh gdb aes_test
 ```bash
 cd sw/tt-oca-hw-main/fw/sep/tests
 
-./run_test.sh aes_sanity               # build + run
-./run_test.sh aes_sanity --run-only    # run existing ELF
-./run_test.sh aes_sanity --build-only  # build only
-./run_test.sh aes_sanity -t 60         # custom timeout
+./run_test.sh aes_sanity                    # build + run
+./run_test.sh aes_sanity --run-only         # run existing ELF
+./run_test.sh aes_sanity --build-only       # build only
+./run_test.sh aes_sanity -t 60              # custom timeout
 
-./run_all_tests.sh                     # build + run all
-./run_all_tests.sh --clean             # clean + build + run all
-./run_all_tests.sh --no-build          # run only with existing ELFs
+./run_all_tests.sh                          # build + run all
+./run_all_tests.sh --clean                  # clean + build + run all
+./run_all_tests.sh --no-build               # run only with existing ELFs
 ```
 
 ### Linker script for dv/sep/tests
