@@ -249,6 +249,39 @@ public:
             SC_REPORT_ERROR("KeyMgr TLM", "Failed to write KEY_CTRL");
         }
     }
+
+    bool send_read(sc_dt::uint64 addr, tlm::tlm_response_status& status_out) {
+        tlm::tlm_generic_payload trans;
+        sc_time delay = SC_ZERO_TIME;
+        uint32_t data = 0;
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
+        trans.set_data_length(4);
+        trans.set_streaming_width(4);
+        trans.set_byte_enable_ptr(0);
+        trans.set_dmi_allowed(false);
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        initiator_socket->b_transport(trans, delay);
+        status_out = trans.get_response_status();
+        return true;
+    }
+
+    bool send_write(sc_dt::uint64 addr, uint32_t value, tlm::tlm_response_status& status_out) {
+        tlm::tlm_generic_payload trans;
+        sc_time delay = SC_ZERO_TIME;
+        trans.set_command(tlm::TLM_WRITE_COMMAND);
+        trans.set_address(addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&value));
+        trans.set_data_length(4);
+        trans.set_streaming_width(4);
+        trans.set_byte_enable_ptr(0);
+        trans.set_dmi_allowed(false);
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        initiator_socket->b_transport(trans, delay);
+        status_out = trans.get_response_status();
+        return true;
+    }
 };
 
 /**

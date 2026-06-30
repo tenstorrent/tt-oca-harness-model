@@ -265,6 +265,24 @@ public:
     // RSA-2048 Algorithm Execution Test
     void test_rsa2048_algorithm_execution();            // Comprehensive RSA-2048 end-to-end test
 
+    // Coverage tests (exercise uncovered otbn.cpp / algorithm error paths)
+    void run_coverage_tests();
+    void test_cov_keymgr_tlm_read_error();
+    void test_cov_keymgr_tlm_bad_address();
+    void test_cov_keymgr_key_invalidate();
+    void test_cov_keymgr_wdr_s1_h_write();
+    void test_cov_dmem_protected_read();
+    void test_cov_lc_escalation_intr_enable();
+    void test_cov_lc_rma_intr_enable();
+    void test_cov_rsa2048_key_invalid();
+    void test_cov_summation_n_zero();
+    void test_cov_p256_invalid_signature();
+    void test_cov_p256_invalid_pubkey();
+    void test_cov_rsa3072_happy_path();
+    void test_cov_rsa3072_zero_modulus();
+    void test_cov_csr_wdr_callback_execute();
+    void test_cov_wdr_key_read_with_key();
+
     // Signals for port binding
     sc_signal<bool> intr_done_sig;
     sc_signal<bool> alert_fatal_sig;

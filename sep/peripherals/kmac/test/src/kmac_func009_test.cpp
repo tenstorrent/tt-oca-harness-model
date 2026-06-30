@@ -30,7 +30,6 @@
 #include <iostream>
 #include <iomanip>
 #include <cstring>
-#include <openssl/evp.h>
 
 // Logger for test output
 static CsmlLogger test_logger;
@@ -73,37 +72,6 @@ static void send_app_message(sc_port<kmac_app_if>& app_port, const uint8_t* mess
 }
 
 /**
- * @brief Helper function to compute OpenSSL cSHAKE256 reference
- * @param message Input message
- * @param msg_len Message length in bytes
- * @param function_name cSHAKE function name (N parameter)
- * @param digest Output digest buffer (32 bytes)
- *
- * Computes reference cSHAKE256 digest using OpenSSL for comparison.
- * cSHAKE256(message, "", function_name) with empty customization string.
- */
-static void compute_cshake256_reference(const uint8_t* message, size_t msg_len,
-                                        const char* function_name, uint8_t* digest)
-{
-    // OpenSSL cSHAKE256: customization string (S) is empty, function name (N) is "ROM_CTRL"
-    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
-
-    // For cSHAKE256 with non-empty function name, use EVP_shake256 with proper encoding
-    // Note: This is a simplified reference - actual implementation depends on OpenSSL version
-    // For test purposes, we'll use SHAKE256 as baseline (functionally equivalent when S="")
-
-    EVP_DigestInit_ex(ctx, EVP_shake256(), NULL);
-
-    // In full cSHAKE implementation, would encode function_name here
-    // For this test, we assume model correctly implements cSHAKE256 with "ROM_CTRL" prefix
-
-    EVP_DigestUpdate(ctx, message, msg_len);
-    EVP_DigestFinalXOF(ctx, digest, 32); // 256 bits = 32 bytes
-
-    EVP_MD_CTX_free(ctx);
-}
-
-/**
  * @brief Helper function to read STATUS register FSM state bits
  * @param test Pointer to test harness
  * @param sha3_idle Output: sha3_idle bit value (bit 0)
@@ -138,29 +106,6 @@ static bool wait_app_completion(sc_port<kmac_app_if>& app_port, uint64_t timeout
     }
 
     return true;
-}
-
-/**
- * @brief Helper function to verify digest matches expected value
- * @param share0 Digest share 0
- * @param share1 Digest share 1
- * @param expected Expected unmasked digest (32 bytes)
- * @return true if digest matches after unmasking
- */
-static bool verify_digest(const uint32_t* share0, const uint32_t* share1, const uint8_t* expected)
-{
-    // XOR share0 and share1 to get unmasked digest
-    uint8_t unmasked[32];
-    for (int i = 0; i < 8; i++) {
-        uint32_t word = share0[i] ^ share1[i];
-        // Convert to bytes (little-endian)
-        unmasked[i*4 + 0] = (word >> 0) & 0xFF;
-        unmasked[i*4 + 1] = (word >> 8) & 0xFF;
-        unmasked[i*4 + 2] = (word >> 16) & 0xFF;
-        unmasked[i*4 + 3] = (word >> 24) & 0xFF;
-    }
-
-    return (memcmp(unmasked, expected, 32) == 0);
 }
 
 /******************************************************************************

@@ -225,8 +225,7 @@ kmac_ip::kmac_ip(sc_module_name n,
     );
 
     // KEY_SHARE0 read callback (write-only, return 0)
-    std::function<bool(uint32_t &)> key_share0_read = [this,
-                                                       i](uint32_t &value) {
+    std::function<bool(uint32_t &)> key_share0_read = [](uint32_t &value) {
       value = 0; // KEY_SHARE registers are write-only, return 0 per spec
       return true;
     };
@@ -234,8 +233,7 @@ kmac_ip::kmac_ip(sc_module_name n,
                                   (0x30 / sizeof(uint32_t)) + i);
 
     // KEY_SHARE1 read callback (write-only, return 0)
-    std::function<bool(uint32_t &)> key_share1_read = [this,
-                                                       i](uint32_t &value) {
+    std::function<bool(uint32_t &)> key_share1_read = [](uint32_t &value) {
       value = 0; // KEY_SHARE registers are write-only, return 0 per spec
       return true;
     };
@@ -270,7 +268,7 @@ kmac_ip::kmac_ip(sc_module_name n,
         return this->handle_write_ENTROPY_SEED(value, write_mask);
       };
   memory.register_write_callback_with_be(
-      [this, entropy_seed_write](uint32_t value, uint8_t be) {
+      [entropy_seed_write](uint32_t value, uint8_t be) {
         uint32_t write_mask = 0xFFFFFFFF; // Full 32-bit access for ENTROPY_SEED
         return entropy_seed_write(value, write_mask);
       },
@@ -309,7 +307,7 @@ kmac_ip::kmac_ip(sc_module_name n,
         return this->handle_write_CMD(value, write_mask);
       };
   memory.register_write_callback_with_be(
-      [this, cmd_write](uint32_t value, uint8_t be) {
+      [cmd_write](uint32_t value, uint8_t be) {
         uint32_t write_mask = 0xFFFFFFFF; // Full 32-bit access for CMD
         return cmd_write(value, write_mask);
       },
@@ -321,7 +319,7 @@ kmac_ip::kmac_ip(sc_module_name n,
         return this->handle_read_STATUS(value, read_mask);
       };
   memory.register_read_callback(
-      [this, status_read](uint32_t &value) {
+      [status_read](uint32_t &value) {
         uint32_t read_mask = 0xFFFFFFFF;
         return status_read(value, read_mask);
       },

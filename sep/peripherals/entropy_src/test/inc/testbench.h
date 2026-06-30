@@ -2250,4 +2250,11 @@ public:
      */
     bool tc_f004_hw_reset_during_fifo_filling();
 
+    // Coverage tests (test_coverage.cpp)
+    bool tc_cov_boot_rst_n_with_startup_delay();
+    bool tc_cov_fifo_reenable_startup_delay();
+    bool tc_cov_sw_reset_during_reenable_startup_delay();
+    bool tc_cov_hw_reset_rederive_state();
+    bool tc_cov_new_rdl_register_access();
+
 };

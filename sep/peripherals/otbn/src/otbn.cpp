@@ -25,6 +25,7 @@
 #include "otbn_algorithm_p256_ecdsa.h"
 #include "otbn_algorithm_smoke.h"
 #include "otbn_algorithm_rsa_3072.h"
+#include "otbn_algorithm_callback_cov.h"
 #include <cstdlib>  ///< For srand() and rand() per otbn_plan.md specification
 
 /**
@@ -942,6 +943,10 @@ void otbn_ip::select_algorithm(const std::string& algo_name) {
    }
    else if (algo_name == "rsa_3072" || algo_name == "RSA-3072" || algo_name == "RSA_3072") {
        current_algorithm = new otbn_algorithm_rsa_3072(dmem_size);
+
+   }
+   else if (algo_name == "callback_cov" || algo_name == "CALLBACK_COV") {
+       current_algorithm = new otbn_algorithm_callback_cov(dmem_size);
 
    }
    // Add more algorithms here as they are implemented:

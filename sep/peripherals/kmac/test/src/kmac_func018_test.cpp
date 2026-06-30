@@ -41,7 +41,6 @@
 static CsmlLogger test_logger;
 
 // STATE window memory offsets
-static const uint32_t STATE_WINDOW_BASE = 0x400;
 static const uint32_t STATE_SHARE0_BASE = 0x400;
 static const uint32_t STATE_SHARE0_SIZE = 0xC8; // 200 bytes
 static const uint32_t STATE_SHARE1_BASE = 0x500;

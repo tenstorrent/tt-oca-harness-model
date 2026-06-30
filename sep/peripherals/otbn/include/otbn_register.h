@@ -26,8 +26,7 @@
 
 
 #pragma once
-#include<iostream>
-#include<systemc.h>
+#include <systemc.h>
 #include "csml_register.h"
 
 /// @brief OTBN register type namespace - contains all hardware register class definitions

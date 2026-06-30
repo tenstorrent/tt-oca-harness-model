@@ -142,38 +142,6 @@ static void write_key_share1(kmac_test* test, const uint8_t* key_data, size_t ke
 }
 
 /**
- * @brief Helper function to read KEY_SHARE0 registers
- * @param test Pointer to test harness
- * @param key_data Output buffer for key data
- * @param key_len_bytes Length of key to read in bytes
- *
- * Reads KEY_SHARE0 registers. Note: KEY_SHARE registers are write-only by default,
- * so this may return zeros unless model supports read-back.
- */
-static void read_key_share0(kmac_test* test, uint8_t* key_data, size_t key_len_bytes)
-{
-    const uint32_t KEY_SHARE0_BASE = test->KEY_SHARE0_OFFSET;
-    const size_t MAX_KEY_BYTES = 64;
-
-    if (key_len_bytes > MAX_KEY_BYTES) {
-        key_len_bytes = MAX_KEY_BYTES;
-    }
-
-    std::memset(key_data, 0, key_len_bytes);
-
-    size_t word_count = (key_len_bytes + 3) / 4;
-    for (size_t i = 0; i < word_count; i++) {
-        uint32_t word_val = 0;
-        test->register_read_32(KEY_SHARE0_BASE + i * 4, word_val);
-
-        size_t bytes_this_word = ((i == word_count - 1) && (key_len_bytes % 4 != 0)) ? (key_len_bytes % 4) : 4;
-        for (size_t j = 0; j < bytes_this_word; j++) {
-            key_data[i * 4 + j] = (word_val >> (j * 8)) & 0xFF;
-        }
-    }
-}
-
-/**
  * @brief Helper function to write KEY_LEN register
  * @param test Pointer to test harness
  * @param key_len_val Key length value (0x0=128b, 0x1=192b, 0x2=256b, 0x3=384b, 0x4=512b)
@@ -322,7 +290,6 @@ void testbench::test_key_single_share_128bit()
     try {
         const char* test_msg = "Single-share 128-bit key test";
         const size_t msg_len = strlen(test_msg);
-        const size_t output_bits = 256;
 
         // 128-bit key
         uint8_t key[16];
