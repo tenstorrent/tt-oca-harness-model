@@ -45,8 +45,9 @@ include(PeripheralCommon)
 #   PRIMARY_TARGET  - CMake test executable target (required)
 #   TEST_COMMANDS   - optional list of COMMAND ... steps (default: run PRIMARY_TARGET)
 #   EXTRA_DEPENDS   - optional extra build dependencies
+#   EXCLUDE_SRC     - optional lcov --remove patterns after --extract (e.g. optional modules)
 function(peripheral_add_coverage_target)
-  cmake_parse_arguments(PCOV "" "PRIMARY_TARGET" "TEST_COMMANDS;EXTRA_DEPENDS" ${ARGN})
+  cmake_parse_arguments(PCOV "" "PRIMARY_TARGET" "TEST_COMMANDS;EXTRA_DEPENDS;EXCLUDE_SRC" ${ARGN})
 
   if(NOT PCOV_PRIMARY_TARGET)
     message(FATAL_ERROR "peripheral_add_coverage_target: PRIMARY_TARGET is required")
@@ -66,7 +67,7 @@ function(peripheral_add_coverage_target)
     set(PCOV_TEST_COMMANDS COMMAND "${_exe}")
   endif()
 
-  add_custom_target(coverage
+  set(_cov_cmds
     COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR}
             -P ${PERIPHERAL_COVERAGE_MODULE_DIR}/PeripheralCoverageClean.cmake
     COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --zerocounters --directory .
@@ -74,8 +75,21 @@ function(peripheral_add_coverage_target)
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
     COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
     COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
+  )
+  if(PCOV_EXCLUDE_SRC)
+    list(APPEND _cov_cmds
+      COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
+              --remove coverage/coverage_filtered.info ${PCOV_EXCLUDE_SRC}
+              --output-file coverage/coverage_filtered.info
+    )
+  endif()
+  list(APPEND _cov_cmds
     COMMAND ${GENHTML_EXECUTABLE} ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
     COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
+  )
+
+  add_custom_target(coverage
+    ${_cov_cmds}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMENT "Generating coverage report for ${PCOV_PRIMARY_TARGET}..."
   )

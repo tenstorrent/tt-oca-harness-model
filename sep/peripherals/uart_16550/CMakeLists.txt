@@ -169,7 +169,14 @@ if(BUILD_TESTS)
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # Keep only model/ directory in coverage, exclude everything else
-    peripheral_add_coverage_target(PRIMARY_TARGET uart_test)
+    # Terminal UI / socket queue are tested via terminal_test, not uart_test.
+    # Exclude from lcov extract so macOS OBJECT coverage matches RHEL (core UART only).
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET uart_test
+      EXCLUDE_SRC
+        '${CMAKE_CURRENT_SOURCE_DIR}/src/uart_terminal_ui.cpp'
+        '${CMAKE_CURRENT_SOURCE_DIR}/src/thread_safe_queue_channel.cpp'
+    )
   endif()
 
   # -----------------------------------------------------------------------------
