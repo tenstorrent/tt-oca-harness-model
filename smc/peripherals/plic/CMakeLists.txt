@@ -103,12 +103,14 @@ endif()
 # `.dylib` (macOS) by letting find_library pick the right extension.
 find_library(CCI_CONFIG_LIB
     NAMES cci cci-config
-    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
+    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64" "${CCI_HOME}/lib-linux64"
+          "${CCI_HOME}/lib-macosx" "${CCI_HOME}/lib-macosarm64"
     NO_DEFAULT_PATH
     REQUIRED)
 find_library(CCI_INSPECTION_LIB
     NAMES cci cci-inspection
-    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
+    HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64" "${CCI_HOME}/lib-linux64"
+          "${CCI_HOME}/lib-macosx" "${CCI_HOME}/lib-macosarm64"
     NO_DEFAULT_PATH
     REQUIRED)
 add_library(SystemC::cci INTERFACE IMPORTED)
