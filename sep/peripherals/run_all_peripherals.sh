@@ -228,6 +228,7 @@ LCOV_WRAP
     fi
   fi
 
+  local status=0
   {
     echo "=== ${name} Coverage build ==="
     echo "    clean: ${CLEAN}"
@@ -246,22 +247,24 @@ LCOV_WRAP
     local PATH_ORIG="${PATH}"
     [[ -n "${lcov_wrapper_dir}" ]] && export PATH="${lcov_wrapper_dir}:${PATH}"
 
-    cmake -S "${src_dir}" -B "${build_dir}" \
-      -DCMAKE_BUILD_TYPE=Coverage \
-      -DBUILD_TESTS=ON \
-      ${thread_cache_arg:+"${thread_cache_arg}"} \
-      ${linker_extra_flags:+"${linker_extra_flags}"} \
-      "${CMAKE_EXTRA_ARGS[@]}" 2>&1
-
-    cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1
-
-    # Run the coverage target (generates lcov report)
-    cmake --build "${build_dir}" --target coverage 2>&1
+    # Track the real exit status of configure + build. (The coverage report
+    # target is best-effort: lcov/gcov quirks must not fail the build stage.)
+    if cmake -S "${src_dir}" -B "${build_dir}" \
+         -DCMAKE_BUILD_TYPE=Coverage \
+         -DBUILD_TESTS=ON \
+         ${thread_cache_arg:+"${thread_cache_arg}"} \
+         ${linker_extra_flags:+"${linker_extra_flags}"} \
+         "${CMAKE_EXTRA_ARGS[@]}" 2>&1 \
+       && cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1; then
+      # Run the coverage target (generates lcov report) — non-fatal.
+      cmake --build "${build_dir}" --target coverage 2>&1 || true
+    else
+      status=1
+    fi
 
     export PATH="${PATH_ORIG}"
 
   } > "${log_file}" 2>&1
-  local status=$?
   return "${status}"
 }
 
