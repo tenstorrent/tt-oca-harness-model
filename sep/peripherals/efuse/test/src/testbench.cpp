@@ -361,6 +361,7 @@ void testbench::run_tests()
     test_woset_sys_dis();
     test_efuse_sense_done();
     test_efuse_read_ctrl_rw();
+    run_coverage_tests();
 
     report_test_summary();
 

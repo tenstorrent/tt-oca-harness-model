@@ -33,11 +33,11 @@
 // STRING CONVERSION UTILITIES
 // ============================================================================
 
-/// Convert sfdp_addr_mode_e to human-readable string
-std::string addr_mode_to_string(sfdp_addr_mode_e mode);
+/// Convert address-mode field bits (2-bit SFDP value) to human-readable string
+std::string addr_mode_to_string(uint8_t mode);
 
-/// Convert sfdp_qer_e to human-readable string
-std::string qer_to_string(sfdp_qer_e qer);
+/// Convert QER field bits (3-bit SFDP value) to human-readable string
+std::string qer_to_string(uint8_t qer);
 
 // ============================================================================
 // PARSER FUNCTIONS

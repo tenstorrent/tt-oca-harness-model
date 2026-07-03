@@ -42,4 +42,16 @@ public:
     void test_woset_sys_dis();
     void test_efuse_sense_done();
     void test_efuse_read_ctrl_rw();
+
+    // Coverage tests (test_coverage.cpp)
+    void run_coverage_tests();
+    void test_woset_locks_hi();
+    void test_woset_lc_state();
+    void test_woset_sip_dis_hi();
+    void test_woset_sys_dis_hi();
+    void test_woset_chiplet_pubk_revoke();
+    void test_woset_bl_version();
+    void test_efuse_write_ctrl_go();
+    void test_efuse_read_ctrl_go();
+    void test_otp_accessors();
 };

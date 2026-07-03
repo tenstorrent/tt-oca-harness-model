@@ -172,7 +172,7 @@ void test_err_code_swissuedcmdinappactive_0x03_detailed(kmac_test* test)
 {
     printf("\n[TC-145] Error code SwIssuedCmdInAppActive (0x03) test\n");
 
-    uint32_t err_code, intr_state, status_value;
+    uint32_t status_value;
 
     // Note: This test requires application interface support
     // For now, we'll simulate the condition by checking if the model
@@ -250,8 +250,7 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
     // Verify in IDLE state
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    bool idle = (status_value & (1 << 0)) != 0; // sha3_idle bit
-    assert(idle);
+    assert((status_value & (1 << 0)) != 0); // sha3_idle bit
 
     // Attempt invalid MSG_FIFO write (offset 0x800)
     test->register_write_32(0x800, 0xDEADBEEF);
@@ -289,8 +288,7 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
     // Verify in ABSORB state
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    bool absorb = (status_value & (1 << 1)) != 0; // sha3_absorb bit
-    assert(absorb);
+    assert((status_value & (1 << 1)) != 0); // sha3_absorb bit
 
     // Write MSG_FIFO (valid in ABSORB)
     test->register_write_32(0x800, 0x12345678);
@@ -311,8 +309,7 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
     // Verify in SQUEEZE state
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    bool squeeze = (status_value & (1 << 2)) != 0; // sha3_squeeze bit
-    assert(squeeze);
+    assert((status_value & (1 << 2)) != 0); // sha3_squeeze bit
 
     // Attempt invalid MSG_FIFO write
     test->register_write_32(0x800, 0xCAFEBABE);
@@ -363,7 +360,7 @@ void test_err_code_waittimerexpired_0x04(kmac_test* test)
 {
     printf("\n[TC-147] Error code WaitTimerExpired (0x04) test\n");
 
-    uint32_t err_code, intr_state, status_value, entropy_period;
+    uint32_t err_code, status_value, entropy_period;
 
     // Step 1: Configure EDN mode in CFG_SHADOWED
     printf("  Configuring EDN entropy mode...\n");

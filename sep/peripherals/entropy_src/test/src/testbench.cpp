@@ -78,9 +78,10 @@ testbench::testbench(sc_module_name name)
     sig_intr.write(false);
 
     // =========================================================================
-    // Initialise hardware reset signal to de-asserted (active-low: high = running)
+    // Initialise hardware reset signal — held low until boot coverage test runs
+    // (TC-COV-001 exercises the rst_ni gate in entropy_generation_thread).
     // =========================================================================
-    sig_rst_n.write(true);
+    sig_rst_n.write(false);
 
     // =========================================================================
     // Perform all port bindings
@@ -476,6 +477,13 @@ void testbench::run_tests()
     CSML_INFO(1, logger) << "======================================";
     CSML_INFO(1, logger) << " entropy_src Testbench — Run Tests";
     CSML_INFO(1, logger) << "======================================";
+
+    // Coverage: boot rst_n gate + initial STARTUP_DELAY before first SW reset.
+    CSML_INFO(1, logger) << "--------------------------------------";
+    CSML_INFO(1, logger) << " Coverage: thread boot / startup paths";
+    CSML_INFO(1, logger) << "--------------------------------------";
+    record_result("TC-COV-001: boot_rst_n_with_startup_delay",
+        tc_cov_boot_rst_n_with_startup_delay());
 
     // Apply initial reset before any tests.
     apply_reset();
@@ -1313,6 +1321,29 @@ void testbench::run_tests()
     record_result(
         "TC-F004-HW-002: hw_reset_during_fifo_filling",
         tc_f004_hw_reset_during_fifo_filling());
+
+    // =========================================================================
+    // Coverage tests — additional thread / register paths
+    // =========================================================================
+    CSML_INFO(1, logger) << "--------------------------------------";
+    CSML_INFO(1, logger) << " Coverage: thread / RDL register paths";
+    CSML_INFO(1, logger) << "--------------------------------------";
+
+    apply_reset();
+    record_result("TC-COV-002: fifo_reenable_startup_delay",
+        tc_cov_fifo_reenable_startup_delay());
+
+    apply_reset();
+    record_result("TC-COV-003: sw_reset_during_reenable_startup_delay",
+        tc_cov_sw_reset_during_reenable_startup_delay());
+
+    apply_reset();
+    record_result("TC-COV-004: hw_reset_rederive_state",
+        tc_cov_hw_reset_rederive_state());
+
+    apply_reset();
+    record_result("TC-COV-005: new_rdl_register_access",
+        tc_cov_new_rdl_register_access());
 
     // =========================================================================
     // Summary

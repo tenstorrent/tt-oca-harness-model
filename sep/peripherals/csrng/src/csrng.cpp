@@ -662,8 +662,7 @@ void csrng_model::apply_fips_force_override(int instance_num, bool& fips_complia
 
     if (fips_force_enable && (fips_force & (1 << instance_num))) {
         fips_compliant = true;
-        CSML_INFO(2, logger) << "[CRNG] FIPS compliance forced for instance "
-                             << instance_num << std::endl;
+        CSML_INFO(2, logger) << "[CRNG] FIPS compliance forced for instance "<< instance_num << std::endl;
     }
 }
 
@@ -783,8 +782,7 @@ bool csrng_model::cmd_instantiate(int instance_num, uint8_t flag0, uint8_t clen,
 
     m_cmd_status = CMD_SUCCESS;
     CSML_INFO(1, logger) << "[CRNG] Instance " << instance_num << " instantiated (FIPS=" << fips_compliant << ")" << std::endl;
-    CSML_INFO(2, logger) << "[CRNG] Instance " << instance_num << " V[0]=0x" << std::hex << inst.V[0] 
-                        << ", Key[0]=0x" << inst.Key[0] << std::dec << std::endl;
+    CSML_INFO(2, logger) << "[CRNG] Instance " << instance_num << " V[0]=0x" << std::hex << inst.V[0] << ", Key[0]=0x" << inst.Key[0] << std::dec << std::endl;
 
     return true;
 }
@@ -1030,10 +1028,7 @@ void csrng_model::process_command()
     uint8_t flag0 = (m_current_command >> 8) & 0xF;
     uint16_t glen = (m_current_command >> 12) & 0xFFF;
 
-    CSML_INFO(2, logger) << "[CRNG] Processing command: acmd=" << (int)acmd
-                         << ", clen=" << (int)clen
-                         << ", flag0=" << (int)flag0
-                         << ", glen=" << glen << std::endl;
+    CSML_INFO(2, logger) << "[CRNG] Processing command: acmd=" << (int)acmd << ", clen=" << (int)clen  << ", flag0=" << (int)flag0 << ", glen=" << glen << std::endl;
 
     // Validate clen range (0-12)
     if (clen > 12) {
@@ -1359,8 +1354,7 @@ bool csrng_model::handle_read_GENBITS(DT& value, DT read_mask)
             // Pop next block from queue
             m_genbits_buffer = m_genbits_block_queue.front();
             m_genbits_block_queue.pop();
-            CSML_INFO(2, logger) << "[CRNG] GENBITS block fully read, loading next block from queue (remaining: "
-                                 << m_genbits_block_queue.size() << ")" << std::endl;
+            CSML_INFO(2, logger) << "[CRNG] GENBITS block fully read, loading next block from queue (remaining: " << m_genbits_block_queue.size() << ")" << std::endl;
             // m_genbits_valid remains true, m_genbits_fips remains same for this GENERATE batch
         } else {
             // No more blocks, clear valid flag
@@ -1663,8 +1657,7 @@ bool csrng_model::handle_write_CTRL(DT value, DT write_mask)
         std::cout << "[DEBUG] handle_write_CTRL: ENABLE=false, m_cmd_ready=" << m_cmd_ready << std::endl;
     }
 
-    CSML_INFO(2, logger) << "[CRNG] CTRL written: 0x" << std::hex << value << std::dec
-                         << " (valid=" << valid << ", enable=" << enable << ")" << std::endl;
+    CSML_INFO(2, logger) << "[CRNG] CTRL written: 0x" << std::hex << value << std::dec << " (valid=" << valid << ", enable=" << enable << ")" << std::endl;
     return true;
 }
 

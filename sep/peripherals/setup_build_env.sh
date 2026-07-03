@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Shared build environment for sep/peripherals/* run_tests.sh and run_all_peripherals.sh.
+#
+# REQUIRED: vp/configure_vp.sh must resolve valid install paths before peripheral tests run.
+#   - Edit defaults in vp/configure_vp.sh (SYSTEMC_HOME, CCI_HOME, OPENSSL_ROOT, BOOST_ROOT), or
+#   - Export those variables (and CMAKE_CXX_STANDARD if not C++20) in the shell / CI job.
+#
+# This script quietly sources vp/configure_vp.sh and exposes CMAKE_EXTRA_ARGS for cmake configure.
+# Individual run_tests.sh scripts source this file automatically; you do not need to
+# `source vp/configure_vp.sh` separately unless running cmake by hand.
+
+if [ -n "${BASH_VERSION:-}" ]; then
+  _PERIPH_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+  _PERIPH_SETUP_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)"
+fi
+
+# Resolve install paths (SystemC, CCI, OpenSSL, Boost) from vp/configure_vp.sh.
+peripheral_setup_build_env() {
+  export VP_CONFIGURE_QUIET=1
+  # shellcheck disable=SC1091
+  source "${_PERIPH_SETUP_DIR}/../../vp/configure_vp.sh"
+
+  CMAKE_EXTRA_ARGS=(
+    -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}"
+    -DCMAKE_CXX_STANDARD_REQUIRED=ON
+    -DSYSTEMC_HOME="${SYSTEMC_HOME}"
+    -DCCI_HOME="${CCI_HOME}"
+    -DSystemCLanguage_DIR="${SYSTEMC_HOME}/lib/cmake/SystemCLanguage"
+    -DSystemCCCI_DIR="${CCI_HOME}/lib/cmake/SystemCCCI"
+    -DBOOST_ROOT="${BOOST_ROOT}" -DBoost_ROOT="${BOOST_ROOT}"
+    -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT}"
+    -DBoost_NO_SYSTEM_PATHS=ON -DBoost_NO_BOOST_CMAKE=ON
+  )
+  export CMAKE_EXTRA_ARGS
+}
+
+# Drop stale cmake cache when install paths or C++ standard change.
+peripheral_cache_stale() {
+  local cache="$1/CMakeCache.txt"
+  [[ -f "${cache}" ]] || return 1
+  local cached_sc cached_ssl cached_cci cached_std
+  cached_sc="$(grep -E '^SYSTEMC_HOME:' "${cache}" 2>/dev/null | sed 's/^SYSTEMC_HOME:[^=]*=//' || true)"
+  cached_ssl="$(grep -E '^OPENSSL_INCLUDE_DIR:' "${cache}" 2>/dev/null | sed 's/^OPENSSL_INCLUDE_DIR:[^=]*=//' || true)"
+  cached_cci="$(grep -E '^CCI_INCLUDE_DIR:' "${cache}" 2>/dev/null | sed 's/^CCI_INCLUDE_DIR:[^=]*=//' || true)"
+  cached_std="$(grep -E '^CMAKE_CXX_STANDARD:' "${cache}" 2>/dev/null | sed 's/^CMAKE_CXX_STANDARD:[^=]*=//' || true)"
+  [[ -n "${cached_sc}" && "${cached_sc}" != "${SYSTEMC_HOME}" ]] && return 0
+  [[ -n "${cached_ssl}" && "${cached_ssl}" != "${OPENSSL_INC}" ]] && return 0
+  [[ -n "${cached_cci}" && "${cached_cci}" != "${CCI_HOME}/include" ]] && return 0
+  [[ -n "${cached_std}" && "${cached_std}" != "${CMAKE_CXX_STANDARD}" ]] && return 0
+  return 1
+}
+
+peripheral_parallel_jobs() {
+  if [[ -n "${MAX_JOBS:-}" ]]; then
+    echo "${MAX_JOBS}"
+    return
+  fi
+  if command -v nproc >/dev/null 2>&1; then
+    nproc
+  elif command -v sysctl >/dev/null 2>&1; then
+    sysctl -n hw.ncpu 2>/dev/null || echo 4
+  else
+    echo 4
+  fi
+}

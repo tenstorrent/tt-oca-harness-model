@@ -259,4 +259,16 @@ public:
      * @brief Test DMA trigger
      */
     void test_func010_dma_trigger();
+
+    /// =========================================================================
+    /// Coverage Tests
+    /// =========================================================================
+    void test_coverage_big_endian_byte_order();
+    void test_coverage_intr_test_edge_cases();
+    void test_coverage_event_enable_immediate_trigger();
+    void test_coverage_spien_reenable_queued_commands();
+    void test_coverage_reset_with_queued_commands();
+    void test_coverage_signal_update_during_reset();
+    void test_coverage_fifo_overflow_underflow();
 };
+

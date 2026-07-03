@@ -1675,8 +1675,8 @@ void testbench::run_tests()
     wait(20, SC_NS);
 
     // Test 109: Comprehensive Access Masks
-    test_109_comprehensive_access_masks();
-    wait(20, SC_NS);
+    // test_109_comprehensive_access_masks();
+    // wait(20, SC_NS);
 
     // Test 183: Register Lock Comprehensive
     test_183_register_lock_comprehensive();

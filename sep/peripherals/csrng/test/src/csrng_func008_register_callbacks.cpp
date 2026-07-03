@@ -1620,7 +1620,7 @@ void testbench::test_109_comprehensive_access_masks()
              csrng_basetest::GENBITS_VLD_READ, "GENBITS_VLD"}
         };
 
-        bool all_passed = true;
+        // bool all_passed = true;
         for (const auto& test : tests) {
             // Write all 1s
             m_test->register_write_32(test.offset, 0xFFFFFFFF);
@@ -1632,8 +1632,8 @@ void testbench::test_109_comprehensive_access_masks()
             wait(10, SC_NS);
 
             // Apply masks
-            uint32_t expected_write = 0xFFFFFFFF & test.write_mask;
-            uint32_t read_masked = read_val & test.read_mask;
+            // uint32_t expected_write = 0xFFFFFFFF & test.write_mask;
+            // uint32_t read_masked = read_val & test.read_mask;
 
             CSML_INFO(2, logger) << test.name << " - Write mask: 0x" << std::hex << test.write_mask
                                 << ", Read mask: 0x" << test.read_mask

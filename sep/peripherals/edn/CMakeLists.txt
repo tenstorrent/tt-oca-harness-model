@@ -7,6 +7,8 @@ project(edn LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -53,7 +55,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 # Compiler settings
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -74,7 +76,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "edn: Release build - errors only, optimized")
 endif()
 
@@ -87,7 +89,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "edn: Coverage build enabled")
 endif()
@@ -108,9 +111,8 @@ include_directories(
 include(FindCCI)
 include(FindSystemC)
 
-if(NOT TARGET OpenSSL::Crypto)
-  find_package(OpenSSL REQUIRED)
-endif()
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 
 if(CCI_FOUND)
   include_directories(${CCI_INCLUDE_DIR})
@@ -137,7 +139,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # edn model library (always built)
-add_library(edn_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(edn_model ${MODEL_SRCS})
 target_include_directories(edn_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(edn_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::Crypto)
 if(CCI_FOUND)
@@ -147,8 +149,7 @@ endif()
 # edn testbench executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(edn_testbench ${TEST_SRCS})
-  target_link_libraries(edn_testbench PRIVATE edn_model)
-
+  peripheral_link_test_to_model(edn_testbench edn_model)
   enable_testing()
   add_test(NAME edn_testbench COMMAND edn_testbench)
 
@@ -156,29 +157,15 @@ if(BUILD_TESTS)
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Keep only model/ directory in coverage, exclude everything else
-    add_custom_target(coverage
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 1
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 2
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 3
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 4
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 5
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 6
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 7
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 8
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 9
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 10
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 11
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 12
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 13
-      COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini 14
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
+    set(_edn_cov_cmds)
+    foreach(_cfg RANGE 1 14)
+      list(APPEND _edn_cov_cmds
+        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ../config/accellera_config.ini ${_cfg})
+    endforeach()
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET edn_testbench
+      TEST_COMMANDS ${_edn_cov_cmds}
     )
-    add_dependencies(coverage edn_testbench)
   endif()
 endif()
 

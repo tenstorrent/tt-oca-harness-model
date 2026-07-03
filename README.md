@@ -82,7 +82,7 @@ OCAH subsystems:
 
 ```
 tt-oca-sim/
-├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI)
+├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI, PeripheralCommon, …)
 ├── sep/                           ← SEP IP peripheral models
 │   ├── peripherals/               ← individual IP models
 │   │   ├── aes/                   ← AES-256 engine
@@ -102,7 +102,9 @@ tt-oca-sim/
 │   │   ├── sep_memory/            ← SRAM / ROM models
 │   │   ├── spi_controller/        ← SPI controller (OpenTitan)
 │   │   ├── spi_flash/             ← SPI flash model (SFDP Profile 1)
-│   │   └── uart_16550/            ← UART 16550
+│   │   ├── uart_16550/            ← UART 16550
+│   │   ├── setup_build_env.sh     ← shared env for run_tests.sh / run_all_peripherals.sh
+│   │   └── run_all_peripherals.sh ← batch peripheral tests (sources vp/configure_vp.sh)
 │   ├── cpu/                       ← VeeR EL2 ISS + TLM-2.0 wrapper
 │   └── utils/
 │       ├── csml/                  ← Core SystemC Model Library (submodule — Vayavya CSML)
@@ -120,6 +122,7 @@ tt-oca-sim/
 │       └── SmcSystemCStd.cmake    ← auto-detects SystemC C++ standard
 ├── vp/                            ← SEP Virtual Platform
 │   ├── configure_vp.sh            ← configure CMake + export build env
+│   ├── vp_build_env.sh            ← derived paths (BOOST_LIB, LD_LIBRARY_PATH, …)
 │   ├── CMakeLists.txt
 │   └── platform/
 │       ├── infra/                 ← bus, PLIC, CLINT, ELF loader
@@ -137,19 +140,13 @@ tt-oca-sim/
 │       ├── dv/sep/tests/          ← DV test ELFs
 │       └── fw/sep/tests/          ← Firmware test suite
 ├── doc/                           ← Architecture and design documentation
-│   ├── 01_SMC_Architecture.md/.pdf
-│   ├── 02_SMC_IP_LowLevel_Design.md/.pdf
-│   ├── 03_SMC_Test_Plan.md/.pdf
-│   ├── 04_SMC_VP_Exit_Criteria.md/.pdf
 │   ├── component-developer-guide.md/.pdf
 │   ├── maintainer-guide.md/.pdf
 │   └── SystemC_Virtual_Platform_Customer_Guide.md/.pdf
-├── scripts/
-│   ├── md-to-pdf.sh               ← Markdown → PDF (pandoc + Chrome headless)
-│   └── md-pdf.css
 ├── Makefile                       ← top-level: sep-vp, submodule-init, clean
 ├── RELEASE_NOTES.md
-└── LICENSE
+├── LICENSE
+└── LICENSE.riscv-vp-plusplus      ← upstream MIT license attribution
 ```
 
 ---
@@ -159,20 +156,22 @@ tt-oca-sim/
 ### Dependencies
 
 - **CMake** 3.24+
-- **C++ compiler**: GCC 9+ (C++17) or GCC 11+ (C++20)
+- **C++ compiler**: GCC 9+ (C++17) or GCC 11+ (C++20, default)
 - **SystemC** 3.0.2
 - **CCI** 1.0.1
-- **Boost** (`iostreams`, `program_options`, `log`)
-- **OpenSSL** (for HMAC, KMAC, CSRNG crypto models)
+- **Boost** **1.84.0** (`iostreams`, `program_options`, `regex`)
+- **OpenSSL** (for HMAC, KMAC, CSRNG crypto models) — tested on **macOS** and **RHEL** with **3.0.13**; on Ubuntu with **3.2.1** and **3.5.2**
 
 ### Installation
 
-#### 1. System packages
+The OCH SEP VP has been tested on **Ubuntu**, **RHEL**, and **macOS**. The step-by-step installation examples below are for **Ubuntu** (`apt` packages and typical Linux install paths).
+
+#### 1. System packages (Ubuntu)
 
 ```bash
 sudo apt-get update
 sudo apt install -y g++ make cmake autoconf \
-    libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
+    libboost-iostreams-dev libboost-program-options-dev libboost-regex-dev \
     libssl-dev libvncserver-dev doxygen graphviz
 ```
 
@@ -197,6 +196,8 @@ cd ~/Downloads && git clone https://github.com/Tencent/rapidjson.git
 
 #### 4. CCI 1.0.1
 
+Download and extract (all builds):
+
 ```bash
 cd ~/Downloads
 wget https://github.com/accellera-official/cci/releases/download/v1.0.1/cci_v1.0.1.tar.gz
@@ -214,8 +215,38 @@ make && sudo make install
 
 > **C++20 note:** CCI 1.0.1 requires a patch for C++20 builds (GCC 11+). In
 > `src/cci/core/cci_value.h`, change both `typedef void value_type;` lines
-> (marked `// TODO`) to the concrete iterator type. See the RELEASE_NOTES for
+> (marked `// TODO`) to the concrete iterator type. See below or RELEASE_NOTES for
 > the exact patch.
+
+Apply the patch from the CCI source root (`~/Downloads/cci_v1.0.1`), then continue with configure/install:
+
+```bash
+cd ~/Downloads/cci_v1.0.1
+patch -p1 <<'PATCH'
+--- a/src/cci/core/cci_value.h
++++ b/src/cci/core/cci_value.h
+@@ -764,7 +764,7 @@
+   template<typename U> friend class cci_impl::value_iterator_impl;
+   typedef cci_impl::value_ptr<cci_value_map_elem_cref> proxy_ptr;
+ 
+-  typedef void value_type; // TODO: add  explicit value_type 
++  typedef cci_value_map_elem_cref value_type; // TODO: add  explicit value_type 
+ public:
+   typedef cci_value_map_elem_cref const_reference;
+   typedef cci_value_map_elem_ref  reference;
+@@ -791,7 +791,7 @@
+ {
+   template<typename U> friend class cci_impl::value_iterator_impl;
+   typedef cci_impl::value_ptr<cci_value_map_elem_ref> proxy_ptr;
+-  typedef void value_type; // TODO: add  explicit value_type
++  typedef cci_value_map_elem_ref value_type; // TODO: add  explicit value_type
+ public:
+   typedef cci_value_map_elem_cref const_reference;
+   typedef cci_value_map_elem_ref  reference;
+PATCH
+```
+
+Then continue with configure/install:
 
 ### Configure & Build
 
@@ -231,17 +262,27 @@ git submodule update --init --recursive
 
 **Build:**
 
-Edit **`vp/configure_vp.sh`** to set `SYSTEMC_HOME`, `CCI_HOME`, `BOOST_ROOT`,
-and `OPENSSL_ROOT` to your install paths, then:
+1. Edit **`vp/configure_vp.sh`** and set `SYSTEMC_HOME`, `CCI_HOME`, `OPENSSL_ROOT`, and
+   `BOOST_ROOT` to your install prefix (or rely on auto-discovery). Use a C++20 SystemC tree when
+   `CMAKE_CXX_STANDARD=20`, the default.
+2. Configure and build — no `source` step required; `./configure_vp.sh` passes all paths to
+   CMake via `-D` flags and creates **`vp/build/`**:
 
 ```bash
-cd vp && ./configure_vp.sh && cd build && make sep-vp
+unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
+cd vp
+./configure_vp.sh
+cd build
+make sep-vp
 ```
 
-Override on the command line:
+Override defaults on the command line (examples):
 
 ```bash
-CMAKE_BUILD_TYPE=Release CMAKE_CXX_STANDARD=20 cd vp && ./configure_vp.sh && cd build && make sep-vp
+unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
+cd vp
+CMAKE_BUILD_TYPE=Release CMAKE_CXX_STANDARD=20 ./configure_vp.sh
+cd build && make sep-vp
 ```
 
 Or from the repo root:
@@ -249,6 +290,12 @@ Or from the repo root:
 ```bash
 SYSTEMC_HOME=/path/to/systemc make sep-vp
 ```
+```
+
+Optional: **`source vp/configure_vp.sh`** (from repo root) or **`source ./configure_vp.sh`**
+(after `cd vp`) only if you need install paths exported in your shell (for example manual
+`cmake` in a peripheral directory, or debugging). It is **not** required for the VP
+configure/build steps above — use **`./configure_vp.sh`** there instead.
 
 Output binary: `vp/build/bin/sep-vp`
 
@@ -268,6 +315,7 @@ to use — mismatches fail at link time with an `sc_api_version_*` undefined sym
 
 **`vp/platform/sep/config/veeriss_config.json`** — VeeR EL2 ISS configuration
 (XLEN, NMI vector, ICCM/DCCM layout, RISC-V extensions, CSR overrides).
+Referenced from the INI via `och_sep_ss1.configFile`.
 
 ```bash
 vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
@@ -280,10 +328,10 @@ vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
 
 ```bash
 cd sw/sep-vp-tests/sep-gpio-test
-make        # build ELF
-make sim    # run on VP
-make debug  # run with GDB enabled
-make gdb    # connect GDB (second terminal)
+make             # build ELF
+make sim         # run on VP
+make debug       # run with GDB enabled
+make gdb         # connect GDB (second terminal)
 ```
 
 ### Peripheral Model Unit Tests (SEP)
@@ -294,28 +342,76 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
 <ip>/
 ├── CMakeLists.txt
 ├── README.md
-├── run_tests.sh
-├── include/
-├── src/
-├── test/
-└── doc/
+├── run_tests.sh          ← sources ../setup_build_env.sh (VP paths required)
+├── include/              ← public headers
+├── src/                  ← implementation
+├── test/                 ← CTest-registered unit tests
+└── docs/
     ├── 01_<IP>_Specification/
     ├── 02_<IP>_HighLevel_Design.md
     └── 03_<IP>_Test_Plan.md
 ```
 
+#### Build environment (required)
+
+Peripheral standalone builds use the **same install paths as the VP**: `SYSTEMC_HOME`, `CCI_HOME`,
+`OPENSSL_ROOT`, `BOOST_ROOT`, and (for SystemC 3.x) a matching `CMAKE_CXX_STANDARD`.
+
+Every `run_tests.sh` and `run_all_peripherals.sh` **automatically** loads these via
+`sep/peripherals/setup_build_env.sh`, which quietly **`source`s `vp/configure_vp.sh`** and passes
+the resulting paths to cmake as `CMAKE_EXTRA_ARGS` (`SystemCLanguage_DIR`, `SystemCCCI_DIR`,
+OpenSSL/Boost roots, C++ standard, and stale-cache detection).
+
+**You must configure paths before running peripheral tests.** Either:
+
+1. **Edit `vp/configure_vp.sh`** — set the `:="${SYSTEMC_HOME:=…}"` defaults for your machine
+   (same block used for the VP build), **or**
+2. **Export the variables** in your shell or CI job before invoking tests, for example:
+
 ```bash
-cd sep/peripherals/<ip>
-./run_tests.sh              # build + run
-./run_tests.sh --asan       # with AddressSanitizer
-./run_tests.sh --coverage   # with lcov coverage report
-./run_tests.sh --debug      # debug build
-./run_tests.sh --ctest      # ctest
-./run_tests.sh --docs       # doxygen docs
+export SYSTEMC_HOME=/opt/systemc-3.0.1
+export CCI_HOME=/opt/cci-1.0.2
+export OPENSSL_ROOT=/usr                    # or a custom OpenSSL prefix
+export BOOST_ROOT=/usr                      # or a custom Boost prefix
+export CMAKE_CXX_STANDARD=17                # if SystemC was built with C++17
 ```
 
-`sep/peripherals/run_all_peripherals.sh` builds and runs all SEP peripherals at once.
-Logs are written to `sep/peripherals/logs/`.
+Pre-set environment variables override the defaults in `configure_vp.sh`. Match
+`CMAKE_CXX_STANDARD` to the C++ standard your SystemC install was built with (mismatch causes
+link errors such as missing `sc_api_version_*` symbols).
+
+Manual `source vp/configure_vp.sh` is **not** required when using `run_tests.sh` or
+`run_all_peripherals.sh` (they call `setup_build_env.sh` for you). Source it only for ad-hoc
+cmake from a peripheral directory.
+
+Single peripheral:
+
+```bash
+cd sep/peripherals/<ip>
+./run_tests.sh                               # build + run (env loaded automatically)
+./run_tests.sh --asan                        # with AddressSanitizer
+./run_tests.sh --coverage                    # with lcov coverage report
+./run_tests.sh --coverage --clean            # recommended on macOS (see note below)
+./run_tests.sh --debug                       # debug build
+./run_tests.sh --ctest                       # ctest
+./run_tests.sh --docs                        # doxygen docs
+```
+
+All peripherals:
+
+```bash
+cd sep/peripherals
+./run_all_peripherals.sh                     # release / asan / coverage / ctest for each model
+./run_all_peripherals.sh --clean             # clean build dirs first
+./run_all_peripherals.sh --clean aes hmac    # subset only
+```
+
+**Coverage on macOS:** Use `--clean` when running coverage (`./run_tests.sh --coverage --clean` or
+`./run_all_peripherals.sh --clean`) so stale `.gcda` files from prior runs are removed before
+capture. Incremental coverage builds on Apple Clang can leave corrupt profile data and report falsely
+low percentages even when tests pass. Install `lcov` first on macOS (`brew install lcov`).
+
+Logs from `run_all_peripherals.sh` are written to `sep/peripherals/logs/`.
 
 ### Peripheral Model Unit Tests (SMC)
 
@@ -386,8 +482,8 @@ ELFs: `sw/tt-oca-hw-main/dv/sep/tests/<test_name>/<test_name>.elf`
 ### Run tests
 
 ```bash
-bin/sep_fw_standalone.sh sim   aes_test     # run a built test on sep-vp
-bin/sep_fw_standalone.sh run   aes_test     # build + run in one shot
+bin/sep_fw_standalone.sh sim   aes_test  # run a built test on sep-vp
+bin/sep_fw_standalone.sh run   aes_test  # build + run in one shot
 ```
 
 ### GDB debug workflow
@@ -395,10 +491,10 @@ bin/sep_fw_standalone.sh run   aes_test     # build + run in one shot
 Enable GDB in the INI: `och_sep_ss1.gdb : true`
 
 ```bash
-bin/sep_fw_standalone.sh build-dbg aes_test   # build with -O0 -g
+bin/sep_fw_standalone.sh build-dbg aes_test  # build with -O0 -g
 
 # Terminal 1: VP acts as GDB server
-bin/sep_fw_standalone.sh debug aes_test        # default port 4000
+bin/sep_fw_standalone.sh debug aes_test      # default port 4000
 
 # Terminal 2: connect gdb-multiarch
 bin/sep_fw_standalone.sh gdb aes_test
@@ -409,14 +505,14 @@ bin/sep_fw_standalone.sh gdb aes_test
 ```bash
 cd sw/tt-oca-hw-main/fw/sep/tests
 
-./run_test.sh aes_sanity               # build + run
-./run_test.sh aes_sanity --run-only    # run existing ELF
-./run_test.sh aes_sanity --build-only  # build only
-./run_test.sh aes_sanity -t 60         # custom timeout
+./run_test.sh aes_sanity                    # build + run
+./run_test.sh aes_sanity --run-only         # run existing ELF
+./run_test.sh aes_sanity --build-only       # build only
+./run_test.sh aes_sanity -t 60              # custom timeout
 
-./run_all_tests.sh                     # build + run all
-./run_all_tests.sh --clean             # clean + build + run all
-./run_all_tests.sh --no-build          # run only with existing ELFs
+./run_all_tests.sh                          # build + run all
+./run_all_tests.sh --clean                  # clean + build + run all
+./run_all_tests.sh --no-build               # run only with existing ELFs
 ```
 
 ### Linker script for dv/sep/tests
@@ -515,22 +611,57 @@ Log file names can be changed via CCI parameters.
 | c++20 | system GCC 8.5 | cxx201709L | Not Supported |
 | c++20 | gcc-toolset-9 (GCC 9.2) | cxx201709L | Not Supported |
 
+### Compiler Selection
+
+Use a GCC version that supports the C++ standard selected via `CMAKE_CXX_STANDARD` in `vp/configure_vp.sh`.
+
+On **RHEL 8**, GCC Toolsets can be used to select a newer compiler. For example, to build with GCC 11:
+
+```bash
+# Open a shell with GCC 11 on PATH
+scl enable gcc-toolset-11 bash
+
+unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
+
+cd vp
+CMAKE_CXX_STANDARD=20 ./configure_vp.sh
+cd build && make sep-vp
+```
+
+Alternatively, point CMake to the desired compiler explicitly:
+
+```bash
+export PATH="/opt/rh/gcc-toolset-11/root/usr/bin:$PATH"
+export CC=/opt/rh/gcc-toolset-11/root/usr/bin/gcc
+export CXX=/opt/rh/gcc-toolset-11/root/usr/bin/g++
+```
+
+On **Ubuntu**, install the required compiler package (for example, `g++-11`) and either ensure it appears first on `PATH` or set `CC` and `CXX` before running `configure_vp.sh`:
+
+```bash
+export CC=gcc-11
+export CXX=g++-11
+```
+
+Verify the active compiler:
+
+```bash
+g++ --version
+```
+
+Verify the compiler selected by CMake:
+
+```bash
+grep CMAKE_CXX_COMPILER build/CMakeCache.txt
+```
+
 ---
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| `doc/01_SMC_Architecture.md` | SMC subsystem architecture (OCAH Ch. 6 modeling view) |
-| `doc/02_SMC_IP_LowLevel_Design.md` | Low-level design for each SMC IP model |
-| `doc/03_SMC_Test_Plan.md` | SMC model verification plan |
-| `doc/04_SMC_VP_Exit_Criteria.md` | Exit criteria for SMC VP completion |
 | `doc/component-developer-guide.md` | Day-to-day contributor workflow |
 | `doc/maintainer-guide.md` | Repository maintenance guide |
 | `doc/SystemC_Virtual_Platform_Customer_Guide.md` | Customer-facing VP usage guide |
-
-PDF versions of all Markdown documents are generated with:
-
-```bash
-scripts/md-to-pdf.sh doc/
 ```

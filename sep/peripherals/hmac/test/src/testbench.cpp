@@ -40,6 +40,7 @@ extern "C" void __gcov_dump(void);
 #define TEST_ERROR_RECOVERY 
 #define TEST_BLOCK_BOUNDARY_MESSAGE
 #define TEST_CONTEXT_SAVING
+#define TEST_HASH_STOP_SYNC_FIFO_DRAIN
 #define TEST_CONTEXT_SHA_EN_DISABLE_CLEAR
 #define TEST_KEY_WRITE_DURING_PROCESSING
 #define TEST_HMAC_ERR_INTERRUPT
@@ -55,7 +56,7 @@ void testbench::run_tests()
     wait(20, SC_NS);
 
     // Comment out Basic Tests for now - focus on core functionality
-    /*
+
     CSML_INFO(1, logger) << "\n*** Starting Basic Tests (8 Tests) ***\n" << std::endl;
     test_reset_mechanisms();           
     test_readonly_registers();         
@@ -65,7 +66,7 @@ void testbench::run_tests()
     test_read_only_registers();       
     test_port_binding_verification(); 
     test_reset_functionality();       
-    */
+
 
     #ifdef TEST_SHA256
     test_sha256_hash(); 
@@ -196,6 +197,10 @@ void testbench::run_tests()
 
     #ifdef TEST_CONTEXT_SAVING
       test_context_save_basic();
+    #endif
+
+    #ifdef TEST_HASH_STOP_SYNC_FIFO_DRAIN
+      test_hash_stop_sync_fifo_drain();
     #endif
 
     #ifdef TEST_CONTEXT_SHA_EN_DISABLE_CLEAR
@@ -5124,7 +5129,118 @@ void testbench::test_context_save_basic()
     
 }
 
+void testbench::test_hash_stop_sync_fifo_drain()
+{
+    CSML_INFO(1, logger) << "\n========================================" << std::endl;
+    CSML_INFO(1, logger) << "  Test: hash_stop Synchronous FIFO Drain" << std::endl;
+    CSML_INFO(1, logger) << "========================================\n" << std::endl;
 
+    test->rst_ni.write(false);
+    wait(20, SC_NS);
+    test->rst_ni.write(true);
+    wait(20, SC_NS);
+    wait_for_hmac_idle();
+
+    uint32_t write_val = 0;
+    uint32_t read_val = 0;
+    uint32_t status_val = 0;
+    bool test_passed = true;
+
+    // SHA-256 block = 16 words; block_processing_thread waits ~1600 ns per block at 50 MHz.
+    static constexpr unsigned int kBlockWords = 16;
+    static constexpr unsigned int kStallNs = 10;
+
+    uint32_t block1[kBlockWords] = {
+        0x61626364, 0x65666768, 0x696A6B6C, 0x6D6E6F70,
+        0x71727374, 0x75767778, 0x797A4142, 0x43444546,
+        0x4748494A, 0x4B4C4D4E, 0x4F505152, 0x53545556,
+        0x5758595A, 0x30313233, 0x34353637, 0x38394041
+    };
+
+    uint32_t block2[kBlockWords];
+    for (unsigned int i = 0; i < kBlockWords; i++) {
+        block2[i] = 0xA0000000u + i;
+    }
+
+    // Step 1: Configure SHA-256 hash-only mode
+    write_val = (1 << 1) | (0x1 << 5);
+    test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
+    wait(5, SC_NS);
+
+    // Step 2: Start hashing
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1);
+    wait(10, SC_NS);
+
+    test->read_register_32(hmac_basetest::STATUS_OFFSET, status_val);
+    wait(5, SC_NS);
+    if (status_val & 0x1) {
+        CSML_INFO(1, logger) << "FAIL: Engine should be PROCESSING after hash_start" << std::endl;
+        m_tests_failed++;
+        test_passed = false;
+    }
+
+    // Step 3: Write one full block so the background thread enters its timing wait
+    for (unsigned int i = 0; i < kBlockWords; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, block1[i]);
+    }
+    wait(kStallNs, SC_NS);
+
+    // Step 4: While the block thread is stalled, fill the FIFO with two more blocks
+    // without yielding — hash_stop must synchronously drain them.
+    for (unsigned int i = 0; i < kBlockWords; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, block2[i]);
+    }
+    for (unsigned int i = 0; i < kBlockWords; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, block2[i] ^ 0x55555555u);
+    }
+
+    // Step 5: hash_stop with a full FIFO — exercises the synchronous drain loop
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x4);
+    wait(50, SC_NS);
+
+    // Step 6: Verify hash_stop completed
+    test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+    wait(5, SC_NS);
+    bool hmac_done = (read_val & 0x1) != 0;
+    if (!hmac_done) {
+        CSML_INFO(1, logger) << "FAIL: INTR_STATE.hmac_done not asserted after hash_stop" << std::endl;
+        m_tests_failed++;
+        test_passed = false;
+    }
+
+    test->read_register_32(hmac_basetest::STATUS_OFFSET, status_val);
+    wait(5, SC_NS);
+    bool idle = (status_val & 0x1) != 0;
+    if (!idle) {
+        CSML_INFO(1, logger) << "FAIL: Engine not IDLE after hash_stop" << std::endl;
+        m_tests_failed++;
+        test_passed = false;
+    }
+
+    // MSG_LENGTH tracks all FIFO writes: 3 blocks * 16 words * 32 bits = 1536 bits
+    const uint32_t expected_length_lower = 3u * kBlockWords * 32u;
+    uint32_t msg_length_lower = 0;
+    test->read_register_32(hmac_basetest::MSG_LENGTH_LOWER_OFFSET, msg_length_lower);
+    wait(5, SC_NS);
+    if (msg_length_lower != expected_length_lower) {
+        CSML_INFO(1, logger) << "FAIL: MSG_LENGTH_LOWER = " << msg_length_lower
+                  << " (expected " << expected_length_lower << ")" << std::endl;
+        test->assert_equal(expected_length_lower, msg_length_lower,
+                           "MSG_LENGTH_LOWER after hash_stop sync drain");
+        m_tests_failed++;
+        test_passed = false;
+    }
+
+    CSML_INFO(1, logger) << "\n========================================" << std::endl;
+    CSML_INFO(1, logger) << "  Test Summary: hash_stop Synchronous FIFO Drain" << std::endl;
+    CSML_INFO(1, logger) << "========================================" << std::endl;
+    if (test_passed) {
+        CSML_INFO(1, logger) << "Overall Test Result: PASS" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "Overall Test Result: FAIL" << std::endl;
+        sc_stop();
+    }
+}
 
 void testbench::test_block_boundary_message()
 {
@@ -6015,10 +6131,12 @@ int sc_main(int argc, char* argv[])
 
     sc_start();
 
+
 #ifdef __COVERAGE__
     __gcov_dump();  // Flush coverage data before quick_exit
 #endif
     std::quick_exit(tb.m_tests_failed > 0 ? 1 : 0);
+
     return 0;
 }
 

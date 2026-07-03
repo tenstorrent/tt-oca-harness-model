@@ -233,22 +233,54 @@ public:
             SC_REPORT_ERROR("KeyMgr TLM", "Failed to write KEY_S1_L");
         }
 
-        // Write KEY_S1_H (addresses 0x60-0x7F) - Upper 256 bits of KEY_S1 (all zeros)
-        for (int i = 0; i < 32; i++) {
-            data[i] = 0;
-        }
+        // Commit key via KEY_CTRL=1 at 0x060 (sets key_registered=true in keymgr_b_transport).
+        // Address 0x60 is KEY_CTRL, NOT KEY_S1_H — writing it with value=1 marks the key valid.
+        uint32_t ctrl_word = 1u;
         trans.set_command(tlm::TLM_WRITE_COMMAND);
-        trans.set_address(0x60);  // KEY_S1_H
-        trans.set_data_ptr(data);
-        trans.set_data_length(32);
-        trans.set_streaming_width(32);
+        trans.set_address(0x60);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&ctrl_word));
+        trans.set_data_length(4);
+        trans.set_streaming_width(4);
         trans.set_byte_enable_ptr(0);
         trans.set_dmi_allowed(false);
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
         initiator_socket->b_transport(trans, delay);
         if (trans.is_response_error()) {
-            SC_REPORT_ERROR("KeyMgr TLM", "Failed to write KEY_S1_H");
+            SC_REPORT_ERROR("KeyMgr TLM", "Failed to write KEY_CTRL");
         }
+    }
+
+    bool send_read(sc_dt::uint64 addr, tlm::tlm_response_status& status_out) {
+        tlm::tlm_generic_payload trans;
+        sc_time delay = SC_ZERO_TIME;
+        uint32_t data = 0;
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
+        trans.set_data_length(4);
+        trans.set_streaming_width(4);
+        trans.set_byte_enable_ptr(0);
+        trans.set_dmi_allowed(false);
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        initiator_socket->b_transport(trans, delay);
+        status_out = trans.get_response_status();
+        return true;
+    }
+
+    bool send_write(sc_dt::uint64 addr, uint32_t value, tlm::tlm_response_status& status_out) {
+        tlm::tlm_generic_payload trans;
+        sc_time delay = SC_ZERO_TIME;
+        trans.set_command(tlm::TLM_WRITE_COMMAND);
+        trans.set_address(addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&value));
+        trans.set_data_length(4);
+        trans.set_streaming_width(4);
+        trans.set_byte_enable_ptr(0);
+        trans.set_dmi_allowed(false);
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        initiator_socket->b_transport(trans, delay);
+        status_out = trans.get_response_status();
+        return true;
     }
 };
 

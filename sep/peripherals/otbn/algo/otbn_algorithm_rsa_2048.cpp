@@ -32,8 +32,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     }
     // Verify DMEM size is sufficient for RSA-2048 operations
     if (m_dmem_size < 1024) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Insufficient DMEM size ("
-                  << m_dmem_size << " bytes, need >= 1024)";
+        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes, need >= 1024)";
         return ERROR;
     }
 
@@ -101,8 +100,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     // Ensure result is exactly 256 bytes (pad with zeros if necessary)
     int result_len = BN_num_bytes(result);
     if (result_len > 256) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Result too large ("
-                  << result_len << " bytes)";
+        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Result too large (" << result_len << " bytes)";
         BN_free(base); BN_free(exponent); BN_free(modulus); BN_free(result);
         BN_CTX_free(ctx);
         return ERROR;

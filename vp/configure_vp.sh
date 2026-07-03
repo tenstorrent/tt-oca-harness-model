@@ -1,29 +1,36 @@
 #!/usr/bin/env bash
 # Configure and run CMake for the SEP Virtual Platform.
 #
-# USAGE
-#   ./configure_vp.sh                          # auto-discover all paths
-#   CMAKE_CXX_STANDARD=20 ./configure_vp.sh    # force C++20
-#   SYSTEMC_HOME=/my/sc ./configure_vp.sh      # explicit SystemC path
-#   source ./configure_vp.sh                   # export env without running cmake
-#   ./configure_vp.sh -- -DFOO=BAR             # pass extra cmake args
+#   source ./configure_vp.sh              # export env only
+#   ./configure_vp.sh                     # export env + cmake configure
+#   CMAKE_CXX_STANDARD=20 ./configure_vp.sh
+#   ./configure_vp.sh -- -DFOO=bar
 #
-# AUTO-DISCOVERY
-#   If SYSTEMC_HOME, CCI_HOME, BOOST_ROOT, or OPENSSL_ROOT are not set the
-#   script probes a list of well-known install prefixes and uses the first
-#   match.  Set any variable explicitly to skip probing for that library.
-#
-# ENVIRONMENT VARIABLES (all optional — discovered if not set)
-#   SYSTEMC_HOME        SystemC install prefix  (must contain include/systemc.h)
-#   CCI_HOME            CCI install prefix      (must contain include/cci_configuration)
-#   BOOST_ROOT          Boost install prefix    (must contain include/boost/version.hpp)
-#   OPENSSL_ROOT        OpenSSL install prefix  (must contain include/openssl/ssl.h)
-#   CMAKE_BUILD_TYPE    Debug | Release          (default: Debug)
-#   CMAKE_CXX_STANDARD  17 | 20                 (default: 20)
+# Auto-discovers SYSTEMC_HOME, CCI_HOME, BOOST_ROOT, OPENSSL_ROOT if not set.
+# Edit defaults below or export variables before sourcing.
 
-set -euo pipefail
+_vp_configure_sourced=false
+if [ -n "${BASH_VERSION:-}" ]; then
+  [[ "${BASH_SOURCE[0]:-}" != "${0:-}" ]] && _vp_configure_sourced=true
+elif [ -n "${ZSH_VERSION:-}" ]; then
+  case ${ZSH_EVAL_CONTEXT:-} in
+    *:file) _vp_configure_sourced=true ;;
+  esac
+fi
 
-VP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if ! "${_vp_configure_sourced}"; then
+  set -euo pipefail
+fi
+
+if [ -n "${BASH_VERSION:-}" ]; then
+  _vp_configure_sh="${BASH_SOURCE[0]}"
+elif [ -n "${ZSH_VERSION:-}" ]; then
+  _vp_configure_sh="${(%):-%N}"
+else
+  _vp_configure_sh="$0"
+fi
+VP_DIR="$(cd "$(dirname "${_vp_configure_sh}")" && pwd)"
+unset _vp_configure_sh
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -41,9 +48,6 @@ VP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ---------------------------------------------------------------------------
 
 # find_prefix VARNAME "label" "probe-relative-path" candidate...
-#   If VARNAME is already set and probe exists there, accept it.
-#   Otherwise search candidates in order and take the first match.
-#   Prints what was found; exits 1 with a clear message on failure.
 find_prefix() {
   local varname="$1" label="$2" probe="$3"; shift 3
   local current="${!varname:-}"
@@ -77,26 +81,12 @@ find_prefix() {
   return 1
 }
 
-# libdir PREFIX — resolves the right library subdirectory for this platform
-libdir() {
-  local p="$1"
-  # SystemC/CCI on Linux (Accellera configure puts libs here)
-  if   [[ -d "${p}/lib-linux64"              ]]; then echo "${p}/lib-linux64"
-  # RHEL / Fedora / older distros
-  elif [[ -d "${p}/lib64"                    ]]; then echo "${p}/lib64"
-  # Debian/Ubuntu multiarch x86_64
-  elif [[ -d "${p}/lib/x86_64-linux-gnu"    ]]; then echo "${p}/lib/x86_64-linux-gnu"
-  # Debian/Ubuntu multiarch aarch64
-  elif [[ -d "${p}/lib/aarch64-linux-gnu"   ]]; then echo "${p}/lib/aarch64-linux-gnu"
-  # macOS Homebrew, manual installs, everything else
-  else                                               echo "${p}/lib"
-  fi
-}
-
 # ---------------------------------------------------------------------------
 # Auto-discover dependencies
 # ---------------------------------------------------------------------------
-echo "Discovering dependencies..."
+if [[ -z "${VP_CONFIGURE_QUIET:-}" ]]; then
+  echo "Discovering dependencies..."
+fi
 
 find_prefix SYSTEMC_HOME "SystemC" "include/systemc.h" \
   "${HOME}/local/systemc-3.0.2-cxx20" \
@@ -123,6 +113,7 @@ find_prefix SYSTEMC_HOME "SystemC" "include/systemc.h" \
   /opt/local/libexec/systemc
 
 find_prefix CCI_HOME "CCI" "include/cci_configuration" \
+  "${HOME}/local/cci-cxx20" \
   "${HOME}/local/cci-1.0.1" \
   "${HOME}/local/cci" \
   "${HOME}/cci-1.0.1" \
@@ -154,7 +145,9 @@ find_prefix OPENSSL_ROOT "OpenSSL" "include/openssl/ssl.h" \
   /usr/local/opt/openssl \
   /opt/local
 
-echo ""
+if [[ -z "${VP_CONFIGURE_QUIET:-}" ]]; then
+  echo ""
+fi
 
 # ---------------------------------------------------------------------------
 # Parse trailing cmake args
@@ -162,59 +155,39 @@ echo ""
 CMAKE_EXTRA=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -h|--help) sed -n '2,22p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help)
+      sed -n '2,11p' "$0" | sed 's/^# \?//'
+      exit 0
+      ;;
     --) shift; CMAKE_EXTRA=("$@"); break ;;
     *) echo "error: unknown argument '$1'  (use VAR=value or -- cmake-args)" >&2; exit 1 ;;
   esac
 done
 
 # ---------------------------------------------------------------------------
-# Export environment
+# Export environment via vp_build_env.sh
 # ---------------------------------------------------------------------------
-export OPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR:-${OPENSSL_ROOT}}"
+# shellcheck source=vp_build_env.sh
+source "${VP_DIR}/vp_build_env.sh"
+vp_export_build_paths || exit 1
+
 export SYSTEMC_HOME CCI_HOME OPENSSL_ROOT BOOST_ROOT
-export BOOST_INC="${BOOST_ROOT}/include" BOOST_LIB="${BOOST_ROOT}/lib"
-export OPENSSL_INC="${OPENSSL_ROOT}/include"
-if [[ -d "${OPENSSL_ROOT_DIR}/lib64" ]]; then
-  export OPENSSL_LIB="${OPENSSL_ROOT_DIR}/lib64"
-else
-  export OPENSSL_LIB="${OPENSSL_ROOT_DIR}/lib"
-fi
-export CRYPTO_LIB="${OPENSSL_LIB}"
-export CMAKE_BUILD_TYPE CMAKE_CXX_STANDARD CXX_STD="c++${CMAKE_CXX_STANDARD}"
+export CMAKE_BUILD_TYPE CMAKE_CXX_STANDARD
 
-_sc_lib="$(libdir "${SYSTEMC_HOME}")"
-_cci_lib="$(libdir "${CCI_HOME}")"
-_boost_lib="$(libdir "${BOOST_ROOT}")"
-_ssl_lib="${OPENSSL_LIB}"
-
-export CMAKE_PREFIX_PATH="${SYSTEMC_HOME};${CCI_HOME};${BOOST_ROOT};${OPENSSL_ROOT_DIR}${CMAKE_PREFIX_PATH:+;${CMAKE_PREFIX_PATH}}"
-
-# RPATH: only non-system prefixes matter; include all to be safe
-_rpaths="${_ssl_lib};${_boost_lib};${_sc_lib};${_cci_lib}"
-export CMAKE_BUILD_RPATH="${_rpaths}"
-export CMAKE_INSTALL_RPATH="${_rpaths}"
-
-# Dynamic linker search path — macOS uses DYLD_LIBRARY_PATH, Linux uses LD_LIBRARY_PATH
-_dynpath="${_ssl_lib}:${_boost_lib}:${_sc_lib}:${_cci_lib}"
-if [[ "$(uname -s)" == "Darwin" ]]; then
-  export DYLD_LIBRARY_PATH="${_dynpath}${DYLD_LIBRARY_PATH:+:${DYLD_LIBRARY_PATH}}"
-else
-  export LD_LIBRARY_PATH="${_dynpath}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+if [[ -z "${VP_CONFIGURE_QUIET:-}" ]]; then
+  vp_print_build_env
 fi
 
-export PATH="${OPENSSL_ROOT}/bin:${BOOST_ROOT}/bin:${PATH}"
-
-printf 'Build: type=%-10s  cxx=%s\n' "${CMAKE_BUILD_TYPE}" "${CMAKE_CXX_STANDARD}"
-
-# If sourced (e.g. "source ./configure_vp.sh"), just export and return.
-[[ "${BASH_SOURCE[0]}" != "${0}" ]] && return 0
+if "${_vp_configure_sourced}"; then
+  unset _vp_configure_sourced
+  return 0 2>/dev/null || exit 0
+fi
+unset _vp_configure_sourced
 
 # ---------------------------------------------------------------------------
 # Run CMake
 # ---------------------------------------------------------------------------
 BUILD_DIR="${VP_DIR}/build"
-
 CMAKE_ARGS=(
   -S "${VP_DIR}" -B "${BUILD_DIR}"
   -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
@@ -223,16 +196,22 @@ CMAKE_ARGS=(
   -DCMAKE_CXX_EXTENSIONS=OFF
   -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
   -DBOOST_ROOT="${BOOST_ROOT}" -DBoost_ROOT="${BOOST_ROOT}"
-  -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT_DIR}"
+  -DOPENSSL_ROOT_DIR="${OPENSSL_ROOT}"
   -DSYSTEMC_HOME="${SYSTEMC_HOME}" -DCCI_HOME="${CCI_HOME}"
+  -DSystemCLanguage_DIR="${SYSTEMC_HOME}/lib/cmake/SystemCLanguage"
+  -DSystemCCCI_DIR="${CCI_HOME}/lib/cmake/SystemCCCI"
   -DBoost_NO_SYSTEM_PATHS=ON -DBoost_NO_BOOST_CMAKE=ON
-  -DCMAKE_BUILD_RPATH="${_rpaths}"
-  -DCMAKE_INSTALL_RPATH="${_rpaths}"
+  -DCMAKE_BUILD_RPATH="${OPENSSL_LIB};${BOOST_LIB};${VP_SYSTEMC_LIB};${VP_CCI_LIB}"
+  -DCMAKE_INSTALL_RPATH="${OPENSSL_LIB};${BOOST_LIB};${VP_SYSTEMC_LIB};${VP_CCI_LIB}"
 )
 
 mkdir -p "${BUILD_DIR}"
-cmake "${CMAKE_ARGS[@]}" ${CMAKE_EXTRA[@]+"${CMAKE_EXTRA[@]}"}
+if ((${#CMAKE_EXTRA[@]})); then
+  cmake "${CMAKE_ARGS[@]}" "${CMAKE_EXTRA[@]}"
+else
+  cmake "${CMAKE_ARGS[@]}"
+fi
 
 echo ""
 echo "Configured: ${BUILD_DIR}"
-echo "  cd $(basename "${BUILD_DIR}") && make sep-vp"
+echo "  cd build && make sep-vp"

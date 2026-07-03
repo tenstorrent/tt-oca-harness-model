@@ -8,6 +8,8 @@ project(otbn LANGUAGES CXX)
 # Support both standalone and integrated builds
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 
 # Doxygen documentation
 find_package(Doxygen)
@@ -59,7 +61,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 # Compiler settings
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -84,7 +86,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG} -Werror -Wno-unused-function")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "OTBN: Release build - errors only, optimized")
 endif()
 
@@ -97,7 +99,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "OTBN: Coverage build enabled")
 endif()
@@ -126,7 +129,8 @@ endif()
 # -----------------------------------------------------------------------------
 # OpenSSL Library (Required for RSA-2048 cryptographic operations)
 # -----------------------------------------------------------------------------
-find_package(OpenSSL REQUIRED)
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 
 if(OpenSSL_FOUND)
   message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
@@ -150,10 +154,12 @@ set(MODEL_SRCS
   algo/otbn_algorithm_p256_ecdsa.cpp
   algo/otbn_algorithm_smoke.cpp
   algo/otbn_algorithm_rsa_3072.cpp
+  algo/otbn_algorithm_callback_cov.cpp
 )
 
 set(TEST_SRCS
   test/src/testbench.cpp
+  test/src/test_coverage.cpp
   test/src/otbn_test.cpp
   test/src/otbn_basetest.cpp
 )
@@ -173,10 +179,8 @@ endif()
 
 # OTBN model library (always built)
 # Use STATIC library to match HMAC configuration
-add_library(otbn_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(otbn_model ${MODEL_SRCS})
 target_include_directories(otbn_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-target_compile_options(otbn_model PRIVATE -ftemplate-depth=8192)
 
 target_link_libraries(otbn_model PUBLIC
   csml_logger
@@ -190,21 +194,18 @@ target_link_libraries(otbn_model PUBLIC
 # OTBN test executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(otbn_test ${TEST_SRCS})
-  target_compile_options(otbn_test PRIVATE -ftemplate-depth=8192)
-  target_link_libraries(otbn_test PRIVATE otbn_model)
-
+  peripheral_link_test_to_model(otbn_test otbn_model)
   # -----------------------------------------------------------------------------
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Keep only model/ directory in coverage, exclude everything else
     add_custom_target(coverage
-      COMMAND ./bin/otbn_test
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
+      COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --zerocounters --directory ${CMAKE_BINARY_DIR}
+      COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR}
+              -P ${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake/PeripheralCoverageClean.cmake
+      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/run_tests.sh --coverage --no-build
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at build/coverage/coverage/html/index.html"
     )
     add_dependencies(coverage otbn_test)
   endif()

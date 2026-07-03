@@ -21,15 +21,54 @@
 - All peripheral models are unit tested
 - Firmware tests written by Vayavya under `sw/sep-vp-tests/` run successfully on the VP
 - TT firmware tests under `sw/tt-oca-hw-main/dv/sep/tests/` run successfully on the VP
-- TT firmware tests under `sw/tt-oca-hw-main/fw/sep/tests/` 
-   -Tests exercising the current sep models run successfully on the VP 
-   -Tests exercising the sep models which are currently not part of the VP are not tested.
+- TT firmware tests under `sw/tt-oca-hw-main/fw/sep/tests/`
+  - Tests exercising the current sep models run successfully on the VP
+  - Tests exercising the sep models which are currently not part of the VP are not tested
+
+### Tested on
+
+- Ubuntu 22.04 LTS
+- RHEL 8.10
+- macOS 26.5.1 (Tahoe)
+
+### Compiler versions tested
+
+- GCC 11.4.0, C++17 (Accellera flow)
+- GCC 9.5.0, C++17 (Accellera flow)
+- GCC 11.2, C++20 (Accellera flow)
+
+### Peripheral unit test & line coverage (`run_all_peripherals.sh`)
+
+All peripherals **PASS** Debug, ASAN, Coverage, and CTest on **RHEL 8.10** and **macOS** (Jun 30, 2026).  
+Line coverage % from merged `lcov` reports (`make coverage` / `run_tests.sh --coverage --clean`).
+
+| Peripheral      | RHEL 8.10 | macOS   | Ubuntu 22.04 |
+|-----------------|----------:|--------:|-------------:|
+| aes             | 91.9%     | 92.6%   | 92.6%        |
+| aon_timer       | 98.5%     | 98.1%   | 98.5%        |
+| csrng           | 91.4%     | 91.3%   | 92.2%        |
+| edn             | 92.6%     | 93.0%   | 93.2%        |
+| efuse           | 100.0%    | 100.0%  | 100.0%       |
+| entropy_src     | 89.8%     | 92.0%   | 91.4%        |
+| gpio            | 87.4%     | 87.5%   | 88.8%        |
+| hmac            | 91.7%     | 91.5%   | 92.1%        |
+| key_manager     | 97.8%     | 97.9%   | 98.0%        |
+| kmac            | 91.9%     | 92.2%   | 92.2%        |
+| lifecycle_ctrl  | 97.9%     | 97.5%   | 98.1%        |
+| mailbox         | 98.2%     | 97.3%   | 98.0%        |
+| otbn            | 91.5%     | 92.2%   | 91.9%        |
+| secure_dma      | 91.9%     | 92.1%   | 92.2%        |
+| spi_controller  | 96.1%     | 95.9%   | 96.6%        |
+| spi_flash       | 97.8%     | 98.4%   | 97.9%        |
+| uart_16550      | 97.4%     | 96.0%   | 97.7%        |
+
+**Notes**
+- RHEL: gcc/gcov; macOS: clang/llvm-prof + Homebrew `lcov`.
 
 ---
 
 # Issues Fixed
-None
----
+Enhancement Request for macOS support
 
 # Current Limitations
 
@@ -40,10 +79,6 @@ None
   - `local_master_alias_remap_ctrl`
   - `och_sep_cdns_spi_ctrl`, `och_sep_spi_mux_ctrl`
 - **Key Manager**: unit-level testing only (no DV tests)
-- **Compiler versions tested**:
-  - GCC 11.4.0, C++17 (Accellera flow)
-  - GCC 9.5.0, C++17 (Accellera flow)
-  - GCC 11.2, C++20 (Accellera flow)
 
 
 # GCC and C++ Compatibility

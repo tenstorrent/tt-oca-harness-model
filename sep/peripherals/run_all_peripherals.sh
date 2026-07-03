@@ -2,6 +2,11 @@
 # Run release / asan / coverage / ctest for every peripheral model
 # (except sep_memory, cpu, and AVBbus which are excluded by design).
 #
+# Prerequisites: valid VP install paths (same as vp/configure_vp.sh).
+#   Edit vp/configure_vp.sh defaults or export SYSTEMC_HOME, CCI_HOME,
+#   OPENSSL_ROOT, BOOST_ROOT (and CMAKE_CXX_STANDARD if needed) before running.
+#   This script sources setup_build_env.sh → vp/configure_vp.sh automatically.
+#
 # Usage:
 #   ./run_all_peripherals.sh              # incremental build, run everything
 #   ./run_all_peripherals.sh --clean      # clean build directories first, then run everything
@@ -10,7 +15,7 @@
 #
 # Output
 #   logs/<peripheral>/release_build.log
-#   logs/<peripheral>/asan_build.log
+#   logs/<peripheral>/asan_build.log      ← ASAN build + ctest under sanitizers
 #   logs/<peripheral>/coverage_build.log
 #   logs/<peripheral>/ctest.log
 #   logs/<peripheral>/Full_result.log     ← per-peripheral summary
@@ -20,7 +25,15 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_ROOT="${SCRIPT_DIR}/logs"
-JOBS=$(nproc)
+
+# Linux: nproc; macOS: sysctl; fallback: getconf
+if command -v nproc >/dev/null 2>&1; then
+  JOBS=$(nproc)
+elif [[ "$(uname -s)" == "Darwin" ]]; then
+  JOBS=$(sysctl -n hw.ncpu)
+else
+  JOBS=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)
+fi
 CLEAN=false
 
 # ── Parse --clean flag (must come before peripheral names) ───────────────────
@@ -31,6 +44,12 @@ for arg in "$@"; do
     *) ARGS+=("$arg") ;;
   esac
 done
+
+# ── Resolve build environment (SystemC, OpenSSL, Boost) ─────────────────────
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/setup_build_env.sh"
+peripheral_setup_build_env || exit 1
+
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 # ── Peripherals to skip ────────────────────────────────────────────────────────
@@ -45,63 +64,12 @@ fi
 
 pass() { printf "${GREEN}PASS${NC}"; }
 fail() { printf "${RED}FAIL${NC}"; }
+skip() { printf "${YELLOW}SKIP${NC}"; }
 
-# ── Resolve SystemC / CCI paths once ─────────────────────────────────────────
-if [ -z "${SYSTEMC_HOME:-}" ]; then
-  for candidate in \
-    "${HOME}/local/systemc-3.0.2-cxx20" \
-    "${HOME}/local/systemc-3.0.2-cxx17" \
-    "${HOME}/local/systemc-3.0.2" \
-    "${HOME}/local/systemc-3.0.1" \
-    "${HOME}/local/systemc" \
-    "${HOME}/systemc-3.0.2" \
-    "${HOME}/systemc-3.0.1" \
-    "${HOME}/systemc" \
-    /usr/local/systemc-3.0.2 \
-    /usr/local/systemc301 \
-    /usr/local/systemc-3.0.1 \
-    /usr/local/systemc300 \
-    /usr/local/systemc \
-    /usr/local \
-    /usr/lib/systemc-3.0.2 \
-    /usr/lib/systemc-3.0.1 \
-    /usr/lib/systemc \
-    /opt/homebrew/opt/systemc \
-    /opt/homebrew/opt/libsystemc \
-    /usr/local/opt/systemc; do
-    [ -f "${candidate}/include/systemc.h" ] && { export SYSTEMC_HOME="$candidate"; break; }
-  done
+LCOV_AVAILABLE=false
+if command -v lcov >/dev/null 2>&1; then
+  LCOV_AVAILABLE=true
 fi
-if [ -z "${CCI_HOME:-}" ]; then
-  for candidate in \
-    "${HOME}/local/cci-cxx20" \
-    "${HOME}/local/cci-1.0.1" \
-    "${HOME}/local/cci" \
-    "${HOME}/cci-1.0.1" \
-    "${HOME}/cci" \
-    /usr/local/cci-1.0.1 \
-    /usr/local/cci \
-    /usr/lib/cci-1.0.1 \
-    /usr/lib/cci \
-    /opt/homebrew/opt/systemc-cci \
-    /usr/local/opt/systemc-cci; do
-    [ -d "${candidate}/include/cci_configuration" ] && { export CCI_HOME="$candidate"; break; }
-  done
-fi
-
-# Default C++ standard
-: "${CMAKE_CXX_STANDARD:=20}"
-
-if [ -n "${SYSTEMC_HOME:-}" ]; then
-  echo "  SYSTEMC_HOME = ${SYSTEMC_HOME}"
-else
-  echo "warning: SYSTEMC_HOME not found — builds may fail" >&2
-fi
-if [ -n "${CCI_HOME:-}" ]; then
-  echo "  CCI_HOME     = ${CCI_HOME}"
-fi
-echo "  CXX_STANDARD = ${CMAKE_CXX_STANDARD}"
-echo ""
 
 # ── Helper: build one peripheral with one build type ─────────────────────────
 # Returns 0 on success, non-zero on failure.
@@ -123,21 +91,64 @@ build_peripheral() {
 
     if $CLEAN; then
       rm -rf "${build_dir}"
+    elif peripheral_cache_stale "${build_dir}"; then
+      echo "    (removing stale cmake cache — install paths changed)"
+      rm -rf "${build_dir}"
     fi
     mkdir -p "${build_dir}"
 
     cmake -S "${src_dir}" -B "${build_dir}" \
       -DCMAKE_BUILD_TYPE="${build_type}" \
-      -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}" \
-      -DSYSTEMC_HOME="${SYSTEMC_HOME:-}" \
-      ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"} \
-      -DBUILD_TESTS=ON 2>&1
+      -DBUILD_TESTS=ON \
+      "${CMAKE_EXTRA_ARGS[@]}" 2>&1
 
     cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1
 
   } > "${log_file}" 2>&1
 
   return $?
+}
+
+# ── Helper: ASAN build + run ctest under AddressSanitizer ─────────────────────
+run_asan() {
+  local name="$1"
+  local src_dir="${SCRIPT_DIR}/${name}"
+  local build_dir="${src_dir}/build/asan"
+  local log_file="$2"
+
+  {
+    echo "=== ${name} ASAN build + test ==="
+    echo "    src : ${src_dir}"
+    echo "    bld : ${build_dir}"
+    echo "    clean: ${CLEAN}"
+    echo "    date: $(date)"
+    echo ""
+
+    if $CLEAN; then
+      rm -rf "${build_dir}"
+    elif peripheral_cache_stale "${build_dir}"; then
+      echo "    (removing stale cmake cache — install paths changed)"
+      rm -rf "${build_dir}"
+    fi
+    mkdir -p "${build_dir}"
+
+    cmake -S "${src_dir}" -B "${build_dir}" \
+      -DCMAKE_BUILD_TYPE=ASAN \
+      -DBUILD_TESTS=ON \
+      "${CMAKE_EXTRA_ARGS[@]}" 2>&1
+
+    cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1
+
+    echo ""
+    echo "=== ${name} ASAN ctest ==="
+    echo "    bld : ${build_dir}"
+    echo "    date: $(date)"
+    echo ""
+    ctest --test-dir "${build_dir}" --output-on-failure -V 2>&1
+
+  } > "${log_file}" 2>&1
+  local status=$?
+  return "${status}"
 }
 
 # ── Helper: run ctest for one peripheral ─────────────────────────────────────
@@ -161,8 +172,8 @@ run_ctest() {
 extract_coverage() {
   local log="$1"
   # lcov summary line: "  lines......: 72.3% (1234 of 1706 lines)"
-  # Use perl instead of grep -P (BSD grep on macOS does not support -P)
-  perl -ne 'print "$1\n" if /lines\.+:\s*([0-9]+\.[0-9]+)%/' "$log" | tail -1
+  # sed works on BSD/macOS and GNU; grep -oP is GNU-only.
+  sed -n 's/.*lines\.*:[[:space:]]*\([0-9][0-9]*\.[0-9][0-9]*\)%.*/\1/p' "$log" | tail -1
 }
 
 # ── Helper: run coverage build + generate report, return status ──────────────
@@ -179,6 +190,16 @@ run_coverage() {
   local thread_cache_arg=""
   local linker_extra_flags=""
   local lcov_wrapper_dir=""
+
+  if [ "$LCOV_AVAILABLE" != true ]; then
+    {
+      echo "=== ${name} Coverage build ==="
+      echo "SKIP: lcov not found (install with: brew install lcov)"
+      echo "    date: $(date)"
+    } > "${log_file}"
+    return 3
+  fi
+
   if [[ "$(uname -s)" == "Darwin" ]]; then
     thread_cache_arg="-DCMAKE_HAVE_LIBC_PTHREAD=1"
     # The peripheral CMakeLists.txt passes --coverage -lgcov to the linker;
@@ -215,6 +236,9 @@ LCOV_WRAP
 
     if $CLEAN; then
       rm -rf "${build_dir}"
+    elif peripheral_cache_stale "${build_dir}"; then
+      echo "    (removing stale cmake cache — install paths changed)"
+      rm -rf "${build_dir}"
     fi
     mkdir -p "${build_dir}"
 
@@ -224,12 +248,10 @@ LCOV_WRAP
 
     cmake -S "${src_dir}" -B "${build_dir}" \
       -DCMAKE_BUILD_TYPE=Coverage \
-      -DCMAKE_CXX_STANDARD="${CMAKE_CXX_STANDARD}" \
-      -DSYSTEMC_HOME="${SYSTEMC_HOME:-}" \
-      ${CCI_HOME:+-DCCI_HOME="${CCI_HOME}"} \
+      -DBUILD_TESTS=ON \
       ${thread_cache_arg:+"${thread_cache_arg}"} \
       ${linker_extra_flags:+"${linker_extra_flags}"} \
-      -DBUILD_TESTS=ON 2>&1
+      "${CMAKE_EXTRA_ARGS[@]}" 2>&1
 
     cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1
 
@@ -239,8 +261,8 @@ LCOV_WRAP
     export PATH="${PATH_ORIG}"
 
   } > "${log_file}" 2>&1
-
-  return $?
+  local status=$?
+  return "${status}"
 }
 
 # ── Build peripheral list (remaining args after --clean was stripped) ─────────
@@ -260,6 +282,8 @@ fi
 
 echo ""
 echo "Peripherals to test (${#PERIPHERALS[@]}): ${PERIPHERALS[*]}"
+echo "C++ standard     : ${CMAKE_CXX_STANDARD}"
+echo "SYSTEMC_HOME     : ${SYSTEMC_HOME}"
 echo "Build mode       : $($CLEAN && echo 'clean' || echo 'incremental')"
 echo "Logs directory   : ${LOG_ROOT}"
 echo ""
@@ -296,9 +320,9 @@ for name in "${PERIPHERALS[@]}"; do
   [ $release_status -eq 0 ] && { pass; echo; release_label="PASS"; } \
                              || { fail; echo; release_label="FAIL"; OVERALL_PASS=false; }
 
-  # 2. ASAN build
-  printf "  ASAN build    ... "
-  build_peripheral "${name}" "ASAN" "${plog}/asan_build.log"
+  # 2. ASAN build + ctest (sanitizer-instrumented binary)
+  printf "  ASAN          ... "
+  run_asan "${name}" "${plog}/asan_build.log"
   asan_status=$?
   [ $asan_status -eq 0 ] && { pass; echo; asan_label="PASS"; } \
                           || { fail; echo; asan_label="FAIL"; OVERALL_PASS=false; }
@@ -309,8 +333,13 @@ for name in "${PERIPHERALS[@]}"; do
   cov_status=$?
   cov_pct=$(extract_coverage "${plog}/coverage_build.log")
   [ -z "$cov_pct" ] && cov_pct="n/a"
-  [ $cov_status -eq 0 ] && { pass; printf " (${cov_pct}%%)\n"; cov_label="PASS"; } \
-                         || { fail; echo; cov_label="FAIL"; OVERALL_PASS=false; }
+  if [ $cov_status -eq 3 ]; then
+    skip; printf " (lcov not installed)\n"; cov_label="SKIP"
+  elif [ $cov_status -eq 0 ]; then
+    pass; printf " (${cov_pct}%%)\n"; cov_label="PASS"
+  else
+    fail; echo; cov_label="FAIL"; OVERALL_PASS=false
+  fi
 
   # 4. CTest (uses the Release build that was built in step 1)
   printf "  CTest         ... "

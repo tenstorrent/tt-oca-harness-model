@@ -94,137 +94,84 @@ void spi_controller_ip::register_callbacks()
    // ===== Register Write Callbacks =====
 
    // INTR_STATUS (0x0) - W1C for interrupt state
-   std::function<bool(uint32_t)> intr_state_handler;
-   intr_state_handler = std::bind(
-      &spi_controller_ip::handle_write_INTR_STATUS,
-      this,
-      std::placeholders::_1,
-      INTR_STATUS.write_bit_mask
-   );
-   memory.register_write_callback(intr_state_handler, INTR_STATUS.offset);
+   auto intr_status_mask = INTR_STATUS.write_bit_mask;
+   memory.register_write_callback(
+      [this, intr_status_mask](uint32_t value) { return handle_write_INTR_STATUS(value, intr_status_mask); },
+      INTR_STATUS.offset);
 
    // INTR_ENABLE (0x4) - Interrupt enable control
-   std::function<bool(uint32_t)> intr_enable_handler;
-   intr_enable_handler = std::bind(
-      &spi_controller_ip::handle_write_INTR_ENABLE,
-      this,
-      std::placeholders::_1,
-      INTR_ENABLE.write_bit_mask
-   );
-   memory.register_write_callback(intr_enable_handler, INTR_ENABLE.offset);
+   auto intr_enable_mask = INTR_ENABLE.write_bit_mask;
+   memory.register_write_callback(
+      [this, intr_enable_mask](uint32_t value) { return handle_write_INTR_ENABLE(value, intr_enable_mask); },
+      INTR_ENABLE.offset);
 
    // INTR_TEST (0x8) - Interrupt testing
-   std::function<bool(uint32_t)> intr_test_handler;
-   intr_test_handler = std::bind(
-      &spi_controller_ip::handle_write_INTR_TEST,
-      this,
-      std::placeholders::_1,
-      INTR_TEST.write_bit_mask
-   );
-   memory.register_write_callback(intr_test_handler, INTR_TEST.offset);
+   auto intr_test_mask = INTR_TEST.write_bit_mask;
+   memory.register_write_callback(
+      [this, intr_test_mask](uint32_t value) { return handle_write_INTR_TEST(value, intr_test_mask); },
+      INTR_TEST.offset);
 
    // CTRL (0xC) - System control (SPIEN, SW_RST, OUTPUT_EN, watermarks)
-   std::function<bool(uint32_t)> control_handler;
-   control_handler = std::bind(
-      &spi_controller_ip::handle_write_CTRL,
-      this,
-      std::placeholders::_1,
-      CTRL.write_bit_mask
-   );
-   memory.register_write_callback(control_handler, CTRL.offset);
+   auto ctrl_mask = CTRL.write_bit_mask;
+   memory.register_write_callback(
+      [this, ctrl_mask](uint32_t value) { return handle_write_CTRL(value, ctrl_mask); },
+      CTRL.offset);
 
    // CMD (0x1C) - Command register (pre-write callback for validation)
-   std::function<bool(uint32_t)> cmd_write_handler;
-   cmd_write_handler = std::bind(
-      &spi_controller_ip::handle_write_CMD,
-      this,
-      std::placeholders::_1,
-      CMD.write_bit_mask
-   );
-   memory.register_write_callback(cmd_write_handler, CMD.offset);
+   auto cmd_mask = CMD.write_bit_mask;
+   memory.register_write_callback(
+      [this, cmd_mask](uint32_t value) { return handle_write_CMD(value, cmd_mask); },
+      CMD.offset);
 
    // TXDATA (0x24) - Transmit FIFO (byte-enable aware)
-   std::function<bool(uint32_t, uint8_t)> txdata_write_handler;
-   txdata_write_handler = std::bind(
-      &spi_controller_ip::handle_write_TXDATA,
-      this,
-      std::placeholders::_1,
-      std::placeholders::_2,
-      TXDATA.write_bit_mask
-   );
-   memory.register_write_callback_with_be(txdata_write_handler, TXDATA.offset);
+   auto txdata_mask = TXDATA.write_bit_mask;
+   memory.register_write_callback_with_be(
+      [this, txdata_mask](uint32_t value, uint8_t be) { return handle_write_TXDATA(value, be, txdata_mask); },
+      TXDATA.offset);
 
    // ERROR_ENABLE (0x28) - Error interrupt masking
-   std::function<bool(uint32_t)> error_enable_handler;
-   error_enable_handler = std::bind(
-      &spi_controller_ip::handle_write_ERROR_ENABLE,
-      this,
-      std::placeholders::_1,
-      ERROR_ENABLE.write_bit_mask
-   );
-   memory.register_write_callback(error_enable_handler, ERROR_ENABLE.offset);
+   auto error_enable_mask = ERROR_ENABLE.write_bit_mask;
+   memory.register_write_callback(
+      [this, error_enable_mask](uint32_t value) { return handle_write_ERROR_ENABLE(value, error_enable_mask); },
+      ERROR_ENABLE.offset);
 
    // ERROR_STATUS (0x2C) - Error status (W1C semantics)
-   std::function<bool(uint32_t)> error_status_write_handler;
-   error_status_write_handler = std::bind(
-      &spi_controller_ip::handle_write_ERROR_STATUS,
-      this,
-      std::placeholders::_1,
-      ERROR_STATUS.write_bit_mask
-   );
-   memory.register_write_callback(error_status_write_handler, ERROR_STATUS.offset);
+   auto error_status_mask = ERROR_STATUS.write_bit_mask;
+   memory.register_write_callback(
+      [this, error_status_mask](uint32_t value) { return handle_write_ERROR_STATUS(value, error_status_mask); },
+      ERROR_STATUS.offset);
 
    // EVENT_ENABLE (0x30) - Event interrupt masking
-   std::function<bool(uint32_t)> event_enable_handler;
-   event_enable_handler = std::bind(
-      &spi_controller_ip::handle_write_EVENT_ENABLE,
-      this,
-      std::placeholders::_1,
-      EVENT_ENABLE.write_bit_mask
-   );
-   memory.register_write_callback(event_enable_handler, EVENT_ENABLE.offset);
+   auto event_enable_mask = EVENT_ENABLE.write_bit_mask;
+   memory.register_write_callback(
+      [this, event_enable_mask](uint32_t value) { return handle_write_EVENT_ENABLE(value, event_enable_mask); },
+      EVENT_ENABLE.offset);
 
    // CFG (0x14) - Per-device configuration with shadow array support
-   std::function<bool(uint32_t)> configopts_write_handler;
-   configopts_write_handler = std::bind(
-      &spi_controller_ip::handle_write_CFG,
-      this,
-      std::placeholders::_1,
-      CFG.write_bit_mask
-   );
-   memory.register_write_callback(configopts_write_handler, CFG.offset);
+   auto cfg_write_mask = CFG.write_bit_mask;
+   memory.register_write_callback(
+      [this, cfg_write_mask](uint32_t value) { return handle_write_CFG(value, cfg_write_mask); },
+      CFG.offset);
 
    // ===== Register Read Callbacks =====
 
    // STATUS (0x10) - Dynamic status computation
-   std::function<bool(uint32_t&)> status_read_handler;
-   status_read_handler = std::bind(
-      &spi_controller_ip::handle_read_STATUS,
-      this,
-      std::placeholders::_1,
-      STATUS.read_bit_mask
-   );
-   memory.register_read_callback(status_read_handler, STATUS.offset);
+   auto status_read_mask = STATUS.read_bit_mask;
+   memory.register_read_callback(
+      [this, status_read_mask](uint32_t& value) { return handle_read_STATUS(value, status_read_mask); },
+      STATUS.offset);
 
    // CFG (0x14) - Per-device configuration read from shadow array
-   std::function<bool(uint32_t&)> configopts_read_handler;
-   configopts_read_handler = std::bind(
-      &spi_controller_ip::handle_read_CFG,
-      this,
-      std::placeholders::_1,
-      CFG.read_bit_mask
-   );
-   memory.register_read_callback(configopts_read_handler, CFG.offset);
+   auto cfg_read_mask = CFG.read_bit_mask;
+   memory.register_read_callback(
+      [this, cfg_read_mask](uint32_t& value) { return handle_read_CFG(value, cfg_read_mask); },
+      CFG.offset);
 
    // RXDATA (0x20) - Receive FIFO
-   std::function<bool(uint32_t&)> rxdata_read_handler;
-   rxdata_read_handler = std::bind(
-      &spi_controller_ip::handle_read_RXDATA,
-      this,
-      std::placeholders::_1,
-      RXDATA.read_bit_mask
-   );
-   memory.register_read_callback(rxdata_read_handler, RXDATA.offset);
+   auto rxdata_mask = RXDATA.read_bit_mask;
+   memory.register_read_callback(
+      [this, rxdata_mask](uint32_t& value) { return handle_read_RXDATA(value, rxdata_mask); },
+      RXDATA.offset);
 }
 
 /**
@@ -559,7 +506,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                     CSML_ERROR(0, logger) << "[SPI_HOST] TX FIFO underflow: "
                         << "no data after watermark event (watermark not reached). Segment requires "
                         << bytes_needed << " bytes, only " << byte_idx << " available." << std::endl;
-                    ERROR_STATUS.UNDERFLOW = 1;
+                    ERROR_STATUS.underflow = 1;
                     update_error_interrupt_state();
                     set_fsm_state(fsm_state_e::IDLE);
                     update_event_interrupt_state();
@@ -1266,7 +1213,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
                 << "In TLM LT atomic model, software must ensure sufficient RX space before CMD write. "
                 << "Setting ERROR_STATUS.OVERFLOW" << std::endl;
 
-            ERROR_STATUS.OVERFLOW = 1;
+            ERROR_STATUS.overflow = 1;
             update_error_interrupt_state();
 
             return false;  // Reject command
@@ -1361,7 +1308,7 @@ bool spi_controller_ip::handle_write_TXDATA(uint32_t value, uint8_t byte_enable,
     // Check if TX FIFO is full
     if (is_tx_fifo_full()) {
         CSML_ERROR(0, logger) << "[SPI_HOST/TXDATA ERROR] TX FIFO overflow - FIFO is full. Setting ERROR_STATUS.OVERFLOW" << std::endl;
-        ERROR_STATUS.OVERFLOW = 1;
+        ERROR_STATUS.overflow = 1;
         update_error_interrupt_state();
         return false;
     }
@@ -1389,7 +1336,7 @@ bool spi_controller_ip::handle_read_RXDATA(uint32_t& value, uint32_t mask)
     if (is_rx_fifo_empty()) {
         CSML_WARN(1, logger) << "  [WARNING] RX FIFO underflow - FIFO is empty, returning 0" << std::endl;
         value = 0;
-        ERROR_STATUS.UNDERFLOW = 1;
+        ERROR_STATUS.underflow = 1;
         update_error_interrupt_state();
         return true;
     }

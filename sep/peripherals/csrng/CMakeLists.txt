@@ -4,6 +4,8 @@ project(csrng LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -61,7 +63,7 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 # Compiler settings
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -80,7 +82,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "csrng: Release build - errors only, optimized")
 endif()
 
@@ -93,7 +95,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "csrng: Coverage build enabled")
 endif()
@@ -103,7 +106,8 @@ endif()
 find_package(Threads REQUIRED)
 
 # Find OpenSSL library (required by CRNG model)
-find_package(OpenSSL REQUIRED)
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 
 # -----------------------------------------------------------------------------
 # External Dependencies (CCI)
@@ -154,8 +158,14 @@ file(GLOB_RECURSE TEST_SRCS  "test/src/*.cpp")
 # -----------------------------------------------------------------------------
 # Targets
 # -----------------------------------------------------------------------------
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  if(NOT TARGET csml_logger)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
+  endif()
+endif()
+
 # Model library
-add_library(csrng_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(csrng_model ${MODEL_SRCS})
 target_link_libraries(csrng_model PUBLIC SystemC::systemc Threads::Threads OpenSSL::SSL OpenSSL::Crypto csml_logger)
 if(CCI_FOUND)
   target_link_libraries(csrng_model PUBLIC ${CCI_LIBRARIES})
@@ -164,7 +174,8 @@ endif()
 if(BUILD_TESTS)
   # Testbench executable
   add_executable(csrng_testbench ${TEST_SRCS})
-  target_link_libraries(csrng_testbench PRIVATE csrng_model SystemC::systemc)
+  peripheral_link_test_to_model(csrng_testbench csrng_model)
+  target_link_libraries(csrng_testbench PRIVATE SystemC::systemc)
 
   # Set RPATH so the testbench binary finds SystemC and CCI at runtime.
   set_target_properties(csrng_testbench PROPERTIES
@@ -187,15 +198,7 @@ message(STATUS "Generated Project: csrng")
 # Coverage Target
 # -----------------------------------------------------------------------------
 if(BUILD_TESTS AND CMAKE_BUILD_TYPE STREQUAL "Coverage")
-  add_custom_target(coverage
-    COMMAND ./bin/csrng_testbench
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-    COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-    COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-    COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-  )
-  add_dependencies(coverage csrng_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET csrng_testbench)
 endif()
 
 # -----------------------------------------------------------------------------

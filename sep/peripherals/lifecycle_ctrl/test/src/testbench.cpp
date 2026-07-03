@@ -288,6 +288,39 @@ void testbench::test_demote_2_w1s()
 }
 
 // =============================================================================
+// Test 11: DEMOTE_2 lock — once bit 1 is set, further writes are ignored
+// =============================================================================
+
+void testbench::test_demote_2_lock()
+{
+    report_test_start("Test 11: DEMOTE_2 lock semantics");
+
+    uint32_t val = 0;
+
+    // Set lock bit
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x00000002);
+    wait(1, SC_NS);
+    m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, val);
+    if ((val & 0x2) == 0x2)
+        report_test_pass("DEMOTE_2: lock bit set");
+    else
+        report_test_fail("DEMOTE_2 lock set",
+            "expected lock bit set, got 0x" + std::to_string(val));
+
+    uint32_t before = val;
+
+    // Write after lock — must be silently ignored and a CSML WARNING logged
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x00000000);
+    wait(1, SC_NS);
+    m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, val);
+    if (val == before)
+        report_test_pass("DEMOTE_2: write ignored after lock");
+    else
+        report_test_fail("DEMOTE_2 post-lock write",
+            "DEMOTE_2 changed after lock, got 0x" + std::to_string(val));
+}
+
+// =============================================================================
 // Test 8: INVALID state — encodings 0x4 and 0x5 must produce FEAT_CTRL=0
 // =============================================================================
 
@@ -368,6 +401,31 @@ void testbench::test_secure_tm()
 }
 
 // =============================================================================
+// Test 12: security_disable override
+// =============================================================================
+
+void testbench::test_security_disable()
+{
+    report_test_start("Test 12: security_disable override");
+
+    bool sec_dis = m_dut->security_disable.get_param_value();
+    if (!sec_dis) {
+        report_test_pass("Test 12 skipped — security_disable not true (set security_disable=true in ini to run)");
+        return;
+    }
+
+    uint32_t val_lo = 0, val_hi = 0;
+    m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_LO_OFFSET, val_lo);
+    m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_HI_OFFSET, val_hi);
+
+    if (val_lo == 0xFFFFFFFF && val_hi == 0xFFFFFFFF)
+        report_test_pass("security_disable: FEAT_CTRL=0xFFFFFFFF_FFFFFFFF");
+    else
+        report_test_fail("security_disable FEAT_CTRL",
+            "expected all-ones, got lo=0x" + std::to_string(val_lo) + " hi=0x" + std::to_string(val_hi));
+}
+
+// =============================================================================
 // Main test sequence
 // =============================================================================
 
@@ -387,9 +445,11 @@ void testbench::run_tests()
     test_demote_1_w1s();
     test_demote_1_lock();
     test_demote_2_w1s();
+    test_demote_2_lock();
     test_invalid_state();
     test_rma_chiplet_state();
     test_secure_tm();
+    test_security_disable();
 
     report_test_summary();
 

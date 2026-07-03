@@ -46,25 +46,18 @@ find_package(OpenSSL REQUIRED)
 
   target_compile_options(sep-vp PRIVATE -ftemplate-depth=8192)
 
-  target_link_directories(sep-vp PRIVATE
-    ${Boost_LIBRARY_DIR_RELEASE}
-    ${Boost_LIBRARY_DIR_DEBUG}
-  )
-
   target_link_libraries(sep-vp
-    softfloat
     platform-infra
-    ${Boost_LIBRARIES}
+    Boost::iostreams
+    Boost::program_options
     SystemC::systemc
-    pthread
+    Threads::Threads
     uart_model
     gpio_model
     hmac_model
     otbn_model
     sep_memory_model
-    csml_logger
     spi_controller_model
-    spi_flash_core
     spi_flash_model
     kmac_model
     OpenSSL::Crypto
@@ -81,8 +74,6 @@ find_package(OpenSSL REQUIRED)
     edn_model
     veeriss_model
     z
-    pthread
-    dl
   )
 
   if(CCI_FOUND)

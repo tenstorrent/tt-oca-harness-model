@@ -40,8 +40,7 @@ otbn_algorithm::status_t otbn_algorithm_summation::execute(char* dmem) {
     }
 
     if (N + 2 > m_dmem_size) {
-        CSML_ERROR(0, logger) << "[OTBN Summation] ERROR: N=" << N << " exceeds DMEM size ("
-                  << m_dmem_size << " bytes)";
+        CSML_ERROR(0, logger) << "[OTBN Summation] ERROR: N=" << N << " exceeds DMEM size (" << m_dmem_size << " bytes)";
         return ERROR;
     }
 
@@ -73,8 +72,7 @@ otbn_algorithm::status_t otbn_algorithm_summation::execute(char* dmem) {
     }
 
     // Debug output
-    CSML_INFO(1, logger) << "[OTBN Summation] N=" << N << ", Sum=" << sum
-              << ", Result length=" << result_length << " bytes";
+    CSML_INFO(1, logger) << "[OTBN Summation] N=" << N << ", Sum=" << sum << ", Result length=" << result_length << " bytes";
 
     // Update instruction count based on operation complexity
     instruction_count = 100 + (N * 10);  // Base + per-byte cost

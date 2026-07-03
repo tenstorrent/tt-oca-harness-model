@@ -7,6 +7,8 @@ project(aes LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -59,7 +61,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 # Compiler settings
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -78,7 +80,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "aes: Release build - errors only, optimized")
 endif()
 
@@ -91,7 +93,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g --coverage -fprofile-arcs -ftest-coverage ${WFLAG}")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "aes: Coverage build enabled")
 endif()
@@ -100,7 +103,8 @@ endif()
 find_package(Threads REQUIRED)
 
 # Find OpenSSL library (required by AES model)
-find_package(OpenSSL REQUIRED)
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 
 if(OpenSSL_FOUND)
   message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
@@ -153,7 +157,7 @@ file(GLOB_RECURSE TEST_SRCS  "test/src/*.cpp")
 # Targets
 # -----------------------------------------------------------------------------
 # Model library
-add_library(aes_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(aes_model ${MODEL_SRCS})
 target_link_libraries(aes_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::SSL OpenSSL::Crypto)
 if(CCI_FOUND)
   target_link_libraries(aes_model PUBLIC ${CCI_LIBRARIES})
@@ -163,7 +167,8 @@ endif()
 if(BUILD_TESTS)
   # Testbench executable
   add_executable(aes_testbench ${TEST_SRCS})
-  target_link_libraries(aes_testbench PRIVATE aes_model csml_logger SystemC::systemc)
+  peripheral_link_test_to_model(aes_testbench aes_model)
+  target_link_libraries(aes_testbench PRIVATE csml_logger SystemC::systemc)
 
   # Set RPATH
 
@@ -181,15 +186,7 @@ message(STATUS "Generated Project: aes")
 # Coverage Target
 # -----------------------------------------------------------------------------
 if(BUILD_TESTS AND CMAKE_BUILD_TYPE STREQUAL "Coverage")
-  add_custom_target(coverage
-    COMMAND ./bin/aes_testbench
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-    COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-    COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-    COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-  )
-  add_dependencies(coverage aes_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET aes_testbench)
 endif()
 # -----------------------------------------------------------------------------
 # Static Analysis Target (cppcheck)

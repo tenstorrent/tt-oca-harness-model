@@ -42,6 +42,8 @@ set(RISCV_SRCS
 file(GLOB _softfloat_clean_artifacts CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/build/RISCV-GCC/*.o"
     "${CMAKE_CURRENT_SOURCE_DIR}/build/RISCV-GCC/*.a"
+    "${CMAKE_CURRENT_SOURCE_DIR}/build/Darwin-GCC/*.o"
+    "${CMAKE_CURRENT_SOURCE_DIR}/build/Darwin-GCC/*.a"
 )
 
 add_library(softfloat STATIC ${SOFTFLOAT_SRCS} ${RISCV_SRCS})

@@ -440,9 +440,7 @@ void hmac_ip::update_interrupt_outputs() {
    bool fifo_empty = (INTR_STATE.fifo_empty & INTR_ENABLE.fifo_empty);
    bool hmac_err = (INTR_STATE.hmac_err & INTR_ENABLE.hmac_err);
 
-   CSML_DEBUG(2, logger) << "Updating interrupts: done=" << hmac_done
-                         << " fifo_empty=" << fifo_empty
-                         << " err=" << hmac_err << std::endl;
+   CSML_DEBUG(2, logger) << "Updating interrupts: done=" << hmac_done << " fifo_empty=" << fifo_empty << " err=" << hmac_err << std::endl;
 
    intr_hmac_done.write(hmac_done);
    intr_fifo_empty.write(fifo_empty);
@@ -485,8 +483,7 @@ void hmac_ip::update_status_register() {
    // Bits 4-9: fifo_depth (6 bits)
    status_value |= ((static_cast<uint32_t>(msg_fifo.size()) & 0x3F) << 4);
 
-   CSML_DEBUG(2, logger) << "STATUS register updated: 0x" << std::hex << status_value << std::dec
-                         << " (FIFO depth=" << msg_fifo.size() << ")" << std::endl;
+   CSML_DEBUG(2, logger) << "STATUS register updated: 0x" << std::hex << status_value << std::dec << " (FIFO depth=" << msg_fifo.size() << ")" << std::endl;
 
    // Directly assign computed value to STATUS register
    STATUS = status_value;
@@ -654,8 +651,7 @@ void hmac_ip::process_message_block() {
    CSML_FUNC_TRACE(logger);
 
    unsigned int block_size = get_block_size_words();
-   CSML_DEBUG(2, logger) << "Processing message block: block_size=" << block_size
-                         << " words, FIFO size=" << msg_fifo.size() << std::endl;
+   CSML_DEBUG(2, logger) << "Processing message block: block_size=" << block_size << " words, FIFO size=" << msg_fifo.size() << std::endl;
 
    if (msg_fifo.size() >= block_size) {
       std::vector<uint8_t> block_data;
@@ -723,8 +719,7 @@ unsigned int hmac_ip::flush_packer_if_needed() {
 
    unsigned int last_word_valid_bytes = 0;  // Track valid bytes in last word from packer flush
    if (packer_bytes_count > 0) {
-      CSML_DEBUG(2, logger) << "Flushing packer buffer: " << static_cast<int>(packer_bytes_count)
-                            << " bytes, buffer=0x" << std::hex << packer_buffer << std::dec << std::endl;
+      CSML_DEBUG(2, logger) << "Flushing packer buffer: " << static_cast<int>(packer_bytes_count) << " bytes, buffer=0x" << std::hex << packer_buffer << std::dec << std::endl;
 
       // Apply endian swap if configured (before pushing, same as normal accumulation)
       uint32_t word_to_push = packer_buffer;
@@ -857,8 +852,7 @@ bool hmac_ip::compute_and_write_digest() {
          uint32_t original = word;
          word = ((word & 0xFF) << 24) | ((word & 0xFF00) << 8) |
           ((word & 0xFF0000) >> 8) | ((word & 0xFF000000) >> 24);
-         CSML_DEBUG(2, logger) << "Digest swap: DIGEST[" << i << "]=0x" << std::hex << original
-                               << " -> 0x" << word << std::dec << std::endl;
+         CSML_DEBUG(2, logger) << "Digest swap: DIGEST[" << i << "]=0x" << std::hex << original << " -> 0x" << word << std::dec << std::endl;
       }
       DIGEST[i] = word;
    }
@@ -1050,9 +1044,7 @@ bool hmac_ip::handle_write_CFG(uint32_t value, uint32_t write_mask) {
    uint32_t key_length = (value >> 9) & 0x3F;
    uint32_t hmac_en = value & 0x1;
 
-   CSML_DEBUG(2, logger) << "CFG parameters: digest_size=0x" << std::hex << digest_size
-                         << " key_length=0x" << key_length
-                         << " hmac_en=" << hmac_en << std::dec << std::endl;
+   CSML_DEBUG(2, logger) << "CFG parameters: digest_size=0x" << std::hex << digest_size << " key_length=0x" << key_length << " hmac_en=" << hmac_en << std::dec << std::endl;
 
    // Check for invalid digest size (SHA2_None)
    if ((digest_size != 0x1) && (digest_size != 0x2) && (digest_size != 0x4) ) {
@@ -1162,9 +1154,7 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       uint32_t key_length = CFG.key_length;
       uint32_t hmac_en = CFG.hmac_en;
 
-      CSML_DEBUG(2, logger) << "Configuration: digest_size=0x" << std::hex << digest_size
-                            << " key_length=0x" << key_length
-                            << " hmac_en=" << hmac_en << std::dec << std::endl;
+      CSML_DEBUG(2, logger) << "Configuration: digest_size=0x" << std::hex << digest_size << " key_length=0x" << key_length << " hmac_en=" << hmac_en << std::dec << std::endl;
 
       if (digest_size == 0x8 || (hmac_en && key_length == 0x20) ||
           (digest_size == 0x1 && key_length == 0x10)) {
@@ -1534,8 +1524,7 @@ bool hmac_ip::handle_write_MSG_FIFO_with_be(uint32_t value, uint8_t byte_enable)
 
    // Validate conditions
    if (!CFG.sha_en || current_state != State::PROCESSING) {
-      CSML_ERROR(0, logger) << "MSG_FIFO write rejected: sha_en=" << CFG.sha_en
-                            << " state=" << (current_state == State::PROCESSING ? "PROCESSING" : "not PROCESSING") << std::endl;
+      CSML_ERROR(0, logger) << "MSG_FIFO write rejected: sha_en=" << CFG.sha_en << " state=" << (current_state == State::PROCESSING ? "PROCESSING" : "not PROCESSING") << std::endl;
       report_error(0x5); // SwPushMsgWhenDisallowed
       return false;
    }
@@ -1588,8 +1577,7 @@ bool hmac_ip::handle_write_MSG_FIFO_with_be(uint32_t value, uint8_t byte_enable)
          apply_endian_swap(word_to_push);
 
          msg_fifo.push(word_to_push);
-         CSML_DEBUG(3, logger) << "Pushed word to FIFO: 0x" << std::hex << word_to_push << std::dec
-                               << " (FIFO size now=" << msg_fifo.size() << ")" << std::endl;
+         CSML_DEBUG(3, logger) << "Pushed word to FIFO: 0x" << std::hex << word_to_push << std::dec << " (FIFO size now=" << msg_fifo.size() << ")" << std::endl;
 
          packer_buffer = 0;
          packer_bytes_count = 0;
@@ -1652,12 +1640,10 @@ void hmac_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
    uint32_t* data  = reinterpret_cast<uint32_t*>(trans.get_data_ptr());
    if (offset <= 0x1C && (offset % 4) == 0) {
       m_keymgr_share0[offset / 4] = *data;
-      CSML_DEBUG(2, logger) << "keymgr: share0[" << (offset/4) << "]=0x"
-                            << std::hex << *data << std::dec << std::endl;
+      CSML_DEBUG(2, logger) << "keymgr: share0[" << (offset/4) << "]=0x"  << std::hex << *data << std::dec << std::endl;
    } else if (offset >= 0x20 && offset <= 0x3C && (offset % 4) == 0) {
       m_keymgr_share1[(offset - 0x20) / 4] = *data;
-      CSML_DEBUG(2, logger) << "keymgr: share1[" << ((offset-0x20)/4) << "]=0x"
-                            << std::hex << *data << std::dec << std::endl;
+      CSML_DEBUG(2, logger) << "keymgr: share1[" << ((offset-0x20)/4) << "]=0x" << std::hex << *data << std::dec << std::endl;
    } else if (offset == 0x40) {
       m_keymgr_key_valid = (*data & 0x1u) != 0;
       CSML_INFO(1, logger) << "keymgr: key_valid=" << m_keymgr_key_valid << std::endl;

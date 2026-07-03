@@ -635,7 +635,7 @@ void testbench::test_ot_private_to_ot_private() {
   uint32_t intr_state = 0;
   m_test->register_read_32(secure_dma_basetest::INTR_STATE_OFFSET, intr_state);
 
-  if (((intr_state & 0x1) == 0) && !done_intr_seen || !done_seen) {
+  if ((((intr_state & 0x1) == 0) && !done_intr_seen) || !done_seen) {
     passed = false;
     msg << "dma_done interrupt not observed (signal/INTR_STATE); ";
   }

@@ -4,6 +4,8 @@ project(efuse LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -41,7 +43,7 @@ message(STATUS "efuse Build Type: ${CMAKE_BUILD_TYPE}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -61,7 +63,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=1)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
@@ -72,7 +74,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
 endif()
 
@@ -112,12 +115,13 @@ set(TEST_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/test/src/efuse_test.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test/src/efuse_basetest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/test/src/testbench.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/src/test_coverage.cpp
 )
 
 # -----------------------------------------------------------------------------
 # Library target
 # -----------------------------------------------------------------------------
-add_library(efuse_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(efuse_model ${MODEL_SRCS})
 target_include_directories(efuse_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(efuse_model PUBLIC csml_logger SystemC::systemc Threads::Threads ${CCI_LIBRARIES})
 
@@ -126,18 +130,9 @@ target_link_libraries(efuse_model PUBLIC csml_logger SystemC::systemc Threads::T
 # -----------------------------------------------------------------------------
 if(BUILD_TESTS)
   add_executable(efuse_test ${TEST_SRCS})
-  target_link_libraries(efuse_test PRIVATE efuse_model)
-
+  peripheral_link_test_to_model(efuse_test efuse_model)
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    add_custom_target(coverage
-      COMMAND ./bin/efuse_test
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    )
-    add_dependencies(coverage efuse_test)
+    peripheral_add_coverage_target(PRIMARY_TARGET efuse_test)
   endif()
 
   enable_testing()

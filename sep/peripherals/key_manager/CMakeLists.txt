@@ -7,6 +7,8 @@ project(key_manager LANGUAGES CXX)
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -49,7 +51,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 # Compiler settings
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -64,11 +66,20 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g -O0 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
+  add_compile_definitions(CSML_DEFAULT_VERBOSITY=2)
+  message(STATUS "key_manager: ASAN build - AddressSanitizer enabled")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
 endif()
 
@@ -81,7 +92,8 @@ include(FindCCI)
 include(FindSystemC)
 
 # OpenSSL (required for RAND_bytes DRBG fallback in keymgr_tt.cpp)
-find_package(OpenSSL REQUIRED)
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 if(OpenSSL_FOUND)
   message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
 else()
@@ -127,6 +139,7 @@ set(TEST_SRCS
   test/src/key_manager_func011_test.cpp
   test/src/key_manager_func012_test.cpp
   test/src/key_manager_func013_test.cpp
+  test/src/key_manager_func014_test.cpp
   test/src/testbench.cpp
 )
 
@@ -140,7 +153,7 @@ else()
   option(BUILD_TESTS "Build keymgr_tt test executable" OFF)
 endif()
 
-add_library(key_manager_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(key_manager_model ${MODEL_SRCS})
 target_include_directories(key_manager_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(key_manager_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::Crypto)
 if(CCI_FOUND)
@@ -149,21 +162,13 @@ endif()
 
 if(BUILD_TESTS)
   add_executable(key_manager_testbench ${TEST_SRCS})
-  target_link_libraries(key_manager_testbench PRIVATE key_manager_model)
+  peripheral_link_test_to_model(key_manager_testbench key_manager_model)
   if(CCI_FOUND)
     target_link_libraries(key_manager_testbench PRIVATE ${CCI_LIBRARIES})
   endif()
 
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    add_custom_target(coverage
-      COMMAND ./bin/key_manager_testbench
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report: coverage/html/index.html"
-    )
-    add_dependencies(coverage key_manager_testbench)
+    peripheral_add_coverage_target(PRIMARY_TARGET key_manager_testbench)
   endif()
 
   enable_testing()

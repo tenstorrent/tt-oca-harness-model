@@ -8,6 +8,8 @@ project(spi_flash LANGUAGES CXX)
 # Support both standalone and integrated builds
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 # Doxygen documentation
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
@@ -57,7 +59,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 # Compiler settings
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -78,7 +80,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "SPI Flash: Release build - optimized")
 endif()
 
@@ -91,7 +93,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "SPI Flash: Coverage build enabled")
 endif()
@@ -162,12 +165,12 @@ endif()
 # spi_flash_test  links spi_flash_core only (no sc_main required)
 # spi_flash_sc_test links spi_flash_model (sc_main provided)
 # -----------------------------------------------------------------------------
-add_library(spi_flash_core STATIC ${MODEL_CORE_SRCS})
+peripheral_add_model_library(spi_flash_core ${MODEL_CORE_SRCS})
 target_include_directories(spi_flash_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-add_library(spi_flash_model STATIC ${MODEL_SC_SRCS})
+peripheral_add_model_library(spi_flash_model ${MODEL_SC_SRCS})
 target_include_directories(spi_flash_model PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../spi_controller/include
@@ -219,7 +222,8 @@ if(BUILD_TESTS)
     )
     # spi_flash_model propagates spi_flash_core (PUBLIC) but keeps csml/SystemC PRIVATE.
     # Explicitly link csml_logger and SystemC for the static lib symbol resolution + sc_main.
-    target_link_libraries(spi_flash_sc_test PRIVATE spi_flash_model csml_logger SystemC::systemc Threads::Threads)
+    peripheral_link_test_to_model(spi_flash_sc_test spi_flash_model)
+    target_link_libraries(spi_flash_sc_test PRIVATE csml_logger SystemC::systemc Threads::Threads)
 
     enable_testing()
     add_test(NAME spi_flash_sc_test COMMAND spi_flash_sc_test)
@@ -231,27 +235,19 @@ if(BUILD_TESTS)
   # Coverage target (runs both tests when coverage build)
   # ---------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    set(COVERAGE_CMDS
-      COMMAND ./bin/spi_flash_test
-    )
+    set(_spi_cov_cmds COMMAND ./bin/spi_flash_test)
     if(EXISTS ${SC_TEST_SRC})
-      list(APPEND COVERAGE_CMDS COMMAND ./bin/spi_flash_sc_test)
+      list(APPEND _spi_cov_cmds COMMAND ./bin/spi_flash_sc_test)
     endif()
-
-    add_custom_target(coverage
-      ${COVERAGE_CMDS}
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    )
-    if(TARGET spi_flash_test)
-      add_dependencies(coverage spi_flash_test)
-    endif()
+    set(_spi_cov_deps)
     if(TARGET spi_flash_sc_test)
-      add_dependencies(coverage spi_flash_sc_test)
+      list(APPEND _spi_cov_deps spi_flash_sc_test)
     endif()
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET spi_flash_test
+      TEST_COMMANDS ${_spi_cov_cmds}
+      EXTRA_DEPENDS ${_spi_cov_deps}
+    )
   endif()
 
 endif()

@@ -25,121 +25,9 @@
 #include "softfloat-util.hpp"
 
 
-// make_unsigned/make_signed do work on our types -- compensate.
+// make_unsigned/make_signed do not work on WdRiscv wide types; see wideint.hpp.
 namespace std
 {
-  template <>
-  struct
-  make_unsigned<WdRiscv::Int128>
-  {
-    typedef WdRiscv::Uint128 type;
-  };
-
-  template <>
-  struct
-  make_unsigned<WdRiscv::Int256>
-  {
-    typedef WdRiscv::Uint256 type;
-  };
-
-  template <>
-  struct
-  make_unsigned<WdRiscv::Int512>
-  {
-    typedef WdRiscv::Uint512 type;
-  };
-
-  template <>
-  struct
-  make_unsigned<WdRiscv::Int1024>
-  {
-    typedef WdRiscv::Uint1024 type;
-  };
-
-  template <>
-  struct
-  make_unsigned<WdRiscv::Uint128>
-  {
-    typedef WdRiscv::Uint128 type;
-  };
-
-  template <>
-  struct
-  make_unsigned<WdRiscv::Uint256>
-  {
-    typedef WdRiscv::Uint256 type;
-  };
-
-  template <>
-  struct
-  make_unsigned<WdRiscv::Uint512>
-  {
-    typedef WdRiscv::Uint512 type;
-  };
-
-  template <>
-  struct
-  make_unsigned<WdRiscv::Uint1024>
-  {
-    typedef WdRiscv::Uint1024 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Uint128>
-  {
-    typedef WdRiscv::Int128 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Uint256>
-  {
-    typedef WdRiscv::Int256 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Uint512>
-  {
-    typedef WdRiscv::Int512 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Uint1024>
-  {
-    typedef WdRiscv::Int1024 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Int128>
-  {
-    typedef WdRiscv::Int128 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Int256>
-  {
-    typedef WdRiscv::Int256 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Int512>
-  {
-    typedef WdRiscv::Int512 type;
-  };
-
-  template <>
-  struct
-  make_signed<WdRiscv::Int1024>
-  {
-    typedef WdRiscv::Int1024 type;
-  };
-
   WdRiscv::Float16 fminf(WdRiscv::Float16 a, WdRiscv::Float16 b)
   {
     return WdRiscv::Float16::fromFloat(fminf(a.toFloat(), b.toFloat()));
@@ -261,7 +149,7 @@ namespace WdRiscv
   T
   minVal()
   {
-    typedef typename std::make_unsigned<T>::type UT;
+    typedef typename make_unsigned<T>::type UT;
     if constexpr (std::is_same<T, UT>::value)
       return T(0);
     else
@@ -277,7 +165,7 @@ namespace WdRiscv
   T
   maxVal()
   {
-    typedef typename std::make_unsigned<T>::type UT;
+    typedef typename make_unsigned<T>::type UT;
     if constexpr (std::is_same<T, UT>::value)
       {
 	T x{0};
@@ -7522,7 +7410,7 @@ void
 Hart<URV>::vmulhsu_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
                       unsigned start, unsigned elems, bool masked)
 {
-  typedef typename std::make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
+  typedef typename make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
 
   unsigned errors = 0;
   ELEM_TYPE e1 = 0, dest = 0;
@@ -7588,7 +7476,7 @@ void
 Hart<URV>::vmulhsu_vx(unsigned vd, unsigned vs1, unsigned rs2, unsigned group,
                       unsigned start, unsigned elems, bool masked)
 {
-  typedef typename std::make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
+  typedef typename make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
 
   unsigned errors = 0;
   ELEM_TYPE e1 = 0, dest = 0;
@@ -8474,7 +8362,7 @@ Hart<URV>::vwmulsu_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
                      unsigned start, unsigned elems, bool masked)
 {
   typedef typename makeDoubleWide<ELEM_TYPE>::type  ELEM_TYPE_X2;
-  typedef typename std::make_unsigned<ELEM_TYPE>::type ELEM_TYPE_U;
+  typedef typename make_unsigned<ELEM_TYPE>::type ELEM_TYPE_U;
 
   ELEM_TYPE e1 = 0;
   ELEM_TYPE_U e2u = 0;
@@ -8550,7 +8438,7 @@ Hart<URV>::vwmulsu_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
                      unsigned start, unsigned elems, bool masked)
 {
   typedef typename makeDoubleWide<ELEM_TYPE>::type  ELEM_TYPE_X2;
-  typedef typename std::make_unsigned<ELEM_TYPE>::type ELEM_TYPE_U;
+  typedef typename make_unsigned<ELEM_TYPE>::type ELEM_TYPE_U;
 
   ELEM_TYPE e1 = 0;
   ELEM_TYPE_X2 dest = 0;
@@ -8702,7 +8590,7 @@ Hart<URV>::vwmaccu_vx(unsigned vd, ELEM_TYPE e1, unsigned vs2, unsigned group,
                       unsigned start, unsigned elems, bool masked)
 {
   typedef typename makeDoubleWide<ELEM_TYPE>::type DWT; // Double wide type
-  typedef typename std::make_signed<DWT>::type SDWT; // Signed double wide type
+  typedef typename make_signed<DWT>::type SDWT; // Signed double wide type
   unsigned errors = 0, wideGroup = group*2;
 
   ELEM_TYPE e2 = 0;
@@ -8899,8 +8787,8 @@ Hart<URV>::vwmaccsu_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
                        unsigned start, unsigned elems, bool masked)
 {
   typedef typename makeDoubleWide<ELEM_TYPE>::type DWT; // Double wide type
-  typedef typename std::make_unsigned<DWT>::type DWTU; // Double wide type unsigned
-  typedef typename std::make_unsigned<ELEM_TYPE>::type SWTU; // Single wide type unsigned
+  typedef typename make_unsigned<DWT>::type DWTU; // Double wide type unsigned
+  typedef typename make_unsigned<ELEM_TYPE>::type SWTU; // Single wide type unsigned
 
   unsigned errors = 0, wideGroup = group*2;
 
@@ -8976,8 +8864,8 @@ Hart<URV>::vwmaccsu_vx(unsigned vd, ELEM_TYPE e1, unsigned vs2, unsigned group,
                        unsigned start, unsigned elems, bool masked)
 {
   typedef typename makeDoubleWide<ELEM_TYPE>::type DWT; // Double wide type
-  typedef typename std::make_unsigned<DWT>::type DWTU; // Double wide type unsigned
-  typedef typename std::make_unsigned<ELEM_TYPE>::type SWTU; // Single wide type unsigned
+  typedef typename make_unsigned<DWT>::type DWTU; // Double wide type unsigned
+  typedef typename make_unsigned<ELEM_TYPE>::type SWTU; // Single wide type unsigned
 
   unsigned errors = 0, wideGroup = group*2;
 
@@ -9058,8 +8946,8 @@ Hart<URV>::vwmaccus_vx(unsigned vd, ELEM_TYPE e1, unsigned vs2, unsigned group,
                        unsigned start, unsigned elems, bool masked)
 {
   typedef typename makeDoubleWide<ELEM_TYPE>::type DWT; // Double wide type
-  typedef typename std::make_unsigned<DWT>::type DWTU; // Double wide type unsigned
-  typedef typename std::make_unsigned<ELEM_TYPE>::type SWTU; // Single wide type unsigned
+  typedef typename make_unsigned<DWT>::type DWTU; // Double wide type unsigned
+  typedef typename make_unsigned<ELEM_TYPE>::type SWTU; // Single wide type unsigned
 
   unsigned errors = 0, wideGroup = group*2;
 
@@ -13051,7 +12939,7 @@ void
 Hart<URV>::vnclip_wv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
                      unsigned start, unsigned elems, bool masked)
 {
-  typedef typename std::make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
+  typedef typename make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
   typedef typename makeDoubleWide<ELEM_TYPE>::type ELEM_TYPE2X; // Double wide
 
   unsigned errors = 0;
@@ -13142,7 +13030,7 @@ void
 Hart<URV>::vnclip_wx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
                      unsigned start, unsigned elems, bool masked)
 {
-  typedef typename std::make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
+  typedef typename make_unsigned<ELEM_TYPE>::type  U_ELEM_TYPE;
   typedef typename makeDoubleWide<ELEM_TYPE>::type ELEM_TYPE2X; // Double wide
 
   unsigned errors = 0;

@@ -8,6 +8,8 @@ project(hmac LANGUAGES CXX)
 # Support both standalone and integrated builds
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
 
+include(PeripheralCommon)
+
 
 # Doxygen documentation
 find_package(Doxygen)
@@ -61,7 +63,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 # Compiler settings
 # -----------------------------------------------------------------------------
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -83,7 +85,7 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=0)
+  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "HMAC: Release build - errors only, optimized")
 endif()
 
@@ -96,7 +98,8 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --coverage -lgcov")
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
   add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "HMAC: Coverage build enabled")
 endif()
@@ -124,7 +127,8 @@ endif()
 # -----------------------------------------------------------------------------
 # OpenSSL Library (required for HMAC cryptographic operations)
 # -----------------------------------------------------------------------------
-find_package(OpenSSL REQUIRED)
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
 if(OPENSSL_FOUND)
   message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
   message(STATUS "  Include: ${OPENSSL_INCLUDE_DIR}")
@@ -163,11 +167,8 @@ endif()
 
 # HMAC model library (always built)
 # Use STATIC library to match old working CMake configuration
-add_library(hmac_model STATIC ${MODEL_SRCS})
+peripheral_add_model_library(hmac_model ${MODEL_SRCS})
 target_include_directories(hmac_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-
-# Increase template depth for HMAC's large register arrays (1024 MSG_FIFO registers)
-target_compile_options(hmac_model PRIVATE -ftemplate-depth=2000)
 
 target_link_libraries(hmac_model PUBLIC
   csml_logger
@@ -181,23 +182,13 @@ target_link_libraries(hmac_model PUBLIC
 # HMAC test executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(hmac_test ${TEST_SRCS})
-  target_compile_options(hmac_test PRIVATE -ftemplate-depth=2000)
-  target_link_libraries(hmac_test PRIVATE hmac_model)
-
+  peripheral_link_test_to_model(hmac_test hmac_model)
   # -----------------------------------------------------------------------------
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # Keep only model/ directory in coverage, exclude everything else
-    add_custom_target(coverage
-      COMMAND ./bin/hmac_test
-      COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-      COMMAND lcov --capture --directory . --output-file coverage/coverage.info
-      COMMAND lcov --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
-      COMMAND genhtml coverage/coverage_filtered.info --output-directory coverage/html
-      COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    )
-    add_dependencies(coverage hmac_test)
+    peripheral_add_coverage_target(PRIMARY_TARGET hmac_test)
   endif()
 
   # -----------------------------------------------------------------------------

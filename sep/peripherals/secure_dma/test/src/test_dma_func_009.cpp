@@ -3113,7 +3113,6 @@ void testbench::test_src_wrap_mode() {
   const uint32_t dst_addr = 0x20005000;
   const uint32_t transfer_size = 32;   // 2 chunks of 16 bytes
   const uint32_t chunk_size = 16;
-  const uint32_t width_bytes = 4;
   const uint8_t pattern_start = 0x60;  // First 16 bytes: 0x60..0x6F
 
   // Fill source circular buffer region [src_addr, src_addr+16). With wrap,
@@ -3252,7 +3251,6 @@ void testbench::test_dst_wrap_mode() {
   const uint32_t dst_addr = 0x20007000;
   const uint32_t transfer_size = 32;   // 2 chunks of 16 bytes
   const uint32_t chunk_size = 16;
-  const uint32_t width_bytes = 4;
   const uint8_t pattern_start = 0x70;   // src[0..31] = 0x70..0x8F
 
   // Fill source linearly. Chunk1: src[0..15] → dst[0..15]. At chunk boundary

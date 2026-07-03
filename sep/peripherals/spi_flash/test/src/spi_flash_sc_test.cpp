@@ -462,6 +462,115 @@ private:
         SC_TEST_ASSERT(rx[0] == 0xFF, "Memory unchanged (still 0xFF)");
     }
 
+    bool cmd_program_4b_2seg(uint8_t opcode, uint32_t addr,
+                             const uint8_t* data, uint16_t len)
+    {
+        uint8_t hdr[5] = { opcode,
+                           static_cast<uint8_t>(addr >> 24),
+                           static_cast<uint8_t>(addr >> 16),
+                           static_cast<uint8_t>(addr >>  8),
+                           static_cast<uint8_t>(addr) };
+
+        spi_segment_t seg1{5, spi_direction_e::TX_ONLY,
+                           spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        spi_port->spi_transaction(seg1, m_cfg, hdr, nullptr);
+
+        spi_segment_t seg2{len, spi_direction_e::TX_ONLY,
+                           spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        return spi_port->spi_transaction(seg2, m_cfg, data, nullptr);
+    }
+
+    bool cmd_read_4b(uint8_t opcode, uint32_t addr, uint8_t* rx, uint16_t len)
+    {
+        uint8_t hdr[5] = { opcode,
+                           static_cast<uint8_t>(addr >> 24),
+                           static_cast<uint8_t>(addr >> 16),
+                           static_cast<uint8_t>(addr >>  8),
+                           static_cast<uint8_t>(addr) };
+
+        spi_segment_t seg1{5, spi_direction_e::TX_ONLY,
+                           spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        spi_port->spi_transaction(seg1, m_cfg, hdr, nullptr);
+
+        spi_segment_t seg2{len, spi_direction_e::RX_ONLY,
+                           spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        return spi_port->spi_transaction(seg2, m_cfg, nullptr, rx);
+    }
+
+    bool cmd_erase_4b(uint8_t opcode, uint32_t addr)
+    {
+        uint8_t tx[5] = { opcode,
+                          static_cast<uint8_t>(addr >> 24),
+                          static_cast<uint8_t>(addr >> 16),
+                          static_cast<uint8_t>(addr >>  8),
+                          static_cast<uint8_t>(addr) };
+
+        spi_segment_t seg{5, spi_direction_e::TX_ONLY,
+                          spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        return spi_port->spi_transaction(seg, m_cfg, tx, nullptr);
+    }
+
+    void test_4byte_modes()
+    {
+        SC_TEST_SECTION("SC.9: 4-byte address instructions and modes");
+
+        const uint32_t addr = 0x700000; // 7MB
+        const uint8_t data[4] = {0x12, 0x34, 0x56, 0x78};
+
+        // Test explicit 4-byte commands
+        cmd_no_addr(spi_flash_opcodes::WRITE_ENABLE);
+        bool ok = cmd_program_4b_2seg(spi_flash_opcodes::PROGRAM_4BYTE, addr, data, 4);
+        SC_TEST_ASSERT(ok == true, "PROGRAM_4BYTE returns true");
+
+        uint8_t rx[4] = {};
+        cmd_read_4b(spi_flash_opcodes::READ_4B, addr, rx, 4);
+        SC_TEST_ASSERT(rx[0] == 0x12 && rx[1] == 0x34 && rx[2] == 0x56 && rx[3] == 0x78, "READ_4B returns expected data");
+
+        cmd_no_addr(spi_flash_opcodes::WRITE_ENABLE);
+        ok = cmd_erase_4b(spi_flash_opcodes::ERASE_64KB_4B, addr);
+        SC_TEST_ASSERT(ok == true, "ERASE_64KB_4B returns true");
+
+        cmd_read_4b(spi_flash_opcodes::READ_4B, addr, rx, 4);
+        SC_TEST_ASSERT(rx[0] == 0xFF, "Erase 4B verified");
+
+        // Test EN4B/EX4B address mode effects on legacy commands
+        cmd_no_addr(spi_flash_opcodes::EN4B);
+        // Now legacy commands expect 4 address bytes
+        cmd_no_addr(spi_flash_opcodes::WRITE_ENABLE);
+        ok = cmd_program_4b_2seg(spi_flash_opcodes::PROGRAM, addr, data, 4);
+        SC_TEST_ASSERT(ok == true, "Legacy PROGRAM in 4-byte mode returns true");
+
+        cmd_read_4b(spi_flash_opcodes::READ, addr, rx, 4);
+        SC_TEST_ASSERT(rx[0] == 0x12 && rx[1] == 0x34 && rx[2] == 0x56 && rx[3] == 0x78, "Legacy READ in 4-byte mode returns expected data");
+
+        cmd_no_addr(spi_flash_opcodes::EX4B);
+    }
+
+    void test_pure_rx_only()
+    {
+        SC_TEST_SECTION("SC.10: Pure RX-only segment (no preceding TX)");
+
+        uint8_t rx[4] = {0x11, 0x22, 0x33, 0x44};
+        spi_segment_t seg{4, spi_direction_e::RX_ONLY,
+                          spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        
+        bool ok = spi_port->spi_transaction(seg, m_cfg, nullptr, rx);
+        SC_TEST_ASSERT(ok == true, "Pure RX-only segment transaction returns true");
+        SC_TEST_ASSERT(rx[0] == 0xFF && rx[1] == 0xFF && rx[2] == 0xFF && rx[3] == 0xFF, "Pure RX-only segment filled with 0xFF");
+    }
+
+    void test_unknown_opcode_sc()
+    {
+        SC_TEST_SECTION("SC.11: Unknown opcode segment fallback and failure");
+
+        // Send unknown opcode 0xAA
+        uint8_t tx = 0xAA;
+        spi_segment_t seg{1, spi_direction_e::TX_ONLY,
+                          spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        bool ok = spi_port->spi_transaction(seg, m_cfg, &tx, nullptr);
+        SC_TEST_ASSERT(ok == false, "spi_transaction with unknown opcode returns false");
+    }
+
     // -----------------------------------------------------------------------
     // SC_THREAD: entry point
     // -----------------------------------------------------------------------
@@ -483,6 +592,9 @@ private:
         test_suspend_resume();
         test_reset_signal();
         test_program_no_wren();
+        test_4byte_modes();
+        test_pure_rx_only();
+        test_unknown_opcode_sc();
 
         std::cout << "\n========================================\n";
         std::cout << "Results: " << s_tests_passed << "/"
