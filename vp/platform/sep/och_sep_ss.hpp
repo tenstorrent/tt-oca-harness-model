@@ -8,6 +8,7 @@
 #include <tlm.h>
 #include "sep_memory.h"
 #include "sep_virt_console.h"
+#include "sep_status_report.h"
 #include "secure_dma.h"
 #include "uart_with_terminal.h"
 #include "gpio.h"
@@ -49,6 +50,19 @@ namespace {
         static BasicOptions o;
         return o;
     }
+
+    // SEP status ring buffer placement in the smc_global window, expressed once and used by
+    // BOTH the SMC-handshake seed block (constructor) and the SEP_STATUS write-tap
+    // (module_bind), so the two can't drift. The bus strips the 0x40000000 base, so these
+    // are smc_global window-local offsets. Layout: { u32 head, tail, num_entries; u32 entries[] }.
+    constexpr uint32_t SMC_SRAM_WINDOW_OFF  = 0x60000;  // SMC_SRAM_OFFSET (window-local)
+    constexpr uint32_t STATUS_RING_SRAM_OFF = 0x1000;   // SRAM-relative; published in scratch[11]
+    constexpr uint32_t STATUS_RING_ENTRIES  = 512;      // capacity (real SMC_RING_BUFFER_SIZE)
+    constexpr uint64_t STATUS_RING_LOCAL    = static_cast<uint64_t>(SMC_SRAM_WINDOW_OFF) +
+                                              STATUS_RING_SRAM_OFF;            // 0x61000 (header)
+    constexpr uint64_t STATUS_RING_DATA     = STATUS_RING_LOCAL + 12;          // 0x6100C (entries[])
+    constexpr uint64_t STATUS_RING_DATA_END = STATUS_RING_DATA +
+                                              static_cast<uint64_t>(STATUS_RING_ENTRIES) * 4; // 0x6180C (excl)
 } // namespace
 
 class och_sep_ss : public sc_module {
@@ -100,6 +114,7 @@ public:
         delete sep_scratch;
         delete outbound_filter;
         delete smc_global;
+        delete sep_status;
         delete spi_device;
         delete spi_controller;
         delete keymgr;
@@ -126,6 +141,7 @@ private:
     SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
     SEPMemory*                        smc_global         = nullptr;  // functional stub (RW)
     SimVirtConsole*                   sim_out            = nullptr;  // SIM_OUT bootcode console (taps sep_scratch)
+    SepStatusReport*                  sep_status         = nullptr;  // SEP_STATUS production status console (taps smc_global ring)
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
@@ -284,6 +300,18 @@ private:
     ArgsCSML*              argsCSML      = nullptr;
     csml_param<uint64_t>   globalQuantumNs;
 
+    // Boot straps latched by the (emulated) SMC reset unit, exposed as CCI params
+    // so the ROM boot mode is selectable at invocation (accellera_config.ini) with
+    // no rebuild. The seed block composes these into STRAPS_LO/STRAPS_HI words and
+    // writes them to the smc_global stub at offsets 0x2090/0x2094, matching the
+    // SEP<->SMC contract in fw/sep/bootcode/include/sep_smc_interface.h. Defaults
+    // are all false (= Secondary chiplet, status reporting enabled, refclk).
+    csml_param<bool>       strap_primary_chiplet;       // STRAPS_LO[25]
+    csml_param<bool>       strap_boot_recovery;         // STRAPS_HI[23]
+    csml_param<bool>       strap_rotate_update;         // STRAPS_HI[29]
+    csml_param<bool>       strap_status_report_disable; // STRAPS_LO[21]
+    csml_param<bool>       strap_bl0_pll_clk;           // STRAPS_HI[24]
+
     // =========================================================================
     // Methods
     // =========================================================================
@@ -301,6 +329,11 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , unused_irq_signal("unused_irq_signal")
     , plic_inputs(PLIC_NUM_INTERRUPTS, &unused_irq_signal)
     , globalQuantumNs("globalQuantumNs", 10)
+    , strap_primary_chiplet("smc.primary_chiplet", false)
+    , strap_boot_recovery("smc.boot_recovery", false)
+    , strap_rotate_update("smc.rotate_update", false)
+    , strap_status_report_disable("smc.status_report_disable", false)
+    , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
 {
     argsCSML = new ArgsCSML(opt);
     Args& args = opt;
@@ -402,14 +435,14 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     //   SMC SRAM   @ SMC_SRAM_OFFSET(0x60000), 1 MiB; scratch offsets are SRAM-relative
     {
         constexpr uint64_t SMC_SCRATCH_BASE = 0x10100;   // SMC_SCRATCH_BASE_OFFSET
-        constexpr uint64_t SMC_SRAM_OFF     = 0x60000;   // SMC_SRAM_OFFSET (window-local)
         auto scratch_local = [](unsigned idx) -> uint64_t {
             return SMC_SCRATCH_BASE + (static_cast<uint64_t>(idx) << 3);
         };
 
-        // SMC SRAM regions staged by the (emulated) SMC, as SRAM-relative offsets.
-        const uint32_t status_ring_off = 0x1000;  // -> scratch[11] STATUS_BUFFER_ADDR
-        const uint32_t manifest_off    = 0x2000;  // -> scratch[8]  MANIFEST_ADDR
+        // SMC SRAM regions staged by the (emulated) SMC, as SRAM-relative offsets. The
+        // status ring placement is the shared STATUS_RING_* constants (see top-of-file).
+        const uint32_t status_ring_off = STATUS_RING_SRAM_OFF;  // -> scratch[11] STATUS_BUFFER_ADDR
+        const uint32_t manifest_off    = 0x2000;                // -> scratch[8]  MANIFEST_ADDR
 
         // scratch[9] STATUS_TO_SEP: all ready flags
         // (SRAM_INIT|MANIFEST_READY|BUFFER_READY|SRAM_PROTECTED = 0xF). BUFFER_READY
@@ -423,12 +456,14 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         smc_global->load_data(reinterpret_cast<const char*>(&manifest_off),
                               scratch_local(8),  sizeof(manifest_off));
 
-        // Valid (empty) status_ring_buffer at SMC SRAM + status_ring_off:
+        // Valid (empty) status_ring_buffer at the shared STATUS_RING_LOCAL offset:
         //   struct { uint32_t head, tail, num_entries; uint32_t entries[]; }
-        // head=tail=0, num_entries=64; entries[] read back as 0 (paged memory).
-        const uint32_t ring_hdr[3] = { 0u, 0u, 64u };  // head, tail, num_entries
+        // head=tail=0; num_entries=STATUS_RING_ENTRIES (512 — the real SMC_RING_BUFFER_SIZE,
+        // large enough that a default-config boot's full status stream is captured without
+        // the firmware substituting overflow markers). entries[] read back as 0 (paged mem).
+        const uint32_t ring_hdr[3] = { 0u, 0u, STATUS_RING_ENTRIES };  // head, tail, num_entries
         smc_global->load_data(reinterpret_cast<const char*>(ring_hdr),
-                              SMC_SRAM_OFF + status_ring_off, sizeof(ring_hdr));
+                              STATUS_RING_LOCAL, sizeof(ring_hdr));
 
         // DFT_CTRL_STATUS_SMU (SMC reg @ 0xF800): memory-repair / MBIST status. The ROM's
         // dft_mem_repair_gate() (rom_main.c) halts with ROM_ERR_DFT_GATE_BLOCKED unless
@@ -438,6 +473,25 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         const uint32_t dft_status = 0x3u;  // MEM_REPAIR_DONE | MEM_REPAIR_SUCCESS
         smc_global->load_data(reinterpret_cast<const char*>(&dft_status),
                               SMC_DFT_CTRL_STATUS, sizeof(dft_status));
+
+        // Reset-unit latched boot straps (STRAPS_LO/HI), composed from CCI params so
+        // the ROM boot mode is invocation-selectable. init_straps() reads these
+        // (fw/sep/bootcode/src/boot_straps.c): STRAPS_LO[25]=primary_chiplet selects
+        // Primary (SPI boot) vs Secondary (wait for SMC manifest). Bit positions per
+        // sep_smc_interface.h; HI bits are relative to the STRAPS_HI word.
+        constexpr uint64_t SMC_STRAPS_LO = 0x2090;  // SMC_STRAPS_LO_OFFSET
+        constexpr uint64_t SMC_STRAPS_HI = 0x2094;  // SMC_STRAPS_HI_OFFSET
+        uint32_t straps_lo = 0u;
+        uint32_t straps_hi = 0u;
+        if (strap_primary_chiplet.get_param_value())       straps_lo |= (1u << 25);
+        if (strap_status_report_disable.get_param_value()) straps_lo |= (1u << 21);
+        if (strap_boot_recovery.get_param_value())         straps_hi |= (1u << 23);
+        if (strap_bl0_pll_clk.get_param_value())           straps_hi |= (1u << 24);
+        if (strap_rotate_update.get_param_value())         straps_hi |= (1u << 29);
+        smc_global->load_data(reinterpret_cast<const char*>(&straps_lo),
+                              SMC_STRAPS_LO, sizeof(straps_lo));
+        smc_global->load_data(reinterpret_cast<const char*>(&straps_hi),
+                              SMC_STRAPS_HI, sizeof(straps_hi));
     }
 
     unused_irq_signal.write(false);
@@ -458,6 +512,7 @@ inline void och_sep_ss::create_modules() {
     // SMC global window stub (SEP↔SMC AXI path); RW backing store, no SMC behavior.
     smc_global      = new SEPMemory("smc_global", false);
     sim_out         = new SimVirtConsole("sim_out");
+    sep_status      = new SepStatusReport("sep_status");
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
@@ -588,6 +643,24 @@ inline void och_sep_ss::module_bind() {
                 [this, COLD_SCRATCH_2_OFFSET](uint64_t offset, const uint8_t* data, unsigned len) {
                     if (offset == COLD_SCRATCH_2_OFFSET && len >= 4) {
                         sim_out->on_bytes(offset, data, len);
+                    }
+                });
+        }
+
+        // SEP_STATUS: observe the SEP firmware's *production* status writes into the status
+        // ring buffer in SMC SRAM (the path the SMC reads on silicon) and decode them to the
+        // console with a SEP_STATUS header. The firmware writes each status as `entries[head]
+        // = word` (one aligned 32-bit store); we tap only the entries[] window, so the
+        // head/tail/num_entries header writes and the construction-time seeding (load_data,
+        // not b_transport) are naturally excluded. Observation-only — the ring keeps normal
+        // R/W semantics and `tail` is never advanced, so a future SMC-emulation model can own
+        // ring draining once this is disabled (enable=false installs no tap).
+        if (sep_status->enabled()) {
+            smc_global->setWriteTap(
+                [this](uint64_t offset, const uint8_t* data, unsigned len) {
+                    if (offset >= STATUS_RING_DATA && offset < STATUS_RING_DATA_END &&
+                        len >= 4 && (offset % 4) == 0) {
+                        sep_status->on_bytes(offset, data, len);
                     }
                 });
         }
