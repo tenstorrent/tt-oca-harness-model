@@ -19,6 +19,17 @@
 //   11. Reset clears programmed tables
 //   12. Output remap (M-mode/Xvisor): bit-exact REGION_ATTRS.offset[55:0]
 //   13. Filter CSR image: bit-exact FILTER_CONFIG/START_ADDR/END_ADDR + locked
+//   14. Alternate internal masters (jtag / data_accel / log)
+//   15. Testbench API + LOCAL_BASE / REGION_SIZE global CSRs
+//   16. M-mode output remap via local-base aperture
+//   17. PERIPH_EXT local decode (sys / sep direct)
+//   18. Deny-read poison fill with trailing partial bytes
+//   19. Alias-remap CSR read-back, cacheable bit, IGNORE_COMMAND
+//   20. Output-remap 64-bit write + IGNORE_COMMAND
+//   21. Filter CSR edge cases (src_id, R/W-only, burst, OOB entries)
+//   22. Outbound-filter NS matching
+//   23. DMI denied on jtag / data_accel / log
+//   24. no_addr_remap config bypasses output remap
 //
 // Convention: prints "ALL TESTS PASSED" on success; non-zero exit on failure.
 
@@ -27,6 +38,7 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include <array>
 #include <cstring>
 #include <iostream>
 #include <map>
@@ -107,17 +119,17 @@ struct driver : sc_core::sc_module {
 
     explicit driver(sc_module_name n) : sc_core::sc_module(n), sock("sock") {}
 
-    tlm::tlm_response_status xfer(tlm::tlm_command cmd, uint64_t addr,
-                                  uint32_t* data,
-                                  bool with_ext = false,
-                                  uint16_t src_id = 0, bool ns = true) {
+    tlm::tlm_response_status raw(tlm::tlm_command cmd, uint64_t addr,
+                                 unsigned len, uint8_t* buf,
+                                 bool with_ext = false, uint16_t src_id = 0,
+                                 bool ns = true) {
         tlm::tlm_generic_payload gp;
         sc_time t = SC_ZERO_TIME;
         gp.set_command(cmd);
         gp.set_address(addr);
-        gp.set_data_ptr(reinterpret_cast<uint8_t*>(data));
-        gp.set_data_length(4);
-        gp.set_streaming_width(4);
+        gp.set_data_ptr(buf);
+        gp.set_data_length(len);
+        gp.set_streaming_width(len);
         gp.set_byte_enable_ptr(nullptr);
         gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
@@ -130,6 +142,14 @@ struct driver : sc_core::sc_module {
         sock->b_transport(gp, t);
         if (with_ext) gp.clear_extension<smc::smc_axi_extension>();
         return gp.get_response_status();
+    }
+
+    tlm::tlm_response_status xfer(tlm::tlm_command cmd, uint64_t addr,
+                                  uint32_t* data,
+                                  bool with_ext = false,
+                                  uint16_t src_id = 0, bool ns = true) {
+        return raw(cmd, addr, 4, reinterpret_cast<uint8_t*>(data),
+                   with_ext, src_id, ns);
     }
 
     void write32(uint64_t a, uint32_t v) {
@@ -149,6 +169,15 @@ struct driver : sc_core::sc_module {
             ++g_failures;
         }
         return v;
+    }
+    void write64(uint64_t a, uint64_t v) {
+        auto r = raw(tlm::TLM_WRITE_COMMAND, a, 8,
+                     reinterpret_cast<uint8_t*>(&v));
+        if (r != tlm::TLM_OK_RESPONSE) {
+            std::cerr << "FAIL write64(0x" << std::hex << a << ") rsp="
+                      << r << std::dec << "\n";
+            ++g_failures;
+        }
     }
     bool dmi_query(uint64_t a) {
         tlm::tlm_generic_payload gp;
@@ -173,9 +202,12 @@ constexpr uint64_t A_AR          = 0xC001'2000ULL;
 constexpr uint64_t A_IBF         = 0xC001'5000ULL;
 constexpr uint64_t A_OBF         = 0xC001'6000ULL;
 constexpr uint64_t A_GBASE       = 0xC001'0040ULL;
+constexpr uint64_t A_LBASE       = 0xC001'0048ULL;
 constexpr uint64_t A_RSIZE       = 0xC001'0050ULL;
+constexpr uint64_t A_PERIPH_EXT  = 0xC040'0000ULL;
 constexpr uint64_t A_UNMAPPED    = 0xC000'1000ULL;  // gap between WDT and periph
 constexpr uint64_t A_OUTBOUND    = 0x8000'0000ULL;  // in neither aperture
+constexpr uint64_t A_MM_LOCAL    = 0xC100'0000ULL;  // M-mode window (local base)
 
 // FILTER_CONFIG[31:0] field encodings (filter_ctrl.rdl).
 constexpr uint32_t CFG_READ_EN  = 1u << 0;
@@ -185,8 +217,11 @@ constexpr uint32_t CFG_ALLOW_NS = 1u << 8;   // 1 ⇒ matches non-secure traffic
 constexpr uint32_t CFG_LOCKED   = 1u << 31;  // locked[63] lands in high word
 // "Allow a range for non-secure read+write" — the common case for the drivers,
 // which issue non-secure (ns=true) transactions by default.
-constexpr uint32_t CFG_RW_NS    = CFG_EN | CFG_READ_EN | CFG_WRITE_EN | CFG_ALLOW_NS;
-constexpr uint32_t CFG_RW_SECURE= CFG_EN | CFG_READ_EN | CFG_WRITE_EN; // allow_ns=0
+constexpr uint32_t CFG_RW_NS      = CFG_EN | CFG_READ_EN | CFG_WRITE_EN | CFG_ALLOW_NS;
+constexpr uint32_t CFG_RW_SECURE  = CFG_EN | CFG_READ_EN | CFG_WRITE_EN; // allow_ns=0
+constexpr uint32_t CFG_READ_NS    = CFG_EN | CFG_READ_EN | CFG_ALLOW_NS;
+constexpr uint32_t CFG_WRITE_NS   = CFG_EN | CFG_WRITE_EN | CFG_ALLOW_NS;
+constexpr uint32_t CFG_ALLOW_BURST = 1u << 24;
 // Enabled secure-matching entry with no read/write permission → hits then blocks
 // (used to deny a range on the otherwise allow-by-default outbound path).
 constexpr uint32_t CFG_DENY     = CFG_EN;                              // allow_ns=0, no r/w
@@ -202,25 +237,48 @@ struct tb : sc_core::sc_module {
     SC_HAS_PROCESS(tb);
 
     smc::smc_fabric dut;
+    smc::smc_fabric dut_noremap;
 
     // Inbound drivers (one per fabric target socket).
     driver d_jtag, d_mmio, d_daccel, d_log, d_sys, d_sep;
+    driver d_mmio_nr;
+    driver d_nr_jtag, d_nr_daccel, d_nr_log, d_nr_sys, d_nr_sep;
 
     // Downstream probes (one per fabric initiator socket).
     probe p_front, p_daccel, p_periph, p_dfd, p_cpu, p_mbox, p_dft, p_out;
     probe p_aR, p_mR, p_xR, p_ibf, p_obf;  // internal-CSR sockets (unused but bound)
+    probe p_out_nr;
+    probe p_nr_front, p_nr_daccel, p_nr_periph, p_nr_dfd, p_nr_cpu, p_nr_mbox;
+    probe p_nr_dft, p_nr_aR, p_nr_mR, p_nr_xR, p_nr_ibf, p_nr_obf;
 
     sc_core::sc_signal<bool> rst_n{"rst_n"};
+    sc_core::sc_signal<bool> rst_n_nr{"rst_n_nr"};
+
+    static smc::smc_fabric::config no_remap_cfg() {
+        smc::smc_fabric::config c{};
+        c.no_addr_remap = true;
+        return c;
+    }
 
     explicit tb(sc_module_name n)
         : sc_core::sc_module(n)
         , dut("fabric")
+        , dut_noremap("fabric_noremap", no_remap_cfg())
         , d_jtag("d_jtag"), d_mmio("d_mmio"), d_daccel("d_daccel")
         , d_log("d_log"), d_sys("d_sys"), d_sep("d_sep")
+        , d_mmio_nr("d_mmio_nr")
+        , d_nr_jtag("d_nr_jtag"), d_nr_daccel("d_nr_daccel")
+        , d_nr_log("d_nr_log"), d_nr_sys("d_nr_sys"), d_nr_sep("d_nr_sep")
         , p_front("p_front"), p_daccel("p_daccel"), p_periph("p_periph")
         , p_dfd("p_dfd"), p_cpu("p_cpu"), p_mbox("p_mbox"), p_dft("p_dft")
         , p_out("p_out"), p_aR("p_aR"), p_mR("p_mR"), p_xR("p_xR")
         , p_ibf("p_ibf"), p_obf("p_obf")
+        , p_out_nr("p_out_nr")
+        , p_nr_front("p_nr_front"), p_nr_daccel("p_nr_daccel")
+        , p_nr_periph("p_nr_periph"), p_nr_dfd("p_nr_dfd")
+        , p_nr_cpu("p_nr_cpu"), p_nr_mbox("p_nr_mbox"), p_nr_dft("p_nr_dft")
+        , p_nr_aR("p_nr_aR"), p_nr_mR("p_nr_mR"), p_nr_xR("p_nr_xR")
+        , p_nr_ibf("p_nr_ibf"), p_nr_obf("p_nr_obf")
     {
         // Inbound: driver → fabric target sockets.
         d_jtag  .sock.bind(dut.jtag_axi_in);
@@ -246,6 +304,27 @@ struct tb : sc_core::sc_module {
         dut.to_outbound_filter_ctrl.bind(p_obf   .sock);
 
         dut.rst_n_i(rst_n);
+
+        d_mmio_nr.sock.bind(dut_noremap.mmio_in);
+        d_nr_jtag  .sock.bind(dut_noremap.jtag_axi_in);
+        d_nr_daccel.sock.bind(dut_noremap.data_accel_in);
+        d_nr_log   .sock.bind(dut_noremap.log_in);
+        d_nr_sys   .sock.bind(dut_noremap.sys_axi_in);
+        d_nr_sep   .sock.bind(dut_noremap.sep_axi_in);
+        dut_noremap.output_axi.bind(p_out_nr.sock);
+        dut_noremap.to_front_port          .bind(p_nr_front .sock);
+        dut_noremap.to_data_accel_ctrl     .bind(p_nr_daccel.sock);
+        dut_noremap.to_periph              .bind(p_nr_periph.sock);
+        dut_noremap.to_dfd_apb             .bind(p_nr_dfd   .sock);
+        dut_noremap.to_cpu_ctrl            .bind(p_nr_cpu   .sock);
+        dut_noremap.to_mailbox             .bind(p_nr_mbox  .sock);
+        dut_noremap.to_dft_csr             .bind(p_nr_dft   .sock);
+        dut_noremap.to_aR_ctrl             .bind(p_nr_aR    .sock);
+        dut_noremap.to_mR_ctrl             .bind(p_nr_mR    .sock);
+        dut_noremap.to_xR_ctrl             .bind(p_nr_xR    .sock);
+        dut_noremap.to_inbound_filter_ctrl .bind(p_nr_ibf   .sock);
+        dut_noremap.to_outbound_filter_ctrl.bind(p_nr_obf   .sock);
+        dut_noremap.rst_n_i(rst_n_nr);
 
         SC_THREAD(run);
     }
@@ -558,6 +637,246 @@ struct tb : sc_core::sc_module {
         d_mmio.write32(e1 + 0x08, 0xDEAD'BEEFu);     // ignored — entry is locked
         EXPECT_EQ(0x1234'5678u, d_mmio.read32(e1 + 0x08));  // START_ADDR unchanged
         std::cout << "  [PASS] filter CSR image (CONFIG/START/END, locked)\n";
+
+        // ----------------------------------------------------------------
+        // 14. Alternate internal masters (jtag / data_accel / log).
+        // ----------------------------------------------------------------
+        {
+            const unsigned h = p_front.hits;
+            d_jtag.write32(A_SPM, 0xA001);
+            EXPECT_EQ(h + 1u, p_front.hits);
+            EXPECT_EQ(A_SPM, p_front.last_addr);
+        }
+        {
+            const unsigned h = p_daccel.hits;
+            d_daccel.write32(A_DMA, 0xA002);
+            EXPECT_EQ(h + 1u, p_daccel.hits);
+        }
+        {
+            const unsigned h = p_periph.hits;
+            d_log.write32(A_PERIPH_MAIN, 0xA003);
+            EXPECT_EQ(h + 1u, p_periph.hits);
+        }
+        std::cout << "  [PASS] alternate internal masters\n";
+
+        // ----------------------------------------------------------------
+        // 15. Testbench API + LOCAL_BASE / REGION_SIZE CSRs.
+        // ----------------------------------------------------------------
+        dut.write_global_base(0x5000'0000ULL);
+        EXPECT_EQ(0x5000'0000ULL, dut.read_global_base());
+        EXPECT_EQ(0x5000'0000u, d_mmio.read32(A_GBASE));
+
+        dut.write_region_size(0x0300'0000ULL);
+        EXPECT_EQ(0x0300'0000ULL, dut.read_region_size());
+        EXPECT_EQ(0x0300'0000u, d_mmio.read32(A_RSIZE));
+
+        EXPECT_EQ(0xC000'0000u, d_mmio.read32(A_LBASE));  // RO LOCAL_BASE
+        d_mmio.write32(A_LBASE, 0xDEAD'BEEFu);            // ignored write
+        EXPECT_EQ(0xC000'0000u, d_mmio.read32(A_LBASE));
+
+        uint32_t ignore = 0;
+        EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                  d_mmio.raw(tlm::TLM_IGNORE_COMMAND, A_GBASE, 4,
+                             reinterpret_cast<uint8_t*>(&ignore)));
+        std::cout << "  [PASS] global CSR / testbench API\n";
+
+        pulse_reset();
+
+        // ----------------------------------------------------------------
+        // 16. M-mode output remap via local-base aperture (0xC100_xxxx).
+        // ----------------------------------------------------------------
+        d_mmio.write32(A_MR + 2 * 0x08 + 0x00, 0x5550'0000u);
+        {
+            const uint64_t a = A_MM_LOCAL + (2ULL << 20) + 0x33;
+            const unsigned h = p_out.hits;
+            d_mmio.xfer(tlm::TLM_WRITE_COMMAND, a, &scratch);
+            EXPECT_EQ(h + 1u, p_out.hits);
+            EXPECT_EQ(0x5550'0033ULL, p_out.last_addr);
+        }
+        std::cout << "  [PASS] M-mode remap via local-base aperture\n";
+
+        pulse_reset();
+
+        // ----------------------------------------------------------------
+        // 17. PERIPH_EXT local decode (sys / sep direct, above 16 MB demux).
+        // ----------------------------------------------------------------
+        program_filter(A_IBF, 0xC000'0000ULL, 0x1000'0000ULL, CFG_RW_NS);
+        {
+            const unsigned h = p_periph.hits;
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      d_sys.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_EXT, &scratch,
+                                 true, 0, true));
+            EXPECT_EQ(h + 1u, p_periph.hits);
+            EXPECT_EQ(A_PERIPH_EXT, p_periph.last_addr);
+        }
+        {
+            const unsigned h = p_periph.hits;
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      d_sep.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_EXT + 0x100, &scratch));
+            EXPECT_EQ(h + 1u, p_periph.hits);
+            EXPECT_EQ(A_PERIPH_EXT + 0x100, p_periph.last_addr);
+        }
+        std::cout << "  [PASS] PERIPH_EXT decode (sys / sep)\n";
+
+        pulse_reset();
+
+        // ----------------------------------------------------------------
+        // 18. Deny-read poison fill with trailing partial bytes (len=6).
+        // ----------------------------------------------------------------
+        {
+            std::array<uint8_t, 6> poison_buf{};
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      d_mmio.raw(tlm::TLM_READ_COMMAND, A_UNMAPPED, 6,
+                                 poison_buf.data()));
+            EXPECT_EQ(0x1Eu, poison_buf[4]);
+            EXPECT_EQ(0xABu, poison_buf[5]);
+        }
+        std::cout << "  [PASS] deny-read poison trailing bytes\n";
+
+        // ----------------------------------------------------------------
+        // 19. Alias-remap CSR read-back + cacheable + IGNORE_COMMAND.
+        // ----------------------------------------------------------------
+        {
+            const uint64_t ar0 = A_AR;
+            d_mmio.write32(ar0 + 0x00, 0xA000'0000u);
+            d_mmio.write32(ar0 + 0x08, 0xA000'1000u);
+            d_mmio.write32(ar0 + 0x10, 0x0001'0000u);
+            d_mmio.write32(ar0 + 0x18, 0x3u);  // valid | cacheable
+            EXPECT_EQ(0xA000'0000u, d_mmio.read32(ar0 + 0x00));
+            EXPECT_EQ(0xA000'1000u, d_mmio.read32(ar0 + 0x08));
+            EXPECT_EQ(0x0001'0000u, d_mmio.read32(ar0 + 0x10));
+            EXPECT_EQ(0x3u, d_mmio.read32(ar0 + 0x18));
+            auto r = dut.get_alias_region(0);
+            EXPECT_TRUE(r.valid);
+            EXPECT_TRUE(r.cacheable);
+            d_mmio.write32(ar0 + 0x1C, 0x99u);  // reserved field — ignored
+            EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                      d_mmio.raw(tlm::TLM_IGNORE_COMMAND, ar0, 4,
+                                 reinterpret_cast<uint8_t*>(&ignore)));
+        }
+        std::cout << "  [PASS] alias-remap CSR read-back\n";
+
+        pulse_reset();
+
+        // ----------------------------------------------------------------
+        // 20. Output-remap 64-bit write + IGNORE_COMMAND.
+        // ----------------------------------------------------------------
+        d_mmio.write64(A_MR + 4 * 0x08 + 0x00, 0x0000'00AA'BBCC'DDEEULL);
+        EXPECT_EQ(0xBBCC'DDEEu, d_mmio.read32(A_MR + 4 * 0x08 + 0x00));
+        EXPECT_EQ(0x0000'00AAu, d_mmio.read32(A_MR + 4 * 0x08 + 0x04));
+        EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                  d_mmio.raw(tlm::TLM_IGNORE_COMMAND, A_MR, 4,
+                             reinterpret_cast<uint8_t*>(&ignore)));
+        EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                  d_mmio.raw(tlm::TLM_IGNORE_COMMAND, A_XR, 4,
+                             reinterpret_cast<uint8_t*>(&ignore)));
+        std::cout << "  [PASS] output-remap 64-bit CSR write\n";
+
+        pulse_reset();
+
+        // ----------------------------------------------------------------
+        // 21. Filter CSR edge cases.
+        // ----------------------------------------------------------------
+        {
+            const uint64_t e2 = A_IBF + 2 * 0x20;
+            d_mmio.write64(e2 + 0x00, CFG_RW_NS | CFG_ALLOW_BURST |
+                                       (static_cast<uint64_t>(7u) << 16));
+            EXPECT_EQ(0x3u, (d_mmio.read32(e2 + 0x00) >> 12) & 0x7u);
+            EXPECT_EQ(7u, dut.get_inbound_filter_entry(2).src_id);
+            EXPECT_TRUE(dut.get_inbound_filter_entry(2).allow_burst);
+
+            d_mmio.write32(e2 + 0x10, 0xFFFF'FFFFu);
+            d_mmio.write32(e2 + 0x14, 0x00AB'CDEFu);
+            EXPECT_EQ(0x00AB'CDEFu, d_mmio.read32(e2 + 0x14));
+
+            d_mmio.write32(e2 + 0x18, 0x1234'5678u);
+            EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                      d_mmio.raw(tlm::TLM_IGNORE_COMMAND, e2, 4,
+                                 reinterpret_cast<uint8_t*>(&ignore)));
+        }
+
+        pulse_reset();
+        program_filter(A_IBF, 0xC000'0000ULL, 0x0100'0000ULL,
+                       CFG_RW_NS | (9u << 16));
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  d_sys.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_MAIN, &scratch,
+                             true, 9, true));
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  d_sys.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_MAIN, &scratch,
+                             true, 3, true));
+
+        pulse_reset();
+        program_filter(A_IBF, 0xC000'0000ULL, 0x0100'0000ULL, CFG_READ_NS);
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  d_sys.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_MAIN, &scratch,
+                             true, 0, true));
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  d_sys.xfer(tlm::TLM_WRITE_COMMAND, A_PERIPH_MAIN, &scratch,
+                             true, 0, true));
+
+        pulse_reset();
+        program_filter(A_IBF, 0xC000'0000ULL, 0x0100'0000ULL, CFG_WRITE_NS);
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  d_sys.xfer(tlm::TLM_WRITE_COMMAND, A_PERIPH_MAIN, &scratch,
+                             true, 0, true));
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  d_sys.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_MAIN, &scratch,
+                             true, 0, true));
+
+        pulse_reset();
+        program_filter(A_IBF, 0xC000'2010ULL, 0x10ULL,
+                       CFG_RW_NS | CFG_ALLOW_BURST);
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  d_sys.xfer(tlm::TLM_READ_COMMAND, 0xC000'2018ULL, &scratch,
+                             true, 0, true));
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  d_mmio.raw(tlm::TLM_READ_COMMAND, A_IBF + 16 * 0x20, 4,
+                             reinterpret_cast<uint8_t*>(&ignore)));
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  d_mmio.raw(tlm::TLM_READ_COMMAND, A_AR + 8 * 0x20, 4,
+                             reinterpret_cast<uint8_t*>(&ignore)));
+        std::cout << "  [PASS] filter CSR edge cases\n";
+
+        pulse_reset();
+
+        // ----------------------------------------------------------------
+        // 22. Outbound-filter NS matching (plain path forces SMC_SRC_ID=3).
+        // ----------------------------------------------------------------
+        program_filter(A_OBF, A_OUTBOUND, 0x1000ULL, CFG_EN);  // secure-only deny
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  d_mmio.xfer(tlm::TLM_WRITE_COMMAND, A_OUTBOUND, &scratch,
+                              true, 0, false));
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  d_mmio.xfer(tlm::TLM_WRITE_COMMAND, A_OUTBOUND, &scratch,
+                              true, 0, true));
+        std::cout << "  [PASS] outbound-filter NS matching\n";
+
+        // ----------------------------------------------------------------
+        // 23. DMI denied on jtag / data_accel / log.
+        // ----------------------------------------------------------------
+        EXPECT_EQ(false, d_jtag.dmi_query(A_SPM));
+        EXPECT_EQ(false, d_daccel.dmi_query(A_DMA));
+        EXPECT_EQ(false, d_log.dmi_query(A_PERIPH_MAIN));
+        std::cout << "  [PASS] DMI denied on all internal masters\n";
+
+        // ----------------------------------------------------------------
+        // 24. no_addr_remap config bypasses output remap.
+        // ----------------------------------------------------------------
+        rst_n_nr.write(true);
+        sc_core::wait(1, SC_NS);
+        rst_n_nr.write(false);
+        sc_core::wait(1, SC_NS);
+        rst_n_nr.write(true);
+        sc_core::wait(1, SC_NS);
+        {
+            const uint64_t mm_addr =
+                dut_noremap.read_global_base() + 0x0100'0000ULL + 0x55;
+            const unsigned h = p_out_nr.hits;
+            d_mmio_nr.xfer(tlm::TLM_WRITE_COMMAND, mm_addr, &scratch);
+            EXPECT_EQ(h + 1u, p_out_nr.hits);
+            EXPECT_EQ(mm_addr, p_out_nr.last_addr);
+        }
+        std::cout << "  [PASS] no_addr_remap bypass\n";
 
         if (g_failures == 0)
             std::cout << "\nALL TESTS PASSED\n";

@@ -29,6 +29,7 @@ find_package(OpenSSL REQUIRED)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/AVBbus/model/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/entropy_src/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/edn/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_virt_console/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISS/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISS/softfloat/source/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISSTlm/model/inc
@@ -57,6 +58,8 @@ find_package(OpenSSL REQUIRED)
     hmac_model
     otbn_model
     sep_memory_model
+    sep_virt_console_model
+    csml_logger
     spi_controller_model
     spi_flash_model
     kmac_model

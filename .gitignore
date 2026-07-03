@@ -39,6 +39,9 @@ coverage-report/
 *.swo
 *~
 
+# Local dependency paths (see smc/cpu_cluster/deps.env.example)
+smc/cpu_cluster/deps.env
+
 # clangd / Microsoft C/C++ language-server caches — auto-generated, per-user.
 .cache/
 .ccls-cache/
@@ -268,12 +271,16 @@ coverage-report/
 # -----------------------------------------------------------------------------
 # Local-only doc tooling: stylesheets are developer helpers
 # (print stylesheets) and are intentionally not tracked.
-# -----------------------------------------------------------------------------
+# CPU cluster IP docs under smc/cpu_cluster/doc/ are tracked (01/02/03 layout).
 *.css
 **/*.css
+!smc/cpu_cluster/doc/
+!smc/cpu_cluster/doc/**
 
 *.md 
 *.svg
+!smc/cpu_cluster/doc/
+!smc/cpu_cluster/doc/**
 
 # ======================================================================================
 

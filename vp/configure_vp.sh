@@ -6,8 +6,28 @@
 #   CMAKE_CXX_STANDARD=20 ./configure_vp.sh
 #   ./configure_vp.sh -- -DFOO=bar
 #
-# Auto-discovers SYSTEMC_HOME, CCI_HOME, BOOST_ROOT, OPENSSL_ROOT if not set.
-# Edit defaults below or export variables before sourcing.
+# AUTO-DISCOVERY
+#   If SYSTEMC_HOME, CCI_HOME, BOOST_ROOT, or OPENSSL_ROOT are not set the
+#   script probes a list of well-known install prefixes and uses the first
+#   match.  Set any variable explicitly to skip probing for that library.
+#
+# ENVIRONMENT VARIABLES (all optional — discovered if not set)
+#   SYSTEMC_HOME        SystemC install prefix  (must contain include/systemc.h)
+#   CCI_HOME            CCI install prefix      (must contain include/cci_configuration)
+#   BOOST_ROOT          Boost install prefix    (must contain include/boost/version.hpp)
+#   OPENSSL_ROOT        OpenSSL install prefix  (must contain include/openssl/ssl.h)
+#   CMAKE_BUILD_TYPE    Debug | Release          (default: Debug)
+#   CMAKE_CXX_STANDARD  17 | 20                 (default: 20)
+#
+# PLATFORM NOTES
+#   macOS    : Homebrew paths are probed automatically.
+#   Ubuntu   : System paths (/usr, /usr/local) are probed.  Install:
+#                sudo apt install libboost-dev libssl-dev
+#   RHEL 8   : Default GCC 8 does NOT support C++20.  Enable GCC 12 first:
+#                scl enable gcc-toolset-12 bash
+#              Then run this script.  The kmac peripheral requires OpenSSL ≥ 3.0
+#              (RHEL 8 ships 1.1.1).  Build OpenSSL 3 from source or install
+#              it to ~/local/openssl-3 and set OPENSSL_ROOT before running.
 
 _vp_configure_sourced=false
 if [ -n "${BASH_VERSION:-}" ]; then
@@ -114,12 +134,16 @@ find_prefix SYSTEMC_HOME "SystemC" "include/systemc.h" \
 
 find_prefix CCI_HOME "CCI" "include/cci_configuration" \
   "${HOME}/local/cci-cxx20" \
+  "${HOME}/local/cci-1.0.2" \
   "${HOME}/local/cci-1.0.1" \
   "${HOME}/local/cci" \
+  "${HOME}/cci-1.0.2" \
   "${HOME}/cci-1.0.1" \
   "${HOME}/cci" \
+  /usr/local/cci-1.0.2 \
   /usr/local/cci-1.0.1 \
   /usr/local/cci \
+  /usr/lib/cci-1.0.2 \
   /usr/lib/cci-1.0.1 \
   /usr/lib/cci \
   /opt/homebrew/opt/systemc-cci \
@@ -136,6 +160,11 @@ find_prefix BOOST_ROOT "Boost" "include/boost/version.hpp" \
   /opt/local
 
 find_prefix OPENSSL_ROOT "OpenSSL" "include/openssl/ssl.h" \
+  "${HOME}/local/openssl-3.3.2" \
+  "${HOME}/local/openssl-3.3" \
+  "${HOME}/local/openssl-3.0" \
+  "${HOME}/local/openssl-3" \
+  "${HOME}/local/openssl" \
   /usr \
   /usr/local \
   "${HOME}/local/openssl" \
@@ -147,6 +176,21 @@ find_prefix OPENSSL_ROOT "OpenSSL" "include/openssl/ssl.h" \
 
 if [[ -z "${VP_CONFIGURE_QUIET:-}" ]]; then
   echo ""
+fi
+
+# ---------------------------------------------------------------------------
+# GCC version guard: C++20 requires GCC 10 or later
+# ---------------------------------------------------------------------------
+if command -v g++ >/dev/null 2>&1; then
+  _gxx_major=$(g++ -dumpversion 2>/dev/null | cut -d. -f1)
+  if [[ "${CMAKE_CXX_STANDARD}" == "20" ]] && \
+     [[ "${_gxx_major}" =~ ^[0-9]+$ ]] && \
+     (( _gxx_major < 10 )); then
+    echo "warning: g++ ${_gxx_major} detected; C++20 requires GCC ≥ 10." >&2
+    echo "  RHEL 8 : scl enable gcc-toolset-12 bash && ./configure_vp.sh" >&2
+    echo "  Ubuntu  : sudo apt install g++-12 && CXX=g++-12 ./configure_vp.sh" >&2
+    echo "" >&2
+  fi
 fi
 
 # ---------------------------------------------------------------------------

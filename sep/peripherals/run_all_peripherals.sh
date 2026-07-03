@@ -321,11 +321,16 @@ for name in "${PERIPHERALS[@]}"; do
                              || { fail; echo; release_label="FAIL"; OVERALL_PASS=false; }
 
   # 2. ASAN build + ctest (sanitizer-instrumented binary)
-  printf "  ASAN          ... "
-  run_asan "${name}" "${plog}/asan_build.log"
-  asan_status=$?
-  [ $asan_status -eq 0 ] && { pass; echo; asan_label="PASS"; } \
-                          || { fail; echo; asan_label="FAIL"; OVERALL_PASS=false; }
+  if [[ "${SKIP_ASAN:-0}" == "1" ]]; then
+    printf "  ASAN          ... SKIP (SKIP_ASAN=1)\n"
+    asan_label="SKIP"
+  else
+    printf "  ASAN          ... "
+    run_asan "${name}" "${plog}/asan_build.log"
+    asan_status=$?
+    [ $asan_status -eq 0 ] && { pass; echo; asan_label="PASS"; } \
+                            || { fail; echo; asan_label="FAIL"; OVERALL_PASS=false; }
+  fi
 
   # 3. Coverage build + report
   printf "  Coverage      ... "

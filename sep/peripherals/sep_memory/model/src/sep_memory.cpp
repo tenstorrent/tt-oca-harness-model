@@ -56,7 +56,11 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
   auto *ptr = trans.get_data_ptr();
   auto len = trans.get_data_length();
 
-	{
+	// Guard the hex-dump string building behind the verbosity threshold. Without this,
+	// the ostringstream construction and format loop run on EVERY transaction
+	// (every fetch/load/store) even though CSML_DEBUG(5) suppresses the actual emission at
+	// the configured verbosity. These unnecessary loop passes make the whole sim crawl.
+	if (logger.getMaxVerbosity() >= 5) {
 		std::ostringstream oss;
 		const auto dump_len = std::min<unsigned>(len, 16);
 		for (unsigned i = 0; i < dump_len; ++i) {
@@ -72,6 +76,11 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
   if(cmd == tlm::TLM_WRITE_COMMAND) {
     if(!m_read_only) {
       m_mem.writeBytes(addr, reinterpret_cast<const uint8_t*>(ptr), len);
+      // Observation-only: notify any registered write tap after the store. Must not
+      // alter the transaction or response (R/W semantics preserved).
+      if (m_write_tap) {
+        m_write_tap(addr, reinterpret_cast<const uint8_t*>(ptr), len);
+      }
     } else {
         // ROM semantics: accept the bus transaction but ignore writes.
         // This matches expectations from firmware tests (e.g. rom_sanity_test)
@@ -82,7 +91,7 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
     }
   } else if(cmd == tlm::TLM_READ_COMMAND) {
       m_mem.readBytes(addr, ptr, len);
-		{
+		if (logger.getMaxVerbosity() >= 5) {
 			std::ostringstream oss;
 			const auto dump_len = std::min<unsigned>(len, 16);
 			for (unsigned i = 0; i < dump_len; ++i) {
@@ -101,7 +110,14 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
   trans.set_response_status(tlm::TLM_OK_RESPONSE);
 }
 
-bool SEPMemory::get_direct_mem_ptr(TRANS& trans, tlm::tlm_dmi& dmi) { 
+bool SEPMemory::get_direct_mem_ptr(TRANS& trans, tlm::tlm_dmi& dmi) {
+  // If a write tap is installed (e.g. the SIM_OUT virtual console), deny DMI so that
+  // every write traps to b_transport and is observed — even from a future DMI-using
+  // initiator. Today the VeeR ISS disables DMI, but this keeps observation robust.
+  if (m_write_tap) {
+    return false;
+  }
+
   uint64_t addr = trans.get_address();
   
   uint64_t page_start = addr & ~(PAGE_SIZE - 1);

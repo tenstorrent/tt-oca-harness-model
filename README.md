@@ -535,6 +535,17 @@ The following IPs are **not modeled** in the VP. Tests that exercise them will f
 - `local_master_alias_remap_ctrl`
 - `och_sep_cdns_spi_ctrl`, `och_sep_spi_mux_ctrl`
 
+### Simulation aids (no hardware equivalent)
+
+- **SIM_OUT bootcode virtual console** (`sep/peripherals/sep_virt_console`): the SEP
+  bootcode reports status via `simput*` writes to `SEP_SCRATCH_COLD_SCRATCH_2`
+  (`0x10802010`). The VP observes those writes through a write-tap on the `sep_scratch`
+  stub, decodes them, and prints each line to the console as
+  `[<time>] [INFO <v>] [SIM_OUT] - <text>`. This is an observability aid for the
+  standalone-SEP configuration; it does not change the register's R/W semantics. In the
+  SMU configuration the SMC reads the register itself, so the console can be disabled via
+  `och_sep_ss1.sim_out.enable : false`.
+
 ### Tests added by Vayavya
 
 The following tests under `sw/tt-oca-hw-main/dv/sep/tests/` were added by Vayavya:

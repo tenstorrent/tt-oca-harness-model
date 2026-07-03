@@ -66,7 +66,27 @@ class BasicOptions : public Args {
         addr_t entropy_src_end_addr    = 0x10916FFF;  // ENTROPY_SOURCE size 0x1000
         addr_t edn_start_addr          = 0x10915800;  // DRBG_EDN_BASE (sep_crypto_pkg.sv)
         addr_t edn_end_addr            = 0x10915847;  // EDN register space (0x48 bytes)
-        
+
+        // Functional stubs (plain RW backing store, no behavioral model) — required by the
+        // boot ROM early init. SEP_SCRATCH holds warm/cold scratch (warm reset detection);
+        // OUTBOUND_FILTER_CTRL is programmed to allow mailbox egress. See och_sep_top_reg.h.
+        addr_t sep_scratch_start_addr     = 0x10802000;  // SEP_SCRATCH cold/warm scratch
+        addr_t sep_scratch_end_addr       = 0x10802FFF;  // 4 KiB
+        addr_t outbound_filter_start_addr = 0x10A20000;  // OUTBOUND_FILTER_CTRL_0..N
+        addr_t outbound_filter_end_addr   = 0x10A20FFF;  // 4 KiB
+
+        // SMC global window: the sep_local_axi_xbar routes [0x40000000, 0xC0000000) to the
+        // SMC via sep_system_peripherals (see fw/sep/bootcode sep_smc_interface.h). The boot
+        // ROM coordinates with the SMC over this path (straps, CPU_CTRL scratch, chip-id,
+        // fuse map, DFT status, and the 1 MiB SMC SRAM). The VP models nothing on the SMC
+        // side, so these accesses faulted (store access fault). Model the low 2 MiB as a
+        // functional RW stub: it covers all SMC registers (0x2090..0xF800) and SMC SRAM
+        // (0x60000..0x15FFFF) with margin, and stays clear of both the avbbus placeholder
+        // (0x46040000) and the SEP mailbox (0x80000000) — separate targets in the same
+        // routed window.
+        addr_t smc_global_start_addr      = 0x40000000;  // SEP_SMC_GLOBAL_BASE
+        addr_t smc_global_end_addr        = 0x401FFFFF;  // 2 MiB (regs + SMC SRAM)
+
         int uartTcpPort = 8888;
 
         addr_t rom_size  = rom_end_addr - rom_start_addr + 1;
