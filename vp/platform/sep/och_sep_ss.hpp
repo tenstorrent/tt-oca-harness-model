@@ -888,4 +888,13 @@ inline void och_sep_ss::start_of_simulation() {
               sep_efuse->get_chiplet_uid() + 8,
               otp.chiplet_uid);
     keymgr->set_otp_data(otp);
+
+    // Backdoor-load the staged SPI flash image so the controller's command/FIFO reads see the
+    // real manifest+payload images instead of erased 0xFF. The model opens data/flash_memory.bin
+    // relative to the working directory, which is the directory of the .ini passed to sep-vp
+    // (sep-vp chdir's there at startup); the harness generates its ini and stages the image into
+    // the per-run directory. When nothing is staged this is a no-op that logs "... not found" and
+    // leaves the flash erased, so existing tests are unaffected. start_of_simulation runs after
+    // elaboration/binding and before the first transaction, so the first read sees populated flash.
+    spi_device->get_model()->load_memory_from_file();
 }
