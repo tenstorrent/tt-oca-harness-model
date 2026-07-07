@@ -10,6 +10,7 @@ Numbered documents follow the [Component Developer Guide](../../../doc/component
 | [02_CPU_Cluster_LowLevel_Design.md](02_CPU_Cluster_LowLevel_Design.md) | [02_CPU_Cluster_LowLevel_Design.pdf](02_CPU_Cluster_LowLevel_Design.pdf) | Architecture, implementation, diagrams, build graph |
 | [03_CPU_Cluster_Test_Plan.md](03_CPU_Cluster_Test_Plan.md) | [03_CPU_Cluster_Test_Plan.pdf](03_CPU_Cluster_Test_Plan.pdf) | Verification strategy, test cases, coverage plan |
 | [04_CCI_Integration_Guide.md](04_CCI_Integration_Guide.md) | [04_CCI_Integration_Guide.pdf](04_CCI_Integration_Guide.pdf) | SystemC CCI 1.0 adoption (supplementary) |
+| [05_RTL_SystemC_Integration_Guide.md](05_RTL_SystemC_Integration_Guide.md) | [05_RTL_SystemC_Integration_Guide.pdf](05_RTL_SystemC_Integration_Guide.pdf) | Step-by-step RTL-aligned SMC SystemC platform integration and firmware portability |
 
 SMC-wide PDF references (when present alongside this tree):
 

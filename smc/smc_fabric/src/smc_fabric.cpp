@@ -200,12 +200,14 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
         return;
     }
 
-    // --- CPU-control window (fabric global CSRs + cpu_ctrl forwarding) ---
-    if (a >= CPU_CTRL_BASE && a < CPU_CTRL_END) {
-        if (!handle_global_csr(trans, a - CPU_CTRL_BASE))
-            to_cpu_ctrl->b_transport(trans, delay);
-        else
-            trans.set_dmi_allowed(false);
+    // --- SMC base config window (fabric global CSRs) ---
+    if (a >= SMC_BASE_CONFIG_BASE && a < SMC_BASE_CONFIG_END) {
+        if (!handle_global_csr(trans, a - SMC_BASE_CONFIG_BASE)) {
+            if (trans.is_read())
+                std::memset(trans.get_data_ptr(), 0, trans.get_data_length());
+            trans.set_response_status(tlm::TLM_OK_RESPONSE); // unmodelled base_config regs: RAZ/WI
+        }
+        trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
         return;
     }
@@ -419,11 +421,12 @@ uint64_t smc_fabric::apply_output_remap(uint64_t                          addr,
 tlm_utils::simple_initiator_socket<smc_fabric, 64>*
 smc_fabric::local_decode(uint32_t a)
 {
-    // front_port: WDT/debug, scratchpad RAM, PLIC, CLINT/BEU.
+    // front_port: WDT/debug, cpu_ctrl, scratchpad RAM, PLIC, CLINT/BEU.
     // PLIC/CLINT lie above LOCAL_ALIAS_REGION_SIZE (16 MB), so internal masters
     // only reach them via the global alias aperture; sys/sep bypass the demux
     // and may hit any decoded local target directly.
     if ((a >= FRONT_WDT_DEBUG_BASE && a < FRONT_WDT_DEBUG_END) ||
+        (a >= FRONT_CPU_CTRL_BASE  && a < FRONT_CPU_CTRL_END)  ||
         (a >= FRONT_SPM_BASE       && a < FRONT_SPM_END)       ||
         (a >= FRONT_PLIC_BASE      && a < FRONT_PLIC_END)      ||
         (a >= FRONT_CLINT_BEU_BASE && a < FRONT_CLINT_BEU_END))
@@ -495,15 +498,15 @@ void smc_fabric::reset_proc()
 
     // Restore RW registers to power-on defaults.
     cfg_.global_base_addr = 0x4000'0000ULL;
-    cfg_.region_size      = 0x0200'0000ULL;
+    cfg_.region_size      = 0x0100'0000ULL;
 }
 
 // ---------------------------------------------------------------------------
 // Internal CSR handlers
 // ---------------------------------------------------------------------------
 
-// Global fabric CSRs — LOCAL_BASE (RO), GLOBAL_BASE (RW), REGION_SIZE (RW).
-// sub_offset is relative to CPU_CTRL_BASE.
+// SMC base config CSRs — LOCAL_BASE (RO), GLOBAL_BASE (RW), REGION_SIZE (RW).
+// sub_offset is relative to SMC_BASE_CONFIG_BASE.
 bool smc_fabric::handle_global_csr(tlm::tlm_generic_payload& trans,
                                     uint32_t                  sub_offset)
 {

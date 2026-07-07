@@ -47,7 +47,7 @@ public:
     struct config {
         uint64_t local_base_addr      = 0xC000'0000ULL;
         uint64_t global_base_addr     = 0x4000'0000ULL;
-        uint64_t region_size          = 0x0200'0000ULL;  // REGION_SIZE CSR image only
+        uint64_t region_size          = 0x0100'0000ULL;  // REGION_SIZE CSR image only
 
         bool     no_addr_remap        = false;  // smc_config_pkg::NO_ADDR_REMAP (=0 → remap on)
 
@@ -231,10 +231,10 @@ private:
     // response status directly on `trans`.
     // -----------------------------------------------------------------------
 
-    // Global fabric CSRs (LOCAL_BASE, GLOBAL_BASE, REGION_SIZE).
+    // SMC base config CSRs (LOCAL_BASE, GLOBAL_BASE, REGION_SIZE).
     // Returns true when the offset matches a fabric-owned register; false
-    // means the access falls elsewhere in the CPU-control window and should
-    // be forwarded to to_cpu_ctrl.
+    // means the access falls elsewhere in the smc_base_config window and is
+    // treated as RAZ/WI by this LT model.
     bool handle_global_csr(tlm::tlm_generic_payload& trans, uint32_t sub_offset);
 
     void handle_alias_remap    (tlm::tlm_generic_payload& trans, uint32_t sub_offset);
@@ -281,6 +281,8 @@ private:
     // front_port (AXI4) — smc_local_xbar_pkg.sv
     static constexpr uint32_t FRONT_WDT_DEBUG_BASE = 0xC000'0000u;
     static constexpr uint32_t FRONT_WDT_DEBUG_END  = 0xC000'1000u;
+    static constexpr uint32_t FRONT_CPU_CTRL_BASE  = 0xC003'9000u;
+    static constexpr uint32_t FRONT_CPU_CTRL_END   = 0xC003'A000u;
     static constexpr uint32_t FRONT_SPM_BASE       = 0xC004'0000u;  // scratchpad RAM
     static constexpr uint32_t FRONT_SPM_END        = 0xC016'0000u;
     static constexpr uint32_t FRONT_PLIC_BASE      = 0xC400'0000u;  // outside alias aperture
@@ -305,8 +307,8 @@ private:
     // local_reg → internal AXI-Lite sub-crossbar — smc_internal_axi_lite_xbar_pkg.sv
     static constexpr uint32_t DFT_CSR_BASE   = 0xC000'F800u;
     static constexpr uint32_t DFT_CSR_END    = 0xC001'0000u;
-    static constexpr uint32_t CPU_CTRL_BASE  = 0xC001'0000u;
-    static constexpr uint32_t CPU_CTRL_END   = 0xC001'2000u;
+    static constexpr uint32_t SMC_BASE_CONFIG_BASE = 0xC001'0000u;
+    static constexpr uint32_t SMC_BASE_CONFIG_END  = 0xC001'2000u;
     static constexpr uint32_t AR_CTRL_BASE   = 0xC001'2000u;  // alias remap CSRs
     static constexpr uint32_t AR_CTRL_END    = 0xC001'3000u;
     static constexpr uint32_t MR_CTRL_BASE   = 0xC001'3000u;  // M-mode remap CSRs
@@ -326,13 +328,13 @@ private:
     // does not participate in routing.
     static constexpr uint64_t LOCAL_ALIAS_REGION_SIZE = 0x0100'0000ULL;
 
-    // Global fabric CSR offsets within the CPU_CTRL window — ocah_smc_top_reg.svh
-    //   GLOBAL_BASE  0xC001_0040 (RW, default 0x4000_0000)
-    //   LOCAL_BASE   0xC001_0048 (RO, default 0xC000_0000)
-    //   REGION_SIZE  0xC001_0050 (RW, default 0x0200_0000)
-    static constexpr uint32_t GCSR_GLOBAL_BASE = 0x40u;
-    static constexpr uint32_t GCSR_LOCAL_BASE  = 0x48u;
-    static constexpr uint32_t GCSR_REGION_SIZE = 0x50u;
+    // smc_base_config.rdl offsets within SMC_BASE_CONFIG_BASE.
+    //   GLOBAL_BASE  0xC001_0000 (RW, default 0x4000_0000)
+    //   LOCAL_BASE   0xC001_0008 (RO, default 0xC000_0000)
+    //   REGION_SIZE  0xC001_0010 (RW, default 0x0100_0000)
+    static constexpr uint32_t GCSR_GLOBAL_BASE = 0x00u;
+    static constexpr uint32_t GCSR_LOCAL_BASE  = 0x08u;
+    static constexpr uint32_t GCSR_REGION_SIZE = 0x10u;
 
     // M-mode/Xvisor remap windows — smc_pkg.sv:283-286 (relative to local/global base)
     //   MMODE_REGION_MEM_BASE_ADDR  0xC100_0000 → START 0x0100_0000, SIZE 0x0080_0000

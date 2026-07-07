@@ -528,7 +528,7 @@ struct cluster_tb_top : sc_core::sc_module
         def_ctor_cluster.irq_timer[0](def_irq_timer);
         def_ctor_cluster.irq_ext[0](def_irq_ext);
         def_ctor_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
-        def_ctrl.write32(0x040, 0u);
+        def_ctrl.write32(0x020, 0u);
 
         strap_cluster.data.bind(strap_data.socket);
         strap_cluster.mmio.bind(strap_mmio.socket);
@@ -541,7 +541,7 @@ struct cluster_tb_top : sc_core::sc_module
         strap_cluster.irq_timer[0](strap_irq_timer);
         strap_cluster.irq_ext[0](strap_irq_ext);
         strap_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
-        strap_ctrl.write32(0x040, 0u);
+        strap_ctrl.write32(0x020, 0u);
 
         quantum_zero_cluster.data.bind(qzero_data.socket);
         quantum_zero_cluster.mmio.bind(qzero_mmio.socket);
@@ -554,7 +554,7 @@ struct cluster_tb_top : sc_core::sc_module
         quantum_zero_cluster.irq_timer[0](qzero_irq_timer);
         quantum_zero_cluster.irq_ext[0](qzero_irq_ext);
         quantum_zero_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
-        qzero_ctrl.write32(0x040, 0u);
+        qzero_ctrl.write32(0x020, 0u);
 
         offset_mem_cluster.data.bind(offmem_data.socket);
         offset_mem_cluster.mmio.bind(offmem_mmio.socket);
@@ -567,7 +567,7 @@ struct cluster_tb_top : sc_core::sc_module
         offset_mem_cluster.irq_timer[0](offmem_irq_timer);
         offset_mem_cluster.irq_ext[0](offmem_irq_ext);
         offset_mem_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
-        offmem_ctrl.write32(0x040, 0u);
+        offmem_ctrl.write32(0x020, 0u);
 
         scratchpad.rst_n_i.bind(sram_rst_n);
         sram_rst_n.write(true);
@@ -614,7 +614,7 @@ struct cluster_tb_top : sc_core::sc_module
         std::cout << "==== SMC CPU Cluster TB ====\n";
 
         // Unit tests drive hart 0 only; park the others to avoid stray TLM traffic.
-        ctrl.write32(0x040, 0x1u);
+        ctrl.write32(0x020, 0x1u);
 
         // --- default ctor, const hart, config straps (N6/N7) ------------------
         {
@@ -650,7 +650,7 @@ struct cluster_tb_top : sc_core::sc_module
             sh.mem_write(RESET_PC + 12, 4, smc_test::OP_J_SELF);
             sh.set_reset_pc(RESET_PC);
             sh.reset();
-            strap_ctrl.write32(0x040, 0x1u);
+            strap_ctrl.write32(0x020, 0x1u);
             strap_data.saw_extension = false;
             strap_data.last_locked   = false;
             sh.step();
@@ -804,7 +804,7 @@ struct cluster_tb_top : sc_core::sc_module
 
         // --- IRQ aggregator (needs sc_start) ----------------------------------
         {
-            ctrl.write32(0x040, 0xFu);
+            ctrl.write32(0x020, 0xFu);
             auto& h0 = cluster.hart(0);
             h0.mem_write(RESET_PC + 0, 4, smc_test::OP_CSRW_MSTATUS_0);
             h0.mem_write(RESET_PC + 4, 4, smc_test::OP_CSRW_MIE_0);
@@ -857,7 +857,7 @@ struct cluster_tb_top : sc_core::sc_module
 #ifdef SMC_HAVE_PLIC
         // --- CPU -> PLIC -> CPU (MMIO configure, irq_ext, ISR claim/complete) ---
         {
-            ctrl.write32(0x040, 0x1u);
+            ctrl.write32(0x020, 0x1u);
             auto& h0 = cluster.hart(0);
             h0.mem_write(PLIC_FLAG_DONE, 4, 0u);
             h0.mem_write(PLIC_FLAG_CLAIM, 4, 0u);
@@ -903,16 +903,15 @@ struct cluster_tb_top : sc_core::sc_module
                 sram_rst_n.write(true);
             };
 
-            EXPECT_EQ(ctrl.read32(0x200), 0u);
+            EXPECT_FALSE(cluster.init_mem_done());
 
             // TC-CPU-004: auto-init enabled -> INIT_MEM_DONE asserts after reset.
-            ctrl.write32(0x204, 0u);
-            EXPECT_EQ(ctrl.read32(0x204), 0u);
+            cluster.set_disable_sram_autoinit(false);
             pulse_sram_reset();
             bool done = false;
             for (unsigned k = 0; k < 500u && !done; ++k) {
                 wait(sc_core::sc_time(10, sc_core::SC_US));
-                done = (ctrl.read32(0x200) == 1u);
+                done = cluster.init_mem_done();
             }
             EXPECT_TRUE(done);
             EXPECT_EQ(scratchpad.peek(0), 0u);
@@ -920,11 +919,10 @@ struct cluster_tb_top : sc_core::sc_module
 
             // TC-CPU-005: auto-init disabled -> INIT_MEM_DONE never asserts.
             scratchpad.seed(0xA5u);
-            ctrl.write32(0x204, 1u);
-            EXPECT_EQ(ctrl.read32(0x204), 1u);
+            cluster.set_disable_sram_autoinit(true);
             pulse_sram_reset();
             wait(sc_core::sc_time(200, sc_core::SC_US));
-            EXPECT_EQ(ctrl.read32(0x200), 0u);
+            EXPECT_FALSE(cluster.init_mem_done());
             EXPECT_EQ(scratchpad.peek(0), 0xA5u);
             EXPECT_EQ(scratchpad.peek(256), 0xA5u);
 
@@ -933,7 +931,7 @@ struct cluster_tb_top : sc_core::sc_module
 
         // --- CPU-Control register file ------------------------------------------
         {
-            ctrl.write32(0x040, 0xFu);
+            ctrl.write32(0x020, 0xFu);
             constexpr uint64_t ALT_VECTOR = 0x200ULL;
             cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
             cluster.hart(0).mem_write(ALT_VECTOR, 4, smc_test::OP_J_SELF);
@@ -952,49 +950,44 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_EQ(cluster.reset_vector_n(3), 0x380ULL);
             cluster.hart(3).reset();
             EXPECT_EQ(cluster.hart(3).get_pc(), 0x380ULL);
-            EXPECT_EQ(ctrl.read32(0x100), uint32_t(cfg_.local_base_default));
+            EXPECT_EQ(ctrl.read32(0x200), 0u);
+            EXPECT_EQ(ctrl.read32(0x204), uint32_t(NHARTS) << 1);
 
             cluster.set_init_mem_done(true);
-            EXPECT_EQ(ctrl.read32(0x200), 1u);
+            EXPECT_TRUE(cluster.init_mem_done());
             cluster.set_init_mem_done(false);
-            EXPECT_EQ(ctrl.read32(0x204), 1u);
+            EXPECT_FALSE(cluster.init_mem_done());
 
-            EXPECT_EQ(ctrl.read32(0x040), 0xFu);
+            EXPECT_EQ(ctrl.read32(0x020), 0xFu);
             wait(sc_core::sc_time(2, sc_core::SC_US));
             const uint64_t pc1_a = cluster.hart(1).get_pc();
-            ctrl.write32(0x040, 0xDu);
+            ctrl.write32(0x020, 0xDu);
             wait(sc_core::sc_time(5, sc_core::SC_US));
             EXPECT_EQ(cluster.hart(1).get_pc(), pc1_a);
-            ctrl.write32(0x040, 0xFu);
+            ctrl.write32(0x020, 0xFu);
             wait(sc_core::sc_time(5, sc_core::SC_US));
             pass("CPU-Control register file");
         }
 
         // --- ctrl negative paths + CSR edge cases (coverage) ------------------
         {
-            ctrl.write32(0x040, 0xFu);
+            ctrl.write32(0x020, 0xFu);
 
-            EXPECT_EQ(ctrl.read32(0x050), 0u);
+            EXPECT_EQ(ctrl.read32(0x050), 0x4000u);
             ctrl.write32(0x050, 0xDEADBEEFu);
-            EXPECT_EQ(ctrl.read32(0x050), 0u);
+            EXPECT_EQ(ctrl.read32(0x050), 0xDEADBEEFu);
 
             (void)ctrl.read64(0x020);
-            EXPECT_EQ(ctrl.last_response(), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+            EXPECT_EQ(ctrl.last_response(), tlm::TLM_OK_RESPONSE);
 
             EXPECT_EQ(ctrl.read64(0x000), cluster.reset_vector_n(0));
             EXPECT_EQ(cluster.reset_vector_n(99), 0u);
 
-            ctrl.write32(0x104, 0x12345678u);
-            ctrl.write32(0x108, 0x02000000u);
-            EXPECT_EQ(ctrl.read32(0x104), 0x12345678u);
-            EXPECT_EQ(ctrl.read32(0x108), 0x02000000u);
-
-            const uint32_t lb = ctrl.read32(0x100);
-            ctrl.write32(0x100, 0xFFFFFFFFu);
-            EXPECT_EQ(ctrl.read32(0x100), lb);
+            ctrl.write32(0x080, 0x12345678u);
+            EXPECT_EQ(ctrl.read32(0x080), 0x12345678u);
 
             cluster.set_mem_repair_status(0x42u);
-            EXPECT_EQ(ctrl.read32(0x208), 0x42u);
+            EXPECT_EQ(cluster.init_mem_done(), false);
 
             cluster.inject_nmi(99);
             cluster.inject_nmi(0, 0x42u);
@@ -1010,9 +1003,9 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_FALSE(h0.mem_read(0, 3, junk));
             EXPECT_FALSE(h0.mem_write(0, 3, 0));
 
-            ctrl.write32(0x040, 0x0u);
+            ctrl.write32(0x020, 0x0u);
             wait(sc_core::sc_time(50, sc_core::SC_US));
-            ctrl.write32(0x040, 0xFu);
+            ctrl.write32(0x020, 0xFu);
             wait(sc_core::sc_time(50, sc_core::SC_US));
 
             pass("CPU-Control negative paths and CSR edge cases");
@@ -1020,7 +1013,7 @@ struct cluster_tb_top : sc_core::sc_module
 
         // --- batch step + data-path error (coverage) --------------------------
         {
-            ctrl.write32(0x040, 0x1u);
+            ctrl.write32(0x020, 0x1u);
             auto& h = cluster.hart(0);
             h.reset();
             smc_test::smc_master m(h);
@@ -1034,35 +1027,35 @@ struct cluster_tb_top : sc_core::sc_module
             pass("batch step and data-path TLM error handling");
         }
 
-        // --- CORE_ENABLE park and NMI wake (coverage) -------------------------
+        // --- RESET_CTRL park and NMI wake (coverage) ---------------------------
         {
-            ctrl.write32(0x040, 0x1u);
+            ctrl.write32(0x020, 0x1u);
             wait(sc_core::sc_time(10, sc_core::SC_MS));
             const uint64_t pc_running = cluster.hart(0).get_pc();
-            ctrl.write32(0x040, 0x0u);
+            ctrl.write32(0x020, 0x0u);
             wait(sc_core::sc_time(20, sc_core::SC_MS));
             EXPECT_EQ(cluster.hart(0).get_pc(), pc_running);
 
-            ctrl.write32(0x040, 0x1u);
+            ctrl.write32(0x020, 0x1u);
             wait(sc_core::sc_time(10, sc_core::SC_MS));
             cluster.inject_nmi(0, 0x5u);
             wait(sc_core::sc_time(2, sc_core::SC_MS));
             EXPECT_FALSE(cluster.hart(0).is_wfi());
 
-            pass("CORE_ENABLE park and NMI wake");
+            pass("RESET_CTRL park and NMI wake");
         }
 
         // --- branch coverage: ctrl lengths, fast-mem edge, batch step ---------
         {
-            ctrl.write32(0x040, 0x0u);
+            ctrl.write32(0x020, 0x0u);
             wait(sc_core::sc_time(10, sc_core::SC_MS));
 
             uint8_t byte_buf[2] = {0xAB, 0xCD};
-            ctrl.write_bytes(0x104, 1, byte_buf);
-            EXPECT_EQ(ctrl.read32(0x104), 0xABu);
-            ctrl.write_bytes(0x104, 2, byte_buf);
-            EXPECT_EQ(ctrl.read32(0x104), 0xCDABu);
-            ctrl.write32(0x104, 0x12345678u);
+            ctrl.write_bytes(0x080, 1, byte_buf);
+            EXPECT_EQ(ctrl.read32(0x080), 0xABu);
+            ctrl.write_bytes(0x080, 2, byte_buf);
+            EXPECT_EQ(ctrl.read32(0x080), 0xCDABu);
+            ctrl.write32(0x080, 0x12345678u);
 
             uint8_t rv_buf[8] = {};
             ctrl.read_bytes(0x000, 8, rv_buf);
@@ -1070,11 +1063,11 @@ struct cluster_tb_top : sc_core::sc_module
 
             uint8_t wide32[5] = {1, 2, 3, 4, 5};
             uint8_t wide32_read[5] = {};
-            ctrl.read_bytes(0x104, 5, wide32_read);
+            ctrl.read_bytes(0x080, 5, wide32_read);
             uint8_t wide64[9] = {};
             ctrl.read_bytes(0x000, 9, wide64);
-            ctrl.write_bytes(0x104, 5, wide32);
-            EXPECT_EQ(ctrl.read32(0x104), 0x04030201u);
+            ctrl.write_bytes(0x080, 5, wide32);
+            EXPECT_EQ(ctrl.read32(0x080), 0x04030201u);
             const uint8_t rv_patch[9] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99};
             ctrl.write_bytes(0x000, 9, rv_patch);
             EXPECT_EQ(cluster.reset_vector_n(0), 0x8877665544332211ULL);
@@ -1095,10 +1088,10 @@ struct cluster_tb_top : sc_core::sc_module
             ASSERT_TRUE(m.write64(0xFFF9, 0xAABBCCDDEEFF0011ULL));
             EXPECT_EQ(m.read64(0xFFF9), 0ULL);
 
-            qzero_ctrl.write32(0x040, 0x1u);
+            qzero_ctrl.write32(0x020, 0x1u);
             wait(sc_core::sc_time(5, sc_core::SC_MS));
 
-            ctrl.write32(0x040, 0x1u);
+            ctrl.write32(0x020, 0x1u);
             pass("ctrl access widths, fast-mem edge, and batch step branches");
         }
 

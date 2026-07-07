@@ -86,8 +86,9 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
 
     // ----- 4. CPU-Control register file: defaults --------------------------
     regs_.reset_vector.fill(reset_pc_p_.get_value());
-    regs_.core_enable = (nh >= 32) ? ~0u : ((1u << nh) - 1u); // LCOV_EXCL_LINE nh capped at 4
-    regs_.local_base  = static_cast<uint32_t>(local_base_default_p_.get_value());
+    regs_.reset_ctrl = (regs_.reset_ctrl & ~0xFULL) |
+                       ((nh >= 32) ? 0xFULL : ((1ULL << nh) - 1ULL));
+    regs_.smc_attributes = (static_cast<uint64_t>(nh & 0x7u) << 33);
 
     // ----- 5. Construct the shared Whisper System ---------------------------
     whisper_sys_ = std::make_unique<WdRiscv::System<uint64_t>>(
@@ -178,6 +179,11 @@ void smc_cpu_cluster::set_init_mem_done(bool done)
     regs_.init_mem_done = done ? 1u : 0u;
 }
 
+void smc_cpu_cluster::set_disable_sram_autoinit(bool disable)
+{
+    regs_.disable_sram_autoinit = disable ? 1u : 0u;
+}
+
 void smc_cpu_cluster::set_mem_repair_status(uint32_t v)
 {
     regs_.mem_repair_status = v;
@@ -197,7 +203,7 @@ void smc_cpu_cluster::inject_nmi(unsigned i, uint64_t cause)
 
 // ===========================================================================
 // SC_THREAD: per-hart execution loop with temporal decoupling.
-// §3.5 hart_thread + CORE_ENABLE gating + step(K).
+// §3.5 hart_thread + RESET_CTRL gating + step(K).
 // ===========================================================================
 void smc_cpu_cluster::hart_thread(unsigned i)
 {
@@ -207,8 +213,8 @@ void smc_cpu_cluster::hart_thread(unsigned i)
     hart.reset();
 
     while (true) {
-        // §3.8 CORE_ENABLE gate: park if my bit is clear.
-        if ((regs_.core_enable & (1u << i)) == 0) {
+        // §3.8 RESET_CTRL gate: lower reset_n bits release each hart when set.
+        if ((regs_.reset_ctrl & (1ULL << i)) == 0) {
             qk.sync();
             sc_core::wait(core_enable_event_[i]);
             // After being re-enabled, fall through and re-evaluate.
@@ -384,10 +390,10 @@ bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
 }
 
 // ===========================================================================
-// ctrl target socket b_transport handler -- §3.8 register file.
+// ctrl target socket b_transport handler -- cpu_ctrl.rdl register file.
 //
-// 32-bit aligned access only.  Reads of unmapped offsets return 0; writes
-// to RO offsets are silently dropped.  Writes to RESET_VECTOR_N[i] update
+// Reads of unmapped offsets return 0; writes to RO offsets are silently dropped.
+// Writes to RESET_VECTOR[i] update
 // the iss_hart's reset_pc immediately (effective on next reset).
 // ===========================================================================
 void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
@@ -428,8 +434,8 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
         }
     };
 
-    // RESET_VECTOR_N[i] occupies 8 bytes each starting at 0x000.
-    if (off < 0x040) {
+    // RESET_VECTOR[i] occupies 8 bytes each starting at 0x000.
+    if (off < 0x020) {
         const unsigned idx = unsigned(off / 8);
         if (idx >= 4) {
             trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
@@ -448,7 +454,15 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
         return;
     }
 
-    auto handle32 = [&](uint32_t& reg, bool ro) {
+    auto handle_u64 = [&](uint64_t& reg, bool ro) {
+        if (trans.get_command() == tlm::TLM_READ_COMMAND) {
+            store_u64(reg);
+        } else if (!ro) {
+            reg = load_u64();
+        }
+        trans.set_response_status(tlm::TLM_OK_RESPONSE);
+    };
+    auto handle_u32 = [&](uint32_t& reg, bool ro) {
         if (trans.get_command() == tlm::TLM_READ_COMMAND) {
             store_u32(reg);
         } else if (!ro) {
@@ -458,42 +472,112 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
     };
 
     switch (off) {
-    case 0x040:  // CORE_ENABLE
+    case 0x020:  // RESET_CTRL
         if (trans.get_command() == tlm::TLM_READ_COMMAND) {
-            store_u32(regs_.core_enable);
+            store_u64(regs_.reset_ctrl);
         } else {
-            apply_core_enable(load_u32());
+            apply_reset_ctrl(load_u64());
         }
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         return;
-
-    case 0x100: handle32(regs_.local_base,            /*ro*/ true ); return;
-    case 0x104: handle32(regs_.global_base,           /*ro*/ false); return;
-    case 0x108: handle32(regs_.region_size,           /*ro*/ false); return;
-    case 0x200: handle32(regs_.init_mem_done,         /*ro*/ true ); return;
-    case 0x204: handle32(regs_.disable_sram_autoinit, /*ro*/ false); return;
-    case 0x208: handle32(regs_.mem_repair_status,     /*ro*/ true ); return;
-
+    case 0x028: handle_u64(regs_.core_reset_pulse_count, /*ro*/ false); return;
+    case 0x030: handle_u64(regs_.reset_timeout,          /*ro*/ false); return;
+    case 0x040: handle_u64(regs_.reference_counter,      /*ro*/ false); return;
+    case 0x050: handle_u32(regs_.wdt_timeout,            /*ro*/ false); return;
+    case 0x058:  // WDT_TIMEOUT_RESET single-pulse bits; reads as zero in LT.
+        if (trans.get_command() == tlm::TLM_READ_COMMAND)
+            store_u32(0);
+        trans.set_response_status(tlm::TLM_OK_RESPONSE);
+        return;
+    case 0x060: handle_u32(regs_.test_ctrl,              /*ro*/ true ); return;
     default:
+        break;
+    }
+
+    if (off >= 0x200 && off < 0x208) {
         if (trans.get_command() == tlm::TLM_READ_COMMAND) {
-            std::memset(ptr, 0, len);
+            uint64_t v = regs_.smc_attributes >> (8 * (off - 0x200));
+            store_u64(v);
         }
-        trans.set_response_status(tlm::TLM_OK_RESPONSE);   // RAZ/WI
+        trans.set_response_status(tlm::TLM_OK_RESPONSE);
         return;
     }
+
+    if (off >= 0x080 && off < 0x100) {
+        handle_u32(regs_.scratch[(off - 0x080) / 8], /*ro*/ false);
+        return;
+    }
+
+    if (off >= 0x100 && off < 0x200) {
+        const unsigned idx = unsigned((off - 0x100) / 8);
+        if (idx < regs_.wb_pc.size()) {
+            uint64_t& pc = regs_.wb_pc[idx];
+            if (idx < harts_.size()) pc = harts_[idx]->get_pc();
+            handle_u64(pc, /*ro*/ true);
+            return;
+        }
+    }
+
+    if (off >= 0x240 && off < 0x260) {
+        const unsigned idx = unsigned((off - 0x240) / 8);
+        uint64_t v = 0;
+        if (idx < regs_.mutex_available.size()) {
+            if (trans.get_command() == tlm::TLM_READ_COMMAND) {
+                v = regs_.mutex_available[idx] ? 1u : 0u;
+                regs_.mutex_available[idx] = false;
+                store_u64(v);
+            } else {
+                regs_.mutex_available[idx] = true;
+            }
+            trans.set_response_status(tlm::TLM_OK_RESPONSE);
+            return;
+        }
+    }
+
+    if (off >= 0x260 && off < 0x280) {
+        const unsigned idx = unsigned((off - 0x260) / 8);
+        if (idx < regs_.sema.size()) {
+            if (trans.get_command() == tlm::TLM_READ_COMMAND) {
+                store_u32(static_cast<uint16_t>(regs_.sema[idx]));
+            } else {
+                regs_.sema[idx] = static_cast<int16_t>(
+                    regs_.sema[idx] + static_cast<int16_t>(load_u32() & 0xFFFFu));
+            }
+            trans.set_response_status(tlm::TLM_OK_RESPONSE);
+            return;
+        }
+    }
+
+    if (off >= 0x280 && off < 0x2A0) {
+        const unsigned idx = unsigned((off - 0x280) / 8);
+        handle_u64(regs_.dummy_rom[idx], /*ro*/ false);
+        return;
+    }
+
+    if (off >= 0x2A0 && off < 0x2C0) {
+        const unsigned idx = unsigned((off - 0x2A0) / 8);
+        handle_u64(regs_.dummy_rom_null[idx], /*ro*/ false);
+        return;
+    }
+
+    if (trans.get_command() == tlm::TLM_READ_COMMAND) {
+        std::memset(ptr, 0, len);
+    }
+    trans.set_response_status(tlm::TLM_OK_RESPONSE);   // RAZ/WI
+    return;
 }
 
 // ===========================================================================
-// CORE_ENABLE write logic -- §3.8 + §3.4 enable/park bookkeeping.
+// RESET_CTRL write logic -- §3.8 + §3.4 enable/park bookkeeping.
 // ===========================================================================
-void smc_cpu_cluster::apply_core_enable(uint32_t new_value)
+void smc_cpu_cluster::apply_reset_ctrl(uint64_t new_value)
 {
-    const uint32_t old_value = regs_.core_enable;
-    regs_.core_enable        = new_value;
+    const uint64_t old_value = regs_.reset_ctrl;
+    regs_.reset_ctrl         = new_value;
 
     for (unsigned i = 0; i < num_harts_p_.get_value(); ++i) {
-        const bool was_en = (old_value & (1u << i)) != 0;
-        const bool is_en  = (new_value & (1u << i)) != 0;
+        const bool was_en = (old_value & (1ULL << i)) != 0;
+        const bool is_en  = (new_value & (1ULL << i)) != 0;
         if (!was_en && is_en) {
             // 0 -> 1 transition: wake the parked hart_thread.
             core_enable_event_[i].notify(sc_core::SC_ZERO_TIME);

@@ -15,10 +15,9 @@
 //                   distinguish fetch from load; the socket is exposed for
 //                   forward compatibility with §3.6).
 //   * 1 target socket:
-//        ctrl    -- 8 KB CPU-Control register file at BASE+0x001_0000
-//                   (RESET_VECTOR_N, CORE_ENABLE, LOCAL_BASE, GLOBAL_BASE,
-//                    REGION_SIZE, INIT_MEM_DONE, DISABLE_SRAM_AUTO_INIT,
-//                    MEM_REPAIR_STATUS).  See §3.8.
+//        ctrl    -- 4 KB CPU-Control register file at BASE+0x003_9000
+//                   (RESET_VECTOR, RESET_CTRL, scratch, attributes, mutex,
+//                    semaphore, and dummy ROM words).  See cpu_ctrl.rdl.
 //   * Per-hart IRQ inputs:
 //        irq_sw[i]    (= msip_in[i]    in §3.7 -- CLINT software IRQ)
 //        irq_timer[i] (= mtip_in[i]    in §3.7 -- CLINT timer IRQ)
@@ -94,11 +93,12 @@ public:
         uint16_t    source_id     = 0x10;              // SMC_CPU_SOURCE_ID
 
         // §3.8 control-register window.  Writes to the ctrl socket land
-        // here; offsets are taken modulo 0x2000 so the socket can sit
+        // here; offsets are taken modulo 0x1000 so the socket can sit
         // anywhere in the system address map.
-        uint64_t    ctrl_size_bytes = 0x2000;          // 8 KiB
+        uint64_t    ctrl_size_bytes = 0x1000;          // 4 KiB
 
-        // §3.8 LOCAL_BASE reset value (read-only on ctrl socket).
+        // Construction strap retained for SMC_ATTRIBUTES/debug APIs; LOCAL_BASE
+        // is now exposed by smc_base_config, not cpu_ctrl.
         uint64_t    local_base_default = 0xC000'0000ull;
     };
 
@@ -136,6 +136,8 @@ public:
     // -- §3.8 register accessors -------------------------------------------
     uint64_t reset_vector_n  (unsigned i) const;
     void     set_init_mem_done(bool done);    // peer IP / firmware hook
+    bool     init_mem_done() const { return regs_.init_mem_done != 0; }
+    void     set_disable_sram_autoinit(bool disable);
     void     set_mem_repair_status(uint32_t v);
 
     // §3.8 strap sampled by scratchpad_sram on reset (see INIT_MEM_DONE handshake).
@@ -180,8 +182,9 @@ private:
     // ctrl socket b_transport handler.
     void ctrl_b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time&);
 
-    // CORE_ENABLE write helper.
-    void apply_core_enable(uint32_t new_value);
+    // RESET_CTRL write helper. Lower bits are active-high run enables in LT
+    // because the RDL fields are active-low reset_n controls.
+    void apply_reset_ctrl(uint64_t new_value);
 
     // -- State ---------------------------------------------------------------
     std::unique_ptr<WdRiscv::System<uint64_t>>        whisper_sys_;
@@ -201,13 +204,30 @@ private:
     struct ctrl_regs
     {
         std::array<uint64_t, 4> reset_vector{};
-        uint32_t core_enable           = 0;             // bit i = enable hart i
-        uint32_t local_base            = 0;             // RO, set in ctor
-        uint32_t global_base           = 0;
-        uint32_t region_size           = 0;
-        uint32_t init_mem_done         = 0;             // RO
-        uint32_t disable_sram_autoinit = 0;
-        uint32_t mem_repair_status     = 0;             // RO
+        uint64_t reset_ctrl             = 0x0000'0000'0000'010FULL;
+        uint64_t core_reset_pulse_count = 0x0000'000F'0010'0008ULL;
+        uint64_t reset_timeout          = 0;
+        uint64_t reference_counter      = 0;
+        uint32_t wdt_timeout            = 0x4000;
+        uint32_t test_ctrl              = 0;             // RO
+        std::array<uint32_t, 16> scratch{};
+        std::array<uint64_t, 32> wb_pc{};
+        uint64_t smc_attributes         = 0;             // RO strap image
+        std::array<bool, 4> mutex_available{{true, true, true, true}};
+        std::array<int16_t, 4> sema{};
+        std::array<uint64_t, 4> dummy_rom{{
+            0x0145'0513'0000'0517ULL,
+            0xFFF0'0693'3055'1073ULL,
+            0x1050'0073'3046'B073ULL,
+            0x0000'0000'FFDF'F06FULL,
+        }};
+        std::array<uint64_t, 4> dummy_rom_null{};
+
+        // Internal hooks retained for peer LT models that have not yet moved to
+        // their RTL register blocks.
+        uint32_t init_mem_done          = 0;
+        uint32_t disable_sram_autoinit  = 0;
+        uint32_t mem_repair_status      = 0;
     } regs_;
 };
 

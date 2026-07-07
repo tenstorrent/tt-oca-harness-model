@@ -8,7 +8,7 @@
 //
 //   1.  Reset / power-on defaults
 //   2.  Local decode routing to each downstream initiator socket
-//   3.  Global fabric CSRs (GLOBAL_BASE) vs cpu_ctrl forwarding
+//   3.  smc_base_config CSRs (GLOBAL_BASE) vs cpu_ctrl front-port routing
 //   4.  Alias remap (programmable window → local target)
 //   5.  Outbound routing (default allow) → output_axi
 //   6.  Inbound filter: default-deny, allow entry, NS filtering
@@ -196,14 +196,14 @@ constexpr uint64_t A_SPM         = 0xC004'0000ULL;
 constexpr uint64_t A_DMA         = 0xC003'8000ULL;
 constexpr uint64_t A_DFD         = 0xC016'0000ULL;
 constexpr uint64_t A_DFT         = 0xC000'F800ULL;
-constexpr uint64_t A_CPUCTRL     = 0xC001'0000ULL;
+constexpr uint64_t A_CPUCTRL     = 0xC003'9000ULL;
 constexpr uint64_t A_MAILBOX     = 0xC001'8000ULL;
 constexpr uint64_t A_AR          = 0xC001'2000ULL;
 constexpr uint64_t A_IBF         = 0xC001'5000ULL;
 constexpr uint64_t A_OBF         = 0xC001'6000ULL;
-constexpr uint64_t A_GBASE       = 0xC001'0040ULL;
-constexpr uint64_t A_LBASE       = 0xC001'0048ULL;
-constexpr uint64_t A_RSIZE       = 0xC001'0050ULL;
+constexpr uint64_t A_GBASE       = 0xC001'0000ULL;
+constexpr uint64_t A_LBASE       = 0xC001'0008ULL;
+constexpr uint64_t A_RSIZE       = 0xC001'0010ULL;
 constexpr uint64_t A_PERIPH_EXT  = 0xC040'0000ULL;
 constexpr uint64_t A_UNMAPPED    = 0xC000'1000ULL;  // gap between WDT and periph
 constexpr uint64_t A_OUTBOUND    = 0x8000'0000ULL;  // in neither aperture
@@ -358,7 +358,7 @@ struct tb : sc_core::sc_module {
         // ----------------------------------------------------------------
         pulse_reset();
         EXPECT_EQ(0x4000'0000ULL, dut.read_global_base());
-        EXPECT_EQ(0x0200'0000ULL, dut.read_region_size());
+        EXPECT_EQ(0x0100'0000ULL, dut.read_region_size());
         EXPECT_EQ(false, dut.get_inbound_filter_entry(0).addr_mode);
         EXPECT_EQ(0x7ULL, dut.get_inbound_filter_entry(0).end_addr);  // RDL reset
         EXPECT_EQ(false, dut.get_alias_region(0).valid);
@@ -380,6 +380,10 @@ struct tb : sc_core::sc_module {
         EXPECT_EQ(1u, p_daccel.hits);
         EXPECT_EQ(A_DMA, p_daccel.last_addr);
 
+        d_mmio.write32(A_CPUCTRL, 0x3334);
+        EXPECT_EQ(2u, p_front.hits);
+        EXPECT_EQ(A_CPUCTRL, p_front.last_addr);
+
         // DFD (0xC016_0000) is above LOCAL_ALIAS_REGION_SIZE — use global alias.
         d_mmio.write32(0x4016'0000ULL, 0x4444);
         EXPECT_EQ(1u, p_dfd.hits);
@@ -393,18 +397,19 @@ struct tb : sc_core::sc_module {
         std::cout << "  [PASS] local decode routing\n";
 
         // ----------------------------------------------------------------
-        // 3. Global CSR (GLOBAL_BASE) handled internally; cpu_ctrl forwarded.
+        // 3. smc_base_config CSR handled internally; cpu_ctrl goes to front_port.
         // ----------------------------------------------------------------
         d_mmio.write32(A_GBASE, 0x1234'0000u);
         EXPECT_EQ(0x1234'0000ULL, dut.read_global_base());
         EXPECT_EQ(0x1234'0000u, d_mmio.read32(A_GBASE));
         EXPECT_EQ(0u, p_cpu.hits);  // GLOBAL_BASE not forwarded
 
-        d_mmio.write32(A_CPUCTRL, 0xABCD);  // not a fabric CSR offset → forward
-        EXPECT_EQ(1u, p_cpu.hits);
-        EXPECT_EQ(A_CPUCTRL, p_cpu.last_addr);
-        EXPECT_EQ(0xABCDu, d_mmio.read32(A_CPUCTRL));  // round-trips via probe mem
-        std::cout << "  [PASS] global CSR vs cpu_ctrl forwarding\n";
+        const unsigned front_before = p_front.hits;
+        d_mmio.write32(A_CPUCTRL, 0xABCD);
+        EXPECT_EQ(front_before + 1u, p_front.hits);
+        EXPECT_EQ(A_CPUCTRL, p_front.last_addr);
+        EXPECT_EQ(0xABCDu, d_mmio.read32(A_CPUCTRL));  // round-trips via front-port probe mem
+        std::cout << "  [PASS] smc_base_config CSR vs cpu_ctrl front-port routing\n";
 
         pulse_reset();  // restore global_base
 
