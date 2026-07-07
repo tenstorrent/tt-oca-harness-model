@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Implementation Architecture &#8212; OCH Architecture v1.0</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=918ff8a3" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=204b838c" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+    <script type="module">
+mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    securityLevel: 'loose',
+    flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis',
+        nodeSpacing: 70,
+        rankSpacing: 70,
+        padding: 20
+    },
+    fontSize: 16,
+    themeVariables: {
+        fontSize: '16px',
+        primaryColor: '#e1f5ff',
+        primaryTextColor: '#000',
+        primaryBorderColor: '#3498db',
+        lineColor: '#2c3e50',
+        secondaryColor: '#fff4e1',
+        tertiaryColor: '#ffe1f5'
+    }
+});
+</script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs";
+
+const style = document.createElement('style');
+style.textContent = `.mermaid-container {
+    position: relative !important;
+    display: inline-block;
+    width: 100%;
+}
+
+.mermaid-fullscreen-btn {
+    position: absolute !important;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-content {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-content.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-fullscreen-content .mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-content .mermaid svg {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    max-height: 85vh;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}
+`;
+document.head.appendChild(style);
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness < 128;
+    }
+    return false;
+};
+
+const initFullscreen = async () => {
+    await mermaid.run();
+
+    const all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(initFullscreen, 200);
+        return;
+    }
+
+    const darkTheme = isDarkTheme();
+
+    const modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-fullscreen-content${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    const modalContent = modal.querySelector('.mermaid-fullscreen-content');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = '';
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    const allButtons = [];
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.display = 'block';
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+
+        container.appendChild(fullscreenBtn);
+        allButtons.push(fullscreenBtn);
+    });
+
+    // Update theme classes when theme changes
+    const updateTheme = () => {
+        const dark = isDarkTheme();
+        allButtons.forEach(btn => {
+            if (dark) {
+                btn.classList.add('dark-theme');
+            } else {
+                btn.classList.remove('dark-theme');
+            }
+        });
+        if (dark) {
+            modal.classList.add('dark-theme');
+            modalContent.classList.add('dark-theme');
+            closeBtn.classList.add('dark-theme');
+        } else {
+            modal.classList.remove('dark-theme');
+            modalContent.classList.remove('dark-theme');
+            closeBtn.classList.remove('dark-theme');
+        }
+    };
+
+    // Watch for theme changes
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style']
+    });
+};
+
+window.addEventListener("load", initFullscreen);
+</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Integration Guide" href="integration.html" />
+    <link rel="prev" title="OCH System Architecture" href="architecture.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">OCH Architecture</a></h1>
+
+
+
+<p class="blurb">OCH architecture and implementation reference</p>
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Architecture</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">OCH System Architecture</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Implementation Architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#source-tree-orientation">Source Tree Orientation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#smu-implementation">SMU Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#smc-implementation">SMC Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#sep-implementation">SEP Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#dtp-implementation">DTP Implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#bus-and-protocol-stack">Bus and Protocol Stack</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#firmware">Firmware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#current-implementation-caveats">Current Implementation Caveats</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="integration.html">Integration Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="verification.html">Verification and Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roadmap.html">Roadmap and Open Items</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="architecture.html" title="previous chapter">OCH System Architecture</a></li>
+      <li>Next: <a href="integration.html" title="next chapter">Integration Guide</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="implementation-architecture">
+<h1>Implementation Architecture<a class="headerlink" href="#implementation-architecture" title="Link to this heading">¶</a></h1>
+<section id="source-tree-orientation">
+<h2>Source Tree Orientation<a class="headerlink" href="#source-tree-orientation" title="Link to this heading">¶</a></h2>
+<p>The implementation lives under <code class="docutils literal notranslate"><span class="pre">sw/tt-oca-hw-main</span></code> in the local workspace.
+The major implementation directories are:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Purpose</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hw/smu/rtl/</span></code></p></td>
+<td><p>SMU integration top, wrapper, and AXI crossbar</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hw/smc/</span></code></p></td>
+<td><p>SMC subsystem RTL, Rocket cluster wrapper, fabric, peripherals, reset unit</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hw/sep/</span></code></p></td>
+<td><p>SEP subsystem RTL, VeeR CPU, crypto, lifecycle, local fabric</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hw/dtp/</span></code></p></td>
+<td><p>Debug/test port RTL and JTAG/iJTAG infrastructure</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hw/ip/</span></code></p></td>
+<td><p>Reusable IP blocks such as crypto, JTAG, mailboxes, timers, and remappers</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hw/comp/</span></code></p></td>
+<td><p>Components with register-generation and integration collateral</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">hw/periph/</span></code></p></td>
+<td><p>Vendor-macro wrappers and reference peripheral integration shims</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">hw/common/</span></code></p></td>
+<td><p>Shared primitives, AXI/TL-UL glue, assertions, and FuSa helpers</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">meta/registers/</span></code></p></td>
+<td><p>Register descriptions used as CSR single source of truth</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fw/sep/</span></code></p></td>
+<td><p>SEP boot ROM and directed firmware tests</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fw/smc/</span></code></p></td>
+<td><p>SMC firmware, ROM, common code, and test sequences</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dv/</span></code></p></td>
+<td><p>SEP, SMC, SMU, DTP, and shared verification environments</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="smu-implementation">
+<h2>SMU Implementation<a class="headerlink" href="#smu-implementation" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">smu.sv</span></code> is the reusable integration top. It instantiates the DTP, SMC, SEP
+when enabled, and the SMU AXI crossbar. <code class="docutils literal notranslate"><span class="pre">smu_wrapper.sv</span></code> is the integration
+wrapper that adds pad/macro-level connections and demonstrates adopter-facing
+wiring.</p>
+<p>The SMU crossbar is a three-master/three-slave fabric:</p>
+<ul class="simple">
+<li><p>SEP outbound AXI.</p></li>
+<li><p>SMC outbound AXI.</p></li>
+<li><p>External SMN inbound AXI.</p></li>
+<li><p>SEP inbound AXI.</p></li>
+<li><p>SMC inbound AXI.</p></li>
+<li><p>External SMN outbound AXI.</p></li>
+</ul>
+<p>The crossbar deliberately avoids reflexive routes. SEP-to-SEP and SMC-to-SMC
+traffic stay local to their subsystems; crossbar traffic is for peer or external
+access.</p>
+</section>
+<section id="smc-implementation">
+<h2>SMC Implementation<a class="headerlink" href="#smc-implementation" title="Link to this heading">¶</a></h2>
+<p>The SMC is the platform-management controller. It combines a RISC-V management
+CPU, management fabric, reset and power control, data movement engines,
+peripherals, and debug hooks.</p>
+<pre  class="mermaid">
+        flowchart TB
+    CPU[&quot;Rocket RV64GC cluster&lt;br/&gt;1 or 4 cores&quot;]
+    Fabric[&quot;SMC fabric&lt;br/&gt;input, local, output&quot;]
+    Periphs[&quot;SMC peripherals&lt;br/&gt;GPIO, UART, I2C, AVSBus, PVT, mailbox&quot;]
+    Reset[&quot;SMC reset unit&lt;br/&gt;domain release, isolation, FLR&quot;]
+    DMA[&quot;DMA and zeroer&quot;]
+    Debug[&quot;JTAG / DFD / BEU&quot;]
+    SEPIn[&quot;SEP inbound path&quot;]
+    SysOut[&quot;System outbound AXI&quot;]
+
+    CPU &lt;--&gt; Fabric
+    Fabric &lt;--&gt; Periphs
+    Fabric &lt;--&gt; DMA
+    Fabric &lt;--&gt; Debug
+    Fabric &lt;--&gt; SEPIn
+    Fabric --&gt; SysOut
+    Reset --&gt; CPU
+    Reset --&gt; Periphs
+    Reset --&gt; DMA
+    </pre><p>Key implementation points:</p>
+<ul class="simple">
+<li><p>Rocket RV64GC is generated through the SMC CPU flow and uses TileLink
+internally, with AXI-facing boundaries.</p></li>
+<li><p>The SMC fabric bridges CPU, JTAG debug, SEP inbound, system inbound/outbound,
+local peripheral, remap, and filter paths.</p></li>
+<li><p>The local aperture is 32 MB at <code class="docutils literal notranslate"><span class="pre">0xC000_0000</span></code>.</p></li>
+<li><p>The PLIC supports a large interrupt fan-in for multi-core SMC operation.</p></li>
+<li><p>Reset orchestration exports subsystem reset and isolation controls.</p></li>
+<li><p>I3C and some external integration points are reserved or shimmed depending on
+the build.</p></li>
+</ul>
+</section>
+<section id="sep-implementation">
+<h2>SEP Implementation<a class="headerlink" href="#sep-implementation" title="Link to this heading">¶</a></h2>
+<p>The SEP is the root-of-trust subsystem. It contains a VeeR EL2 core, local
+AXI fabric, secure boot ROM, lifecycle controller, cryptographic accelerators,
+watchdog, DMA, secure memories, and IO wrappers.</p>
+<pre  class="mermaid">
+        flowchart TB
+    VeeR[&quot;VeeR EL2&lt;br/&gt;RV32 secure CPU&quot;]
+    LocalFabric[&quot;SEP local AXI fabric&quot;]
+    Crypto[&quot;Crypto complex&lt;br/&gt;AES, HMAC, KMAC, OTBN, KM, entropy&quot;]
+    LCC[&quot;Lifecycle controller&quot;]
+    ROM[&quot;BL0 ROM and TCMs&quot;]
+    DMA[&quot;SEP DMA&quot;]
+    IO[&quot;SPI / low-speed IO&quot;]
+    SMUAXI[&quot;SMU / SMC / external AXI paths&quot;]
+
+    VeeR &lt;--&gt; LocalFabric
+    LocalFabric &lt;--&gt; Crypto
+    LocalFabric &lt;--&gt; LCC
+    LocalFabric &lt;--&gt; ROM
+    LocalFabric &lt;--&gt; DMA
+    LocalFabric &lt;--&gt; IO
+    LocalFabric &lt;--&gt; SMUAXI
+    </pre><p>OpenTitan-derived blocks retain TL-UL internals in several places and are
+bridged to AXI4-Lite through protocol adapters. The key manager uses a
+dedicated key bus instead of side-load wiring. Memories and entropy sources are
+integrated through wrappers so an adopter can bind real macros and technology
+IP outside the reusable core.</p>
+</section>
+<section id="dtp-implementation">
+<h2>DTP Implementation<a class="headerlink" href="#dtp-implementation" title="Link to this heading">¶</a></h2>
+<p>The DTP provides JTAG, iJTAG, scan, debug, JTAG-to-AXI, and cross-trigger
+connectivity. The documented scan topology is:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>PTAP -&gt; I/O STAP -&gt; SMC debug STAP -&gt; SEP debug STAP -&gt; extra STAPs -&gt; PTAP
+</pre></div>
+</div>
+<p>Lifecycle state gates access to debug chains. SMC debug depends on SoC or
+application debug authorization; SEP debug additionally depends on SEP debug
+authorization. Cross-trigger paths connect SMC, SEP, and external trigger
+ports, with some DTP-internal trigger ports reserved for SMC synchronization.</p>
+</section>
+<section id="bus-and-protocol-stack">
+<h2>Bus and Protocol Stack<a class="headerlink" href="#bus-and-protocol-stack" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Protocol</p></th>
+<th class="head"><p>Use</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>AXI4</p></td>
+<td><p>SMU crossbar, SMC/SEP system ports, CPU front ports, DMA</p></td>
+</tr>
+<tr class="row-odd"><td><p>AXI4-Lite</p></td>
+<td><p>CSRs, peripherals, debug and remap/filter control</p></td>
+</tr>
+<tr class="row-even"><td><p>TileLink / TL-UL</p></td>
+<td><p>Rocket internals and OpenTitan-derived IP internals</p></td>
+</tr>
+<tr class="row-odd"><td><p>APB4</p></td>
+<td><p>Selected DFD, watchdog, timer, and GPIO pad-domain blocks</p></td>
+</tr>
+<tr class="row-even"><td><p>AXI-Stream</p></td>
+<td><p>Entropy/TRNG input paths</p></td>
+</tr>
+<tr class="row-odd"><td><p>ATB</p></td>
+<td><p>Telemetry receiver streaming</p></td>
+</tr>
+<tr class="row-even"><td><p>JTAG / iJTAG</p></td>
+<td><p>DTP, STAP/PTAP chains, JTAG-to-AXI</p></td>
+</tr>
+</tbody>
+</table>
+<p>The register-generation flow treats SystemRDL as the CSR source of truth, with
+generated RTL, SystemVerilog headers, and C headers produced by the local tools.</p>
+</section>
+<section id="firmware">
+<h2>Firmware<a class="headerlink" href="#firmware" title="Link to this heading">¶</a></h2>
+<p>The firmware tree contains both secure and management firmware:</p>
+<ul class="simple">
+<li><p>SEP BL0 ROM code, manifest parsing, crypto helpers, lifecycle handling, and
+directed tests under <code class="docutils literal notranslate"><span class="pre">fw/sep/</span></code>.</p></li>
+<li><p>SMC ROM, Rust application work, shared firmware code, and test sequences under
+<code class="docutils literal notranslate"><span class="pre">fw/smc/</span></code>.</p></li>
+</ul>
+<p>Firmware is responsible for early base-address programming, lifecycle-aware
+policy, inter-subsystem access setup, and secure or management service bring-up.</p>
+</section>
+<section id="current-implementation-caveats">
+<h2>Current Implementation Caveats<a class="headerlink" href="#current-implementation-caveats" title="Link to this heading">¶</a></h2>
+<p>Several implementation areas are visibly work-in-progress:</p>
+<ul class="simple">
+<li><p>SMN and AoU are architectural placeholders.</p></li>
+<li><p>Some SEP timer, soft interrupt, external interrupt, and DMI paths are tied off
+or marked TODO at the SMU boundary.</p></li>
+<li><p>The standalone <code class="docutils literal notranslate"><span class="pre">hw/periph/periph.sv</span></code> top is a stub.</p></li>
+<li><p>Generated or third-party dependency outputs may require repository
+initialization before every RTL path can be elaborated.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2026, Tenstorrent.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/implementation.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
