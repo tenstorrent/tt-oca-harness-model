@@ -285,6 +285,11 @@ sep/peripherals/deps.env
 !smc/cpu_cluster/doc/
 !smc/cpu_cluster/doc/**
 
+# OCH GitHub Pages documentation is intentionally tracked under docs/och.
+!docs/
+!docs/**
+docs/och_source/_build/
+
 # ======================================================================================
 
 # =============================================================================

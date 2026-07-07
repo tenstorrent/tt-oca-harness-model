@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>OCH System Architecture &#8212; OCH Architecture v1.0</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="_static/alabaster.css?v=918ff8a3" />
+    <link rel="stylesheet" type="text/css" href="_static/custom.css?v=204b838c" />
+    <script src="_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="_static/doctools.js?v=9a2dae69"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs"></script>
+    <script type="module" src="https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0.1.4/dist/mermaid-layout-elk.esm.min.mjs"></script>
+    <script type="module">
+mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    securityLevel: 'loose',
+    flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis',
+        nodeSpacing: 70,
+        rankSpacing: 70,
+        padding: 20
+    },
+    fontSize: 16,
+    themeVariables: {
+        fontSize: '16px',
+        primaryColor: '#e1f5ff',
+        primaryTextColor: '#000',
+        primaryBorderColor: '#3498db',
+        lineColor: '#2c3e50',
+        secondaryColor: '#fff4e1',
+        tertiaryColor: '#ffe1f5'
+    }
+});
+</script>
+    <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.esm.min.mjs";
+
+const style = document.createElement('style');
+style.textContent = `.mermaid-container {
+    position: relative !important;
+    display: inline-block;
+    width: 100%;
+}
+
+.mermaid-fullscreen-btn {
+    position: absolute !important;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+    color: #333;
+}
+
+.mermaid-fullscreen-btn:hover {
+    opacity: 100% !important;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-btn.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-btn.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 3px 10px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal {
+    display: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(255, 255, 255, 0.98);
+    z-index: 9999;
+    padding: 20px;
+    overflow: auto;
+}
+
+.mermaid-fullscreen-modal.dark-theme {
+    background: rgba(0, 0, 0, 0.98);
+}
+
+.mermaid-fullscreen-modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-content {
+    position: relative;
+    width: 95vw;
+    height: 90vh;
+    max-width: 95vw;
+    max-height: 90vh;
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-content.dark-theme {
+    background: #1a1a1a;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+}
+
+.mermaid-fullscreen-content .mermaid {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mermaid-fullscreen-content .mermaid svg {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+    max-height: 85vh;
+    cursor: grab;
+}
+
+.mermaid-fullscreen-close {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s;
+    font-size: 24px;
+    line-height: 1;
+    color: #333;
+}
+
+.mermaid-fullscreen-close:hover {
+    background: white;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+}
+
+.mermaid-fullscreen-close.dark-theme {
+    background: rgba(50, 50, 50, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #e0e0e0;
+}
+
+.mermaid-fullscreen-close.dark-theme:hover {
+    background: rgba(60, 60, 60, 1);
+    box-shadow: 0 6px 16px rgba(255, 255, 255, 0.2);
+}
+
+.mermaid-fullscreen-modal .mermaid-fullscreen-btn {
+    display: none !important;
+}
+`;
+document.head.appendChild(style);
+
+// Detect if page has dark background
+const isDarkTheme = () => {
+    const bgColor = window.getComputedStyle(document.body).backgroundColor;
+    const match = bgColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+    if (match) {
+        const r = parseInt(match[1]);
+        const g = parseInt(match[2]);
+        const b = parseInt(match[3]);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        return brightness < 128;
+    }
+    return false;
+};
+
+const initFullscreen = async () => {
+    await mermaid.run();
+
+    const all_mermaids = document.querySelectorAll(".mermaid");
+    const mermaids_processed = document.querySelectorAll(".mermaid[data-processed='true']");
+
+    if(all_mermaids.length !== mermaids_processed.length) {
+        // Wait for mermaid to process all diagrams
+        setTimeout(initFullscreen, 200);
+        return;
+    }
+
+    const darkTheme = isDarkTheme();
+
+    const modal = document.createElement('div');
+    modal.className = 'mermaid-fullscreen-modal' + (darkTheme ? ' dark-theme' : '');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Fullscreen diagram viewer');
+    modal.innerHTML = `
+        <button class="mermaid-fullscreen-close${darkTheme ? ' dark-theme' : ''}" aria-label="Close fullscreen">✕</button>
+        <div class="mermaid-fullscreen-content${darkTheme ? ' dark-theme' : ''}"></div>
+    `;
+    document.body.appendChild(modal);
+
+    const modalContent = modal.querySelector('.mermaid-fullscreen-content');
+    const closeBtn = modal.querySelector('.mermaid-fullscreen-close');
+
+    const closeModal = () => {
+        modal.classList.remove('active');
+        modalContent.innerHTML = '';
+        document.body.style.overflow = '';
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.classList.contains('active')) {
+            closeModal();
+        }
+    });
+
+    const allButtons = [];
+
+    document.querySelectorAll('.mermaid').forEach((mermaidDiv) => {
+        if (mermaidDiv.parentNode.classList.contains('mermaid-container') ||
+            mermaidDiv.closest('.mermaid-fullscreen-modal')) {
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'mermaid-container';
+        mermaidDiv.parentNode.insertBefore(container, mermaidDiv);
+        container.appendChild(mermaidDiv);
+
+        const fullscreenBtn = document.createElement('button');
+        fullscreenBtn.className = 'mermaid-fullscreen-btn' + (darkTheme ? ' dark-theme' : '');
+        fullscreenBtn.setAttribute('aria-label', 'View diagram in fullscreen');
+        fullscreenBtn.textContent = '⛶';
+
+        // Calculate dynamic position based on diagram's margin and padding
+        const diagramStyle = window.getComputedStyle(mermaidDiv);
+        const marginTop = parseFloat(diagramStyle.marginTop) || 0;
+        const marginRight = parseFloat(diagramStyle.marginRight) || 0;
+        const paddingTop = parseFloat(diagramStyle.paddingTop) || 0;
+        const paddingRight = parseFloat(diagramStyle.paddingRight) || 0;
+        fullscreenBtn.style.top = `${marginTop + paddingTop + 4}px`;
+        fullscreenBtn.style.right = `${marginRight + paddingRight + 4}px`;
+
+        fullscreenBtn.addEventListener('click', () => {
+            const clone = mermaidDiv.cloneNode(true);
+            modalContent.innerHTML = '';
+            modalContent.appendChild(clone);
+
+            const svg = clone.querySelector('svg');
+            if (svg) {
+                svg.removeAttribute('width');
+                svg.removeAttribute('height');
+                svg.style.width = '100%';
+                svg.style.height = 'auto';
+                svg.style.maxWidth = '100%';
+                svg.style.display = 'block';
+            }
+
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        });
+
+        container.appendChild(fullscreenBtn);
+        allButtons.push(fullscreenBtn);
+    });
+
+    // Update theme classes when theme changes
+    const updateTheme = () => {
+        const dark = isDarkTheme();
+        allButtons.forEach(btn => {
+            if (dark) {
+                btn.classList.add('dark-theme');
+            } else {
+                btn.classList.remove('dark-theme');
+            }
+        });
+        if (dark) {
+            modal.classList.add('dark-theme');
+            modalContent.classList.add('dark-theme');
+            closeBtn.classList.add('dark-theme');
+        } else {
+            modal.classList.remove('dark-theme');
+            modalContent.classList.remove('dark-theme');
+            closeBtn.classList.remove('dark-theme');
+        }
+    };
+
+    // Watch for theme changes
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme']
+    });
+    observer.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'style']
+    });
+};
+
+window.addEventListener("load", initFullscreen);
+</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Implementation Architecture" href="implementation.html" />
+    <link rel="prev" title="OCH Architecture Documentation" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  <div class="document">
+    
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">OCH Architecture</a></h1>
+
+
+
+<p class="blurb">OCH architecture and implementation reference</p>
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Architecture</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">OCH System Architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#executive-summary">Executive Summary</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#top-level-structure">Top-Level Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#subsystem-responsibilities">Subsystem Responsibilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#connectivity-model">Connectivity Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#addressing-model">Addressing Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#clock-and-reset-architecture">Clock and Reset Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#security-architecture">Security Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#functional-safety">Functional Safety</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#architecture-gaps-and-assumptions">Architecture Gaps and Assumptions</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="implementation.html">Implementation Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="integration.html">Integration Guide</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Project Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="verification.html">Verification and Validation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="roadmap.html">Roadmap and Open Items</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">OCH Architecture Documentation</a></li>
+      <li>Next: <a href="implementation.html" title="next chapter">Implementation Architecture</a></li>
+  </ul></li>
+</ul>
+</div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="och-system-architecture">
+<h1>OCH System Architecture<a class="headerlink" href="#och-system-architecture" title="Link to this heading">¶</a></h1>
+<section id="executive-summary">
+<h2>Executive Summary<a class="headerlink" href="#executive-summary" title="Link to this heading">¶</a></h2>
+<p>OCH, also referred to in the source tree as OCAH, is a reusable chiplet
+management harness for OCA-style systems. Its purpose is to provide the
+non-differentiating infrastructure that every chiplet needs: secure boot,
+debug and test access, reset and power orchestration, platform firmware,
+telemetry, lifecycle control, and attachment to the system-management network.</p>
+<p>The current implementation is organized around the <strong>System Management Unit
+(SMU)</strong>. The SMU integrates three peer subsystems:</p>
+<ul class="simple">
+<li><p><strong>SMC</strong>: System Management Controller for platform orchestration.</p></li>
+<li><p><strong>SEP</strong>: Secure Enclave Processor for root-of-trust and security services.</p></li>
+<li><p><strong>DTP</strong>: Debug and Test Port for JTAG, iJTAG, boundary scan, and debug access.</p></li>
+</ul>
+<p>The design intentionally separates reusable logic from adopter-specific
+technology macros. PLLs, eFuse macros, SRAM and ROM macros, TRNG sources,
+GPIO pads, SPI pads, padring wrappers, and vendor DFT cells are connected
+through integration shims instead of being hard-coded into the reusable core.</p>
+</section>
+<section id="top-level-structure">
+<h2>Top-Level Structure<a class="headerlink" href="#top-level-structure" title="Link to this heading">¶</a></h2>
+<pre  class="mermaid">
+        flowchart TB
+    Wrapper[&quot;smu_wrapper.sv&lt;br/&gt;Pads, macros, customer integration&quot;]
+    SMU[&quot;smu.sv&lt;br/&gt;Reusable OCH integration top&quot;]
+    SMCShim[&quot;smc_ip_integration.sv&lt;br/&gt;PLL, PVT, GPIO, eFuse, memory shims&quot;]
+    SEPShim[&quot;sep_ip_integration.sv&lt;br/&gt;SEP memory, SPI, TRNG shims&quot;]
+
+    DTP[&quot;DTP&lt;br/&gt;JTAG / iJTAG / cross-trigger&quot;]
+    SMC[&quot;SMC&lt;br/&gt;Rocket management CPU + fabric + peripherals&quot;]
+    SEP[&quot;SEP&lt;br/&gt;VeeR secure enclave + crypto&quot;]
+    XBAR[&quot;SMU AXI crossbar&lt;br/&gt;SEP, SMC, external SMN routing&quot;]
+    SMN[&quot;External SMN / chiplet fabric&quot;]
+
+    Wrapper --&gt; SMU
+    Wrapper --&gt; SMCShim
+    Wrapper --&gt; SEPShim
+    SMU --&gt; DTP
+    SMU --&gt; SMC
+    SMU --&gt; SEP
+    SMU --&gt; XBAR
+    XBAR &lt;--&gt; SMN
+    SMCShim --&gt; SMC
+    SEPShim --&gt; SEP
+    </pre><p>The integration top is <code class="docutils literal notranslate"><span class="pre">hw/smu/rtl/smu.sv</span></code>; there is no separate <code class="docutils literal notranslate"><span class="pre">hw/top</span></code>
+directory in the inspected tree. <code class="docutils literal notranslate"><span class="pre">smu_wrapper.sv</span></code> is the adopter-facing wrapper
+that demonstrates how macros and pads attach to the reusable SMU core.</p>
+</section>
+<section id="subsystem-responsibilities">
+<h2>Subsystem Responsibilities<a class="headerlink" href="#subsystem-responsibilities" title="Link to this heading">¶</a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Subsystem</p></th>
+<th class="head"><p>Primary responsibility</p></th>
+<th class="head"><p>Implementation focus</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>SMU</p></td>
+<td><p>Chiplet management hub</p></td>
+<td><p>Composes SMC, SEP, DTP, and the SMU AXI crossbar</p></td>
+</tr>
+<tr class="row-odd"><td><p>SMC</p></td>
+<td><p>Platform orchestration</p></td>
+<td><p>Boot control, reset, power, clocks, DMA, telemetry, peripheral management</p></td>
+</tr>
+<tr class="row-even"><td><p>SEP</p></td>
+<td><p>Security root</p></td>
+<td><p>Secure boot, lifecycle, crypto, attestation, key management</p></td>
+</tr>
+<tr class="row-odd"><td><p>DTP</p></td>
+<td><p>Debug and test</p></td>
+<td><p>JTAG, iJTAG, STAP/PTAP topology, JTAG-to-AXI, cross-trigger</p></td>
+</tr>
+<tr class="row-even"><td><p>SMN</p></td>
+<td><p>Management network</p></td>
+<td><p>External system-management-network attachment; detailed SMN docs are still placeholders</p></td>
+</tr>
+<tr class="row-odd"><td><p>AoU</p></td>
+<td><p>AXI-over-UCIe bridge</p></td>
+<td><p>Planned D2D path; current docs are placeholders</p></td>
+</tr>
+<tr class="row-even"><td><p>SMO</p></td>
+<td><p>Safety monitor</p></td>
+<td><p>External fault reaction agent for FuSa flows</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="connectivity-model">
+<h2>Connectivity Model<a class="headerlink" href="#connectivity-model" title="Link to this heading">¶</a></h2>
+<pre  class="mermaid">
+        flowchart LR
+    SEPOut[&quot;SEP outbound AXI&quot;]
+    SMCOut[&quot;SMC outbound AXI&quot;]
+    ExtIn[&quot;External SMN inbound&quot;]
+    XBAR[&quot;SMU AXI crossbar&lt;br/&gt;3x3 non-reflexive routing&quot;]
+    SEPIn[&quot;SEP inbound AXI&quot;]
+    SMCIn[&quot;SMC inbound AXI&quot;]
+    ExtOut[&quot;External SMN outbound&quot;]
+
+    SEPOut --&gt; XBAR
+    SMCOut --&gt; XBAR
+    ExtIn --&gt; XBAR
+    XBAR --&gt; SEPIn
+    XBAR --&gt; SMCIn
+    XBAR --&gt; ExtOut
+    </pre><p>The SMU crossbar provides non-reflexive connectivity between SEP, SMC, and
+external SMN paths. SEP and SMC target apertures are runtime-programmable. The
+external outbound window is a static catch-all region beginning at
+<code class="docutils literal notranslate"><span class="pre">0x0000_8000_0000</span></code>.</p>
+</section>
+<section id="addressing-model">
+<h2>Addressing Model<a class="headerlink" href="#addressing-model" title="Link to this heading">¶</a></h2>
+<p>OCH uses local subsystem views plus programmable global views.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Region</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>SMC local alias</p></td>
+<td><p>Fixed <code class="docutils literal notranslate"><span class="pre">LOCAL_BASE</span> <span class="pre">=</span> <span class="pre">0xC000_0000</span></code>, covering the SMC 32 MB local aperture</p></td>
+</tr>
+<tr class="row-odd"><td><p>SMC global aperture</p></td>
+<td><p>Programmed through <code class="docutils literal notranslate"><span class="pre">GLOBAL_BASE</span></code> and <code class="docutils literal notranslate"><span class="pre">REGION_SIZE</span></code> before outbound system traffic</p></td>
+</tr>
+<tr class="row-even"><td><p>SEP local space</p></td>
+<td><p>32-bit SEP map with local, SMC, SMU, AXI extension, and CPU TCM regions</p></td>
+</tr>
+<tr class="row-odd"><td><p>SMU external window</p></td>
+<td><p>Static external outbound region from <code class="docutils literal notranslate"><span class="pre">0x0000_8000_0000</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>The current source documentation has strong SMC and SEP memory maps, but the
+top-level OCH memory map is still incomplete. A production integration should
+close that gap before treating addresses as a final SoC contract.</p>
+</section>
+<section id="clock-and-reset-architecture">
+<h2>Clock and Reset Architecture<a class="headerlink" href="#clock-and-reset-architecture" title="Link to this heading">¶</a></h2>
+<p>OCH has multiple functional clock domains: SMU/SMC/SEP core, always-on
+reference, peripheral, telemetry, SEP watchdog, JTAG TCK, and asynchronous
+entropy sampling. Reset is hierarchical: cold reset enters the SMC reset unit,
+then domain-specific resets are synchronized and released in staged order.</p>
+<pre  class="mermaid">
+        sequenceDiagram
+    participant Integrator
+    participant SMC as SMC Reset Unit
+    participant SEP as SEP
+    participant DTP as DTP
+    participant Subsystems as Managed Subsystems
+
+    Integrator-&gt;&gt;SMC: Assert and release rst_cold_ni
+    SMC-&gt;&gt;SMC: Sense fuses and sample straps
+    SMC-&gt;&gt;Subsystems: Request memory repair if enabled
+    SMC-&gt;&gt;Subsystems: Auto-zero SRAM if enabled
+    SMC-&gt;&gt;SMC: Start SMC firmware from ROM
+    SMC-&gt;&gt;SEP: Release SEP after fuse sense
+    SMC-&gt;&gt;Subsystems: Release reset and isolation per policy
+    DTP--&gt;&gt;SMC: Optional JTAG reset override paths
+    </pre></section>
+<section id="security-architecture">
+<h2>Security Architecture<a class="headerlink" href="#security-architecture" title="Link to this heading">¶</a></h2>
+<p>The SEP is the security root. It contains a VeeR EL2 secure processor,
+OpenTitan-derived crypto blocks, lifecycle control, key management, entropy
+and DRBG infrastructure, DMA, watchdog, and secure boot firmware. Debug access
+is lifecycle-gated. Secure boot follows a BL0-to-BL1 chain with public-key
+verification and lifecycle-dependent policy.</p>
+<p>Security mechanisms visible in the source and docs include:</p>
+<ul class="simple">
+<li><p>Dedicated lifecycle states and demotion controls.</p></li>
+<li><p>eFuse shadowing and feature-disable vectors.</p></li>
+<li><p>Traffic filters and address remapping at management-fabric boundaries.</p></li>
+<li><p>Crypto alert aggregation.</p></li>
+<li><p>Separate key bus for key-manager integration.</p></li>
+<li><p>Debug access conditioned on lifecycle and security straps.</p></li>
+</ul>
+</section>
+<section id="functional-safety">
+<h2>Functional Safety<a class="headerlink" href="#functional-safety" title="Link to this heading">¶</a></h2>
+<p>OCH targets safety-oriented integrations where an external Safety Monitor
+(SMO) reacts to fault signals. The documentation identifies safety mechanisms
+such as ECC, parity, watchdogs, reset isolation, timeout handling, DCLS-style
+CPU options, and per-subsystem fault reporting. The safety monitor is external
+to the reusable harness.</p>
+</section>
+<section id="architecture-gaps-and-assumptions">
+<h2>Architecture Gaps and Assumptions<a class="headerlink" href="#architecture-gaps-and-assumptions" title="Link to this heading">¶</a></h2>
+<p>The current OCH tree is active work. The published architecture should be read
+as an implementation-oriented snapshot, not a frozen product specification.</p>
+<ul class="simple">
+<li><p>The top-level OCH memory map is referenced but not complete in the local docs.</p></li>
+<li><p>SMN and AoU chapters are placeholders.</p></li>
+<li><p>Several SEP interrupt and DMI paths are tied off or marked TODO in the SMU.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hw/periph/periph.sv</span></code> is a stub; peripherals are integrated through SMC
+wrappers and IP-integration paths.</p></li>
+<li><p>OCA compliance text is still under development.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+    <div class="clearer"></div>
+  </div>
+    <div class="footer">
+      &#169;2026, Tenstorrent.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 7.4.7</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 0.7.16</a>
+      
+      |
+      <a href="_sources/architecture.md.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
