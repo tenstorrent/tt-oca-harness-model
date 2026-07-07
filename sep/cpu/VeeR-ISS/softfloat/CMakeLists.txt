@@ -60,6 +60,16 @@ target_compile_options(softfloat PRIVATE
     -w
 )
 
+if(APPLE OR NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+  # Neither AppleClang nor GCC at -O0 reliably inline away the plain-"inline"
+  # softfloat_countLeadingZeros{16,32,64} helpers (see build/RISCV-GCC/platform.h),
+  # which leaves them with no out-of-line body and fails to link — most visibly
+  # in Debug (-O0) builds on either toolchain. Fall back to the portable
+  # generic implementations in that case; GCC Release (-O2/-O3) inlines every
+  # call site away and never needs this fallback.
+  target_compile_definitions(softfloat PRIVATE SOFTFLOAT_NO_BUILTIN_CLZ)
+endif()
+
 set_target_properties(softfloat PROPERTIES
     C_STANDARD 99
     ADDITIONAL_CLEAN_FILES "${_softfloat_clean_artifacts}"

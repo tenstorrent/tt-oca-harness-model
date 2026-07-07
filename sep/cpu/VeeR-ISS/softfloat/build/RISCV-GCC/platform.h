@@ -50,7 +50,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /*----------------------------------------------------------------------------
 *----------------------------------------------------------------------------*/
+// softfloat_countLeadingZeros{16,32,64} in opts-GCC.h are defined as plain
+// "inline" (no "static"/"extern"), so they only get an out-of-line, linkable
+// body when the compiler decides NOT to inline every call site — which never
+// happens reliably across compilers/optimization levels. GCC Release builds
+// (-O2/-O3) happen to inline every call away and never need the symbol; Clang
+// (and any Debug/-O0 build) does not, causing "undefined symbol" link errors.
+// Define SOFTFLOAT_NO_BUILTIN_CLZ to fall back to the always-out-of-line
+// generic implementations in source/s_countLeadingZeros{16,32,64}.c instead.
+#ifndef SOFTFLOAT_NO_BUILTIN_CLZ
 #define SOFTFLOAT_BUILTIN_CLZ 1
+#endif
 #include "opts-GCC.h"
 
 

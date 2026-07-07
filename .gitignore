@@ -42,6 +42,9 @@ coverage-report/
 # Local dependency paths (see smc/peripherals/uart/deps.env.example)
 smc/peripherals/uart/deps.env
 
+# Local dependency paths (see sep/peripherals/deps.env.example)
+sep/peripherals/deps.env
+
 # clangd / Microsoft C/C++ language-server caches — auto-generated, per-user.
 .cache/
 .ccls-cache/
@@ -281,6 +284,11 @@ smc/peripherals/uart/deps.env
 *.svg
 !smc/cpu_cluster/doc/
 !smc/cpu_cluster/doc/**
+
+# OCH GitHub Pages documentation is intentionally tracked under docs/och.
+!docs/
+!docs/**
+docs/och_source/_build/
 
 # ======================================================================================
 

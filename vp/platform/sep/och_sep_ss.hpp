@@ -73,8 +73,8 @@ public:
     // Targets: sram, rom, plic, clint, dma, uart, gpio, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
     //          keymgr_kpvlp, efuse, lc_ctrl, avbbus, entropy_src, edn,
-    //          sep_scratch, outbound_filter, smc_global  (PLIC is internal to VeeRISSTlm)
-    static constexpr unsigned int TARG_COUNT = 28;
+    //          sep_scratch, outbound_filter, smc_global, spi_mux  (PLIC is internal to VeeRISSTlm)
+    static constexpr unsigned int TARG_COUNT = 29;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -114,6 +114,7 @@ public:
         delete sep_scratch;
         delete outbound_filter;
         delete smc_global;
+        delete spi_mux;
         delete sep_status;
         delete spi_device;
         delete spi_controller;
@@ -121,9 +122,11 @@ public:
         delete rsu_module;
         delete clint;
         delete plic;
-        for (auto* p : bus->ports)
-            delete p;
-        delete bus;
+        if (bus) {
+            for (auto* p : bus->ports)
+                delete p;
+            delete bus;
+        }
         delete argsCSML;
     }
 
@@ -140,6 +143,7 @@ private:
     SEPMemory*                        sep_scratch        = nullptr;  // functional stub (RW)
     SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
     SEPMemory*                        smc_global         = nullptr;  // functional stub (RW)
+    SEPMemory*                        spi_mux            = nullptr;  // functional stub (RW) — OCH_SEP_SPI_MUX_CTRL
     SimVirtConsole*                   sim_out            = nullptr;  // SIM_OUT bootcode console (taps sep_scratch)
     SepStatusReport*                  sep_status         = nullptr;  // SEP_STATUS production status console (taps smc_global ring)
     stdout_device*                    stdout_dev         = nullptr;
@@ -494,6 +498,17 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
                               SMC_STRAPS_HI, sizeof(straps_hi));
     }
 
+    // Seed the SPI mux control register reset default. OCH_SEP_SPI_MUX_CTRL resets with
+    // cs_force_high=1 (bit 1), spi_sel=0 (bit 0) -> 0x00000002. The offset is window-local
+    // (the bus strips the 0x20000000 base). The driver overwrites this before relying on it;
+    // seeding just makes the pre-write read-back match silicon reset. load_data writes the
+    // backing store directly (not via b_transport), so no observation tap is involved.
+    {
+        const uint32_t spi_mux_reset = 0x00000002u;
+        spi_mux->load_data(reinterpret_cast<const char*>(&spi_mux_reset),
+                           0x0, sizeof(spi_mux_reset));
+    }
+
     unused_irq_signal.write(false);
     module_bind();
 }
@@ -511,6 +526,8 @@ inline void och_sep_ss::create_modules() {
     outbound_filter = new SEPMemory("outbound_filter", false);
     // SMC global window stub (SEP↔SMC AXI path); RW backing store, no SMC behavior.
     smc_global      = new SEPMemory("smc_global", false);
+    // SPI mux control register stub (OCH_SEP_SPI_MUX_CTRL); RW backing store, no mux behavior.
+    spi_mux         = new SEPMemory("spi_mux", false);
     sim_out         = new SimVirtConsole("sim_out");
     sep_status      = new SepStatusReport("sep_status");
     stdout_dev      = new stdout_device("stdout");
@@ -586,6 +603,7 @@ inline void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.sep_scratch_start_addr,     opt.sep_scratch_end_addr,     *sep_scratch);
         bus->ports[it++] = new PortMapping(opt.outbound_filter_start_addr, opt.outbound_filter_end_addr, *outbound_filter);
         bus->ports[it++] = new PortMapping(opt.smc_global_start_addr,      opt.smc_global_end_addr,      *smc_global);
+        bus->ports[it++] = new PortMapping(opt.spi_mux_start_addr,         opt.spi_mux_end_addr,         *spi_mux);
     }
     bus->mapping_complete();
 
@@ -631,6 +649,7 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(sep_scratch->tsock);
         bus->isocks[it++].bind(outbound_filter->tsock);
         bus->isocks[it++].bind(smc_global->tsock);
+        bus->isocks[it++].bind(spi_mux->tsock);
 
         // SIM_OUT: observe bootcode simput* writes to SEP_SCRATCH_COLD_SCRATCH_2 on the
         // sep_scratch stub and decode them to the console with a SIM_OUT header. The bus
@@ -871,4 +890,13 @@ inline void och_sep_ss::start_of_simulation() {
               sep_efuse->get_chiplet_uid() + 8,
               otp.chiplet_uid);
     keymgr->set_otp_data(otp);
+
+    // Backdoor-load the staged SPI flash image so the controller's command/FIFO reads see the
+    // real manifest+payload images instead of erased 0xFF. The model opens data/flash_memory.bin
+    // relative to the working directory, which is the directory of the .ini passed to sep-vp
+    // (sep-vp chdir's there at startup); the harness generates its ini and stages the image into
+    // the per-run directory. When nothing is staged this is a no-op that logs "... not found" and
+    // leaves the flash erased, so existing tests are unaffected. start_of_simulation runs after
+    // elaboration/binding and before the first transaction, so the first read sees populated flash.
+    spi_device->get_model()->load_memory_from_file();
 }
