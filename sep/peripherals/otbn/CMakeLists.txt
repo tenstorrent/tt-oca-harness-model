@@ -85,7 +85,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG} -Werror -Wno-unused-function")
+  # -Wno-overloaded-virtual: Clang's -Wall (unlike GCC's) enables
+  # -Woverloaded-virtual, which fires on CCI's cci_param_typed<T>
+  # register_*_callback() overload set (typed overloads intentionally
+  # coexist with the untyped virtuals from cci_param_untyped) - upstream
+  # CCI API design, not an application bug.
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG} -Werror -Wno-unused-function -Wno-overloaded-virtual")
   add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
   message(STATUS "OTBN: Release build - errors only, optimized")
 endif()

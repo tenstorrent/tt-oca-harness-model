@@ -60,6 +60,14 @@ target_compile_options(softfloat PRIVATE
     -w
 )
 
+if(APPLE)
+  # AppleClang does not reliably inline away the plain-"inline"
+  # softfloat_countLeadingZeros{16,32,64} helpers (see build/RISCV-GCC/platform.h),
+  # which leaves them with no out-of-line body and fails to link — most visibly
+  # in Debug (-O0) builds. Fall back to the portable generic implementations.
+  target_compile_definitions(softfloat PRIVATE SOFTFLOAT_NO_BUILTIN_CLZ)
+endif()
+
 set_target_properties(softfloat PROPERTIES
     C_STANDARD 99
     ADDITIONAL_CLEAN_FILES "${_softfloat_clean_artifacts}"

@@ -98,9 +98,13 @@ fi
 if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
     echo ">> Configuring (${BUILD_TYPE}) in ${BUILD_DIR}"
     # shellcheck disable=SC2086
+    # No -DSMC_CXX_STANDARD override here: CMakeLists.txt calls
+    # smc_detect_systemc_cxx_std() to match whatever standard the linked
+    # SystemC was built with (e.g. C++17 on macOS/Homebrew vs C++20 on the
+    # reference Linux toolchain). Hard-coding 20 here breaks any C++17
+    # SystemC install with an undefined sc_api_version_*_cxx202002L symbol.
     cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
           -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-          -DSMC_CXX_STANDARD=20 \
           ${CMAKE_EXTRA}
 fi
 
