@@ -122,9 +122,11 @@ public:
         delete rsu_module;
         delete clint;
         delete plic;
-        for (auto* p : bus->ports)
-            delete p;
-        delete bus;
+        if (bus) {
+            for (auto* p : bus->ports)
+                delete p;
+            delete bus;
+        }
         delete argsCSML;
     }
 
