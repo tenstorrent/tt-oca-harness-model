@@ -87,6 +87,13 @@ class BasicOptions : public Args {
         addr_t smc_global_start_addr      = 0x40000000;  // SEP_SMC_GLOBAL_BASE
         addr_t smc_global_end_addr        = 0x401FFFFF;  // 2 MiB (regs + SMC SRAM)
 
+        // OCH_SEP_SPI_MUX_CTRL window. Functional RW stub only: the VP has a single
+        // hard-wired OpenTitan flash leg, so this just backs the SPI driver's spi_sel /
+        // cs_force_high writes so they don't fault. It does NOT model leg selection or
+        // forced chip-select — that behavior is validated in RTL-level (UVM) verification.
+        addr_t spi_mux_start_addr         = 0x20000000;  // OCH_SEP_SPI_MUX_CTRL base
+        addr_t spi_mux_end_addr           = 0x20000FFF;  // 4 KiB (single ctrl reg; clear of 0x20002000)
+
         int uartTcpPort = 8888;
 
         addr_t rom_size  = rom_end_addr - rom_start_addr + 1;
