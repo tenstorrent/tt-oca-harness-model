@@ -533,7 +533,7 @@ The following IPs are **not modeled** in the VP. Tests that exercise them will f
 - `PIC` (Platform Interrupt Controller)
 - `sep_cpu_ctrl`, `sep_reset_ctrl`
 - `local_master_alias_remap_ctrl`
-- `och_sep_cdns_spi_ctrl`, `och_sep_spi_mux_ctrl`
+- `och_sep_cdns_spi_ctrl` (the Cadence SPI leg; the OpenTitan `och_sep_spi_mux_ctrl` is now a functional RW stub — see "Functional stubs" below)
 
 ### Simulation aids (no hardware equivalent)
 
@@ -556,6 +556,27 @@ The following IPs are **not modeled** in the VP. Tests that exercise them will f
   the ring or advances the consumer (`tail`) pointer, so it does not change firmware-observable
   behavior. Disable via `och_sep_ss1.sep_status.enable : false` (e.g. once an SMC-emulation
   model consumes the ring itself).
+
+- **SPI flash image backdoor-load** (`spi_flash` model, called from `start_of_simulation`): a
+  simulation-only way to preload the SPI NOR flash model's contents. The VP loads a staged image
+  from `data/flash_memory.bin` (relative to the run directory) so controller reads return the
+  real manifest+payload images (two software banks) instead of erased `0xFF`. On silicon the
+  flash is programmed by other means; this just stages that content for a run. When no image is
+  staged it is a no-op that logs a "... not found — using blank (0xFF) memory" line and leaves
+  the flash erased, so tests that stage nothing are unaffected.
+
+### Functional stubs (simplified models of real hardware)
+
+The hardware here **does** exist; the VP models the register interface but simplifies the
+behavior behind it.
+
+- **SPI mux control register stub** (`och_sep_ss.hpp`, backed by `sep_memory`): `OCH_SEP_SPI_MUX_CTRL`
+  (`0x20000000`) is a real silicon register — the OpenTitan SPI driver's first action is a
+  mux-select write to it. The VP maps it as a functional RW stub so the write does not fault, and
+  it reads back the silicon reset default (`0x00000002`, `cs_force_high=1`) before any write. It
+  stores and returns values only — it does **not** model SPI leg selection or forced chip-select,
+  because the VP has a single hard-wired OpenTitan flash leg. Real mux/chip-select behavior is
+  validated in RTL-level (UVM) verification.
 
 ### Tests added by Vayavya
 
