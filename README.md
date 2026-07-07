@@ -1,5 +1,11 @@
 # tt-oca-sim — Open Chiplet Atlas Virtual Platform
 
+## Published Documentation
+
+- **OCH Architecture and Implementation**: https://cuddly-barnacle-62pjzl3.pages.github.io/och/
+- Source lives under `docs/och_source/`; published HTML lives under `docs/och/`.
+- Rebuild locally with `docs/build_och_docs.sh`.
+
 ## What is Open Chiplet Atlas?
 
 **Open Chiplet Atlas (OCA)** is Tenstorrent's chiplet-based System-in-Package (SiP)
