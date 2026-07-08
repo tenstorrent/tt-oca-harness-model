@@ -420,12 +420,27 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     // The handshake_monitor_thread notifies m_transfer_start_event on the first
     // enabled rising edge, so simply defer here. In non-handshake
     // (memory-to-memory) mode the source is always ready, so start immediately.
-    bool hardware_handshake_enable = (value & (1U << 4)) != 0; // Bit 4
+    const bool hardware_handshake_enable = (value & (1U << 4)) != 0; // Bit 4
     if (!hardware_handshake_enable) {
       m_transfer_start_event.notify(SC_ZERO_TIME);
-    CSML_INFO(2, logger) << "Transfer engine triggered via m_transfer_start_event" << std::endl;
+      CSML_INFO(2, logger) << "Transfer engine triggered via m_transfer_start_event" << std::endl;
     } else {
-    CSML_INFO(2, logger) << "Handshake mode: deferring first chunk until first watermark trigger" << std::endl;
+      // Triggers are level-sensitive: if an enabled trigger is already asserted at arm time,
+      // start immediately (otherwise wait for handshake_monitor_thread's rising edge).
+      const uint32_t enable_mask = static_cast<uint32_t>(HANDSHAKE_INTR_ENABLE) & 0x7FF;
+      bool already_high = false;
+      for (int i = 0; i < 11; i++) {
+        if ((enable_mask & (1U << i)) && lsio_trigger[i].read()) {
+          already_high = true;
+          break;
+        }
+      }
+      if (already_high) {
+        m_transfer_start_event.notify(SC_ZERO_TIME);
+        CSML_INFO(2, logger) << "Handshake mode: trigger already HIGH on arm; starting first chunk immediately" << std::endl;
+      } else {
+        CSML_INFO(2, logger) << "Handshake mode: deferring first chunk until first watermark trigger" << std::endl;
+      }
     }
   }
 
