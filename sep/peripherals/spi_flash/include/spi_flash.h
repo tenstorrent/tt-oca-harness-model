@@ -28,8 +28,12 @@
  * csaat=false.
  *
  * This wrapper accumulates all TX bytes in m_tx_accum across csaat=true
- * segments.  When csaat=false it parses the accumulated bytes (opcode +
- * optional address + optional write data) and dispatches to the model.
+ * segments.  spi_transaction() then classifies each segment and routes it:
+ *   - a memory-read RX segment is served immediately from the running read
+ *     address (reads stream data on every RX segment, so a chained multi-segment
+ *     read is served in order rather than collapsing to its final segment);
+ *   - any other command accumulates until csaat=false, then parses the bytes
+ *     (opcode + optional address + optional write data) and dispatches once.
  *
  * LT model: all operations complete instantly (sc_time = SC_ZERO_TIME).
  */
@@ -126,6 +130,15 @@ private:
     spi_flash_model      m_model;      ///< Pure-C++ flash behaviour
     std::vector<uint8_t> m_tx_accum;   ///< TX byte accumulator (across CSAAT segments)
 
+    // Streaming-read state. A memory read is framed as one opcode+address TX
+    // segment followed by one or more CSAAT-chained RX segments, each served in
+    // order from an advancing address. Because the RX segments add no TX bytes,
+    // the accumulated header (hence the base address) is stable for the whole
+    // read, so a single "bytes served so far" counter is all the state needed:
+    // each segment reads from base + m_read_bytes. Reset to 0 when CS is released
+    // (or on rst_ni), readying the accumulator for the next command.
+    uint32_t m_read_bytes = 0;         ///< Bytes already served in the in-progress read
+
     // ----------------------------------------------------------------
     // SystemC process
     // ----------------------------------------------------------------
@@ -143,5 +156,31 @@ private:
      *         0 for no-address opcodes (control / suspend / resume)
      */
     int addr_bytes_for_opcode(uint8_t opcode) const;
+
+    /**
+     * @brief True if @p opcode is a memory-read opcode that streams data on every
+     *        RX segment (READ / fast / dual / quad / 4-byte / SFDP). READ_STATUS is
+     *        deliberately excluded — it dispatches once via dispatch_command().
+     */
+    bool is_memory_read_opcode(uint8_t opcode) const;
+
+    /** Parse the big-endian address that follows the opcode in m_tx_accum. */
+    uint32_t parse_address(uint8_t opcode) const;
+
+    /** Copy up to @p len bytes of read data back to the caller (no-op if null). */
+    void copy_rx(uint8_t* rx_data, const std::vector<uint8_t>& rx_vec, uint32_t len) const;
+
+    /**
+     * @brief Serve one RX segment of a memory read from the running address
+     *        (base + bytes already served), advancing the counter. Resets the
+     *        read state and clears the accumulator on the final (csaat=0) segment.
+     */
+    bool serve_read_segment(const spi_segment_t& segment, uint8_t* rx_data);
+
+    /**
+     * @brief Dispatch a completed non-streaming command (write / erase / control /
+     *        status, or a bare RX with no opcode) once, from the accumulated bytes.
+     */
+    bool dispatch_command(const spi_segment_t& segment, uint8_t* rx_data);
 };
 

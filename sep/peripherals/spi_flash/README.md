@@ -32,6 +32,10 @@ class spi_flash : public sc_module, public spi_if
 | `spi_target` | `sc_export<spi_if>` | SPI transaction target (bound by spi_controller) |
 | `rst_ni` | `sc_in<bool>` | Active-low reset — clears WEL, preserves memory |
 
+## Behavior notes
+
+**Multi-segment (CSAAT-chained) reads.** A read command is framed as one opcode+address TX segment followed by one or more RX segments; when the driver keeps CS asserted (`csaat=1`) across several RX segments, the model serves each RX segment's data from a running address that advances by each segment's length. (Previously data was served only on the final `csaat=0` segment, which truncated multi-segment reads.) A bare RX segment with no preceding opcode+address returns `0xFF` (idle MISO).
+
 ## Building and Testing
 
 ```bash
