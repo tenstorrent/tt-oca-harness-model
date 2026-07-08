@@ -211,7 +211,7 @@ bool spi_flash::serve_read_segment(const spi_segment_t& segment, uint8_t* rx_dat
     m_read_bytes += segment.len;
 
     if (segment.csaat) {
-        return true;                  // more RX segments of this read follow
+        return ok;                    // more RX segments of this read follow
     }
     m_read_bytes = 0;                 // CS released — ready for the next command
     m_tx_accum.clear();
