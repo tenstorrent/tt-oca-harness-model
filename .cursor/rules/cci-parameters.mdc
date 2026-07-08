@@ -1,0 +1,88 @@
+---
+description: Expose SystemC model configuration via CCI (cci_param / csml_param) instead of ad-hoc structs or globals
+globs: **/*.cpp,**/*.h
+alwaysApply: false
+---
+
+# Configuration Parameters (SystemC CCI)
+
+Runtime configuration for any SystemC/TLM model in this repository must go through the
+**Accellera CCI 1.0** API (`cci::cci_param`), not ad-hoc globals, environment
+variables, or hand-rolled config structs alone. CCI gives every model the same
+broker-mediated, introspectable, preset-overridable parameter surface.
+
+## Scope
+
+- **Hand-written models** (any subsystem — SMC, SEP, VP, fabric, CPU cluster,
+  and future models): declare parameters as `cci::cci_param<T>` members.
+- **CSML-based SEP models**: use `csml_param<T>` from `csml_parameter.h` (a
+  thin CCI wrapper used by the CSML framework). Do not add parallel raw
+  `cci_param` members for the same knob.
+- A legacy `*_cfg` struct may remain for constructor defaults, but new
+  tunables must also be exposed as CCI parameters (Phase-1 migration pattern
+  in `smc/cpu_cluster/doc/04_CCI_Integration_Guide.md`).
+
+`#include <cci_configuration>` and link the target against `SystemC::cci`.
+
+## Declaring parameters
+
+```cpp
+// In the module class — declare BEFORE ports / sized members / FIFOs so
+// member-init order resolves presets before sizing.
+cci::cci_param<unsigned, cci::CCI_IMMUTABLE_PARAM> num_harts_p_;
+cci::cci_param<double>                             access_delay_ns_p_;
+
+// In the constructor initializer list — short relative name, default, description.
+num_harts_p_("num_harts", cfg.num_harts,
+             "Number of harts (1..4095). Sizes msip_o[] / mtip_o[].")
+, access_delay_ns_p_("access_delay_ns", 2.0,
+                    "TLM register-access annotated delay (ns). Mutable at run-time.")
+```
+
+Conventions:
+
+- Member suffix `_p_`; CCI name is the short leaf (`"num_harts"`, not the full
+  hierarchical path — CCI prepends the module hierarchy automatically).
+- **Immutable** (`cci::CCI_IMMUTABLE_PARAM`) for sizing/structural knobs (array
+  depths, port counts, clock periods) that cannot change after elaboration.
+- **Mutable** (plain `cci::cci_param<T>`) for run-time tunables (`access_delay_ns`,
+  `quantum_ns`, feature flags). Re-read `.get_value()` when used (e.g. each
+  `b_transport`), do not cache once at construction.
+- Add `add_metadata()` for timing params (`"unit"` → `"nanoseconds"`,
+  `"tlm_phase"` → `"annotated_delay"`).
+
+## Broker setup (platforms and testbenches)
+
+Register the global broker **before any** `cci_param` is constructed:
+
+```cpp
+#include <cci/utils/consuming_broker.h>
+
+int sc_main(int, char**) {
+    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+
+    cci::cci_originator platform_cfg("platform_cfg");
+    auto broker = cci::cci_get_global_broker(platform_cfg);
+    broker.set_preset_cci_value("tb.plic.num_sources", cci::cci_value(64u));
+
+    tb top("tb");   // DUT picks up presets during construction
+    sc_core::sc_start();
+}
+```
+
+- Preset keys use the **full hierarchical name** (`"tb.plic.num_sources"`).
+- Inside the SystemC hierarchy, use `cci::cci_get_broker()` (no originator).
+- Testbench sizing params that mirror the DUT must receive matching presets so
+  `sc_vector` widths stay consistent (see `plic_tb.cpp`).
+
+## Do not
+
+- Introduce new model knobs as bare constructor arguments, `static` globals,
+  or `getenv()` reads when CCI is available.
+- Mark sizing parameters mutable — changing them post-elaboration breaks port
+  bindings and scheduled events.
+- Access another module's `cci_param` member directly; use broker handles
+  (`broker.get_param_handle("module.param")`).
+
+See `smc/cpu_cluster/doc/04_CCI_Integration_Guide.md` for broker concepts,
+callbacks, introspection, and migration from legacy `config` structs.

@@ -9,6 +9,8 @@
 
 #include "plic.h"
 
+#include "sim_log.h"
+
 #include <algorithm>
 #include <cstring>
 #include <iomanip>
@@ -101,16 +103,14 @@ plic::plic(sc_core::sc_module_name name, plic_cfg cfg)
 
     // Report the resolved CCI configuration so every simulation run shows
     // whether values came from a preset (tool/TB override) or the default.
-    {
-        std::string msg = "CCI config resolved:";
-        msg += "  num_sources="  + std::to_string(cfg_.num_sources)
-             + (num_sources_p_.is_preset_value()     ? " [preset]"  : " [default]");
-        msg += "  num_contexts=" + std::to_string(cfg_.num_contexts)
-             + (num_contexts_p_.is_preset_value()    ? " [preset]"  : " [default]");
-        msg += "  access_delay_ns=" + std::to_string(access_delay_ns_p_.get_value())
-             + (access_delay_ns_p_.is_preset_value() ? " [preset]"  : " [default]");
-        SC_REPORT_INFO(name, msg.c_str());
-    }
+    SIM_LOG_INFO(this,
+        "CCI config resolved:"
+        << "  num_sources=" << cfg_.num_sources
+        << (num_sources_p_.is_preset_value()     ? " [preset]"  : " [default]")
+        << "  num_contexts=" << cfg_.num_contexts
+        << (num_contexts_p_.is_preset_value()    ? " [preset]"  : " [default]")
+        << "  access_delay_ns=" << access_delay_ns_p_.get_value()
+        << (access_delay_ns_p_.is_preset_value() ? " [preset]"  : " [default]"));
 
     // Source IDs are 1-based; we keep index 0 allocated (always 0) so that
     // the address arithmetic `priority_[src]` is identical to the spec
@@ -577,14 +577,17 @@ void plic::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
         uint32_t v = 0;
         ok = reg_read(adr, v);
         if (ok) std::memcpy(buf, &v, 4);
+        SIM_LOG_TRACE(this, "read  off=0x" << std::hex << adr << " data=0x" << v);
     } else if (cmd == tlm::TLM_WRITE_COMMAND) {
         uint32_t v = 0;
         std::memcpy(&v, buf, 4);
         ok = reg_write(adr, v);
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << adr << " data=0x" << v);
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
+    if (!ok) SIM_LOG_DEBUG(this, "TLM decode miss at off=0x" << std::hex << adr);
 
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
     gp.set_response_status(ok ? tlm::TLM_OK_RESPONSE

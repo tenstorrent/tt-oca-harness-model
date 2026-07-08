@@ -95,6 +95,7 @@ add_library(smc_fabric STATIC
 target_include_directories(smc_fabric
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
         ${SMC_AXI_EXTENSION_DIR}
 )
 

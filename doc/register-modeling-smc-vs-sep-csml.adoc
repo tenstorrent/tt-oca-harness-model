@@ -1,0 +1,530 @@
+= Register File Modeling in SystemC/C++: SMC vs. SEP (CSML)
+:doctype: book
+:sectanchors:
+:sectlinks:
+:sectnums:
+:toc:
+:toclevels: 3
+:source-highlighter: highlight.js
+
+This document analyzes how memory-mapped register files are modeled in the
+SMC peripheral SystemC code (hand-written, e.g. `i3c_controller`,
+`reset_unit`) versus the SEP subsystem's CSML-based register modeling, and
+compares the two approaches: how registers are defined, how bit-field access
+is implemented, how read/write access restrictions are enforced, what helper
+functions exist, and the trade-offs of each.
+
+[[scope-and-sources]]
+== Scope and Sources
+
+* SMC examples: `smc/peripherals/i3c_controller/`, `smc/peripherals/reset_unit/`,
+  `smc/peripherals/uart/`, `smc/peripherals/plic/`, `smc/peripherals/clint/`.
+* SEP examples: `sep/peripherals/aes/`, `sep/peripherals/aon_timer/`,
+  `sep/peripherals/mailbox/`, `sep/peripherals/gpio/`, using the CSML library
+  (`sep/utils/csml`, submodule from `https://github.com/Vayavya-Labs/CSML.git`).
+* RTL ground truth referenced by both: PeakRDL `.rdl` sources under
+  `hw/smc/data/registers/rdl/` and `hw/sep/.../data/registers/rdl/` in
+  `tt-oca-hw`.
+
+[IMPORTANT]
+====
+In this project, **no CSML code generator is actually invoked**. Several
+SEP `*_register.h` files carry header comments such as "Generated from CSV
+specification using CSML generator tool," but that generator is an external
+Vayavya-Labs tool that is not vendored, wired into CMake, or run as part of
+this repository's build. In practice, both the SMC and SEP register files
+in this repo are **hand-authored C++** -- SMC as plain imperative
+`reg_read`/`reg_write` switches, and SEP as hand-written classes that follow
+the CSML template shape (`csml_reg`, `csml_bitfield`). This matters for the
+trade-off discussion below: SEP does not get "free" regeneration from a
+spec change any more than SMC does.
+====
+
+[[smc-approach]]
+== How SMC Register Files Are Built
+
+=== Generation
+
+There is no register code generator in `smc/`. Each peripheral's register
+map is transcribed by hand from the RTL PeakRDL `.rdl` source into a
+`*_cfg` struct of `static constexpr` offsets and reset values, documented in
+a header comment table. Example (I3C):
+
+[source,cpp]
+----
+struct i3c_controller_cfg {
+    static constexpr uint64_t HCI_VERSION            = 0x00;
+    static constexpr uint64_t HC_CONTROL             = 0x04;
+    static constexpr uint64_t CONTROLLER_DEVICE_ADDR = 0x08;
+    // ...
+    static constexpr uint64_t PIO_CONTROL            = 0xAC;
+};
+----
+
+=== Storage
+
+Registers are plain `uint32_t` fields in a per-instance state struct -- no
+typed register class:
+
+[source,cpp]
+----
+struct inst_state {
+    uint32_t hc_control             = i3c_controller_cfg::HC_CONTROL_RESET;
+    uint32_t controller_device_addr = 0;
+    uint32_t intr_status            = 0;
+    uint32_t pio_control            = i3c_controller_cfg::PIO_CONTROL_RESET;
+    // ...
+};
+----
+
+=== Bit-field access
+
+There is no shared bit-field framework. Each peripheral defines local named
+bit positions and masks in an anonymous/named namespace, and uses shifts and
+masks directly:
+
+[source,cpp]
+----
+namespace hc_control {
+constexpr unsigned BUS_ENABLE    = 31;
+constexpr unsigned MODE_SELECTOR = 6;   // read-only, always 1
+constexpr uint32_t WMASK = (1u << BUS_ENABLE) | (1u << RESUME) | (1u << ABORT) |
+                           (1u << HALT_ON_TO) | (1u << HOT_JOIN_CTRL) |
+                           (1u << I2C_DEV_PRES) | (1u << IBA_INCLUDE);
+}
+
+constexpr bool bit(uint32_t v, unsigned i) { return ((v >> i) & 1u) != 0; }
+----
+
+Reads mask off reserved/RO bits and OR in hardwired values; writes mask off
+non-writable bits before storing:
+
+[source,cpp]
+----
+// read
+data = (s.hc_control & hc_control::WMASK) | (1u << hc_control::MODE_SELECTOR);
+
+// write
+s.hc_control = data & hc_control::WMASK;
+----
+
+=== Read/write access restrictions
+
+Access control is entirely inline in the `reg_read()`/`reg_write()` switch
+statements -- there is no declarative mask table:
+
+[cols="1,3",options="header"]
+|===
+| Access type | SMC pattern
+
+| RO
+| Empty `case` in `reg_write`; value computed/stored on read.
+
+| WO
+| `reg_read` returns 0; `reg_write` applies the value.
+
+| RW
+| Direct assignment, usually `data & MASK`.
+
+| W1C
+| `status &= ~(data & W1C_MASK);`
+
+| woset (write-1-to-set, sticky)
+| `lock \|= data;`
+
+| Lock-gated RW
+| `wmask = ~lock; reg = (data & wmask) \| (reg & ~wmask);`
+
+| Self-clearing
+| Bit cleared immediately after the side effect is applied.
+
+| RAZ/WI hole
+| `default:` breaks (read as zero, write ignored).
+
+| Out-of-window / misaligned
+| `TLM_ADDRESS_ERROR_RESPONSE` / `TLM_BURST_ERROR_RESPONSE` from `b_transport`.
+|===
+
+Example -- W1C interrupt status (I3C):
+
+[source,cpp]
+----
+case i3c_controller_cfg::INTR_STATUS:
+    s.intr_status &= ~(data & hc_intr::W1C_MASK); break; // W1C
+----
+
+Example -- lock-gated configuration write (reset_unit):
+
+[source,cpp]
+----
+const uint32_t wmask = ~ss_config_lock_;
+ss_config_ = (data & wmask) | (ss_config_ & ~wmask);
+// ...
+case reset_unit_cfg::SS_CONFIG_LOCK:
+    ss_config_lock_ |= data; // woset: write-1-to-set, sticky
+----
+
+=== Helper functions
+
+No shared register library exists; helpers are re-implemented per peripheral:
+
+[cols="1,3",options="header"]
+|===
+| Helper | Role
+
+| `reg_read()` / `reg_write()`
+| Core offset decode (switch or region-based).
+
+| `b_transport()`
+| TLM front door: alignment/window checks, delay annotation.
+
+| `transport_dbg()` / `dbg_read()`
+| Back-door access, no delay, sometimes no side effects.
+
+| `bit(v, i)`
+| Single-bit test (duplicated per file).
+
+| `compute_*()`
+| Hardware-derived read-only values (e.g. `compute_present_state`).
+
+| `schedule_recompute()`
+| Defers output-port updates to an `SC_METHOD`.
+|===
+
+[[sep-csml-approach]]
+== How SEP Register Files Are Built (CSML)
+
+=== "Generation"
+
+SEP peripherals use the Vayavya **CSML** (Common System Modeling Library),
+vendored as the `sep/utils/csml` git submodule. Register headers
+(`*_register.h`) follow the shape that the external CSML Code Generator
+would emit (declarative masks, typed bit-field members), but -- as noted
+above -- **that generator is not run in this repository**. The headers are
+maintained by hand in the same style, sourced from CSV/RDL/hjson specs kept
+under each peripheral's `docs/` directory for reference.
+
+=== Storage and register definition
+
+Each register is a class template instantiated over a shared
+`csml_memory<N>` backing store, constructed with `(name, memory, offset,
+read_mask, write_mask, reset_value)`:
+
+[source,cpp]
+----
+template<unsigned int N>
+class ALERT_TEST_type : public csml_reg<N> {
+public:
+    ALERT_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      csml_reg<N>(reg_name, memory, offset, 0x0, 0xffffffff, 0x0),
+      recov_ctrl_update_err(reg_name + ".recov_ctrl_update_err", *this, 0, 1),
+      fatal_fault(reg_name + ".fatal_fault", *this, 1, 1),
+      reserved0(reg_name + ".reserved0", *this, 2, 30)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    csml_bitfield<N> recov_ctrl_update_err;
+    csml_bitfield<N> fatal_fault;
+    csml_bitfield<N> reserved0;
+};
+----
+
+Register arrays use `csml_reg_vector<T, N>` / `csml_reg_2D<T, R, C>`; a
+`*_base` class wires all register instances plus a `csml_memory<N>` to a
+`tlm_utils::simple_target_socket`.
+
+=== Bit-field access
+
+`csml_bitfield<N>` gives named, typed access into a parent register word,
+with implicit conversion and assignment operators that mask/shift/merge
+under the hood:
+
+[source,cpp]
+----
+uint32_t status = static_cast<uint32_t>(INTR_STATUS);  // whole register
+CTRL_SHADOWED.OPERATION = 0x1;                          // single field
+STATUS.IDLE = true;                                     // bitfield assign
+----
+
+=== Read/write access restrictions
+
+Two tiers:
+
+. **Framework level** -- `set_read_write_restrictions(memory)` (called in
+  every register constructor) enforces RO (`write_mask == 0`) and WO
+  (`read_mask == 0`) automatically, and merges writes as
+  `word = (value & write_mask) | (word & ~write_mask)`.
++
+[source,cpp]
+----
+// GPIO DATA_CTRL: RO bits appear in read_mask but not write_mask.
+DATA_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
+  csml_reg<N>(reg_name, memory, offset,
+              0x823F0031,  // read_mask (includes RO status bits)
+              0x003F0031,  // write_mask (RW fields only)
+              0x00000000),
+----
+
+. **Behavioral level** -- W1C, RW0C, shadow-register, and lock-gated
+  semantics are *not* covered by masks and must be implemented as explicit
+  callbacks registered on `csml_memory`, replacing the default handler for
+  that offset:
++
+[source,cpp]
+----
+std::function<bool(uint32_t)> cb_write_intr_state =
+    [this](uint32_t value) {
+        return this->handle_write_INTR_STATE(value, INTR_STATE.write_bit_mask);
+    };
+memory.register_write_callback(cb_write_intr_state, INTR_STATE.offset);
+
+bool aon_timer_ip::handle_write_INTR_STATE(uint32_t value, uint32_t write_mask)
+{
+    if (value & 0x1U) {                 // W1C bit 0
+        m_intr_state_wkup = false;
+        INTR_STATE.wkup_timer_expired = 0U;
+        m_ev_output_update.notify(SC_ZERO_TIME);
+    }
+    // ...
+}
+----
+
+=== Helper functions
+
+[cols="1,3",options="header"]
+|===
+| Helper | Role
+
+| `csml_memory<N>`
+| Backing store + callback dispatch + `b_transport`/`transport_dbg`.
+
+| `csml_reg<N>` / `csml_bitfield<N>`
+| Typed register/field with mask, reset, and operator overloads.
+
+| `csml_reg_vector`, `csml_reg_2D`
+| Register array / grid helpers.
+
+| `register_*_callback[_with_be]`
+| Override default transport per offset for behavioral semantics.
+
+| `set_read_write_restrictions()`
+| Declares RO/WO from `read_mask`/`write_mask`.
+
+| `csml_param<T>`, `load_config_file()`
+| CCI-backed parameters and INI config loading.
+|===
+
+[[comparison-table]]
+== Summary Comparison Table
+
+[cols="2,4,4",options="header"]
+|===
+| Aspect | SMC (hand-written) | SEP (CSML)
+
+| Register definition
+| Imperative `switch(offset)` + flat `uint32_t` state.
+| Typed `csml_reg`/`csml_bitfield` classes per register.
+
+| Generation
+| No generator; RDL transcribed by hand into `*_cfg` constants.
+| No generator run in this repo either; headers hand-authored in CSML's declarative shape.
+
+| Storage
+| Plain `uint32_t` members / arrays / FIFOs.
+| Word slots in a shared `csml_memory<N>` block.
+
+| TLM transport
+| Custom `b_transport()` per peripheral.
+| Delegated to `csml_memory::b_transport` (address decode + callback dispatch).
+
+| Bit-field access
+| Manual shift/mask, local `bit()` helper, per-file bit namespaces.
+| `csml_bitfield<N>` with mask/merge operators, named members.
+
+| RO / WO enforcement
+| Explicit empty `case` (RO) / read-returns-0 (WO) per register.
+| Declarative `read_mask`/`write_mask` + `set_read_write_restrictions()`.
+
+| W1C / RW0C / lock-gated / shadow semantics
+| Inline in `reg_write()` (e.g. `status &= ~(data & W1C_MASK)`).
+| Explicit `register_write_callback` overriding the default handler -- masks alone are not enough here either.
+
+| Register arrays
+| Indexed offsets inside a switch or address-range decode.
+| `csml_reg_vector<T,N>`, `csml_reg_2D<T,R,C>`.
+
+| Reusable helper library
+| None; `bit()`, `compute_*()` etc. duplicated per peripheral.
+| Yes; `csml_register.h`/`csml_memory` shared across all SEP IPs.
+
+| External dependency
+| None beyond SystemC/CCI.
+| `sep/utils/csml` submodule (Vayavya-Labs/CSML, external GitHub repo).
+
+| C++ standard risk
+| Repo controls the standard directly (C++20 per workspace policy).
+| CSML is a fixed external ABI/API; if the codebase needs C++23 features, that requires requesting an update from the external CSML maintainers, not just a local flag change.
+
+| API learning curve
+| Low -- everything is visible in one `.cpp` switch statement.
+| Higher -- behavior is split across generated-looking header, `*_base` wiring, and callback registration; overloaded operators and default-transport behavior are not obvious from the call site.
+
+| Risk of undiscovered bugs
+| Explicit but repetitive; a missed `case` is usually a visible RAZ/WI gap.
+| Implicit default read/write merge behavior and operator overloading can silently do the "wrong" thing if a callback is not registered or a mask is off by one bit; harder to spot in review.
+
+| Boilerplate
+| High and repetitive across peripherals (every IP re-derives RO/WO/W1C/RAZ-WI handling from scratch).
+| Framework absorbs plain RW/RO/WO boilerplate; W1C/shadow/lock callbacks still repeat similar patterns per IP.
+
+| Register interface change (add/rename/re-mask a field)
+| Edit `*_cfg` constants + `reg_read`/`reg_write` cases directly -- fully local to the repo.
+| Edit the hand-maintained `*_register.h` class in the same repo; if a *framework* API/behavior change is needed (not just a field), that touches the external CSML submodule.
+|===
+
+[[recommendations]]
+== Observations and Recommendations
+
+* **No active code generator is used for either subsystem's SystemC
+  register files today.** SEP's CSML-shaped headers and SMC's plain
+  structs are both maintained by hand against RTL RDL/CSV/hjson specs.
+  Any future register-interface change is a manual edit in both cases.
+
+* **Future register interface changes.** Because CSML is vendored as an
+  external submodule (`sep/utils/csml`, upstream
+  `Vayavya-Labs/CSML`), a change that needs a *new capability* in the
+  framework itself (a new access-restriction mode, a new bit-field
+  operator, etc.) requires filing a change request against that external
+  repository and waiting on/merging an upstream update, rather than being
+  fixable purely inside `tt-oca-sim`. SMC has no such external
+  dependency for its register logic.
+
+* **C++ standard upgrades.** If a future toolchain move (e.g. to C++23)
+  needs corresponding changes in CSML's templates/headers, that update
+  must be requested from and applied by the external CSML maintainers,
+  since `sep/utils/csml` is a separate repository outside this project's
+  direct control. SMC's hand-written register code has no such external
+  gate -- it only depends on SystemC/CCI, which are already tracked and
+  pinned by this project's own C++20 toolchain policy.
+
+* **API discoverability.** CSML's operator overloading
+  (`csml_bitfield::operator=`, implicit conversions, default
+  read/write merge behavior baked into `csml_reg`) makes it harder for a
+  new contributor to predict register behavior from the call site alone,
+  compared to SMC's fully explicit `switch`-based `reg_read`/`reg_write`.
+  This opacity increases the chance of **undiscovered bugs** -- e.g. a
+  register that silently keeps CSML's default merge-write behavior
+  because a callback was never registered for a semantic (W1C/RW0C) field,
+  or a `read_mask`/`write_mask` bit that is off by one and only shows up
+  as a subtle firmware-visible discrepancy rather than a build error.
+
+* **The repetitive boilerplate can be factored out without adopting an
+  external framework -- and has been.** The recurring RO/WO/W1C/woset/
+  lock-gated/RAZ-WI patterns and the duplicated `bit()` helper are small,
+  self-contained, and do not require CSML's class-per-register machinery to
+  share. `common/include/reg_access.h` (namespace `regmodel`) provides them
+  as width-generic free functions (`apply_w1c`, `apply_woset`,
+  `apply_lock_gated`, `apply_write_mask`, `bit`) plus a templated
+  `regmodel::Register<Word>` (aliases `Register8/16/32/64`) whose read/write
+  contract is enforced at construction the same way `csml_reg<N>`'s is, and
+  which optionally takes read/write callbacks so side-effect and W1C
+  registers can live in the model too -- all without the external
+  dependency. The library is deliberately **not** SMC-specific: it is
+  framework-free and width-generic, so SEP or any other hand-written model
+  can use it (SEP currently uses CSML instead). It keeps the fully
+  transparent, explicit-switch style for registers with genuinely complex
+  behavior (FIFO ports, HCI descriptors, banking) while removing the
+  copy-pasted mask-merge snippets and giving plain RO/WO/RW registers a
+  structural guarantee instead of a convention. `.cursor/rules/
+  register-access-helpers.mdc` makes using it the default for
+  AI-generated (and human-written) hand-written register code anywhere in
+  this repository, closing most of the propagation/consistency gap described
+  below without CSML's external-repo dependency, opacity, or C++-standard
+  coupling risks.
+
+[[csml-vs-ai-generated-boilerplate]]
+== What CSML Solves That AI-Generated Boilerplate Alone Does Not
+
+A natural question once an AI agent can generate correct RO/WO/W1C
+boilerplate on demand: what does adopting a framework like CSML actually
+buy over just generating that logic per peripheral? The honest answer is
+**not** "it saves typing" -- that argument is weak once generation is cheap.
+The real distinction is structural:
+
+[cols="1,3",options="header"]
+|===
+| Property | AI-generated (or hand-written) per-file boilerplate | Shared library (CSML, or an in-house equivalent)
+
+| What gets produced
+| N independent copies of the same logic, one per peripheral file.
+| One implementation, used by reference from every peripheral.
+
+| Bug-fix propagation
+| A fix found in one peripheral's `reg_write()` does not reach any other peripheral; each must be independently re-audited.
+| A fix in the shared engine (`csml_memory`/`csml_reg`, or an in-house equivalent) reaches every consumer on the next build/version bump.
+
+| Consistency across peripherals
+| Not guaranteed -- e.g. `i3c_controller`'s decode-miss is RAZ/WI, `uart`'s is an address error, in the same repository.
+| One policy, enforced identically everywhere the shared code is used.
+
+| Review surface
+| Every peripheral's full decode/mask/response-code logic must be re-verified from scratch.
+| Reviewed once in the shared library; per-peripheral review shrinks to "are the declared masks/callbacks correct."
+
+| Enforcement mechanism
+| Convention -- a future edit can silently drop a mask and nothing catches it except code review.
+| Structural for CSML (`csml_reg`'s constructor requires the contract); achievable in-house via a small typed wrapper (`regmodel::Register<Word>`) rather than free functions alone.
+|===
+
+Concrete evidence from this codebase: `entropy_src.cpp` documents that only
+8 of its 42 registers need custom behavioral callbacks -- the other 34 are
+served entirely by CSML's shared, already-exercised default transport with
+no additional code:
+
+[source,cpp]
+----
+ * The eight behavioural callbacks registered in the `entropy_src_ip`
+ * constructor override the default CSML storage callbacks for the seven
+ * write-side-effect registers and one read-side-effect register.  All 34
+ * remaining registers are served by CSML default callbacks with no
+ * additional code required here.
+----
+
+That 34-register footprint has been exercised across every SEP peripheral
+that uses plain RW/RO/WO/W1C registers -- a much larger validation surface
+than any single AI-generated file gets from one review pass.
+
+=== Closing the gap without CSML
+
+The propagation and consistency advantages above come from being a
+**shared library**, not from being **external**. An in-house,
+dependency-free equivalent gets the same properties while avoiding CSML's
+costs:
+
+* `common/include/reg_access.h` (namespace `regmodel`) is the shared
+  implementation -- one place to fix bugs and add new access patterns,
+  instead of N independent re-derivations. It is width-generic
+  (`Register<Word>` / `Register8/16/32/64`) and framework-free, so it is not
+  tied to SMC and can back any hand-written model.
+* `.cursor/rules/register-access-helpers.mdc` makes it the default path
+  for AI-generated register code in any hand-written model in this repository,
+  so consistency doesn't depend on every session/engineer remembering the
+  convention.
+* `regmodel::Register<Word>` gives plain RO/WO/RW registers the same
+  constructor-enforced contract as `csml_reg<N>` (and optional read/write
+  callbacks for side-effect/W1C registers), closing the one gap a rule alone
+  cannot close (a rule is a strong nudge; a type that cannot be misused
+  without deliberate effort is a guarantee).
+
+Two honest caveats:
+
+* A rule only governs sessions/tools that load it. It does not, by itself,
+  stop a hand-written PR or a differently-configured AI session from
+  reintroducing hand-rolled masking. Pairing it with a lightweight CI check
+  (e.g. flagging new `&= ~(data &`-style patterns outside
+  `reg_access.h` in hand-written model diffs) would make the
+  convention durable rather than best-effort.
+* `reg_access.h` starts with zero real-world exercise, versus CSML's
+  much larger existing footprint across ~18 SEP peripherals. That gap
+  closes only as more SMC peripherals adopt it and it accumulates its own
+  test coverage and usage history.

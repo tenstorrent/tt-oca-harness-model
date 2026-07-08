@@ -9,6 +9,8 @@
 
 #include "scratchpad_ram.h"
 
+#include "sim_log.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -159,12 +161,12 @@ scratchpad_ram::scratchpad_ram(sc_core::sc_module_name name,
     sensitive << rst_n_i;
     dont_initialize();
 
-    SC_REPORT_INFO(name,
-        ("scratchpad_ram instantiated: size_bytes=" + std::to_string(cfg_.size_bytes) +
-         ", init_file=\"" + cfg_.init_file + "\"" +
-         ", init_file_format=" + resolve_format(cfg_.init_file_format, cfg_.init_file) +
-         ", access_delay_ns=" + std::to_string(cfg_.access_delay_ns) +
-         ", ecc_enabled=" + (cfg_.ecc_enabled ? "true" : "false")).c_str());
+    SIM_LOG_INFO(this,
+        "scratchpad_ram instantiated: size_bytes=" << cfg_.size_bytes
+        << ", init_file=\"" << cfg_.init_file << "\""
+        << ", init_file_format=" << resolve_format(cfg_.init_file_format, cfg_.init_file)
+        << ", access_delay_ns=" << cfg_.access_delay_ns
+        << ", ecc_enabled=" << (cfg_.ecc_enabled ? "true" : "false"));
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +280,8 @@ void scratchpad_ram::b_transport(tlm::tlm_generic_payload& gp,
         } else {
             std::memcpy(buf, data_.data() + addr, length);
         }
+        SIM_LOG_TRACE(this, "read  addr=0x" << std::hex << addr
+                            << " len=" << std::dec << length);
     } else if (gp.is_write()) {
         // True RAM: writes commit.  Byte-enables select which bytes change
         // (the RTL implements this via a read-modify-write under the SECDED
@@ -293,6 +297,8 @@ void scratchpad_ram::b_transport(tlm::tlm_generic_payload& gp,
             std::memcpy(data_.data() + addr, buf, length);
         }
         ecc_clear_range(addr, length);
+        SIM_LOG_TRACE(this, "write addr=0x" << std::hex << addr
+                            << " len=" << std::dec << length);
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;

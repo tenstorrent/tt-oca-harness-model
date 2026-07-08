@@ -83,6 +83,8 @@
 
 #include <cci_configuration>
 
+#include "reg_access.h"
+#include "reg_map.h"
 #include "smc_tlm_extensions.h"
 
 namespace smc {
@@ -520,9 +522,6 @@ private:
         uint8_t mcr = 0;     ///< Modem Control
         uint8_t lsr = 0x60;  ///< Line Status (THRE=1, TEMT=1 at reset)
         uint8_t msr = 0;     ///< Modem Status
-        uint8_t scr = 0;     ///< Scratch
-        uint8_t ecr = 0;     ///< Extended Control
-        uint8_t itr = 0;     ///< Interrupt Test
         uint8_t dll = 0;     ///< Divisor Latch LSB
         uint8_t dlm = 0;     ///< Divisor Latch MSB
     };
@@ -538,6 +537,22 @@ private:
     uart_cfg cfg_;                  ///< Configuration snapshot.
 
     uart_regs            regs_;     ///< Register file.
+
+    // Plain masked RW registers modeled with the shared typed register wrapper
+    // (common/include/reg_access.h): the read_mask / write_mask / reset
+    // contract is enforced by the type, replacing hand-rolled `& MASK` decode.
+    // Reserved bits are excluded from both masks so they read 0 and ignore
+    // writes structurally.
+    regmodel::Register8 scr_{0xFFu, 0xFFu, 0x00u}; ///< Scratch (RW, no HW function)
+    regmodel::Register8 ecr_{0x03u, 0x03u, 0x00u}; ///< Extended Control ([1:0] RW)
+    regmodel::Register8 itr_{0x3Fu, 0x3Fu, 0x00u}; ///< Interrupt Test ([5:0] RW)
+
+    // Offset->register dispatch table (common/include/reg_map.h) owning the
+    // plain SW-only registers above. Reads dispatch entirely through the map;
+    // writes dispatch through it too, then run any model-side effect. Registers
+    // with read/write side effects or DLAB banking stay in the reg_read/
+    // reg_write switch by design.
+    regmodel::RegisterMap8 regmap_;
     std::deque<rx_entry> rx_fifo_;  ///< RX FIFO (limited by rx depth, or 1).
     std::deque<uint8_t>  tx_fifo_;  ///< TX FIFO (limited by tx depth, or 1).
     std::deque<uint8_t>  tx_history_; ///< Transmitted bytes (dbg_tx_pop()).

@@ -9,6 +9,9 @@
 
 #include "clint.h"
 
+#include "reg_access.h"
+#include "sim_log.h"
+
 #include <algorithm>
 #include <cstring>
 #include <iomanip>
@@ -122,10 +125,10 @@ clint::clint(sc_core::sc_module_name name, clint_cfg cfg)
         tick_event_.notify(tick_period_);
     }
 
-    SC_REPORT_INFO(name,
-        ("CLINT instantiated with num_harts=" + std::to_string(cfg_.num_harts) +
-         ", tick_period_ns=" + std::to_string(cfg_.tick_period_ns) +
-         ", access_delay_ns=" + std::to_string(access_delay_ns_p_.get_value())).c_str());
+    SIM_LOG_INFO(this,
+        "CLINT instantiated with num_harts=" << cfg_.num_harts
+        << ", tick_period_ns=" << cfg_.tick_period_ns
+        << ", access_delay_ns=" << access_delay_ns_p_.get_value());
 }
 
 // ---------------------------------------------------------------------------
@@ -307,10 +310,13 @@ bool clint::reg_write(uint64_t off, unsigned access_size,
             mtimecmp_[h] = (uint64_t(data_hi) << 32) | uint64_t(data_lo);
         } else { // access_size == 4
             if (half == 0) {
-                mtimecmp_[h] = (mtimecmp_[h] & 0xFFFF'FFFF'0000'0000ULL) | uint64_t(data_lo);
+                // Low 32-bit lane write (shared lane-merge helper).
+                mtimecmp_[h] = regmodel::apply_write_mask(
+                    mtimecmp_[h], uint64_t(data_lo), 0x0000'0000'FFFF'FFFFULL);
             } else if (half == 4) {
-                mtimecmp_[h] = (mtimecmp_[h] & 0x0000'0000'FFFF'FFFFULL) |
-                               (uint64_t(data_lo) << 32);
+                // High 32-bit lane write.
+                mtimecmp_[h] = regmodel::apply_write_mask(
+                    mtimecmp_[h], uint64_t(data_lo) << 32, 0xFFFF'FFFF'0000'0000ULL);
             } else {
                 return false;
             }
@@ -329,9 +335,11 @@ bool clint::reg_write(uint64_t off, unsigned access_size,
             mtime_ = (uint64_t(data_hi) << 32) | uint64_t(data_lo);
         } else { // access_size == 4
             if (half == 0) {
-                mtime_ = (mtime_ & 0xFFFF'FFFF'0000'0000ULL) | uint64_t(data_lo);
+                mtime_ = regmodel::apply_write_mask(
+                    mtime_, uint64_t(data_lo), 0x0000'0000'FFFF'FFFFULL);
             } else if (half == 4) {
-                mtime_ = (mtime_ & 0x0000'0000'FFFF'FFFFULL) | (uint64_t(data_lo) << 32);
+                mtime_ = regmodel::apply_write_mask(
+                    mtime_, uint64_t(data_lo) << 32, 0xFFFF'FFFF'0000'0000ULL);
             } else {
                 return false;
             }
@@ -393,17 +401,22 @@ void clint::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
             std::memcpy(buf, &lo, 4);
             if (length == 8) std::memcpy(buf + 4, &hi, 4);
         }
+        SIM_LOG_TRACE(this, "read  off=0x" << std::hex << addr << " len=" << std::dec
+                            << length << " lo=0x" << std::hex << lo << " hi=0x" << hi);
     } else if (gp.is_write()) {
         uint32_t lo = 0, hi = 0;
         std::memcpy(&lo, buf, 4);
         if (length == 8) std::memcpy(&hi, buf + 4, 4);
         ok = reg_write(addr, length, lo, hi);
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << addr << " len=" << std::dec
+                            << length << " lo=0x" << std::hex << lo << " hi=0x" << hi);
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
 
     if (!ok) {
+        SIM_LOG_DEBUG(this, "TLM decode miss at off=0x" << std::hex << addr);
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
         return;
     }

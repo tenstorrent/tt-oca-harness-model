@@ -5,23 +5,30 @@ alwaysApply: true
 
 # Commit & push authorship
 
-All commits in this repository must be authored by **pdroy@tenstorrent.com**.
-Never attribute commits to Cursor or any AI agent.
+Every commit must be attributed to the **human developer who authored the
+change**, using that developer's own configured git identity. Never attribute a
+commit to Cursor or any other AI agent.
 
 ## Rules
 
-- The commit **author and committer** must be `Pragnajit Datta Roy <pdroy@tenstorrent.com>`.
-- **Do NOT** add a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer (or any
-  AI/agent co-author trailer) to commit messages.
-- Before any `git push`, verify the commits being pushed have the correct author.
+- The commit **author and committer** must be the real developer's name and
+  email (whatever they have set in their local git config, e.g.
+  `git config user.name` / `git config user.email`). Do **not** override or
+  hard-code a specific person's identity.
+- **Never** author or co-author a commit as an AI agent. In particular, do
+  **not** add a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer (or
+  any other AI/agent co-author trailer) to commit messages.
+- Before any `git push`, verify the commits being pushed are authored by a real
+  developer and contain no AI/agent attribution.
 
 ## How to enforce
 
-Set the identity once (already the repo default):
+Each developer sets their own identity once (do this per developer, not as a
+shared value):
 
 ```bash
-git config user.name  "Pragnajit Datta Roy"
-git config user.email "pdroy@tenstorrent.com"
+git config user.name  "Your Name"
+git config user.email "you@tenstorrent.com"
 ```
 
 If a commit is created with a stray `Co-authored-by: Cursor` trailer, strip it
@@ -37,8 +44,8 @@ FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f \
   origin/main..HEAD
 ```
 
-Verify before pushing:
+Verify before pushing (author must be a real developer, never an AI agent):
 
 ```bash
-git log origin/main..HEAD --format='%an <%ae> | %s'   # author must be pdroy@tenstorrent.com
+git log origin/main..HEAD --format='%an <%ae> | %s'
 ```

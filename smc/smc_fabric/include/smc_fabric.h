@@ -181,7 +181,8 @@ private:
     // -----------------------------------------------------------------------
     // Internal-master routing (shared by jtag/mmio/data_accel/log)
     // -----------------------------------------------------------------------
-    void bt_internal(tlm::tlm_generic_payload&, sc_core::sc_time&);
+    void bt_internal(tlm::tlm_generic_payload&, sc_core::sc_time&,
+                     const char* ingress);
 
     // -----------------------------------------------------------------------
     // Routing helpers

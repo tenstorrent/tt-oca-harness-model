@@ -129,7 +129,8 @@ add_library(smc_i3c_controller STATIC
     src/i3c_controller.cpp)
 
 target_include_directories(smc_i3c_controller
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+           ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include)
 
 target_link_libraries(smc_i3c_controller PUBLIC SystemC::systemc SystemC::cci)
 

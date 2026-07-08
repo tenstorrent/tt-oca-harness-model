@@ -10,6 +10,9 @@
 
 #include "uart.h"
 
+#include "reg_access.h"
+#include "sim_log.h"
+
 #include <cstring>
 #include <iomanip>
 #include <string>
@@ -75,7 +78,7 @@ constexpr uint8_t ITR_TLSI  = 0x04; ///< Force line-status
 constexpr uint8_t ITR_TDSSI = 0x08; ///< Force modem-status
 constexpr uint8_t ITR_TFEI  = 0x10; ///< Force FIFO-error
 constexpr uint8_t ITR_TRTI  = 0x20; ///< Force RX-timeout
-constexpr uint8_t ITR_MASK  = 0x3F;
+// ITR write mask (0x3F) is enforced by the typed `itr_` register's write_mask.
 
 } // anonymous namespace
 
@@ -123,16 +126,22 @@ uart::uart(sc_core::sc_module_name name, uart_cfg cfg)
     if (cfg_.rx_fifo_depth == 0 || cfg_.rx_fifo_depth > 4096)
         SC_REPORT_FATAL(name, "UART rx_fifo_depth must be in 1..4096");
 
-    {
-        std::string msg = "CCI config resolved:";
-        msg += "  tx_fifo_depth=" + std::to_string(cfg_.tx_fifo_depth)
-             + (tx_fifo_depth_p_.is_preset_value()   ? " [preset]"  : " [default]");
-        msg += "  rx_fifo_depth=" + std::to_string(cfg_.rx_fifo_depth)
-             + (rx_fifo_depth_p_.is_preset_value()   ? " [preset]"  : " [default]");
-        msg += "  access_delay_ns=" + std::to_string(access_delay_ns_p_.get_value())
-             + (access_delay_ns_p_.is_preset_value() ? " [preset]"  : " [default]");
-        SC_REPORT_INFO(name, msg.c_str());
-    }
+    // Register the plain SW-only registers in the offset->register dispatch
+    // table (common/include/reg_map.h). Reads/writes to these offsets are then
+    // served by the map instead of a hand-written switch case.
+    regmap_.add(uart_cfg::OFF_SCR, "SCR", scr_)
+           .add(uart_cfg::OFF_ECR, "ECR", ecr_)
+           .add(uart_cfg::OFF_ITR, "ITR", itr_);
+
+    SIM_LOG_INFO(this,
+        "CCI config resolved:"
+        << "  tx_fifo_depth=" << cfg_.tx_fifo_depth
+        << (tx_fifo_depth_p_.is_preset_value()   ? " [preset]"  : " [default]")
+        << "  rx_fifo_depth=" << cfg_.rx_fifo_depth
+        << (rx_fifo_depth_p_.is_preset_value()   ? " [preset]"  : " [default]")
+        << "  access_delay_ns=" << access_delay_ns_p_.get_value()
+        << (access_delay_ns_p_.is_preset_value() ? " [preset]"  : " [default]")
+        << "  regmap_registers=" << regmap_.size());
 
     // Coarse functional RX character-timeout period (not bit-accurate).
     rx_timeout_delay_ = sc_core::sc_time(1.0, sc_core::SC_US);
@@ -174,6 +183,9 @@ void uart::reset_proc()
     if (rst_n_i.read()) return; // act only on assertion (low)
 
     regs_ = uart_regs{};        // LSR back to 0x60 (THRE|TEMT), all else 0
+    scr_.reset(0x00u);          // typed registers reset separately from regs_
+    ecr_.reset(0x00u);
+    itr_.reset(0x00u);
     rx_fifo_.clear();
     tx_fifo_.clear();
     tx_history_.clear();
@@ -238,7 +250,7 @@ bool uart::any_rx_error() const
 
 void uart::update_rx_trigger()
 {
-    const uint8_t sel = static_cast<uint8_t>(((regs_.ecr & 0x3u) << 2)
+    const uint8_t sel = static_cast<uint8_t>(((ecr_.read() & 0x3u) << 2)
                                            | ((regs_.fcr >> 6) & 0x3u));
     static const unsigned table[12] =
         {1, 4, 8, 14, 32, 64, 128, 256, 512, 1024, 2048, 4096};
@@ -439,6 +451,11 @@ void uart::fcr_write(uint8_t data)
 
 bool uart::reg_read(uint64_t off, uint32_t& data)
 {
+    // Plain SW-only registers (SCR/ECR/ITR) are owned by the RegisterMap and
+    // have no read side effects, so the map fully serves them. These offsets
+    // are never DLAB-banked, so the lookup is safe regardless of LCR.DLAB.
+    if (uint8_t rv = 0; regmap_.read(off, rv)) { data = rv; return true; }
+
     const bool dlab = (regs_.lcr & LCR_DLAB) != 0;
     switch (off) {
     case uart_cfg::OFF_RBR_THR: data = dlab ? regs_.dll : rbr_read(); break;
@@ -448,9 +465,6 @@ bool uart::reg_read(uint64_t off, uint32_t& data)
     case uart_cfg::OFF_MCR:     data = regs_.mcr;                     break;
     case uart_cfg::OFF_LSR:     data = lsr_read();                    break;
     case uart_cfg::OFF_MSR:     data = msr_read();                    break;
-    case uart_cfg::OFF_SCR:     data = regs_.scr;                     break;
-    case uart_cfg::OFF_ECR:     data = regs_.ecr;                     break;
-    case uart_cfg::OFF_ITR:     data = regs_.itr;                     break;
     default: return false; // decode miss inside window -> ADDRESS_ERROR
     }
     return true;
@@ -479,7 +493,9 @@ bool uart::reg_write(uint64_t off, uint32_t data)
             schedule_recompute();
         } else {
             const uint8_t old = regs_.ier;
-            regs_.ier = b & IER_MASK;
+            // Reserved IER bits [7:5] are RAZ/WI: drop them via the shared
+            // masking helper instead of a hand-rolled `& MASK`.
+            regs_.ier = regmodel::apply_write_mask<uint8_t>(regs_.ier, b, IER_MASK);
             // Enabling ETBEI while THR is already empty raises the THRE int.
             if ((regs_.ier & IER_ETBEI) && !(old & IER_ETBEI)
                 && (regs_.lsr & LSR_THRE)) {
@@ -492,20 +508,23 @@ bool uart::reg_write(uint64_t off, uint32_t data)
     case uart_cfg::OFF_IIR_FCR: fcr_write(b);                      break;
     case uart_cfg::OFF_LCR:     regs_.lcr = b; schedule_recompute(); break;
     case uart_cfg::OFF_MCR:
-        regs_.mcr = b & MCR_MASK;
+        // Reserved MCR bits [7:6] are RAZ/WI (shared masking helper).
+        regs_.mcr = regmodel::apply_write_mask<uint8_t>(regs_.mcr, b, MCR_MASK);
         detect_modem_deltas();   // loopback changes can move MSR levels
         schedule_recompute();
         break;
     case uart_cfg::OFF_LSR:     /* read-only: ignore */            break;
     case uart_cfg::OFF_MSR:     /* read-only: ignore */            break;
-    case uart_cfg::OFF_SCR:     regs_.scr = b;                     break;
+    // SCR/ECR/ITR storage is owned by the RegisterMap (write_mask drops
+    // reserved bits); ECR/ITR additionally need a model-side recompute.
+    case uart_cfg::OFF_SCR:     regmap_.write(off, b);             break;
     case uart_cfg::OFF_ECR:
-        regs_.ecr = b & 0x03;
+        regmap_.write(off, b);
         update_rx_trigger();
         schedule_recompute();
         break;
     case uart_cfg::OFF_ITR:
-        regs_.itr = b & ITR_MASK;
+        regmap_.write(off, b);
         schedule_recompute();
         break;
     default: return false; // decode miss inside window -> ADDRESS_ERROR
@@ -560,7 +579,7 @@ void uart::detect_modem_deltas()
 uart_intr_id uart::interrupt_id() const
 {
     const uint8_t ier = regs_.ier;
-    const uint8_t itr = regs_.itr;
+    const uint8_t itr = itr_.read();
 
     const bool fifo_error  = fifo_en_ && any_rx_error();
     const bool line_status = (regs_.lsr & LSR_RX_ERRS) != 0;
@@ -725,11 +744,16 @@ void uart::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
         uint32_t v = 0;
         ok = reg_read(adr, v);
         if (ok) std::memcpy(buf, &v, 4);
+        SIM_LOG_TRACE(this, "read  off=0x" << std::hex << adr
+                            << " data=0x" << v << (ok ? "" : " [decode-miss]"));
     } else {
         uint32_t v = 0;
         std::memcpy(&v, buf, 4);
         ok = reg_write(adr, v);
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << adr
+                            << " data=0x" << v << (ok ? "" : " [decode-miss]"));
     }
+    if (!ok) SIM_LOG_DEBUG(this, "TLM decode miss at off=0x" << std::hex << adr);
 
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
     gp.set_response_status(ok ? tlm::TLM_OK_RESPONSE
@@ -790,6 +814,9 @@ unsigned uart::dbg_rx_count() const
 
 uint32_t uart::dbg_reg(uint64_t off) const
 {
+    // Plain SW-only registers (SCR/ECR/ITR) via the RegisterMap peek.
+    if (uint8_t rv = 0; regmap_.read(off, rv)) return rv;
+
     const bool dlab = (regs_.lcr & LCR_DLAB) != 0;
     switch (off) {
     case uart_cfg::OFF_RBR_THR:
@@ -821,9 +848,6 @@ uint32_t uart::dbg_reg(uint64_t off) const
         if (dcd) v |= MSR_DCD;
         return v;
     }
-    case uart_cfg::OFF_SCR: return regs_.scr;
-    case uart_cfg::OFF_ECR: return regs_.ecr;
-    case uart_cfg::OFF_ITR: return regs_.itr;
     default: return 0u;
     }
 }

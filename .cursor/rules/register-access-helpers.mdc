@@ -1,0 +1,89 @@
+---
+description: Use the shared regmodel register-access library for hand-written SystemC register models (any subsystem) instead of re-deriving masking logic per file
+globs: **/*.cpp,**/*.h
+alwaysApply: false
+---
+
+# Register Access Control (shared regmodel library)
+
+Hand-written SystemC/TLM register models anywhere in this repository -- regardless
+of subsystem (SMC, SEP, VP, or any other system being modelled) -- are not code-generated. To avoid
+re-deriving the same RO/WO/RW1C/woset/lock-gated masking logic independently in
+every file (and the policy drift that causes), new or edited register access
+code **must** use the shared, generic, dependency-free library
+`common/include/reg_access.h` (namespace `regmodel`) instead of hand-rolling the
+mask arithmetic inline.
+
+The library is width-generic (`Register8/16/32/64`, or `Register<Word>`) and
+framework-free (depends only on `<cstdint>`/`<functional>`), so this rule
+applies to any hand-written model regardless of subsystem or register width.
+
+## Scope: which models this covers
+
+- **Any hand-written register model** in this repository -- SMC peripherals
+  (`i3c_controller`, `reset_unit`, `uart`, ...), `smc_fabric`, SEP models,
+  VP platforms, and any future subsystem -- must use `regmodel` for masking logic.
+- **Models built on an external framework** (e.g. SEP peripherals that use the
+  CSML library, `csml_reg`/`csml_bitfield`/`csml_memory`) keep using that
+  framework's mechanisms; do not migrate them onto `regmodel` wholesale.
+  However, when such a model drops to raw C++ for a semantic that the framework
+  does not cover (a W1C/woset/lock-gated callback body, for example), use the
+  `regmodel` free functions for the masking arithmetic rather than re-deriving
+  it inline.
+- **New models with no framework** should default to `regmodel`.
+
+Add `common/include` to the target's `target_include_directories` and
+`#include "reg_access.h"`.
+
+## Semantic write patterns: use the free functions
+
+```cpp
+#include "reg_access.h"
+using namespace regmodel;
+
+// W1C
+case FOO_INTR_STATUS:
+    s.intr_status = apply_w1c(s.intr_status, data, W1C_MASK); break;
+// woset (sticky lock)
+case FOO_LOCK:
+    s.lock = apply_woset(s.lock, data); break;
+// lock-gated read-modify-write
+case FOO_CONFIG:
+    s.config = apply_lock_gated(s.config, data, s.lock); break;
+```
+
+Do NOT re-derive these inline (`s.x &= ~(data & MASK)`, `(data & ~lock) | ...`).
+
+## Plain RO/WO/RW registers: prefer `regmodel::Register<Word>`
+
+For a register whose behavior is just mask-on-read / mask-merge-on-write,
+declare it as a `Register32` (or the width-appropriate alias) rather than a
+bare integer decoded by hand -- the mask contract becomes part of the object:
+
+```cpp
+regmodel::Register32 ctrl{CTRL_RMASK, CTRL_WMASK, CTRL_RESET};
+...
+case CTRL: data = ctrl.read(); break;   // read side
+case CTRL: ctrl.write(data); break;      // write side
+```
+
+## Side-effect / W1C registers via callbacks (optional)
+
+Registers with side effects can stay in the model via read/write callbacks
+instead of an ad-hoc switch case:
+
+```cpp
+regmodel::Register32 intr_status{W1C_MASK, W1C_MASK, 0};
+intr_status.on_write([](uint32_t cur, uint32_t in){
+    return regmodel::apply_w1c(cur, in, W1C_MASK);
+});
+```
+
+Registers with genuinely complex behavior (FIFO ports, HCI command/response
+descriptors, DLAB-style banking) may remain explicit `reg_read`/`reg_write`
+cases -- but still use the `regmodel` free functions for the masking
+arithmetic. Do not force such registers into `Register<Word>` if it hurts
+clarity.
+
+See `doc/register-modeling-smc-vs-sep-csml.adoc` for why this exists instead
+of adopting SEP's CSML framework.

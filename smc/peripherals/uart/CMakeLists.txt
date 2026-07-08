@@ -144,6 +144,7 @@ add_library(smc_uart STATIC
 target_include_directories(smc_uart
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
         ${SMC_AXI_EXTENSION_DIR})
 
 target_link_libraries(smc_uart PUBLIC SystemC::systemc SystemC::cci)

@@ -7,6 +7,8 @@
 
 #include "smc_fabric.h"
 
+#include "reg_access.h"
+#include "sim_log.h"
 #include "smc_axi_extension.h"
 
 #include <algorithm>
@@ -15,6 +17,17 @@
 #include <sstream>
 
 namespace smc {
+
+namespace {
+
+const char* tlm_cmd_str(const tlm::tlm_generic_payload& trans)
+{
+    if (trans.is_read())  return "read";
+    if (trans.is_write()) return "write";
+    return "other";
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Constructor
@@ -48,19 +61,15 @@ smc_fabric::smc_fabric(sc_core::sc_module_name name, const config& cfg)
     sensitive << rst_n_i.neg();   // event finder: resolved after port binding
     dont_initialize();
 
-    SC_REPORT_INFO(name,
-        (std::string("smc_fabric constructed: "
-                     "local_base=0x") +
-         [&]{ std::ostringstream s;
-              s << std::hex << cfg_.local_base_addr; return s.str(); }() +
-         " global_base=0x" +
-         [&]{ std::ostringstream s;
-              s << std::hex << cfg_.global_base_addr; return s.str(); }() +
-         " region_size=0x" +
-         [&]{ std::ostringstream s;
-              s << std::hex << cfg_.region_size; return s.str(); }() +
-         " no_addr_remap=" + (cfg_.no_addr_remap ? "true" : "false") +
-         " reg_access_ns=" + std::to_string(cfg_.reg_access_ns)).c_str());
+    SIM_LOG_INFO(this,
+        "smc_fabric constructed: "
+        << std::hex
+        << "local_base=0x"   << cfg_.local_base_addr
+        << " global_base=0x" << cfg_.global_base_addr
+        << " region_size=0x" << cfg_.region_size
+        << std::dec
+        << " no_addr_remap=" << (cfg_.no_addr_remap ? "true" : "false")
+        << " reg_access_ns=" << cfg_.reg_access_ns);
 }
 
 // ---------------------------------------------------------------------------
@@ -85,12 +94,30 @@ void smc_fabric::write_region_size(uint64_t v)
 // ---------------------------------------------------------------------------
 
 void smc_fabric::bt_internal(tlm::tlm_generic_payload& trans,
-                              sc_core::sc_time&         delay)
+                              sc_core::sc_time&         delay,
+                              const char*               ingress)
 {
-    uint64_t addr = apply_alias_remap(trans.get_address());
+    const uint64_t orig = trans.get_address();
+    uint64_t addr = apply_alias_remap(orig);
     trans.set_address(addr);
 
-    if (is_local(addr)) {
+    const bool local = is_local(addr);
+    if (remap_debug_.hit) {
+        SIM_LOG_TRACE(this,
+            ingress << " " << tlm_cmd_str(trans)
+            << " orig=0x" << std::hex << orig
+            << " mapped=0x" << addr
+            << std::dec << " alias[" << remap_debug_.region_index << "]"
+            << " -> " << (local ? "local" : "outbound"));
+    } else {
+        SIM_LOG_TRACE(this,
+            ingress << " " << tlm_cmd_str(trans)
+            << " orig=0x" << std::hex << orig
+            << " mapped=0x" << addr
+            << " no_alias -> " << (local ? "local" : "outbound"));
+    }
+
+    if (local) {
         trans.set_address(to_local_addr(addr));
         route_local(trans, delay);
     } else {
@@ -98,10 +125,10 @@ void smc_fabric::bt_internal(tlm::tlm_generic_payload& trans,
     }
 }
 
-void smc_fabric::bt_jtag      (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d); }
-void smc_fabric::bt_mmio      (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d); }
-void smc_fabric::bt_data_accel(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d); }
-void smc_fabric::bt_log       (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d); }
+void smc_fabric::bt_jtag      (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "jtag_axi_in"); }
+void smc_fabric::bt_mmio      (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "mmio_in"); }
+void smc_fabric::bt_data_accel(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "data_accel_in"); }
+void smc_fabric::bt_log       (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "log_in"); }
 
 // ---------------------------------------------------------------------------
 // b_transport — sys_axi_in: inbound filter then local route
@@ -115,15 +142,29 @@ void smc_fabric::bt_sys_axi(tlm::tlm_generic_payload& trans,
     // prot[1] in smc_axi_extension = NS bit (1 = non-secure).
     bool    ns     = ext ? ((ext->prot >> 1) & 1u) != 0u : true;
 
+    SIM_LOG_TRACE(this,
+        "sys_axi_in " << tlm_cmd_str(trans)
+        << " addr=0x" << std::hex << trans.get_address()
+        << std::dec << " src_id=" << static_cast<unsigned>(src_id)
+        << " ns=" << ns);
+
     if (!inbound_filter_allow(trans.get_address(), src_id, ns,
                               trans.is_write())) {
+        SIM_LOG_DEBUG(this,
+            "sys_axi_in inbound filter deny addr=0x" << std::hex
+            << trans.get_address() << std::dec
+            << " src_id=" << static_cast<unsigned>(src_id)
+            << " ns=" << ns);
         fill_deny_response(trans);
         trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
         return;
     }
 
-    trans.set_address(to_local_addr(trans.get_address()));
+    const uint32_t local = to_local_addr(trans.get_address());
+    SIM_LOG_TRACE(this,
+        "sys_axi_in -> route_local local=0x" << std::hex << local);
+    trans.set_address(local);
     route_local(trans, delay);
 }
 
@@ -134,7 +175,12 @@ void smc_fabric::bt_sys_axi(tlm::tlm_generic_payload& trans,
 void smc_fabric::bt_sep_axi(tlm::tlm_generic_payload& trans,
                              sc_core::sc_time&         delay)
 {
-    trans.set_address(to_local_addr(trans.get_address()));
+    const uint32_t local = to_local_addr(trans.get_address());
+    SIM_LOG_TRACE(this,
+        "sep_axi_in " << tlm_cmd_str(trans)
+        << " addr=0x" << std::hex << trans.get_address()
+        << " -> route_local local=0x" << local << " (no filter)");
+    trans.set_address(local);
     route_local(trans, delay);
 }
 
@@ -195,6 +241,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- DFT CSRs (forwarded downstream) ---
     if (a >= DFT_CSR_BASE && a < DFT_CSR_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> to_dft_csr");
         to_dft_csr->b_transport(trans, delay);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
         return;
@@ -202,6 +251,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- SMC base config window (fabric global CSRs) ---
     if (a >= SMC_BASE_CONFIG_BASE && a < SMC_BASE_CONFIG_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> smc_base_config_csr");
         if (!handle_global_csr(trans, a - SMC_BASE_CONFIG_BASE)) {
             if (trans.is_read())
                 std::memset(trans.get_data_ptr(), 0, trans.get_data_length());
@@ -214,6 +266,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- Alias remap CSRs (handled internally, table updated directly) ---
     if (a >= AR_CTRL_BASE && a < AR_CTRL_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> alias_remap_csr");
         handle_alias_remap(trans, a - AR_CTRL_BASE);
         trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
@@ -222,6 +277,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- M-mode remap CSRs ---
     if (a >= MR_CTRL_BASE && a < MR_CTRL_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> mmode_remap_csr");
         handle_mmode_remap(trans, a - MR_CTRL_BASE);
         trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
@@ -230,6 +288,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- Xvisor remap CSRs ---
     if (a >= XR_CTRL_BASE && a < XR_CTRL_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> xvisor_remap_csr");
         handle_xvisor_remap(trans, a - XR_CTRL_BASE);
         trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
@@ -238,6 +299,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- Inbound filter CSRs ---
     if (a >= IB_FILTER_BASE && a < IB_FILTER_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> inbound_filter_csr");
         handle_inbound_filter(trans, a - IB_FILTER_BASE);
         trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
@@ -246,6 +310,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- Outbound filter CSRs ---
     if (a >= OB_FILTER_BASE && a < OB_FILTER_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> outbound_filter_csr");
         handle_outbound_filter(trans, a - OB_FILTER_BASE);
         trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
@@ -254,6 +321,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
 
     // --- Mailbox CSRs (forwarded downstream) ---
     if (a >= MAILBOX_BASE && a < MAILBOX_END) {
+        SIM_LOG_TRACE(this,
+            "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+            << " -> to_mailbox");
         to_mailbox->b_transport(trans, delay);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
         return;
@@ -262,10 +332,23 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
     // --- Regular local targets ---
     auto* sock = local_decode(a);
     if (!sock) {
+        SIM_LOG_DEBUG(this,
+            "route_local decode miss " << tlm_cmd_str(trans)
+            << " addr=0x" << std::hex << a);
         fill_deny_response(trans);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
         return;
     }
+
+    const char* tgt = "unknown";
+    if (sock == &to_front_port)      tgt = "to_front_port";
+    else if (sock == &to_data_accel_ctrl) tgt = "to_data_accel_ctrl";
+    else if (sock == &to_dfd_apb)    tgt = "to_dfd_apb";
+    else if (sock == &to_periph)      tgt = "to_periph";
+
+    SIM_LOG_TRACE(this,
+        "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
+        << " -> " << tgt);
     (*sock)->b_transport(trans, delay);
 }
 
@@ -282,14 +365,23 @@ void smc_fabric::route_outbound(tlm::tlm_generic_payload& trans,
     bool    ns     = ext ? ((ext->prot >> 1) & 1u) != 0u : false;
 
     uint64_t addr = trans.get_address();
+    const char* path = "plain";
+
+    SIM_LOG_TRACE(this,
+        "route_outbound " << tlm_cmd_str(trans)
+        << " enter addr=0x" << std::hex << addr
+        << std::dec << " src_id=" << static_cast<unsigned>(src_id)
+        << " ns=" << ns);
 
     if (!cfg_.no_addr_remap) {
         switch (classify_outbound(addr)) {
         case outbound_path::mmode:
+            path = "mmode";
             addr = apply_output_remap(addr, mmode_regions_,
                                       MMODE_REMAP_START, MMODE_SRC_ID, ext);
             break;
         case outbound_path::xvisor:
+            path = "xvisor";
             addr = apply_output_remap(addr, xvisor_regions_,
                                       XVISOR_REMAP_START, OTHERS_SRC_ID, ext);
             break;
@@ -299,6 +391,10 @@ void smc_fabric::route_outbound(tlm::tlm_generic_payload& trans,
             break;
         }
         trans.set_address(addr);
+        SIM_LOG_TRACE(this,
+            "route_outbound " << path << " remapped=0x" << std::hex << addr);
+    } else {
+        SIM_LOG_TRACE(this, "route_outbound bypass remap (no_addr_remap)");
     }
     // bypass (no_addr_remap=true): address and source_id pass through unchanged.
 
@@ -306,11 +402,18 @@ void smc_fabric::route_outbound(tlm::tlm_generic_payload& trans,
     if (ext) src_id = static_cast<uint8_t>(ext->source_id & 0xFu);
 
     if (!outbound_filter_allow(addr, src_id, ns, trans.is_write())) {
+        SIM_LOG_DEBUG(this,
+            "route_outbound filter deny addr=0x" << std::hex << addr << std::dec
+            << " src_id=" << static_cast<unsigned>(src_id)
+            << " ns=" << ns);
         fill_deny_response(trans);
         trans.set_dmi_allowed(false);
         delay += sc_core::sc_time(cfg_.reg_access_ns, sc_core::SC_NS);
         return;
     }
+
+    SIM_LOG_TRACE(this,
+        "route_outbound -> output_axi addr=0x" << std::hex << addr);
     output_axi->b_transport(trans, delay);
 }
 
@@ -773,9 +876,11 @@ static void handle_filter_entry_csr(smc_fabric::filter_entry& e,
         } else {
             uint32_t v = 0;
             std::memcpy(&v, trans.get_data_ptr(), std::min(len, 4u));
-            nv = high ? ((cur & 0x0000'0000'FFFF'FFFFULL)
-                         | (static_cast<uint64_t>(v) << 32))
-                      : ((cur & 0xFFFF'FFFF'0000'0000ULL) | v);
+            // 32-bit lane merge into the 64-bit register image (shared helper).
+            nv = high ? regmodel::apply_write_mask(
+                            cur, static_cast<uint64_t>(v) << 32, 0xFFFF'FFFF'0000'0000ULL)
+                      : regmodel::apply_write_mask(
+                            cur, static_cast<uint64_t>(v), 0x0000'0000'FFFF'FFFFULL);
         }
         switch (which) {
         case CFG:   filter_cfg_unpack(e, nv);                break;

@@ -9,6 +9,8 @@
 
 #include "bootrom.h"
 
+#include "sim_log.h"
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -150,11 +152,11 @@ bootrom::bootrom(sc_core::sc_module_name name, bootrom_cfg cfg)
     sensitive << rst_n_i;
     dont_initialize();
 
-    SC_REPORT_INFO(name,
-        ("bootrom instantiated: size_bytes=" + std::to_string(cfg_.size_bytes) +
-         ", init_file=\"" + cfg_.init_file + "\"" +
-         ", init_file_format=" + resolve_format(cfg_.init_file_format, cfg_.init_file) +
-         ", access_delay_ns=" + std::to_string(cfg_.access_delay_ns)).c_str());
+    SIM_LOG_INFO(this,
+        "bootrom instantiated: size_bytes=" << cfg_.size_bytes
+        << ", init_file=\"" << cfg_.init_file << "\""
+        << ", init_file_format=" << resolve_format(cfg_.init_file_format, cfg_.init_file)
+        << ", access_delay_ns=" << cfg_.access_delay_ns);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,9 +221,13 @@ void bootrom::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
 
     if (gp.is_read()) {
         std::memcpy(buf, data_.data() + addr, length);
+        SIM_LOG_TRACE(this, "read  addr=0x" << std::hex << addr
+                            << " len=" << std::dec << length);
     } else if (gp.is_write()) {
         // C4: silently discard writes; do NOT mutate data_.  The bus
         // contract requires rvalid (TLM_OK_RESPONSE) to assert anyway.
+        SIM_LOG_TRACE(this, "write ignored (ROM) addr=0x" << std::hex << addr
+                            << " len=" << std::dec << length);
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;

@@ -10,6 +10,9 @@
 
 #include "i3c_controller.h"
 
+#include "reg_access.h"
+#include "sim_log.h"
+
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -19,7 +22,8 @@ namespace smc {
 
 namespace {
 
-constexpr bool bit(uint32_t v, unsigned i) { return ((v >> i) & 1u) != 0; }
+// Bit accessor from the shared register-model library (common/include/reg_access.h).
+using regmodel::bit;
 
 // ---------------------------------------------------------------------------
 // Model command-descriptor field accessors (64-bit; functional layout — see
@@ -145,13 +149,12 @@ i3c_controller::i3c_controller(sc_core::sc_module_name name, i3c_controller_cfg 
     sensitive << xfer_event_;
     dont_initialize();
 
-    SC_REPORT_INFO(name,
-        ("i3c_controller instantiated: num_instances=" +
-         std::to_string(cfg_.num_instances) +
-         ", cmd_fifo=" + std::to_string(cfg_.cmd_fifo_depth) +
-         ", tx_fifo=" + std::to_string(cfg_.tx_fifo_depth) +
-         ", rx_fifo=" + std::to_string(cfg_.rx_fifo_depth) +
-         ", ibi_fifo=" + std::to_string(cfg_.ibi_fifo_depth)).c_str());
+    SIM_LOG_INFO(this,
+        "i3c_controller instantiated: num_instances=" << cfg_.num_instances
+        << ", cmd_fifo=" << cfg_.cmd_fifo_depth
+        << ", tx_fifo=" << cfg_.tx_fifo_depth
+        << ", rx_fifo=" << cfg_.rx_fifo_depth
+        << ", ibi_fifo=" << cfg_.ibi_fifo_depth);
 }
 
 void i3c_controller::start_of_simulation()
@@ -606,13 +609,16 @@ bool i3c_controller::reg_write(unsigned inst, uint64_t loff, uint32_t data)
     case i3c_controller_cfg::RESET_CONTROL:
         apply_reset_control(s, data & reset_control::MASK); break;
     case i3c_controller_cfg::INTR_STATUS:
-        s.intr_status &= ~(data & hc_intr::W1C_MASK); break; // W1C
+        s.intr_status = regmodel::apply_w1c(s.intr_status, data, hc_intr::W1C_MASK);
+        break; // W1C
     case i3c_controller_cfg::INTR_STATUS_ENABLE:
         s.intr_status_enable = data; break;
     case i3c_controller_cfg::INTR_SIGNAL_ENABLE:
         s.intr_signal_enable = data; break;
     case i3c_controller_cfg::INTR_FORCE:
-        s.intr_status |= (data & hc_intr::W1C_MASK); break;
+        // Force = write-1-to-set on the same W1C bits (masked to the valid set).
+        s.intr_status = regmodel::apply_woset(s.intr_status, data & hc_intr::W1C_MASK);
+        break;
     case i3c_controller_cfg::DCT_SECTION_OFFSET:
         s.dct_section_offset = data & 0xFF80'0000u; break; // only ENTDAA index rw
     case i3c_controller_cfg::COMMAND_PORT:
@@ -634,7 +640,8 @@ bool i3c_controller::reg_write(unsigned inst, uint64_t loff, uint32_t data)
     case i3c_controller_cfg::DATA_BUFFER_THLD_CTRL:
         s.data_buffer_thld_ctrl = data; break;
     case i3c_controller_cfg::PIO_INTR_STATUS:
-        s.pio_intr_status &= ~(data & pio_intr::W1C_MASK); break; // W1C
+        s.pio_intr_status = regmodel::apply_w1c(s.pio_intr_status, data, pio_intr::W1C_MASK);
+        break; // W1C
     case i3c_controller_cfg::PIO_INTR_STATUS_ENABLE:
         s.pio_intr_status_enable = data; break;
     case i3c_controller_cfg::PIO_INTR_SIGNAL_ENABLE:
@@ -704,16 +711,22 @@ void i3c_controller::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time&
         uint32_t data = 0;
         ok = reg_read(inst, loff, data);
         if (ok) std::memcpy(buf, &data, 4);
+        SIM_LOG_TRACE(this, "read  inst=" << inst << " off=0x" << std::hex << loff
+                            << " data=0x" << data);
     } else if (gp.is_write()) {
         uint32_t data = 0;
         std::memcpy(&data, buf, 4);
         ok = reg_write(inst, loff, data);
+        SIM_LOG_TRACE(this, "write inst=" << inst << " off=0x" << std::hex << loff
+                            << " data=0x" << data);
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
 
     if (!ok) {
+        SIM_LOG_DEBUG(this, "TLM decode miss inst=" << inst << " off=0x"
+                            << std::hex << loff);
         gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
@@ -771,7 +784,7 @@ unsigned int i3c_controller::transport_dbg(tlm::tlm_generic_payload& gp)
 void i3c_controller::set_bus_model(unsigned inst, bus_model_fn fn)
 {
     if (inst >= cfg_.num_instances) {
-        SC_REPORT_WARNING(name(), "set_bus_model: instance out of range");
+        SIM_LOG_WARN(this, "set_bus_model: instance " << inst << " out of range");
         return;
     }
     inst_[inst].bus_model = std::move(fn);

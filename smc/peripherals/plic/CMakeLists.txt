@@ -157,6 +157,7 @@ add_library(smc_plic STATIC
 target_include_directories(smc_plic
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
         ${SMC_AXI_EXTENSION_DIR})
 
 target_link_libraries(smc_plic PUBLIC SystemC::systemc SystemC::cci)

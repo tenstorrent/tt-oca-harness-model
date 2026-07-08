@@ -9,6 +9,9 @@
 
 #include "reset_unit.h"
 
+#include "reg_access.h"
+#include "sim_log.h"
+
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -18,8 +21,11 @@ namespace smc {
 
 namespace {
 
-/// Pick bit @p i out of a 32-bit mask.
-constexpr bool bit(uint32_t v, unsigned i) { return ((v >> i) & 1u) != 0; }
+// Shared, width-generic register access-control helpers
+// (common/include/reg_access.h). `bit` picks bit i out of a mask.
+using regmodel::apply_lock_gated;
+using regmodel::apply_woset;
+using regmodel::bit;
 
 } // anonymous namespace
 
@@ -132,11 +138,10 @@ reset_unit::reset_unit(sc_core::sc_module_name name, reset_unit_cfg cfg)
     sensitive << recompute_event_;
     dont_initialize();
 
-    SC_REPORT_INFO(name,
-        ("reset_unit instantiated: num_subsystems=" +
-         std::to_string(cfg_.num_subsystems) +
-         ", ref_clk_period_ns=" + std::to_string(cfg_.ref_clk_period_ns) +
-         ", access_delay_ns="  + std::to_string(cfg_.access_delay_ns)).c_str());
+    SIM_LOG_INFO(this,
+        "reset_unit instantiated: num_subsystems=" << cfg_.num_subsystems
+        << ", ref_clk_period_ns=" << cfg_.ref_clk_period_ns
+        << ", access_delay_ns=" << cfg_.access_delay_ns);
 }
 
 // ---------------------------------------------------------------------------
@@ -432,20 +437,17 @@ bool reset_unit::reg_write(uint64_t off, uint32_t data)
     if (off >= reset_unit_cfg::WINDOW_SIZE) return false;
 
     switch (off) {
-    case reset_unit_cfg::SS_CONFIG: {
+    case reset_unit_cfg::SS_CONFIG:
         // Locked bits keep their value (config_filtered_wr_mask = ~lock).
-        const uint32_t wmask = ~ss_config_lock_;
-        ss_config_ = (data & wmask) | (ss_config_ & ~wmask);
+        ss_config_ = apply_lock_gated(ss_config_, data, ss_config_lock_);
         break;
-    }
     case reset_unit_cfg::SS_CONFIG_LOCK:
-        ss_config_lock_ |= data; // woset: write-1-to-set, sticky
+        ss_config_lock_ = apply_woset(ss_config_lock_, data); // sticky
         break;
-    case reset_unit_cfg::SS_COLD_RESET_N: {
-        const uint32_t wmask = ~ss_cold_reset_lock_;
-        ss_cold_reset_n_ = (data & wmask) | (ss_cold_reset_n_ & ~wmask);
+    case reset_unit_cfg::SS_COLD_RESET_N:
+        ss_cold_reset_n_ =
+            apply_lock_gated(ss_cold_reset_n_, data, ss_cold_reset_lock_);
         break;
-    }
     case reset_unit_cfg::SS_WARM_RESET_N:    ss_warm_reset_n_     = data; break;
     case reset_unit_cfg::SS_CONFIG_HOLD:     ss_config_hold_      = data; break;
     case reset_unit_cfg::SS_SRAM_HOLD:       ss_sram_hold_        = data; break;
@@ -453,7 +455,7 @@ bool reset_unit::reg_write(uint64_t off, uint32_t data)
     case reset_unit_cfg::SS_DEBUG_HOLD:      ss_debug_hold_       = data; break;
     case reset_unit_cfg::SS_RESET_COMPLETE:  /* SW read-only */         break;
     case reset_unit_cfg::SS_COLD_RESET_LOCK:
-        ss_cold_reset_lock_ |= data; // woset
+        ss_cold_reset_lock_ = apply_woset(ss_cold_reset_lock_, data);
         break;
     case reset_unit_cfg::SS_FORCE_TO_REF_CLK: ss_force_to_ref_clk_n_ = data; break;
     case reset_unit_cfg::STRAPS_LO:          /* SW read-only */         break;
@@ -518,16 +520,19 @@ void reset_unit::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& del
         uint32_t data = 0;
         ok = reg_read(addr, data);
         if (ok) std::memcpy(buf, &data, 4);
+        SIM_LOG_TRACE(this, "read  off=0x" << std::hex << addr << " data=0x" << data);
     } else if (gp.is_write()) {
         uint32_t data = 0;
         std::memcpy(&data, buf, 4);
         ok = reg_write(addr, data);
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << addr << " data=0x" << data);
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
 
     if (!ok) {
+        SIM_LOG_DEBUG(this, "TLM decode miss at off=0x" << std::hex << addr);
         gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
