@@ -131,12 +131,6 @@ jobs:
             libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
             libssl-dev
 
-      # The csml submodule is owned by Vayavya-Labs and cannot be patched via PR.
-      # These two minimal fixes are required for C++20 conformance and are
-      # pending upstream merge. Apply them here until the vendor ships the fix.
-      - name: Patch CSML for C++20 (pending Vayavya-Labs/CSML upstream merge)
-        run: python3 scripts/patch_csml_cxx20.py
-
       - name: Restore SystemC cache
         uses: actions/cache@v4
         with:
@@ -186,9 +180,6 @@ jobs:
           sudo apt-get install -y g++ cmake lcov \
             libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
             libssl-dev
-
-      - name: Patch CSML for C++20 (pending Vayavya-Labs/CSML upstream merge)
-        run: python3 scripts/patch_csml_cxx20.py
 
       - name: Restore SystemC cache
         uses: actions/cache@v4
