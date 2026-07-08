@@ -211,6 +211,11 @@ bool spi_flash::serve_read_segment(const spi_segment_t& segment, uint8_t* rx_dat
     m_read_bytes += segment.len;
 
     if (segment.csaat) {
+        if (!ok) {
+            // Error mid-read: reset state so the next command starts clean
+            m_read_bytes = 0;
+            m_tx_accum.clear();
+        }
         return ok;                    // more RX segments of this read follow
     }
     m_read_bytes = 0;                 // CS released — ready for the next command
