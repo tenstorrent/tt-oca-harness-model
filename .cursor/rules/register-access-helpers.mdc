@@ -1,10 +1,10 @@
 ---
-description: Use the shared regmodel register-access library for hand-written SystemC register models (any subsystem) instead of re-deriving masking logic per file
-globs: **/*.cpp,**/*.h
+description: Use shared regmodel libraries (reg_access.h, reg_map.h, sim_log.h) for hand-written SystemC register models instead of re-deriving masking, dispatch, and logging per file
+globs: smc/**/*.cpp,smc/**/*.h,sep/**/*.cpp,sep/**/*.h,common/**/*.cpp,common/**/*.h
 alwaysApply: false
 ---
 
-# Register Access Control (shared regmodel library)
+# Register Modeling & Logging (shared regmodel libraries)
 
 Hand-written SystemC/TLM register models anywhere in this repository -- regardless
 of subsystem (SMC, SEP, VP, or any other system being modelled) -- are not code-generated. To avoid
@@ -87,3 +87,106 @@ clarity.
 
 See `doc/register-modeling-smc-vs-sep-csml.adoc` for why this exists instead
 of adopting SEP's CSML framework.
+
+## Offset dispatch: use `reg_map.h` where applicable
+
+When a model has **plain** registers (RO/WO/RW mask contract only, or simple
+W1C via `Register<Word>` write callbacks) with **no address banking** and
+**no bus-level side effects** in the decode path, use
+`common/include/reg_map.h` (`regmodel::RegisterMap<Word>`) instead of
+hand-written `switch` cases for every offset.
+
+Add `common/include` to `target_include_directories` and
+`#include "reg_map.h"` alongside `reg_access.h`.
+
+### When to use RegisterMap
+
+- Plain software-only registers (e.g. UART `SCR`, `ECR`, `ITR`)
+- Registers whose side effects are expressible as `Register<Word>` callbacks
+  (W1C, woset) and do not need extra logic in `reg_write` beyond the callback
+
+### When NOT to use RegisterMap (keep explicit decode)
+
+- **Banked decode** (UART DLAB remapping 0x00/0x04 to DLL/DLM)
+- **FIFO / command ports** with queue push/pop side effects
+- **Read-modify-write with hardware logic** triggered after the write
+  (e.g. `ECR`/`ITR` that also call `update_interrupts()` — write through the
+  map, then invoke side-effect helpers in `reg_write`)
+- **Memory-like targets** (bootrom, scratchpad RAM) — no register map
+- **Routers** (smc_fabric) — route tracing, not offset tables
+
+### Pattern (reference: `smc/peripherals/uart`)
+
+```cpp
+#include "reg_access.h"
+#include "reg_map.h"
+
+// members:
+regmodel::Register8 scr_{0xFFu, 0xFFu, 0x00u};
+regmodel::RegisterMap8 regmap_;
+
+// constructor:
+regmap_.add(uart_cfg::OFF_SCR, "SCR", scr_)
+       .add(uart_cfg::OFF_ECR, "ECR", ecr_);
+
+// reg_read — try map first, fall back to switch for banked/behavioral regs:
+if (uint8_t rv = 0; regmap_.read(off, rv)) { data = rv; return true; }
+switch (off) { ... }
+
+// reg_write — map for plain regs; side-effect hooks after write when needed:
+case uart_cfg::OFF_ECR:
+    regmap_.write(off, b);
+    update_interrupts();
+    break;
+```
+
+Use `regmap_.for_each()` for debug dumps and `regmap_.find(off)` for
+back-door access when the register is in the map.
+
+## Transaction logging: use `sim_log.h`
+
+New or edited SystemC/TLM models should use `common/include/sim_log.h`
+(`SIM_LOG_*` macros, namespace `simlog`) instead of raw `SC_REPORT_INFO` for
+routine messages and per-transaction tracing. Add `common/include` to the
+target and `#include "sim_log.h"`.
+
+### Level guide
+
+| Macro | Use for |
+|-------|---------|
+| `SIM_LOG_INFO` | Construction / CCI config summaries (once at elaboration) |
+| `SIM_LOG_TRACE` | Per-transaction `b_transport` read/write (addr, data, route target) |
+| `SIM_LOG_DEBUG` | Decode misses, filter denials, unexpected but non-fatal paths |
+| `SIM_LOG_WARN` | Recoverable runtime issues (out-of-range API calls) |
+| `SIM_LOG_FATAL` / `SC_REPORT_FATAL` | Elaboration-time config errors that must abort simulation |
+
+Keep `SC_REPORT_FATAL` for CCI/elaboration invariant checks that testbenches
+depend on. Do not replace those with `SIM_LOG_FATAL` unless the test contract
+is updated.
+
+### Pattern (reference: peripherals and `smc_fabric`)
+
+```cpp
+#include "sim_log.h"
+
+// constructor:
+SIM_LOG_INFO(this, "uart instantiated: tx_fifo=" << cfg_.tx_fifo_depth);
+
+// b_transport:
+if (gp.is_read()) {
+    ok = reg_read(addr, data);
+    SIM_LOG_TRACE(this, "read  off=0x" << std::hex << addr << " data=0x" << data);
+} else if (gp.is_write()) {
+    ok = reg_write(addr, data);
+    SIM_LOG_TRACE(this, "write off=0x" << std::hex << addr << " data=0x" << data);
+}
+if (!ok) SIM_LOG_DEBUG(this, "TLM decode miss at off=0x" << std::hex << addr);
+
+// routers (smc_fabric): trace ingress, remap decision, and downstream target
+SIM_LOG_TRACE(this, ingress << " " << cmd << " orig=0x" << std::hex << orig
+                            << " -> " << (local ? "local" : "outbound"));
+```
+
+Runtime detail is controlled via `simlog::set_level(simlog::level::trace)` (or
+a CCI `log_level` param wired to that call). At default `info` level, TRACE/DEBUG
+are silent (one integer compare each).

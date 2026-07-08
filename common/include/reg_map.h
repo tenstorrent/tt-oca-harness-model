@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
  * @file reg_map.h
- * @brief SKETCH: offset -> Register<Word> dispatch table built on reg_access.h.
+ * @brief Offset -> Register<Word> dispatch table built on reg_access.h.
  *
- * This is a *proposal sketch*, not yet wired into any peripheral. It closes the
+ * Wired in `smc/peripherals/uart` (SCR/ECR/ITR). It closes the
  * biggest remaining gap between the in-house `regmodel` micro-library and a full
  * framework like CSML: the memory-map / address-decode / dispatch plumbing that
  * every hand-written model currently re-implements as a `reg_read`/`reg_write`

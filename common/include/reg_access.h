@@ -37,6 +37,20 @@
 
 namespace regmodel {
 
+namespace detail {
+
+/// Cast any unsigned integral mask/literal to @p Word. On Linux x86_64,
+/// `uint64_t` is `unsigned long` while `0x…ULL` literals are
+/// `unsigned long long`; without this helper, GCC cannot deduce a single
+/// `Word` template parameter from mixed call-site types.
+template <typename Word, typename T>
+constexpr Word to_word(T v) {
+    static_assert(std::is_unsigned<Word>::value, "Word must be an unsigned integer");
+    return static_cast<Word>(v);
+}
+
+} // namespace detail
+
 // ---------------------------------------------------------------------------
 // Free functions: the semantic write patterns, as reusable building blocks.
 // Use these inside an explicit `reg_write()` switch case, or inside a
@@ -52,32 +66,35 @@ constexpr bool bit(Word v, unsigned i) {
 
 /// Write-1-to-clear: bits set in `data & w1c_mask` are cleared in `reg`.
 /// Matches RTL `sw = rw1c` / `sw = w1c` fields (e.g. *_STATUS interrupt regs).
-template <typename Word>
-constexpr Word apply_w1c(Word reg, Word data, Word w1c_mask) {
-    return reg & ~(data & w1c_mask);
+template <typename Word, typename Data = Word, typename Mask = Word>
+constexpr Word apply_w1c(Word reg, Data data, Mask w1c_mask) {
+    const Word m = detail::to_word<Word>(w1c_mask);
+    return reg & ~(detail::to_word<Word>(data) & m);
 }
 
 /// Write-1-to-set, sticky: bits set in `data` are OR'd into `reg` and never
 /// cleared by software (only by reset). Matches RTL `sw = woset` lock regs.
-template <typename Word>
-constexpr Word apply_woset(Word reg, Word data) {
-    return reg | data;
+template <typename Word, typename Data = Word>
+constexpr Word apply_woset(Word reg, Data data) {
+    return reg | detail::to_word<Word>(data);
 }
 
 /// Lock-gated read-modify-write: bits set in `lock` are frozen (retain their
 /// current value); all other bits take the new `data`. Matches RTL registers
 /// whose write mask is computed as `~lock` at runtime.
-template <typename Word>
-constexpr Word apply_lock_gated(Word reg, Word data, Word lock) {
-    const Word wmask = ~lock;
-    return (data & wmask) | (reg & ~wmask);
+template <typename Word, typename Data = Word, typename Lock = Word>
+constexpr Word apply_lock_gated(Word reg, Data data, Lock lock) {
+    const Word lk = detail::to_word<Word>(lock);
+    const Word wmask = ~lk;
+    return (detail::to_word<Word>(data) & wmask) | (reg & ~wmask);
 }
 
 /// Mask-and-merge write: `write_mask` bits take `data`, others keep `reg`.
 /// This is the plain RW/RO/WO default (RO => write_mask==0, WO handled on read).
-template <typename Word>
-constexpr Word apply_write_mask(Word reg, Word data, Word write_mask) {
-    return (data & write_mask) | (reg & ~write_mask);
+template <typename Word, typename Data = Word, typename Mask = Word>
+constexpr Word apply_write_mask(Word reg, Data data, Mask write_mask) {
+    const Word m = detail::to_word<Word>(write_mask);
+    return (detail::to_word<Word>(data) & m) | (reg & ~m);
 }
 
 // ---------------------------------------------------------------------------
