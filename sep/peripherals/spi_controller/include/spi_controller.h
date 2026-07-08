@@ -397,6 +397,7 @@ private:
 
    /// Transaction tracking
    bool m_transaction_pending;  ///< Flag indicating if a transaction is pending
+   bool m_sw_reset_abort = false;  ///< Set by SW_RST to abort an in-flight transaction
    spi_segment_t m_current_segment;  ///< Current segment being processed
    spi_config_t m_current_config;  ///< Current configuration for the segment
 

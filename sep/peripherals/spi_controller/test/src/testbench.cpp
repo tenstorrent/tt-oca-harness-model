@@ -155,6 +155,9 @@ void testbench::run_tests()
     test_coverage_signal_update_during_reset();
     test_coverage_fifo_overflow_underflow();
 
+    // Regression reproduction for the OT-SPI second-read TX-command drop.
+    test_repro_second_read_tx_drop();
+
 
     // Print final test summary
     CSML_INFO(1, logger) << "\n========================================" << std::endl
