@@ -725,6 +725,10 @@ public:
   void test_hw_handshake_no_chunk_done_intr();
   void test_hw_handshake_total_size_reached();
 
+  // RX-drain handshake behavior (peripheral-to-memory streaming)
+  void test_hw_handshake_no_drain_before_trigger();
+  void test_hw_handshake_multichunk_reference_74();
+
   // Helper function for generic trigger tests
   bool run_generic_hw_handshake_test(
       uint32_t trigger_index,

@@ -104,6 +104,10 @@ void testbench::run_func011_tests() {
   test_hw_handshake_no_chunk_done_intr();
   // test_hw_handshake_total_size_reached();
 
+  // RX-drain handshake behavior (peripheral-to-memory streaming)
+  test_hw_handshake_no_drain_before_trigger();
+  test_hw_handshake_multichunk_reference_74();
+
   CSML_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-011 Test Suite Complete\n"
                        << "========================================\n"
@@ -1381,4 +1385,224 @@ bool testbench::run_generic_hw_handshake_test(uint32_t trigger_index,
   }
 
   return passed;
+}
+
+// =============================================================================
+// RX-drain handshake: DMA must NOT drain before the first watermark trigger
+// =============================================================================
+
+/**
+ * @brief Arming a handshake transfer must not move any data until the first
+ *        watermark trigger arrives.
+ *
+ * Models the real boot flow, where the DMA is armed BEFORE the peripheral read
+ * is issued. If the engine drains a chunk immediately on arm it reads an empty
+ * peripheral FIFO (returning zero) and corrupts the transfer. This verifies
+ * that, after go with hardware-handshake enabled but with NO trigger asserted,
+ * the transfer is armed (busy=1) yet has moved nothing (done=0, destination
+ * unchanged). It then confirms the transfer still completes correctly once the
+ * triggers are supplied.
+ */
+void testbench::test_hw_handshake_no_drain_before_trigger() {
+  std::string test_name =
+      "Handshake: no drain before first trigger (arm-before-data)";
+  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+
+  bool passed = true;
+  std::stringstream msg;
+
+  m_test->apply_reset(sc_time(100, SC_NS));
+  wait(20, SC_NS);
+
+  const uint32_t src_addr = 0x10001000; // peripheral FIFO (fixed), OT internal
+  const uint32_t dst_addr = 0x10002000; // memory buffer (increment), OT internal
+  const uint32_t total_size = 64;       // 4 chunks
+  const uint32_t chunk_size = 16;       // watermark-sized chunk
+  const uint32_t trigger_index = 0;
+  const uint8_t src_value = 0xA5;       // FIFO data
+  const uint8_t dst_sentinel = 0xEE;    // pre-fill dest to detect a premature drain
+
+  // Fixed-source FIFO returns 4 bytes per transaction.
+  for (uint32_t i = 0; i < 4; i++)
+    m_test->write_ot_memory_byte(src_addr + i, src_value);
+  // Pre-fill the destination so any premature chunk-1 write is detectable.
+  for (uint32_t i = 0; i < total_size; i++)
+    m_test->write_ot_memory_w_byte(dst_addr + i, dst_sentinel);
+
+  m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);
+  m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
+  m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
+  m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
+  m_test->register_write_32(secure_dma_basetest::SRC_ADDR_HI_OFFSET, 0);
+  m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
+  m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0);
+  m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET,
+                            (0x7 << 0) | (0x7 << 4));
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x0); // fixed
+  m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1); // increment
+  wait(10, SC_NS);
+  m_test->register_write_32(secure_dma_basetest::HANDSHAKE_INTR_ENABLE_OFFSET,
+                            (1 << trigger_index));
+  m_test->register_write_32(secure_dma_basetest::INTR_ENABLE_OFFSET, 0x1);
+
+  // Arm: go + hardware_handshake_enable, but DO NOT assert any trigger.
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000010);
+
+  // Give the engine ample time to (wrongly) run a chunk if the bug is present.
+  wait(500, SC_NS);
+
+  uint32_t status = 0;
+  m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
+  if ((status & 0x1) == 0) {
+    passed = false;
+    msg << "not armed (STATUS.busy=0) after go; ";
+  }
+  if (status & 0x2) {
+    passed = false;
+    msg << "STATUS.done set before any trigger (premature drain); ";
+  }
+  bool dst_untouched = true;
+  for (uint32_t i = 0; i < total_size; i++) {
+    if (m_test->read_ot_memory_byte(dst_addr + i) != dst_sentinel) {
+      dst_untouched = false;
+      break;
+    }
+  }
+  if (!dst_untouched) {
+    passed = false;
+    msg << "destination modified before any trigger (drain-before-data); ";
+  }
+
+  // Now supply the triggers and confirm the transfer completes with real data.
+  const uint32_t num_chunks = total_size / chunk_size; // 4
+  const uint32_t max_polls = 100;
+  uint32_t triggers = 0;
+  bool done = false;
+  while (!done && triggers < num_chunks) {
+    m_test->set_lsio_trigger(trigger_index, true);
+    wait(5, SC_NS);
+    m_test->set_lsio_trigger(trigger_index, false);
+    triggers++;
+    for (uint32_t p = 0; p < max_polls && !done; p++) {
+      wait(10, SC_NS);
+      m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
+      if (status & 0x2)
+        done = true;
+    }
+  }
+  if (!done) {
+    passed = false;
+    msg << "transfer did not complete after " << triggers << " triggers; ";
+  } else {
+    for (uint32_t i = 0; i < total_size; i++) {
+      if (m_test->read_ot_memory_byte(dst_addr + i) != src_value) {
+        passed = false;
+        msg << "post-transfer data mismatch at offset " << i << "; ";
+        break;
+      }
+    }
+  }
+
+  if (passed)
+    msg << "armed without draining; completed on " << triggers
+        << " triggers with correct data";
+  report_test_result(test_name, passed, msg.str());
+}
+
+// =============================================================================
+// RX-drain handshake: multi-chunk transfer at the reference scale
+// =============================================================================
+
+/**
+ * @brief Handshake-paced transfer of 1184 bytes as 74 chunks of 16 bytes,
+ *        verifying byte-for-byte data correctness and completion.
+ *
+ * This mirrors the boot manifest-header read (74 x 16-byte chunks) at the
+ * model level. An incrementing source pattern is used so ordering is verified
+ * (not just a constant), one chunk drained per watermark trigger, completing
+ * when TOTAL_DATA_SIZE is reached.
+ */
+void testbench::test_hw_handshake_multichunk_reference_74() {
+  std::string test_name =
+      "Handshake: 74-chunk (1184B) multi-chunk drain, data verified";
+  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+
+  bool passed = true;
+  std::stringstream msg;
+
+  m_test->apply_reset(sc_time(100, SC_NS));
+  wait(20, SC_NS);
+
+  const uint32_t src_addr = 0x10001000; // incrementing source
+  const uint32_t dst_addr = 0x10010000; // incrementing dest (well separated)
+  const uint32_t total_size = 1184;     // 74 x 16
+  const uint32_t chunk_size = 16;
+  const uint32_t trigger_index = 0;
+  const uint32_t num_chunks = total_size / chunk_size; // 74
+
+  // Distinct per-byte source pattern so ordering is verified end to end.
+  auto pattern = [](uint32_t i) -> uint8_t {
+    return static_cast<uint8_t>((i * 7u + 13u) & 0xFF);
+  };
+  for (uint32_t i = 0; i < total_size; i++)
+    m_test->write_ot_memory_byte(src_addr + i, pattern(i));
+
+  m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);
+  m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
+  m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
+  m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
+  m_test->register_write_32(secure_dma_basetest::SRC_ADDR_HI_OFFSET, 0);
+  m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
+  m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0);
+  m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET,
+                            (0x7 << 0) | (0x7 << 4));
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x1); // increment
+  m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1); // increment
+  wait(10, SC_NS);
+  m_test->register_write_32(secure_dma_basetest::HANDSHAKE_INTR_ENABLE_OFFSET,
+                            (1 << trigger_index));
+  m_test->register_write_32(secure_dma_basetest::INTR_ENABLE_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000010);
+  wait(10, SC_NS);
+
+  const uint32_t max_polls = 100;
+  uint32_t triggers = 0;
+  uint32_t status = 0;
+  bool done = false;
+  while (!done && triggers < num_chunks) {
+    m_test->set_lsio_trigger(trigger_index, true);
+    wait(5, SC_NS);
+    m_test->set_lsio_trigger(trigger_index, false);
+    triggers++;
+    for (uint32_t p = 0; p < max_polls && !done; p++) {
+      wait(10, SC_NS);
+      m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
+      if (status & 0x2)
+        done = true;
+    }
+  }
+
+  if (!done) {
+    passed = false;
+    msg << "STATUS.done not observed after " << triggers << " triggers (expected "
+        << num_chunks << "); ";
+  }
+  if (triggers != num_chunks) {
+    passed = false;
+    msg << "completed in " << triggers << " triggers, expected " << num_chunks
+        << " (one chunk per trigger); ";
+  }
+  // Byte-for-byte data verification across all 74 chunks.
+  for (uint32_t i = 0; i < total_size && passed; i++) {
+    uint8_t actual = m_test->read_ot_memory_byte(dst_addr + i);
+    if (actual != pattern(i)) {
+      passed = false;
+      msg << "data mismatch at offset " << i << " (expected 0x" << std::hex
+          << (int)pattern(i) << ", got 0x" << (int)actual << std::dec << "); ";
+    }
+  }
+
+  if (passed)
+    msg << "74 chunks drained one-per-trigger; 1184 bytes verified byte-for-byte";
+  report_test_result(test_name, passed, msg.str());
 }

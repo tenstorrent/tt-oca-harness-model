@@ -40,6 +40,10 @@ class secure_dma_model : public secure_dma_base
 | `intr_o` | `sc_out<bool>` | Transfer complete / error interrupt |
 | `rst_ni` | `sc_in<bool>` | Active-low reset |
 
+## Behavior notes
+
+**Hardware-handshake RX drain (peripheral-to-memory).** When `CONTROL.hardware_handshake_enable` (bit 4) is set, arming the transfer (`CONTROL.go`) does **not** move any data immediately. The engine waits for the first RX-watermark trigger on `lsio_trigger` before draining the first chunk, then drains one chunk per trigger until `TOTAL_DATA_SIZE` is reached. This matches hardware: the DMA is typically armed before the peripheral read is issued, so draining on arm would read an empty peripheral FIFO. Non-handshake (memory-to-memory) transfers still start immediately on `go`.
+
 ## Building and Testing
 
 ```bash

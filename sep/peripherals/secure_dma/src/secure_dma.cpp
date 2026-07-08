@@ -413,9 +413,20 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     CSML_INFO(2, logger) << "Continuing multi-chunk hash accumulation (initial_transfer=0)" << std::endl;
     }
 
-    // Trigger transfer engine thread to start execution
-    m_transfer_start_event.notify(SC_ZERO_TIME);
-  CSML_INFO(2, logger) << "Transfer engine triggered via m_transfer_start_event" << std::endl;
+    // Start the transfer engine. In hardware-handshake mode the first chunk
+    // MUST wait for the peripheral's watermark trigger before draining —
+    // arming alone must not drain, or the engine would read an empty peripheral
+    // FIFO (which returns zero data) before the source has produced anything.
+    // The handshake_monitor_thread notifies m_transfer_start_event on the first
+    // enabled rising edge, so simply defer here. In non-handshake
+    // (memory-to-memory) mode the source is always ready, so start immediately.
+    bool hardware_handshake_enable = (value & (1U << 4)) != 0; // Bit 4
+    if (!hardware_handshake_enable) {
+      m_transfer_start_event.notify(SC_ZERO_TIME);
+    CSML_INFO(2, logger) << "Transfer engine triggered via m_transfer_start_event" << std::endl;
+    } else {
+    CSML_INFO(2, logger) << "Handshake mode: deferring first chunk until first watermark trigger" << std::endl;
+    }
   }
 
   // Side-effect: abort bit initiates transfer abort
