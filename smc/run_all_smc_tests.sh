@@ -190,19 +190,18 @@ fi
 ALL_IPS=(
     "bootrom:${SCRIPT_DIR}/peripherals/bootrom"
     "clint:${SCRIPT_DIR}/peripherals/clint"
+    "cpu_ctrl:${SCRIPT_DIR}/peripherals/cpu_ctrl"
     "i3c_controller:${SCRIPT_DIR}/peripherals/i3c_controller"
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
+    "uart:${SCRIPT_DIR}/peripherals/uart"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
 )
+# cpu_cluster requires Whisper (Tenstorrent internal) and Boost; only include
+# when both were found (_cpu_cluster_ready, computed above alongside the
+# WHISPER_HOME/BOOST_DIR banner).
 if [[ "${_cpu_cluster_ready}" == true ]]; then
-    ALL_IPS+=("cpu_cluster:${SCRIPT_DIR}/cpu_cluster")
-fi
-
-# cpu_cluster requires Whisper (Tenstorrent internal); only include when
-# WHISPER_HOME is set and the archive has been built.
-if $_WHISPER_OK; then
     ALL_IPS+=("cpu_cluster:${SCRIPT_DIR}/cpu_cluster")
 fi
 
