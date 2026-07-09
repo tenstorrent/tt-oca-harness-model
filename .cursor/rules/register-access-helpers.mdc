@@ -1,7 +1,6 @@
 ---
 description: Use shared regmodel libraries (reg_access.h, reg_map.h, sim_log.h) for hand-written SystemC register models instead of re-deriving masking, dispatch, and logging per file
-globs: smc/**/*.cpp,smc/**/*.h,sep/**/*.cpp,sep/**/*.h,common/**/*.cpp,common/**/*.h
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Register Modeling & Logging (shared regmodel libraries)

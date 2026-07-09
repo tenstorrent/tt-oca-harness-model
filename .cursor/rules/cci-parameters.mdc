@@ -1,7 +1,6 @@
 ---
 description: Expose SystemC model configuration via CCI (cci_param / csml_param) instead of ad-hoc structs or globals
-globs: **/*.cpp,**/*.h
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Configuration Parameters (SystemC CCI)
