@@ -1,0 +1,107 @@
+---
+description: Use scripts/pdf_to_markdown_with_diagrams.py for any PDF-to-Markdown conversion in this repo
+alwaysApply: true
+---
+
+# PDF -> Markdown conversion
+
+Any PDF (`.pdf`) to Markdown (`.md`) conversion performed in this repository —
+whether the agent is recovering text from a vendor datasheet, importing a spec
+that only exists as PDF, or extracting diagrams/images from a PDF for inclusion
+in repo docs — **must** use the shared helper
+`scripts/pdf_to_markdown_with_diagrams.py` instead of invoking `pdftotext`,
+`pdfimages`, `PyMuPDF` (`fitz`), `pdfplumber`, or any other PDF-parsing
+library directly.
+
+`scripts/pdf_to_markdown_with_diagrams.py` is cross-platform (macOS, RHEL,
+Ubuntu) and location-agnostic. It already encapsulates the repo conventions:
+text extraction with heading/list/structure preservation, image/diagram
+extraction into a sibling `images/` directory, Markdown image references with
+relative paths, and a graceful fallback chain
+(`PyMuPDF` -> `pdfplumber` -> poppler system tools `pdftotext` / `pdfimages`).
+
+## When to use it
+
+- Converting a `.pdf` file (or several, one invocation at a time) to Markdown.
+- Recovering text + diagrams from a PDF-only spec / datasheet / report so it
+  can be checked into the repo as `.md`.
+- Extracting images from a PDF for reuse in repo documentation.
+
+## When NOT to use it
+
+- Markdown -> PDF (the other direction) — use `scripts/build_docs.sh` (see
+  the `md-to-pdf.mdc` rule).
+- AsciiDoc (`.adoc`) sources — this script is PDF-input only.
+- Re-flowing or re-styling an existing `.md` — edit the `.md` directly.
+- OCR of scanned/image-only PDFs — this script extracts the embedded text
+  layer and images; it does not run OCR. If a PDF has no text layer, request
+  an OCR-capable tool instead.
+
+## Invocation patterns
+
+```bash
+# Default: .md written next to the .pdf (same basename, .md extension),
+# images extracted into <pdf_dir>/images/.
+python3 scripts/pdf_to_markdown_with_diagrams.py doc/foo.pdf
+#   -> doc/foo.md
+#   -> doc/images/page_1_img_1.png, ...
+
+# Explicit output file path.
+python3 scripts/pdf_to_markdown_with_diagrams.py doc/foo.pdf doc/foo_out.md
+
+# Explicit output directory (trailing slash matters — without it the path
+# is treated as a file name). The .md is named after the PDF basename.
+python3 scripts/pdf_to_markdown_with_diagrams.py doc/foo.pdf -o build/
+
+# Dependency check (no conversion; prints which backends are available).
+python3 scripts/pdf_to_markdown_with_diagrams.py --check-deps
+
+# Help:
+python3 scripts/pdf_to_markdown_with_diagrams.py -h
+```
+
+Always invoke with `python3` (not `python`) for portability across macOS,
+RHEL, and Ubuntu.
+
+## Dependencies
+
+The script auto-detects whichever backend is installed and falls back through
+a chain, so install **any one** of:
+
+- **PyMuPDF** (preferred, best image extraction):
+  - `pip install PyMuPDF`  (any platform)
+- **pdfplumber** (text-only fallback — images will come from `pdfimages`):
+  - `pip install pdfplumber`
+- **poppler system tools** (last-resort fallback, no Python deps):
+  - macOS:  `brew install poppler`
+  - RHEL:   `sudo dnf install poppler-utils`
+  - Ubuntu: `sudo apt-get install poppler-utils`
+
+Run `python3 scripts/pdf_to_markdown_with_diagrams.py --check-deps` to see
+which backends are currently available on the host.
+
+## Rules
+
+- Do **not** run `pdftotext`, `pdfimages`, `pdfplumber`, or `PyMuPDF` directly
+  to produce Markdown — call the script so the image-extraction layout,
+  relative image paths, and heading heuristics stay consistent across the
+  repo.
+- Do **not** hand-write a new `pdf2md_*.py` per document. New conversions go
+  through `scripts/pdf_to_markdown_with_diagrams.py`.
+- If the script is missing a capability you need (better table handling,
+  OCR fallback, alternate image naming, page-range selection), **extend
+  `scripts/pdf_to_markdown_with_diagrams.py`** rather than duplicating it.
+- After conversion, **check the produced `.md`** before reporting success:
+  the script prints `Markdown saved to: <path>` and `Output size: N bytes`.
+  Image-only or scanned PDFs will produce a near-empty `.md` — flag that to
+  the user rather than presenting an empty conversion as success.
+- The script writes images into an `images/` subdirectory **relative to the
+  output `.md` location**, and the `.md` references them with relative paths
+  (`images/page_N_img_M.<ext>`). Do not move the `.md` without the `images/`
+  directory, or the references will break.
+
+## See also
+
+- `scripts/README.md` — operator-facing docs for the scripts in this folder.
+- `.cursor/rules/md-to-pdf.mdc` — the reverse direction (Markdown -> PDF via
+  `scripts/build_docs.sh`).
