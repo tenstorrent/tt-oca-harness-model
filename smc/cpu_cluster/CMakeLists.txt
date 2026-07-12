@@ -231,6 +231,9 @@ if(SMC_BUILD_PLIC_INTEGRATION)
         PUBLIC
             "${SMC_PLIC_DIR}/include"
             "${CMAKE_CURRENT_SOURCE_DIR}/include"
+            # plic.cpp includes sim_log.h from the shared common/ tree (same
+            # include the PLIC's own CMakeLists.txt adds for its smc_plic target).
+            "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include"
     )
 
     # CCI / SystemC dylib paths at run-time -- both live outside the standard

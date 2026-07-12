@@ -124,6 +124,12 @@ public:
     constexpr Register(Word read_mask, Word write_mask, Word reset_value)
         : read_mask_(read_mask), write_mask_(write_mask), value_(reset_value) {}
 
+    /// Default-constructs a fully-masked-off (RO=0/WO=0) register at reset 0.
+    /// Exists so homogeneous register banks (e.g. `std::array<Register32, N>`)
+    /// can be default-member-initialized, then reconfigured via assignment
+    /// once the real read/write masks are known.
+    constexpr Register() : Register(Word{0}, Word{0}, Word{0}) {}
+
     /// Software read: applies the read callback if set, else masks by read_mask.
     Word read() const {
         return on_read_ ? on_read_(value_) : (value_ & read_mask_);
