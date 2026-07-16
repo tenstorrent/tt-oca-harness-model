@@ -1,0 +1,128 @@
+---
+description: Keep adding tests until line coverage is above 95% and run ASan, fixing every memory violation
+alwaysApply: true
+---
+
+# Test coverage ≥ 95% and ASan-clean
+
+When changing or adding C++ in this repository (any subsystem — SMC, SEP, VP,
+fabric, CPU cluster, common libs), the change is not "done" until **both** of
+the following are true:
+
+1. **Line coverage for the touched source is ≥ 95%**, measured by the repo's
+   existing coverage tooling.
+2. **The test binary runs clean under AddressSanitizer + UBSan** — no
+   AddressSanitizer or UndefinedBehaviorSanitizer errors, no leaks.
+
+Keep adding / extending tests until both gates pass. Do not stop at "tests
+compile and run" — that is not the bar.
+
+## Coverage gate (≥ 95%)
+
+Use the existing per-target `run_tests.sh --coverage` orchestrator. Do not
+invoke `gcovr`, `llvm-cov`, `lcov`, or `genhtml` directly — the orchestrator
+already picks the right backend (Clang → llvm-cov, GCC → gcovr) and writes
+`build_cov/coverage-report/index.html`.
+
+```bash
+# Per-target (e.g. smc/peripherals/clint, smc/cpu_cluster):
+./run_tests.sh --coverage
+
+# Top-level orchestrator (Release + ASAN + Coverage across all SMC targets):
+./run_all_smc_tests.sh
+```
+
+Coverage is measured against the **touched source files** for the change
+(the `.cpp` / `.h` you added or modified), not the whole tree. Read
+`build_cov/coverage-report/index.html` and identify uncovered lines/branches
+in those files.
+
+### Iteration loop
+
+Repeat until the per-file line coverage is ≥ 95%:
+
+1. Run `./run_tests.sh --coverage`.
+2. Open `build_cov/coverage-report/index.html`, filter to the touched files.
+3. For each uncovered line/branch, add a test that exercises it:
+   - New register offset / field → add a `b_transport` write+read test case.
+   - Error / decode-miss path → add a test that drives the bad input.
+   - Callback / side-effect branch → add a test that triggers the side effect.
+   - Default / fallthrough `default:` case → add a test with an out-of-range
+     offset or invalid command.
+4. Re-run `./run_tests.sh --coverage` and re-check.
+
+If a line is genuinely unreachable (dead code, defensive guards behind
+`SC_REPORT_FATAL` invariants), **remove the dead code** rather than leaving it
+uncovered. Do not lower the 95% bar to match the code; lower the code to
+match the bar.
+
+### Exclusions
+
+Do not pad coverage by excluding files. The only acceptable exclusions are:
+- Generated code (chipyard RTL wrappers, CSML-generated regfiles).
+- `sc_main` / testbench harness files (no unit under test).
+- Explicit `// GCOV_EXCL_LINE` / `// GCOV_EXCL_START` ... `// GCOV_EXCL_STOP`
+  for lines that cannot be reached without forcing a UB the sanitizer would
+  also flag — and only after a reviewer agrees.
+
+## ASan / UBSan gate
+
+Run the test binary under AddressSanitizer + UBSan via the existing
+orchestrator. Do not pass `-fsanitize=...` by hand — the build system already
+wires it.
+
+```bash
+# SMC targets (clint, plic, uart, i3c_controller, reset_unit, ...):
+cmake -S . -B build_asan -DENABLE_ASAN=ON
+cmake --build build_asan -j
+ASAN_OPTIONS=halt_on_error=0:detect_leaks=1 ./build_asan/<target>_tb
+
+# Or via the orchestrator (handles build dir + ASAN_OPTIONS + log capture):
+./run_tests.sh --asan
+
+# SEP targets use CMAKE_BUILD_TYPE=ASAN instead of ENABLE_ASAN:
+cmake -S . -B build_asan -DCMAKE_BUILD_TYPE=ASAN
+cmake --build build_asan -j
+ASAN_OPTIONS=halt_on_error=0:detect_leaks=1 ./build_asan/<target>_tb
+```
+
+`run_tests.sh --asan` writes `build_asan/asan.log.*` — read it. A non-empty
+`asan.log.*` file means the gate failed, even if the binary's exit code is 0
+(`halt_on_error=0` keeps the run going to surface multiple errors).
+
+### What counts as a violation (must fix, not suppress)
+
+- `ERROR: AddressSanitizer: heap-buffer-overflow` / `stack-buffer-overflow`
+- `ERROR: AddressSanitizer: heap-use-after-free` / `stack-use-after-scope`
+- `ERROR: AddressSanitizer: SEGV`
+- `ERROR: AddressSanitizer: memory-leak` / `LeakSanitizer`
+- `runtime error: ...` from UBSan (signed overflow, null deref, shift-out-of-
+  range, misaligned access, etc.)
+
+### Fix order
+
+1. **Fix the source**, not the test. A real ASan/UBSan report is a bug in the
+   model — patch the `.cpp`, then re-run `--asan` to confirm the log is empty.
+2. If the violation is in a destructor / `end_of_simulation` cleanup path,
+   still fix it — leak reports fail the gate.
+3. Only as a last resort, suppress a **specific** report with
+   `ASAN_OPTIONS=suppressions=asan.supp` plus a narrow suppressions file, and
+   document why in a comment on the suppression entry. Do not blanket-suppress
+   a whole category (`detect_leaks=0`, `halt_on_error=1`, etc.) to make a
+   failure "go away" — that fails the gate.
+
+## Done definition
+
+A C++ change is ready for review only when, for every touched target:
+
+- `./run_tests.sh --coverage` reports ≥ 95% line coverage on the touched
+  files (paste the per-file number into the PR description).
+- `./run_tests.sh --asan` exits with an empty `build_asan/asan.log.*` (no
+  ASan / UBSan / leak reports).
+- Any newly added test is meaningful (exercises a real path), not a
+  coverage-padding no-op.
+
+Reference orchestrators: `smc/cpu_cluster/run_tests.sh`,
+`smc/peripherals/<target>/run_tests.sh`, `smc/cpu_cluster/run_all_smc_tests.sh`,
+`.github/workflows/ci.yml` (Ubuntu: Release + ASAN + Coverage; RHEL8: skips
+ASAN because the gcc-toolset-12 ASan runtime is not packaged).
