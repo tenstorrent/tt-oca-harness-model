@@ -17,11 +17,88 @@ the following are true:
 Keep adding / extending tests until both gates pass. Do not stop at "tests
 compile and run" — that is not the bar.
 
+## Three separate runs: Release / ASan / Coverage
+
+Coverage and ASan are **each their own dedicated build + test invocation**,
+exactly the pattern used by every SMC peripheral (`smc/peripherals/clint`,
+`plic`, `uart`, `i3c_controller`, `reset_unit`, …) and the `smc/cpu_cluster`
+top-level. The three runs are never merged.
+
+```bash
+# Three SEPARATE invocations — never combined:
+./run_tests.sh              # Release build + run        -> build/
+./run_tests.sh --asan       # ASan build + run            -> build_asan/
+./run_tests.sh --coverage   # Coverage build + run        -> build_cov/
+```
+
+Hard rules baked into the orchestrator (keep them in any new `run_tests.sh`):
+
+- `--asan` and `--coverage` are **mutually exclusive** — the script exits 2 if
+  both are passed. ASan and coverage instrumentation conflict and produce
+  misleading coverage; they must not coexist in one binary.
+- Each instrumented mode uses an **isolated build directory**
+  (`build_asan/`, `build_cov/`) so its object files never invalidate the
+  other modes' CMake caches (and vice versa). Never reuse `build/` for an
+  instrumented run.
+- The top-level orchestrator `run_all_smc_tests.sh` and `.github/workflows/ci.yml`
+  run Release → ASAN → Coverage as **separate phases**. New targets picked
+  up by the orchestrator inherit this split — do not fuse a target's ASan or
+  Coverage run with another phase.
+
+### What "separate run" forbids
+
+- ❌ Running the Release binary under `ASAN_OPTIONS=...` — it was not
+  compiled with `-fsanitize=address`, so nothing is checked.
+- ❌ Adding `-fsanitize=address` (or `--coverage` / `-fprofile-arcs`) to the
+  default `CMAKE_CXX_FLAGS` so the regular `./run_tests.sh` "also catches
+  bugs / records coverage" — it slows the Release run, breaks the
+  Release/ASan/Coverage split, and taints the coverage report.
+- ❌ A single `run_tests.sh` invocation that builds once and then runs
+  "plain, then ASan, then coverage" against the same binary — three
+  builds, three binaries, three runs.
+- ❌ Reusing `build/` (or `build_asan/` for coverage, or vice versa) for an
+  instrumented run — CMake cache poisoning between instrumented and
+  non-instrumented object files.
+- ❌ Disabling LeakSanitizer (`detect_leaks=0`) globally to make a leak
+  go away — fix the leak, do not mute the detector.
+
+### CMake wiring (no hand-rolled flags)
+
+Do **not** add `-fsanitize=address` or `--coverage` directly to
+`CMAKE_CXX_FLAGS` or pass them on the `cmake` command line. Route them
+through the target's existing options so the orchestrator and CI drive
+them consistently:
+
+```cmake
+# SMC peripherals / smc/cpu_cluster — option-driven:
+option(ENABLE_ASAN     "Build with AddressSanitizer"   OFF)
+option(ENABLE_COVERAGE "Build with source-level coverage" OFF)
+if(ENABLE_ASAN AND ENABLE_COVERAGE)
+  message(FATAL_ERROR "ENABLE_ASAN and ENABLE_COVERAGE cannot both be ON "
+                       "(they produce conflicting instrumentation).")
+endif()
+if(ENABLE_ASAN)
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+  add_link_options   (-fsanitize=address)
+endif()
+if(ENABLE_COVERAGE)
+  add_compile_options(--coverage)  # GCC: --coverage; Clang: -fprofile-instr-gen ...
+  add_link_options   (--coverage)
+endif()
+```
+
+SEP peripherals use a different but equivalent convention
+(`CMAKE_BUILD_TYPE STREQUAL "ASAN"` with `-fsanitize=address,undefined`).
+Stay consistent with the subsystem you are in — do **not** introduce a
+parallel `ENABLE_ASAN` option on a SEP target, and do **not** migrate an
+SMC target to `CMAKE_BUILD_TYPE=ASAN`.
+
 ## Coverage gate (≥ 95%)
 
-Use the existing per-target `run_tests.sh --coverage` orchestrator. Do not
-invoke `gcovr`, `llvm-cov`, `lcov`, or `genhtml` directly — the orchestrator
-already picks the right backend (Clang → llvm-cov, GCC → gcovr) and writes
+Use the existing per-target `run_tests.sh --coverage` orchestrator (a
+**separate run** — see above). Do not invoke `gcovr`, `llvm-cov`, `lcov`,
+or `genhtml` directly — the orchestrator already picks the right backend
+(Clang → llvm-cov, GCC → gcovr) and writes
 `build_cov/coverage-report/index.html`.
 
 ```bash
@@ -68,19 +145,18 @@ Do not pad coverage by excluding files. The only acceptable exclusions are:
 ## ASan / UBSan gate
 
 Run the test binary under AddressSanitizer + UBSan via the existing
-orchestrator. Do not pass `-fsanitize=...` by hand — the build system already
-wires it.
+orchestrator as a **separate run** (`./run_tests.sh --asan` — see "Three
+separate runs" above). Do not pass `-fsanitize=...` by hand — the build
+system already wires it through `ENABLE_ASAN` (SMC) or
+`CMAKE_BUILD_TYPE=ASAN` (SEP).
 
 ```bash
 # SMC targets (clint, plic, uart, i3c_controller, reset_unit, ...):
-cmake -S . -B build_asan -DENABLE_ASAN=ON
-cmake --build build_asan -j
-ASAN_OPTIONS=halt_on_error=0:detect_leaks=1 ./build_asan/<target>_tb
-
-# Or via the orchestrator (handles build dir + ASAN_OPTIONS + log capture):
 ./run_tests.sh --asan
+#   ^ builds in build_asan/ with -DENABLE_ASAN=ON, runs with
+#     ASAN_OPTIONS=halt_on_error=0:detect_leaks=1:log_path=build_asan/asan.log
 
-# SEP targets use CMAKE_BUILD_TYPE=ASAN instead of ENABLE_ASAN:
+# SEP targets:
 cmake -S . -B build_asan -DCMAKE_BUILD_TYPE=ASAN
 cmake --build build_asan -j
 ASAN_OPTIONS=halt_on_error=0:detect_leaks=1 ./build_asan/<target>_tb
