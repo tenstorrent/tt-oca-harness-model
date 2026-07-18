@@ -190,6 +190,7 @@ fi
 ALL_IPS=(
     "bootrom:${SCRIPT_DIR}/peripherals/bootrom"
     "clint:${SCRIPT_DIR}/peripherals/clint"
+    "i2c_controller:${SCRIPT_DIR}/peripherals/i2c_controller"
     "i3c_controller:${SCRIPT_DIR}/peripherals/i3c_controller"
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
