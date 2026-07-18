@@ -1,0 +1,73 @@
+---
+description: Use scripts/build_docs.sh for any Markdown-to-PDF conversion in this repo
+alwaysApply: true
+---
+
+# Markdown -> PDF conversion
+
+Any Markdown (`.md`) to PDF conversion performed in this repository — whether
+the agent is producing a one-off PDF of a spec, regenerating a checked-in PDF
+next to its source, or batch-converting a folder of docs — **must** use the
+shared, generic helper `scripts/build_docs.sh` instead of invoking `pandoc`,
+`typst`, `tectonic`, or `Google Chrome --headless` directly.
+
+`scripts/build_docs.sh` is location-agnostic and works for any `.md` file at
+any folder hierarchy in the repo. It already encapsulates the repo conventions:
+pandoc -> standalone HTML5 with embedded CSS -> Chrome headless PDF, default
+`print.css` discovery (`print.css` next to the input, else
+`smc/cpu_cluster/doc/print.css`), TOC, title derivation, and proper error
+checks.
+
+## When to use it
+
+- Converting a `.md` file (or several) to PDF.
+- Regenerating a checked-in PDF whose `.md` source was edited.
+- Producing a PDF deliverable from a Markdown spec / design doc / README.
+
+## When NOT to use it
+
+- AsciiDoc (`.adoc`) sources — this script is Markdown-only.
+- Editing the stylesheet — edit `print.css` directly, do not patch the script.
+- Adding a new PDF engine to the repo's toolchain — extend the script rather
+  than spinning up a parallel one-off command.
+
+## Invocation patterns
+
+```bash
+# Default: PDF written next to the .md (same basename, .pdf extension).
+scripts/build_docs.sh doc/foo.md                       # -> doc/foo.pdf
+
+# Explicit output path (single input only).
+scripts/build_docs.sh doc/foo.md --out build/foo.pdf
+
+# Batch: multiple files, or a shell-expanded glob.
+scripts/build_docs.sh doc/a.md doc/b.md
+scripts/build_docs.sh doc/*.md
+
+# Overrides:
+scripts/build_docs.sh doc/foo.md --css my.css --title "My Doc"
+scripts/build_docs.sh doc/foo.md --no-toc
+scripts/build_docs.sh doc/foo.md --toc-depth 2
+scripts/build_docs.sh doc/foo.md --keep-html           # keep intermediate HTML
+scripts/build_docs.sh doc/foo.md --chrome /path/to/chrome
+
+# Use a pandoc PDF engine (typst / tectonic) instead of the HTML/Chrome path.
+# `--css` is ignored in this mode.
+scripts/build_docs.sh doc/foo.md --engine typst
+
+# Help:
+scripts/build_docs.sh --help
+```
+
+## Rules
+
+- Do **not** run `pandoc ... -o foo.pdf` directly — call the script so the
+  house style (CSS, TOC, title metadata) stays consistent across the repo.
+- Do **not** hand-write a new `build_*.sh` per document (the way
+  `doc/export-pdf.sh` and `doc/build_customer_guide.sh` did). Those predate the
+  generic helper; new conversions go through `scripts/build_docs.sh`.
+- If the script is missing a capability you need (new engine, alternate
+  stylesheet set, front-matter handling), **extend `scripts/build_docs.sh`**
+  rather than duplicating it.
+- Verify the PDF was produced (the script prints `=> <path>` per file and a
+  final `Done: N file(s) converted.` line) before reporting success.

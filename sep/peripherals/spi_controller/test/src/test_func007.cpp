@@ -1035,3 +1035,148 @@ void testbench::test_func007_multi_segment_csaat()
     report_test_result("FUNC-007: Multi-Segment CSAAT", test_passed);
 }
 
+// =============================================================================
+// Regression reproduction: second-read TX-command drop after SW_RST
+// =============================================================================
+//
+// Bug seen in the OpenTitan-SPI DMA boot end-to-end run (branch
+// cmccoy/spi_dma_fixups): after a flash read completes, the boot ROM issues
+// CTRL.SW_RST and then a SECOND read, framed as an opcode+address TX segment
+// (CSAAT held) followed by CSAAT-chained RX segments. In the VP the second
+// read's TX command is QUEUED but the transaction thread never processes it
+// (no "Pulling from TX FIFO"): the opcode+address is never driven, so the read
+// returns undriven data (in the E2E the payload TOC read back as 0xFF ->
+// MANIFEST_ERR_BAD_TOC_ID). The first read is unaffected.
+//
+// This models two back-to-back flash reads (opcode+addr TX + chained RX,
+// PIO-drained) with a SW_RST between. The direct discriminator is the TX-FIFO
+// depth after each read: if the opcode+address TX command is processed the TX
+// FIFO drains to 0; if it is dropped the pushed opcode+address word is stranded
+// (TXQD > 0).
+//
+// NOTE: the E2E drop occurs while the DMA drains the RX FIFO concurrently and
+// firmware races ahead queuing the next read (so the SW_RST and the second
+// read's TX land while the first read is still in flight). This unit test
+// PIO-drains between chunks and may not recreate that exact interleave on the
+// first pass. If it PASSES, tighten the interleave: queue the SW_RST + second
+// read's TX/RX before the first read's tail segment has drained (or drive the
+// RX drain from a separate thread) to recreate the "command issued while a
+// prior read is still in flight" window that the DMA path produces.
+// =============================================================================
+void testbench::test_repro_second_read_tx_drop()
+{
+    using namespace spi_controller_regs;
+
+    bool test_passed = true;
+    int sub_tests_passed = 0;
+    int sub_tests_failed = 0;
+    const std::string test_name = "REPRO: second flash read TX-command drop after SW_RST";
+    uint32_t status = 0, error_status = 0;
+
+    CSML_INFO(1, logger) << "\n========================================" << std::endl
+                         << "[REPRO] Second-read TX-command drop after SW_RST" << std::endl
+                         << "========================================" << std::endl;
+
+    // Clean, enabled, error-free start.
+    software_reset();
+    wait(20, SC_NS);
+    clear_errors();
+    test->write_register_32(CTRL_OFFSET, 0xA0000000);  // SPIEN(31)=1, OUTPUT_EN(29)=1
+    wait(10, SC_NS);
+    test->clear_slave_state();
+
+    // One flash read: opcode(0x03)+3-byte address TX (CSAAT held), then the data
+    // phase as CSAAT-chained RX chunks of <= 256 B, PIO-drained per chunk. Sets
+    // drained_bytes and returns the TX-FIFO depth (words) after the transfer:
+    // 0 => the opcode+address TX command was processed; >0 => it was dropped.
+    auto run_flash_read = [&](uint8_t fill, uint32_t total_bytes, uint32_t &drained_bytes) -> uint32_t {
+        std::vector<uint8_t> data(total_bytes, fill);
+        test->load_slave_rx_data(data);
+
+        // TX phase: 4-byte opcode+address, CSAAT=1 so the RX data phase follows.
+        const uint8_t hdr[4] = { 0x03u, 0x00u, 0x10u, 0x00u };
+        uint32_t hdr_word = (uint32_t)hdr[0] | ((uint32_t)hdr[1] << 8)
+                          | ((uint32_t)hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
+        test->write_register_32(TXDATA_OFFSET, hdr_word);
+        test->write_register_32(CMD_OFFSET, BUILD_CMD(3u, 2u /*TX*/, 0u, 1u /*csaat*/));
+
+        drained_bytes = 0;
+        uint32_t issued = 0;
+        while (issued < total_bytes) {
+            uint32_t chunk = (total_bytes - issued) < 256u ? (total_bytes - issued) : 256u;
+            bool last = (issued + chunk) >= total_bytes;
+            test->write_register_32(CMD_OFFSET, BUILD_CMD(chunk - 1u, 1u /*RX*/, 0u, last ? 0u : 1u));
+
+            uint32_t got = 0, guard = 0;
+            while (got < chunk && guard < 200000u) {
+                guard++;
+                test->read_register_32(STATUS_OFFSET, status);
+                uint32_t rxqd = (status >> 8) & 0xFFu;
+                if (rxqd > 0u) {
+                    uint32_t word = 0;
+                    test->read_register_32(RXDATA_OFFSET, word);
+                    got += (chunk - got) < 4u ? (chunk - got) : 4u;
+                } else {
+                    wait(50, SC_NS);
+                }
+            }
+            drained_bytes += got;
+            issued += chunk;
+        }
+
+        wait(200, SC_NS);  // let the engine settle before sampling TXQD
+        test->read_register_32(STATUS_OFFSET, status);
+        return status & 0xFFu;  // TXQD (words remaining in TX FIFO)
+    };
+
+    // ---- Read 1 (baseline: must work) ----
+    uint32_t got1 = 0;
+    uint32_t txqd1 = run_flash_read(0xA5u, 512u, got1);
+    if (got1 == 512u && txqd1 == 0u) {
+        CSML_INFO(2, logger) << "  [PASS] Read 1: 512 B drained, TX FIFO empty (opcode+addr consumed)" << std::endl;
+        sub_tests_passed++;
+    } else {
+        CSML_ERROR(2, logger) << "  [FAIL] Read 1: drained=" << got1 << " TXQD=" << txqd1 << std::endl;
+        sub_tests_failed++; test_passed = false;
+    }
+
+    // ---- SW_RST between reads, as the boot ROM does before each read ----
+    software_reset();
+    wait(20, SC_NS);
+    test->write_register_32(CTRL_OFFSET, 0xA0000000);
+    wait(10, SC_NS);
+
+    // ---- Read 2 (the read the bug drops) ----
+    uint32_t got2 = 0;
+    uint32_t txqd2 = run_flash_read(0x5Au, 512u, got2);
+
+    // CORE CHECK: the second read's opcode+address TX command must be processed,
+    // i.e. the TX FIFO must be empty. A dropped command strands the pushed
+    // opcode+address word (TXQD > 0).
+    if (txqd2 == 0u) {
+        CSML_INFO(2, logger) << "  [PASS] Read 2: opcode+addr TX command processed (TX FIFO empty)" << std::endl;
+        sub_tests_passed++;
+    } else {
+        CSML_ERROR(2, logger) << "  [FAIL] Read 2: opcode+addr TX command DROPPED — "
+                              << txqd2 << " word(s) stranded in TX FIFO (reproduces the E2E bug)" << std::endl;
+        sub_tests_failed++; test_passed = false;
+    }
+    if (got2 == 512u) {
+        sub_tests_passed++;
+    } else {
+        CSML_ERROR(2, logger) << "  [FAIL] Read 2: only " << got2 << "/512 B drained" << std::endl;
+        sub_tests_failed++; test_passed = false;
+    }
+    test->read_register_32(ERROR_STATUS_OFFSET, error_status);
+    if (((error_status >> 4) & 0x1u) == 0u) {
+        sub_tests_passed++;
+    } else {
+        CSML_ERROR(2, logger) << "  [FAIL] Read 2: unexpected ERROR_STATUS.OVERFLOW" << std::endl;
+        sub_tests_failed++; test_passed = false;
+    }
+
+    CSML_INFO(1, logger) << "  [REPRO] sub-tests passed=" << sub_tests_passed
+                         << " failed=" << sub_tests_failed << std::endl;
+    report_test_result(test_name.c_str(), test_passed);
+}
+

@@ -270,5 +270,11 @@ public:
     void test_coverage_reset_with_queued_commands();
     void test_coverage_signal_update_during_reset();
     void test_coverage_fifo_overflow_underflow();
+
+    /// Regression reproduction: a second flash read (opcode+address TX + chained
+    /// RX) issued after a CTRL.SW_RST must still process its TX command. Models
+    /// the OT-SPI boot pattern where the payload read's opcode+address was
+    /// silently dropped after the manifest-header read + SW_RST.
+    void test_repro_second_read_tx_drop();
 };
 

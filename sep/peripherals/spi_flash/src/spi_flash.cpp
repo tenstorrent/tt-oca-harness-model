@@ -48,6 +48,7 @@ void spi_flash::reset_method()
     if (!rst_ni.read()) {
         m_model.reset();
         m_tx_accum.clear();
+        m_read_bytes = 0;
         std::cout << "[spi_flash] Reset asserted — device state cleared\n";
     }
 }
@@ -106,98 +107,158 @@ int spi_flash::addr_bytes_for_opcode(uint8_t opcode) const
 }
 
 // ============================================================================
-// SPI TRANSACTION (multi-segment state machine)
+// OPCODE CLASSIFICATION + SHARED PARSE / COPY HELPERS
 // ============================================================================
+
+bool spi_flash::is_memory_read_opcode(uint8_t opcode) const
+{
+    using namespace spi_flash_opcodes;
+    switch (opcode) {
+        case READ:
+        case READ_4B:
+        case READ_FAST:
+        case READ_FAST_ALT:
+        case READ_DUAL_OUT:
+        case READ_QUAD_OUT:
+        case READ_SFDP:
+            return true;
+        default:
+            return false;   // incl. READ_STATUS: dispatched once, not streamed
+    }
+}
+
+uint32_t spi_flash::parse_address(uint8_t opcode) const
+{
+    // Address bytes follow the opcode in the accumulated header, big-endian.
+    const int alen = addr_bytes_for_opcode(opcode);
+    uint32_t addr = 0;
+    for (int i = 0; i < alen; ++i) {
+        const size_t idx = static_cast<size_t>(1 + i);
+        if (idx < m_tx_accum.size())
+            addr = (addr << 8u) | m_tx_accum[idx];
+    }
+    return addr;
+}
+
+void spi_flash::copy_rx(uint8_t* rx_data,
+                        const std::vector<uint8_t>& rx_vec,
+                        uint32_t len) const
+{
+    if (rx_data == nullptr) return;
+    for (size_t i = 0; i < rx_vec.size() && i < len; ++i)
+        rx_data[i] = rx_vec[i];
+}
+
+// ============================================================================
+// SPI TRANSACTION — classify each segment, then dispatch
+// ============================================================================
+//
+// The controller calls this once per SPI segment; a logical flash command spans a
+// sequence of segments framed by csaat ("chip select stays asserted after this
+// segment"). Every segment first accumulates its TX bytes, then takes exactly one
+// of two dispatch shapes:
+//
+//   * Memory read — returns data on EVERY RX segment, streamed from an advancing
+//     address, so each RX segment dispatches its own read (serve_read_segment).
+//   * Everything else (write / erase / control / status, or a bare RX with no
+//     opcode) — accumulates until CS is released, then dispatches once
+//     (dispatch_command).
 
 bool spi_flash::spi_transaction(const spi_segment_t& segment,
                                  const spi_config_t& /*config*/,
                                  const uint8_t*       tx_data,
                                  uint8_t*             rx_data)
 {
-    // ------------------------------------------------------------------
-    // Step 1 — Accumulate TX bytes from this segment
-    // ------------------------------------------------------------------
-    if (segment.direction == spi_direction_e::TX_ONLY ||
-        segment.direction == spi_direction_e::BIDIR)
-    {
-        if (tx_data != nullptr) {
-            m_tx_accum.insert(m_tx_accum.end(),
-                              tx_data,
-                              tx_data + segment.len);
-        }
+    // Accumulate this segment's TX bytes. The command header (opcode + address +
+    // any write data) builds up across CSAAT-chained TX/BIDIR segments; RX and
+    // DUMMY segments carry none.
+    if ((segment.direction == spi_direction_e::TX_ONLY ||
+         segment.direction == spi_direction_e::BIDIR) && tx_data != nullptr) {
+        m_tx_accum.insert(m_tx_accum.end(), tx_data, tx_data + segment.len);
     }
-    // DUMMY and RX_ONLY segments carry no TX bytes — nothing to accumulate.
 
-    // ------------------------------------------------------------------
-    // Step 2 — If CS stays asserted, wait for the next segment
-    // ------------------------------------------------------------------
+    // A segment carries memory-read data iff it receives bytes and the accumulated
+    // opcode is a streaming-read opcode. Such segments must be served now, from the
+    // running read address — not deferred to CS release (which would drop every
+    // intermediate chunk and truncate the read to its final segment).
+    const bool receives =
+        (segment.direction == spi_direction_e::RX_ONLY ||
+         segment.direction == spi_direction_e::BIDIR) && segment.len > 0;
+    if (receives && !m_tx_accum.empty() && is_memory_read_opcode(m_tx_accum[0])) {
+        return serve_read_segment(segment, rx_data);
+    }
+
+    // Non-read command: keep accumulating until CS is released, then dispatch once.
     if (segment.csaat) {
-        return true;   // transaction not yet complete
+        return true;
     }
+    return dispatch_command(segment, rx_data);
+}
 
-    // ------------------------------------------------------------------
-    // Step 3 — Last segment: parse the accumulated TX bytes
-    // ------------------------------------------------------------------
+// Serve one RX segment of a (possibly multi-segment) memory read. The base address
+// is parsed from the stable accumulated header and offset by the bytes already
+// served this command, so no separate "read active" flag or latched opcode is
+// needed — RX segments add no TX bytes, so the header stays put for the whole read.
+bool spi_flash::serve_read_segment(const spi_segment_t& segment, uint8_t* rx_data)
+{
+    const uint8_t  opcode = m_tx_accum[0];
+    const uint32_t addr   = parse_address(opcode) + m_read_bytes;
+
+    std::vector<uint8_t> rx_vec(segment.len, 0x00);
+    std::vector<uint8_t> no_write;
+    const bool ok = m_model.process_command(opcode, addr, rx_vec, no_write);
+    copy_rx(rx_data, rx_vec, segment.len);
+    m_read_bytes += segment.len;
+
+    if (segment.csaat) {
+        if (!ok) {
+            // Error mid-read: reset state so the next command starts clean
+            m_read_bytes = 0;
+            m_tx_accum.clear();
+        }
+        return ok;                    // more RX segments of this read follow
+    }
+    m_read_bytes = 0;                 // CS released — ready for the next command
+    m_tx_accum.clear();
+    return ok;
+}
+
+// Dispatch a completed non-streaming command from the accumulated TX bytes: parse
+// [opcode][address][write data], run it once, and copy back any read bytes (e.g.
+// READ_STATUS). A bare RX with no accumulated opcode models an undriven MISO (0xFF).
+bool spi_flash::dispatch_command(const spi_segment_t& segment, uint8_t* rx_data)
+{
     if (m_tx_accum.empty()) {
-        // Pure RX-only segment with no preceding TX: no opcode to parse.
-        // Model MISO as idle-high (0xFF) — same as an undriven MISO line.
-        // This path is exercised by VP DMA handshake tests that issue a
-        // bare RX CMD without a flash command prefix; data values are not
-        // checked by those tests, only the handshake protocol.
+        // RX-only segment with no preceding TX command: model MISO idle-high.
+        // Exercised by VP DMA-handshake tests that issue a bare RX with no flash
+        // command prefix (those check the handshake protocol, not data values).
         if (rx_data != nullptr && segment.len > 0) {
             std::memset(rx_data, 0xFF, segment.len);
         }
         return true;
     }
 
-    uint8_t opcode = m_tx_accum[0];
-    int     addr_len = addr_bytes_for_opcode(opcode);
+    const uint8_t  opcode  = m_tx_accum[0];
+    const uint32_t address = parse_address(opcode);
+    const size_t   hdr_len = static_cast<size_t>(1 + addr_bytes_for_opcode(opcode));
 
-    // Parse address (big-endian, MSB first)
-    uint32_t address = 0;
-    for (int i = 0; i < addr_len; ++i) {
-        size_t idx = static_cast<size_t>(1 + i);
-        if (idx < m_tx_accum.size()) {
-            address = (address << 8u) | m_tx_accum[idx];
-        }
-    }
-
-    // Any bytes after opcode + address are write (program) data
-    size_t hdr_len = static_cast<size_t>(1 + addr_len);
+    // Any bytes after opcode + address are write (program) data.
     std::vector<uint8_t> write_data;
     if (hdr_len < m_tx_accum.size()) {
         write_data.assign(m_tx_accum.begin() + static_cast<ptrdiff_t>(hdr_len),
                           m_tx_accum.end());
     }
 
-    // ------------------------------------------------------------------
-    // Step 4 — Prepare receive buffer for read commands
-    // ------------------------------------------------------------------
+    // Size the receive buffer for commands that return data (e.g. READ_STATUS).
     std::vector<uint8_t> rx_vec;
     if ((segment.direction == spi_direction_e::RX_ONLY ||
-         segment.direction == spi_direction_e::BIDIR) &&
-        segment.len > 0)
-    {
+         segment.direction == spi_direction_e::BIDIR) && segment.len > 0) {
         rx_vec.resize(segment.len, 0x00);
     }
 
-    // ------------------------------------------------------------------
-    // Step 5 — Dispatch to the pure-C++ flash model
-    // ------------------------------------------------------------------
-    bool ok = m_model.process_command(opcode, address, rx_vec, write_data);
+    const bool ok = m_model.process_command(opcode, address, rx_vec, write_data);
+    copy_rx(rx_data, rx_vec, segment.len);
 
-    // ------------------------------------------------------------------
-    // Step 6 — Copy read data back to the caller's buffer
-    // ------------------------------------------------------------------
-    if (rx_data != nullptr && !rx_vec.empty()) {
-        for (size_t i = 0; i < rx_vec.size() && i < segment.len; ++i)
-            rx_data[i] = rx_vec[i];
-    }
-
-    // ------------------------------------------------------------------
-    // Step 7 — Clear accumulator ready for next command
-    // ------------------------------------------------------------------
     m_tx_accum.clear();
-
     return ok;
 }

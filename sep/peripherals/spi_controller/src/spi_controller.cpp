@@ -425,16 +425,36 @@ void spi_controller_ip::spi_transaction_thread()
             // Process the transaction (returns false on error)
             bool transaction_success = process_single_transaction(segment, config);
 
-            // SW_RST could have cleared the queue during transaction processing
-            if (!m_command_queue.empty()) {
+            // Pop the segment we just processed — UNLESS a SW_RST cleared the
+            // queue while this segment was in flight (m_sw_reset_abort, armed by
+            // SW_RST only when a transaction is ACTIVE). In that case the segment
+            // we processed was already flushed and the current front is a NEW
+            // command (e.g. the opcode+address of the read firmware issues right
+            // after flushing for the next transfer); popping it would silently
+            // drop that command. m_sw_reset_abort is cleared at the next
+            // process_single_transaction() entry, so the new command pops normally.
+            if (!m_sw_reset_abort && !m_command_queue.empty()) {
                 m_command_queue.pop();
             }
 
             if (!transaction_success) {
-                // Transaction failed - error already set, FSM already returned to IDLE
-                // Stop processing remaining commands until error is cleared
-                CSML_ERROR(0, logger) << "[SPI_HOST] Transaction failed, halting command processing" << std::endl;
-                break;
+                // The transaction did not complete. Two disjoint causes:
+                //  (a) a real error (e.g. TX underflow) set ERROR_STATUS — the
+                //      while-guard below is now false, so the loop exits and the
+                //      core stays halted until firmware clears the error, then
+                //      handle_write_ERROR_STATUS re-kicks m_transaction_event.
+                //  (b) a SW_RST aborted an in-flight blocked segment — ERROR_STATUS
+                //      is clear and the queue was flushed, possibly re-populated
+                //      with the next read's commands. We must re-evaluate the queue
+                //      rather than break: the CMD-write notifications that queued
+                //      those commands may have been lost (the thread was parked on
+                //      a FIFO wait, not m_transaction_event), so breaking to
+                //      wait(m_transaction_event) would strand them.
+                // 'continue' handles both: the guard exits on a real error and
+                // keeps draining on a clean SW_RST abort.
+                CSML_INFO(1, logger) << "[SPI_HOST] Transaction did not complete (error or SW_RST abort); "
+                                     << "re-evaluating command queue" << std::endl;
+                continue;
             }
 
             // Determine next state based on CSAAT flag
@@ -463,6 +483,9 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
     // for TLM LT compliance. No need for async check here since command
     // would have been rejected before reaching this point if insufficient space.
     // ===================================================================
+
+    // Fresh transaction: clear any stale SW_RST abort request.
+    m_sw_reset_abort = false;
 
     // Prepare TX/RX buffers for the entire segment
     uint8_t tx_buffer[512];
@@ -500,6 +523,12 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                     wait(m_tx_fifo_at_watermark);
                 } else {
                     wait(m_tx_data_available);
+                }
+
+                // SW_RST while blocked: abort this transaction cleanly.
+                if (m_sw_reset_abort) {
+                    set_fsm_state(fsm_state_e::IDLE);
+                    return false;
                 }
 
                 if (!tx_fifo_pop(word)) {
@@ -573,6 +602,12 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                 update_dma_trigger();
                 update_event_interrupt_state();
                 wait(m_rx_space_available_event);
+
+                // SW_RST while blocked on a full FIFO: abort this transaction.
+                if (m_sw_reset_abort) {
+                    set_fsm_state(fsm_state_e::IDLE);
+                    return false;
+                }
             }
 
             update_dma_trigger();
@@ -983,6 +1018,17 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
     if (CTRL.SW_RST) {
         CSML_INFO(2, logger) << "  [RESET] Software reset triggered!" << std::endl;
 
+        // Capture whether a transaction is in flight BEFORE we overwrite the FSM
+        // state below. The transaction thread holds fsm_state ACTIVE for the whole
+        // span between reading m_command_queue.front() and the post-process pop, so
+        // ACTIVE here means "the segment currently being processed is still the
+        // queue front we are about to clear". This must be sampled first: the
+        // set_fsm_state(IDLE) on the next line would otherwise make the arming
+        // check below always false (the original bug — the abort was never armed,
+        // so a queue clear + re-populate during an in-flight segment let the
+        // post-process pop drop the freshly queued command).
+        bool was_active = (m_fsm_state == fsm_state_e::ACTIVE);
+
         // Reset FSM state
         set_fsm_state(fsm_state_e::IDLE);
 
@@ -1010,9 +1056,21 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
         // Update DMA trigger
         update_dma_trigger();
 
-        // CRITICAL FIX: Wake up any stalled transactions
-        // This allows them to detect SW_RST and abort cleanly
+        // Wake any stalled transaction so it can abort cleanly on reset. Only
+        // arm the abort (and the TX-side wakes) when a transaction was actually
+        // in flight (was_active, sampled above before the FSM was forced IDLE):
+        // arming it while the engine is idle would leave m_sw_reset_abort set and
+        // swallow the *next* command's transaction — e.g. the read firmware
+        // issues immediately after this SW_RST. The abort is consumed exactly
+        // once: by the post-process pop guard (which then skips popping the
+        // freshly queued command that took the flushed segment's place) and is
+        // cleared again at the next process_single_transaction() entry.
         m_rx_space_available_event.notify();
+        if (was_active) {
+            m_sw_reset_abort = true;
+            m_tx_data_available.notify();
+            m_tx_fifo_at_watermark.notify();
+        }
 
          // Auto-clear SW_RST
         CTRL.SW_RST = 0;
@@ -1197,21 +1255,22 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
         return false;
     }
 
-    // Validation 5: TLM LT RX FIFO Pre-check (synchronous overflow detection)
-    // In TLM LT atomic modeling, we must verify RX FIFO space BEFORE accepting the command.
-    // This check must be done synchronously in CMD write handler, not asynchronously in transaction thread.
+    // Validation 5: RX segment must fit the per-transaction buffer.
+    // Real hardware streams an RX segment larger than the RX FIFO by stalling
+    // the serial clock while the FIFO is full and resuming as the drainer pops.
+    // process_single_transaction reproduces this: it fills the FIFO to capacity
+    // and waits on m_rx_space_available_event (fired when RXDATA is read), so an
+    // RX segment larger than the free FIFO space is NOT an error — do not reject
+    // it with ERROR_STATUS.OVERFLOW. Only reject a segment that exceeds the
+    // model's fixed per-transaction buffer (see rx_buffer[] in
+    // process_single_transaction), which is a genuine model limit.
     if (cmd_direction == 1 || cmd_direction == 3) {  // RX_ONLY or BIDIR
         uint32_t bytes_to_receive = cmd_len + 1;  // LEN is 0-based, so add 1
-        uint32_t words_needed = (bytes_to_receive + 3) / 4;  // Round up to 32-bit words
-        uint32_t rx_space_available = get_rx_depth() - get_rx_fifo_depth();
 
-        if (words_needed > rx_space_available) {
-            CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Insufficient RX FIFO space for transaction. "
-                << "Command requires " << words_needed << " words (" << bytes_to_receive << " bytes), "
-                << "but only " << rx_space_available << " words available in RX FIFO (capacity: "
-                << get_rx_depth() << " words). "
-                << "In TLM LT atomic model, software must ensure sufficient RX space before CMD write. "
-                << "Setting ERROR_STATUS.OVERFLOW" << std::endl;
+        if (bytes_to_receive > 512) {
+            CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] RX segment of " << bytes_to_receive
+                << " bytes exceeds the model's per-transaction buffer (512 bytes). "
+                << "Split the read into smaller segments. Setting ERROR_STATUS.OVERFLOW" << std::endl;
 
             ERROR_STATUS.overflow = 1;
             update_error_interrupt_state();
@@ -1219,9 +1278,8 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
             return false;  // Reject command
         }
 
-        CSML_INFO(2, logger) << "[SPI_HOST/CMD] RX FIFO pre-check passed: "
-            << words_needed << " words needed, "
-            << rx_space_available << " available" << std::endl;
+        CSML_INFO(2, logger) << "[SPI_HOST/CMD] RX segment accepted: " << bytes_to_receive
+            << " bytes (streams under back-pressure if it exceeds free FIFO space)" << std::endl;
     }
 
     // TX FIFO pre-check removed: DMA hardware handshake fills the FIFO after CMD

@@ -1,0 +1,204 @@
+---
+description: Keep adding tests until line coverage is above 95% and run ASan, fixing every memory violation
+alwaysApply: true
+---
+
+# Test coverage ≥ 95% and ASan-clean
+
+When changing or adding C++ in this repository (any subsystem — SMC, SEP, VP,
+fabric, CPU cluster, common libs), the change is not "done" until **both** of
+the following are true:
+
+1. **Line coverage for the touched source is ≥ 95%**, measured by the repo's
+   existing coverage tooling.
+2. **The test binary runs clean under AddressSanitizer + UBSan** — no
+   AddressSanitizer or UndefinedBehaviorSanitizer errors, no leaks.
+
+Keep adding / extending tests until both gates pass. Do not stop at "tests
+compile and run" — that is not the bar.
+
+## Three separate runs: Release / ASan / Coverage
+
+Coverage and ASan are **each their own dedicated build + test invocation**,
+exactly the pattern used by every SMC peripheral (`smc/peripherals/clint`,
+`plic`, `uart`, `i3c_controller`, `reset_unit`, …) and the `smc/cpu_cluster`
+top-level. The three runs are never merged.
+
+```bash
+# Three SEPARATE invocations — never combined:
+./run_tests.sh              # Release build + run        -> build/
+./run_tests.sh --asan       # ASan build + run            -> build_asan/
+./run_tests.sh --coverage   # Coverage build + run        -> build_cov/
+```
+
+Hard rules baked into the orchestrator (keep them in any new `run_tests.sh`):
+
+- `--asan` and `--coverage` are **mutually exclusive** — the script exits 2 if
+  both are passed. ASan and coverage instrumentation conflict and produce
+  misleading coverage; they must not coexist in one binary.
+- Each instrumented mode uses an **isolated build directory**
+  (`build_asan/`, `build_cov/`) so its object files never invalidate the
+  other modes' CMake caches (and vice versa). Never reuse `build/` for an
+  instrumented run.
+- The top-level orchestrator `run_all_smc_tests.sh` and `.github/workflows/ci.yml`
+  run Release → ASAN → Coverage as **separate phases**. New targets picked
+  up by the orchestrator inherit this split — do not fuse a target's ASan or
+  Coverage run with another phase.
+
+### What "separate run" forbids
+
+- ❌ Running the Release binary under `ASAN_OPTIONS=...` — it was not
+  compiled with `-fsanitize=address`, so nothing is checked.
+- ❌ Adding `-fsanitize=address` (or `--coverage` / `-fprofile-arcs`) to the
+  default `CMAKE_CXX_FLAGS` so the regular `./run_tests.sh` "also catches
+  bugs / records coverage" — it slows the Release run, breaks the
+  Release/ASan/Coverage split, and taints the coverage report.
+- ❌ A single `run_tests.sh` invocation that builds once and then runs
+  "plain, then ASan, then coverage" against the same binary — three
+  builds, three binaries, three runs.
+- ❌ Reusing `build/` (or `build_asan/` for coverage, or vice versa) for an
+  instrumented run — CMake cache poisoning between instrumented and
+  non-instrumented object files.
+- ❌ Disabling LeakSanitizer (`detect_leaks=0`) globally to make a leak
+  go away — fix the leak, do not mute the detector.
+
+### CMake wiring (no hand-rolled flags)
+
+Do **not** add `-fsanitize=address` or `--coverage` directly to
+`CMAKE_CXX_FLAGS` or pass them on the `cmake` command line. Route them
+through the target's existing options so the orchestrator and CI drive
+them consistently:
+
+```cmake
+# SMC peripherals / smc/cpu_cluster — option-driven:
+option(ENABLE_ASAN     "Build with AddressSanitizer"   OFF)
+option(ENABLE_COVERAGE "Build with source-level coverage" OFF)
+if(ENABLE_ASAN AND ENABLE_COVERAGE)
+  message(FATAL_ERROR "ENABLE_ASAN and ENABLE_COVERAGE cannot both be ON "
+                       "(they produce conflicting instrumentation).")
+endif()
+if(ENABLE_ASAN)
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
+  add_link_options   (-fsanitize=address)
+endif()
+if(ENABLE_COVERAGE)
+  add_compile_options(--coverage)  # GCC: --coverage; Clang: -fprofile-instr-gen ...
+  add_link_options   (--coverage)
+endif()
+```
+
+SEP peripherals use a different but equivalent convention
+(`CMAKE_BUILD_TYPE STREQUAL "ASAN"` with `-fsanitize=address,undefined`).
+Stay consistent with the subsystem you are in — do **not** introduce a
+parallel `ENABLE_ASAN` option on a SEP target, and do **not** migrate an
+SMC target to `CMAKE_BUILD_TYPE=ASAN`.
+
+## Coverage gate (≥ 95%)
+
+Use the existing per-target `run_tests.sh --coverage` orchestrator (a
+**separate run** — see above). Do not invoke `gcovr`, `llvm-cov`, `lcov`,
+or `genhtml` directly — the orchestrator already picks the right backend
+(Clang → llvm-cov, GCC → gcovr) and writes
+`build_cov/coverage-report/index.html`.
+
+```bash
+# Per-target (e.g. smc/peripherals/clint, smc/cpu_cluster):
+./run_tests.sh --coverage
+
+# Top-level orchestrator (Release + ASAN + Coverage across all SMC targets):
+./run_all_smc_tests.sh
+```
+
+Coverage is measured against the **touched source files** for the change
+(the `.cpp` / `.h` you added or modified), not the whole tree. Read
+`build_cov/coverage-report/index.html` and identify uncovered lines/branches
+in those files.
+
+### Iteration loop
+
+Repeat until the per-file line coverage is ≥ 95%:
+
+1. Run `./run_tests.sh --coverage`.
+2. Open `build_cov/coverage-report/index.html`, filter to the touched files.
+3. For each uncovered line/branch, add a test that exercises it:
+   - New register offset / field → add a `b_transport` write+read test case.
+   - Error / decode-miss path → add a test that drives the bad input.
+   - Callback / side-effect branch → add a test that triggers the side effect.
+   - Default / fallthrough `default:` case → add a test with an out-of-range
+     offset or invalid command.
+4. Re-run `./run_tests.sh --coverage` and re-check.
+
+If a line is genuinely unreachable (dead code, defensive guards behind
+`SC_REPORT_FATAL` invariants), **remove the dead code** rather than leaving it
+uncovered. Do not lower the 95% bar to match the code; lower the code to
+match the bar.
+
+### Exclusions
+
+Do not pad coverage by excluding files. The only acceptable exclusions are:
+- Generated code (chipyard RTL wrappers, CSML-generated regfiles).
+- `sc_main` / testbench harness files (no unit under test).
+- Explicit `// GCOV_EXCL_LINE` / `// GCOV_EXCL_START` ... `// GCOV_EXCL_STOP`
+  for lines that cannot be reached without forcing a UB the sanitizer would
+  also flag — and only after a reviewer agrees.
+
+## ASan / UBSan gate
+
+Run the test binary under AddressSanitizer + UBSan via the existing
+orchestrator as a **separate run** (`./run_tests.sh --asan` — see "Three
+separate runs" above). Do not pass `-fsanitize=...` by hand — the build
+system already wires it through `ENABLE_ASAN` (SMC) or
+`CMAKE_BUILD_TYPE=ASAN` (SEP).
+
+```bash
+# SMC targets (clint, plic, uart, i3c_controller, reset_unit, ...):
+./run_tests.sh --asan
+#   ^ builds in build_asan/ with -DENABLE_ASAN=ON, runs with
+#     ASAN_OPTIONS=halt_on_error=0:detect_leaks=1:log_path=build_asan/asan.log
+
+# SEP targets:
+cmake -S . -B build_asan -DCMAKE_BUILD_TYPE=ASAN
+cmake --build build_asan -j
+ASAN_OPTIONS=halt_on_error=0:detect_leaks=1 ./build_asan/<target>_tb
+```
+
+`run_tests.sh --asan` writes `build_asan/asan.log.*` — read it. A non-empty
+`asan.log.*` file means the gate failed, even if the binary's exit code is 0
+(`halt_on_error=0` keeps the run going to surface multiple errors).
+
+### What counts as a violation (must fix, not suppress)
+
+- `ERROR: AddressSanitizer: heap-buffer-overflow` / `stack-buffer-overflow`
+- `ERROR: AddressSanitizer: heap-use-after-free` / `stack-use-after-scope`
+- `ERROR: AddressSanitizer: SEGV`
+- `ERROR: AddressSanitizer: memory-leak` / `LeakSanitizer`
+- `runtime error: ...` from UBSan (signed overflow, null deref, shift-out-of-
+  range, misaligned access, etc.)
+
+### Fix order
+
+1. **Fix the source**, not the test. A real ASan/UBSan report is a bug in the
+   model — patch the `.cpp`, then re-run `--asan` to confirm the log is empty.
+2. If the violation is in a destructor / `end_of_simulation` cleanup path,
+   still fix it — leak reports fail the gate.
+3. Only as a last resort, suppress a **specific** report with
+   `ASAN_OPTIONS=suppressions=asan.supp` plus a narrow suppressions file, and
+   document why in a comment on the suppression entry. Do not blanket-suppress
+   a whole category (`detect_leaks=0`, `halt_on_error=1`, etc.) to make a
+   failure "go away" — that fails the gate.
+
+## Done definition
+
+A C++ change is ready for review only when, for every touched target:
+
+- `./run_tests.sh --coverage` reports ≥ 95% line coverage on the touched
+  files (paste the per-file number into the PR description).
+- `./run_tests.sh --asan` exits with an empty `build_asan/asan.log.*` (no
+  ASan / UBSan / leak reports).
+- Any newly added test is meaningful (exercises a real path), not a
+  coverage-padding no-op.
+
+Reference orchestrators: `smc/cpu_cluster/run_tests.sh`,
+`smc/peripherals/<target>/run_tests.sh`, `smc/cpu_cluster/run_all_smc_tests.sh`,
+`.github/workflows/ci.yml` (Ubuntu: Release + ASAN + Coverage; RHEL8: skips
+ASAN because the gcc-toolset-12 ASan runtime is not packaged).

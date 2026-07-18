@@ -394,85 +394,92 @@ void testbench::test_func003_fifo_stall_conditions()
     software_reset();
     wait(10, SC_NS);
 
-    // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    // Enable SPIEN(31) and OUTPUT_EN(29) so the transaction engine actually runs
+    // (0xC0000000 sets SPIEN+SW_RST and leaves OUTPUT_EN=0, which keeps the core
+    // disabled — the streaming drain below requires OUTPUT_EN=1).
+    test->write_register_32(CTRL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
-    // Pre-load slave with 300 bytes of data (exceeds RX FIFO capacity of 256 bytes)
+    // Pre-load slave with 300 bytes (exceeds the 256-byte RX FIFO). With streaming
+    // back-pressure this is NOT rejected: the controller fills the FIFO to capacity,
+    // stalls the (modeled) serial clock while full, and resumes as the drainer pops,
+    // so all 300 bytes are delivered. This replaces the old "reject with OVERFLOW"
+    // contract, which could not model a segment larger than the FIFO.
     std::vector<uint8_t> rx_overflow_data(300);
     for (size_t i = 0; i < 300; i++) {
         rx_overflow_data[i] = 0xE0 + (i & 0xFF);
     }
     test->load_slave_rx_data(rx_overflow_data);
 
-    CSML_INFO(2, logger) << "  [ACTION] Issuing RX command for 300 bytes (exceeds 256-byte RX FIFO capacity)..." << std::endl;
-    CSML_INFO(2, logger) << "  [EXPECT] TLM LT atomic pre-check should reject transaction with ERROR_STATUS.OVERFLOW" << std::endl;
+    CSML_INFO(2, logger) << "  [ACTION] Issuing RX command for 300 bytes (exceeds 256-byte RX FIFO)..." << std::endl;
+    CSML_INFO(2, logger) << "  [EXPECT] Streams under back-pressure (no OVERFLOW); all 300 bytes drain via PIO" << std::endl;
 
-    // Issue RX command for 300 bytes - should be rejected immediately in TLM LT
-    uint32_t cmd_rx_overflow = BUILD_CMD(299, 1, 0, 0);  // 300 bytes RX
+    uint32_t cmd_rx_overflow = BUILD_CMD(299, 1, 0, 0);  // 300 bytes RX (75 words)
     test->write_register_32(CMD_OFFSET, cmd_rx_overflow);
-    wait(10, SC_NS);  // Short wait for atomic operation
 
-    // Check that ERROR_STATUS.OVERFLOW is set (bit 4)
+    // Drain all 75 words via PIO. Each RXDATA read frees a slot, letting the
+    // controller stream the next word (via m_rx_space_available_event).
+    const uint32_t ovf_expected_words = 300 / 4;  // 75 words
+    uint32_t ovf_words_drained = 0;
+    uint32_t ovf_drain_guard = 0;
+    while (ovf_words_drained < ovf_expected_words && ovf_drain_guard < 200000) {
+        ovf_drain_guard++;
+        test->read_register_32(STATUS_OFFSET, status_val);
+        uint32_t rxqd_now = (status_val >> 8) & 0xFF;
+        if (rxqd_now > 0) {
+            uint32_t rx_word = 0;
+            test->read_register_32(RXDATA_OFFSET, rx_word);
+            ovf_words_drained++;
+        } else {
+            wait(50, SC_NS);
+        }
+    }
+
+    // Core assertion: the over-FIFO segment was accepted and streamed, not rejected.
     uint32_t error_status_val = 0;
     test->read_register_32(ERROR_STATUS_OFFSET, error_status_val);
     bool overflow_set = (error_status_val >> 4) & 0x1;
 
-    if (overflow_set) {
-        CSML_INFO(2, logger) << "  [PASS] ERROR_STATUS.OVERFLOW=1 (transaction rejected by TLM LT pre-check)" << std::endl;
+    if (!overflow_set) {
+        CSML_INFO(2, logger) << "  [PASS] No OVERFLOW: over-FIFO RX segment accepted (streamed, not rejected)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS.OVERFLOW=0 (expected OVERFLOW error)" << std::endl;
+        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS.OVERFLOW=1 (over-FIFO segment wrongly rejected)" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    // Verify FSM is in IDLE state with error (ACTIVE=0, RXQD=0, no data transferred)
-    // RTL: STATUS.READY = ~command_busy — independent of error state (spi_controller_core.sv:163).
-    // READY stays 1 when IDLE regardless of ERROR_STATUS.
-    test->read_register_32(STATUS_OFFSET, status_val);
-    active = (status_val >> 30) & 0x1;
+    if (ovf_words_drained == ovf_expected_words) {
+        CSML_INFO(2, logger) << "  [PASS] All " << ovf_expected_words
+                  << " words (300 bytes) streamed and drained via back-pressure" << std::endl;
+        sub_tests_passed++;
+    } else {
+        CSML_ERROR(2, logger) << "  [FAIL] Drained " << ovf_words_drained
+                  << " words, expected " << ovf_expected_words << std::endl;
+        sub_tests_failed++;
+        test_passed = false;
+    }
+
+    // After the full drain the transaction completes its (loosely-timed) segment
+    // delay and returns to IDLE. Poll for ACTIVE to clear rather than sampling
+    // instantaneously (the FSM stays ACTIVE during the post-push timing advance).
+    uint32_t idle_guard = 0;
+    do {
+        test->read_register_32(STATUS_OFFSET, status_val);
+        active = (status_val >> 30) & 0x1;
+        if (active) wait(1, SC_US);
+        idle_guard++;
+    } while (active && idle_guard < 2000);
     ready = (status_val >> 31) & 0x1;
     rxqd = (status_val >> 8) & 0xFF;
 
     if (!active && rxqd == 0) {
-        CSML_INFO(2, logger) << "  [PASS] FSM in IDLE with error: READY=" << ready
-                  << " (error present, READY independent of error state), ACTIVE=0, RXQD=0" << std::endl;
+        CSML_INFO(2, logger) << "  [PASS] FSM returned to IDLE after full drain: ACTIVE=0, RXQD=0, READY="
+                  << ready << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Unexpected FSM state: READY=" << ready
-                  << ", ACTIVE=" << active << ", RXQD=" << rxqd << std::endl;
-        sub_tests_failed++;
-        test_passed = false;
-    }
-
-    // Clear the OVERFLOW error via W1C
-    CSML_INFO(2, logger) << "  [ACTION] Clearing ERROR_STATUS.OVERFLOW via W1C..." << std::endl;
-    test->write_register_32(ERROR_STATUS_OFFSET, 0x10);  // W1C bit 4 (OVERFLOW)
-    wait(10, SC_NS);
-
-    // Verify error cleared
-    test->read_register_32(ERROR_STATUS_OFFSET, error_status_val);
-    overflow_set = (error_status_val >> 4) & 0x1;
-
-    if (!overflow_set) {
-        CSML_INFO(2, logger) << "  [PASS] ERROR_STATUS.OVERFLOW=0 (error cleared)" << std::endl;
-        sub_tests_passed++;
-    } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS.OVERFLOW=1 (error not cleared)" << std::endl;
-        sub_tests_failed++;
-        test_passed = false;
-    }
-
-    // Verify READY returns to 1 after error is cleared
-    test->read_register_32(STATUS_OFFSET, status_val);
-    ready = (status_val >> 31) & 0x1;
-
-    if (ready) {
-        CSML_INFO(2, logger) << "  [PASS] STATUS.READY=1 (FSM ready after error cleared)" << std::endl;
-        sub_tests_passed++;
-    } else {
-        CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY=0 (FSM not ready after error cleared)" << std::endl;
+        CSML_ERROR(2, logger) << "  [FAIL] Unexpected FSM state after drain: ACTIVE=" << active
+                  << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
