@@ -130,6 +130,7 @@ add_library(smc_i2c_controller STATIC
 
 target_include_directories(smc_i2c_controller
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+           ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
            ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include)
 
 target_link_libraries(smc_i2c_controller PUBLIC SystemC::systemc SystemC::cci)

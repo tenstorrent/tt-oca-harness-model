@@ -129,6 +129,7 @@ add_library(smc_reset_unit STATIC
 
 target_include_directories(smc_reset_unit
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+           ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
            ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include)
 
 target_link_libraries(smc_reset_unit PUBLIC SystemC::systemc SystemC::cci)

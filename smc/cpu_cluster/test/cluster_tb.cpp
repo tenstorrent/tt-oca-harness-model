@@ -20,6 +20,7 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <string>
 
 #include "System.hpp"
@@ -771,6 +772,87 @@ struct cluster_tb_top : sc_core::sc_module
             ASSERT_TRUE(m.write32(MMIO + 0x400, 0xBEEFu));
             EXPECT_TRUE(bus_mmio.last_locked);
             pass("smc_axi_extension on MMIO transactions");
+        }
+
+        // --- smc_axi_extension setters / clone / copy_from (canonical header) -
+        // Exercises the prot[*] ↔ bool coherence of every setter in both
+        // directions, plus the TLM-2.0 clone()/copy_from() overrides that
+        // the framework invokes when a payload is deep-copied.
+        {
+            smc::smc_axi_extension e;
+
+            // set_priv: true sets prot[2] and clears is_user; false clears
+            // prot[2] and sets is_user.
+            e.set_priv(true);
+            EXPECT_TRUE((e.prot & (1u << 2)) != 0u);
+            EXPECT_FALSE(e.is_user);
+            e.set_priv(false);
+            EXPECT_EQ((e.prot & (1u << 2)), 0u);
+            EXPECT_TRUE(e.is_user);
+
+            // set_secure: true clears prot[1] and sets is_secure; false sets
+            // prot[1] and clears is_secure.
+            e.set_secure(true);
+            EXPECT_EQ((e.prot & (1u << 1)), 0u);
+            EXPECT_TRUE(e.is_secure);
+            e.set_secure(false);
+            EXPECT_TRUE((e.prot & (1u << 1)) != 0u);
+            EXPECT_FALSE(e.is_secure);
+
+            // set_fetch: true clears prot[0] and sets is_fetch; false sets
+            // prot[0] and clears is_fetch.
+            e.set_fetch(true);
+            EXPECT_EQ((e.prot & (1u << 0)), 0u);
+            EXPECT_TRUE(e.is_fetch);
+            e.set_fetch(false);
+            EXPECT_TRUE((e.prot & (1u << 0)) != 0u);
+            EXPECT_FALSE(e.is_fetch);
+
+            // set_locked: true sets prot[3] and is_locked; false clears both.
+            e.set_locked(true);
+            EXPECT_TRUE((e.prot & (1u << 3)) != 0u);
+            EXPECT_TRUE(e.is_locked);
+            e.set_locked(false);
+            EXPECT_EQ((e.prot & (1u << 3)), 0u);
+            EXPECT_FALSE(e.is_locked);
+
+            // clone() deep-copies every field.
+            e.source_id = 0x1234u;
+            e.axi_id    = 0x5678u;
+            e.axi_user  = 0x9Au;
+            e.set_priv(true);
+            e.set_secure(true);
+            e.set_fetch(true);
+            e.set_locked(true);
+            std::unique_ptr<smc::smc_axi_extension> c(
+                static_cast<smc::smc_axi_extension*>(e.clone()));
+            ASSERT_TRUE(c != nullptr);
+            EXPECT_EQ(c->source_id, e.source_id);
+            EXPECT_EQ(c->axi_id,    e.axi_id);
+            EXPECT_EQ(c->axi_user,  e.axi_user);
+            EXPECT_EQ(c->prot,      e.prot);
+            EXPECT_EQ(c->is_user,   e.is_user);
+            EXPECT_EQ(c->is_secure, e.is_secure);
+            EXPECT_EQ(c->is_fetch,  e.is_fetch);
+            EXPECT_EQ(c->is_locked, e.is_locked);
+
+            // copy_from() copies every field into an existing instance.
+            smc::smc_axi_extension dst;
+            dst.set_priv(false);
+            dst.set_secure(false);
+            dst.set_fetch(false);
+            dst.set_locked(false);
+            dst.copy_from(e);
+            EXPECT_EQ(dst.source_id, e.source_id);
+            EXPECT_EQ(dst.axi_id,    e.axi_id);
+            EXPECT_EQ(dst.axi_user,  e.axi_user);
+            EXPECT_EQ(dst.prot,      e.prot);
+            EXPECT_EQ(dst.is_user,   e.is_user);
+            EXPECT_EQ(dst.is_secure, e.is_secure);
+            EXPECT_EQ(dst.is_fetch,  e.is_fetch);
+            EXPECT_EQ(dst.is_locked, e.is_locked);
+
+            pass("smc_axi_extension setters / clone / copy_from coherence");
         }
 
         // --- step / WFI (hart 0) ------------------------------------------------

@@ -1,5 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// include/smc_axi_extension.h
+// smc/common/include/smc_axi_extension.h
+//
+// Canonical SMC TLM-2.0 generic-payload extension.  This is the SINGLE
+// definition of `smc::smc_axi_extension` and `smc::source_id_t` for every
+// SMC IP (cpu_cluster, smc_fabric, and every peripheral).  Do not duplicate
+// this type in peripheral trees -- include this header instead.
 //
 // PURPOSE
 // -------
@@ -30,7 +36,12 @@
 // just see a standard generic_payload.  The fabric / filter modules retrieve
 // it via `trans.get_extension<smc_axi_extension>()`.
 //
-// Shared with every SMC IP; PLIC pulls this in via smc_tlm_extensions.h.
+// All fields default to "trusted CPU cluster" values so that test-bench
+// code that omits the extension sees well-defined, passing behaviour.
+//
+// References
+// - 01_SMC_Architecture.md §6.1  -- canonical definition of sideband fields
+// - 02_CPU_Cluster_LowLevel_Design.md §4.7 -- sideband field semantics
 // ===========================================================================
 
 #pragma once
@@ -40,6 +51,32 @@
 #include <cstdint>
 
 namespace smc {
+
+/**
+ * @brief AXI source-ID enumeration understood by the SMC fabric and filters.
+ *
+ * Each master on the SMC internal bus is assigned a fixed source ID.  The
+ * `axi_filter` module (sitting between the NoC and each IP target) uses this
+ * field to enforce access-control policies described in
+ * `02_SMC_IP_LowLevel_Design.md §2`.
+ *
+ * | Value       | Master                        |
+ * |-------------|-------------------------------|
+ * | `SMC_ID`    | CPU cluster / internal masters |
+ * | `MMODE_ID`  | M-mode remapped traffic       |
+ * | `OTHER_ID`  | Xvisor remapped traffic       |
+ * | `JTAG_ID`   | Debug Module / jtag2axi       |
+ * | `SEP_ID`    | SEP chiplet inbound           |
+ * | `SYS_ID`    | System NoC inbound            |
+ */
+enum source_id_t : uint16_t {
+    SMC_ID   = 0x10, ///< CPU cluster (= smc_axi_extension::SMC_CPU_SOURCE_ID)
+    MMODE_ID = 0x20, ///< M-mode remapped traffic
+    OTHER_ID = 0x30, ///< Xvisor remapped traffic
+    JTAG_ID  = 0x40, ///< Debug Module / jtag2axi
+    SEP_ID   = 0x50, ///< SEP chiplet inbound
+    SYS_ID   = 0x60  ///< System NoC inbound
+};
 
 class smc_axi_extension : public tlm::tlm_extension<smc_axi_extension>
 {
@@ -53,6 +90,8 @@ public:
     bool     is_fetch   = false;    // mirror of !prot[0]
     bool     is_secure  = false;    // mirror of !prot[1]
     bool     is_user    = false;    // mirror of !prot[2]
+
+    uint8_t  axi_user   = 0;
 
     smc_axi_extension() = default;
 

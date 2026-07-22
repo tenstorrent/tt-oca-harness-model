@@ -143,6 +143,7 @@ add_library(smc_bootrom STATIC
 
 target_include_directories(smc_bootrom
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+           ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
            ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include)
 
 target_link_libraries(smc_bootrom PUBLIC SystemC::systemc SystemC::cci)

@@ -35,11 +35,14 @@ inside the target.  Temporal decoupling is the initiator's responsibility.
 ```
 cpu_ctrl/
 ├── include/cpu_ctrl.h          SC_MODULE + handoff constants
-├── include/smc_tlm_extensions.h
 ├── src/cpu_ctrl.cpp            Register decode + TLM callbacks
 ├── test/cpu_ctrl_tb.cpp        Self-checking bench
 └── doc/                        Specification + test plan
 ```
+
+`smc_axi_extension` / `source_id_t` are pulled from the shared canonical
+header `smc/common/include/smc_axi_extension.h` (added to the include path
+by this target's CMake); the peripheral no longer carries a local copy.
 
 ---
 
