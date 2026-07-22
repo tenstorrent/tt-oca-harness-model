@@ -119,7 +119,7 @@
 
 #include <cci_configuration>
 
-#include "smc_tlm_extensions.h"
+#include "smc_axi_extension.h"
 
 namespace smc {
 

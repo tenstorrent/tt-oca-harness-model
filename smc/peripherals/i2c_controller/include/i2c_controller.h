@@ -135,7 +135,7 @@
 
 #include "reg_access.h"
 #include "reg_map.h"
-#include "smc_tlm_extensions.h"
+#include "smc_axi_extension.h"
 
 namespace smc {
 

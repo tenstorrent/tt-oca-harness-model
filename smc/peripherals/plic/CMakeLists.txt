@@ -143,9 +143,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
-# Canonical smc_axi_extension.h (shared with cpu_cluster).
+# Canonical smc_axi_extension.h (shared across the SMC tree).
 set(SMC_AXI_EXTENSION_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../cpu_cluster/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include"
     CACHE PATH "Directory containing smc_axi_extension.h")
 
 # ---------------------------------------------------------------------------

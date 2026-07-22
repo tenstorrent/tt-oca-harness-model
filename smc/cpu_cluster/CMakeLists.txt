@@ -231,8 +231,9 @@ if(SMC_BUILD_PLIC_INTEGRATION)
         PUBLIC
             "${SMC_PLIC_DIR}/include"
             "${CMAKE_CURRENT_SOURCE_DIR}/include"
-            # plic.cpp includes sim_log.h from the shared common/ tree (same
-            # include the PLIC's own CMakeLists.txt adds for its smc_plic target).
+            # smc_axi_extension.h (canonical) + sim_log.h from the shared
+            # common/ trees (smc-scoped and top-level).
+            "${CMAKE_CURRENT_SOURCE_DIR}/../common/include"
             "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include"
     )
 
@@ -261,7 +262,9 @@ add_library(smc_cpu_cluster STATIC
 )
 
 target_include_directories(smc_cpu_cluster
-    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
 )
 
 target_link_libraries(smc_cpu_cluster
@@ -277,7 +280,6 @@ target_sources(smc_cpu_cluster
         include/iss_hart.h
         include/iss_backend_whisper.h
         include/smc_cpu_cluster.h
-        include/smc_axi_extension.h
 )
 
 # ---------------------------------------------------------------------------

@@ -598,7 +598,7 @@ The S-mode context leg and multi-hart PLIC topology remain open.
 | Item                                                                                              | Evidence                                                               |
 |---------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|
 | Build glue: `SMC_BUILD_PLIC_INTEGRATION=ON` + `smc_plic_ip`                                       | `CMakeLists.txt`                                                       |
-| CCI discovery + unified `smc_axi_extension` ODR shim                                              | `cpu_cluster/include/smc_axi_extension.h`, `smc_tlm_extensions.h`      |
+| CCI discovery + unified `smc_axi_extension` ODR shim                                              | `smc/common/include/smc_axi_extension.h`                               |
 | `MmioPlicRouter` at `0x88000000` → PLIC offsets                                                   | `cluster_tb.cpp`                                                       |
 | **CPU MMIO** programs PLIC (priority / enable / threshold)                                        | `load_plic_cpu_firmware()`, `dbg_priority` / `dbg_enable` readback     |
 | **CPU ISR** claim (32-bit `lw`) + complete + `PLIC_FLAG_DONE`                                     | `cluster_tb` PLIC phase                                                |

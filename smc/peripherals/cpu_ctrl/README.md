@@ -17,8 +17,7 @@ cpu_ctrl/
 ├── README.md
 ├── run_tests.sh
 ├── include/
-│   ├── cpu_ctrl.h
-│   └── smc_tlm_extensions.h
+│   └── cpu_ctrl.h
 ├── src/
 │   └── cpu_ctrl.cpp
 ├── test/

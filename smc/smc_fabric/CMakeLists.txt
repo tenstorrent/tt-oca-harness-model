@@ -79,10 +79,10 @@ include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
 # ---------------------------------------------------------------------------
-# smc_axi_extension.h — shared header from cpu_cluster
+# smc_axi_extension.h — canonical header in the SMC-shared common tree
 # ---------------------------------------------------------------------------
 set(SMC_AXI_EXTENSION_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../cpu_cluster/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../common/include"
     CACHE PATH "Directory containing smc_axi_extension.h")
 
 # ---------------------------------------------------------------------------
