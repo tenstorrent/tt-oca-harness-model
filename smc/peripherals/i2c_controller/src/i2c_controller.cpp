@@ -148,6 +148,7 @@ void i2c_controller::schedule_recompute()
 
 void i2c_controller::schedule_xfer()
 {
+    xfer_delay_ = sc_core::sc_time(xfer_delay_ns_p_.get_value(), sc_core::SC_NS);
     xfer_event_.notify(xfer_delay_);
 }
 
