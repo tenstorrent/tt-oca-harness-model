@@ -1,0 +1,32 @@
+// Register-access flow (b_transport decode).  Render:  dot -Tsvg 02_register_flow.dot -o 02_register_flow.svg
+digraph regflow {
+  rankdir=TB;
+  fontname="Helvetica";
+  node [shape=box, style="rounded,filled", fillcolor="#eef3fb", fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=9];
+
+  A  [label="b_transport(gp, delay)"];
+  B  [label="cmd READ or WRITE?", shape=diamond, fillcolor="#fff7cc"];
+  C  [label="len == 4 bytes?", shape=diamond, fillcolor="#fff7cc"];
+  D  [label="4-byte aligned\nand offset < 0x200?", shape=diamond, fillcolor="#fff7cc"];
+  F  [label="reg_read() / reg_write()"];
+  G  [label="offset decode hit?", shape=diamond, fillcolor="#fff7cc"];
+  H  [label="apply side effects;\ndelay += access_delay_ns;\nnotify recompute_event_"];
+  I  [label="TLM_OK_RESPONSE", fillcolor="#d7f5d7"];
+  E1 [label="TLM_COMMAND_ERROR", fillcolor="#f8d7da"];
+  E2 [label="TLM_BURST_ERROR", fillcolor="#f8d7da"];
+  E3 [label="TLM_ADDRESS_ERROR", fillcolor="#f8d7da"];
+  E4 [label="TLM_ADDRESS_ERROR", fillcolor="#f8d7da"];
+
+  A -> B;
+  B -> E1 [label="neither"];
+  B -> C  [label="yes"];
+  C -> E2 [label="no"];
+  C -> D  [label="yes"];
+  D -> E3 [label="no"];
+  D -> F  [label="yes"];
+  F -> G;
+  G -> E4 [label="miss"];
+  G -> H  [label="hit"];
+  H -> I;
+}
