@@ -187,8 +187,11 @@ if (( USE_ASAN )); then
     else
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
-    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
-    [[ -x "${NEG_TB_BIN}" ]] && ASAN_OPTIONS="${_ASAN_OPTS}" "${NEG_TB_BIN}" || true
+set +e
+ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"
+TB_EXIT=$?
+set -e
+[[ -x "${NEG_TB_BIN}" ]] && ASAN_OPTIONS="${_ASAN_OPTS}" "${NEG_TB_BIN}" || true
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
