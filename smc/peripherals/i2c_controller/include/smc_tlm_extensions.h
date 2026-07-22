@@ -66,27 +66,22 @@ enum source_id_t : uint16_t {
  * code that omits the extension sees well-defined, passing behaviour.
  */
 struct smc_axi_extension : public tlm::tlm_extension<smc_axi_extension> {
-    uint32_t source_id  = SMC_ID; ///< Originating master; see @ref source_id_t
-    uint8_t  prot       = 0;      ///< AXI4 PROT[2:0]: [0]=privileged, [1]=non-secure, [2]=instruction
-    bool     cacheable  = false;  ///< AXI4 CACHE modifiable bit
-    bool     non_secure = false;  ///< Mirrors prot[1]; provided for readability
-    uint16_t axi_id     = 0;      ///< AXI transaction ID (ARID / AWID)
-    uint8_t  axi_user   = 0;      ///< AXI user-defined sideband (ARUSER / AWUSER)
+    static constexpr uint16_t SMC_CPU_SOURCE_ID = 0x10;
 
-    /// @brief Deep-copy this extension (required by TLM-2.0 extension protocol).
-    tlm_extension_base* clone() const override {
-        return new smc_axi_extension(*this);
-    }
+    uint16_t source_id = SMC_CPU_SOURCE_ID;
+    uint16_t axi_id    = 0;
+    uint8_t  prot      = 0b0111; // [3]=lock, [2]=priv, [1]=ns, [0]=data
 
-    /// @brief Copy all fields from @p ext (required by TLM-2.0 extension protocol).
+    bool     is_locked = false;
+    bool     is_fetch  = false;
+    bool     is_secure = false;
+    bool     is_user   = false;
+
+    uint8_t  axi_user  = 0;
+
+    tlm_extension_base* clone() const override { return new smc_axi_extension(*this); }
     void copy_from(const tlm_extension_base& ext) override {
-        const auto& other = static_cast<const smc_axi_extension&>(ext);
-        source_id  = other.source_id;
-        prot       = other.prot;
-        cacheable  = other.cacheable;
-        non_secure = other.non_secure;
-        axi_id     = other.axi_id;
-        axi_user   = other.axi_user;
+        *this = static_cast<const smc_axi_extension&>(ext);
     }
 };
 
