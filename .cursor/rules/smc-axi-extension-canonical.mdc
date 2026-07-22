@@ -1,0 +1,95 @@
+---
+description: Every SMC IP/peripheral must use the shared canonical smc_axi_extension.h from smc/common/include so all TLM transactions share one ODR-safe smc::smc_axi_extension / source_id_t type
+alwaysApply: true
+---
+
+# Canonical SMC TLM sideband extension
+
+Every SMC IP and peripheral — existing or newly modeled — must carry AXI4
+sideband metadata on its TLM-2.0 transactions using the **single shared**
+type defined in `smc/common/include/smc_axi_extension.h`:
+
+- `smc::smc_axi_extension` — the `tlm_extension` carrying `source_id`,
+  `axi_id`, `prot`, `is_locked`/`is_fetch`/`is_secure`/`is_user`, `axi_user`,
+  plus the `set_priv`/`set_secure`/`set_fetch`/`set_locked` coherence setters.
+- `smc::source_id_t` — the `uint16_t` enum (`SMC_ID=0x10` … `SYS_ID=0x60`).
+
+This is the **only** definition of those types in the tree. Do not
+re-derive, re-declare, or duplicate either of them in a peripheral tree.
+
+## Why this is mandatory
+
+A platform binary links multiple SMC modules together (cpu_cluster +
+smc_fabric + several peripherals). If two TUs see different definitions of
+`smc::smc_axi_extension` under the same name, `trans.get_extension<smc_axi_extension>()`
+reinterprets one byte layout through another — `source_id` widens/narrows,
+`cacheable`/`non_secure` read from where `is_locked`/`is_fetch` were written,
+etc. That is an ODR violation and a silent data-corruption bug at the fabric
+boundary. One canonical header makes the contract hold by construction.
+
+## How to use it
+
+Add the shared directory to the target's include path and include the header:
+
+```cmake
+# In the peripheral's CMakeLists.txt — add to target_include_directories:
+target_include_directories(smc_<ip> PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include   # smc-scoped (smc_axi_extension.h)
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include # repo common (sim_log.h, reg_access.h)
+)
+```
+
+```cpp
+#include "smc_axi_extension.h"   // resolves to smc/common/include/smc_axi_extension.h
+
+// Attach to an outgoing transaction:
+auto* ext = new smc::smc_axi_extension();
+ext->source_id = smc::SMC_ID;
+ext->set_priv(priv != 0);
+gp.set_extension(ext);
+
+// Inspect on an incoming transaction:
+if (auto* ext = gp.get_extension<smc::smc_axi_extension>()) {
+    filter_allow(addr, ext->source_id, (ext->prot >> 1) & 1u, gp.is_write());
+}
+```
+
+## Do not
+
+- ❌ Define `smc::smc_axi_extension` or `smc::source_id_t` in a peripheral
+  header (no per-peripheral `smc_tlm_extensions.h` shim, no inline copy).
+  These patterns were removed from the tree on purpose — see commit
+  `15c2690` ("Relocate smc_axi_extension to shared smc/common/include").
+- ❌ `#include "smc_axi_extension.h"` from a peripheral's own `include/`
+  expecting a local copy — the header lives only in `smc/common/include/`.
+- ❌ Invent a parallel sideband type ("my_ip_axi_extension") for an SMC IP
+  that talks to the SMC fabric — it will not be ODR-compatible with the
+  fabric's `get_extension<smc_axi_extension>()` lookup.
+- ❌ Change the field set or `source_id_t` values in one peripheral to
+  "fix" a local need — the canonical header is the contract; propose a
+  change there so every IP moves together.
+
+## New IP checklist
+
+When adding a new SMC IP/peripheral:
+
+1. `#include "smc_axi_extension.h"` in the IP's main header (do not create
+   a local `smc_tlm_extensions.h`).
+2. Add `smc/common/include` to the target's `target_include_directories`
+   (path is `${CMAKE_CURRENT_SOURCE_DIR}/../../common/include` from a
+   peripheral, `../common/include` from `smc_fabric`/`cpu_cluster`).
+3. Attach `smc_axi_extension` to every outgoing `tlm_generic_payload` and
+   read it (via `get_extension<smc_axi_extension>()`) on every inbound
+   filter/access-control decision.
+4. If you need a new sideband field or a new `source_id_t` value, edit the
+   canonical header so all IPs stay aligned — do not fork.
+
+## Reference
+
+- Canonical header: `smc/common/include/smc_axi_extension.h`
+- ODR-safety is exercised by `smc/cpu_cluster/test/cluster_tb.cpp`, which
+  links `smc_plic_ip` (built from `peripherals/plic/src/plic.cpp`) against
+  `smc_cpu_cluster` — both pull the single canonical header, so the linked
+  binary sees one `smc::smc_axi_extension` type (test plan item F36).
+- Design note: `smc/cpu_cluster/doc/02_CPU_Cluster_LowLevel_Design.md §4.7`.
