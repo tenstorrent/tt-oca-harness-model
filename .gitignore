@@ -59,6 +59,10 @@ sep/peripherals/deps.env
 # compile_commands.json symlinks pointing into build/ — recreated by the
 # build (see CMake's CMAKE_EXPORT_COMPILE_COMMANDS).
 **/peripherals/*/compile_commands.json
+smc/platform/compile_commands.json
+
+# LLVM source-based coverage raw profiles (run_tests.sh --coverage).
+**/*.profraw
 
 # macOS
 .DS_Store

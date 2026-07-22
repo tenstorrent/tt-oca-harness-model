@@ -1,0 +1,446 @@
+// SPDX-License-Identifier: Apache-2.0
+= SMC Platform Test & Firmware Run Guide
+:toc:
+:toclevels: 4
+:sectnums:
+
+== Purpose
+
+This guide explains two things:
+
+1. How to build and run the `smc/platform` integration tests (Release,
+   AddressSanitizer, coverage, and CTest modes), and how those modes relate to
+   the top-level `run_all_smc_tests.sh` orchestrator.
+
+2. How to run a bare-metal `.elf` (or `.hex`) firmware image on the SMC CPU
+   cluster inside the platform model — the CCI presets, boot ROM preload
+   format, and address map a firmware author or test-bench writer needs.
+
+It assumes the platform model described in
+`smc/doc/systemc_tlm2_integration_guide.adoc` already exists.
+
+== Layout
+
+[cols="30,70",options="header"]
+|===
+|Path |Contents
+
+|`smc/platform/run_tests.sh`
+|Build + run orchestrator for the platform benches (Release / ASan / coverage / ctest).
+
+|`smc/platform/CMakeLists.txt`
+|Top-level platform CMake project; pulls in every SMC IP and (optionally) the
+CPU cluster.
+
+|`smc/platform/test/CMakeLists.txt`
+|Declares the `platform_tb` and `platform_fw_tb` executables and the firmware
+hex-path cache variables.
+
+|`smc/platform/test/platform_tb.cpp`
+|Phase-1 bench: elaboration + MMIO round-trips + stub/IRQ coverage.  Runs with
+or without the cluster.
+
+|`smc/platform/test/platform_fw_tb.cpp`
+|Phase-2 bench: loads `firmware.hex` into the boot ROM, runs the cluster, and
+asserts a scratchpad write + UART "UI" pattern.  Built only when the cluster is
+enabled.
+
+|`smc/platform/test/gen_firmware.py`
+|Generates the checked-in `firmware.hex` (and `--park park.hex`) in the bootrom
+hex preload format.
+
+|`smc/platform/test/firmware.hex`, `park.hex`
+|Checked-in preload images (regenerate via `gen_firmware.py`).
+|===
+
+== Prerequisites
+
+=== SystemC and CCI (required)
+
+The platform is C++20 and links Accellera SystemC 3.x + CCI 1.0.  Point the
+build at the C++20 installs:
+
+[source,bash]
+----
+export SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20
+export CCI_HOME=/Users/pdroy/local/cci-cxx20
+----
+
+If `SYSTEMC_HOME` / `CCI_HOME` are unset, `run_tests.sh` probes a few common
+prefixes (`/opt/homebrew/opt/systemc`, `/usr/local`, ...).  CCI's library path
+must be on `DYLD_LIBRARY_PATH` (macOS) or `LD_LIBRARY_PATH` (Linux); the script
+adds it for you when `CCI_HOME` is set.
+
+=== Whisper and Boost (optional — enables the CPU cluster)
+
+The firmware-on-cluster bench (`platform_fw_tb`) needs the Whisper ISS and
+Boost.  Set both to auto-enable the cluster:
+
+[source,bash]
+----
+export WHISPER_HOME=/Users/pdroy/tt_whisper/whisper   # Whisper *source* tree
+export BOOST_DIR=/opt/homebrew/opt/boost              # Boost install root
+----
+
+When both are set and exist, `run_tests.sh` builds with
+`-DSMC_PLATFORM_WITH_CLUSTER=ON`.  Without them the platform builds and runs
+cluster-free (only `platform_tb`).
+
+NOTE: `WHISPER_HOME` must point at the Whisper *source* tree (the directory
+containing `Hart.cpp`), not the `build-Darwin` output directory.
+
+== Running the platform tests
+
+All examples below are run from `smc/platform`.
+
+=== Release (default)
+
+[source,bash]
+----
+SYSTEMC_HOME=... CCI_HOME=... ./run_tests.sh
+----
+
+Incremental build into `build/`, then run `platform_tb` (and `platform_fw_tb`
+if the cluster is enabled).  A clean rebuild:
+
+[source,bash]
+----
+./run_tests.sh --clean
+----
+
+=== AddressSanitizer (+ UBSan)
+
+[source,bash]
+----
+./run_tests.sh --asan
+----
+
+Builds into `build_asan/` with `-fsanitize=address -fno-omit-frame-pointer -g`
+and runs both benches under
+`ASAN_OPTIONS=halt_on_error=0:detect_leaks=1:log_path=build_asan/asan.log.*`
+(Linux adds `detect_leaks=1`; macOS LeakSanitizer is not separately toggled).
+A non-empty `asan.log.*` file fails the gate even if the binary exits 0.
+
+=== Coverage
+
+[source,bash]
+----
+./run_tests.sh --coverage
+----
+
+Builds into `build_cov/` with LLVM source-based coverage (Clang) or `gcov`
+(GCC).  Runs both benches, merges the `.profraw` files, and prints a per-file
+line-coverage summary.  An HTML report is written to
+`build_cov/coverage-report/index.html`.
+
+The gate is ≥ 95% line coverage on the touched source files
+(`smc_platform.cpp`, the platform headers, and the test benches).  See
+`.cursor/rules/test-coverage-asan.mdc` for the full policy.
+
+=== CTest
+
+[source,bash]
+----
+./run_tests.sh --ctest
+----
+
+Runs the benches via `ctest --test-dir build --output-on-failure` against the
+Release build directory.
+
+=== Cluster overrides
+
+The cluster auto-enables when `WHISPER_HOME` + `BOOST_DIR` are set.  Override
+explicitly:
+
+[source,bash]
+----
+./run_tests.sh --with-cluster       # force ON (errors if deps missing)
+./run_tests.sh --without-cluster    # force OFF (cluster-free Release/ASan/coverage)
+----
+
+`--asan` and `--coverage` are mutually exclusive (the script exits 2 if both
+are passed); ASan and coverage instrumentation conflict and must not coexist.
+Each instrumented mode uses its own isolated build directory so it never
+clobbers a plain Release build.
+
+=== What the benches check
+
+`platform_tb` (always built, 28 checks)::
+Elaboration of the full platform; MMIO round-trips through `jtag_axi_in`,
+`sep_axi_in`, and the filter-gated `sys_axi_in`; stub RAZ/WI access; stub IRQ
+injection; `addr_router` decode-miss; `interrupt_aggregator` propagation; and
+direct `multi_stub_target` TLM interface coverage.
+
+`platform_fw_tb` (cluster-only, 5 checks)::
+Loads `firmware.hex` into the boot ROM, runs the cluster for 1 ms, and asserts
+scratchpad word 0 == `0x1234ABCD` and that UART[0] emitted at least `"UI"`.
+
+=== Top-level orchestrator
+
+`smc/run_all_smc_tests.sh` runs every SMC IP (including `platform`) in three
+separate phases — Release, ASAN, Coverage — plus CTest.  The platform is
+registered at `smc/run_all_smc_tests.sh` line 204 and is safe to include
+unconditionally: its `run_tests.sh` auto-disables the cluster when Whisper/Boost
+are absent, so a CI host without Whisper still gets the cluster-free gates.
+
+[source,bash]
+----
+# From smc/  (sets WHISPER_HOME/BOOST_DIR when the cpu_cluster target is ready):
+./run_all_smc_tests.sh [platform]    # optional IP-name filter
+----
+
+== Running a `.elf` / `.hex` firmware on the SMC
+
+The platform model has no real bootloader.  Firmware is booted by *preloading*
+an image into the boot ROM (`bootrom.init_file`) before simulation starts,
+then pointing the cluster's reset PC at the boot ROM base.  The CPU fetches
+instructions from the preloaded ROM exactly as if it had executed them from
+real ROM.
+
+There are two supported preload formats (selected by `bootrom.init_file_format`):
+
+[cols="20,80",options="header"]
+|===
+|Format |Description
+
+|`hex` (default for `.hex`)
+|Text, one 64-bit big-endian ASCII hex word per line.  Comments (`#`) and blank
+lines are ignored.  Matches the SEP team's `bootrom_sanity.rv64.hex` format.
+
+|`bin` (default for `.img` / `.bin`)
+|Raw binary, little-endian.  The whole file is `memcpy`'d into the ROM.
+
+|`auto`
+|Pick `bin` for `.img`/`.bin` suffixes, else `hex`.
+|===
+
+=== The bootrom hex format (the common path)
+
+Each line is a single 64-bit value in big-endian ASCII hex (MSB first), e.g.:
+
+----
+02009093c00400b7
+305090730200d093
+...
+----
+
+The bootrom parses each line into a `uint64_t` and `memcpy`'s it into its
+host-endian (little-endian) `data_` buffer.  Two 32-bit RV64 instructions pack
+into one 64-bit word: the *low* 32 bits become the first instruction's
+little-endian bytes, the *high* 32 bits become the second.  Pad the image to an
+even instruction count so every line carries two instructions.
+
+Lines past `size_bytes` are tolerated if they are zero (many hex generators
+emit a full-size image); a non-zero overflow word is a fatal error.
+
+=== Option A — run the checked-in firmware (quickest path)
+
+The repo ships a tiny `firmware.hex` that writes `0x1234ABCD` to scratchpad
+word 0 and emits `"UI"` on UART[0].  To run it:
+
+[source,bash]
+----
+cd smc/platform
+SYSTEMC_HOME=... CCI_HOME=... \
+WHISPER_HOME=... BOOST_DIR=... \
+./run_tests.sh --with-cluster --clean
+----
+
+`platform_fw_tb` is built and run automatically; it asserts the scratchpad
+write and the UART pattern.  Output ends with `ALL TESTS PASSED (5 checks)`.
+
+Regenerate the checked-in image after editing `gen_firmware.py`:
+
+[source,bash]
+----
+python3 smc/platform/test/gen_firmware.py smc/platform/test/firmware.hex
+python3 smc/platform/test/gen_firmware.py --park smc/platform/test/park.hex
+----
+
+`park.hex` is a minimal image that sets `mtvec` to the boot ROM base and
+busy-loops; `platform_tb` loads it (when the cluster is on) so the harts do not
+fetch zeros and report "16 consecutive illegal instructions".
+
+=== Option B — run your own `.elf`
+
+The bootrom only reads `hex`/`bin` files, not ELF.  Convert your ELF to a raw
+binary, then to the bootrom hex format.
+
+==== Step 1 — link/compile for the SMC memory map
+
+Firmware must link against the SMC address map (all addresses are
+local-alias aperture `[0xC000'0000, 0xC100'0000)` unless noted):
+
+[cols="25,25,50",options="header"]
+|===
+|Target |Base |Notes
+
+|Boot ROM |`0xC004'0000` |Reset vector; preload image lands here. Size 0x20000.
+
+|Scratchpad RAM |`0xC006'0000` |1 MiB, read/write. Use for `.data`/`.bss`/stack.
+
+|UART[0..3] |`0xC000'A000 + i*0x1000` |THR at +0x00, IER +0x04, LCR +0x0C (bit 7 = DLAB).
+
+|I2C[0..2] |`0xC000'9000 + i*0x200` |
+
+|I3C |`0xC000'5000` (6 instances, 0x1E00 window) |
+
+|Reset unit |`0xC000'2000` |
+
+|CPU control |`0xC001'0000` (periph) / `0xC003'9000` (front-port alias) |
+
+|PLIC |`0xC400'0000` |Outside the 16 MB alias aperture; reach via the global alias.
+
+|CLINT |`0xC800'0000` |Outside the 16 MB alias aperture; reach via the global alias.
+|===
+
+Link your ELF with the text segment at `0xC004'0000` (the boot ROM base) so the
+reset fetch lands on your first instruction.  The cluster's `reset_pc` preset
+must match (see Step 3).
+
+==== Step 2 — convert ELF → bootrom hex
+
+[source,bash]
+----
+# 1. Raw binary (little-endian) from the ELF:
+riscv64-unknown-elf-objcopy -O binary firmware.elf firmware.bin
+
+# 2. Pack into the bootrom hex format: one 64-bit big-endian word per line.
+python3 - <<'PY'
+import struct, sys
+data = open("firmware.bin","rb").read()
+# pad to a multiple of 8 bytes
+if len(data) % 8: data += b'\x00' * (8 - len(data) % 8)
+with open("firmware.hex","w") as f:
+    for i in range(0, len(data), 8):
+        # host-endian (little) uint64 -> big-endian ASCII
+        word = struct.unpack_from("<Q", data, i)[0]
+        f.write(f"{word:016x}\n")
+PY
+----
+
+The low 32 bits of each 64-bit word become the first instruction's
+little-endian bytes (see "The bootrom hex format" above), so the byte order in
+`firmware.bin` is preserved as-is — do not byte-swap the binary.
+
+==== Step 3 — point the bench at your image
+
+The simplest path is to reuse `platform_fw_tb` with your hex file.  Either:
+
+(a) Overwrite the checked-in image and rebuild:
+
+[source,bash]
+----
+cp firmware.hex smc/platform/test/firmware.hex
+cd smc/platform && ./run_tests.sh --with-cluster --clean
+----
+
+(b) Or keep your image separate and point CMake at it:
+
+[source,bash]
+----
+cmake -S smc/platform -B build \
+      -DSMC_PLATFORM_WITH_CLUSTER=ON \
+      -DWHISPER_HOME=... -DBOOST_DIR=... \
+      -DSMC_PLATFORM_FIRMWARE_HEX=/abs/path/to/firmware.hex
+cmake --build build -j
+./build/test/platform_fw_tb
+----
+
+`SMC_PLATFORM_FIRMWARE_HEX` (declared in `smc/platform/test/CMakeLists.txt`)
+flows into the `SMC_PLATFORM_FIRMWARE_HEX` compile definition that
+`platform_fw_tb.cpp` passes to the `bootrom.init_file` CCI preset.
+
+==== Step 4 — CCI presets the bench sets for you
+
+`platform_fw_tb.cpp`'s `apply_presets()` already wires the cluster for
+firmware-on-bootrom.  If you write your own bench, mirror these presets
+(full hierarchical names, top instance is `top`):
+
+[cols="35,15,50",options="header"]
+|===
+|Preset |Value |Purpose
+
+|`top.bootrom.size_bytes` |`0x20000` |Boot ROM aperture.
+
+|`top.bootrom.init_file` |`<your.hex>` |Preload image path.
+
+|`top.bootrom.init_file_format` |`"hex"` |Preload format.
+
+|`top.cluster.num_harts` |`4` |Hart count (must match `NUM_HARTS`).
+
+|`top.cluster.reset_pc` |`0xC004'0000` |Boot vector = boot ROM base.
+
+|`top.cluster.fast_mem_lo` / `fast_mem_hi` |`0` / `0` |Disable Whisper's
+internal fast-mem so *all* traffic egresses on `mmio`/`data` and reaches the
+fabric (otherwise scratchpad accesses get absorbed inside Whisper).
+
+|`top.cluster.mmio_lo` / `mmio_hi` |`0xC000'0000` / `0xC100'0000` |MMIO
+carve-out. Must cover the boot ROM (`0xC004'0000`) so instruction fetches route
+through `mmio` → fabric → `front_port_router` → bootrom, not through `data`.
+
+|`top.cluster.source_id` |`0x10` |`smc_axi_extension.source_id` for the
+cluster's outgoing transactions.
+|===
+
+WARNING: If `cluster.mmio_hi` is too low (e.g. `0xC000'F000`), the boot ROM at
+`0xC004'0000` falls outside the MMIO window and fetches route through the
+`data` socket.  In a cluster-OFF bench that socket is a `multi_stub_target`
+returning zero, so the harts execute illegal instructions and the run ends
+with "Hart N: 16 consecutive illegal instructions".  Keep `mmio_hi` ≥
+`0xC100'0000`.
+
+=== Option C — write a dedicated bench
+
+For anything beyond the canned scratchpad+UART check, copy
+`platform_fw_tb.cpp` as a template and:
+
+1. Register a global CCI broker *before* constructing `smc_platform`.
+2. Set the presets from the table above (plus `plic.num_sources`,
+   `clint.num_harts`, etc. to match the platform's `NUM_*` constants).
+3. Construct `smc::smc_platform dut{"top"}`.
+4. Bind a `driver` (a `simple_initiator_socket<64>` wrapper) to
+   `dut.jtag_axi_in` for post-run MMIO inspection.
+5. `sc_start(sc_time(1, SC_MS))` (long enough for the firmware to reach its
+   busy loop).
+6. Assert side effects: read scratchpad via the driver, pop UART bytes via
+   `dut.uart[0].dbg_tx_pop(ch)`, etc.
+
+The `dbg_tx_pop` / `dbg_tx_history` hooks on `smc::uart` are the supported way
+to observe UART output from a test bench (the `tx_o` pins are bound to
+internal `sc_signal<bool>`s and are not byte-granular).
+
+== Troubleshooting
+
+"Hart N: 16 consecutive illegal instructions"::
+The harts are fetching zeros.  Causes: (a) no firmware preloaded and the
+cluster is on — load `park.hex` or your firmware; (b) `cluster.mmio_hi` too
+low so boot ROM fetches route through `data` to a stub — raise `mmio_hi` to
+`0xC100'0000`; (c) firmware linked at the wrong address — confirm the text
+segment is at `0xC004'0000` and `cluster.reset_pc` matches.
+
+"bootrom: cannot open hex preload '/.../firmware.hex'"::
+`SMC_PLATFORM_FIRMWARE_HEX` resolved to a non-existent path.  In
+`test/CMakeLists.txt` the cache variable is set *before* `add_executable`; if
+you reorder it, the define ends up empty.  Keep the ordering.
+
+UART `dbg_tx_pop` returns no bytes::
+The UART model's `tx_enabled()` requires a non-zero divisor (DLL/DLM).  The
+checked-in firmware sets DLL=1, DLM=0, LCR=0x03 before writing THR; your
+firmware must do the same or `drain_tx()` will not move bytes from the TX FIFO
+to the TX history.
+
+"complete binding failed: port not bound"::
+A socket was left unbound in the active build mode.  The platform binds every
+initiator port in both cluster-ON and cluster-OFF modes; if you add a new
+initiator, give it a target in *both* branches of the `#ifdef
+SMC_PLATFORM_WITH_CLUSTER` block (see `idle_mmio_init_` /
+`stub_data` for the pattern).
+
+Coverage gate fails on a header::
+The platform headers are header-only; their coverage is attributed to the TUs
+that include them.  Run `./run_tests.sh --coverage` and open
+`build_cov/coverage-report/index.html`; for an uncovered defensive path that
+is unreachable through the fabric (e.g. `addr_router` decode-miss with a
+gap-free map), exercise it from a standalone unit test in `platform_tb.cpp`
+(see `addr_router_ut`).

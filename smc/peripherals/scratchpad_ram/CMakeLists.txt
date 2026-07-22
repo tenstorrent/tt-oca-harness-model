@@ -91,7 +91,9 @@ if(NOT EXISTS "${CCI_HOME}/include/cci_configuration")
         "CCI header not found at ${CCI_HOME}/include/cci_configuration. "
         "Set -DCCI_HOME=<path> or export CCI_HOME.")
 endif()
+if(NOT TARGET SystemC::cci)
 add_library(SystemC::cci INTERFACE IMPORTED)
+endif()
 # find_library handles CCI >= 1.0 (single libcci) and CCI < 1.0
 # (split libcci-config + libcci-inspection), on macOS and Linux.
 find_library(CCI_CONFIG_LIB

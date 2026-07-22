@@ -198,6 +198,10 @@ ALL_IPS=(
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
     "uart:${SCRIPT_DIR}/peripherals/uart"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
+    # Platform integration (built last; depends on every IP above).  Its
+    # run_tests.sh auto-disables the CPU cluster when Whisper/Boost are absent,
+    # so it is safe to include unconditionally.
+    "platform:${SCRIPT_DIR}/platform"
 )
 # cpu_cluster requires Whisper (Tenstorrent internal) and Boost; only include
 # when both were found (_cpu_cluster_ready, computed above alongside the
