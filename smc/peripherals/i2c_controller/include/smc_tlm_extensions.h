@@ -46,13 +46,13 @@ namespace smc {
  *
  * See `01_SMC_Architecture.md §4` for the full fabric behavior specification.
  */
-enum source_id_t : uint32_t {
-    SMC_ID   = 0x1, ///< CPU cluster and internal masters
-    MMODE_ID = 0x2, ///< M-mode remapped traffic
-    OTHER_ID = 0x3, ///< Xvisor remapped traffic
-    JTAG_ID  = 0x4, ///< Debug Module / jtag2axi
-    SEP_ID   = 0x5, ///< SEP chiplet inbound
-    SYS_ID   = 0x6  ///< System NoC inbound
+enum source_id_t : uint16_t {
+    SMC_ID   = 0x10, ///< CPU cluster (= smc_axi_extension::SMC_CPU_SOURCE_ID)
+    MMODE_ID = 0x20,
+    OTHER_ID = 0x30,
+    JTAG_ID  = 0x40,
+    SEP_ID   = 0x50,
+    SYS_ID   = 0x60
 };
 
 /**
