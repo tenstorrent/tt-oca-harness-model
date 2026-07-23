@@ -295,7 +295,7 @@ smc/platform/compile_commands.json
 !smc/peripherals/cpu_ctrl/doc/
 !smc/peripherals/cpu_ctrl/doc/**
 
-*.md 
+#*.md 
 *.svg
 !smc/cpu_cluster/doc/
 !smc/cpu_cluster/doc/**
