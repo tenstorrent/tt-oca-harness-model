@@ -413,7 +413,14 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         // here makes boot-from-ROM work. load_executable_image filters PT_LOAD segments
         // by address range, so only ROM-resident segments land here; load_data bypasses
         // the read-only flag for one-time init. No-op for ELFs without a ROM segment.
-        loader.load_executable_image(*rom,  opt.rom_size,   opt.rom_start_addr);
+        //
+        // Load the ROM by *physical* address (use_vaddr=false): the self-contained boot
+        // ROM image links .data into DCCM (VMA) but stores its init image at an LMA in ROM
+        // (rom.ld `AT> rom`), and vector.S copies ROM->DCCM at boot. Selecting segments by
+        // LMA places that .data init image at its ROM load address so the copy reads real
+        // data; a VMA-based load would leave it in DCCM only and the ROM copy-source blank,
+        // zeroing g_data_init and tripping the rom_main runtime-init check (0xB001).
+        loader.load_executable_image(*rom,  opt.rom_size,   opt.rom_start_addr, /*use_vaddr=*/false);
         loader.load_executable_image(*itcm, 0x20000, opt.itcm_start_addr);
         loader.load_executable_image(*dtcm, 0x10000, opt.dtcm_start_addr);
         loader.load_executable_image(*sram, opt.sram_size, opt.sram_start_addr);
