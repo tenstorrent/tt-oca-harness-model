@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// smc/platform/src/smc_platform.cpp
+// vp/platform/smc/src/smc_platform.cpp
 // ===========================================================================
 
-#include "smc_platform.h"
+#include "smc_platform.hpp"
 
 #include <systemc>
 #include <tlm.h>
@@ -21,15 +21,15 @@ static constexpr uint64_t A_WDT_DEBUG   = 0xC000'0000ULL;
 static constexpr uint64_t A_CPU_CTRL_FP  = 0xC003'9000ULL;
 static constexpr uint64_t A_BOOTROM      = 0xC004'0000ULL;
 static constexpr uint64_t A_SCRATCH      = 0xC006'0000ULL;
-static constexpr uint64_t A_PLIC         = 0xC400'0000ULL;
-static constexpr uint64_t A_CLINT        = 0xC800'0000ULL;
-static constexpr uint64_t A_BEU          = 0xC801'0000ULL;
+static constexpr uint64_t A_PLIC         = 0xC080'0000ULL;
+static constexpr uint64_t A_CLINT        = 0xC0C0'0000ULL;
+static constexpr uint64_t A_BEU          = 0xC0C1'0000ULL;
 
 static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
 static constexpr uint64_t A_I3C         = 0xC000'5000ULL;
 static constexpr uint64_t A_I2C0         = 0xC000'9000ULL;
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;
-static constexpr uint64_t A_CPU_CTRL    = 0xC001'0000ULL;
+static constexpr uint64_t A_CPU_CTRL    = 0xC040'0000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_LO = 0xC000'2000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_HI = 0xC000'E800ULL;
 static constexpr uint64_t A_PERIPH_EXT_LO  = 0xC040'0000ULL;
@@ -93,8 +93,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     front_port_router.add_route(1, A_CPU_CTRL_FP, 0x1000,   "cpu_ctrl_fp");
     front_port_router.add_route(2, A_BOOTROM,     0x20000,  "bootrom");
     front_port_router.add_route(3, A_SCRATCH,     0x100000, "scratch");
-    front_port_router.add_route(4, A_PLIC,        0x4000000,"plic");
-    front_port_router.add_route(5, A_CLINT,       0xC000,   "clint");
+    front_port_router.add_route(4, A_PLIC,        0x400000, "plic");
+    front_port_router.add_route(5, A_CLINT,       0x20000,  "clint");
     front_port_router.add_route(6, A_BEU,         0x10000,  "beu");
     front_port_router.out[0].bind(stub_wdt_debug.reg_socket);
 

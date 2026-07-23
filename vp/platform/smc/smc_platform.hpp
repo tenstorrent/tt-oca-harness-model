@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// smc/platform/include/smc_platform.h
+// vp/platform/smc/smc_platform.hpp
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
 // (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, I3C, 3x
@@ -41,11 +41,11 @@
 #include "smc_cpu_cluster.h"
 #endif
 
-#include "addr_router.h"
-#include "interrupt_aggregator.h"
-#include "multi_stub_target.h"
-#include "stub_target.h"
-#include "width_adapter.h"
+#include "inc/addr_router.h"
+#include "inc/interrupt_aggregator.h"
+#include "inc/multi_stub_target.h"
+#include "inc/stub_target.h"
+#include "inc/width_adapter.h"
 
 namespace smc {
 

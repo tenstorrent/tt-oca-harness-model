@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// smc/platform/include/stub_target.h
+// vp/platform/smc/inc/stub_target.h
 //
 // Minimal TLM-2.0 target used by `smc_platform` to stand in for RTL-connected
 // blocks that do not yet have functional SystemC models (WDT/debug, BEU, DMA,

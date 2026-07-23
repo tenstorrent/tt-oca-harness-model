@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// smc/platform/include/interrupt_aggregator.h
+// vp/platform/smc/inc/interrupt_aggregator.h
 //
 // Composes the SMC peripheral interrupt vector and drives the PLIC source
 // lines, mirroring the `peripheral_interrupts_o` composition in

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// smc/platform/include/addr_router.h
+// vp/platform/smc/inc/addr_router.h
 //
 // Header-only TLM-2.0 address-range demux used by `smc_platform` to split the
 // fabric's `to_front_port` and `to_periph` initiator sockets across multiple

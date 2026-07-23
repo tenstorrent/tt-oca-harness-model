@@ -2,6 +2,40 @@
 
 This directory contains bare-metal software tests for the SEP Virtual Platform peripherals.
 
+## Run all tests automatically
+
+`run_sep_vp_tests.sh` is a host-agnostic runner (macOS / RHEL / Ubuntu) that
+auto-detects the RISC-V toolchain, the `sep-vp` executable, and the required
+SystemC/CCI/Whisper/Boost install locations, then builds and runs the firmware
+tests. If `sep-vp` is missing, the script builds it for you.
+
+```bash
+cd sw/sep-vp-tests
+
+./run_sep_vp_tests.sh --list          # list available tests
+./run_sep_vp_tests.sh                 # build + run all tests
+./run_sep_vp_tests.sh sep-gpio-test   # build + run a single test by name
+./run_sep_vp_tests.sh -i              # choose a single test from a numbered menu
+./run_sep_vp_tests.sh --build-vp      # (re)build sep-vp first, then run all
+```
+
+The script searches common install prefixes and `PATH` for the toolchain. If your
+setup is non-standard, override detection with environment variables:
+
+```bash
+RISCV_PREFIX=riscv64-elf- \
+SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
+CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+WHISPER_HOME=/Users/pdroy/tt_whisper/whisper \
+BOOST_DIR=/opt/homebrew/opt/boost \
+./run_sep_vp_tests.sh
+```
+
+> **Note:** The SEP VP does not self-terminate when firmware finishes; it keeps
+> running until you press Ctrl+C. The runner simply invokes `make sim` for each
+> test, matching the manual workflow below. Use it for one test at a time, or stop
+> each run with Ctrl+C when the firmware output is complete.
+
 ## Available Tests
 
 | Directory | Description |
@@ -46,11 +80,18 @@ Provides a subset of the OpenTitan DIF (Device Interface Function) API for use i
 
 ## Building and Running Tests
 
+The quickest way to run tests is the `run_sep_vp_tests.sh` helper
+(see [Run all tests automatically](#run-all-tests-automatically) above). The
+sections below describe the manual `make` workflow for individual tests and
+debugging.
+
 ### Prerequisites
 
 - **RISC-V GNU toolchain** (`riscv64-unknown-elf-gcc`) in your `$PATH`
 - **SEP VP** built at `../../vp/build/bin/sep-vp`
   (from repo root: `cd vp/build && make`)
+
+The runner will build `sep-vp` automatically if it is not found.
 
 ### Build a Test
 
@@ -279,6 +320,8 @@ SRCS = ../common/start.S main.c \
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RISCV_PREFIX` | `riscv64-unknown-elf-` | Toolchain prefix |
+| `VP` | `../../../vp/build/bin/sep-vp` | Path to the `sep-vp` executable |
+| `VP_BUILD_DIR` | `vp/build_sep` | Build directory used when the runner builds `sep-vp` |
 | `DEBUG_PORT` | read from INI (`gdbTcpPort`), fallback `5005` | GDB server port |
 | `EXTRA_CFLAGS` | _(empty)_ | Additional compiler flags |
 
@@ -309,6 +352,13 @@ include ../Makefile.common
 
 ```bash
 make && make sim
+```
+
+Or run it from the parent directory with the runner:
+
+```bash
+cd ..
+./run_sep_vp_tests.sh my-test-name
 ```
 
 ### `printf` Format Specifiers Available

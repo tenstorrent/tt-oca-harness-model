@@ -286,10 +286,10 @@ private:
     static constexpr uint32_t FRONT_CPU_CTRL_END   = 0xC003'A000u;
     static constexpr uint32_t FRONT_SPM_BASE       = 0xC004'0000u;  // scratchpad RAM
     static constexpr uint32_t FRONT_SPM_END        = 0xC016'0000u;
-    static constexpr uint32_t FRONT_PLIC_BASE      = 0xC400'0000u;  // outside alias aperture
-    static constexpr uint32_t FRONT_PLIC_END       = 0xC800'0000u;
-    static constexpr uint32_t FRONT_CLINT_BEU_BASE = 0xC800'0000u;  // outside alias aperture
-    static constexpr uint32_t FRONT_CLINT_BEU_END  = 0xC802'0000u;
+    static constexpr uint32_t FRONT_PLIC_BASE      = 0xC080'0000u;  // local alias: 4 MB
+    static constexpr uint32_t FRONT_PLIC_END       = 0xC0C0'0000u;
+    static constexpr uint32_t FRONT_CLINT_BEU_BASE = 0xC0C0'0000u;  // local alias: 128 KB
+    static constexpr uint32_t FRONT_CLINT_BEU_END  = 0xC0C2'0000u;
 
     // data_accel_ctrl (AXI4) — smc_local_xbar_pkg.sv
     static constexpr uint32_t DACCEL_DMA_ZEROER_BASE = 0xC003'8000u;  // DMA + zeroer ctrl

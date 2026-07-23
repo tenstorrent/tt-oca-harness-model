@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// smc/platform/include/width_adapter.h
+// vp/platform/smc/inc/width_adapter.h
 //
 // Header-only TLM-2.0 LT width adapter.  Bridges a target socket of width
 // `InBus` to an initiator socket of width `OutBus` by forwarding the generic

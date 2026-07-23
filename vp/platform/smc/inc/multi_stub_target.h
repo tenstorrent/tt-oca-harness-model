@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // ===========================================================================
-// smc/platform/include/multi_stub_target.h
+// vp/platform/smc/inc/multi_stub_target.h
 //
 // Same RAZ/WI behaviour as `stub_target`, but built on the base
 // `tlm::tlm_target_socket` (an sc_export) so that **multiple initiator sockets
