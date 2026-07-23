@@ -41,28 +41,98 @@
 /* PLIC register offsets (RISC-V standard layout, 336 sources, 8 contexts) */
 #define PLIC_PRIORITY(source)   (0x000000u + 4u * (source))
 #define PLIC_ENABLE(ctx, word)  (0x002000u + 0x80u * (ctx) + 4u * (word))
+#define PLIC_PENDING(word)      (0x001000u + 4u * (word))
 #define PLIC_THRESHOLD(ctx)     (0x200000u + 0x1000u * (ctx))
 #define PLIC_CLAIM_COMPLETE(ctx) (0x200004u + 0x1000u * (ctx))
 
 /* Reset unit register offsets */
 #define RESET_SS_CONFIG          0x20u
-#define RESET_SS_WARM_RESET_N    0x44u
 #define RESET_SS_CONFIG_LOCK     0x24u
+#define RESET_SS_COLD_RESET_N    0x40u
+#define RESET_SS_WARM_RESET_N    0x44u
+#define RESET_SS_COLD_RESET_LOCK 0x70u
 
 /* CPU control register offsets */
-#define CPU_CTRL_SCRATCH(idx)    (0x100u + 8u * (idx))
+#define CPU_CTRL_SCRATCH(idx)         (0x100u + 8u * (idx))
+#define CPU_CTRL_REFERENCE_COUNTER    0x060u
+#define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
+#define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
 
 /* I2C controller register offsets (per core, 0x200-byte window) */
-#define I2C_INTR_ENABLE          0x04u
-#define I2C_CTRL                 0x10u
-#define I2C_TIMING0              0x3Cu
+#define I2C_INTR_STATE            0x00u
+#define I2C_INTR_ENABLE           0x04u
+#define I2C_CTRL                  0x10u
+#define I2C_STATUS                0x14u
+#define I2C_RDATA                 0x18u
+#define I2C_FDATA                 0x1Cu
+#define I2C_FIFO_CTRL             0x20u
+#define I2C_HOST_FIFO_STATUS      0x2Cu
+#define I2C_TARGET_FIFO_STATUS    0x30u
+#define I2C_TARGET_ID             0x54u
+#define I2C_ACQDATA               0x58u
+#define I2C_TXDATA                0x5Cu
+#define I2C_CONTROLLER_EVENTS     0x78u
+
+/* I2C CTRL bit fields */
+#define I2C_CTRL_ENABLEHOST       (1u << 0u)
+#define I2C_CTRL_ENABLETARGET     (1u << 1u)
+
+/* I2C FDATA bit fields */
+#define I2C_FDATA_START           (1u << 8u)
+#define I2C_FDATA_STOP            (1u << 9u)
+#define I2C_FDATA_READB           (1u << 10u)
+#define I2C_FDATA_NAKOK           (1u << 12u)
+
+/* I2C STATUS bit fields */
+#define I2C_STATUS_HOSTIDLE       (1u << 3u)
+#define I2C_STATUS_TARGETIDLE     (1u << 4u)
+#define I2C_STATUS_FMTEMPTY       (1u << 2u)
+#define I2C_STATUS_RXEMPTY        (1u << 5u)
+#define I2C_STATUS_ACQEMPTY       (1u << 9u)
+#define I2C_STATUS_TXEMPTY       (1u << 8u)
+
+/* I2C FIFO_CTRL bit fields */
+#define I2C_FIFO_CTRL_RXRST       (1u << 0u)
+#define I2C_FIFO_CTRL_FMTRST      (1u << 1u)
+#define I2C_FIFO_CTRL_ACQRST      (1u << 7u)
+#define I2C_FIFO_CTRL_TXRST       (1u << 8u)
 
 /* I3C controller register offsets (per instance, 11-bit window) */
 #define I3C_HCI_VERSION          0x00u
 #define I3C_HC_CONTROL           0x04u
 #define I3C_CONTROLLER_DEVICE_ADDR 0x08u
 #define I3C_RESET_CONTROL          0x10u
+#define I3C_COMMAND_PORT         0x80u
+#define I3C_RESPONSE_PORT        0x84u
+#define I3C_XFER_DATA_PORT       0x88u
+#define I3C_PIO_INTR_STATUS      0xA0u
 #define I3C_PIO_CONTROL          0xACu
+#define I3C_DAT_BASE             0x300u
+
+/* I3C command-descriptor field positions */
+#define I3C_CMD_ATTR_MASK        0x7u
+#define I3C_CMD_TID_SHIFT        3u
+#define I3C_CMD_RNW_SHIFT        7u
+#define I3C_CMD_DEVIDX_SHIFT     8u
+#define I3C_CMD_CP_SHIFT         15u
+#define I3C_CMD_CCC_SHIFT        32u
+#define I3C_CMD_LENGTH_SHIFT     48u
+
+/* I3C HC_CONTROL / PIO_CONTROL bit fields */
+#define I3C_HC_CONTROL_BUS_ENABLE  (1u << 31u)
+#define I3C_PIO_CONTROL_ENABLE     (1u << 0u)
+
+/* I3C PIO_INTR_STATUS bit fields */
+#define I3C_PIO_INTR_TX_THLD       (1u << 0u)
+#define I3C_PIO_INTR_RX_THLD       (1u << 1u)
+#define I3C_PIO_INTR_RESP_READY    (1u << 4u)
+#define I3C_PIO_INTR_TRANSFER_ERR  (1u << 9u)
+
+/* UART PLIC source IDs (peripheral bits 18:21 -> PLIC sources 19:22) */
+#define PLIC_SRC_UART0    19u
+#define PLIC_SRC_UART1    20u
+#define PLIC_SRC_UART2    21u
+#define PLIC_SRC_UART3    22u
 
 /* UART 16550 register offsets (DLAB=0 unless noted) */
 #define UART_RBR_THR_DLL  0x00   /* RBR (ro) / THR (wo) / DLL (DLAB=1) */
@@ -76,6 +146,16 @@
 /* LSR bit masks */
 #define UART_LSR_THRE     0x20   /* TX holding register empty */
 #define UART_LSR_DR       0x01   /* RX data ready */
+
+/* IER bit masks (DLAB=0) */
+#define UART_IER_ERBFI    0x01   /* enable RX data ready interrupt */
+#define UART_IER_ETBEI    0x02   /* enable TX holding register empty interrupt */
+#define UART_IER_ELSI     0x04   /* enable RX line status interrupt */
+#define UART_IER_EDSSI    0x08   /* enable modem status interrupt */
+#define UART_IER_EFEI     0x10   /* enable FIFO error interrupt */
+
+/* MCR bit masks */
+#define UART_MCR_LOOP     0x10   /* internal loopback mode */
 
 /* MMIO helpers */
 #define REG_READ(addr)          (*((volatile uint32_t *)(uintptr_t)(addr)))

@@ -238,6 +238,40 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         i2c[i].irq_o.bind(i2c_irq[i]);
     }
 
+    // -- I2C0 controller -> I2C1 target loopback (for smc-i2c-loopback-test)
+    //    I2C0's bus model forwards controller segments to I2C1's target back door.
+    i2c[0].set_bus_model([this](smc::i2c_xfer& x) {
+        if (x.dir == smc::i2c_dir::Write) {
+            x.ack = i2c[1].target_write(x.addr, x.write_data);
+        } else {
+            std::vector<uint8_t> out;
+            x.ack = i2c[1].target_read(x.addr, x.read_len, out);
+            x.read_data = std::move(out);
+        }
+    });
+
+    // -- I3C0 controller -> echo target (for smc-i3c-loopback-test)
+    //    The bus model ACKs dynamic address 0x50 and echoes the last written
+    //    bytes back on a subsequent read.
+    {
+        auto i3c_echo = std::make_shared<std::vector<uint8_t>>();
+        i3c.set_bus_model(0, [i3c_echo](smc::i3c_xfer& x) {
+            if (x.dynamic_addr != 0x50u) {
+                x.ack = false;
+                return;
+            }
+            x.ack = true;
+            x.error = smc::i3c_err::Success;
+            if (x.kind == smc::i3c_xfer_kind::PrivateWrite) {
+                *i3c_echo = std::move(x.write_data);
+            } else if (x.kind == smc::i3c_xfer_kind::PrivateRead) {
+                x.read_data.assign(i3c_echo->begin(), i3c_echo->end());
+                if (x.read_data.size() > x.data_length)
+                    x.read_data.resize(x.data_length);
+            }
+        });
+    }
+
     // -- Bind every stub_target's irq_o to a dummy sink --------------------
     {
         stub_target<64>* stubs64[] = {
