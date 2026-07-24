@@ -1,0 +1,13 @@
+# Build artifacts
+*.o
+*.dump
+*.sym
+smc-bootrom-test
+smc-clint-test
+smc-cpu-ctrl-test
+smc-i2c-test
+smc-i3c-test
+smc-plic-test
+smc-reset-test
+smc-scratch-test
+smc-uart-test

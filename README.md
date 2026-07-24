@@ -80,7 +80,7 @@ OCAH subsystems:
 | Subsystem | What is provided |
 |-----------|-----------------|
 | **SEP** | Full, runnable Virtual Platform (`sep-vp`) — models all SEP peripherals, runs actual RISC-V VeeR EL2 firmware, used for pre-silicon DV and firmware development |
-| **SMC** | SystemC TLM-2.0 IP model library — individual models for each SMC peripheral (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, I3C, …), with unit tests and documentation |
+| **SMC** | SystemC TLM-2.0 IP model library (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, I3C, …) with per-IP unit tests, **plus a full runnable Virtual Platform (`smc-vp`)** that wires the fabric + every peripheral + the Whisper-backed CVA6 cluster and runs bare-metal RV64 firmware |
 
 ---
 
@@ -124,23 +124,33 @@ tt-oca-sim/
 │   │   ├── reset_unit/            ← Reset generation unit (cold / cool / FLR)
 │   │   └── scratchpad_ram/        ← 1 MiB scratchpad SRAM (32 banks)
 │   ├── cpu_cluster/               ← SMC CPU cluster (1–4 RV64GC, Whisper ISS)
+│   ├── smc_fabric/                ← SMC AXI fabric / address router model
 │   └── cmake/
 │       └── SmcSystemCStd.cmake    ← auto-detects SystemC C++ standard
-├── vp/                            ← SEP Virtual Platform
-│   ├── configure_vp.sh            ← configure CMake + export build env
+├── vp/                            ← Virtual Platforms
+│   ├── configure_vp.sh            ← configure CMake + export build env (SEP)
 │   ├── vp_build_env.sh            ← derived paths (BOOST_LIB, LD_LIBRARY_PATH, …)
 │   ├── CMakeLists.txt
 │   └── platform/
-│       ├── infra/                 ← bus, PLIC, CLINT, ELF loader
-│       └── sep/                   ← SEP platform wiring (och_sep_ss)
-│           ├── main.cpp           ← sc_main entry point
-│           ├── och_sep_ss.hpp     ← top-level SEP platform module
-│           ├── inc/               ← SEP-specific headers (Args, memory map)
+│       ├── infra/                 ← bus, PLIC, CLINT, ELF loader (SEP)
+│       ├── sep/                   ← SEP platform wiring (och_sep_ss)
+│       │   ├── main.cpp           ← sc_main entry point
+│       │   ├── och_sep_ss.hpp     ← top-level SEP platform module
+│       │   ├── inc/               ← SEP-specific headers (Args, memory map)
+│       │   └── config/
+│       │       ├── accellera_config.ini   ← CCI runtime parameters
+│       │       └── veeriss_config.json    ← VeeR EL2 ISS configuration
+│       └── smc/                   ← SMC platform wiring (smc-vp)
+│           ├── main.cpp           ← sc_main entry point (CCI ini + ELF load + UART drain)
+│           ├── smc_platform.hpp   ← top-level SMC platform module
+│           ├── src/smc_platform.cpp
+│           ├── inc/               ← helpers (addr_router, width_adapter, stub_target, …)
 │           └── config/
-│               ├── accellera_config.ini   ← CCI runtime parameters
-│               └── veeriss_config.json    ← VeeR EL2 ISS configuration
+│               └── smc_platform_vp.ini   ← CCI runtime parameters
 ├── sw/                            ← Firmware and DV tests
-│   ├── sep-vp-tests/              ← Vayavya peripheral verification tests
+│   ├── sep-vp-tests/              ← Vayavya peripheral verification tests (SEP)
+│   ├── smc-vp-tests/              ← Bare-metal RV64 firmware tests (SMC, runs on smc-vp)
+│   │   └── run_smc_vp_tests.sh    ← host-agnostic runner: auto-detects toolchain + smc-vp, builds/runs tests
 │   └── tt-oca-hw-main/            ← TT DV + firmware test suites
 │       ├── bin/sep_fw_standalone.sh
 │       ├── dv/sep/tests/          ← DV test ELFs
@@ -149,7 +159,7 @@ tt-oca-sim/
 │   ├── component-developer-guide.md/.pdf
 │   ├── maintainer-guide.md/.pdf
 │   └── SystemC_Virtual_Platform_Customer_Guide.md/.pdf
-├── Makefile                       ← top-level: sep-vp, submodule-init, clean
+├── Makefile                       ← top-level: sep-vp, smc-vp, submodule-init, clean
 ├── RELEASE_NOTES.md
 ├── LICENSE
 └── LICENSE.riscv-vp-plusplus      ← upstream MIT license attribution
@@ -431,6 +441,119 @@ The SMC CPU cluster test suite:
 ```bash
 cd smc/cpu_cluster
 ./run_tests.sh
+```
+
+---
+
+## Building the SMC VP
+
+### Dependencies (in addition to the SEP VP deps above)
+
+The SMC VP reuses SystemC, CCI, and Boost from the SEP build, and adds:
+
+- **Whisper** — Tenstorrent's CVA6 Instruction Set Simulator, the CPU backend for
+  `smc_cpu_cluster`. Build it against the same C++20 SystemC tree:
+
+  ```bash
+  git clone <whisper-repo> whisper && cd whisper
+  SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
+  CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+  cmake -S . -B build -DCMAKE_CXX_STANDARD=20
+  cmake --build build -j
+  ```
+
+  Point `WHISPER_HOME` (or the path used in `vp/platform/smc/CMakeLists.txt`)
+  at the resulting build tree.
+
+- **RISC-V toolchain** (RV64GC) for bare-metal firmware — same toolchain used for
+  the TT firmware tests (see "Toolchain" below).
+
+> **C++20 is mandatory** for `smc-vp`: the local SystemC/CCI installs are built with
+> C++20 and the ABI is keyed per standard. See `.cursor/rules/cpp20-build.mdc`.
+
+### Configure & Build
+
+`smc-vp` is built from the same `vp/` CMake tree as `sep-vp`. After configuring the
+VP (see "Building the SEP VP"), build the SMC target:
+
+```bash
+cd vp/build
+make smc-vp
+```
+
+Output binary: `vp/build/bin/smc-vp` (path may differ by build dir; check
+`vp/build/` for the executable).
+
+Alternatively, configure a dedicated build tree so SEP and SMC caches don't
+poison each other:
+
+```bash
+SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
+CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+cmake -S vp -B vp/build_smc -DSMC_CXX_STANDARD=20
+cmake --build vp/build_smc --target smc-vp -j
+```
+
+---
+
+## Running the SMC VP
+
+### Runtime Configuration
+
+**`vp/platform/smc/config/smc_platform_vp.ini`** — CCI parameters for the
+SMC platform and CPU cluster (hart count, reset PC, fast-mem layout, model
+verbosity, etc.).
+
+```bash
+vp/build/bin/smc-vp vp/platform/smc/config/smc_platform_vp.ini <firmware.elf>
+```
+
+`smc-vp` loads the ELF into the Whisper-backed CVA6 cluster fast-mem, sets
+`reset_pc` to the ELF entry, runs the simulation, and finally drains UART0's TX
+debug buffer to stdout so the firmware's `printf` output is visible on the console.
+
+### smc-vp-tests (bare-metal RV64 firmware)
+
+> Tests under `sw/smc-vp-tests/` are bare-metal RV64 firmware that exercise SMC
+> peripherals (bootrom, CLINT, CPU control, I2C, I3C, PLIC, reset, scratchpad,
+> UART, …) end-to-end from code running on the CVA6 cluster. See
+> `sw/smc-vp-tests/README.md` for the full guide.
+
+```bash
+cd sw/smc-vp-tests/smc-uart-test
+make             # build ELF (RV64 toolchain)
+make sim         # build + run on smc-vp
+```
+
+Run the whole suite (the helper auto-detects the toolchain and `smc-vp`
+binary, and builds `smc-vp` if it is missing):
+
+```bash
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh              # run all smc-* tests
+./run_smc_vp_tests.sh smc-uart-test # run a single test by name
+./run_smc_vp_tests.sh -i            # choose a single test from a numbered menu
+./run_smc_vp_tests.sh --build-vp     # rebuild smc-vp first, then run all
+```
+
+### Standalone SMC peripheral unit tests
+
+Each SMC peripheral under `smc/peripherals/<ip>/` and the fabric/cluster have
+their own C++ SystemC testbenches driven by `run_tests.sh` (Release / ASan /
+Coverage as separate runs):
+
+```bash
+cd smc/peripherals/<ip>          # or smc/smc_fabric, smc/cpu_cluster
+./run_tests.sh                   # release build + run
+./run_tests.sh --asan            # AddressSanitizer + UBSan
+./run_tests.sh --coverage        # ≥95% line coverage report
+```
+
+Run every SMC target in one go:
+
+```bash
+cd smc
+./run_all_smc_tests.sh           # release / asan / coverage across all SMC targets
 ```
 
 ---

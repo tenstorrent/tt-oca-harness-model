@@ -33,6 +33,10 @@ endif
 sep-vp: submodule-init $(VP_BUILD_DIR)/Makefile
 	$(MAKE) sep-vp -C $(VP_BUILD_DIR)
 
+# Build the SMC VP (smc-vp) from the same vp/ CMake tree.
+smc-vp: submodule-init $(VP_BUILD_DIR)/Makefile
+	$(MAKE) smc-vp -C $(VP_BUILD_DIR)
+
 # Ensure git submodules (e.g. sep/utils/csml) are initialised and up to date.
 # Safe to run repeatedly — no-ops when already in sync.
 submodule-init:
@@ -59,4 +63,4 @@ clean:
 		echo "  Configure first: make sep-vp   (or: cmake -S vp -B $(VP_BUILD_DIR))"; \
 	fi
 
-.PHONY: sep-vp submodule-init clean
+.PHONY: sep-vp smc-vp submodule-init clean

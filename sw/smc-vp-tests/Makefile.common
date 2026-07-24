@@ -1,0 +1,71 @@
+# =============================================================================
+# sw/smc-vp-tests/Makefile.common
+#
+# Shared build/run rules for bare-metal RV64 firmware tests that run on the
+# `smc-vp` executable (vp/platform/smc).  Mirrors the shape of
+# sw/sep-vp-tests/Makefile.common, adapted for the SMC CVA6 cluster:
+#   - RV64 / lp64 (the SMC CPU is a 64-bit CVA6)
+#   - firmware linked at 0x80000000 (cluster fast-mem window)
+#   - `make sim` runs `smc-vp <ini> <elf>`
+#
+# Per-test Makefiles set SRCS / OBJS / TARGET and `include ../Makefile.common`.
+# =============================================================================
+
+# Toolchain
+RISCV_PREFIX ?= riscv64-unknown-elf-
+CC      = $(RISCV_PREFIX)gcc
+OBJCOPY = $(RISCV_PREFIX)objcopy
+OBJDUMP = $(RISCV_PREFIX)objdump
+
+# Architecture — rv64imac + zicsr (mtvec/mret) + zifencei (fence.i). No FP
+# needed for these bare-metal tests; the CVA6 cluster emulates the superset.
+ABI  = lp64
+ARCH = rv64imac_zicsr_zifencei
+
+# Common include paths — shared helpers + SMC peripheral base addresses.
+SMC_VP_TESTS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+COMMON_INCS = -I$(SMC_VP_TESTS_DIR)common
+
+# Compiler flags
+CFLAGS  = -march=$(ARCH) -mabi=$(ABI) -mcmodel=medany -mno-relax
+CFLAGS += -O0 -g
+CFLAGS += -Wall -Wextra
+CFLAGS += -ffreestanding -nostdlib -nostartfiles
+CFLAGS += $(COMMON_INCS)
+CFLAGS += $(EXTRA_CFLAGS)
+
+# Linker flags
+LDFLAGS += -march=$(ARCH) -mabi=$(ABI) -mcmodel=medany -mno-relax
+LDFLAGS += -nostdlib -nostartfiles
+LDFLAGS += -Wl,--no-relax,--print-memory-usage
+
+# VP invocation.  VP / VP_FLAGS overridable so a developer can point at a
+# non-default build tree (e.g. vp/build_smc/bin/smc-vp during bring-up).
+VP        ?= ../../../vp/build/bin/smc-vp
+VP_FLAGS  ?= ../../../vp/platform/smc/config/smc_platform_vp.ini
+SIM_TIME_MS ?= 50
+
+.PHONY: all clean sim dump
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(LDFLAGS) -o $@ $^ -lgcc
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+%.o: %.S
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+dump: $(TARGET)
+	$(OBJDUMP) -D $(TARGET) > $(TARGET).dump
+	$(OBJDUMP) -t $(TARGET) > $(TARGET).sym
+
+# Run the firmware on smc-vp.  The VP runs a bounded simulation window
+# (SIM_TIME_MS) then exits; the firmware prints PASS/FAIL to UART0.
+sim: $(TARGET)
+	$(VP) $(VP_FLAGS) $(TARGET) $(SIM_TIME_MS)
+
+clean:
+	rm -f $(OBJS) $(TARGET) $(TARGET).dump $(TARGET).sym

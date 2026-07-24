@@ -100,10 +100,12 @@ find_library(CCI_INSPECTION_LIB
     HINTS "${CCI_HOME}/lib" "${CCI_HOME}/lib64"
     NO_DEFAULT_PATH
     REQUIRED)
+if(NOT TARGET SystemC::cci)
 add_library(SystemC::cci INTERFACE IMPORTED)
 set_target_properties(SystemC::cci PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${CCI_HOME}/include"
     INTERFACE_LINK_LIBRARIES       "${CCI_CONFIG_LIB};${CCI_INSPECTION_LIB}")
+endif()
 
 if(NOT TARGET SystemC::systemc)
     if(DEFINED ENV{SYSTEMC_HOME})

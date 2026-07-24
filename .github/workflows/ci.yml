@@ -22,6 +22,10 @@
 #
 #  smc-fabric-tests  Build and run the SMC Fabric SystemC/TLM-2.0 testbench
 #                    via smc/smc_fabric/run_tests.sh (needs build-deps).
+#
+#  smc-vp            Build the smc-vp executable (needs build-deps + Whisper ISS
+#                    + RISC-V bare-metal toolchain).  Runs the smc-vp-tests
+#                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -35,6 +39,7 @@ on:
 env:
   SYSTEMC_VERSION: "3.0.2"
   CCI_VERSION:     "1.0.2"
+  WHISPER_REV:     "a53d0f3e"  # tenstorrent/whisper commit the SMC VP was validated against
   SYSTEMC_HOME:    /home/runner/local/systemc-3.0.2
   CCI_HOME:        /home/runner/local/cci-1.0.2
   CXX_STD:         "20"
@@ -298,4 +303,83 @@ jobs:
         with:
           name: smc-fabric-logs
           path: smc/logs/
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 6 — build smc-vp and run SMC VP firmware tests
+# The SMC platform requires the Tenstorrent-internal Whisper ISS.  We clone it,
+# build librvcore.a, then configure the VP with WHISPER_HOME and run all
+# bare-metal firmware tests under sw/smc-vp-tests.
+# ─────────────────────────────────────────────────────────────────────────────
+  smc-vp:
+    name: SMC VP firmware tests
+    runs-on: ubuntu-22.04
+    needs: build-deps
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake make \
+            libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
+            libssl-dev gcc-riscv64-unknown-elf
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Cache Whisper
+        id: cache-whisper
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/whisper
+          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Build Whisper
+        if: steps.cache-whisper.outputs.cache-hit != 'true'
+        env:
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create a minimal Boost root that only exposes the headers so the
+          # Makefile does not add -isystem /usr, which shadows libc headers.
+          mkdir -p /tmp/boost/include
+          ln -s /usr/include/boost /tmp/boost/include/boost
+
+          git clone \
+            https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+            /home/runner/whisper
+          cd /home/runner/whisper
+          git checkout ${{ env.WHISPER_REV }}
+          make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
+            build-$(uname -s)/librvcore.a -j$(nproc)
+
+      - name: Run SMC VP tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+          WHISPER_HOME: /home/runner/whisper
+          BOOST_DIR:    /usr
+        run: |
+          cd sw/smc-vp-tests
+          ./run_smc_vp_tests.sh
+
+      - name: Upload smc-vp logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-vp-logs
+          path: sw/smc-vp-tests/smc-*/run_*.log
           retention-days: 7

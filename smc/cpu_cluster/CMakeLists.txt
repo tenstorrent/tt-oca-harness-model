@@ -83,6 +83,7 @@ message(STATUS "BOOST_DIR    = ${BOOST_DIR}")
 #     and this cluster's top-level integration build can share one target
 #     namespace.
 # ---------------------------------------------------------------------------
+if(NOT TARGET SystemC::systemc)
 find_library(SC_LIB
     NAMES systemc
     HINTS "${SYSTEMC_HOME}/lib"
@@ -99,6 +100,7 @@ set_target_properties(SystemC::systemc PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${SYSTEMC_HOME}/include"
 )
 message(STATUS "SystemC library = ${SC_LIB}")
+endif()
 
 # Match the C++ standard SystemC was built with (probes guard symbol in
 # libsystemc.{so,dylib,a} -- see smc/cmake/SmcSystemCStd.cmake).

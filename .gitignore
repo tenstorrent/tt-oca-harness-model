@@ -59,6 +59,10 @@ sep/peripherals/deps.env
 # compile_commands.json symlinks pointing into build/ — recreated by the
 # build (see CMake's CMAKE_EXPORT_COMPILE_COMMANDS).
 **/peripherals/*/compile_commands.json
+smc/platform/compile_commands.json
+
+# LLVM source-based coverage raw profiles (run_tests.sh --coverage).
+**/*.profraw
 
 # macOS
 .DS_Store
@@ -291,7 +295,7 @@ sep/peripherals/deps.env
 !smc/peripherals/cpu_ctrl/doc/
 !smc/peripherals/cpu_ctrl/doc/**
 
-*.md 
+#*.md 
 *.svg
 !smc/cpu_cluster/doc/
 !smc/cpu_cluster/doc/**
@@ -305,6 +309,14 @@ sep/peripherals/deps.env
 docs/och_source/_build/
 
 # ======================================================================================
+
+# =============================================================================
+# SMC VP firmware test build artifacts
+# Each smc-*-test directory produces a binary with the same name as the test.
+# =============================================================================
+sw/smc-vp-tests/smc-*-test/smc-*-test
+sw/smc-vp-tests/smc-*-test/*.o
+sw/smc-vp-tests/smc-*-test/*.log
 
 # =============================================================================
 # End of .gitignore

@@ -9,6 +9,10 @@ This guide describes how to integrate the SMC SystemC/TLM2.0 models under
 `/Users/pdroy/tt-oca-sim/smc` so they track the RTL subsystem connected under
 `/Users/pdroy/tt_oca_hw/tt-oca-hw/hw/smc`.
 
+For building/running the platform tests and booting bare-metal firmware on
+the CPU cluster, see `smc/doc/platform_test_and_firmware_guide.adoc`.
+
+
 The SystemC platform should be a firmware-oriented, loosely timed model. It
 does not need cycle-accurate AXI arbitration, CDC, pad, PLL, or SRAM macro
 timing, but it must preserve the programmer-visible contract:
@@ -40,7 +44,7 @@ timing, but it must preserve the programmer-visible contract:
 `smc/smc_fabric/test/smc_fabric_tb.cpp`
 
 |SystemC peripherals
-|`smc/peripherals/{bootrom,scratchpad_ram,plic,clint,reset_unit,uart,i3c_controller}`
+|`smc/peripherals/{bootrom,scratchpad_ram,plic,clint,reset_unit,uart,i2c_controller,i3c_controller,cpu_ctrl}`
 
 |RTL top level and base
 |`hw/smc/smc.sv`, `hw/smc/smc_base.sv`,
@@ -79,10 +83,12 @@ timing, but it must preserve the programmer-visible contract:
   current models do. Model bus timing with annotated delay, not `wait()` inside
   `b_transport`.
 * Use `smc_axi_extension` on outgoing CPU and fabric transactions whenever AXI
-  source ID, AXI ID, protection, security, or lock information matters.
-  Before building the full platform, converge the memory models on the same
-  canonical extension definition used by the CPU cluster so filters and monitors
-  see one metadata type throughout the SMC.
+  source ID, AXI ID, protection, security, or lock information matters. The
+  canonical, single definition lives in `smc/common/include/smc_axi_extension.h`
+  (`smc::smc_axi_extension`, `smc::source_id_t`) and is shared by the CPU
+  cluster, `smc_fabric`, and every SMC peripheral — there are no per-peripheral
+  copies. Include this header directly; do not fork or re-derive the type, so
+  filters and monitors see one metadata type throughout the SMC (ODR-safe).
 * Use `regmodel` helpers from `common/include/reg_access.h` and
   `common/include/reg_map.h` for new or edited hand-written register models.
 * Use `sim_log.h` for routine construction, decode, and transaction logs in new
@@ -161,6 +167,27 @@ SMC top wrapper should instantiate four or adapt the aperture.
 |`irq_o[i]`, SCL/SDA/drive signals, recovery status
 |Models six-instance HCI/PIO register and descriptor behavior at LT level. RTL
 currently connects an `i3ccore_stub` until the updated controller is integrated.
+
+|`i2c_controller`
+|Implemented as SystemC LT model
+|`reg_socket` target (one core; RTL `i2c_wrap` packs `NUM_I2CS = 3`)
+|`irq_o`, FMT/RX/TX/ACQ FIFOs, bus-model callback, target back doors
+|OpenTitan-derived I2C controller/target (Controller/Target/Hybrid/Monitor
+modes, 20-source interrupt block, SMBus). Models ONE core in a 0x200-byte
+register window — an SMC top wrapper should instantiate three cores plus the
+wrapper-enable register. SCL/SDA waveform, timing, and oversampling are
+firmware-visible but functionally abstracted.
+
+|`cpu_ctrl`
+|Implemented as SystemC LT model
+|`reg_socket` target
+|HW backdoors for `SMC_ATTRIBUTES`, `TEST_CTRL`, `WB_PC_COREn[]`
+|SMC fabric-control register file at `0xC001_0000` (8 KiB): `RESET_VECTOR[4]`,
+`RESET_CTRL`, `CORE_RESET_PULSE_COUNT`, `CLOCK_GATE_CONTROL`, `REFERENCE_COUNTER`,
+`WDT_TIMEOUT[_RESET]`, `SCRATCH[16]` SMC↔SEP handoff mailbox, `MUTEX[4]`,
+`SEMA[4]`, `DUMMY_ROM_*`, and HW-driven read-only `SMC_ATTRIBUTES`/`WB_PC_*`.
+Uses `regmodel` for SCRATCH/MUTEX/WB_PC masking and CCI for `base_addr` /
+`access_delay_ns`. See `smc/peripherals/cpu_ctrl/doc`.
 |===
 
 == RTL Hierarchy to Mirror
@@ -305,9 +332,12 @@ signals, debug state, and interrupt bit 22.
 |I2C
 |`0xC000_9000`
 |`0xE0C`
-|Stub/model needed
-|RTL instantiates `i2c_wrap` with `NUM_I2C = 3`, periph-clock CDC, pad routing,
-and interrupt bits 25:23.
+|`i2c_controller.reg_socket` (×3)
+|SystemC model exists — one `i2c_controller` per 0x200-byte core window. RTL
+`i2c_wrap` packs `NUM_I2CS = 3` cores plus a wrapper-enable register; an SMC
+top wrapper should instantiate three `i2c_controller` models, decode the
+`i2c_wrap` subwindows, and handle the wrapper-enable register. Periph-clock
+CDC, pad routing, and interrupt bits 25:23.
 
 |UART/log engine wrapper
 |`0xC000_A000`
@@ -345,12 +375,19 @@ and routes telemetry interrupts to bits 10:8.
 |Stub/model needed
 |RTL routes DTP CSR externally and DFT control/status internally.
 
-|SMC base-config CSRs
+|SMC CPU Control / base-config CSRs
 |`0xC001_0000`
-|`0x4C`
-|Fabric-owned in `smc_fabric`
-|Contains `GLOBAL_BASE`, `LOCAL_BASE`, `REGION_SIZE`, clock-gate controls,
-and hang detector fields. This is not CPU control.
+|`0x2000` (8 KiB)
+|`cpu_ctrl.reg_socket` (fabric intercepts base-config subset)
+|Full SMC fabric-control register file per `smc_misc/data/registers/rdl/cpu_ctrl.rdl`:
+`RESET_VECTOR[4]`, `RESET_CTRL`, `CORE_RESET_PULSE_COUNT`, `CLOCK_GATE_CONTROL`,
+`REFERENCE_COUNTER`, `WDT_TIMEOUT[_RESET]`, `SCRATCH[16]` SMC↔SEP handoff
+mailbox, `MUTEX[4]`, `SEMA[4]`, `DUMMY_ROM_*`, `SMC_ATTRIBUTES`, `WB_PC_COREn[]`.
+`smc_fabric` intercepts the `smc_base_config` subset (`GLOBAL_BASE`/`LOCAL_BASE`/
+`REGION_SIZE` at offsets `0x00`/`0x08`/`0x10`) inside this window; the remaining
+registers are served by the `cpu_ctrl` SystemC model. This window is **distinct
+from** the `0xC003_9000` CPU-control window below, which targets the generated
+CPU wrapper's internal control register file.
 
 |Alias/M-mode/Xvisor remap
 |`0xC001_2000`, `0xC001_3000`, `0xC001_4000`
@@ -386,12 +423,16 @@ interrupt 2. No SMC SystemC DMA model exists.
 |RTL memory zeroer is connected with its own control registers and raises
 internal interrupt 3. No SystemC zeroer model exists.
 
-|CPU control
+|CPU control (generated wrapper)
 |`0xC003_9000`
-|`0x2C0`
+|`0x1000` (4 KiB fabric route; `0x2C0` populated)
 |`smc_cpu_cluster.ctrl`
-|Important: generated RTL map places CPU control here. Route this window to the
-SystemC CPU cluster control target.
+|Generated RTL map places the CPU-wrapper control register file here
+(`RESET_VECTOR`, `RESET_CTRL`, scratch, attributes, mutex, semaphore, dummy ROM
+words — same `cpu_ctrl.rdl` shape as the fabric-control instance at
+`0xC001_0000`, exposed as a separate target inside the CPU cluster). Route this
+window to `smc_cpu_cluster.ctrl`. Do **not** confuse it with the
+`cpu_ctrl.reg_socket` SMC fabric-control target at `0xC001_0000`.
 
 |Boot ROM
 |`0xC004_0000`
@@ -465,13 +506,23 @@ than every final peripheral subwindow. It routes the peripheral main aperture
 and peripheral extension aperture to `to_periph`; a SystemC SMC peripheral
 router should then decode the detailed `smc_top_reg.svh` peripheral subwindows.
 
-The CPU-control address is a common source of confusion:
+The CPU-control address is a common source of confusion because two distinct
+register files share the `cpu_ctrl.rdl` shape:
 
-* `0xC001_0000` is `SMC_BASE_CONFIG`, owned by fabric.
-* `0xC003_9000` is `SMC_CPU_CTRL`, routed to CPU control.
+* `0xC001_0000` is the **SMC fabric-control** window (`SMC_BASE_CONFIG` /
+  `cpu_ctrl.rdl` in `smc_misc`). It is 8 KiB wide and owned by the `cpu_ctrl`
+  SystemC peripheral, **except** for the `smc_base_config` subset
+  (`GLOBAL_BASE`/`LOCAL_BASE`/`REGION_SIZE` at offsets `0x00`/`0x08`/`0x10`),
+  which `smc_fabric` intercepts and handles internally. The `SCRATCH[16]` SMC↔SEP
+  handoff mailbox lives at offset `0x100` (`SMC_SCRATCH_BASE_ADDR = 0xC001_0100`).
+* `0xC003_9000` is **`SMC_CPU_CTRL`**, the generated CPU-wrapper control window,
+  routed to `smc_cpu_cluster.ctrl`. This is a separate target inside the CPU
+  cluster and must not be confused with the `cpu_ctrl.reg_socket` instance at
+  `0xC001_0000`.
 
-Route `0xC003_9000..0xC003_92BF` to `smc_cpu_cluster.ctrl`, not to the
-base-config CSR handler.
+Route `0xC003_9000..0xC003_9FFF` to `smc_cpu_cluster.ctrl`. Route the
+non-intercepted offsets of `0xC001_0000..0xC001_1FFF` to `cpu_ctrl.reg_socket`
+(see <<CPU Control (cpu_ctrl)>> for the fabric-binding nuance).
 
 == CPU Cluster Integration
 
@@ -622,6 +673,26 @@ single `reg_socket` to the I3C aperture and connect:
 Document in tests that RTL is connected as a stub today, while SystemC can be
 used as the intended functional model for firmware bring-up.
 
+==== I2C
+
+RTL instantiates `i2c_wrap` with `NUM_I2CS = 3` OCA I2C cores plus a
+wrapper-enable register, behind one AXI-Lite slave at `0xC000_9000`. Each core
+occupies a 0x200-byte window; the wrapper-enable register sits at offset
+`0xE00`. The SystemC `i2c_controller` model reproduces **one** core (the
+natural unit), mirroring how `uart` models a single UART instance. For SMC
+integration:
+
+* instantiate three `i2c_controller` models (or wrap one model in a
+  three-instance aperture), decoding the `0xC000_9000..0xC000_92FF` subwindows,
+* add a small stub/register for the wrapper-enable aperture at `0xC000_9E00`,
+* bind each core's `irq_o` to peripheral interrupt bits 25:23 after
+  synchronization,
+* connect `set_bus_model(inst, callback)` for controller-mode target behavior,
+* use `target_write()` / `target_read()` back doors for target-mode tests,
+* treat SCL/SDA, timing (`TIMING0..4`), oversampling (`VAL`), and line override
+  (`OVRD`) as firmware-visible but functionally abstracted storage (no
+  bit-level waveform), consistent with the I3C modeling policy.
+
 ==== PLIC
 
 Bind `0xC400_0000` to `plic.reg_socket`. Configure:
@@ -659,6 +730,96 @@ TLM targets. Bind them through the front-port/local memory decode:
 If the top-level platform also supports direct CPU fast memory, disable or
 avoid overlapping fast-memory windows for these regions to keep all firmware
 access visible to the integration fabric.
+
+==== CPU Control (cpu_ctrl)
+[[_cpu_control_cpu_ctrl]]
+
+The `cpu_ctrl` SystemC LT model owns the SMC fabric-control register file at
+`0xC001_0000` (8 KiB window), defined by
+`hw/smc/smc_misc/data/registers/rdl/cpu_ctrl.rdl`. It is the firmware-side home
+of the **`SCRATCH[16]` SMC ROM ↔ SEP ROM inter-stage handoff mailbox**, which is
+the bring-up critical path for production ROM.
+
+Registers modeled (offsets relative to `0xC001_0000`):
+
+* `RESET_VECTOR[4]` (`0x000`), `RESET_CTRL` (`0x020`),
+  `CORE_RESET_PULSE_COUNT` (`0x028`), `CLOCK_GATE_CONTROL` (`0x030`),
+* `GLOBAL_BASE` (`0x040`), `LOCAL_BASE` (`0x048`, RO), `REGION_SIZE` (`0x050`),
+  `REFERENCE_COUNTER` (`0x060`), `WDT_TIMEOUT` (`0x070`),
+  `WDT_TIMEOUT_RESET` (`0x078`, self-clearing pulse),
+* **`SCRATCH[16]`** (`0x100`) — see <<_handoff_scratch_indices>> below,
+* `TEST_CTRL` (`0x200`, RO / HW backdoor), `DEBUG_CTRL` (`0x208`),
+  `DEBUG_BUS_MUX` (`0x210`),
+* `WB_PC_COREn[8]` (`0x300`/`0x340`/`0x380`/`0x3C0`, RO / HW backdoor per core),
+* `SMC_ATTRIBUTES` (`0x1000`, RO / HW backdoor — strap image),
+* `MUTEX[4]` (`0x1040`, read-acquire / write-release),
+* `SEMA[4]` (`0x1060`, signed 16-bit inc/dec on write),
+* `DUMMY_ROM_0..3` (`0x1180`..`0x1198`) and `DUMMY_ROM_NULL[4]` (`0x11A0`).
+
+Holes inside the 8 KiB window are RAZ/WI; addresses `>= 0x2000` return
+`TLM_ADDRESS_ERROR_RESPONSE`. Width contracts: naturally aligned `{1, 2, 4, 8}`
+byte accesses. `MUTEX[n]` reads perform an atomic test-and-set as a bus-level
+side effect (a side-effect-free peek is available via `transport_dbg` /
+`dbg_reg()`). `WDT_TIMEOUT_RESET` and `RESET_CTRL` pulse bits self-clear;
+functional reset sequencing and clock-gating side effects are **not** modeled.
+
+[[_handoff_scratch_indices]]
+Handoff scratch indices (firmware contract; mirrors
+`fw/smc/prod_rom/include/smc_rom_defs.h`):
+
+[cols="10,18,42,30",options="header"]
+|===
+|Index |Address |Firmware symbol |Role
+
+|8  |`0xC001_0140` |`SMC_SCRATCH_MANIFEST_ADDR`       |Manifest SRAM offset
+|9  |`0xC001_0148` |`SMC_SCRATCH_SMC_STATUS_TO_SEP`   |Coordination status bits
+|11 |`0xC001_0158` |`SMC_SCRATCH_STATUS_BUFFER_ADDR`  |Status ring-buffer offset
+|13 |`0xC001_0168` |`SMC_SCRATCH_SEP_SAFE_SRAM_START` |SEP safe SRAM start offset
+|14 |`0xC001_0170` |`SMC_SCRATCH_SEP_SAFE_SRAM_SIZE`  |SEP safe SRAM size
+|15 |`0xC001_0178` |`SMC_SCRATCH_MEM_REPAIR_STATUS`   |Memory-repair magic status
+|===
+
+`SCRATCH[9]` status bits: bit 0 `SRAM_INIT`, bit 1 `MANIFEST_READY`,
+bit 2 `BUFFER_READY`, bit 3 `SRAM_PROTECTED`. `SCRATCH[15]` magic values:
+`0x600DCAFE` passed, `0xBADC0FFE` failed, `0x12340001` bypassed.
+
+CCI parameters:
+
+[cols="22,18,18,42",options="header"]
+|===
+|Name |Type |Default |Purpose
+
+|`base_addr`        |`uint64_t` |`0xC0010000` |Absolute CPU-control base
+|`access_delay_ns`  |`double`   |`2.0`        |LT annotated access latency
+|===
+
+Fabric binding:
+
+[source,cpp]
+----
+smc::cpu_ctrl cpu_ctrl_dut{"cpu_ctrl"};
+fabric.to_cpu_ctrl.bind(cpu_ctrl_dut.reg_socket); // standalone / direct probe
+----
+
+NOTE: `smc_fabric` currently reserves the whole
+`SMC_BASE_CONFIG_BASE..SMC_BASE_CONFIG_END` (`0xC001_0000..0xC001_2000`) window
+and intercepts the `smc_base_config` subset (`GLOBAL_BASE`/`LOCAL_BASE`/
+`REGION_SIZE` at offsets `0x00`/`0x08`/`0x10`) internally; offsets it does not
+handle are returned as RAZ/WI rather than forwarded. The fabric's
+`to_cpu_ctrl` initiator socket today serves the `0xC003_9000` front-port window
+(`FRONT_CPU_CTRL_BASE`), not `0xC001_0000`. Full-platform integration therefore
+requires either (a) extending `smc_fabric` to forward the non-intercepted
+`0xC001_0000..0xC001_1FFF` offsets to `cpu_ctrl.reg_socket`, or (b) binding
+`cpu_ctrl` as a standalone target reached by a platform-level router that
+splits the `0xC001_0000` window between the fabric's base-config CSRs and the
+`cpu_ctrl` model. The standalone testbench and `to_cpu_ctrl` direct probe both
+work today with `base_addr = 0xC001_0000`.
+
+HW backdoor API (for strap-driven RO registers and debug visibility):
+`set_smc_attributes(v)`, `set_test_ctrl(v)`,
+`set_wb_pc(core, slot, pc)`, `scratch(idx)`, `set_scratch(idx, v)`,
+`dump_state(os)`. Use these from the platform/testbench to drive strap images
+and inspect writeback PCs without going through the bus.
 
 === RTL-Connected Blocks Without Current SMC SystemC Models
 
@@ -706,12 +867,6 @@ registers and expose deterministic lifecycle/chip config values.
 |`avsbus_controller`
 |Peripheral bit 22, debug state
 |Return idle/done status for ROM; allow interrupt forcing for tests.
-
-|I2C
-|`i2c_wrap`, 3 instances, pad mux and CDC
-|Peripheral bits 25:23
-|Stub reset values for early boot; develop target/controller model before OCCP
-over I2C tests.
 
 |Log engine
 |Inside `uart_wrap`, one per UART
@@ -804,7 +959,7 @@ RTL builds the 32-bit `peripheral_interrupts_o` in `smc_peripherals.sv`:
 |17:12 |`i3c_irqs_smc_clk` |`i3c_controller.irq_o[5:0]`
 |21:18 |`uart_irq_combined_smc_clk` |UART/log wrapper interrupt combine
 |22 |`avsbus_irq_smc_clk` |AVSBus stub/model
-|25:23 |`i2c_irqs_smc_clk` |I2C stub/model
+|25:23 |`i2c_irqs_smc_clk` |`i2c_controller.irq_o[2:0]` (3 instances)
 |26 |Synchronized active-high SEP WDT reset assertion |Top-level SEP WDT input
 |27 |`temp_interrupt_smc_clk` |PVT/temp input or stub
 |28 |`locked_field_access_interrupt` |eFuse/security model
@@ -853,11 +1008,17 @@ public:
     smc::clint clint{"clint"};
     smc::bootrom bootrom{"bootrom"};
     smc::scratchpad_ram scratch{"scratchpad_ram"};
+    smc::cpu_ctrl cpu_ctrl{"cpu_ctrl"};  // SMC fabric-control @ 0xC001_0000
 
     // Add wrappers/routers:
     // - periph_router: reset, misc, GPIO, I3C, PVT, AVS, I2C, UART, eFuse,
     //   telemetry, OCTS, DTP, extension.
-    // - front_port_router: CPU control, ROM, scratch, PLIC, CLINT, BEU, CPU L2.
+    // - front_port_router: CPU control (0xC003_9000), ROM, scratch, PLIC,
+    //   CLINT, BEU, CPU L2.
+    // - cpu_ctrl_router: splits 0xC001_0000..0xC001_1FFF between fabric-owned
+    //   base-config CSRs (offsets 0x00/0x08/0x10) and cpu_ctrl.reg_socket
+    //   (everything else), until smc_fabric forwards the non-intercepted
+    //   offsets itself.
     // - interrupt_aggregator: peripheral/mailbox/internal vector into PLIC.
 };
 ----
@@ -868,7 +1029,14 @@ Recommended routers:
   `fabric.to_periph`; subtracts block base before forwarding to modeled
   peripherals.
 * `front_port_router`: 64-bit TLM target bound to `fabric.to_front_port`;
-  routes CPU control, ROM, scratch, PLIC, CLINT, and BEU.
+  routes CPU control (`0xC003_9000` → `cluster.ctrl`), ROM, scratch, PLIC,
+  CLINT, and BEU.
+* `cpu_ctrl_router`: 64-bit TLM target that splits the `0xC001_0000..0xC001_1FFF`
+  window between fabric-owned base-config CSRs (`GLOBAL_BASE`/`LOCAL_BASE`/
+  `REGION_SIZE` at offsets `0x00`/`0x08`/`0x10`) and `cpu_ctrl.reg_socket`
+  (everything else). Until `smc_fabric` forwards non-intercepted offsets itself,
+  this router is the integration seam between the fabric and the
+  `cpu_ctrl` model.
 * `stub_target`: reusable target with configurable reset values, RAZ/WI
   behavior, optional sticky warning, and optional interrupt output.
 * `interrupt_aggregator`: SC_METHOD that composes external, peripheral,
@@ -898,13 +1066,18 @@ Existing unit/integration tests:
 |`smc/peripherals/reset_unit/test` |Reset registers, lock behavior, FLR, derived resets
 |`smc/peripherals/uart/test` |16550 register behavior, FIFO/interrupt paths
 |`smc/peripherals/i3c_controller/test` |HCI/PIO queues, interrupts, negative and coverage tests
+|`smc/peripherals/i2c_controller/test` |Controller/Target FIFOs (FMT/RX/TX/ACQ), interrupt aggregation, NACK/halt/resume, SMBus, target back doors, coverage tests
+|`smc/peripherals/cpu_ctrl/test` |Register R/W paths, HW backdoors (`SMC_ATTRIBUTES`/`TEST_CTRL`/`WB_PC`), `SCRATCH[16]` handoff indices, `MUTEX` test-and-set, `SEMA` inc/dec, `WDT_TIMEOUT_RESET` self-clear, `b_transport`/`transport_dbg` error responses
 |`smc/smc_fabric/test` |Fabric local decode, remap, filters, source IDs, DMI denial
 |`smc/cpu_cluster/test` |CPU cluster TLM, interrupts, debug, optional PLIC integration
 |===
 
-`smc/run_all_smc_tests.sh` currently covers most SMC IP tests but does not run
-the UART test. Add UART coverage there when using the script as an aggregate
-pre-submit check.
+`smc/run_all_smc_tests.sh` drives every SMC IP — `bootrom`, `clint`,
+`cpu_ctrl`, `i2c_controller`, `i3c_controller`, `plic`, `reset_unit`, `scratchpad_ram`, `uart`,
+and `smc_fabric` — across four quality gates (Release, ASAN, Coverage, CTest),
+with `cpu_cluster` included automatically when `WHISPER_HOME` and `BOOST_DIR`
+are available. UART and `cpu_ctrl` are both in the default IP set; no special
+flag is required to pick them up.
 
 For the eventual SMC platform test, add milestones in this order:
 
@@ -913,7 +1086,9 @@ For the eventual SMC platform test, add milestones in this order:
 3. CPU fetches ROM bytes through `bootrom`.
 4. CPU reads/writes scratchpad at `0xC006_0000`.
 5. Reset-unit and misc/strap/eFuse stubs provide deterministic early boot
-   values.
+   values; `cpu_ctrl.SCRATCH[15]` carries the memory-repair magic status and
+   `cpu_ctrl.SCRATCH[9]` reflects SMC→SEP status bits consumed by the SEP ROM
+   handoff.
 6. CLINT MSIP/MTIP and PLIC external interrupt wake a hart.
 7. UART console output works through a modeled UART instance.
 8. Production or smoke ROM reaches the first known status/post-code milestone.
@@ -926,21 +1101,29 @@ For the eventual SMC platform test, add milestones in this order:
   tree.
 * Add a generated or shared C++ address-map header derived from the same RDL as
   `smc_top_reg.svh`/firmware headers.
-* Add `periph_router`, `front_port_router`, `stub_target`, and
-  `interrupt_aggregator` helpers.
+* Add `periph_router`, `front_port_router`, `cpu_ctrl_router`, `stub_target`,
+  and `interrupt_aggregator` helpers.
 * Configure boot ROM and scratchpad sizes to match the generated RTL map.
 * Decide how ROM images are loaded: direct `load_elf`, ROM binary/hex preload,
   or ELF section split across ROM and SRAM.
-* Implement high-priority stubs: misc/scratch/status, eFuse, GPIO straps,
-  PLL/PVT success state, mailbox, WDT/BEU.
+* Implement high-priority stubs: eFuse, GPIO straps, PLL/PVT success state,
+  mailbox, WDT/BEU. (The SMC fabric-control `misc/scratch/status` surface is
+  already covered by the `cpu_ctrl` SystemC model at `0xC001_0000`, including
+  the `SCRATCH[16]` SMC↔SEP handoff mailbox; remaining `smc_misc` sub-blocks
+  such as chip config / RAS bank / NDM reset handling still need stubs.)
+* Extend `smc_fabric` so the non-intercepted offsets of
+  `0xC001_0000..0xC001_1FFF` are forwarded to `cpu_ctrl.reg_socket` (today the
+  fabric returns RAZ/WI for anything outside `GLOBAL_BASE`/`LOCAL_BASE`/
+  `REGION_SIZE` in that window), or wire a `cpu_ctrl_router` that splits the
+  window in the platform. Clarify which socket carries the `cpu_ctrl` traffic
+  versus the `0xC003_9000` `to_cpu_ctrl` front-port route.
 * Wrap the existing UART model for four RTL UART instances and log-engine
   aperture behavior.
 * Bind the SystemC I3C functional model to the RTL I3C aperture while noting
   that RTL currently connects a stub.
-* Unify `smc_axi_extension` usage across CPU cluster, fabric, Boot ROM, and
-  scratchpad RAM before full-platform filter/security testing.
-* Add `smc/peripherals/uart/test` to `smc/run_all_smc_tests.sh` or document why
-  it remains a separate test path.
+* Wrap the `i2c_controller` model for the three RTL I2C cores (`NUM_I2CS = 3`)
+  under `0xC000_9000`, plus the wrapper-enable register at `0xC000_9E00`, and
+  bind the three `irq_o` lines to peripheral interrupt bits 25:23.
 * Add platform tests that compare decode behavior against generated map
   constants and fail on unintended decode holes.
 
