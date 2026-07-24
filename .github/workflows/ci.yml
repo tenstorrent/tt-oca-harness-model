@@ -354,11 +354,10 @@ jobs:
           GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BOOST_ROOT: /usr
         run: |
-          git clone --depth 1 --no-checkout \
+          git clone \
             https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
             /home/runner/whisper
           cd /home/runner/whisper
-          git fetch --depth 1 origin ${{ env.WHISPER_REV }}
           git checkout ${{ env.WHISPER_REV }}
           make MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20 \
             build-$(uname -s)/librvcore.a -j$(nproc)
