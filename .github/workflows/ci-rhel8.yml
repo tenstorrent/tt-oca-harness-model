@@ -601,7 +601,7 @@ jobs:
             /home/runner/whisper
           cd /home/runner/whisper
           git checkout ${{ env.WHISPER_REV }}
-          make MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20 \
+          make MEM_CALLBACKS=1 CXX_STD=c++20 \
             build-$(uname -s)/librvcore.a -j$(nproc)
 
       - name: Run SMC VP tests
