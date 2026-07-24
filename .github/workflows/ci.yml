@@ -352,14 +352,18 @@ jobs:
         if: steps.cache-whisper.outputs.cache-hit != 'true'
         env:
           GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BOOST_ROOT: /usr
         run: |
+          # Create a minimal Boost root that only exposes the headers so the
+          # Makefile does not add -isystem /usr, which shadows libc headers.
+          mkdir -p /tmp/boost/include
+          ln -s /usr/include/boost /tmp/boost/include/boost
+
           git clone \
             https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
             /home/runner/whisper
           cd /home/runner/whisper
           git checkout ${{ env.WHISPER_REV }}
-          make MEM_CALLBACKS=1 CXX_STD=c++20 \
+          make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
             build-$(uname -s)/librvcore.a -j$(nproc)
 
       - name: Run SMC VP tests
