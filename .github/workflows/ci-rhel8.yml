@@ -557,7 +557,8 @@ jobs:
           XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
           wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
           tar zxf "${XPACK}.tar.gz"
-          mv "${XPACK}" toolchain
+          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          mv "${EXTRACTED_DIR}" toolchain
           echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
 
       - name: Checkout (with submodules)
