@@ -1,0 +1,30 @@
+---
+description: Every new IP model must have standalone + platform tests and CI entries before push
+alwaysApply: true
+---
+
+# New IP Model Pre-Push Test Checklist
+
+Before pushing a new IP model, verify it is covered by both standalone tests and the CI orchestrator. This applies to any new hand-written SystemC/TLM peripheral, fabric block, CPU-cluster block, or SEP model.
+
+## Required checks
+
+1. **Standalone unit tests** — add a `test/` directory under the IP with at least one testbench that exercises the model in isolation. Mirror the pattern used by existing IPs in the same subsystem (e.g. `smc/peripherals/<ip>/test/` with a `run_tests.sh`).
+2. **Coverage + ASan gating** — the new IP must pass `./run_tests.sh --coverage` (≥ 95% line coverage on touched files) and `./run_tests.sh --asan` (no leaks or sanitizer errors). See the existing `test-coverage-asan` rule for details.
+3. **CI orchestrator list** — add the IP name to the subsystem's top-level orchestrator so it is picked up by CI:
+   - SMC peripherals: `smc/run_all_smc_tests.sh` (default IP list and argument list handling).
+   - SEP peripherals: `sep/peripherals/run_all_peripherals.sh`.
+4. **GitHub Actions workflow** — add the IP to the CI matrix in `.github/workflows/ci.yml` (and `.github/workflows/ci-rhel8.yml` if that workflow tests the same subsystem).
+5. **Platform integration tests** — if the IP is reachable from a VP platform (e.g. `smc-vp` or `sep-vp`), add a platform-level test or firmware test that exercises it through the integrated system, and register it in the platform's test runner (`sw/smc-vp-tests/run_smc_vp_tests.sh`, `sw/sep-vp-tests/`, etc.).
+
+## What to flag before pushing
+
+- A new IP directory with no `test/` subdirectory.
+- An IP present in `smc/run_all_smc_tests.sh` or `sep/peripherals/run_all_peripherals.sh` but missing from `.github/workflows/ci.yml` (or vice versa).
+- A PR that adds model code but has no CTest target, coverage report, or ASan run for that IP.
+- Platform-visible IP without a platform-level regression test.
+
+## Examples
+
+- New SMC peripheral `smc/peripherals/foo/` should add `smc/peripherals/foo/test/foo_tb.cpp`, `smc/peripherals/foo/run_tests.sh`, be listed in `smc/run_all_smc_tests.sh foo ...`, and added to the `smc-unit-tests` job in `.github/workflows/ci.yml`.
+- New SEP peripheral `sep/peripherals/bar/` should add `sep/peripherals/bar/test/bar_tb.cpp`, `sep/peripherals/bar/run_tests.sh`, be listed in `sep/peripherals/run_all_peripherals.sh`, and added to the `sep-unit-tests` job in `.github/workflows/ci.yml`.
