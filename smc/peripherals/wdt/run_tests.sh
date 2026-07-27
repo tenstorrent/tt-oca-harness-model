@@ -259,18 +259,27 @@ elif (( USE_COVERAGE )); then
     echo ""
 
     HTML_DIR="${BUILD_DIR}/coverage-report"
+    TICK_BIN="${BUILD_DIR}/test/wdt_tick_tb"
     SOURCES=(
         "${SCRIPT_DIR}/src/wdt.cpp"
         "${SCRIPT_DIR}/test/wdt_tb.cpp"
+        "${SCRIPT_DIR}/test/wdt_tick_tb.cpp"
     )
 
     # ---- LLVM instrumented coverage (Clang / AppleClang) ------------------
     if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
         PROFRAW="${BUILD_DIR}/wdt_tb.profraw"
-        PROFDATA="${BUILD_DIR}/wdt_tb.profdata"
+        TICK_PROFRAW="${BUILD_DIR}/wdt_tick_tb.profraw"
+        PROFDATA="${BUILD_DIR}/wdt_combined.profdata"
 
         LLVM_PROFILE_FILE="${PROFRAW}" "${TB_BIN}"
         echo ""
+        if [[ -x "${TICK_BIN}" ]]; then
+            echo ">> Running with ${COVERAGE_TOOL} coverage instrumentation: ${TICK_BIN}"
+            echo ""
+            LLVM_PROFILE_FILE="${TICK_PROFRAW}" "${TICK_BIN}"
+            echo ""
+        fi
 
         PROFDATA_CMD="$(_find_llvm_tool llvm-profdata)"
         COV_CMD="$(_find_llvm_tool llvm-cov)"
@@ -281,18 +290,25 @@ elif (( USE_COVERAGE )); then
             exit 1
         fi
 
+        _PROFRAW_ARGS=("${PROFRAW}")
+        [[ -f "${TICK_PROFRAW}" ]] && _PROFRAW_ARGS+=("${TICK_PROFRAW}")
         echo ">> Merging profile data (${PROFDATA_CMD}) …"
-        ${PROFDATA_CMD} merge -sparse "${PROFRAW}" -o "${PROFDATA}"
+        ${PROFDATA_CMD} merge -sparse "${_PROFRAW_ARGS[@]}" -o "${PROFDATA}"
+
+        _OBJECT_ARGS=()
+        [[ -x "${TICK_BIN}" ]] && _OBJECT_ARGS+=("-object=${TICK_BIN}")
 
         echo ""
         echo "===== Line coverage summary ====="
         ${COV_CMD} report "${TB_BIN}" \
+            "${_OBJECT_ARGS[@]}" \
             -instr-profile="${PROFDATA}" \
             "${SOURCES[@]}"
 
         echo ""
         echo "===== Uncovered lines in wdt.cpp ====="
         ${COV_CMD} show "${TB_BIN}" \
+            "${_OBJECT_ARGS[@]}" \
             -instr-profile="${PROFDATA}" \
             -sources "${SCRIPT_DIR}/src/wdt.cpp" \
             -format=text \
@@ -301,6 +317,7 @@ elif (( USE_COVERAGE )); then
             || echo "(none — full coverage)"
 
         ${COV_CMD} show "${TB_BIN}" \
+            "${_OBJECT_ARGS[@]}" \
             -instr-profile="${PROFDATA}" \
             "${SOURCES[@]}" \
             -format=html \
@@ -310,6 +327,7 @@ elif (( USE_COVERAGE )); then
     # ---- gcov coverage (GCC) -----------------------------------------------
     else
         "${TB_BIN}"
+        [[ -x "${TICK_BIN}" ]] && "${TICK_BIN}"
         echo ""
 
         if command -v gcovr &>/dev/null; then

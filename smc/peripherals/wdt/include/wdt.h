@@ -134,6 +134,16 @@ public:
     void     dbg_set_count(uint32_t v);
     void     dump_state(std::ostream& os = std::cout) const;
 
+    /// Direct register access for unit tests (bypasses TLM size/window checks).
+    bool dbg_reg_read(uint64_t off, unsigned access_size, uint32_t& data) const
+    {
+        return reg_read(off, access_size, data);
+    }
+    bool dbg_reg_write(uint64_t off, unsigned access_size, uint32_t data)
+    {
+        return reg_write(off, access_size, data);
+    }
+
 private:
     void         b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
     unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
