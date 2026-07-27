@@ -81,9 +81,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Fabric reset -------------------------------------------------------
     fabric.rst_n_i.bind(rst_n_sig);
 
-    // Idle initiators satisfy the fabric's log_in / data_accel_in BW ports.
-    idle_log_init_   .bind(fabric.log_in);
-    idle_daccel_init_.bind(fabric.data_accel_in);
+    // Idle initiator satisfies the fabric's log_in BW port; the DMA owns
+    // fabric.data_accel_in.
+    idle_log_init_ .bind(fabric.log_in);
+    dma_.mst_socket.bind(fabric.data_accel_in);
 
     // -- front_port_router: fabric.to_front_port (cluster.data is routed to a
     //    dedicated multi_stub_target below, not through the shared router, so
@@ -152,7 +153,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[10].bind(stub_periph_misc.reg_socket);
 
     // -- Fabric initiator stubs -------------------------------------------
-    fabric.to_data_accel_ctrl     .bind(stub_dma.reg_socket);
+    fabric.to_data_accel_ctrl.bind(wa_dma.tgt);
+    wa_dma.init.bind(dma_.reg_socket);
     fabric.to_dfd_apb              .bind(stub_dfd.reg_socket);
     fabric.to_mailbox              .bind(stub_mbox.reg_socket);
     fabric.to_dft_csr              .bind(stub_dft.reg_socket);
@@ -275,7 +277,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Bind every stub_target's irq_o to a dummy sink --------------------
     {
         stub_target<64>* stubs64[] = {
-            &stub_wdt_debug, &stub_beu, &stub_dma, &stub_dfd, &stub_mbox,
+            &stub_wdt_debug, &stub_beu, &stub_dfd, &stub_mbox,
             &stub_dft, &stub_sysmem, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
             &stub_xR, &stub_ibf, &stub_obf,
         };
@@ -329,7 +331,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         std::ostringstream _oss;
         _oss << "smc_platform elaborated: "
              << NUM_UART << " uart, " << NUM_I2C << " i2c, "
-             << NUM_I3C << " i3c, " << NUM_PLIC_SRC << " plic sources";
+             << NUM_I3C << " i3c, dma, " << NUM_PLIC_SRC << " plic sources";
 #ifdef SMC_PLATFORM_WITH_CLUSTER
         _oss << ", cluster ON";
 #else

@@ -3,8 +3,8 @@
 // vp/platform/smc/smc_platform.hpp
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
-// (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, I3C, 3x
-// I2C, 4x UART, and optionally the Whisper-backed CPU cluster), wires the
+// (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, DMA, I3C,
+// 3x I2C, 4x UART, and optionally the Whisper-backed CPU cluster), wires the
 // fabric's initiator sockets through address routers to the modeled targets
 // and stubs, composes the peripheral interrupt vector into the PLIC, and —
 // when the cluster is present — connects CLINT MSIP/MTIP and PLIC MEIP to the
@@ -30,6 +30,7 @@
 #include "bootrom.h"
 #include "clint.h"
 #include "cpu_ctrl.h"
+#include "dma.h"
 #include "i2c_controller.h"
 #include "i3c_controller.h"
 #include "plic.h"
@@ -82,6 +83,7 @@ public:
     bootrom         bootrom_{"bootrom"};
     scratchpad_ram   scratch{"scratchpad_ram"};
     cpu_ctrl        cpu_ctrl_{"cpu_ctrl"};
+    dma             dma_{"dma"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart{"uart", NUM_UART};
@@ -106,6 +108,7 @@ public:
     width_adapter<64, 32>       wa_scratch{"wa_scratch"};
     width_adapter<64, 32>       wa_plic{"wa_plic"};
     width_adapter<64, 32>       wa_clint{"wa_clint"};
+    width_adapter<64, 32>       wa_dma{"wa_dma"};
     interrupt_aggregator        intagg;
 
     // -----------------------------------------------------------------------
@@ -113,7 +116,6 @@ public:
     // -----------------------------------------------------------------------
     stub_target<64> stub_wdt_debug{"stub_wdt_debug"};
     stub_target<64> stub_beu{"stub_beu"};
-    stub_target<64> stub_dma{"stub_dma"};
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};
@@ -226,7 +228,6 @@ private:
     // initiator (their internal BW port); nothing drives them in the platform,
     // so bind idle initiators that never issue transactions.
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_log_init_{"idle_log_init_"};
-    tlm_utils::simple_initiator_socket<smc_platform, 64> idle_daccel_init_{"idle_daccel_init_"};
     // In cluster-OFF builds there is no cluster.mmio to bind fabric.mmio_in, so
     // an idle initiator satisfies the fabric's BW port instead.
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_mmio_init_{"idle_mmio_init_"};

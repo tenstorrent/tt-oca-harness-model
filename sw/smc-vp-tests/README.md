@@ -109,6 +109,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `smc-bootrom-test/` | BootROM reads at several offsets (zero-initialised by default) |
 | `smc-clint-test/` | CLINT MSIP write/read round-trip for hart 0 + MTIMECMP timer interrupt |
 | `smc-cpu-ctrl-test/` | CPU control SCRATCH, REFERENCE_COUNTER, MUTEX test-and-set, and SEMA up/down |
+| `smc-dma-test/` | DMA scratchpad-to-scratchpad copy |
 | `smc-i2c-loopback-test/` | I2C0 controller -> I2C1 target loopback (write + read) |
 | `smc-i2c-test/` | I2C controller 0 INTR_ENABLE / CTRL / FIFO_CTRL write/read round-trip |
 | `smc-i3c-loopback-test/` | I3C0 controller -> echo target loopback (write + read) |
@@ -131,7 +132,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 
 `smc-vp` (built from `vp/platform/smc/`) instantiates the full SMC
 platform — fabric, PLIC, CLINT, reset unit, boot ROM, scratchpad, cpu_ctrl,
-I3C, 3x I2C, 4x UART, and the Whisper-backed CVA6 cluster — and runs a
+DMA, I3C, 3x I2C, 4x UART, and the Whisper-backed CVA6 cluster — and runs a
 bounded SystemC simulation:
 
 ```

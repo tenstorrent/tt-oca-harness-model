@@ -16,6 +16,7 @@
 #
 #  smc-unit-tests  Run every SMC peripheral unit test via each
 #                  smc/peripherals/<ip>/run_tests.sh (needs build-deps).
+#                  Includes the new DMA peripheral unit tests.
 #                  The cpu_cluster is skipped — it requires the Tenstorrent-
 #                  internal Whisper ISS (WHISPER_HOME); enable it locally once
 #                  WHISPER_HOME is available.
@@ -25,7 +26,8 @@
 #
 #  smc-vp            Build the smc-vp executable (needs build-deps + Whisper ISS
 #                    + RISC-V bare-metal toolchain).  Runs the smc-vp-tests
-#                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh.
+#                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh,
+#                    including the new smc-dma-test.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -254,7 +256,7 @@ jobs:
           CCI_HOME:     ${{ env.CCI_HOME }}
         run: |
           smc/run_all_smc_tests.sh \
-            bootrom clint i3c_controller plic reset_unit scratchpad_ram
+            bootrom clint dma i3c_controller plic reset_unit scratchpad_ram
 
       - name: Upload SMC peripheral test logs
         if: always()

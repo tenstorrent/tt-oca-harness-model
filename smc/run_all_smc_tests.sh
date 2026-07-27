@@ -193,6 +193,7 @@ ALL_IPS=(
     "i2c_controller:${SCRIPT_DIR}/peripherals/i2c_controller"
     "cpu_ctrl:${SCRIPT_DIR}/peripherals/cpu_ctrl"
     "i3c_controller:${SCRIPT_DIR}/peripherals/i3c_controller"
+    "dma:${SCRIPT_DIR}/peripherals/dma"
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
