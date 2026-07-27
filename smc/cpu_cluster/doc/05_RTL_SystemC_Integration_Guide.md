@@ -232,7 +232,7 @@ Minimum required decode for ROM bring-up:
 
 | Region | Base | Target |
 |---|---:|---|
-| WDT | `0xC0000000` | watchdog stub or real model |
+| WDT | `0xC0000000` | `smc::wdt` stage-1 (×N); stage-2 in cluster/`cpu_ctrl` |
 | Reset Unit | `0xC0002000` | `reset_unit` |
 | MISC / scratch | `0xC0002800` | scratch/status register model |
 | CPU Control | `0xC0010000` | `smc_cpu_cluster::ctrl` |

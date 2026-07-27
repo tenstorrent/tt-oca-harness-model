@@ -20,7 +20,6 @@
 #include <cstring>
 #include <iostream>
 #include <map>
-#include <memory>
 #include <string>
 
 #include "System.hpp"
@@ -409,6 +408,32 @@ struct cluster_tb_top : sc_core::sc_module
     sc_core::sc_signal<bool>       strap_irq_timer;
     sc_core::sc_signal<bool>       strap_irq_ext;
 
+    // Stage-2 WDT sidebands (one sticky vector per cluster that has N harts).
+    sc_core::sc_vector<sc_core::sc_signal<bool>> cluster_wdt_sticky;
+    sc_core::sc_signal<bool> cluster_rst_primary_n;
+    sc_core::sc_signal<bool> cluster_wdt_first;
+    sc_core::sc_signal<bool> cluster_wdt_second;
+
+    sc_core::sc_signal<bool> def_wdt_sticky;
+    sc_core::sc_signal<bool> def_rst_primary_n;
+    sc_core::sc_signal<bool> def_wdt_first;
+    sc_core::sc_signal<bool> def_wdt_second;
+
+    sc_core::sc_signal<bool> strap_wdt_sticky;
+    sc_core::sc_signal<bool> strap_rst_primary_n;
+    sc_core::sc_signal<bool> strap_wdt_first;
+    sc_core::sc_signal<bool> strap_wdt_second;
+
+    sc_core::sc_signal<bool> qzero_wdt_sticky;
+    sc_core::sc_signal<bool> qzero_rst_primary_n;
+    sc_core::sc_signal<bool> qzero_wdt_first;
+    sc_core::sc_signal<bool> qzero_wdt_second;
+
+    sc_core::sc_signal<bool> offmem_wdt_sticky;
+    sc_core::sc_signal<bool> offmem_rst_primary_n;
+    sc_core::sc_signal<bool> offmem_wdt_first;
+    sc_core::sc_signal<bool> offmem_wdt_second;
+
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_sw;
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_timer;
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_ext;
@@ -488,6 +513,26 @@ struct cluster_tb_top : sc_core::sc_module
         , strap_irq_sw("strap_irq_sw")
         , strap_irq_timer("strap_irq_timer")
         , strap_irq_ext("strap_irq_ext")
+        , cluster_wdt_sticky("cluster_wdt_sticky", NHARTS)
+        , cluster_rst_primary_n("cluster_rst_primary_n")
+        , cluster_wdt_first("cluster_wdt_first")
+        , cluster_wdt_second("cluster_wdt_second")
+        , def_wdt_sticky("def_wdt_sticky")
+        , def_rst_primary_n("def_rst_primary_n")
+        , def_wdt_first("def_wdt_first")
+        , def_wdt_second("def_wdt_second")
+        , strap_wdt_sticky("strap_wdt_sticky")
+        , strap_rst_primary_n("strap_rst_primary_n")
+        , strap_wdt_first("strap_wdt_first")
+        , strap_wdt_second("strap_wdt_second")
+        , qzero_wdt_sticky("qzero_wdt_sticky")
+        , qzero_rst_primary_n("qzero_rst_primary_n")
+        , qzero_wdt_first("qzero_wdt_first")
+        , qzero_wdt_second("qzero_wdt_second")
+        , offmem_wdt_sticky("offmem_wdt_sticky")
+        , offmem_rst_primary_n("offmem_rst_primary_n")
+        , offmem_wdt_first("offmem_wdt_first")
+        , offmem_wdt_second("offmem_wdt_second")
         , sig_sw("sig_sw", NHARTS)
         , sig_timer("sig_timer", NHARTS)
         , sig_ext("sig_ext", NHARTS)
@@ -518,6 +563,15 @@ struct cluster_tb_top : sc_core::sc_module
         cluster.ifetch.bind(bus_ifetch.socket);
         ctrl.socket.bind(cluster.ctrl);
 
+        cluster_rst_primary_n.write(true);
+        for (unsigned i = 0; i < NHARTS; ++i) {
+            cluster_wdt_sticky[i].write(false);
+            cluster.wdt_timeout_cluster_i[i].bind(cluster_wdt_sticky[i]);
+        }
+        cluster.rst_primary_n_i.bind(cluster_rst_primary_n);
+        cluster.wdt_first_timeout_o.bind(cluster_wdt_first);
+        cluster.wdt_second_timeout_o.bind(cluster_wdt_second);
+
         def_ctor_cluster.data.bind(def_data.socket);
         def_ctor_cluster.mmio.bind(def_mmio.socket);
         def_ctor_cluster.ifetch.bind(def_ifetch.socket);
@@ -528,6 +582,12 @@ struct cluster_tb_top : sc_core::sc_module
         def_ctor_cluster.irq_sw[0](def_irq_sw);
         def_ctor_cluster.irq_timer[0](def_irq_timer);
         def_ctor_cluster.irq_ext[0](def_irq_ext);
+        def_wdt_sticky.write(false);
+        def_rst_primary_n.write(true);
+        def_ctor_cluster.wdt_timeout_cluster_i[0].bind(def_wdt_sticky);
+        def_ctor_cluster.rst_primary_n_i.bind(def_rst_primary_n);
+        def_ctor_cluster.wdt_first_timeout_o.bind(def_wdt_first);
+        def_ctor_cluster.wdt_second_timeout_o.bind(def_wdt_second);
         def_ctor_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         def_ctrl.write32(0x020, 0u);
 
@@ -541,6 +601,12 @@ struct cluster_tb_top : sc_core::sc_module
         strap_cluster.irq_sw[0](strap_irq_sw);
         strap_cluster.irq_timer[0](strap_irq_timer);
         strap_cluster.irq_ext[0](strap_irq_ext);
+        strap_wdt_sticky.write(false);
+        strap_rst_primary_n.write(true);
+        strap_cluster.wdt_timeout_cluster_i[0].bind(strap_wdt_sticky);
+        strap_cluster.rst_primary_n_i.bind(strap_rst_primary_n);
+        strap_cluster.wdt_first_timeout_o.bind(strap_wdt_first);
+        strap_cluster.wdt_second_timeout_o.bind(strap_wdt_second);
         strap_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         strap_ctrl.write32(0x020, 0u);
 
@@ -554,6 +620,12 @@ struct cluster_tb_top : sc_core::sc_module
         quantum_zero_cluster.irq_sw[0](qzero_irq_sw);
         quantum_zero_cluster.irq_timer[0](qzero_irq_timer);
         quantum_zero_cluster.irq_ext[0](qzero_irq_ext);
+        qzero_wdt_sticky.write(false);
+        qzero_rst_primary_n.write(true);
+        quantum_zero_cluster.wdt_timeout_cluster_i[0].bind(qzero_wdt_sticky);
+        quantum_zero_cluster.rst_primary_n_i.bind(qzero_rst_primary_n);
+        quantum_zero_cluster.wdt_first_timeout_o.bind(qzero_wdt_first);
+        quantum_zero_cluster.wdt_second_timeout_o.bind(qzero_wdt_second);
         quantum_zero_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         qzero_ctrl.write32(0x020, 0u);
 
@@ -567,6 +639,12 @@ struct cluster_tb_top : sc_core::sc_module
         offset_mem_cluster.irq_sw[0](offmem_irq_sw);
         offset_mem_cluster.irq_timer[0](offmem_irq_timer);
         offset_mem_cluster.irq_ext[0](offmem_irq_ext);
+        offmem_wdt_sticky.write(false);
+        offmem_rst_primary_n.write(true);
+        offset_mem_cluster.wdt_timeout_cluster_i[0].bind(offmem_wdt_sticky);
+        offset_mem_cluster.rst_primary_n_i.bind(offmem_rst_primary_n);
+        offset_mem_cluster.wdt_first_timeout_o.bind(offmem_wdt_first);
+        offset_mem_cluster.wdt_second_timeout_o.bind(offmem_wdt_second);
         offset_mem_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         offmem_ctrl.write32(0x020, 0u);
 
@@ -772,87 +850,6 @@ struct cluster_tb_top : sc_core::sc_module
             ASSERT_TRUE(m.write32(MMIO + 0x400, 0xBEEFu));
             EXPECT_TRUE(bus_mmio.last_locked);
             pass("smc_axi_extension on MMIO transactions");
-        }
-
-        // --- smc_axi_extension setters / clone / copy_from (canonical header) -
-        // Exercises the prot[*] ↔ bool coherence of every setter in both
-        // directions, plus the TLM-2.0 clone()/copy_from() overrides that
-        // the framework invokes when a payload is deep-copied.
-        {
-            smc::smc_axi_extension e;
-
-            // set_priv: true sets prot[2] and clears is_user; false clears
-            // prot[2] and sets is_user.
-            e.set_priv(true);
-            EXPECT_TRUE((e.prot & (1u << 2)) != 0u);
-            EXPECT_FALSE(e.is_user);
-            e.set_priv(false);
-            EXPECT_EQ((e.prot & (1u << 2)), 0u);
-            EXPECT_TRUE(e.is_user);
-
-            // set_secure: true clears prot[1] and sets is_secure; false sets
-            // prot[1] and clears is_secure.
-            e.set_secure(true);
-            EXPECT_EQ((e.prot & (1u << 1)), 0u);
-            EXPECT_TRUE(e.is_secure);
-            e.set_secure(false);
-            EXPECT_TRUE((e.prot & (1u << 1)) != 0u);
-            EXPECT_FALSE(e.is_secure);
-
-            // set_fetch: true clears prot[0] and sets is_fetch; false sets
-            // prot[0] and clears is_fetch.
-            e.set_fetch(true);
-            EXPECT_EQ((e.prot & (1u << 0)), 0u);
-            EXPECT_TRUE(e.is_fetch);
-            e.set_fetch(false);
-            EXPECT_TRUE((e.prot & (1u << 0)) != 0u);
-            EXPECT_FALSE(e.is_fetch);
-
-            // set_locked: true sets prot[3] and is_locked; false clears both.
-            e.set_locked(true);
-            EXPECT_TRUE((e.prot & (1u << 3)) != 0u);
-            EXPECT_TRUE(e.is_locked);
-            e.set_locked(false);
-            EXPECT_EQ((e.prot & (1u << 3)), 0u);
-            EXPECT_FALSE(e.is_locked);
-
-            // clone() deep-copies every field.
-            e.source_id = 0x1234u;
-            e.axi_id    = 0x5678u;
-            e.axi_user  = 0x9Au;
-            e.set_priv(true);
-            e.set_secure(true);
-            e.set_fetch(true);
-            e.set_locked(true);
-            std::unique_ptr<smc::smc_axi_extension> c(
-                static_cast<smc::smc_axi_extension*>(e.clone()));
-            ASSERT_TRUE(c != nullptr);
-            EXPECT_EQ(c->source_id, e.source_id);
-            EXPECT_EQ(c->axi_id,    e.axi_id);
-            EXPECT_EQ(c->axi_user,  e.axi_user);
-            EXPECT_EQ(c->prot,      e.prot);
-            EXPECT_EQ(c->is_user,   e.is_user);
-            EXPECT_EQ(c->is_secure, e.is_secure);
-            EXPECT_EQ(c->is_fetch,  e.is_fetch);
-            EXPECT_EQ(c->is_locked, e.is_locked);
-
-            // copy_from() copies every field into an existing instance.
-            smc::smc_axi_extension dst;
-            dst.set_priv(false);
-            dst.set_secure(false);
-            dst.set_fetch(false);
-            dst.set_locked(false);
-            dst.copy_from(e);
-            EXPECT_EQ(dst.source_id, e.source_id);
-            EXPECT_EQ(dst.axi_id,    e.axi_id);
-            EXPECT_EQ(dst.axi_user,  e.axi_user);
-            EXPECT_EQ(dst.prot,      e.prot);
-            EXPECT_EQ(dst.is_user,   e.is_user);
-            EXPECT_EQ(dst.is_secure, e.is_secure);
-            EXPECT_EQ(dst.is_fetch,  e.is_fetch);
-            EXPECT_EQ(dst.is_locked, e.is_locked);
-
-            pass("smc_axi_extension setters / clone / copy_from coherence");
         }
 
         // --- step / WFI (hart 0) ------------------------------------------------

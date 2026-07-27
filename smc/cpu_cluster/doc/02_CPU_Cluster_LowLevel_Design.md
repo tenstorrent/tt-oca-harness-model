@@ -317,7 +317,8 @@ IMPLEMENTED and are therefore excluded from the initial modeling scope.
 | Priority | Modules                                                                                                                                                       | Rationale                                                |
 |----------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------|
 | P0       | `smc_fabric`, `axi_filter`, `smc_cpu_cluster` (stub), `plic`, `clint`, `boot_rom`, `scratchpad_sram`, `reset_unit`, `misc_wrapper`, `mailbox_unit`, `system_timer_octs`, `uart_16550`, `gpio`, `efuse` | Required to boot SMC firmware up to OCCP loop.            |
-| P1       | `dma_engine`, `memory_zeroer`, `log_engine`, `i2c_controller`, `avsbus_controller`, `pvt_wrapper`, `telemetry_receiver`, `pll_wrapper`, `wdt`, `bus_error_unit` | Required for full functional system management workloads. |
+| P1       | `dma_engine`, `memory_zeroer`, `log_engine`, `i2c_controller`, `avsbus_controller`, `pvt_wrapper`, `telemetry_receiver`, `pll_wrapper`, `bus_error_unit` | Required for full functional system management workloads. |
+| Done     | `wdt` (per-core stage-1) + stage-2 in cluster/`cpu_ctrl` | See `smc/peripherals/wdt/` |
 | P2       | `debug_module`                                                                                                                                                | Needed only when modelling JTAG / debug flows.            |
 
 ---
@@ -637,16 +638,16 @@ common regression in this area; the test
 
 ### 4.7 TLM-2.0 sideband — `smc_axi_extension`
 
-> Canonical definition: `smc/common/include/smc_axi_extension.h`.
+> Canonical definition: `libsmc/cpu/smc_axi_extension.h`.
 
 Every outgoing transaction carries a `tlm::tlm_extension` describing the
-master and access type.  The class (and the `smc::source_id_t` enum) is
-defined under the `smc` namespace in the single shared header
-`smc/common/include/smc_axi_extension.h`, which every SMC IP — cpu_cluster,
-smc_fabric, and every peripheral — includes directly via its CMake include
-path.  There are no per-peripheral copies, so a single binary that links any
-combination of SMC modules sees one and only one `smc::smc_axi_extension`
-type — the ODR contract is held by construction.
+master and access type.  The class is defined under the `smc` namespace
+and is **shared verbatim** with every other SMC IP that needs to read
+or write it (e.g. the PLIC; the cluster's header is included unchanged
+under the same name in `peripherals/plic/include/smc_tlm_extensions.h`
+via an `__has_include` shim, so a single binary that links both modules
+sees one and only one `smc::smc_axi_extension` type — the ODR contract
+is held).
 
 | Field        | Type      | Default              | Meaning                                                       |
 |--------------|-----------|----------------------|---------------------------------------------------------------|
@@ -1145,10 +1146,10 @@ below.  Items left blocked on peer IPs are tabulated in §8.
 | 3.8  | `INIT_MEM_DONE` / `MEM_REPAIR_STATUS` testbench hooks      | done   | `set_init_mem_done()` exercised by `ScratchpadSramStub` in `cluster_tb` (TC-CPU-004/005). Production scratchpad TLM on `data` still open. |
 | 3.9  | Debug API: `step(K)`, `inject_nmi`, `last_commit()`        | done   | `iss_hart::step(unsigned n)`, `iss_hart::inject_nmi(cause)` (`Hart::setPendingNmi`), `iss_hart::last_commit()` populated each `step()`.  `cluster.inject_nmi(i, cause)` wakes a parked hart.                  |
 | 3.9  | `iss_hart::current_priv()`                                 | done   | Live `Hart::privilegeMode()` (0 = U, 1 = S, 3 = M); drives `prot[2]`.                                                                                                                                         |
-| 3.10 | `smc_axi_extension` on every outgoing transaction          | done   | `smc/common/include/smc_axi_extension.h` (§4.7); `tlm_access()` allocates and attaches one extension per GP; ownership transferred to the GP.                                                                         |
+| 3.10 | `smc_axi_extension` on every outgoing transaction          | done   | `libsmc/cpu/smc_axi_extension.h` (§4.7); `tlm_access()` allocates and attaches one extension per GP; ownership transferred to the GP.                                                                         |
 | 3.10 | `prot[3]` (lock) for AMO / LR-SC                           | done   | `cfg.amo_lock_detect == true`: `tlm_access()` inspects `iss_hart::last_commit().opcode` (AMO opcode = `0x2F`).                                                                                                |
 | 3.10 | `prot[2]` (privilege) for U vs M/S                         | done   | `tlm_access()` reads `iss_hart::current_priv()`.                                                                                                                                                              |
-| 3.10 | Unified `smc_axi_extension` shared with peer IPs (ODR-safe) | done   | Single canonical header `smc/common/include/smc_axi_extension.h` included by every SMC IP (no per-peripheral copies).  Exercised when `cluster_tb` links `smc_plic_ip`.         |
+| 3.10 | Unified `smc_axi_extension` shared with peer IPs (ODR-safe) | done   | PLIC's `smc_tlm_extensions.h` is a thin shim that `__has_include`s `smc_axi_extension.h` and delegates to the cluster's canonical class.  Exercised when `cluster_tb` links `smc_plic_ip`.         |
 
 ---
 
