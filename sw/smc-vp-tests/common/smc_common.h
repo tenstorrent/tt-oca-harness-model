@@ -26,6 +26,7 @@
 #define SMC_UART3_BASE       0xC000D000ULL
 #define SMC_CPU_CTRL_BASE    0xC0400000ULL
 #define SMC_CPU_CTRL_FP_BASE 0xC0039000ULL
+#define SMC_DMA_BASE         0xC0038000ULL
 #define SMC_BOOTROM_BASE     0xC0040000ULL
 #define SMC_SCRATCH_BASE     0xC0060000ULL
 #define SMC_PLIC_BASE        0xC0800000ULL
@@ -58,6 +59,24 @@
 #define CPU_CTRL_REFERENCE_COUNTER    0x060u
 #define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
 #define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
+
+/* DMA controller register offsets (window size 0x138) */
+#define DMA_CONFIG             0x000u
+#define DMA_STATUS_0           0x004u
+#define DMA_NEXT_ID_0          0x048u
+#define DMA_DONE_0             0x0C8u
+#define DMA_DST_ADDRESS_LO     0x108u
+#define DMA_DST_ADDRESS_HI     0x10Cu
+#define DMA_SRC_ADDRESS_LO     0x110u
+#define DMA_SRC_ADDRESS_HI     0x114u
+#define DMA_LENGTH_LO          0x118u
+#define DMA_LENGTH_HI          0x11Cu
+#define DMA_DST_STRIDE_LO      0x120u
+#define DMA_DST_STRIDE_HI      0x124u
+#define DMA_SRC_STRIDE_LO      0x128u
+#define DMA_SRC_STRIDE_HI      0x12Cu
+#define DMA_NUM_REPETITIONS_LO 0x130u
+#define DMA_NUM_REPETITIONS_HI 0x134u
 
 /* I2C controller register offsets (per core, 0x200-byte window) */
 #define I2C_INTR_STATE            0x00u

@@ -81,6 +81,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Fabric reset -------------------------------------------------------
     fabric.rst_n_i.bind(rst_n_sig);
 
+    // Idle initiator satisfies the fabric's log_in BW port; the DMA owns
+    // fabric.data_accel_in.
+    idle_log_init_ .bind(fabric.log_in);
+    dma_.mst_socket.bind(fabric.data_accel_in);
     // Idle initiator satisfies the fabric's log_in BW port.  data_accel_in is
     // driven by the memory_zeroer's DMA master (wired in the peripheral section
     // below), so it no longer needs an idle initiator.
@@ -168,6 +172,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     zeroer.irq_o.bind(sig_zeroer_irq);
 
     // -- Fabric initiator stubs -------------------------------------------
+    fabric.to_data_accel_ctrl.bind(wa_dma.tgt);
+    wa_dma.init.bind(dma_.reg_socket);
     fabric.to_dfd_apb              .bind(stub_dfd.reg_socket);
     fabric.to_mailbox              .bind(stub_mbox.reg_socket);
     fabric.to_dft_csr              .bind(stub_dft.reg_socket);
@@ -344,7 +350,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         std::ostringstream _oss;
         _oss << "smc_platform elaborated: "
              << NUM_UART << " uart, " << NUM_I2C << " i2c, "
-             << NUM_I3C << " i3c, " << NUM_PLIC_SRC << " plic sources";
+             << NUM_I3C << " i3c, dma, " << NUM_PLIC_SRC << " plic sources";
 #ifdef SMC_PLATFORM_WITH_CLUSTER
         _oss << ", cluster ON";
 #else

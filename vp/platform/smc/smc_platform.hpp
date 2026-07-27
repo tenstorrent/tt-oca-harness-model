@@ -3,8 +3,8 @@
 // vp/platform/smc/smc_platform.hpp
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
-// (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, I3C, 3x
-// I2C, 4x UART, and optionally the Whisper-backed CPU cluster), wires the
+// (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, DMA, I3C,
+// 3x I2C, 4x UART, and optionally the Whisper-backed CPU cluster), wires the
 // fabric's initiator sockets through address routers to the modeled targets
 // and stubs, composes the peripheral interrupt vector into the PLIC, and —
 // when the cluster is present — connects CLINT MSIP/MTIP and PLIC MEIP to the
@@ -30,6 +30,7 @@
 #include "bootrom.h"
 #include "clint.h"
 #include "cpu_ctrl.h"
+#include "dma.h"
 #include "i2c_controller.h"
 #include "i3c_controller.h"
 #include "memory_zeroer.h"
@@ -83,6 +84,7 @@ public:
     bootrom         bootrom_{"bootrom"};
     scratchpad_ram   scratch{"scratchpad_ram"};
     cpu_ctrl        cpu_ctrl_{"cpu_ctrl"};
+    dma             dma_{"dma"};
     memory_zeroer   zeroer{"memory_zeroer"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
@@ -108,6 +110,7 @@ public:
     width_adapter<64, 32>       wa_scratch{"wa_scratch"};
     width_adapter<64, 32>       wa_plic{"wa_plic"};
     width_adapter<64, 32>       wa_clint{"wa_clint"};
+    width_adapter<64, 32>       wa_dma{"wa_dma"};
     // memory_zeroer sits behind the fabric's data-accelerator ports:
     //  - CSR: `to_data_accel_ctrl` forwards the absolute 0xC003_82xx window; a
     //    1-entry addr_router rebases it to the IP's 0-based register offsets

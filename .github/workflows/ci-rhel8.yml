@@ -18,10 +18,13 @@
 #  build-deps-rhel8      Build + cache SystemC 3.0.2, OpenSSL 3.3.x, CCI 1.0.2
 #  sep-vp-rhel8          Build the sep-vp binary
 #  sep-unit-tests-rhel8  Run SEP peripheral unit tests
-#  smc-unit-tests-rhel8  Run SMC peripheral unit tests
+#  smc-unit-tests-rhel8  Run SMC peripheral unit tests (includes the new DMA
+#                        peripheral unit tests)
 #  smc-fabric-tests-rhel8  Run SMC Fabric tests
 #
 #  smc-vp-rhel8          Build smc-vp and run SMC VP firmware tests (needs
+#                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain),
+#                        including the new smc-dma-test.
 #                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain).
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -441,7 +444,7 @@ jobs:
           SKIP_ASAN:    "1"
         run: |
           smc/run_all_smc_tests.sh \
-            bootrom clint i3c_controller plic reset_unit scratchpad_ram
+            bootrom clint dma i3c_controller plic reset_unit scratchpad_ram
 
       - name: Upload SMC peripheral test logs
         if: always()
