@@ -218,9 +218,9 @@ public:
     // Dummy sinks for every stub_target's irq_o (stubs don't drive the PLIC in
     // Phase 1; their irq_drive_method still requires a bound port).
     sc_core::sc_vector<sc_core::sc_signal<bool>> stub_irq_sig{"stub_irq_sig", 20};
-    // memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
-    // dummy sink for now; can later be routed into the PLIC/aggregator.
-    sc_core::sc_signal<bool> sig_zeroer_irq{"sig_zeroer_irq"};
+// memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
+// dummy sink for now; can later be routed into the PLIC/aggregator.
+sc_core::sc_signal<bool, sc_core::SC_MANY_WRITERS> sig_zeroer_irq{"sig_zeroer_irq"};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_sw{"sig_irq_sw", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_timer{"sig_irq_timer", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_ext{"sig_irq_ext", NUM_PLIC_CTX};
