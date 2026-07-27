@@ -25,6 +25,7 @@
 #  smc-vp-rhel8          Build smc-vp and run SMC VP firmware tests (needs
 #                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain),
 #                        including the new smc-dma-test.
+#                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain).
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI (RHEL 8)

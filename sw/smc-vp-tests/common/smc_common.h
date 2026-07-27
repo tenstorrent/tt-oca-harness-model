@@ -32,6 +32,7 @@
 #define SMC_PLIC_BASE        0xC0800000ULL
 #define SMC_CLINT_BASE       0xC0C00000ULL
 #define SMC_BEU_BASE         0xC0C10000ULL
+#define SMC_ZEROER_BASE      0xC0038200ULL
 
 /* CLINT register offsets (RISC-V standard layout) */
 #define CLINT_MSIP(hart)        (0x0000u + 4u * (hart))
@@ -176,10 +177,25 @@
 /* MCR bit masks */
 #define UART_MCR_LOOP     0x10   /* internal loopback mode */
 
+/* memory_zeroer (AXI zeroer) — base 0xC003_8200, window 0x18.
+ * NOTE: these are 64-bit registers and the model only accepts naturally
+ * aligned 8-byte accesses — use REG_READ64 / REG_WRITE64, not REG_WRITE. */
+
+#define ZEROER_DEST_ADDR         0x00u   /* RW: byte address to zero-fill      */
+#define ZEROER_SIZE              0x08u   /* RW: number of bytes to zero        */
+#define ZEROER_CTRL_STATUS       0x10u   /* RW int_en[0] / RO busy[32]; write  */
+                                         /* triggers a job when SIZE != 0      */
+#define ZEROER_CTRL_INT_EN       (1ull << 0u)   /* completion interrupt enable */
+#define ZEROER_CTRL_BUSY         (1ull << 32u)  /* 1 while a job is running     */
+
 /* MMIO helpers */
 #define REG_READ(addr)          (*((volatile uint32_t *)(uintptr_t)(addr)))
 #define REG_WRITE(addr, val)    (*((volatile uint32_t *)(uintptr_t)(addr)) = (val))
 #define REG_OR(addr, val)       REG_WRITE((addr), REG_READ((addr)) | (val))
 #define REG_AND(addr, val)      REG_WRITE((addr), REG_READ((addr)) & (val))
+
+/* 64-bit MMIO helpers (required for the memory_zeroer register file) */
+#define REG_READ64(addr)        (*((volatile uint64_t *)(uintptr_t)(addr)))
+#define REG_WRITE64(addr, val)  (*((volatile uint64_t *)(uintptr_t)(addr)) = (val))
 
 #endif /* SMC_COMMON_H */

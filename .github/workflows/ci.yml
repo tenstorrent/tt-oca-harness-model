@@ -28,6 +28,7 @@
 #                    + RISC-V bare-metal toolchain).  Runs the smc-vp-tests
 #                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh,
 #                    including the new smc-dma-test.
+#                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI

@@ -85,6 +85,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // fabric.data_accel_in.
     idle_log_init_ .bind(fabric.log_in);
     dma_.mst_socket.bind(fabric.data_accel_in);
+    // Idle initiator satisfies the fabric's log_in BW port.  data_accel_in is
+    // driven by the memory_zeroer's DMA master (wired in the peripheral section
+    // below), so it no longer needs an idle initiator.
+    idle_log_init_.bind(fabric.log_in);
 
     // -- front_port_router: fabric.to_front_port (cluster.data is routed to a
     //    dedicated multi_stub_target below, not through the shared router, so
@@ -151,6 +155,21 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[8].bind(uart[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
     periph_router.out[10].bind(stub_periph_misc.reg_socket);
+
+    // -- memory_zeroer (data-accelerator) ---------------------------------
+    // CSR path: fabric's 64-bit `to_data_accel_ctrl` initiator -> 32-bit
+    // reg_socket via a 1-entry addr_router that rebases the absolute window
+    // (0xC003_8200) down to the IP's 0-based register offsets.
+    fabric.to_data_accel_ctrl.bind(daccel_router.tgt);
+    daccel_router.add_route(0, memory_zeroer_cfg::DEFAULT_BASE_ADDR,
+                            memory_zeroer_cfg::WINDOW_SIZE, "memory_zeroer");
+    daccel_router.out[0].bind(zeroer.reg_socket);
+    // DMA path: the zeroer's 32-bit initiator injects zero-fill writes back
+    // into the fabric via the 64-bit `data_accel_in` target (width adapter).
+    zeroer.dma_socket.bind(wa_zeroer_dma.tgt);
+    wa_zeroer_dma.init.bind(fabric.data_accel_in);
+    zeroer.rst_n_i.bind(rst_n_sig);
+    zeroer.irq_o.bind(sig_zeroer_irq);
 
     // -- Fabric initiator stubs -------------------------------------------
     fabric.to_data_accel_ctrl.bind(wa_dma.tgt);
