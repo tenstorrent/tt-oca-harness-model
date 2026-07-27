@@ -187,7 +187,8 @@ if (( USE_ASAN )); then
     else
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
-    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
+    TB_EXIT=0
+    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}" || TB_EXIT=$?
     [[ -x "${NEG_TB_BIN}" ]] && ASAN_OPTIONS="${_ASAN_OPTS}" "${NEG_TB_BIN}" || true
     echo ""
 
