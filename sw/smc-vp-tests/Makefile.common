@@ -17,10 +17,24 @@ CC      = $(RISCV_PREFIX)gcc
 OBJCOPY = $(RISCV_PREFIX)objcopy
 OBJDUMP = $(RISCV_PREFIX)objdump
 
-# Architecture — rv64imac + zicsr (mtvec/mret) + zifencei (fence.i). No FP
-# needed for these bare-metal tests; the CVA6 cluster emulates the superset.
+# Architecture — rv64imac. No FP needed for these bare-metal tests; the CVA6
+# cluster emulates the superset.
+#
+# NOTE: do NOT append "_zicsr_zifencei" here. These tests use CSR access
+# (mtvec/mret) but no fence.i, and both are accepted under plain "rv64imac"
+# by every toolchain we support:
+#   - Newer toolchains (binutils/gcc that split Zicsr/Zifencei out of the "I"
+#     base per ISA-manual 20191213+) still accept CSR instructions under
+#     "rv64imac" -- the extension is implied, only newer *-march spellings
+#     require it to be spelled out explicitly, they don't reject its absence.
+#   - Older toolchains -- notably Ubuntu's apt "gcc-riscv64-unknown-elf"
+#     package used by CI (.github/workflows/ci.yml) -- predate the
+#     multi-letter "_zicsr_zifencei" -march syntax entirely and fail with
+#     "cc1: error: unsupported ISA subset 'z'" if it is present.
+# Keeping the -march string to single-letter extensions is the portable
+# choice across both toolchain generations.
 ABI  = lp64
-ARCH = rv64imac_zicsr_zifencei
+ARCH = rv64imac
 
 # Common include paths — shared helpers + SMC peripheral base addresses.
 SMC_VP_TESTS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))

@@ -366,8 +366,19 @@ jobs:
             /home/runner/whisper
           cd /home/runner/whisper
           git checkout ${{ env.WHISPER_REV }}
+          # smc/cpu_cluster/external/whisper-cmake/CMakeLists.txt imports FOUR
+          # archives (librvcore.a + its three sub-libs). Whisper's GNUmakefile
+          # only wires soft_float/pci/virtual_memory as prerequisites of the
+          # top-level `whisper` executable, NOT of the `librvcore.a` archive
+          # target -- so building just librvcore.a silently skips them. Build
+          # all four explicitly or the CMake configure step fails later with
+          # "Whisper artifact not found" even though this step "succeeded".
           make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
-            build-$(uname -s)/librvcore.a -j$(nproc)
+            build-$(uname -s)/librvcore.a \
+            virtual_memory/libvirtual_memory.a \
+            pci/libpci.a \
+            third_party/softfloat/build/RISCV-GCC/softfloat.a \
+            -j$(nproc)
 
       - name: Run SMC VP tests
         env:
