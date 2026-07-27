@@ -254,6 +254,13 @@ void tb::run()
     settle();
     EXPECT_TRUE(!irq_local.read());
     EXPECT_TRUE(!irq_plic.read());
+
+    // SW must not be able to set accrued status bits (HW-set / SW-clear only).
+    drv.write64(ACCRUED_ENABLE, M_DEU);
+    settle();
+    EXPECT_EQ(0u, drv.read64(ACCRUED_ENABLE));
+    EXPECT_TRUE(!irq_local.read());
+    EXPECT_TRUE(!irq_plic.read());
     std::cout << "  [PASS] local + PLIC interrupt aggregation\n";
 
     // ----------------------------------------------------------------------
