@@ -96,5 +96,5 @@ int main(void)
     } else {
         printf("\nFAIL: memory_zeroer test failed\n\n");
     }
-    return 0;
+return pass ? 0 : 1;
 }
