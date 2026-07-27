@@ -32,6 +32,7 @@
 #include "cpu_ctrl.h"
 #include "i2c_controller.h"
 #include "i3c_controller.h"
+#include "memory_zeroer.h"
 #include "plic.h"
 #include "reset_unit.h"
 #include "scratchpad_ram.h"
@@ -82,6 +83,7 @@ public:
     bootrom         bootrom_{"bootrom"};
     scratchpad_ram   scratch{"scratchpad_ram"};
     cpu_ctrl        cpu_ctrl_{"cpu_ctrl"};
+    memory_zeroer   zeroer{"memory_zeroer"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart{"uart", NUM_UART};
@@ -106,6 +108,16 @@ public:
     width_adapter<64, 32>       wa_scratch{"wa_scratch"};
     width_adapter<64, 32>       wa_plic{"wa_plic"};
     width_adapter<64, 32>       wa_clint{"wa_clint"};
+    // memory_zeroer sits behind the fabric's data-accelerator ports:
+    //  - CSR: `to_data_accel_ctrl` forwards the absolute 0xC003_82xx window; a
+    //    1-entry addr_router rebases it to the IP's 0-based register offsets
+    //    (and adapts 64->32).  A plain width_adapter would NOT rebase, so the
+    //    IP would see 0xC003_8200 instead of offset 0 and reject every access.
+    //  - DMA: the 32-bit initiator drives the 64-bit `data_accel_in` target;
+    //    it issues absolute addresses the fabric re-decodes, so a verbatim
+    //    width_adapter (no rebase) is correct here.
+    addr_router<64, 32>         daccel_router{"daccel_router", 1};
+    width_adapter<32, 64>       wa_zeroer_dma{"wa_zeroer_dma"};
     interrupt_aggregator        intagg;
 
     // -----------------------------------------------------------------------
@@ -113,7 +125,6 @@ public:
     // -----------------------------------------------------------------------
     stub_target<64> stub_wdt_debug{"stub_wdt_debug"};
     stub_target<64> stub_beu{"stub_beu"};
-    stub_target<64> stub_dma{"stub_dma"};
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};
@@ -207,6 +218,9 @@ public:
     // Dummy sinks for every stub_target's irq_o (stubs don't drive the PLIC in
     // Phase 1; their irq_drive_method still requires a bound port).
     sc_core::sc_vector<sc_core::sc_signal<bool>> stub_irq_sig{"stub_irq_sig", 20};
+    // memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
+    // dummy sink for now; can later be routed into the PLIC/aggregator.
+    sc_core::sc_signal<bool> sig_zeroer_irq{"sig_zeroer_irq"};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_sw{"sig_irq_sw", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_timer{"sig_irq_timer", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_ext{"sig_irq_ext", NUM_PLIC_CTX};
@@ -226,7 +240,6 @@ private:
     // initiator (their internal BW port); nothing drives them in the platform,
     // so bind idle initiators that never issue transactions.
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_log_init_{"idle_log_init_"};
-    tlm_utils::simple_initiator_socket<smc_platform, 64> idle_daccel_init_{"idle_daccel_init_"};
     // In cluster-OFF builds there is no cluster.mmio to bind fabric.mmio_in, so
     // an idle initiator satisfies the fabric's BW port instead.
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_mmio_init_{"idle_mmio_init_"};

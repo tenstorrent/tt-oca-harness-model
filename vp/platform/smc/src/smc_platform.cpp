@@ -81,9 +81,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Fabric reset -------------------------------------------------------
     fabric.rst_n_i.bind(rst_n_sig);
 
-    // Idle initiators satisfy the fabric's log_in / data_accel_in BW ports.
-    idle_log_init_   .bind(fabric.log_in);
-    idle_daccel_init_.bind(fabric.data_accel_in);
+    // Idle initiator satisfies the fabric's log_in BW port.  data_accel_in is
+    // driven by the memory_zeroer's DMA master (wired in the peripheral section
+    // below), so it no longer needs an idle initiator.
+    idle_log_init_.bind(fabric.log_in);
 
     // -- front_port_router: fabric.to_front_port (cluster.data is routed to a
     //    dedicated multi_stub_target below, not through the shared router, so
@@ -151,8 +152,22 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
     periph_router.out[10].bind(stub_periph_misc.reg_socket);
 
+    // -- memory_zeroer (data-accelerator) ---------------------------------
+    // CSR path: fabric's 64-bit `to_data_accel_ctrl` initiator -> 32-bit
+    // reg_socket via a 1-entry addr_router that rebases the absolute window
+    // (0xC003_8200) down to the IP's 0-based register offsets.
+    fabric.to_data_accel_ctrl.bind(daccel_router.tgt);
+    daccel_router.add_route(0, memory_zeroer_cfg::DEFAULT_BASE_ADDR,
+                            memory_zeroer_cfg::WINDOW_SIZE, "memory_zeroer");
+    daccel_router.out[0].bind(zeroer.reg_socket);
+    // DMA path: the zeroer's 32-bit initiator injects zero-fill writes back
+    // into the fabric via the 64-bit `data_accel_in` target (width adapter).
+    zeroer.dma_socket.bind(wa_zeroer_dma.tgt);
+    wa_zeroer_dma.init.bind(fabric.data_accel_in);
+    zeroer.rst_n_i.bind(rst_n_sig);
+    zeroer.irq_o.bind(sig_zeroer_irq);
+
     // -- Fabric initiator stubs -------------------------------------------
-    fabric.to_data_accel_ctrl     .bind(stub_dma.reg_socket);
     fabric.to_dfd_apb              .bind(stub_dfd.reg_socket);
     fabric.to_mailbox              .bind(stub_mbox.reg_socket);
     fabric.to_dft_csr              .bind(stub_dft.reg_socket);
@@ -275,7 +290,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Bind every stub_target's irq_o to a dummy sink --------------------
     {
         stub_target<64>* stubs64[] = {
-            &stub_wdt_debug, &stub_beu, &stub_dma, &stub_dfd, &stub_mbox,
+            &stub_wdt_debug, &stub_beu, &stub_dfd, &stub_mbox,
             &stub_dft, &stub_sysmem, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
             &stub_xR, &stub_ibf, &stub_obf,
         };
