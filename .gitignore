@@ -40,8 +40,9 @@ coverage-report/
 *.swo
 *~
 
-# Local dependency paths (see smc/peripherals/uart/deps.env.example)
+# Local dependency paths (see smc/peripherals/*/deps.env.example)
 smc/peripherals/uart/deps.env
+smc/peripherals/beu/deps.env
 
 # Local dependency paths (see smc/peripherals/cpu_ctrl/deps.env.example)
 smc/peripherals/cpu_ctrl/deps.env
