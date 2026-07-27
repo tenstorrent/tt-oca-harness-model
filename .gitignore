@@ -49,6 +49,9 @@ smc/peripherals/cpu_ctrl/deps.env
 # Local dependency paths (see smc/cpu_cluster/deps.env.example)
 smc/cpu_cluster/deps.env
 
+# Local dependency paths (see smc/peripherals/memory_zeroer/deps.env.example)
+smc/peripherals/memory_zeroer/deps.env
+
 # Local dependency paths (see sep/peripherals/deps.env.example)
 sep/peripherals/deps.env
 
