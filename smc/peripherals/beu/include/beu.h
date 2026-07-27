@@ -95,7 +95,7 @@
 
 #include "reg_access.h"
 #include "reg_map.h"
-#include "smc_tlm_extensions.h"
+#include "smc_axi_extension.h"
 
 namespace smc {
 
@@ -186,7 +186,7 @@ public:
     SC_HAS_PROCESS(beu);
 
     /// AXI4-Lite-style TLM-2.0 target socket (64-bit access).
-    tlm_utils::simple_target_socket<beu> reg_socket;
+    tlm_utils::simple_target_socket<beu, 64> reg_socket;
 
     /// Active-low asynchronous reset.
     sc_core::sc_in<bool>  rst_n_i;

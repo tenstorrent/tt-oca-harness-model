@@ -68,7 +68,7 @@ constexpr uint64_t VALID_MASK = M_ITL | M_IEC | M_DTL | M_DEC | M_DEU; // 0xE6
 
 // Tiny TLM driver exercising the LT path through a quantum keeper (64-bit).
 struct driver : sc_core::sc_module {
-    tlm_utils::simple_initiator_socket<driver> sock;
+    tlm_utils::simple_initiator_socket<driver, 64> sock;
     tlm_utils::tlm_quantumkeeper qk;
 
     explicit driver(sc_core::sc_module_name n) : sc_module(n), sock("sock") {

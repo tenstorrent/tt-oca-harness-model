@@ -7,7 +7,8 @@ packs one per core at `0xC801_0000 + N*0x1000`) as described in:
 
 - `doc/01_BEU_Specification.md` — externally-observable behaviour
 - `doc/02_BEU_LowLevel_Design.md` — TLM interface, register map, internals
-- `doc/03_BEU_Test_Plan.md` — verification strategy and test list
+- `doc/03_BEU_Test_Plan.md` — unit verification strategy and test list
+- `doc/04_BEU_Platform_Integration_Test_Plan.md` — what is required to wire BEU into `smc-vp` and add an `smc-beu-test` platform firmware test
 - `hw/smc/smc_cpu/data/registers/rdl/bus_error_unit.rdl` — authoritative register map
 - `hw/smc/smc_cpu/chipyard_generated_files/4core/OCAH4CORECluster_BusErrorUnit.sv` — behaviour reference
 - `hw/smc/doc/interrupts.adoc` — BEU local (NMI-like) + PLIC delivery
@@ -58,12 +59,15 @@ beu/
 ├── run_tests.sh                  Build + run convenience script
 ├── deps.env.example              Template for local dependency paths
 ├── doc/
-│   ├── 01_BEU_Specification.md
+│   ├── 01_BEU_Specification.md / .pdf
+│   ├── 02_BEU_LowLevel_Design.md / .pdf
+│   ├── 03_BEU_Test_Plan.md / .pdf
+│   ├── 04_BEU_Platform_Integration_Test_Plan.md / .pdf
 │   ├── 02_BEU_LowLevel_Design.md
 │   └── 03_BEU_Test_Plan.md
 ├── include/
-│   ├── smc_tlm_extensions.h      Shared GP extension (smc_axi_extension)
 │   └── beu.h                     SC_MODULE(beu) declaration
+│                                 (uses shared smc/common/include/smc_axi_extension.h)
 ├── src/
 │   └── beu.cpp                   Implementation
 └── test/

@@ -240,7 +240,7 @@ int sc_main(int argc, char** argv)
     std::cout << "---- UART0 output ----\n";
     {
         uint8_t ch = 0;
-        while (dut.uart[0].dbg_tx_pop(ch)) std::cout.put((char)ch);
+        while (dut.uart_[0].dbg_tx_pop(ch)) std::cout.put((char)ch);
         std::cout << "\n---- end UART0 ----\n";
     }
     return 0;

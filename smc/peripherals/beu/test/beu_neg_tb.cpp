@@ -47,7 +47,7 @@ int g_failures = 0;
 constexpr uint64_t CAUSE = 0x00, PHYS_ADDR = 0x08, ENABLE = 0x10;
 
 struct driver : sc_core::sc_module {
-    tlm_utils::simple_initiator_socket<driver> sock;
+    tlm_utils::simple_initiator_socket<driver, 64> sock;
     explicit driver(sc_core::sc_module_name n) : sc_module(n), sock("sock") {}
 
     // Raw b_transport returning the response status (no auto-fail).

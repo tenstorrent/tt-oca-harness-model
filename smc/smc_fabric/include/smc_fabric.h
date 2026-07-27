@@ -27,6 +27,7 @@
 
 #include <systemc.h>
 #include <tlm.h>
+#include <tlm_utils/multi_passthrough_target_socket.h>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
@@ -64,7 +65,12 @@ public:
     // -----------------------------------------------------------------------
     tlm_utils::simple_target_socket<smc_fabric, 64> jtag_axi_in   {"jtag_axi_in"};
     tlm_utils::simple_target_socket<smc_fabric, 64> mmio_in       {"mmio_in"};
-    tlm_utils::simple_target_socket<smc_fabric, 64> data_accel_in {"data_accel_in"};
+    // data_accel_in fans in >1 upstream master (DMA engine + memory_zeroer's
+    // DMA-write-back master both target this port on real platforms — see
+    // doc/02_tlm_interface.md), so it is a multi-bind socket; every other
+    // inbound-master socket here has exactly one upstream master and stays a
+    // plain single-bind simple_target_socket.
+    tlm_utils::multi_passthrough_target_socket<smc_fabric, 64> data_accel_in {"data_accel_in"};
     tlm_utils::simple_target_socket<smc_fabric, 64> log_in        {"log_in"};
     tlm_utils::simple_target_socket<smc_fabric, 64> sys_axi_in    {"sys_axi_in"};
     tlm_utils::simple_target_socket<smc_fabric, 64> sep_axi_in    {"sep_axi_in"};
@@ -170,13 +176,18 @@ private:
     // -----------------------------------------------------------------------
     void bt_jtag      (tlm::tlm_generic_payload&, sc_core::sc_time&);
     void bt_mmio      (tlm::tlm_generic_payload&, sc_core::sc_time&);
-    void bt_data_accel(tlm::tlm_generic_payload&, sc_core::sc_time&);
+    // data_accel_in is a multi_passthrough_target_socket, so its fw-interface
+    // callbacks carry a leading bound-initiator index (unused here — every
+    // bound master is routed identically by bt_internal()).
+    void bt_data_accel(int, tlm::tlm_generic_payload&, sc_core::sc_time&);
     void bt_log       (tlm::tlm_generic_payload&, sc_core::sc_time&);
     void bt_sys_axi   (tlm::tlm_generic_payload&, sc_core::sc_time&);
     void bt_sep_axi   (tlm::tlm_generic_payload&, sc_core::sc_time&);
 
     // DMI — always denied (fabric never grants DMI).
     bool get_direct_mem_ptr(tlm::tlm_generic_payload&, tlm::tlm_dmi&);
+    // Multi-socket overload for data_accel_in (see bt_data_accel).
+    bool get_direct_mem_ptr(int, tlm::tlm_generic_payload&, tlm::tlm_dmi&);
 
     // -----------------------------------------------------------------------
     // Internal-master routing (shared by jtag/mmio/data_accel/log)

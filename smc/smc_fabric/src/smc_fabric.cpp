@@ -49,10 +49,13 @@ smc_fabric::smc_fabric(sc_core::sc_module_name name, const config& cfg)
     sys_axi_in   .register_b_transport(this, &smc_fabric::bt_sys_axi);
     sep_axi_in   .register_b_transport(this, &smc_fabric::bt_sep_axi);
 
-    // DMI is never granted; register a uniform deny handler.
+    // DMI is never granted; register a uniform deny handler.  data_accel_in
+    // is a multi_passthrough_target_socket, so it uses the tagged overload.
     jtag_axi_in  .register_get_direct_mem_ptr(this, &smc_fabric::get_direct_mem_ptr);
     mmio_in      .register_get_direct_mem_ptr(this, &smc_fabric::get_direct_mem_ptr);
-    data_accel_in.register_get_direct_mem_ptr(this, &smc_fabric::get_direct_mem_ptr);
+    data_accel_in.register_get_direct_mem_ptr(this,
+        static_cast<bool (smc_fabric::*)(int, tlm::tlm_generic_payload&, tlm::tlm_dmi&)>(
+            &smc_fabric::get_direct_mem_ptr));
     log_in       .register_get_direct_mem_ptr(this, &smc_fabric::get_direct_mem_ptr);
     sys_axi_in   .register_get_direct_mem_ptr(this, &smc_fabric::get_direct_mem_ptr);
     sep_axi_in   .register_get_direct_mem_ptr(this, &smc_fabric::get_direct_mem_ptr);
@@ -127,7 +130,7 @@ void smc_fabric::bt_internal(tlm::tlm_generic_payload& trans,
 
 void smc_fabric::bt_jtag      (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "jtag_axi_in"); }
 void smc_fabric::bt_mmio      (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "mmio_in"); }
-void smc_fabric::bt_data_accel(tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "data_accel_in"); }
+void smc_fabric::bt_data_accel(int /*id*/, tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "data_accel_in"); }
 void smc_fabric::bt_log       (tlm::tlm_generic_payload& t, sc_core::sc_time& d) { bt_internal(t, d, "log_in"); }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +198,15 @@ bool smc_fabric::get_direct_mem_ptr(tlm::tlm_generic_payload& /*trans*/,
     dmi_data.set_start_address(0);
     dmi_data.set_end_address(std::numeric_limits<sc_dt::uint64>::max());
     return false;
+}
+
+// Tagged overload for data_accel_in (a multi_passthrough_target_socket);
+// identical deny-DMI behavior, ignores which bound master asked.
+bool smc_fabric::get_direct_mem_ptr(int /*id*/,
+                                     tlm::tlm_generic_payload& trans,
+                                     tlm::tlm_dmi&             dmi_data)
+{
+    return get_direct_mem_ptr(trans, dmi_data);
 }
 
 // ---------------------------------------------------------------------------

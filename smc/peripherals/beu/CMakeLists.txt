@@ -122,6 +122,11 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
+# Canonical smc_axi_extension.h (shared across the SMC tree).
+set(SMC_AXI_EXTENSION_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include"
+    CACHE PATH "Directory containing smc_axi_extension.h")
+
 # ---------------------------------------------------------------------------
 # libsmc_beu
 # ---------------------------------------------------------------------------
@@ -130,7 +135,8 @@ add_library(smc_beu STATIC
 
 target_include_directories(smc_beu
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-           ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include)
+           ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
+           ${SMC_AXI_EXTENSION_DIR})
 
 target_link_libraries(smc_beu PUBLIC SystemC::systemc SystemC::cci)
 

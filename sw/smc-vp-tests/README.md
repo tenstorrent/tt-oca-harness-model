@@ -107,6 +107,8 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | Directory | Description |
 |-----------|-------------|
 | `smc-bootrom-test/` | BootROM reads at several offsets (zero-initialised by default) |
+| `smc-beu-test/` | BEU register smoke test: ENABLE reset value, PLIC_ENABLE/LOCAL_ENABLE mask-on-write, PHYS_ADDR read-only, CAUSE re-arm, all 4 per-core windows decode independently (Phase E1) |
+| `smc-beu-error-test/` | BEU error-injection + accrual + SW-ack + per-core isolation, driven by the platform's test-only CCI error-injection hook (Phase D1); see its `.ini` and `smc/peripherals/beu/doc/04_BEU_Platform_Integration_Test_Plan.md` Phases E2/E3 |
 | `smc-clint-test/` | CLINT MSIP write/read round-trip for hart 0 + MTIMECMP timer interrupt |
 | `smc-cpu-ctrl-test/` | CPU control SCRATCH, REFERENCE_COUNTER, MUTEX test-and-set, and SEMA up/down |
 | `smc-dma-test/` | DMA scratchpad-to-scratchpad copy |
@@ -114,10 +116,18 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `smc-i2c-test/` | I2C controller 0 INTR_ENABLE / CTRL / FIFO_CTRL write/read round-trip |
 | `smc-i3c-loopback-test/` | I3C0 controller -> echo target loopback (write + read) |
 | `smc-i3c-test/` | I3C controller 0 HCI_VERSION read + HC_CONTROL / PIO_CONTROL round-trip |
+| `smc-memory-zeroer-test/` | memory_zeroer CSR program + DMA zero-fill write-back into scratchpad RAM (needs its own `.ini`; see `smc_memory_zeroer_test.ini`) |
 | `smc-plic-test/` | PLIC threshold + enable write/read + UART0 TX-empty interrupt claim/complete |
 | `smc-reset-test/` | Reset unit SS_CONFIG round-trip + SS_CONFIG_LOCK / SS_COLD_RESET_LOCK sticky locks |
 | `smc-scratch-test/` | Scratchpad RAM multi-word write/read round-trip from the CPU |
 | `smc-uart-test/` | UART0 SCR, divisor/LCR, FIFO enable, and MCR register tests |
+
+> Some directories listed above (`smc-bootrom-test`, `smc-clint-test`,
+> `smc-cpu-ctrl-test`, `smc-i2c-test`, `smc-i3c-test`, `smc-plic-test`,
+> `smc-reset-test`, `smc-scratch-test`, `smc-uart-test`) are documented here
+> but are **not currently present** in the working tree or git history —
+> flagged for follow-up, out of scope for the BEU work that added the two
+> `smc-beu-*` rows above.
 
 ### Shared Support Code (`common/`)
 

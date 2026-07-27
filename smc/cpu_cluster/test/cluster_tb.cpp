@@ -399,19 +399,24 @@ struct cluster_tb_top : sc_core::sc_module
     sc_core::sc_signal<bool>       offmem_irq_sw;
     sc_core::sc_signal<bool>       offmem_irq_timer;
     sc_core::sc_signal<bool>       offmem_irq_ext;
+    sc_core::sc_signal<bool>       offmem_beu_nmi;
     sc_core::sc_signal<bool>       qzero_irq_sw;
     sc_core::sc_signal<bool>       qzero_irq_timer;
     sc_core::sc_signal<bool>       qzero_irq_ext;
+    sc_core::sc_signal<bool>       qzero_beu_nmi;
     sc_core::sc_signal<bool>       def_irq_sw;
     sc_core::sc_signal<bool>       def_irq_timer;
     sc_core::sc_signal<bool>       def_irq_ext;
+    sc_core::sc_signal<bool>       def_beu_nmi;
     sc_core::sc_signal<bool>       strap_irq_sw;
     sc_core::sc_signal<bool>       strap_irq_timer;
     sc_core::sc_signal<bool>       strap_irq_ext;
+    sc_core::sc_signal<bool>       strap_beu_nmi;
 
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_sw;
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_timer;
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_ext;
+    sc_core::sc_vector<sc_core::sc_signal<bool>> sig_nmi;
 
     smc_test::Watchdog wd;
 
@@ -479,18 +484,23 @@ struct cluster_tb_top : sc_core::sc_module
         , offmem_irq_sw("offmem_irq_sw")
         , offmem_irq_timer("offmem_irq_timer")
         , offmem_irq_ext("offmem_irq_ext")
+        , offmem_beu_nmi("offmem_beu_nmi")
         , qzero_irq_sw("qzero_irq_sw")
         , qzero_irq_timer("qzero_irq_timer")
         , qzero_irq_ext("qzero_irq_ext")
+        , qzero_beu_nmi("qzero_beu_nmi")
         , def_irq_sw("def_irq_sw")
         , def_irq_timer("def_irq_timer")
         , def_irq_ext("def_irq_ext")
+        , def_beu_nmi("def_beu_nmi")
         , strap_irq_sw("strap_irq_sw")
         , strap_irq_timer("strap_irq_timer")
         , strap_irq_ext("strap_irq_ext")
+        , strap_beu_nmi("strap_beu_nmi")
         , sig_sw("sig_sw", NHARTS)
         , sig_timer("sig_timer", NHARTS)
         , sig_ext("sig_ext", NHARTS)
+        , sig_nmi("sig_nmi", NHARTS)
         , wd("wd", sc_core::sc_time(120, sc_core::SC_MS), "cluster_tb")
         , scratchpad("scratchpad", cluster)
         , sram_rst_n("sram_rst_n")
@@ -528,6 +538,8 @@ struct cluster_tb_top : sc_core::sc_module
         def_ctor_cluster.irq_sw[0](def_irq_sw);
         def_ctor_cluster.irq_timer[0](def_irq_timer);
         def_ctor_cluster.irq_ext[0](def_irq_ext);
+        def_beu_nmi.write(false);
+        def_ctor_cluster.beu_nmi_in[0](def_beu_nmi);
         def_ctor_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         def_ctrl.write32(0x020, 0u);
 
@@ -541,6 +553,8 @@ struct cluster_tb_top : sc_core::sc_module
         strap_cluster.irq_sw[0](strap_irq_sw);
         strap_cluster.irq_timer[0](strap_irq_timer);
         strap_cluster.irq_ext[0](strap_irq_ext);
+        strap_beu_nmi.write(false);
+        strap_cluster.beu_nmi_in[0](strap_beu_nmi);
         strap_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         strap_ctrl.write32(0x020, 0u);
 
@@ -554,6 +568,8 @@ struct cluster_tb_top : sc_core::sc_module
         quantum_zero_cluster.irq_sw[0](qzero_irq_sw);
         quantum_zero_cluster.irq_timer[0](qzero_irq_timer);
         quantum_zero_cluster.irq_ext[0](qzero_irq_ext);
+        qzero_beu_nmi.write(false);
+        quantum_zero_cluster.beu_nmi_in[0](qzero_beu_nmi);
         quantum_zero_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         qzero_ctrl.write32(0x020, 0u);
 
@@ -567,6 +583,8 @@ struct cluster_tb_top : sc_core::sc_module
         offset_mem_cluster.irq_sw[0](offmem_irq_sw);
         offset_mem_cluster.irq_timer[0](offmem_irq_timer);
         offset_mem_cluster.irq_ext[0](offmem_irq_ext);
+        offmem_beu_nmi.write(false);
+        offset_mem_cluster.beu_nmi_in[0](offmem_beu_nmi);
         offset_mem_cluster.hart(0).mem_write(RESET_PC, 4, smc_test::OP_J_SELF);
         offmem_ctrl.write32(0x020, 0u);
 
@@ -577,8 +595,10 @@ struct cluster_tb_top : sc_core::sc_module
             sig_sw[i].write(false);
             sig_timer[i].write(false);
             sig_ext[i].write(false);
+            sig_nmi[i].write(false);
             cluster.irq_sw[i].bind(sig_sw[i]);
             cluster.irq_timer[i].bind(sig_timer[i]);
+            cluster.beu_nmi_in[i].bind(sig_nmi[i]);
         }
         // irq_ext[0] reserved for PLIC ctx_out when integration is enabled.
         for (unsigned i = 1; i < NHARTS; ++i) {

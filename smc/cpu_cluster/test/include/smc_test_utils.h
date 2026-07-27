@@ -421,21 +421,24 @@ struct mmio_capture_buses
 
 // ---------------------------------------------------------------------------
 // bind_signal_drivers: convenience wiring of N sc_signal<bool> drivers to
-// the cluster's per-hart irq_sw / irq_timer / irq_ext input ports.
+// the cluster's per-hart irq_sw / irq_timer / irq_ext / beu_nmi_in ports.
 // ---------------------------------------------------------------------------
 inline void bind_signal_drivers(
     smc::smc_cpu_cluster& cluster,
     sc_core::sc_vector<sc_core::sc_signal<bool>>& sig_sw,
     sc_core::sc_vector<sc_core::sc_signal<bool>>& sig_timer,
-    sc_core::sc_vector<sc_core::sc_signal<bool>>& sig_ext)
+    sc_core::sc_vector<sc_core::sc_signal<bool>>& sig_ext,
+    sc_core::sc_vector<sc_core::sc_signal<bool>>& sig_nmi)
 {
     for (unsigned i = 0; i < cluster.num_harts(); ++i) {
         sig_sw   [i].write(false);
         sig_timer[i].write(false);
         sig_ext  [i].write(false);
+        sig_nmi  [i].write(false);
         cluster.irq_sw   [i].bind(sig_sw   [i]);
         cluster.irq_timer[i].bind(sig_timer[i]);
         cluster.irq_ext  [i].bind(sig_ext  [i]);
+        cluster.beu_nmi_in[i].bind(sig_nmi[i]);
     }
 }
 

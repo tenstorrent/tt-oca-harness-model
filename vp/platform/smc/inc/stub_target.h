@@ -3,9 +3,8 @@
 // vp/platform/smc/inc/stub_target.h
 //
 // Minimal TLM-2.0 target used by `smc_platform` to stand in for RTL-connected
-// blocks that do not yet have functional SystemC models (WDT/debug, BEU, DMA,
-// zeroer, DFD, mailbox, DFT, GPIO, PVT, AVS, eFuse, telemetry, OCTS, DTP, misc,
-// system-memory output, and the fabric's internal-CSR initiator sockets).
+// blocks that do not yet have functional SystemC models (WDT/debug, DFD,
+// mailbox, DFT, and fabric-internal CSR initiator sockets).
 //
 // Behaviour:
 //   * Reads return a per-offset reset value (default 0) and complete with

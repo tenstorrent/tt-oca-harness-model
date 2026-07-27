@@ -177,6 +177,36 @@
 /* MCR bit masks */
 #define UART_MCR_LOOP     0x10   /* internal loopback mode */
 
+/* Bus Error Unit (BEU) — per-core alias, base 0xC0C1_0000, 4 KiB window
+ * each (0xC0C1_0000 + N*0x1000, N = 0..NUM_HARTS-1).  Registers are 64-bit
+ * (accesswidth=64 in bus_error_unit.rdl) — use REG_READ64 / REG_WRITE64.
+ * Interrupts bypass the PLIC: irq_local_o feeds the core's NMI-like input
+ * directly, irq_plic_o is wired to the PLIC vector for completeness but is
+ * not used by firmware today (see hw/smc/doc/interrupts.adoc). */
+#define SMC_BEU_BASE_N(n)   (SMC_BEU_BASE + 0x1000ULL * (n))
+
+#define BEU_CAUSE           0x00u   /* rw  [2:0] latched error cause; write 0 to re-arm    */
+#define BEU_PHYS_ADDR       0x08u   /* ro  [55:0] address of the latched error             */
+#define BEU_ENABLE          0x10u   /* rw  [7:0] per-source recording enable (reset: all)  */
+#define BEU_PLIC_ENABLE     0x18u   /* rw  [7:0] per-source PLIC interrupt mask (reset: 0) */
+#define BEU_ACCRUED_ENABLE  0x20u   /* rw  [7:0] sticky accrued status; HW-set, SW-clears  */
+#define BEU_LOCAL_ENABLE    0x28u   /* rw  [7:0] per-source local (NMI) interrupt mask (0) */
+
+/* Only bits {1,2,5,6,7} are defined in every 8-bit field; {0,3,4} reserved. */
+#define BEU_VALID_MASK      0xE6ull
+
+/* Error source bit positions == CAUSE encoding; mirrors smc::beu_src
+ * (smc/peripherals/beu/include/beu.h).  Firmware cannot drive these directly
+ * (no live cache/TileLink ECC event exists in the VP); they document the
+ * CAUSE values latched by the platform's test-only error-injection hook
+ * (Phase D1 — see 04_BEU_Platform_Integration_Test_Plan.md and
+ * smc-beu-error-test/). */
+#define BEU_SRC_ICACHE_TLBUS          1u  /* itl_error */
+#define BEU_SRC_ICACHE_CORRECTABLE    2u  /* iec_error */
+#define BEU_SRC_DCACHE_TLBUS          5u  /* dtl_error */
+#define BEU_SRC_DCACHE_CORRECTABLE    6u  /* dec_error */
+#define BEU_SRC_DCACHE_UNCORRECTABLE  7u  /* deu_error */
+
 /* memory_zeroer (AXI zeroer) — base 0xC003_8200, window 0x18.
  * NOTE: these are 64-bit registers and the model only accepts naturally
  * aligned 8-byte accesses — use REG_READ64 / REG_WRITE64, not REG_WRITE. */

@@ -82,10 +82,15 @@ TOOLCHAIN_SEARCH_DIRS+=(
     "/opt/homebrew/bin"
     "/usr/local/bin"
 )
-# TT / RHEL common install tree
-for d in /tools_soc/opensrc/riscv-gnu-toolchain/*; do
+# TT / RHEL common install tree.  Multiple versions can coexist (old ones are
+# never removed), and older ones may be missing ISA-string support this repo
+# needs (e.g. `10-1.0-riscv64iafv-centos7`'s assembler rejects the explicit
+# `_zicsr_zifencei` suffix `Makefile.common` passes via -march).  Version-sort
+# descending so the newest dated install (known-good; see sw/smc-vp-tests
+# README toolchain notes) is tried first.
+while IFS= read -r d; do
     [ -d "${d}/bin" ] && TOOLCHAIN_SEARCH_DIRS+=("${d}/bin")
-done
+done < <(printf '%s\n' /tools_soc/opensrc/riscv-gnu-toolchain/*/ 2>/dev/null | sed 's:/$::' | sort -rV)
 TOOLCHAIN_SEARCH_DIRS+=(
     "/opt/riscv/bin"
     "/usr/local/riscv/bin"
@@ -122,6 +127,21 @@ if [ -z "${RISCV_PREFIX}" ]; then
     exit 1
 fi
 log_info "RISC-V toolchain prefix: ${RISCV_PREFIX}"
+
+# detect_toolchain() only reports WHICH prefix has a working compiler; if it
+# found that compiler through TOOLCHAIN_SEARCH_DIRS rather than the existing
+# PATH, that directory must be exported here -- otherwise `make` (a child
+# process spawned later by run_test()) still can't find "${RISCV_PREFIX}gcc",
+# even though this script's own `command -v` check "found" it in this shell.
+if ! command -v "${RISCV_PREFIX}gcc" >/dev/null 2>&1; then
+    for dir in "${TOOLCHAIN_SEARCH_DIRS[@]}"; do
+        if [ -x "${dir}/${RISCV_PREFIX}gcc" ]; then
+            log_info "adding toolchain directory to PATH: ${dir}"
+            export PATH="${dir}:${PATH}"
+            break
+        fi
+    done
+fi
 
 # -----------------------------------------------------------------------------
 # smc-vp binary detection / build
