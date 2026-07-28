@@ -71,10 +71,79 @@ pll_wrapper::pll_wrapper(sc_core::sc_module_name name, pll_wrapper_cfg cfg)
         {OFF_AWM_1,    awm_cfg::WINDOW_SIZE,      &init_awm1_, "awm_1"},
     }};
 
+    // Lock modelling: a REG_UPDATE strobe commits the shadow config and makes
+    // the firmware-polled pll_cntl status report lock.  Firmware polls
+    // pll_cntl.CGM_x_STATUS / AWM_x_STATUS (not the sub-block's own status),
+    // so the coordination lives here in the composing wrapper.
+    cgm0_.observe_write(cgm::OFF_REG_UPDATE,
+                        [this](uint32_t w) { commit_cgm_lock(0, w); });
+    cgm1_.observe_write(cgm::OFF_REG_UPDATE,
+                        [this](uint32_t w) { commit_cgm_lock(1, w); });
+    awm0_.observe_write(awm::GLOBAL_REG_UPDATE,
+                        [this](uint32_t w) { commit_awm_lock(0, w); });
+    awm1_.observe_write(awm::GLOBAL_REG_UPDATE,
+                        [this](uint32_t w) { commit_awm_lock(1, w); });
+
     SIM_LOG_INFO(this,
                  "pll_wrapper instantiated: base=0x"
                      << std::hex << cfg_.base_addr << " window=0x"
                      << cfg_.WINDOW_SIZE << std::dec << " sub-blocks=5");
+}
+
+void pll_wrapper::commit_cgm_lock(unsigned idx, uint32_t written)
+{
+    // Only a reg_update strobe (bit 0) commits shadow config + re-locks.
+    if ((written & 0x1u) == 0u) return;
+
+    cgm& c = (idx == 0) ? cgm0_ : cgm1_;
+
+    // Lock follows cgm_enable (ENABLES[0]); a disable + REG_UPDATE drops lock.
+    uint32_t enables = 0;
+    c.peek(cgm::OFF_ENABLES, enables);
+    const bool locked = (enables & 0x1u) != 0u;
+
+    // pll_cntl.CGM_x_STATUS.lock_detect[0] — the bit firmware polls.
+    const uint64_t st_off =
+        (idx == 0) ? pll_cntl::OFF_CGM_0_STATUS : pll_cntl::OFF_CGM_1_STATUS;
+    uint32_t st = 0;
+    cntl_.peek(st_off, st);
+    st = locked ? (st | 0x1u) : (st & ~0x1u);
+    cntl_.poke(st_off, st);
+
+    // Mirror the sub-block's own CGM_STATUS.lock_detect[0] for read accuracy.
+    uint32_t cst = 0;
+    c.peek(cgm::OFF_CGM_STATUS, cst);
+    cst = locked ? (cst | 0x1u) : (cst & ~0x1u);
+    c.poke(cgm::OFF_CGM_STATUS, cst);
+
+    SIM_LOG_INFO(this, "CGM" << idx << " REG_UPDATE: lock_detect="
+                             << (locked ? 1 : 0));
+}
+
+void pll_wrapper::commit_awm_lock(unsigned idx, uint32_t written)
+{
+    if ((written & 0x1u) == 0u) return;  // reg_update strobe
+
+    // Firmware exit conditions: AWM_0 lock_detect == 7 (all three CGMs used
+    // and locked), AWM_1 lock_detect == 1.
+    const uint32_t lockval = (idx == 0) ? 0x7u : 0x1u;
+
+    const uint64_t st_off =
+        (idx == 0) ? pll_cntl::OFF_AWM_0_STATUS : pll_cntl::OFF_AWM_1_STATUS;
+    uint32_t st = 0;
+    cntl_.peek(st_off, st);
+    st = (st & ~0x7u) | lockval;  // lock_detect[2:0]
+    cntl_.poke(st_off, st);
+
+    // Mirror awm GLOBAL LOCK_STATUS.lock_detect[5:3] for read accuracy.
+    awm& a = (idx == 0) ? awm0_ : awm1_;
+    uint32_t gls = 0;
+    a.peek(awm::GLOBAL_LOCK_STATUS, gls);
+    gls = (gls & ~(0x7u << 3)) | (lockval << 3);
+    a.poke(awm::GLOBAL_LOCK_STATUS, gls);
+
+    SIM_LOG_INFO(this, "AWM" << idx << " REG_UPDATE: lock_detect=0x"
+                             << std::hex << lockval << std::dec);
 }
 
 void pll_wrapper::b_transport(tlm::tlm_generic_payload& gp,

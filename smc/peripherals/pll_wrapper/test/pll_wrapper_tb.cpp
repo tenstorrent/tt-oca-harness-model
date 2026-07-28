@@ -103,6 +103,37 @@ struct driver : sc_core::sc_module {
         EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
     }
 
+    // 16-bit access — matches the firmware's read/write_cgm_pll_reg etc.
+    uint16_t read16(uint64_t addr)
+    {
+        tlm::tlm_generic_payload gp;
+        uint16_t data = 0;
+        sc_time delay = SC_ZERO_TIME;
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
+        gp.set_data_length(2);
+        gp.set_streaming_width(2);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, delay);
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
+        return data;
+    }
+
+    void write16(uint64_t addr, uint16_t data)
+    {
+        tlm::tlm_generic_payload gp;
+        sc_time delay = SC_ZERO_TIME;
+        gp.set_command(tlm::TLM_WRITE_COMMAND);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
+        gp.set_data_length(2);
+        gp.set_streaming_width(2);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, delay);
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
+    }
+
     tlm::tlm_response_status try_access(tlm::tlm_command cmd, uint64_t addr,
                                         unsigned len)
     {
@@ -235,10 +266,15 @@ struct tb : sc_core::sc_module {
         std::cout << "  [PASS] reserved-gap accesses fault (decode)\n";
 
         // -- 7. Size / alignment errors propagate from the sub-block -------
+        // 1/2/4-byte accesses are all supported (firmware uses 16-bit), but
+        // must be a supported width, naturally aligned, and not straddle a
+        // 32-bit register boundary.
         EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
-                  drv.try_access(tlm::TLM_READ_COMMAND, 0x010, 2)); // size!=4
+                  drv.try_access(tlm::TLM_READ_COMMAND, 0x010, 3)); // bad width
         EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
-                  drv.try_access(tlm::TLM_READ_COMMAND, 0x012, 4)); // unaligned
+                  drv.try_access(tlm::TLM_READ_COMMAND, 0x012, 4)); // 4B unaligned
+        EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                  drv.try_access(tlm::TLM_READ_COMMAND, 0x011, 2)); // 2B unaligned
         std::cout << "  [PASS] size / alignment errors\n";
 
         // -- 8. Hardware-status back door (poke) then software read --------
@@ -275,6 +311,68 @@ struct tb : sc_core::sc_module {
                     .is_valid());
             std::cout << "  [PASS] CCI discovery / mutation per sub-block\n";
         }
+
+        // -- 11. Firmware-style CGM program + lock poll (16-bit access) ----
+        // Emulate program_cgm(): the firmware uses 16-bit MMIO, sets
+        // cgm_enable + freq_acq_enable, programs the config, strobes
+        // REG_UPDATE, then busy-polls pll_cntl.CGM_x_STATUS.lock_detect until
+        // it reads 1.  The model must make that loop terminate.
+        using CG = smc::pll::cgm;
+        pulse_reset();
+        {
+            // lock not asserted until REG_UPDATE
+            EXPECT_EQ(0u,
+                      drv.read16(W::OFF_PLL_CNTL + PC::OFF_CGM_0_STATUS) & 0x1u);
+
+            drv.write16(W::OFF_CGM_0 + CG::OFF_ENABLES, 0x3u); // cgm+freq_acq
+            drv.write16(W::OFF_CGM_0 + CG::OFF_FCW_INT, 20);
+            drv.write16(W::OFF_CGM_0 + CG::OFF_REG_UPDATE, 0x1u);
+
+            uint32_t lock = 0;
+            int spins = 0;
+            do {
+                lock = drv.read16(W::OFF_PLL_CNTL + PC::OFF_CGM_0_STATUS) & 0x1u;
+            } while (lock != 1u && ++spins < 1000);
+            EXPECT_EQ(1u, lock);
+            // sub-block CGM_STATUS mirrors lock for diagnostic reads
+            EXPECT_EQ(0x1u,
+                      drv.read16(W::OFF_CGM_0 + CG::OFF_CGM_STATUS) & 0x1u);
+            // REG_UPDATE self-clears
+            EXPECT_EQ(0u, drv.read16(W::OFF_CGM_0 + CG::OFF_REG_UPDATE));
+        }
+        std::cout << "  [PASS] firmware CGM program + lock poll (16-bit)\n";
+
+        // -- 12. Disable + REG_UPDATE drops CGM lock -----------------------
+        drv.write16(W::OFF_CGM_0 + CG::OFF_ENABLES, 0x0u);      // cgm_enable=0
+        drv.write16(W::OFF_CGM_0 + CG::OFF_REG_UPDATE, 0x1u);
+        EXPECT_EQ(0u, drv.read16(W::OFF_PLL_CNTL + PC::OFF_CGM_0_STATUS) & 0x1u);
+        std::cout << "  [PASS] CGM disable + REG_UPDATE clears lock\n";
+
+        // -- 13. AWM REG_UPDATE drives pll_cntl AWM lock status ------------
+        // AWM_0 must report lock_detect==7 (all three CGMs), AWM_1==1.  The
+        // firmware writes GLOBAL REG_UPDATE with a 32-bit store.
+        drv.write32(W::OFF_AWM_0 + AW::GLOBAL_REG_UPDATE, 0x1u);
+        EXPECT_EQ(0x7u,
+                  drv.read16(W::OFF_PLL_CNTL + PC::OFF_AWM_0_STATUS) & 0x7u);
+        // sub-block GLOBAL_LOCK_STATUS.lock_detect[5:3] mirrors it
+        EXPECT_EQ(0x7u,
+                  (drv.read32(W::OFF_AWM_0 + AW::GLOBAL_LOCK_STATUS) >> 3) & 0x7u);
+        drv.write32(W::OFF_AWM_1 + AW::GLOBAL_REG_UPDATE, 0x1u);
+        EXPECT_EQ(0x1u,
+                  drv.read16(W::OFF_PLL_CNTL + PC::OFF_AWM_1_STATUS) & 0x7u);
+        std::cout << "  [PASS] AWM REG_UPDATE drives pll_cntl lock status\n";
+
+        // -- 14. 16-bit RMW must preserve the 32-bit register high half ----
+        // AG_MUX_SELECT is a 32-bit register; a 16-bit low-half write must not
+        // disturb bits [31:16].
+        drv.write32(W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT, 0x3F3F0000u);
+        drv.write16(W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT, 0xBEEFu);
+        EXPECT_EQ(0x3F3FBEEFu,
+                  drv.read32(W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT));
+        // 16-bit read of the high half returns bits [31:16]
+        EXPECT_EQ(0x3F3Fu,
+                  drv.read16(W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT + 2));
+        std::cout << "  [PASS] 16-bit RMW preserves 32-bit register high half\n";
 
         if (g_failures == 0)
             std::cout << "\nALL TESTS PASSED\n";

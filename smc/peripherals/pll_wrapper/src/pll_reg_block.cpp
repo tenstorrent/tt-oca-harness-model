@@ -142,8 +142,10 @@ void reg_block::b_transport(tlm::tlm_generic_payload& gp,
         return;
     }
 
-    // 32-bit APB-style register file: naturally aligned 4-byte accesses only.
-    if (len != 4 || (adr & 0x3u) != 0) {
+    // The PLL firmware uses 16-bit and 32-bit accesses (and could use 8-bit).
+    // Accept naturally aligned 1/2/4-byte accesses only.
+    if ((len != 1 && len != 2 && len != 4) ||
+        (adr & (static_cast<uint64_t>(len) - 1)) != 0) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
         return;
     }
@@ -165,22 +167,49 @@ void reg_block::b_transport(tlm::tlm_generic_payload& gp,
         return;
     }
 
+    // Map the (possibly sub-word) access onto its containing 32-bit register.
+    const uint64_t reg_off   = adr & ~UINT64_C(0x3);
+    const unsigned lane      = static_cast<unsigned>(adr & 0x3u);   // 0..3
+    const unsigned lane_bits = lane * 8u;
+    const uint32_t lane_mask =
+        (len == 4) ? 0xFFFFFFFFu
+                   : ((((uint32_t{1} << (len * 8u)) - 1u)) << lane_bits);
+
+    // A single access must not straddle two registers.
+    if (lane + len > 4u) {
+        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+
     if (cmd == tlm::TLM_READ_COMMAND) {
-        uint32_t data = 0;
+        uint32_t word = 0;
         // Unmapped-but-in-window reads as zero (reserved => RAZ).
-        map_.read(adr, data);
-        std::memcpy(ptr, &data, sizeof(data));
+        map_.read(reg_off, word);
+        const uint32_t lane_val = (word & lane_mask) >> lane_bits;
+        std::memcpy(ptr, &lane_val, len);
         SIM_LOG_TRACE(this,
-                      "read off=0x" << std::hex << adr << " data=0x" << data
-                                    << std::dec);
+                      "read off=0x" << std::hex << adr << " (reg 0x" << reg_off
+                                    << ") data=0x" << lane_val << std::dec);
     } else if (cmd == tlm::TLM_WRITE_COMMAND) {
-        uint32_t data = 0;
-        std::memcpy(&data, ptr, sizeof(data));
+        uint32_t incoming = 0;
+        std::memcpy(&incoming, ptr, len);
+        // Read-modify-write the containing word: touched lane takes the new
+        // bytes, untouched lanes keep their current backing value (so the
+        // register write callback leaves them unchanged).
+        const regmodel::Register32* cur_reg = map_.find(reg_off);
+        const uint32_t cur = (cur_reg != nullptr) ? cur_reg->raw() : 0u;
+        const uint32_t data =
+            (cur & ~lane_mask) | ((incoming << lane_bits) & lane_mask);
         // Unmapped-but-in-window writes are ignored (reserved => WI).
-        map_.write(adr, data);
+        map_.write(reg_off, data);
         SIM_LOG_TRACE(this,
-                      "write off=0x" << std::hex << adr << " data=0x" << data
-                                     << std::dec);
+                      "write off=0x" << std::hex << adr << " (reg 0x" << reg_off
+                                     << ") data=0x" << data << std::dec);
+        // Fire any side-effect observers (e.g. REG_UPDATE -> lock status).
+        auto range = write_observers_.equal_range(reg_off);
+        for (auto it = range.first; it != range.second; ++it) {
+            it->second(data);
+        }
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
@@ -188,6 +217,11 @@ void reg_block::b_transport(tlm::tlm_generic_payload& gp,
 
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
     gp.set_response_status(tlm::TLM_OK_RESPONSE);
+}
+
+void reg_block::observe_write(uint64_t offset, WriteObserver fn)
+{
+    write_observers_.emplace(offset, std::move(fn));
 }
 
 void reg_block::dump_state(std::ostream& os) const

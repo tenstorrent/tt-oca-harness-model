@@ -21,10 +21,13 @@
  * monitor counters, ...) are left at their reset value and can be driven from a
  * test or an enclosing model via the @ref poke back door.
  *
- * Bus contract: the SMC register bus is 32-bit (APB-style).  Every register in
- * the RDL sits on a 4-byte-aligned offset, so this block accepts naturally
- * aligned 4-byte accesses only.  16-bit RDL registers (cgm/awm) are stored in
- * the low half of a 32-bit word; the high half reads back as zero.
+ * Bus contract: registers are stored as 32-bit words on 4-byte-aligned
+ * offsets, but the SMC PLL firmware accesses them with mixed widths — 16-bit
+ * (`uint16_t`) loads/stores for cgm/awm and the pll_cntl status/config
+ * registers, and 32-bit stores for the wide pll_cntl registers.  This block
+ * therefore accepts naturally aligned 1/2/4-byte accesses that fall within a
+ * single 32-bit register, performing a read-modify-write on the containing
+ * word.  16-bit RDL registers (cgm/awm) live in the low half of their word.
  */
 
 #ifndef SMC_PLL_REG_BLOCK_H_
@@ -39,7 +42,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -104,6 +109,15 @@ public:
     /// Overwrite raw backing storage at @p offset (models a HW-driven update).
     bool poke(uint64_t offset, uint32_t value);
 
+    /// Callback invoked after a software write to @p offset, receiving the
+    /// full 32-bit value presented to the register (post byte-lane merge,
+    /// pre self-clear).  Used by an enclosing model to react to a strobe write
+    /// — e.g. a REG_UPDATE that must assert lock status in another sub-block.
+    using WriteObserver = std::function<void(uint32_t /*written*/)>;
+    /// Register a side-effect observer on a register.  Multiple observers on
+    /// one offset fire in registration order.
+    void observe_write(uint64_t offset, WriteObserver fn);
+
     uint64_t window_size() const { return window_size_; }
     uint64_t base_addr()   const { return base_addr_; }
     std::size_t num_registers() const { return map_.size(); }
@@ -134,6 +148,7 @@ protected:
     std::deque<regmodel::Register32> regs_;
     std::vector<uint32_t>            resets_;
     regmodel::RegisterMap32          map_;
+    std::multimap<uint64_t, WriteObserver> write_observers_;
 };
 
 }  // namespace pll

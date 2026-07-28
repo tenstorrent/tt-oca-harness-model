@@ -84,6 +84,13 @@ private:
 
     void b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
 
+    // Lock modelling (driven by REG_UPDATE writes; see pll_wrapper.cpp).
+    // A CGM/AWM shadow-commit (REG_UPDATE strobe) makes the firmware-polled
+    // pll_cntl status register report lock, so programming sequences that
+    // `while (lock_detect != N)` make forward progress.
+    void commit_cgm_lock(unsigned idx, uint32_t written);
+    void commit_awm_lock(unsigned idx, uint32_t written);
+
     pll_wrapper_cfg cfg_;
 
     pll_cntl cntl_;

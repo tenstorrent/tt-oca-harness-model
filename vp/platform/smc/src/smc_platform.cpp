@@ -28,6 +28,7 @@ static constexpr uint64_t A_BEU          = 0xC0C1'0000ULL;
 static constexpr uint64_t A_DMA          = 0xC003'8000ULL;  // dma_cfg default base_addr
 
 static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
+static constexpr uint64_t A_PLL_WRAP     = 0xC000'3000ULL;  // pll_wrap.rdl base
 static constexpr uint64_t A_I3C         = 0xC000'5000ULL;
 static constexpr uint64_t A_I2C0         = 0xC000'9000ULL;
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;
@@ -219,6 +220,12 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(7, A_UART0 + 0x2000, 0x1000, "uart2");
     periph_router.add_route(8, A_UART0 + 0x3000, 0x1000, "uart3");
     periph_router.add_route(9, A_CPU_CTRL,  0x2000, "cpu_ctrl");
+    // pll_wrap: PLL wrapper (pll_cntl + 2x cgm + 2x awm) at 0xC000_3000.  Its
+    // 0x1000 window shadows the periph_main_misc catch-all below (routes match
+    // smallest-window-first), so PLL accesses reach the model instead of the
+    // stub.  The router rebases the absolute window to the wrapper's 0-based
+    // composed offsets.
+    periph_router.add_route(11, A_PLL_WRAP, 0x1000, "pll_wrap");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
     periph_router.add_route(10, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
     periph_router.add_route(10, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
@@ -233,6 +240,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[8].bind(uart_[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
     periph_router.out[10].bind(stub_periph_misc.reg_socket);
+    periph_router.out[11].bind(pll_wrap.reg_socket);
+    pll_wrap.rst_n_i.bind(rst_n_sig);
 
     // -- DMA + memory_zeroer (data-accelerator CSR + DMA paths) ------------
     // CSR path: fabric's 64-bit `to_data_accel_ctrl` initiator is a single-
