@@ -117,6 +117,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `smc-reset-test/` | Reset unit SS_CONFIG round-trip + SS_CONFIG_LOCK / SS_COLD_RESET_LOCK sticky locks |
 | `smc-scratch-test/` | Scratchpad RAM multi-word write/read round-trip from the CPU |
 | `smc-uart-test/` | UART0 SCR, divisor/LCR, FIFO enable, and MCR register tests |
+| `smc-wdt-test/` | SiFive TLWDT stage-1 KEY/CMP/IP/FEED + stage-2 WDT_TIMEOUT / RESET on front-port |
 
 ### Shared Support Code (`common/`)
 

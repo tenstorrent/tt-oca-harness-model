@@ -11,3 +11,7 @@ smc-plic-test
 smc-reset-test
 smc-scratch-test
 smc-uart-test
+# ELF TARGET names (underscore) produced by per-test Makefiles
+smc_wdt_test
+smc_i2c_loopback_test
+smc_i3c_loopback_test

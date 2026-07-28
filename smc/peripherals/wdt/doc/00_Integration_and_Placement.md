@@ -54,7 +54,7 @@ repo/tt-oca-sim/smc/
 └── peripherals/wdt/     smc::wdt × NUM_CPU_CORES
 ```
 
-**Recommended VP wiring (not yet in platform):**
+**Recommended VP wiring:**
 
 1. Front-port address router (or cluster wrapper) subtracts instance base:
    `local_off = addr - (0xC000_0000 + core_id * 0x400)`.
@@ -66,6 +66,10 @@ repo/tt-oca-sim/smc/
    `metal_watchdog_get_interrupt_id`). Note: **SEP external WDT** is a
    different IRQ (1-core PLIC ID 59 / 4-core PLIC ID 283) and is **not**
    this Chipyard TLWDT model.
+
+`vp/platform/smc` implements this: `wdt_demux` under front-port route 0,
+PLIC sources 329–332 via `interrupt_aggregator`, sticky → cluster stage-2,
+and `wdt_first/second_timeout` → `reset_unit`.
 
 ## Timing model (no `sc_clock`)
 
