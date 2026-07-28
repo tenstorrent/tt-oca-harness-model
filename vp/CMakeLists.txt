@@ -33,6 +33,25 @@ if(POLICY CMP0167)
   cmake_policy(SET CMP0167 NEW)
 endif()
 
+# Forward the repo-wide BOOST_DIR convention (smc/cpu_cluster/CMakeLists.txt,
+# vp/configure_vp.sh, sw/smc-vp-tests/run_smc_vp_tests.sh) to find_package,
+# which only consults BOOST_ROOT / Boost_ROOT.  Without this, a Boost outside
+# the system prefixes is invisible here even though the rest of the build was
+# told where it lives -- the RHEL CI runner installs one under
+# /home/runner/local and failed with "Could NOT find Boost".  Both spellings
+# are set so this works in FindBoost module mode and in BoostConfig config
+# mode (CMP0167 NEW).
+if(NOT BOOST_ROOT)
+  if(BOOST_DIR)
+    set(BOOST_ROOT "${BOOST_DIR}")
+  elseif(DEFINED ENV{BOOST_DIR})
+    set(BOOST_ROOT "$ENV{BOOST_DIR}")
+  endif()
+endif()
+if(BOOST_ROOT AND NOT Boost_ROOT)
+  set(Boost_ROOT "${BOOST_ROOT}")
+endif()
+
 find_package(Boost REQUIRED COMPONENTS iostreams program_options)
 
 include(FindCCI)

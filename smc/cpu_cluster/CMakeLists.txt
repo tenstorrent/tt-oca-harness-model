@@ -144,7 +144,10 @@ find_library(BOOST_PROGRAM_OPTIONS_LIB
           "${BOOST_DIR}/stage/lib"
     NO_DEFAULT_PATH)
 if(BOOST_PROGRAM_OPTIONS_LIB)
-    add_library(boost::program_options SHARED IMPORTED GLOBAL)
+    # UNKNOWN, not SHARED: the located library may be a static archive -- the
+    # RHEL CI runner builds Boost with link=static, so only
+    # libboost_program_options.a exists there.
+    add_library(boost::program_options UNKNOWN IMPORTED GLOBAL)
     set_target_properties(boost::program_options PROPERTIES
         IMPORTED_LOCATION             "${BOOST_PROGRAM_OPTIONS_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${BOOST_DIR}/include"

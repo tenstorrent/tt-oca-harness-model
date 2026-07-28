@@ -666,6 +666,7 @@ jobs:
           CCI_HOME:             ${{ env.CCI_HOME }}
           WHISPER_HOME:         /home/runner/whisper
           BOOST_DIR:            ${{ env.BOOST_HOME }}
+          BOOST_ROOT:           ${{ env.BOOST_HOME }}
           RISCV_TOOLCHAIN_PATH: /home/runner/riscv/toolchain
         run: |
           cd sw/smc-vp-tests
