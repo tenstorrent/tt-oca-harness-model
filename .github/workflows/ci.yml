@@ -399,18 +399,21 @@ jobs:
           cd /home/runner/whisper
           git checkout ${{ env.WHISPER_REV }}
           # smc/cpu_cluster/external/whisper-cmake/CMakeLists.txt imports FOUR
-          # archives (librvcore.a + its three sub-libs). Whisper's GNUmakefile
-          # only wires soft_float/pci/virtual_memory as prerequisites of the
-          # top-level `whisper` executable, NOT of the `librvcore.a` archive
-          # target -- so building just librvcore.a silently skips them. Build
-          # all four explicitly or the CMake configure step fails later with
-          # "Whisper artifact not found" even though this step "succeeded".
-          make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
-            build-$(uname -s)/librvcore.a \
-            virtual_memory/libvirtual_memory.a \
-            pci/libpci.a \
-            third_party/softfloat/build/RISCV-GCC/softfloat.a \
-            -j$(nproc)
+          # archives: librvcore.a plus the softfloat/pci/virtual_memory
+          # sub-libs.  Whisper's GNUmakefile wires those three as prerequisites
+          # of the `whisper` executable only -- not of librvcore.a -- so asking
+          # for librvcore.a alone silently skips them and the CMake configure
+          # step later fails with "Whisper artifact not found".  They also
+          # cannot be named as relative goals ("No rule to make target"): the
+          # makefile defines them by absolute path, one of which even carries a
+          # double slash ($PWD/virtual_memory//libvirtual_memory.a).  So add a
+          # single aggregate goal expressed in the makefile's own variables --
+          # no hard-coded paths, and no executable link.
+          printf 'smc_vp_whisper_libs: $(BUILD_DIR)/librvcore.a $(soft_float_lib) $(pci_lib) $(virtual_memory_lib)\n' \
+            > /tmp/whisper-smc-libs.mk
+          make -f GNUmakefile -f /tmp/whisper-smc-libs.mk \
+            MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
+            smc_vp_whisper_libs -j$(nproc)
 
       - name: Run SMC VP tests
         env:
