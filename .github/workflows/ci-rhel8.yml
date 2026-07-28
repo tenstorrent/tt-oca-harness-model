@@ -587,6 +587,16 @@ jobs:
           path: ${{ env.CCI_HOME }}
           key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
 
+      # smc-vp links the whole VP tree, including the SEP peripherals that call
+      # peripheral_find_openssl().  RHEL 8 ships no openssl-devel in this image,
+      # so the from-source OpenSSL 3 built by build-deps-rhel8 is required here
+      # too -- not just in the SEP jobs.
+      - name: Restore OpenSSL 3 cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENSSL3_HOME }}
+          key: openssl-${{ env.OPENSSL3_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
       - name: Cache Whisper
         id: cache-whisper-rhel8
         uses: actions/cache@v4
@@ -667,6 +677,8 @@ jobs:
           WHISPER_HOME:         /home/runner/whisper
           BOOST_DIR:            ${{ env.BOOST_HOME }}
           BOOST_ROOT:           ${{ env.BOOST_HOME }}
+          OPENSSL_ROOT:         ${{ env.OPENSSL3_HOME }}
+          OPENSSL_ROOT_DIR:     ${{ env.OPENSSL3_HOME }}
           RISCV_TOOLCHAIN_PATH: /home/runner/riscv/toolchain
         run: |
           cd sw/smc-vp-tests
