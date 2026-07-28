@@ -32,7 +32,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
-log_info()  { echo "[run_smc_vp_tests] $*"; }
+# All three log to stderr on purpose: several helpers below "return" a value by
+# echoing it to stdout and are read back with `$(...)`, so anything progress-
+# related must stay off stdout or it ends up inside the captured value.
+log_info()  { echo "[run_smc_vp_tests] $*" >&2; }
 log_warn()  { echo "[run_smc_vp_tests] WARN: $*" >&2; }
 log_error() { echo "[run_smc_vp_tests] ERROR: $*" >&2; }
 
@@ -82,10 +85,15 @@ TOOLCHAIN_SEARCH_DIRS+=(
     "/opt/homebrew/bin"
     "/usr/local/bin"
 )
-# TT / RHEL common install tree
-for d in /tools_soc/opensrc/riscv-gnu-toolchain/*; do
+# TT / RHEL common install tree.  Multiple versions can coexist (old ones are
+# never removed), and older ones may be missing ISA-string support this repo
+# needs (e.g. `10-1.0-riscv64iafv-centos7`'s assembler rejects the explicit
+# `_zicsr_zifencei` suffix `Makefile.common` passes via -march).  Version-sort
+# descending so the newest dated install (known-good; see sw/smc-vp-tests
+# README toolchain notes) is tried first.
+while IFS= read -r d; do
     [ -d "${d}/bin" ] && TOOLCHAIN_SEARCH_DIRS+=("${d}/bin")
-done
+done < <(printf '%s\n' /tools_soc/opensrc/riscv-gnu-toolchain/*/ 2>/dev/null | sed 's:/$::' | sort -rV)
 TOOLCHAIN_SEARCH_DIRS+=(
     "/opt/riscv/bin"
     "/usr/local/riscv/bin"
@@ -122,6 +130,21 @@ if [ -z "${RISCV_PREFIX}" ]; then
     exit 1
 fi
 log_info "RISC-V toolchain prefix: ${RISCV_PREFIX}"
+
+# detect_toolchain() only reports WHICH prefix has a working compiler; if it
+# found that compiler through TOOLCHAIN_SEARCH_DIRS rather than the existing
+# PATH, that directory must be exported here -- otherwise `make` (a child
+# process spawned later by run_test()) still can't find "${RISCV_PREFIX}gcc",
+# even though this script's own `command -v` check "found" it in this shell.
+if ! command -v "${RISCV_PREFIX}gcc" >/dev/null 2>&1; then
+    for dir in "${TOOLCHAIN_SEARCH_DIRS[@]}"; do
+        if [ -x "${dir}/${RISCV_PREFIX}gcc" ]; then
+            log_info "adding toolchain directory to PATH: ${dir}"
+            export PATH="${dir}:${PATH}"
+            break
+        fi
+    done
+fi
 
 # -----------------------------------------------------------------------------
 # smc-vp binary detection / build
@@ -258,17 +281,29 @@ build_vp() {
     cmake --build "${VP_BUILD_DIR}" --target smc-vp -j
 }
 
-get_vp() {
-    local vp
-    if ! vp="$(find_vp_binary)"; then
-        log_warn "smc-vp binary not found; building it now."
-        build_vp
-        vp="$(find_vp_binary)" || {
-            log_error "smc-vp still not found after build; check ${VP_BUILD_DIR}/bin/"
-            exit 1
-        }
+# Resolve the smc-vp executable into the global VP_BIN.
+#
+# This deliberately does NOT return the path on stdout.  build_vp() streams
+# cmake's configure/build output to stdout, so capturing it (`vp="$(get_vp)"`)
+# folded that output into the path and handed `make sim` a VP= value such as
+#   VP="[run_smc_vp_tests] SYSTEMC_HOME: /... <newline> /path/to/smc-vp"
+# which sh then tried to execute ("/bin/sh: 1: [run_smc_vp_tests]: not found").
+# find_vp_binary() is the only stdout-returning helper here, and it echoes
+# nothing but the path.
+#
+# Resolving once (from the main flow, not per test) also means a broken VP
+# build reports one clear error instead of re-running the whole cmake configure
+# for every test in the list.
+resolve_vp() {
+    if VP_BIN="$(find_vp_binary)"; then
+        return 0
     fi
-    echo "${vp}"
+    log_warn "smc-vp binary not found; building it now."
+    build_vp
+    VP_BIN="$(find_vp_binary)" || {
+        log_error "smc-vp still not found after build; check ${VP_BUILD_DIR}/bin/"
+        return 1
+    }
 }
 
 # -----------------------------------------------------------------------------
@@ -297,9 +332,6 @@ run_test() {
         return 1
     fi
 
-    local vp
-    vp="$(get_vp)"
-
     log_info "============================================================"
     log_info "building test: $1"
     log_info "============================================================"
@@ -312,7 +344,7 @@ run_test() {
         }
         log_info "running test: $1"
         local sim_log="run_smc_vp_tests_sim.log"
-        if ! make sim RISCV_PREFIX="${RISCV_PREFIX}" VP="${vp}" >"${sim_log}" 2>&1; then
+        if ! make sim RISCV_PREFIX="${RISCV_PREFIX}" VP="${VP_BIN}" >"${sim_log}" 2>&1; then
             cat "${sim_log}"
             log_error "simulation exited non-zero for $1"
             rm -f "${sim_log}"
@@ -452,6 +484,14 @@ fi
 if [ ${BUILD_VP} -eq 1 ]; then
     build_vp
 fi
+
+# Resolve (building if needed) before the loop: every test runs the same VP, and
+# without it there is nothing to run, so fail here rather than reporting a
+# confusing per-test simulation failure.
+if ! resolve_vp; then
+    exit 1
+fi
+log_info "smc-vp: ${VP_BIN}"
 
 log_info "tests to run: ${TESTS[*]}"
 FAILED=0

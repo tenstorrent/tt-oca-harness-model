@@ -118,17 +118,44 @@ set_target_properties(boost::headers PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${BOOST_DIR}/include"
 )
 
-# Boost program_options shared lib — needed if any Whisper symbol drags it in.
+# Boost program_options shared lib — librvcore.a references it (via Whisper's
+# Args.cpp), and it must land AFTER that archive on the link line, which is what
+# the whisper::whisper append in external/whisper-cmake/CMakeLists.txt arranges.
+#
+# Search every lib layout a Boost install may use, because NO_DEFAULT_PATH keeps
+# us to BOOST_DIR (so we cannot pick a system Boost that disagrees with
+# BOOST_DIR's headers): <root>/lib for source/TT installs, <root>/lib64 on RHEL,
+# <root>/lib/<arch> for Debian/Ubuntu multiarch, and <root>/stage/lib for an
+# in-tree b2 build.  The multiarch case is not hypothetical: CI passes
+# BOOST_DIR=/usr on Ubuntu, where the library is in
+# /usr/lib/x86_64-linux-gnu — searching only <root>/lib found nothing, the
+# target below was never created, and smc-vp failed to link with undefined
+# boost::program_options symbols.
+# CMAKE_LIBRARY_ARCHITECTURE only carries the triplet on Debian-family hosts
+# (it is empty on RHEL), so glob the multiarch directories too rather than
+# depending on it.
+file(GLOB _boost_multiarch_libdirs "${BOOST_DIR}/lib/*-linux-gnu")
 find_library(BOOST_PROGRAM_OPTIONS_LIB
     NAMES boost_program_options
     PATHS "${BOOST_DIR}/lib"
+          "${BOOST_DIR}/lib64"
+          "${BOOST_DIR}/lib/${CMAKE_LIBRARY_ARCHITECTURE}"
+          ${_boost_multiarch_libdirs}
+          "${BOOST_DIR}/stage/lib"
     NO_DEFAULT_PATH)
 if(BOOST_PROGRAM_OPTIONS_LIB)
-    add_library(boost::program_options SHARED IMPORTED GLOBAL)
+    # UNKNOWN, not SHARED: the located library may be a static archive -- the
+    # RHEL CI runner builds Boost with link=static, so only
+    # libboost_program_options.a exists there.
+    add_library(boost::program_options UNKNOWN IMPORTED GLOBAL)
     set_target_properties(boost::program_options PROPERTIES
         IMPORTED_LOCATION             "${BOOST_PROGRAM_OPTIONS_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${BOOST_DIR}/include"
     )
+    message(STATUS "BOOST_PO_LIB = ${BOOST_PROGRAM_OPTIONS_LIB}")
+else()
+    message(STATUS "BOOST_PO_LIB = not found under ${BOOST_DIR} "
+                   "(whisper-cmake will fall back to Boost::program_options)")
 endif()
 
 # ---------------------------------------------------------------------------

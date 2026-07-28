@@ -3,12 +3,12 @@
 // vp/platform/smc/smc_platform.hpp
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
-// (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, I3C, 3x
-// I2C, 4x UART, 4x WDT, and optionally the Whisper-backed CPU cluster), wires the
-// fabric's initiator sockets through address routers to the modeled targets
-// and stubs, composes the peripheral interrupt vector into the PLIC, and —
-// when the cluster is present — connects CLINT MSIP/MTIP and PLIC MEIP to the
-// cluster's per-hart IRQ inputs.
+// (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, DMA, I3C,
+// 3x I2C, 4x UART, 4x WDT, 4x per-core BEU, and optionally the Whisper-backed
+// CPU cluster), wires the fabric's initiator sockets through address routers
+// to the modeled targets and stubs, composes the peripheral interrupt vector
+// into the PLIC, and — when the cluster is present — connects CLINT MSIP/MTIP
+// and PLIC MEIP to the cluster's per-hart IRQ inputs.
 //
 // See smc/doc/systemc_tlm2_integration_guide.adoc for the address map and
 // binding rationale.
@@ -21,6 +21,8 @@
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm_utils/simple_initiator_socket.h>
 
+#include <cci_configuration>
+
 #include <cstdint>
 
 #include "sim_log.h"
@@ -30,13 +32,16 @@
 #include "bootrom.h"
 #include "clint.h"
 #include "cpu_ctrl.h"
+#include "dma.h"
 #include "i2c_controller.h"
 #include "i3c_controller.h"
+#include "memory_zeroer.h"
 #include "plic.h"
 #include "reset_unit.h"
 #include "scratchpad_ram.h"
 #include "uart.h"
 #include "wdt.h"
+#include "beu.h"
 
 #ifdef SMC_PLATFORM_WITH_CLUSTER
 #include "smc_cpu_cluster.h"
@@ -54,6 +59,7 @@ class smc_platform : public sc_core::sc_module
 {
 public:
     static constexpr unsigned NUM_HARTS     = 4;
+    static constexpr unsigned NUM_BEU       = NUM_HARTS; // one BEU per core
     static constexpr unsigned NUM_UART      = 4;
     static constexpr unsigned NUM_I2C       = 3;
     static constexpr unsigned NUM_I3C       = 6;
@@ -63,6 +69,33 @@ public:
     // Peripheral IRQ inputs: i3c[0..5], uart[0..3], i2c[0..2], wdt[0..3].
     static constexpr unsigned NUM_PERIPH_IRQ =
         NUM_I3C + NUM_UART + NUM_I2C + NUM_HARTS;
+
+    // -----------------------------------------------------------------------
+    // Test-only BEU error-injection hook (Phase D1; see
+    // smc/peripherals/beu/doc/04_BEU_Platform_Integration_Test_Plan.md §Phase
+    // D/E2/E3).  Firmware has no way to synthesize a live cache/TileLink ECC
+    // event in the VP, so up to 3 errors can be injected directly into named
+    // BEU instances at elaboration (before sc_start(), so the state is
+    // already latched when firmware's first register read happens),
+    // entirely CCI-driven.  Every slot defaults to enable=false, so plain
+    // smc-vp runs (and every other smc-vp-tests/ test) are unaffected; a
+    // test's own .ini opts in explicitly (see smc-beu-error-test/).
+    // Declared before ports/sized members per the CCI parameter convention.
+    // -----------------------------------------------------------------------
+    cci::cci_param<bool>     beu_inject0_enable_p_;
+    cci::cci_param<unsigned> beu_inject0_core_p_;
+    cci::cci_param<unsigned> beu_inject0_src_p_;
+    cci::cci_param<uint64_t> beu_inject0_addr_p_;
+
+    cci::cci_param<bool>     beu_inject1_enable_p_;
+    cci::cci_param<unsigned> beu_inject1_core_p_;
+    cci::cci_param<unsigned> beu_inject1_src_p_;
+    cci::cci_param<uint64_t> beu_inject1_addr_p_;
+
+    cci::cci_param<bool>     beu_inject2_enable_p_;
+    cci::cci_param<unsigned> beu_inject2_core_p_;
+    cci::cci_param<unsigned> beu_inject2_src_p_;
+    cci::cci_param<uint64_t> beu_inject2_addr_p_;
 
     // -----------------------------------------------------------------------
     // External boundary (chiplet-facing).  Inbound masters are forwarded to the
@@ -84,10 +117,13 @@ public:
     bootrom         bootrom_{"bootrom"};
     scratchpad_ram   scratch{"scratchpad_ram"};
     cpu_ctrl        cpu_ctrl_{"cpu_ctrl"};
+    dma             dma_{"dma"};
+    memory_zeroer   zeroer{"memory_zeroer"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
-    sc_core::sc_vector<uart>           uart{"uart", NUM_UART};
+    sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
     sc_core::sc_vector<wdt>            wdt{"wdt", NUM_HARTS};
+    sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
 #endif
@@ -106,18 +142,38 @@ public:
     // -----------------------------------------------------------------------
     addr_router<64, 64>         front_port_router{"front_port_router", 7};
     addr_router<64, 32>         wdt_demux{"wdt_demux", NUM_HARTS};
+    // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
+    addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     addr_router<64, 32>         periph_router{"periph_router", 11};
     width_adapter<64, 32>       wa_bootrom{"wa_bootrom"};
     width_adapter<64, 32>       wa_scratch{"wa_scratch"};
     width_adapter<64, 32>       wa_plic{"wa_plic"};
     width_adapter<64, 32>       wa_clint{"wa_clint"};
+    // DMA and memory_zeroer share the fabric's single (simple, single-bind)
+    // `to_data_accel_ctrl` initiator socket -- both live in the RTL's
+    // 0xC003_8000..0xC0040000 data-accelerator CSR window (see
+    // DACCEL_DMA_ZEROER_BASE/_END in smc_fabric.h) -- so their CSR targets
+    // fan out through a shared 2-entry addr_router instead of each binding
+    // to_data_accel_ctrl directly (which only the first bind would win):
+    //  - out[0] "memory_zeroer": rebases the absolute 0xC003_82xx window to
+    //    the IP's 0-based register offsets (and adapts 64->32).  A plain
+    //    width_adapter would NOT rebase, so the IP would see 0xC003_8200
+    //    instead of offset 0 and reject every access.
+    //  - out[1] "dma": rebases the absolute 0xC003_80xx window the same way
+    //    (dma::normalize_addr() also tolerates absolute addresses, so this
+    //    is belt-and-suspenders, not strictly required); dma_.reg_socket is
+    //    already 32-bit, so out[1] binds it directly (no width_adapter).
+    // Separately, memory_zeroer's own DMA master drives the fabric's 64-bit
+    // `data_accel_in` target with absolute addresses the fabric re-decodes,
+    // so a verbatim width_adapter (no rebase) is correct for that path.
+    addr_router<64, 32>         daccel_router{"daccel_router", 2};
+    width_adapter<32, 64>       wa_zeroer_dma{"wa_zeroer_dma"};
     interrupt_aggregator        intagg;
 
     // -----------------------------------------------------------------------
     // Stubs for unmodeled / RTL-connected blocks
     // -----------------------------------------------------------------------
-    stub_target<64> stub_beu{"stub_beu"};
-    stub_target<64> stub_dma{"stub_dma"};
+    stub_target<64> stub_wdt_debug{"stub_wdt_debug"};
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};
@@ -219,6 +275,14 @@ public:
     // Dummy sinks for every stub_target's irq_o (stubs don't drive the PLIC in
     // Phase 1; their irq_drive_method still requires a bound port).
     sc_core::sc_vector<sc_core::sc_signal<bool>> stub_irq_sig{"stub_irq_sig", 20};
+    // BEU IRQ: local (NMI-like) is wired to cluster.beu_nmi_in in Phase C;
+    // PLIC outputs stay on sinks — OCA RTL uses the per-tile buserror/NMI path
+    // (cpu_interrupts.adoc has no BEU PLIC source ID).
+    sc_core::sc_vector<sc_core::sc_signal<bool>> beu_irq_local{"beu_irq_local", NUM_BEU};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> beu_irq_plic{"beu_irq_plic", NUM_BEU};
+// memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
+// dummy sink for now; can later be routed into the PLIC/aggregator.
+sc_core::sc_signal<bool, sc_core::SC_MANY_WRITERS> sig_zeroer_irq{"sig_zeroer_irq"};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_sw{"sig_irq_sw", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_timer{"sig_irq_timer", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_ext{"sig_irq_ext", NUM_PLIC_CTX};
@@ -238,7 +302,6 @@ private:
     // initiator (their internal BW port); nothing drives them in the platform,
     // so bind idle initiators that never issue transactions.
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_log_init_{"idle_log_init_"};
-    tlm_utils::simple_initiator_socket<smc_platform, 64> idle_daccel_init_{"idle_daccel_init_"};
     // In cluster-OFF builds there is no cluster.mmio to bind fabric.mmio_in, so
     // an idle initiator satisfies the fabric's BW port instead.
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_mmio_init_{"idle_mmio_init_"};

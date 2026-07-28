@@ -188,11 +188,14 @@ fi
 # smc_fabric is listed last; it does not use CCI and its run_tests.sh will
 # simply ignore CCI_HOME even if the variable happens to be set.
 ALL_IPS=(
+    "beu:${SCRIPT_DIR}/peripherals/beu"
     "bootrom:${SCRIPT_DIR}/peripherals/bootrom"
     "clint:${SCRIPT_DIR}/peripherals/clint"
     "i2c_controller:${SCRIPT_DIR}/peripherals/i2c_controller"
     "cpu_ctrl:${SCRIPT_DIR}/peripherals/cpu_ctrl"
     "i3c_controller:${SCRIPT_DIR}/peripherals/i3c_controller"
+    "dma:${SCRIPT_DIR}/peripherals/dma"
+    "memory_zeroer:${SCRIPT_DIR}/peripherals/memory_zeroer"
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"

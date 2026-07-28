@@ -16,6 +16,7 @@
 #
 #  smc-unit-tests  Run every SMC peripheral unit test via each
 #                  smc/peripherals/<ip>/run_tests.sh (needs build-deps).
+#                  Includes the new DMA peripheral unit tests.
 #                  The cpu_cluster is skipped — it requires the Tenstorrent-
 #                  internal Whisper ISS (WHISPER_HOME); enable it locally once
 #                  WHISPER_HOME is available.
@@ -25,6 +26,8 @@
 #
 #  smc-vp            Build the smc-vp executable (needs build-deps + Whisper ISS
 #                    + RISC-V bare-metal toolchain).  Runs the smc-vp-tests
+#                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh,
+#                    including the new smc-dma-test.
 #                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -254,7 +257,7 @@ jobs:
           CCI_HOME:     ${{ env.CCI_HOME }}
         run: |
           smc/run_all_smc_tests.sh \
-            bootrom clint i3c_controller plic reset_unit scratchpad_ram
+            bootrom clint dma i3c_controller plic reset_unit scratchpad_ram
 
       - name: Upload SMC peripheral test logs
         if: always()
@@ -346,10 +349,34 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /home/runner/whisper
-          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          # The "-libs4" suffix versions the build RECIPE, not the Whisper
+          # revision: entries saved by the earlier recipe contain a tree with
+          # only librvcore.a built.  Bump it whenever the artifact set built
+          # below changes, so stale/incomplete entries are not reused.
+          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libs4
+
+      # A cache hit is not proof the tree is usable: actions/cache saves the
+      # directory in a post-job step even when the job failed, so one bad build
+      # can be cached and then restored on every subsequent run, permanently
+      # skipping the build step below.  Gate that step on the artifacts really
+      # being present instead of on cache-hit.
+      - name: Check Whisper artifacts
+        id: whisper-libs
+        run: |
+          complete=true
+          for lib in build-$(uname -s)/librvcore.a \
+                     virtual_memory/libvirtual_memory.a \
+                     pci/libpci.a \
+                     third_party/softfloat/build/RISCV-GCC/softfloat.a; do
+            if [ ! -f "/home/runner/whisper/${lib}" ]; then
+              echo "missing: ${lib}"
+              complete=false
+            fi
+          done
+          echo "complete=${complete}" >> "$GITHUB_OUTPUT"
 
       - name: Build Whisper
-        if: steps.cache-whisper.outputs.cache-hit != 'true'
+        if: steps.whisper-libs.outputs.complete != 'true'
         env:
           GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -358,13 +385,35 @@ jobs:
           mkdir -p /tmp/boost/include
           ln -s /usr/include/boost /tmp/boost/include/boost
 
-          git clone \
-            https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
-            /home/runner/whisper
+          # This step also runs when the cache restored an INCOMPLETE tree, so
+          # the clone target may already exist -- reuse it rather than failing
+          # with "destination path already exists".  No fetch is needed: the
+          # cache key pins WHISPER_REV, so the checkout is already at that rev.
+          if [ -d /home/runner/whisper/.git ]; then
+            echo "reusing restored Whisper checkout; building missing artifacts"
+          else
+            git clone \
+              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              /home/runner/whisper
+          fi
           cd /home/runner/whisper
           git checkout ${{ env.WHISPER_REV }}
-          make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
-            build-$(uname -s)/librvcore.a -j$(nproc)
+          # smc/cpu_cluster/external/whisper-cmake/CMakeLists.txt imports FOUR
+          # archives: librvcore.a plus the softfloat/pci/virtual_memory
+          # sub-libs.  Whisper's GNUmakefile wires those three as prerequisites
+          # of the `whisper` executable only -- not of librvcore.a -- so asking
+          # for librvcore.a alone silently skips them and the CMake configure
+          # step later fails with "Whisper artifact not found".  They also
+          # cannot be named as relative goals ("No rule to make target"): the
+          # makefile defines them by absolute path, one of which even carries a
+          # double slash ($PWD/virtual_memory//libvirtual_memory.a).  So add a
+          # single aggregate goal expressed in the makefile's own variables --
+          # no hard-coded paths, and no executable link.
+          printf 'smc_vp_whisper_libs: $(BUILD_DIR)/librvcore.a $(soft_float_lib) $(pci_lib) $(virtual_memory_lib)\n' \
+            > /tmp/whisper-smc-libs.mk
+          make -f GNUmakefile -f /tmp/whisper-smc-libs.mk \
+            MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
+            smc_vp_whisper_libs -j$(nproc)
 
       - name: Run SMC VP tests
         env:

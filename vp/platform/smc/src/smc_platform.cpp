@@ -25,6 +25,7 @@ static constexpr uint64_t A_SCRATCH      = 0xC006'0000ULL;
 static constexpr uint64_t A_PLIC         = 0xC080'0000ULL;
 static constexpr uint64_t A_CLINT        = 0xC0C0'0000ULL;
 static constexpr uint64_t A_BEU          = 0xC0C1'0000ULL;
+static constexpr uint64_t A_DMA          = 0xC003'8000ULL;  // dma_cfg default base_addr
 
 static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
 static constexpr uint64_t A_I3C         = 0xC000'5000ULL;
@@ -41,6 +42,35 @@ static constexpr uint64_t A_PERIPH_EXT_HI  = 0xC080'0000ULL;
 // ---------------------------------------------------------------------------
 smc_platform::smc_platform(sc_core::sc_module_name name)
     : sc_core::sc_module(name)
+    // Test-only BEU error-injection hook (Phase D1); see the member
+    // declarations in smc_platform.hpp for the full rationale.
+    , beu_inject0_enable_p_("beu_inject0_enable", false,
+          "Test-only: if true, inject BEU error #0 at elaboration.")
+    , beu_inject0_core_p_("beu_inject0_core", 0u,
+          "Target BEU instance (0..NUM_BEU-1) for injection #0.")
+    , beu_inject0_src_p_("beu_inject0_src", 7u,
+          "beu_src enum value (bit position) for injection #0; default 7 = "
+          "DCACHE_UNCORRECTABLE.")
+    , beu_inject0_addr_p_("beu_inject0_addr", uint64_t{0},
+          "Physical address recorded by injection #0 (masked to 56 bits).")
+    , beu_inject1_enable_p_("beu_inject1_enable", false,
+          "Test-only: if true, inject BEU error #1 at elaboration.")
+    , beu_inject1_core_p_("beu_inject1_core", 0u,
+          "Target BEU instance (0..NUM_BEU-1) for injection #1.")
+    , beu_inject1_src_p_("beu_inject1_src", 5u,
+          "beu_src enum value (bit position) for injection #1; default 5 = "
+          "DCACHE_TLBUS.")
+    , beu_inject1_addr_p_("beu_inject1_addr", uint64_t{0},
+          "Physical address recorded by injection #1 (masked to 56 bits).")
+    , beu_inject2_enable_p_("beu_inject2_enable", false,
+          "Test-only: if true, inject BEU error #2 at elaboration.")
+    , beu_inject2_core_p_("beu_inject2_core", 1u,
+          "Target BEU instance (0..NUM_BEU-1) for injection #2.")
+    , beu_inject2_src_p_("beu_inject2_src", 1u,
+          "beu_src enum value (bit position) for injection #2; default 1 = "
+          "ICACHE_TLBUS.")
+    , beu_inject2_addr_p_("beu_inject2_addr", uint64_t{0},
+          "Physical address recorded by injection #2 (masked to 56 bits).")
     , intagg("intagg", NUM_PERIPH_IRQ, NUM_PLIC_SRC,
              std::vector<unsigned>{
                  // i3c[0..5] -> peripheral bits 17:12
@@ -92,9 +122,17 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Fabric reset -------------------------------------------------------
     fabric.rst_n_i.bind(rst_n_sig);
 
-    // Idle initiators satisfy the fabric's log_in / data_accel_in BW ports.
-    idle_log_init_   .bind(fabric.log_in);
-    idle_daccel_init_.bind(fabric.data_accel_in);
+    // Idle initiator satisfies the fabric's log_in BW port (nothing drives
+    // log_in in this platform).
+    //
+    // fabric.data_accel_in is a tlm_utils::multi_passthrough_target_socket
+    // (multi-bind) specifically because two independent masters both write
+    // results back into local memory through it: smc_dma's own data-mover
+    // (dma_.mst_socket, bound here) and the memory_zeroer's DMA master
+    // (wa_zeroer_dma.init, bound in the peripheral section below). See
+    // smc_fabric.h's data_accel_in declaration for the multi-bind rationale.
+    idle_log_init_ .bind(fabric.log_in);
+    dma_.mst_socket.bind(fabric.data_accel_in);
 
     // -- front_port_router: fabric.to_front_port (cluster.data is routed to a
     //    dedicated multi_stub_target below, not through the shared router, so
@@ -141,7 +179,51 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     wa_plic.init.bind(plic_.reg_socket);
     front_port_router.out[5].bind(wa_clint.tgt);
     wa_clint.init.bind(clint_.reg_socket);
-    front_port_router.out[6].bind(stub_beu.reg_socket);
+    // BEU: front_port out[6] -> beu_router -> beu[N] (4 KiB each).
+    // front_port_router already rebases A_BEU away, so beu_router sees
+    // offsets in [0, 0x10000) and further rebases each 4 KiB window to 0.
+    front_port_router.out[6].bind(beu_router.tgt);
+    for (unsigned n = 0; n < NUM_BEU; ++n) {
+        beu_router.add_route(n, n * 0x1000ULL, 0x1000,
+                             std::string("beu") + std::to_string(n));
+        beu_router.out[n].bind(beu_[n].reg_socket);
+        beu_[n].rst_n_i.bind(rst_n_sig);
+        beu_[n].irq_local_o.bind(beu_irq_local[n]);
+        beu_[n].irq_plic_o.bind(beu_irq_plic[n]);
+    }
+
+    // -- Test-only BEU error injection (Phase D1) --------------------------
+    // Runs at elaboration (before sc_start()), so any enabled injection is
+    // already latched into ACCRUED/CAUSE/PHYS_ADDR by the time firmware's
+    // first register read happens.  See the CCI param declarations in
+    // smc_platform.hpp for the full rationale; every slot is disabled
+    // (enable=false) unless a test's .ini opts in.
+    auto inject_beu_test_error = [this](bool enable, unsigned core,
+                                        unsigned src, uint64_t addr) {
+        if (!enable) return;
+        if (core >= NUM_BEU) {
+            SIM_LOG_WARN(this, "beu test-inject: core index " << core
+                              << " out of range (NUM_BEU=" << NUM_BEU
+                              << "); injection ignored");
+            return;
+        }
+        SIM_LOG_INFO(this, "beu test-inject: core=" << core
+                          << " src=" << src
+                          << " addr=0x" << std::hex << addr << std::dec);
+        beu_[core].inject_error(static_cast<beu_src>(src), addr);
+    };
+    inject_beu_test_error(beu_inject0_enable_p_.get_value(),
+                          beu_inject0_core_p_.get_value(),
+                          beu_inject0_src_p_.get_value(),
+                          beu_inject0_addr_p_.get_value());
+    inject_beu_test_error(beu_inject1_enable_p_.get_value(),
+                          beu_inject1_core_p_.get_value(),
+                          beu_inject1_src_p_.get_value(),
+                          beu_inject1_addr_p_.get_value());
+    inject_beu_test_error(beu_inject2_enable_p_.get_value(),
+                          beu_inject2_core_p_.get_value(),
+                          beu_inject2_src_p_.get_value(),
+                          beu_inject2_addr_p_.get_value());
 
     // -- periph_router: fabric.to_periph -----------------------------------
     fabric.to_periph.bind(periph_router.tgt);
@@ -163,15 +245,33 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[2].bind(i2c[0].reg_socket);
     periph_router.out[3].bind(i2c[1].reg_socket);
     periph_router.out[4].bind(i2c[2].reg_socket);
-    periph_router.out[5].bind(uart[0].reg_socket);
-    periph_router.out[6].bind(uart[1].reg_socket);
-    periph_router.out[7].bind(uart[2].reg_socket);
-    periph_router.out[8].bind(uart[3].reg_socket);
+    periph_router.out[5].bind(uart_[0].reg_socket);
+    periph_router.out[6].bind(uart_[1].reg_socket);
+    periph_router.out[7].bind(uart_[2].reg_socket);
+    periph_router.out[8].bind(uart_[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
     periph_router.out[10].bind(stub_periph_misc.reg_socket);
 
+    // -- DMA + memory_zeroer (data-accelerator CSR + DMA paths) ------------
+    // CSR path: fabric's 64-bit `to_data_accel_ctrl` initiator is a single-
+    // bind socket, but both DMA and memory_zeroer live in the RTL's shared
+    // 0xC003_8000..0xC0040000 data-accelerator CSR window, so they fan out
+    // through a shared 2-entry addr_router that rebases each absolute window
+    // down to the IP's 0-based register offsets (and adapts 64->32).
+    fabric.to_data_accel_ctrl.bind(daccel_router.tgt);
+    daccel_router.add_route(0, memory_zeroer_cfg::DEFAULT_BASE_ADDR,
+                            memory_zeroer_cfg::WINDOW_SIZE, "memory_zeroer");
+    daccel_router.out[0].bind(zeroer.reg_socket);
+    daccel_router.add_route(1, A_DMA, dma_cfg::WINDOW_SIZE, "dma");
+    daccel_router.out[1].bind(dma_.reg_socket);
+    // DMA path: the zeroer's 32-bit initiator injects zero-fill writes back
+    // into the fabric via the 64-bit `data_accel_in` target (width adapter).
+    zeroer.dma_socket.bind(wa_zeroer_dma.tgt);
+    wa_zeroer_dma.init.bind(fabric.data_accel_in);
+    zeroer.rst_n_i.bind(rst_n_sig);
+    zeroer.irq_o.bind(sig_zeroer_irq);
+
     // -- Fabric initiator stubs -------------------------------------------
-    fabric.to_data_accel_ctrl     .bind(stub_dma.reg_socket);
     fabric.to_dfd_apb              .bind(stub_dfd.reg_socket);
     fabric.to_mailbox              .bind(stub_mbox.reg_socket);
     fabric.to_dft_csr              .bind(stub_dft.reg_socket);
@@ -222,21 +322,21 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
 
     // -- UART port binding -------------------------------------------------
     for (unsigned i = 0; i < NUM_UART; ++i) {
-        uart[i].rst_n_i.bind(rst_n_sig);
-        uart[i].rx_i  .bind(uart_rx[i]);
-        uart[i].cts_ni.bind(uart_cts[i]);
-        uart[i].dsr_ni.bind(uart_dsr[i]);
-        uart[i].ri_ni .bind(uart_ri[i]);
-        uart[i].dcd_ni.bind(uart_dcd[i]);
-        uart[i].tx_o   .bind(uart_tx[i]);
-        uart[i].rts_no .bind(uart_rts[i]);
-        uart[i].dtr_no .bind(uart_dtr[i]);
-        uart[i].out1_no.bind(uart_out1[i]);
-        uart[i].out2_no.bind(uart_out2[i]);
-        uart[i].rxrdy_o.bind(uart_rxrdy[i]);
-        uart[i].txrdy_o.bind(uart_txrdy[i]);
-        uart[i].err_o   .bind(uart_err[i]);
-        uart[i].irq_o   .bind(uart_irq[i]);
+        uart_[i].rst_n_i.bind(rst_n_sig);
+        uart_[i].rx_i  .bind(uart_rx[i]);
+        uart_[i].cts_ni.bind(uart_cts[i]);
+        uart_[i].dsr_ni.bind(uart_dsr[i]);
+        uart_[i].ri_ni .bind(uart_ri[i]);
+        uart_[i].dcd_ni.bind(uart_dcd[i]);
+        uart_[i].tx_o   .bind(uart_tx[i]);
+        uart_[i].rts_no .bind(uart_rts[i]);
+        uart_[i].dtr_no .bind(uart_dtr[i]);
+        uart_[i].out1_no.bind(uart_out1[i]);
+        uart_[i].out2_no.bind(uart_out2[i]);
+        uart_[i].rxrdy_o.bind(uart_rxrdy[i]);
+        uart_[i].txrdy_o.bind(uart_txrdy[i]);
+        uart_[i].err_o   .bind(uart_err[i]);
+        uart_[i].irq_o   .bind(uart_irq[i]);
     }
 
     // -- I3C port binding --------------------------------------------------
@@ -310,7 +410,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Bind every stub_target's irq_o to a dummy sink --------------------
     {
         stub_target<64>* stubs64[] = {
-            &stub_beu, &stub_dma, &stub_dfd, &stub_mbox,
+            &stub_wdt_debug, &stub_dfd, &stub_mbox,
             &stub_dft, &stub_sysmem, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
             &stub_xR, &stub_ibf, &stub_obf,
         };
@@ -351,6 +451,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         cluster.irq_timer[h].bind(sig_irq_timer[h]);
         cluster.irq_ext[h]  .bind(sig_irq_ext[h]);
         cluster.wdt_timeout_cluster_i[h].bind(wdt_sticky[h]);
+        // Phase C: BEU local (NMI-like) -> cluster beu_nmi_in.
+        // irq_plic stays on beu_irq_plic sinks — OCA RTL routes BEU to the
+        // per-tile buserror/NMI line, not the PLIC vector (see interrupts.adoc).
+        cluster.beu_nmi_in[h].bind(beu_irq_local[h]);
     }
     cluster.rst_primary_n_i.bind(sig_rst_primary_smc);
     cluster.wdt_first_timeout_o.bind(sig_wdt_first);
@@ -372,6 +476,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         _oss << "smc_platform elaborated: "
              << NUM_UART << " uart, " << NUM_I2C << " i2c, "
              << NUM_I3C << " i3c, " << NUM_HARTS << " wdt, "
+             << NUM_BEU << " beu, dma, "
              << NUM_PLIC_SRC << " plic sources";
 #ifdef SMC_PLATFORM_WITH_CLUSTER
         _oss << ", cluster ON";

@@ -81,6 +81,8 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
     irq_timer.init(nh);
     irq_ext  .init(nh);
     wdt_timeout_cluster_i.init(nh);
+    beu_nmi_in.init(nh);
+    beu_nmi_prev_.assign(nh, false);
     wfi_event_       .init(nh);
     core_enable_event_.init(nh);
 
@@ -176,6 +178,16 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
             [this, i]() { this->irq_aggregator(i); },
             sc_core::sc_gen_unique_name("irq_agg"),
             &opts);
+
+        // SC_METHOD: BEU local/NMI rising edge -> inject_nmi.
+        sc_core::sc_spawn_options nmi_opts;
+        nmi_opts.spawn_method();
+        nmi_opts.dont_initialize();
+        nmi_opts.set_sensitivity(&beu_nmi_in[i]);
+        sc_core::sc_spawn(
+            [this, i]() { this->beu_nmi_method(i); },
+            sc_core::sc_gen_unique_name("beu_nmi"),
+            &nmi_opts);
     }
 }
 
@@ -294,6 +306,19 @@ void smc_cpu_cluster::irq_aggregator(unsigned i)
         harts_[i]->clear_wfi();                    // idempotent
         wfi_event_[i].notify(sc_core::SC_ZERO_TIME);
     }
+}
+
+// ===========================================================================
+// SC_METHOD: BEU local interrupt (NMI-like).  BEU irq_local is level-sticky;
+// Whisper NMI is a one-shot pending event, so we fire only on the rising edge.
+// ===========================================================================
+void smc_cpu_cluster::beu_nmi_method(unsigned i)
+{
+    const bool now = beu_nmi_in[i].read();
+    if (now && !beu_nmi_prev_[i]) {
+        inject_nmi(i, /*cause=*/0);
+    }
+    beu_nmi_prev_[i] = now;
 }
 
 // ===========================================================================

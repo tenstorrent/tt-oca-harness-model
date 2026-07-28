@@ -18,10 +18,13 @@
 #  build-deps-rhel8      Build + cache SystemC 3.0.2, OpenSSL 3.3.x, CCI 1.0.2
 #  sep-vp-rhel8          Build the sep-vp binary
 #  sep-unit-tests-rhel8  Run SEP peripheral unit tests
-#  smc-unit-tests-rhel8  Run SMC peripheral unit tests
+#  smc-unit-tests-rhel8  Run SMC peripheral unit tests (includes the new DMA
+#                        peripheral unit tests)
 #  smc-fabric-tests-rhel8  Run SMC Fabric tests
 #
 #  smc-vp-rhel8          Build smc-vp and run SMC VP firmware tests (needs
+#                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain),
+#                        including the new smc-dma-test.
 #                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain).
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -441,7 +444,7 @@ jobs:
           SKIP_ASAN:    "1"
         run: |
           smc/run_all_smc_tests.sh \
-            bootrom clint i3c_controller plic reset_unit scratchpad_ram
+            bootrom clint dma i3c_controller plic reset_unit scratchpad_ram
 
       - name: Upload SMC peripheral test logs
         if: always()
@@ -584,15 +587,49 @@ jobs:
           path: ${{ env.CCI_HOME }}
           key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
 
+      # smc-vp links the whole VP tree, including the SEP peripherals that call
+      # peripheral_find_openssl().  RHEL 8 ships no openssl-devel in this image,
+      # so the from-source OpenSSL 3 built by build-deps-rhel8 is required here
+      # too -- not just in the SEP jobs.
+      - name: Restore OpenSSL 3 cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENSSL3_HOME }}
+          key: openssl-${{ env.OPENSSL3_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
       - name: Cache Whisper
         id: cache-whisper-rhel8
         uses: actions/cache@v4
         with:
           path: /home/runner/whisper
-          key: whisper-${{ env.WHISPER_REV }}-rhel8-cxx${{ env.CXX_STD }}
+          # The "-libs4" suffix versions the build RECIPE, not the Whisper
+          # revision: entries saved by the earlier recipe contain a tree with
+          # only librvcore.a built.  Bump it whenever the artifact set built
+          # below changes, so stale/incomplete entries are not reused.
+          key: whisper-${{ env.WHISPER_REV }}-rhel8-cxx${{ env.CXX_STD }}-libs4
+
+      # A cache hit is not proof the tree is usable: actions/cache saves the
+      # directory in a post-job step even when the job failed, so one bad build
+      # can be cached and then restored on every subsequent run, permanently
+      # skipping the build step below.  Gate that step on the artifacts really
+      # being present instead of on cache-hit.
+      - name: Check Whisper artifacts
+        id: whisper-libs-rhel8
+        run: |
+          complete=true
+          for lib in build-$(uname -s)/librvcore.a \
+                     virtual_memory/libvirtual_memory.a \
+                     pci/libpci.a \
+                     third_party/softfloat/build/RISCV-GCC/softfloat.a; do
+            if [ ! -f "/home/runner/whisper/${lib}" ]; then
+              echo "missing: ${lib}"
+              complete=false
+            fi
+          done
+          echo "complete=${complete}" >> "$GITHUB_OUTPUT"
 
       - name: Build Whisper
-        if: steps.cache-whisper-rhel8.outputs.cache-hit != 'true'
+        if: steps.whisper-libs-rhel8.outputs.complete != 'true'
         env:
           GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BOOST_ROOT: ${{ env.BOOST_HOME }}
@@ -603,13 +640,35 @@ jobs:
           mkdir -p /tmp/boost/include
           ln -s "$BOOST_HOME/include/boost" /tmp/boost/include/boost
 
-          git clone \
-            https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
-            /home/runner/whisper
+          # This step also runs when the cache restored an INCOMPLETE tree, so
+          # the clone target may already exist -- reuse it rather than failing
+          # with "destination path already exists".  No fetch is needed: the
+          # cache key pins WHISPER_REV, so the checkout is already at that rev.
+          if [ -d /home/runner/whisper/.git ]; then
+            echo "reusing restored Whisper checkout; building missing artifacts"
+          else
+            git clone \
+              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              /home/runner/whisper
+          fi
           cd /home/runner/whisper
           git checkout ${{ env.WHISPER_REV }}
-          make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
-            build-$(uname -s)/librvcore.a -j$(nproc)
+          # smc/cpu_cluster/external/whisper-cmake/CMakeLists.txt imports FOUR
+          # archives: librvcore.a plus the softfloat/pci/virtual_memory
+          # sub-libs.  Whisper's GNUmakefile wires those three as prerequisites
+          # of the `whisper` executable only -- not of librvcore.a -- so asking
+          # for librvcore.a alone silently skips them and the CMake configure
+          # step later fails with "Whisper artifact not found".  They also
+          # cannot be named as relative goals ("No rule to make target"): the
+          # makefile defines them by absolute path, one of which even carries a
+          # double slash ($PWD/virtual_memory//libvirtual_memory.a).  So add a
+          # single aggregate goal expressed in the makefile's own variables --
+          # no hard-coded paths, and no executable link.
+          printf 'smc_vp_whisper_libs: $(BUILD_DIR)/librvcore.a $(soft_float_lib) $(pci_lib) $(virtual_memory_lib)\n' \
+            > /tmp/whisper-smc-libs.mk
+          make -f GNUmakefile -f /tmp/whisper-smc-libs.mk \
+            MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT=/tmp/boost \
+            smc_vp_whisper_libs -j$(nproc)
 
       - name: Run SMC VP tests
         env:
@@ -617,6 +676,9 @@ jobs:
           CCI_HOME:             ${{ env.CCI_HOME }}
           WHISPER_HOME:         /home/runner/whisper
           BOOST_DIR:            ${{ env.BOOST_HOME }}
+          BOOST_ROOT:           ${{ env.BOOST_HOME }}
+          OPENSSL_ROOT:         ${{ env.OPENSSL3_HOME }}
+          OPENSSL_ROOT_DIR:     ${{ env.OPENSSL3_HOME }}
           RISCV_TOOLCHAIN_PATH: /home/runner/riscv/toolchain
         run: |
           cd sw/smc-vp-tests

@@ -37,6 +37,9 @@ add_subdirectory(${SMC_IP_DIR}/i2c_controller   ${CMAKE_CURRENT_BINARY_DIR}/ip_i
 add_subdirectory(${SMC_IP_DIR}/i3c_controller  ${CMAKE_CURRENT_BINARY_DIR}/ip_i3c)
 add_subdirectory(${SMC_IP_DIR}/cpu_ctrl         ${CMAKE_CURRENT_BINARY_DIR}/ip_cpu_ctrl)
 add_subdirectory(${SMC_IP_DIR}/wdt              ${CMAKE_CURRENT_BINARY_DIR}/ip_wdt)
+add_subdirectory(${SMC_IP_DIR}/dma              ${CMAKE_CURRENT_BINARY_DIR}/ip_dma)
+add_subdirectory(${SMC_IP_DIR}/memory_zeroer    ${CMAKE_CURRENT_BINARY_DIR}/ip_memory_zeroer)
+add_subdirectory(${SMC_IP_DIR}/beu              ${CMAKE_CURRENT_BINARY_DIR}/ip_beu)
 add_subdirectory(${_smc_root}/smc_fabric        ${CMAKE_CURRENT_BINARY_DIR}/ip_smc_fabric)
 
 # The cluster's own PLIC-integration test target (smc_plic_ip) is redundant
@@ -86,6 +89,9 @@ target_link_libraries(smc-vp
         smc_i3c_controller
         smc_cpu_ctrl
         smc_wdt
+        smc_dma
+        smc_beu
+        smc_memory_zeroer
         smc_cpu_cluster
         SystemC::systemc
         SystemC::cci

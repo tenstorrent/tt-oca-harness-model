@@ -1171,7 +1171,7 @@ The **CLINT IP** is not modeled here; `cluster_tb` only toggles
 | `PLIC.ctx_out[2*h + 0]`        | `irq_ext[i]` (`sc_in<bool>`)                   | **Integration green** (`cluster_tb` §8.7): CPU MMIO configures PLIC; TB drives `src_in`; firmware ISR claim/complete. Full PLIC matrix: `plic_tb`. S-mode context open. |
 | `PLIC.ctx_out[2*h + 1]`        | `irq_ext_s[i]` (planned port)                  | Open — see `03_CPU_Cluster_Test_Plan.md §13.1`                                                     |
 | `PLIC.seip / claim-complete`   | shared with `irq_ext` + `mmio`                 | Open — folded into the S-mode leg above                                                            |
-| `BEU.nmi_out[i]`               | `beu_nmi_in[i]` (planned port; trivial to add) | Cluster has `iss_hart::inject_nmi(cause)` ready; awaiting BEU IP and the port                      |
+| `BEU.irq_local_o[i]`           | `beu_nmi_in[i]` | Rising edge → `inject_nmi(i)`; wired in `smc_platform` |
 | `Debug Module → cluster`       | `debug_irq_in` (planned)                       | Awaiting Debug Module IP                                                                            |
 | `Reset Unit → cluster`         | reset network (Cold / Cool / Core / FLR / WDT) | Awaiting Reset Unit IP; cluster currently consumes a single boolean `rst_n_i`                       |
 | `Boot ROM` + `Scratchpad SRAM` | `data` / `ifetch` initiator sockets            | Init handshake via `ScratchpadSramStub` in `cluster_tb`; full scratchpad map + Boot ROM still open |

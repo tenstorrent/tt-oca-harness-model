@@ -22,6 +22,7 @@
 //        irq_sw[i]    (= msip_in[i]    in §3.7 -- CLINT software IRQ)
 //        irq_timer[i] (= mtip_in[i]    in §3.7 -- CLINT timer IRQ)
 //        irq_ext[i]   (= meip_in[i]    in §3.7 -- PLIC M-mode external)
+//        beu_nmi_in[i](= BEU local/NMI line; rising edge -> inject_nmi)
 //
 //   * Debug API for the testbench / debug master:
 //        load_elf, hart(i).{step,reset,read_csr,inject_nmi,last_commit, ...}
@@ -118,6 +119,10 @@ public:
     sc_core::sc_vector<sc_core::sc_in<bool>>                irq_sw   {"irq_sw"};
     sc_core::sc_vector<sc_core::sc_in<bool>>                irq_timer{"irq_timer"};
     sc_core::sc_vector<sc_core::sc_in<bool>>                irq_ext  {"irq_ext"};
+    // Per-hart BEU local (NMI-like) input.  Rising edge schedules
+    // inject_nmi(i); level is owned by the BEU (sticky until SW clears
+    // ACCRUED).  Named to match LLD §3.7 `beu_nmi_in`.
+    sc_core::sc_vector<sc_core::sc_in<bool>>                beu_nmi_in{"beu_nmi_in"};
 
     // Stage-2 WDT (RTL smc_cpu_ctrl_wrap): countdown while per-core stage-1
     // sticky rst is high.  first = OR(sticky); second → reset_unit.
@@ -186,6 +191,7 @@ private:
     void wdt_stage2_tick_method();
     void wdt_stage2_output_method();
     void wdt_stage2_input_method();
+    void beu_nmi_method(unsigned i);    // SC_METHOD: rising edge -> inject_nmi
 
     // -- Memory callback bodies (registered on whisper_sys_) ----------------
     bool mem_read_cb (uint64_t addr, unsigned size, uint64_t& data);
@@ -220,6 +226,8 @@ private:
     sc_core::sc_vector<sc_core::sc_event>             core_enable_event_{"core_enable_event"};
     std::vector<tlm_utils::tlm_quantumkeeper>         qk_;
     std::vector<uint8_t>                              mem_buf_;
+    // Rising-edge detect for beu_nmi_in (level-sensitive BEU output).
+    std::vector<bool>                                 beu_nmi_prev_;
 
     // Set by hart_thread() before each step() so the memory callbacks
     // (which run synchronously inside singleStep) know whose quantum

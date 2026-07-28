@@ -2,16 +2,13 @@
 *.o
 *.dump
 *.sym
-smc-bootrom-test
-smc-clint-test
-smc-cpu-ctrl-test
-smc-i2c-test
-smc-i3c-test
-smc-plic-test
-smc-reset-test
-smc-scratch-test
-smc-uart-test
-# ELF TARGET names (underscore) produced by per-test Makefiles
-smc_wdt_test
-smc_i2c_loopback_test
-smc_i3c_loopback_test
+*.log
+
+# Compiled test binaries.  Every test's Makefile builds TARGET = smc_<name>_test
+# (underscored -- see e.g. smc-beu-test/Makefile -- specifically so it never
+# collides with the hyphenated smc-<name>-test/ source directory of the same
+# test).  This one glob covers every test's binary; do NOT add per-test
+# hyphenated entries here (smc-<name>-test would match the source directory
+# itself, not its binary, and has silently hidden whole test directories from
+# `git status`/`git add` in the past).
+smc_*_test

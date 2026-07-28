@@ -14,11 +14,17 @@ cov_build/
 *.out
 *.exe
 
-# CMake generated files
+# CMake generated files.  NOTE: no bare "Makefile" entry here -- an unscoped
+# "Makefile" pattern matches ANY file named exactly "Makefile" anywhere in the
+# repo (git .gitignore patterns with no "/" match at every depth), which
+# silently swallows hand-written Makefiles too (e.g. sw/smc-vp-tests/*/Makefile,
+# sw/sep-vp-tests/*/Makefile).  CMake's generated Makefile always lands inside
+# a build directory, which is already covered by the build/ / build_*/ /
+# cov_build/ patterns above -- a separate bare "Makefile" line is both
+# redundant for its intended purpose and actively harmful for everything else.
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
 CTestTestfile.cmake
 Testing/
 
@@ -40,14 +46,18 @@ coverage-report/
 *.swo
 *~
 
-# Local dependency paths (see smc/peripherals/uart/deps.env.example)
+# Local dependency paths (see smc/peripherals/*/deps.env.example)
 smc/peripherals/uart/deps.env
+smc/peripherals/beu/deps.env
 
 # Local dependency paths (see smc/peripherals/cpu_ctrl/deps.env.example)
 smc/peripherals/cpu_ctrl/deps.env
 
 # Local dependency paths (see smc/cpu_cluster/deps.env.example)
 smc/cpu_cluster/deps.env
+
+# Local dependency paths (see smc/peripherals/memory_zeroer/deps.env.example)
+smc/peripherals/memory_zeroer/deps.env
 
 # Local dependency paths (see sep/peripherals/deps.env.example)
 sep/peripherals/deps.env
@@ -311,12 +321,12 @@ docs/och_source/_build/
 # ======================================================================================
 
 # =============================================================================
-# SMC VP firmware test build artifacts
-# Each smc-*-test directory produces a binary with the same name as the test.
+# SMC VP firmware test build artifacts: see sw/smc-vp-tests/.gitignore.
+# (Each test's Makefile builds TARGET=smc_<name>_test, UNDERSCORED so it never
+# collides with its own hyphenated smc-<name>-test/ source directory -- a
+# sw/smc-vp-tests/smc-*-test/smc-*-test pattern here would never match that
+# binary name, so the ignore rule lives with the tests instead of here.)
 # =============================================================================
-sw/smc-vp-tests/smc-*-test/smc-*-test
-sw/smc-vp-tests/smc-*-test/*.o
-sw/smc-vp-tests/smc-*-test/*.log
 
 # =============================================================================
 # End of .gitignore

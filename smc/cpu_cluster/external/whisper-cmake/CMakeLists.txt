@@ -183,9 +183,26 @@ else()
 endif()
 
 # Boost program_options is needed if Whisper's Args.cpp made it into librvcore.
+# Appending it HERE is what places it after the archive on the link line; a
+# consumer listing Boost itself (as vp/platform/smc does) is not enough, since
+# that copy precedes librvcore.a and --as-needed then discards it.
+#
+# Accept either the target the parent CMakeLists locates by hand
+# (boost::program_options) or the find_package one a consumer may already have
+# (Boost::program_options), so a Boost layout the manual search misses is not
+# fatal.
 if(TARGET boost::program_options)
     set_property(TARGET whisper::whisper APPEND PROPERTY
         INTERFACE_LINK_LIBRARIES boost::program_options)
+elseif(TARGET Boost::program_options)
+    set_property(TARGET whisper::whisper APPEND PROPERTY
+        INTERFACE_LINK_LIBRARIES Boost::program_options)
+else()
+    message(WARNING
+        "No Boost program_options target found; linking whisper::whisper may "
+        "fail with undefined boost::program_options symbols from "
+        "librvcore.a(Args.cpp.o).  Point BOOST_DIR at an install whose lib "
+        "directory contains libboost_program_options.")
 endif()
 
 message(STATUS "Whisper imported (${WHISPER_BUILD_DIR}):")

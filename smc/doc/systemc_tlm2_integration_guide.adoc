@@ -477,9 +477,10 @@ subtract the base address.
 
 |Bus Error Units
 |`0xC801_0000 + N*0x1000`
-|4 x `0x30`
-|Stub/model needed
-|RTL connects per-core BEU registers. No SystemC BEU model exists yet.
+|4 x `0x1000` (regs in low `0x30`)
+|`beu[N].reg_socket`
+|Per-core Rocket BEU model (`smc::beu`). Platform local alias is
+`0xC0C1_0000 + N*0x1000` via `front_port_router` → `beu_router`.
 |===
 
 == Fabric Integration
