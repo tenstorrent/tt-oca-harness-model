@@ -64,6 +64,11 @@ struct driver : sc_core::sc_module {
         gp.set_byte_enable_ptr(nullptr);
         gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
         sock->b_transport(gp, t);
+        if (gp.get_response_status() != tlm::TLM_OK_RESPONSE) {
+            std::cerr << "FAIL write32(0x" << std::hex << addr << ") rsp="
+                      << gp.get_response_string() << std::dec << "\n";
+            ++g_failures;
+        }
     }
 };
 

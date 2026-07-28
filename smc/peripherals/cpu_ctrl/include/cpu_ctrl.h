@@ -222,7 +222,10 @@ private:
     void wdt_stage2_tick_method();
     void wdt_stage2_output_method();
     void wdt_stage2_input_method();
-    void wdt_stage2_step_once();
+    /// Apply reload conditions and update first/second flags.
+    /// When `do_decrement` is true (periodic / dbg tick), also count down
+    /// while sticky is asserted; register-reset and sticky-edge paths pass false.
+    void wdt_stage2_step_once(bool do_decrement = true);
     void schedule_wdt_stage2_recompute();
     void apply_wdt_timeout_reset(uint32_t pulse_bits);
 };

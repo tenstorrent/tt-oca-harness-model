@@ -549,11 +549,12 @@ void cpu_ctrl::apply_wdt_timeout_reset(uint32_t pulse_bits)
                 static_cast<uint32_t>(wdt_timeout_ & 0xFFFF'FFFFu);
         }
     }
-    wdt_stage2_step_once();
+    // Reload / refresh outputs only — do not advance the countdown.
+    wdt_stage2_step_once(/*do_decrement=*/false);
     schedule_wdt_stage2_recompute();
 }
 
-void cpu_ctrl::wdt_stage2_step_once()
+void cpu_ctrl::wdt_stage2_step_once(bool do_decrement)
 {
     bool any_first  = false;
     bool any_second = false;
@@ -567,7 +568,7 @@ void cpu_ctrl::wdt_stage2_step_once()
             wdt_stage2_count_[i] =
                 static_cast<uint32_t>(wdt_timeout_ & 0xFFFF'FFFFu);
             wdt_stage2_reload_pulse_[i] = false;
-        } else if (sticky && wdt_stage2_count_[i] != 0) {
+        } else if (do_decrement && sticky && wdt_stage2_count_[i] != 0) {
             --wdt_stage2_count_[i];
         }
         any_first  = any_first || sticky;
@@ -595,7 +596,9 @@ void cpu_ctrl::wdt_stage2_tick_method()
 
 void cpu_ctrl::wdt_stage2_input_method()
 {
-    wdt_stage2_step_once();
+    // Sticky / primary-reset edges reload or refresh outputs; countdown
+    // advances only on the periodic (or dbg) tick path.
+    wdt_stage2_step_once(/*do_decrement=*/false);
     schedule_wdt_stage2_recompute();
 }
 

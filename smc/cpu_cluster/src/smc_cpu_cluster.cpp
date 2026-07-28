@@ -637,11 +637,12 @@ void smc_cpu_cluster::apply_wdt_timeout_reset(uint32_t pulse_bits)
             wdt_stage2_count_[i] = regs_.wdt_timeout;
         }
     }
-    wdt_stage2_step_once();  // refresh first/second from current sticky levels
+    // Reload / refresh outputs only — do not advance the countdown.
+    wdt_stage2_step_once(/*do_decrement=*/false);
     schedule_wdt_stage2_recompute();
 }
 
-void smc_cpu_cluster::wdt_stage2_step_once()
+void smc_cpu_cluster::wdt_stage2_step_once(bool do_decrement)
 {
     const unsigned nh = num_harts_p_.get_value();
     bool any_first  = false;
@@ -657,7 +658,7 @@ void smc_cpu_cluster::wdt_stage2_step_once()
         if (reload) {
             wdt_stage2_count_[i] = regs_.wdt_timeout;
             wdt_stage2_reload_pulse_[i] = false;
-        } else if (sticky && wdt_stage2_count_[i] != 0) {
+        } else if (do_decrement && sticky && wdt_stage2_count_[i] != 0) {
             --wdt_stage2_count_[i];
         }
 
@@ -692,9 +693,9 @@ void smc_cpu_cluster::wdt_stage2_tick_method()
 
 void smc_cpu_cluster::wdt_stage2_input_method()
 {
-    // Sticky / primary-reset edges: reload or start counting without waiting
-    // for the next periodic tick.
-    wdt_stage2_step_once();
+    // Sticky / primary-reset edges reload or refresh outputs; countdown
+    // advances only on the periodic (or dbg) tick path.
+    wdt_stage2_step_once(/*do_decrement=*/false);
     schedule_wdt_stage2_recompute();
 }
 
