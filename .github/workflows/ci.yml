@@ -349,10 +349,34 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /home/runner/whisper
-          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+          # The "-libs4" suffix versions the build RECIPE, not the Whisper
+          # revision: entries saved by the earlier recipe contain a tree with
+          # only librvcore.a built.  Bump it whenever the artifact set built
+          # below changes, so stale/incomplete entries are not reused.
+          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libs4
+
+      # A cache hit is not proof the tree is usable: actions/cache saves the
+      # directory in a post-job step even when the job failed, so one bad build
+      # can be cached and then restored on every subsequent run, permanently
+      # skipping the build step below.  Gate that step on the artifacts really
+      # being present instead of on cache-hit.
+      - name: Check Whisper artifacts
+        id: whisper-libs
+        run: |
+          complete=true
+          for lib in build-$(uname -s)/librvcore.a \
+                     virtual_memory/libvirtual_memory.a \
+                     pci/libpci.a \
+                     third_party/softfloat/build/RISCV-GCC/softfloat.a; do
+            if [ ! -f "/home/runner/whisper/${lib}" ]; then
+              echo "missing: ${lib}"
+              complete=false
+            fi
+          done
+          echo "complete=${complete}" >> "$GITHUB_OUTPUT"
 
       - name: Build Whisper
-        if: steps.cache-whisper.outputs.cache-hit != 'true'
+        if: steps.whisper-libs.outputs.complete != 'true'
         env:
           GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -361,9 +385,17 @@ jobs:
           mkdir -p /tmp/boost/include
           ln -s /usr/include/boost /tmp/boost/include/boost
 
-          git clone \
-            https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
-            /home/runner/whisper
+          # This step also runs when the cache restored an INCOMPLETE tree, so
+          # the clone target may already exist -- reuse it rather than failing
+          # with "destination path already exists".  No fetch is needed: the
+          # cache key pins WHISPER_REV, so the checkout is already at that rev.
+          if [ -d /home/runner/whisper/.git ]; then
+            echo "reusing restored Whisper checkout; building missing artifacts"
+          else
+            git clone \
+              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              /home/runner/whisper
+          fi
           cd /home/runner/whisper
           git checkout ${{ env.WHISPER_REV }}
           # smc/cpu_cluster/external/whisper-cmake/CMakeLists.txt imports FOUR

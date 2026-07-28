@@ -32,7 +32,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
-log_info()  { echo "[run_smc_vp_tests] $*"; }
+# All three log to stderr on purpose: several helpers below "return" a value by
+# echoing it to stdout and are read back with `$(...)`, so anything progress-
+# related must stay off stdout or it ends up inside the captured value.
+log_info()  { echo "[run_smc_vp_tests] $*" >&2; }
 log_warn()  { echo "[run_smc_vp_tests] WARN: $*" >&2; }
 log_error() { echo "[run_smc_vp_tests] ERROR: $*" >&2; }
 
@@ -278,17 +281,29 @@ build_vp() {
     cmake --build "${VP_BUILD_DIR}" --target smc-vp -j
 }
 
-get_vp() {
-    local vp
-    if ! vp="$(find_vp_binary)"; then
-        log_warn "smc-vp binary not found; building it now."
-        build_vp
-        vp="$(find_vp_binary)" || {
-            log_error "smc-vp still not found after build; check ${VP_BUILD_DIR}/bin/"
-            exit 1
-        }
+# Resolve the smc-vp executable into the global VP_BIN.
+#
+# This deliberately does NOT return the path on stdout.  build_vp() streams
+# cmake's configure/build output to stdout, so capturing it (`vp="$(get_vp)"`)
+# folded that output into the path and handed `make sim` a VP= value such as
+#   VP="[run_smc_vp_tests] SYSTEMC_HOME: /... <newline> /path/to/smc-vp"
+# which sh then tried to execute ("/bin/sh: 1: [run_smc_vp_tests]: not found").
+# find_vp_binary() is the only stdout-returning helper here, and it echoes
+# nothing but the path.
+#
+# Resolving once (from the main flow, not per test) also means a broken VP
+# build reports one clear error instead of re-running the whole cmake configure
+# for every test in the list.
+resolve_vp() {
+    if VP_BIN="$(find_vp_binary)"; then
+        return 0
     fi
-    echo "${vp}"
+    log_warn "smc-vp binary not found; building it now."
+    build_vp
+    VP_BIN="$(find_vp_binary)" || {
+        log_error "smc-vp still not found after build; check ${VP_BUILD_DIR}/bin/"
+        return 1
+    }
 }
 
 # -----------------------------------------------------------------------------
@@ -317,9 +332,6 @@ run_test() {
         return 1
     fi
 
-    local vp
-    vp="$(get_vp)"
-
     log_info "============================================================"
     log_info "building test: $1"
     log_info "============================================================"
@@ -332,7 +344,7 @@ run_test() {
         }
         log_info "running test: $1"
         local sim_log="run_smc_vp_tests_sim.log"
-        if ! make sim RISCV_PREFIX="${RISCV_PREFIX}" VP="${vp}" >"${sim_log}" 2>&1; then
+        if ! make sim RISCV_PREFIX="${RISCV_PREFIX}" VP="${VP_BIN}" >"${sim_log}" 2>&1; then
             cat "${sim_log}"
             log_error "simulation exited non-zero for $1"
             rm -f "${sim_log}"
@@ -472,6 +484,14 @@ fi
 if [ ${BUILD_VP} -eq 1 ]; then
     build_vp
 fi
+
+# Resolve (building if needed) before the loop: every test runs the same VP, and
+# without it there is nothing to run, so fail here rather than reporting a
+# confusing per-test simulation failure.
+if ! resolve_vp; then
+    exit 1
+fi
+log_info "smc-vp: ${VP_BIN}"
 
 log_info "tests to run: ${TESTS[*]}"
 FAILED=0
