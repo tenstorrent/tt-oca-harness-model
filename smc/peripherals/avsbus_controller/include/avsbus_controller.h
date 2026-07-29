@@ -5,7 +5,8 @@
  *
  * Register-accurate functional model of the single-target AVSBus 1.3.1
  * controller used by the SMC (`hw/ip/avsbus_controller`).  Mapped at
- * `0xC000_8000` (4 KiB window); interrupt feeds peripheral bit 22 / PLIC 278.
+ * `0xC000_8000` (4 KiB window); interrupt feeds peripheral bit 22 / PLIC
+ * source 23 in the VP (`src_in[22]` → source ID = bit + 1).
  *
  * Authoritative references
  * ------------------------

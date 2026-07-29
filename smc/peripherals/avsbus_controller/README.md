@@ -36,7 +36,9 @@ cp deps.env.example deps.env   # set SYSTEMC_HOME / CCI_HOME
 ./run_tests.sh --coverage
 ```
 
-Produces `libsmc_avsbus_controller.a`.
+Produces `libsmc_avsbus_controller.a`. Linked into `smc-vp` via
+`vp/platform/smc/CMakeLists.txt`. Platform smoke test:
+`sw/smc-vp-tests/smc-avsbus-test` (`./run_smc_vp_tests.sh smc-avsbus-test`).
 
 ## Abstraction
 

@@ -325,9 +325,10 @@ peripheral interrupt bit 27.
 |AVSBus
 |`0xC000_8000`
 |4 KiB
-|Stub needed
-|RTL instantiates `avsbus_controller` with ref/periph clocks, GPIO-facing AVS
-signals, debug state, and interrupt bit 22.
+|`avsbus_controller.reg_socket`
+|SystemC LT model exists (`smc/peripherals/avsbus_controller`). Platform
+carves a 4 KiB window out of the periph_misc catch-all, binds reset/IRQ/GPIO-
+enable, and maps interrupt bit 22 → PLIC source 23.
 
 |I2C
 |`0xC000_9000`
@@ -959,7 +960,7 @@ RTL builds the 32-bit `peripheral_interrupts_o` in `smc_peripherals.sv`:
 |11 |OR of `ndmreset_request_smc_clk` |SMC misc/NDM stub
 |17:12 |`i3c_irqs_smc_clk` |`i3c_controller.irq_o[5:0]`
 |21:18 |`uart_irq_combined_smc_clk` |UART/log wrapper interrupt combine
-|22 |`avsbus_irq_smc_clk` |AVSBus stub/model
+|22 |`avsbus_irq_smc_clk` |`avsbus_controller.irq_o`
 |25:23 |`i2c_irqs_smc_clk` |`i2c_controller.irq_o[2:0]` (3 instances)
 |26 |Synchronized active-high SEP WDT reset assertion |Top-level SEP WDT input
 |27 |`temp_interrupt_smc_clk` |PVT/temp input or stub

@@ -29,6 +29,7 @@ static constexpr uint64_t A_DMA          = 0xC003'8000ULL;  // dma_cfg default b
 
 static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
 static constexpr uint64_t A_I3C         = 0xC000'5000ULL;
+static constexpr uint64_t A_AVSBUS       = 0xC000'8000ULL;
 static constexpr uint64_t A_I2C0         = 0xC000'9000ULL;
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;
 static constexpr uint64_t A_CPU_CTRL    = 0xC040'0000ULL;
@@ -77,6 +78,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  12, 13, 14, 15, 16, 17,
                  // uart[0..3] -> peripheral bits 21:18
                  18, 19, 20, 21,
+                 // avsbus -> peripheral bit 22
+                 22,
                  // i2c[0..2] -> peripheral bits 25:23
                  23, 24, 25})
 {
@@ -219,6 +222,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(7, A_UART0 + 0x2000, 0x1000, "uart2");
     periph_router.add_route(8, A_UART0 + 0x3000, 0x1000, "uart3");
     periph_router.add_route(9, A_CPU_CTRL,  0x2000, "cpu_ctrl");
+    // AVSBus: 4 KiB window at 0xC000_8000 (shadows the periph_misc catch-all).
+    periph_router.add_route(11, A_AVSBUS,   0x1000, "avsbus");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
     periph_router.add_route(10, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
     periph_router.add_route(10, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
@@ -233,6 +238,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[8].bind(uart_[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
     periph_router.out[10].bind(stub_periph_misc.reg_socket);
+    periph_router.out[11].bind(avsbus.reg_socket);
 
     // -- DMA + memory_zeroer (data-accelerator CSR + DMA paths) ------------
     // CSR path: fabric's 64-bit `to_data_accel_ctrl` initiator is a single-
@@ -339,6 +345,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         i2c[i].irq_o.bind(i2c_irq[i]);
     }
 
+    // -- AVSBus reset + IRQ + GPIO-enable sink -----------------------------
+    avsbus.rst_n_i.bind(rst_n_sig);
+    avsbus.irq_o.bind(avsbus_irq);
+    avsbus.avs_gpio_enable_o.bind(avsbus_gpio_en);
+
     // -- I2C0 controller -> I2C1 target loopback (for smc-i2c-loopback-test)
     //    I2C0's bus model forwards controller segments to I2C1's target back door.
     i2c[0].set_bus_model([this](smc::i2c_xfer& x) {
@@ -389,10 +400,12 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     }
 
     // -- Interrupt aggregator -> PLIC -------------------------------------
-    // Inputs: i3c[0..5], uart[0..3], i2c[0..2].
+    // Inputs: i3c[0..5], uart[0..3], avsbus, i2c[0..2].
     for (unsigned i = 0; i < NUM_I3C; ++i)  intagg.src[i].bind(i3c_irq[i]);
     for (unsigned i = 0; i < NUM_UART; ++i) intagg.src[NUM_I3C + i].bind(uart_irq[i]);
-    for (unsigned i = 0; i < NUM_I2C; ++i)  intagg.src[NUM_I3C + NUM_UART + i].bind(i2c_irq[i]);
+    intagg.src[NUM_I3C + NUM_UART].bind(avsbus_irq);
+    for (unsigned i = 0; i < NUM_I2C; ++i)
+        intagg.src[NUM_I3C + NUM_UART + 1 + i].bind(i2c_irq[i]);
     for (unsigned i = 0; i < NUM_PLIC_SRC; ++i) {
         plic_.src_in[i].bind(plic_src_sig[i]);
         intagg.plic_src[i].bind(plic_src_sig[i]);
@@ -434,7 +447,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         std::ostringstream _oss;
         _oss << "smc_platform elaborated: "
              << NUM_UART << " uart, " << NUM_I2C << " i2c, "
-             << NUM_I3C << " i3c, " << NUM_BEU << " beu, dma, "
+             << NUM_I3C << " i3c, " << NUM_BEU << " beu, avsbus, dma, "
              << NUM_PLIC_SRC << " plic sources";
 #ifdef SMC_PLATFORM_WITH_CLUSTER
         _oss << ", cluster ON";
