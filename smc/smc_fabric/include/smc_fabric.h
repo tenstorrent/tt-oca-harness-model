@@ -303,14 +303,20 @@ private:
     static constexpr uint32_t FRONT_CLINT_BEU_END  = 0xC0C2'0000u;
 
     // data_accel_ctrl (AXI4) — smc_local_xbar_pkg.sv
+    // Ends at 0xC003_A000 so the OCA I3C wraps (smc_top.rdl oca_i3c_wrap_0
+    // @ 0xC003_A000) are not swallowed by the DMA/zeroer window.
     static constexpr uint32_t DACCEL_DMA_ZEROER_BASE = 0xC003'8000u;  // DMA + zeroer ctrl
-    static constexpr uint32_t DACCEL_DMA_ZEROER_END  = 0xC004'0000u;
+    static constexpr uint32_t DACCEL_DMA_ZEROER_END  = 0xC003'A000u;
 
     // periph_reg (AXI4-Lite 32) — smc_local_xbar_pkg.sv
     static constexpr uint32_t PERIPH_MAIN_BASE = 0xC000'2000u;
     static constexpr uint32_t PERIPH_MAIN_END  = 0xC000'E800u;
     static constexpr uint32_t PERIPH_EXT_BASE  = 0xC040'0000u;
     static constexpr uint32_t PERIPH_EXT_END   = 0xC080'0000u;
+    // OCA I3C wraps live above the DMA window (smc_top.rdl); routed to
+    // to_periph so the existing i3c_controller model can sit there.
+    static constexpr uint32_t PERIPH_I3C_BASE  = 0xC003'A000u;
+    static constexpr uint32_t PERIPH_I3C_END   = 0xC004'0000u;
 
     // smc_dfd_reg (APB) — smc_local_xbar_pkg.sv
     static constexpr uint32_t DFD_REGS_BASE = 0xC016'0000u;

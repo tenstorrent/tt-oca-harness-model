@@ -4,11 +4,11 @@
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
 // (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, DMA, I3C,
-// 3x I2C, 4x UART, 4x per-core BEU, and optionally the Whisper-backed CPU
-// cluster), wires the fabric's initiator sockets through address routers to
-// the modeled targets and stubs, composes the peripheral interrupt vector
-// into the PLIC, and — when the cluster is present — connects CLINT MSIP/MTIP
-// and PLIC MEIP to the cluster's per-hart IRQ inputs.
+// 3x I2C, 4x UART, 3x telemetry_receiver, 4x per-core BEU, and optionally the
+// Whisper-backed CPU cluster), wires the fabric's initiator sockets through
+// address routers to the modeled targets and stubs, composes the peripheral
+// interrupt vector into the PLIC, and — when the cluster is present — connects
+// CLINT MSIP/MTIP and PLIC MEIP to the cluster's per-hart IRQ inputs.
 //
 // See smc/doc/systemc_tlm2_integration_guide.adoc for the address map and
 // binding rationale.
@@ -41,6 +41,7 @@
 #include "scratchpad_ram.h"
 #include "uart.h"
 #include "beu.h"
+#include "telemetry_receiver.h"
 
 #ifdef SMC_PLATFORM_WITH_CLUSTER
 #include "smc_cpu_cluster.h"
@@ -62,12 +63,14 @@ public:
     static constexpr unsigned NUM_UART      = 4;
     static constexpr unsigned NUM_I2C       = 3;
     static constexpr unsigned NUM_I3C       = 6;
+    static constexpr unsigned NUM_TELEMETRY = 3;
     static constexpr unsigned NUM_PLIC_SRC   = 336;
     static constexpr unsigned NUM_PLIC_CTX   = 8;
     static constexpr unsigned NUM_SUBSYS     = 32;
-    // 13 peripheral IRQ inputs: i3c[0..5], uart[0..3], i2c[0..2].
-    // (BEU local/PLIC IRQ wiring is Phase C; Phase B only binds sinks.)
-    static constexpr unsigned NUM_PERIPH_IRQ = NUM_I3C + NUM_UART + NUM_I2C;
+    // Peripheral IRQ inputs: telemetry[0..2], i3c[0..5], uart[0..3], i2c[0..2]
+    // (matches smc_peripherals.sv peripheral_interrupts_o composition).
+    static constexpr unsigned NUM_PERIPH_IRQ =
+        NUM_TELEMETRY + NUM_I3C + NUM_UART + NUM_I2C;
 
     // -----------------------------------------------------------------------
     // Test-only BEU error-injection hook (Phase D1; see
@@ -96,6 +99,15 @@ public:
     cci::cci_param<unsigned> beu_inject2_src_p_;
     cci::cci_param<uint64_t> beu_inject2_addr_p_;
 
+    // Test-only telemetry ATB inject (elaboration-time).  Firmware cannot drive
+    // the ATB byte stream; one message can be pushed into a named receiver
+    // before sc_start() so register-visible probe_id / counters are already
+    // latched.  Defaults to enable=false so plain smc-vp runs are unaffected.
+    cci::cci_param<bool>     tel_inject_enable_p_;
+    cci::cci_param<unsigned> tel_inject_inst_p_;
+    cci::cci_param<unsigned> tel_inject_probe_p_;
+    cci::cci_param<uint32_t> tel_inject_counter0_p_;
+
     // -----------------------------------------------------------------------
     // External boundary (chiplet-facing).  Inbound masters are forwarded to the
     // fabric; outbound `fabric.output_axi` is bound to the internal
@@ -122,6 +134,7 @@ public:
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
     sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
+    sc_core::sc_vector<telemetry_receiver> telemetry_{"telemetry", NUM_TELEMETRY};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
 #endif
@@ -140,7 +153,12 @@ public:
     addr_router<64, 64>         front_port_router{"front_port_router", 7};
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
-    addr_router<64, 32>         periph_router{"periph_router", 11};
+    // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
+    // cpu_ctrl, i3c, catch-all stub (12).
+    addr_router<64, 32>         periph_router{"periph_router", 12};
+    // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
+    // InBus=32: sits behind periph_router's 32-bit initiator outputs.
+    addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
     width_adapter<64, 32>       wa_bootrom{"wa_bootrom"};
     width_adapter<64, 32>       wa_scratch{"wa_scratch"};
     width_adapter<64, 32>       wa_plic{"wa_plic"};
@@ -259,6 +277,11 @@ public:
     // I2C / PLIC / cluster IRQ signals
     // -----------------------------------------------------------------------
     sc_core::sc_vector<sc_core::sc_signal<bool>> i2c_irq{"i2c_irq", NUM_I2C};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_irq{"telemetry_irq", NUM_TELEMETRY};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_afready{"telemetry_afready", NUM_TELEMETRY};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_afvalid{"telemetry_afvalid", NUM_TELEMETRY};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_atready{"telemetry_atready", NUM_TELEMETRY};
+    sc_core::sc_vector<sc_core::sc_signal<uint32_t>> telemetry_debug{"telemetry_debug", NUM_TELEMETRY};
     sc_core::sc_vector<sc_core::sc_signal<bool>> plic_src_sig{"plic_src_sig", NUM_PLIC_SRC};
     // Dummy sinks for every stub_target's irq_o (stubs don't drive the PLIC in
     // Phase 1; their irq_drive_method still requires a bound port).

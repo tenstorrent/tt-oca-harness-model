@@ -554,7 +554,8 @@ smc_fabric::local_decode(uint32_t a)
         return &to_dfd_apb;
 
     if ((a >= PERIPH_MAIN_BASE && a < PERIPH_MAIN_END) ||
-        (a >= PERIPH_EXT_BASE  && a < PERIPH_EXT_END))
+        (a >= PERIPH_EXT_BASE  && a < PERIPH_EXT_END)  ||
+        (a >= PERIPH_I3C_BASE  && a < PERIPH_I3C_END))
         return &to_periph;
 
     // No matching local target → caller issues TLM_ADDRESS_ERROR_RESPONSE.

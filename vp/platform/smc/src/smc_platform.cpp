@@ -28,9 +28,10 @@ static constexpr uint64_t A_BEU          = 0xC0C1'0000ULL;
 static constexpr uint64_t A_DMA          = 0xC003'8000ULL;  // dma_cfg default base_addr
 
 static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
-static constexpr uint64_t A_I3C         = 0xC000'5000ULL;
-static constexpr uint64_t A_I2C0         = 0xC000'9000ULL;
-static constexpr uint64_t A_UART0        = 0xC000'A000ULL;
+static constexpr uint64_t A_I2C0         = 0xC000'5000ULL;  // RTL smc_i2c_wrap
+static constexpr uint64_t A_TELEMETRY    = 0xC000'9000ULL;  // RTL telemetry_receiver_wrap
+static constexpr uint64_t A_UART0        = 0xC000'A000ULL;  // sim location (RTL uart @ 0x6000)
+static constexpr uint64_t A_I3C          = 0xC003'A000ULL;  // RTL oca_i3c_wrap_0
 static constexpr uint64_t A_CPU_CTRL    = 0xC040'0000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_LO = 0xC000'2000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_HI = 0xC000'E800ULL;
@@ -71,8 +72,19 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
           "ICACHE_TLBUS.")
     , beu_inject2_addr_p_("beu_inject2_addr", uint64_t{0},
           "Physical address recorded by injection #2 (masked to 56 bits).")
+    , tel_inject_enable_p_("tel_inject_enable", false,
+          "Test-only: if true, push one ATB message into a telemetry receiver "
+          "at elaboration.")
+    , tel_inject_inst_p_("tel_inject_inst", 0u,
+          "Target telemetry_receiver instance (0..NUM_TELEMETRY-1).")
+    , tel_inject_probe_p_("tel_inject_probe", 0x15u,
+          "Probe ID encoded into the injected ATB message (low 5 bits).")
+    , tel_inject_counter0_p_("tel_inject_counter0", uint32_t{0xDEADBEEFu},
+          "Counter[0] value encoded into the injected ATB message.")
     , intagg("intagg", NUM_PERIPH_IRQ, NUM_PLIC_SRC,
              std::vector<unsigned>{
+                 // telemetry[0..2] -> peripheral bits 10:8
+                 8, 9, 10,
                  // i3c[0..5] -> peripheral bits 17:12
                  12, 13, 14, 15, 16, 17,
                  // uart[0..3] -> peripheral bits 21:18
@@ -208,31 +220,77 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                           beu_inject2_addr_p_.get_value());
 
     // -- periph_router: fabric.to_periph -----------------------------------
+    // Address map aligned with smc_top.rdl for I2C / telemetry / I3C.
     fabric.to_periph.bind(periph_router.tgt);
     periph_router.add_route(0, A_RESET,     0x200,  "reset");
-    periph_router.add_route(1, A_I3C,       0x1E00, "i3c");
-    periph_router.add_route(2, A_I2C0,      0x200,  "i2c0");
-    periph_router.add_route(3, A_I2C0 + 0x200,  0x200, "i2c1");
-    periph_router.add_route(4, A_I2C0 + 0x400, 0x200, "i2c2");
+    periph_router.add_route(1, A_I2C0,      0x200,  "i2c0");
+    periph_router.add_route(2, A_I2C0 + 0x200,  0x200, "i2c1");
+    periph_router.add_route(3, A_I2C0 + 0x400, 0x200, "i2c2");
+    periph_router.add_route(4, A_TELEMETRY, 0x300,  "telemetry");
     periph_router.add_route(5, A_UART0,      0x1000, "uart0");
     periph_router.add_route(6, A_UART0 + 0x1000, 0x1000, "uart1");
     periph_router.add_route(7, A_UART0 + 0x2000, 0x1000, "uart2");
     periph_router.add_route(8, A_UART0 + 0x3000, 0x1000, "uart3");
     periph_router.add_route(9, A_CPU_CTRL,  0x2000, "cpu_ctrl");
+    // i3c_controller packs NUM_I3C instances at INSTANCE_SPACING=0x500.
+    periph_router.add_route(10, A_I3C, 0x1E00, "i3c");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
-    periph_router.add_route(10, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
-    periph_router.add_route(10, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
+    periph_router.add_route(11, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
+    periph_router.add_route(11, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
     periph_router.out[0].bind(reset.reg_socket);
-    periph_router.out[1].bind(i3c.reg_socket);
-    periph_router.out[2].bind(i2c[0].reg_socket);
-    periph_router.out[3].bind(i2c[1].reg_socket);
-    periph_router.out[4].bind(i2c[2].reg_socket);
+    periph_router.out[1].bind(i2c[0].reg_socket);
+    periph_router.out[2].bind(i2c[1].reg_socket);
+    periph_router.out[3].bind(i2c[2].reg_socket);
+    periph_router.out[4].bind(telemetry_router.tgt);
+    for (unsigned n = 0; n < NUM_TELEMETRY; ++n) {
+        telemetry_router.add_route(n, n * 0x100ULL, 0x100,
+                                   std::string("tel") + std::to_string(n));
+        telemetry_router.out[n].bind(telemetry_[n].reg_socket);
+        telemetry_[n].rst_n_i.bind(rst_n_sig);
+        telemetry_[n].afready_i.bind(telemetry_afready[n]);
+        telemetry_[n].irq_o.bind(telemetry_irq[n]);
+        telemetry_[n].afvalid_o.bind(telemetry_afvalid[n]);
+        telemetry_[n].atready_o.bind(telemetry_atready[n]);
+        telemetry_[n].debug_o.bind(telemetry_debug[n]);
+        telemetry_afready[n].write(false);
+    }
     periph_router.out[5].bind(uart_[0].reg_socket);
     periph_router.out[6].bind(uart_[1].reg_socket);
     periph_router.out[7].bind(uart_[2].reg_socket);
     periph_router.out[8].bind(uart_[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
-    periph_router.out[10].bind(stub_periph_misc.reg_socket);
+    periph_router.out[10].bind(i3c.reg_socket);
+    periph_router.out[11].bind(stub_periph_misc.reg_socket);
+
+    // -- Test-only telemetry ATB inject ------------------------------------
+    if (tel_inject_enable_p_.get_value()) {
+        const unsigned inst = tel_inject_inst_p_.get_value();
+        if (inst >= NUM_TELEMETRY) {
+            SIM_LOG_WARN(this, "tel test-inject: inst " << inst
+                              << " out of range (NUM_TELEMETRY=" << NUM_TELEMETRY
+                              << "); injection ignored");
+        } else {
+            const uint8_t  probe = static_cast<uint8_t>(
+                tel_inject_probe_p_.get_value() & 0x1Fu);
+            const uint32_t ctr0  = tel_inject_counter0_p_.get_value();
+            SIM_LOG_INFO(this, "tel test-inject: inst=" << inst
+                              << " probe=0x" << std::hex << unsigned(probe)
+                              << " counter0=0x" << ctr0 << std::dec);
+            std::vector<telemetry_counter_value> counters{
+                {true, ctr0}};
+            // Default max_counters_per_message is 4; pad with invalid entries
+            // so the encoder fills a full multi-packet message.
+            while (counters.size() < 4)
+                counters.push_back({false, 0u});
+            const auto beats = telemetry_encode_message(probe, counters, 4);
+            const unsigned accepted = telemetry_[inst].push_atb_beats(beats);
+            if (accepted != beats.size()) {
+                SIM_LOG_WARN(this, "tel test-inject: only accepted "
+                                  << accepted << " of " << beats.size()
+                                  << " beats");
+            }
+        }
+    }
 
     // -- DMA + memory_zeroer (data-accelerator CSR + DMA paths) ------------
     // CSR path: fabric's 64-bit `to_data_accel_ctrl` initiator is a single-
@@ -389,10 +447,18 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     }
 
     // -- Interrupt aggregator -> PLIC -------------------------------------
-    // Inputs: i3c[0..5], uart[0..3], i2c[0..2].
-    for (unsigned i = 0; i < NUM_I3C; ++i)  intagg.src[i].bind(i3c_irq[i]);
-    for (unsigned i = 0; i < NUM_UART; ++i) intagg.src[NUM_I3C + i].bind(uart_irq[i]);
-    for (unsigned i = 0; i < NUM_I2C; ++i)  intagg.src[NUM_I3C + NUM_UART + i].bind(i2c_irq[i]);
+    // Inputs: telemetry[0..2], i3c[0..5], uart[0..3], i2c[0..2].
+    {
+        unsigned s = 0;
+        for (unsigned i = 0; i < NUM_TELEMETRY; ++i)
+            intagg.src[s++].bind(telemetry_irq[i]);
+        for (unsigned i = 0; i < NUM_I3C; ++i)
+            intagg.src[s++].bind(i3c_irq[i]);
+        for (unsigned i = 0; i < NUM_UART; ++i)
+            intagg.src[s++].bind(uart_irq[i]);
+        for (unsigned i = 0; i < NUM_I2C; ++i)
+            intagg.src[s++].bind(i2c_irq[i]);
+    }
     for (unsigned i = 0; i < NUM_PLIC_SRC; ++i) {
         plic_.src_in[i].bind(plic_src_sig[i]);
         intagg.plic_src[i].bind(plic_src_sig[i]);
@@ -434,7 +500,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         std::ostringstream _oss;
         _oss << "smc_platform elaborated: "
              << NUM_UART << " uart, " << NUM_I2C << " i2c, "
-             << NUM_I3C << " i3c, " << NUM_BEU << " beu, dma, "
+             << NUM_I3C << " i3c, " << NUM_TELEMETRY << " telemetry, "
+             << NUM_BEU << " beu, dma, "
              << NUM_PLIC_SRC << " plic sources";
 #ifdef SMC_PLATFORM_WITH_CLUSTER
         _oss << ", cluster ON";

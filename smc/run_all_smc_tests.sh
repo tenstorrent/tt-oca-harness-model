@@ -199,6 +199,7 @@ ALL_IPS=(
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
+    "telemetry_receiver:${SCRIPT_DIR}/peripherals/telemetry_receiver"
     "uart:${SCRIPT_DIR}/peripherals/uart"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
 )
