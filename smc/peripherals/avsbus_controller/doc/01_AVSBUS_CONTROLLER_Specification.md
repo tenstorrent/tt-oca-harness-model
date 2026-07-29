@@ -7,7 +7,7 @@ implements AVSBus **1.3.1** for a **single** target voltage regulator, exposing
 a 32-bit AXI4-Lite register window and one aggregated interrupt.
 
 SMC placement: base `0xC000_8000`, 4 KiB window, peripheral interrupt bit 22
-(PLIC source 278).
+(PLIC source 23).
 
 ## 2. Software-visible behaviour
 
@@ -17,7 +17,7 @@ SMC placement: base `0xC000_8000`, 4 KiB window, peripheral interrupt bit 22
 |--------|------|--------|-------|-------------|
 | 0x00 | AVS_CMD | W | — | Push command into command FIFO |
 | 0x04 | AVS_READBACK | R | 0 | Pop response from readback FIFO |
-| 0x08 | AVS_DEBUG_READBACK | R | 0xFFFFFFFF / 0xDEADBEEF empty | Peek TOF (no pop) |
+| 0x08 | AVS_DEBUG_READBACK | R | 0xDEADBEEF (empty) | Peek TOF (no pop) |
 | 0x0C | AVS_LATEST_SLAVE_SUBFRAME | R | 0x0000FFFF | Latest slave frame (bypass FIFO) |
 | 0x20 | AVS_NORMAL_STATUS | R | live | Idle / FIFO / retry status |
 | 0x24 | AVS_SLAVE_STATUS | R | 0 | Latest ACK + status response |

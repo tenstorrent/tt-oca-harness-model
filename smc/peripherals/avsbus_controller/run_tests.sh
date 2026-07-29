@@ -226,7 +226,7 @@ elif (( USE_COVERAGE )); then
     if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
         PROFRAW="${BUILD_DIR}/avsbus_controller_tb.profraw"
         NEG_PROFRAW="${BUILD_DIR}/avsbus_controller_neg_tb.profraw"
-        PROFDATA="${BUILD_DIR}/beu_combined.profdata"
+        PROFDATA="${BUILD_DIR}/avsbus_controller_combined.profdata"
 
         LLVM_PROFILE_FILE="${PROFRAW}" "${TB_BIN}"
         echo ""
