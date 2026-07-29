@@ -122,7 +122,8 @@ public:
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
-    sc_core::sc_vector<wdt>            wdt{"wdt", NUM_HARTS};
+    // Trailing underscore avoids colliding with class smc::wdt (GCC -fpermissive).
+    sc_core::sc_vector<wdt>            wdt_{"wdt", NUM_HARTS};
     sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
@@ -173,7 +174,7 @@ public:
     // -----------------------------------------------------------------------
     // Stubs for unmodeled / RTL-connected blocks
     // -----------------------------------------------------------------------
-    stub_target<64> stub_wdt_debug{"stub_wdt_debug"};
+    // WDT is modeled (wdt_[] + wdt_demux); no stub_wdt_debug.
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};

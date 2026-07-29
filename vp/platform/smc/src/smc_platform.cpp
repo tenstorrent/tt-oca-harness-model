@@ -152,7 +152,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     for (unsigned i = 0; i < NUM_HARTS; ++i) {
         wdt_demux.add_route(i, static_cast<uint64_t>(i) * 0x400ULL, 0x400ULL,
                             std::string("wdt") + std::to_string(i));
-        wdt_demux.out[i].bind(wdt[i].reg_socket);
+        wdt_demux.out[i].bind(wdt_[i].reg_socket);
     }
 
     // The three multi_stub_target placeholders are each always bound by their
@@ -359,10 +359,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
 
     // -- WDT (stage-1 SiFive TLWDT) ----------------------------------------
     for (unsigned i = 0; i < NUM_HARTS; ++i) {
-        wdt[i].rst_n_i.bind(rst_n_sig);
-        wdt[i].core_rst_i.bind(wdt_core_rst[i]);
-        wdt[i].irq_o.bind(wdt_irq[i]);
-        wdt[i].rst_sticky_o.bind(wdt_sticky[i]);
+        wdt_[i].rst_n_i.bind(rst_n_sig);
+        wdt_[i].core_rst_i.bind(wdt_core_rst[i]);
+        wdt_[i].irq_o.bind(wdt_irq[i]);
+        wdt_[i].rst_sticky_o.bind(wdt_sticky[i]);
     }
 
     // Standalone periph-bus cpu_ctrl_ stage-2 ports (elaboration only; sticky
@@ -410,7 +410,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Bind every stub_target's irq_o to a dummy sink --------------------
     {
         stub_target<64>* stubs64[] = {
-            &stub_wdt_debug, &stub_dfd, &stub_mbox,
+            &stub_dfd, &stub_mbox,
             &stub_dft, &stub_sysmem, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
             &stub_xR, &stub_ibf, &stub_obf,
         };
