@@ -188,6 +188,7 @@ fi
 # smc_fabric is listed last; it does not use CCI and its run_tests.sh will
 # simply ignore CCI_HOME even if the variable happens to be set.
 ALL_IPS=(
+    "avsbus_controller:${SCRIPT_DIR}/peripherals/avsbus_controller"
     "beu:${SCRIPT_DIR}/peripherals/beu"
     "bootrom:${SCRIPT_DIR}/peripherals/bootrom"
     "clint:${SCRIPT_DIR}/peripherals/clint"
@@ -196,11 +197,13 @@ ALL_IPS=(
     "i3c_controller:${SCRIPT_DIR}/peripherals/i3c_controller"
     "dma:${SCRIPT_DIR}/peripherals/dma"
     "memory_zeroer:${SCRIPT_DIR}/peripherals/memory_zeroer"
+    "pll_wrapper:${SCRIPT_DIR}/peripherals/pll_wrapper"
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
     "telemetry_receiver:${SCRIPT_DIR}/peripherals/telemetry_receiver"
     "uart:${SCRIPT_DIR}/peripherals/uart"
+    "wdt:${SCRIPT_DIR}/peripherals/wdt"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
 )
 # cpu_cluster requires Whisper (Tenstorrent internal) and Boost; only include

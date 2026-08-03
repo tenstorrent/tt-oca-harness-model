@@ -28,7 +28,9 @@ static constexpr uint64_t A_BEU          = 0xC0C1'0000ULL;
 static constexpr uint64_t A_DMA          = 0xC003'8000ULL;  // dma_cfg default base_addr
 
 static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
+static constexpr uint64_t A_PLL_WRAP     = 0xC000'3000ULL;  // pll_wrap.rdl base
 static constexpr uint64_t A_I2C0         = 0xC000'5000ULL;  // RTL smc_i2c_wrap
+static constexpr uint64_t A_AVSBUS       = 0xC000'8000ULL;
 static constexpr uint64_t A_TELEMETRY    = 0xC000'9000ULL;  // RTL telemetry_receiver_wrap
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;  // sim location (RTL uart @ 0x6000)
 static constexpr uint64_t A_I3C          = 0xC003'A000ULL;  // RTL oca_i3c_wrap_0
@@ -89,8 +91,12 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  12, 13, 14, 15, 16, 17,
                  // uart[0..3] -> peripheral bits 21:18
                  18, 19, 20, 21,
+                 // avsbus -> peripheral bit 22
+                 22,
                  // i2c[0..2] -> peripheral bits 25:23
-                 23, 24, 25})
+                 23, 24, 25,
+                 // wdt[0..3] -> PLIC source IDs 329..332 (bits 328..331)
+                 328, 329, 330, 331})
 {
     // -- Drive input signals to safe, post-reset defaults -------------------
     rst_n_sig.write(true);
@@ -112,6 +118,14 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         uart_ri[i].write(true);
         uart_dcd[i].write(true);
     }
+
+    for (unsigned i = 0; i < NUM_HARTS; ++i) {
+        wdt_core_rst[i].write(false);          // cores not in reset
+        wdt_sticky[i].write(false);
+        cpu_ctrl_wdt_sticky[i].write(false);
+    }
+    cpu_ctrl_wdt_first.write(false);
+    cpu_ctrl_wdt_second.write(false);
 
     // -- External inbound targets -> fabric --------------------------------
     fwd_sys_ .bind(fabric.sys_axi_in);
@@ -140,14 +154,22 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     //    dedicated multi_stub_target below, not through the shared router, so
     //    the router target only ever takes the one fabric initiator). --------
     fabric.to_front_port.bind(front_port_router.tgt);
-    front_port_router.add_route(0, A_WDT_DEBUG,   0x1000,   "wdt_debug");
+    front_port_router.add_route(0, A_WDT_DEBUG,   0x1000,   "wdt");
     front_port_router.add_route(1, A_CPU_CTRL_FP, 0x1000,   "cpu_ctrl_fp");
     front_port_router.add_route(2, A_BOOTROM,     0x20000,  "bootrom");
     front_port_router.add_route(3, A_SCRATCH,     0x100000, "scratch");
     front_port_router.add_route(4, A_PLIC,        0x400000, "plic");
     front_port_router.add_route(5, A_CLINT,       0x20000,  "clint");
     front_port_router.add_route(6, A_BEU,         0x10000,  "beu");
-    front_port_router.out[0].bind(stub_wdt_debug.reg_socket);
+
+    // Nested demux: fabric subtracts 0xC000_0000, then each 1 KiB window
+    // maps to one SiFive TLWDT instance (address relative to instance base).
+    front_port_router.out[0].bind(wdt_demux.tgt);
+    for (unsigned i = 0; i < NUM_HARTS; ++i) {
+        wdt_demux.add_route(i, static_cast<uint64_t>(i) * 0x400ULL, 0x400ULL,
+                            std::string("wdt") + std::to_string(i));
+        wdt_demux.out[i].bind(wdt_[i].reg_socket);
+    }
 
     // The three multi_stub_target placeholders are each always bound by their
     // own idle initiator (so they are never unbound).  In cluster mode the
@@ -234,9 +256,17 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(9, A_CPU_CTRL,  0x2000, "cpu_ctrl");
     // i3c_controller packs NUM_I3C instances at INSTANCE_SPACING=0x500.
     periph_router.add_route(10, A_I3C, 0x1E00, "i3c");
+    // pll_wrap: PLL wrapper (pll_cntl + 2x cgm + 2x awm) at 0xC000_3000.  Its
+    // 0x1000 window shadows the periph_main_misc catch-all below (routes match
+    // smallest-window-first), so PLL accesses reach the model instead of the
+    // stub.  The router rebases the absolute window to the wrapper's 0-based
+    // composed offsets.
+    periph_router.add_route(11, A_PLL_WRAP, 0x1000, "pll_wrap");
+    // AVSBus: 4 KiB window at 0xC000_8000 (shadows the periph_misc catch-all).
+    periph_router.add_route(12, A_AVSBUS,   0x1000, "avsbus");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
-    periph_router.add_route(11, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
-    periph_router.add_route(11, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
+    periph_router.add_route(13, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
+    periph_router.add_route(13, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
     periph_router.out[0].bind(reset.reg_socket);
     periph_router.out[1].bind(i2c[0].reg_socket);
     periph_router.out[2].bind(i2c[1].reg_socket);
@@ -260,7 +290,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[8].bind(uart_[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
     periph_router.out[10].bind(i3c.reg_socket);
-    periph_router.out[11].bind(stub_periph_misc.reg_socket);
+    periph_router.out[11].bind(pll_wrap.reg_socket);
+    pll_wrap.rst_n_i.bind(rst_n_sig);
+    periph_router.out[12].bind(avsbus.reg_socket);
+    periph_router.out[13].bind(stub_periph_misc.reg_socket);
 
     // -- Test-only telemetry ATB inject ------------------------------------
     if (tel_inject_enable_p_.get_value()) {
@@ -397,6 +430,27 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         i2c[i].irq_o.bind(i2c_irq[i]);
     }
 
+    // -- AVSBus reset + IRQ + GPIO-enable sink -----------------------------
+    avsbus.rst_n_i.bind(rst_n_sig);
+    avsbus.irq_o.bind(avsbus_irq);
+    avsbus.avs_gpio_enable_o.bind(avsbus_gpio_en);
+
+    // -- WDT (stage-1 SiFive TLWDT) ----------------------------------------
+    for (unsigned i = 0; i < NUM_HARTS; ++i) {
+        wdt_[i].rst_n_i.bind(rst_n_sig);
+        wdt_[i].core_rst_i.bind(wdt_core_rst[i]);
+        wdt_[i].irq_o.bind(wdt_irq[i]);
+        wdt_[i].rst_sticky_o.bind(wdt_sticky[i]);
+    }
+
+    // Standalone periph-bus cpu_ctrl_ stage-2 ports (elaboration only; sticky
+    // from front-port WDTs feeds the cluster's embedded cpu_ctrl path).
+    for (unsigned i = 0; i < NUM_HARTS; ++i)
+        cpu_ctrl_.wdt_timeout_cluster_i[i].bind(cpu_ctrl_wdt_sticky[i]);
+    cpu_ctrl_.rst_primary_n_i.bind(rst_n_sig);
+    cpu_ctrl_.wdt_first_timeout_o.bind(cpu_ctrl_wdt_first);
+    cpu_ctrl_.wdt_second_timeout_o.bind(cpu_ctrl_wdt_second);
+
     // -- I2C0 controller -> I2C1 target loopback (for smc-i2c-loopback-test)
     //    I2C0's bus model forwards controller segments to I2C1's target back door.
     i2c[0].set_bus_model([this](smc::i2c_xfer& x) {
@@ -434,7 +488,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // -- Bind every stub_target's irq_o to a dummy sink --------------------
     {
         stub_target<64>* stubs64[] = {
-            &stub_wdt_debug, &stub_dfd, &stub_mbox,
+            &stub_dfd, &stub_mbox,
             &stub_dft, &stub_sysmem, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
             &stub_xR, &stub_ibf, &stub_obf,
         };
@@ -447,7 +501,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     }
 
     // -- Interrupt aggregator -> PLIC -------------------------------------
-    // Inputs: telemetry[0..2], i3c[0..5], uart[0..3], i2c[0..2].
+    // Inputs: telemetry[0..2], i3c[0..5], uart[0..3], avsbus, i2c[0..2], wdt[0..3].
     {
         unsigned s = 0;
         for (unsigned i = 0; i < NUM_TELEMETRY; ++i)
@@ -456,8 +510,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
             intagg.src[s++].bind(i3c_irq[i]);
         for (unsigned i = 0; i < NUM_UART; ++i)
             intagg.src[s++].bind(uart_irq[i]);
+        intagg.src[s++].bind(avsbus_irq);
         for (unsigned i = 0; i < NUM_I2C; ++i)
             intagg.src[s++].bind(i2c_irq[i]);
+        for (unsigned i = 0; i < NUM_HARTS; ++i)
+            intagg.src[s++].bind(wdt_irq[i]);
     }
     for (unsigned i = 0; i < NUM_PLIC_SRC; ++i) {
         plic_.src_in[i].bind(plic_src_sig[i]);
@@ -479,11 +536,15 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         cluster.irq_sw[h]   .bind(sig_irq_sw[h]);
         cluster.irq_timer[h].bind(sig_irq_timer[h]);
         cluster.irq_ext[h]  .bind(sig_irq_ext[h]);
+        cluster.wdt_timeout_cluster_i[h].bind(wdt_sticky[h]);
         // Phase C: BEU local (NMI-like) -> cluster beu_nmi_in.
         // irq_plic stays on beu_irq_plic sinks — OCA RTL routes BEU to the
         // per-tile buserror/NMI line, not the PLIC vector (see interrupts.adoc).
         cluster.beu_nmi_in[h].bind(beu_irq_local[h]);
     }
+    cluster.rst_primary_n_i.bind(sig_rst_primary_smc);
+    cluster.wdt_first_timeout_o.bind(sig_wdt_first);
+    cluster.wdt_second_timeout_o.bind(sig_wdt_second);
     // Cluster MMIO enters the fabric; fetches go via cluster.data (already
     // bound to front_port_router for ROM/scratch/PLIC/CLINT).
     cluster.mmio.bind(fabric.mmio_in);
@@ -500,7 +561,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         std::ostringstream _oss;
         _oss << "smc_platform elaborated: "
              << NUM_UART << " uart, " << NUM_I2C << " i2c, "
-             << NUM_I3C << " i3c, " << NUM_TELEMETRY << " telemetry, "
+             << NUM_I3C << " i3c, " << NUM_TELEMETRY << " telemetry, avsbus, " << NUM_HARTS << " wdt, "
              << NUM_BEU << " beu, dma, "
              << NUM_PLIC_SRC << " plic sources";
 #ifdef SMC_PLATFORM_WITH_CLUSTER

@@ -44,7 +44,7 @@ timing, but it must preserve the programmer-visible contract:
 `smc/smc_fabric/test/smc_fabric_tb.cpp`
 
 |SystemC peripherals
-|`smc/peripherals/{bootrom,scratchpad_ram,plic,clint,reset_unit,uart,i2c_controller,i3c_controller,cpu_ctrl}`
+|`smc/peripherals/{bootrom,scratchpad_ram,plic,clint,reset_unit,uart,i2c_controller,i3c_controller,wdt,cpu_ctrl}`
 
 |RTL top level and base
 |`hw/smc/smc.sv`, `hw/smc/smc_base.sv`,
@@ -145,6 +145,13 @@ claim/complete side effects, and CCI sizing.
 |`msip_o[h]`, `mtip_o[h]`, `rst_n_i`
 |RISC-V CLINT model with MSIP, MTIMECMP, MTIME, 32/64-bit accesses, and CCI
 tick period.
+
+|`wdt`
+|Implemented
+|`reg_socket` target
+|`rst_n_i`, `core_rst_i`, `irq_o`, `rst_sticky_o`
+|Per-core SiFive TLWDT (stage 1). Absolute base `0xC000_0000 + N×0x400`.
+KEY/FEED unlock semantics; sticky rst feeds stage-2 in `cpu_ctrl` / cluster.
 
 |`reset_unit`
 |Implemented
@@ -269,10 +276,13 @@ maps equivalent offsets relative to the programmed `GLOBAL_BASE`.
 
 |Watchdog timers
 |`0xC000_0000`
-|4 x small windows
-|Stub needed
-|RTL connects per-core WDT registers and WDT timeout into reset/interrupt logic.
-No SMC SystemC WDT model exists yet.
+|4 x 1 KiB windows
+|`wdt.reg_socket` (×N)
+|Stage-1 SiFive TLWDT model. Front-port sub-decode binds each core window
+(`0xC000_0000 + N×0x400`) with base subtracted. `rst_sticky_o` →
+`wdt_timeout_cluster_i[N]`; `irq_o` → PLIC. Stage-2 countdown in
+`smc_cpu_cluster` / `cpu_ctrl` drives `wdt_second_timeout_o` →
+`reset_unit.smc_wdt_second_timeout_i`.
 
 |Debug module
 |`0xC000_1000`
@@ -324,9 +334,10 @@ peripheral interrupt bit 27.
 |AVSBus
 |`0xC000_8000`
 |4 KiB
-|Stub needed
-|RTL instantiates `avsbus_controller` with ref/periph clocks, GPIO-facing AVS
-signals, debug state, and interrupt bit 22.
+|`avsbus_controller.reg_socket`
+|SystemC LT model exists (`smc/peripherals/avsbus_controller`). Platform
+carves a 4 KiB window out of the periph_misc catch-all, binds reset/IRQ/GPIO-
+enable, and maps interrupt bit 22 → PLIC source 23.
 
 |I2C
 |`0xC000_5000`
@@ -737,6 +748,30 @@ If the top-level platform also supports direct CPU fast memory, disable or
 avoid overlapping fast-memory windows for these regions to keep all firmware
 access visible to the integration fabric.
 
+==== Watchdog timers (front-port)
+
+Per-core stage-1 WDTs sit on the fabric **front-port** path at
+`0xC000_0000 + N×0x400` (1 KiB each). Platform integration should provide:
+
+* a thin front-port decoder that routes each 1 KiB window to
+  `wdt[N].reg_socket` (address relative to the instance base),
+* `wdt[N].rst_n_i` from the core/uncore reset domain,
+* `wdt[N].core_rst_i` from per-core reset (active-high “core in reset”),
+* `wdt[N].irq_o` into the PLIC `src_in` map used by firmware
+  (`metal_watchdog_get_interrupt_id` / device-tree line; SEP external WDT is a
+  separate peripheral IRQ — 1-core PLIC ID 59 / 4-core PLIC ID 283),
+* `wdt[N].rst_sticky_o` → `smc_cpu_cluster.wdt_timeout_cluster_i[N]`
+  (or standalone `cpu_ctrl.wdt_timeout_cluster_i[N]`).
+
+Stage-2 countdown lives in `cpu_ctrl` / `smc_cpu_cluster`
+(`WDT_TIMEOUT` @ `0x50`, `WDT_TIMEOUT_RESET` @ `0x58`):
+
+* `wdt_first_timeout_o` → `reset_unit.smc_wdt_first_timeout_i` (informational),
+* `wdt_second_timeout_o` → `reset_unit.smc_wdt_second_timeout_i` (asserts
+  core + WDT reset together with `rst_ext_wdt_ni`).
+
+See `smc/peripherals/wdt/` and `hw/smc/smc_cpu/data/registers/rdl/wdt.rdl`.
+
 ==== CPU Control (cpu_ctrl)
 [[_cpu_control_cpu_ctrl]]
 
@@ -750,9 +785,9 @@ Registers modeled (offsets relative to `0xC001_0000`):
 
 * `RESET_VECTOR[4]` (`0x000`), `RESET_CTRL` (`0x020`),
   `CORE_RESET_PULSE_COUNT` (`0x028`), `CLOCK_GATE_CONTROL` (`0x030`),
-* `GLOBAL_BASE` (`0x040`), `LOCAL_BASE` (`0x048`, RO), `REGION_SIZE` (`0x050`),
-  `REFERENCE_COUNTER` (`0x060`), `WDT_TIMEOUT` (`0x070`),
-  `WDT_TIMEOUT_RESET` (`0x078`, self-clearing pulse),
+* `GLOBAL_BASE` (`0x040`), `LOCAL_BASE` (`0x048`, RO),
+  `WDT_TIMEOUT` (`0x050`), `WDT_TIMEOUT_RESET` (`0x058`, self-clearing pulse),
+  `REFERENCE_COUNTER` (`0x060`), `REGION_SIZE` (`0x068`, legacy),
 * **`SCRATCH[16]`** (`0x100`) — see <<_handoff_scratch_indices>> below,
 * `TEST_CTRL` (`0x200`, RO / HW backdoor), `DEBUG_CTRL` (`0x208`),
   `DEBUG_BUS_MUX` (`0x210`),
@@ -766,8 +801,9 @@ Holes inside the 8 KiB window are RAZ/WI; addresses `>= 0x2000` return
 `TLM_ADDRESS_ERROR_RESPONSE`. Width contracts: naturally aligned `{1, 2, 4, 8}`
 byte accesses. `MUTEX[n]` reads perform an atomic test-and-set as a bus-level
 side effect (a side-effect-free peek is available via `transport_dbg` /
-`dbg_reg()`). `WDT_TIMEOUT_RESET` and `RESET_CTRL` pulse bits self-clear;
-functional reset sequencing and clock-gating side effects are **not** modeled.
+`dbg_reg()`). `WDT_TIMEOUT_RESET` and `RESET_CTRL` pulse bits self-clear.
+`WDT_TIMEOUT_RESET` also reloads the stage-2 countdown when sticky is asserted;
+functional cold/warm reset sequencing and clock-gating side effects are **not** modeled beyond the WDT stage-2 outputs.
 
 [[_handoff_scratch_indices]]
 Handoff scratch indices (firmware contract; mirrors
@@ -835,12 +871,6 @@ until functional SystemC models are developed:
 [cols="20,25,20,35",options="header"]
 |===
 |Block |RTL connection |Interrupt/reset sideband |Stub behavior recommendation
-
-|Watchdog timers
-|CPU cluster WDT windows at `0xC000_0000 + core*0x400`
-|`wdt_first_timeout_o`, `wdt_second_timeout_o`, reset-unit WDT input
-|Return reset values; optionally expose a test API to force first/second
-timeout.
 
 |RISC-V debug module
 |`0xC000_1000`, CPU JTAG signals
@@ -964,7 +994,7 @@ RTL builds the 32-bit `peripheral_interrupts_o` in `smc_peripherals.sv`:
 |11 |OR of `ndmreset_request_smc_clk` |SMC misc/NDM stub
 |17:12 |`i3c_irqs_smc_clk` |`i3c_controller.irq_o[5:0]`
 |21:18 |`uart_irq_combined_smc_clk` |UART/log wrapper interrupt combine
-|22 |`avsbus_irq_smc_clk` |AVSBus stub/model
+|22 |`avsbus_irq_smc_clk` |`avsbus_controller.irq_o`
 |25:23 |`i2c_irqs_smc_clk` |`i2c_controller.irq_o[2:0]` (3 instances)
 |26 |Synchronized active-high SEP WDT reset assertion |Top-level SEP WDT input
 |27 |`temp_interrupt_smc_clk` |PVT/temp input or stub
@@ -1073,7 +1103,8 @@ Existing unit/integration tests:
 |`smc/peripherals/uart/test` |16550 register behavior, FIFO/interrupt paths
 |`smc/peripherals/i3c_controller/test` |HCI/PIO queues, interrupts, negative and coverage tests
 |`smc/peripherals/i2c_controller/test` |Controller/Target FIFOs (FMT/RX/TX/ACQ), interrupt aggregation, NACK/halt/resume, SMBus, target back doors, coverage tests
-|`smc/peripherals/cpu_ctrl/test` |Register R/W paths, HW backdoors (`SMC_ATTRIBUTES`/`TEST_CTRL`/`WB_PC`), `SCRATCH[16]` handoff indices, `MUTEX` test-and-set, `SEMA` inc/dec, `WDT_TIMEOUT_RESET` self-clear, `b_transport`/`transport_dbg` error responses
+|`smc/peripherals/cpu_ctrl/test` |Register R/W paths, HW backdoors (`SMC_ATTRIBUTES`/`TEST_CTRL`/`WB_PC`), `SCRATCH[16]` handoff indices, `MUTEX` test-and-set, `SEMA` inc/dec, `WDT_TIMEOUT_RESET` self-clear + stage-2 countdown, `b_transport`/`transport_dbg` error responses
+|`smc/peripherals/wdt/test` |KEY/FEED unlock, compare/IRQ, sticky rst, scale, zerocmp, awake vs always, module reset
 |`smc/smc_fabric/test` |Fabric local decode, remap, filters, source IDs, DMI denial
 |`smc/cpu_cluster/test` |CPU cluster TLM, interrupts, debug, optional PLIC integration
 |===

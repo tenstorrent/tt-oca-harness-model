@@ -4,7 +4,7 @@
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
 // (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, DMA, I3C,
-// 3x I2C, 4x UART, 3x telemetry_receiver, 4x per-core BEU, and optionally the
+// 3x I2C, 4x UART, 3x telemetry_receiver, AVSBus controller, 4x WDT, 4x per-core BEU, and optionally the
 // Whisper-backed CPU cluster), wires the fabric's initiator sockets through
 // address routers to the modeled targets and stubs, composes the peripheral
 // interrupt vector into the PLIC, and — when the cluster is present — connects
@@ -36,12 +36,15 @@
 #include "i2c_controller.h"
 #include "i3c_controller.h"
 #include "memory_zeroer.h"
+#include "pll_wrapper.h"
 #include "plic.h"
 #include "reset_unit.h"
 #include "scratchpad_ram.h"
 #include "uart.h"
+#include "wdt.h"
 #include "beu.h"
 #include "telemetry_receiver.h"
+#include "avsbus_controller.h""
 
 #ifdef SMC_PLATFORM_WITH_CLUSTER
 #include "smc_cpu_cluster.h"
@@ -67,10 +70,10 @@ public:
     static constexpr unsigned NUM_PLIC_SRC   = 336;
     static constexpr unsigned NUM_PLIC_CTX   = 8;
     static constexpr unsigned NUM_SUBSYS     = 32;
-    // Peripheral IRQ inputs: telemetry[0..2], i3c[0..5], uart[0..3], i2c[0..2]
+    // Peripheral IRQ inputs: telemetry[0..2], i3c[0..5], uart[0..3], avsbus, i2c[0..2], wdt[0..3]
     // (matches smc_peripherals.sv peripheral_interrupts_o composition).
     static constexpr unsigned NUM_PERIPH_IRQ =
-        NUM_TELEMETRY + NUM_I3C + NUM_UART + NUM_I2C;
+        NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C + NUM_HARTS;
 
     // -----------------------------------------------------------------------
     // Test-only BEU error-injection hook (Phase D1; see
@@ -130,11 +133,15 @@ public:
     cpu_ctrl        cpu_ctrl_{"cpu_ctrl"};
     dma             dma_{"dma"};
     memory_zeroer   zeroer{"memory_zeroer"};
+    pll::pll_wrapper pll_wrap{"pll_wrap"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
+    // Trailing underscore avoids colliding with class smc::wdt (GCC -fpermissive).
+    sc_core::sc_vector<wdt>            wdt_{"wdt", NUM_HARTS};
     sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
     sc_core::sc_vector<telemetry_receiver> telemetry_{"telemetry", NUM_TELEMETRY};
+    avsbus_controller                  avsbus{"avsbus"};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
 #endif
@@ -145,17 +152,19 @@ public:
     // front_port_router: 64-bit in (fabric.to_front_port + cluster.data) ->
     //   64-bit outputs.  The 32-bit front-port peripherals (boot ROM,
     //   scratchpad, PLIC, CLINT) sit behind `width_adapter<64,32>` instances
-    //   because TLM simple sockets refuse cross-width binds.
+    //   because TLM simple sockets refuse cross-width binds.  The WDT window
+    //   is demuxed by `wdt_demux` (64→32) into four 1 KiB instances.
     //
     // periph_router: 64-bit in (fabric.to_periph) -> 32-bit outputs (every
     //   peripheral on this bus is a 32-bit reg_socket).
     // -----------------------------------------------------------------------
     addr_router<64, 64>         front_port_router{"front_port_router", 7};
+    addr_router<64, 32>         wdt_demux{"wdt_demux", NUM_HARTS};
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
-    // cpu_ctrl, i3c, catch-all stub (12).
-    addr_router<64, 32>         periph_router{"periph_router", 12};
+    // cpu_ctrl, i3c, pll_wrap, avsbus, catch-all stub (14).
+    addr_router<64, 32>         periph_router{"periph_router", 14};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
@@ -187,7 +196,7 @@ public:
     // -----------------------------------------------------------------------
     // Stubs for unmodeled / RTL-connected blocks
     // -----------------------------------------------------------------------
-    stub_target<64> stub_wdt_debug{"stub_wdt_debug"};
+    // WDT is modeled (wdt_[] + wdt_demux); no stub_wdt_debug.
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};
@@ -274,7 +283,7 @@ public:
     sc_core::sc_vector<sc_core::sc_signal<bool>> i3c_ria{"i3c_ria", NUM_I3C};
 
     // -----------------------------------------------------------------------
-    // I2C / PLIC / cluster IRQ signals
+    // I2C / WDT / PLIC / cluster IRQ signals
     // -----------------------------------------------------------------------
     sc_core::sc_vector<sc_core::sc_signal<bool>> i2c_irq{"i2c_irq", NUM_I2C};
     sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_irq{"telemetry_irq", NUM_TELEMETRY};
@@ -282,6 +291,14 @@ public:
     sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_afvalid{"telemetry_afvalid", NUM_TELEMETRY};
     sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_atready{"telemetry_atready", NUM_TELEMETRY};
     sc_core::sc_vector<sc_core::sc_signal<uint32_t>> telemetry_debug{"telemetry_debug", NUM_TELEMETRY};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_irq{"wdt_irq", NUM_HARTS};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_sticky{"wdt_sticky", NUM_HARTS};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_core_rst{"wdt_core_rst", NUM_HARTS};
+    // Standalone periph-bus cpu_ctrl_ stage-2 ports (not driven by front-port WDTs).
+    sc_core::sc_vector<sc_core::sc_signal<bool>> cpu_ctrl_wdt_sticky{
+        "cpu_ctrl_wdt_sticky", NUM_HARTS};
+    sc_core::sc_signal<bool> cpu_ctrl_wdt_first{"cpu_ctrl_wdt_first"};
+    sc_core::sc_signal<bool> cpu_ctrl_wdt_second{"cpu_ctrl_wdt_second"};
     sc_core::sc_vector<sc_core::sc_signal<bool>> plic_src_sig{"plic_src_sig", NUM_PLIC_SRC};
     // Dummy sinks for every stub_target's irq_o (stubs don't drive the PLIC in
     // Phase 1; their irq_drive_method still requires a bound port).
@@ -291,6 +308,9 @@ public:
     // (cpu_interrupts.adoc has no BEU PLIC source ID).
     sc_core::sc_vector<sc_core::sc_signal<bool>> beu_irq_local{"beu_irq_local", NUM_BEU};
     sc_core::sc_vector<sc_core::sc_signal<bool>> beu_irq_plic{"beu_irq_plic", NUM_BEU};
+    // AVSBus interrupt (peripheral bit 22) + unused GPIO-enable output sink.
+    sc_core::sc_signal<bool> avsbus_irq{"avsbus_irq"};
+    sc_core::sc_signal<bool> avsbus_gpio_en{"avsbus_gpio_en"};
 // memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
 // dummy sink for now; can later be routed into the PLIC/aggregator.
 sc_core::sc_signal<bool, sc_core::SC_MANY_WRITERS> sig_zeroer_irq{"sig_zeroer_irq"};

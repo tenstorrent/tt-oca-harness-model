@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iomanip>
+#include <sstream>
 
 namespace smc {
 
@@ -48,14 +49,25 @@ cpu_ctrl::cpu_ctrl(sc_core::sc_module_name name, cpu_ctrl_cfg cfg)
           "access_delay_ns",
           cfg.access_delay_ns,
           "TLM b_transport annotated delay in nanoseconds.")
+    , wdt_stage2_tick_ns_p_(
+          "wdt_stage2_tick_ns",
+          cfg.wdt_stage2_tick_ns,
+          "Stage-2 WDT countdown tick period in nanoseconds; 0 disables auto-tick.")
     , cfg_(cfg)
 {
     cfg_.base_addr       = base_addr_p_.get_value();
     cfg_.access_delay_ns = access_delay_ns_p_.get_value();
+    cfg_.wdt_stage2_tick_ns = wdt_stage2_tick_ns_p_.get_value();
 
     base_addr_p_.add_metadata("rdl_block", cci::cci_value(std::string("cpu_ctrl")));
     base_addr_p_.add_metadata("default",   cci::cci_value(std::string("0xC0010000")));
     access_delay_ns_p_.add_metadata("unit", cci::cci_value(std::string("nanoseconds")));
+
+    wdt_timeout_cluster_i.init(cpu_ctrl_cfg::NUM_CORES);
+    wdt_stage2_count_.fill(0x4000);
+    wdt_stage2_reload_pulse_.fill(false);
+    wdt_stage2_tick_period_ =
+        sc_core::sc_time(cfg_.wdt_stage2_tick_ns, sc_core::SC_NS);
 
     // Fix regmodel register masks/callbacks for the module's lifetime here;
     // reset_regs() below (and on soft reset) only resets the stored values
@@ -91,6 +103,25 @@ cpu_ctrl::cpu_ctrl(sc_core::sc_module_name name, cpu_ctrl_cfg cfg)
     reg_socket.register_b_transport(this, &cpu_ctrl::b_transport);
     reg_socket.register_transport_dbg(this, &cpu_ctrl::transport_dbg);
 
+    SC_METHOD(wdt_stage2_tick_method);
+    sensitive << wdt_stage2_tick_event_;
+    dont_initialize();
+
+    SC_METHOD(wdt_stage2_output_method);
+    sensitive << wdt_stage2_recompute_event_;
+    dont_initialize();
+
+    SC_METHOD(wdt_stage2_input_method);
+    sensitive << rst_primary_n_i;
+    for (unsigned i = 0; i < cpu_ctrl_cfg::NUM_CORES; ++i) {
+        sensitive << wdt_timeout_cluster_i[i];
+    }
+    dont_initialize();
+
+    if (wdt_stage2_tick_period_ != sc_core::SC_ZERO_TIME) {
+        wdt_stage2_tick_event_.notify(wdt_stage2_tick_period_);
+    }
+
     SC_REPORT_INFO(name,
         ("cpu_ctrl instantiated: base_addr=0x" +
          ([&] {
@@ -116,6 +147,10 @@ void cpu_ctrl::reset_regs()
     reference_counter_      = 0;
     wdt_timeout_            = 0x4000;
     wdt_timeout_reset_      = 0;
+    wdt_stage2_count_.fill(static_cast<uint32_t>(wdt_timeout_));
+    wdt_stage2_reload_pulse_.fill(false);
+    wdt_first_timeout_  = false;
+    wdt_second_timeout_ = false;
     for (auto& r : scratch_) r.reset(0);
     test_ctrl_              = 0;
     debug_ctrl_             = 0;
@@ -159,7 +194,7 @@ uint64_t cpu_ctrl::read_qword(uint64_t off) const
     case cpu_ctrl_cfg::OFF_REGION_SIZE:            return region_size_;
     case cpu_ctrl_cfg::OFF_REFERENCE_COUNTER:      return reference_counter_;
     case cpu_ctrl_cfg::OFF_WDT_TIMEOUT:            return wdt_timeout_;
-    case cpu_ctrl_cfg::OFF_WDT_TIMEOUT_RESET:      return wdt_timeout_reset_;
+    case cpu_ctrl_cfg::OFF_WDT_TIMEOUT_RESET:      return 0;  // singlepulse reads as 0
     case cpu_ctrl_cfg::OFF_TEST_CTRL:              return test_ctrl_;
     case cpu_ctrl_cfg::OFF_DEBUG_CTRL:             return debug_ctrl_;
     case cpu_ctrl_cfg::OFF_DEBUG_BUS_MUX:          return debug_bus_mux_;
@@ -260,7 +295,7 @@ bool cpu_ctrl::write_qword(uint64_t off, uint64_t val, unsigned byte_off,
         wdt_timeout_ &= 0xFFFF'FFFFULL;
         return true;
     case cpu_ctrl_cfg::OFF_WDT_TIMEOUT_RESET:
-        merge(wdt_timeout_reset_, insert);
+        apply_wdt_timeout_reset(static_cast<uint32_t>(insert & 0xFu));
         wdt_timeout_reset_ = 0;  // singlepulse
         return true;
     case cpu_ctrl_cfg::OFF_TEST_CTRL:
@@ -498,6 +533,93 @@ unsigned int cpu_ctrl::transport_dbg(tlm::tlm_generic_payload& gp)
         return len;
     }
     return 0;
+}
+
+void cpu_ctrl::schedule_wdt_stage2_recompute()
+{
+    wdt_stage2_recompute_event_.notify(sc_core::SC_ZERO_TIME);
+}
+
+void cpu_ctrl::apply_wdt_timeout_reset(uint32_t pulse_bits)
+{
+    for (unsigned i = 0; i < cpu_ctrl_cfg::NUM_CORES; ++i) {
+        if ((pulse_bits >> i) & 1u) {
+            wdt_stage2_reload_pulse_[i] = true;
+            wdt_stage2_count_[i] =
+                static_cast<uint32_t>(wdt_timeout_ & 0xFFFF'FFFFu);
+        }
+    }
+    // Reload / refresh outputs only — do not advance the countdown.
+    wdt_stage2_step_once(/*do_decrement=*/false);
+    schedule_wdt_stage2_recompute();
+}
+
+void cpu_ctrl::wdt_stage2_step_once(bool do_decrement)
+{
+    bool any_first  = false;
+    bool any_second = false;
+    for (unsigned i = 0; i < cpu_ctrl_cfg::NUM_CORES; ++i) {
+        const bool sticky = wdt_timeout_cluster_i[i].read();
+        const bool reload =
+            !rst_primary_n_i.read() ||
+            wdt_stage2_reload_pulse_[i] ||
+            !sticky;
+        if (reload) {
+            wdt_stage2_count_[i] =
+                static_cast<uint32_t>(wdt_timeout_ & 0xFFFF'FFFFu);
+            wdt_stage2_reload_pulse_[i] = false;
+        } else if (do_decrement && sticky && wdt_stage2_count_[i] != 0) {
+            --wdt_stage2_count_[i];
+        }
+        any_first  = any_first || sticky;
+        any_second = any_second || (wdt_stage2_count_[i] == 0);
+    }
+    wdt_first_timeout_  = any_first;
+    wdt_second_timeout_ = any_second;
+}
+
+void cpu_ctrl::wdt_stage2_tick_method()
+{
+    if (!rst_primary_n_i.read()) {
+        wdt_stage2_count_.fill(static_cast<uint32_t>(wdt_timeout_ & 0xFFFF'FFFFu));
+        wdt_first_timeout_  = false;
+        wdt_second_timeout_ = false;
+        schedule_wdt_stage2_recompute();
+    } else {
+        wdt_stage2_step_once();
+        schedule_wdt_stage2_recompute();
+    }
+    if (wdt_stage2_tick_period_ != sc_core::SC_ZERO_TIME) {
+        wdt_stage2_tick_event_.notify(wdt_stage2_tick_period_);
+    }
+}
+
+void cpu_ctrl::wdt_stage2_input_method()
+{
+    // Sticky / primary-reset edges reload or refresh outputs; countdown
+    // advances only on the periodic (or dbg) tick path.
+    wdt_stage2_step_once(/*do_decrement=*/false);
+    schedule_wdt_stage2_recompute();
+}
+
+void cpu_ctrl::wdt_stage2_output_method()
+{
+    if (wdt_first_timeout_ != wdt_first_cache_) {
+        wdt_first_timeout_o.write(wdt_first_timeout_);
+        wdt_first_cache_ = wdt_first_timeout_;
+    }
+    if (wdt_second_timeout_ != wdt_second_cache_) {
+        wdt_second_timeout_o.write(wdt_second_timeout_);
+        wdt_second_cache_ = wdt_second_timeout_;
+    }
+}
+
+void cpu_ctrl::dbg_wdt_stage2_tick(unsigned n)
+{
+    for (unsigned k = 0; k < n; ++k) {
+        wdt_stage2_step_once();
+    }
+    schedule_wdt_stage2_recompute();
 }
 
 }  // namespace smc
