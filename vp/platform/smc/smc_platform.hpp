@@ -4,11 +4,11 @@
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
 // (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, DMA, I3C,
-// 3x I2C, 4x UART, 4x WDT, 4x per-core BEU, and optionally the Whisper-backed
-// CPU cluster), wires the fabric's initiator sockets through address routers
-// to the modeled targets and stubs, composes the peripheral interrupt vector
-// into the PLIC, and — when the cluster is present — connects CLINT MSIP/MTIP
-// and PLIC MEIP to the cluster's per-hart IRQ inputs.
+// 3x I2C, 4x UART, AVSBus controller, 4x WDT, 4x per-core BEU, and optionally the
+// Whisper-backed CPU cluster), wires the fabric's initiator sockets through
+// address routers to the modeled targets and stubs, composes the peripheral
+// interrupt vector into the PLIC, and — when the cluster is present — connects
+// CLINT MSIP/MTIP and PLIC MEIP to the cluster's per-hart IRQ inputs.
 //
 // See smc/doc/systemc_tlm2_integration_guide.adoc for the address map and
 // binding rationale.
@@ -43,6 +43,7 @@
 #include "uart.h"
 #include "wdt.h"
 #include "beu.h"
+#include "avsbus_controller.h"
 
 #ifdef SMC_PLATFORM_WITH_CLUSTER
 #include "smc_cpu_cluster.h"
@@ -67,9 +68,9 @@ public:
     static constexpr unsigned NUM_PLIC_SRC   = 336;
     static constexpr unsigned NUM_PLIC_CTX   = 8;
     static constexpr unsigned NUM_SUBSYS     = 32;
-    // Peripheral IRQ inputs: i3c[0..5], uart[0..3], i2c[0..2], wdt[0..3].
+    // Peripheral IRQ inputs: i3c[0..5], uart[0..3], avsbus, i2c[0..2], wdt[0..3].
     static constexpr unsigned NUM_PERIPH_IRQ =
-        NUM_I3C + NUM_UART + NUM_I2C + NUM_HARTS;
+        NUM_I3C + NUM_UART + 1 + NUM_I2C + NUM_HARTS;
 
     // -----------------------------------------------------------------------
     // Test-only BEU error-injection hook (Phase D1; see
@@ -127,6 +128,7 @@ public:
     // Trailing underscore avoids colliding with class smc::wdt (GCC -fpermissive).
     sc_core::sc_vector<wdt>            wdt_{"wdt", NUM_HARTS};
     sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
+    avsbus_controller                  avsbus{"avsbus"};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
 #endif
@@ -147,7 +149,7 @@ public:
     addr_router<64, 32>         wdt_demux{"wdt_demux", NUM_HARTS};
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
-    addr_router<64, 32>         periph_router{"periph_router", 12};
+    addr_router<64, 32>         periph_router{"periph_router", 13};
     width_adapter<64, 32>       wa_bootrom{"wa_bootrom"};
     width_adapter<64, 32>       wa_scratch{"wa_scratch"};
     width_adapter<64, 32>       wa_plic{"wa_plic"};
@@ -283,6 +285,9 @@ public:
     // (cpu_interrupts.adoc has no BEU PLIC source ID).
     sc_core::sc_vector<sc_core::sc_signal<bool>> beu_irq_local{"beu_irq_local", NUM_BEU};
     sc_core::sc_vector<sc_core::sc_signal<bool>> beu_irq_plic{"beu_irq_plic", NUM_BEU};
+    // AVSBus interrupt (peripheral bit 22) + unused GPIO-enable output sink.
+    sc_core::sc_signal<bool> avsbus_irq{"avsbus_irq"};
+    sc_core::sc_signal<bool> avsbus_gpio_en{"avsbus_gpio_en"};
 // memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
 // dummy sink for now; can later be routed into the PLIC/aggregator.
 sc_core::sc_signal<bool, sc_core::SC_MANY_WRITERS> sig_zeroer_irq{"sig_zeroer_irq"};

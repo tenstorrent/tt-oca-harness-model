@@ -188,6 +188,7 @@ fi
 # smc_fabric is listed last; it does not use CCI and its run_tests.sh will
 # simply ignore CCI_HOME even if the variable happens to be set.
 ALL_IPS=(
+    "avsbus_controller:${SCRIPT_DIR}/peripherals/avsbus_controller"
     "beu:${SCRIPT_DIR}/peripherals/beu"
     "bootrom:${SCRIPT_DIR}/peripherals/bootrom"
     "clint:${SCRIPT_DIR}/peripherals/clint"

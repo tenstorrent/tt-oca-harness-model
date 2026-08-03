@@ -21,6 +21,7 @@
 #define SMC_WDT3_BASE        0xC0000C00ULL
 #define SMC_RESET_BASE       0xC0002000ULL
 #define SMC_I3C_BASE         0xC0005000ULL
+#define SMC_AVSBUS_BASE      0xC0008000ULL
 #define SMC_I2C0_BASE        0xC0009000ULL
 #define SMC_I2C1_BASE        0xC0009200ULL
 #define SMC_I2C2_BASE        0xC0009400ULL
@@ -178,6 +179,50 @@
 #define PLIC_SRC_UART1    20u
 #define PLIC_SRC_UART2    21u
 #define PLIC_SRC_UART3    22u
+
+/* AVSBus PLIC source ID (peripheral bit 22 -> PLIC source 23) */
+#define PLIC_SRC_AVSBUS   23u
+
+/* AVSBus Controller — base 0xC000_8000, 4 KiB window, 32-bit registers.
+ * Mirrors hw/ip/avsbus_controller RDL (AVSBus 1.3.1 single-target). */
+#define AVS_CMD                    0x00u
+#define AVS_READBACK               0x04u
+#define AVS_DEBUG_READBACK         0x08u
+#define AVS_LATEST_SLAVE_SUBFRAME  0x0Cu
+#define AVS_NORMAL_STATUS          0x20u
+#define AVS_SLAVE_STATUS           0x24u
+#define AVS_FIFOS_STATUS           0x28u
+#define AVS_INTERRUPT              0x30u
+#define AVS_INTERRUPT_MASK         0x34u
+#define AVS_INTERRUPT_CLEAR        0x38u
+#define AVS_CFG_0                  0x50u
+#define AVS_CFG_1                  0x54u
+#define AVS_CONFIG                 0x58u
+
+/* AVS_NORMAL_STATUS bits */
+#define AVS_STATUS_CMD_FIFO_EMPTY      (1u << 17u)
+#define AVS_STATUS_READBACK_HAS_DATA   (1u << 20u)
+#define AVS_STATUS_BUS_IS_IDLE         (1u << 21u)
+
+/* AVS_INTERRUPT bits */
+#define AVS_IRQ_READBACK_HAS_DATA      (1u << 3u)
+
+/* AVS_CMD field helpers (RDL layout) */
+#define AVS_CMD_PACK(r_or_w, grp, code, rail, data) \
+    ((((uint32_t)(r_or_w) & 0x3u) << 28) | \
+     (((uint32_t)(grp)    & 0x1u) << 27) | \
+     (((uint32_t)(code)   & 0xFu) << 23) | \
+     (((uint32_t)(rail)   & 0xFu) << 19) | \
+     (((uint32_t)(data)   & 0xFFFFu) << 3))
+#define AVS_CMD_COMMIT_WRITE  0x0u
+#define AVS_CMD_READ          0x2u
+#define AVS_CMD_CODE_VOLTAGE  0x0u
+
+/* Known reset values */
+#define AVS_CFG_0_RESET       0x00051000u
+#define AVS_CFG_1_RESET       0x00000003u
+#define AVS_CONFIG_RESET      0x1u
+#define AVS_IRQ_MASK_RESET    0x1FFu
 
 /* SiFive TLWDT PLIC source IDs (Freedom Metal metal_watchdog_get_interrupt_id) */
 #define PLIC_SRC_WDT0    329u

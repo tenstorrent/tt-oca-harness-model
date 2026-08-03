@@ -49,6 +49,7 @@ coverage-report/
 # Local dependency paths (see smc/peripherals/*/deps.env.example)
 smc/peripherals/uart/deps.env
 smc/peripherals/beu/deps.env
+smc/peripherals/avsbus_controller/deps.env
 
 # Local dependency paths (see smc/peripherals/cpu_ctrl/deps.env.example)
 smc/peripherals/cpu_ctrl/deps.env
