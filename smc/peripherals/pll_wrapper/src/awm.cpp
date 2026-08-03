@@ -122,17 +122,20 @@ void tile(std::vector<reg_spec>& out,
     }
 }
 
-// Build (once) the full awm register table by tiling GLOBAL + 6x FREQUENCY +
-// 3x CGM at their instance bases.  Returned by reference so it outlives the
-// module construction (reg_block copies each entry during build()).
 const std::vector<reg_spec>& awm_table()
 {
     static std::vector<std::string> name_store;
     static std::vector<reg_spec>    table = [] {
         std::vector<reg_spec> t;
+
+        constexpr std::size_t kNumRegs =
+            (sizeof(kGlobal) / sizeof(kGlobal[0])) +
+            6 * (sizeof(kFrequency) / sizeof(kFrequency[0])) +
+            3 * (sizeof(kCgm) / sizeof(kCgm[0]));
+
         // Reserve so the c_str() pointers taken in tile() stay valid.
-        name_store.reserve(256);
-        t.reserve(128);
+        name_store.reserve(kNumRegs);
+        t.reserve(kNumRegs);
 
         tile(t, name_store, kGlobal, sizeof(kGlobal) / sizeof(kGlobal[0]),
              awm::OFF_GLOBAL, "GLOBAL.");
