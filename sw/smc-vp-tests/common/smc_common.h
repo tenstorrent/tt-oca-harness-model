@@ -38,6 +38,7 @@
 #define SMC_CLINT_BASE       0xC0C00000ULL
 #define SMC_BEU_BASE         0xC0C10000ULL
 #define SMC_ZEROER_BASE      0xC0038200ULL
+#define SMC_PLL_WRAP_BASE     0xC0003000ULL
 
 /* CLINT register offsets (RISC-V standard layout) */
 #define CLINT_MSIP(hart)        (0x0000u + 4u * (hart))
@@ -293,11 +294,50 @@
 #define ZEROER_CTRL_INT_EN       (1ull << 0u)   /* completion interrupt enable */
 #define ZEROER_CTRL_BUSY         (1ull << 32u)  /* 1 while a job is running     */
 
+/* PLL wrapper (pll_wrap.rdl) — base 0xC000_3000, window 0x1000.
+ * Composed map (matches vp/platform/smc periph_router route "pll_wrap"):
+ *   pll_cntl @0x000, cgm_0 @0x100, cgm_1 @0x200, awm_0 @0x400, awm_1 @0xA00.
+ * The firmware (fw/smc) accesses cgm/awm and the pll_cntl status registers
+ * with 16-bit MMIO, and the wide pll_cntl registers with 32-bit — use
+ * REG_READ16/REG_WRITE16 for the former, REG_READ/REG_WRITE for the latter. */
+#define PLL_CNTL_BASE         (SMC_PLL_WRAP_BASE + 0x000u)
+#define PLL_CGM_BASE(id)      (SMC_PLL_WRAP_BASE + 0x100u + (id) * 0x100u)
+#define PLL_AWM_BASE(id)      (SMC_PLL_WRAP_BASE + 0x400u + (id) * 0x600u)
+
+/* pll_cntl register offsets (firmware-polled lock status lives here) */
+#define PLL_CNTL_CGM_0_STATUS   0x00u   /* RO lock_detect[0]   */
+#define PLL_CNTL_CGM_1_STATUS   0x04u   /* RO lock_detect[0]   */
+#define PLL_CNTL_AWM_0_STATUS   0x14u   /* RO lock_detect[2:0] */
+#define PLL_CNTL_AWM_1_STATUS   0x1Cu   /* RO lock_detect[2:0] */
+#define PLL_CNTL_AG_MUX_SELECT  0x20u   /* RW 32-bit, mask 0x3F3FFFFF */
+
+/* cgm register offsets (16-bit registers) */
+#define CGM_ENABLES         0x00u   /* cgm_enable[0], freq_acq_enable[1] */
+#define CGM_FCW_INT         0x04u
+#define CGM_FCW_FRAC        0x08u
+#define CGM_PREDIV          0x0Cu
+#define CGM_REG_UPDATE      0x20u   /* WO self-clearing commit strobe */
+#define CGM_CGM_STATUS      0x4Cu   /* RO lock_detect[0] */
+
+/* awm GLOBAL register offsets */
+#define AWM_GLOBAL_REG_UPDATE   0x28u   /* WO commit strobe */
+#define AWM_GLOBAL_LOCK_STATUS  0x98u   /* RO lock_detect[5:3] */
+
+/* PLL field bits */
+#define CGM_ENABLE_BIT       (1u << 0u)
+#define CGM_FREQ_ACQ_BIT     (1u << 1u)
+#define PLL_LOCK_DETECT_BIT  (1u << 0u)
+
 /* MMIO helpers */
 #define REG_READ(addr)          (*((volatile uint32_t *)(uintptr_t)(addr)))
 #define REG_WRITE(addr, val)    (*((volatile uint32_t *)(uintptr_t)(addr)) = (val))
 #define REG_OR(addr, val)       REG_WRITE((addr), REG_READ((addr)) | (val))
 #define REG_AND(addr, val)      REG_WRITE((addr), REG_READ((addr)) & (val))
+
+/* 16-bit MMIO helpers (the PLL firmware accesses cgm/awm/pll_cntl status
+ * registers as 16-bit; the pll_wrapper model supports sub-word access). */
+#define REG_READ16(addr)        (*((volatile uint16_t *)(uintptr_t)(addr)))
+#define REG_WRITE16(addr, val)  (*((volatile uint16_t *)(uintptr_t)(addr)) = (uint16_t)(val))
 
 /* 64-bit MMIO helpers (required for the memory_zeroer register file) */
 #define REG_READ64(addr)        (*((volatile uint64_t *)(uintptr_t)(addr)))

@@ -39,6 +39,7 @@ add_subdirectory(${SMC_IP_DIR}/cpu_ctrl         ${CMAKE_CURRENT_BINARY_DIR}/ip_c
 add_subdirectory(${SMC_IP_DIR}/wdt              ${CMAKE_CURRENT_BINARY_DIR}/ip_wdt)
 add_subdirectory(${SMC_IP_DIR}/dma              ${CMAKE_CURRENT_BINARY_DIR}/ip_dma)
 add_subdirectory(${SMC_IP_DIR}/memory_zeroer    ${CMAKE_CURRENT_BINARY_DIR}/ip_memory_zeroer)
+add_subdirectory(${SMC_IP_DIR}/pll_wrapper      ${CMAKE_CURRENT_BINARY_DIR}/ip_pll_wrapper)
 add_subdirectory(${SMC_IP_DIR}/beu              ${CMAKE_CURRENT_BINARY_DIR}/ip_beu)
 add_subdirectory(${SMC_IP_DIR}/avsbus_controller ${CMAKE_CURRENT_BINARY_DIR}/ip_avsbus)
 add_subdirectory(${_smc_root}/smc_fabric        ${CMAKE_CURRENT_BINARY_DIR}/ip_smc_fabric)
@@ -94,6 +95,7 @@ target_link_libraries(smc-vp
         smc_beu
         smc_avsbus_controller
         smc_memory_zeroer
+        smc_pll_wrapper
         smc_cpu_cluster
         SystemC::systemc
         SystemC::cci

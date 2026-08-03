@@ -36,6 +36,7 @@
 #include "i2c_controller.h"
 #include "i3c_controller.h"
 #include "memory_zeroer.h"
+#include "pll_wrapper.h"
 #include "plic.h"
 #include "reset_unit.h"
 #include "scratchpad_ram.h"
@@ -120,6 +121,7 @@ public:
     cpu_ctrl        cpu_ctrl_{"cpu_ctrl"};
     dma             dma_{"dma"};
     memory_zeroer   zeroer{"memory_zeroer"};
+    pll::pll_wrapper pll_wrap{"pll_wrap"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
@@ -147,7 +149,7 @@ public:
     addr_router<64, 32>         wdt_demux{"wdt_demux", NUM_HARTS};
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
-    addr_router<64, 32>         periph_router{"periph_router", 12};
+    addr_router<64, 32>         periph_router{"periph_router", 13};
     width_adapter<64, 32>       wa_bootrom{"wa_bootrom"};
     width_adapter<64, 32>       wa_scratch{"wa_scratch"};
     width_adapter<64, 32>       wa_plic{"wa_plic"};
