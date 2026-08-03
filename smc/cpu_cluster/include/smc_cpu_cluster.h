@@ -101,6 +101,9 @@ public:
         // Construction strap retained for SMC_ATTRIBUTES/debug APIs; LOCAL_BASE
         // is now exposed by smc_base_config, not cpu_ctrl.
         uint64_t    local_base_default = 0xC000'0000ull;
+
+        /// Stage-2 WDT tick period (ns).  0 disables auto-tick (use dbg_wdt_stage2_tick).
+        double      wdt_stage2_tick_ns = 100.0;
     };
 
     // -- TLM / signal ports --------------------------------------------------
@@ -120,6 +123,13 @@ public:
     // inject_nmi(i); level is owned by the BEU (sticky until SW clears
     // ACCRUED).  Named to match LLD §3.7 `beu_nmi_in`.
     sc_core::sc_vector<sc_core::sc_in<bool>>                beu_nmi_in{"beu_nmi_in"};
+
+    // Stage-2 WDT (RTL smc_cpu_ctrl_wrap): countdown while per-core stage-1
+    // sticky rst is high.  first = OR(sticky); second → reset_unit.
+    sc_core::sc_vector<sc_core::sc_in<bool>>                wdt_timeout_cluster_i{"wdt_timeout_cluster_i"};
+    sc_core::sc_in<bool>                                   rst_primary_n_i{"rst_primary_n_i"};
+    sc_core::sc_out<bool>                                  wdt_first_timeout_o{"wdt_first_timeout_o"};
+    sc_core::sc_out<bool>                                  wdt_second_timeout_o{"wdt_second_timeout_o"};
 
     // -- Construction --------------------------------------------------------
     SC_HAS_PROCESS(smc_cpu_cluster);
@@ -148,6 +158,12 @@ public:
     // §3.8 strap sampled by scratchpad_sram on reset (see INIT_MEM_DONE handshake).
     uint32_t disable_sram_autoinit() const { return regs_.disable_sram_autoinit; }
 
+    /// Advance stage-2 countdown by @p n ticks (test / tick_period_ns==0).
+    void dbg_wdt_stage2_tick(unsigned n = 1);
+    bool dbg_wdt_first_timeout() const { return wdt_first_timeout_; }
+    bool dbg_wdt_second_timeout() const { return wdt_second_timeout_; }
+    uint32_t dbg_wdt_stage2_count(unsigned core) const;
+
 private:
     // -- CCI configuration (Phase 1 — defaults match struct config; broker
     //    presets override before construction).  Declared before processes so
@@ -167,10 +183,14 @@ private:
     cci::cci_param<uint16_t>                             source_id_p_;
     cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> ctrl_size_bytes_p_;
     cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> local_base_default_p_;
+    cci::cci_param<double, cci::CCI_IMMUTABLE_PARAM>   wdt_stage2_tick_ns_p_;
 
     // -- Processes -----------------------------------------------------------
     void hart_thread(unsigned i);       // SC_THREAD: step loop
     void irq_aggregator(unsigned i);    // SC_METHOD: signals -> MIP
+    void wdt_stage2_tick_method();
+    void wdt_stage2_output_method();
+    void wdt_stage2_input_method();
     void beu_nmi_method(unsigned i);    // SC_METHOD: rising edge -> inject_nmi
 
     // -- Memory callback bodies (registered on whisper_sys_) ----------------
@@ -191,6 +211,13 @@ private:
     // RESET_CTRL write helper. Lower bits are active-high run enables in LT
     // because the RDL fields are active-low reset_n controls.
     void apply_reset_ctrl(uint64_t new_value);
+
+    void apply_wdt_timeout_reset(uint32_t pulse_bits);
+    /// Apply reload conditions and update first/second flags.
+    /// When `do_decrement` is true (periodic / dbg tick), also count down
+    /// while sticky is asserted; register-reset and sticky-edge paths pass false.
+    void wdt_stage2_step_once(bool do_decrement = true);
+    void schedule_wdt_stage2_recompute();
 
     // -- State ---------------------------------------------------------------
     std::unique_ptr<WdRiscv::System<uint64_t>>        whisper_sys_;
@@ -237,6 +264,17 @@ private:
         uint32_t disable_sram_autoinit  = 0;
         uint32_t mem_repair_status      = 0;
     } regs_;
+
+    // Stage-2 WDT countdown (one counter per hart, max 4).
+    std::array<uint32_t, 4> wdt_stage2_count_{};
+    std::array<bool, 4>     wdt_stage2_reload_pulse_{};
+    bool wdt_first_timeout_  = false;
+    bool wdt_second_timeout_ = false;
+    bool wdt_first_cache_    = false;
+    bool wdt_second_cache_   = false;
+    sc_core::sc_event wdt_stage2_tick_event_;
+    sc_core::sc_event wdt_stage2_recompute_event_;
+    sc_core::sc_time  wdt_stage2_tick_period_{};
 };
 
 } // namespace smc

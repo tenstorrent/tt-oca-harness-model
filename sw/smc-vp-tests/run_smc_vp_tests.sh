@@ -337,7 +337,7 @@ run_test() {
     log_info "============================================================"
     (
         cd "${test_dir}"
-        make clean || true
+        make clean RISCV_PREFIX="${RISCV_PREFIX}" || true
         make RISCV_PREFIX="${RISCV_PREFIX}" || {
             log_error "build failed for $1"
             return 1

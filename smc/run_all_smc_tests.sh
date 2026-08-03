@@ -201,6 +201,7 @@ ALL_IPS=(
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
     "uart:${SCRIPT_DIR}/peripherals/uart"
+    "wdt:${SCRIPT_DIR}/peripherals/wdt"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
 )
 # cpu_cluster requires Whisper (Tenstorrent internal) and Boost; only include
