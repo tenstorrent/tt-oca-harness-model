@@ -201,6 +201,7 @@ ALL_IPS=(
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
     "uart:${SCRIPT_DIR}/peripherals/uart"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
+    "octs_system_timer:${SCRIPT_DIR}/peripherals/octs_system_timer"
 )
 # cpu_cluster requires Whisper (Tenstorrent internal) and Boost; only include
 # when both were found (_cpu_cluster_ready, computed above alongside the

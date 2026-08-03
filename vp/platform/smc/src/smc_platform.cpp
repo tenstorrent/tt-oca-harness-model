@@ -32,6 +32,9 @@ static constexpr uint64_t A_I3C         = 0xC000'5000ULL;
 static constexpr uint64_t A_I2C0         = 0xC000'9000ULL;
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;
 static constexpr uint64_t A_CPU_CTRL    = 0xC040'0000ULL;
+// smc_top.rdl: system_timer_octs @ SMC_BASE + 0x000_E000 (window 0x24 B, but
+// it owns the whole 0x1000 peripheral slot).
+static constexpr uint64_t A_SYSTEM_TIMER_OCTS = 0xC000'E000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_LO = 0xC000'2000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_HI = 0xC000'E800ULL;
 static constexpr uint64_t A_PERIPH_EXT_LO  = 0xC040'0000ULL;
@@ -71,6 +74,12 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
           "ICACHE_TLBUS.")
     , beu_inject2_addr_p_("beu_inject2_addr", uint64_t{0},
           "Physical address recorded by injection #2 (masked to 56 bits).")
+    , octs_clk_period_ns_p_("octs_clk_period_ns", 10.0,
+          "Period of the clock driving octs_system_timer, in ns (10 ns = "
+          "100 MHz). One timer tick per rising edge.")
+    , octs_is_primary_p_("octs_is_primary", true,
+          "Strap for octs_system_timer.is_primary_i: true = SMC is the system "
+          "timekeeping PRIMARY (silicon default), false = SECONDARY.")
     , intagg("intagg", NUM_PERIPH_IRQ, NUM_PLIC_SRC,
              std::vector<unsigned>{
                  // i3c[0..5] -> peripheral bits 17:12
@@ -79,6 +88,9 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  18, 19, 20, 21,
                  // i2c[0..2] -> peripheral bits 25:23
                  23, 24, 25})
+    , octs_clk("octs_clk",
+               sc_core::sc_time(octs_clk_period_ns_p_.get_value(),
+                                sc_core::SC_NS))
 {
     // -- Drive input signals to safe, post-reset defaults -------------------
     rst_n_sig.write(true);
@@ -92,6 +104,13 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     sig_flr.write(false);
     sig_ss_complete.write(0xFFFFFFFFu);
     sig_straps.write(0);
+
+    // As a PRIMARY (the default strap) the OCTS timer sources sync_load /
+    // cnt_credit instead of consuming them, so its inputs stay idle.  Strapped
+    // SECONDARY it has no pulse source in this platform and stays idle too.
+    sig_octs_is_primary.write(octs_is_primary_p_.get_value());
+    sig_octs_sync_load_in.write(false);
+    sig_octs_credit_in.write(false);
 
     for (unsigned i = 0; i < NUM_UART; ++i) {
         uart_rx[i].write(true);   // idle high
@@ -219,9 +238,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(7, A_UART0 + 0x2000, 0x1000, "uart2");
     periph_router.add_route(8, A_UART0 + 0x3000, 0x1000, "uart3");
     periph_router.add_route(9, A_CPU_CTRL,  0x2000, "cpu_ctrl");
+    periph_router.add_route(10, A_SYSTEM_TIMER_OCTS, 0x1000, "octs_system_timer");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
-    periph_router.add_route(10, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
-    periph_router.add_route(10, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
+    periph_router.add_route(11, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
+    periph_router.add_route(11, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
     periph_router.out[0].bind(reset.reg_socket);
     periph_router.out[1].bind(i3c.reg_socket);
     periph_router.out[2].bind(i2c[0].reg_socket);
@@ -232,7 +252,21 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[7].bind(uart_[2].reg_socket);
     periph_router.out[8].bind(uart_[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
-    periph_router.out[10].bind(stub_periph_misc.reg_socket);
+    periph_router.out[10].bind(octs_timer.reg_socket);
+    periph_router.out[11].bind(stub_periph_misc.reg_socket);
+
+    // -- octs_system_timer signals -----------------------------------------
+    octs_timer.clk_i              .bind(octs_clk);
+    octs_timer.rst_n_i            .bind(rst_n_sig);
+    octs_timer.is_primary_i       .bind(sig_octs_is_primary);
+    octs_timer.timer_sync_load_i  .bind(sig_octs_sync_load_in);
+    octs_timer.timer_cnt_credit_i .bind(sig_octs_credit_in);
+    octs_timer.timer_sync_load_o  .bind(sig_octs_sync_load_out);
+    octs_timer.timer_cnt_credit_o .bind(sig_octs_credit_out);
+    octs_timer.timer_count_o      .bind(sig_octs_count);
+    octs_timer.timer_gpio_enable_o.bind(sig_octs_gpio_enable);
+    octs_timer.cur_credits_debug_o.bind(sig_octs_cur_credits);
+    octs_timer.credits_left_debug_o.bind(sig_octs_credits_left);
 
     // -- DMA + memory_zeroer (data-accelerator CSR + DMA paths) ------------
     // CSR path: fabric's 64-bit `to_data_accel_ctrl` initiator is a single-

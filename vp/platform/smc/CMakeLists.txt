@@ -38,6 +38,7 @@ add_subdirectory(${SMC_IP_DIR}/i3c_controller  ${CMAKE_CURRENT_BINARY_DIR}/ip_i3
 add_subdirectory(${SMC_IP_DIR}/cpu_ctrl         ${CMAKE_CURRENT_BINARY_DIR}/ip_cpu_ctrl)
 add_subdirectory(${SMC_IP_DIR}/dma              ${CMAKE_CURRENT_BINARY_DIR}/ip_dma)
 add_subdirectory(${SMC_IP_DIR}/memory_zeroer    ${CMAKE_CURRENT_BINARY_DIR}/ip_memory_zeroer)
+add_subdirectory(${SMC_IP_DIR}/octs_system_timer ${CMAKE_CURRENT_BINARY_DIR}/ip_octs_system_timer)
 add_subdirectory(${SMC_IP_DIR}/beu              ${CMAKE_CURRENT_BINARY_DIR}/ip_beu)
 add_subdirectory(${_smc_root}/smc_fabric        ${CMAKE_CURRENT_BINARY_DIR}/ip_smc_fabric)
 
@@ -90,6 +91,7 @@ target_link_libraries(smc-vp
         smc_dma
         smc_beu
         smc_memory_zeroer
+        smc_octs_system_timer
         smc_cpu_cluster
         SystemC::systemc
         SystemC::cci

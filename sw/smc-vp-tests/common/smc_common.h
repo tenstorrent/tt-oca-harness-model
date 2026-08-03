@@ -33,6 +33,7 @@
 #define SMC_CLINT_BASE       0xC0C00000ULL
 #define SMC_BEU_BASE         0xC0C10000ULL
 #define SMC_ZEROER_BASE      0xC0038200ULL
+#define SMC_OCTS_TIMER_BASE  0xC000E000ULL
 
 /* CLINT register offsets (RISC-V standard layout) */
 #define CLINT_MSIP(hart)        (0x0000u + 4u * (hart))
@@ -217,6 +218,37 @@
                                          /* triggers a job when SIZE != 0      */
 #define ZEROER_CTRL_INT_EN       (1ull << 0u)   /* completion interrupt enable */
 #define ZEROER_CTRL_BUSY         (1ull << 32u)  /* 1 while a job is running     */
+
+/* octs_system_timer (OCTS System Timer) — base 0xC000_E000, window 0x24.
+ * Offsets and reset values come from system_timer_octs.rdl; they match the
+ * SMC_SYSTEM_TIMER_OCTS_*_REG_OFFSET defines in the RTL firmware's
+ * prod_rom/registers/smc_top_regs.h.
+ *
+ * Only naturally aligned 32-bit accesses are supported (memmap.adoc), so the
+ * 64-bit preset and live count are split into adjacent LO/HI registers.  Use
+ * REG_READ / REG_WRITE, never REG_READ64.
+ *
+ * The SMC instance is strapped as the timekeeping PRIMARY, so STATUS.MODE
+ * reads 0 and CREDIT_EXPIRED stays 0 (it only accumulates on a SECONDARY). */
+#define OCTS_TIMER_START      0x00u  /* rw  START[0], singlepulse; reads as 0  */
+#define OCTS_CTRL             0x04u  /* rw  credit/pulse_width/step; [31:24] rsvd */
+#define OCTS_STATUS           0x08u  /* ro  MODE[0], RUNNING[4]                */
+#define OCTS_TIMER_PRESET_LO  0x0Cu  /* rw  preset[31:0]                       */
+#define OCTS_TIMER_PRESET_HI  0x10u  /* rw  preset[63:32]                      */
+#define OCTS_TIMER_COUNT_LO   0x14u  /* ro  live count[31:0]                   */
+#define OCTS_TIMER_COUNT_HI   0x18u  /* ro  live count[63:32]                  */
+#define OCTS_CREDIT_EXPIRED   0x1Cu  /* r/w0 peak credit-starved cycle count   */
+#define OCTS_TIMER_GPIO_ENABLE 0x20u /* rw  GPIO_ENABLE[0] -> gpio_enable_o    */
+
+/* CTRL reset value: credit_val=0x0A, pulse_width=0x02, step=0x01. */
+#define OCTS_CTRL_RESET       0x0001020Au
+#define OCTS_CTRL_WMASK       0x00FFFFFFu  /* [31:24] reserved, RAZ/WI        */
+#define OCTS_CTRL_CREDIT_VAL(c)  ((c) & 0xFFu)
+#define OCTS_CTRL_PULSE_WIDTH(p) (((p) & 0xFFu) << 8)
+#define OCTS_CTRL_STEP(s)        (((s) & 0xFFu) << 16)
+
+#define OCTS_STATUS_MODE      (1u << 0)  /* 0 = PRIMARY, 1 = SECONDARY        */
+#define OCTS_STATUS_RUNNING   (1u << 4)  /* enable && count > 0               */
 
 /* MMIO helpers */
 #define REG_READ(addr)          (*((volatile uint32_t *)(uintptr_t)(addr)))
