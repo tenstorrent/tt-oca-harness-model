@@ -15,6 +15,10 @@
 
 /* SMC platform address map (local alias aperture) */
 #define SMC_WDT_DEBUG_BASE   0xC0000000ULL
+#define SMC_WDT0_BASE        0xC0000000ULL
+#define SMC_WDT1_BASE        0xC0000400ULL
+#define SMC_WDT2_BASE        0xC0000800ULL
+#define SMC_WDT3_BASE        0xC0000C00ULL
 #define SMC_RESET_BASE       0xC0002000ULL
 #define SMC_I3C_BASE         0xC0005000ULL
 #define SMC_I2C0_BASE        0xC0009000ULL
@@ -56,9 +60,29 @@
 
 /* CPU control register offsets */
 #define CPU_CTRL_SCRATCH(idx)         (0x100u + 8u * (idx))
+#define CPU_CTRL_WDT_TIMEOUT          0x050u
+#define CPU_CTRL_WDT_TIMEOUT_RESET    0x058u
 #define CPU_CTRL_REFERENCE_COUNTER    0x060u
 #define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
 #define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
+
+/* SiFive TLWDT (stage-1) register offsets — window 0x400 per core */
+#define WDT_CTRL           0x00u
+#define WDT_COUNT          0x08u
+#define WDT_SCALED_COUNT   0x10u
+#define WDT_FEED           0x18u
+#define WDT_KEY            0x1Cu
+#define WDT_CMP            0x20u
+
+#define WDT_KEY_MAGIC      0x0051F15Eu
+#define WDT_FEED_MAGIC     0x0D09F00Du
+
+#define WDT_CTRL_SCALE_MASK   0xFu
+#define WDT_CTRL_RSTEN        (1u << 8u)
+#define WDT_CTRL_ZEROCMP      (1u << 9u)
+#define WDT_CTRL_ALWAYS       (1u << 12u)
+#define WDT_CTRL_AWAKE        (1u << 13u)
+#define WDT_CTRL_IP           (1u << 28u)
 
 /* DMA controller register offsets (window size 0x138) */
 #define DMA_CONFIG             0x000u
@@ -153,6 +177,12 @@
 #define PLIC_SRC_UART1    20u
 #define PLIC_SRC_UART2    21u
 #define PLIC_SRC_UART3    22u
+
+/* SiFive TLWDT PLIC source IDs (Freedom Metal metal_watchdog_get_interrupt_id) */
+#define PLIC_SRC_WDT0    329u
+#define PLIC_SRC_WDT1    330u
+#define PLIC_SRC_WDT2    331u
+#define PLIC_SRC_WDT3    332u
 
 /* UART 16550 register offsets (DLAB=0 unless noted) */
 #define UART_RBR_THR_DLL  0x00   /* RBR (ro) / THR (wo) / DLL (DLAB=1) */

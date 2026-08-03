@@ -36,6 +36,7 @@ add_subdirectory(${SMC_IP_DIR}/uart             ${CMAKE_CURRENT_BINARY_DIR}/ip_u
 add_subdirectory(${SMC_IP_DIR}/i2c_controller   ${CMAKE_CURRENT_BINARY_DIR}/ip_i2c)
 add_subdirectory(${SMC_IP_DIR}/i3c_controller  ${CMAKE_CURRENT_BINARY_DIR}/ip_i3c)
 add_subdirectory(${SMC_IP_DIR}/cpu_ctrl         ${CMAKE_CURRENT_BINARY_DIR}/ip_cpu_ctrl)
+add_subdirectory(${SMC_IP_DIR}/wdt              ${CMAKE_CURRENT_BINARY_DIR}/ip_wdt)
 add_subdirectory(${SMC_IP_DIR}/dma              ${CMAKE_CURRENT_BINARY_DIR}/ip_dma)
 add_subdirectory(${SMC_IP_DIR}/memory_zeroer    ${CMAKE_CURRENT_BINARY_DIR}/ip_memory_zeroer)
 add_subdirectory(${SMC_IP_DIR}/beu              ${CMAKE_CURRENT_BINARY_DIR}/ip_beu)
@@ -87,6 +88,7 @@ target_link_libraries(smc-vp
         smc_i2c_controller
         smc_i3c_controller
         smc_cpu_ctrl
+        smc_wdt
         smc_dma
         smc_beu
         smc_memory_zeroer

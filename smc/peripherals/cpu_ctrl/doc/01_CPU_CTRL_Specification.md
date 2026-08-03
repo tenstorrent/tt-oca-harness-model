@@ -31,10 +31,10 @@ and TLM bus contract.
 | `0x030`  | `CLOCK_GATE_CONTROL`     | RW        | `cg_hysteresis=0x1F` |
 | `0x040`  | `GLOBAL_BASE`            | RW        | `0x4000_0000` |
 | `0x048`  | `LOCAL_BASE`             | RO        | `0xC000_0000` |
-| `0x050`  | `REGION_SIZE`            | RW        | `0x0100_0000` (16 MiB) |
+| `0x050`  | `WDT_TIMEOUT`            | RW        | `0x4000` (RDL-aligned) |
+| `0x058`  | `WDT_TIMEOUT_RESET`      | RW pulse  | Self-clearing |
 | `0x060`  | `REFERENCE_COUNTER`      | RW        | `0` |
-| `0x070`  | `WDT_TIMEOUT`            | RW        | `0x4000` |
-| `0x078`  | `WDT_TIMEOUT_RESET`      | RW pulse  | Self-clearing |
+| `0x068`  | `REGION_SIZE`            | RW        | `0x0100_0000` (16 MiB; legacy) |
 | `0x100`  | **`SCRATCH[16]`**        | RW        | `0` — **inter-stage handoff** |
 | `0x200`  | `TEST_CTRL`              | RO        | HW backdoor |
 | `0x208`  | `DEBUG_CTRL`             | RW        | `0` |

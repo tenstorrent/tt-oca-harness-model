@@ -4,9 +4,9 @@
 //
 // Top-level SMC SystemC/TLM-2.0 platform.  Instantiates the modeled blocks
 // (fabric, reset unit, PLIC, CLINT, boot ROM, scratchpad, cpu_ctrl, DMA, I3C,
-// 3x I2C, 4x UART, 4x per-core BEU, and optionally the Whisper-backed CPU
-// cluster), wires the fabric's initiator sockets through address routers to
-// the modeled targets and stubs, composes the peripheral interrupt vector
+// 3x I2C, 4x UART, 4x WDT, 4x per-core BEU, and optionally the Whisper-backed
+// CPU cluster), wires the fabric's initiator sockets through address routers
+// to the modeled targets and stubs, composes the peripheral interrupt vector
 // into the PLIC, and — when the cluster is present — connects CLINT MSIP/MTIP
 // and PLIC MEIP to the cluster's per-hart IRQ inputs.
 //
@@ -40,6 +40,7 @@
 #include "reset_unit.h"
 #include "scratchpad_ram.h"
 #include "uart.h"
+#include "wdt.h"
 #include "beu.h"
 
 #ifdef SMC_PLATFORM_WITH_CLUSTER
@@ -65,9 +66,9 @@ public:
     static constexpr unsigned NUM_PLIC_SRC   = 336;
     static constexpr unsigned NUM_PLIC_CTX   = 8;
     static constexpr unsigned NUM_SUBSYS     = 32;
-    // 13 peripheral IRQ inputs: i3c[0..5], uart[0..3], i2c[0..2].
-    // (BEU local/PLIC IRQ wiring is Phase C; Phase B only binds sinks.)
-    static constexpr unsigned NUM_PERIPH_IRQ = NUM_I3C + NUM_UART + NUM_I2C;
+    // Peripheral IRQ inputs: i3c[0..5], uart[0..3], i2c[0..2], wdt[0..3].
+    static constexpr unsigned NUM_PERIPH_IRQ =
+        NUM_I3C + NUM_UART + NUM_I2C + NUM_HARTS;
 
     // -----------------------------------------------------------------------
     // Test-only BEU error-injection hook (Phase D1; see
@@ -121,6 +122,8 @@ public:
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
+    // Trailing underscore avoids colliding with class smc::wdt (GCC -fpermissive).
+    sc_core::sc_vector<wdt>            wdt_{"wdt", NUM_HARTS};
     sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
@@ -132,12 +135,14 @@ public:
     // front_port_router: 64-bit in (fabric.to_front_port + cluster.data) ->
     //   64-bit outputs.  The 32-bit front-port peripherals (boot ROM,
     //   scratchpad, PLIC, CLINT) sit behind `width_adapter<64,32>` instances
-    //   because TLM simple sockets refuse cross-width binds.
+    //   because TLM simple sockets refuse cross-width binds.  The WDT window
+    //   is demuxed by `wdt_demux` (64→32) into four 1 KiB instances.
     //
     // periph_router: 64-bit in (fabric.to_periph) -> 32-bit outputs (every
     //   peripheral on this bus is a 32-bit reg_socket).
     // -----------------------------------------------------------------------
     addr_router<64, 64>         front_port_router{"front_port_router", 7};
+    addr_router<64, 32>         wdt_demux{"wdt_demux", NUM_HARTS};
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     addr_router<64, 32>         periph_router{"periph_router", 11};
@@ -169,7 +174,7 @@ public:
     // -----------------------------------------------------------------------
     // Stubs for unmodeled / RTL-connected blocks
     // -----------------------------------------------------------------------
-    stub_target<64> stub_wdt_debug{"stub_wdt_debug"};
+    // WDT is modeled (wdt_[] + wdt_demux); no stub_wdt_debug.
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};
@@ -256,9 +261,17 @@ public:
     sc_core::sc_vector<sc_core::sc_signal<bool>> i3c_ria{"i3c_ria", NUM_I3C};
 
     // -----------------------------------------------------------------------
-    // I2C / PLIC / cluster IRQ signals
+    // I2C / WDT / PLIC / cluster IRQ signals
     // -----------------------------------------------------------------------
     sc_core::sc_vector<sc_core::sc_signal<bool>> i2c_irq{"i2c_irq", NUM_I2C};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_irq{"wdt_irq", NUM_HARTS};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_sticky{"wdt_sticky", NUM_HARTS};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_core_rst{"wdt_core_rst", NUM_HARTS};
+    // Standalone periph-bus cpu_ctrl_ stage-2 ports (not driven by front-port WDTs).
+    sc_core::sc_vector<sc_core::sc_signal<bool>> cpu_ctrl_wdt_sticky{
+        "cpu_ctrl_wdt_sticky", NUM_HARTS};
+    sc_core::sc_signal<bool> cpu_ctrl_wdt_first{"cpu_ctrl_wdt_first"};
+    sc_core::sc_signal<bool> cpu_ctrl_wdt_second{"cpu_ctrl_wdt_second"};
     sc_core::sc_vector<sc_core::sc_signal<bool>> plic_src_sig{"plic_src_sig", NUM_PLIC_SRC};
     // Dummy sinks for every stub_target's irq_o (stubs don't drive the PLIC in
     // Phase 1; their irq_drive_method still requires a bound port).
