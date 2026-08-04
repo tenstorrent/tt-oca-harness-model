@@ -5,9 +5,9 @@ Synchronization) System Timer**: a 64-bit timer that keeps a nanosecond-level
 timeline coherent across chiplets using a PRIMARY/SECONDARY hierarchy with a
 credit-based synchronization protocol.
 
-> This IP is **standalone** for now — it is deliberately *not* wired into
-> `vp/platform/smc`. It builds as `libsmc_octs_system_timer.a` and ships a
-> self-checking unit testbench.
+> This IP can be built **standalone** (as `libsmc_octs_system_timer.a`) and ships a
+> self-checking unit testbench. It is also integrated into `vp/platform/smc` (see
+> "SMC platform integration" below).
 
 ## Provenance
 
