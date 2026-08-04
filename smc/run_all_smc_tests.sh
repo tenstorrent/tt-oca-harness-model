@@ -198,6 +198,7 @@ ALL_IPS=(
     "dma:${SCRIPT_DIR}/peripherals/dma"
     "memory_zeroer:${SCRIPT_DIR}/peripherals/memory_zeroer"
     "pll_wrapper:${SCRIPT_DIR}/peripherals/pll_wrapper"
+    "pvt_wrap:${SCRIPT_DIR}/peripherals/pvt_wrap"
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"

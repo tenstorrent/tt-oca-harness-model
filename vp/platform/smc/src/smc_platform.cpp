@@ -35,6 +35,7 @@ static constexpr uint64_t A_TELEMETRY    = 0xC000'9000ULL;  // RTL telemetry_rec
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;  // sim location (RTL uart @ 0x6000)
 static constexpr uint64_t A_I3C          = 0xC003'A000ULL;  // RTL oca_i3c_wrap_0
 static constexpr uint64_t A_CPU_CTRL    = 0xC040'0000ULL;
+static constexpr uint64_t A_PVT_WRAP    = 0xC040'2000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_LO = 0xC000'2000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_HI = 0xC000'E800ULL;
 static constexpr uint64_t A_PERIPH_EXT_LO  = 0xC040'0000ULL;
@@ -256,17 +257,19 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(9, A_CPU_CTRL,  0x2000, "cpu_ctrl");
     // i3c_controller packs NUM_I3C instances at INSTANCE_SPACING=0x500.
     periph_router.add_route(10, A_I3C, 0x1E00, "i3c");
+    // pvt_wrap: PVT wrapper at 0xC040_2000.
+    periph_router.add_route(11, A_PVT_WRAP, 0x1000, "pvt_wrap");
     // pll_wrap: PLL wrapper (pll_cntl + 2x cgm + 2x awm) at 0xC000_3000.  Its
     // 0x1000 window shadows the periph_main_misc catch-all below (routes match
     // smallest-window-first), so PLL accesses reach the model instead of the
     // stub.  The router rebases the absolute window to the wrapper's 0-based
     // composed offsets.
-    periph_router.add_route(11, A_PLL_WRAP, 0x1000, "pll_wrap");
+    periph_router.add_route(12, A_PLL_WRAP, 0x1000, "pll_wrap");
     // AVSBus: 4 KiB window at 0xC000_8000 (shadows the periph_misc catch-all).
-    periph_router.add_route(12, A_AVSBUS,   0x1000, "avsbus");
+    periph_router.add_route(13, A_AVSBUS,   0x1000, "avsbus");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
-    periph_router.add_route(13, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
-    periph_router.add_route(13, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
+    periph_router.add_route(14, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
+    periph_router.add_route(14, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
     periph_router.out[0].bind(reset.reg_socket);
     periph_router.out[1].bind(i2c[0].reg_socket);
     periph_router.out[2].bind(i2c[1].reg_socket);
@@ -290,10 +293,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[8].bind(uart_[3].reg_socket);
     periph_router.out[9].bind(cpu_ctrl_.reg_socket);
     periph_router.out[10].bind(i3c.reg_socket);
-    periph_router.out[11].bind(pll_wrap.reg_socket);
+    periph_router.out[11].bind(pvt_wrap_.reg_socket);
+    periph_router.out[12].bind(pll_wrap.reg_socket);
     pll_wrap.rst_n_i.bind(rst_n_sig);
-    periph_router.out[12].bind(avsbus.reg_socket);
-    periph_router.out[13].bind(stub_periph_misc.reg_socket);
+    periph_router.out[13].bind(avsbus.reg_socket);
+    periph_router.out[14].bind(stub_periph_misc.reg_socket);
 
     // -- Test-only telemetry ATB inject ------------------------------------
     if (tel_inject_enable_p_.get_value()) {
@@ -337,8 +341,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     daccel_router.out[0].bind(zeroer.reg_socket);
     daccel_router.add_route(1, A_DMA, dma_cfg::WINDOW_SIZE, "dma");
     daccel_router.out[1].bind(dma_.reg_socket);
-    // DMA path: the zeroer's 32-bit initiator injects zero-fill writes back
-    // into the fabric via the 64-bit `data_accel_in` target (width adapter).
+    // DMA path: both smc_dma and the memory_zeroer DMA master drive the fabric's
+    // multi-bind 64-bit `data_accel_in` target with absolute addresses the fabric
+    // re-decodes; the width adapter is verbatim (no rebase) because addresses
+    // stay absolute until the fabric re-routes them.
     zeroer.dma_socket.bind(wa_zeroer_dma.tgt);
     wa_zeroer_dma.init.bind(fabric.data_accel_in);
     zeroer.rst_n_i.bind(rst_n_sig);
@@ -385,9 +391,16 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     for (unsigned i = 0; i < NUM_SUBSYS; ++i)
         reset.ss_reset_ctrl_o[i].bind(sig_ss_reset[i]);
 
-    // -- plic / clint reset ------------------------------------------------
+    // -- plic / clint / pvt_wrap reset -------------------------------------
     plic_.rst_n_i .bind(rst_n_sig);
     clint_.rst_n_i.bind(rst_n_sig);
+    pvt_wrap_.rst_n_i.bind(rst_n_sig);
+
+    // -- pvt_wrap outputs (unused externally, bound to dummy signals) -------
+    pvt_wrap_.process_clk_obs_o.bind(pvt_process_clk_obs);
+    pvt_wrap_.process_clk_obs_en_o.bind(pvt_process_clk_obs_en);
+    pvt_wrap_.voltage_code_o.bind(pvt_voltage_code);
+    pvt_wrap_.temp_interrupt_o.bind(pvt_temp_interrupt);
 
     // -- bootrom / scratchpad reset ---------------------------------------
     bootrom_.rst_n_i.bind(rst_n_sig);
@@ -562,7 +575,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         _oss << "smc_platform elaborated: "
              << NUM_UART << " uart, " << NUM_I2C << " i2c, "
              << NUM_I3C << " i3c, " << NUM_TELEMETRY << " telemetry, avsbus, " << NUM_HARTS << " wdt, "
-             << NUM_BEU << " beu, dma, "
+             << NUM_BEU << " beu, pvt_wrap, pll_wrap, dma, "
              << NUM_PLIC_SRC << " plic sources";
 #ifdef SMC_PLATFORM_WITH_CLUSTER
         _oss << ", cluster ON";

@@ -37,6 +37,7 @@
 #include "i3c_controller.h"
 #include "memory_zeroer.h"
 #include "pll_wrapper.h"
+#include "pvt_wrap.h"
 #include "plic.h"
 #include "reset_unit.h"
 #include "scratchpad_ram.h"
@@ -134,6 +135,7 @@ public:
     dma             dma_{"dma"};
     memory_zeroer   zeroer{"memory_zeroer"};
     pll::pll_wrapper pll_wrap{"pll_wrap"};
+    pvt_wrap        pvt_wrap_{"pvt_wrap"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
     sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
@@ -163,8 +165,8 @@ public:
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
-    // cpu_ctrl, i3c, pll_wrap, avsbus, catch-all stub (14).
-    addr_router<64, 32>         periph_router{"periph_router", 14};
+    // cpu_ctrl, i3c, pll_wrap, pvt_wrap, avsbus, catch-all stub (15).
+    addr_router<64, 32>         periph_router{"periph_router", 15};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
@@ -186,10 +188,11 @@ public:
     //    (dma::normalize_addr() also tolerates absolute addresses, so this
     //    is belt-and-suspenders, not strictly required); dma_.reg_socket is
     //    already 32-bit, so out[1] binds it directly (no width_adapter).
-    // Separately, memory_zeroer's own DMA master drives the fabric's 64-bit
-    // `data_accel_in` target with absolute addresses the fabric re-decodes,
-    // so a verbatim width_adapter (no rebase) is correct for that path.
     addr_router<64, 32>         daccel_router{"daccel_router", 2};
+    // Separately, both the DMA master and the memory_zeroer DMA master drive the
+    // fabric's multi-bind 64-bit `data_accel_in` target; a width_adapter converts
+    // the zeroer's 32-bit initiator to the 64-bit fabric target.  Addresses stay
+    // absolute until the fabric re-routes them.
     width_adapter<32, 64>       wa_zeroer_dma{"wa_zeroer_dma"};
     interrupt_aggregator        intagg;
 
@@ -269,6 +272,14 @@ public:
     sc_core::sc_vector<sc_core::sc_signal<bool>> uart_txrdy{"uart_txrdy", NUM_UART};
     sc_core::sc_vector<sc_core::sc_signal<bool>> uart_err{"uart_err", NUM_UART};
     sc_core::sc_vector<sc_core::sc_signal<bool>> uart_irq{"uart_irq", NUM_UART};
+
+    // -----------------------------------------------------------------------
+    // PVT wrapper signals (unused externally, bound for elaboration)
+    // -----------------------------------------------------------------------
+    sc_core::sc_signal<bool>     pvt_process_clk_obs{"pvt_process_clk_obs"};
+    sc_core::sc_signal<bool>     pvt_process_clk_obs_en{"pvt_process_clk_obs_en"};
+    sc_core::sc_signal<uint32_t> pvt_voltage_code{"pvt_voltage_code"};
+    sc_core::sc_signal<bool>     pvt_temp_interrupt{"pvt_temp_interrupt"};
 
     // -----------------------------------------------------------------------
     // I3C signals (unused pad lines, bound for elaboration)
