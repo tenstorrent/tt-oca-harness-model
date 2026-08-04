@@ -36,6 +36,7 @@
 #include "i2c_controller.h"
 #include "i3c_controller.h"
 #include "memory_zeroer.h"
+#include "octs_system_timer.h"
 #include "pll_wrapper.h"
 #include "plic.h"
 #include "reset_unit.h"
@@ -102,6 +103,15 @@ public:
     cci::cci_param<unsigned> beu_inject2_src_p_;
     cci::cci_param<uint64_t> beu_inject2_addr_p_;
 
+    /// Period of the clock feeding octs_system_timer, in nanoseconds.
+    /// Immutable: `octs_clk` reads it once in the member-initialiser list.
+    cci::cci_param<double, cci::CCI_IMMUTABLE_PARAM> octs_clk_period_ns_p_;
+
+    /// Strap value for octs_system_timer's `is_primary_i`.  True (the silicon
+    /// configuration) makes SMC the system timekeeping PRIMARY.  A test can set
+    /// it false via its .ini to exercise the SECONDARY branch — with no
+    /// sync_load source in the SMC VP the timer then stays idle by design.
+    cci::cci_param<bool> octs_is_primary_p_;
     // Test-only telemetry ATB inject (elaboration-time).  Firmware cannot drive
     // the ATB byte stream; one message can be pushed into a named receiver
     // before sc_start() so register-visible probe_id / counters are already
@@ -133,6 +143,7 @@ public:
     cpu_ctrl        cpu_ctrl_{"cpu_ctrl"};
     dma             dma_{"dma"};
     memory_zeroer   zeroer{"memory_zeroer"};
+    octs_system_timer octs_timer{"octs_system_timer"};
     pll::pll_wrapper pll_wrap{"pll_wrap"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
@@ -163,8 +174,8 @@ public:
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
-    // cpu_ctrl, i3c, pll_wrap, avsbus, catch-all stub (14).
-    addr_router<64, 32>         periph_router{"periph_router", 14};
+    // cpu_ctrl, i3c, pll_wrap, avsbus, octs_system_timer, catch-all stub (15).
+    addr_router<64, 32>         periph_router{"periph_router", 15};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
@@ -314,6 +325,37 @@ public:
 // memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
 // dummy sink for now; can later be routed into the PLIC/aggregator.
 sc_core::sc_signal<bool, sc_core::SC_MANY_WRITERS> sig_zeroer_irq{"sig_zeroer_irq"};
+
+    // -----------------------------------------------------------------------
+    // OCTS system timer signals
+    //
+    // Unlike every other peripheral here, octs_system_timer is a synchronous
+    // (clock-driven) model: it advances exactly one RTL cycle per rising edge
+    // of clk_i, so the platform has to supply a clock.  `octs_clk_period_ns_p_`
+    // sets that period; 10 ns (100 MHz) gives the counter enough resolution to
+    // move visibly within a firmware busy-wait, since the LT cluster charges a
+    // notional 1 ns per retired instruction.
+    //
+    // By default (`octs_is_primary_p_`) the SMC instance is the system's
+    // timekeeping PRIMARY, so it generates sync_load / cnt_credit for
+    // downstream SECONDARY timers in other subsystems rather than consuming
+    // them.  Both sync inputs are therefore tied low, and the outputs land on
+    // sinks — nothing else in the SMC VP consumes them yet.  A test may strap
+    // the timer SECONDARY, in which case it has no pulse source here and stays
+    // parked; the real primary→secondary sync path is covered by the IP's own
+    // unit testbench, which pairs a primary with a secondary.
+    // -----------------------------------------------------------------------
+    sc_core::sc_clock            octs_clk;
+    sc_core::sc_signal<bool>     sig_octs_is_primary{"sig_octs_is_primary"};
+    sc_core::sc_signal<bool>     sig_octs_sync_load_in{"sig_octs_sync_load_in"};
+    sc_core::sc_signal<bool>     sig_octs_credit_in{"sig_octs_credit_in"};
+    sc_core::sc_signal<bool>     sig_octs_sync_load_out{"sig_octs_sync_load_out"};
+    sc_core::sc_signal<bool>     sig_octs_credit_out{"sig_octs_credit_out"};
+    sc_core::sc_signal<uint64_t> sig_octs_count{"sig_octs_count"};
+    sc_core::sc_signal<bool>     sig_octs_gpio_enable{"sig_octs_gpio_enable"};
+    sc_core::sc_signal<uint32_t> sig_octs_cur_credits{"sig_octs_cur_credits"};
+    sc_core::sc_signal<bool>     sig_octs_credits_left{"sig_octs_credits_left"};
+
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_sw{"sig_irq_sw", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_timer{"sig_irq_timer", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> sig_irq_ext{"sig_irq_ext", NUM_PLIC_CTX};
