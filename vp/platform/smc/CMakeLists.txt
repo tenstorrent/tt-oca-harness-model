@@ -39,6 +39,7 @@ add_subdirectory(${SMC_IP_DIR}/cpu_ctrl         ${CMAKE_CURRENT_BINARY_DIR}/ip_c
 add_subdirectory(${SMC_IP_DIR}/wdt              ${CMAKE_CURRENT_BINARY_DIR}/ip_wdt)
 add_subdirectory(${SMC_IP_DIR}/dma              ${CMAKE_CURRENT_BINARY_DIR}/ip_dma)
 add_subdirectory(${SMC_IP_DIR}/memory_zeroer    ${CMAKE_CURRENT_BINARY_DIR}/ip_memory_zeroer)
+add_subdirectory(${SMC_IP_DIR}/octs_system_timer ${CMAKE_CURRENT_BINARY_DIR}/ip_octs_system_timer)
 add_subdirectory(${SMC_IP_DIR}/pll_wrapper      ${CMAKE_CURRENT_BINARY_DIR}/ip_pll_wrapper)
 add_subdirectory(${SMC_IP_DIR}/beu              ${CMAKE_CURRENT_BINARY_DIR}/ip_beu)
 add_subdirectory(${SMC_IP_DIR}/telemetry_receiver ${CMAKE_CURRENT_BINARY_DIR}/ip_telemetry_receiver)
@@ -98,6 +99,7 @@ target_link_libraries(smc-vp
         smc_telemetry_receiver
         smc_avsbus_controller
         smc_memory_zeroer
+        smc_octs_system_timer
         smc_pll_wrapper
         smc_pvt_wrap
         smc_cpu_cluster
