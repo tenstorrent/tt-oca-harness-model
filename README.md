@@ -80,7 +80,7 @@ OCAH subsystems:
 | Subsystem | What is provided |
 |-----------|-----------------|
 | **SEP** | Full, runnable Virtual Platform (`sep-vp`) — models all SEP peripherals, runs actual RISC-V VeeR EL2 firmware, used for pre-silicon DV and firmware development |
-| **SMC** | SystemC TLM-2.0 IP model library (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, I3C, …) with per-IP unit tests, **plus a full runnable Virtual Platform (`smc-vp`)** that wires the fabric + every peripheral + the Whisper-backed CVA6 cluster and runs bare-metal RV64 firmware |
+| **SMC** | SystemC TLM-2.0 IP model library (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, DMA, PVT wrapper, I3C, …) with per-IP unit tests, **plus a full runnable Virtual Platform (`smc-vp`)** that wires the fabric + every peripheral + the Whisper-backed CVA6 cluster and runs bare-metal RV64 firmware |
 
 ---
 
@@ -515,8 +515,8 @@ debug buffer to stdout so the firmware's `printf` output is visible on the conso
 ### smc-vp-tests (bare-metal RV64 firmware)
 
 > Tests under `sw/smc-vp-tests/` are bare-metal RV64 firmware that exercise SMC
-> peripherals (bootrom, CLINT, CPU control, I2C, I3C, PLIC, reset, scratchpad,
-> UART, …) end-to-end from code running on the CVA6 cluster. See
+> peripherals (bootrom, CLINT, CPU control, DMA, I2C, I3C, PLIC, PVT wrapper,
+> reset, scratchpad, UART, …) end-to-end from code running on the CVA6 cluster. See
 > `sw/smc-vp-tests/README.md` for the full guide.
 
 ```bash

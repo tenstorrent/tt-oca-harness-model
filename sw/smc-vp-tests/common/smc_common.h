@@ -39,6 +39,7 @@
 #define SMC_UART2_BASE       0xC000C000ULL
 #define SMC_UART3_BASE       0xC000D000ULL
 #define SMC_CPU_CTRL_BASE    0xC0400000ULL
+#define SMC_PVT_WRAP_BASE    0xC0402000ULL
 #define SMC_CPU_CTRL_FP_BASE 0xC0039000ULL
 #define SMC_DMA_BASE         0xC0038000ULL
 #define SMC_I3C_BASE         0xC003A000ULL
@@ -102,6 +103,26 @@
 #define CPU_CTRL_REFERENCE_COUNTER    0x060u
 #define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
 #define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
+
+/* PVT wrapper register offsets */
+#define PVT_PROCESS_CTRL            0x00u
+#define PVT_PROCESS_STATUS          0x04u
+#define PVT_REF_CLK_PERIOD_LO       0x08u
+#define PVT_REF_CLK_PERIOD_HI       0x0Cu
+#define PVT_PROCESS_CLOCK_LO        0x10u
+#define PVT_PROCESS_CLOCK_HI        0x14u
+#define PVT_VOLTAGE_CTRL            0x18u
+#define PVT_VOLTAGE_STATUS          0x1Cu
+#define PVT_TEMP_CTRL               0x20u
+#define PVT_TEMP_STATUS             0x24u
+#define PVT_TEMP_INTERRUPT          0x28u
+
+#define PVT_PROCESS_ENABLE          (1u << 0u)
+#define PVT_PROCESS_OBS_CLK_ENABLE  (1u << 4u)
+#define PVT_PROCESS_COUNT_EN        (1u << 8u)
+#define PVT_VOLTAGE_RESET_N         (1u << 0u)
+#define PVT_TEMP_EN                 (1u << 0u)
+#define PVT_STATUS_VALID            (1u << 0u)
 
 /* SiFive TLWDT (stage-1) register offsets — window 0x400 per core */
 #define WDT_CTRL           0x00u
