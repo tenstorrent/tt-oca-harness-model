@@ -173,10 +173,9 @@ public:
     addr_router<64, 32>         wdt_demux{"wdt_demux", NUM_HARTS};
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
-    addr_router<64, 32>         periph_router{"periph_router", 12};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
-    // cpu_ctrl, i3c, pll_wrap, avsbus, catch-all stub (14).
-    addr_router<64, 32>         periph_router{"periph_router", 14};
+    // cpu_ctrl, i3c, pll_wrap, avsbus, octs_system_timer, catch-all stub (15).
+    addr_router<64, 32>         periph_router{"periph_router", 15};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
