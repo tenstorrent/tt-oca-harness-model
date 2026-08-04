@@ -44,7 +44,7 @@
 #include "wdt.h"
 #include "beu.h"
 #include "telemetry_receiver.h"
-#include "avsbus_controller.h""
+#include "avsbus_controller.h"
 
 #ifdef SMC_PLATFORM_WITH_CLUSTER
 #include "smc_cpu_cluster.h"
