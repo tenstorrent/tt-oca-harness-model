@@ -48,6 +48,15 @@ unsigned g_failures = 0;
         }                                                                      \
     } while (0)
 
+#define EXPECT_FALSE(cond)                                                     \
+    do {                                                                       \
+        if (cond) {                                                            \
+            std::cerr << "FAIL " << __FILE__ << ":" << __LINE__                \
+                      << "  expected FALSE: " #cond "\n";                      \
+            ++g_failures;                                                      \
+        }                                                                      \
+    } while (0)
+
 constexpr uint64_t BASE = smc::cpu_ctrl_cfg::DEFAULT_BASE_ADDR;
 
 struct driver : sc_core::sc_module {
@@ -176,17 +185,44 @@ struct tb : sc_core::sc_module {
     smc::cpu_ctrl dut;
     driver        drv;
 
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_sticky;
+    sc_core::sc_signal<bool> rst_primary_n;
+    sc_core::sc_signal<bool> wdt_first;
+    sc_core::sc_signal<bool> wdt_second;
+
     explicit tb(sc_module_name n)
         : sc_module(n)
         , dut("cpu_ctrl")
         , drv("drv")
+        , wdt_sticky("wdt_sticky", smc::cpu_ctrl_cfg::NUM_CORES)
+        , rst_primary_n("rst_primary_n")
+        , wdt_first("wdt_first")
+        , wdt_second("wdt_second")
     {
         drv.sock.bind(dut.reg_socket);
+        rst_primary_n.write(true);
+        for (unsigned i = 0; i < smc::cpu_ctrl_cfg::NUM_CORES; ++i) {
+            wdt_sticky[i].write(false);
+            dut.wdt_timeout_cluster_i[i].bind(wdt_sticky[i]);
+        }
+        dut.rst_primary_n_i.bind(rst_primary_n);
+        dut.wdt_first_timeout_o.bind(wdt_first);
+        dut.wdt_second_timeout_o.bind(wdt_second);
         SC_THREAD(run);
     }
 
     void run()
     {
+        // Drive sidebands after simulation has started (constructor writes
+        // before sc_start do not reliably update signal values).
+        rst_primary_n.write(true);
+        for (unsigned i = 0; i < smc::cpu_ctrl_cfg::NUM_CORES; ++i) {
+            wdt_sticky[i].write(false);
+        }
+        for (int i = 0; i < 2; ++i) {
+            wait(SC_ZERO_TIME);
+        }
+
         std::cout << "==== CPU Control TB ====\n";
 
         // 1. Power-on defaults (offset and absolute addressing).
@@ -287,10 +323,30 @@ struct tb : sc_core::sc_module {
         EXPECT_EQ(3u, read32(sem0));
         std::cout << "  [PASS] semaphore inc/dec\n";
 
-        // 9. WDT_TIMEOUT_RESET single-pulse (self-clearing).
+        // 9. WDT_TIMEOUT_RESET single-pulse (self-clearing) + stage-2 reload.
         write32(BASE + smc::cpu_ctrl_cfg::OFF_WDT_TIMEOUT_RESET, 0xFu);
         EXPECT_EQ(0u, read32(BASE + smc::cpu_ctrl_cfg::OFF_WDT_TIMEOUT_RESET));
-        std::cout << "  [PASS] WDT_TIMEOUT_RESET pulse\n";
+        // Drive sticky and countdown to second timeout.
+        write32(BASE + smc::cpu_ctrl_cfg::OFF_WDT_TIMEOUT, 3u);
+        write32(BASE + smc::cpu_ctrl_cfg::OFF_WDT_TIMEOUT_RESET, 0x1u);
+        wdt_sticky[0].write(true);
+        // sticky update → input_method → output_method → signal visible
+        for (int i = 0; i < 3; ++i) {
+            wait(SC_ZERO_TIME);
+        }
+        dut.dbg_wdt_stage2_tick(3);
+        // recompute notify → output_method → signal visible
+        for (int i = 0; i < 2; ++i) {
+            wait(SC_ZERO_TIME);
+        }
+        EXPECT_TRUE(wdt_first.read());
+        EXPECT_TRUE(wdt_second.read());
+        wdt_sticky[0].write(false);
+        for (int i = 0; i < 3; ++i) {
+            wait(SC_ZERO_TIME);
+        }
+        EXPECT_FALSE(wdt_first.read());
+        std::cout << "  [PASS] WDT_TIMEOUT_RESET pulse + stage-2\n";
 
         // 10. transport_dbg side-effect-free mutex peek.
         uint64_t dbg = 0;

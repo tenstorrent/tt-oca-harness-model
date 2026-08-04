@@ -79,10 +79,11 @@ struct cpu_ctrl_cfg {
     static constexpr uint64_t OFF_CLOCK_GATE_CONTROL     = 0x030u;
     static constexpr uint64_t OFF_GLOBAL_BASE            = 0x040u;
     static constexpr uint64_t OFF_LOCAL_BASE             = 0x048u;
-    static constexpr uint64_t OFF_REGION_SIZE            = 0x050u;
+    // REGION_SIZE kept for fabric-legacy benches; RDL moved WDT to 0x50/0x58.
+    static constexpr uint64_t OFF_REGION_SIZE            = 0x068u;
     static constexpr uint64_t OFF_REFERENCE_COUNTER      = 0x060u;
-    static constexpr uint64_t OFF_WDT_TIMEOUT            = 0x070u;
-    static constexpr uint64_t OFF_WDT_TIMEOUT_RESET      = 0x078u;
+    static constexpr uint64_t OFF_WDT_TIMEOUT            = 0x050u;
+    static constexpr uint64_t OFF_WDT_TIMEOUT_RESET      = 0x058u;
     static constexpr uint64_t OFF_SCRATCH                = 0x100u;
     static constexpr uint64_t OFF_TEST_CTRL              = 0x200u;
     static constexpr uint64_t OFF_DEBUG_CTRL             = 0x208u;
@@ -108,6 +109,8 @@ struct cpu_ctrl_cfg {
 
     uint64_t base_addr       = DEFAULT_BASE_ADDR;
     double   access_delay_ns = 2.0;
+    /// Stage-2 countdown tick period (ns). 0 disables auto-tick.
+    double   wdt_stage2_tick_ns = 0.0;
 };
 
 // ---------------------------------------------------------------------------
@@ -117,6 +120,12 @@ struct cpu_ctrl_cfg {
 class cpu_ctrl : public sc_core::sc_module {
 public:
     tlm_utils::simple_target_socket<cpu_ctrl> reg_socket{"reg_socket"};
+
+    /// Per-core stage-1 sticky inputs (sized to NUM_CORES).
+    sc_core::sc_vector<sc_core::sc_in<bool>> wdt_timeout_cluster_i{"wdt_timeout_cluster_i"};
+    sc_core::sc_in<bool>  rst_primary_n_i{"rst_primary_n_i"};
+    sc_core::sc_out<bool> wdt_first_timeout_o{"wdt_first_timeout_o"};
+    sc_core::sc_out<bool> wdt_second_timeout_o{"wdt_second_timeout_o"};
 
     SC_HAS_PROCESS(cpu_ctrl);
 
@@ -138,9 +147,14 @@ public:
 
     double access_delay_ns() const { return access_delay_ns_p_.get_value(); }
 
+    void dbg_wdt_stage2_tick(unsigned n = 1);
+    bool dbg_wdt_first_timeout() const { return wdt_first_timeout_; }
+    bool dbg_wdt_second_timeout() const { return wdt_second_timeout_; }
+
 private:
     cci::cci_param<uint64_t> base_addr_p_;
     cci::cci_param<double>   access_delay_ns_p_;
+    cci::cci_param<double, cci::CCI_IMMUTABLE_PARAM> wdt_stage2_tick_ns_p_;
 
     cpu_ctrl_cfg cfg_;
 
@@ -181,6 +195,16 @@ private:
     regmodel::Register64 dummy_rom_3_{};
     std::array<regmodel::Register64, cpu_ctrl_cfg::DUMMY_ROM_NULLS> dummy_rom_null_{};
 
+    std::array<uint32_t, cpu_ctrl_cfg::NUM_CORES> wdt_stage2_count_{};
+    std::array<bool, cpu_ctrl_cfg::NUM_CORES>     wdt_stage2_reload_pulse_{};
+    bool wdt_first_timeout_  = false;
+    bool wdt_second_timeout_ = false;
+    bool wdt_first_cache_    = false;
+    bool wdt_second_cache_   = false;
+    sc_core::sc_event wdt_stage2_tick_event_;
+    sc_core::sc_event wdt_stage2_recompute_event_;
+    sc_core::sc_time  wdt_stage2_tick_period_{};
+
     void reset_regs();
 
     uint64_t normalize_addr(uint64_t addr) const;
@@ -194,6 +218,16 @@ private:
 
     void b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
     unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+
+    void wdt_stage2_tick_method();
+    void wdt_stage2_output_method();
+    void wdt_stage2_input_method();
+    /// Apply reload conditions and update first/second flags.
+    /// When `do_decrement` is true (periodic / dbg tick), also count down
+    /// while sticky is asserted; register-reset and sticky-edge paths pass false.
+    void wdt_stage2_step_once(bool do_decrement = true);
+    void schedule_wdt_stage2_recompute();
+    void apply_wdt_timeout_reset(uint32_t pulse_bits);
 };
 
 }  // namespace smc

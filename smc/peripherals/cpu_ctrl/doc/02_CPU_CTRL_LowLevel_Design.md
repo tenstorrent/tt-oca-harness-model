@@ -40,10 +40,6 @@ cpu_ctrl/
 └── doc/                        Specification + test plan
 ```
 
-`smc_axi_extension` / `source_id_t` are pulled from the shared canonical
-header `smc/common/include/smc_axi_extension.h` (added to the include path
-by this target's CMake); the peripheral no longer carries a local copy.
-
 ---
 
 ## 3. Register storage

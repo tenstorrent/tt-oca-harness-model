@@ -13,13 +13,27 @@
 
 #include <stdint.h>
 
-/* SMC platform address map (local alias aperture) */
+/* SMC platform address map (local alias aperture).
+ * Aligned with smc_top.rdl / smc_top_reg.svh for I2C, telemetry, and I3C:
+ *   I2C wrap          @ 0xC000_5000 (cores +0x200/+0x400)
+ *   telemetry wrap    @ 0xC000_9000 (instances +0x100, size 0x300)
+ *   oca_i3c_wrap_0    @ 0xC003_A000
+ * UART bases remain at the pre-existing sim locations (0xC000_A000+) until a
+ * separate UART map cleanup; RTL places uart_wrap at 0xC000_6000. */
 #define SMC_WDT_DEBUG_BASE   0xC0000000ULL
+#define SMC_WDT0_BASE        0xC0000000ULL
+#define SMC_WDT1_BASE        0xC0000400ULL
+#define SMC_WDT2_BASE        0xC0000800ULL
+#define SMC_WDT3_BASE        0xC0000C00ULL
 #define SMC_RESET_BASE       0xC0002000ULL
-#define SMC_I3C_BASE         0xC0005000ULL
-#define SMC_I2C0_BASE        0xC0009000ULL
-#define SMC_I2C1_BASE        0xC0009200ULL
-#define SMC_I2C2_BASE        0xC0009400ULL
+#define SMC_I2C0_BASE        0xC0005000ULL
+#define SMC_I2C1_BASE        0xC0005200ULL
+#define SMC_I2C2_BASE        0xC0005400ULL
+#define SMC_AVSBUS_BASE      0xC0008000ULL
+#define SMC_TELEMETRY_BASE   0xC0009000ULL
+#define SMC_TELEMETRY0_BASE  (SMC_TELEMETRY_BASE + 0x000ULL)
+#define SMC_TELEMETRY1_BASE  (SMC_TELEMETRY_BASE + 0x100ULL)
+#define SMC_TELEMETRY2_BASE  (SMC_TELEMETRY_BASE + 0x200ULL)
 #define SMC_UART0_BASE       0xC000A000ULL
 #define SMC_UART1_BASE       0xC000B000ULL
 #define SMC_UART2_BASE       0xC000C000ULL
@@ -27,6 +41,7 @@
 #define SMC_CPU_CTRL_BASE    0xC0400000ULL
 #define SMC_CPU_CTRL_FP_BASE 0xC0039000ULL
 #define SMC_DMA_BASE         0xC0038000ULL
+#define SMC_I3C_BASE         0xC003A000ULL
 #define SMC_BOOTROM_BASE     0xC0040000ULL
 #define SMC_SCRATCH_BASE     0xC0060000ULL
 #define SMC_PLIC_BASE        0xC0800000ULL
@@ -34,6 +49,31 @@
 #define SMC_BEU_BASE         0xC0C10000ULL
 #define SMC_ZEROER_BASE      0xC0038200ULL
 #define SMC_OCTS_TIMER_BASE  0xC000E000ULL
+#define SMC_PLL_WRAP_BASE     0xC0003000ULL
+
+/* Telemetry receiver register offsets (32-bit; one instance window = 0x100) */
+#define TEL_CTRL                   0x00u
+#define TEL_STATUS                 0x04u
+#define TEL_INTR_STATUS            0x08u
+#define TEL_INTR_ENABLE            0x0Cu
+#define TEL_INTR_TEST              0x10u
+#define TEL_PROBE_ID               0x14u
+#define TEL_COUNTER_VLDS           0x18u
+#define TEL_COUNTER0               0x80u
+#define TEL_COUNTER(i)             (TEL_COUNTER0 + 4u * (i))
+
+#define TEL_CTRL_BUFFER_POP        (1u << 0)
+#define TEL_CTRL_RX_FLUSH          (1u << 4)
+#define TEL_CTRL_TX_FLUSH          (1u << 8)
+#define TEL_STATUS_BUFFER_EMPTY    (1u << 0)
+#define TEL_STATUS_BUFFER_FULL     (1u << 4)
+#define TEL_INTR_MISSING_LAST      (1u << 0)
+#define TEL_INTR_BUFFER_THRESHOLD  (1u << 4)
+
+/* Telemetry PLIC source IDs (peripheral bits 8:10 -> PLIC sources 9:11) */
+#define PLIC_SRC_TELEMETRY0  9u
+#define PLIC_SRC_TELEMETRY1  10u
+#define PLIC_SRC_TELEMETRY2  11u
 
 /* CLINT register offsets (RISC-V standard layout) */
 #define CLINT_MSIP(hart)        (0x0000u + 4u * (hart))
@@ -57,9 +97,29 @@
 
 /* CPU control register offsets */
 #define CPU_CTRL_SCRATCH(idx)         (0x100u + 8u * (idx))
+#define CPU_CTRL_WDT_TIMEOUT          0x050u
+#define CPU_CTRL_WDT_TIMEOUT_RESET    0x058u
 #define CPU_CTRL_REFERENCE_COUNTER    0x060u
 #define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
 #define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
+
+/* SiFive TLWDT (stage-1) register offsets — window 0x400 per core */
+#define WDT_CTRL           0x00u
+#define WDT_COUNT          0x08u
+#define WDT_SCALED_COUNT   0x10u
+#define WDT_FEED           0x18u
+#define WDT_KEY            0x1Cu
+#define WDT_CMP            0x20u
+
+#define WDT_KEY_MAGIC      0x0051F15Eu
+#define WDT_FEED_MAGIC     0x0D09F00Du
+
+#define WDT_CTRL_SCALE_MASK   0xFu
+#define WDT_CTRL_RSTEN        (1u << 8u)
+#define WDT_CTRL_ZEROCMP      (1u << 9u)
+#define WDT_CTRL_ALWAYS       (1u << 12u)
+#define WDT_CTRL_AWAKE        (1u << 13u)
+#define WDT_CTRL_IP           (1u << 28u)
 
 /* DMA controller register offsets (window size 0x138) */
 #define DMA_CONFIG             0x000u
@@ -155,6 +215,56 @@
 #define PLIC_SRC_UART2    21u
 #define PLIC_SRC_UART3    22u
 
+/* AVSBus PLIC source ID (peripheral bit 22 -> PLIC source 23) */
+#define PLIC_SRC_AVSBUS   23u
+
+/* AVSBus Controller — base 0xC000_8000, 4 KiB window, 32-bit registers.
+ * Mirrors hw/ip/avsbus_controller RDL (AVSBus 1.3.1 single-target). */
+#define AVS_CMD                    0x00u
+#define AVS_READBACK               0x04u
+#define AVS_DEBUG_READBACK         0x08u
+#define AVS_LATEST_SLAVE_SUBFRAME  0x0Cu
+#define AVS_NORMAL_STATUS          0x20u
+#define AVS_SLAVE_STATUS           0x24u
+#define AVS_FIFOS_STATUS           0x28u
+#define AVS_INTERRUPT              0x30u
+#define AVS_INTERRUPT_MASK         0x34u
+#define AVS_INTERRUPT_CLEAR        0x38u
+#define AVS_CFG_0                  0x50u
+#define AVS_CFG_1                  0x54u
+#define AVS_CONFIG                 0x58u
+
+/* AVS_NORMAL_STATUS bits */
+#define AVS_STATUS_CMD_FIFO_EMPTY      (1u << 17u)
+#define AVS_STATUS_READBACK_HAS_DATA   (1u << 20u)
+#define AVS_STATUS_BUS_IS_IDLE         (1u << 21u)
+
+/* AVS_INTERRUPT bits */
+#define AVS_IRQ_READBACK_HAS_DATA      (1u << 3u)
+
+/* AVS_CMD field helpers (RDL layout) */
+#define AVS_CMD_PACK(r_or_w, grp, code, rail, data) \
+    ((((uint32_t)(r_or_w) & 0x3u) << 28) | \
+     (((uint32_t)(grp)    & 0x1u) << 27) | \
+     (((uint32_t)(code)   & 0xFu) << 23) | \
+     (((uint32_t)(rail)   & 0xFu) << 19) | \
+     (((uint32_t)(data)   & 0xFFFFu) << 3))
+#define AVS_CMD_COMMIT_WRITE  0x0u
+#define AVS_CMD_READ          0x2u
+#define AVS_CMD_CODE_VOLTAGE  0x0u
+
+/* Known reset values */
+#define AVS_CFG_0_RESET       0x00051000u
+#define AVS_CFG_1_RESET       0x00000003u
+#define AVS_CONFIG_RESET      0x1u
+#define AVS_IRQ_MASK_RESET    0x1FFu
+
+/* SiFive TLWDT PLIC source IDs (Freedom Metal metal_watchdog_get_interrupt_id) */
+#define PLIC_SRC_WDT0    329u
+#define PLIC_SRC_WDT1    330u
+#define PLIC_SRC_WDT2    331u
+#define PLIC_SRC_WDT3    332u
+
 /* UART 16550 register offsets (DLAB=0 unless noted) */
 #define UART_RBR_THR_DLL  0x00   /* RBR (ro) / THR (wo) / DLL (DLAB=1) */
 #define UART_IER_DLM      0x04   /* IER / DLM (DLAB=1) */
@@ -249,12 +359,50 @@
 
 #define OCTS_STATUS_MODE      (1u << 0)  /* 0 = PRIMARY, 1 = SECONDARY        */
 #define OCTS_STATUS_RUNNING   (1u << 4)  /* enable && count > 0               */
+/* PLL wrapper (pll_wrap.rdl) — base 0xC000_3000, window 0x1000.
+ * Composed map (matches vp/platform/smc periph_router route "pll_wrap"):
+ *   pll_cntl @0x000, cgm_0 @0x100, cgm_1 @0x200, awm_0 @0x400, awm_1 @0xA00.
+ * The firmware (fw/smc) accesses cgm/awm and the pll_cntl status registers
+ * with 16-bit MMIO, and the wide pll_cntl registers with 32-bit — use
+ * REG_READ16/REG_WRITE16 for the former, REG_READ/REG_WRITE for the latter. */
+#define PLL_CNTL_BASE         (SMC_PLL_WRAP_BASE + 0x000u)
+#define PLL_CGM_BASE(id)      (SMC_PLL_WRAP_BASE + 0x100u + (id) * 0x100u)
+#define PLL_AWM_BASE(id)      (SMC_PLL_WRAP_BASE + 0x400u + (id) * 0x600u)
+
+/* pll_cntl register offsets (firmware-polled lock status lives here) */
+#define PLL_CNTL_CGM_0_STATUS   0x00u   /* RO lock_detect[0]   */
+#define PLL_CNTL_CGM_1_STATUS   0x04u   /* RO lock_detect[0]   */
+#define PLL_CNTL_AWM_0_STATUS   0x14u   /* RO lock_detect[2:0] */
+#define PLL_CNTL_AWM_1_STATUS   0x1Cu   /* RO lock_detect[2:0] */
+#define PLL_CNTL_AG_MUX_SELECT  0x20u   /* RW 32-bit, mask 0x3F3FFFFF */
+
+/* cgm register offsets (16-bit registers) */
+#define CGM_ENABLES         0x00u   /* cgm_enable[0], freq_acq_enable[1] */
+#define CGM_FCW_INT         0x04u
+#define CGM_FCW_FRAC        0x08u
+#define CGM_PREDIV          0x0Cu
+#define CGM_REG_UPDATE      0x20u   /* WO self-clearing commit strobe */
+#define CGM_CGM_STATUS      0x4Cu   /* RO lock_detect[0] */
+
+/* awm GLOBAL register offsets */
+#define AWM_GLOBAL_REG_UPDATE   0x28u   /* WO commit strobe */
+#define AWM_GLOBAL_LOCK_STATUS  0x98u   /* RO lock_detect[5:3] */
+
+/* PLL field bits */
+#define CGM_ENABLE_BIT       (1u << 0u)
+#define CGM_FREQ_ACQ_BIT     (1u << 1u)
+#define PLL_LOCK_DETECT_BIT  (1u << 0u)
 
 /* MMIO helpers */
 #define REG_READ(addr)          (*((volatile uint32_t *)(uintptr_t)(addr)))
 #define REG_WRITE(addr, val)    (*((volatile uint32_t *)(uintptr_t)(addr)) = (val))
 #define REG_OR(addr, val)       REG_WRITE((addr), REG_READ((addr)) | (val))
 #define REG_AND(addr, val)      REG_WRITE((addr), REG_READ((addr)) & (val))
+
+/* 16-bit MMIO helpers (the PLL firmware accesses cgm/awm/pll_cntl status
+ * registers as 16-bit; the pll_wrapper model supports sub-word access). */
+#define REG_READ16(addr)        (*((volatile uint16_t *)(uintptr_t)(addr)))
+#define REG_WRITE16(addr, val)  (*((volatile uint16_t *)(uintptr_t)(addr)) = (uint16_t)(val))
 
 /* 64-bit MMIO helpers (required for the memory_zeroer register file) */
 #define REG_READ64(addr)        (*((volatile uint64_t *)(uintptr_t)(addr)))

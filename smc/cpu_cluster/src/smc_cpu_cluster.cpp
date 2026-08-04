@@ -65,6 +65,8 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
                          "Size of the CPU-Control register window (§3.8).")
     , local_base_default_p_("local_base_default", cfg.local_base_default,
                             "LOCAL_BASE reset value reported via the ctrl socket (§3.8).")
+    , wdt_stage2_tick_ns_p_("wdt_stage2_tick_ns", cfg.wdt_stage2_tick_ns,
+                            "Stage-2 WDT countdown tick period in nanoseconds; 0 disables auto-tick.")
     , qk_(num_harts_p_.get_value())
 {
     const unsigned nh = num_harts_p_.get_value();
@@ -78,13 +80,39 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
     irq_sw   .init(nh);
     irq_timer.init(nh);
     irq_ext  .init(nh);
+    wdt_timeout_cluster_i.init(nh);
     beu_nmi_in.init(nh);
     beu_nmi_prev_.assign(nh, false);
     wfi_event_       .init(nh);
     core_enable_event_.init(nh);
 
+    wdt_stage2_count_.fill(regs_.wdt_timeout);
+    wdt_stage2_reload_pulse_.fill(false);
+    wdt_stage2_tick_period_ =
+        sc_core::sc_time(wdt_stage2_tick_ns_p_.get_value(), sc_core::SC_NS);
+
     // ----- 3. ctrl target socket --------------------------------------------
     ctrl.register_b_transport(this, &smc_cpu_cluster::ctrl_b_transport);
+
+    // ----- 3b. Stage-2 WDT processes ----------------------------------------
+    SC_METHOD(wdt_stage2_tick_method);
+    sensitive << wdt_stage2_tick_event_;
+    dont_initialize();
+
+    SC_METHOD(wdt_stage2_output_method);
+    sensitive << wdt_stage2_recompute_event_;
+    dont_initialize();
+
+    SC_METHOD(wdt_stage2_input_method);
+    sensitive << rst_primary_n_i;
+    for (unsigned i = 0; i < nh; ++i) {
+        sensitive << wdt_timeout_cluster_i[i];
+    }
+    dont_initialize();
+
+    if (wdt_stage2_tick_period_ != sc_core::SC_ZERO_TIME) {
+        wdt_stage2_tick_event_.notify(wdt_stage2_tick_period_);
+    }
 
     // ----- 4. CPU-Control register file: defaults --------------------------
     regs_.reset_vector.fill(reset_pc_p_.get_value());
@@ -510,8 +538,11 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
     case 0x040: handle_u64(regs_.reference_counter,      /*ro*/ false); return;
     case 0x050: handle_u32(regs_.wdt_timeout,            /*ro*/ false); return;
     case 0x058:  // WDT_TIMEOUT_RESET single-pulse bits; reads as zero in LT.
-        if (trans.get_command() == tlm::TLM_READ_COMMAND)
+        if (trans.get_command() == tlm::TLM_READ_COMMAND) {
             store_u32(0);
+        } else {
+            apply_wdt_timeout_reset(load_u32());
+        }
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         return;
     case 0x060: handle_u32(regs_.test_ctrl,              /*ro*/ true ); return;
@@ -611,6 +642,114 @@ void smc_cpu_cluster::apply_reset_ctrl(uint64_t new_value)
         // of its loop and park itself.  No explicit kick needed.
         (void)was_en;
     }
+}
+
+// ===========================================================================
+// Stage-2 WDT countdown (RTL smc_cpu_ctrl_wrap)
+// ===========================================================================
+
+void smc_cpu_cluster::schedule_wdt_stage2_recompute()
+{
+    wdt_stage2_recompute_event_.notify(sc_core::SC_ZERO_TIME);
+}
+
+void smc_cpu_cluster::apply_wdt_timeout_reset(uint32_t pulse_bits)
+{
+    const unsigned nh = num_harts_p_.get_value();
+    for (unsigned i = 0; i < nh && i < 4; ++i) {
+        if ((pulse_bits >> i) & 1u) {
+            wdt_stage2_reload_pulse_[i] = true;
+            wdt_stage2_count_[i] = regs_.wdt_timeout;
+        }
+    }
+    // Reload / refresh outputs only — do not advance the countdown.
+    wdt_stage2_step_once(/*do_decrement=*/false);
+    schedule_wdt_stage2_recompute();
+}
+
+void smc_cpu_cluster::wdt_stage2_step_once(bool do_decrement)
+{
+    const unsigned nh = num_harts_p_.get_value();
+    bool any_first  = false;
+    bool any_second = false;
+
+    for (unsigned i = 0; i < nh && i < 4; ++i) {
+        const bool sticky = wdt_timeout_cluster_i[i].read();
+        const bool reload =
+            !rst_primary_n_i.read() ||
+            wdt_stage2_reload_pulse_[i] ||
+            !sticky;
+
+        if (reload) {
+            wdt_stage2_count_[i] = regs_.wdt_timeout;
+            wdt_stage2_reload_pulse_[i] = false;
+        } else if (do_decrement && sticky && wdt_stage2_count_[i] != 0) {
+            --wdt_stage2_count_[i];
+        }
+
+        any_first  = any_first || sticky;
+        any_second = any_second || (wdt_stage2_count_[i] == 0);
+    }
+
+    wdt_first_timeout_  = any_first;
+    wdt_second_timeout_ = any_second;
+}
+
+void smc_cpu_cluster::wdt_stage2_tick_method()
+{
+    if (!rst_primary_n_i.read()) {
+        // Hold reload while primary reset asserted.
+        const unsigned nh = num_harts_p_.get_value();
+        for (unsigned i = 0; i < nh && i < 4; ++i) {
+            wdt_stage2_count_[i] = regs_.wdt_timeout;
+        }
+        wdt_first_timeout_  = false;
+        wdt_second_timeout_ = false;
+        schedule_wdt_stage2_recompute();
+    } else {
+        wdt_stage2_step_once();
+        schedule_wdt_stage2_recompute();
+    }
+
+    if (wdt_stage2_tick_period_ != sc_core::SC_ZERO_TIME) {
+        wdt_stage2_tick_event_.notify(wdt_stage2_tick_period_);
+    }
+}
+
+void smc_cpu_cluster::wdt_stage2_input_method()
+{
+    // Sticky / primary-reset edges reload or refresh outputs; countdown
+    // advances only on the periodic (or dbg) tick path.
+    wdt_stage2_step_once(/*do_decrement=*/false);
+    schedule_wdt_stage2_recompute();
+}
+
+void smc_cpu_cluster::wdt_stage2_output_method()
+{
+    if (wdt_first_timeout_ != wdt_first_cache_) {
+        wdt_first_timeout_o.write(wdt_first_timeout_);
+        wdt_first_cache_ = wdt_first_timeout_;
+    }
+    if (wdt_second_timeout_ != wdt_second_cache_) {
+        wdt_second_timeout_o.write(wdt_second_timeout_);
+        wdt_second_cache_ = wdt_second_timeout_;
+    }
+}
+
+void smc_cpu_cluster::dbg_wdt_stage2_tick(unsigned n)
+{
+    for (unsigned k = 0; k < n; ++k) {
+        wdt_stage2_step_once();
+    }
+    schedule_wdt_stage2_recompute();
+}
+
+uint32_t smc_cpu_cluster::dbg_wdt_stage2_count(unsigned core) const
+{
+    if (core >= 4) {
+        return 0;
+    }
+    return wdt_stage2_count_[core];
 }
 
 } // namespace smc

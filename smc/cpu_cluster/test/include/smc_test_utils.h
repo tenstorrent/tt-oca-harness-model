@@ -327,6 +327,7 @@ inline smc::smc_cpu_cluster::config make_default_cluster_cfg(unsigned num_harts 
     cfg.isa          = "rv64imafdc";
     cfg.quantum_ns   = 1000;
     cfg.quantum_insts = 16;              // small K so unit tests are responsive
+    cfg.wdt_stage2_tick_ns = 0.0;        // tests drive stage-2 via dbg_wdt_stage2_tick
     return cfg;
 }
 
@@ -389,12 +390,34 @@ struct default_buses
     TlmRamStub      bus_ifetch{"bus_ifetch"};
     ctrl_initiator  ctrl      {"ctrl_init"};
 
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_sticky{"wdt_sticky"};
+    sc_core::sc_signal<bool> rst_primary_n{"rst_primary_n"};
+    sc_core::sc_signal<bool> wdt_first{"wdt_first"};
+    sc_core::sc_signal<bool> wdt_second{"wdt_second"};
+
     void bind(smc::smc_cpu_cluster& cluster)
     {
         cluster.data  .bind(bus_data  .socket);
         cluster.mmio  .bind(bus_mmio  .socket);
         cluster.ifetch.bind(bus_ifetch.socket);
         ctrl.socket.bind(cluster.ctrl);
+        bind_wdt_stage2(cluster);
+    }
+
+    void bind_wdt_stage2(smc::smc_cpu_cluster& cluster)
+    {
+        const unsigned nh = cluster.num_harts();
+        if (wdt_sticky.size() != nh) {
+            wdt_sticky.init(nh);
+        }
+        rst_primary_n.write(true);
+        for (unsigned i = 0; i < nh; ++i) {
+            wdt_sticky[i].write(false);
+            cluster.wdt_timeout_cluster_i[i].bind(wdt_sticky[i]);
+        }
+        cluster.rst_primary_n_i.bind(rst_primary_n);
+        cluster.wdt_first_timeout_o.bind(wdt_first);
+        cluster.wdt_second_timeout_o.bind(wdt_second);
     }
 };
 
@@ -410,12 +433,29 @@ struct mmio_capture_buses
     TlmRamStub        bus_ifetch{"bus_ifetch"};
     ctrl_initiator    ctrl      {"ctrl_init"};
 
+    sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_sticky{"wdt_sticky"};
+    sc_core::sc_signal<bool> rst_primary_n{"rst_primary_n"};
+    sc_core::sc_signal<bool> wdt_first{"wdt_first"};
+    sc_core::sc_signal<bool> wdt_second{"wdt_second"};
+
     void bind(smc::smc_cpu_cluster& cluster)
     {
         cluster.data  .bind(bus_data  .socket);
         cluster.mmio  .bind(bus_mmio  .socket);
         cluster.ifetch.bind(bus_ifetch.socket);
         ctrl.socket.bind(cluster.ctrl);
+        const unsigned nh = cluster.num_harts();
+        if (wdt_sticky.size() != nh) {
+            wdt_sticky.init(nh);
+        }
+        rst_primary_n.write(true);
+        for (unsigned i = 0; i < nh; ++i) {
+            wdt_sticky[i].write(false);
+            cluster.wdt_timeout_cluster_i[i].bind(wdt_sticky[i]);
+        }
+        cluster.rst_primary_n_i.bind(rst_primary_n);
+        cluster.wdt_first_timeout_o.bind(wdt_first);
+        cluster.wdt_second_timeout_o.bind(wdt_second);
     }
 };
 
@@ -440,6 +480,28 @@ inline void bind_signal_drivers(
         cluster.irq_ext  [i].bind(sig_ext  [i]);
         cluster.beu_nmi_in[i].bind(sig_nmi[i]);
     }
+}
+
+/// Bind stage-2 WDT sidebands to idle (deasserted) signals.
+inline void bind_wdt_stage2_idle(
+    smc::smc_cpu_cluster& cluster,
+    sc_core::sc_vector<sc_core::sc_signal<bool>>& sticky,
+    sc_core::sc_signal<bool>& rst_primary_n,
+    sc_core::sc_signal<bool>& first_o,
+    sc_core::sc_signal<bool>& second_o)
+{
+    const unsigned nh = cluster.num_harts();
+    if (sticky.size() != nh) {
+        sticky.init(nh);
+    }
+    rst_primary_n.write(true);
+    for (unsigned i = 0; i < nh; ++i) {
+        sticky[i].write(false);
+        cluster.wdt_timeout_cluster_i[i].bind(sticky[i]);
+    }
+    cluster.rst_primary_n_i.bind(rst_primary_n);
+    cluster.wdt_first_timeout_o.bind(first_o);
+    cluster.wdt_second_timeout_o.bind(second_o);
 }
 
 }  // namespace smc_test

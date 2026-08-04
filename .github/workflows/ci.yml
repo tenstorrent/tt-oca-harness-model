@@ -257,7 +257,8 @@ jobs:
           CCI_HOME:     ${{ env.CCI_HOME }}
         run: |
           smc/run_all_smc_tests.sh \
-            bootrom clint dma i3c_controller plic reset_unit scratchpad_ram
+            bootrom clint dma i3c_controller plic reset_unit scratchpad_ram \
+            telemetry_receiver
 
       - name: Upload SMC peripheral test logs
         if: always()
