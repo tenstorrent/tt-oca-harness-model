@@ -295,8 +295,8 @@ struct i3c_controller_cfg {
 
     /// Per-IP base address inside the SMC fabric (informational; the model
     /// exposes offsets relative to its own aperture). smc_top.rdl:
-    /// `oca_i3c_wrap_0 @ 0xC000_5000`.
-    static constexpr uint64_t SMC_BASE_ADDR = 0xC000'5000ULL;
+    /// `oca_i3c_wrap_0 @ 0xC003_A000`.
+    static constexpr uint64_t SMC_BASE_ADDR = 0xC003'A000ULL;
 
     /// Hard upper bound on instances (i3ccore_wrap_pkg::MAX_NUM_I3CS).
     static constexpr unsigned MAX_INSTANCES = 6;

@@ -13,18 +13,27 @@
 
 #include <stdint.h>
 
-/* SMC platform address map (local alias aperture) */
+/* SMC platform address map (local alias aperture).
+ * Aligned with smc_top.rdl / smc_top_reg.svh for I2C, telemetry, and I3C:
+ *   I2C wrap          @ 0xC000_5000 (cores +0x200/+0x400)
+ *   telemetry wrap    @ 0xC000_9000 (instances +0x100, size 0x300)
+ *   oca_i3c_wrap_0    @ 0xC003_A000
+ * UART bases remain at the pre-existing sim locations (0xC000_A000+) until a
+ * separate UART map cleanup; RTL places uart_wrap at 0xC000_6000. */
 #define SMC_WDT_DEBUG_BASE   0xC0000000ULL
 #define SMC_WDT0_BASE        0xC0000000ULL
 #define SMC_WDT1_BASE        0xC0000400ULL
 #define SMC_WDT2_BASE        0xC0000800ULL
 #define SMC_WDT3_BASE        0xC0000C00ULL
 #define SMC_RESET_BASE       0xC0002000ULL
-#define SMC_I3C_BASE         0xC0005000ULL
+#define SMC_I2C0_BASE        0xC0005000ULL
+#define SMC_I2C1_BASE        0xC0005200ULL
+#define SMC_I2C2_BASE        0xC0005400ULL
 #define SMC_AVSBUS_BASE      0xC0008000ULL
-#define SMC_I2C0_BASE        0xC0009000ULL
-#define SMC_I2C1_BASE        0xC0009200ULL
-#define SMC_I2C2_BASE        0xC0009400ULL
+#define SMC_TELEMETRY_BASE   0xC0009000ULL
+#define SMC_TELEMETRY0_BASE  (SMC_TELEMETRY_BASE + 0x000ULL)
+#define SMC_TELEMETRY1_BASE  (SMC_TELEMETRY_BASE + 0x100ULL)
+#define SMC_TELEMETRY2_BASE  (SMC_TELEMETRY_BASE + 0x200ULL)
 #define SMC_UART0_BASE       0xC000A000ULL
 #define SMC_UART1_BASE       0xC000B000ULL
 #define SMC_UART2_BASE       0xC000C000ULL
@@ -32,6 +41,7 @@
 #define SMC_CPU_CTRL_BASE    0xC0400000ULL
 #define SMC_CPU_CTRL_FP_BASE 0xC0039000ULL
 #define SMC_DMA_BASE         0xC0038000ULL
+#define SMC_I3C_BASE         0xC003A000ULL
 #define SMC_BOOTROM_BASE     0xC0040000ULL
 #define SMC_SCRATCH_BASE     0xC0060000ULL
 #define SMC_PLIC_BASE        0xC0800000ULL
@@ -39,6 +49,30 @@
 #define SMC_BEU_BASE         0xC0C10000ULL
 #define SMC_ZEROER_BASE      0xC0038200ULL
 #define SMC_PLL_WRAP_BASE     0xC0003000ULL
+
+/* Telemetry receiver register offsets (32-bit; one instance window = 0x100) */
+#define TEL_CTRL                   0x00u
+#define TEL_STATUS                 0x04u
+#define TEL_INTR_STATUS            0x08u
+#define TEL_INTR_ENABLE            0x0Cu
+#define TEL_INTR_TEST              0x10u
+#define TEL_PROBE_ID               0x14u
+#define TEL_COUNTER_VLDS           0x18u
+#define TEL_COUNTER0               0x80u
+#define TEL_COUNTER(i)             (TEL_COUNTER0 + 4u * (i))
+
+#define TEL_CTRL_BUFFER_POP        (1u << 0)
+#define TEL_CTRL_RX_FLUSH          (1u << 4)
+#define TEL_CTRL_TX_FLUSH          (1u << 8)
+#define TEL_STATUS_BUFFER_EMPTY    (1u << 0)
+#define TEL_STATUS_BUFFER_FULL     (1u << 4)
+#define TEL_INTR_MISSING_LAST      (1u << 0)
+#define TEL_INTR_BUFFER_THRESHOLD  (1u << 4)
+
+/* Telemetry PLIC source IDs (peripheral bits 8:10 -> PLIC sources 9:11) */
+#define PLIC_SRC_TELEMETRY0  9u
+#define PLIC_SRC_TELEMETRY1  10u
+#define PLIC_SRC_TELEMETRY2  11u
 
 /* CLINT register offsets (RISC-V standard layout) */
 #define CLINT_MSIP(hart)        (0x0000u + 4u * (hart))

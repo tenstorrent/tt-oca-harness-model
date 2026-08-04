@@ -281,9 +281,11 @@ local-alias aperture `[0xC000'0000, 0xC100'0000)` unless noted):
 
 |UART[0..3] |`0xC000'A000 + i*0x1000` |THR at +0x00, IER +0x04, LCR +0x0C (bit 7 = DLAB).
 
-|I2C[0..2] |`0xC000'9000 + i*0x200` |
+|I2C[0..2] |`0xC000'5000 + i*0x200` |
 
-|I3C |`0xC000'5000` (6 instances, 0x1E00 window) |
+|I3C |`0xC003'A000` (6 instances packed at 0x500 in the SystemC model) |
+
+|Telemetry[0..2] |`0xC000'9000 + i*0x100` |
 
 |Reset unit |`0xC000'2000` |
 

@@ -318,12 +318,11 @@ No SystemC misc wrapper model exists yet.
 interrupts, UART/I2C/I3C pad muxing, cool reset pin, and boot stall.
 
 |I3C controller
-|`0xC000_5000`
-|6 x `0x500`
+|`0xC003_A000`
+|packed `0x1E00` (sim) / 6×`0x1000` (RTL)
 |`i3c_controller.reg_socket`
-|SystemC model exists. RTL currently instantiates `i3ccore_stub` at
-`OCA_I3C_WRAP_0_REG_MAP_BASE_ADDR`, with 6 instances and DAT/DCT memory
-interfaces connected.
+|RTL `oca_i3c_wrap_N` @ `0xC003_A000 + N×0x1000`. SystemC packs 6 instances
+at `INSTANCE_SPACING=0x500` behind one aperture.
 
 |PVT
 |`0xC000_7000`
@@ -341,22 +340,20 @@ carves a 4 KiB window out of the periph_misc catch-all, binds reset/IRQ/GPIO-
 enable, and maps interrupt bit 22 → PLIC source 23.
 
 |I2C
-|`0xC000_9000`
+|`0xC000_5000`
 |`0xE0C`
 |`i2c_controller.reg_socket` (×3)
-|SystemC model exists — one `i2c_controller` per 0x200-byte core window. RTL
-`i2c_wrap` packs `NUM_I2CS = 3` cores plus a wrapper-enable register; an SMC
-top wrapper should instantiate three `i2c_controller` models, decode the
-`i2c_wrap` subwindows, and handle the wrapper-enable register. Periph-clock
-CDC, pad routing, and interrupt bits 25:23.
+|RTL `i2c_wrap` @ `0xC000_5000` (`smc_top.rdl`). SystemC model — one
+`i2c_controller` per 0x200-byte core window. Periph-clock CDC, pad routing,
+and interrupt bits 25:23.
 
 |UART/log engine wrapper
 |`0xC000_A000`
 |4 KiB
 |Four `uart` instances plus log-engine stubs
-|SystemC has one UART model. RTL instantiates `uart_wrap` with `NUM_UART = 4`
-and log engines enabled for all four. UART/log interrupts are combined into
-peripheral bits 21:18.
+|SystemC has one UART model. **Note:** RTL `uart_wrap` is at `0xC000_6000`;
+the sim still parks UARTs at `0xC000_A000` pending a separate map cleanup.
+UART/log interrupts are combined into peripheral bits 21:18.
 
 |eFuse map/interface/shim
 |`0xC000_B000..0xC000_C1FF`
@@ -367,11 +364,11 @@ command interface, fuse reset, fuse sense done, and locked-field interrupt bit
 28. No SMC SystemC eFuse model exists.
 
 |Telemetry receiver
-|`0xC000_D000`
-|4 KiB
-|Stub/model needed
-|RTL instantiates `telemetry_receiver_wrap` with `NUM_TELEMETRY_RECEIVERS = 3`
-and routes telemetry interrupts to bits 10:8.
+|`0xC000_9000`
+|`0x300`
+|`telemetry_receiver.reg_socket` (×3)
+|RTL `telemetry_receiver_wrap` with `NUM_TELEMETRY_RECEIVERS = 3`, stride
+`0x100`. Wired in `smc-vp`; interrupts on peripheral bits 10:8.
 
 |System Timer OCTS
 |`0xC000_E000`
@@ -385,6 +382,14 @@ and routes telemetry interrupts to bits 10:8.
 |4 KiB
 |Stub/model needed
 |RTL routes DTP CSR externally and DFT control/status internally.
+
+|OCA I3C wraps
+|`0xC003_A000`
+|6 × `0x1000` (RTL) / packed `0x500` (SystemC model)
+|`i3c_controller.reg_socket`
+|RTL `oca_i3c_wrap_N` @ `0xC003_A000 + N×0x1000`. The SystemC model still
+packs instances at `INSTANCE_SPACING=0x500` behind one aperture starting at
+`0xC003_A000`.
 
 |SMC CPU Control / base-config CSRs
 |`0xC001_0000`
@@ -688,15 +693,15 @@ used as the intended functional model for firmware bring-up.
 ==== I2C
 
 RTL instantiates `i2c_wrap` with `NUM_I2CS = 3` OCA I2C cores plus a
-wrapper-enable register, behind one AXI-Lite slave at `0xC000_9000`. Each core
+wrapper-enable register, behind one AXI-Lite slave at `0xC000_5000`. Each core
 occupies a 0x200-byte window; the wrapper-enable register sits at offset
 `0xE00`. The SystemC `i2c_controller` model reproduces **one** core (the
 natural unit), mirroring how `uart` models a single UART instance. For SMC
 integration:
 
 * instantiate three `i2c_controller` models (or wrap one model in a
-  three-instance aperture), decoding the `0xC000_9000..0xC000_92FF` subwindows,
-* add a small stub/register for the wrapper-enable aperture at `0xC000_9E00`,
+  three-instance aperture), decoding the `0xC000_5000..0xC000_55FF` subwindows,
+* add a small stub/register for the wrapper-enable aperture at `0xC000_5E00`,
 * bind each core's `irq_o` to peripheral interrupt bits 25:23 after
   synchronization,
 * connect `set_bus_model(inst, callback)` for controller-mode target behavior,
@@ -985,7 +990,7 @@ RTL builds the 32-bit `peripheral_interrupts_o` in `smc_peripherals.sv`:
 |===
 |Bit(s) |RTL source |SystemC source
 |7:0 |`sep_mailbox_interrupts_i` |Top-level input or mailbox/SEP stub
-|10:8 |`telemetry_irq` |Telemetry stub/model
+|10:8 |`telemetry_irq` |`telemetry_receiver.irq_o` (3 instances)
 |11 |OR of `ndmreset_request_smc_clk` |SMC misc/NDM stub
 |17:12 |`i3c_irqs_smc_clk` |`i3c_controller.irq_o[5:0]`
 |21:18 |`uart_irq_combined_smc_clk` |UART/log wrapper interrupt combine
@@ -1154,7 +1159,7 @@ For the eventual SMC platform test, add milestones in this order:
 * Bind the SystemC I3C functional model to the RTL I3C aperture while noting
   that RTL currently connects a stub.
 * Wrap the `i2c_controller` model for the three RTL I2C cores (`NUM_I2CS = 3`)
-  under `0xC000_9000`, plus the wrapper-enable register at `0xC000_9E00`, and
+  under `0xC000_5000`, plus the wrapper-enable register at `0xC000_5E00`, and
   bind the three `irq_o` lines to peripheral interrupt bits 25:23.
 * Add platform tests that compare decode behavior against generated map
   constants and fail on unintended decode holes.
