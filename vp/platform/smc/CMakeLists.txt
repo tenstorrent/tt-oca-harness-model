@@ -44,6 +44,7 @@ add_subdirectory(${SMC_IP_DIR}/beu              ${CMAKE_CURRENT_BINARY_DIR}/ip_b
 add_subdirectory(${SMC_IP_DIR}/telemetry_receiver ${CMAKE_CURRENT_BINARY_DIR}/ip_telemetry_receiver)
 add_subdirectory(${SMC_IP_DIR}/avsbus_controller ${CMAKE_CURRENT_BINARY_DIR}/ip_avsbus)
 add_subdirectory(${_smc_root}/smc_fabric        ${CMAKE_CURRENT_BINARY_DIR}/ip_smc_fabric)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../aou ${CMAKE_CURRENT_BINARY_DIR}/ip_aou)
 
 # The cluster's own PLIC-integration test target (smc_plic_ip) is redundant
 # here (we link the real smc_plic below); disable it to avoid double-compiling
@@ -72,7 +73,8 @@ target_include_directories(smc-vp
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/inc
         ${SMC_AXI_EXTENSION_DIR}
-        ${SMC_REPO_COMMON_INCLUDE})
+        ${SMC_REPO_COMMON_INCLUDE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../aou/include)
 
 # The platform module is always built with the CPU cluster wired in — the VP
 # exists to run firmware on the CVA6 cores, so SMC_PLATFORM_WITH_CLUSTER is
@@ -96,6 +98,7 @@ target_link_libraries(smc-vp
         smc_beu
         smc_telemetry_receiver
         smc_avsbus_controller
+        aou_core
         smc_memory_zeroer
         smc_pll_wrapper
         smc_cpu_cluster

@@ -31,6 +31,7 @@ static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
 static constexpr uint64_t A_PLL_WRAP     = 0xC000'3000ULL;  // pll_wrap.rdl base
 static constexpr uint64_t A_I2C0         = 0xC000'5000ULL;  // RTL smc_i2c_wrap
 static constexpr uint64_t A_AVSBUS       = 0xC000'8000ULL;
+static constexpr uint64_t A_AOU          = 0xC000'E000ULL;  // AOU CSR window (0x80)
 static constexpr uint64_t A_TELEMETRY    = 0xC000'9000ULL;  // RTL telemetry_receiver_wrap
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;  // sim location (RTL uart @ 0x6000)
 static constexpr uint64_t A_I3C          = 0xC003'A000ULL;  // RTL oca_i3c_wrap_0
@@ -96,7 +97,9 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  // i2c[0..2] -> peripheral bits 25:23
                  23, 24, 25,
                  // wdt[0..3] -> PLIC source IDs 329..332 (bits 328..331)
-                 328, 329, 330, 331})
+                 328, 329, 330, 331,
+                 // aou (local core only, not the peer stub) -> peripheral bit 26
+                 26})
 {
     // -- Drive input signals to safe, post-reset defaults -------------------
     rst_n_sig.write(true);
@@ -264,9 +267,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(11, A_PLL_WRAP, 0x1000, "pll_wrap");
     // AVSBus: 4 KiB window at 0xC000_8000 (shadows the periph_misc catch-all).
     periph_router.add_route(12, A_AVSBUS,   0x1000, "avsbus");
+    // AOU CSRs: 0x80 window at 0xC000_E000.
+    periph_router.add_route(13, A_AOU,      0x80,   "aou");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
-    periph_router.add_route(13, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
-    periph_router.add_route(13, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
+    periph_router.add_route(14, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
+    periph_router.add_route(14, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
     periph_router.out[0].bind(reset.reg_socket);
     periph_router.out[1].bind(i2c[0].reg_socket);
     periph_router.out[2].bind(i2c[1].reg_socket);
@@ -293,7 +298,24 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[11].bind(pll_wrap.reg_socket);
     pll_wrap.rst_n_i.bind(rst_n_sig);
     periph_router.out[12].bind(avsbus.reg_socket);
-    periph_router.out[13].bind(stub_periph_misc.reg_socket);
+    periph_router.out[13].bind(aou_.apb_socket);
+    periph_router.out[14].bind(stub_periph_misc.reg_socket);
+
+    // AOU peer link: outbound fabric traffic enters local AOU; peer master
+    // lands on remote stub. Peer FDI tied active; local SW activates AOU.
+    // aou_irq is also routed into intagg -> PLIC below (local core only —
+    // the peer stub's irq_o has no local-firmware-visible sink).
+    aou_.fdi_active_i.bind(aou_fdi_active);
+    aou_peer_.fdi_active_i.bind(aou_peer_fdi_active);
+    aou_.irq_o.bind(aou_irq);
+    aou_peer_.irq_o.bind(aou_peer_irq);
+    aou_fdi_active.write(true);
+    aou_peer_fdi_active.write(true);
+    aou_.connect_peer(&aou_peer_);
+    aou_peer_.connect_peer(&aou_);
+    fabric.output_axi.bind(aou_.axi_s[0]);
+    aou_.axi_m[0].bind(stub_aou_remote.reg_socket);
+    aou_peer_.axi_m[0].bind(stub_sysmem.reg_socket);
 
     // -- Test-only telemetry ATB inject ------------------------------------
     if (tel_inject_enable_p_.get_value()) {
@@ -348,7 +370,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     fabric.to_dfd_apb              .bind(stub_dfd.reg_socket);
     fabric.to_mailbox              .bind(stub_mbox.reg_socket);
     fabric.to_dft_csr              .bind(stub_dft.reg_socket);
-    fabric.output_axi              .bind(stub_sysmem.reg_socket);
+    // fabric.output_axi is bound to aou_.axi_s[0] above (AOU outbound path).
     fabric.to_cpu_ctrl             .bind(stub_cpu_ctrl_fab.reg_socket);
     fabric.to_aR_ctrl              .bind(stub_aR.reg_socket);
     fabric.to_mR_ctrl              .bind(stub_mR.reg_socket);
@@ -489,7 +511,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     {
         stub_target<64>* stubs64[] = {
             &stub_dfd, &stub_mbox,
-            &stub_dft, &stub_sysmem, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
+            &stub_dft, &stub_sysmem, &stub_aou_remote, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
             &stub_xR, &stub_ibf, &stub_obf,
         };
         unsigned s = 0;
@@ -501,7 +523,9 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     }
 
     // -- Interrupt aggregator -> PLIC -------------------------------------
-    // Inputs: telemetry[0..2], i3c[0..5], uart[0..3], avsbus, i2c[0..2], wdt[0..3].
+    // Inputs: telemetry[0..2], i3c[0..5], uart[0..3], avsbus, i2c[0..2],
+    // wdt[0..3], aou (local core only — the peer stub models the remote die
+    // and its irq_o is not observable by local firmware).
     {
         unsigned s = 0;
         for (unsigned i = 0; i < NUM_TELEMETRY; ++i)
@@ -515,6 +539,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
             intagg.src[s++].bind(i2c_irq[i]);
         for (unsigned i = 0; i < NUM_HARTS; ++i)
             intagg.src[s++].bind(wdt_irq[i]);
+        intagg.src[s++].bind(aou_irq);
     }
     for (unsigned i = 0; i < NUM_PLIC_SRC; ++i) {
         plic_.src_in[i].bind(plic_src_sig[i]);

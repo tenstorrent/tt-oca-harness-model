@@ -44,7 +44,8 @@
 #include "wdt.h"
 #include "beu.h"
 #include "telemetry_receiver.h"
-#include "avsbus_controller.h""
+#include "avsbus_controller.h"
+#include "aou_core.h"
 
 #ifdef SMC_PLATFORM_WITH_CLUSTER
 #include "smc_cpu_cluster.h"
@@ -71,9 +72,12 @@ public:
     static constexpr unsigned NUM_PLIC_CTX   = 8;
     static constexpr unsigned NUM_SUBSYS     = 32;
     // Peripheral IRQ inputs: telemetry[0..2], i3c[0..5], uart[0..3], avsbus, i2c[0..2], wdt[0..3]
-    // (matches smc_peripherals.sv peripheral_interrupts_o composition).
+    // (matches smc_peripherals.sv peripheral_interrupts_o composition), plus
+    // the local AOU core's irq_o (PLIC source bit 26 — a VP-only assignment;
+    // the real RTL's peripheral_interrupts_o composition does not yet include
+    // AOU, see sw/tt-oca-hw-main/doc/aou.placeholder.adoc).
     static constexpr unsigned NUM_PERIPH_IRQ =
-        NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C + NUM_HARTS;
+        NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C + NUM_HARTS + 1;
 
     // -----------------------------------------------------------------------
     // Test-only BEU error-injection hook (Phase D1; see
@@ -142,6 +146,13 @@ public:
     sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
     sc_core::sc_vector<telemetry_receiver> telemetry_{"telemetry", NUM_TELEMETRY};
     avsbus_controller                  avsbus{"avsbus"};
+    // AOU: local + peer LT bridge (FDI abstracted via connect_peer).
+    aou::aou_core                      aou_{"aou"};
+    aou::aou_core                      aou_peer_{"aou_peer"};
+    sc_core::sc_signal<bool>           aou_fdi_active{"aou_fdi_active"};
+    sc_core::sc_signal<bool>           aou_peer_fdi_active{"aou_peer_fdi_active"};
+    sc_core::sc_signal<bool>           aou_irq{"aou_irq"};
+    sc_core::sc_signal<bool>           aou_peer_irq{"aou_peer_irq"};
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     smc_cpu_cluster cluster{"cluster"};
 #endif
@@ -163,8 +174,8 @@ public:
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
-    // cpu_ctrl, i3c, pll_wrap, avsbus, catch-all stub (14).
-    addr_router<64, 32>         periph_router{"periph_router", 14};
+    // cpu_ctrl, i3c, pll_wrap, avsbus, aou, catch-all stub (15).
+    addr_router<64, 32>         periph_router{"periph_router", 15};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
@@ -200,6 +211,8 @@ public:
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};
+    // Extra stub for AOU peer master (remote-die memory stand-in).
+    stub_target<64> stub_aou_remote{"stub_aou_remote"};
     stub_target<64> stub_sysmem{"stub_sysmem"};
     stub_target<64> stub_cpu_ctrl_fab{"stub_cpu_ctrl_fab"};
     stub_target<64> stub_aR{"stub_aR"};
