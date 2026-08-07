@@ -8,38 +8,37 @@ LDFLAGS += -T ../common/link.ld
 
 include ../Makefile.common
 
-# --- Flash fixture staging -------------------------------------------------
-# sep-vp chdir's to the directory of the .ini it is given, so the flash model resolves
-# data/flash_memory.bin relative to the CONFIG directory (not this test dir). Stage there.
-CFG_DIR     := $(dir $(VP_FLAGS))
+# --- Dedicated VP config + flash fixture -----------------------------------
+# This test verifies DMA-drained bytes against an image in the SPI flash, so it needs the
+# bootcode preload out of the way (see NO_SPIPRELOAD_INI in ../Makefile.common). The
+# fixture has to be staged in the config directory too: sep-vp chdir's there, so the flash
+# model resolves data/flash_memory.bin relative to it rather than to this test dir.
+VP_FLAGS    := $(NO_SPIPRELOAD_INI)
+CFG_DIR     := $(dir $(NO_SPIPRELOAD_INI))
 STAGED_IMG  := $(CFG_DIR)data/flash_memory.bin
-SIM_TIMEOUT ?= 60
 
-.PHONY: fixture stage unstage sim-staged distclean
+.PHONY: fixture stage unstage distclean
 
 flash_fixture.bin: gen_flash_fixture.py
 	python3 gen_flash_fixture.py $@
 
 fixture: flash_fixture.bin
 
-stage: flash_fixture.bin
-	mkdir -p $(CFG_DIR)data && cp flash_fixture.bin $(STAGED_IMG)
+$(STAGED_IMG): flash_fixture.bin
+	mkdir -p $(dir $@) && cp $< $@
+
+stage: $(STAGED_IMG)
 
 unstage:
-	rm -f $(STAGED_IMG)
+	rm -f $(STAGED_IMG) $(NO_SPIPRELOAD_INI)
 	-rmdir $(CFG_DIR)data 2>/dev/null || true
 
-# Build + run the integration test with the fixture staged. This test always needs the
-# fixture: it verifies DMA-drained bytes against the image, so without data every read
-# fails. Forces a clean rebuild and wraps the sep-vp run in a timeout (the VP does not
-# self-terminate), then unstages.
-sim-staged:
-	$(MAKE) clean
-	$(MAKE) stage
-	$(MAKE) $(TARGET)
-	timeout -k 5 $(SIM_TIMEOUT) $(VP) $(VP_FLAGS) $(TARGET) || true
-	$(MAKE) unstage
+# Give `sim` (from Makefile.common) the config and fixture as prerequisites so plain
+# `make sim` works like every other test here. Without the fixture every read compares
+# against an empty flash and all four transfers fail.
+sim: $(NO_SPIPRELOAD_INI) $(STAGED_IMG)
+
+clean: unstage
 
 distclean: clean
-	$(MAKE) unstage
 	rm -f flash_fixture.bin

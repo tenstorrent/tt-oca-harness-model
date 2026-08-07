@@ -97,7 +97,6 @@ tt-oca-sim/
 │   │   ├── edn/                   ← Entropy Distribution Network
 │   │   ├── efuse/                 ← eFuse/OTP controller
 │   │   ├── entropy_src/           ← Entropy Source
-│   │   ├── gpio/                  ← GPIO controller
 │   │   ├── hmac/                  ← HMAC-SHA-2 engine
 │   │   ├── key_manager/           ← Key Manager (lifecycle-aware)
 │   │   ├── kmac/                  ← KMAC / SHA-3 engine
@@ -108,7 +107,6 @@ tt-oca-sim/
 │   │   ├── sep_memory/            ← SRAM / ROM models
 │   │   ├── spi_controller/        ← SPI controller (OpenTitan)
 │   │   ├── spi_flash/             ← SPI flash model (SFDP Profile 1)
-│   │   ├── uart_16550/            ← UART 16550
 │   │   ├── setup_build_env.sh     ← shared env for run_tests.sh / run_all_peripherals.sh
 │   │   └── run_all_peripherals.sh ← batch peripheral tests (sources vp/configure_vp.sh)
 │   ├── cpu/                       ← VeeR EL2 ISS + TLM-2.0 wrapper
@@ -149,12 +147,13 @@ tt-oca-sim/
 │               └── smc_platform_vp.ini   ← CCI runtime parameters
 ├── sw/                            ← Firmware and DV tests
 │   ├── sep-vp-tests/              ← Vayavya peripheral verification tests (SEP)
-│   ├── smc-vp-tests/              ← Bare-metal RV64 firmware tests (SMC, runs on smc-vp)
-│   │   └── run_smc_vp_tests.sh    ← host-agnostic runner: auto-detects toolchain + smc-vp, builds/runs tests
-│   └── tt-oca-hw-main/            ← TT DV + firmware test suites
-│       ├── bin/sep_fw_standalone.sh
-│       ├── dv/sep/tests/          ← DV test ELFs
-│       └── fw/sep/tests/          ← Firmware test suite
+│   │   └── fw-tests-from-tt-oca-hw/   ← TT firmware test suite (fw/sep), self-contained
+│   │       ├── fw/sep/tests/      ← the tests, plus run_all_tests.sh / run_test.sh
+│   │       ├── fw/sep/bootcode/   ← SEP Boot ROM (BL0)
+│   │       └── dependencies/      ← setup_dependencies.sh builds picolibc; also holds
+│   │                                 meta/registers/c, the shared SEP register headers
+│   └── smc-vp-tests/              ← Bare-metal RV64 firmware tests (SMC, runs on smc-vp)
+│       └── run_smc_vp_tests.sh    ← host-agnostic runner: auto-detects toolchain + smc-vp, builds/runs tests
 ├── doc/                           ← Architecture and design documentation
 │   ├── component-developer-guide.md/.pdf
 │   ├── maintainer-guide.md/.pdf
@@ -343,7 +342,7 @@ vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
 > peripherals end-to-end from firmware running on the VeeR EL2 core.
 
 ```bash
-cd sw/sep-vp-tests/sep-gpio-test
+cd sw/sep-vp-tests/sep-hmac-test
 make             # build ELF
 make sim         # run on VP
 make debug       # run with GDB enabled
@@ -560,12 +559,12 @@ cd smc
 
 ## Building and Running TT Firmware Tests
 
-`sw/tt-oca-hw-main/dv/sep/tests/` — DV tests from the TT hardware repository,
-verified on the SEP VP.
-
-`sw/tt-oca-hw-main/fw/sep/tests/` — Main firmware test suite verified on the SEP VP.
-
-TT tests are managed by `bin/sep_fw_standalone.sh`.
+`sw/sep-vp-tests/fw-tests-from-tt-oca-hw/` — the SEP firmware tests written by the
+TT RTL and firmware teams (`fw/sep` in the tt-oca-hw repo), migrated into this
+repo so they build and run without a tt-oca-hw checkout. Running them alongside
+`sw/sep-vp-tests/` means the VP is checked against software that was not written
+with the VP in mind. That directory's own README covers the layout, what
+`setup_dependencies.sh` builds and why, and the current pass/fail breakdown.
 
 ### Toolchain
 
@@ -581,75 +580,92 @@ module load riscv-gnu-toolchain/2025.01.20-rhel-8.10
 export RISCV_TOOLCHAIN_PATH=/tools_soc/opensrc/riscv-gnu-toolchain/2025.01.20-rhel-8.10
 ```
 
-**Bundled zip archive:**
-```bash
-cd sw/tt-oca-hw-main/toolchain/
-unzip ../riscv-gnu-toolchain-2025.01.20-rhel-8.10.zip
-# sep_fw_standalone.sh auto-detects it
-```
+The scripts probe `PATH` for the toolchain themselves (`riscv64-unknown-elf-`,
+`riscv64-elf-`, `riscv-none-elf-`, …), so `brew install riscv64-elf-gcc` also
+works. Override with `GCC_PREFIX` or `RISCV_TOOLCHAIN_PATH`.
 
-> `sw/tt-oca-hw-main/bin/setup_sep_test_env.sh` is TT's internal RHEL/UVM script —
-> not for VP firmware testing. Use `sep_fw_standalone.sh` instead.
-
-### One-time setup
+### Build and run tests
 
 ```bash
-cd sw/tt-oca-hw-main
-bin/sep_fw_standalone.sh setup
-```
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests
 
-### Build tests
+./run_all_tests.sh                          # build + run all, print a summary
+./run_all_tests.sh --clean                  # clean + build + run all
+./run_all_tests.sh --no-build               # run only with existing ELFs
 
-```bash
-bin/sep_fw_standalone.sh build-all          # build all dv/sep/tests/
-bin/sep_fw_standalone.sh build hello_world  # build a single test
-bin/sep_fw_standalone.sh build-dbg aes_test # build with debug flags (-O0 -g)
-```
-
-ELFs: `sw/tt-oca-hw-main/dv/sep/tests/<test_name>/<test_name>.elf`
-
-### Run tests
-
-```bash
-bin/sep_fw_standalone.sh sim   aes_test  # run a built test on sep-vp
-bin/sep_fw_standalone.sh run   aes_test  # build + run in one shot
-```
-
-### GDB debug workflow
-
-Enable GDB in the INI: `och_sep_ss1.gdb : true`
-
-```bash
-bin/sep_fw_standalone.sh build-dbg aes_test  # build with -O0 -g
-
-# Terminal 1: VP acts as GDB server
-bin/sep_fw_standalone.sh debug aes_test      # default port 4000
-
-# Terminal 2: connect gdb-multiarch
-bin/sep_fw_standalone.sh gdb aes_test
-```
-
-### Using run_test.sh for fw/sep/tests
-
-```bash
-cd sw/tt-oca-hw-main/fw/sep/tests
-
-./run_test.sh aes_sanity                    # build + run
+./run_test.sh aes_sanity                    # build + run one
 ./run_test.sh aes_sanity --run-only         # run existing ELF
 ./run_test.sh aes_sanity --build-only       # build only
 ./run_test.sh aes_sanity -t 60              # custom timeout
-
-./run_all_tests.sh                          # build + run all
-./run_all_tests.sh --clean                  # clean + build + run all
-./run_all_tests.sh --no-build               # run only with existing ELFs
 ```
 
-### Linker script for dv/sep/tests
-The original `dv/sep/tests/common/exec_from_tcms.ld` used outdated RTL simulation
-addresses (`ITCM=0x01000000`, `DTCM=0x0`). TT advised that the correct reference is
-`fw/sep/tests/common/exec_from_tcms.ld` which uses VP addresses (`ITCM=0xC0000000`,
-`DTCM=0xC0040000`). Vayavya created `dv/sep/tests/common/exec_from_tcms_vp.ld` as a
-copy; all `dv/sep/tests/` link against it via `common.mk`.
+The first run also builds picolibc into `dependencies/`, which takes a few extra
+minutes; later runs go straight to the tests. ELFs land in
+`fw/sep/tests/<test_name>/<test_name>.elf` and per-test logs in
+`fw/sep/tests/logs/`. `sep-vp` is located by walking up to the repo root, so it
+only needs to have been built.
+
+### GDB debug workflow
+
+Enable GDB in the INI (`och_sep_ss1.gdb : true`), build the test with `-O0 -g`,
+then run the VP directly on the ELF — it acts as a GDB server on port 4000 —
+and attach `gdb-multiarch` from a second terminal.
+
+### Building and running the SEP Boot ROM (SPI boot)
+
+`sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/` is the SEP Boot ROM (BL0) firmware — the code
+that runs first out of reset, reads/validates a manifest from SPI flash, and hands
+off to BL1. It has its own build and its own runtime wiring on the VP.
+
+**Build the ROM ELF:**
+
+```bash
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode
+make BOOT_SPI_CONTROLLER_OT=1 all
+```
+
+`BOOT_SPI_CONTROLLER_OT=1` is required — this selects the OpenTitan SPI host driver
+(`sep_ot_spi.c`) at compile time instead of the default Cadence xSPI driver
+(`sep_spi.c`, `BOOT_SPI_CONTROLLER_OT=0`). The VP only models the OpenTitan
+`spi_controller`/`spi_flash` peripherals (see "Functional stubs" below for the
+Cadence leg), so a ROM built with the default flag will never get past SPI init on
+this VP. Output: `build/boot_rom.elf`, linked at ROM base (`0x10040000`).
+
+The `non_secure_boot_spi`/`secure_boot_spi` Make targets (which pack a manifest +
+BL1 payload into a flash image via `tt_boot_manifest`) need the private
+`tt-boot-manifest` submodule and are **not** required for the steps below — the
+checked-in `prebuilt/non_secure_boot.spi_preload` / `prebuilt/secure_boot.spi_preload`
+already contain a manifest + `bl1_pass_test` payload and can be used directly.
+
+**Stage the SPI flash image and select the boot strap**, in `accellera_config.ini`:
+
+```ini
+[bool]
+# Primary chiplet + SPI boot (default is Secondary, which waits for an SMC
+# that this VP does not model — the ROM will hang in BOOT_SECONDARY otherwise).
+och_sep_ss1.smc.primary_chiplet : true
+
+[string]
+# Parsed directly into spi_flash's backing memory in start_of_simulation
+# (Verilog $readmemh-style hex, "@addr" + hex byte pairs) — no .bin conversion
+# needed. See "Simulation aids" below for the raw-binary alternative.
+och_sep_ss1.spiPreload : ../../../../sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/prebuilt/non_secure_boot.spi_preload
+```
+
+**Run**, overriding `targets` on the command line to point at the ROM ELF instead
+of the ini's default firmware target:
+
+```bash
+vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini \
+    sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/build/boot_rom.elf
+```
+
+A successful non-secure boot prints (via the `[SIM_OUT]`/`[SEP_STATUS]` consoles
+described above) `BOOT_SPI` → `SPI_INIT_OK` → `MANIFEST_OK` → `BL1_FOUND` /
+`BL1_COPIED` → `BL1_JUMP=0x10020000` → BL1's own `GO!`, ending in
+`[VP] SIMULATION OF THE TEST PASSED`. The ROM parks the core in a `wfi` loop after
+handoff (no self-terminating exit), so the run needs a manual `Ctrl-C` once `PASS`
+appears.
 
 ### VP firmware test notes
 
@@ -692,7 +708,10 @@ The following IPs are **not modeled** in the VP. Tests that exercise them will f
   real manifest+payload images (two software banks) instead of erased `0xFF`. On silicon the
   flash is programmed by other means; this just stages that content for a run. When no image is
   staged it is a no-op that logs a "... not found — using blank (0xFF) memory" line and leaves
-  the flash erased, so tests that stage nothing are unaffected.
+  the flash erased, so tests that stage nothing are unaffected. Alternatively, `och_sep_ss1.spiPreload`
+  parses a Verilog `$readmemh`-style `.spi_preload` file directly into the same backing memory —
+  see "Building and running the SEP Boot ROM (SPI boot)" above; `spiPreload` takes precedence
+  when set, otherwise this raw-binary path is used.
 
 ### Functional stubs (simplified models of real hardware)
 
@@ -706,15 +725,6 @@ behavior behind it.
   stores and returns values only — it does **not** model SPI leg selection or forced chip-select,
   because the VP has a single hard-wired OpenTitan flash leg. Real mux/chip-select behavior is
   validated in RTL-level (UVM) verification.
-
-### Tests added by Vayavya
-
-The following tests under `sw/tt-oca-hw-main/dv/sep/tests/` were added by Vayavya:
-
-| Test | Purpose |
-|------|---------|
-| `interrupt_test` | Verifies PLIC/CLINT interrupt controller behavior — triggers MSIP via CLINT, timer interrupt (MTIP), and synchronous exception; confirms the VeeR EL2 trap handler dispatches and returns correctly |
-| `wdog_reset_test` | Verifies watchdog-triggered system reset — arms the AON timer watchdog bite threshold, waits for the bite to fire, and confirms the VP issues a full system reset and that the VeeR ISS restarts from the entry point with SRAM contents preserved across the reset |
 
 ### Troubleshooting
 

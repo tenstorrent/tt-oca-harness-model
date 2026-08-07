@@ -6,22 +6,6 @@
 #include <cassert>
 #include <cstring>
 
-// GPIO loopback bridge — connects GPIO output back to its input for loopback testing.
-class gpio_bridge : public sc_module {
-public:
-    sc_in<bool>  gpio_out_in;
-    sc_out<bool> gpio_in_out;
-
-    void loopback_process() {
-        gpio_in_out.write(gpio_out_in.read());
-    }
-
-    SC_CTOR(gpio_bridge) {
-        SC_METHOD(loopback_process);
-        sensitive << gpio_out_in;
-    }
-};
-
 // 64-to-32 bit bus adapter for DMA sys_initiator_socket (64-bit) → SimpleBus (32-bit).
 class dma_sys_bus_adapter : public sc_core::sc_module {
 public:

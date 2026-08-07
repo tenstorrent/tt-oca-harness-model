@@ -32,8 +32,6 @@ const unsigned int OTBN_IRQ            = 21;  //   [20] intr_otbn_done
 
 // VP-only interrupt sources — no silicon equivalent, placed past silicon range:
 const unsigned int MAILBOX_IRQ1        = 22;  // second mailbox channel
-const unsigned int UART_IRQ            = 26;
-const unsigned int GPIO_IRQ            = 27;
 const unsigned int AON_WKUP_IRQ        = 28;
 const unsigned int AON_WDOG_IRQ        = 29;
 const unsigned int SPI_ERROR_IRQ       = 31;

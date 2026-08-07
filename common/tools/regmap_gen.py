@@ -33,7 +33,7 @@ Dependency (why it is not run in this repo yet):
 Usage:
 
     python3 common/tools/regmap_gen.py \
-        --rdl sw/tt-oca-hw-main/hw/comp/uart_16550/data/registers/rdl/uart_16550_main.rdl \
+        --rdl path/to/uart_16550_main.rdl \
         --namespace gen::uart \
         --out smc/peripherals/uart/include/uart_16550_main.regmap.gen.h
 

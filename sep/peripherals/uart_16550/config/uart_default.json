@@ -1,7 +1,0 @@
-{
-  "testbench": {
-    "uart_inst": {
-      "TimeKeeperQuantumNs": 1000.0
-    }
-  }
-}

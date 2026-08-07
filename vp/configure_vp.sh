@@ -19,6 +19,11 @@
 #   CMAKE_BUILD_TYPE    Debug | Release          (default: Debug)
 #   CMAKE_CXX_STANDARD  17 | 20                 (default: 20)
 #
+#   Each prefix also accepts a per-standard form — SYSTEMC_HOME_C17 /
+#   SYSTEMC_HOME_C20, CCI_HOME_C17 / _C20, BOOST_ROOT_C17 / _C20,
+#   OPENSSL_ROOT_C17 / _C20.  The set matching CMAKE_CXX_STANDARD wins over the
+#   unsuffixed variable, so both toolchains can live in one shell profile.
+#
 # PLATFORM NOTES
 #   macOS    : Homebrew paths are probed automatically.
 #   Ubuntu   : System paths (/usr, /usr/local) are probed.  Install:
@@ -62,6 +67,10 @@ unset _vp_configure_sh
   echo "error: CMAKE_CXX_STANDARD must be 17 or 20 (got '${CMAKE_CXX_STANDARD}')" >&2
   exit 1
 }
+
+# shellcheck source=vp_build_env.sh
+source "${VP_DIR}/vp_build_env.sh"
+vp_select_std_prefixes
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -211,8 +220,6 @@ done
 # ---------------------------------------------------------------------------
 # Export environment via vp_build_env.sh
 # ---------------------------------------------------------------------------
-# shellcheck source=vp_build_env.sh
-source "${VP_DIR}/vp_build_env.sh"
 vp_export_build_paths || exit 1
 
 export SYSTEMC_HOME CCI_HOME OPENSSL_ROOT BOOST_ROOT
