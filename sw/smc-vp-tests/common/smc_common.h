@@ -30,7 +30,9 @@
 #define SMC_I2C1_BASE        0xC0005200ULL
 #define SMC_I2C2_BASE        0xC0005400ULL
 #define SMC_AVSBUS_BASE      0xC0008000ULL
-#define SMC_AOU_BASE         0xC000E000ULL
+/* AOU: free 0x1000 gap between pll_wrap (0xC000_3000-0xC000_3FFF) and i2c0
+ * (0xC000_5000); 0xC000_E000 is system_timer_octs per smc_top.rdl. */
+#define SMC_AOU_BASE         0xC0004000ULL
 #define SMC_TELEMETRY_BASE   0xC0009000ULL
 #define SMC_TELEMETRY0_BASE  (SMC_TELEMETRY_BASE + 0x000ULL)
 #define SMC_TELEMETRY1_BASE  (SMC_TELEMETRY_BASE + 0x100ULL)

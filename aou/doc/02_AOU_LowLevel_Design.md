@@ -52,7 +52,7 @@ class aou_core : public sc_module {
 ## 5. SMC VP wiring
 
 ```
-cluster.mmio → fabric → periph_router @ 0xC000_E000 → aou_.apb_socket
+cluster.mmio → fabric → periph_router @ 0xC000_4000 → aou_.apb_socket
 fabric.output_axi → aou_.axi_s[0]
 aou_.connect_peer(&aou_peer_)
 aou_.axi_m[0]      → stub_aou_remote

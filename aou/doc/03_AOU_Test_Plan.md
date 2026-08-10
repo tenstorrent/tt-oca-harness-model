@@ -27,7 +27,7 @@ cd aou && ./run_tests.sh
 
 ## 2. Platform smoke (`sw/smc-vp-tests/smc-aou-test`)
 
-Hart-0 MMIO through `smc-vp` at `SMC_AOU_BASE` (`0xC000_E000`):
+Hart-0 MMIO through `smc-vp` at `SMC_AOU_BASE` (`0xC000_4000`):
 
 | # | Case |
 |---|------|

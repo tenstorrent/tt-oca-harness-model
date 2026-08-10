@@ -31,7 +31,10 @@ static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
 static constexpr uint64_t A_PLL_WRAP     = 0xC000'3000ULL;  // pll_wrap.rdl base
 static constexpr uint64_t A_I2C0         = 0xC000'5000ULL;  // RTL smc_i2c_wrap
 static constexpr uint64_t A_AVSBUS       = 0xC000'8000ULL;
-static constexpr uint64_t A_AOU          = 0xC000'E000ULL;  // AOU CSR window (0x80)
+// AOU CSR window (0x80). Free gap between pll_wrap's 0x1000 window
+// (0xC000_3000-0xC000_3FFF) and i2c0 (0xC000_5000) — 0xC000_E000 is taken by
+// system_timer_octs per smc_top.rdl (see A_SYSTEM_TIMER_OCTS below).
+static constexpr uint64_t A_AOU          = 0xC000'4000ULL;
 static constexpr uint64_t A_TELEMETRY    = 0xC000'9000ULL;  // RTL telemetry_receiver_wrap
 static constexpr uint64_t A_UART0        = 0xC000'A000ULL;  // sim location (RTL uart @ 0x6000)
 static constexpr uint64_t A_I3C          = 0xC003'A000ULL;  // RTL oca_i3c_wrap_0
@@ -289,7 +292,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(12, A_PLL_WRAP, 0x1000, "pll_wrap");
     // AVSBus: 4 KiB window at 0xC000_8000 (shadows the periph_misc catch-all).
     periph_router.add_route(13, A_AVSBUS,   0x1000, "avsbus");
-    // AOU CSRs: 0x80 window at 0xC000_E000.
+    // AOU CSRs: 0x80 window at 0xC000_4000.
     periph_router.add_route(14, A_AOU,      0x80,   "aou");
     // octs_system_timer: 4 KiB window (shadows the periph_misc catch-all).
     periph_router.add_route(15, A_SYSTEM_TIMER_OCTS, 0x1000, "octs_system_timer");
