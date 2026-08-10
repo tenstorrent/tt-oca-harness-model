@@ -65,19 +65,31 @@ or its generated headers.
 ```bash
 # From this directory, with the RISC-V toolchain on PATH and gcc-toolset-11 active
 # (sep-vp needs the gcc-11 C++ runtime):
-make sim-staged      # stage the fixture, build, run on sep-vp, unstage
-make distclean       # remove build artifacts + the staged fixture
+make                 # build
+make sim             # build if needed, then run on sep-vp
+make clean           # remove build artifacts, the staged fixture and the derived config
+make distclean       # the above, plus the generated fixture image
 ```
 
-`make sim-staged` stages the fixture to `<config-dir>/data/flash_memory.bin` (sep-vp
-`chdir`s to the config `.ini` directory, so the flash model resolves it there), runs the
-in-tree `sep-vp`, then unstages. The firmware self-checks and prints:
+`make` and `make sim` behave the same as every other test in `sw/sep-vp-tests`. As with
+those, `sep-vp` does not self-terminate: press `Ctrl-C` once the summary prints. The
+firmware self-checks and reports:
 
 ```
 SEP_SPI_DMA_TEST: ALL PASS
 All tests PASSED!
 ```
 
-An automated wrapper lives at `tools/virtual_platform/tests/test_spi_dma_stream.py`
-(mirrors `test_spi_mux_flash.py`): it drives `make sim-staged` and asserts the pass marks,
-skipping cleanly if the RISC-V toolchain or `sep-vp` is absent.
+`make sim` prepares two things first, both into the `sep-vp` config directory, because the
+VP `chdir`s to the directory of the `.ini` it is given and resolves everything relative to
+it:
+
+- `data/flash_memory.bin` — the staged fixture, so the flash model has the data oracle.
+- `accellera_config_no_spipreload.ini` — the shared `accellera_config.ini` with
+  `och_sep_ss1.spiPreload` commented out. That setting loads the bootcode image directly
+  into the flash model's backing store, overwriting the fixture; with it enabled all four
+  transfers fail against boot data. The config is derived with `sed` at build time instead
+  of being checked in, so it picks up any edits to the shared config. The rule lives in
+  `../Makefile.common` as `NO_SPIPRELOAD_INI`; `sep-spi-mux-test` uses it too.
+
+Both are build artifacts, are git-ignored, and are removed by `make clean`.

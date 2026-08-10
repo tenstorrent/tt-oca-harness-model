@@ -103,7 +103,6 @@ tt-oca-sim/
 │   │   ├── edn/
 │   │   ├── efuse/
 │   │   ├── entropy_src/
-│   │   ├── gpio/
 │   │   ├── hmac/
 │   │   ├── key_manager/
 │   │   ├── kmac/
@@ -114,7 +113,6 @@ tt-oca-sim/
 │   │   ├── sep_memory/
 │   │   ├── spi_controller/
 │   │   ├── spi_flash/
-│   │   ├── uart_16550/
 │   │   └── run_all_peripherals.sh
 │   ├── cpu/
 │   │   ├── VeeR-ISS/
@@ -149,11 +147,11 @@ tt-oca-sim/
 │               ├── accellera_config.ini
 │               └── veeriss_config.json
 ├── sw/
-│   ├── sep-vp-tests/                  ← Vayavya peripheral verification tests
-│   └── tt-oca-hw-main/                ← TT DV + firmware tests
-│       ├── bin/sep_fw_standalone.sh
-│       ├── dv/sep/tests/
-│       └── fw/sep/tests/
+│   └── sep-vp-tests/                  ← Vayavya peripheral verification tests
+│       └── fw-tests-from-tt-oca-hw/   ← TT firmware tests (fw/sep), self-contained
+│           ├── fw/sep/tests/          ← tests + run_all_tests.sh / run_test.sh
+│           ├── fw/sep/bootcode/       ← SEP Boot ROM (BL0)
+│           └── dependencies/          ← incl. meta/registers/c (shared SEP register headers)
 ├── scripts/
 │   ├── md-to-pdf.sh
 │   └── md-pdf.css

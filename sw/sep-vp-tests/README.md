@@ -14,7 +14,7 @@ cd sw/sep-vp-tests
 
 ./run_sep_vp_tests.sh --list          # list available tests
 ./run_sep_vp_tests.sh                 # build + run all tests
-./run_sep_vp_tests.sh sep-gpio-test   # build + run a single test by name
+./run_sep_vp_tests.sh sep-crng-test   # build + run a single test by name
 ./run_sep_vp_tests.sh -i              # choose a single test from a numbered menu
 ./run_sep_vp_tests.sh --build-vp      # (re)build sep-vp first, then run all
 ```
@@ -40,7 +40,6 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 
 | Directory | Description |
 |-----------|-------------|
-| `sep-gpio-test/` | GPIO peripheral register access and loopback test |
 | `sep-hmac-test/` | HMAC peripheral register access test |
 | `hmac-dv-test/` | HMAC design-verification test |
 | `opentitan-hmac-test/` | OpenTitan-compatible HMAC DIF test (SHA-256 + HMAC-SHA-256) |
@@ -53,7 +52,6 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `sep-spi-test/` | SPI controller test |
 | `otbn-dv-test/` | OTBN (OpenTitan Big Number) design-verification test |
 | `otbn-dv-p256-verify-test/` | OTBN P-256 ECDSA verification test |
-| `uart_16550_test/` | UART 16550 transmit test (requires tmux — see note below) |
 | `rom_test/` | ROM read test |
 
 ### Shared Support Code (`common/`)
@@ -74,8 +72,6 @@ Provides a subset of the OpenTitan DIF (Device Interface Function) API for use i
 | File | Purpose |
 |------|---------|
 | `dif_hmac_sep.c/.h` | OpenTitan HMAC DIF adapted for the SEP VP |
-| `uart_output.c` | UART output helpers for OpenTitan-style test output |
-
 ---
 
 ## Building and Running Tests
@@ -87,7 +83,9 @@ debugging.
 
 ### Prerequisites
 
-- **RISC-V GNU toolchain** (`riscv64-unknown-elf-gcc`) in your `$PATH`
+- **RISC-V GNU toolchain** in your `$PATH` — `riscv64-unknown-elf-gcc` on
+  Ubuntu/RHEL, `riscv64-elf-gcc` from Homebrew on macOS. The Makefiles detect
+  either one.
 - **SEP VP** built at `../../vp/build/bin/sep-vp`
   (from repo root: `cd vp/build && make`)
 
@@ -98,11 +96,11 @@ The runner will build `sep-vp` automatically if it is not found.
 Navigate to any test directory and run `make`:
 
 ```bash
-cd sep-gpio-test
+cd sep-crng-test
 make
 ```
 
-This produces an ELF binary (e.g., `sep_gpio_test`) linked against `rv32imc` / `ilp32`.
+This produces an ELF binary (e.g., `sep_crng_test`) linked against `rv32imc` / `ilp32`.
 
 ### Run the Test
 
@@ -127,38 +125,6 @@ Creates `<target>.dump` (full disassembly) and `<target>.sym` (symbol table).
 ```bash
 make clean
 ```
-
----
-
-## UART Test Note
-
-`uart_16550_test` uses the UART model's TCP terminal feature. The model forks a child
-process that tries to open a **tmux split-pane** to display UART output. If no tmux
-session is running you will see:
-
-```
-error connecting to /tmp/tmux-NNNN/default (No such file or directory)
-```
-
-This is non-fatal — the firmware still executes. To see UART output:
-
-**Option A — run inside tmux:**
-```bash
-tmux new-session
-cd uart_16550_test && make sim
-# UART output appears in a new tmux split pane
-```
-
-**Option B — connect the Python client manually:**
-```bash
-# Terminal 1
-make sim
-
-# Terminal 2 (after VP starts)
-python3 ../../sep/peripherals/uart_16550/src/uart_terminal_client.py \
-    --host localhost --port 8000
-```
-
 ---
 
 ## Debugging Software with GDB
@@ -200,7 +166,7 @@ The GDB port is read automatically from the INI by `Makefile.common`.
 **Terminal 1 — Start VP as GDB server:**
 
 ```bash
-cd sep-gpio-test
+cd sep-crng-test
 make debug
 ```
 
@@ -215,7 +181,7 @@ The VP waits for a GDB connection before executing code.
 **Terminal 2 — Connect GDB client:**
 
 ```bash
-cd sep-gpio-test
+cd sep-crng-test
 make gdb
 ```
 
@@ -319,7 +285,8 @@ SRCS = ../common/start.S main.c \
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `RISCV_PREFIX` | `riscv64-unknown-elf-` | Toolchain prefix |
+| `RISCV_PREFIX` | first of `riscv64-unknown-elf-`, `riscv64-elf-`, `riscv-none-elf-`, `riscv64-linux-gnu-`, `riscv-none-embed-` found in `$PATH` | Toolchain prefix |
+| `RISCV_TOOLCHAIN_PATH` | _(unset)_ | Base dir holding `bin/<prefix>gcc`, for toolchains outside `$PATH` |
 | `VP` | `../../../vp/build/bin/sep-vp` | Path to the `sep-vp` executable |
 | `VP_BUILD_DIR` | `vp/build_sep` | Build directory used when the runner builds `sep-vp` |
 | `DEBUG_PORT` | read from INI (`gdbTcpPort`), fallback `5005` | GDB server port |

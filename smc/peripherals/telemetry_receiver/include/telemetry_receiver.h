@@ -26,14 +26,10 @@
  * | `hw/smc/data/registers/rdl/smc_top.rdl` | Placement of the wrapper in the SMC map |
  *
  * @note **Base address is deliberately not encoded in this model.**  The RTL
- *       `smc_top.rdl` places `telemetry_receiver_wrap` at `0xC000_9000`, but
- *       the SystemC platform currently maps I2C0 there and
- *       `smc/doc/systemc_tlm2_integration_guide.adoc` documents the telemetry
- *       receiver at `0xC000_D000`.  That conflict is a platform-map question,
- *       not an IP question — the base address is assigned by the platform's
- *       address router (as it is for `beu` and `i3c_controller`), so this model
- *       decodes window-relative offsets only.  See
- *       `doc/01_TELEMETRY_RECEIVER_Specification.md` §2.
+ *       `smc_top.rdl` places `telemetry_receiver_wrap` at `0xC000_9000`. The base
+ *       address is assigned by the platform's address router (as it is for `beu`
+ *       and `i3c_controller`), so this model decodes window-relative offsets only.
+ *       See `doc/01_TELEMETRY_RECEIVER_Specification.md` §2.
  *
  * ---
  * ## Register map (one instance, 0x100 window, 32-bit registers)

@@ -1,5 +1,30 @@
 # Toolchain
-RISCV_PREFIX ?= riscv64-unknown-elf-
+# Set RISCV_PREFIX in the environment or on the command line to pin one.
+# Otherwise probe the prefixes the supported hosts ship, so a bare `make` works
+# everywhere: Ubuntu/RHEL install riscv64-unknown-elf-, macOS Homebrew installs
+# riscv64-elf-, and the xpack builds use riscv-none-elf-.  RISCV_TOOLCHAIN_PATH
+# points at a toolchain that is not on PATH (RHEL module trees, bundled zips).
+# Candidate order matches sw/sep-vp-tests/run_sep_vp_tests.sh.
+RISCV_PREFIX_CANDIDATES ?= riscv64-unknown-elf- riscv64-elf- riscv-none-elf- \
+                           riscv64-linux-gnu- riscv-none-embed-
+
+ifneq ($(strip $(RISCV_TOOLCHAIN_PATH)),)
+RISCV_BINDIR := $(RISCV_TOOLCHAIN_PATH)/bin/
+endif
+
+ifeq ($(origin RISCV_PREFIX), undefined)
+RISCV_PREFIX := $(firstword $(foreach p,$(RISCV_PREFIX_CANDIDATES), \
+                  $(if $(shell command -v $(RISCV_BINDIR)$(p)gcc 2>/dev/null),$(RISCV_BINDIR)$(p))))
+endif
+
+ifeq ($(strip $(RISCV_PREFIX)),)
+ifeq ($(filter clean,$(MAKECMDGOALS)),)
+$(error No RISC-V toolchain found. Set RISCV_PREFIX or RISCV_TOOLCHAIN_PATH, or install one: \
+macOS "brew install riscv64-elf-gcc"; Ubuntu "sudo apt install gcc-riscv64-unknown-elf"; \
+RHEL/TT "module load riscv-gnu-toolchain/2025.01.20-rhel-8.10")
+endif
+endif
+
 CC = $(RISCV_PREFIX)gcc
 OBJCOPY = $(RISCV_PREFIX)objcopy
 OBJDUMP = $(RISCV_PREFIX)objdump
@@ -17,7 +42,7 @@ endif
 # Common include paths — single authoritative register header + shared helpers
 SEP_VP_TESTS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 COMMON_INCS = -I$(SEP_VP_TESTS_DIR)common \
-              -I$(SEP_VP_TESTS_DIR)../tt-oca-hw-main/meta/registers/c
+              -I$(SEP_VP_TESTS_DIR)fw-tests-from-tt-oca-hw/dependencies/meta/registers/c
 
 # Compiler flags
 CFLAGS = -march=$(ARCH) -mabi=$(ABI) -mno-relax
@@ -35,7 +60,15 @@ LDFLAGS += -Wl,--no-relax,--print-memory-usage
 
 # VP settings
 VP = ../../../vp/build/bin/sep-vp
-VP_FLAGS = ../../../vp/platform/sep/config/accellera_config.ini
+BASE_INI = ../../../vp/platform/sep/config/accellera_config.ini
+VP_FLAGS = $(BASE_INI)
+
+# Tests that read their data oracle out of the SPI flash need spiPreload disabled: that
+# setting loads the bootcode image straight into the flash model's backing store, over
+# whatever the test staged (or over the erased state it expects). Such a test opts in with
+# `VP_FLAGS := $(NO_SPIPRELOAD_INI)` and lists it as a `sim` prerequisite. Derived with sed
+# rather than checked in, so it tracks edits to the shared config instead of drifting.
+NO_SPIPRELOAD_INI = $(dir $(BASE_INI))accellera_config_no_spipreload.ini
 GDB_ENABLED_FROM_INI := $(shell sed -n 's/^[[:space:]]*och_sep_ss1\.gdb[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p' $(VP_FLAGS) 2>/dev/null | head -n 1)
 GDB_ENABLED ?= $(if $(strip $(GDB_ENABLED_FROM_INI)),$(GDB_ENABLED_FROM_INI),false)
 DEBUG_PORT_FROM_INI := $(shell sed -n 's/^[[:space:]]*och_sep_ss1\.gdbTcpPort[[:space:]]*:[[:space:]]*\[\([0-9]\+\)\].*/\1/p' $(VP_FLAGS) 2>/dev/null | head -n 1)
@@ -80,6 +113,9 @@ gdb: $(TARGET)
 	$(GDB) $(TARGET) \
 		-ex "target remote localhost:$(DEBUG_PORT)" \
 		-ex "set architecture riscv:rv32"
+
+$(NO_SPIPRELOAD_INI): $(BASE_INI)
+	sed 's|^och_sep_ss1\.spiPreload|#&|' $< > $@
 
 clean:
 	rm -f $(OBJS) $(TARGET) $(TARGET).dump $(TARGET).sym

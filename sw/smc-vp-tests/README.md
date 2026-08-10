@@ -117,7 +117,10 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `smc-i3c-loopback-test/` | I3C0 controller -> echo target loopback (write + read) |
 | `smc-i3c-test/` | I3C controller 0 HCI_VERSION read + HC_CONTROL / PIO_CONTROL round-trip |
 | `smc-memory-zeroer-test/` | memory_zeroer CSR program + DMA zero-fill write-back into scratchpad RAM (needs its own `.ini`; see `smc_memory_zeroer_test.ini`) |
+| `smc-octs-timer-test/` | octs_system_timer as the system PRIMARY: reset defaults, CTRL reserved-bit RAZ/WI, GPIO_ENABLE, 64-bit PRESET pair, TIMER_START singlepulse, RUNNING + counter monotonicity, RO writes ignored, CREDIT_EXPIRED stays 0, re-START reloads the preset. Mirrors `octs_p0_primary_test` / `octs_p0_credit_test` in `tt-oca-hw-main/fw/smc/tests` |
+| `smc-octs-timer-secondary-test/` | Same timer strapped SECONDARY (`dut.octs_is_primary=false` in its `.ini`): STATUS.MODE reads SECONDARY, registers behave as on a primary, and TIMER_START alone leaves the counter parked at 0 because nothing in the SMC VP drives `sync_load`. Mirrors `octs_p0_sec_test` |
 | `smc-plic-test/` | PLIC threshold + enable write/read + UART0 TX-empty interrupt claim/complete |
+| `smc-pvt-wrap-test/` | PVT wrapper process-clock count, voltage droop, and temperature status register access |
 | `smc-reset-test/` | Reset unit SS_CONFIG round-trip + SS_CONFIG_LOCK / SS_COLD_RESET_LOCK sticky locks |
 | `smc-scratch-test/` | Scratchpad RAM multi-word write/read round-trip from the CPU |
 | `smc-uart-test/` | UART0 SCR, divisor/LCR, FIFO enable, and MCR register tests |
@@ -137,13 +140,13 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `start.S` | RV64 startup: parks harts 1..3, sets mtvec/sp, clears BSS, inits UART0, calls `main` |
 | `link.ld` | Linker script: single RAM region at `0x80000000` (cluster fast-mem window) |
 | `printf.c` | Bare-metal `printf` (`%s`/`%u`/`%x`/`%0Nx`/`%%`) over UART0 THR with LSR THRE polling |
-| `smc_common.h` | SMC peripheral base addresses + register offsets for CLINT, PLIC, reset, cpu_ctrl, I2C, I3C, UART + `REG_READ/WRITE` helpers |
+| `smc_common.h` | SMC peripheral base addresses + register offsets for CLINT, PLIC, reset, cpu_ctrl, PVT wrapper, I2C, I3C, UART + `REG_READ/WRITE` helpers |
 
 ## How it works
 
 `smc-vp` (built from `vp/platform/smc/`) instantiates the full SMC
 platform — fabric, PLIC, CLINT, reset unit, boot ROM, scratchpad, cpu_ctrl,
-DMA, I3C, 3x I2C, 4x UART, and the Whisper-backed CVA6 cluster — and runs a
+DMA, PVT wrapper, I3C, 3x I2C, 4x UART, and the Whisper-backed CVA6 cluster — and runs a
 bounded SystemC simulation:
 
 ```

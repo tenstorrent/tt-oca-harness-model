@@ -9,42 +9,59 @@ LDFLAGS += -T ../common/link.ld
 include ../Makefile.common
 
 # --- Flash fixture staging -------------------------------------------------
-# sep-vp chdir's to the directory of the .ini it is given, so the flash model resolves
-# data/flash_memory.bin relative to the CONFIG directory (not this test dir). Stage there.
-CFG_DIR     := $(dir $(VP_FLAGS))
-STAGED_IMG  := $(CFG_DIR)data/flash_memory.bin
-SIM_TIMEOUT ?= 20
+# Two verification modes, selected with STAGED:
+#   make sim            no image in flash, main.c expects erased 0xFF
+#   make sim STAGED=1   fixture staged, main.c expects its manifest magic
+# Both need the bootcode preload out of the way (see NO_SPIPRELOAD_INI in
+# ../Makefile.common) -- it fills the flash with boot data, which is neither erased nor the
+# fixture. The fixture is staged in the config directory because sep-vp chdir's there, so
+# the flash model resolves data/flash_memory.bin relative to it, not to this test dir.
+VP_FLAGS   := $(NO_SPIPRELOAD_INI)
+CFG_DIR    := $(dir $(NO_SPIPRELOAD_INI))
+STAGED_IMG := $(CFG_DIR)data/flash_memory.bin
 
-.PHONY: fixture stage unstage sim-unstaged sim-staged distclean
+STAGED ?= 0
+ifeq ($(STAGED),1)
+EXTRA_CFLAGS += -DFLASH_STAGED
+endif
+
+# main.c compiles to different expectations per mode, so switching modes has to force a
+# rebuild -- otherwise stale objects from the other mode produce a bogus result. Rewrite
+# the stamp only when the mode actually changes, and hang the objects off it.
+$(shell [ "`cat .staged-mode 2>/dev/null`" = "$(STAGED)" ] || echo $(STAGED) > .staged-mode)
+$(OBJS): .staged-mode
+
+.PHONY: fixture stage unstage unstage-image clean-mode distclean
 
 flash_fixture.bin: gen_flash_fixture.py
 	python3 gen_flash_fixture.py $@
 
 fixture: flash_fixture.bin
 
-stage: flash_fixture.bin
-	mkdir -p $(CFG_DIR)data && cp flash_fixture.bin $(STAGED_IMG)
+$(STAGED_IMG): flash_fixture.bin
+	mkdir -p $(dir $@) && cp $< $@
 
-unstage:
+stage: $(STAGED_IMG)
+
+unstage-image:
 	rm -f $(STAGED_IMG)
 	-rmdir $(CFG_DIR)data 2>/dev/null || true
 
-# Convenience: build+run the two verification modes. Each forces a clean rebuild so the
-# FLASH_STAGED expectation in main.c matches the staging state, and wraps the sep-vp run in a
-# timeout (the VP does not self-terminate).
-sim-unstaged:
-	$(MAKE) clean
-	$(MAKE) unstage
-	$(MAKE) $(TARGET)
-	timeout -k 5 $(SIM_TIMEOUT) $(VP) $(VP_FLAGS) $(TARGET) || true
+unstage: unstage-image
+	rm -f $(NO_SPIPRELOAD_INI)
 
-sim-staged:
-	$(MAKE) clean
-	$(MAKE) stage
-	$(MAKE) EXTRA_CFLAGS=-DFLASH_STAGED $(TARGET)
-	timeout -k 5 $(SIM_TIMEOUT) $(VP) $(VP_FLAGS) $(TARGET) || true
-	$(MAKE) unstage
+# Give `sim` (from Makefile.common) the state its mode expects, so plain `make sim` works
+# like every other test here.
+ifeq ($(STAGED),1)
+sim: $(NO_SPIPRELOAD_INI) $(STAGED_IMG)
+else
+sim: $(NO_SPIPRELOAD_INI) unstage-image
+endif
+
+clean-mode:
+	rm -f .staged-mode
+
+clean: unstage clean-mode
 
 distclean: clean
-	$(MAKE) unstage
 	rm -f flash_fixture.bin

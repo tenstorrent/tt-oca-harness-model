@@ -22,6 +22,12 @@
 #   BOOST_DIR           - Boost root (macOS: /opt/homebrew/opt/boost)
 #   VP                  - explicit sep-vp executable path
 #   VP_BUILD_DIR        - build directory used for sep-vp (default: vp/build_sep)
+#   SIM_TIMEOUT         - hard cap in seconds for one test (default 300)
+#   SIM_IDLE_TIMEOUT    - stop a test after this many seconds without new output
+#                         (default 30)
+#   TEST_PASS_REGEX     - extended regex marking a passing run (case-insensitive)
+#   TEST_FAIL_REGEX     - extended regex marking a failing run (case-insensitive)
+#   LOG_DIR             - where per-test logs are written (default ./logs)
 # =============================================================================
 
 set -euo pipefail
@@ -285,8 +291,110 @@ list_tests() {
     printf '%s\n' "${tests[@]}"
 }
 
+# The VP never exits on its own: the firmware finishes, but sc_start() keeps the
+# SystemC kernel running, so `make sim` would block forever and the loop below
+# would stop at the first test.  Each test therefore runs under a watchdog that
+# watches the log, stops the VP as soon as the firmware prints its pass/fail
+# banner, and gives up on a test that goes quiet or overruns the hard cap.
+PASS_REGEX="${TEST_PASS_REGEX:-all[[:space:]]+([a-z]+[[:space:]]+)?(tests|checks)[[:space:]]+passed|test[[:space:]]+passed}"
+FAIL_REGEX="${TEST_FAIL_REGEX:-some[[:space:]]+([a-z]+[[:space:]]+)?(tests|checks)[[:space:]]+failed|test[[:space:]]+failed}"
+SIM_TIMEOUT="${SIM_TIMEOUT:-300}"
+SIM_IDLE_TIMEOUT="${SIM_IDLE_TIMEOUT:-30}"
+LOG_DIR="${LOG_DIR:-${SCRIPT_DIR}/logs}"
+
+# `make sim` sits between us and the VP, so signalling make alone would leave
+# sep-vp running.  List the whole tree, parents first.
+collect_tree() {
+    local pid="$1" child
+    echo "${pid}"
+    for child in $(pgrep -P "${pid}" 2>/dev/null || true); do
+        collect_tree "${child}"
+    done
+}
+
+# Take the tree down from the top: make prints "*** [sim] Terminated" if it is
+# still alive when the VP dies, so kill it before its child.
+stop_sim() {
+    local pid="$1" p
+    for p in $(collect_tree "${pid}"); do
+        kill -KILL "${p}" 2>/dev/null || true
+    done
+    # Mute the shell's own "Terminated" report for the reaped job.
+    exec 4>&2 2>/dev/null
+    wait "${pid}" 2>/dev/null || true
+    exec 2>&4 4>&-
+}
+
+# The VP writes its own timestamped log lines into the same stream as the
+# firmware's printf, so a banner can come out split ("All tests PASS" ... "ED!").
+# Drop the VP lines and join what is left before matching.  Only the tail is
+# scanned: banners are printed at the end and these logs reach megabytes.
+log_has() {
+    local text
+    text="$(tail -c 262144 "$2" 2>/dev/null \
+            | sed -E 's/\[[0-9]+ +(ps|ns|us|ms|s)\] \[[A-Z]+ [0-9]+\].*$//' \
+            | tr -d '\n\r')" || return 1
+    grep -Eiq -- "$1" <<<"${text}"
+}
+
+# Sets RESULT to PASS / FAIL / TIMEOUT / NO-BANNER.
+run_sim() {
+    local name="$1" test_dir="$2" vp="$3" log="$4"
+    local started="${SECONDS}" last_size=0 idle=0 reason="" size pid
+
+    : > "${log}"
+    (
+        cd "${test_dir}"
+        make sim RISCV_PREFIX="${RISCV_PREFIX}" VP="${vp}" 2>&1 | tee -a "${log}"
+    ) &
+    pid=$!
+
+    while true; do
+        if log_has "${FAIL_REGEX}" "${log}"; then reason="banner"; break; fi
+        if log_has "${PASS_REGEX}" "${log}"; then reason="banner"; break; fi
+        if ! kill -0 "${pid}" 2>/dev/null; then reason="exited"; break; fi
+        if [ $((SECONDS - started)) -ge "${SIM_TIMEOUT}" ]; then reason="timeout"; break; fi
+        size="$(wc -c < "${log}" 2>/dev/null || echo 0)"
+        if [ "${size}" -eq "${last_size}" ]; then
+            idle=$((idle + 1))
+            if [ "${idle}" -ge "${SIM_IDLE_TIMEOUT}" ]; then reason="idle"; break; fi
+        else
+            idle=0
+            last_size="${size}"
+        fi
+        sleep 1
+    done
+
+    if kill -0 "${pid}" 2>/dev/null; then
+        sleep 1   # let the banner and any trailing lines flush into the log
+        stop_sim "${pid}"
+    else
+        wait "${pid}" 2>/dev/null || true
+    fi
+
+    if log_has "${FAIL_REGEX}" "${log}"; then
+        RESULT="FAIL"
+    elif log_has "${PASS_REGEX}" "${log}"; then
+        RESULT="PASS"
+    elif [ "${reason}" = "timeout" ]; then
+        RESULT="TIMEOUT"
+    else
+        RESULT="NO-BANNER"
+    fi
+
+    case "${RESULT}" in
+        PASS)      log_info "${name}: PASS" ;;
+        FAIL)      log_error "${name}: FAIL (firmware reported failures)" ;;
+        TIMEOUT)   log_error "${name}: TIMEOUT after ${SIM_TIMEOUT}s (no pass/fail banner)" ;;
+        NO-BANNER) log_error "${name}: no pass/fail banner (vp ${reason}); see ${log}" ;;
+    esac
+}
+
+# Sets RESULT for the caller's summary.
 run_test() {
-    local test_dir="${SCRIPT_DIR}/$1"
+    local name="$1" test_dir="${SCRIPT_DIR}/$1"
+    RESULT="ERROR"
+
     if [ ! -d "${test_dir}" ]; then
         log_error "test directory not found: ${test_dir}"
         return 1
@@ -299,19 +407,27 @@ run_test() {
     local vp
     vp="$(get_vp)"
 
+    mkdir -p "${LOG_DIR}"
+    local build_log="${LOG_DIR}/${name}.build.log"
+    local sim_log="${LOG_DIR}/${name}.log"
+
     log_info "============================================================"
-    log_info "building test: $1"
+    log_info "building test: ${name}"
     log_info "============================================================"
-    (
+    if ! (
         cd "${test_dir}"
-        make clean || true
-        make RISCV_PREFIX="${RISCV_PREFIX}" || {
-            log_error "build failed for $1"
-            return 1
-        }
-        log_info "running test: $1"
-        make sim RISCV_PREFIX="${RISCV_PREFIX}" VP="${vp}"
-    )
+        set -o pipefail
+        make clean >/dev/null 2>&1 || true
+        make RISCV_PREFIX="${RISCV_PREFIX}" 2>&1 | tee "${build_log}"
+    ); then
+        RESULT="BUILD-FAIL"
+        log_error "build failed for ${name}; see ${build_log}"
+        return 1
+    fi
+
+    log_info "running test: ${name} (stop on banner, ${SIM_IDLE_TIMEOUT}s idle / ${SIM_TIMEOUT}s cap)"
+    run_sim "${name}" "${test_dir}" "${vp}" "${sim_log}"
+    [ "${RESULT}" = "PASS" ]
 }
 
 # -----------------------------------------------------------------------------
@@ -368,27 +484,38 @@ Usage: ${0##*/} [OPTIONS] [TEST_DIR|TEST_DIR ...]
 
 Host-agnostic runner for the sep-vp bare-metal firmware tests.
 
+Tests run one after another. The VP does not exit by itself, so each run is
+stopped as soon as the firmware prints its pass/fail banner, after
+SIM_IDLE_TIMEOUT seconds without output, or at the SIM_TIMEOUT hard cap.
+Per-test logs are written to ${LOG_DIR}.
+
 Options:
   --build-vp      (re)configure and build sep-vp before running tests
   --rebuild-vp    alias for --build-vp
   --interactive   -i  show a numbered menu and run the chosen test
+  --timeout SECS  hard cap per test (default ${SIM_TIMEOUT})
+  --idle SECS     stop a test after this long with no new output (default ${SIM_IDLE_TIMEOUT})
+  --stop-on-fail  stop at the first test that does not pass
   --list          list available tests and exit
   --help          show this help and exit
 
 Environment overrides:
   RISCV_PREFIX, RISCV_TOOLCHAIN_PATH, SYSTEMC_HOME, CCI_HOME,
-  WHISPER_HOME, BOOST_DIR, VP, VP_BUILD_DIR
+  WHISPER_HOME, BOOST_DIR, VP, VP_BUILD_DIR,
+  SIM_TIMEOUT, SIM_IDLE_TIMEOUT, TEST_PASS_REGEX, TEST_FAIL_REGEX, LOG_DIR
 
 Examples:
   ${0##*/}                     # run all tests
   ${0##*/} sep-gpio-test       # run a single test by name
   ${0##*/} -i                  # choose a test interactively
   ${0##*/} --build-vp          # build sep-vp first, then run all tests
+  ${0##*/} --timeout 60        # give each test at most a minute
 EOF
 }
 
 BUILD_VP=0
 INTERACTIVE=0
+STOP_ON_FAIL=0
 TESTS=()
 
 while [ $# -gt 0 ]; do
@@ -398,6 +525,17 @@ while [ $# -gt 0 ]; do
             ;;
         --interactive|-i)
             INTERACTIVE=1
+            ;;
+        --timeout)
+            SIM_TIMEOUT="${2:?--timeout needs a value in seconds}"
+            shift
+            ;;
+        --idle|--idle-timeout)
+            SIM_IDLE_TIMEOUT="${2:?--idle needs a value in seconds}"
+            shift
+            ;;
+        --stop-on-fail)
+            STOP_ON_FAIL=1
             ;;
         --list)
             list_tests
@@ -440,18 +578,42 @@ if [ ${BUILD_VP} -eq 1 ]; then
 fi
 
 log_info "tests to run: ${TESTS[*]}"
+mkdir -p "${LOG_DIR}"
+
 FAILED=0
+NAMES=()
+STATUSES=()
+DURATIONS=()
+
 for t in "${TESTS[@]}"; do
-    if ! run_test "${t}"; then
-        log_error "test failed: ${t}"
-        FAILED=1
+    start="${SECONDS}"
+    RESULT="ERROR"
+    run_test "${t}" || true
+    NAMES+=("${t}")
+    STATUSES+=("${RESULT}")
+    DURATIONS+=("$((SECONDS - start))")
+    if [ "${RESULT}" != "PASS" ]; then
+        FAILED=$((FAILED + 1))
+        if [ "${STOP_ON_FAIL}" -eq 1 ]; then
+            log_error "stopping after first failure (--stop-on-fail)"
+            break
+        fi
     fi
 done
 
-if [ ${FAILED} -ne 0 ]; then
-    log_error "one or more tests failed"
+echo ""
+log_info "============================================================"
+log_info "summary  (logs in ${LOG_DIR})"
+log_info "============================================================"
+for i in "${!NAMES[@]}"; do
+    printf '  %-28s %-11s %4ss\n' "${NAMES[$i]}" "${STATUSES[$i]}" "${DURATIONS[$i]}"
+done
+echo ""
+
+if [ "${FAILED}" -ne 0 ]; then
+    log_error "${FAILED} of ${#NAMES[@]} test(s) did not pass"
     exit 1
 fi
 
-log_info "all tests passed"
+log_info "all ${#NAMES[@]} tests passed"
 exit 0

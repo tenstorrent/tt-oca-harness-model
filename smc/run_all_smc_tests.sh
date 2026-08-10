@@ -198,6 +198,7 @@ ALL_IPS=(
     "dma:${SCRIPT_DIR}/peripherals/dma"
     "memory_zeroer:${SCRIPT_DIR}/peripherals/memory_zeroer"
     "pll_wrapper:${SCRIPT_DIR}/peripherals/pll_wrapper"
+    "pvt_wrap:${SCRIPT_DIR}/peripherals/pvt_wrap"
     "plic:${SCRIPT_DIR}/peripherals/plic"
     "reset_unit:${SCRIPT_DIR}/peripherals/reset_unit"
     "scratchpad_ram:${SCRIPT_DIR}/peripherals/scratchpad_ram"
@@ -205,6 +206,7 @@ ALL_IPS=(
     "uart:${SCRIPT_DIR}/peripherals/uart"
     "wdt:${SCRIPT_DIR}/peripherals/wdt"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
+    "octs_system_timer:${SCRIPT_DIR}/peripherals/octs_system_timer"
 )
 # cpu_cluster requires Whisper (Tenstorrent internal) and Boost; only include
 # when both were found (_cpu_cluster_ready, computed above alongside the

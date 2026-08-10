@@ -40,6 +40,7 @@
 #define SMC_UART2_BASE       0xC000C000ULL
 #define SMC_UART3_BASE       0xC000D000ULL
 #define SMC_CPU_CTRL_BASE    0xC0400000ULL
+#define SMC_PVT_WRAP_BASE    0xC0402000ULL
 #define SMC_CPU_CTRL_FP_BASE 0xC0039000ULL
 #define SMC_DMA_BASE         0xC0038000ULL
 #define SMC_I3C_BASE         0xC003A000ULL
@@ -49,6 +50,7 @@
 #define SMC_CLINT_BASE       0xC0C00000ULL
 #define SMC_BEU_BASE         0xC0C10000ULL
 #define SMC_ZEROER_BASE      0xC0038200ULL
+#define SMC_OCTS_TIMER_BASE  0xC000E000ULL
 #define SMC_PLL_WRAP_BASE     0xC0003000ULL
 
 /* Telemetry receiver register offsets (32-bit; one instance window = 0x100) */
@@ -102,6 +104,26 @@
 #define CPU_CTRL_REFERENCE_COUNTER    0x060u
 #define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
 #define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
+
+/* PVT wrapper register offsets */
+#define PVT_PROCESS_CTRL            0x00u
+#define PVT_PROCESS_STATUS          0x04u
+#define PVT_REF_CLK_PERIOD_LO       0x08u
+#define PVT_REF_CLK_PERIOD_HI       0x0Cu
+#define PVT_PROCESS_CLOCK_LO        0x10u
+#define PVT_PROCESS_CLOCK_HI        0x14u
+#define PVT_VOLTAGE_CTRL            0x18u
+#define PVT_VOLTAGE_STATUS          0x1Cu
+#define PVT_TEMP_CTRL               0x20u
+#define PVT_TEMP_STATUS             0x24u
+#define PVT_TEMP_INTERRUPT          0x28u
+
+#define PVT_PROCESS_ENABLE          (1u << 0u)
+#define PVT_PROCESS_OBS_CLK_ENABLE  (1u << 4u)
+#define PVT_PROCESS_COUNT_EN        (1u << 8u)
+#define PVT_VOLTAGE_RESET_N         (1u << 0u)
+#define PVT_TEMP_EN                 (1u << 0u)
+#define PVT_STATUS_VALID            (1u << 0u)
 
 /* SiFive TLWDT (stage-1) register offsets — window 0x400 per core */
 #define WDT_CTRL           0x00u
@@ -329,6 +351,36 @@
 #define ZEROER_CTRL_INT_EN       (1ull << 0u)   /* completion interrupt enable */
 #define ZEROER_CTRL_BUSY         (1ull << 32u)  /* 1 while a job is running     */
 
+/* octs_system_timer (OCTS System Timer) — base 0xC000_E000, window 0x24.
+ * Offsets and reset values come from system_timer_octs.rdl; they match the
+ * SMC_SYSTEM_TIMER_OCTS_*_REG_OFFSET defines in the RTL firmware's
+ * prod_rom/registers/smc_top_regs.h.
+ *
+ * Only naturally aligned 32-bit accesses are supported (memmap.adoc), so the
+ * 64-bit preset and live count are split into adjacent LO/HI registers.  Use
+ * REG_READ / REG_WRITE, never REG_READ64.
+ *
+ * The SMC instance is strapped as the timekeeping PRIMARY, so STATUS.MODE
+ * reads 0 and CREDIT_EXPIRED stays 0 (it only accumulates on a SECONDARY). */
+#define OCTS_TIMER_START      0x00u  /* rw  START[0], singlepulse; reads as 0  */
+#define OCTS_CTRL             0x04u  /* rw  credit/pulse_width/step; [31:24] rsvd */
+#define OCTS_STATUS           0x08u  /* ro  MODE[0], RUNNING[4]                */
+#define OCTS_TIMER_PRESET_LO  0x0Cu  /* rw  preset[31:0]                       */
+#define OCTS_TIMER_PRESET_HI  0x10u  /* rw  preset[63:32]                      */
+#define OCTS_TIMER_COUNT_LO   0x14u  /* ro  live count[31:0]                   */
+#define OCTS_TIMER_COUNT_HI   0x18u  /* ro  live count[63:32]                  */
+#define OCTS_CREDIT_EXPIRED   0x1Cu  /* r/w0 peak credit-starved cycle count   */
+#define OCTS_TIMER_GPIO_ENABLE 0x20u /* rw  GPIO_ENABLE[0] -> gpio_enable_o    */
+
+/* CTRL reset value: credit_val=0x0A, pulse_width=0x02, step=0x01. */
+#define OCTS_CTRL_RESET       0x0001020Au
+#define OCTS_CTRL_WMASK       0x00FFFFFFu  /* [31:24] reserved, RAZ/WI        */
+#define OCTS_CTRL_CREDIT_VAL(c)  ((c) & 0xFFu)
+#define OCTS_CTRL_PULSE_WIDTH(p) (((p) & 0xFFu) << 8)
+#define OCTS_CTRL_STEP(s)        (((s) & 0xFFu) << 16)
+
+#define OCTS_STATUS_MODE      (1u << 0)  /* 0 = PRIMARY, 1 = SECONDARY        */
+#define OCTS_STATUS_RUNNING   (1u << 4)  /* enable && count > 0               */
 /* PLL wrapper (pll_wrap.rdl) — base 0xC000_3000, window 0x1000.
  * Composed map (matches vp/platform/smc periph_router route "pll_wrap"):
  *   pll_cntl @0x000, cgm_0 @0x100, cgm_1 @0x200, awm_0 @0x400, awm_1 @0xA00.

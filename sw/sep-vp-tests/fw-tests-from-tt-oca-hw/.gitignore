@@ -1,0 +1,19 @@
+# Everything setup_dependencies.sh generates.  Nothing here is source: delete
+# the lot and re-run the script (or just ./fw/sep/tests/run_all_tests.sh) to get
+# it back.
+dependencies/build/
+dependencies/el2/third_party/
+
+# Firmware build artifacts
+*.o
+*.a
+*.elf
+*.hex
+*.dis
+*.sym
+*.map
+*.su
+*.cpp.s
+fw/sep/tests/*/otbn_build/
+fw/sep/tests/logs/
+fw/sep/bootcode/build/
