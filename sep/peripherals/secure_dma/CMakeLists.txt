@@ -111,7 +111,7 @@ include(FindCCI)
 include(FindSystemC)
 
 if(CCI_FOUND)
-  include_directories(${CCI_INCLUDE_DIR})
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
 
 # OpenSSL (required for SHA-2 hash computation in FUNC-010)

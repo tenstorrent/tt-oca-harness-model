@@ -100,7 +100,7 @@ include(FindSystemC)
 
 # Add CCI include directory if found
 if(CCI_FOUND)
-  include_directories(${CCI_INCLUDE_DIR})
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
 
 # Find OpenSSL library

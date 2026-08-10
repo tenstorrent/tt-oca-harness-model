@@ -161,7 +161,7 @@ private:
   // Configuration Parameters
 
   // FIFO depth limit for SHA-256 (in words)
-  static constexpr unsigned int MSG_FIFO_DEPTH_SHA256 = 16;
+  static constexpr unsigned int MSG_FIFO_DEPTH_SHA256 = 32;
   // FIFO depth limit for SHA-384/512 (in words)
   static constexpr unsigned int MSG_FIFO_DEPTH_SHA384_512 = 32;
   // Number of cycles per SHA-256 block

@@ -39,7 +39,7 @@ if(NOT TARGET Boost::iostreams)
 endif()
 
 if(CCI_FOUND)
-  include_directories(${CCI_INCLUDE_DIR})
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
 
 set(SRAM_SRCS
