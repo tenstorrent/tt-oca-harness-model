@@ -63,6 +63,10 @@ smc/peripherals/memory_zeroer/deps.env
 # Local dependency paths (see sep/peripherals/deps.env.example)
 sep/peripherals/deps.env
 
+# Local dependency paths (see aou/deps.env.example)
+aou/deps.env
+aou/compile_commands.json
+
 # clangd / Microsoft C/C++ language-server caches — auto-generated, per-user.
 .cache/
 .ccls-cache/
