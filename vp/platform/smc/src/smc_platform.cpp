@@ -108,9 +108,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  23, 24, 25,
                  // wdt[0..3] -> PLIC source IDs 329..332 (bits 328..331)
                  328, 329, 330, 331,
-                 // aou (local core only, not the peer stub) -> peripheral bit 26
-                 26})
-                 328, 329, 330, 331})
+                // aou (local core only, not the peer stub) -> peripheral bit 26
+                26})
     , octs_clk("octs_clk",
                sc_core::sc_time(octs_clk_period_ns_p_.get_value(),
                                 sc_core::SC_NS))
@@ -289,17 +288,14 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // composed offsets.
     periph_router.add_route(12, A_PLL_WRAP, 0x1000, "pll_wrap");
     // AVSBus: 4 KiB window at 0xC000_8000 (shadows the periph_misc catch-all).
-    periph_router.add_route(12, A_AVSBUS,   0x1000, "avsbus");
-    // AOU CSRs: 0x80 window at 0xC000_E000.
-    periph_router.add_route(13, A_AOU,      0x80,   "aou");
-    // Catch-alls (largest windows, checked last) -> periph_misc stub.
-    periph_router.add_route(14, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
-    periph_router.add_route(14, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
     periph_router.add_route(13, A_AVSBUS,   0x1000, "avsbus");
-    periph_router.add_route(14, A_SYSTEM_TIMER_OCTS, 0x1000, "octs_system_timer");
+    // AOU CSRs: 0x80 window at 0xC000_E000.
+    periph_router.add_route(14, A_AOU,      0x80,   "aou");
+    // octs_system_timer: 4 KiB window (shadows the periph_misc catch-all).
+    periph_router.add_route(15, A_SYSTEM_TIMER_OCTS, 0x1000, "octs_system_timer");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
-    periph_router.add_route(15, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
-    periph_router.add_route(15, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
+    periph_router.add_route(16, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
+    periph_router.add_route(16, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
     periph_router.out[0].bind(reset.reg_socket);
     periph_router.out[1].bind(i2c[0].reg_socket);
     periph_router.out[2].bind(i2c[1].reg_socket);
@@ -326,9 +322,10 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[11].bind(pvt_wrap_.reg_socket);
     periph_router.out[12].bind(pll_wrap.reg_socket);
     pll_wrap.rst_n_i.bind(rst_n_sig);
-    periph_router.out[12].bind(avsbus.reg_socket);
-    periph_router.out[13].bind(aou_.apb_socket);
-    periph_router.out[14].bind(stub_periph_misc.reg_socket);
+    periph_router.out[13].bind(avsbus.reg_socket);
+    periph_router.out[14].bind(aou_.apb_socket);
+    periph_router.out[15].bind(octs_timer.reg_socket);
+    periph_router.out[16].bind(stub_periph_misc.reg_socket);
 
     // AOU peer link: outbound fabric traffic enters local AOU; peer master
     // lands on remote stub. Peer FDI tied active; local SW activates AOU.
@@ -344,10 +341,9 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     aou_peer_.connect_peer(&aou_);
     fabric.output_axi.bind(aou_.axi_s[0]);
     aou_.axi_m[0].bind(stub_aou_remote.reg_socket);
+    idle_aou_peer_init_.bind(aou_peer_.axi_s[0]);
     aou_peer_.axi_m[0].bind(stub_sysmem.reg_socket);
-    periph_router.out[13].bind(avsbus.reg_socket);
-    periph_router.out[14].bind(octs_timer.reg_socket);
-    periph_router.out[15].bind(stub_periph_misc.reg_socket);
+    idle_aou_peer_apb_init_.bind(aou_peer_.apb_socket);
 
     // -- octs_system_timer signals -----------------------------------------
     octs_timer.clk_i              .bind(octs_clk);

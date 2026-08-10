@@ -187,9 +187,9 @@ public:
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
-    // cpu_ctrl, i3c, pvt_wrap, pll_wrap, avsbus, octs_system_timer,
-    // catch-all stub (16).
-    addr_router<64, 32>         periph_router{"periph_router", 16};
+    // cpu_ctrl, i3c, pvt_wrap, pll_wrap, avsbus, aou, octs_system_timer,
+    // catch-all stub (17).
+    addr_router<64, 32>         periph_router{"periph_router", 17};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
@@ -410,6 +410,13 @@ private:
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_ctrl_init_{"idle_ctrl_init_"};
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_ifetch_init_{"idle_ifetch_init_"};
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_data_init_{"idle_data_init_"};
+    // aou_peer_ models the remote die's AOU core; its axi_s[0] would receive
+    // traffic from the remote fabric, and its apb_socket would receive CSR
+    // accesses from the remote local CPU — neither is modeled by this
+    // single-chip platform. Bind idle initiators so the required ports are
+    // satisfied.
+    tlm_utils::simple_initiator_socket<smc_platform, 64> idle_aou_peer_init_{"idle_aou_peer_init_"};
+    tlm_utils::simple_initiator_socket<smc_platform, 32> idle_aou_peer_apb_init_{"idle_aou_peer_apb_init_"};
 
     void fwd_sys_axi (tlm::tlm_generic_payload&, sc_core::sc_time&);
     void fwd_jtag_axi(tlm::tlm_generic_payload&, sc_core::sc_time&);
