@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# =============================================================================
+# vp_test_env.sh — shared environment discovery for run_test.sh / run_all_tests.sh
+#
+# Sourced, not executed.  Sets up everything that differs between the original
+# tt-oca-hw checkout and this copy under sw/sep-vp-tests/sw-tests-from-tt-oca-hw:
+#
+#   OCH_ROOT   root of this mini tree (holds fw/, plus meta/ dv/ vendor/ deps/
+#              symlinks into dependencies/)
+#   RV_ROOT    VeeR EL2 / picolibc location ($OCH_ROOT/deps/el2)
+#   GCC_PREFIX RISC-V toolchain prefix without the trailing dash, detected from
+#              PATH so the same tree builds on macOS, Ubuntu and RHEL
+#   SEP_VP     sep-vp executable, found by walking up to the tt-oca-sim root
+#   CONFIG     accellera_config.ini that goes with it
+#
+# Every value can be overridden by exporting it before calling the runners.
+# =============================================================================
+
+# tests/ -> sep/ -> fw/ -> tree root
+VP_TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export OCH_ROOT="${OCH_ROOT:-$(cd "${VP_TESTS_DIR}/../../.." && pwd)}"
+export RV_ROOT="${RV_ROOT:-${OCH_ROOT}/deps/el2}"
+
+# -----------------------------------------------------------------------------
+# RISC-V toolchain
+#
+# common.mk defaults GCC_PREFIX to riscv64-unknown-elf, which only exists on the
+# Ubuntu/RHEL machines.  Homebrew installs riscv64-elf-, so probe instead.
+# -----------------------------------------------------------------------------
+vp_detect_toolchain() {
+    local candidates="riscv64-unknown-elf riscv64-elf riscv-none-elf riscv64-linux-gnu riscv-none-embed"
+    local p
+
+    if [ -n "${RISCV_TOOLCHAIN_PATH:-}" ]; then
+        if [ -d "${RISCV_TOOLCHAIN_PATH}/bin" ]; then
+            export PATH="${RISCV_TOOLCHAIN_PATH}/bin:${PATH}"
+        else
+            export PATH="${RISCV_TOOLCHAIN_PATH}:${PATH}"
+        fi
+    fi
+
+    if [ -n "${GCC_PREFIX:-}" ] && command -v "${GCC_PREFIX}-gcc" >/dev/null 2>&1; then
+        export GCC_PREFIX
+        return 0
+    fi
+
+    for p in ${candidates}; do
+        if command -v "${p}-gcc" >/dev/null 2>&1; then
+            export GCC_PREFIX="${p}"
+            return 0
+        fi
+    done
+
+    echo "ERROR: no RISC-V toolchain found in PATH." >&2
+    echo "  Tried: ${candidates}" >&2
+    echo "  macOS:   brew install riscv64-elf-gcc" >&2
+    echo "  Ubuntu:  sudo apt install gcc-riscv64-unknown-elf" >&2
+    echo "  RHEL/TT: module load riscv-gnu-toolchain/2025.01.20-rhel-8.10" >&2
+    echo "  Or set GCC_PREFIX / RISCV_TOOLCHAIN_PATH." >&2
+    return 1
+}
+
+# -----------------------------------------------------------------------------
+# Vendored dependencies
+#
+# picolibc is built once by dependencies/setup_dependencies.sh.  Run it
+# automatically so a fresh checkout only needs ./run_all_tests.sh.
+# -----------------------------------------------------------------------------
+vp_ensure_dependencies() {
+    local setup="${OCH_ROOT}/dependencies/setup_dependencies.sh"
+    local install specs
+
+    # RV_ROOT reaches the install through the deps/el2 symlink; the specs file
+    # spells it out physically, so compare like with like.
+    install="$(cd "${RV_ROOT}/third_party/picolibc/install" 2>/dev/null && pwd -P)" || install=""
+    specs="${install:-/nonexistent}/picolibc.specs"
+
+    # picolibc.specs carries absolute -isystem and -L paths from build time, so
+    # an existing file is not enough: after a rename or a move it points into
+    # thin air and the link fails with "cannot find -lc".  Re-run the setup,
+    # which rewrites the paths without rebuilding.
+    if [ -f "${specs}" ] && grep -q "${install}" "${specs}"; then
+        return 0
+    fi
+
+    if [ ! -x "${setup}" ]; then
+        echo "ERROR: picolibc is missing and ${setup} was not found." >&2
+        return 1
+    fi
+
+    echo "[vp_test_env] setting up dependencies (picolibc)"
+    "${setup}" || return 1
+}
+
+# -----------------------------------------------------------------------------
+# sep-vp
+#
+# The original scripts counted directory levels up to the repo root.  This copy
+# sits one level deeper, so walk up until vp/ shows up instead.
+# -----------------------------------------------------------------------------
+vp_find_sep_vp() {
+    local dir="${VP_TESTS_DIR}" cand
+
+    if [ -n "${SEP_VP:-}" ] && [ -x "${SEP_VP}" ]; then
+        VP_ROOT="${VP_ROOT:-$(cd "$(dirname "${SEP_VP}")/../.." && pwd)}"
+    else
+        while [ "${dir}" != "/" ]; do
+            for cand in "${dir}/vp/build/bin/sep-vp" "${dir}/vp/build_sep/bin/sep-vp"; do
+                if [ -x "${cand}" ]; then
+                    SEP_VP="${cand}"
+                    VP_ROOT="${dir}"
+                    break 2
+                fi
+            done
+            # Remember the repo root even if sep-vp has not been built yet.
+            [ -d "${dir}/vp/platform/sep" ] && VP_ROOT="${dir}"
+            dir="$(dirname "${dir}")"
+        done
+    fi
+
+    if [ -z "${SEP_VP:-}" ] || [ ! -x "${SEP_VP}" ]; then
+        echo "ERROR: sep-vp not found above ${VP_TESTS_DIR}" >&2
+        echo "  Build it (cd vp && ./configure_vp.sh && cmake --build build --target sep-vp)" >&2
+        echo "  or export SEP_VP=/path/to/sep-vp" >&2
+        return 1
+    fi
+
+    CONFIG="${CONFIG:-${VP_ROOT}/vp/platform/sep/config/accellera_config.ini}"
+    if [ ! -f "${CONFIG}" ]; then
+        echo "ERROR: VP config not found: ${CONFIG}" >&2
+        return 1
+    fi
+
+    export SEP_VP CONFIG VP_ROOT
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# Per-test knobs that used to live in bash-4 associative arrays.  macOS ships
+# bash 3.2, which has none, so they are plain lookups here.
+# -----------------------------------------------------------------------------
+
+# OTBN tests need the VP's ISS pointed at a specific algorithm model.
+vp_algo_override() {
+    case "$1" in
+        otbn_loops_test|otbn_plic_test|otbn_sw_error_test) echo "otbn_loop" ;;
+        otbn_smoke_test|otbn_sep_integration_test|otbn_fw_control_test) echo "smoke" ;;
+        otbn_p256_verify_test)     echo "p256_ecdsa" ;;
+        otbn_rsa_3072_verify_test) echo "rsa_3072" ;;
+        *) echo "" ;;
+    esac
+}
+
+# Tests whose Makefile emits a second ELF from the same sources.
+vp_extra_elfs() {
+    case "$1" in
+        spi_crc_test)     echo "spi_crc_ot_mode" ;;
+        spi_phy_reg_test) echo "spi_phy_reg_ot_mode" ;;
+        *) echo "" ;;
+    esac
+}
+
+# Reverse of the above: which directory holds a variant ELF.
+vp_test_dir_for() {
+    case "$1" in
+        spi_crc_ot_mode)     echo "spi_crc_test" ;;
+        spi_phy_reg_ot_mode) echo "spi_phy_reg_test" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+# Write a copy of CONFIG with the OTBN algorithm patched in; echoes its path.
+vp_make_test_config() {
+    local algo="$1" config_dir tmp
+    config_dir="$(cd "$(dirname "${CONFIG}")" && pwd)"
+    tmp="$(mktemp /tmp/sep_vp_config_XXXXXX.ini)"
+    sed -e "s|algorithm_type *:.*|algorithm_type : ${algo}|g" \
+        -e "s|configFile *:.*|configFile : ${config_dir}/veeriss_config.json|g" \
+        "${CONFIG}" > "${tmp}"
+    echo "${tmp}"
+}

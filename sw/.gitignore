@@ -13,9 +13,7 @@ sep-vp-tests/sep-aon-timer-test/sep-aon-timer-test
 sep-vp-tests/sep-crng-test/sep-crng-test
 sep-vp-tests/sep-edn-test/sep-edn-test
 sep-vp-tests/sep-efuse-test/sep-efuse-test
-sep-vp-tests/sep-gpio-test/sep_gpio_test
 sep-vp-tests/sep-hmac-test/sep-hmac-test
 sep-vp-tests/sep-kmac-dv-test/kmac-dv-test
 sep-vp-tests/sep-mailbox-test/main
 sep-vp-tests/sep-spi-test/main
-sep-vp-tests/uart_16550_test/uart_16550_test

@@ -20,10 +20,6 @@ class BasicOptions : public Args {
         addr_t sram_end_addr     = 0x1003FFFF;
         addr_t dma_start_addr    = 0x10800000;
         addr_t dma_end_addr      = 0x1080014F;  // SECURE_DMA size 0x150
-        addr_t uart_start_addr   = 0x44000000;  // VP placeholder (SMC window); confirm IO bridge offset
-        addr_t uart_end_addr     = 0x4400FFFF;
-        addr_t gpio_start_addr   = 0x46010000;  // VP placeholder (SMC window); confirm IO bridge offset
-        addr_t gpio_end_addr     = 0x46010FFF;
         addr_t hmac_start_addr   = 0x10911000;
         addr_t hmac_end_addr     = 0x10912FFF;  // HMAC_REG size 0x2000
         addr_t otbn_start_addr   = 0x10900000;
@@ -60,8 +56,6 @@ class BasicOptions : public Args {
         addr_t sep_efuse_end_addr      = 0x10930643;  // EFUSE_SHIM_CTRL end (0x10930600 + 0x44 - 1)
         addr_t lc_ctrl_start_addr      = 0x10918000;
         addr_t lc_ctrl_end_addr        = 0x10918017;  // SEP_LIFECYCLE_CTRL size 0x18
-        addr_t avbbus_start_addr       = 0x46040000;  // VP placeholder (SMC window); confirm IO bridge offset
-        addr_t avbbus_end_addr         = 0x4604005B;  // size 0x5C
         addr_t entropy_src_start_addr  = 0x10916000;  // ENTROPY_SOURCE_BASE (sep_crypto_pkg.sv)
         addr_t entropy_src_end_addr    = 0x10916FFF;  // ENTROPY_SOURCE size 0x1000
         addr_t edn_start_addr          = 0x10915800;  // DRBG_EDN_BASE (sep_crypto_pkg.sv)
@@ -81,9 +75,8 @@ class BasicOptions : public Args {
         // fuse map, DFT status, and the 1 MiB SMC SRAM). The VP models nothing on the SMC
         // side, so these accesses faulted (store access fault). Model the low 2 MiB as a
         // functional RW stub: it covers all SMC registers (0x2090..0xF800) and SMC SRAM
-        // (0x60000..0x15FFFF) with margin, and stays clear of both the avbbus placeholder
-        // (0x46040000) and the SEP mailbox (0x80000000) — separate targets in the same
-        // routed window.
+        // (0x60000..0x15FFFF) with margin, and stays clear of the SEP mailbox
+        // (0x80000000), a separate target in the same routed window.
         addr_t smc_global_start_addr      = 0x40000000;  // SEP_SMC_GLOBAL_BASE
         addr_t smc_global_end_addr        = 0x401FFFFF;  // 2 MiB (regs + SMC SRAM)
 
@@ -93,8 +86,6 @@ class BasicOptions : public Args {
         // forced chip-select — that behavior is validated in RTL-level (UVM) verification.
         addr_t spi_mux_start_addr         = 0x20000000;  // OCH_SEP_SPI_MUX_CTRL base
         addr_t spi_mux_end_addr           = 0x20000FFF;  // 4 KiB (single ctrl reg; clear of 0x20002000)
-
-        int uartTcpPort = 8888;
 
         addr_t rom_size  = rom_end_addr - rom_start_addr + 1;
         addr_t sram_size = sram_end_addr - sram_start_addr + 1;

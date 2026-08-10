@@ -12,16 +12,15 @@
 - Memories: SRAM, ROM, ITCM, DTCM
 - Interconnect and interrupt controllers: SimpleBus, PLIC, CLINT
 - Reset and infrastructure: Reset generation unit (RSU), stdout device
-- Peripherals: DMA, UART, GPIO, HMAC, KMAC, OTBN, CSRNG, AES, SPI controller(Open Titan), SPI Flash(SFDP Profile 1 commands), Key Manager, EDN, Entropy Source, Mailbox, AON Timer, SEP Efuse/OTP, Lifecycle Controller
-- Integration stubs/Adapters: OTP key request stub, Mailbox host stub, GPIO loopback bridge, MailboxBridge, dma_sys_bus_adapter
+- Peripherals: DMA, HMAC, KMAC, OTBN, CSRNG, AES, SPI controller(Open Titan), SPI Flash(SFDP Profile 1 commands), Key Manager, EDN, Entropy Source, Mailbox, AON Timer, SEP Efuse/OTP, Lifecycle Controller
+- Integration stubs/Adapters: OTP key request stub, Mailbox host stub, MailboxBridge, dma_sys_bus_adapter
 
 
 ## Testing Status
 
 - All peripheral models are unit tested
 - Firmware tests written by Vayavya under `sw/sep-vp-tests/` run successfully on the VP
-- TT firmware tests under `sw/tt-oca-hw-main/dv/sep/tests/` run successfully on the VP
-- TT firmware tests under `sw/tt-oca-hw-main/fw/sep/tests/`
+- TT firmware tests under `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/`
   - Tests exercising the current sep models run successfully on the VP
   - Tests exercising the sep models which are currently not part of the VP are not tested
 
@@ -50,7 +49,6 @@ Line coverage % from merged `lcov` reports (`make coverage` / `run_tests.sh --co
 | edn             | 92.6%     | 93.0%   | 93.2%        |
 | efuse           | 100.0%    | 100.0%  | 100.0%       |
 | entropy_src     | 89.8%     | 92.0%   | 91.4%        |
-| gpio            | 87.4%     | 87.5%   | 88.8%        |
 | hmac            | 91.7%     | 91.5%   | 92.1%        |
 | key_manager     | 97.8%     | 97.9%   | 98.0%        |
 | kmac            | 91.9%     | 92.2%   | 92.2%        |
@@ -60,7 +58,6 @@ Line coverage % from merged `lcov` reports (`make coverage` / `run_tests.sh --co
 | secure_dma      | 91.9%     | 92.1%   | 92.2%        |
 | spi_controller  | 96.1%     | 95.9%   | 96.6%        |
 | spi_flash       | 97.8%     | 98.4%   | 97.9%        |
-| uart_16550      | 97.4%     | 96.0%   | 97.7%        |
 
 **Notes**
 - RHEL: gcc/gcov; macOS: clang/llvm-prof + Homebrew `lcov`.

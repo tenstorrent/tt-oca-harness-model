@@ -36,7 +36,6 @@ add_subdirectory(utils/csml)
 message(STATUS "Configuring generic models...")
 
 set(_SEP_GENERIC
-  uart_16550
   sep_memory
   rom
   sep_virt_console
@@ -50,7 +49,6 @@ add_subdirectory(cpu)
 message(STATUS "Configuring OpenTitan models...")
 
 set(_SEP_OT
-  gpio
   hmac
   kmac
   otbn
@@ -64,7 +62,6 @@ set(_SEP_OT
   key_manager
   efuse
   lifecycle_ctrl
-  AVBbus
   entropy_src
   edn
 )

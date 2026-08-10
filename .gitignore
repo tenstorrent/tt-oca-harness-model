@@ -86,7 +86,7 @@ smc/platform/compile_commands.json
 # =============================================================================
 # Tenstorrent SEP (SystemC Execution Platform) - Root .gitignore
 # =============================================================================
-# This file applies to all models in the repository (HMAC, OTBN, GPIO, etc.)
+# This file applies to all models in the repository (HMAC, OTBN, KMAC, etc.)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -104,8 +104,6 @@ smc/platform/compile_commands.json
 **/obj/
 **/obj_nocci/
 **/bin/
-# Exception: firmware standalone scripts in tt-oca-hw-main/bin/ must be tracked
-!sw/tt-oca-hw-main/bin
 **/lib/
 
 # -----------------------------------------------------------------------------
@@ -119,6 +117,7 @@ smc/platform/compile_commands.json
 **/*.dll
 **/*.exe
 **/*.dump
+**/*.crt0.cpp.s
 
 # -----------------------------------------------------------------------------
 # Executables
@@ -328,6 +327,16 @@ docs/och_source/_build/
 # sw/smc-vp-tests/smc-*-test/smc-*-test pattern here would never match that
 # binary name, so the ignore rule lives with the tests instead of here.)
 # =============================================================================
+
+# =============================================================================
+# SPI flash fixtures and the VP config derived from accellera_config.ini with
+# spiPreload disabled. sep-vp chdir's to the config directory, so the fixture has
+# to be staged there rather than beside the test. `make clean` removes both.
+# =============================================================================
+vp/platform/sep/config/accellera_config_no_spipreload.ini
+vp/platform/sep/config/data/
+sw/sep-vp-tests/sep-spi-*-test/flash_fixture.bin
+sw/sep-vp-tests/sep-spi-*-test/.staged-mode
 
 # =============================================================================
 # End of .gitignore

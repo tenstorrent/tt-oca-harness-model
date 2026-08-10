@@ -12,8 +12,6 @@ find_package(OpenSSL REQUIRED)
 # =============================================================================
   include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/inc
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/uart_16550/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/gpio/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/hmac/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/otbn/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/spi_controller/include
@@ -26,7 +24,6 @@ find_package(OpenSSL REQUIRED)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/secure_dma/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/key_manager/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/efuse/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/AVBbus/model/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/entropy_src/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/edn/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_virt_console/include
@@ -54,8 +51,6 @@ find_package(OpenSSL REQUIRED)
     Boost::program_options
     SystemC::systemc
     Threads::Threads
-    uart_model
-    gpio_model
     hmac_model
     otbn_model
     sep_memory_model
@@ -74,7 +69,6 @@ find_package(OpenSSL REQUIRED)
     key_manager_model
     efuse_model
     lifecycle_ctrl_model
-    avbbus_model
     entropy_src_model
     edn_model
     veeriss_model

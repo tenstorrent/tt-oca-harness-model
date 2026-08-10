@@ -3,15 +3,15 @@
 #include <boost/program_options.hpp>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
+#include <sstream>
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm.h>
 #include "sep_memory.h"
 #include "sep_virt_console.h"
 #include "sep_status_report.h"
 #include "secure_dma.h"
-#include "uart_with_terminal.h"
-#include "gpio.h"
 #include "hmac.h"
 #include "kmac.h"
 #include "otbn.h"
@@ -31,7 +31,6 @@
 #include "aon_timer.h"
 #include "efuse.h"
 #include "lifecycle_ctrl.h"
-#include "AVBBus.h"
 #include "entropy_src.h"
 #include "edn.h"
 #include "riscv_plic.h"
@@ -70,11 +69,11 @@ class och_sep_ss : public sc_module {
 public:
     // VP bus topology — initiators: riscv, dma_ot, dma_ctn, dma_sys_adapter
     static constexpr unsigned int INIT_COUNT = 4;
-    // Targets: sram, rom, plic, clint, dma, uart, gpio, hmac, otbn, itcm, dtcm,
+    // Targets: sram, rom, plic, clint, dma, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
-    //          keymgr_kpvlp, efuse, lc_ctrl, avbbus, entropy_src, edn,
+    //          keymgr_kpvlp, efuse, lc_ctrl, entropy_src, edn,
     //          sep_scratch, outbound_filter, smc_global, spi_mux  (PLIC is internal to VeeRISSTlm)
-    static constexpr unsigned int TARG_COUNT = 29;
+    static constexpr unsigned int TARG_COUNT = 26;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -92,9 +91,6 @@ public:
         delete stdout_dev;
         delete dma;
         delete dma_sys_adapter;
-        delete uart;
-        delete gpio;
-        delete gpio_loopback;
         delete hmac;
         delete kmac;
         delete otbn;
@@ -107,7 +103,6 @@ public:
         delete aon_timer;
         delete sep_efuse;
         delete lc_ctrl;
-        delete avbbus;
         delete entropy_src;
         delete edn;
         delete sim_out;  // destructor flushes any buffered, unterminated SIM_OUT line
@@ -149,9 +144,6 @@ private:
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
-    UART_with_terminal*               uart               = nullptr;
-    gpio_ip*                          gpio               = nullptr;
-    gpio_bridge*                      gpio_loopback      = nullptr;
     hmac_ip*                          hmac               = nullptr;
     kmac_ip*                          kmac               = nullptr;
     otbn_ip*                          otbn               = nullptr;
@@ -164,7 +156,6 @@ private:
     aon_timer_ip*                     aon_timer          = nullptr;
     efuse_model*                      sep_efuse          = nullptr;
     lifecycle_ctrl_model*             lc_ctrl            = nullptr;
-    avbbus_ip*                        avbbus             = nullptr;
     entropy_src_ip*                   entropy_src        = nullptr;
     edn_ip*                           edn                = nullptr;
     spi_flash*                        spi_device         = nullptr;
@@ -185,30 +176,11 @@ private:
     // =========================================================================
     sc_signal<bool, SC_MANY_WRITERS> reset_signal;
 
-    // UART
-    sc_signal<bool, SC_MANY_WRITERS> uart_intr_signal;
-
     // SPI
     sc_signal<bool, SC_MANY_WRITERS> spi_clk_signal;
     sc_signal<bool, SC_MANY_WRITERS> spi_error_irq_signal;
     sc_signal<bool, SC_MANY_WRITERS> spi_event_irq_signal;
     sc_signal<bool, SC_MANY_WRITERS> spi_dma_trigger_signal;
-
-    // GPIO
-    sc_signal<bool, SC_MANY_WRITERS> gpio_out_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_oe_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_in_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_interrupt_signal;
-    // LSIO (tied off)
-    sc_signal<bool, SC_MANY_WRITERS> gpio_lsio_out_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_lsio_oe_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_lsio_in_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_lsio_access_signal;
-    // PAD config
-    sc_signal<sc_uint<3>>            gpio_pad_drive_strength_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_pad_pull_enable_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_pad_pull_select_signal;
-    sc_signal<bool, SC_MANY_WRITERS> gpio_pad_schmitt_enable_signal;
 
     // HMAC
     sc_signal<double, SC_MANY_WRITERS> hmac_clk_signal;
@@ -316,6 +288,15 @@ private:
     csml_param<bool>       strap_status_report_disable; // STRAPS_LO[21]
     csml_param<bool>       strap_bl0_pll_clk;           // STRAPS_LO[20]
 
+    // Verilog $readmemh-style SPI flash image loaded before simulation starts.
+    // "@addr" lines set the write cursor, subsequent lines are whitespace-separated
+    // hex byte pairs. Parsed directly into spi_flash's backing memory in
+    // start_of_simulation via spi_flash_model::write_byte(); no conversion to a
+    // raw .bin is needed. Empty (default) falls back to the existing
+    // data/flash_memory.bin raw-binary backdoor load.
+    csml_param<std::string> spiPreload;
+    std::string             spiPreloadPath;
+
     // =========================================================================
     // Methods
     // =========================================================================
@@ -338,6 +319,7 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , strap_rotate_update("smc.rotate_update", false)
     , strap_status_report_disable("smc.status_report_disable", false)
     , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
+    , spiPreload("spiPreload", "")
 {
     argsCSML = new ArgsCSML(opt);
     Args& args = opt;
@@ -384,6 +366,18 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
                 elfPath = std::filesystem::absolute(elfPath).lexically_normal();
             elfFile = elfPath.string();
             target.front().front() = elfFile;
+        }
+    }
+
+    spiPreloadPath = spiPreload.get_param_value();
+    if (not spiPreloadPath.empty()) {
+        std::filesystem::path preloadPath(spiPreloadPath);
+        if (preloadPath.is_relative()) {
+            if (const char* baseDir = std::getenv("SEP_VP_INI_DIR"))
+                preloadPath = (std::filesystem::path(baseDir) / preloadPath).lexically_normal();
+            else
+                preloadPath = std::filesystem::absolute(preloadPath).lexically_normal();
+            spiPreloadPath = preloadPath.string();
         }
     }
     if (args.verbose)
@@ -544,8 +538,6 @@ inline void och_sep_ss::create_modules() {
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
-    uart            = new UART_with_terminal("uart", opt.uartTcpPort, false);
-    gpio            = new gpio_ip("gpio");
     hmac            = new hmac_ip("hmac");
     kmac            = new kmac_ip("kmac");
     otbn            = new otbn_ip("otbn", 0x10000);
@@ -559,7 +551,6 @@ inline void och_sep_ss::create_modules() {
     aon_timer       = new aon_timer_ip("aon_timer");
     sep_efuse       = new efuse_model("sep_efuse");
     lc_ctrl         = new lifecycle_ctrl_model("lc_ctrl");
-    avbbus          = new avbbus_ip("avbbus");
     entropy_src     = new entropy_src_ip("entropy_src");
     edn             = new edn_ip("edn");
     spi_device      = new spi_flash("spi_flash");
@@ -571,8 +562,6 @@ inline void och_sep_ss::create_modules() {
     plic              = new FE310_PLIC<1, PLIC_NUM_INTERRUPTS, 96, 32>("plic");
     bus               = new SimpleBus<INIT_COUNT, TARG_COUNT>("bus", false);
     rsu_module        = new reset_generation_unit("rsu");
-    gpio_loopback     = new gpio_bridge("gpio_loopback");
-    gpio->set_prot_mode(0xFF);
 }
 
 // -----------------------------------------------------------------------------
@@ -591,8 +580,6 @@ inline void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.plic_start_addr,        opt.plic_end_addr,        *plic);
         bus->ports[it++] = new PortMapping(opt.clint_start_addr,       opt.clint_end_addr,       *clint);
         bus->ports[it++] = new PortMapping(opt.dma_start_addr,         opt.dma_end_addr,         *dma);
-        bus->ports[it++] = new PortMapping(opt.uart_start_addr,        opt.uart_end_addr,        *uart);
-        bus->ports[it++] = new PortMapping(opt.gpio_start_addr,        opt.gpio_end_addr,        *gpio);
         bus->ports[it++] = new PortMapping(opt.hmac_start_addr,        opt.hmac_end_addr,        *hmac);
         bus->ports[it++] = new PortMapping(opt.otbn_start_addr,        opt.otbn_end_addr,        *otbn);
         bus->ports[it++] = new PortMapping(opt.itcm_start_addr,        opt.itcm_end_addr,        *itcm);
@@ -608,7 +595,6 @@ inline void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.keymgr_kpvlp_start_addr,opt.keymgr_kpvlp_end_addr,*keymgr);
         bus->ports[it++] = new PortMapping(opt.sep_efuse_start_addr,   opt.sep_efuse_end_addr,   *sep_efuse);
         bus->ports[it++] = new PortMapping(opt.lc_ctrl_start_addr,     opt.lc_ctrl_end_addr,     *lc_ctrl);
-        bus->ports[it++] = new PortMapping(opt.avbbus_start_addr,      opt.avbbus_end_addr,      *avbbus);
         bus->ports[it++] = new PortMapping(opt.entropy_src_start_addr, opt.entropy_src_end_addr, *entropy_src);
         bus->ports[it++] = new PortMapping(opt.edn_start_addr,         opt.edn_end_addr,         *edn);
         bus->ports[it++] = new PortMapping(opt.sep_scratch_start_addr,     opt.sep_scratch_end_addr,     *sep_scratch);
@@ -637,8 +623,6 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(plic->tsock);
         bus->isocks[it++].bind(clint->tsock);
         bus->isocks[it++].bind(dma->target_socket);
-        bus->isocks[it++].bind(uart->target_socket);
-        bus->isocks[it++].bind(gpio->target_socket);
         bus->isocks[it++].bind(hmac->target_socket);
         bus->isocks[it++].bind(otbn->target_socket);
         bus->isocks[it++].bind(itcm->tsock);
@@ -654,7 +638,6 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(keymgr->kpvlp_socket);
         bus->isocks[it++].bind(sep_efuse->target_socket);
         bus->isocks[it++].bind(lc_ctrl->target_socket);
-        bus->isocks[it++].bind(avbbus->target_socket);
         bus->isocks[it++].bind(entropy_src->target_socket);
         bus->isocks[it++].bind(edn->target_socket);
         bus->isocks[it++].bind(sep_scratch->tsock);
@@ -696,10 +679,6 @@ inline void och_sep_ss::module_bind() {
         }
     }
 
-    // UART
-    uart->reset(reset_signal);
-    uart->INTR(uart_intr_signal);
-
     // DMA
     dma->clk_i(dma_clk_signal);
     dma->rst_ni(reset_signal);
@@ -713,26 +692,6 @@ inline void och_sep_ss::module_bind() {
     dma->dma_done_intr(dma_done_intr_sig);
     dma->dma_chunk_done_intr(dma_chunk_done_intr_sig);
     dma->dma_error_intr(dma_error_intr_sig);
-
-    // GPIO
-    gpio->rst_ni(reset_signal);
-    gpio->gpio_out_o(gpio_out_signal);
-    gpio->gpio_oe_o(gpio_oe_signal);
-    gpio->gpio_in_i(gpio_in_signal);
-    gpio->interrupt_o(gpio_interrupt_signal);
-    gpio->lsio_gpio_out_i(gpio_lsio_out_signal);
-    gpio->lsio_gpio_oe_i(gpio_lsio_oe_signal);
-    gpio->lsio_gpio_in_o(gpio_lsio_in_signal);
-    gpio->lsio_access_i(gpio_lsio_access_signal);
-    gpio->pad_drive_strength_o(gpio_pad_drive_strength_signal);
-    gpio->pad_pull_enable_o(gpio_pad_pull_enable_signal);
-    gpio->pad_pull_select_o(gpio_pad_pull_select_signal);
-    gpio->pad_schmitt_enable_o(gpio_pad_schmitt_enable_signal);
-    gpio_lsio_out_signal.write(false);
-    gpio_lsio_oe_signal.write(false);
-    gpio_lsio_access_signal.write(false);
-    gpio_loopback->gpio_out_in(gpio_out_signal);
-    gpio_loopback->gpio_in_out(gpio_in_signal);
 
     // HMAC
     hmac->clk_i(hmac_clk_signal);
@@ -811,11 +770,9 @@ inline void och_sep_ss::module_bind() {
     aon_racl_policies_signal.write(0);
 
     // PLIC interrupt routing
-    plic_inputs[UART_IRQ]            = &uart_intr_signal;
     plic_inputs[SPI_ERROR_IRQ]       = &spi_error_irq_signal;
     plic_inputs[AON_WKUP_IRQ]        = &aon_intr_wkup_signal;
     plic_inputs[AON_WDOG_IRQ]        = &aon_intr_bark_signal;
-    plic_inputs[GPIO_IRQ]            = &gpio_interrupt_signal;
     plic_inputs[KEYMGR_IRQ]          = &keymgr_irq_signal;
     plic_inputs[SPI_EVENT_IRQ]       = &spi_event_irq_signal;
     plic_inputs[HMAC_DONE_IRQ]       = &hmac_done_signal;
@@ -903,11 +860,40 @@ inline void och_sep_ss::start_of_simulation() {
     keymgr->set_otp_data(otp);
 
     // Backdoor-load the staged SPI flash image so the controller's command/FIFO reads see the
-    // real manifest+payload images instead of erased 0xFF. The model opens data/flash_memory.bin
-    // relative to the working directory, which is the directory of the .ini passed to sep-vp
-    // (sep-vp chdir's there at startup); the harness generates its ini and stages the image into
-    // the per-run directory. When nothing is staged this is a no-op that logs "... not found" and
-    // leaves the flash erased, so existing tests are unaffected. start_of_simulation runs after
+    // real manifest+payload images instead of erased 0xFF. start_of_simulation runs after
     // elaboration/binding and before the first transaction, so the first read sees populated flash.
-    spi_device->get_model()->load_memory_from_file();
+    if (not spiPreloadPath.empty()) {
+        // spiPreload points at a Verilog $readmemh-style hex file (e.g. a
+        // fw/sep/bootcode/*.spi_preload image) — "@addr" lines set the write
+        // cursor, other lines are whitespace-separated hex byte pairs. Poke
+        // straight into the flash model's backing store via write_byte(); the
+        // model has no notion of file format, so no .bin conversion is needed.
+        std::ifstream vmf(spiPreloadPath);
+        if (!vmf.is_open()) {
+            std::cerr << "[spi_flash] spiPreload: cannot open " << spiPreloadPath << '\n';
+        } else {
+            spi_flash_model* flash = spi_device->get_model();
+            uint32_t addr = 0;
+            std::string line;
+            while (std::getline(vmf, line)) {
+                if (line.empty() || line[0] == '#') continue;
+                if (line[0] == '@') { addr = static_cast<uint32_t>(std::stoul(line.substr(1), nullptr, 16)); continue; }
+                std::istringstream ss(line);
+                std::string tok;
+                while (ss >> tok) {
+                    if (addr < flash->size())
+                        flash->write_byte(addr++, static_cast<uint8_t>(std::stoul(tok, nullptr, 16)));
+                }
+            }
+            std::cout << "[spi_flash] spiPreload: loaded into flash from " << spiPreloadPath << '\n';
+        }
+    } else {
+        // No spiPreload configured — fall back to the raw-binary backdoor file.
+        // The model opens data/flash_memory.bin relative to the working
+        // directory (the directory of the .ini passed to sep-vp; sep-vp chdir's
+        // there at startup). When nothing is staged this is a no-op that logs
+        // "... not found" and leaves the flash erased, so existing tests are
+        // unaffected.
+        spi_device->get_model()->load_memory_from_file();
+    }
 }

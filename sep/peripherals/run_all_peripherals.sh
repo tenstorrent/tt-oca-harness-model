@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run release / asan / coverage / ctest for every peripheral model
-# (except sep_memory, cpu, and AVBbus which are excluded by design).
+# (except sep_memory and cpu, which are excluded by design).
 #
 # Prerequisites: valid VP install paths (same as vp/configure_vp.sh).
 #   Edit vp/configure_vp.sh defaults or export SYSTEMC_HOME, CCI_HOME,
@@ -53,7 +53,7 @@ peripheral_setup_build_env || exit 1
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
 # ── Peripherals to skip ────────────────────────────────────────────────────────
-SKIP=("sep_memory" "cpu" "AVBbus")
+SKIP=("sep_memory" "cpu")
 
 # ── Colour helpers (disabled when not a TTY) ──────────────────────────────────
 if [ -t 1 ]; then

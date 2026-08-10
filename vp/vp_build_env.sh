@@ -1,5 +1,21 @@
 # Derived paths from SYSTEMC_HOME, CCI_HOME, OPENSSL_ROOT, BOOST_ROOT.
 # Set those four in configure_vp.sh (or export them before sourcing).
+#
+# Per-standard prefixes may instead be given as SYSTEMC_HOME_C17 / SYSTEMC_HOME_C20
+# (likewise CCI_HOME, OPENSSL_ROOT, BOOST_ROOT). vp_select_std_prefixes picks the
+# set matching CMAKE_CXX_STANDARD, so one shell profile can hold both toolchains.
+
+# Promote the *_C17 / *_C20 variables matching CMAKE_CXX_STANDARD into the
+# unsuffixed names the rest of the build reads.
+vp_select_std_prefixes() {
+  local std="${CMAKE_CXX_STANDARD:-20}" v suffixed
+  for v in SYSTEMC_HOME CCI_HOME OPENSSL_ROOT BOOST_ROOT; do
+    eval "suffixed=\${${v}_C${std}:-}"
+    if [[ -n "${suffixed}" ]]; then
+      eval "export ${v}=\"\${suffixed}\""
+    fi
+  done
+}
 
 vp_libdir() {
   local root="$1"
