@@ -78,7 +78,7 @@ fi
 source "${SCRIPT_DIR}/../setup_build_env.sh"
 peripheral_setup_build_env || exit 1
 
-if ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
+if ! ${NO_BUILD} && ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
   echo "Removing stale cmake cache (install paths or C++ standard changed) ..."
   rm -rf "${BUILD_DIR}"
 fi

@@ -116,7 +116,7 @@ include_directories(
 include(FindCCI)
 include(FindSystemC)
 if(CCI_FOUND)
-  include_directories(${CCI_INCLUDE_DIR})
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
 
 # -----------------------------------------------------------------------------

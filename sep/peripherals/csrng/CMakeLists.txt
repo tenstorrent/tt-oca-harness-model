@@ -121,7 +121,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 if(CCI_FOUND)
-  include_directories(${CCI_INCLUDE_DIR})
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
 
 if(OpenSSL_FOUND)

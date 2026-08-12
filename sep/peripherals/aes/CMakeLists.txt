@@ -123,7 +123,7 @@ include(FindSystemC)
 # Add CCI include directory if found, and activate the Accellera CCI backend
 # in csml_parameter.h (required for csml_param<T> constructors to exist).
 if(CCI_FOUND)
-  include_directories(${CCI_INCLUDE_DIR})
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
   
 endif()
 
