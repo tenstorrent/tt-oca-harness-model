@@ -39,15 +39,19 @@ peripheral_setup_build_env() {
 peripheral_cache_stale() {
   local cache="$1/CMakeCache.txt"
   [[ -f "${cache}" ]] || return 1
-  local cached_sc cached_ssl cached_cci cached_std
+  local cached_sc cached_ssl cached_cci cached_std cached_lcov
   cached_sc="$(grep -E '^SYSTEMC_HOME:' "${cache}" 2>/dev/null | sed 's/^SYSTEMC_HOME:[^=]*=//' || true)"
   cached_ssl="$(grep -E '^OPENSSL_INCLUDE_DIR:' "${cache}" 2>/dev/null | sed 's/^OPENSSL_INCLUDE_DIR:[^=]*=//' || true)"
   cached_cci="$(grep -E '^CCI_INCLUDE_DIR:' "${cache}" 2>/dev/null | sed 's/^CCI_INCLUDE_DIR:[^=]*=//' || true)"
   cached_std="$(grep -E '^CMAKE_CXX_STANDARD:' "${cache}" 2>/dev/null | sed 's/^CMAKE_CXX_STANDARD:[^=]*=//' || true)"
+  cached_lcov="$(grep -E '^LCOV_EXECUTABLE:' "${cache}" 2>/dev/null | sed 's/^LCOV_EXECUTABLE:[^=]*=//' || true)"
   [[ -n "${cached_sc}" && "${cached_sc}" != "${SYSTEMC_HOME}" ]] && return 0
   [[ -n "${cached_ssl}" && "${cached_ssl}" != "${OPENSSL_INC}" ]] && return 0
   [[ -n "${cached_cci}" && "${cached_cci}" != "${CCI_HOME}/include" ]] && return 0
   [[ -n "${cached_std}" && "${cached_std}" != "${CMAKE_CXX_STANDARD}" ]] && return 0
+  # run_all_peripherals.sh points LCOV_EXECUTABLE at a per-PID wrapper under
+  # TMPDIR; once that is reaped the cached path breaks every later coverage run.
+  [[ -n "${cached_lcov}" && ! -x "${cached_lcov}" ]] && return 0
   return 1
 }
 

@@ -19,7 +19,10 @@ endif()
 unset(_lcov_ver_out)
 
 if(LCOV_VERSION VERSION_GREATER_EQUAL "1.15")
-  set(LCOV_IGNORE_FLAGS   --ignore-errors inconsistent,unsupported,format,mismatch)
+  # 'unused' is required because --extract already narrows the trace to src/ and
+  # include/, so any later --remove pattern matches nothing and lcov 2.x makes
+  # that a fatal error rather than a warning.
+  set(LCOV_IGNORE_FLAGS   --ignore-errors inconsistent,unsupported,format,mismatch,unused)
   set(GENHTML_IGNORE_FLAGS --ignore-errors inconsistent,unsupported,format,corrupt,category)
 else()
   set(LCOV_IGNORE_FLAGS   "")

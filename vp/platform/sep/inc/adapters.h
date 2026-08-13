@@ -5,6 +5,8 @@
 #include <systemc>
 #include <cassert>
 #include <cstring>
+#include "sep_cpu_ctrl.h"
+#include "sep_axi_extension.h"
 
 // 64-to-32 bit bus adapter for DMA sys_initiator_socket (64-bit) → SimpleBus (32-bit).
 class dma_sys_bus_adapter : public sc_core::sc_module {
@@ -23,7 +25,6 @@ private:
         ini->b_transport(trans, delay);
     }
 };
-
 
 /**
  * @brief 32-to-64 bit bus adapter for the OT Mailbox IP (Port 0, SEP side).
@@ -58,8 +59,7 @@ struct MailboxBridge : public sc_core::sc_module {
 
     MailboxBridge(sc_core::sc_module_name n)
         : sc_module(n), tsock("tsock"), isock("isock")
-        , m_write_latch(0), m_write_latch_valid(false)
-        , m_read_latch(0),  m_read_latch_valid(false)
+        , m_read_latch(0),  m_read_latch_valid(false), m_write_latch(0)
     {
         tsock.register_b_transport(this, &MailboxBridge::b_transport);
     }
@@ -86,15 +86,20 @@ struct MailboxBridge : public sc_core::sc_module {
             std::memcpy(&word, dptr, 4);
 
             if ((offset & ~static_cast<uint64_t>(0x7)) == WRITE_DATA_OFFSET) {
-                if (!is_high) {
-                    m_write_latch       = word;
-                    m_write_latch_valid = true;
-                    txn.set_response_status(tlm::TLM_OK_RESPONSE);
+                // WRITE_DATA is one 64-bit FIFO entry and this core issues only
+                // 32-bit accesses, so the halves are paired: the low write latches,
+                // the high write pushes the assembled entry.  Mirrors the READ_DATA
+                // path below.  Forwarding each half on its own would enqueue two
+                // zero-padded entries, leaving the CPU no way to put a full 64-bit
+                // value into the mailbox and desynchronising it from the reader.
+                if (is_high) {
+                    const uint64_t value =
+                        (static_cast<uint64_t>(word) << 32) | m_write_latch;
+                    m_write_latch = 0;
+                    forward_write64(reg_base, value, txn, delay);
                 } else {
-                    const uint64_t combined = (static_cast<uint64_t>(word) << 32)
-                                            |  static_cast<uint64_t>(m_write_latch);
-                    m_write_latch_valid = false;
-                    forward_write64(reg_base, combined, txn, delay);
+                    m_write_latch = word;
+                    txn.set_response_status(tlm::TLM_OK_RESPONSE);
                 }
             } else {
                 if (is_high) {
@@ -141,10 +146,9 @@ struct MailboxBridge : public sc_core::sc_module {
     }
 
 private:
-    uint32_t m_write_latch;
-    bool     m_write_latch_valid;
     uint32_t m_read_latch;
     bool     m_read_latch_valid;
+    uint32_t m_write_latch;
 
     void forward_write64(uint64_t addr, uint64_t value,
                          tlm::tlm_generic_payload& orig, sc_core::sc_time& delay)
@@ -178,5 +182,210 @@ private:
         isock->b_transport(fwd, delay);
         std::memcpy(&value, buf, 8);
         orig.set_response_status(fwd.get_response_status());
+    }
+};
+
+/**
+ * @brief Fixed local-alias remapper (mirrors hw/ip/local_alias_remap/rtl/axi_local_alias_remap.sv).
+ *
+ * Reads sep_cpu_ctrl's SEP_LOCAL_BASE_ADDR / SEP_REGION_SIZE registers at
+ * transport time (not just at elaboration), so firmware writes to those CSRs
+ * take effect immediately on the next transaction — matching how the RTL wires
+ * these registers directly into the fixed remapper's runtime inputs.
+ *
+ * The SimpleBus port bound to this adapter's `tgt` socket already subtracted
+ * its static PortMapping base (`static_bus_offset`) before delivery; this
+ * adapter adds that back to recover the true global address, applies the
+ * live local_base/region_size window check, then forwards the corrected
+ * local address on `ini` (back into local_alias_remap_ip's programmable
+ * 16-region table, which is a separate hardware block).
+ */
+class local_alias_remap_adapter : public sc_core::sc_module {
+public:
+    tlm_utils::simple_target_socket<local_alias_remap_adapter>    tgt;
+    tlm_utils::simple_initiator_socket<local_alias_remap_adapter> ini;
+
+    SC_HAS_PROCESS(local_alias_remap_adapter);
+
+    local_alias_remap_adapter(sc_core::sc_module_name n,
+                               sep_cpu_ctrl_ip* cpu_ctrl,
+                               uint64_t static_bus_offset)
+        : sc_module(n), tgt("tgt"), ini("ini")
+        , cpu_ctrl_(cpu_ctrl), static_bus_offset_(static_bus_offset)
+    {
+        tgt.register_b_transport(this, &local_alias_remap_adapter::b_transport);
+        tgt.register_transport_dbg(this, &local_alias_remap_adapter::transport_dbg);
+    }
+
+private:
+    sep_cpu_ctrl_ip* cpu_ctrl_;
+    uint64_t         static_bus_offset_;
+
+    uint64_t remap(uint64_t local_in) const {
+        const uint64_t global_addr = local_in + static_bus_offset_;
+        const uint64_t local_base  = static_cast<uint64_t>(cpu_ctrl_->SEP_LOCAL_BASE_ADDR);
+        const uint64_t region_size = static_cast<uint64_t>(
+            static_cast<uint32_t>(cpu_ctrl_->SEP_REGION_SIZE));
+
+        if (global_addr >= local_base && global_addr < local_base + region_size)
+            return global_addr - local_base;   // target_base = 0
+
+        // Outside the currently-configured dynamic window (e.g. before firmware
+        // widens SEP_REGION_SIZE past its 16 MiB reset default): fall back to
+        // the VP's static default mapping instead of returning global_addr
+        // unchanged. This PortMapping covers the whole 0xC0000000-0xFFFFFFFF
+        // range, so an unchanged address would re-enter this same adapter and
+        // recurse forever. `local_in` is exactly the old unconditional
+        // bus-level subtraction (global_addr - static_bus_offset_).
+        return local_in;
+    }
+
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
+        const uint64_t orig = trans.get_address();
+        trans.set_address(remap(orig));
+        ini->b_transport(trans, delay);
+        trans.set_address(orig);
+    }
+
+    unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
+        const uint64_t orig = trans.get_address();
+        trans.set_address(remap(orig));
+        unsigned int ret = ini->transport_dbg(trans);
+        trans.set_address(orig);
+        return ret;
+    }
+};
+
+/**
+ * @brief Outbound filter merge point (mirrors sep_system_peripherals.sv's
+ * u_outbound_filter_mux, an axi_mux instance with THREE slave inputs:
+ * sep_ap_remapped_axi_req, sep_stee_remapped_axi_req, and the raw
+ * SEP_EXT_TO_SMU leg straight off u_axi_demux — the SMU leg carries no
+ * address remap of its own, it merges in unmodified).
+ *
+ * RTL chains {AP remap, STEE remap, raw SMU} -> axi_mux -> outbound filter
+ * (BlockByDefault=1), so the filter's permission check runs on all three
+ * post-merge. This merges ap_output_remap's and stee_output_remap's
+ * remapped_socket outputs, plus the SMU window's raw forwarded traffic, onto
+ * the single downstream socket feeding sep_filter_ctrl_ip's data_socket.
+ *
+ * axi_mux itself is a generic external AXI library component (deps/axi/), not
+ * SEP-specific — arbitration policy is irrelevant at this LT abstraction level
+ * since SystemC's single-threaded execution already serializes any concurrent
+ * b_transport calls from the three upstream sources.
+ */
+class outbound_filter_mux : public sc_core::sc_module {
+public:
+    tlm_utils::simple_target_socket<outbound_filter_mux>    ap_tgt;
+    tlm_utils::simple_target_socket<outbound_filter_mux>    stee_tgt;
+    tlm_utils::simple_target_socket<outbound_filter_mux>    smu_tgt;
+    tlm_utils::simple_initiator_socket<outbound_filter_mux> ini;
+
+    SC_HAS_PROCESS(outbound_filter_mux);
+
+    outbound_filter_mux(sc_core::sc_module_name n)
+        : sc_module(n), ap_tgt("ap_tgt"), stee_tgt("stee_tgt"), smu_tgt("smu_tgt"), ini("ini")
+    {
+        ap_tgt.register_b_transport(this, &outbound_filter_mux::b_transport);
+        ap_tgt.register_transport_dbg(this, &outbound_filter_mux::transport_dbg);
+        stee_tgt.register_b_transport(this, &outbound_filter_mux::b_transport);
+        stee_tgt.register_transport_dbg(this, &outbound_filter_mux::transport_dbg);
+        smu_tgt.register_b_transport(this, &outbound_filter_mux::b_transport);
+        smu_tgt.register_transport_dbg(this, &outbound_filter_mux::transport_dbg);
+    }
+
+private:
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
+        ini->b_transport(trans, delay);
+    }
+    unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
+        return ini->transport_dbg(trans);
+    }
+};
+
+/**
+ * @brief SMN inbound global->local remapper (mirrors
+ * u_inbound_global_to_local_addr_remap, an axi_local_alias_remap instance,
+ * in sep_system_peripherals.sv).
+ *
+ * This is the SEP-boundary-crossing counterpart to local_alias_remap_adapter:
+ * that one translates the CPU's local-alias addresses within SEP; this one
+ * translates a GLOBAL address (as seen by an external master like SMC/AP)
+ * into a local SEP address, downstream of inbound_filter.
+ *
+ *   local_alias_base_i -> SEP_GLOBAL_BASE_ADDR (a different register from the
+ *                          CPU path's SEP_LOCAL_BASE_ADDR)
+ *   region_size_i       -> SEP_REGION_SIZE (the SAME shared register the
+ *                          CPU-path adapter also reads)
+ *   target_base_i       -> hardwired '0 in RTL (not register-backed)
+ *
+ * Unlike local_alias_remap_adapter, passthrough-on-no-match is safe here
+ * without a static-offset fallback: this sits on a dedicated external-facing
+ * socket (smn_inbound_socket) and re-enters the SEP bus as a NEW initiator,
+ * not the same target port, so there is no risk of re-decode recursion.
+ */
+class smn_inbound_remap_adapter : public sc_core::sc_module {
+public:
+    tlm_utils::simple_target_socket<smn_inbound_remap_adapter>    tgt;
+    tlm_utils::simple_initiator_socket<smn_inbound_remap_adapter> ini;
+
+    SC_HAS_PROCESS(smn_inbound_remap_adapter);
+
+    smn_inbound_remap_adapter(sc_core::sc_module_name n, sep_cpu_ctrl_ip* cpu_ctrl)
+        : sc_module(n), tgt("tgt"), ini("ini"), cpu_ctrl_(cpu_ctrl)
+    {
+        tgt.register_b_transport(this, &smn_inbound_remap_adapter::b_transport);
+        tgt.register_transport_dbg(this, &smn_inbound_remap_adapter::transport_dbg);
+        default_ext_.source_id = sep::SMC_SOURCE_ID;
+    }
+
+private:
+    sep_cpu_ctrl_ip* cpu_ctrl_;
+
+    uint64_t remap(uint64_t addr) const {
+        const uint64_t global_base  = static_cast<uint64_t>(cpu_ctrl_->SEP_GLOBAL_BASE_ADDR);
+        const uint64_t region_size  = static_cast<uint64_t>(
+            static_cast<uint32_t>(cpu_ctrl_->SEP_REGION_SIZE));
+
+        if (addr >= global_base && addr < global_base + region_size)
+            return addr - global_base;   // target_base = 0
+        return addr;                     // outside window: passthrough
+    }
+
+    // Inbound traffic carries the source ID its originator stamped, so an
+    // extension already on the payload is left alone. One is supplied only when
+    // absent: without it the inbound filter would fall back to
+    // sep_axi_extension's SEP_SOURCE_ID default and treat external traffic as a
+    // trusted local master. SMC is the only master on this port in this
+    // platform, hence SMC_SOURCE_ID.
+    sep::sep_axi_extension default_ext_;
+
+    void stamp_default_source(tlm::tlm_generic_payload& trans) {
+        if (trans.get_extension<sep::sep_axi_extension>()) return;
+        trans.set_extension(&default_ext_);
+    }
+
+    void unstamp_default_source(tlm::tlm_generic_payload& trans) {
+        if (trans.get_extension<sep::sep_axi_extension>() == &default_ext_)
+            trans.clear_extension<sep::sep_axi_extension>();
+    }
+
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
+        const uint64_t orig = trans.get_address();
+        stamp_default_source(trans);
+        trans.set_address(remap(orig));
+        ini->b_transport(trans, delay);
+        trans.set_address(orig);
+        unstamp_default_source(trans);
+    }
+
+    unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
+        const uint64_t orig = trans.get_address();
+        stamp_default_source(trans);
+        trans.set_address(remap(orig));
+        unsigned int ret = ini->transport_dbg(trans);
+        trans.set_address(orig);
+        unstamp_default_source(trans);
+        return ret;
     }
 };

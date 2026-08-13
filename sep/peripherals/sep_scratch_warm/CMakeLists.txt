@@ -179,6 +179,38 @@ message(STATUS "Generated Project: sep_scratch_warm")
 message(STATUS "  - SYSTEMC_HOME: ${SYSTEMC_HOME}")
 
 # -----------------------------------------------------------------------------
+# Coverage Target
+# -----------------------------------------------------------------------------
+if(BUILD_TESTS AND CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    add_custom_target(coverage
+        COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR}
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake/PeripheralCoverageClean.cmake
+        COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --zerocounters --directory ${CMAKE_BINARY_DIR}
+        COMMAND ${CMAKE_BINARY_DIR}/bin/sep_scratch_warm_testbench
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
+        COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
+                --capture --directory ${CMAKE_BINARY_DIR}
+                --output-file ${CMAKE_BINARY_DIR}/coverage/coverage.info
+        COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
+                --extract ${CMAKE_BINARY_DIR}/coverage/coverage.info
+                "${CMAKE_CURRENT_SOURCE_DIR}/src/*"
+                "${CMAKE_CURRENT_SOURCE_DIR}/include/*"
+                --output-file ${CMAKE_BINARY_DIR}/coverage/coverage_filtered.info
+        COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
+                --remove ${CMAKE_BINARY_DIR}/coverage/coverage_filtered.info
+                '/opt/*' '/usr/*'
+                --output-file ${CMAKE_BINARY_DIR}/coverage/coverage_filtered.info
+        COMMAND ${GENHTML_EXECUTABLE} ${GENHTML_IGNORE_FLAGS}
+                ${CMAKE_BINARY_DIR}/coverage/coverage_filtered.info
+                --output-directory ${CMAKE_BINARY_DIR}/coverage/html
+        COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        COMMENT "Generating coverage report for sep_scratch_warm..."
+    )
+    add_dependencies(coverage sep_scratch_warm_testbench)
+endif()
+
+# -----------------------------------------------------------------------------
 # Static Analysis Target (cppcheck)
 # -----------------------------------------------------------------------------
 find_program(CPPCHECK_EXECUTABLE cppcheck)

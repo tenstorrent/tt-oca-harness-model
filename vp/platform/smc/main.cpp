@@ -250,7 +250,7 @@ int sc_main(int argc, char** argv)
 
     // Drain UART0's TX debug buffer to stdout so the firmware's printf output
     // (which writes to UART0 THR) is visible — mirrors how sep-vp surfaces
-    // firmware console output via its stdout_device / SimVirtConsole tap.
+    // firmware console output via its stdout_device / scratch_cold SIM_OUT tap.
     // The SMC UART model buffers TX bytes in a debug FIFO rather than emitting
     // them live, so we flush it once after the run.
     std::cout << "---- UART0 output ----\n";

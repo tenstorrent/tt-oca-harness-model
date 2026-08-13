@@ -102,6 +102,7 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
   ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/tlm_extensions
 )
 
 # -----------------------------------------------------------------------------
@@ -200,6 +201,7 @@ if(CPPCHECK_EXECUTABLE)
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/include
       -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/tlm_extensions
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
       2> ${CMAKE_BINARY_DIR}/cppcheck_report.txt

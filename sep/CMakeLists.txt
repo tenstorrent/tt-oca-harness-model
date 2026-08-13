@@ -33,24 +33,19 @@ add_subdirectory(utils/csml)
 # Ordered so dependencies come before dependents.
 # Each entry is skipped gracefully if its CMakeLists.txt is absent.
 # -----------------------------------------------------------------------------
-message(STATUS "Configuring generic models...")
+message(STATUS "Configuring peripheral models...")
 
-set(_SEP_GENERIC
+set(_SEP_PERIPHERALS
   sep_memory
   rom
-  sep_virt_console
-  sep_status_report
   el2_pic
+  sep_scratch_cold
+  sep_scratch_warm
+  sep_output_remap_ctrl
+  sep_filter_ctrl
+  sep_reset_ctrl
   sep_cpu_ctrl
-)
-
-message(STATUS "Configuring CPU models...")
-add_subdirectory(cpu/VeeR-ISS/softfloat)
-add_subdirectory(cpu)
-
-message(STATUS "Configuring OpenTitan models...")
-
-set(_SEP_OT
+  local_master_alias_remap_ctrl
   hmac
   kmac
   otbn
@@ -68,7 +63,11 @@ set(_SEP_OT
   edn
 )
 
-foreach(_p IN LISTS _SEP_GENERIC _SEP_OT)
+message(STATUS "Configuring CPU models...")
+add_subdirectory(cpu/VeeR-ISS/softfloat)
+add_subdirectory(cpu)
+
+foreach(_p IN LISTS _SEP_PERIPHERALS)
   set(_dir "${CMAKE_CURRENT_SOURCE_DIR}/peripherals/${_p}")
   if(EXISTS "${_dir}/CMakeLists.txt")
     add_subdirectory("${_dir}")

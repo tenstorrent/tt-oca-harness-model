@@ -300,15 +300,17 @@ TOP_SUMMARY="${LOG_ROOT}/Full_result.log"
   echo "  run_all_peripherals.sh — Full Result Summary"
   echo "  $(date)"
   echo "============================================================"
-  printf "%-20s  %-12s  %-12s  %-12s  %-12s  %s\n" \
-    "Peripheral" "Release" "ASAN" "Coverage" "CTest" "Coverage%"
-  echo "------------------------------------------------------------"
+  printf "%-4s  %-32s  %-12s  %-12s  %-12s  %-12s  %s\n" \
+    "Sr." "Peripheral" "Release" "ASAN" "Coverage" "CTest" "Coverage%"
+  echo "------------------------------------------------------------------------"
 } > "${TOP_SUMMARY}"
 
 # ── Per-peripheral run ────────────────────────────────────────────────────────
 OVERALL_PASS=true
+sr_no=0
 
 for name in "${PERIPHERALS[@]}"; do
+  sr_no=$((sr_no + 1))
   plog="${LOG_ROOT}/${name}"
   mkdir -p "${plog}"
 
@@ -375,8 +377,8 @@ for name in "${PERIPHERALS[@]}"; do
   } > "${plog}/Full_result.log"
 
   # Append row to top-level summary
-  printf "%-20s  %-12s  %-12s  %-12s  %-12s  %s\n" \
-    "${name}" "${release_label}" "${asan_label}" "${cov_label}" "${ctest_label}" "${cov_pct}%" \
+  printf "%-4s  %-32s  %-12s  %-12s  %-12s  %-12s  %s\n" \
+    "${sr_no}." "${name}" "${release_label}" "${asan_label}" "${cov_label}" "${ctest_label}" "${cov_pct}%" \
     >> "${TOP_SUMMARY}"
 
   echo ""
@@ -384,13 +386,18 @@ done
 
 # Top-level footer
 {
-  echo "------------------------------------------------------------"
+  echo "------------------------------------------------------------------------"
   if $OVERALL_PASS; then
     echo "  Overall: PASS — all peripherals passed all stages"
   else
     echo "  Overall: FAIL — one or more peripherals/stages failed"
   fi
   echo "============================================================"
+  echo "Notes:"
+  echo "  - sep_filter_ctrl covers both the inbound and outbound filter control instances."
+  echo "  - sep_output_remap_ctrl covers both the AP and STEE output remap instances."
+  echo "  - sep_scratch_warm is store-only (no behavioral logic); its suite checks"
+  echo "    reset values, read/write and reserved-bit masking."
 } >> "${TOP_SUMMARY}"
 
 echo ""
