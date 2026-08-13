@@ -1,6 +1,6 @@
 #pragma once
 #include "sep_output_remap_ctrl_register.h"
-#include <string.h>
+#include <string>
 
 class sep_output_remap_ctrl_base : public sc_module
 {

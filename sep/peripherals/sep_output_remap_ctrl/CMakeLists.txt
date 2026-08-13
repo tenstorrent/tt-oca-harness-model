@@ -155,8 +155,14 @@ if(BUILD_TESTS)
   peripheral_link_test_to_model(sep_output_remap_ctrl_testbench sep_output_remap_ctrl_model)
   target_include_directories(sep_output_remap_ctrl_testbench PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/tlm_extensions
   )
   target_link_libraries(sep_output_remap_ctrl_testbench PRIVATE csml_logger SystemC::systemc)
+
+  # The suite checks with assert(), which the Release NDEBUG above would compile
+  # out — leaving a testbench that passes without verifying anything. Release is
+  # what ./run_tests.sh builds by default, so keep asserts live for this target.
+  target_compile_options(sep_output_remap_ctrl_testbench PRIVATE -UNDEBUG)
 
   enable_testing()
   add_test(NAME sep_output_remap_ctrl_testbench COMMAND sep_output_remap_ctrl_testbench)

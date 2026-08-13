@@ -124,7 +124,11 @@ The constructor `SC_REPORT_FATAL`s if `num_regions` is zero or not a power of 2,
 
 #### 2.2.1 AXI User-Field Retagging
 
-Real `output_remap.sv` forces `aw.user`/`w.user`/`ar.user` to a fixed `UserOverrideVal` (`OTHERS_SOURCE_ID`) on every remapped transaction, via the `prim_axi_user_override_struct` submodule (gated by `UserOverrideEn`, `1'b1` for both SEP instances). No AXI `user` field exists on `tlm_generic_payload`, and nothing downstream in the VP currently inspects a user/source-ID sideband to make a functional decision — the same underlying limitation as `sep_filter_ctrl`'s `src_id`/`group_id` gap. Tracked in `Abstractions.md` §1.4.
+Real `output_remap.sv` forces `aw.user`/`w.user`/`ar.user` to a fixed `UserOverrideVal` (`OTHERS_SOURCE_ID`) on every remapped transaction, via the `prim_axi_user_override_struct` submodule (gated by `UserOverrideEn`, `1'b1` for both SEP instances).
+
+`tlm_generic_payload` has no AXI `user` field, so the VP models this sideband as `sep_axi_extension::source_id`. Both transport paths re-tag it to `sep::OTHERS_SOURCE_ID` for the downstream forward and restore the caller's value on return. This is not merely cosmetic: `sep_filter_ctrl` matches entries on `src_id`, so the re-tag changes which filter entries a transaction can hit — the same reason hardware does it.
+
+What remains unmodelled is the wider `user` bus: only `source_id` exists on the extension, the per-channel distinction between `aw.user`, `w.user` and `ar.user` is collapsed, and a payload arriving with no extension attached carries no source ID to re-tag and passes through untouched. Tracked in `Abstractions.md` §1.4.
 
 #### 2.2.2 CSR Byte-Enable
 

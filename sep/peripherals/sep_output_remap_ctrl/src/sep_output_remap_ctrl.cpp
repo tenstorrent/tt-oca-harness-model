@@ -107,43 +107,74 @@ uint64_t sep_output_remap_ctrl_ip::remap_address(uint64_t addr) const
 }
 
 // =============================================================================
-// data_b_transport()
+// Source-ID re-tagging
 //
 // output_remap.sv is instantiated for both the AP and STEE stages with
 // UserOverrideEn=1'b1 and UserOverrideVal=OTHERS_SOURCE_ID
-// (sep_system_peripherals.sv:255-256,282-283), so every transaction crossing
-// into those domains is re-tagged regardless of which master issued it. The
-// source ID is restored afterwards for the same reason the address is: the
-// caller owns this payload and the override applies only downstream.
+// (sep_system_peripherals.sv:255-256,282-283), so in hardware every transaction
+// crossing into those domains is re-tagged regardless of which master issued it.
+// The VP models that sideband only as sep_axi_extension::source_id, so a payload
+// arriving without the extension carries no source ID to re-tag and passes
+// through untouched. Restored after the forward for the same reason the address
+// is: the payload belongs to the initiator, and in RTL the override is a
+// downstream wire rather than a mutation visible upstream.
+// =============================================================================
+bool sep_output_remap_ctrl_ip::override_source_id(tlm::tlm_generic_payload& trans,
+                                                    uint8_t& previous) const
+{
+    sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>();
+    if (!ext)
+        return false;
+
+    previous        = ext->source_id;
+    ext->source_id  = sep::OTHERS_SOURCE_ID;
+    return true;
+}
+
+void sep_output_remap_ctrl_ip::restore_source_id(tlm::tlm_generic_payload& trans,
+                                                   uint8_t previous) const
+{
+    if (sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>())
+        ext->source_id = previous;
+}
+
+// =============================================================================
+// data_b_transport()
 // =============================================================================
 void sep_output_remap_ctrl_ip::data_b_transport(tlm::tlm_generic_payload& trans,
                                                   sc_core::sc_time& delay)
 {
     const uint64_t orig_addr = trans.get_address();
-    const uint64_t new_addr  = remap_address(orig_addr);
+    uint8_t        orig_src_id = 0;
+    const bool     retagged    = override_source_id(trans, orig_src_id);
 
-    sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>();
-    const uint8_t orig_src_id = ext ? ext->source_id : 0;
-    if (ext) ext->source_id = sep::OTHERS_SOURCE_ID;
-
-    trans.set_address(new_addr);
+    trans.set_address(remap_address(orig_addr));
     remapped_socket->b_transport(trans, delay);
     trans.set_address(orig_addr);   // restore
 
-    if (ext) ext->source_id = orig_src_id;
+    if (retagged) restore_source_id(trans, orig_src_id);
 }
 
 // =============================================================================
 // data_transport_dbg()
+//
+// Re-tags exactly as the functional path does. The hardware has no separate
+// debug path — the override is combinational on the AXI channel — and
+// sep_filter_ctrl does make decisions on source_id, so a debug read that skipped
+// the re-tag could be allowed or denied differently from the functional read of
+// the same address.
 // =============================================================================
 unsigned int sep_output_remap_ctrl_ip::data_transport_dbg(tlm::tlm_generic_payload& trans)
 {
     const uint64_t orig_addr = trans.get_address();
-    const uint64_t new_addr  = remap_address(orig_addr);
+    uint8_t        orig_src_id = 0;
+    const bool     retagged    = override_source_id(trans, orig_src_id);
 
-    trans.set_address(new_addr);
+    trans.set_address(remap_address(orig_addr));
     unsigned int ret = remapped_socket->transport_dbg(trans);
     trans.set_address(orig_addr);   // restore
+
+    if (retagged) restore_source_id(trans, orig_src_id);
 
     return ret;
 }

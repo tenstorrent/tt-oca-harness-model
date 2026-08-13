@@ -128,6 +128,13 @@ private:
     // =========================================================================
     uint64_t remap_address(uint64_t addr) const;
 
+    /// Re-tag the payload's source ID to OTHERS_SOURCE_ID for the downstream
+    /// forward, returning the caller's value so it can be put back. Returns
+    /// false when the payload carries no sep_axi_extension, in which case there
+    /// is no source ID to override and restore_source_id() is a no-op.
+    bool override_source_id(tlm::tlm_generic_payload& trans, uint8_t& previous) const;
+    void restore_source_id(tlm::tlm_generic_payload& trans, uint8_t previous) const;
+
     // =========================================================================
     // Data-path socket transport (registered in constructor)
     // =========================================================================

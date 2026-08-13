@@ -27,6 +27,7 @@
 
 #include "sep_output_remap_ctrl.h"
 #include "sep_output_remap_ctrl_test.h"
+#include "sep_axi_extension.h"
 
 #include <cassert>
 #include <iostream>
@@ -48,22 +49,36 @@ struct StubTarget : sc_core::sc_module
     tlm_utils::simple_target_socket<StubTarget> socket;
     uint64_t last_addr = 0;
 
+    // The source ID as seen downstream — the only place the re-tag is
+    // observable, since the DUT restores the caller's value before returning.
+    bool     last_had_ext = false;
+    uint8_t  last_src_id  = 0xFF;
+
     SC_CTOR(StubTarget) : socket("socket")
     {
         socket.register_b_transport(this,   &StubTarget::b_transport);
         socket.register_transport_dbg(this, &StubTarget::transport_dbg);
     }
 
-    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
+    void capture(tlm::tlm_generic_payload& trans)
     {
         last_addr = trans.get_address();
+
+        const sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>();
+        last_had_ext = (ext != nullptr);
+        last_src_id  = ext ? ext->source_id : 0xFF;
+    }
+
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
+    {
+        capture(trans);
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         delay = sc_core::SC_ZERO_TIME;
     }
 
     unsigned int transport_dbg(tlm::tlm_generic_payload& trans)
     {
-        last_addr = trans.get_address();
+        capture(trans);
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         return trans.get_data_length();
     }
@@ -190,6 +205,56 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
         trans.set_byte_enable_ptr(nullptr);
         trans.set_streaming_width(8);
         sock->transport_dbg(trans);
+    }
+
+    // Same two accesses, but with a sep_axi_extension carrying a caller-chosen
+    // source ID. Returns what the caller's payload holds afterwards, so a
+    // missing restore shows up as a changed value rather than passing silently.
+    uint8_t data_write_ext(tlm_utils::simple_initiator_socket<sep_output_remap_ctrl_testbench>& sock,
+                           uint64_t addr, uint8_t src_id)
+    {
+        tlm::tlm_generic_payload trans;
+        sep::sep_axi_extension   ext;
+        uint64_t                 buf = 0xC0FFEE;
+        sc_core::sc_time         delay = sc_core::SC_ZERO_TIME;
+
+        ext.source_id = src_id;
+        trans.set_extension(&ext);
+
+        trans.set_command(tlm::TLM_WRITE_COMMAND);
+        trans.set_address(addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&buf));
+        trans.set_data_length(8);
+        trans.set_byte_enable_ptr(nullptr);
+        trans.set_streaming_width(8);
+        sock->b_transport(trans, delay);
+
+        const uint8_t after = ext.source_id;
+        trans.clear_extension(&ext);   // stack-allocated; must not be auto-deleted
+        return after;
+    }
+
+    uint8_t data_dbg_ext(tlm_utils::simple_initiator_socket<sep_output_remap_ctrl_testbench>& sock,
+                         uint64_t addr, uint8_t src_id)
+    {
+        tlm::tlm_generic_payload trans;
+        sep::sep_axi_extension   ext;
+        uint64_t                 buf = 0;
+
+        ext.source_id = src_id;
+        trans.set_extension(&ext);
+
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&buf));
+        trans.set_data_length(8);
+        trans.set_byte_enable_ptr(nullptr);
+        trans.set_streaming_width(8);
+        sock->transport_dbg(trans);
+
+        const uint8_t after = ext.source_id;
+        trans.clear_extension(&ext);
+        return after;
     }
 
     void report(const char* name, bool pass)
@@ -378,6 +443,41 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             uint64_t dummy = 0;
             data_dbg(data_init_ap, incoming, dummy);
             report("T9: transport_dbg applies same remap", stub_ap.last_addr == expected);
+        }
+
+        // ------------------------------------------------------------------
+        // T11/T12/T13: source-ID re-tagging
+        //
+        // output_remap.sv drives UserOverrideEn=1'b1 on both SEP instances, so
+        // everything crossing into AP/STEE reaches the fabric tagged
+        // OTHERS_SOURCE_ID whatever the issuing master was. Only the stub can
+        // see that, since the DUT restores the caller's value on the way back.
+        // Worth testing rather than assuming: sep_filter_ctrl matches entries on
+        // src_id, so the re-tag decides which filter entries a transaction hits.
+        // ------------------------------------------------------------------
+        {
+            const uint64_t incoming        = AP_REGION_BASE + 0x00002000ULL;
+            constexpr uint8_t CALLER_SRC_ID = 0x7;   // anything but OTHERS_SOURCE_ID
+
+            const uint8_t after_write = data_write_ext(data_init_ap, incoming, CALLER_SRC_ID);
+            report("T11: b_transport re-tags source_id to OTHERS_SOURCE_ID downstream",
+                   stub_ap.last_had_ext && stub_ap.last_src_id == sep::OTHERS_SOURCE_ID);
+            report("T11b: caller's source_id restored after b_transport",
+                   after_write == CALLER_SRC_ID);
+
+            stub_ap.last_src_id = 0xFF;
+            const uint8_t after_dbg = data_dbg_ext(data_init_ap, incoming, CALLER_SRC_ID);
+            report("T12: transport_dbg re-tags identically to the functional path",
+                   stub_ap.last_had_ext && stub_ap.last_src_id == sep::OTHERS_SOURCE_ID);
+            report("T12b: caller's source_id restored after transport_dbg",
+                   after_dbg == CALLER_SRC_ID);
+
+            // A payload with no extension carries no source ID to re-tag; it must
+            // still be forwarded and remapped rather than rejected or crashing.
+            uint64_t dummy = 0;
+            data_dbg(data_init_ap, incoming, dummy);
+            report("T13: un-extended payload passes through the re-tag path",
+                   !stub_ap.last_had_ext);
         }
 
         // ------------------------------------------------------------------
