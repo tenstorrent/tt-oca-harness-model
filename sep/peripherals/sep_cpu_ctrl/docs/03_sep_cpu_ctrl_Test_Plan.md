@@ -137,9 +137,6 @@ None — expected values are the register map's documented reset/mask constants 
 
 ### 5.2 Important Exclusions
 
-The following registers appear in the register map (`sep_cpu_ctrl_basetest.h`) but are **not** touched anywhere in `sep_cpu_ctrl_test.cpp`, and are therefore not covered by this test plan:
-
-- `PKA_CTRL`
 - `TIMEOUT_COUNT_SYS_IN`, `TIMEOUT_COUNT_MAILBOX_INBOUND`, `TIMEOUT_COUNT_MAILBOX_OUTBOUND`, `TIMEOUT_COUNT_ENTROPY_WRITE`, `TIMEOUT_COUNT_ENTROPY_READ`, `TIMEOUT_COUNT_FILTER_OUT`, `TIMEOUT_COUNT_ALIAS_REMAP` (only `TIMEOUT_COUNT_DMA` is checked, as the masking representative)
 - `TIMEOUT_ENABLE`
 - `SEP_REGION_SIZE`, `SMU_GLOBAL_BASE_ADDR`, `SMU_REGION_SIZE`

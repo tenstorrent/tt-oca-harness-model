@@ -535,7 +535,7 @@ class SEP_TEST_CTRL_type : public csml_reg<N>
     using typename csml_reg<N>::memory_type;
     typedef typename csml_word<N>::wordtype DT;
     SEP_TEST_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x0, 0x0, 0),
+      csml_reg<N>(reg_name, memory, offset, 0xFC000000ULL, 0x0, 0),
       Reserved0(reg_name + ".Reserved0", *this, 0, 26),
       sep_standalone(reg_name + ".sep_standalone", *this, 26, 1),
       fast_pka_en(reg_name + ".fast_pka_en", *this, 27, 1),
