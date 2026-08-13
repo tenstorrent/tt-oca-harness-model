@@ -31,6 +31,10 @@ SMC_INI="${SMC_INI:-$SCRIPT_DIR/../../vp/platform/smu/config/smc_smu_vp.ini}"
 SEP_INI="${SEP_INI:-$SCRIPT_DIR/../../vp/platform/smu/config/sep_smu_config.ini}"
 SIM_TIME_MS="${SIM_TIME_MS:-50}"
 
+if [ -n "${RISCV_TOOLCHAIN_PATH:-}" ]; then
+    export PATH="${RISCV_TOOLCHAIN_PATH}/bin:${PATH}"
+fi
+
 if [ -z "${RISCV_PREFIX:-}" ]; then
     for p in riscv64-unknown-elf- riscv64-elf- riscv-none-elf-; do
         if command -v "${p}gcc" >/dev/null 2>&1; then

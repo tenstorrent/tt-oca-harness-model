@@ -32,7 +32,12 @@ runner auto-detects a few common prefixes.
 ```
 
 Environment overrides: `VP` (smu-vp binary), `SMC_INI`, `SEP_INI`,
-`SIM_TIME_MS`, `RISCV_PREFIX`.
+`SIM_TIME_MS`, `RISCV_PREFIX`, `RISCV_TOOLCHAIN_PATH`.
+
+CI (Ubuntu and RHEL 8) runs the interconnect unit tests
+(`vp/platform/smu/run_tests.sh`, Release / ASan / coverage on Ubuntu;
+Release / coverage on RHEL) and this firmware suite via `smu-vp` /
+`smu-vp-rhel8` jobs.
 
 A test passes when **both** firmware halves print their PASS banner (SMC on
 UART0, SEP on the virtconsole) and neither prints FAIL.
