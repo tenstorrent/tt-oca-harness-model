@@ -208,6 +208,16 @@ void testbench::run_tests()
     do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
     test_meip_word_mapping();
 
+    // FUNC-EL2PIC-013: Edge-mode clear against a still-asserted source
+    report_test_start("FUNC-EL2PIC-013: Edge Clear While Asserted");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    test_edge_clear_while_asserted();
+
+    // FUNC-EL2PIC-014: priord=1 makes raw priority 0 the highest
+    report_test_start("FUNC-EL2PIC-014: priord=1 Raw Priority 0 Is Highest");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    test_priord_raw_zero_is_highest();
+
     // FUNC-EL2PIC-012: Unbound sources tied low
     report_test_start("FUNC-EL2PIC-012: Unbound Sources Tied Low");
     test_unbound_sources_tied_low();
@@ -896,6 +906,142 @@ void testbench::test_meip_word_mapping()
         report_test_pass("FUNC-EL2PIC-011: test_meip_word_mapping");
     else
         report_test_fail("FUNC-EL2PIC-011: test_meip_word_mapping", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-013: Edge-mode meigwclr against a still-asserted source
+//
+// The "edge" gateway latches level rather than detecting a transition:
+// el2_pic_ctrl.sv:588 sets gw_int_pending from effective unconditionally, and
+// :592 ORs the live effective level on top of the latch. So clearing while the
+// source is still asserted re-pends immediately, and only returning the input
+// to its inactive level makes a clear stick. A transition-detector
+// implementation passes FUNC-EL2PIC-005 but drops the interrupt here.
+// ===========================================================================
+void testbench::test_edge_clear_while_asserted()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src = 9;
+
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), 0x2u);  // edge, active-high
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), 7u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(src), 0x1u);
+    m_test->drive_irq(src, false);
+    wait(SC_ZERO_TIME);
+
+    m_test->drive_irq(src, true);
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "EIP not asserted on assert; ";
+    }
+
+    // Clear with the source still high: must re-pend rather than go quiet.
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x1u);
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "EIP dropped by meigwclr while source still asserted; ";
+    }
+    if ((m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) & (1u << src)) == 0) {
+        pass = false; reason += "meip bit cleared while source still asserted; ";
+    }
+
+    // Drop the source. The latch is still set from before, so it stays pending
+    // until cleared — this is what distinguishes edge from level mode.
+    m_test->drive_irq(src, false);
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "latch lost when source de-asserted; ";
+    }
+
+    // Now the clear sticks.
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x1u);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "EIP still asserted after clearing an inactive source; ";
+    }
+    if (m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) != 0) {
+        pass = false; reason += "meip[0] not clear at end";
+    }
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-013: test_edge_clear_while_asserted");
+    else
+        report_test_fail("FUNC-EL2PIC-013: test_edge_clear_while_asserted", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-014: Under priord=1, raw priority 0 is the highest
+//
+// "Priority 0 never interrupts" holds only for priord=0. el2_pic_ctrl.sv:329
+// inverts intpriority before arbitration and applies no raw==0 exception, so
+// under priord=1 raw 0 becomes effective 15 (the winner) and raw 15 becomes the
+// value that can never clear the threshold. FUNC-EL2PIC-008 uses raw 1 and 2,
+// which straddle neither end, so it cannot catch a raw==0 skip.
+// ===========================================================================
+void testbench::test_priord_raw_zero_is_highest()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src_zero = 11;   // raw 0  → eff 15 under priord=1 (highest)
+    const unsigned src_mid  = 12;   // raw 8  → eff 7
+    const unsigned src_max  = 13;   // raw 15 → eff 0  (can never win)
+
+    for (unsigned s : {src_zero, src_mid, src_max}) {
+        m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(s), 0x0u);  // level, active-high
+        m_test->reg_write_32(el2_pic_basetest::meie_offset(s), 0x1u);
+    }
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src_zero), 0u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src_mid),  8u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src_max),  15u);
+
+    m_test->reg_write_32(el2_pic_basetest::mpiccfg_offset(), 0x1u);   // priord=1
+    // Thresholds invert too, so leaving them at raw 0 would present an
+    // effective 15 and block everything. Same reprogramming FUNC-EL2PIC-008 does.
+    mock_hart.meipt        = 0xFu;
+    mock_hart.meicurpl_csr = 0xFu;
+    wait(SC_ZERO_TIME);
+
+    m_test->drive_irq(src_mid, true);
+    m_test->drive_irq(src_max, true);
+    m_test->drive_irq(src_zero, true);
+    wait(SC_ZERO_TIME);
+
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "no EIP with raw-0 source pending under priord=1; ";
+    }
+    if (mock_hart.claim_id != src_zero) {
+        pass = false;
+        reason += "expected claim " + std::to_string(src_zero) + " (raw 0 → eff 15) got " +
+                  std::to_string(mock_hart.claim_id) + "; ";
+    }
+
+    // Drop the raw-0 source: src_mid (eff 7) should take over, and src_max
+    // (eff 0) must never win once src_mid also goes away.
+    m_test->drive_irq(src_zero, false);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.claim_id != src_mid) {
+        pass = false;
+        reason += "expected claim " + std::to_string(src_mid) + " got " +
+                  std::to_string(mock_hart.claim_id) + "; ";
+    }
+
+    m_test->drive_irq(src_mid, false);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "raw 15 (eff 0) won under priord=1; ";
+    }
+
+    m_test->drive_irq(src_max, false);
+    m_test->reg_write_32(el2_pic_basetest::mpiccfg_offset(), 0x0u);
+    mock_hart.meipt        = 0u;
+    mock_hart.meicurpl_csr = 0u;
+    wait(1, sc_core::SC_NS);
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-014: test_priord_raw_zero_is_highest");
+    else
+        report_test_fail("FUNC-EL2PIC-014: test_priord_raw_zero_is_highest", reason);
 }
 
 // ===========================================================================

@@ -15,8 +15,9 @@ void el2_pic_base::reset_all_registers()
         MEIGWCTRL[i].reset();
         MEIGWCLR[i].reset();
     }
-    MEIP[0].reset();
-    MEIP[1].reset();
+    for (unsigned w = 0; w < NUM_PEND_WORDS; ++w) {
+        MEIP[w].reset();
+    }
 }
 
 } // namespace el2_pic

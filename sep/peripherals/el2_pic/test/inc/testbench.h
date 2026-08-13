@@ -115,6 +115,16 @@ public:
     void test_meip_word_mapping();
 
     // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-013: Edge-mode meigwclr against a still-asserted source
+    // -------------------------------------------------------------------------
+    void test_edge_clear_while_asserted();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-014: Under priord=1, raw priority 0 is the highest
+    // -------------------------------------------------------------------------
+    void test_priord_raw_zero_is_highest();
+
+    // -------------------------------------------------------------------------
     // FUNC-EL2PIC-012: Unbound irq_in sources are tied low
     // -------------------------------------------------------------------------
     void test_unbound_sources_tied_low();

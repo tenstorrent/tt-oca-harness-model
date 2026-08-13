@@ -82,8 +82,8 @@ Each source `1..255` has its own `sc_spawn`'d SystemC method (`gateway_changed`)
 
 - **Polarity** (`meigwctrl[S].polarity`): `effective = polarity ? !raw : raw`.
 - **Level mode** (`irq_type=0`): `source_pending_[S]` tracks `effective` directly.
-- **Edge mode** (`irq_type=1`): `source_pending_[S]` latches `true` only on a qualifying `0→1` transition of `effective`, and is only cleared by a firmware write to `meigwclr[S]`.
-- The live `source_pending_[]` bitmap is mirrored into `MEIP[0]` on every recompute so software reads see current state without needing a separate poll path.
+- **Edge mode** (`irq_type=1`): a latching gateway rather than a transition detector, matching `el2_pic_ctrl.sv:588-592`. `source_pending_[S]` is set on any evaluation where `effective` is asserted, so a narrow pulse survives until firmware sees it. Only a write to `meigwclr[S]` clears it, and only while `effective` is inactive — clearing a still-asserted source re-pends it immediately, since the RTL ORs the live level on top of the latch.
+- `meip[0..7]` are not mirrored. Reads go through a callback that computes the bitmap from `source_pending_[]` on demand, matching the RTL where `intpend` is combinational off the gateways rather than a register.
 
 #### 2.1.2 Priority Arbitration (`reevaluate_arbitration()`)
 
@@ -93,10 +93,11 @@ Re-run synchronously after any of: a gateway event, a `meipl`/`meie`/`meigwctrl`
 for s in 1..255:
     skip if !source_pending_[s]
     skip if MEIE[s].inten == 0
-    skip if MEIPL[s].intpriority == 0        // priority 0 = never interrupt
     eff_prio = priord ? (~raw_prio & 0xF) : raw_prio
     keep s if eff_prio > best_eff_prio       // strictly greater — ties keep the lower (earlier) ID
 ```
+
+Note the absence of a raw `intpriority == 0` skip. "Priority 0 never interrupts" is not a special case in `el2_pic_ctrl.sv:329-331` — it falls out of the threshold compare below, because an effective priority of 0 cannot be strictly greater than a threshold of 0. Stating it as a rule on the *raw* value would be wrong under `priord=1`, where raw 0 inverts to 15 (the highest) and raw 15 becomes the value that can never win.
 
 The winner is then compared against **both** threshold CSRs read live from the hart (`meipt` at 0xBC9, `meicurpl` at 0xBCC), each independently priority-order-adjusted:
 
@@ -127,7 +128,7 @@ Nothing is mirrored back into `MEIP` storage. `csml`'s `read_registers()` consul
 
 #### 2.1.6 Reset Behavior
 
-`SC_METHOD` sensitive to `rst_ni.neg()`: resets all CSML registers to power-on defaults, clears `source_pending_[]`/`last_effective_level_[]`, and — if an external interrupt was asserted — calls `hart_->clear_external_interrupt()` before dropping `eip_asserted_`.
+`SC_METHOD` sensitive to `rst_ni.neg()`: resets all CSML registers to power-on defaults, clears `source_pending_[]`, and — if an external interrupt was asserted — calls `hart_->clear_external_interrupt()` before dropping `eip_asserted_`.
 
 #### 2.1.7 Internal (Non-Bus) Socket Topology
 
@@ -200,7 +201,7 @@ The wake-from-Sleep signal driven when the winning priority reaches the hardwire
 | Register | Offset | Reset | Access | Description |
 |----------|--------|-------|--------|-------------|
 | **MEIPL[0]** | 0x0000 | 0x0 | — | Reserved (source ID 0 invalid). |
-| **MEIPL[1..255]** | 0x0004–0x03FC | 0x0 each | RW | Bits[3:0] `intpriority`: 0=never interrupt, 1..15=priority (meaning depends on `MPICCFG.priord`). Bits[31:4] reserved. Every write triggers `post_write_MEIPL()` → `reevaluate_arbitration()`. |
+| **MEIPL[1..255]** | 0x0004–0x03FC | 0x0 each | RW | Bits[3:0] `intpriority`: priority, with both the ordering and which value means "never interrupt" depending on `MPICCFG.priord` — raw 0 under `priord=0`, raw 15 under `priord=1`. Bits[31:4] reserved. Every write triggers `post_write_MEIPL()` → `reevaluate_arbitration()`. |
 
 ### 4.3 Pending Registers (MEIP)
 
@@ -275,7 +276,6 @@ el2_pic::el2_pic_model (sc_module, extends el2_pic_base)
     ├── VeeRISSTlm*                 hart_ = nullptr   — set via bind_hart()
     ├── sc_vector<sc_signal<bool>>  irq_tie_low_      — sized in before_end_of_elaboration
     ├── std::array<bool,256>        source_pending_
-    ├── std::array<bool,256>        last_effective_level_
     ├── bool                        eip_asserted_ = false
     └── unsigned                    current_claim_id_ = 0
 ```
@@ -294,7 +294,7 @@ VeeRISSTlm (sc_module)
 ```
 el2_pic_model constructor:
   → el2_pic_base constructor: allocate csml_memory<32>, construct all register objects, bind target_socket
-  → source_pending_.fill(false); last_effective_level_.fill(false)
+  → source_pending_.fill(false)
   → SC_METHOD(reset_process), sensitive to rst_ni.neg()
   → register_all_callbacks()   — install post-write / custom read/write callbacks
 
@@ -319,11 +319,10 @@ gateway/register event
   → recompute_pending_for_source(s)  [if a gateway-relevant change]
        raw = irq_in[s].read()
        effective = polarity ? !raw : raw
-       edge mode:  latch true on 0→1 transition of effective
+       edge mode:  latch true whenever effective is asserted
        level mode: source_pending_[s] = effective
-       mirror all source_pending_[] into MEIP[0]
   → reevaluate_arbitration()
-       scan s=1..255, skip !pending / !enabled / priority==0
+       scan s=1..255, skip !pending / !enabled
        eff_prio = priord ? ~raw_prio : raw_prio   (masked to 4 bits)
        keep strictly-greater eff_prio (ties keep lower/earlier ID)
        if winner found:

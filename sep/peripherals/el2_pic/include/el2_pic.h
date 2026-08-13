@@ -89,12 +89,10 @@ private:
     uint32_t pending_word(unsigned w) const;
 
     // Per-source latched state used by the gateway. For edge mode, this is
-    // a sticky bit set on the qualifying edge and cleared by meigwclr[i].
-    // For level mode this is just the live polarity-adjusted level.
+    // a sticky bit set whenever the polarity-adjusted level is asserted and
+    // cleared by meigwclr[i] only while that level is inactive. For level mode
+    // it is just the live polarity-adjusted level.
     std::array<bool, NUM_INTERRUPTS> source_pending_{};
-
-    // Last polarity-adjusted level we saw on each input (for edge detection).
-    std::array<bool, NUM_INTERRUPTS> last_effective_level_{};
 
     // Tie-off for sources the parent left unbound. Sized lazily in
     // before_end_of_elaboration, since sc_vector cannot be resized afterwards.

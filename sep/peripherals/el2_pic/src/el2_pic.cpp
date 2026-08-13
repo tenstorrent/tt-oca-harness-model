@@ -20,7 +20,6 @@ el2_pic_model::el2_pic_model(sc_module_name n)
     logger.setFunctionTrace(false);
 
     source_pending_.fill(false);
-    last_effective_level_.fill(false);
 
     // Reset handler: SystemC method sensitive to negative edge of rst_ni
     SC_METHOD(reset_process);
@@ -68,7 +67,6 @@ void el2_pic_model::reset_process()
 {
     reset_all_registers();
     source_pending_.fill(false);
-    last_effective_level_.fill(false);
 
     if (eip_asserted_ && hart_ != nullptr) {
         hart_->clear_external_interrupt(MachineMode);
@@ -101,15 +99,20 @@ void el2_pic_model::recompute_pending_for_source(unsigned source_id)
     bool is_edge = (MEIGWCTRL[source_id].irq_type.get() != 0);
 
     if (is_edge) {
-        // Edge mode: latch on the qualifying transition (0 → 1 of effective).
-        if (effective && !last_effective_level_[source_id]) {
+        // Edge mode is a latching gateway, not a transition detector. RTL
+        // (el2_pic_ctrl.sv:588-592):
+        //   gw_int_pending_in    = effective | (gw_int_pending & ~meigwclr)
+        //   extintsrc_req_config = effective | gw_int_pending
+        // The latch sets on any cycle where effective is high, so an asserted
+        // level pends immediately and a pulse narrower than a poll survives.
+        // Only meigwclr clears it, and only while effective is low.
+        if (effective) {
             source_pending_[source_id] = true;
         }
     } else {
         // Level mode: pending tracks the effective level directly.
         source_pending_[source_id] = effective;
     }
-    last_effective_level_[source_id] = effective;
 }
 
 // source_pending_ is the only pending state; the meip registers are computed
@@ -149,8 +152,12 @@ void el2_pic_model::reevaluate_arbitration()
         if (!source_pending_[s]) continue;
         if (MEIE[s].inten.get() == 0) continue;
         unsigned raw_prio = MEIPL[s].intpriority.get();
-        if (raw_prio == 0) continue;
-        // RTL: intpriority_reg_inv[i] = intpriord ? ~intpriority_reg[i] : intpriority_reg[i]
+        // RTL: intpriority_reg_inv[i] = intpriord ? ~intpriority_reg[i] : intpriority_reg[i],
+        // and intpend_w_prior_en masks that inverted value by pending & enable
+        // (el2_pic_ctrl.sv:329-331). There is no raw==0 special case: "priority 0
+        // never interrupts" is an emergent property of the threshold compare
+        // below, and it applies to the *effective* priority. Under priord=1 raw 0
+        // inverts to 15, the highest, and raw 15 becomes the one that cannot win.
         unsigned eff_prio = priord ? (~raw_prio & 0xF) : raw_prio;
         if (eff_prio > best_eff_prio) {
             best_eff_prio = eff_prio;
@@ -242,10 +249,13 @@ bool el2_pic_model::write_MEIGWCLR(unsigned source_id, uint32_t value)
     (void)value;
     CSML_DEBUG(3, logger) << "MEIGWCLR[" << source_id << "] cleared" << std::endl;
     source_pending_[source_id] = false;
-    // For level mode, re-evaluate (signal may still be asserted).
-    if (MEIGWCTRL[source_id].irq_type.get() == 0) {
-        recompute_pending_for_source(source_id);
-    }
+    // Re-evaluate against the live input in both modes. RTL only clears while
+    // the input is inactive: gw_int_pending_in ORs in effective unconditionally,
+    // and extintsrc_req_config ORs the raw effective level on top of the latch.
+    // So clearing a still-asserted source re-pends it on the spot, in edge mode
+    // as much as in level mode; firmware must return the source to its inactive
+    // level for the clear to stick.
+    recompute_pending_for_source(source_id);
     reevaluate_arbitration();
     return true;
 }
