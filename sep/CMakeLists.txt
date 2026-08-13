@@ -40,8 +40,7 @@ set(_SEP_GENERIC
   rom
   sep_virt_console
   sep_status_report
-  sep_scratch_cold
-  sep_scratch_warm
+  sep_cpu_ctrl
 )
 
 message(STATUS "Configuring CPU models...")
