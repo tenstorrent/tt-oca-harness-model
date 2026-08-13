@@ -157,9 +157,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     fwd_sys_ .bind(fabric.sys_axi_in);
     fwd_jtag_.bind(fabric.jtag_axi_in);
     fwd_sep_ .bind(fabric.sep_axi_in);
+    fwd_aou_ .bind(aou_.axi_s[0]);
     sys_axi_in .register_b_transport(this, &smc_platform::fwd_sys_axi);
     jtag_axi_in.register_b_transport(this, &smc_platform::fwd_jtag_axi);
     sep_axi_in .register_b_transport(this, &smc_platform::fwd_sep_axi);
+    aou_axi_s  .register_b_transport(this, &smc_platform::fwd_aou_axi);
 
     // -- Fabric reset -------------------------------------------------------
     fabric.rst_n_i.bind(rst_n_sig);
@@ -330,10 +332,13 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[15].bind(octs_timer.reg_socket);
     periph_router.out[16].bind(stub_periph_misc.reg_socket);
 
-    // AOU peer link: outbound fabric traffic enters local AOU; peer master
-    // lands on remote stub. Peer FDI tied active; local SW activates AOU.
-    // aou_irq is also routed into intagg -> PLIC below (local core only —
-    // the peer stub's irq_o has no local-firmware-visible sink).
+    // AOU: CSRs on the SMC periph bus; AXI hop is the D2D data path
+    // (tt-oca-hw: AoU on SMU smu_axi_in/out == xbar ext_in/ext_out).
+    // Local axi_s/axi_m are re-exported at the platform boundary
+    // (aou_axi_s / aou_axi_m); smc-vp idle/stubs them, smu-vp binds the
+    // xbar chiplet ports.  Peer models the remote die: axi_s idle, axi_m
+    // on stub_sysmem (remote SMN).  aou_irq -> intagg -> PLIC (local core
+    // only — the peer stub's irq_o has no local-firmware-visible sink).
     aou_.fdi_active_i.bind(aou_fdi_active);
     aou_peer_.fdi_active_i.bind(aou_peer_fdi_active);
     aou_.irq_o.bind(aou_irq);
@@ -342,8 +347,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     aou_peer_fdi_active.write(true);
     aou_.connect_peer(&aou_peer_);
     aou_peer_.connect_peer(&aou_);
-    fabric.output_axi.bind(aou_.axi_s[0]);
-    aou_.axi_m[0].bind(stub_aou_remote.reg_socket);
+    aou_.axi_m[0].bind(aou_axi_m);
     idle_aou_peer_init_.bind(aou_peer_.axi_s[0]);
     aou_peer_.axi_m[0].bind(stub_sysmem.reg_socket);
     idle_aou_peer_apb_init_.bind(aou_peer_.apb_socket);
@@ -416,7 +420,9 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     fabric.to_dfd_apb              .bind(stub_dfd.reg_socket);
     fabric.to_mailbox              .bind(stub_mbox.reg_socket);
     fabric.to_dft_csr              .bind(stub_dft.reg_socket);
-    // fabric.output_axi is bound to aou_.axi_s[0] above (AOU outbound path).
+    // Outbound system-NoC traffic is re-exported at the platform boundary
+    // (hierarchical initiator bind); smc-vp stubs it, smu-vp binds the xbar.
+    fabric.output_axi              .bind(output_axi);
     fabric.to_cpu_ctrl             .bind(stub_cpu_ctrl_fab.reg_socket);
     fabric.to_aR_ctrl              .bind(stub_aR.reg_socket);
     fabric.to_mR_ctrl              .bind(stub_mR.reg_socket);
@@ -564,7 +570,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     {
         stub_target<64>* stubs64[] = {
             &stub_dfd, &stub_mbox,
-            &stub_dft, &stub_sysmem, &stub_aou_remote, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
+            &stub_dft, &stub_sysmem, &stub_cpu_ctrl_fab, &stub_aR, &stub_mR,
             &stub_xR, &stub_ibf, &stub_obf,
         };
         unsigned s = 0;
@@ -665,6 +671,10 @@ void smc_platform::fwd_jtag_axi(tlm::tlm_generic_payload& gp, sc_core::sc_time& 
 void smc_platform::fwd_sep_axi(tlm::tlm_generic_payload& gp, sc_core::sc_time& t)
 {
     fwd_sep_->b_transport(gp, t);
+}
+void smc_platform::fwd_aou_axi(tlm::tlm_generic_payload& gp, sc_core::sc_time& t)
+{
+    fwd_aou_->b_transport(gp, t);
 }
 
 }  // namespace smc

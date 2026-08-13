@@ -1,0 +1,11 @@
+# Build artifacts
+*.o
+*.dump
+*.sym
+*.log
+
+# Compiled firmware halves.  Each test's smc.mk / sep.mk builds
+# TARGET = smu_<name>_smc / smu_<name>_sep (underscored) so the binary
+# never collides with the hyphenated smu-<name>-test/ source directory.
+smu_*_smc
+smu_*_sep
