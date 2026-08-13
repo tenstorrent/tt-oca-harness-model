@@ -34,7 +34,7 @@ All test cases use exact port/signal names from `include/sep_filter_ctrl.h`:
 - `target_socket` — TLM target socket (inherited from `sep_filter_ctrl_base`) for CSR access to the per-entry `FILTER_CONFIG`/`START_ADDR`/`END_ADDR` table (`0x20`-byte stride per entry)
 - `data_socket` — AXI data-path slave; incoming transactions to be filtered
 - `filtered_socket` — AXI data-path master; transactions forwarded here only if permitted
-- `rst_ni` — active-low asynchronous reset. **Note:** the testbench writes `rst_n_sig` high once in its constructor and never pulses it low — so no test in this suite exercises a live reset; "reset values" here means the freshly-constructed DUT's power-on state, not a reset-clears-programmed-state check (contrast with `local_master_alias_remap_ctrl`'s T11 or `sep_cpu_ctrl`'s reset pulse, which do test this).
+- `rst_ni` — active-low asynchronous reset. **Note:** Suites A–C never advance the scheduler, so the `SC_METHOD` reset handler cannot fire and their "reset values" mean the freshly-constructed DUT's power-on state. Suite D (rows 17–18) is the live-reset check: it runs `sc_start()`, pulses `rst_n_sig` low, and confirms programmed entries are cleared.
 
 ## 2. Test Plan Table
 

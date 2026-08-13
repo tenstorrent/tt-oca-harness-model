@@ -17,7 +17,7 @@ This document specifies the SystemC Transaction-Level Model (TLM) for `sep_filte
 - **Masked/granular address comparison, not exact-byte** — the range check shifts off the low 12 bits (4 KB page, if `allow_burst`) or 3 bits (8-byte word, otherwise) before comparing, matching `traffic_filter.sv`'s `tx_in_range` logic exactly.
 - **Hardware auto-correction of `START_ADDR`/`END_ADDR`** — both fields are `hw=rw` in the RDL; whenever they fall within the same page/word, the stored values are snapped to the full enclosing boundary, mirroring `axi_filter_wrap.sv`'s continuous combinational correction.
 - **One class, two instance shapes** — `InstanceType::OUTBOUND` (32 entries) and `InstanceType::INBOUND` (16 entries) share identical logic; only the entry count differs.
-- **NS and source-ID filtering are CSR-programmable but not runtime-enforced** — a permanent TLM limitation, not a defect (§2.2, cross-referenced in `Abstractions.md`).
+- **NS and source-ID filtering are enforced from `sep_axi_extension`** — `match_entry()` compares `attrs.is_ns` against `allow_ns` and, for a non-zero CSR field, `attrs.source_id` against `src_id`. Transactions arriving without the extension fall back to its default attributes, so an initiator that does not stamp one is treated as a secure `SEP_SOURCE_ID` master rather than being waved through unchecked. Group-ID filtering remains inert because SEP ties `EnGroupIdFilter=0` (§2.2, cross-referenced in `Abstractions.md`).
 
 ---
 

@@ -158,6 +158,11 @@ if(BUILD_TESTS)
   )
   target_link_libraries(sep_filter_ctrl_testbench PRIVATE csml_logger SystemC::systemc)
 
+  # The suite checks with assert(), which the Release NDEBUG above would compile
+  # out — leaving a testbench that passes without verifying anything. Release is
+  # what ./run_tests.sh builds by default, so keep asserts live for this target.
+  target_compile_options(sep_filter_ctrl_testbench PRIVATE -UNDEBUG)
+
   enable_testing()
   add_test(NAME sep_filter_ctrl_testbench COMMAND sep_filter_ctrl_testbench)
 endif()
