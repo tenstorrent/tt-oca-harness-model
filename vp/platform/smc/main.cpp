@@ -222,6 +222,22 @@ int sc_main(int argc, char** argv)
     idle_jtag.sock.bind(dut.jtag_axi_in);
     idle_sep .sock.bind(dut.sep_axi_in);
 
+    // Terminate the platform's outbound system-NoC port with a stub (the SMU
+    // platform binds the SMU crossbar here instead).
+    smc::stub_target<64> stub_sysmem{"stub_sysmem"};
+    sc_core::sc_signal<bool> stub_sysmem_irq{"stub_sysmem_irq"};
+    dut.output_axi.bind(stub_sysmem.reg_socket);
+    stub_sysmem.irq_o.bind(stub_sysmem_irq);
+
+    // Standalone smc-vp has no SMU xbar: idle-bind AOU AXI ingress and stub
+    // the local AOU master (smu-vp binds these to xbar ext_out / ext_in).
+    idle_initiator idle_aou{"idle_aou"};
+    idle_aou.sock.bind(dut.aou_axi_s);
+    smc::stub_target<64> stub_aou_remote{"stub_aou_remote"};
+    sc_core::sc_signal<bool> stub_aou_remote_irq{"stub_aou_remote_irq"};
+    dut.aou_axi_m.bind(stub_aou_remote.reg_socket);
+    stub_aou_remote.irq_o.bind(stub_aou_remote_irq);
+
     // Load the firmware into the cluster's Whisper ISS (fast-mem backed).
     if (!dut.cluster.load_elf({elf_path})) {
         std::cerr << "ERROR: cluster.load_elf failed for '" << elf_path << "'\n";
