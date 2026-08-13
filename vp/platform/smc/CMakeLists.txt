@@ -70,10 +70,15 @@ add_executable(smc-vp
     src/smc_platform.cpp)
 
 # smc_platform.hpp lives at the subdir root; helpers live in inc/.
+# ${_smc_root}/peripherals is on the path so the platform header can use
+# collision-proof qualified includes ("clint/include/clint.h",
+# "uart/include/uart.h") that stay unambiguous when the SEP platform headers
+# share a translation unit (smu-vp).
 target_include_directories(smc-vp
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/inc
+        ${_smc_root}/peripherals
         ${SMC_AXI_EXTENSION_DIR}
         ${SMC_REPO_COMMON_INCLUDE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../aou/include)
