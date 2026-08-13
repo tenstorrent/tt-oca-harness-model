@@ -137,7 +137,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Build Boost ${{ env.BOOST_VERSION }}
         if: steps.cache-boost-rhel8.outputs.cache-hit != 'true'
@@ -154,6 +154,7 @@ jobs:
             --with-iostreams --with-log --with-program_options --with-regex \
             --with-system --with-thread \
             link=static threading=multi variant=release \
+            cxxflags=-fPIC cflags=-fPIC \
             cxxstd=17 \
             -j$(nproc) \
             > /tmp/boost-build.log 2>&1 || { tail -30 /tmp/boost-build.log; exit 1; }
@@ -265,7 +266,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore OpenSSL 3 cache
         uses: actions/cache@v4
@@ -346,7 +347,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore OpenSSL 3 cache
         uses: actions/cache@v4
@@ -430,7 +431,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore CCI cache
         uses: actions/cache@v4
@@ -584,7 +585,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore CCI cache
         uses: actions/cache@v4
@@ -820,7 +821,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore CCI cache
         uses: actions/cache@v4

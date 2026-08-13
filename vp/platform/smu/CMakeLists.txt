@@ -119,49 +119,33 @@ target_include_directories(smc_cluster_smu
         ${_w_incs})
 target_compile_definitions(smc_cluster_smu PRIVATE ${_w_defs})
 
-# SystemC is a shared lib in CI; Whisper archives are built -fPIC for this DSO.
-# CCI and Boost are often *static non-PIC* archives (Ubuntu CI libcci.a, RHEL
-# CI libboost_program_options.a) and cannot be linked into a .so.  Headers stay
-# on the cluster; the archives are whole-archived into smu-vp instead.
-set(_smu_cluster_undefs FALSE)
+# Boost.program_options lives IN this DSO (Whisper's Args.cpp).  A static Boost
+# must be PIC (RHEL CI rebuilds it with cxxflags=-fPIC); Ubuntu/macOS use a
+# shared Boost.  Do not leave those refs for smu-vp to export: Boost is built
+# with hidden visibility, so "hidden symbol ... referenced by DSO" fails.
+#
+# Static CCI must NOT be copied into this DSO.  cci_param registration is a
+# process-wide singleton; two copies (DSO + executable) split the broker.
+# Headers stay here; the archive is whole-archived into smu-vp instead.
 set(_cci_archs "")
-set(_boost_archs "")
-set(_smu_cluster_links ${_w_links})
 if(NOT APPLE)
     smu_static_archives_from(_cci_archs SystemC::cci)
-    smu_static_archives_from(_boost_archs Boost::program_options)
-    if(NOT _boost_archs)
-        smu_static_archives_from(_boost_archs boost::program_options)
-    endif()
-    if(_cci_archs)
-        get_target_property(_cci_incs SystemC::cci INTERFACE_INCLUDE_DIRECTORIES)
-        if(_cci_incs)
-            target_include_directories(smc_cluster_smu PRIVATE ${_cci_incs})
-        endif()
-        set(_smu_cluster_undefs TRUE)
-    endif()
-    if(_boost_archs)
-        # whisper::whisper lists Boost::program_options in INTERFACE_LINK_LIBRARIES.
-        list(FILTER _smu_cluster_links EXCLUDE REGEX "[Bb]oost::program_options")
-        set(_smu_cluster_undefs TRUE)
-    endif()
 endif()
 
 target_link_libraries(smc_cluster_smu
     PRIVATE
         SystemC::systemc
         boost::headers
-        ${_smu_cluster_links})
+        ${_w_links})
 
-if(APPLE)
-    target_link_libraries(smc_cluster_smu PRIVATE SystemC::cci Boost::program_options)
+if(_cci_archs)
+    get_target_property(_cci_incs SystemC::cci INTERFACE_INCLUDE_DIRECTORIES)
+    if(_cci_incs)
+        target_include_directories(smc_cluster_smu PRIVATE ${_cci_incs})
+    endif()
+    target_link_options(smc_cluster_smu PRIVATE "-Wl,--allow-shlib-undefined")
 else()
-    if(NOT _cci_archs)
-        target_link_libraries(smc_cluster_smu PRIVATE SystemC::cci)
-    endif()
-    if(_smu_cluster_undefs)
-        target_link_options(smc_cluster_smu PRIVATE "-Wl,--allow-shlib-undefined")
-    endif()
+    target_link_libraries(smc_cluster_smu PRIVATE SystemC::cci)
 endif()
 
 if(APPLE)
@@ -312,32 +296,20 @@ target_link_libraries(smu-vp
         # Common
         SystemC::systemc
         Boost::iostreams
+        Boost::program_options
         OpenSSL::Crypto
         Threads::Threads
         z)
 
-# Shared CCI/Boost can link normally.  Static archives must not be listed
-# twice (regular link + --whole-archive) or the linker reports duplicates.
-if(APPLE OR NOT _cci_archs)
-    if(CCI_FOUND)
-        target_link_libraries(smu-vp PRIVATE CCI::cci)
-    endif()
-endif()
-if(APPLE OR NOT _boost_archs)
-    target_link_libraries(smu-vp PRIVATE Boost::program_options)
-endif()
-
-# Static CCI/Boost were left unresolved in libsmc_cluster_smu.so.  Pull the
-# whole archives into the executable and export them so the .so binds at load.
-if(NOT APPLE AND _smu_cluster_undefs)
+# Static CCI was left unresolved in libsmc_cluster_smu.so so the process has
+# one broker.  Whole-archive it into the executable and export-dynamic so the
+# .so binds at load.  Skip the regular CCI::cci link to avoid duplicate objs.
+if(_cci_archs)
     target_link_options(smu-vp PRIVATE "-Wl,--export-dynamic")
-    set(_smu_wa "")
-    list(APPEND _smu_wa ${_cci_archs} ${_boost_archs})
-    list(REMOVE_DUPLICATES _smu_wa)
-    if(_smu_wa)
-        target_link_libraries(smu-vp PRIVATE
-            "-Wl,--whole-archive" ${_smu_wa} "-Wl,--no-whole-archive")
-    endif()
+    target_link_libraries(smu-vp PRIVATE
+        "-Wl,--whole-archive" ${_cci_archs} "-Wl,--no-whole-archive")
+elseif(CCI_FOUND)
+    target_link_libraries(smu-vp PRIVATE CCI::cci)
 endif()
 
 # CCI / SystemC dylibs live outside the standard loader path; bake an RPATH
