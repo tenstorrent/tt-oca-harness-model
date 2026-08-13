@@ -142,6 +142,11 @@ if(BUILD_TESTS)
         csml_logger
         SystemC::systemc
     )
+
+    # The suite checks with assert(), which the Release NDEBUG would compile out —
+    # leaving a testbench that passes without verifying anything. Release is what
+    # ./run_tests.sh builds by default, so keep asserts live for this target.
+    target_compile_options(local_master_alias_remap_ctrl_testbench PRIVATE -UNDEBUG)
     
     add_test(
         NAME local_master_alias_remap_ctrl_unit_tests
