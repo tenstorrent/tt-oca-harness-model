@@ -49,19 +49,36 @@ class aou_core : public sc_module {
 | `access_delay_ns` | 1.0 | mutable |
 | `bridge_delay_ns` | 0.0 | mutable |
 
-## 5. SMC VP wiring
+## 5. SMC / SMU VP wiring
+
+Standalone `smc-vp`:
 
 ```
 cluster.mmio → fabric → periph_router @ 0xC000_4000 → aou_.apb_socket
-fabric.output_axi → aou_.axi_s[0]
+aou_axi_s          ← idle initiator
+aou_.axi_m[0]      → aou_axi_m → stub_aou_remote
 aou_.connect_peer(&aou_peer_)
-aou_.axi_m[0]      → stub_aou_remote
 aou_peer_.axi_m[0] → stub_sysmem
-fdi_active_* signals tied true at elaboration
+```
+
+`smu-vp` (RTL: AoU on SMU `smu_axi_in`/`smu_axi_out` = xbar `ext_in`/`ext_out`):
+
+```
+cluster.mmio → fabric → periph_router @ 0xC000_4000 → aou_.apb_socket
+smu_axi_xbar.ext_out → aou_axi_s → aou_.axi_s[0]
+aou_.axi_m[0] → aou_axi_m → smu_axi_xbar.ext_in
+aou_.connect_peer(&aou_peer_)          // UCIe PHY stub
+aou_peer_.axi_m[0] → stub_sysmem       // remote-die SMN
+```
+
+`fdi_active_*` signals tied true at elaboration.
+
+```
 aou_.irq_o → aou_irq → intagg.src[21] → plic_src_sig[26] → plic_.src_in[26]
              (PLIC source ID 27; aou_peer_.irq_o is unrouted — the peer
               models the remote die and is not locally firmware-visible)
 ```
 
-Files: `vp/platform/smc/smc_platform.{hpp,cpp}`, `vp/platform/smc/CMakeLists.txt`.
+Files: `vp/platform/smc/smc_platform.{hpp,cpp}`, `vp/platform/smc/main.cpp`,
+`vp/platform/smu/main.cpp`.
 Firmware base: `SMC_AOU_BASE` in `sw/smc-vp-tests/common/smc_common.h`.

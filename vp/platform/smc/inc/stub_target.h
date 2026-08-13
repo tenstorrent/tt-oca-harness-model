@@ -9,7 +9,9 @@
 // Behaviour:
 //   * Reads return a per-offset reset value (default 0) and complete with
 //     TLM_OK_RESPONSE.  Out-of-window offsets are RAZ (read-as-zero).
-//   * Writes are accepted and ignored (WI); TLM_OK_RESPONSE is returned.
+//   * Writes are accepted and ignored (WI) unless `store_writes` is true,
+//     in which case byte values are retained and later reads return them
+//     (used by the remote-die SMN stub behind AOU for catch-all readback).
 //   * Optionally logs a one-shot DEBUG message on the first access so decode
 //     holes show up in traces without spamming the log.
 //   * Optionally exposes an `irq_o` line a testbench can pulse to inject an
@@ -45,9 +47,11 @@ public:
     SC_HAS_PROCESS(stub_target);
 
     explicit stub_target(sc_core::sc_module_name name,
-                         bool warn_on_access = true)
+                         bool warn_on_access = true,
+                         bool store_writes = false)
         : sc_core::sc_module(name)
         , warn_on_access_(warn_on_access)
+        , store_writes_(store_writes)
     {
         reg_socket.register_b_transport(this, &stub_target::b_transport);
 
@@ -90,11 +94,21 @@ private:
         }
 
         if (trans.is_read()) {
-            const uint32_t v = lookup(addr);
+            if (store_writes_) {
+                for (unsigned i = 0; i < len; ++i) {
+                    const auto it = stored_.find(addr + i);
+                    ptr[i] = (it == stored_.end()) ? 0 : it->second;
+                }
+            } else {
+                const uint32_t v = lookup(addr);
+                for (unsigned i = 0; i < len; ++i)
+                    ptr[i] = static_cast<uint8_t>((v >> (8 * i)) & 0xFFu);
+            }
+        } else if (trans.is_write() && store_writes_) {
             for (unsigned i = 0; i < len; ++i)
-                ptr[i] = static_cast<uint8_t>((v >> (8 * i)) & 0xFFu);
+                stored_[addr + i] = ptr[i];
         }
-        // Writes are accepted and ignored (WI).
+        // Writes with store_writes_ == false are accepted and ignored (WI).
 
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         delay += sc_core::sc_time(1, sc_core::SC_NS);
@@ -121,11 +135,13 @@ private:
     }
 
     bool warn_on_access_;
+    bool store_writes_ = false;
     bool warned_ = false;
     bool irq_pending_ = false;
     sc_core::sc_time irq_hold_ = sc_core::SC_ZERO_TIME;
     sc_core::sc_event irq_event_;
     std::unordered_map<uint64_t, uint32_t> reset_values_;
+    std::unordered_map<uint64_t, uint8_t> stored_;
 };
 
 }  // namespace smc
