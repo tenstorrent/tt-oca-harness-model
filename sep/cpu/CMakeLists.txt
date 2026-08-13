@@ -50,8 +50,10 @@ endif()
 # -----------------------------------------------------------------------------
 # Sources
 # -----------------------------------------------------------------------------
-#List of all CPP sources needed for librvcore.a
-file(GLOB_RECURSE VEERISS_MODEL_SRCS 
+# Vendored VeeR-ISS sources for librvcore.a.  Listed separately from our own
+# code so they can be built without -Wall/-Wextra: warnings in upstream's ISS
+# are not ours to fix, and they drown out the ones that are.
+file(GLOB_RECURSE VEERISS_ISS_SRCS
 	"VeeR-ISS/IntRegs.cpp"
 	"VeeR-ISS/CsRegs.cpp"
 	"VeeR-ISS/FpRegs.cpp"
@@ -85,8 +87,14 @@ file(GLOB_RECURSE VEERISS_MODEL_SRCS
 	"VeeR-ISS/amo.cpp"
 	"VeeR-ISS/SparseMem.cpp"
 	"VeeR-ISS/InstProfile.cpp"
+	)
+
+# Our TLM wrapper around the ISS — built with the full warning set.
+file(GLOB_RECURSE VEERISS_TLM_SRCS
 	"VeeR-ISSTlm/model/src/VeeR-ISSTlm.cpp"
 	)
+
+set(VEERISS_MODEL_SRCS ${VEERISS_ISS_SRCS} ${VEERISS_TLM_SRCS})
 
 # -----------------------------------------------------------------------------
 # Link Directories (must be set before targets)
@@ -103,10 +111,17 @@ add_library(veeriss_model STATIC ${VEERISS_MODEL_SRCS})
 # -----------------------------------------------------------------------------
 target_include_directories(veeriss_model
   PRIVATE
-	VeeR-ISS
-	VeeR-ISS/softfloat/source/include
 	VeeR-ISSTlm/model/inc
 	${CMAKE_CURRENT_SOURCE_DIR}/../utils/csml/inc
+	${CMAKE_CURRENT_SOURCE_DIR}/../utils/tlm_extensions
+	)
+
+# The ISS and softfloat are vendored third party, so their headers go in as
+# SYSTEM includes: -Wall -Wextra below applies to our code, not theirs.
+target_include_directories(veeriss_model SYSTEM
+  PRIVATE
+	VeeR-ISS
+	VeeR-ISS/softfloat/source/include
 	)
 # -----------------------------------------------------------------------------
 # External Dependencies (SystemC and CCI)
@@ -118,7 +133,7 @@ find_package(Boost REQUIRED COMPONENTS program_options)
 
 # Add CCI include directory if found
 if(CCI_FOUND)
-  include_directories(${CCI_INCLUDE_DIR})
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
 
 target_compile_options(veeriss_model PRIVATE
@@ -128,6 +143,11 @@ target_compile_options(veeriss_model PRIVATE
   -Wextra
   -fPIC
 )
+
+# The SYSTEM include above only quiets the ISS headers; its .cpp files are
+# sources of this target, so silence them here.  Source options come after the
+# target's on the command line, so -w wins over the -Wall -Wextra above.
+set_source_files_properties(${VEERISS_ISS_SRCS} PROPERTIES COMPILE_OPTIONS "-w")
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(veeriss_model PRIVATE -mtune=native)
 endif()
@@ -138,7 +158,7 @@ target_compile_definitions(veeriss_model PUBLIC
   ISA=rv32imc
 )
 
-target_link_libraries(veeriss_model PRIVATE softfloat Boost::headers Boost::program_options PUBLIC SystemC::systemc Threads::Threads z)
+target_link_libraries(veeriss_model PRIVATE softfloat Boost::headers Boost::program_options PUBLIC SystemC::systemc Threads::Threads z el2_pic_model)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_libraries(veeriss_model PRIVATE stdc++fs)
 endif()

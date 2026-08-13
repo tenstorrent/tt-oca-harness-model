@@ -40,6 +40,7 @@ set(_SEP_GENERIC
   rom
   sep_virt_console
   sep_status_report
+  el2_pic
 )
 
 message(STATUS "Configuring CPU models...")
