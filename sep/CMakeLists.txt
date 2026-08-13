@@ -41,6 +41,7 @@ set(_SEP_GENERIC
   sep_virt_console
   sep_status_report
   el2_pic
+  sep_cpu_ctrl
 )
 
 message(STATUS "Configuring CPU models...")
