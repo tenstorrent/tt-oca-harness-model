@@ -77,9 +77,16 @@ in both cold and warm blocks are plain R/W with no side-effects.
 
 ## 4. Model Code Assessment (`sep_scratch_cold.h`)
 
-### What the existing model does
+> **Superseded.** This section assesses a `sep_scratch_device` that covered cold and warm
+> as one contiguous 48-word device. No such module exists: the implementation splits them
+> into `sep_scratch_cold_ip` and `sep_scratch_warm_ip`, each with its own register bank and
+> `rst_ni`, so the cold-domain side effects stay out of the warm block and the two can sit
+> in different reset domains. The addresses and the SCRATCH[2] console attachment below
+> still hold; the single-module layout does not. Kept for the reasoning that led here.
 
-`sep_scratch_device` is a single `sc_module` that covers **both cold and warm** as one
+### What the superseded single-module design did
+
+`sep_scratch_device` was a single `sc_module` covering **both cold and warm** as one
 contiguous device (`REG_WORDS = 0xC0/4 = 48` 32-bit words spanning `0x10802000–0x108020BF`).
 The layout in the word array:
 

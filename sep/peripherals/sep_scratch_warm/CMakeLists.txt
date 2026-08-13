@@ -144,6 +144,34 @@ if(CCI_FOUND)
   target_link_libraries(sep_scratch_warm_model PUBLIC ${CCI_LIBRARIES})
 endif()
 
+set(TEST_SRCS
+  test/src/sep_scratch_warm_basetest.cpp
+  test/src/sep_scratch_warm_test.cpp
+  test/src/sep_scratch_warm_testbench.cpp
+)
+
+if(BUILD_TESTS)
+  add_executable(sep_scratch_warm_testbench ${TEST_SRCS})
+  peripheral_link_test_to_model(sep_scratch_warm_testbench sep_scratch_warm_model)
+  target_link_libraries(sep_scratch_warm_testbench PRIVATE csml_logger SystemC::systemc)
+  if(CCI_FOUND)
+    target_link_libraries(sep_scratch_warm_testbench PRIVATE ${CCI_LIBRARIES})
+  endif()
+  target_include_directories(sep_scratch_warm_testbench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  )
+
+  # The suite checks with assert(), which the Release NDEBUG above would compile
+  # out — leaving a testbench that passes without verifying anything. Release is
+  # what ./run_tests.sh builds by default, so keep asserts live for this target.
+  target_compile_options(sep_scratch_warm_testbench PRIVATE -UNDEBUG)
+
+  enable_testing()
+  add_test(NAME sep_scratch_warm_testbench COMMAND sep_scratch_warm_testbench)
+endif()
+
 # -----------------------------------------------------------------------------
 # Print status information
 # -----------------------------------------------------------------------------
