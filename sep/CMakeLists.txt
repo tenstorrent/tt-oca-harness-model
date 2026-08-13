@@ -40,6 +40,7 @@ set(_SEP_GENERIC
   rom
   sep_virt_console
   sep_status_report
+  local_master_alias_remap_ctrl
 )
 
 message(STATUS "Configuring CPU models...")
