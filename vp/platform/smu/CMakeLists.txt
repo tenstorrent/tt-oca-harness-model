@@ -98,8 +98,28 @@ target_link_libraries(smc_cluster_smu
         SystemC::systemc
         SystemC::cci
         boost::headers
-        Boost::program_options   # librvcore.a references boost::program_options
         ${_w_links})
+
+# librvcore.a references Boost.program_options.  A *shared* Boost (Ubuntu apt,
+# Homebrew) can be linked into this .so.  A *static* Boost that was not built
+# -fPIC cannot (RHEL CI: libboost_program_options.a → R_X86_64_32).  In that
+# case leave the refs undefined here and resolve them from smu-vp, which
+# already links Boost::program_options into the executable.
+set(_smu_boost_in_cluster TRUE)
+if(TARGET Boost::program_options)
+    get_target_property(_boost_po_type Boost::program_options TYPE)
+    get_target_property(_boost_po_loc  Boost::program_options IMPORTED_LOCATION)
+    if(NOT APPLE AND (
+           _boost_po_type STREQUAL "STATIC_LIBRARY"
+        OR _boost_po_loc MATCHES "\\.(a|lib)$"))
+        set(_smu_boost_in_cluster FALSE)
+    endif()
+endif()
+if(_smu_boost_in_cluster)
+    target_link_libraries(smc_cluster_smu PRIVATE Boost::program_options)
+else()
+    target_link_options(smc_cluster_smu PRIVATE "-Wl,--allow-shlib-undefined")
+endif()
 
 if(APPLE)
     # Hide every symbol defined in the four Whisper archives from the dylib's
@@ -256,6 +276,13 @@ target_link_libraries(smu-vp
 
 if(CCI_FOUND)
     target_link_libraries(smu-vp PRIVATE CCI::cci)
+endif()
+
+# Static Boost lives in the executable, not the cluster .so (see above).
+# --export-dynamic puts those symbols in the dynamic table so the .so can
+# resolve librvcore's Boost.program_options refs at load time.
+if(NOT _smu_boost_in_cluster)
+    target_link_options(smu-vp PRIVATE "-Wl,--export-dynamic")
 endif()
 
 # CCI / SystemC dylibs live outside the standard loader path; bake an RPATH
