@@ -39,7 +39,13 @@ VeeRISSTlm::VeeRISSTlm(sc_module_name name, const Args &args, const WdRiscv::Har
 	, config_(config)
 	, hart_id(0)
 	, entrypoint(entrypoint)
+	, pic_(sc_core::sc_module_name("pic"))
+	, pic_isock_("pic_isock")
 {
+	pic_.bind_hart(this);
+	pic_isock_.bind(pic_.target_socket);  // must bind in ctor, before elaboration port checks
+	pic_.clk_i(pic_clk_);
+	pic_.rst_ni(rst_ni);                  // PIC resets with the core it lives in
 	logger.setMaxVerbosity(verbosity.get_param_value());
 	logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
 	logger.setFunctionTrace(false);
@@ -207,6 +213,24 @@ void VeeRISSTlm::do_reset_sequence()
 		auto& hart = *system_->ithHart(i);
 		hart.reset(resetMmioRegs);
 		hart.pokePc(URV(entrypoint));
+
+		// // Re-apply register initializations: hart.reset() clears all registers,
+		// // but bare-metal firmware (e.g. bl1_pass_test) inherits SP from the
+		// // caller, so regInits must survive reset just like they survive power-on.
+		// for (const auto& regInit : args_.regInits) {
+		// 	auto eq = regInit.find('=');
+		// 	if (eq == std::string::npos) continue;
+		// 	std::string regName = regInit.substr(0, eq);
+		// 	const std::string regVal = regInit.substr(eq + 1);
+		// 	auto colon = regName.find(':');
+		// 	if (colon != std::string::npos) regName = regName.substr(colon + 1);
+		// 	unsigned reg = 0;
+		// 	if (hart.findIntReg(regName, reg)) {
+		// 		URV val = 0;
+		// 		try { val = URV(std::stoul(regVal, nullptr, 0)); } catch (...) {}
+		// 		hart.pokeIntReg(reg, val);
+		// 	}
+		// }
 	}
 }
 
@@ -371,6 +395,16 @@ bool VeeRISSTlm::batchRun(bool waitAll)
 {
 	if (system_->hartCount() == 0)
 		return true;
+
+	// Re-evaluate PIC arbitration whenever firmware writes meipt or meicurpl.
+	// RTL: mexintpend is combinational against those CSR values; our behavioral
+	// model must re-check thresholds immediately after the CSRW completes.
+	system_->ithHart(hart_id)->registerPostCsrInst(
+		[this](unsigned, CsrNumber csrn) {
+			uint32_t n = static_cast<uint32_t>(csrn);
+			if (n == 0xBC9 || n == 0xBCC)
+				pic_.notify_threshold_changed();
+		});
 
 	bool ok;
 	if (system_->hartCount() == 1)
@@ -721,7 +755,32 @@ void VeeRISSTlm::clear_external_interrupt(PrivilegeLevel level)
 	hart0->setExternalInterrupt(false);
 }
 
-/// notifyWrite used to invalidate reservations book keeping maintained by Hart, 
+/// VeeR EL2 fast-PIC: set the claim_id field [9:2] of MEIHAP. The upper
+/// bits hold meivt's base; CsRegs::poke(MEIHAP, ...) preserves them and
+/// only updates the claim_id field, so we just OR in (claim_id << 2).
+void VeeRISSTlm::set_pic_claim_id(uint32_t claim_id)
+{
+	auto hart0 = system_->ithHart(hart_id);
+	URV val = (URV(claim_id) & URV(0xFF)) << 2;
+	hart0->pokeCsr(CsrNumber::MEIHAP, val);
+}
+
+bool VeeRISSTlm::peek_csr(uint32_t csr_num, uint32_t &val)
+{
+	auto hart0 = system_->ithHart(hart_id);
+	URV v = 0;
+	bool ok = hart0->peekCsr(CsrNumber(csr_num), v);
+	val = static_cast<uint32_t>(v);
+	return ok;
+}
+
+bool VeeRISSTlm::poke_csr(uint32_t csr_num, uint32_t val)
+{
+	auto hart0 = system_->ithHart(hart_id);
+	return hart0->pokeCsr(CsrNumber(csr_num), URV(val));
+}
+
+/// notifyWrite used to invalidate reservations book keeping maintained by Hart,
 /// in case of the reserved address written by another initiator
 void VeeRISSTlm::notifyWrite(uint64_t addr, unsigned size, int initiator_id) 
 {
@@ -732,6 +791,25 @@ void VeeRISSTlm::notifyWrite(uint64_t addr, unsigned size, int initiator_id)
 	auto hart0 = system_->ithHart(hart_id);
 	hart0->externalInvalidateLr(addr, size);
 } 
+
+/// Direct TLM access to the internal PIC socket (bypasses system bus).
+/// addr is the absolute system address; CSML memory expects a PIC-relative offset,
+/// so we subtract PIC_BASE here (same translation the bus router would do).
+bool VeeRISSTlm::doPicAccess(tlm_command cmd, uint64_t addr, unsigned char *data, unsigned len)
+{
+	tlm_generic_payload trans;
+	trans.set_command(cmd);
+	trans.set_address(addr - PIC_BASE);
+	trans.set_data_ptr(data);
+	trans.set_data_length(len);
+	trans.set_streaming_width(len);
+	trans.set_byte_enable_ptr(nullptr);
+	trans.set_dmi_allowed(false);
+	trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
+	sc_time delay = sc_time(1, SC_NS);
+	pic_isock_->b_transport(trans, delay);
+	return trans.is_response_ok();
+}
 
 /// Read callback
 bool VeeRISSTlm::externalRead(uint64_t addr, unsigned size, uint64_t &val)
@@ -746,11 +824,30 @@ bool VeeRISSTlm::externalRead(uint64_t addr, unsigned size, uint64_t &val)
 
 	auto hart0 = system_->ithHart(hart_id);
 
+	// PIC is internal to the VeeR EL2 core — route direct, not through system bus.
+	if (addr >= PIC_BASE && addr < PIC_BASE + PIC_SIZE) {
+		bool success = doPicAccess(TLM_READ_COMMAND, addr, dataBuffer, size);
+		if (success) memcpy(&val, dataBuffer, size);
+		return success;
+	}
+
 	bool success = doTlmAccess(TLM_READ_COMMAND, addr, dataBuffer, size,
 			(hart0->inDebugMode() || hart0->gdbAccessInProgress()));
 
-	if (success)
+	if (success) {
 		memcpy(&val, dataBuffer, size);
+	} else if (!hart0->inDebugMode()) {
+		// VeeR EL2: imprecise load bus error — post as NMI (MDSEAC+LOAD_EXCEPTION).
+		if (!hart0->isNmiActive()) {
+			uint32_t nmi_pc = nmi_vec_i.read();
+			if (nmi_pc != 0)
+				hart0->defineNmiPc(nmi_pc);
+			hart0->pokeCsr(CsrNumber::MDSEAC, addr);
+			hart0->setPendingNmi(NmiCause::LOAD_EXCEPTION);
+			interruptWakeEvent_.notify(sc_core::SC_ZERO_TIME);
+		}
+		return true;   // suppress synchronous fault; NMI pending instead
+	}
 
 	CSML_DEBUG(3, logger) << "externalRead Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
 
@@ -768,14 +865,38 @@ bool VeeRISSTlm::externalWrite(uint64_t addr, unsigned size, uint64_t val)
 	memcpy(dataBuffer, &val, size);
 
 	auto hart0 = system_->ithHart(hart_id);
+
+	// PIC is internal to the VeeR EL2 core — route direct, not through system bus.
+	if (addr >= PIC_BASE && addr < PIC_BASE + PIC_SIZE) {
+		return doPicAccess(TLM_WRITE_COMMAND, addr, dataBuffer, size);
+	}
+
     if (addr >= 0x80000000 && addr < 0x80000010) {
         CSML_INFO(5, logger) << "STDOUT_DEVICE: write addr=0x" << hex << addr << "val=0x" << *dataBuffer << "size=%u" << size << "\n";
     }
 
 	CSML_DEBUG(5, logger) << "externalWrite Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
 
-	return doTlmAccess(TLM_WRITE_COMMAND, addr, dataBuffer, size,
+	bool ok = doTlmAccess(TLM_WRITE_COMMAND, addr, dataBuffer, size,
 			(hart0->inDebugMode() || hart0->gdbAccessInProgress()));
+	if (!ok && !hart0->inDebugMode()) {
+		// VeeR EL2: store bus errors are imprecise — post as NMI (MDSEAC+STORE_EXCEPTION)
+		// rather than raising a synchronous STORE_ACC_FAULT. This matches RTL behaviour
+		// where the write buffer absorbs the write and the error surfaces asynchronously.
+		if (!hart0->isNmiActive()) {
+			// Sync the NMI vector from the hardware register (set by firmware via
+			// nmi_set_vector_reg()) before firing, otherwise the hart uses the JSON
+			// default which may not match the firmware's _nmi_handler address.
+			uint32_t nmi_pc = nmi_vec_i.read();
+			if (nmi_pc != 0)
+				hart0->defineNmiPc(nmi_pc);
+			hart0->pokeCsr(CsrNumber::MDSEAC, addr);
+			hart0->setPendingNmi(NmiCause::STORE_EXCEPTION);
+			interruptWakeEvent_.notify(sc_core::SC_ZERO_TIME);
+		}
+		return true;   // suppress synchronous fault; NMI pending instead
+	}
+	return ok;
 }
 
 /// TLM Transport helper
@@ -791,6 +912,11 @@ bool VeeRISSTlm::doTlmAccess(tlm_command cmd, uint64_t addr, unsigned char *data
 	trans.set_byte_enable_ptr(0);	// No byte enables required for now
 	trans.set_dmi_allowed(false);
 	trans.set_response_status(TLM_INCOMPLETE_RESPONSE);
+
+	// Stamp the AXI sideband the outbound/inbound filters key off. Mirrors
+	// sep_cpu.sv:450-460, which drives SEP_SOURCE_ID on every AW/AR/W user
+	// field of the IFU, LSU and DBG ports.
+	trans.set_extension(&axi_ext_);
 
 	sc_time delay = sc_time(1, SC_NS);
 
@@ -815,6 +941,10 @@ bool VeeRISSTlm::doTlmAccess(tlm_command cmd, uint64_t addr, unsigned char *data
 	// {
 	//    wait(delay);
 	//}
+
+	// Detach before `trans` goes out of scope: the payload destructor frees the
+	// extensions it still holds, and axi_ext_ is a member, not heap-allocated.
+	trans.clear_extension<sep::sep_axi_extension>();
 
 	return trans.is_response_ok();
 }

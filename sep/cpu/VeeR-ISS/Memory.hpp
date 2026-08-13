@@ -592,9 +592,22 @@ namespace WdRiscv
     void finishCcmConfig(bool iccmRw);
 
     /// Read a memory mapped register.
+    ///
+    /// For external mem-mapped regions (defineMemoryMappedRegisterArea with
+    /// internal=false), prefer the live peripheral value via readCallback_;
+    /// pmaMgr_'s internal copy is just a snapshot of the last write. For
+    /// internal regions (e.g. silicon's built-in PIC), the internal copy is
+    /// authoritative.
     template<typename T>
     bool readRegister(size_t addr, T& value) const
     {
+      if (readCallback_ and pmaMgr_.isExternalMemMapped(addr)) {
+        uint64_t v = 0;
+        if (readCallback_(addr, sizeof(T), v)) {
+          value = static_cast<T>(v);
+          return true;
+        }
+      }
       return pmaMgr_.readRegister(addr, value);
     }
 
@@ -614,11 +627,20 @@ namespace WdRiscv
     }
 
     /// Write a memory mapped register.
+    ///
+    /// `internal=true`  — built-in core register (e.g. VeeR PIC on silicon).
+    ///                    Storage is kept inside pmaMgr_ only.
+    /// `internal=false` — external memory-mapped peripheral. Storage is kept
+    ///                    in pmaMgr_ (so ISS-side checks like fast-interrupt
+    ///                    MEIHAP vector fetch still work) AND the write is
+    ///                    mirrored to writeCallback_ so the external bus /
+    ///                    peripheral model observes it.
     template<typename T>
     bool writeRegister(unsigned sysHartIx, size_t addr, T value, bool internal=true)
     {
       uint64_t size;
       T prev = 0;
+      T rawValue = value;                  // pre-mask value (for external bus)
       auto& lwd = lastWriteData_.at(sysHartIx);
       if(not internal) {
     	lwd.prevValue_ = prev;
@@ -634,6 +656,14 @@ namespace WdRiscv
 
       if (not pmaMgr_.writeRegister(addr, value)) {
         return false;
+      }
+      // External mem-mapped regions: also drive the write out to the bus
+      // so an external peripheral model (e.g. el2_pic) can observe it.
+      // Use the raw (unmasked) value — when no per-register mask is defined
+      // here, doRegisterMasking returns 0 and would otherwise zero every
+      // external write. The peripheral applies its own write masks.
+      if (not internal and writeCallback_) {
+        writeCallback_(addr, sizeof(T), static_cast<uint64_t>(rawValue));
       }
       if(internal) {
 		  lwd.prevValue_ = prev;

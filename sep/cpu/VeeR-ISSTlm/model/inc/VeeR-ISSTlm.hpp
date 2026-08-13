@@ -46,6 +46,8 @@ typedef int socklen_t;
 #include "../../../../vp/platform/infra/bus.h"
 #include "csml_parameter.h"
 #include "csml_logger.h"
+#include "sep_axi_extension.h"
+#include "../../../sep/peripherals/el2_pic/include/el2_pic.h"
 using namespace WdRiscv;
 
 
@@ -1903,6 +1905,13 @@ class VeeRISSTlm : public clint_interrupt_target, public external_interrupt_targ
 
 		// TLM Initiator Socket (width 32)
 		tlm_utils::simple_initiator_socket<VeeRISSTlm> initiator_socket;
+
+		// VeeR EL2 PIC — internal to the core, not on the system bus.
+		// Firmware accesses to PIC_BASE..PIC_BASE+PIC_SIZE are intercepted
+		// in externalRead/externalWrite and routed here directly.
+		static constexpr uint64_t PIC_BASE = 0xC0080000ULL;
+		static constexpr uint64_t PIC_SIZE = 0x6000ULL;
+
         // Active-low reset signal LOW=reset, HIGH=normal
         sc_in<bool> rst_ni;
         // NMI input — rising edge triggers non-maskable interrupt
@@ -1951,6 +1960,16 @@ class VeeRISSTlm : public clint_interrupt_target, public external_interrupt_targ
 
 		// TLM Transport Helper
 		bool doTlmAccess(tlm::tlm_command cmd, uint64_t addr, unsigned char *data, unsigned len, bool inDebugMode);
+		// Direct PIC socket access (bypasses system bus)
+		bool doPicAccess(tlm::tlm_command cmd, uint64_t addr, unsigned char *data, unsigned len);
+
+		// AXI sideband stamped on every access this core issues. sep_cpu.sv drives
+		// a constant SEP_SOURCE_ID on the IFU, LSU and DBG ports and EL2 runs
+		// secure (prot[1]=0), so the value never varies and one instance is reused
+		// rather than allocated per access -- this sits on the ISS's hot path.
+		// Attached with set_extension and detached with clear_extension so the
+		// payload destructor never tries to free a non-heap object.
+		sep::sep_axi_extension axi_ext_;
 
 		// NMI handler — fires on rising edge of nmi_i
 		void handle_nmi_signal();
@@ -1978,12 +1997,42 @@ class VeeRISSTlm : public clint_interrupt_target, public external_interrupt_targ
 		int initiator_id;
 		void notifyWrite(uint64_t addr, unsigned size, int initiator_id) override;
 
-		// Clint Interrupt interface functions
+		// Clint Interrupt interface functions. The PIC supersedes the CLINT for
+		// SEP, but the platform still instantiates one, so the interface stays
+		// until that instantiation goes away.
 		void trigger_software_interrupt() override;
 		void clear_software_interrupt() override;
 		void trigger_timer_interrupt() override;
 		void clear_timer_interrupt() override;
-		// External Interrupt interface functions
+
+	public:
+		// External Interrupt interface (called from PIC). Public so the
+		// PIC can drive these directly through a VeeRISSTlm* without needing
+		// to upcast to external_interrupt_target* (the base class makes them
+		// public, but the override re-declaration here would otherwise stay
+		// private and reject direct calls from peripheral models).
 		void trigger_external_interrupt(PrivilegeLevel level) override;
 		void clear_external_interrupt(PrivilegeLevel level) override;
+
+		// VeeR EL2 fast-PIC interface: set the claim_id bits in MEIHAP
+		// before driving the external interrupt. The ISS will read MEIHAP
+		// in initiateFastInterrupt() to compute the vectored entry PC.
+		void set_pic_claim_id(uint32_t claim_id);
+
+		// Forward Hart::peekCsr/pokeCsr for custom CSRs (e.g. meipt 0xBC9,
+		// meicurpl 0xBCC) that have no CsrNumber enum entry but are defined
+		// in veeriss_config.json.
+		bool peek_csr(uint32_t csr_num, uint32_t &val);
+		bool poke_csr(uint32_t csr_num, uint32_t val);
+
+		// Access the internal PIC model so och_sep_ss can bind irq_in ports.
+		el2_pic::el2_pic_model& get_pic() { return pic_; }
+
+		el2_pic::el2_pic_model pic_;
+		tlm_utils::simple_initiator_socket<VeeRISSTlm, 32> pic_isock_;
+
+		// The PIC is internal to the core, so no parent can drive its clk_i; the
+		// model is event-driven and never reads it, but the port must be bound
+		// for elaboration to pass.
+		sc_core::sc_signal<bool> pic_clk_;
 };
