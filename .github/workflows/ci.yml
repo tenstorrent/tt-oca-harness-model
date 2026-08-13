@@ -28,6 +28,14 @@
 #                    + RISC-V bare-metal toolchain).  Runs the smc-vp-tests
 #                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh,
 #                    including the new smc-dma-test and smc-pvt-wrap-test.
+#
+#  smu-unit-tests    SMU interconnect unit tests (smu_axi_xbar + axi_window_remap)
+#                    via vp/platform/smu/run_tests.sh (Release + ASAN + Coverage).
+#
+#  smu-vp            Build smu-vp and run SMU VP firmware tests
+#                    (sw/smu-vp-tests/run_smu_vp_tests.sh).  Needs Whisper built
+#                    -fPIC (linked into libsmc_cluster_smu.so) plus a dual-width
+#                    RISC-V toolchain (RV64 SMC + RV32 SEP).
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -42,6 +50,7 @@ env:
   SYSTEMC_VERSION: "3.0.2"
   CCI_VERSION:     "1.0.2"
   WHISPER_REV:     "a53d0f3e"  # tenstorrent/whisper commit the SMC VP was validated against
+  RISCV_XPACK_VERSION: "15.2.0-1"
   SYSTEMC_HOME:    /home/runner/local/systemc-3.0.2
   CCI_HOME:        /home/runner/local/cci-1.0.2
   CXX_STD:         "20"
@@ -432,3 +441,158 @@ jobs:
           name: smc-vp-logs
           path: sw/smc-vp-tests/smc-*/run_*.log
           retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 7 — SMU interconnect unit tests
+# Header-only smu_axi_xbar + axi_window_remap; SystemC + CCI only (no Whisper).
+# Release + ASAN + Coverage as three separate run_tests.sh invocations.
+# ─────────────────────────────────────────────────────────────────────────────
+  smu-unit-tests:
+    name: SMU interconnect unit tests
+    runs-on: ubuntu-22.04
+    needs: build-deps
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake gcovr
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Run SMU interconnect tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+        run: |
+          cd vp/platform/smu
+          ./run_tests.sh
+          ./run_tests.sh --asan
+          ./run_tests.sh --coverage
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 8 — build smu-vp and run SMU VP firmware tests
+# smu-vp links Whisper into a shared library (libsmc_cluster_smu), so the
+# Whisper archives must be built -fPIC.  Firmware halves are RV64 (SMC) and
+# RV32 (SEP); the xpack riscv-none-elf toolchain covers both.
+# ─────────────────────────────────────────────────────────────────────────────
+  smu-vp:
+    name: SMU VP firmware tests
+    runs-on: ubuntu-22.04
+    needs: build-deps
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake make wget \
+            libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
+            libssl-dev
+
+      - name: Install RISC-V toolchain (xpack, RV32+RV64)
+        run: |
+          mkdir -p /home/runner/riscv
+          cd /home/runner/riscv
+          XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
+          wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
+          tar zxf "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          mv "${EXTRACTED_DIR}" toolchain
+          echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Cache Whisper (PIC)
+        id: cache-whisper-pic
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/whisper
+          # Distinct from the smc-vp "-libs4" cache: smu-vp needs PIC objects
+          # to link librvcore.a into libsmc_cluster_smu.so.
+          key: whisper-${{ env.WHISPER_REV }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libs4-pic
+
+      - name: Check Whisper artifacts
+        id: whisper-libs-pic
+        run: |
+          complete=true
+          for lib in build-$(uname -s)/librvcore.a \
+                     virtual_memory/libvirtual_memory.a \
+                     pci/libpci.a \
+                     third_party/softfloat/build/RISCV-GCC/softfloat.a; do
+            if [ ! -f "/home/runner/whisper/${lib}" ]; then
+              echo "missing: ${lib}"
+              complete=false
+            fi
+          done
+          echo "complete=${complete}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Whisper (-fPIC)
+        if: steps.whisper-libs-pic.outputs.complete != 'true'
+        env:
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/boost/include
+          ln -s /usr/include/boost /tmp/boost/include/boost
+
+          if [ -d /home/runner/whisper/.git ]; then
+            echo "reusing restored Whisper checkout; building missing artifacts"
+          else
+            git clone \
+              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              /home/runner/whisper
+          fi
+          cd /home/runner/whisper
+          git checkout ${{ env.WHISPER_REV }}
+          printf 'smc_vp_whisper_libs: $(BUILD_DIR)/librvcore.a $(soft_float_lib) $(pci_lib) $(virtual_memory_lib)\n' \
+            > /tmp/whisper-smc-libs.mk
+          make -f GNUmakefile -f /tmp/whisper-smc-libs.mk \
+            MEM_CALLBACKS=1 CXX_STD=c++20 EXTRA_CXXFLAGS=-fPIC \
+            BOOST_ROOT=/tmp/boost \
+            smc_vp_whisper_libs -j$(nproc)
+
+      - name: Build smu-vp and run SMU VP tests
+        env:
+          SYSTEMC_HOME:         ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:             ${{ env.CCI_HOME }}
+          WHISPER_HOME:         /home/runner/whisper
+          BOOST_DIR:            /usr
+          RISCV_PREFIX:         riscv-none-elf-
+          RISCV_TOOLCHAIN_PATH: /home/runner/riscv/toolchain
+        run: |
+          cmake -S vp -B vp/build_smc \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=${{ env.CXX_STD }} \
+            -DSMC_CXX_STANDARD=${{ env.CXX_STD }}
+          cmake --build vp/build_smc --target smu-vp -j$(nproc)
+          cd sw/smu-vp-tests
+          ./run_smu_vp_tests.sh
