@@ -84,6 +84,31 @@ foreach(_p IN ITEMS _w_incs _w_defs _w_links _w_opts)
     endif()
 endforeach()
 
+# Return the static archive paths an imported/INTERFACE target would pull in.
+function(smu_static_archives_from out_var tgt)
+    set(_archs "")
+    if(TARGET ${tgt})
+        get_target_property(_type ${tgt} TYPE)
+        get_target_property(_loc ${tgt} IMPORTED_LOCATION)
+        if(NOT _loc)
+            get_target_property(_loc ${tgt} IMPORTED_LOCATION_RELEASE)
+        endif()
+        if(_type STREQUAL "STATIC_LIBRARY" OR _loc MATCHES "\\.(a|lib)$")
+            list(APPEND _archs "${_loc}")
+        endif()
+        get_target_property(_libs ${tgt} INTERFACE_LINK_LIBRARIES)
+        if(_libs)
+            foreach(_l IN LISTS _libs)
+                if(_l MATCHES "\\.(a|lib)$")
+                    list(APPEND _archs "${_l}")
+                endif()
+            endforeach()
+        endif()
+        list(REMOVE_DUPLICATES _archs)
+    endif()
+    set(${out_var} "${_archs}" PARENT_SCOPE)
+endfunction()
+
 add_library(smc_cluster_smu SHARED ${_cluster_srcs_abs})
 
 target_include_directories(smc_cluster_smu
@@ -93,32 +118,50 @@ target_include_directories(smc_cluster_smu
     PRIVATE
         ${_w_incs})
 target_compile_definitions(smc_cluster_smu PRIVATE ${_w_defs})
+
+# SystemC is a shared lib in CI; Whisper archives are built -fPIC for this DSO.
+# CCI and Boost are often *static non-PIC* archives (Ubuntu CI libcci.a, RHEL
+# CI libboost_program_options.a) and cannot be linked into a .so.  Headers stay
+# on the cluster; the archives are whole-archived into smu-vp instead.
+set(_smu_cluster_undefs FALSE)
+set(_cci_archs "")
+set(_boost_archs "")
+set(_smu_cluster_links ${_w_links})
+if(NOT APPLE)
+    smu_static_archives_from(_cci_archs SystemC::cci)
+    smu_static_archives_from(_boost_archs Boost::program_options)
+    if(NOT _boost_archs)
+        smu_static_archives_from(_boost_archs boost::program_options)
+    endif()
+    if(_cci_archs)
+        get_target_property(_cci_incs SystemC::cci INTERFACE_INCLUDE_DIRECTORIES)
+        if(_cci_incs)
+            target_include_directories(smc_cluster_smu PRIVATE ${_cci_incs})
+        endif()
+        set(_smu_cluster_undefs TRUE)
+    endif()
+    if(_boost_archs)
+        # whisper::whisper lists Boost::program_options in INTERFACE_LINK_LIBRARIES.
+        list(FILTER _smu_cluster_links EXCLUDE REGEX "[Bb]oost::program_options")
+        set(_smu_cluster_undefs TRUE)
+    endif()
+endif()
+
 target_link_libraries(smc_cluster_smu
     PRIVATE
         SystemC::systemc
-        SystemC::cci
         boost::headers
-        ${_w_links})
+        ${_smu_cluster_links})
 
-# librvcore.a references Boost.program_options.  A *shared* Boost (Ubuntu apt,
-# Homebrew) can be linked into this .so.  A *static* Boost that was not built
-# -fPIC cannot (RHEL CI: libboost_program_options.a → R_X86_64_32).  In that
-# case leave the refs undefined here and resolve them from smu-vp, which
-# already links Boost::program_options into the executable.
-set(_smu_boost_in_cluster TRUE)
-if(TARGET Boost::program_options)
-    get_target_property(_boost_po_type Boost::program_options TYPE)
-    get_target_property(_boost_po_loc  Boost::program_options IMPORTED_LOCATION)
-    if(NOT APPLE AND (
-           _boost_po_type STREQUAL "STATIC_LIBRARY"
-        OR _boost_po_loc MATCHES "\\.(a|lib)$"))
-        set(_smu_boost_in_cluster FALSE)
-    endif()
-endif()
-if(_smu_boost_in_cluster)
-    target_link_libraries(smc_cluster_smu PRIVATE Boost::program_options)
+if(APPLE)
+    target_link_libraries(smc_cluster_smu PRIVATE SystemC::cci Boost::program_options)
 else()
-    target_link_options(smc_cluster_smu PRIVATE "-Wl,--allow-shlib-undefined")
+    if(NOT _cci_archs)
+        target_link_libraries(smc_cluster_smu PRIVATE SystemC::cci)
+    endif()
+    if(_smu_cluster_undefs)
+        target_link_options(smc_cluster_smu PRIVATE "-Wl,--allow-shlib-undefined")
+    endif()
 endif()
 
 if(APPLE)
@@ -269,20 +312,32 @@ target_link_libraries(smu-vp
         # Common
         SystemC::systemc
         Boost::iostreams
-        Boost::program_options
         OpenSSL::Crypto
         Threads::Threads
         z)
 
-if(CCI_FOUND)
-    target_link_libraries(smu-vp PRIVATE CCI::cci)
+# Shared CCI/Boost can link normally.  Static archives must not be listed
+# twice (regular link + --whole-archive) or the linker reports duplicates.
+if(APPLE OR NOT _cci_archs)
+    if(CCI_FOUND)
+        target_link_libraries(smu-vp PRIVATE CCI::cci)
+    endif()
+endif()
+if(APPLE OR NOT _boost_archs)
+    target_link_libraries(smu-vp PRIVATE Boost::program_options)
 endif()
 
-# Static Boost lives in the executable, not the cluster .so (see above).
-# --export-dynamic puts those symbols in the dynamic table so the .so can
-# resolve librvcore's Boost.program_options refs at load time.
-if(NOT _smu_boost_in_cluster)
+# Static CCI/Boost were left unresolved in libsmc_cluster_smu.so.  Pull the
+# whole archives into the executable and export them so the .so binds at load.
+if(NOT APPLE AND _smu_cluster_undefs)
     target_link_options(smu-vp PRIVATE "-Wl,--export-dynamic")
+    set(_smu_wa "")
+    list(APPEND _smu_wa ${_cci_archs} ${_boost_archs})
+    list(REMOVE_DUPLICATES _smu_wa)
+    if(_smu_wa)
+        target_link_libraries(smu-vp PRIVATE
+            "-Wl,--whole-archive" ${_smu_wa} "-Wl,--no-whole-archive")
+    endif()
 endif()
 
 # CCI / SystemC dylibs live outside the standard loader path; bake an RPATH
