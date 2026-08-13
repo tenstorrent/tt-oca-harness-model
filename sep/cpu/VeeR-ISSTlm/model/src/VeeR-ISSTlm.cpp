@@ -44,6 +44,8 @@ VeeRISSTlm::VeeRISSTlm(sc_module_name name, const Args &args, const WdRiscv::Har
 {
 	pic_.bind_hart(this);
 	pic_isock_.bind(pic_.target_socket);  // must bind in ctor, before elaboration port checks
+	pic_.clk_i(pic_clk_);
+	pic_.rst_ni(rst_ni);                  // PIC resets with the core it lives in
 	logger.setMaxVerbosity(verbosity.get_param_value());
 	logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
 	logger.setFunctionTrace(false);

@@ -2030,4 +2030,9 @@ class VeeRISSTlm : public clint_interrupt_target, public external_interrupt_targ
 
 		el2_pic::el2_pic_model pic_;
 		tlm_utils::simple_initiator_socket<VeeRISSTlm, 32> pic_isock_;
+
+		// The PIC is internal to the core, so no parent can drive its clk_i; the
+		// model is event-driven and never reads it, but the port must be bound
+		// for elaboration to pass.
+		sc_core::sc_signal<bool> pic_clk_;
 };
