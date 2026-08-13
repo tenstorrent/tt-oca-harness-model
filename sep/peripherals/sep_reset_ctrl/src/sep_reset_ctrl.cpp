@@ -17,10 +17,17 @@ sep_reset_ctrl_ip::sep_reset_ctrl_ip(sc_module_name n)
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    // Register SC_METHOD to update reset outputs
+    // Register SC_METHOD to update reset outputs. Deliberately initialized rather
+    // than dont_initialize()'d: otherwise the outputs sit at sc_signal's default
+    // false — every crypto IP held in reset — until something produces the first
+    // edge on global_rst_ni or SW_RESET_N. That happens to work when the parent
+    // writes the reset signal during elaboration, because the false-to-true
+    // update counts as a change, but it silently does not when the parent
+    // constructs the signal already true (sc_signal's initial-value ctor): no
+    // edge, no run, and the whole accelerator set stays reset for the entire
+    // simulation. Running once at t=0 makes the initial state ours to define.
     SC_METHOD(update_rst_outputs);
     sensitive << global_rst_ni << sw_reset_changed_;
-    dont_initialize();
 
     // Register SC_METHOD to clear SW_RESET_N back to its default on reset
     SC_METHOD(reset_handler);
@@ -83,6 +90,15 @@ bool sep_reset_ctrl_ip::handle_sw_reset_n_write(uint64_t value, uint64_t mask)
     // from the ISS SC_THREAD both land in the same delta cycle: the sc_event
     // notification is merged and update_rst_outputs only ever fires with the
     // final (de-asserted) value, so peripheral registers are never cleared.
-    sc_core::wait(sc_core::SC_ZERO_TIME);
+    //
+    // Only a thread may wait. csml's write_registers() takes an is_debug flag but
+    // ignores it, so a transport_dbg write — GDB poking this register, say —
+    // reaches here with no process context at all, and an unguarded wait() would
+    // be a fatal SystemC error. The debug path gets the event without the yield,
+    // which is right: it is not modelling a timed bus access to begin with.
+    const auto kind = sc_core::sc_get_current_process_handle().proc_kind();
+    if (kind == sc_core::SC_THREAD_PROC_ || kind == sc_core::SC_CTHREAD_PROC_) {
+        sc_core::wait(sc_core::SC_ZERO_TIME);
+    }
     return true;
 }

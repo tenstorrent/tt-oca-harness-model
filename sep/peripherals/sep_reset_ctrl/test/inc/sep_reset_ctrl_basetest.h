@@ -26,7 +26,9 @@ class sep_reset_ctrl_basetest : public sc_module
 
     enum Register_Reset_Val
     {
-      SW_RESET_N_RESET = (0x000000000000001f)
+      // km_n resets asserted (0), the other four released — sep_reset_ctrl.rdl
+      // and sep_reset_ctrl_reg.sv:318-410.
+      SW_RESET_N_RESET = (0x000000000000001e)
     };
      
     struct Register_Property_t

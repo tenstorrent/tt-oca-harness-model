@@ -1,6 +1,6 @@
 #pragma once
 #include "sep_reset_ctrl_register.h"
-#include <string.h>
+#include <string>
 
 class sep_reset_ctrl_base : public sc_module
 {
