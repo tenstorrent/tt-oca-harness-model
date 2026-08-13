@@ -26,6 +26,7 @@
 #include "aes.h"
 #include "mailbox.h"
 #include "adapters.h"
+#include "smc_global_port.h"
 #include "stubs.h"
 #include "vp_devices.h"
 #include "aon_timer.h"
@@ -67,8 +68,9 @@ namespace {
 class och_sep_ss : public sc_module {
 
 public:
-    // VP bus topology — initiators: riscv, dma_ot, dma_ctn, dma_sys_adapter
-    static constexpr unsigned int INIT_COUNT = 4;
+    // VP bus topology — initiators: riscv, dma_ot, dma_ctn, dma_sys_adapter,
+    // sep_inbound (SMU on-die path: SMC/external master -> SEP local bus)
+    static constexpr unsigned int INIT_COUNT = 5;
     // Targets: sram, rom, plic, clint, dma, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
     //          keymgr_kpvlp, efuse, lc_ctrl, entropy_src, edn,
@@ -76,6 +78,28 @@ public:
     static constexpr unsigned int TARG_COUNT = 26;
 
     SC_HAS_PROCESS(och_sep_ss);
+
+    // ------------------------------------------------------------------
+    // Chiplet boundary (SMU on-die path; see doc/smc-sep-d2d-interconnect).
+    //
+    // sep_ext_to_smc_axi — SEP outbound master port for the SMC global
+    //   window (RTL: sep_ext_to_smc_axi).  Carries global addresses; the
+    //   SMU platform routes it through the local-alias window remap to the
+    //   SMC's dedicated sep_axi_in.  Standalone sep-vp binds a stub here.
+    //
+    // sep_smn_inbound_axi — inbound target port from the SMU crossbar
+    //   (RTL: smn_inbound_axi).  Global addresses in the SEP aperture are
+    //   remapped global->local (subtract sep_global_base, RTL target_base=0)
+    //   and re-issued on the internal bus.  Standalone sep-vp binds an idle
+    //   initiator here.
+    //
+    // sep_ext_to_smc_axi must be a plain tlm_initiator_socket: it is the
+    // parent of a hierarchical initiator bind (smc_global->init64), and a
+    // simple_* socket's internal sc_export is already bound to its own fw
+    // process at construction, so a simple_* parent fails elaboration (E126).
+    // ------------------------------------------------------------------
+    tlm::tlm_initiator_socket<64>                     sep_ext_to_smc_axi{"sep_ext_to_smc_axi"};
+    tlm_utils::simple_target_socket<och_sep_ss, 64>    sep_smn_inbound_axi{"sep_smn_inbound_axi"};
 
     och_sep_ss(sc_module_name name, BasicOptions& opt_in);
     och_sep_ss(sc_module_name name)
@@ -137,7 +161,7 @@ private:
     SEPMemory*                        dtcm               = nullptr;
     SEPMemory*                        sep_scratch        = nullptr;  // functional stub (RW)
     SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
-    SEPMemory*                        smc_global         = nullptr;  // functional stub (RW)
+    sep_smc_global_port*              smc_global         = nullptr;  // SMC window: RW fallback stub or SMU forwarder
     SEPMemory*                        spi_mux            = nullptr;  // functional stub (RW) — OCH_SEP_SPI_MUX_CTRL
     SimVirtConsole*                   sim_out            = nullptr;  // SIM_OUT bootcode console (taps sep_scratch)
     SepStatusReport*                  sep_status         = nullptr;  // SEP_STATUS production status console (taps smc_global ring)
@@ -297,12 +321,22 @@ private:
     csml_param<std::string> spiPreload;
     std::string             spiPreloadPath;
 
+    // SEP global aperture base (SEP_GLOBAL_BASE_ADDR CSR equivalent) for the
+    // inbound global->local remap on sep_smn_inbound_axi.  Must match the SMU
+    // crossbar's sep_global_base (the integrator programs both, as on RTL).
+    csml_param<uint64_t>   sep_global_base;
+
+    // Inbound SMU path: boundary target (sep_smn_inbound_axi, 64-bit) ->
+    // internal bus initiator (32-bit), with global->local address remap.
+    tlm_utils::simple_initiator_socket<och_sep_ss, 32> sep_inbound_init32_{"sep_inbound_init32_"};
+
     // =========================================================================
     // Methods
     // =========================================================================
     void create_modules();
     void module_bind();
     void start_of_simulation() override;
+    void fwd_sep_inbound(tlm::tlm_generic_payload&, sc_core::sc_time&);
 };
 
 // -----------------------------------------------------------------------------
@@ -320,7 +354,11 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , strap_status_report_disable("smc.status_report_disable", false)
     , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
     , spiPreload("spiPreload", "")
+    , sep_global_base("sep_global_base", 0x50000000ULL)
 {
+    // SMU on-die inbound path: global->local remap, then onto the internal bus.
+    sep_smn_inbound_axi.register_b_transport(this, &och_sep_ss::fwd_sep_inbound);
+
     argsCSML = new ArgsCSML(opt);
     Args& args = opt;
 
@@ -438,7 +476,14 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     // Layout mirrors fw/sep/bootcode/include/sep_smc_interface.h:
     //   scratch[i] @ SMC_SCRATCH_BASE_OFFSET(0x10100) + (i << 3)
     //   SMC SRAM   @ SMC_SRAM_OFFSET(0x60000), 1 MiB; scratch offsets are SRAM-relative
-    {
+    //
+    // In forward mode (SMU platform) the window is backed by the real SMC, and
+    // the SMC firmware owns staging this handshake (the silicon contract); the
+    // VP does not second-guess it here.
+    if (smc_global->forwarding()) {
+        std::cout << "och_sep_ss: smc_global window forwards to the SMC (SMU mode); "
+                     "boot-handshake seeding is owned by the SMC firmware" << std::endl;
+    } else {
         constexpr uint64_t SMC_SCRATCH_BASE = 0x10100;   // SMC_SCRATCH_BASE_OFFSET
         auto scratch_local = [](unsigned idx) -> uint64_t {
             return SMC_SCRATCH_BASE + (static_cast<uint64_t>(idx) << 3);
@@ -501,7 +546,7 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
                               SMC_STRAPS_LO, sizeof(straps_lo));
         smc_global->load_data(reinterpret_cast<const char*>(&straps_hi),
                               SMC_STRAPS_HI, sizeof(straps_hi));
-    }
+    }  // end smc_global seed (fallback mode only)
 
     // Seed the SPI mux control register reset default. OCH_SEP_SPI_MUX_CTRL resets with
     // cs_force_high=1 (bit 1), spi_sel=0 (bit 0) -> 0x00000002. The offset is window-local
@@ -529,8 +574,10 @@ inline void och_sep_ss::create_modules() {
     // Functional RW stubs (no behavioral model) for boot ROM early init.
     sep_scratch     = new SEPMemory("sep_scratch", false);
     outbound_filter = new SEPMemory("outbound_filter", false);
-    // SMC global window stub (SEP↔SMC AXI path); RW backing store, no SMC behavior.
-    smc_global      = new SEPMemory("smc_global", false);
+    // SMC global window (SEP↔SMC dedicated AXI path): RW fallback stub in
+    // standalone sep-vp, or forwarder to the SMU platform when
+    // `smc_global.forward_en` is set (see inc/smc_global_port.h).
+    smc_global      = new sep_smc_global_port("smc_global");
     // SPI mux control register stub (OCH_SEP_SPI_MUX_CTRL); RW backing store, no mux behavior.
     spi_mux         = new SEPMemory("spi_mux", false);
     sim_out         = new SimVirtConsole("sim_out");
@@ -613,6 +660,8 @@ inline void och_sep_ss::module_bind() {
         bus->tsocks[it++].bind(dma->ctn_initiator_socket);
         bus->tsocks[it++].bind(dma_sys_adapter->ini);
         dma->sys_initiator_socket.bind(dma_sys_adapter->tgt);
+        // SMU on-die inbound path (SMC/external masters -> SEP local bus).
+        bus->tsocks[it++].bind(sep_inbound_init32_);
     }
 
     // Bus initiator sockets → target module sockets
@@ -642,8 +691,12 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(edn->target_socket);
         bus->isocks[it++].bind(sep_scratch->tsock);
         bus->isocks[it++].bind(outbound_filter->tsock);
-        bus->isocks[it++].bind(smc_global->tsock);
+        bus->isocks[it++].bind(smc_global->tgt32);
         bus->isocks[it++].bind(spi_mux->tsock);
+
+        // SMU on-die dedicated path: export the SMC window master at the
+        // platform boundary (hierarchical initiator bind).
+        smc_global->init64.bind(sep_ext_to_smc_axi);
 
         // SIM_OUT: observe bootcode simput* writes to SEP_SCRATCH_COLD_SCRATCH_2 on the
         // sep_scratch stub and decode them to the console with a SIM_OUT header. The bus
@@ -896,4 +949,24 @@ inline void och_sep_ss::start_of_simulation() {
         // unaffected.
         spi_device->get_model()->load_memory_from_file();
     }
+}
+
+// -----------------------------------------------------------------------------
+// fwd_sep_inbound — SMU on-die inbound path (sep_smn_inbound_axi)
+//
+// Models the SEP-side `u_inbound_global_to_local_addr_remap`
+// (hw/sep/sep_system_peripherals/rtl/sep_system_peripherals.sv): addresses in
+// the SEP global aperture are rebased to the SEP-local view by subtracting
+// sep_global_base (RTL target_base_i = '0), then re-issued on the internal
+// 32-bit bus.  The SMU crossbar only routes aperture hits here, so no
+// window check is repeated.  (The RTL's inbound filter tables are a separate
+// stage and are not modeled here.)
+// -----------------------------------------------------------------------------
+inline void och_sep_ss::fwd_sep_inbound(tlm::tlm_generic_payload& trans,
+                                        sc_core::sc_time& delay) {
+    const uint64_t global = trans.get_address();
+    const uint64_t local  = global - sep_global_base.get_param_value();
+    trans.set_address(local);
+    sep_inbound_init32_->b_transport(trans, delay);
+    trans.set_address(global);  // restore for the caller
 }

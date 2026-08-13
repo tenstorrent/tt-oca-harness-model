@@ -30,7 +30,12 @@
 #include "smc_fabric.h"
 
 #include "bootrom.h"
-#include "clint.h"
+// Path-qualified ("clint/include/...", "uart/include/...") because the SEP
+// platform ships same-named headers (vp/platform/infra/clint.h,
+// sep/peripherals/uart_16550/include/uart.h): in the SMU platform TU both
+// include sets are visible and the bare names are ambiguous.  Requires
+// smc/peripherals on the include path (both smc-vp and smu-vp add it).
+#include "clint/include/clint.h"
 #include "cpu_ctrl.h"
 #include "dma.h"
 #include "i2c_controller.h"
@@ -42,7 +47,7 @@
 #include "plic.h"
 #include "reset_unit.h"
 #include "scratchpad_ram.h"
-#include "uart.h"
+#include "uart/include/uart.h"
 #include "wdt.h"
 #include "beu.h"
 #include "telemetry_receiver.h"
@@ -127,14 +132,26 @@ public:
     cci::cci_param<uint32_t> tel_inject_counter0_p_;
 
     // -----------------------------------------------------------------------
-    // External boundary (chiplet-facing).  Inbound masters are forwarded to the
-    // fabric; outbound `fabric.output_axi` is bound to the internal
-    // `stub_sysmem` target (a platform-level outbound initiator hook is left
-    // for a later phase).
+    // External boundary (chiplet-facing).  Inbound masters are forwarded to
+    // the fabric; outbound `fabric.output_axi` is re-exported hierarchically
+    // as `output_axi` so the integrating executable decides what terminates
+    // it (smc-vp binds a stub; the SMU platform binds the SMU crossbar).
+    // `output_axi` / `aou_axi_m` must be plain tlm_initiator_socket: a
+    // simple_* socket's internal sc_export is bound to its own fw process at
+    // construction, so it can never be the parent of a hierarchical initiator
+    // bind (E126).
+    //
+    // AOU AXI (RTL: AoU sits on SMU `smu_axi_in`/`smu_axi_out`, i.e. the
+    // xbar's ext_in/ext_out — see tt-oca-hw doc/architecture.adoc).  Local
+    // CSRs stay on the SMC periph bus; the AXI hop is the D2D data path.
+    // smc-vp idle/stubs these; smu-vp binds them to the xbar chiplet ports.
     // -----------------------------------------------------------------------
     tlm_utils::simple_target_socket<smc_platform, 64>   sys_axi_in{"sys_axi_in"};
     tlm_utils::simple_target_socket<smc_platform, 64>   jtag_axi_in{"jtag_axi_in"};
     tlm_utils::simple_target_socket<smc_platform, 64>   sep_axi_in{"sep_axi_in"};
+    tlm::tlm_initiator_socket<64>                        output_axi{"output_axi"};
+    tlm_utils::simple_target_socket<smc_platform, 64>   aou_axi_s{"aou_axi_s"};
+    tlm::tlm_initiator_socket<64>                        aou_axi_m{"aou_axi_m"};
 
     // -----------------------------------------------------------------------
     // Modeled blocks
@@ -226,9 +243,10 @@ public:
     stub_target<64> stub_dfd{"stub_dfd"};
     stub_target<64> stub_mbox{"stub_mbox"};
     stub_target<64> stub_dft{"stub_dft"};
-    // Extra stub for AOU peer master (remote-die memory stand-in).
-    stub_target<64> stub_aou_remote{"stub_aou_remote"};
-    stub_target<64> stub_sysmem{"stub_sysmem"};
+    // Remote-die SMN/memory stand-in: aou_peer_.axi_m lands here.
+    // store_writes so SMC catch-all traffic through AOU (ext_out) can
+    // read back (port of tt-oca-hw smu_sep_ext_axi).
+    stub_target<64> stub_sysmem{"stub_sysmem", /*warn=*/true, /*store=*/true};
     stub_target<64> stub_cpu_ctrl_fab{"stub_cpu_ctrl_fab"};
     stub_target<64> stub_aR{"stub_aR"};
     stub_target<64> stub_mR{"stub_mR"};
@@ -410,17 +428,20 @@ private:
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_ctrl_init_{"idle_ctrl_init_"};
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_ifetch_init_{"idle_ifetch_init_"};
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_data_init_{"idle_data_init_"};
+    // Forward aou_axi_s (platform boundary) onto local aou_.axi_s[0].
+    tlm_utils::simple_initiator_socket<smc_platform, 64> fwd_aou_{"fwd_aou_"};
     // aou_peer_ models the remote die's AOU core; its axi_s[0] would receive
     // traffic from the remote fabric, and its apb_socket would receive CSR
     // accesses from the remote local CPU — neither is modeled by this
     // single-chip platform. Bind idle initiators so the required ports are
-    // satisfied.
+    // satisfied.  Peer axi_m terminates on stub_sysmem (remote SMN stub).
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_aou_peer_init_{"idle_aou_peer_init_"};
     tlm_utils::simple_initiator_socket<smc_platform, 32> idle_aou_peer_apb_init_{"idle_aou_peer_apb_init_"};
 
     void fwd_sys_axi (tlm::tlm_generic_payload&, sc_core::sc_time&);
     void fwd_jtag_axi(tlm::tlm_generic_payload&, sc_core::sc_time&);
     void fwd_sep_axi (tlm::tlm_generic_payload&, sc_core::sc_time&);
+    void fwd_aou_axi (tlm::tlm_generic_payload&, sc_core::sc_time&);
 };
 
 }  // namespace smc
