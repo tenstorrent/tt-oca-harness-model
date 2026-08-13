@@ -25,6 +25,11 @@
 #  smc-vp-rhel8          Build smc-vp and run SMC VP firmware tests (needs
 #                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain),
 #                        including the new smc-dma-test and smc-pvt-wrap-test.
+#  smu-unit-tests-rhel8  SMU interconnect unit tests (Release + Coverage;
+#                        ASAN skipped — gcc-toolset-12 ASAN runtime is not
+#                        packaged on AlmaLinux 8).
+#  smu-vp-rhel8          Build smu-vp and run SMU VP firmware tests (Whisper
+#                        rebuilt -fPIC; xpack RISC-V toolchain for RV32+RV64).
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI (RHEL 8)
@@ -132,7 +137,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Build Boost ${{ env.BOOST_VERSION }}
         if: steps.cache-boost-rhel8.outputs.cache-hit != 'true'
@@ -149,6 +154,7 @@ jobs:
             --with-iostreams --with-log --with-program_options --with-regex \
             --with-system --with-thread \
             link=static threading=multi variant=release \
+            cxxflags=-fPIC cflags=-fPIC \
             cxxstd=17 \
             -j$(nproc) \
             > /tmp/boost-build.log 2>&1 || { tail -30 /tmp/boost-build.log; exit 1; }
@@ -260,7 +266,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore OpenSSL 3 cache
         uses: actions/cache@v4
@@ -341,7 +347,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore OpenSSL 3 cache
         uses: actions/cache@v4
@@ -425,7 +431,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore CCI cache
         uses: actions/cache@v4
@@ -579,7 +585,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.BOOST_HOME }}
-          key: boost-${{ env.BOOST_VERSION }}-rhel8
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
 
       - name: Restore CCI cache
         uses: actions/cache@v4
@@ -691,3 +697,207 @@ jobs:
           name: smc-vp-logs-rhel8
           path: sw/smc-vp-tests/smc-*/run_*.log
           retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 7 — SMU interconnect unit tests on RHEL 8
+# SystemC + CCI only.  ASAN is skipped (gcc-toolset-12 ASAN runtime is not
+# packaged on AlmaLinux 8); Ubuntu CI covers ASAN.
+# ─────────────────────────────────────────────────────────────────────────────
+  smu-unit-tests-rhel8:
+    name: SMU interconnect unit tests (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+    needs: build-deps-rhel8
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }} \
+            cmake git \
+            python3-pip
+          pip3 install --quiet gcovr
+
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Run SMU interconnect tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+        run: |
+          cd vp/platform/smu
+          ./run_tests.sh
+          ./run_tests.sh --coverage
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 8 — build smu-vp and run SMU VP firmware tests on RHEL 8
+# Whisper archives must be PIC (libsmc_cluster_smu.so).  OpenSSL 3 is required
+# because smu-vp also links the SEP peripheral tree.
+# ─────────────────────────────────────────────────────────────────────────────
+  smu-vp-rhel8:
+    name: SMU VP firmware tests (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+    needs: build-deps-rhel8
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }} \
+            cmake make git wget which \
+            zlib-devel readline-devel
+
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Install RISC-V toolchain
+        run: |
+          mkdir -p /home/runner/riscv
+          cd /home/runner/riscv
+          XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
+          wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
+          tar zxf "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          mv "${EXTRACTED_DIR}" toolchain
+          echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore Boost cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_HOME }}
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Restore OpenSSL 3 cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENSSL3_HOME }}
+          key: openssl-${{ env.OPENSSL3_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Cache Whisper (PIC)
+        id: cache-whisper-pic-rhel8
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/whisper
+          key: whisper-${{ env.WHISPER_REV }}-rhel8-cxx${{ env.CXX_STD }}-libs4-pic
+
+      - name: Check Whisper artifacts
+        id: whisper-libs-pic-rhel8
+        run: |
+          complete=true
+          for lib in build-$(uname -s)/librvcore.a \
+                     virtual_memory/libvirtual_memory.a \
+                     pci/libpci.a \
+                     third_party/softfloat/build/RISCV-GCC/softfloat.a; do
+            if [ ! -f "/home/runner/whisper/${lib}" ]; then
+              echo "missing: ${lib}"
+              complete=false
+            fi
+          done
+          echo "complete=${complete}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Whisper (-fPIC)
+        if: steps.whisper-libs-pic-rhel8.outputs.complete != 'true'
+        env:
+          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOOST_ROOT: ${{ env.BOOST_HOME }}
+        run: |
+          mkdir -p /tmp/boost/include
+          ln -s "$BOOST_HOME/include/boost" /tmp/boost/include/boost
+
+          if [ -d /home/runner/whisper/.git ]; then
+            echo "reusing restored Whisper checkout; building missing artifacts"
+          else
+            git clone \
+              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              /home/runner/whisper
+          fi
+          cd /home/runner/whisper
+          git checkout ${{ env.WHISPER_REV }}
+          printf 'smc_vp_whisper_libs: $(BUILD_DIR)/librvcore.a $(soft_float_lib) $(pci_lib) $(virtual_memory_lib)\n' \
+            > /tmp/whisper-smc-libs.mk
+          make -f GNUmakefile -f /tmp/whisper-smc-libs.mk \
+            MEM_CALLBACKS=1 CXX_STD=c++20 EXTRA_CXXFLAGS=-fPIC \
+            BOOST_ROOT=/tmp/boost \
+            smc_vp_whisper_libs -j$(nproc)
+
+      - name: Build smu-vp and run SMU VP tests
+        env:
+          SYSTEMC_HOME:         ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:             ${{ env.CCI_HOME }}
+          WHISPER_HOME:         /home/runner/whisper
+          BOOST_DIR:            ${{ env.BOOST_HOME }}
+          BOOST_ROOT:           ${{ env.BOOST_HOME }}
+          OPENSSL_ROOT:         ${{ env.OPENSSL3_HOME }}
+          OPENSSL_ROOT_DIR:     ${{ env.OPENSSL3_HOME }}
+          RISCV_PREFIX:         riscv-none-elf-
+          RISCV_TOOLCHAIN_PATH: /home/runner/riscv/toolchain
+        run: |
+          cmake -S vp -B vp/build_smc \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_STANDARD=${{ env.CXX_STD }} \
+            -DSMC_CXX_STANDARD=${{ env.CXX_STD }}
+          cmake --build vp/build_smc --target smu-vp -j$(nproc)
+          cd sw/smu-vp-tests
+          ./run_smu_vp_tests.sh

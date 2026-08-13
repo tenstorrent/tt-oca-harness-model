@@ -6,6 +6,8 @@ add_subdirectory(sep)
 # when WHISPER_HOME is unavailable so that SEP-only CI builds configure cleanly.
 if(DEFINED ENV{WHISPER_HOME} AND NOT "$ENV{WHISPER_HOME}" STREQUAL "")
     add_subdirectory(smc)
+    # The SMU platform integrates the SMC and SEP platforms (needs both).
+    add_subdirectory(smu)
 else()
-    message(STATUS "WHISPER_HOME not set; skipping smc platform in this build")
+    message(STATUS "WHISPER_HOME not set; skipping smc and smu platforms in this build")
 endif()
