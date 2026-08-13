@@ -686,6 +686,58 @@ void VeeRISSTlm::handle_nmi_signal()
 	}
 }
 
+/// Clint Software Interrupt interface function
+void VeeRISSTlm::trigger_software_interrupt()
+{
+	CSML_INFO(3, logger) << "trigger_software_interrupt" << std::endl;
+	auto hart0 = system_->ithHart(hart_id);
+	URV mipVal = 0;
+	hart0->peekCsr(CsrNumber::MIP, mipVal);
+	mipVal = mipVal | (URV(1) << URV(InterruptCause::M_SOFTWARE));
+	hart0->pokeCsr(CsrNumber::MIP, mipVal);
+	hart0->recordCsrWrite(CsrNumber::MIP);
+	interruptWakeEvent_.notify(sc_core::SC_ZERO_TIME);
+}
+
+/// Clint Software Interrupt interface function
+void VeeRISSTlm::clear_software_interrupt()
+{
+	CSML_INFO(3, logger) << "clear_software_interrupt" << std::endl;
+	auto hart0 = system_->ithHart(hart_id);
+	URV mipVal = 0;
+	hart0->peekCsr(CsrNumber::MIP, mipVal);
+	mipVal = mipVal & ~(URV(1) << URV(InterruptCause::M_SOFTWARE));
+	hart0->pokeCsr(CsrNumber::MIP, mipVal);
+	hart0->recordCsrWrite(CsrNumber::MIP);
+}
+
+/// Clint Timer Interrupt interface function
+void VeeRISSTlm::trigger_timer_interrupt()
+{
+	CSML_INFO(3, logger) << "trigger_timer_interrupt" << std::endl;
+	auto hart0 = system_->ithHart(hart_id);
+	URV mipVal = 0;
+	hart0->peekCsr(CsrNumber::MIP, mipVal);
+	mipVal = mipVal | (URV(1) << URV(InterruptCause::M_TIMER));
+	hart0->pokeCsr(CsrNumber::MIP, mipVal);
+	//Hart-side “isInterruptPending/possible” logic depends on the CSR write bookkeeping (many parts of this ISS do)
+	hart0->recordCsrWrite(CsrNumber::MIP);
+	interruptWakeEvent_.notify(sc_core::SC_ZERO_TIME);
+}
+
+/// Clint Timer Interrupt interface function
+void VeeRISSTlm::clear_timer_interrupt()
+{
+	CSML_INFO(3, logger) << "clear_timer_interrupt" << std::endl;
+	auto hart0 = system_->ithHart(hart_id);
+	URV mipVal = 0;
+	hart0->peekCsr(CsrNumber::MIP, mipVal);
+	mipVal = mipVal & ~(URV(1) << URV(InterruptCause::M_TIMER));
+	hart0->pokeCsr(CsrNumber::MIP, mipVal);
+    //Hart-side “isInterruptPending/possible” logic depends on the CSR write bookkeeping (many parts of this ISS do)
+	hart0->recordCsrWrite(CsrNumber::MIP);
+}
+
 /// External Interrupt interface function
 void VeeRISSTlm::trigger_external_interrupt(PrivilegeLevel level)
 {

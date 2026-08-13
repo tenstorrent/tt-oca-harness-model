@@ -1889,7 +1889,7 @@ determineRegisterWidth(const Args& args, const HartConfig& config)
 }
 
 /// SystemC wrapper Veer/EL2
-class VeeRISSTlm : public external_interrupt_target, public BusWriteObserver, public sc_module
+class VeeRISSTlm : public clint_interrupt_target, public external_interrupt_target, public BusWriteObserver, public sc_module
 {
 	public:
         // CSML logger instance for debug/trace output
@@ -1996,6 +1996,14 @@ class VeeRISSTlm : public external_interrupt_target, public BusWriteObserver, pu
 		// Used to invalidate reservation maintained by the memory model in case there is a write by any other initiator(Atomic operations like store/load)
 		int initiator_id;
 		void notifyWrite(uint64_t addr, unsigned size, int initiator_id) override;
+
+		// Clint Interrupt interface functions. The PIC supersedes the CLINT for
+		// SEP, but the platform still instantiates one, so the interface stays
+		// until that instantiation goes away.
+		void trigger_software_interrupt() override;
+		void clear_software_interrupt() override;
+		void trigger_timer_interrupt() override;
+		void clear_timer_interrupt() override;
 
 	public:
 		// External Interrupt interface (called from PIC). Public so the
