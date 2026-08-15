@@ -26,14 +26,23 @@ find_package(OpenSSL REQUIRED)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/efuse/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/entropy_src/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/edn/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_virt_console/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_status_report/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_scratch_cold/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_scratch_warm/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_output_remap_ctrl/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_filter_ctrl/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_reset_ctrl/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_cpu_ctrl/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/local_master_alias_remap_ctrl/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISSTlm/model/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/utils/tlm_extensions
+  )
+  # Vendored ISS and softfloat: SYSTEM so their headers stay out of our warnings.
+  include_directories(SYSTEM
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISS/
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISS/softfloat/source/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/cpu/VeeR-ISSTlm/model/inc
   )
   if(CCI_FOUND)
-    include_directories(${CCI_INCLUDE_DIR})
+    include_directories(SYSTEM ${CCI_INCLUDE_DIR})
   endif()
 
   file(GLOB_RECURSE HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.h ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
@@ -54,9 +63,13 @@ find_package(OpenSSL REQUIRED)
     hmac_model
     otbn_model
     sep_memory_model
-    sep_virt_console_model
-    sep_status_report_model
-    csml_logger
+    sep_scratch_cold_model
+    sep_scratch_warm_model
+    sep_output_remap_ctrl_model
+    sep_filter_ctrl_model
+    sep_reset_ctrl_model
+    sep_cpu_ctrl_model
+    local_master_alias_remap_ctrl_model
     spi_controller_model
     spi_flash_model
     kmac_model

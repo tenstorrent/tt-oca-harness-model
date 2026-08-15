@@ -9,8 +9,13 @@
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm.h>
 #include "sep_memory.h"
-#include "sep_virt_console.h"
-#include "sep_status_report.h"
+#include "sep_scratch_cold.h"
+#include "sep_scratch_warm.h"
+#include "sep_output_remap_ctrl.h"
+#include "sep_filter_ctrl.h"
+#include "sep_reset_ctrl.h"
+#include "sep_cpu_ctrl.h"
+#include "local_alias_remap.h"
 #include "secure_dma.h"
 #include "hmac.h"
 #include "kmac.h"
@@ -34,8 +39,6 @@
 #include "lifecycle_ctrl.h"
 #include "entropy_src.h"
 #include "edn.h"
-#include "riscv_plic.h"
-#include "clint.h"
 #include "rv32/elf_loader.h"
 #include "options.h"
 #include "bus.h"
@@ -51,31 +54,49 @@ namespace {
         return o;
     }
 
-    // SEP status ring buffer placement in the smc_global window, expressed once and used by
-    // BOTH the SMC-handshake seed block (constructor) and the SEP_STATUS write-tap
-    // (module_bind), so the two can't drift. The bus strips the 0x40000000 base, so these
-    // are smc_global window-local offsets. Layout: { u32 head, tail, num_entries; u32 entries[] }.
+    // SEP status ring buffer placement in the smc_global window, used by the
+    // SMC-handshake seed block. The bus strips the 0x40000000 base, so these are
+    // window-local offsets. Layout: { u32 head, tail, num_entries; u32 entries[] }.
     constexpr uint32_t SMC_SRAM_WINDOW_OFF  = 0x60000;  // SMC_SRAM_OFFSET (window-local)
     constexpr uint32_t STATUS_RING_SRAM_OFF = 0x1000;   // SRAM-relative; published in scratch[11]
     constexpr uint32_t STATUS_RING_ENTRIES  = 512;      // capacity (real SMC_RING_BUFFER_SIZE)
     constexpr uint64_t STATUS_RING_LOCAL    = static_cast<uint64_t>(SMC_SRAM_WINDOW_OFF) +
                                               STATUS_RING_SRAM_OFF;            // 0x61000 (header)
-    constexpr uint64_t STATUS_RING_DATA     = STATUS_RING_LOCAL + 12;          // 0x6100C (entries[])
-    constexpr uint64_t STATUS_RING_DATA_END = STATUS_RING_DATA +
-                                              static_cast<uint64_t>(STATUS_RING_ENTRIES) * 4; // 0x6180C (excl)
 } // namespace
 
 class och_sep_ss : public sc_module {
 
 public:
-    // VP bus topology — initiators: riscv, dma_ot, dma_ctn, dma_sys_adapter,
-    // sep_inbound (SMU on-die path: SMC/external master -> SEP local bus)
-    static constexpr unsigned int INIT_COUNT = 5;
-    // Targets: sram, rom, plic, clint, dma, hmac, otbn, itcm, dtcm,
+    // VP bus topology
+    // Initiators: riscv, dma_ot, dma_ctn, dma_sys_adapter, local_alias_remap_out,
+    //             smn_remap_out (the SMU on-die inbound path re-enters the bus
+    //             here once an external driver feeds sep_smn_inbound_axi)
+    static constexpr unsigned int INIT_COUNT = 6;
+    // Targets: sram, rom, dma, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
     //          keymgr_kpvlp, efuse, lc_ctrl, entropy_src, edn,
-    //          sep_scratch, outbound_filter, smc_global, spi_mux  (PLIC is internal to VeeRISSTlm)
-    static constexpr unsigned int TARG_COUNT = 26;
+    //          scratch_cold, scratch_warm,
+    //          local_alias_remap_csr, local_alias_remap_data,
+    //          ap_remap_csr, ap_remap_data, stee_remap_csr, stee_remap_data,
+    //          outbound_filter_csr,
+    //          inbound_filter_csr,
+    //          smc_global, smu (-> outbound_filter_mux), spi_mux, reset_ctrl, cpu_ctrl
+    //          (PIC is internal to VeeRISSTlm; SEP has no external PLIC/CLINT
+    //          or SEP-side GPIO/AVBbus in real silicon — none of these were
+    //          ever part of the register map, they were VP-only scaffolding)
+    // Note: outbound_filter's data path has no standalone bus window — it is
+    // fed by outbound_filter_mux (ap_output_remap + stee_output_remap +
+    // SMU-window remapped_socket outputs), mirroring sep_system_peripherals.sv's
+    // u_outbound_filter_mux (3 slv_reqs_i: AP-remapped, STEE-remapped, and the
+    // raw SEP_EXT_TO_SMU leg) -> axi_filter_wrap chain (BlockByDefault=1).
+    // inbound_filter's data path likewise has no standalone bus window — it
+    // is fed by sep_smn_inbound_axi (the external-facing boundary port).
+    // smc_global is a placeholder stub for u_axi_demux's SEP_EXT_TO_SMC leg
+    // (sep_system_peripherals.sv) — no SMC model exists in this VP yet. The
+    // SMU window has no stub of its own — it forwards straight into
+    // outbound_filter_mux, since real RTL merges it with AP/STEE before the
+    // Outbound Filter rather than terminating it locally.
+    static constexpr unsigned int TARG_COUNT = 35;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -88,10 +109,10 @@ public:
     //   SMC's dedicated sep_axi_in.  Standalone sep-vp binds a stub here.
     //
     // sep_smn_inbound_axi — inbound target port from the SMU crossbar
-    //   (RTL: smn_inbound_axi).  Global addresses in the SEP aperture are
-    //   remapped global->local (subtract sep_global_base, RTL target_base=0)
-    //   and re-issued on the internal bus.  Standalone sep-vp binds an idle
-    //   initiator here.
+    //   (RTL: smn_inbound_axi).  Feeds the RTL-ordered inbound chain
+    //   (inbound_filter -> global->local window remap -> internal bus); see
+    //   smn_inbound_b_transport.  Standalone sep-vp binds an idle initiator
+    //   here.
     //
     // sep_ext_to_smc_axi must be a plain tlm_initiator_socket: it is the
     // parent of a hierarchical initiator bind (smc_global->init64), and a
@@ -129,18 +150,25 @@ public:
         delete lc_ctrl;
         delete entropy_src;
         delete edn;
-        delete sim_out;  // destructor flushes any buffered, unterminated SIM_OUT line
-        delete sep_scratch;
+        delete scratch_cold;
+        delete scratch_warm;
+        delete ap_output_remap;
+        delete stee_output_remap;
+        delete outbound_mux;
         delete outbound_filter;
+        delete inbound_filter;
+        delete smn_remap;
+        delete outbound_filter_stub;
         delete smc_global;
         delete spi_mux;
-        delete sep_status;
+        delete reset_ctrl;
+        delete cpu_ctrl;
+        delete local_alias_remap;
+        delete local_alias_fixed_adapter;
         delete spi_device;
         delete spi_controller;
         delete keymgr;
         delete rsu_module;
-        delete clint;
-        delete plic;
         if (bus) {
             for (auto* p : bus->ports)
                 delete p;
@@ -159,12 +187,23 @@ private:
     SEPMemory*                        rom                = nullptr;
     SEPMemory*                        itcm               = nullptr;
     SEPMemory*                        dtcm               = nullptr;
-    SEPMemory*                        sep_scratch        = nullptr;  // functional stub (RW)
-    SEPMemory*                        outbound_filter    = nullptr;  // functional stub (RW)
-    sep_smc_global_port*              smc_global         = nullptr;  // SMC window: RW fallback stub or SMU forwarder
-    SEPMemory*                        spi_mux            = nullptr;  // functional stub (RW) — OCH_SEP_SPI_MUX_CTRL
-    SimVirtConsole*                   sim_out            = nullptr;  // SIM_OUT bootcode console (taps sep_scratch)
-    SepStatusReport*                  sep_status         = nullptr;  // SEP_STATUS production status console (taps smc_global ring)
+    sep_scratch_cold_ip*              scratch_cold         = nullptr;
+    sep_scratch_warm_ip*              scratch_warm         = nullptr;
+    sep_output_remap_ctrl_ip*         ap_output_remap      = nullptr;
+    sep_output_remap_ctrl_ip*         stee_output_remap    = nullptr;
+    outbound_filter_mux*              outbound_mux         = nullptr;
+    sep_filter_ctrl_ip*               outbound_filter      = nullptr;
+    sep_filter_ctrl_ip*               inbound_filter       = nullptr;
+    smn_inbound_remap_adapter*        smn_remap            = nullptr;
+    filter_output_stub*               outbound_filter_stub = nullptr;
+    // SMC window: RW fallback stub in standalone sep-vp, or forwarder to the
+    // real SMC when `smc_global.forward_en` is set (see inc/smc_global_port.h).
+    sep_smc_global_port*              smc_global           = nullptr;
+    SEPMemory*                        spi_mux              = nullptr;  // functional stub (RW) — spi_mux_ctrl
+    sep_reset_ctrl_ip*                reset_ctrl           = nullptr;
+    sep_cpu_ctrl_ip*                  cpu_ctrl             = nullptr;
+    local_alias_remap_ip*             local_alias_remap    = nullptr;
+    local_alias_remap_adapter*        local_alias_fixed_adapter = nullptr;
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
@@ -189,16 +228,22 @@ private:
     // =========================================================================
     // Platform infrastructure
     // =========================================================================
-    CLINT<1>*                                  clint     = nullptr;
     VeeRISSTlm*                                riscv     = nullptr;  // created after ELF load
     SimpleBus<INIT_COUNT, TARG_COUNT>*         bus       = nullptr;
-    FE310_PLIC<1, PLIC_NUM_INTERRUPTS, 96, 32>* plic    = nullptr;
     reset_generation_unit*                     rsu_module = nullptr;
 
     // =========================================================================
     // Signals — reset + per-IP clocks, interrupts, alerts
     // =========================================================================
     sc_signal<bool, SC_MANY_WRITERS> reset_signal;
+
+    // Per-IP software reset signals driven by sep_reset_ctrl_ip
+    // (AND of global reset_signal with SW_RESET_N register bits)
+    sc_signal<bool> km_sw_rst_n_signal;
+    sc_signal<bool> otbn_sw_rst_n_signal;
+    sc_signal<bool> aes_sw_rst_n_signal;
+    sc_signal<bool> hmac_sw_rst_n_signal;
+    sc_signal<bool> kmac_sw_rst_n_signal;
 
     // SPI
     sc_signal<bool, SC_MANY_WRITERS> spi_clk_signal;
@@ -272,8 +317,8 @@ private:
     sc_signal<bool, SC_MANY_WRITERS>   aon_fatal_fault_signal;
     sc_signal<uint32_t>                aon_racl_policies_signal;
     sc_signal<bool, SC_MANY_WRITERS>   aon_racl_error_signal;
-    // NMI address from stdout_device to VeeRISSTlm (LOAD_NMI_ADDR command)
-    sc_signal<uint32_t>                nmi_vec_signal;
+    // NMI address — written by stdout_device (LOAD_NMI_ADDR) or sep_cpu_ctrl
+    sc_signal<uint32_t, SC_MANY_WRITERS> nmi_vec_signal;
 
     // KeyMgr
     sc_signal<bool, SC_MANY_WRITERS> keymgr_wipe_ni_signal;
@@ -289,9 +334,9 @@ private:
     sc_signal<bool, SC_MANY_WRITERS>   edn_recov_alert_signal;
     sc_signal<bool, SC_MANY_WRITERS>   edn_fatal_alert_signal;
 
-    // PLIC input table — unused slots tied to unused_irq_signal
-    sc_signal<bool, SC_MANY_WRITERS>              unused_irq_signal;
-    std::vector<sc_signal<bool, SC_MANY_WRITERS>*> plic_inputs;
+    // PIC input table — unused slots tied to unused_irq_signal
+    sc_signal<bool, SC_MANY_WRITERS>               unused_irq_signal;
+    std::vector<sc_signal<bool, SC_MANY_WRITERS>*> pic_inputs;
 
     // =========================================================================
     // Config / parameters
@@ -302,33 +347,50 @@ private:
 
     // Boot straps latched by the (emulated) SMC reset unit, exposed as CCI params
     // so the ROM boot mode is selectable at invocation (accellera_config.ini) with
-    // no rebuild. The seed block composes these into STRAPS_LO/STRAPS_HI words and
-    // writes them to the smc_global stub at offsets 0x2090/0x2094, matching the
-    // SEP<->SMC contract in fw/sep/bootcode/include/sep_smc_interface.h. Defaults
-    // are all false (= Secondary chiplet, status reporting enabled, refclk).
+    // no rebuild. The constructor composes them into the STRAPS_LO/STRAPS_HI
+    // words (sep_smc_interface.h). Defaults: Secondary chiplet, status reporting
+    // enabled, refclk.
     csml_param<bool>       strap_primary_chiplet;       // STRAPS_LO[25]
     csml_param<bool>       strap_boot_recovery;         // STRAPS_LO[19]
     csml_param<bool>       strap_rotate_update;         // STRAPS_HI[26]
     csml_param<bool>       strap_status_report_disable; // STRAPS_LO[21]
     csml_param<bool>       strap_bl0_pll_clk;           // STRAPS_LO[20]
 
-    // Verilog $readmemh-style SPI flash image loaded before simulation starts.
-    // "@addr" lines set the write cursor, subsequent lines are whitespace-separated
-    // hex byte pairs. Parsed directly into spi_flash's backing memory in
+    // Optional SPI flash preload: path to a Verilog $readmemh-style hex file
+    // (e.g. fw/sep/bootcode/prebuilt/non_secure_boot.spi_preload) — "@addr" lines
+    // set the write cursor, subsequent lines are whitespace-separated hex byte
+    // pairs. Parsed directly into spi_flash's backing memory in
     // start_of_simulation via spi_flash_model::write_byte(); no conversion to a
     // raw .bin is needed. Empty (default) falls back to the existing
     // data/flash_memory.bin raw-binary backdoor load.
     csml_param<std::string> spiPreload;
-    std::string             spiPreloadPath;
+    std::string              spiPreloadPath;
 
-    // SEP global aperture base (SEP_GLOBAL_BASE_ADDR CSR equivalent) for the
-    // inbound global->local remap on sep_smn_inbound_axi.  Must match the SMU
-    // crossbar's sep_global_base (the integrator programs both, as on RTL).
+    // Relays sep_smn_inbound_axi (external-facing, 64-bit) into the 32-bit
+    // internal inbound chain at inbound_filter->data_socket.
+    tlm_utils::simple_initiator_socket<och_sep_ss> smn_inbound_to_filter;
+
+    // Value seeded into CPU_CTRL.SEP_GLOBAL_BASE_ADDR, which the inbound window
+    // remap reads (see smn_inbound_remap_adapter).  On silicon the CSR resets to
+    // 0 and SEP firmware programs it, which is what the default preserves;
+    // platforms that drive inbound traffic without running that firmware
+    // (smu-vp) preset this to match the SMU crossbar's own sep_global_base.
     csml_param<uint64_t>   sep_global_base;
 
-    // Inbound SMU path: boundary target (sep_smn_inbound_axi, 64-bit) ->
-    // internal bus initiator (32-bit), with global->local address remap.
-    tlm_utils::simple_initiator_socket<och_sep_ss, 32> sep_inbound_init32_{"sep_inbound_init32_"};
+    // Value seeded into CPU_CTRL.SEP_REGION_SIZE, the other half of the inbound
+    // window the remap checks. The CSR resets to 16 MiB, so an inbound aperture
+    // wider than that (smu-vp routes 512 MiB) needs the CSR widened to match, or
+    // hits above the reset window would pass through unremapped and land on the
+    // internal bus as a global address. 0 keeps the reset value.
+    csml_param<uint64_t>   sep_region_size;
+
+    // feat_ctrl_o.sep_debug (sep.sv:952) — drives the inbound filter's
+    // filter_skip_i, bypassing all match/permission checking. The inbound filter
+    // is BlockByDefault, so a platform whose masters issue inbound traffic
+    // without programming the filter tables must raise this, exactly as SEP
+    // debug mode does on silicon. Defaults false (fail-closed, as on reset).
+    csml_param<bool>                 sep_debug;
+    sc_signal<bool, SC_MANY_WRITERS> sep_debug_signal;
 
     // =========================================================================
     // Methods
@@ -336,7 +398,9 @@ private:
     void create_modules();
     void module_bind();
     void start_of_simulation() override;
-    void fwd_sep_inbound(tlm::tlm_generic_payload&, sc_core::sc_time&);
+    void seed_inbound_window();
+    void smn_inbound_b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);
+    unsigned int smn_inbound_transport_dbg(tlm::tlm_generic_payload& trans);
 };
 
 // -----------------------------------------------------------------------------
@@ -346,7 +410,7 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     : sc_module(name)
     , opt(opt_in)
     , unused_irq_signal("unused_irq_signal")
-    , plic_inputs(PLIC_NUM_INTERRUPTS, &unused_irq_signal)
+    , pic_inputs(PIC_NUM_INTERRUPTS, &unused_irq_signal)
     , globalQuantumNs("globalQuantumNs", 10)
     , strap_primary_chiplet("smc.primary_chiplet", false)
     , strap_boot_recovery("smc.boot_recovery", false)
@@ -354,10 +418,14 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , strap_status_report_disable("smc.status_report_disable", false)
     , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
     , spiPreload("spiPreload", "")
-    , sep_global_base("sep_global_base", 0x50000000ULL)
+    , smn_inbound_to_filter("smn_inbound_to_filter")
+    , sep_global_base("sep_global_base", 0x0ULL)
+    , sep_region_size("sep_region_size", 0x0ULL)
+    , sep_debug("sep_debug", false)
+    , sep_debug_signal("sep_debug_signal")
 {
-    // SMU on-die inbound path: global->local remap, then onto the internal bus.
-    sep_smn_inbound_axi.register_b_transport(this, &och_sep_ss::fwd_sep_inbound);
+    sep_smn_inbound_axi.register_b_transport(this, &och_sep_ss::smn_inbound_b_transport);
+    sep_smn_inbound_axi.register_transport_dbg(this, &och_sep_ss::smn_inbound_transport_dbg);
 
     argsCSML = new ArgsCSML(opt);
     Args& args = opt;
@@ -561,6 +629,38 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
 
     unused_irq_signal.write(false);
     module_bind();
+
+    SC_THREAD(seed_inbound_window);
+}
+
+// -----------------------------------------------------------------------------
+// seed_inbound_window — apply the inbound-window presets to the live CSRs
+//
+// The inbound window remap reads CPU_CTRL.SEP_GLOBAL_BASE_ADDR (resets to 0) and
+// CPU_CTRL.SEP_REGION_SIZE (resets to 16 MiB); SEP firmware programs both on
+// silicon. Platforms driving inbound traffic without that firmware preset them
+// instead, and both must agree with the aperture the upstream interconnect
+// routes here. The writes must land after cpu_ctrl's reset_handler has made its
+// initialization pass, or reset_all_registers() would clear them again — hence
+// the zero-time wait rather than a poke from the constructor or
+// start_of_simulation.
+// -----------------------------------------------------------------------------
+inline void och_sep_ss::seed_inbound_window() {
+    sc_core::wait(sc_core::SC_ZERO_TIME);
+    const uint64_t base = sep_global_base.get_param_value();
+    if (base != 0) {
+        cpu_ctrl->SEP_GLOBAL_BASE_ADDR = base;
+        std::cout << "och_sep_ss: SEP_GLOBAL_BASE_ADDR seeded to 0x" << std::hex
+                  << base << std::dec << " from the sep_global_base preset"
+                  << std::endl;
+    }
+    const uint64_t size = sep_region_size.get_param_value();
+    if (size != 0) {
+        cpu_ctrl->SEP_REGION_SIZE = size;
+        std::cout << "och_sep_ss: SEP_REGION_SIZE seeded to 0x" << std::hex
+                  << size << std::dec << " from the sep_region_size preset"
+                  << std::endl;
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -571,17 +671,38 @@ inline void och_sep_ss::create_modules() {
     rom             = new SEPMemory("rom", true);
     itcm            = new SEPMemory("itcm", false);
     dtcm            = new SEPMemory("dtcm", false);
-    // Functional RW stubs (no behavioral model) for boot ROM early init.
-    sep_scratch     = new SEPMemory("sep_scratch", false);
-    outbound_filter = new SEPMemory("outbound_filter", false);
-    // SMC global window (SEP↔SMC dedicated AXI path): RW fallback stub in
-    // standalone sep-vp, or forwarder to the SMU platform when
+    scratch_cold         = new sep_scratch_cold_ip("scratch_cold");
+    scratch_warm         = new sep_scratch_warm_ip("scratch_warm");
+    // AP and STEE output remap — same model, instance type carries hardware constants
+    ap_output_remap      = new sep_output_remap_ctrl_ip("ap_output_remap",   sep_output_remap_ctrl_ip::InstanceType::AP);
+    stee_output_remap    = new sep_output_remap_ctrl_ip("stee_output_remap", sep_output_remap_ctrl_ip::InstanceType::STEE);
+    // Merges AP/STEE remapped output onto one wire into outbound_filter,
+    // mirroring sep_system_peripherals.sv's u_outbound_filter_mux (axi_mux).
+    outbound_mux         = new outbound_filter_mux("outbound_filter_mux");
+    // Outbound filter (32 entries) + inbound filter (16 entries)
+    outbound_filter      = new sep_filter_ctrl_ip("outbound_filter", sep_filter_ctrl_ip::InstanceType::OUTBOUND);
+    inbound_filter       = new sep_filter_ctrl_ip("inbound_filter",  sep_filter_ctrl_ip::InstanceType::INBOUND);
+    outbound_filter_stub = new filter_output_stub("outbound_filter_stub");
+    reset_ctrl           = new sep_reset_ctrl_ip("reset_ctrl");
+    cpu_ctrl             = new sep_cpu_ctrl_ip("cpu_ctrl");
+    local_alias_remap    = new local_alias_remap_ip("local_alias_remap");
+    // Fixed remapper (axi_local_alias_remap.sv) — reads cpu_ctrl's live
+    // SEP_LOCAL_BASE_ADDR/SEP_REGION_SIZE so firmware changes to those CSRs
+    // take effect immediately, unlike the bus's static PortMapping subtraction.
+    local_alias_fixed_adapter = new local_alias_remap_adapter(
+        "local_alias_fixed_adapter", cpu_ctrl, opt.local_alias_remap_data_start_addr);
+    // SMN inbound remapper (u_inbound_global_to_local_addr_remap) — reads
+    // cpu_ctrl's live SEP_GLOBAL_BASE_ADDR + shared SEP_REGION_SIZE.
+    // Downstream of inbound_filter; feeds back into the SEP bus as a new
+    // initiator once an external (SMC/AP) driver binds sep_smn_inbound_axi.
+    smn_remap = new smn_inbound_remap_adapter("smn_remap", cpu_ctrl);
+    // SMC global window (SEP<->SMC dedicated AXI path): RW fallback stub
+    // pre-seeded with the boot handshake the real SMC firmware stages before
+    // releasing SEP from reset, or a forwarder to the SMU platform when
     // `smc_global.forward_en` is set (see inc/smc_global_port.h).
     smc_global      = new sep_smc_global_port("smc_global");
     // SPI mux control register stub (OCH_SEP_SPI_MUX_CTRL); RW backing store, no mux behavior.
     spi_mux         = new SEPMemory("spi_mux", false);
-    sim_out         = new SimVirtConsole("sim_out");
-    sep_status      = new SepStatusReport("sep_status");
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
@@ -605,8 +726,6 @@ inline void och_sep_ss::create_modules() {
     keymgr          = new key_manager_model("keymgr_tt");
     // Demotion-state callback reads live DEMOTE_1/2 values at KDF invocation time.
     keymgr->set_demote_callback([this]() { return lc_ctrl->get_demote_state(); });
-    clint             = new CLINT<1>("CLINT");
-    plic              = new FE310_PLIC<1, PLIC_NUM_INTERRUPTS, 96, 32>("plic");
     bus               = new SimpleBus<INIT_COUNT, TARG_COUNT>("bus", false);
     rsu_module        = new reset_generation_unit("rsu");
 }
@@ -618,14 +737,16 @@ inline void och_sep_ss::module_bind() {
     rsu_module->rst_ni(reset_signal);
     rsu_module->reset_req_i(aon_rst_req_signal);
     stdout_dev->nmi_vec_o(nmi_vec_signal);
+    cpu_ctrl->rst_ni(reset_signal);
+    cpu_ctrl->nmi_vec_o(nmi_vec_signal);
+    cpu_ctrl->hwif_in.smc_fuse_sense_done = true;
+    cpu_ctrl->hwif_in.sep_fuse_sense_done = true;
 
     // Bus port mappings (address → target module)
     {
         unsigned it = 0;
         bus->ports[it++] = new PortMapping(opt.sram_start_addr,        opt.sram_end_addr,        *sram);
         bus->ports[it++] = new PortMapping(opt.rom_start_addr,         opt.rom_end_addr,         *rom);
-        bus->ports[it++] = new PortMapping(opt.plic_start_addr,        opt.plic_end_addr,        *plic);
-        bus->ports[it++] = new PortMapping(opt.clint_start_addr,       opt.clint_end_addr,       *clint);
         bus->ports[it++] = new PortMapping(opt.dma_start_addr,         opt.dma_end_addr,         *dma);
         bus->ports[it++] = new PortMapping(opt.hmac_start_addr,        opt.hmac_end_addr,        *hmac);
         bus->ports[it++] = new PortMapping(opt.otbn_start_addr,        opt.otbn_end_addr,        *otbn);
@@ -644,10 +765,48 @@ inline void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.lc_ctrl_start_addr,     opt.lc_ctrl_end_addr,     *lc_ctrl);
         bus->ports[it++] = new PortMapping(opt.entropy_src_start_addr, opt.entropy_src_end_addr, *entropy_src);
         bus->ports[it++] = new PortMapping(opt.edn_start_addr,         opt.edn_end_addr,         *edn);
-        bus->ports[it++] = new PortMapping(opt.sep_scratch_start_addr,     opt.sep_scratch_end_addr,     *sep_scratch);
-        bus->ports[it++] = new PortMapping(opt.outbound_filter_start_addr, opt.outbound_filter_end_addr, *outbound_filter);
+        // Scratch cold (0x10802000–0x1080203F)
+        bus->ports[it++] = new PortMapping(opt.scratch_cold_start_addr, opt.scratch_cold_end_addr, *scratch_cold);
+        // Scratch warm (0x10802080–0x108020BF)
+        bus->ports[it++] = new PortMapping(opt.scratch_warm_start_addr, opt.scratch_warm_end_addr, *scratch_warm);
+        // Local master alias remap CSR (0x10A10000–0x10A101FF)
+        bus->ports[it++] = new PortMapping(opt.local_alias_remap_csr_start_addr,  opt.local_alias_remap_csr_end_addr,  *local_alias_remap);
+        // Local master alias remap data-path window (0xC0000000–0xFFFFFFFF)
+        bus->ports[it++] = new PortMapping(opt.local_alias_remap_data_start_addr, opt.local_alias_remap_data_end_addr, *local_alias_remap);
+        // AP output remap CSR (16 × 8 B = 0x80 B at 0x10A10200)
+        bus->ports[it++] = new PortMapping(opt.ap_remap_csr_start_addr,    opt.ap_remap_csr_end_addr,    *ap_output_remap);
+        // AP output remap data-path window (8 MB at 0x11000000)
+        bus->ports[it++] = new PortMapping(opt.ap_remap_data_start_addr,   opt.ap_remap_data_end_addr,   *ap_output_remap);
+        // STEE output remap CSR (16 × 8 B = 0x80 B at 0x10A10300)
+        bus->ports[it++] = new PortMapping(opt.stee_remap_csr_start_addr,  opt.stee_remap_csr_end_addr,  *stee_output_remap);
+        // STEE output remap data-path window (8 MB at 0x11800000)
+        bus->ports[it++] = new PortMapping(opt.stee_remap_data_start_addr, opt.stee_remap_data_end_addr, *stee_output_remap);
+        // Outbound filter CSR (32 × 0x20 B = 0x400 B at 0x10A20000)
+        bus->ports[it++] = new PortMapping(opt.outbound_filter_csr_start_addr,  opt.outbound_filter_csr_end_addr,  *outbound_filter);
+        // Outbound filter data path has no standalone bus window — it is fed
+        // by outbound_filter_mux (ap_output_remap + stee_output_remap remapped
+        // outputs), matching sep_system_peripherals.sv's remap -> axi_mux ->
+        // outbound filter chain.
+        // Inbound filter CSR (16 × 0x20 B = 0x200 B at 0x10A21000)
+        bus->ports[it++] = new PortMapping(opt.inbound_filter_csr_start_addr,   opt.inbound_filter_csr_end_addr,   *inbound_filter);
+        // Inbound filter data path has no standalone bus window — fed by
+        // sep_smn_inbound_axi (external-facing), matching sep_system_peripherals.sv's
+        // smn_inbound_axi_req_i -> inbound_filter direct connection.
         bus->ports[it++] = new PortMapping(opt.smc_global_start_addr,      opt.smc_global_end_addr,      *smc_global);
-        bus->ports[it++] = new PortMapping(opt.spi_mux_start_addr,         opt.spi_mux_end_addr,         *spi_mux);
+        // SMU window (0x80000000–0xBFFFFFFF): SEP_EXT_TO_SMU leg of
+        // u_axi_demux — merges into outbound_filter_mux alongside AP/STEE
+        // remap output (sep_system_peripherals.sv's u_outbound_filter_mux
+        // takes exactly these three slv_reqs_i), so it is subject to the
+        // same Outbound Filter policy, not a standalone stub. Registered
+        // after stdout's port above, so stdout's 256-byte console window at
+        // the same base address continues to win by first-match priority.
+        bus->ports[it++] = new PortMapping(opt.smu_global_start_addr,      opt.smu_global_end_addr,      *outbound_mux);
+        // SPI mux ctrl (0x20000000–0x2000000B)
+        bus->ports[it++] = new PortMapping(opt.spi_mux_ctrl_start_addr,    opt.spi_mux_ctrl_end_addr,    *spi_mux);
+        // SEP software reset controller (0x10A50000–0x10A50007)
+        bus->ports[it++] = new PortMapping(opt.reset_ctrl_start_addr,      opt.reset_ctrl_end_addr,      *reset_ctrl);
+        // SEP CPU control (0x10A30000–0x10A31007)
+        bus->ports[it++] = new PortMapping(opt.cpu_ctrl_start_addr,        opt.cpu_ctrl_end_addr,        *cpu_ctrl);
     }
     bus->mapping_complete();
 
@@ -659,18 +818,25 @@ inline void och_sep_ss::module_bind() {
         bus->tsocks[it++].bind(dma->ot_initiator_socket);
         bus->tsocks[it++].bind(dma->ctn_initiator_socket);
         bus->tsocks[it++].bind(dma_sys_adapter->ini);
+        // local_alias_remap forwards remapped transactions back into the same bus
+        bus->tsocks[it++].bind(local_alias_remap->remapped_socket);
+        // smn_remap forwards inbound (external) transactions back into the same
+        // bus, once an SMC/AP model binds sep_smn_inbound_axi
+        bus->tsocks[it++].bind(smn_remap->ini);
         dma->sys_initiator_socket.bind(dma_sys_adapter->tgt);
-        // SMU on-die inbound path (SMC/external masters -> SEP local bus).
-        bus->tsocks[it++].bind(sep_inbound_init32_);
     }
+
+    // Fixed local-alias remapper chains into the programmable 16-region table
+    local_alias_fixed_adapter->ini.bind(local_alias_remap->data_socket);
+
+    // SMN inbound chain: external socket -> inbound_filter -> smn_remap -> bus
+    smn_inbound_to_filter.bind(inbound_filter->data_socket);
 
     // Bus initiator sockets → target module sockets
     {
         unsigned it = 0;
         bus->isocks[it++].bind(sram->tsock);
         bus->isocks[it++].bind(rom->tsock);
-        bus->isocks[it++].bind(plic->tsock);
-        bus->isocks[it++].bind(clint->tsock);
         bus->isocks[it++].bind(dma->target_socket);
         bus->isocks[it++].bind(hmac->target_socket);
         bus->isocks[it++].bind(otbn->target_socket);
@@ -689,47 +855,37 @@ inline void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(lc_ctrl->target_socket);
         bus->isocks[it++].bind(entropy_src->target_socket);
         bus->isocks[it++].bind(edn->target_socket);
-        bus->isocks[it++].bind(sep_scratch->tsock);
-        bus->isocks[it++].bind(outbound_filter->tsock);
+        bus->isocks[it++].bind(scratch_cold->target_socket);
+        bus->isocks[it++].bind(scratch_warm->target_socket);
+        bus->isocks[it++].bind(local_alias_remap->target_socket);
+        // Data-path window routes through the fixed remapper first (reads live
+        // SEP_LOCAL_BASE_ADDR/SEP_REGION_SIZE), then into the programmable
+        // 16-region table (local_alias_remap->data_socket).
+        bus->isocks[it++].bind(local_alias_fixed_adapter->tgt);
+        // AP remap: CSR socket first (bus port order matches port mapping order)
+        bus->isocks[it++].bind(ap_output_remap->target_socket);
+        bus->isocks[it++].bind(ap_output_remap->data_socket);
+        // STEE remap
+        bus->isocks[it++].bind(stee_output_remap->target_socket);
+        bus->isocks[it++].bind(stee_output_remap->data_socket);
+        // Outbound filter: CSR only (data path fed by outbound_filter_mux, not the bus)
+        bus->isocks[it++].bind(outbound_filter->target_socket);
+        // Inbound filter: CSR only (data path fed by sep_smn_inbound_axi, not the bus)
+        bus->isocks[it++].bind(inbound_filter->target_socket);
         bus->isocks[it++].bind(smc_global->tgt32);
+        bus->isocks[it++].bind(outbound_mux->smu_tgt);
         bus->isocks[it++].bind(spi_mux->tsock);
+        bus->isocks[it++].bind(reset_ctrl->target_socket);
+        bus->isocks[it++].bind(cpu_ctrl->target_socket);
 
         // SMU on-die dedicated path: export the SMC window master at the
         // platform boundary (hierarchical initiator bind).
         smc_global->init64.bind(sep_ext_to_smc_axi);
 
-        // SIM_OUT: observe bootcode simput* writes to SEP_SCRATCH_COLD_SCRATCH_2 on the
-        // sep_scratch stub and decode them to the console with a SIM_OUT header. The bus
-        // delivers region-local offsets, so COLD_SCRATCH_2 (0x10802010) is offset 0x10.
-        // Observation-only — the register keeps normal R/W semantics. When the
-        // console is disabled via its `enable` param, no tap is installed.
-        if (sim_out->enabled()) {
-            constexpr uint64_t COLD_SCRATCH_2_OFFSET = 0x10;  // SEP_SCRATCH_COLD_SCRATCH_2__REG_OFFSET
-            sep_scratch->setWriteTap(
-                [this, COLD_SCRATCH_2_OFFSET](uint64_t offset, const uint8_t* data, unsigned len) {
-                    if (offset == COLD_SCRATCH_2_OFFSET && len >= 4) {
-                        sim_out->on_bytes(offset, data, len);
-                    }
-                });
-        }
-
-        // SEP_STATUS: observe the SEP firmware's *production* status writes into the status
-        // ring buffer in SMC SRAM (the path the SMC reads on silicon) and decode them to the
-        // console with a SEP_STATUS header. The firmware writes each status as `entries[head]
-        // = word` (one aligned 32-bit store); we tap only the entries[] window, so the
-        // head/tail/num_entries header writes and the construction-time seeding (load_data,
-        // not b_transport) are naturally excluded. Observation-only — the ring keeps normal
-        // R/W semantics and `tail` is never advanced, so a future SMC-emulation model can own
-        // ring draining once this is disabled (enable=false installs no tap).
-        if (sep_status->enabled()) {
-            smc_global->setWriteTap(
-                [this](uint64_t offset, const uint8_t* data, unsigned len) {
-                    if (offset >= STATUS_RING_DATA && offset < STATUS_RING_DATA_END &&
-                        len >= 4 && (offset % 4) == 0) {
-                        sep_status->on_bytes(offset, data, len);
-                    }
-                });
-        }
+        // The SIM_OUT and SEP_STATUS consoles now live inside sep_scratch_cold,
+        // tapping COLD_SCRATCH[2] and COLD_SCRATCH[1] — the registers the ROM's
+        // simput*() and STATUS_OUT() actually write (fw .../include/errors.h).
+        // No platform-level tap is needed here.
     }
 
     // DMA
@@ -748,7 +904,7 @@ inline void och_sep_ss::module_bind() {
 
     // HMAC
     hmac->clk_i(hmac_clk_signal);
-    hmac->rst_ni(reset_signal);
+    hmac->rst_ni(hmac_sw_rst_n_signal);
     hmac->intr_hmac_done(hmac_done_signal);
     hmac->intr_fifo_empty(hmac_fifo_empty_signal);
     hmac->intr_hmac_err(hmac_err_signal);
@@ -758,7 +914,7 @@ inline void och_sep_ss::module_bind() {
 
     // KMAC
     kmac->clk_i(kmac_clk_signal);
-    kmac->rst_ni(reset_signal);
+    kmac->rst_ni(kmac_sw_rst_n_signal);
     kmac->lc_escalate_en_i(kmac_lc_escalate_signal);
     kmac->idle_o(kmac_idle_signal);
     kmac->intr_o(kmac_intr_signal);
@@ -768,7 +924,7 @@ inline void och_sep_ss::module_bind() {
 
     // OTBN
     otbn->clk_core(otbn_clk_core_signal);
-    otbn->rst_n(reset_signal);
+    otbn->rst_n(otbn_sw_rst_n_signal);
     otbn->intr_done(otbn_intr_done_signal);
     otbn->alert_fatal(otbn_alert_fatal_signal);
     otbn->alert_recov(otbn_alert_recov_signal);
@@ -822,31 +978,30 @@ inline void och_sep_ss::module_bind() {
     aon_lc_escalate_signal.write(false);
     aon_racl_policies_signal.write(0);
 
-    // PLIC interrupt routing
-    plic_inputs[SPI_ERROR_IRQ]       = &spi_error_irq_signal;
-    plic_inputs[AON_WKUP_IRQ]        = &aon_intr_wkup_signal;
-    plic_inputs[AON_WDOG_IRQ]        = &aon_intr_bark_signal;
-    plic_inputs[KEYMGR_IRQ]          = &keymgr_irq_signal;
-    plic_inputs[SPI_EVENT_IRQ]       = &spi_event_irq_signal;
-    plic_inputs[HMAC_DONE_IRQ]       = &hmac_done_signal;
-    plic_inputs[HMAC_FIFO_EMPTY_IRQ] = &hmac_fifo_empty_signal;
-    plic_inputs[HMAC_HMAC_ERR_IRQ]   = &hmac_err_signal;
-    plic_inputs[KMAC_IRQ]            = &kmac_intr_signal;
-    plic_inputs[OTBN_IRQ]            = &otbn_intr_done_signal;
-    plic_inputs[DMA_DONE_IRQ]        = &dma_done_intr_sig;
-    plic_inputs[DMA_CHUNK_DONE_IRQ]  = &dma_chunk_done_intr_sig;
-    plic_inputs[DMA_ERROR_IRQ]       = &dma_error_intr_sig;
-    plic_inputs[MAILBOX_IRQ0]        = &mbox_irq0_signal;
-    plic_inputs[MAILBOX_IRQ1]        = &mbox_irq1_signal;
-    plic_inputs[CS_CMD_REQ_DONE]     = &csrng_cs_cmd_req_done_signal;
-    plic_inputs[CS_ENTROPY_REQ]      = &csrng_cs_entropy_req_signal;
-    plic_inputs[CS_FATAL_ERR]        = &csrng_cs_fatal_err_signal;
-    plic_inputs[CS_HW_INST_EXC]      = &csrng_cs_hw_inst_exc_signal;
-    plic_inputs[ENTROPY_SRC_IRQ]     = &entropy_src_irq_signal;
-    plic_inputs[EDN_CMD_REQ_DONE]    = &edn_cmd_req_done_signal;
-    plic_inputs[EDN_FATAL_ERR]       = &edn_fatal_err_signal;
-    for (unsigned int i = 0; i < PLIC_NUM_INTERRUPTS; i++)
-        plic->inputs[i](*plic_inputs[i]);
+    // PIC interrupt routing
+    // Note: aon_intr_wkup_signal, aon_intr_bark_signal, and
+    // spi_error_irq_signal have no silicon interrupt source (not part of
+    // sep_internal_interrupts[]) and are intentionally NOT routed to the PIC.
+    // Each is still driven by its peripheral model but has no reader.
+    pic_inputs[KEYMGR_IRQ]          = &keymgr_irq_signal;
+    pic_inputs[SPI_EVENT_IRQ]       = &spi_event_irq_signal;
+    pic_inputs[HMAC_DONE_IRQ]       = &hmac_done_signal;
+    pic_inputs[HMAC_FIFO_EMPTY_IRQ] = &hmac_fifo_empty_signal;
+    pic_inputs[HMAC_HMAC_ERR_IRQ]   = &hmac_err_signal;
+    pic_inputs[KMAC_IRQ]            = &kmac_intr_signal;
+    pic_inputs[OTBN_IRQ]            = &otbn_intr_done_signal;
+    pic_inputs[DMA_DONE_IRQ]        = &dma_done_intr_sig;
+    pic_inputs[DMA_CHUNK_DONE_IRQ]  = &dma_chunk_done_intr_sig;
+    pic_inputs[DMA_ERROR_IRQ]       = &dma_error_intr_sig;
+    pic_inputs[MAILBOX_IRQ0]        = &mbox_irq0_signal;
+    pic_inputs[MAILBOX_IRQ1]        = &mbox_irq1_signal;
+    pic_inputs[CS_CMD_REQ_DONE]     = &csrng_cs_cmd_req_done_signal;
+    pic_inputs[CS_ENTROPY_REQ]      = &csrng_cs_entropy_req_signal;
+    pic_inputs[CS_FATAL_ERR]        = &csrng_cs_fatal_err_signal;
+    pic_inputs[CS_HW_INST_EXC]      = &csrng_cs_hw_inst_exc_signal;
+    pic_inputs[ENTROPY_SRC_IRQ]     = &entropy_src_irq_signal;
+    pic_inputs[EDN_CMD_REQ_DONE]    = &edn_cmd_req_done_signal;
+    pic_inputs[EDN_FATAL_ERR]       = &edn_fatal_err_signal;
 
     // CSRNG
     csrng->clk_i(csrng_clk_signal);
@@ -863,7 +1018,7 @@ inline void och_sep_ss::module_bind() {
 
     // AES
     aes->clk_i(aes_clk_signal);
-    aes->rst_ni(reset_signal);
+    aes->rst_ni(aes_sw_rst_n_signal);
     aes->idle_o(aes_idle_signal);
     aes->lc_escalate_en(aes_lc_escalate_signal);
     aes->alert_recov_ctrl_update_err(aes_alert_recov_signal);
@@ -886,17 +1041,68 @@ inline void och_sep_ss::module_bind() {
     edn_clk_signal.write(100.0);  // 100 MHz
 
     // KeyMgr
-    keymgr->rst_ni(reset_signal);
+    keymgr->rst_ni(km_sw_rst_n_signal);
     keymgr->wipe_ni(keymgr_wipe_ni_signal);
     keymgr->irq(keymgr_irq_signal);
     keymgr_wipe_ni_signal.write(true);  // active-low, inactive at startup
+
+    // SEP reset controller — drives per-IP SW reset signals
+    reset_ctrl->global_rst_ni(reset_signal);
+    reset_ctrl->km_rst_ni(km_sw_rst_n_signal);
+    reset_ctrl->otbn_rst_n(otbn_sw_rst_n_signal);
+    reset_ctrl->aes_rst_ni(aes_sw_rst_n_signal);
+    reset_ctrl->hmac_rst_ni(hmac_sw_rst_n_signal);
+    reset_ctrl->kmac_rst_ni(kmac_sw_rst_n_signal);
+
+    // New CSML peripherals — reset
+    scratch_warm->rst_ni(reset_signal);
+    local_alias_remap->rst_ni(reset_signal);
+    ap_output_remap->rst_ni(reset_signal);
+    stee_output_remap->rst_ni(reset_signal);
+    outbound_filter->rst_ni(reset_signal);
+    inbound_filter->rst_ni(reset_signal);
+    // feat_ctrl_o.sep_debug drives only the inbound instance's filter_skip_i;
+    // RTL ties the outbound one to 1'b0, which is what leaving it unbound does.
+    sep_debug_signal.write(sep_debug.get_param_value());
+    inbound_filter->filter_skip_i(sep_debug_signal);
+
+    // Remap/filter output stubs (remapped/filtered destinations are external to VP)
+    // Serial chain (mirrors sep_system_peripherals.sv: remap -> axi_mux -> filter):
+    //   ap_output_remap  ─┐
+    //                      ├─► outbound_filter_mux ─► outbound_filter ─► outbound_filter_stub
+    //   stee_output_remap ─┘
+    ap_output_remap->remapped_socket.bind(outbound_mux->ap_tgt);
+    stee_output_remap->remapped_socket.bind(outbound_mux->stee_tgt);
+    outbound_mux->ini.bind(outbound_filter->data_socket);
+    outbound_filter->filtered_socket.bind(outbound_filter_stub->socket);
+    // Inbound chain (mirrors sep_system_peripherals.sv: filter -> remap):
+    //   sep_smn_inbound_axi ─► inbound_filter ─► smn_remap ─► SEP bus
+    inbound_filter->filtered_socket.bind(smn_remap->tgt);
+
+    // EL2 PIC — embedded in VeeR core, not bus-mapped. The core binds the PIC's
+    // clk_i/rst_ni itself (it lives inside the core and resets with it), so the
+    // platform only sources the interrupt inputs.
+    for (unsigned int i = 0; i < PIC_NUM_INTERRUPTS; i++)
+        riscv->get_pic().irq_in[i](*pic_inputs[i]);
 
     // CPU core
     riscv->rst_ni(reset_signal);
     riscv->nmi_i(aon_nmi_bark_signal);
     riscv->nmi_vec_i(nmi_vec_signal);
-    plic->target_harts[0]  = riscv;
-    clint->target_harts[0] = riscv;
+}
+
+// -----------------------------------------------------------------------------
+// sep_smn_inbound_axi relay — forwards the external-facing boundary socket
+// directly into inbound_filter->data_socket. Mirrors smn_inbound_axi_req_i's
+// direct connection to u_inbound_filter in sep_system_peripherals.sv.
+// -----------------------------------------------------------------------------
+inline void och_sep_ss::smn_inbound_b_transport(tlm::tlm_generic_payload& trans,
+                                                 sc_core::sc_time& delay) {
+    smn_inbound_to_filter->b_transport(trans, delay);
+}
+
+inline unsigned int och_sep_ss::smn_inbound_transport_dbg(tlm::tlm_generic_payload& trans) {
+    return smn_inbound_to_filter->transport_dbg(trans);
 }
 
 // -----------------------------------------------------------------------------
@@ -949,24 +1155,4 @@ inline void och_sep_ss::start_of_simulation() {
         // unaffected.
         spi_device->get_model()->load_memory_from_file();
     }
-}
-
-// -----------------------------------------------------------------------------
-// fwd_sep_inbound — SMU on-die inbound path (sep_smn_inbound_axi)
-//
-// Models the SEP-side `u_inbound_global_to_local_addr_remap`
-// (hw/sep/sep_system_peripherals/rtl/sep_system_peripherals.sv): addresses in
-// the SEP global aperture are rebased to the SEP-local view by subtracting
-// sep_global_base (RTL target_base_i = '0), then re-issued on the internal
-// 32-bit bus.  The SMU crossbar only routes aperture hits here, so no
-// window check is repeated.  (The RTL's inbound filter tables are a separate
-// stage and are not modeled here.)
-// -----------------------------------------------------------------------------
-inline void och_sep_ss::fwd_sep_inbound(tlm::tlm_generic_payload& trans,
-                                        sc_core::sc_time& delay) {
-    const uint64_t global = trans.get_address();
-    const uint64_t local  = global - sep_global_base.get_param_value();
-    trans.set_address(local);
-    sep_inbound_init32_->b_transport(trans, delay);
-    trans.set_address(global);  // restore for the caller
 }

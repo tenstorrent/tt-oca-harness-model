@@ -267,6 +267,17 @@ int sc_main(int argc, char** argv)
                                     cci::cci_value(uint64_t(0x5000'0000ULL)));
         broker.set_preset_cci_value("smu_xbar.sep_global_base",
                                     cci::cci_value(uint64_t(0x5000'0000ULL)));
+
+        // The SEP-side inbound remap checks the aperture against
+        // CPU_CTRL.SEP_REGION_SIZE, so it has to span whatever the crossbar
+        // actually routes; a hit above the CSR window would arrive on the
+        // internal bus still carrying its global address.  Read the crossbar's
+        // effective size back (the ini may have resized it above) instead of
+        // repeating the constant, so the two cannot drift apart.
+        const cci::cci_value xbar_sep_size =
+            broker.get_preset_cci_value("smu_xbar.sep_region_size");
+        if (xbar_sep_size.is_uint64() || xbar_sep_size.is_number())
+            broker.set_preset_cci_value("och_sep_ss1.sep_region_size", xbar_sep_size);
         broker.set_preset_cci_value("smu_xbar.smc_global_base",
                                     cci::cci_value(uint64_t(0x4000'0000ULL)));
 

@@ -394,9 +394,10 @@ Use this when adding a new scratch bank model to SMC or SEP:
 [[csml-alternative]]
 == Relation to SEP CSML / `SEPMemory`
 
-Today some SEP platforms model scratch through CSML `SEPMemory` with a
-platform-injected write-tap (`sep/peripherals/sep_virt_console/`). A
-`reg_map.h` model is the hand-written equivalent:
+Today some SEP platforms model scratch through CSML `SEPMemory`, with the
+console/status decoding folded into the scratch model itself
+(`sep/peripherals/sep_scratch_cold/`). A `reg_map.h` model is the hand-written
+equivalent:
 
 [cols="1,1,1",options="header"]
 |===

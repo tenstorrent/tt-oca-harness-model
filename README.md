@@ -33,16 +33,16 @@ microcontroller cluster (1–4 Rocket RV64GC cores) that owns every aspect of
 chiplet bring-up and runtime management. It is the "service processor" of the
 chiplet, handling everything the compute fabric must not do itself:
 
-| Function | Detail |
-|----------|--------|
-| Clock & voltage management | PLLs, AVS (Adaptive Voltage Scaling), power state transitions |
-| Reset management | Cold / cool / FLR / watchdog reset trees |
-| Hardware bring-up | Boot ROM, eFuse/OTP, strap sampling |
-| Inter-chiplet communication | 32-channel mailboxes, OCCP protocol, OCTS time-sync |
-| Security fabric | Inbound/outbound AXI filters (×16), address remap, protection bits |
-| System monitoring | PVT sensors, telemetry (ATB sinks), log engine |
-| Interrupt management | PLIC (332 sources), CLINT, per-core WDTs, BEUs |
-| Debug | RISC-V Debug Module, JTAG-to-AXI bridge |
+| Function                    | Detail                                                             |
+| --------------------------- | ------------------------------------------------------------------ |
+| Clock & voltage management  | PLLs, AVS (Adaptive Voltage Scaling), power state transitions      |
+| Reset management            | Cold / cool / FLR / watchdog reset trees                           |
+| Hardware bring-up           | Boot ROM, eFuse/OTP, strap sampling                                |
+| Inter-chiplet communication | 32-channel mailboxes, OCCP protocol, OCTS time-sync                |
+| Security fabric             | Inbound/outbound AXI filters (×16), address remap, protection bits |
+| System monitoring           | PVT sensors, telemetry (ATB sinks), log engine                     |
+| Interrupt management        | PLIC (332 sources), CLINT, per-core WDTs, BEUs                     |
+| Debug                       | RISC-V Debug Module, JTAG-to-AXI bridge                            |
 
 In a multi-chiplet SiP the **primary** chiplet's SMC additionally orchestrates
 secondary chiplets (reset sequencing, firmware distribution, telemetry aggregation)
@@ -56,15 +56,15 @@ and communicates with the SMC exclusively through an AXI4 port and a dedicated
 mailbox interface. The SEP is responsible for all security-sensitive operations
 that must be isolated from untrusted software:
 
-| Function | Detail |
-|----------|--------|
+| Function              | Detail                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------- |
 | Cryptographic engines | AES-256, HMAC-SHA-2, KMAC, OTBN (big-number co-processor), CSRNG, Entropy Source, EDN |
-| Key management | Key Manager, lifecycle-controlled key derivation, eFuse/OTP interface |
-| Lifecycle control | Lifecycle Controller (ROM_EXT → DEV → PROD → RMA states) |
-| Secure DMA | Isolated DMA with inbound/outbound filters |
-| Secure boot | Verifies SMC firmware and compute firmware signatures |
-| Mailbox | Host-facing and SMC-facing secure communication channels |
-| AON timer | Always-on watchdog and reset arbitration |
+| Key management        | Key Manager, lifecycle-controlled key derivation, eFuse/OTP interface                 |
+| Lifecycle control     | Lifecycle Controller (ROM_EXT → DEV → PROD → RMA states)                              |
+| Secure DMA            | Isolated DMA with inbound/outbound filters                                            |
+| Secure boot           | Verifies SMC firmware and compute firmware signatures                                 |
+| Mailbox               | Host-facing and SMC-facing secure communication channels                              |
+| AON timer             | Always-on watchdog and reset arbitration                                              |
 
 The SMC provides the SEP with a dedicated AXI port (`sep_axi_in`) and shares
 interrupt lines via mailbox doorbell IRQs. In the full chiplet, the SMC acts as
@@ -96,17 +96,27 @@ tt-oca-sim/
 │   │   ├── csrng/                 ← Cryptographically Secure RNG
 │   │   ├── edn/                   ← Entropy Distribution Network
 │   │   ├── efuse/                 ← eFuse/OTP controller
+│   │   ├── el2_pic/               ← EL2 Platform-level Interrupt Controller (embedded in VeeR EL2 core)
 │   │   ├── entropy_src/           ← Entropy Source
 │   │   ├── hmac/                  ← HMAC-SHA-2 engine
 │   │   ├── key_manager/           ← Key Manager (lifecycle-aware)
 │   │   ├── kmac/                  ← KMAC / SHA-3 engine
 │   │   ├── lifecycle_ctrl/        ← Lifecycle Controller
+│   │   ├── local_master_alias_remap_ctrl/ ← Fixed local-master AXI alias remap
 │   │   ├── mailbox/               ← Secure mailbox (host ↔ SEP)
 │   │   ├── otbn/                  ← OpenTitan Big-Number co-processor
 │   │   ├── secure_dma/            ← Isolated DMA engine
+│   │   ├── sep_cpu_ctrl/          ← SEP CPU control/status registers
+│   │   ├── sep_filter_ctrl/       ← Inbound/outbound AXI security filter
 │   │   ├── sep_memory/            ← SRAM / ROM models
+│   │   ├── sep_output_remap_ctrl/ ← AP/STEE output address remap
+│   │   ├── sep_reset_ctrl/        ← Per-IP software reset control
+│   │   ├── sep_scratch_cold/      ← Cold-domain scratch registers
+│   │   ├── sep_scratch_warm/      ← Warm-domain scratch registers (stub, store-only)
 │   │   ├── spi_controller/        ← SPI controller (OpenTitan)
 │   │   ├── spi_flash/             ← SPI flash model (SFDP Profile 1)
+│   │   ├── logs/                  ← per-peripheral run_all_peripherals.sh logs
+│   │   ├── Coverage_Report.md     ← per-peripheral line/function coverage summary
 │   │   ├── setup_build_env.sh     ← shared env for run_tests.sh / run_all_peripherals.sh
 │   │   └── run_all_peripherals.sh ← batch peripheral tests (sources vp/configure_vp.sh)
 │   ├── cpu/                       ← VeeR EL2 ISS + TLM-2.0 wrapper
@@ -276,8 +286,6 @@ cd tt-oca-sim
 git submodule update --init --recursive
 ```
 
-> **Note:** GitHub SSH keys must be configured — the CSML submodule uses SSH.
-
 **Build:**
 
 1. Edit **`vp/configure_vp.sh`** and set `SYSTEMC_HOME`, `CCI_HOME`, `OPENSSL_ROOT`, and
@@ -307,7 +315,6 @@ Or from the repo root:
 
 ```bash
 SYSTEMC_HOME=/path/to/systemc make sep-vp
-```
 ```
 
 Optional: **`source vp/configure_vp.sh`** (from repo root) or **`source ./configure_vp.sh`**
@@ -643,7 +650,8 @@ and attach `gdb-multiarch` from a second terminal.
 
 `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/` is the SEP Boot ROM (BL0) firmware — the code
 that runs first out of reset, reads/validates a manifest from SPI flash, and hands
-off to BL1. It has its own build and its own runtime wiring on the VP.
+off to BL1. It has its own build (independent of `sep_fw_standalone.sh`) and its
+own runtime wiring on the VP.
 
 **Build the ROM ELF:**
 
@@ -703,32 +711,9 @@ modeled in the VP.
 
 The following IPs are **not modeled** in the VP. Tests that exercise them will fail:
 
-- `PIC` (Platform Interrupt Controller)
-- `sep_cpu_ctrl`, `sep_reset_ctrl`
-- `local_master_alias_remap_ctrl`
 - `och_sep_cdns_spi_ctrl` (the Cadence SPI leg; the OpenTitan `och_sep_spi_mux_ctrl` is now a functional RW stub — see "Functional stubs" below)
 
 ### Simulation aids (no hardware equivalent)
-
-- **SIM_OUT bootcode virtual console** (`sep/peripherals/sep_virt_console`): the SEP
-  bootcode reports status via `simput*` writes to `SEP_SCRATCH_COLD_SCRATCH_2`
-  (`0x10802010`). The VP observes those writes through a write-tap on the `sep_scratch`
-  stub, decodes them, and prints each line to the console as
-  `[<time>] [INFO <v>] [SIM_OUT] - <text>`. This is an observability aid for the
-  standalone-SEP configuration; it does not change the register's R/W semantics. In the
-  SMU configuration the SMC reads the register itself, so the console can be disabled via
-  `och_sep_ss1.sim_out.enable : false`.
-
-- **SEP_STATUS production-status console** (`sep/peripherals/sep_status_report`): the SEP
-  bootcode also reports status on a *production* path — `report_status()` pushes encoded
-  32-bit status codes into a ring buffer in SMC SRAM that the SMC reads on silicon. The VP
-  observes those ring writes through an observation-only write-tap on the `smc_global` stub,
-  decodes each code (severity, firmware stage, value, and a symbolic `SEP_MSG_*` name
-  resolved at run time from `och_sep_ss1.sep_status.names_tsv`), and prints each as
-  `[<time>] [INFO <v>] [SEP_STATUS] - <stage> <SEVERITY> 0xVVVV <NAME>`. It never modifies
-  the ring or advances the consumer (`tail`) pointer, so it does not change firmware-observable
-  behavior. Disable via `och_sep_ss1.sep_status.enable : false` (e.g. once an SMC-emulation
-  model consumes the ring itself).
 
 - **SPI flash image backdoor-load** (`spi_flash` model, called from `start_of_simulation`): a
   simulation-only way to preload the SPI NOR flash model's contents. The VP loads a staged image
@@ -781,13 +766,13 @@ bin/sep_fw_standalone.sh picolibc  # picolibc only
 
 Selected via `algorithm_type` in `accellera_config.ini`
 
-| Value | Algorithm |
-|-------|-----------|
-| `otbn_loop` | Loop algorithm |
-| `smoke` | Smoke test |
-| `p256_ecdsa` | P-256 ECDSA |
-| `rsa_3072` | RSA 3072-bit |
-| `rsa_2048` | RSA 2048-bit |
+| Value        | Algorithm      |
+| ------------ | -------------- |
+| `otbn_loop`  | Loop algorithm |
+| `smoke`      | Smoke test     |
+| `p256_ecdsa` | P-256 ECDSA    |
+| `rsa_3072`   | RSA 3072-bit   |
+| `rsa_2048`   | RSA 2048-bit   |
 
 ### Controlling Verbosity
 
@@ -801,10 +786,10 @@ och_sep_ss1.sram.verbosity    : 0
 
 ### Log Files
 
-| File | Generated by |
-|------|-------------|
-| `och_sep_ss.log` | VP run (current directory) |
-| `veer_trace.log` | VeeR ISS instruction trace |
+| File                 | Generated by                   |
+| -------------------- | ------------------------------ |
+| `och_sep_ss.log`     | VP run (current directory)     |
+| `veer_trace.log`     | VeeR ISS instruction trace     |
 | `veer_inst_freq.log` | VeeR ISS instruction frequency |
 
 Log file names can be changed via CCI parameters.
@@ -813,13 +798,13 @@ Log file names can be changed via CCI parameters.
 
 ## GCC and C++ Compatibility
 
-| CXX_STD | Compiler | SYSTEMC_API | Status |
-|---------|----------|-------------|--------|
-| c++17 | gcc-toolset-9 (GCC 9.2) | cxx201703L | OK |
-| c++17 | system GCC 8.5 | cxx201703L | OK |
-| c++20 | gcc-toolset-11 (GCC 11.2) | cxx202002L | OK |
-| c++20 | system GCC 8.5 | cxx201709L | Not Supported |
-| c++20 | gcc-toolset-9 (GCC 9.2) | cxx201709L | Not Supported |
+| CXX_STD | Compiler                  | SYSTEMC_API | Status        |
+| ------- | ------------------------- | ----------- | ------------- |
+| c++17   | gcc-toolset-9 (GCC 9.2)   | cxx201703L  | OK            |
+| c++17   | system GCC 8.5            | cxx201703L  | OK            |
+| c++20   | gcc-toolset-11 (GCC 11.2) | cxx202002L  | OK            |
+| c++20   | system GCC 8.5            | cxx201709L  | Not Supported |
+| c++20   | gcc-toolset-9 (GCC 9.2)   | cxx201709L  | Not Supported |
 
 ### Compiler Selection
 
@@ -869,9 +854,8 @@ grep CMAKE_CXX_COMPILER build/CMakeCache.txt
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| `doc/component-developer-guide.md` | Day-to-day contributor workflow |
-| `doc/maintainer-guide.md` | Repository maintenance guide |
-| `doc/SystemC_Virtual_Platform_Customer_Guide.md` | Customer-facing VP usage guide |
-```
+| Document                                         | Description                     |
+| ------------------------------------------------ | ------------------------------- |
+| `doc/component-developer-guide.md`               | Day-to-day contributor workflow |
+| `doc/maintainer-guide.md`                        | Repository maintenance guide    |
+| `doc/SystemC_Virtual_Platform_Customer_Guide.md` | Customer-facing VP usage guide  |

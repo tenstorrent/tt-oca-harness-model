@@ -5,7 +5,6 @@
 
 #include <boost/iostreams/device/mapped_file.hpp>
 #include <fstream>
-#include <functional>
 #include <iostream>
 #include <utility>
 
@@ -42,15 +41,7 @@ class SEPMemory : public sc_module, public load_if
     bool get_direct_mem_ptr(TRANS& trans, tlm::tlm_dmi& dmi);
     unsigned transport_dbg(TRANS& trans);
 
-    // Optional, observation-only write tap. If set, it is invoked on every accepted
-    // write to this instance (after the backing-store update) with the local offset,
-    // data pointer, and length. The SIM_OUT virtual console uses this to watch
-    // SEP_SCRATCH_COLD_SCRATCH_2 without changing the register's R/W semantics.
-    using WriteTap = std::function<void(uint64_t offset, const uint8_t* data, unsigned len)>;
-    void setWriteTap(WriteTap tap) { m_write_tap = std::move(tap); }
-
   private:
     bool m_read_only;
-    WriteTap m_write_tap;  // empty by default — no overhead when unset
 
 };

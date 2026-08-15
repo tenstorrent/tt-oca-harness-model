@@ -54,6 +54,18 @@
 //                Both filter instances set EnNsFilter(1'b1), so this bit is
 //                actively enforced (unlike group_id).
 //
+//                The `false` default is RTL-exact for every SEP-local master,
+//                not a placeholder: VeeR EL2 hardwires the ports sep_cpu.sv
+//                feeds to aw/ar.prot -- lsu and sb to 3'b001
+//                (el2_lsu_bus_buffer.sv:881,898, el2_dbg.sv:740,763) and ifu to
+//                3'b101 (el2_ifu_mem_ctl.sv:1075) -- so bit 1 is 0 on all three
+//                regardless of privilege mode, and no SEP block sets it later
+//                (axi_alias_remap, axi_window_remap and the SPI/UART wrappers
+//                all pass prot through unchanged). Do NOT derive this from the
+//                ISS's privilegeMode(): that diverges from RTL, and because
+//                pass_ns is an exact match under BlockByDefault=1, a CPU access
+//                claiming non-secure would be denied by every allow_ns=0 entry.
+//
 //   cacheable -- AWCACHE/ARCACHE in RTL. hw/ip/axi_alias_remap/rtl/
 //                axi_alias_remap.sv:122,147 overwrites the outgoing cache
 //                field with {CacheWidth{REGION_ATTRS[idx].cacheable}} on a
@@ -61,9 +73,12 @@
 //                unchanged on a miss -- the same "compute on hit, passthrough
 //                on miss" shape as source_id's handling in output_remap.sv.
 //                This is the local_master_alias_remap_ctrl SystemC model's
-//                own REGION_ATTRS.cacheable bit (see its docs/03_*_Test_Plan.md
-//                T10); its data path does not yet act on this field, only
-//                store/read it via CSR -- wiring that up is a follow-up.
+//                own REGION_ATTRS.cacheable bit; that model applies it on both
+//                its functional and debug paths, and restores the caller's
+//                value afterwards (see its docs/03_*_Test_Plan.md T12-T17).
+//                RTL replicates the single region bit across all four AxCACHE
+//                bits, so one bool is faithful for this IP -- it cannot express
+//                the finer-grained AXI encodings a different master might drive.
 //
 // Everything else in the standard AXI4 channel (id, len, size, burst, lock,
 // qos, region) was checked and excluded deliberately, not by omission: every
@@ -81,11 +96,19 @@
 // the extension sees well-defined, "trusted local master" behaviour --
 // same philosophy as smc_axi_extension's SMC_CPU_SOURCE_ID default.
 //
-// As of this writing, no SEP model attaches or reads this extension yet --
-// this header only establishes the shared type. Wiring it up (stamping at
-// the VeeR core / secure_dma initiator sockets and at ap_output_remap_ip /
-// stee_output_remap_ip's re-stamp point, and reading it in sep_filter_ctrl's
-// data_b_transport) is a separate follow-up.
+// Current wiring, for orientation when changing any of it:
+//
+//   stamped by  VeeR-ISSTlm (SEP_SOURCE_ID, member extension per transaction),
+//               secure_dma (OTHERS_SOURCE_ID), and adapters.h (SMC_SOURCE_ID
+//               for external traffic that arrives without an extension)
+//   re-stamped  sep_output_remap_ctrl, to OTHERS_SOURCE_ID for the AP/STEE
+//               crossing, restoring the caller's value afterwards
+//   read by     sep_filter_ctrl (source_id vs FILTER_CONFIG.src_id, is_ns vs
+//               allow_ns) and local_master_alias_remap_ctrl (cacheable override)
+//
+// Models that read the extension fall back to the field defaults below when a
+// transaction arrives without one, so an un-stamped initiator looks like a
+// trusted local master rather than failing closed.
 //
 // References
 // - hw/comp/axi_filter/rtl/traffic_filter.sv, axi_filter_wrap.sv

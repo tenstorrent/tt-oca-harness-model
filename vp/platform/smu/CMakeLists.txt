@@ -230,8 +230,14 @@ target_include_directories(smu-vp
         ${_sep_root}/peripherals/efuse/include
         ${_sep_root}/peripherals/entropy_src/include
         ${_sep_root}/peripherals/edn/include
-        ${_sep_root}/peripherals/sep_virt_console/include
-        ${_sep_root}/peripherals/sep_status_report/include
+        ${_sep_root}/peripherals/sep_scratch_cold/include
+        ${_sep_root}/peripherals/sep_scratch_warm/include
+        ${_sep_root}/peripherals/sep_output_remap_ctrl/include
+        ${_sep_root}/peripherals/sep_filter_ctrl/include
+        ${_sep_root}/peripherals/sep_reset_ctrl/include
+        ${_sep_root}/peripherals/sep_cpu_ctrl/include
+        ${_sep_root}/peripherals/local_master_alias_remap_ctrl/include
+        ${_sep_root}/utils/tlm_extensions
         ${_sep_root}/cpu/VeeR-ISS/
         ${_sep_root}/cpu/VeeR-ISS/softfloat/source/include
         ${_sep_root}/cpu/VeeR-ISSTlm/model/inc)
@@ -276,8 +282,13 @@ target_link_libraries(smu-vp
         hmac_model
         otbn_model
         sep_memory_model
-        sep_virt_console_model
-        sep_status_report_model
+        sep_scratch_cold_model
+        sep_scratch_warm_model
+        sep_output_remap_ctrl_model
+        sep_filter_ctrl_model
+        sep_reset_ctrl_model
+        sep_cpu_ctrl_model
+        local_master_alias_remap_ctrl_model
         csml_logger
         spi_controller_model
         spi_flash_model

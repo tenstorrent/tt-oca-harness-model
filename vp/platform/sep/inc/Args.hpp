@@ -7,11 +7,6 @@ class BasicOptions : public Args {
 
         addr_t el2_start_addr    = 0x00000000;
         addr_t el2_end_addr      = 0x0000FFFF;
-        addr_t plic_start_addr   = 0x00200000;
-        addr_t plic_end_addr     = 0x004FFFFF;  // covers hart_config at local +0x200000
-
-        addr_t clint_start_addr  = 0x02000000;
-        addr_t clint_end_addr    = 0x0200ffff;
         addr_t sys_start_addr    = 0x02010000;
         addr_t sys_end_addr      = 0x020103ff;
         addr_t rom_start_addr    = 0x10040000;
@@ -46,6 +41,21 @@ class BasicOptions : public Args {
         addr_t csrng_end_addr    = 0x109157FF;  // DRBG_CSRNG size 0x800
         addr_t mbox_start_addr   = 0x10A00000;
         addr_t mbox_end_addr     = 0x10A0784F;  // AXIL_MAILBOX size 0x7850
+
+        // AP output remap CSR:  16 × 8 B = 0x80 B at 0x10A10200
+        addr_t ap_remap_csr_start_addr  = 0x10A10200;
+        addr_t ap_remap_csr_end_addr    = 0x10A1027F;  // 0x80 B
+        // AP output remap data-path input window: 8 MB at 0x11000000
+        addr_t ap_remap_data_start_addr = 0x11000000;
+        addr_t ap_remap_data_end_addr   = 0x117FFFFF;
+
+        // STEE output remap CSR: 16 × 8 B = 0x80 B at 0x10A10300
+        addr_t stee_remap_csr_start_addr  = 0x10A10300;
+        addr_t stee_remap_csr_end_addr    = 0x10A1037F;  // 0x80 B
+        // STEE output remap data-path input window: 8 MB at 0x11800000
+        addr_t stee_remap_data_start_addr = 0x11800000;
+        addr_t stee_remap_data_end_addr   = 0x11FFFFFF;
+
         addr_t aon_timer_start_addr   = 0x10801000;  // WDT_TIMER_REG base
         addr_t aon_timer_end_addr     = 0x10801037;  // WDT_TIMER_REG size 0x38
         addr_t keymgr_mb_start_addr    = 0x10920000;
@@ -61,31 +71,57 @@ class BasicOptions : public Args {
         addr_t edn_start_addr          = 0x10915800;  // DRBG_EDN_BASE (sep_crypto_pkg.sv)
         addr_t edn_end_addr            = 0x10915847;  // EDN register space (0x48 bytes)
 
-        // Functional stubs (plain RW backing store, no behavioral model) — required by the
-        // boot ROM early init. SEP_SCRATCH holds warm/cold scratch (warm reset detection);
-        // OUTBOUND_FILTER_CTRL is programmed to allow mailbox egress. See och_sep_top_reg.h.
-        addr_t sep_scratch_start_addr     = 0x10802000;  // SEP_SCRATCH cold/warm scratch
-        addr_t sep_scratch_end_addr       = 0x10802FFF;  // 4 KiB
-        addr_t outbound_filter_start_addr = 0x10A20000;  // OUTBOUND_FILTER_CTRL_0..N
-        addr_t outbound_filter_end_addr   = 0x10A20FFF;  // 4 KiB
+        // Outbound filter CSR: 32 × 0x20 B = 0x400 B at 0x10A20000
+        addr_t outbound_filter_csr_start_addr  = 0x10A20000;
+        addr_t outbound_filter_csr_end_addr    = 0x10A203FF;
+        // Outbound filter data path has no standalone bus window — fed by
+        // outbound_filter_mux (ap_output_remap + stee_output_remap outputs),
+        // matching sep_system_peripherals.sv's remap -> axi_mux -> filter chain.
 
-        // SMC global window: the sep_local_axi_xbar routes [0x40000000, 0xC0000000) to the
-        // SMC via sep_system_peripherals (see fw/sep/bootcode sep_smc_interface.h). The boot
-        // ROM coordinates with the SMC over this path (straps, CPU_CTRL scratch, chip-id,
-        // fuse map, DFT status, and the 1 MiB SMC SRAM). The VP models nothing on the SMC
-        // side, so these accesses faulted (store access fault). Model the low 2 MiB as a
-        // functional RW stub: it covers all SMC registers (0x2090..0xF800) and SMC SRAM
-        // (0x60000..0x15FFFF) with margin, and stays clear of the SEP mailbox
-        // (0x80000000), a separate target in the same routed window.
+        // Inbound filter CSR: 16 × 0x20 B = 0x200 B at 0x10A21000
+        addr_t inbound_filter_csr_start_addr   = 0x10A21000;
+        addr_t inbound_filter_csr_end_addr     = 0x10A211FF;
+        // Inbound filter data path has no standalone bus window — fed by
+        // smn_inbound_socket (external-facing), matching sep_system_peripherals.sv's
+        // smn_inbound_axi_req_i -> inbound_filter direct connection.
+        // Scratch cold: 8 × 8 B = 0x40 B at 0x10802000
+        addr_t scratch_cold_start_addr = 0x10802000;
+        addr_t scratch_cold_end_addr   = 0x1080203F;
+        // Scratch warm: 8 × 8 B = 0x40 B at 0x10802080
+        addr_t scratch_warm_start_addr = 0x10802080;
+        addr_t scratch_warm_end_addr   = 0x108020BF;
+
+        // Local alias remap CSR: 16 regions × 0x20 B = 0x200 B at 0x10A10000
+        addr_t local_alias_remap_csr_start_addr  = 0x10A10000;
+        addr_t local_alias_remap_csr_end_addr    = 0x10A101FF;
+        // Local alias remap data-path window: covers full alias region [local_base, local_base+0x40000000).
+        // ITCM (0xC0000000-0xC003FFFF) and DTCM (0xC0040000-0xC005FFFF) are registered first in the bus
+        // and win by first-match priority, so aliased accesses to those subranges are shadowed correctly.
+        addr_t local_alias_remap_data_start_addr = 0xC0000000;
+        addr_t local_alias_remap_data_end_addr   = 0xFFFFFFFF;
+
+        // SPI mux ctrl: SPI_MUX_CTRL + CRC_LOW + CRC_HIGH (3 × 4 B = 12 B at 0x20000000)
+        addr_t spi_mux_ctrl_start_addr   = 0x20000000;
+        addr_t spi_mux_ctrl_end_addr     = 0x2000000B;
+
+        addr_t reset_ctrl_start_addr  = 0x10A50000; //0x10803000;  // SEP Reset Controller SW_RESET_N
+        addr_t reset_ctrl_end_addr    = 0x10A50007;  // 8-byte register
+
+        addr_t cpu_ctrl_start_addr    = 0x10A30000;  // SEP_CPU_CTRL_REG_MAP_BASE_ADDR
+        addr_t cpu_ctrl_end_addr      = 0x10A31007;  // 0x1008 B register space
+        
         addr_t smc_global_start_addr      = 0x40000000;  // SEP_SMC_GLOBAL_BASE
         addr_t smc_global_end_addr        = 0x401FFFFF;  // 2 MiB (regs + SMC SRAM)
 
-        // OCH_SEP_SPI_MUX_CTRL window. Functional RW stub only: the VP has a single
-        // hard-wired OpenTitan flash leg, so this just backs the SPI driver's spi_sel /
-        // cs_force_high writes so they don't fault. It does NOT model leg selection or
-        // forced chip-select — that behavior is validated in RTL-level (UVM) verification.
-        addr_t spi_mux_start_addr         = 0x20000000;  // OCH_SEP_SPI_MUX_CTRL base
-        addr_t spi_mux_end_addr           = 0x20000FFF;  // 4 KiB (single ctrl reg; clear of 0x20002000)
+        // SMU window (u_axi_demux's SEP_EXT_TO_SMU leg — forwards straight
+        // into outbound_filter_mux, no stub of its own). Matches sep_cpu_ctrl's
+        // SMU_GLOBAL_BASE_ADDR/SMU_REGION_SIZE reset defaults (0x80000000,
+        // 0x40000000) rather than a made-up placeholder, since no real SMU
+        // model exists to justify picking a different one. This range
+        // overlaps stdout_start_addr/stdout_end_addr's tiny 256-byte console
+        // window — registered first in the bus, so it keeps priority.
+        addr_t smu_global_start_addr      = 0x80000000;
+        addr_t smu_global_end_addr        = 0xBFFFFFFF;  // 1 GiB
 
         addr_t rom_size  = rom_end_addr - rom_start_addr + 1;
         addr_t sram_size = sram_end_addr - sram_start_addr + 1;

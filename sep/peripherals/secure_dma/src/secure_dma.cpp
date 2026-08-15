@@ -8,6 +8,7 @@
  */
 
 #include "secure_dma.h"
+#include "sep_axi_extension.h"
 #include <iomanip>
 #include <openssl/evp.h>
 #include <openssl/sha.h>
@@ -1930,6 +1931,17 @@ void secure_dma_model::create_tlm_transaction(tlm::tlm_generic_payload &trans,
   // Set response status to incomplete (will be updated by target)
   trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
+  // Stamp the AXI sideband the outbound/inbound filters key off. The DMA is not
+  // given a source ID of its own in RTL -- sep.sv:895 wires its TL-UL bridge
+  // with .TlUserRsvd('0), so its traffic reaches the filters as
+  // OTHERS_SOURCE_ID.
+  auto* axi_ext = trans.get_extension<sep::sep_axi_extension>();
+  if (!axi_ext) {
+    axi_ext = new sep::sep_axi_extension();
+    trans.set_extension(axi_ext);
+  }
+  axi_ext->source_id = sep::OTHERS_SOURCE_ID;
+
   CSML_INFO(3, logger) << "TLM transaction created - " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "WRITE") << " addr=0x" << std::hex << addr << " length=" << std::dec << length << " byte_enable=0x" << std::hex << static_cast<uint32_t>(byte_enable_mask) << std::dec << std::endl;
 }
 
@@ -3341,6 +3353,12 @@ bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
   trans.set_byte_enable_length(0);
   trans.set_dmi_allowed(false);
   trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+
+  // This payload is built by hand rather than through create_tlm_transaction,
+  // so it needs the same OTHERS_SOURCE_ID stamp applied there.
+  auto* axi_ext      = new sep::sep_axi_extension();
+  axi_ext->source_id = sep::OTHERS_SOURCE_ID;
+  trans.set_extension(axi_ext);
 
   // Annotate timing delay for clearing write transaction
   sc_time delay = SC_ZERO_TIME;

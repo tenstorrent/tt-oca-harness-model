@@ -139,6 +139,8 @@ Enhancement Request for macOS support
   AXI-Lite, IC_RESET TDRs, and the cross-trigger network. The VP uses ISS GDB
   for software debug; `jtag_axi_in` is present but idle. Tests or flows that
   require pin-level JTAG, scan, or DTP CSRs are out of scope.
+- **Unmodeled IPs**: Tests referencing the following will fail or produce no output:
+  - `och_sep_cdns_spi_ctrl`, `och_sep_spi_mux_ctrl`
 - **Key Manager**: unit-level testing only (no DV tests)
 
 
