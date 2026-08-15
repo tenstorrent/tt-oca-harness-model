@@ -732,7 +732,7 @@ The hardware here **does** exist; the VP models the register interface but simpl
 behavior behind it.
 
 - **SPI mux control register stub** (`och_sep_ss.hpp`, backed by `sep_memory`): `OCH_SEP_SPI_MUX_CTRL`
-  (`0x20000000`) is a real silicon register — the OpenTitan SPI driver's first action is a
+  (`0x20001000`) is a real silicon register — the OpenTitan SPI driver's first action is a
   mux-select write to it. The VP maps it as a functional RW stub so the write does not fault, and
   it reads back the silicon reset default (`0x00000002`, `cs_force_high=1`) before any write. It
   stores and returns values only — it does **not** model SPI leg selection or forced chip-select,

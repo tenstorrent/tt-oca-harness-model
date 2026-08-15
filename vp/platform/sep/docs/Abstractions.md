@@ -272,7 +272,7 @@ aren't reintroduced:
   having zero register entries for either); GPIO is a remote SMC-side peripheral, not SEP's own
   (confirmed independently via the OCAH doc's §5.2: "Remote peripherals shared with SMC: UART,
   GPIO"). These were VP-only scaffolding, never part of the real register map.
-- **`irq_map.h`** rewritten to be an exact, RTL-verified mirror of the real 34-entry
+- **`irq_map.h`** rewritten to be an exact, RTL-verified mirror of the real 38-entry
   `sep_internal_interrupts[]` array; four VP-only synthetic IRQ constants (`UART_IRQ`,
   `AON_WKUP_IRQ`, `AON_WDOG_IRQ`, `SPI_ERROR_IRQ`) removed entirely rather than relocated.
 - **`sep_filter_ctrl`'s `BlockByDefault`** was inverted (treated "no active entries" as

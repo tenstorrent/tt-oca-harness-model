@@ -100,12 +100,20 @@ class BasicOptions : public Args {
         addr_t local_alias_remap_data_start_addr = 0xC0000000;
         addr_t local_alias_remap_data_end_addr   = 0xFFFFFFFF;
 
-        // SPI mux ctrl: SPI_MUX_CTRL + CRC_LOW + CRC_HIGH (3 × 4 B = 12 B at 0x20000000)
-        addr_t spi_mux_ctrl_start_addr   = 0x20000000;
-        addr_t spi_mux_ctrl_end_addr     = 0x2000000B;
+        // SPI mux ctrl: SPI_MUX_CTRL + CRC_LOW + CRC_HIGH (3 × 4 B = 12 B). Moved here
+        // from 0x20000000 when the efuse shim CSRs claimed that base, leaving the mux one
+        // 4 KiB page up (och_sep_top_reg.h:
+        // SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_REG_MAP_BASE_ADDR = 0x20001000).
+        addr_t spi_mux_ctrl_start_addr   = 0x20001000;
+        addr_t spi_mux_ctrl_end_addr     = 0x2000100B;
 
-        addr_t reset_ctrl_start_addr  = 0x10A50000; //0x10803000;  // SEP Reset Controller SW_RESET_N
-        addr_t reset_ctrl_end_addr    = 0x10A50007;  // 8-byte register
+        // SEP Reset Controller SW_RESET_N. Moved here from 0x10A50000 when the IP
+        // was relocated off sep_system_peripherals onto the top-level SEP xbar in
+        // tt-oca-hw's sep_local_axi_xbar.yaml. Checkable in-tree against
+        // och_sep_top_reg.h: SEP_RESET_CTRL_REG_MAP_BASE_ADDR = 0x10803000,
+        // SEP_RESET_CTRL_REG_MAP_SIZE = 0x8.
+        addr_t reset_ctrl_start_addr  = 0x10803000;
+        addr_t reset_ctrl_end_addr    = 0x10803007;  // 8-byte register
 
         addr_t cpu_ctrl_start_addr    = 0x10A30000;  // SEP_CPU_CTRL_REG_MAP_BASE_ADDR
         addr_t cpu_ctrl_end_addr      = 0x10A31007;  // 0x1008 B register space

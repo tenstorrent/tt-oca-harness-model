@@ -37,8 +37,10 @@ static constexpr unsigned NUM_INTERRUPTS = 256;
 static constexpr unsigned NUM_PEND_WORDS = NUM_INTERRUPTS / 32;
 
 /// Backing memory size in bytes. The PIC's MMIO surface ends at
-/// meigwclr[255] = 0x53FC..0x53FF, so 0x6000 gives comfortable padding.
-static constexpr unsigned MEM_SIZE_BYTES = 0x6000;
+/// meigwclr[255] = 0x53FC..0x53FF, but the core routes the whole
+/// `pic_size = 32` KiB region here, so the store spans the full aperture and
+/// the offsets above meigwclr read back as zero rather than erroring.
+static constexpr unsigned MEM_SIZE_BYTES = 0x8000;
 
 // Register-array byte offsets (per RDL).
 static constexpr unsigned OFFS_MEIPL_BASE       = 0x0000;  // meipl[0]    (reserved)

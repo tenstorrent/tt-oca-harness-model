@@ -2,7 +2,7 @@
  * SPI Mux + Flash-Loader Test for the SEP Platform
  *
  * Exercises the two VP enablement changes:
- *   1. The OCH_SEP_SPI_MUX_CTRL register at 0x20000000 is an RW bus target: a store no
+ *   1. The OCH_SEP_SPI_MUX_CTRL register at 0x20001000 is an RW bus target: a store no
  *      longer faults, read-back returns what was written, and the pre-write read returns the
  *      seeded reset default 0x00000002 (cs_force_high=1, spi_sel=0).
  *   2. The SPI flash READ path returns bytes from the staged image. Built without
@@ -17,7 +17,7 @@ extern int printf(const char *format, ...);
 // ---------------------------------------------------------------------------
 // SPI mux control register (OCH_SEP_SPI_MUX_CTRL)
 // ---------------------------------------------------------------------------
-#define SPI_MUX_BASE            0x20000000
+#define SPI_MUX_BASE            0x20001000
 #define SPI_MUX_CTRL            (SPI_MUX_BASE + 0x00)
 #define SPI_MUX_RESET_VALUE     0x00000002u   // cs_force_high=1, spi_sel=0
 #define SPI_MUX_SPI_SEL         (1u << 0)
