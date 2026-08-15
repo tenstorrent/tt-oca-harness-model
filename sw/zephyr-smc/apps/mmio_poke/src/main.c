@@ -4,7 +4,7 @@
  * Reachability poke of SMC peripherals that have no Zephyr driver (so they
  * do not appear in `device list`).  Uses the same MMIO map as
  * sw/smc-vp-tests/common/smc_common.h.  Safe: no WDT unlock, no UART0
- * reprogramming, no IRQ enable.
+ * reprogramming, and no persistent interrupt enables.
  */
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
