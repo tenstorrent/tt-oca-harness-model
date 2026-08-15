@@ -26,16 +26,24 @@ SC_MODULE(Tb) {
     tlm_utils::simple_initiator_socket<Tb, 32> isock;
     sc_core::sc_signal<bool>              rst_n_sig;
     sc_core::sc_signal<uint32_t, sc_core::SC_MANY_WRITERS> nmi_vec_sig;
+    // Plain (single-writer) signals: publish_window_process is the only driver,
+    // and keeping the default policy makes an accidental second one an error.
+    sc_core::sc_signal<uint64_t> global_base_sig;
+    sc_core::sc_signal<uint64_t> region_size_sig;
 
     SC_CTOR(Tb)
         : dut("dut")
         , isock("isock")
         , rst_n_sig("rst_n_sig")
         , nmi_vec_sig("nmi_vec_sig")
+        , global_base_sig("global_base_sig")
+        , region_size_sig("region_size_sig")
     {
         isock.bind(dut.target_socket);
         dut.rst_ni(rst_n_sig);
         dut.nmi_vec_o(nmi_vec_sig);
+        dut.sep_global_base_addr_o(global_base_sig);
+        dut.sep_region_size_o(region_size_sig);
         SC_THREAD(run);
     }
 
@@ -105,6 +113,14 @@ SC_MODULE(Tb) {
 
         assert(nmi_vec_sig.read() == 0xC0000100u); // 0x60000080 << 1
         std::cout << "[PASS] T1: nmi_vec_o reset=0xC0000100\n";
+
+        v = do_read(0x0C0); // SEP_GLOBAL_BASE_ADDR
+        assert(v == 0x0ULL);
+        v = do_read(0x0D0); // SEP_REGION_SIZE
+        assert(v == 0x01000000ULL);
+        assert(global_base_sig.read() == 0x0ULL);
+        assert(region_size_sig.read() == 0x01000000ULL);
+        std::cout << "[PASS] T1: inbound window resets to [0x0,+16 MiB) and is exported\n";
 
         // ------------------------------------------------------------------
         // T2: Basic SW read/write (CLOCK_GATE_CTRL)
@@ -278,6 +294,47 @@ SC_MODULE(Tb) {
         v = do_read(0x160); // SEP_STRAPS
         assert((v & 0x3ULL) == 0x3ULL);
         std::cout << "[PASS] T13: SEP_STRAPS reflects hwif_in test_en/bypass_mem_repair\n";
+
+        // ------------------------------------------------------------------
+        // T14: inbound-window CSR writes drive sep_global_base_addr_o /
+        // sep_region_size_o. The SMU interconnect sizes its SEP aperture from
+        // these, so a firmware reprogram has to be visible on the ports and not
+        // only in the register file. addr is [55:0], size is [31:0]: the bits
+        // above each field are reserved and must not reach the export.
+        // ------------------------------------------------------------------
+        // Two zero-time waits throughout: the callback only requests a
+        // republish, so the driving process runs one delta later and its signal
+        // write commits the delta after that.
+        do_write(0x0C0, 0x5000'0000ULL);
+        do_write(0x0D0, 0x2000'0000ULL);
+        wait(sc_core::SC_ZERO_TIME);
+        wait(sc_core::SC_ZERO_TIME);
+        assert(do_read(0x0C0) == 0x5000'0000ULL);
+        assert(do_read(0x0D0) == 0x2000'0000ULL);
+        assert(global_base_sig.read() == 0x5000'0000ULL);
+        assert(region_size_sig.read() == 0x2000'0000ULL);
+
+        do_write(0x0C0, 0xFFFF'FFFF'FFFF'FFFFULL);
+        do_write(0x0D0, 0xFFFF'FFFF'FFFF'FFFFULL);
+        wait(sc_core::SC_ZERO_TIME);
+        wait(sc_core::SC_ZERO_TIME);
+        assert(global_base_sig.read() == 0x00FF'FFFF'FFFF'FFFFULL); // [55:0]
+        assert(region_size_sig.read() == 0xFFFF'FFFFULL);           // [31:0]
+        std::cout << "[PASS] T14: inbound window CSR writes drive the exports, reserved bits masked\n";
+
+        // Assigning the registers directly bypasses the write callbacks, which
+        // is how a platform seeds the window in place of firmware. The exports
+        // go stale until publish_inbound_window() asks for a re-sample.
+        dut.SEP_GLOBAL_BASE_ADDR = 0x4000'0000ULL;
+        dut.SEP_REGION_SIZE      = 0x0800'0000ULL;
+        wait(sc_core::SC_ZERO_TIME);
+        assert(global_base_sig.read() == 0x00FF'FFFF'FFFF'FFFFULL); // still stale
+        dut.publish_inbound_window();
+        wait(sc_core::SC_ZERO_TIME);
+        wait(sc_core::SC_ZERO_TIME); // notify(SC_ZERO_TIME) + signal update
+        assert(global_base_sig.read() == 0x4000'0000ULL);
+        assert(region_size_sig.read() == 0x0800'0000ULL);
+        std::cout << "[PASS] T14: publish_inbound_window() re-samples the register file\n";
 
         std::cout << "\n=== All tests PASSED ===\n";
         sc_core::sc_stop();

@@ -164,28 +164,32 @@ shared fixed adapter uses the same window logic for both CPU and DMA traffic.
 underlying `aon_timer`'s alert is explicitly tied off `/* UNUSED */`). This looks like a
 real RTL inconsistency, not just a VP gap — left unwired pending hardware-team clarification.
 
-### 3.5 SEP↔SMC/SMU integration boundary is not yet exposed
-Covered in depth in review — summary:
-- `outbound_filter_stub` and `smc_global` are private members of `och_sep_ss`, not
-  publicly-bindable sockets. `smn_inbound_socket` is the only externally-reachable port on the
-  whole module today.
+### 3.5 SEP↔SMC/SMU integration boundary — partially exposed
+The AXI boundary now exists as public sockets on `och_sep_ss`, so `smu-vp` binds the SEP as a
+real participant rather than reaching into it:
+- `sep_smn_inbound_axi` (RTL `smn_inbound_axi`) — inbound from the SMU crossbar, feeding the
+  RTL-ordered chain `inbound_filter` → global→local window remap → internal bus.
+- `sep_smn_outbound_axi` (RTL `smn_outbound_axi`) — everything the outbound filter passes,
+  previously swallowed by a private `filter_output_stub`, so SEP egress was unobservable.
+- `sep_ext_to_smc_axi` — the dedicated SMC-window master path.
+- `sep_global_base_addr_o`/`sep_region_size_o` (`sc_signal` members driven by `cpu_ctrl` from its
+  CSRs, mirroring `sep_system_csr.sv`) — the crossbar sizes its SEP aperture from these, so the
+  window cannot be configured on one side and not the other.
+
+Standalone `sep-vp` binds an idle initiator to the inbound port and sinks to the two outbound
+ports, since there is no chiplet fabric above it.
+
+What is still missing:
 - `cpu_ctrl->hwif_in.smc_fuse_sense_done`/`sep_fuse_sense_done` are hardcoded `true` at
   construction rather than driven by real cross-module signals.
 - `smc_global_base_addr_i`/`smc_region_size_i` (real RTL inputs from SMC that gate the
   `SEP_EXT_TO_SMC` demux window) aren't modeled as live signals — `smc_global`'s window is a
   static `Args.hpp` constant instead.
 - No top-level ports exist for `lc_state_o`, `feat_ctrl_o`, `security_disable_o`,
-  `lcc_demote_state`, `wdt_rst_ni`/`wdt_timer_rst_req_o` — all internal-only, since there is no
-  parent SMU-level testbench yet to wire them to.
-- `test/src/smn_inbound_testbench.cpp` (a standalone unit test wiring an initiator directly to
-  `smn_inbound_socket` to exercise `inbound_filter` → `smn_inbound_remap_adapter`) has been
-  removed (later session). It was never referenced by CI (`ci.yml`/`ci-rhel8.yml` only build and
-  run `sep-vp`, never `ctest`) or anything else in the repo, so it provided no enforced
-  verification value — a test nobody runs isn't coverage. `smn_inbound_socket_placeholder` (the
-  passive self-bind stopgap in `och_sep_ss.hpp`) remains as the only thing keeping this port
-  bound. Net effect: the SMN inbound chain currently has zero test coverage. This is accepted
-  deliberately for now, pending a real SMC/AP driver to bind `smn_inbound_socket` and exercise
-  this chain as part of actual integration testing rather than an isolated unit test.
+  `lcc_demote_state`, `wdt_rst_ni`/`wdt_timer_rst_req_o` — all internal-only.
+- The SMN inbound chain has no dedicated unit test. An earlier standalone testbench was removed
+  because nothing ran it (`ci.yml`/`ci-rhel8.yml` build and run `sep-vp`, never `ctest`), and a
+  test nobody runs isn't coverage. It is now exercised for real by the `smu-vp` link test instead.
 
 ### 3.6 Address-map entries pending RTL confirmation (found via OCAH doc cross-check, not yet verified against real RTL)
 - UART/SPI look swapped relative to the OCAH memory map: doc places UART (shared with GPIO) at

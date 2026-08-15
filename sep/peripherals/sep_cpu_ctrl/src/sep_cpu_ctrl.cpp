@@ -18,6 +18,11 @@ sep_cpu_ctrl_ip::sep_cpu_ctrl_ip(sc_core::sc_module_name n)
     sensitive << rst_ni;
     dont_initialize();
 
+    // Runs at time 0 so the exports carry the CSR reset values before any
+    // traffic, then on every republish request.
+    SC_METHOD(publish_window_process);
+    sensitive << window_changed_;
+
     register_callbacks();
 }
 
@@ -45,7 +50,29 @@ void sep_cpu_ctrl_ip::reset_handler()
         fs_ext_trng_src_sel_      = 0x7;
         fs_ext_trng_src_sel_lock_ = false;
         nmi_vec_o.write(static_cast<uint32_t>(fs_nmi_vec_) << 1);
+        publish_inbound_window();
     }
+}
+
+// =============================================================================
+// Inbound-window exports — mirror sep_system_csr.sv's continuous assigns
+//
+// RTL drives sep_global_base_addr_o/sep_region_size_o combinationally off the
+// CSR fields. Here one process owns both ports and everything else asks it to
+// re-sample, which keeps the LT model to a single driver per signal while still
+// tracking whatever the registers hold.
+// =============================================================================
+void sep_cpu_ctrl_ip::publish_inbound_window()
+{
+    window_changed_.notify(sc_core::SC_ZERO_TIME);
+}
+
+void sep_cpu_ctrl_ip::publish_window_process()
+{
+    sep_global_base_addr_o.write(
+        static_cast<uint64_t>(SEP_GLOBAL_BASE_ADDR) & 0x00FF'FFFF'FFFF'FFFFULL);
+    sep_region_size_o.write(
+        static_cast<uint64_t>(SEP_REGION_SIZE) & 0xFFFF'FFFFULL);
 }
 
 // =============================================================================
@@ -74,6 +101,13 @@ void sep_cpu_ctrl_ip::register_callbacks()
 
     std::function<bool(DT)> ref_counter_write = std::bind(&sep_cpu_ctrl_ip::handle_write_REFERENCE_COUNTER, this, _1, REFERENCE_COUNTER.write_bit_mask);
     memory.register_write_callback(ref_counter_write, REFERENCE_COUNTER.offset);
+
+    // --- Post-write callbacks ---
+    // Both inbound-window registers are plain storage; these only republish the
+    // stored value on sep_global_base_addr_o / sep_region_size_o afterwards.
+    std::function<bool()> window_published = std::bind(&sep_cpu_ctrl_ip::post_write_inbound_window, this);
+    memory.register_post_write_callback(window_published, SEP_GLOBAL_BASE_ADDR.offset);
+    memory.register_post_write_callback(window_published, SEP_REGION_SIZE.offset);
 
     // --- Read callbacks ---
 
@@ -121,6 +155,15 @@ void sep_cpu_ctrl_ip::register_callbacks()
 bool sep_cpu_ctrl_ip::handle_write_REFERENCE_COUNTER(DT value, DT write_bit_mask)
 {
     hwif_in.reference_counter_rc = static_cast<uint64_t>(value & write_bit_mask);
+    return true;
+}
+
+// SEP_GLOBAL_BASE_ADDR / SEP_REGION_SIZE: plain storage whose stored value
+// leaves the subsystem on sep_global_base_addr_o / sep_region_size_o. Runs after
+// the store, so the republish a delta later re-samples the new contents.
+bool sep_cpu_ctrl_ip::post_write_inbound_window()
+{
+    publish_inbound_window();
     return true;
 }
 

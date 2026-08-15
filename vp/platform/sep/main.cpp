@@ -1,6 +1,7 @@
 #include <systemc.h>
 #include <filesystem>
 #include <cstdlib>
+#include <cstring>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 #include "och_sep_ss.hpp"
@@ -17,19 +18,33 @@ public:
     explicit idle_initiator(sc_core::sc_module_name name) : sc_core::sc_module(name) {}
 };
 
-// Accept-all stub target: terminates the platform's outbound boundary port
-// (sep_ext_to_smc_axi) in standalone sep-vp.  Never receives traffic (the
-// smc_global window falls back to its internal RW store unless
-// `smc_global.forward_en` is set), but the socket must be bound.
+// Accept-all stub target: terminates the platform's outbound boundary ports
+// (sep_ext_to_smc_axi, sep_smn_outbound_axi) in standalone sep-vp, where there
+// is no chiplet fabric to receive them.  Reads are zero-filled rather than left
+// alone so a stray read cannot return whatever was in the caller's buffer.
 class sink_target : public sc_core::sc_module {
 public:
     tlm_utils::simple_target_socket<sink_target, 64> sock{"sock"};
     explicit sink_target(sc_core::sc_module_name name) : sc_core::sc_module(name) {
         sock.register_b_transport(this, &sink_target::b_transport);
+        sock.register_transport_dbg(this, &sink_target::transport_dbg);
     }
 private:
-    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time&) {
+    static void zero_reads(tlm::tlm_generic_payload& trans) {
+        if (!trans.is_read()) return;
+        unsigned char* p = trans.get_data_ptr();
+        if (p && trans.get_data_length() > 0)
+            std::memset(p, 0, trans.get_data_length());
+    }
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
+        delay = sc_core::SC_ZERO_TIME;
+        zero_reads(trans);
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
+    }
+    unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
+        zero_reads(trans);
+        trans.set_response_status(tlm::TLM_OK_RESPONSE);
+        return trans.get_data_length();
     }
 };
 
@@ -77,11 +92,13 @@ int sc_main(int argc, char **argv)
     och_sep_ss och_sep_ss1("och_sep_ss1");
 
     // Standalone sep-vp has no SMU platform: bind the chiplet boundary ports
-    // idle (inbound) / to a sink (outbound dedicated SMC window).
+    // idle (inbound) / to sinks (dedicated SMC window and general outbound).
     idle_initiator idle_smn_in{"idle_smn_in"};
     sink_target    sink_smc_win{"sink_smc_win"};
+    sink_target    sink_smn_out{"sink_smn_out"};
     idle_smn_in.sock.bind(och_sep_ss1.sep_smn_inbound_axi);
     och_sep_ss1.sep_ext_to_smc_axi.bind(sink_smc_win.sock);
+    och_sep_ss1.sep_smn_outbound_axi.bind(sink_smn_out.sock);
 
     sc_start();
     return 0;

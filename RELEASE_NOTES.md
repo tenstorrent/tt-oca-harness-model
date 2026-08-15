@@ -29,11 +29,11 @@ Platforms: `smc-vp`, `sep-vp`, `smu-vp`.
 
 ### SEP
 
-- Interconnect and interrupt: SimpleBus, EL2 PIC, local-master alias remap, output remap, filter control
+- Interconnect and interrupt: SimpleBus (enforcing the SEP crossbar's per-initiator connectivity matrix), EL2 PIC, local-master alias remap, output remap, filter control
 - Reset and CPU control: `sep_reset_ctrl`, `sep_cpu_ctrl`
 - Crypto and entropy: HMAC, KMAC, OTBN, CSRNG, AES, Key Manager, EDN, Entropy Source
 - Peripherals: secure DMA, mailbox, AON timer, eFuse/OTP, lifecycle controller, SPI controller (OpenTitan), SPI Flash (SFDP Profile 1)
-- Integration: OTP key-request stub, mailbox host stub, MailboxBridge, `dma_sys_bus_adapter`, stdout / virt-console / SEP status report
+- Integration: SEP↔SMU AXI boundary (`smn_inbound_axi`, `smn_outbound_axi`, `sep_ext_to_smc_axi`), with the inbound-window CSRs exported so the SMU crossbar sizes its SEP aperture from them; OTP key-request stub, mailbox host stub, MailboxBridge, `dma_sys_bus_adapter`, stdout / virt-console / SEP status report
 
 ## Testing Status
 

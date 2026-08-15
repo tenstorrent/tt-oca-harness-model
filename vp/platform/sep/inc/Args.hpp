@@ -110,16 +110,23 @@ class BasicOptions : public Args {
         addr_t cpu_ctrl_start_addr    = 0x10A30000;  // SEP_CPU_CTRL_REG_MAP_BASE_ADDR
         addr_t cpu_ctrl_end_addr      = 0x10A31007;  // 0x1008 B register space
         
+        // SMC window (SEP_EXT_TO_SMC leg of u_axi_demux). These are only the
+        // defaults for och_sep_ss's smc_global_base/smc_region_size, which model
+        // RTL's smc_global_base_addr_i/smc_region_size_i and are what the bus
+        // actually decodes against; a platform with a real SMC attached presets
+        // them to the window that SMC declares. 2 MiB covers the SMC regs plus
+        // its SRAM, which is all the standalone fallback store needs.
         addr_t smc_global_start_addr      = 0x40000000;  // SEP_SMC_GLOBAL_BASE
         addr_t smc_global_end_addr        = 0x401FFFFF;  // 2 MiB (regs + SMC SRAM)
 
         // SMU window (u_axi_demux's SEP_EXT_TO_SMU leg — forwards straight
-        // into outbound_filter_mux, no stub of its own). Matches sep_cpu_ctrl's
-        // SMU_GLOBAL_BASE_ADDR/SMU_REGION_SIZE reset defaults (0x80000000,
-        // 0x40000000) rather than a made-up placeholder, since no real SMU
-        // model exists to justify picking a different one. This range
-        // overlaps stdout_start_addr/stdout_end_addr's tiny 256-byte console
-        // window — registered first in the bus, so it keeps priority.
+        // into outbound_filter_mux, no stub of its own). No longer decoded from
+        // these constants: the bus reads sep_cpu_ctrl's SMU_GLOBAL_BASE_ADDR /
+        // SMU_REGION_SIZE per transaction, so firmware reprogramming the window
+        // takes effect. The values below are those CSRs' reset defaults, kept
+        // here because the range still documents the map and still overlaps
+        // stdout's 256-byte console window — stdout is registered first in the
+        // bus, so it keeps priority.
         addr_t smu_global_start_addr      = 0x80000000;
         addr_t smu_global_end_addr        = 0xBFFFFFFF;  // 1 GiB
 

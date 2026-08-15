@@ -49,6 +49,26 @@ public:
     sc_core::sc_in<bool>      rst_ni{"rst_ni"};
     sc_core::sc_out<uint32_t> nmi_vec_o{"nmi_vec_o"};
 
+    // Inbound-window exports. sep_system_csr.sv drives these as continuous
+    // assigns off the cpu_ctrl hwif (sep_global_base_addr_o / sep_region_size_o)
+    // and sep.sv forwards them to the SMU interconnect, which sizes its SEP
+    // aperture from them. The CSR pair is therefore the single source of truth
+    // for the window on both sides of the boundary: the SEP-side inbound remap
+    // reads the registers directly, and everything upstream follows these ports.
+    // addr is [55:0] and size is [31:0]; both are published zero-extended.
+    sc_core::sc_out<uint64_t> sep_global_base_addr_o{"sep_global_base_addr_o"};
+    sc_core::sc_out<uint64_t> sep_region_size_o{"sep_region_size_o"};
+
+    // Request a republish of both exports from the current CSR contents. The
+    // RTL assign is continuous, so anything that changes either register out of
+    // band — a platform seeding the window in place of firmware, for instance —
+    // must call this; ordinary firmware writes request it from their write
+    // callbacks. The write itself happens one delta later in
+    // publish_window_process, which is the only driver of the two ports: having
+    // the callers write directly would make every one of them a driver and
+    // SystemC rejects two processes writing one signal in the same delta.
+    void publish_inbound_window();
+
     SepCpuCtrlHwifIn hwif_in;
 
     // -------------------------------------------------------------------------
@@ -78,6 +98,10 @@ private:
     void register_callbacks();
     void reset_handler();
 
+    // Sole driver of sep_global_base_addr_o / sep_region_size_o.
+    void publish_window_process();
+    sc_core::sc_event window_changed_;
+
     // -------------------------------------------------------------------------
     // Write callback handlers  (DT = csml_memory<64> word type = unsigned long long)
     // -------------------------------------------------------------------------
@@ -87,6 +111,12 @@ private:
     bool handle_write_EXT_TRNG_SRC_SEL_LOCK(DT value, DT write_bit_mask);
     bool handle_write_TIMEOUT_CLEAR(DT value, DT write_bit_mask);
     bool handle_write_REFERENCE_COUNTER(DT value, DT write_bit_mask);
+
+    // Post-write hook, not a write callback: registering a write callback for an
+    // offset *replaces* csml_reg's own handle_write, which is what performs the
+    // masked store, so a plain-storage register would stop storing. The
+    // post-write hook runs after that store instead of in place of it.
+    bool post_write_inbound_window();
 
     // -------------------------------------------------------------------------
     // Read callback handlers
