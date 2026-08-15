@@ -305,9 +305,8 @@ smc-vp <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]
 ----
 
 `--uart-live`::
-An `SC_THREAD` drains UART0's TX history every 1 µs of simulation time
+An `SC_THREAD` drains UART0's TX history every 50 µs of simulation time
 and writes characters to **stdout immediately**.  This is how you watch
-the boot process as it happens.
 
 `--uart-interactive`::
 Implies `--uart-live`.  Bytes typed in the terminal are injected into
