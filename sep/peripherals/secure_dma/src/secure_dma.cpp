@@ -1934,12 +1934,13 @@ void secure_dma_model::create_tlm_transaction(tlm::tlm_generic_payload &trans,
   // Stamp the AXI sideband the outbound/inbound filters key off. The DMA is not
   // given a source ID of its own in RTL -- sep.sv:895 wires its TL-UL bridge
   // with .TlUserRsvd('0), so its traffic reaches the filters as
-  // OTHERS_SOURCE_ID. Heap-allocated rather than reusing a member: the payload
-  // destructor frees the extensions it still holds, and the callers here own
-  // short-lived local payloads with no clear_extension of their own.
-  auto* axi_ext      = new sep::sep_axi_extension();
+  // OTHERS_SOURCE_ID.
+  auto* axi_ext = trans.get_extension<sep::sep_axi_extension>();
+  if (!axi_ext) {
+    axi_ext = new sep::sep_axi_extension();
+    trans.set_extension(axi_ext);
+  }
   axi_ext->source_id = sep::OTHERS_SOURCE_ID;
-  trans.set_extension(axi_ext);
 
   CSML_INFO(3, logger) << "TLM transaction created - " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "WRITE") << " addr=0x" << std::hex << addr << " length=" << std::dec << length << " byte_enable=0x" << std::hex << static_cast<uint32_t>(byte_enable_mask) << std::dec << std::endl;
 }
