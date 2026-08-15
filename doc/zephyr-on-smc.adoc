@@ -1,0 +1,494 @@
+// SPDX-License-Identifier: Apache-2.0
+= Porting and Booting Zephyr RTOS on the SMC Virtual Platform
+:toc:
+:toclevels: 4
+:sectnums:
+:source-highlighter: highlight.js
+
+This guide walks through downloading Zephyr, building an out-of-tree
+RISC-V port for the Tenstorrent SMC virtual platform (`smc-vp`), booting
+the kernel, watching the boot banner on UART0, and typing into the Zephyr
+shell.
+
+The port lives in-tree at `sw/zephyr-smc/` and does **not** require
+patching the upstream Zephyr tree.  Firmware is loaded the same way as
+the existing bare-metal tests in `sw/smc-vp-tests/`: an ELF linked at
+`0x80000000` is passed to `smc-vp`, which presets the cluster reset PC
+and dumps / streams UART0.
+
+== What you get
+
+After following this document you can:
+
+. Clone a pinned Zephyr release into a local west workspace.
+. Build `samples/hello_world` and `samples/subsys/shell/shell_module`
+  for the `smc_vp` board.
+. Run the ELF on `smc-vp` and **watch the boot banner live** on UART0.
+. Type into the Zephyr shell over the same UART (stdin of `smc-vp` is
+  injected into UART0 RX).
+
+A helper script, `sw/zephyr-smc/zephyr_smc.sh`, automates the same
+steps.  The sections below show the raw commands so you can reproduce
+them by hand.
+
+=== Watch the boot on this tree (already built)
+
+If `sw/zephyr-smc/build/hello_world/zephyr/zephyr.elf` exists, skip
+ahead and just run:
+
+[source,bash]
+----
+vp/build_smc/bin/smc-vp \
+    sw/zephyr-smc/config/smc_zephyr.ini \
+    sw/zephyr-smc/build/hello_world/zephyr/zephyr.elf \
+    200 --uart-live
+----
+
+The boot banner streams under `---- UART0 (live) ----` as the kernel
+comes up:
+
+----
+*** Booting Zephyr OS build v4.3.0 ***
+Hello World! smc_vp/smc
+----
+
+That is the connected UART: `smc-vp` is the serial cable.  There is no
+separate `/dev/tty` — watch this terminal.
+
+== Architecture mapping
+
+The SMC CPU cluster is four `rv64imafdc` harts (CVA6 / Whisper ISS).
+Zephyr boots on **hart 0 in M-mode**; harts 1..3 stay parked in `wfi`
+(the same convention as `sw/smc-vp-tests/common/start.S`).
+
+[cols="22,22,56",options="header"]
+|===
+|Block |SMC VP address |Zephyr binding
+
+|DRAM (cluster fast-mem)
+|`0x8000_0000` .. `0x9000_0000` (256 MiB)
+|`zephyr,sram = &ram0`
+
+|UART0 (NS16550, 32-bit stride)
+|`0xC000_A000`
+|`compatible = "ns16550"`; `reg-shift = <2>`;
+`CONFIG_UART_NS16550_ACCESS_WORD_ONLY=y` (the model rejects 1-byte TLM)
+
+|PLIC
+|`0xC080_0000`, window `0x40_0000`, 336 sources, 8 contexts
+|`compatible = "sifive,plic-1.0.0"`; UART0 is source **19**
+(peripheral bit 18 + 1).  Context 0 is hart 0 M-mode.
+
+|CLINT / machine timer
+|`0xC0C0_0000` (`mtime` at `+0xBFF8`, `mtimecmp[0]` at `+0x4000`)
+|`compatible = "riscv,machine-timer"`
+
+|Scratchpad / boot ROM / other MMIO
+|local alias `[0xC000_0000, 0xC100_0000)`
+|Not required for hello_world / shell; reachable if you add DTS nodes.
+|===
+
+IMPORTANT: The default `smc-vp` CCI ini freezes CLINT `mtime`
+(`dut.clint.tick_period_ns = 0`) so the bare-metal firmware tests stay
+deterministic.  Zephyr's scheduler needs a ticking `mtime`.  Use
+`sw/zephyr-smc/config/smc_zephyr.ini`, which sets
+`tick_period_ns = 10000` (10 µs → 100 kHz) and matches
+`CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC=100000`.
+
+== Prerequisites
+
+=== Host tools
+
+[cols="28,72",options="header"]
+|===
+|Tool |Notes
+
+|RISC-V GNU toolchain
+|RV64, e.g. Homebrew `riscv64-elf-gcc` (`RISCV_PREFIX=riscv64-elf-`)
+or `riscv64-unknown-elf-gcc`.  Provides `gcc` / `objcopy`.
+
+|Python ≥ 3.10 + `pip`
+|Zephyr 4.3 refuses 3.9.  The helper creates `sw/zephyr-smc/.venv`
+with Homebrew `python3.12` and installs `west` there.
+
+|CMake ≥ 3.20, Ninja
+|Zephyr's default generator.  `brew install ninja` on macOS.
+
+|`smc-vp` dependencies
+|Accellera SystemC 3.x **C++20**, CCI 1.0, Whisper ISS, Boost.
+See `sw/smc-vp-tests/README.md`.
+|===
+
+Canonical env vars on this machine (override to match your install):
+
+[source,bash]
+----
+export SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20
+export CCI_HOME=/Users/pdroy/local/cci-cxx20
+export WHISPER_HOME=/Users/pdroy/tt_whisper/whisper
+export BOOST_DIR=/opt/homebrew/opt/boost
+export RISCV_PREFIX=riscv64-elf-          # or riscv64-unknown-elf-
+----
+
+=== Build `smc-vp` once
+
+From the repository root:
+
+[source,bash]
+----
+cmake -S vp -B vp/build -DCMAKE_BUILD_TYPE=Release \
+      -DSYSTEMC_HOME="$SYSTEMC_HOME" -DCCI_HOME="$CCI_HOME"
+cmake --build vp/build --target smc-vp -j
+# -> vp/build/bin/smc-vp
+----
+
+Confirm:
+
+[source,bash]
+----
+vp/build/bin/smc-vp
+# Usage: smc-vp <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]
+----
+
+== Download Zephyr
+
+The port is written against **Zephyr v4.3.0** (Hardware Model v2:
+`board.yml` + `soc.yml`).  A different tag usually works; override
+`ZEPHYR_VERSION` if you need to.
+
+=== Option A — helper (recommended)
+
+[source,bash]
+----
+cd sw/zephyr-smc
+./zephyr_smc.sh setup
+----
+
+This installs `west` (user pip), clones Zephyr into
+`sw/zephyr-smc/.workspace/` (gitignored), and runs `west update`.
+
+GitHub Actions (`smc-vp` and `smc-vp-rhel8`) run
+`./zephyr_smc.sh ci` after the bare-metal suite: that is `setup`, then
+`test hello` (must print `Hello World`) and `test poke` (must print
+`RESULT: PASS`).  The west workspace is cached; set
+`ZEPHYR_SKIP_UPDATE=1` to reuse a populated tree without `west update`.
+
+=== Option B — by hand
+
+[source,bash]
+----
+python3 -m pip install --user west
+export PATH="$HOME/Library/Python/3.12/bin:$HOME/.local/bin:$PATH"
+
+WS=/path/to/tt-oca-sim/sw/zephyr-smc/.workspace
+west init -m https://github.com/zephyrproject-rtos/zephyr --mr v4.3.0 "$WS"
+cd "$WS"
+west update
+west zephyr-export
+----
+
+`west update` pulls Zephyr plus a few modules.  For `hello_world` on
+RISC-V the Zephyr tree itself is sufficient; the extra modules are
+harmless.
+
+Do **not** commit `.workspace/` — it is listed in
+`sw/zephyr-smc/.gitignore`.
+
+== The out-of-tree port
+
+`sw/zephyr-smc/` is a Zephyr **module**.  `zephyr/module.yml` registers
+three roots so `west build -b smc_vp` finds the board, SoC, and DTS
+without copying files into the Zephyr tree:
+
+[source]
+----
+sw/zephyr-smc/
+├── zephyr/module.yml          # board_root / soc_root / dts_root
+├── dts/
+│   ├── bindings/vendor-prefixes.txt
+│   └── riscv/tenstorrent/smc.dtsi
+├── soc/tenstorrent/smc/       # HWMv2 SoC (Kconfig + linker script)
+├── boards/tenstorrent/smc_vp/ # board.yml, DTS, defconfig
+├── config/smc_zephyr.ini      # CCI presets: ticking CLINT
+└── zephyr_smc.sh
+----
+
+=== Why these Kconfig choices matter
+
+`CONFIG_UART_NS16550_ACCESS_WORD_ONLY=y`::
+The SMC UART TLM target accepts **only 4-byte** transactions
+(`len != 4` → `TLM_BURST_ERROR_RESPONSE`).  Zephyr's ns16550 driver
+defaults to `sys_read8` / `sys_write8`.  Word-only access emits `lw`/`sw`
+so Whisper issues 4-byte TLM beats that the model accepts.
+
+`CONFIG_RISCV_PMP=n`::
+Whisper's PMP surface is not required for hello_world / shell and is a
+common first-boot hang if the ISS and Zephyr disagree on PMP CSRs.
+
+`CONFIG_MP_MAX_NUM_CPUS=1`::
+PLIC context 0 is hart 0 M-mode.  The SMC PLIC packs all four M-mode
+contexts first (0..3) then S-mode (4..7).  That is **not** the
+interleaved M/S layout Zephyr's PLIC driver assumes for SMP, so this
+port stays single-hart.  Extending to SMP means teaching the driver the
+SMC context map (out of scope here).
+
+`CONFIG_XIP=n`::
+The image is loaded into writable fast-mem at `0x80000000`, not executed
+from ROM.
+
+`CONFIG_UART_INTERRUPT_DRIVEN=n` / polling serial shell::
+The irq-driven Zephyr shell enables NS16550 `IER.ETBEI`/`ERBFI`.  That
+raises PLIC source 19; a claim on context 0 currently returns 0, the
+hart takes a spurious external interrupt (IRQ 11), and the kernel never
+prints `uart:~$`.  The board therefore forces
+`CONFIG_SHELL_BACKEND_SERIAL_API_POLLING` so the shell uses
+`uart_poll_in` / `uart_poll_out` (same path as printk).  `shell.conf`
+is passed as `EXTRA_CONF_FILE` when building the shell sample.
+
+== Build Zephyr images
+
+Point west at the module and use the host RISC-V toolchain (no Zephyr
+SDK required):
+
+[source,bash]
+----
+export ZEPHYR_BASE=/path/to/tt-oca-sim/sw/zephyr-smc/.workspace/zephyr
+export ZEPHYR_EXTRA_MODULES=/path/to/tt-oca-sim/sw/zephyr-smc
+export ZEPHYR_TOOLCHAIN_VARIANT=cross-compile
+export CROSS_COMPILE=$(dirname "$(command -v ${RISCV_PREFIX}gcc)")/${RISCV_PREFIX}
+
+# Hello World
+west build -p always -b smc_vp \
+    -d /path/to/tt-oca-sim/sw/zephyr-smc/build/hello_world \
+    "$ZEPHYR_BASE/samples/hello_world"
+
+# Interactive shell (polling UART — see shell.conf)
+west build -p always -b smc_vp \
+    -d /path/to/tt-oca-sim/sw/zephyr-smc/build/shell \
+    "$ZEPHYR_BASE/samples/subsys/shell/shell_module" \
+    -- -DEXTRA_CONF_FILE=/path/to/tt-oca-sim/sw/zephyr-smc/shell.conf
+----
+
+The ELF that `smc-vp` loads is:
+
+----
+sw/zephyr-smc/build/<app>/zephyr/zephyr.elf
+----
+
+Confirm the entry sits in fast-mem:
+
+[source,bash]
+----
+${RISCV_PREFIX}readelf -h sw/zephyr-smc/build/hello_world/zephyr/zephyr.elf \
+    | grep Entry
+# Entry point address: 0x80000...
+----
+
+Helper equivalent:
+
+[source,bash]
+----
+cd sw/zephyr-smc
+./zephyr_smc.sh build hello     # hello_world
+./zephyr_smc.sh build shell     # shell_module
+./zephyr_smc.sh build poke      # apps/mmio_poke (unlisted IPs)
+./zephyr_smc.sh test poke       # run and require RESULT: PASS
+----
+
+== Run on `smc-vp` and watch the boot
+
+`smc-vp` now accepts two optional flags after the simulation window:
+
+[source]
+----
+smc-vp <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]
+----
+
+`--uart-live`::
+An `SC_THREAD` drains UART0's TX history every 50 µs of simulation time
+and writes characters to **stdout immediately**.  This is how you watch
+
+`--uart-interactive`::
+Implies `--uart-live`.  Bytes typed in the terminal are injected into
+UART0 RX via `inject_rx_char()` so the Zephyr console/shell can read
+them.  `sim_time_ms = 0` means "run until Ctrl-C".
+
+Without either flag, behaviour is unchanged: UART0 is dumped once after
+`sc_start()` returns (the historical `---- UART0 output ----` block).
+
+=== Hello World (watch the banner)
+
+[source,bash]
+----
+INI=sw/zephyr-smc/config/smc_zephyr.ini
+ELF=sw/zephyr-smc/build/hello_world/zephyr/zephyr.elf
+vp/build/bin/smc-vp "$INI" "$ELF" 500 --uart-live
+----
+
+Or:
+
+[source,bash]
+----
+cd sw/zephyr-smc
+./zephyr_smc.sh run hello
+----
+
+You should see, **live**, something like:
+
+----
+smc-vp: ELF '...' entry=0x80000xxx
+smc-vp: running 500 ms of simulation...
+---- UART0 (live) ----
+*** Booting Zephyr OS build v4.3.0 ***
+Hello World! smc_vp/smc
+----
+end UART0 ----
+smc-vp: simulation ended at 500000000 ns
+----
+
+If you omit `--uart-live`, the same text appears in the post-run dump
+instead of streaming.
+
+=== Shell (type at the kernel)
+
+[source,bash]
+----
+INI=sw/zephyr-smc/config/smc_zephyr.ini
+ELF=sw/zephyr-smc/build/shell/zephyr/zephyr.elf
+vp/build/bin/smc-vp "$INI" "$ELF" 0 --uart-interactive
+----
+
+Or:
+
+[source,bash]
+----
+cd sw/zephyr-smc
+./zephyr_smc.sh run shell
+----
+
+The process puts the terminal in non-canonical mode so each key is
+forwarded to UART0 RX.  After the boot banner you get a `uart:~$`
+prompt.  Try:
+
+----
+help
+kernel version
+device list
+----
+
+Exit with **Ctrl-C** (`SIGINT` calls `sc_stop()`).  The leftover TX
+FIFO is flushed and the terminal is restored.
+
+== How the UART path works
+
+[source]
+----
+Zephyr printk / shell
+        │  sw/lw  (32-bit, reg-shift=2)
+        ▼
+UART0 THR @ 0xC000_A000
+        │  drain_tx() → tx_history_
+        ▼
+smc-vp uart_console SC_THREAD
+        │  dbg_tx_pop() every 1 µs
+        ▼
+your terminal (stdout)
+
+your keyboard (stdin)
+        │  non-blocking read
+        ▼
+uart.inject_rx_char()
+        │
+        ▼
+UART0 RBR  →  Zephyr uart_poll_in / IRQ
+----
+
+There is no host PTY and no modelled baud-rate wire.  The SystemC UART
+is a register-accurate NS16550; `smc-vp` is the "serial cable".
+
+== Troubleshooting
+
+`Hart N: 16 consecutive illegal instructions`::
+The ELF was not loaded, or `e_entry` is not in
+`[0x80000000, 0x90000000)`.  Rebuild for `smc_vp` and confirm
+`readelf -h` shows an entry in that window.
+
+UART dump is empty / `dbg_tx_pop` returns nothing::
+The UART model only serialises TX when the divisor is non-zero
+(`tx_enabled()`).  The ns16550 driver programs DLL/DLM from
+`clock-frequency` / `current-speed` in the DTS.  If you replaced the
+DTS UART node, keep `clock-frequency` and `current-speed` set.
+
+Boot banner never appears, simulation sits idle::
+CLINT `mtime` is frozen.  You used `smc_platform_vp.ini` instead of
+`smc_zephyr.ini`.  Zephyr waits for the first machine-timer interrupt.
+
+`TLM_BURST_ERROR_RESPONSE` on UART::
+The image was built without `CONFIG_UART_NS16550_ACCESS_WORD_ONLY`.
+Rebuild from `sw/zephyr-smc` so the board defconfig is applied.
+
+`R_RISCV_HI20` truncated against `__clz_tab` when linking the shell::
+Homebrew `riscv64-elf` libgcc is medlow and cannot address
+`0x80000000`.  The SoC `soc.c` provides `__clzdi2` / `__ctzdi2` so
+those libgcc objects are never pulled in.  Rebuild after pulling the
+port.
+
+`west build` cannot find board `smc_vp`::
+`ZEPHYR_EXTRA_MODULES` does not point at `sw/zephyr-smc` (the directory
+that contains `zephyr/module.yml`).
+
+`cross-compile` toolchain not found::
+`CROSS_COMPILE` must be the prefix **including the trailing hyphen**,
+e.g. `/opt/homebrew/bin/riscv64-elf-`, so that
+`${CROSS_COMPILE}gcc` resolves.
+
+`---- UART0 (live) ----` then nothing, no `uart:~$`::
+Ctrl-C the run and rebuild the shell (`./zephyr_smc.sh build shell`).
+An irq-driven image enables UART interrupts and then hangs in the PLIC
+claim path before the prompt is printed.  The current port uses the
+polling serial backend.  Also, `--uart-interactive` must not block on
+stdin inside SystemC (fixed in `smc-vp`: `O_NONBLOCK` + `poll`).
+
+Shell prompt appears but keys do nothing::
+You started without `--uart-interactive`.  Rebuild is not required;
+re-run with the flag (or `./zephyr_smc.sh run shell`).
+
+`Spurious interrupt` / `PLIC interrupt line causing the IRQ: 0`::
+You built with the irq-driven serial shell.  Rebuild with
+`shell.conf` (`CONFIG_SHELL_BACKEND_SERIAL_API_POLLING=y`).
+`CONFIG_EMPTY_IRQ_SPURIOUS=y` keeps a leftover claim-0 from being
+fatal, but the prompt still will not appear until UART IRQs are off.
+
+Simulation is extremely slow::
+`tick_period_ns` is too small (10 MHz default).  `smc_zephyr.ini` uses
+10 µs.  Do not drop it to 100 ns unless you need cycle-accurate time;
+hello_world does not.
+
+== Extending the port
+
+* **Unlisted IPs / platform tests** — `apps/mmio_poke` pokes UART1, I2C,
+  I3C, DMA, WDT, AVSbus, scratchpad, bootrom, reset, and cpu_ctrl through
+  `smc_common.h` (the same map as `sw/smc-vp-tests/`).  Port a bare-metal
+  `main.c` into a new `apps/<name>` the same way; keep the DV suite in
+  `sw/smc-vp-tests/`.  See `sw/zephyr-smc/README.md`.
+* **More peripherals** — add nodes to `dts/riscv/tenstorrent/smc.dtsi`
+  using the bases in `sw/smc-vp-tests/common/smc_common.h`.  Prefer
+  upstream Zephyr drivers (`ns16550`, `sifive,plic-1.0.0`,
+  `riscv,machine-timer`) over new ones.
+* **SMP** — park-vs-bringup for harts 1..3 is already in Zephyr's
+  `reset.S`, but the SMC PLIC context order (all M, then all S) does
+  not match Zephyr's interleaved assumption.  Fix the context map
+  before raising `CONFIG_MP_MAX_NUM_CPUS`.
+* **S-mode / OpenSBI** — not required.  `smc-vp` loads the ELF at the
+  reset vector and runs it in M-mode, same as the bare-metal tests.
+
+== See also
+
+* `sw/zephyr-smc/README.md` — setup, run, `mmio_poke`, porting platform tests.
+* `sw/smc-vp-tests/README.md` — how `smc-vp` loads ELFs and surfaces UART0.
+* `smc/doc/platform_test_and_firmware_guide.adoc` — boot-ROM hex path
+  (not used here; Zephyr uses `cluster.load_elf()`).
+* `smc/peripherals/uart/doc/01_UART_Specification.md` — NS16550 model,
+  including the 4-byte TLM rule and `dbg_tx_pop` / `inject_rx_char`.
+* https://docs.zephyrproject.org/latest/hardware/porting/board_porting.html[Zephyr Board Porting Guide]
+* https://docs.zephyrproject.org/latest/hardware/porting/soc_porting.html[Zephyr SoC Porting Guide]

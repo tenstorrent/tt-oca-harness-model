@@ -28,6 +28,8 @@
 #                    + RISC-V bare-metal toolchain).  Runs the smc-vp-tests
 #                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh,
 #                    including the new smc-dma-test and smc-pvt-wrap-test.
+#                    Then runs Zephyr hello_world + mmio_poke via
+#                    sw/zephyr-smc/zephyr_smc.sh ci (west workspace is cached).
 #
 #  smu-unit-tests    SMU interconnect unit tests (smu_axi_xbar + axi_window_remap)
 #                    via vp/platform/smu/run_tests.sh (Release + ASAN + Coverage).
@@ -51,6 +53,7 @@ env:
   CCI_VERSION:     "1.0.2"
   WHISPER_REV:     "a53d0f3e"  # tenstorrent/whisper commit the SMC VP was validated against
   RISCV_XPACK_VERSION: "15.2.0-1"
+  ZEPHYR_VERSION:  "v4.3.0"
   SYSTEMC_HOME:    /home/runner/local/systemc-3.0.2
   CCI_HOME:        /home/runner/local/cci-1.0.2
   CXX_STD:         "20"
@@ -321,7 +324,8 @@ jobs:
 # Job 6 — build smc-vp and run SMC VP firmware tests
 # The SMC platform requires the Tenstorrent-internal Whisper ISS.  We clone it,
 # build librvcore.a, then configure the VP with WHISPER_HOME and run all
-# bare-metal firmware tests under sw/smc-vp-tests.
+# bare-metal firmware tests under sw/smc-vp-tests, then Zephyr hello_world
+# and mmio_poke via sw/zephyr-smc/zephyr_smc.sh ci.
 # ─────────────────────────────────────────────────────────────────────────────
   smc-vp:
     name: SMC VP firmware tests
@@ -337,7 +341,8 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y g++ cmake make \
+          sudo apt-get install -y g++ cmake make ninja-build gperf \
+            device-tree-compiler python3-pip python3-venv python3-setuptools \
             libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
             libssl-dev gcc-riscv64-unknown-elf
 
@@ -434,12 +439,57 @@ jobs:
           cd sw/smc-vp-tests
           ./run_smc_vp_tests.sh
 
+      # Zephyr 4.3 emits -march=rv64imac_zicsr_zifencei.  Ubuntu 22.04's
+      # gcc-riscv64-unknown-elf (GCC 10) rejects the 'z' subsets; use the
+      # same xpack GCC 15 as smu-vp / RHEL.
+      - name: Install RISC-V toolchain (xpack)
+        run: |
+          mkdir -p /home/runner/riscv
+          cd /home/runner/riscv
+          XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
+          wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
+          tar zxf "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          mv "${EXTRACTED_DIR}" toolchain
+          echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
+
+      - name: Cache Zephyr west workspace
+        id: cache-zephyr
+        uses: actions/cache@v4
+        with:
+          path: |
+            sw/zephyr-smc/.workspace
+            sw/zephyr-smc/.venv
+          key: zephyr-${{ env.ZEPHYR_VERSION }}-${{ runner.os }}-west1
+
+      - name: Run Zephyr SMC VP tests
+        env:
+          SYSTEMC_HOME:    ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:        ${{ env.CCI_HOME }}
+          WHISPER_HOME:    /home/runner/whisper
+          BOOST_DIR:       /usr
+          ZEPHYR_VERSION:  ${{ env.ZEPHYR_VERSION }}
+          ZEPHYR_SKIP_UPDATE: ${{ steps.cache-zephyr.outputs.cache-hit == 'true' && '1' || '0' }}
+          RISCV_PREFIX:    riscv-none-elf-
+          CROSS_COMPILE:   /home/runner/riscv/toolchain/bin/riscv-none-elf-
+          SMC_VP:          ${{ github.workspace }}/vp/build_smc/bin/smc-vp
+        run: |
+          if [ ! -x "$SMC_VP" ]; then
+            SMC_VP="${{ github.workspace }}/vp/build/bin/smc-vp"
+          fi
+          export SMC_VP
+          test -x "$SMC_VP"
+          cd sw/zephyr-smc
+          ./zephyr_smc.sh ci
+
       - name: Upload smc-vp logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smc-vp-logs
-          path: sw/smc-vp-tests/smc-*/run_*.log
+          path: |
+            sw/smc-vp-tests/smc-*/run_*.log
+            sw/zephyr-smc/build/*/run.log
           retention-days: 7
 
 # ─────────────────────────────────────────────────────────────────────────────

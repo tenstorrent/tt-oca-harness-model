@@ -3,7 +3,7 @@
 // vp/platform/smc/main.cpp
 //
 // sc_main for the `smc-vp` executable.  Mirrors vp/platform/sep/main.cpp:
-//   smc-vp <cci-ini> <elf> [sim_time_ms]
+//   smc-vp <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]
 //
 #include "smc_platform.hpp"
 
@@ -13,14 +13,22 @@
 #include <cci_configuration>
 #include <cci/utils/consuming_broker.h>
 
+#include <cctype>
+#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <fcntl.h>
+#include <poll.h>
+#include <termios.h>
+#include <unistd.h>
 
 namespace {
 
@@ -99,6 +107,8 @@ void apply_ini_value(const std::string& key, const std::string& section,
         val = cci::cci_value(static_cast<int64_t>(std::strtoll(v.c_str(), nullptr, 0)));
     } else if (section == "uint") {
         val = cci::cci_value(static_cast<uint64_t>(std::strtoull(v.c_str(), nullptr, 0)));
+    } else if (section == "double" || section == "float") {
+        val = cci::cci_value(std::strtod(v.c_str(), nullptr));
     } else if (section == "string") {
         // strip surrounding quotes if present
         if (v.size() >= 2 && v.front() == '"' && v.back() == '"') v = v.substr(1, v.size() - 2);
@@ -182,6 +192,91 @@ void apply_default_presets(const std::string& top, uint64_t elf_entry)
     set("cluster.source_id",    cci::cci_value(uint16_t(0x10)));
 }
 
+// ---------------------------------------------------------------------------
+// Live UART0 console: drain TX history to stdout and (optionally) inject
+// stdin bytes into RX so a Zephyr shell can be used interactively.
+// ---------------------------------------------------------------------------
+volatile std::sig_atomic_t g_stop_sim = 0;
+
+void on_sigint(int)
+{
+    g_stop_sim = 1;
+}
+
+class termios_guard
+{
+public:
+    void arm()
+    {
+        // Always non-blocking: a blocking read() inside the SystemC
+        // SC_THREAD freezes the whole simulation (no boot banner, no prompt).
+        orig_fl_ = ::fcntl(STDIN_FILENO, F_GETFL, 0);
+        if (orig_fl_ >= 0) {
+            ::fcntl(STDIN_FILENO, F_SETFL, orig_fl_ | O_NONBLOCK);
+            fl_armed_ = true;
+        }
+        if (::isatty(STDIN_FILENO) && ::tcgetattr(STDIN_FILENO, &orig_) == 0) {
+            termios raw = orig_;
+            raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+            raw.c_cc[VMIN]  = 0;
+            raw.c_cc[VTIME] = 0;
+            if (::tcsetattr(STDIN_FILENO, TCSANOW, &raw) == 0)
+                tty_armed_ = true;
+        }
+    }
+    ~termios_guard()
+    {
+        if (tty_armed_) ::tcsetattr(STDIN_FILENO, TCSANOW, &orig_);
+        if (fl_armed_)  ::fcntl(STDIN_FILENO, F_SETFL, orig_fl_);
+    }
+private:
+    termios orig_{};
+    int     orig_fl_   = -1;
+    bool    tty_armed_ = false;
+    bool    fl_armed_  = false;
+};
+
+class uart_console : public sc_core::sc_module
+{
+public:
+    SC_HAS_PROCESS(uart_console);
+    uart_console(sc_core::sc_module_name name, smc::uart& u, bool interactive)
+        : sc_core::sc_module(name), uart_(u), interactive_(interactive)
+    {
+        SC_THREAD(pump);
+    }
+private:
+    smc::uart& uart_;
+    bool       interactive_;
+    void pump()
+    {
+        while (true) {
+            uint8_t ch = 0;
+            bool any = false;
+            while (uart_.dbg_tx_pop(ch)) {
+                std::cout.put(static_cast<char>(ch));
+                any = true;
+            }
+            if (any) std::cout.flush();
+            if (interactive_) {
+                pollfd pfd{STDIN_FILENO, POLLIN, 0};
+                if (::poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN)) {
+                    char buf[64];
+                    const ssize_t n = ::read(STDIN_FILENO, buf, sizeof(buf));
+                    for (ssize_t i = 0; i < n; ++i) {
+                        uart_.inject_rx_char(static_cast<uint8_t>(buf[i]));
+                    }
+                }
+            }
+            if (g_stop_sim) {
+                sc_core::sc_stop();
+                return;
+            }
+            wait(sc_core::sc_time(50, sc_core::SC_US));
+        }
+    }
+};
+
 } // namespace
 
 // ===========================================================================
@@ -189,14 +284,35 @@ void apply_default_presets(const std::string& top, uint64_t elf_entry)
 // ===========================================================================
 int sc_main(int argc, char** argv)
 {
-    if (argc < 3 || argc > 4) {
-        std::cerr << "Usage: " << argv[0] << " <cci-ini> <elf> [sim_time_ms]\n";
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0]
+                  << " <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]\n";
         return 1;
     }
 
     const std::string ini_path = argv[1];
     const std::string elf_path = argv[2];
-    const double sim_time_ms = (argc >= 4) ? std::stod(argv[3]) : 50.0;
+    double sim_time_ms = 50.0;
+    bool uart_live = false;
+    bool uart_interactive = false;
+    bool have_time = false;
+    for (int i = 3; i < argc; ++i) {
+        const std::string a = argv[i];
+        if (a == "--uart-live") {
+            uart_live = true;
+        } else if (a == "--uart-interactive") {
+            uart_interactive = true;
+            uart_live = true;
+        } else if (!have_time && !a.empty()
+                   && (std::isdigit(static_cast<unsigned char>(a[0])) || a[0] == '.')) {
+            sim_time_ms = std::stod(a);
+            have_time = true;
+        } else {
+            std::cerr << "ERROR: unknown argument '" << a << "'\n";
+            return 1;
+        }
+    }
+    if (uart_interactive && !have_time) sim_time_ms = 0.0;
 
     const std::string top = "dut";
 
@@ -244,16 +360,31 @@ int sc_main(int argc, char** argv)
         return 1;
     }
 
-    std::cout << "smc-vp: running " << sim_time_ms << " ms of simulation...\n";
-    sc_start(sc_time(sim_time_ms, SC_MS));
+    termios_guard tty;
+    std::unique_ptr<uart_console> console;
+    if (uart_live) {
+        if (uart_interactive) {
+            tty.arm();
+            std::signal(SIGINT, on_sigint);
+        }
+        std::cout << "---- UART0 (live) ----\n" << std::flush;
+        console = std::make_unique<uart_console>("uart0_console", dut.uart_[0],
+                                                 uart_interactive);
+    }
+
+    if (sim_time_ms <= 0.0) {
+        std::cout << "smc-vp: running until Ctrl-C...\n";
+        sc_start();
+    } else {
+        std::cout << "smc-vp: running " << sim_time_ms << " ms of simulation...\n";
+        sc_start(sc_time(sim_time_ms, SC_MS));
+    }
     std::cout << "smc-vp: simulation ended at " << sc_time_stamp() << "\n";
 
-    // Drain UART0's TX debug buffer to stdout so the firmware's printf output
-    // (which writes to UART0 THR) is visible — mirrors how sep-vp surfaces
-    // firmware console output via its stdout_device / scratch_cold SIM_OUT tap.
-    // The SMC UART model buffers TX bytes in a debug FIFO rather than emitting
-    // them live, so we flush it once after the run.
-    std::cout << "---- UART0 output ----\n";
+    // Drain whatever is still sitting in UART0's TX history.  In live mode
+    // most bytes were already printed; this catches the tail.  In the
+    // historical (non-live) mode this is the only console dump.
+    if (!uart_live) std::cout << "---- UART0 output ----\n";
     {
         uint8_t ch = 0;
         while (dut.uart_[0].dbg_tx_pop(ch)) std::cout.put((char)ch);
@@ -261,5 +392,4 @@ int sc_main(int argc, char** argv)
     }
     return 0;
 }
-
 
