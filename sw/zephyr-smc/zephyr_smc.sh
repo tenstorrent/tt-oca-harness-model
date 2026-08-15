@@ -85,9 +85,7 @@ cmd_setup() {
         local py=""
         for c in python3.12 python3.13 python3.11 python3; do
             if command -v "$c" >/dev/null 2>&1; then
-                local ver
-                ver="$("$c" -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')"
-                if [[ "$(printf '%s\n' "$ver" "3.10" | sort -V | head -1)" == "3.10" ]]; then
+                if "$c" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)'; then
                     py="$(command -v "$c")"
                     break
                 fi
