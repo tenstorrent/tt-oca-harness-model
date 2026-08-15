@@ -201,7 +201,6 @@ volatile std::sig_atomic_t g_stop_sim = 0;
 void on_sigint(int)
 {
     g_stop_sim = 1;
-    sc_core::sc_stop();
 }
 
 class termios_guard
