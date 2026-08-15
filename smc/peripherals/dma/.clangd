@@ -1,0 +1,7 @@
+CompileFlags:
+  # The DMA IP is built standalone (run_tests.sh -> build/), and is not
+  # part of the smc_fabric compilation database. Point clangd at this IP's
+  # own compile_commands.json so go-to-definition, find-references, and
+  # hover resolve dma.h/dma.cpp, SystemC, and CCI symbols here. The closest
+  # .clangd wins, so this applies to files under peripherals/dma/.
+  CompilationDatabase: build

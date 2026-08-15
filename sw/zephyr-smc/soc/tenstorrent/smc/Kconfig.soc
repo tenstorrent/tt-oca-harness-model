@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_SMC
+	bool
+	select RISCV
+	select RISCV_PRIVILEGED
+	select INCLUDE_RESET_VECTOR
+	select RISCV_SOC_HAS_GP_RELATIVE_ADDRESSING
+
+config SOC
+	default "smc" if SOC_SMC

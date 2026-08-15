@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+identifier: smc_vp
+name: Tenstorrent SMC Virtual Platform
+type: mcu
+arch: riscv
+toolchain:
+  - zephyr
+  - cross-compile
+ram: 131072
+testing:
+  ignore_tags:
+    - net
+    - bluetooth
+    - cmsis_act

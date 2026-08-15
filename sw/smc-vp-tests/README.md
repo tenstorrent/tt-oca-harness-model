@@ -217,7 +217,12 @@ flavours:
 ### Firmware-on-CPU tests on `smc-vp` (this directory)
 
 These are the bare-metal RV64 tests here — the CPU fetches the firmware and
-drives the peripherals through the fabric. Build a test and run it on `smc-vp`:
+drives the peripherals through the fabric. This suite is the DV contract;
+do not replace it with Zephyr. A parallel Zephyr port (`sw/zephyr-smc/`)
+can run the same MMIO map as management firmware — see that README for
+`mmio_poke` and how to port a test incrementally.
+
+Build a test and run it on `smc-vp`:
 
 ```bash
 cd sw/smc-vp-tests/smc-scratch-test

@@ -152,8 +152,11 @@ tt-oca-sim/
 │   │       ├── fw/sep/bootcode/   ← SEP Boot ROM (BL0)
 │   │       └── dependencies/      ← setup_dependencies.sh builds picolibc; also holds
 │   │                                 meta/registers/c, the shared SEP register headers
-│   └── smc-vp-tests/              ← Bare-metal RV64 firmware tests (SMC, runs on smc-vp)
-│       └── run_smc_vp_tests.sh    ← host-agnostic runner: auto-detects toolchain + smc-vp, builds/runs tests
+│   ├── smc-vp-tests/              ← Bare-metal RV64 firmware tests (SMC, runs on smc-vp)
+│   │   └── run_smc_vp_tests.sh    ← host-agnostic runner: auto-detects toolchain + smc-vp, builds/runs tests
+│   └── zephyr-smc/                ← Out-of-tree Zephyr port for smc-vp (board/SoC + apps)
+│       ├── zephyr_smc.sh          ← setup / build / run / test
+│       └── apps/mmio_poke/        ← MMIO reachability of IPs with no Zephyr driver
 ├── doc/                           ← Architecture and design documentation
 │   ├── component-developer-guide.md/.pdf
 │   ├── maintainer-guide.md/.pdf
@@ -534,6 +537,31 @@ cd sw/smc-vp-tests
 ./run_smc_vp_tests.sh -i            # choose a single test from a numbered menu
 ./run_smc_vp_tests.sh --build-vp     # rebuild smc-vp first, then run all
 ```
+
+### Zephyr RTOS on smc-vp
+
+Zephyr is the RTOS path for **SMC management firmware** (threads, timers,
+shell, later real drivers).  It is not Linux and it is not a replacement for
+`sw/smc-vp-tests/`.  The out-of-tree port lives in `sw/zephyr-smc/`; the
+operator guide is `doc/zephyr-on-smc.adoc`.
+
+```bash
+cd sw/zephyr-smc
+./zephyr_smc.sh setup            # once: clone Zephyr v4.3.0 + west update
+./zephyr_smc.sh run hello        # boot banner on live UART0
+./zephyr_smc.sh run shell        # uart:~$  (Tab / help — not bash)
+./zephyr_smc.sh test poke        # MMIO poke of IPs that device list omits
+```
+
+Use `sw/zephyr-smc/config/smc_zephyr.ini` (ticking CLINT).  The default
+`smc_platform_vp.ini` freezes `mtime` and Zephyr hangs waiting for a tick.
+
+`device list` only names DTS + driver bindings (PLIC and UART0 today).  To
+touch UART1, I2C, I3C, DMA, WDT, … use `apps/mmio_poke`, the shell `devmem`
+command, or a `REG_READ`/`REG_WRITE` app against
+`sw/smc-vp-tests/common/smc_common.h`.  Platform-level bare-metal tests can
+be ported to Zephyr apps incrementally (same `smc-vp` load path); keep the
+DV suite in `sw/smc-vp-tests/`.  Details: `sw/zephyr-smc/README.md`.
 
 ### Standalone SMC peripheral unit tests
 

@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_SMC_VP
+
+config BUILD_OUTPUT_BIN
+	default y
+
+# Force the serial shell onto uart_poll_in / uart_poll_out.  Enabling
+# IER.ETBEI/ERBFI raises a PLIC source whose claim currently returns 0
+# (spurious IRQ 11) and the kernel never reaches uart:~$.
+if SHELL_BACKEND_SERIAL
+
+config SHELL_BACKEND_SERIAL_INTERRUPT_DRIVEN
+	default n
+
+endif # SHELL_BACKEND_SERIAL
+
+endif # BOARD_SMC_VP
