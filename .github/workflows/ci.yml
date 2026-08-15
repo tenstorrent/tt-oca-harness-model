@@ -439,6 +439,20 @@ jobs:
           cd sw/smc-vp-tests
           ./run_smc_vp_tests.sh
 
+      # Zephyr 4.3 emits -march=rv64imac_zicsr_zifencei.  Ubuntu 22.04's
+      # gcc-riscv64-unknown-elf (GCC 10) rejects the 'z' subsets; use the
+      # same xpack GCC 15 as smu-vp / RHEL.
+      - name: Install RISC-V toolchain (xpack)
+        run: |
+          mkdir -p /home/runner/riscv
+          cd /home/runner/riscv
+          XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
+          wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
+          tar zxf "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          mv "${EXTRACTED_DIR}" toolchain
+          echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
+
       - name: Cache Zephyr west workspace
         id: cache-zephyr
         uses: actions/cache@v4
@@ -456,6 +470,8 @@ jobs:
           BOOST_DIR:       /usr
           ZEPHYR_VERSION:  ${{ env.ZEPHYR_VERSION }}
           ZEPHYR_SKIP_UPDATE: ${{ steps.cache-zephyr.outputs.cache-hit == 'true' && '1' || '0' }}
+          RISCV_PREFIX:    riscv-none-elf-
+          CROSS_COMPILE:   /home/runner/riscv/toolchain/bin/riscv-none-elf-
           SMC_VP:          ${{ github.workspace }}/vp/build_smc/bin/smc-vp
         run: |
           if [ ! -x "$SMC_VP" ]; then
