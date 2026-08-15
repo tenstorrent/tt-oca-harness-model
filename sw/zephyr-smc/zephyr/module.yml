@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Zephyr module metadata.  west / CMake pick this up via ZEPHYR_EXTRA_MODULES
+# pointing at sw/zephyr-smc/ (the directory that contains this zephyr/ folder).
+name: smc_vp
+build:
+  settings:
+    board_root: .
+    dts_root: .
+    soc_root: .

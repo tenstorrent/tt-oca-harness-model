@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+board:
+  name: smc_vp
+  full_name: Tenstorrent SMC Virtual Platform
+  vendor: tenstorrent
+  socs:
+    - name: smc
