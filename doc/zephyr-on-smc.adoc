@@ -167,6 +167,12 @@ cd sw/zephyr-smc
 This installs `west` (user pip), clones Zephyr into
 `sw/zephyr-smc/.workspace/` (gitignored), and runs `west update`.
 
+GitHub Actions (`smc-vp` and `smc-vp-rhel8`) run
+`./zephyr_smc.sh ci` after the bare-metal suite: that is `setup`, then
+`test hello` (must print `Hello World`) and `test poke` (must print
+`RESULT: PASS`).  The west workspace is cached; set
+`ZEPHYR_SKIP_UPDATE=1` to reuse a populated tree without `west update`.
+
 === Option B — by hand
 
 [source,bash]

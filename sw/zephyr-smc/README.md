@@ -30,7 +30,12 @@ cd sw/zephyr-smc
 ./zephyr_smc.sh build poke     # apps/mmio_poke — unlisted-IP MMIO reachability
 ./zephyr_smc.sh run poke
 ./zephyr_smc.sh test poke      # same, and require a RESULT: PASS line
+./zephyr_smc.sh ci             # setup + test hello + test poke (GitHub Actions)
 ```
+
+CI (`smc-vp` / `smc-vp-rhel8`) runs `./zephyr_smc.sh ci` after the bare-metal
+suite.  The west workspace is cached; `hello` must print `Hello World` and
+`poke` must print `RESULT: PASS`.
 
 Equivalent raw command (after a build):
 

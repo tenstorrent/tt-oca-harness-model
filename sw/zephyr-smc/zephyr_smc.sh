@@ -107,8 +107,12 @@ cmd_setup() {
         mkdir -p "$(dirname "$WS")"
         "$west" init -m https://github.com/zephyrproject-rtos/zephyr --mr "$ZEPHYR_VERSION" "$WS"
     fi
-    log "west update (this can take several minutes)"
-    (cd "$WS" && "$west" update)
+    if [[ "${ZEPHYR_SKIP_UPDATE:-}" == "1" && -d "$WS/zephyr" ]]; then
+        log "ZEPHYR_SKIP_UPDATE=1; skipping west update"
+    else
+        log "west update (this can take several minutes)"
+        (cd "$WS" && "$west" update)
+    fi
     (cd "$WS" && "$west" zephyr-export) || true
     if [[ -f "$WS/zephyr/scripts/requirements-base.txt" && -x "$HERE/.venv/bin/pip" ]]; then
         log "installing Zephyr Python requirements into .venv"
@@ -194,26 +198,45 @@ cmd_run() {
 
 cmd_test() {
     local kind="${1:-poke}"
+    local ms pass_pat
+    case "$kind" in
+        hello|hello_world)
+            ms="${SIM_TIME_MS:-500}"
+            pass_pat="Hello World"
+            ;;
+        poke|mmio_poke)
+            ms="${SIM_TIME_MS:-1500}"
+            pass_pat="RESULT: PASS"
+            ;;
+        *)
+            die "test supports hello|poke (shell is interactive)"
+            ;;
+    esac
     cmd_build "$kind"
     app_paths "$kind"
     local elf="$BDIR/zephyr/zephyr.elf"
     local vp
     vp="$(ensure_smc_vp)"
     local ini="$HERE/config/smc_zephyr.ini"
-    local ms="${SIM_TIME_MS:-1500}"
     local log="$BDIR/run.log"
     log "smc-vp $kind (${ms} ms) -> $log"
     "$vp" "$ini" "$elf" "$ms" --uart-live | tee "$log"
-    if grep -q "RESULT: PASS" "$log"; then
+    if grep -q "$pass_pat" "$log"; then
         log "$kind PASS"
     else
-        die "$kind did not print RESULT: PASS (see $log)"
+        die "$kind did not print '$pass_pat' (see $log)"
     fi
+}
+
+cmd_ci() {
+    cmd_setup
+    cmd_test hello
+    cmd_test poke
 }
 
 usage() {
     cat <<EOF
-Usage: $0 <setup|build|run|test|help> [hello|shell|poke]
+Usage: $0 <setup|build|run|test|ci|help> [hello|shell|poke]
 
   setup            Clone Zephyr $ZEPHYR_VERSION into $WS and west update
   build [hello]    Build samples/hello_world for $BOARD
@@ -222,13 +245,15 @@ Usage: $0 <setup|build|run|test|help> [hello|shell|poke]
   run [hello]      Boot hello_world on smc-vp with live UART0
   run shell        Boot the shell; type at the kernel (Ctrl-C to exit)
   run poke         Boot mmio_poke and stream UART0
-  test [poke]      Build + run and require a RESULT: PASS line
+  test [poke]      Build + run; poke requires RESULT: PASS, hello requires Hello World
+  ci               setup + test hello + test poke (used by GitHub Actions)
 
 Environment:
   ZEPHYR_WORKSPACE   west workspace (default: $HERE/.workspace)
   ZEPHYR_VERSION     git tag for west init (default: $ZEPHYR_VERSION)
+  ZEPHYR_SKIP_UPDATE skip west update when the workspace already exists
   CROSS_COMPILE / RISCV_PREFIX
-  SMC_VP             path to smc-vp (else vp/build/bin/smc-vp)
+  SMC_VP             path to smc-vp (else vp/build_smc/bin/smc-vp)
   SIM_TIME_MS        hello_world window (default: 500; poke default: 1500)
   SYSTEMC_HOME CCI_HOME WHISPER_HOME BOOST_DIR
                      required only if smc-vp must be built
@@ -240,6 +265,7 @@ case "${1:-help}" in
     build) shift; cmd_build "${1:-hello}" ;;
     run)   shift; cmd_run "${1:-hello}" ;;
     test)  shift; cmd_test "${1:-poke}" ;;
+    ci)    shift; cmd_ci "$@" ;;
     help|-h|--help) usage ;;
     *) usage; exit 2 ;;
 esac
