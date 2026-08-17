@@ -24,9 +24,12 @@
 //     apertures; ext_in traffic missing both apertures fails with
 //     TLM_ADDRESS_ERROR_RESPONSE (the RTL has no fourth route for it).
 //
-// The apertures are CCI-mutable params so platform firmware/integrators
-// reprogram them exactly like the RTL's SEP_GLOBAL_BASE_ADDR/SEP_REGION_SIZE
-// and SMC GLOBAL_BASE/REGION_SIZE CSR pairs (re-read on every transaction).
+// The SEP aperture is taken from `sep_global_base_addr_i`/`sep_region_size_i`
+// when bound, which the SEP drives from its own SEP_GLOBAL_BASE_ADDR/
+// SEP_REGION_SIZE CSRs exactly as `sep.sv` does — so the crossbar cannot
+// disagree with the subsystem about where the window is.  The SMC aperture and
+// the unbound-SEP fallback are CCI-mutable params.  All are re-read on every
+// transaction, matching the RTL's quasi-static CSR inputs.
 // Addresses are forwarded unchanged (global addresses end-to-end; each
 // subsystem performs its own inbound global->local remap, as in RTL).
 //
@@ -68,6 +71,18 @@ public:
     cci::cci_param<uint64_t> smc_region_size_p_;
 
     // -----------------------------------------------------------------------
+    // SEP aperture inputs (RTL: sep.sv's sep_global_base_addr_o /
+    // sep_region_size_o, driven by the SEP_GLOBAL_BASE_ADDR / SEP_REGION_SIZE
+    // CSRs in sep_system_csr.sv).  On silicon the SEP's own CSRs are the only
+    // definition of its window and the crossbar simply follows them, so bind
+    // these to SEP and the two sides cannot disagree.  Left unbound they fall
+    // back to the params above, which keeps the xbar usable standalone (unit
+    // tests, or an integration with no SEP attached).
+    // -----------------------------------------------------------------------
+    sc_core::sc_in<uint64_t> sep_global_base_addr_i{"sep_global_base_addr_i"};
+    sc_core::sc_in<uint64_t> sep_region_size_i{"sep_region_size_i"};
+
+    // -----------------------------------------------------------------------
     // Master-side target sockets (RTL: sep_out_req_i / smc_out_req_i /
     // ext_in_req_i).
     // -----------------------------------------------------------------------
@@ -103,19 +118,55 @@ public:
         smc_out.register_transport_dbg(this, &smu_axi_xbar::dbg_smc_out);
         ext_in .register_transport_dbg(this, &smu_axi_xbar::dbg_ext_in);
 
-        SIM_LOG_INFO(this, "smu_axi_xbar: sep_aperture=[0x" << std::hex
+        SIM_LOG_INFO(this, "smu_axi_xbar: param sep_aperture=[0x" << std::hex
                      << sep_global_base_p_.get_value() << ",+0x" << sep_region_size_p_.get_value()
                      << ") smc_aperture=[0x" << smc_global_base_p_.get_value()
-                     << ",+0x" << smc_region_size_p_.get_value() << ")");
+                     << ",+0x" << smc_region_size_p_.get_value() << ")"
+                     << " (the SEP aperture is overridden by sep_global_base_addr_i/"
+                        "sep_region_size_i when those are bound)");
+    }
+
+    // SystemC requires every sc_in to be bound, so tie the aperture inputs off
+    // when no SEP is attached and remember to keep reading the params instead.
+    void before_end_of_elaboration() override
+    {
+        const bool base_bound = sep_global_base_addr_i.get_interface() != nullptr;
+        const bool size_bound = sep_region_size_i.get_interface() != nullptr;
+
+        // Half a window is not a window: a base with no size (or the reverse)
+        // would silently fall back to the params for both and quietly ignore
+        // whatever was bound. Tying off here would also re-bind the port that
+        // *is* connected, so the user would see a multi-bind elaboration error
+        // pointing at this line rather than at their own binding.
+        if (base_bound != size_bound) {
+            SC_REPORT_ERROR("smu_axi_xbar",
+                "sep_global_base_addr_i and sep_region_size_i must be bound together. "
+                "Bind both to the SEP's exports to track its window CSRs, or neither "
+                "to fall back to the sep_global_base/sep_region_size params.");
+            return;
+        }
+
+        aperture_from_ports_ = base_bound;  // == size_bound
+        if (!aperture_from_ports_) {
+            sep_global_base_addr_i(sep_base_tieoff_);
+            sep_region_size_i(sep_size_tieoff_);
+            SIM_LOG_INFO(this, "smu_axi_xbar: SEP aperture inputs unbound, "
+                               "using the sep_global_base/sep_region_size params");
+        }
     }
 
 private:
     enum class master { sep, smc, ext };
 
+    // Re-read per transaction: the SEP's CSRs are quasi-static but firmware may
+    // reprogram the window mid-run, exactly as in RTL.
     bool in_sep_aperture(uint64_t addr) const
     {
-        const uint64_t base = sep_global_base_p_.get_value();
-        return addr >= base && addr < base + sep_region_size_p_.get_value();
+        const uint64_t base = aperture_from_ports_ ? sep_global_base_addr_i.read()
+                                                   : sep_global_base_p_.get_value();
+        const uint64_t size = aperture_from_ports_ ? sep_region_size_i.read()
+                                                   : sep_region_size_p_.get_value();
+        return addr >= base && addr < base + size;
     }
 
     bool in_smc_aperture(uint64_t addr) const
@@ -142,6 +193,10 @@ private:
         if (in_sep_aperture(addr)) return &sep_in;
         return &ext_out;                           // static catch-all
     }
+
+    bool aperture_from_ports_ = false;
+    sc_core::sc_signal<uint64_t> sep_base_tieoff_{"sep_base_tieoff", 0};
+    sc_core::sc_signal<uint64_t> sep_size_tieoff_{"sep_size_tieoff", 0};
 
     static const char* master_name(master m)
     {

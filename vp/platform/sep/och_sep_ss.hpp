@@ -33,6 +33,7 @@
 #include "adapters.h"
 #include "smc_global_port.h"
 #include "stubs.h"
+#include "xbar_policy.h"
 #include "vp_devices.h"
 #include "aon_timer.h"
 #include "efuse.h"
@@ -114,13 +115,35 @@ public:
     //   smn_inbound_b_transport.  Standalone sep-vp binds an idle initiator
     //   here.
     //
+    // sep_smn_outbound_axi — general outbound master port (RTL:
+    //   smn_outbound_axi).  Carries everything the outbound filter passes:
+    //   AP/STEE remapped traffic merged by outbound_filter_mux.  Egress is
+    //   therefore observable at the boundary rather than disappearing into a
+    //   sink, which is what lets the SMU crossbar see SEP as a master.  The
+    //   internal chain is 32-bit and the boundary is 64-bit, so
+    //   outbound_filter_to_smn relays between them (mirror of the inbound
+    //   relay below).  Standalone sep-vp binds a sink here.
+    //
     // sep_ext_to_smc_axi must be a plain tlm_initiator_socket: it is the
     // parent of a hierarchical initiator bind (smc_global->init64), and a
     // simple_* socket's internal sc_export is already bound to its own fw
     // process at construction, so a simple_* parent fails elaboration (E126).
+    // sep_smn_outbound_axi is driven by och_sep_ss itself, not hierarchically
+    // bound, so it can be a simple_* socket.
     // ------------------------------------------------------------------
     tlm::tlm_initiator_socket<64>                     sep_ext_to_smc_axi{"sep_ext_to_smc_axi"};
     tlm_utils::simple_target_socket<och_sep_ss, 64>    sep_smn_inbound_axi{"sep_smn_inbound_axi"};
+    tlm_utils::simple_initiator_socket<och_sep_ss, 64> sep_smn_outbound_axi{"sep_smn_outbound_axi"};
+
+    // Inbound-window exports (sep.sv: sep_global_base_addr_o / sep_region_size_o),
+    // driven by cpu_ctrl straight from its CSRs.  An enclosing platform sizes its
+    // SEP aperture from these rather than from a preset of its own, so the two
+    // cannot disagree about where the window is.  Plain signals rather than
+    // sc_out because standalone sep-vp has nothing above it to bind to and an
+    // unbound sc_out fails elaboration.  Single-writer on purpose: cpu_ctrl's
+    // publish process is the only driver, so a second one is caught here.
+    sc_signal<uint64_t> sep_global_base_addr_signal{"sep_global_base_addr_signal"};
+    sc_signal<uint64_t> sep_region_size_signal{"sep_region_size_signal"};
 
     och_sep_ss(sc_module_name name, BasicOptions& opt_in);
     och_sep_ss(sc_module_name name)
@@ -158,7 +181,6 @@ public:
         delete outbound_filter;
         delete inbound_filter;
         delete smn_remap;
-        delete outbound_filter_stub;
         delete smc_global;
         delete spi_mux;
         delete reset_ctrl;
@@ -195,7 +217,6 @@ private:
     sep_filter_ctrl_ip*               outbound_filter      = nullptr;
     sep_filter_ctrl_ip*               inbound_filter       = nullptr;
     smn_inbound_remap_adapter*        smn_remap            = nullptr;
-    filter_output_stub*               outbound_filter_stub = nullptr;
     // SMC window: RW fallback stub in standalone sep-vp, or forwarder to the
     // real SMC when `smc_global.forward_en` is set (see inc/smc_global_port.h).
     sep_smc_global_port*              smc_global           = nullptr;
@@ -370,6 +391,10 @@ private:
     // internal inbound chain at inbound_filter->data_socket.
     tlm_utils::simple_initiator_socket<och_sep_ss> smn_inbound_to_filter;
 
+    // Mirror of the above for egress: receives the 32-bit outbound-filter
+    // output and relays it out on the 64-bit sep_smn_outbound_axi boundary.
+    tlm_utils::simple_target_socket<och_sep_ss> outbound_filter_to_smn;
+
     // Value seeded into CPU_CTRL.SEP_GLOBAL_BASE_ADDR, which the inbound window
     // remap reads (see smn_inbound_remap_adapter).  On silicon the CSR resets to
     // 0 and SEP firmware programs it, which is what the default preserves;
@@ -383,6 +408,15 @@ private:
     // hits above the reset window would pass through unremapped and land on the
     // internal bus as a global address. 0 keeps the reset value.
     csml_param<uint64_t>   sep_region_size;
+
+    // RTL's smc_global_base_addr_i / smc_region_size_i: the SEP_EXT_TO_SMC demux
+    // window, defined by the SMC and not by anything inside SEP.  Modelled as
+    // config rather than signals because no VP SMC model publishes them yet;
+    // the defaults reproduce the window the static Args constants described.
+    // An enclosing platform must keep these in step with whatever it puts on
+    // sep_ext_to_smc_axi, or SEP will gate off part of the SMC it can reach.
+    csml_param<uint64_t>   smc_global_base;
+    csml_param<uint64_t>   smc_region_size;
 
     // feat_ctrl_o.sep_debug (sep.sv:952) — drives the inbound filter's
     // filter_skip_i, bypassing all match/permission checking. The inbound filter
@@ -401,6 +435,8 @@ private:
     void seed_inbound_window();
     void smn_inbound_b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);
     unsigned int smn_inbound_transport_dbg(tlm::tlm_generic_payload& trans);
+    void smn_outbound_b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);
+    unsigned int smn_outbound_transport_dbg(tlm::tlm_generic_payload& trans);
 };
 
 // -----------------------------------------------------------------------------
@@ -419,13 +455,19 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
     , spiPreload("spiPreload", "")
     , smn_inbound_to_filter("smn_inbound_to_filter")
+    , outbound_filter_to_smn("outbound_filter_to_smn")
     , sep_global_base("sep_global_base", 0x0ULL)
     , sep_region_size("sep_region_size", 0x0ULL)
+    , smc_global_base("smc_global_base", opt_in.smc_global_start_addr)
+    , smc_region_size("smc_region_size",
+                      opt_in.smc_global_end_addr - opt_in.smc_global_start_addr + 1)
     , sep_debug("sep_debug", false)
     , sep_debug_signal("sep_debug_signal")
 {
     sep_smn_inbound_axi.register_b_transport(this, &och_sep_ss::smn_inbound_b_transport);
     sep_smn_inbound_axi.register_transport_dbg(this, &och_sep_ss::smn_inbound_transport_dbg);
+    outbound_filter_to_smn.register_b_transport(this, &och_sep_ss::smn_outbound_b_transport);
+    outbound_filter_to_smn.register_transport_dbg(this, &och_sep_ss::smn_outbound_transport_dbg);
 
     argsCSML = new ArgsCSML(opt);
     Args& args = opt;
@@ -661,6 +703,11 @@ inline void och_sep_ss::seed_inbound_window() {
                   << size << std::dec << " from the sep_region_size preset"
                   << std::endl;
     }
+    // Assigning the registers bypasses their write callbacks, so the exports
+    // still carry the reset values at this point. Republish so anything sizing
+    // its aperture from sep_global_base_addr_o/sep_region_size_o sees the
+    // seeded window instead of [0,+16 MiB).
+    cpu_ctrl->publish_inbound_window();
 }
 
 // -----------------------------------------------------------------------------
@@ -682,7 +729,6 @@ inline void och_sep_ss::create_modules() {
     // Outbound filter (32 entries) + inbound filter (16 entries)
     outbound_filter      = new sep_filter_ctrl_ip("outbound_filter", sep_filter_ctrl_ip::InstanceType::OUTBOUND);
     inbound_filter       = new sep_filter_ctrl_ip("inbound_filter",  sep_filter_ctrl_ip::InstanceType::INBOUND);
-    outbound_filter_stub = new filter_output_stub("outbound_filter_stub");
     reset_ctrl           = new sep_reset_ctrl_ip("reset_ctrl");
     cpu_ctrl             = new sep_cpu_ctrl_ip("cpu_ctrl");
     local_alias_remap    = new local_alias_remap_ip("local_alias_remap");
@@ -739,6 +785,8 @@ inline void och_sep_ss::module_bind() {
     stdout_dev->nmi_vec_o(nmi_vec_signal);
     cpu_ctrl->rst_ni(reset_signal);
     cpu_ctrl->nmi_vec_o(nmi_vec_signal);
+    cpu_ctrl->sep_global_base_addr_o(sep_global_base_addr_signal);
+    cpu_ctrl->sep_region_size_o(sep_region_size_signal);
     cpu_ctrl->hwif_in.smc_fuse_sense_done = true;
     cpu_ctrl->hwif_in.sep_fuse_sense_done = true;
 
@@ -792,7 +840,18 @@ inline void och_sep_ss::module_bind() {
         // Inbound filter data path has no standalone bus window — fed by
         // sep_smn_inbound_axi (external-facing), matching sep_system_peripherals.sv's
         // smn_inbound_axi_req_i -> inbound_filter direct connection.
-        bus->ports[it++] = new PortMapping(opt.smc_global_start_addr,      opt.smc_global_end_addr,      *smc_global);
+        // SMC window (SEP_EXT_TO_SMC leg of u_axi_demux).  RTL gates it with
+        // smc_global_base_addr_i/smc_region_size_i, driven by the SMC rather
+        // than by anything inside SEP, so it is modelled as a pair of inputs
+        // (see smc_global_base/smc_region_size) and read per transaction.
+        bus->ports[it++] = new PortMapping(
+            [this]() {
+                const uint64_t base = smc_global_base.get_param_value();
+                const uint64_t size = smc_region_size.get_param_value();
+                // hi < lo is how an empty window (size 0) is expressed.
+                return size ? std::make_pair(base, base + size - 1)
+                            : std::make_pair(uint64_t(1), uint64_t(0));
+            }, *smc_global);
         // SMU window (0x80000000–0xBFFFFFFF): SEP_EXT_TO_SMU leg of
         // u_axi_demux — merges into outbound_filter_mux alongside AP/STEE
         // remap output (sep_system_peripherals.sv's u_outbound_filter_mux
@@ -800,8 +859,19 @@ inline void och_sep_ss::module_bind() {
         // same Outbound Filter policy, not a standalone stub. Registered
         // after stdout's port above, so stdout's 256-byte console window at
         // the same base address continues to win by first-match priority.
-        bus->ports[it++] = new PortMapping(opt.smu_global_start_addr,      opt.smu_global_end_addr,      *outbound_mux);
-        // SPI mux ctrl (0x20001000–0x2000100B)
+        // Driven by cpu_ctrl's SMU_GLOBAL_BASE_ADDR/SMU_REGION_SIZE, which reset
+        // to 0x80000000/0x40000000 — the same window the static Args constants
+        // described, except firmware reprogramming it now takes effect.
+        bus->ports[it++] = new PortMapping(
+            [this]() {
+                const uint64_t base =
+                    static_cast<uint64_t>(cpu_ctrl->SMU_GLOBAL_BASE_ADDR) & 0x00FF'FFFF'FFFF'FFFFULL;
+                const uint64_t size =
+                    static_cast<uint64_t>(cpu_ctrl->SMU_REGION_SIZE) & 0xFFFF'FFFFULL;
+                return size ? std::make_pair(base, base + size - 1)
+                            : std::make_pair(uint64_t(1), uint64_t(0));
+            }, *outbound_mux);
+        // SPI mux ctrl (0x20000000–0x2000000B)
         bus->ports[it++] = new PortMapping(opt.spi_mux_ctrl_start_addr,    opt.spi_mux_ctrl_end_addr,    *spi_mux);
         // SEP software reset controller (0x10803000–0x10803007)
         bus->ports[it++] = new PortMapping(opt.reset_ctrl_start_addr,      opt.reset_ctrl_end_addr,      *reset_ctrl);
@@ -810,7 +880,9 @@ inline void och_sep_ss::module_bind() {
     }
     bus->mapping_complete();
 
-    // Initiator sockets → bus target sockets
+    // Initiator sockets → bus target sockets.  The index order here is what
+    // BUS_MASTER below maps onto the crossbar's connectivity matrix, so the two
+    // must be kept in step.
     {
         unsigned it = 0;
         riscv->setMasterId(it);
@@ -824,6 +896,26 @@ inline void och_sep_ss::module_bind() {
         // bus, once an SMC/AP model binds sep_smn_inbound_axi
         bus->tsocks[it++].bind(smn_remap->ini);
         dma->sys_initiator_socket.bind(dma_sys_adapter->tgt);
+    }
+
+    // Crossbar connectivity matrix (sep_local_axi_xbar.yaml; see
+    // inc/xbar_policy.h).  Without this every initiator reaches every target,
+    // which lets inbound external traffic touch the TCMs, the reset controller
+    // and the system-peripheral CSRs — all of which silicon refuses.
+    {
+        static constexpr sep_xbar::master BUS_MASTER[INIT_COUNT] = {
+            sep_xbar::master::cpu,          // 0: riscv (ifu + lsu + dbg)
+            sep_xbar::master::dma,          // 1: dma OT leg
+            sep_xbar::master::dma,          // 2: dma CTN leg
+            sep_xbar::master::dma,          // 3: dma sys leg
+            sep_xbar::master::local_alias,  // 4: local-alias re-injection
+            sep_xbar::master::ext,          // 5: SMN inbound after remap
+        };
+        bus->access_policy = [](unsigned initiator_id, uint64_t addr) {
+            if (initiator_id >= INIT_COUNT) return true;
+            return sep_xbar::permits(BUS_MASTER[initiator_id],
+                                     sep_xbar::classify(addr));
+        };
     }
 
     // Fixed local-alias remapper chains into the programmable 16-region table
@@ -1066,15 +1158,15 @@ inline void och_sep_ss::module_bind() {
     sep_debug_signal.write(sep_debug.get_param_value());
     inbound_filter->filter_skip_i(sep_debug_signal);
 
-    // Remap/filter output stubs (remapped/filtered destinations are external to VP)
-    // Serial chain (mirrors sep_system_peripherals.sv: remap -> axi_mux -> filter):
+    // Outbound chain (mirrors sep_system_peripherals.sv: remap -> axi_mux ->
+    // filter), terminating at the chiplet boundary rather than in a sink:
     //   ap_output_remap  ─┐
-    //                      ├─► outbound_filter_mux ─► outbound_filter ─► outbound_filter_stub
+    //                      ├─► outbound_filter_mux ─► outbound_filter ─► sep_smn_outbound_axi
     //   stee_output_remap ─┘
     ap_output_remap->remapped_socket.bind(outbound_mux->ap_tgt);
     stee_output_remap->remapped_socket.bind(outbound_mux->stee_tgt);
     outbound_mux->ini.bind(outbound_filter->data_socket);
-    outbound_filter->filtered_socket.bind(outbound_filter_stub->socket);
+    outbound_filter->filtered_socket.bind(outbound_filter_to_smn);
     // Inbound chain (mirrors sep_system_peripherals.sv: filter -> remap):
     //   sep_smn_inbound_axi ─► inbound_filter ─► smn_remap ─► SEP bus
     inbound_filter->filtered_socket.bind(smn_remap->tgt);
@@ -1103,6 +1195,23 @@ inline void och_sep_ss::smn_inbound_b_transport(tlm::tlm_generic_payload& trans,
 
 inline unsigned int och_sep_ss::smn_inbound_transport_dbg(tlm::tlm_generic_payload& trans) {
     return smn_inbound_to_filter->transport_dbg(trans);
+}
+
+// -----------------------------------------------------------------------------
+// smn_outbound relay — forwards outbound-filter output to the boundary socket
+//
+// Egress mirror of the inbound relay: outbound_filter->filtered_socket is 32-bit
+// and sep_smn_outbound_axi is 64-bit, so the two cannot bind directly.
+// Addresses pass through untouched — AP/STEE remapping has already happened
+// upstream in the output remappers, and the boundary carries global addresses.
+// -----------------------------------------------------------------------------
+inline void och_sep_ss::smn_outbound_b_transport(tlm::tlm_generic_payload& trans,
+                                                 sc_core::sc_time& delay) {
+    sep_smn_outbound_axi->b_transport(trans, delay);
+}
+
+inline unsigned int och_sep_ss::smn_outbound_transport_dbg(tlm::tlm_generic_payload& trans) {
+    return sep_smn_outbound_axi->transport_dbg(trans);
 }
 
 // -----------------------------------------------------------------------------

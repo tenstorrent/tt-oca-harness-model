@@ -50,6 +50,13 @@
 
 namespace {
 
+// RTL SEP_SMC_REGION_BASE / _SIZE: the SEP's dedicated view of the SMC. Used
+// both to size the dedicated-path remap and to drive the SEP's
+// smc_global_base_addr_i/smc_region_size_i equivalents, so there is one
+// definition of the window rather than a constant repeated per consumer.
+constexpr uint64_t SEP_SMC_REGION_BASE = 0x4000'0000ULL;
+constexpr uint64_t SEP_SMC_REGION_SIZE = 0x4000'0000ULL;  // 1 GiB
+
 // ---------------------------------------------------------------------------
 // Read e_entry from a little-endian ELF64 header (offset 24, 8 bytes).
 // Used to preset the SMC cluster's immutable reset_pc before construction.
@@ -236,11 +243,13 @@ int sc_main(int argc, char** argv)
     std::cout << "smu-vp: SMC ELF '" << smc_elf << "' entry=0x" << std::hex << entry << std::dec << "\n";
     apply_smc_default_presets(smc_top, entry);
 
-    // Crossbar aperture-size defaults come BEFORE the ini so an ini may
-    // enlarge/shrink them (e.g. to cover the SEP SRAM alias for the SMU
-    // link test).  The aperture BASES stay forced after the ini (see below):
-    // they are the integration contract with the SEP-side inbound remap and
-    // must not be tunable independently.
+    // Aperture-size defaults come BEFORE the ini so an ini may enlarge/shrink
+    // them (e.g. to cover the SEP SRAM alias for the SMU link test).  The bases
+    // stay forced after the ini (see below): they are the integration contract
+    // with the SEP-side inbound remap and must not be tunable independently.
+    // `smu_xbar.sep_region_size` stays the knob the ini turns even though the
+    // crossbar now takes its live SEP aperture from the SEP's CSRs, because the
+    // value is forwarded into those CSRs below.
     {
         cci::cci_originator o("smu_vp_cfg");
         auto broker = cci::cci_get_global_broker(o);
@@ -255,31 +264,37 @@ int sc_main(int argc, char** argv)
     // SMU integration presets.
     //
     // The SEP's smc_global window forwards to the real SMC (dedicated
-    // sep_ext_to_smc_axi path).  The SEP aperture base must match the
-    // crossbar's sep_global_base (on RTL both are programmed from the same
-    // CSR contract); the SMC aperture follows the SMC's GLOBAL_BASE reset.
+    // sep_ext_to_smc_axi path).  The SMC aperture follows the SMC's GLOBAL_BASE
+    // reset.
     // ------------------------------------------------------------------
     {
         cci::cci_originator o("smu_vp_cfg");
         auto broker = cci::cci_get_global_broker(o);
         broker.set_preset_cci_value("och_sep_ss1.smc_global.forward_en", cci::cci_value(true));
+
+        // Seed the SEP's inbound-window CSRs.  Standing in for the firmware that
+        // programs them on silicon, these are the single definition of the
+        // window: the crossbar reads it back over sep_global_base_addr_i /
+        // sep_region_size_i (bound below) rather than being configured to match.
+        // Presetting smu_xbar.sep_global_base as well is what previously let the
+        // two drift, and a crossbar aperture wider than the CSR window forwards
+        // inbound hits the SEP's internal bus cannot decode.
         broker.set_preset_cci_value("och_sep_ss1.sep_global_base",
                                     cci::cci_value(uint64_t(0x5000'0000ULL)));
-        broker.set_preset_cci_value("smu_xbar.sep_global_base",
-                                    cci::cci_value(uint64_t(0x5000'0000ULL)));
-
-        // The SEP-side inbound remap checks the aperture against
-        // CPU_CTRL.SEP_REGION_SIZE, so it has to span whatever the crossbar
-        // actually routes; a hit above the CSR window would arrive on the
-        // internal bus still carrying its global address.  Read the crossbar's
-        // effective size back (the ini may have resized it above) instead of
-        // repeating the constant, so the two cannot drift apart.
         const cci::cci_value xbar_sep_size =
             broker.get_preset_cci_value("smu_xbar.sep_region_size");
         if (xbar_sep_size.is_uint64() || xbar_sep_size.is_number())
             broker.set_preset_cci_value("och_sep_ss1.sep_region_size", xbar_sep_size);
         broker.set_preset_cci_value("smu_xbar.smc_global_base",
                                     cci::cci_value(uint64_t(0x4000'0000ULL)));
+
+        // RTL's smc_global_base_addr_i/smc_region_size_i. The SEP's own default
+        // is the narrower window it used when nothing published these, which
+        // would gate off most of the SMC reachable over the dedicated path.
+        broker.set_preset_cci_value("och_sep_ss1.smc_global_base",
+                                    cci::cci_value(SEP_SMC_REGION_BASE));
+        broker.set_preset_cci_value("och_sep_ss1.smc_region_size",
+                                    cci::cci_value(SEP_SMC_REGION_SIZE));
 
         // SEP ELF selection (overrides the sep ini's `targets` key; same
         // JSON-quoted string convention as sep-vp's targets override).
@@ -296,9 +311,12 @@ int sc_main(int argc, char** argv)
     och_sep_ss sep{"och_sep_ss1"};
     smu::smu_axi_xbar xbar{"smu_xbar"};
     // Dedicated-path local-alias remap (RTL SEP_SMC_REGION_BASE/_SIZE):
-    // SEP SMC window [0x4000_0000, +1 GiB) -> alias base 0x0.
+    // SEP SMC window [SEP_SMC_REGION_BASE, +1 GiB) -> alias base 0x0.  The same
+    // two constants are presented to the SEP as smc_global_base/smc_region_size
+    // above (RTL's smc_global_base_addr_i/smc_region_size_i), so the window the
+    // SEP will emit into and the window this path accepts are one definition.
     smu::axi_window_remap<64, 64> sep2smc_remap{"sep2smc_remap",
-                                                0x4000'0000ULL, 0x4000'0000ULL, 0x0ULL};
+                                                SEP_SMC_REGION_BASE, SEP_SMC_REGION_SIZE, 0x0ULL};
 
     // Dedicated SEP -> SMC path.
     sep.sep_ext_to_smc_axi.bind(sep2smc_remap.tgt);
@@ -309,10 +327,15 @@ int sc_main(int argc, char** argv)
     xbar.smc_in.bind(dut.sys_axi_in);           // xbar -> SMC inbound
     xbar.sep_in.bind(sep.sep_smn_inbound_axi);  // xbar -> SEP inbound
 
-    // The SEP VP exposes no general outbound master port yet (its
-    // smn_outbound equivalent); idle-bind the xbar's SEP master port.
-    idle_initiator idle_sep_out{"idle_sep_out"};
-    idle_sep_out.sock.bind(xbar.sep_out);
+    // The crossbar sizes its SEP aperture from the SEP's own window CSRs
+    // (sep.sv: sep_global_base_addr_o / sep_region_size_o), so a firmware
+    // reprogram moves both sides together.
+    xbar.sep_global_base_addr_i(sep.sep_global_base_addr_signal);
+    xbar.sep_region_size_i(sep.sep_region_size_signal);
+
+    // SEP outbound (RTL smn_outbound_axi): everything the SEP's outbound filter
+    // passes leaves here, so the crossbar sees the SEP as a master.
+    sep.sep_smn_outbound_axi.bind(xbar.sep_out);
 
     // Unused SMC inbound ports.
     idle_initiator idle_jtag{"idle_jtag"};

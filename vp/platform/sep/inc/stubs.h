@@ -113,37 +113,3 @@ private:
         return trans.get_data_length();
     }
 };
-
-// Filter output stub — silently accepts (or zeros reads of) transactions forwarded
-// by sep_filter_ctrl_ip via filtered_socket. The filter's permitted destinations
-// are external to the VP address space, so a stub is the correct VP target.
-class filter_output_stub : public sc_core::sc_module {
-public:
-    tlm_utils::simple_target_socket<filter_output_stub> socket;
-
-    explicit filter_output_stub(sc_core::sc_module_name n)
-        : sc_module(n), socket("socket") {
-        socket.register_b_transport(this,   &filter_output_stub::b_transport);
-        socket.register_transport_dbg(this, &filter_output_stub::transport_dbg);
-    }
-
-private:
-    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
-        delay = sc_core::SC_ZERO_TIME;
-        if (trans.is_read()) {
-            unsigned char* p = trans.get_data_ptr();
-            if (p && trans.get_data_length() > 0)
-                std::memset(p, 0, trans.get_data_length());
-        }
-        trans.set_response_status(tlm::TLM_OK_RESPONSE);
-    }
-    unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
-        if (trans.is_read()) {
-            unsigned char* p = trans.get_data_ptr();
-            if (p && trans.get_data_length() > 0)
-                std::memset(p, 0, trans.get_data_length());
-        }
-        trans.set_response_status(tlm::TLM_OK_RESPONSE);
-        return trans.get_data_length();
-    }
-};
