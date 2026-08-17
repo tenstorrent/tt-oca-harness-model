@@ -1909,8 +1909,11 @@ class VeeRISSTlm : public external_interrupt_target, public BusWriteObserver, pu
 		// VeeR EL2 PIC — internal to the core, not on the system bus.
 		// Firmware accesses to PIC_BASE..PIC_BASE+PIC_SIZE are intercepted
 		// in externalRead/externalWrite and routed here directly.
+		// pic_base_addr=0xc0080000 and pic_size=32 (KiB) in the SEP VeeR
+		// snapshot; the whole 32 KiB claims the region even though the last
+		// implemented register (MEIGWCLR[255], offset 0x53FC) ends at 0x53FF.
 		static constexpr uint64_t PIC_BASE = 0xC0080000ULL;
-		static constexpr uint64_t PIC_SIZE = 0x6000ULL;
+		static constexpr uint64_t PIC_SIZE = 0x8000ULL;
 
         // Active-low reset signal LOW=reset, HIGH=normal
         sc_in<bool> rst_ni;

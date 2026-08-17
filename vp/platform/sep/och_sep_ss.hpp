@@ -660,7 +660,7 @@ inline och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
 
     // Seed the SPI mux control register reset default. OCH_SEP_SPI_MUX_CTRL resets with
     // cs_force_high=1 (bit 1), spi_sel=0 (bit 0) -> 0x00000002. The offset is window-local
-    // (the bus strips the 0x20000000 base). The driver overwrites this before relying on it;
+    // (the bus strips the 0x20001000 base). The driver overwrites this before relying on it;
     // seeding just makes the pre-write read-back match silicon reset. load_data writes the
     // backing store directly (not via b_transport), so no observation tap is involved.
     {
@@ -873,7 +873,7 @@ inline void och_sep_ss::module_bind() {
             }, *outbound_mux);
         // SPI mux ctrl (0x20000000–0x2000000B)
         bus->ports[it++] = new PortMapping(opt.spi_mux_ctrl_start_addr,    opt.spi_mux_ctrl_end_addr,    *spi_mux);
-        // SEP software reset controller (0x10A50000–0x10A50007)
+        // SEP software reset controller (0x10803000–0x10803007)
         bus->ports[it++] = new PortMapping(opt.reset_ctrl_start_addr,      opt.reset_ctrl_end_addr,      *reset_ctrl);
         // SEP CPU control (0x10A30000–0x10A31007)
         bus->ports[it++] = new PortMapping(opt.cpu_ctrl_start_addr,        opt.cpu_ctrl_end_addr,        *cpu_ctrl);

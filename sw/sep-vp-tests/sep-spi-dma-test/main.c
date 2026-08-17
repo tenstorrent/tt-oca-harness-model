@@ -42,7 +42,7 @@ extern int printf(const char *format, ...);
 /* ------------------------------------------------------------------------- */
 
 /* SPI mux control (stub): select the SPI leg, release the forced chip-select. */
-#define SPI_MUX_CTRL            0x20000000u
+#define SPI_MUX_CTRL            0x20001000u
 #define SPI_MUX_SPI_SEL         (1u << 0)   /* spi_sel = 1 */
 /* cs_force_high (bit 1) left 0 */
 

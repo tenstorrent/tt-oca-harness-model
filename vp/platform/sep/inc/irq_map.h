@@ -37,16 +37,20 @@
 //   sep_internal_interrupts[31]     = km_recoverable_err;
 //   sep_internal_interrupts[32]     = crypto_alert;
 //   sep_internal_interrupts[33]     = locked_field_access_interrupt;
+//   sep_internal_interrupts[34]     = intr_abr_error;
+//   sep_internal_interrupts[35]     = intr_abr_notif;
+//   sep_internal_interrupts[36]     = entropy_pool_low;
+//   sep_internal_interrupts[37]     = entropy_pool_fill_stall;
 //
-// VP supports 32 PIC slots (indices 0-31, sources 0-31). Source 0 is reserved
-// by VeeR EL2. Sources 32-34 (km_recoverable_err, crypto_alert,
-// locked_field_access_interrupt) exceed that range and cannot be used as a
-// live pic_inputs[]/irq_in[] index — their constants are for documentation
-// only.
+// NUM_INTERNAL_IRQS = 38 (sep_pkg.sv), so the internal sources fill PIC sources
+// 1-38 and extintsrc_req takes 39-255. The external ones have no VP source yet:
+// och_sep_ss drives no boundary port for them, so they stay tied low.
 // =============================================================================
 
-// Total number of interrupt sources (source 0 reserved by VeeR EL2; sources 1–31 usable)
-const unsigned int PIC_NUM_INTERRUPTS = 32;
+// Sized from the SEP VeeR snapshot's RV_PIC_TOTAL_INT_PLUS1 (common_defines.vh),
+// i.e. pic_total_int=255 plus the reserved source 0. Sources 1-255 are usable;
+// the platform leaves the ones it has no model for pointing at unused_irq_signal.
+const unsigned int PIC_NUM_INTERRUPTS = 256;
 
 // sep_mailbox_interrupt[1:0] → sources 1-2 (VP models channels 0 and 1 only)
 const unsigned int MAILBOX_IRQ0        = 1;   //   [0] sep_mailbox_interrupt[0]
@@ -80,10 +84,10 @@ const unsigned int EDN_CMD_REQ_DONE    = 28;  //   [27] intr_edn_cmd_req_done
 const unsigned int EDN_FATAL_ERR       = 29;  //   [28] intr_edn_fatal_err
 const unsigned int OTBN_IRQ            = 30;  //   [29] intr_otbn_done
 const unsigned int KM_UNRECOVERABLE_ERR_IRQ = 31;  //   [30] km_unrecoverable_err (no VP model)
-
-// ---- Out of range for the VP's 32-slot PIC (source 0-31 only) ----
-// These document the real silicon source number but MUST NOT be used to
-// index pic_inputs[]/irq_in[] — doing so would be out-of-bounds.
-const unsigned int KM_RECOVERABLE_ERR_IRQ  = 32;  //   [31] km_recoverable_err (out of range)
-const unsigned int CRYPTO_ALERT_IRQ        = 33;  //   [32] crypto_alert (out of range)
-const unsigned int LOCKED_FIELD_ACCESS_IRQ = 34;  //   [33] locked_field_access_interrupt (out of range)
+const unsigned int KM_RECOVERABLE_ERR_IRQ   = 32;  //   [31] km_recoverable_err (no VP model)
+const unsigned int CRYPTO_ALERT_IRQ         = 33;  //   [32] crypto_alert (no VP model)
+const unsigned int LOCKED_FIELD_ACCESS_IRQ  = 34;  //   [33] locked_field_access_interrupt (no VP model)
+const unsigned int ABR_ERROR_IRQ            = 35;  //   [34] intr_abr_error (no VP model)
+const unsigned int ABR_NOTIF_IRQ            = 36;  //   [35] intr_abr_notif (no VP model)
+const unsigned int ENTROPY_POOL_LOW_IRQ     = 37;  //   [36] entropy_pool_low (no VP model)
+const unsigned int ENTROPY_POOL_STALL_IRQ   = 38;  //   [37] entropy_pool_fill_stall (no VP model)

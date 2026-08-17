@@ -44,7 +44,7 @@ The PIC (Programmable Interrupt Controller) is modeled closely after the RISC-V 
 2. **Arbitration** — the PIC core continuously evaluates all pending+enabled sources and picks the one with the highest priority (ties broken by lowest source ID), comparing it against the target's priority threshold(s).
 3. **Hand-off** — if the winning source's priority exceeds threshold, the PIC asserts the hart's external interrupt line and exposes the winner's ID through `meihap` (via `meicpct`-triggered capture) for the trap handler to read.
 
-This SEP integration builds the PIC with **255 sources**. SEP itself only drives the low end of that range — `sep_internal_interrupts[]` is the 34-entry array documented in `irq_map.h`, of which 31 are currently wired to `pic_inputs[]` — so the remaining slots exist and are addressable but sit tied low (§3.1.4).
+This SEP integration builds the PIC with **255 sources**. SEP itself only drives the low end of that range — `sep_internal_interrupts[]` is the 38-entry array documented in `irq_map.h`, of which 31 are currently wired to `pic_inputs[]` — so the remaining slots exist and are addressable but sit tied low (§3.1.4).
 
 ### 1.2 Purpose of This Document
 
@@ -171,7 +171,7 @@ The wake-from-Sleep signal driven when the winning priority reaches the hardwire
 
 | Category | Port/Socket Name | Type | Direction | Description |
 |----------|-------------------|------|-----------|--------------|
-| **Register Bus** | `target_socket` (via `el2_pic_base`) | `tlm_utils::simple_target_socket<csml_memory<32>, 32>` | Target | Bound directly to `VeeRISSTlm`'s internal `pic_isock_` — **not** a SEP `SimpleBus` target. Backing memory window: `0x6000` bytes. |
+| **Register Bus** | `target_socket` (via `el2_pic_base`) | `tlm_utils::simple_target_socket<csml_memory<32>, 32>` | Target | Bound directly to `VeeRISSTlm`'s internal `pic_isock_` — **not** a SEP `SimpleBus` target. Backing memory window: `0x8000` bytes. |
 | **Clock/Reset** | `clk_i`, `rst_ni` | `sc_in<bool>` | Input | `rst_ni` drives `reset_process()` on the negative edge; `clk_i` is present but not used for any clocked logic in this LT model (all logic is event/callback-driven). |
 | **Interrupt Sources** | `irq_in` | `sc_vector<sc_in<bool>>`, size `NUM_INTERRUPTS=256` | Input | Index 0 unused (reserved per spec); indices 1–255 are the interrupt sources. A parent binds only the sources it drives — `before_end_of_elaboration()` ties the rest low (see §3.1.4). Today `och_sep_ss` binds indices 0–31 per `irq_map.h`. |
 | **Hart back-reference** | `bind_hart(VeeRISSTlm*)` | C++ method call | — | Not a TLM/SystemC port — a raw pointer stored in `hart_`, used to call `trigger_external_interrupt()`/`clear_external_interrupt()`/`set_pic_claim_id()`/`peek_csr()`/`poke_csr()` directly. |
@@ -188,7 +188,7 @@ The wake-from-Sleep signal driven when the winning priority reaches the hardwire
 
 ## 4. Memory-Mapped Registers
 
-`el2_pic` exposes one `0x6000`-byte memory window (internal to `VeeRISSTlm`, base address per `pic.h`: `0xC008_0000`, real MMIO surface ending at source 255's `meigwclr` = offset `0x53FC`–`0x53FF`). The window size is unchanged by the 32→256 widening: it was already `0x6000` and the top array now reaches `0x53FC` instead of `0x507C`.
+`el2_pic` exposes one `0x8000`-byte memory window (internal to `VeeRISSTlm`, base address per `pic.h`: `0xC008_0000`, real MMIO surface ending at source 255's `meigwclr` = offset `0x53FC`–`0x53FF`). The window spans the core's full `pic_size = 32` KiB aperture rather than stopping at the last implemented register, so offsets above `meigwclr` read back as zero instead of erroring.
 
 ### 4.1 PIC Configuration Register
 
