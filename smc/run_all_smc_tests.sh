@@ -207,6 +207,7 @@ ALL_IPS=(
     "wdt:${SCRIPT_DIR}/peripherals/wdt"
     "smc_fabric:${SCRIPT_DIR}/smc_fabric"
     "octs_system_timer:${SCRIPT_DIR}/peripherals/octs_system_timer"
+    "aou:${SCRIPT_DIR}/../aou"
 )
 # cpu_cluster requires Whisper (Tenstorrent internal) and Boost; only include
 # when both were found (_cpu_cluster_ready, computed above alongside the

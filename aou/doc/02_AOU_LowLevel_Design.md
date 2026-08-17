@@ -65,7 +65,9 @@ aou_peer_.axi_m[0] → stub_sysmem
 
 ```
 cluster.mmio → fabric → periph_router @ 0xC000_4000 → aou_.apb_socket
+SEP 0x4000_4000 → sep_ext_to_smc_axi → fabric → same APB window
 smu_axi_xbar.ext_out → aou_axi_s → aou_.axi_s[0]
+  (SMC output_axi catch-all, or SEP smn_outbound after outbound filter)
 aou_.axi_m[0] → aou_axi_m → smu_axi_xbar.ext_in
 aou_.connect_peer(&aou_peer_)          // UCIe PHY stub
 aou_peer_.axi_m[0] → stub_sysmem       // remote-die SMN

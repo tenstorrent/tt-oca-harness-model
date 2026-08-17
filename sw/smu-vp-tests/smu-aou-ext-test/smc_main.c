@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0
- * Port of tt-oca-hw fw/smc/tests/smu_sep_ext_axi (SEP_SMU_016 SMC->ext_out
- * leg).  Catch-all address 0x80001000 misses both xbar apertures and exits
+ * Port of tt-oca-hw fw/smc/tests/smu_sep_ext_axi (SEP_SMU_016).  Catch-all
+ * address 0xA0001000 misses both xbar apertures and exits
  * smu_axi_xbar.ext_out through the local AOU (RTL: smu_axi_out -> AoU).
  *
- * Firmware activates AOU (peer auto-acks), then write/readbacks the remote
- * SMN stub behind aou_peer_.axi_m.
+ * Firmware activates AOU (peer auto-acks), write/readbacks the remote SMN
+ * stub behind aou_peer_.axi_m, then doorbells SEP so it can run the
+ * smn_outbound -> ext_out -> AOU leg.
  */
 #include "smc_common.h"
 

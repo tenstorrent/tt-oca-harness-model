@@ -7,13 +7,14 @@
 :toclevels: 3
 :source-highlighter: highlight.js
 
-This document describes how to interconnect the SMC (`smc-vp`) and SEP
-(`sep-vp`) virtual platforms in this repository with AXI over a die-to-die
-(D2D) link, using the RTL in `tt-oca-hw` as the reference architecture. It
-enumerates the concrete modeling steps, and calls out the interconnect
-components that are **missing** — both in the hardware repository and in this
-simulation repository — that must be built (or stubbed) to connect the three
-components (SMC, SEP, D2D link) end to end.
+This document is the design and as-built record for interconnecting the
+SMC (`smc-vp`) and SEP (`sep-vp`) virtual platforms with AXI over a
+die-to-die (D2D) link. The RTL in `tt-oca-hw` / `tt-oca-harness`
+(`hw/sys/smu/rtl/smu.sv`) is the reference architecture. The single-die
+`smu-vp` platform, the SMU crossbar and window-remap models, the SEP
+chiplet-boundary sockets, and the AOU (AXI-over-UCIe) LT stub are
+**implemented**. Cycle-accurate FDI/UCIe PHY and a two-die `smu-d2d-vp`
+remain out of scope; <<missing>> lists only what is still open.
 
 [[hw-reference]]
 == Hardware Reference Architecture (tt-oca-hw)
@@ -31,35 +32,69 @@ sole chiplet-facing AXI boundary is the `smu_axi_in` / `smu_axi_out` pair
 (`hw/smu/doc/port_table.adoc`), which attaches to the SMN (System Management
 Network).
 
-.OCAH component stack (simplified)
+.OCAH component stack — three on-die AXI paths plus the chiplet D2D leg
 [source]
 ----
-                 application logic / chiplet NoC   (outside OCAH scope)
-                          |            ^
-        smu_axi_in  ------┘            └------  smu_axi_out
-                          |            |
-   +======================v============+===============================+
-   | SMU (hw/smu/rtl/smu.sv)           |                               |
-   |   +-----------+   smu_axi_xbar    |  +-------------------------+  |
-   |   | SEP       |<-> (3x3 AXI4)     |  | SMC                     |  |
-   |   | (sep.sv)  |   sep_in/smc_in   |  | (smc.sv)                |  |
-   |   +-----+-----+                   |  +----^---------+----------+  |
-   |         | sep_ext_to_smc_axi -----+------+ sep_axi_in          |  |
-   |         | (dedicated port, via    |      |                     |  |
-   |         |  axi_window_remap)      |      | output_axi ---------+--+
-   |         +------------------------>| smc_out (to xbar)             |
-   |   +---------------------------------------------------------+    |
-   |   | DTP (debug/test; JTAG2AXI -> smc jtag_axi_in)           |    |
-   |   +---------------------------------------------------------+    |
-   +==================================================================+
-                          |            ^
-                    SMN --┘            └-- (System Management Network;
-                                            spec section is a stub)
-                          |
-                    AoU bridge (AXI-over-UCIe)  -- NOT in OCAH RTL
-                          |
-                    UCIe D2D PHY                -- adopter-specific macro
+  chiplet NoC / application logic                         (outside OCAH)
+
+           smu_axi_in                          smu_axi_out
+                |                                    ^
+                v                                    |
+  +=============+====================================+=================+
+  | SMU  hw/smu/rtl/smu.sv                                                 |
+  |                                                                        |
+  |   +------------+          smu_axi_xbar (3x3)         +------------+    |
+  |   | SEP        |  sep_out ---------------------->    | SMC        |    |
+  |   | sep.sv     |  sep_in  <----------------------    | smc.sv     |    |
+  |   |            |          smc_out / smc_in           |            |    |
+  |   |            |                                     |            |    |
+  |   |            |  (1) dedicated, bypasses xbar       |            |    |
+  |   | ext_to_smc +--------[ axi_window_remap ]-------->| sep_axi_in |    |
+  |   |            |  0x4000_0000+X  -->  alias X        |            |    |
+  |   |            |                                     | output_axi +--+ |
+  |   +------------+                                     +------------+  | |
+  |        ^   |                                              ^          | |
+  |        |   |              +------------------+            |          | |
+  |        |   +------------->| sep_out          |            |          | |
+  |        +------------------| sep_in           |<-----------+          | |
+  |                           | smc_in / smc_out |<----------------------+ |
+  |                           | ext_in / ext_out |                         |
+  |                           +--------+---------+                         |
+  |   +------------------+             |                                   |
+  |   | DTP  JTAG2AXI    |-------------+--> SMC jtag_axi_in                |
+  |   +------------------+                                                 |
+  +====================================+===================================+
+                                       |
+                              SMN  (OCAH stub)
+                                       |
+                         AoU  AXI-over-UCIe   (no OCAH RTL; LT model in aou/)
+                                       |
+                         UCIe D2D PHY         (adopter-specific; not modeled)
 ----
+
+.SMU crossbar connectivity (non-reflexive: a master never hits its own inbound)
+[cols="^18%,^22%,^22%,^22%,<16%",options="header"]
+|===
+|Master \ Target |`sep_in` |`smc_in` |`ext_out` |Rule
+
+|`sep_out`
+|—
+|SEP/SMC aperture
+|catch-all
+|never `sep_in`
+
+|`smc_out`
+|SEP aperture
+|—
+|catch-all
+|never `smc_in`
+
+|`ext_in`
+|SEP aperture
+|SMC aperture
+|—
+|miss → address error
+|===
 
 === The three SMC/SEP AXI paths inside the SMU
 
@@ -97,7 +132,8 @@ programmable SEP/SMC global apertures; `ext_out` is the static catch-all
 |This is where inter-chiplet traffic enters/exits. In a multi-die system the
 SMN plus an **AXI-over-UCIe (AoU) bridge** and a UCIe PHY carry these AXI
 transactions to the remote die's SMU. Neither the SMN fabric nor the AoU
-bridge RTL ships with OCAH (see <<missing-hw>>).
+bridge RTL ships with OCAH (see <<missing-hw>>). The VP binds this pair
+through `aou_core` (see <<as-built>>).
 |===
 
 === AXI interface facts
@@ -153,119 +189,254 @@ addresses to global system addresses for outbound traffic
 (`hw/smc/doc/fabric.adoc`).
 
 [[sim-today]]
-== What Exists Today in tt-oca-sim
+== Standalone platforms (smc-vp / sep-vp)
+
+The two subsystem VPs remain independently runnable. Integration happens
+only in `smu-vp` (<<as-built>>); standalone bindings keep historical
+`smc-vp` / `sep-vp` firmware behavior.
 
 === SMC virtual platform (`vp/platform/smc`, executable `smc-vp`)
 
-The SMC platform already exposes the chiplet-facing boundary exactly where
-the RTL has it:
+The SMC platform exports the chiplet-facing boundary where the RTL has it:
 
-* `sys_axi_in`, `jtag_axi_in`, `sep_axi_in` — 64-bit
-  `tlm_utils::simple_target_socket`s on `smc_platform`
-  (`vp/platform/smc/smc_platform.hpp`), forwarded into the fabric's matching
-  ports (`fwd_sys_axi` / `fwd_jtag_axi` / `fwd_sep_axi` in
-  `vp/platform/smc/src/smc_platform.cpp`).
-* `smc_fabric` (`smc/smc_fabric/`) models the alias remap, the
-  local/global aperture split (`GLOBAL_BASE` / `LOCAL_BASE` / `REGION_SIZE`
-  CSRs, defaults matching RTL), the inbound filter on `sys_axi_in`, and
-  local-only routing on `sep_axi_in` (no filter, no remap — matching the
-  RTL's dedicated-port behavior).
-* `output_axi` — 64-bit initiator socket for outbound (global-aperture)
-  traffic. In `smc-vp` it is bound to a `stub_sysmem` target; the three
-  inbound boundary sockets are bound to idle initiators in
-  `vp/platform/smc/main.cpp`.
+* `sys_axi_in`, `jtag_axi_in`, `sep_axi_in` — 64-bit target sockets on
+  `smc_platform`, forwarded into the fabric (`fwd_sys_axi` / `fwd_jtag_axi`
+  / `fwd_sep_axi`).
+* `output_axi` — 64-bit initiator for outbound (global-aperture) traffic.
+* `aou_axi_s` / `aou_axi_m` — local AOU AXI slave/master, re-exported so
+  `smu-vp` can bind the xbar `ext_out`/`ext_in` pair. AOU CSRs sit on the
+  periph router at `0xC000_4000` (window `0x80`); `irq_o` is aggregated
+  into PLIC source ID 27.
+* `smc_fabric` models alias remap, the local/global aperture split
+  (`GLOBAL_BASE` / `LOCAL_BASE` / `REGION_SIZE`), the inbound filter on
+  `sys_axi_in`, and local-only routing on `sep_axi_in` (no filter, no
+  remap — dedicated-port behavior).
+
+Standalone `smc-vp` (`vp/platform/smc/main.cpp`) binds `output_axi` to
+`stub_sysmem`, the three inbound sockets to idle initiators, `aou_axi_s`
+to an idle initiator, and `aou_axi_m` to a remote stub. The local AOU is
+`connect_peer`'d to an in-platform `aou_peer_` (remote-die stand-in).
 
 === SEP virtual platform (`vp/platform/sep`, executable `sep-vp`)
 
-* The SEP VP is a **closed system**: all devices hang off an internal
-  `SimpleBus` (`vp/platform/sep/och_sep_ss.hpp`); no external AXI target or
-  initiator socket crosses the platform boundary.
-* The SEP's view of the SMC is a **stub memory**: `smc_global`, a
-  `SEPMemory` instance mapped at `0x4000_0000-0x401F_FFFF` (2 MiB,
-  `vp/platform/sep/inc/Args.hpp`). It is plain RW backing store with no SMC
-  behavior; the boot handshake (scratch words, status ring header, straps,
-  DFT status) is *seeded* into it at construction so the SEP boot ROM can
-  run without a real SMC. Window-local offsets already match the SMC local
-  map (e.g. SMC SRAM at window offset `0x60000` == SMC local
-  `0xC006_0000` == `A_SCRATCH` in `smc-vp`). Note the stub covers only the
-  first 2 MiB of the 1 GiB SEP->SMC window the RTL decodes
-  (`hw/sep/doc/memory_map.adoc`: `0x4000_0000-0x7FFF_FFFF`).
-* The SMC platform's outbound `output_axi` is **not re-exported** at the
-  `smc_platform` boundary — it is bound internally to `stub_sysmem`
-  (`vp/platform/smc/src/smc_platform.cpp`), so SMC-initiated global traffic
-  cannot leave the platform today.
-* Mailbox: the SEP VP has a real mailbox model, but the SMC fabric's
-  `to_mailbox` port is bound to a `stub_mbox` — there is no SMC mailbox IP
-  under `smc/peripherals/`. The RTL's SMC<->SEP mailbox interop path
-  (exercised by DV `smc_sep_interoperability_test`) is therefore not yet
-  reproducible in the VP.
+Devices hang off an internal 32-bit `SimpleBus` (`och_sep_ss.hpp`). Three
+chiplet-boundary sockets are exported:
 
-=== Gap summary
+* `sep_ext_to_smc_axi` — 64-bit initiator for the dedicated SEP→SMC
+  window. Driven by `sep_smc_global_port` when `forward_en=true`.
+* `sep_smn_inbound_axi` — 64-bit target from the SMU crossbar (RTL
+  `smn_inbound_axi`): inbound filter → global-to-local remap → bus.
+* `sep_smn_outbound_axi` — 64-bit initiator after the outbound filter
+  (RTL `smn_outbound_axi`). The SMU window (live
+  `SMU_GLOBAL_BASE_ADDR` / `SMU_REGION_SIZE`) merges into
+  `outbound_filter_mux` (base re-added so the filter sees global
+  addresses), then `outbound_filter_to_smn` (32→64).
 
-Neither a D2D link model, an SMU crossbar model, nor a combined SMU-level
-platform exists in this repository yet. The next section gives the steps to
-build them; <<missing>> calls out each missing piece explicitly.
+Standalone `sep-vp` keeps `smc_global.forward_en=false` (seeded RW
+fallback, first 2 MiB of the 1 GiB SEP→SMC window), binds
+`sep_smn_inbound_axi` to an idle initiator, and sinks both outbound
+initiators. Window-local offsets still match the SMC local map (SMC SRAM
+at offset `0x60000` == `0xC006_0000`).
+
+Mailbox: the SEP VP has a real mailbox model; the SMC fabric's
+`to_mailbox` is still a stub (see <<missing-sim>> item 9).
 
 [[as-built]]
 == As-Built Status (simulation)
 
-Steps 1, 2, 3 (AOU LT stub), 4 (single-die), 5, 6 and 7 of <<steps>> are
-**implemented**. Cycle-accurate FDI/UCIe PHY remains out of scope.
+Steps 1–7 of <<steps>> are **implemented** for a single die. Cycle-accurate
+FDI/UCIe PHY and a two-die `smu-d2d-vp` remain out of scope.
 
-* `vp/platform/smu/` — the `smu-vp` executable (`main.cpp`) instantiates
-  `smc_platform` (`dut`) + `och_sep_ss` (`och_sep_ss1`) + the SMU on-die
-  interconnect and wires the three AXI paths:
-  ** *Dedicated SEP->SMC path:* SEP `sep_ext_to_smc_axi` ->
-     `smu::axi_window_remap<64,64>` (`sep2smc_remap`, window
-     [`0x4000_0000`, +1 GiB) -> alias `0x0`, per `smu_pkg.sv`) ->
-     SMC `sep_axi_in`.
-  ** *Crossbar paths:* SMC `output_axi` -> `smu_axi_xbar.smc_out`;
-     `smc_in` -> SMC `sys_axi_in`; `sep_in` -> SEP `sep_smn_inbound_axi`.
-  ** *D2D / AoU stub:* `smu_axi_xbar.ext_out` -> SMC `aou_axi_s`
-     (local AOU TX); SMC `aou_axi_m` (local AOU RX) -> `ext_in`.
-     The peer AOU inside `smc_platform` is the remote-die stand-in
-     (`connect_peer`; peer `axi_m` -> remote SMN stub). This is the
-     LT stand-in for tt-oca-hw's AoU-on-`smu_axi_*` placement
-     (`doc/architecture.adoc`); catch-all traffic forwards only once
-     firmware has written `aou_init.activate_start` (both cores ENABLED).
-* `vp/platform/smu/inc/smu_axi_xbar.h` — 3x3 non-reflexive crossbar model
-  with CCI-programmable apertures (`sep_global_base`/`sep_region_size`,
-  `smc_global_base`/`smc_region_size`), `ext_out` static catch-all, and
-  `SIM_LOG_TRACE` route tracing. Response routing is by TLM-2.0 socket
-  association, so no ID-remap table is needed at LT fidelity.
-* `vp/platform/smu/inc/axi_window_remap.h` — the `axi_window_remap` RTL
-  block model (in-window rebase, out-of-window passthrough).
-* SEP boundary (`vp/platform/sep/inc/smc_global_port.h` +
-  `och_sep_ss.hpp`): `sep_smc_global_port` replaces the bare `SEPMemory`
-  stub — `forward_en=false` (default) keeps the seeded-stub standalone
-  `sep-vp` behavior byte-identical; `forward_en=true` (preset by `smu-vp`)
-  re-adds the window base and forwards on `sep_ext_to_smc_axi` (global
-  addresses, like the RTL port). `sep_smn_inbound_axi` is the inbound
-  64-bit target; `fwd_sep_inbound` subtracts `sep_global_base` and
-  re-issues on the internal 32-bit bus (the width bridge of
-  <<missing-sim>> item 4).
-* SMC boundary (`vp/platform/smc/smc_platform.hpp`): `output_axi`,
-  `sys_axi_in`, `jtag_axi_in`, `sep_axi_in` are exported platform sockets;
-  standalone `smc-vp` re-binds them to its stub/idle terminators, so
-  `smc-vp` behavior is unchanged.
-* Aperture contract (Step 5): the integrator programs both sides through
-  matching CCI presets — `smu-vp` forces
-  `och_sep_ss1.sep_global_base` == `smu_xbar.sep_global_base`
-  (`0x5000_0000`); aperture *sizes* default to 16 MiB and are
-  ini-overridable (`smc_smu_vp.ini` widens `sep_region_size` to 512 MiB so
-  the SEP SRAM alias at `0x6000_0000` is reachable, and lowers
-  `dut.cluster.mmio_lo` to `0x4000_0000` so SMC CPU traffic to the global
-  apertures routes to the fabric). CSR-mirrored aperture programming
-  (<<missing-sim>> item 8) remains future work.
-* Sidebands (Step 6): SMC-facing legs carry the canonical
-  `smc::smc_axi_extension`; the SEP boundary does not consume or produce
-  extensions, and the crossbar forwards transactions unchanged — there is
-  no reinterpretation of sideband bytes across the boundary.
-* Tests (Step 7): unit tests for both interconnect models live in
-  `vp/platform/smu/test/` (100% line coverage, ASan-clean; see
-  `vp/platform/smu/run_tests.sh`); the bidirectional platform test lives in
-  `sw/smu-vp-tests/smu-link-test/` (SEP->SMC over the dedicated path and
-  SMC->SEP over the crossbar, self-checking on both CPUs).
+=== Topology (`smu-vp`)
+
+`vp/platform/smu/main.cpp` instantiates `smc_platform` (`dut`) +
+`och_sep_ss` (`och_sep_ss1`) + `smu_axi_xbar` + `axi_window_remap` and
+wires every on-die AXI path from `smu.sv`.
+
+.As-built `smu-vp` — path (1) dedicated, (2) crossbar, (3) D2D/AOU catch-all
+[source]
+----
+  +---------------------------+                    +---------------------------+
+  | SEP  och_sep_ss1          |                    | SMC  dut                  |
+  |                           |                    |                           |
+  |  sep_ext_to_smc_axi o-----+--(1) window remap--+----> o sep_axi_in         |
+  |                           |   -0x4000_0000     |                           |
+  |  sep_smn_inbound_axi o<---+----------(2a)------+----- o output_axi         |
+  |  sep_smn_outbound_axi o---+----------(2b)------+----> o sys_axi_in         |
+  +------------+--------------+                    +--------------+------------+
+               |                                                  |
+               |              +------------------+                |
+               |              | smu_axi_xbar     |                |
+               +------------->| sep_out          |                |
+                (2b)          | sep_in           |<---------------+
+                              | smc_out          |<---- output_axi  (2a)
+                              | smc_in           |----> sys_axi_in
+                              | ext_in           |<---- aou_axi_m   (3 RX)
+                              | ext_out          |----> aou_axi_s   (3 TX)
+                              +--------+---------+
+                                       |
+                         catch-all (miss SEP and SMC apertures)
+                                       |
+              +------------------------v-------------------------+
+              | local AOU  aou_            peer AOU  aou_peer_   |
+              |  axi_s[0] <--- ext_out      axi_m[0] --> stub    |
+              |  axi_m[0] ---> ext_in       axi_s[0] idle        |
+              |         connect_peer()  (UCIe PHY stub)          |
+              +--------------------------------------------------+
+----
+
+.Path index
+[cols="<8%,<28%,<64%",options="header"]
+|===
+|# |Name |Route in `smu-vp`
+
+|(1)
+|Dedicated SEP→SMC
+|`sep_ext_to_smc_axi` → `axi_window_remap` → `sep_axi_in` (bypasses xbar)
+
+|(2a)
+|SMC→SEP via xbar
+|`output_axi` → `smc_out` → SEP aperture → `sep_in` → `sep_smn_inbound_axi`
+
+|(2b)
+|SEP→SMC/AOU via xbar
+|`sep_smn_outbound_axi` → `sep_out` → SMC aperture → `smc_in` / catch-all → `ext_out`
+
+|(3)
+|D2D / AoU LT stub
+|`ext_out` → local `aou_.axi_s` → peer `aou_peer_.axi_m` → `stub_sysmem`;
+peer RX would re-enter on `ext_in` (idle today)
+|===
+
+*Dedicated SEP→SMC.* SEP `sep_ext_to_smc_axi` →
+`smu::axi_window_remap<64,64>` (`sep2smc_remap`, window
+`[0x4000_0000, +1 GiB)` → alias `0x0`, per `smu_pkg.sv`) → SMC
+`sep_axi_in`. `smu-vp` presets `och_sep_ss1.smc_global.forward_en=true`
+so the window is a live forwarder, not the seeded stub.
+
+*Crossbar.* SMC `output_axi` → `smu_axi_xbar.smc_out`; `smc_in` → SMC
+`sys_axi_in`; `sep_in` → SEP `sep_smn_inbound_axi`; SEP
+`sep_smn_outbound_axi` → `smu_axi_xbar.sep_out`. Catch-all addresses on
+either outbound master exit `ext_out`.
+
+*D2D / AoU LT stub.* `ext_out`/`ext_in` bind through the local
+`aou_core` (AXI-over-UCIe model in `aou/`), matching OCAH's placement of
+AoU on `smu_axi_in`/`smu_axi_out`. The peer AOU inside `smc_platform` is
+the remote-die stand-in (`connect_peer`; peer `axi_m` → `stub_sysmem`).
+Catch-all traffic forwards only after firmware writes
+`aou_init.activate_start` (both cores ENABLED); until then `axi_s`
+returns `TLM_COMMAND_ERROR_RESPONSE`. Peer `axi_s` is idle — there is no
+remote SMU master in this single-die VP.
+
+=== Models
+
+[cols="<28%,<72%",options="header"]
+|===
+|Model |Role
+
+|`vp/platform/smu/inc/smu_axi_xbar.h`
+|3x3 non-reflexive crossbar. The SEP aperture is taken from
+`sep_global_base_addr_i` / `sep_region_size_i` when bound (SEP
+`sep_cpu_ctrl` CSRs, as in `sep.sv`); the SMC aperture and the
+unbound-SEP fallback are CCI-mutable. `ext_out` is the static
+catch-all. `SIM_LOG_TRACE` route tracing. Responses follow the TLM-2.0
+call, so the RTL `axi_iw_converter` ID-width stage is a no-op at LT
+fidelity.
+
+|`vp/platform/smu/inc/axi_window_remap.h`
+|RTL `axi_window_remap`: in-window rebase, out-of-window passthrough.
+
+|`aou/include/aou_core.h`
+|LT AOU: APB CSR map (`aou-core.rdl`), activate/deactivate, AXI
+`axi_s[rp]` → peer `axi_m[dest_rp]`. No FDI flit/credit/QoS timing.
+CSRs at SMC `0xC000_4000`; SEP reaches them at `0x4000_4000` through the
+dedicated window. `irq_o` → intagg → PLIC source 27.
+
+|`sep_smc_global_port`
+|SEP SMC window. `forward_en=false` (default): seeded RW stub for
+standalone `sep-vp`. `forward_en=true` (`smu-vp`): re-add
+`window_base` and forward on `sep_ext_to_smc_axi`.
+
+|`outbound_filter_mux` + `outbound_filter_to_smn`
+|SEP SMU window (live `SMU_GLOBAL_BASE_ADDR` / `SMU_REGION_SIZE`):
+SimpleBus strips the base; the mux SMU leg re-adds it (RTL demux
+carries globals into the outbound filter); `BlockByDefault=1` filter;
+32→64 relay onto `sep_smn_outbound_axi`.
+|===
+
+=== Aperture contract
+
+The SEP inbound window has one driver: `sep_cpu_ctrl`
+`SEP_GLOBAL_BASE_ADDR` / `SEP_REGION_SIZE`, exported as
+`sep_global_base_addr_signal` / `sep_region_size_signal` and bound into
+the xbar (`sep_global_base_addr_i` / `sep_region_size_i`). `smu-vp`
+seeds those CSRs (standing in for early firmware) and no longer presets
+`smu_xbar.sep_global_base` independently:
+
+* `och_sep_ss1.sep_global_base` = `0x5000_0000`; if the ini widens
+  `smu_xbar.sep_region_size`, the same value is copied into
+  `och_sep_ss1.sep_region_size` so the CSR window matches what the
+  xbar will route.
+* `smu_xbar.smc_global_base` = `0x4000_0000` (SMC `GLOBAL_BASE` reset).
+* `och_sep_ss1.smc_global_base` / `smc_region_size` =
+  `SEP_SMC_REGION_BASE` / `SIZE` (`0x4000_0000` / 1 GiB) so the
+  dedicated demux window matches `axi_window_remap`.
+* `vp/platform/smu/config/smc_smu_vp.ini` widens `sep_region_size` to
+  512 MiB so the SEP SRAM alias at `0x6000_0000` is inside the
+  aperture, and lowers `dut.cluster.mmio_lo` to `0x4000_0000` so SMC
+  CPU traffic to the global apertures reaches the fabric.
+
+The SMC scratchpad is at **`0xC006_0000`**, not `0xC004_0000` (that slot
+is the boot ROM). SEP→SMC traffic must use window offset `0x6_0000+`.
+
+=== Sidebands
+
+SMC-facing legs carry `smc::smc_axi_extension`. The SEP boundary neither
+consumes nor produces that type; the crossbar forwards payloads
+unchanged, so no sideband bytes are reinterpreted.
+
+=== Tests and CI
+
+[cols="<28%,<72%",options="header"]
+|===
+|Suite |Coverage
+
+|`vp/platform/smu/test/`
+|`smu_axi_xbar` + `axi_window_remap`: all route legs, remap, passthrough,
+error propagation, debug transport, runtime CCI reprogram. Release /
+ASan / Coverage (100% line on both headers). CI: `smu-unit-tests` /
+`smu-unit-tests-rhel8`.
+
+|`aou/test/aou_core_tb.cpp`
+|CSR reset/round-trip, activate/deactivate, AXI deny/loopback. Release /
+ASan / Coverage. CI: `aou` in `smc/run_all_smc_tests.sh`.
+
+|`sw/smu-vp-tests/smu-link-test`
+|SEP→SMC dedicated path (scratchpad `0x4006_1000`) and SMC→SEP crossbar
+(`0x6000_8000` → SEP SRAM `0x1000_8000`).
+
+|`sw/smu-vp-tests/smu-xbar-test`
+|Same two paths with the hardware handshake tokens
+(`0x13579BDF` / `0xC001CAFE` / `0x5E9ACCE5` / `0xD0E0F00D`).
+
+|`sw/smu-vp-tests/smu-traffic-test`
+|50 SMC→SEP write+readback beats (DV `smc_cpu_traffic_sep_axi_test`).
+
+|`sw/smu-vp-tests/smu-aou-ext-test`
+|SMC activates AOU, write/readback catch-all `0xA000_1000` through
+`ext_out` → AOU → peer. SEP reads AOU `ip_version` at `0x4000_4000`,
+programs outbound filter 0, write/readback `0xA000_1008` through
+`smn_outbound` → xbar → AOU. (VP uses `0xA000_1000` because hardware's
+`0x8000_1000` sits in cluster fast-mem.)
+|===
+
+A firmware test passes only when **both** halves print PASS (SMC on
+UART0, SEP on the virtconsole) and neither prints FAIL. CI jobs
+`smu-vp` / `smu-vp-rhel8` run `sw/smu-vp-tests/run_smu_vp_tests.sh`
+with no arguments, which discovers every `*/Makefile` under that
+directory — including `smu-aou-ext-test`. AOU unit tests run in
+`smc-unit-tests` / `smc-unit-tests-rhel8` via
+`smc/run_all_smc_tests.sh … aou`.
 
 Both ISS families coexist in one `smu-vp` process: the SMC CPU cluster +
 Whisper archives are linked as `libsmc_cluster_smu` (shared library with
@@ -276,121 +447,80 @@ do not collide at link time.
 [[steps]]
 == Interconnection Steps (simulation)
 
-The target is a new top-level platform — e.g. `vp/platform/smu`
-(executable `smu-vp`) — that instantiates `smc_platform`, the SEP subsystem,
-a crossbar model, and a D2D link model, mirroring `hw/smu/rtl/smu.sv`.
+The target — `vp/platform/smu`, executable `smu-vp` — instantiates
+`smc_platform`, the SEP subsystem, the crossbar, and the AOU LT stub,
+mirroring `hw/smu/rtl/smu.sv`. Each step below records what landed.
 
-=== Step 1 — Expose the SEP VP boundary
+=== Step 1 — Expose the SEP VP boundary (done)
 
-Today nothing can drive the SEP from outside, and SEP accesses to
-`0x4000_0000+` terminate in a stub memory. Two changes:
+1. *SEP → SMC (outbound):* `sep_smc_global_port` replaces the
+   `smc_global` `SEPMemory` stub. `forward_en=false` keeps the seeded
+   fallback for standalone `sep-vp`; `forward_en=true` re-adds
+   `window_base` and forwards on `sep_ext_to_smc_axi`.
+2. *SMC → SEP (inbound):* `sep_smn_inbound_axi` feeds inbound filter →
+   `smn_inbound_remap_adapter` (subtract `sep_global_base`) → internal
+   bus.
+3. *SEP → SMN/AOU (outbound):* `sep_smn_outbound_axi` is the filter
+   output (SMU window + AP/STEE remaps). Standalone `sep-vp` sinks it;
+   `smu-vp` binds `xbar.sep_out`.
 
-1. *SEP -> SMC (outbound):* replace the `smc_global` `SEPMemory` stub with a
-   forwarding target whose `b_transport` re-issues the transaction on a new
-   64-bit initiator socket `sep_ext_to_smc_axi` exported from the SEP
-   platform. Keep the seeded-handshake behavior available behind a CCI
-   parameter (e.g. `sep.smc_global_stub_en`) so standalone `sep-vp` boots
-   are unaffected.
-2. *SMC -> SEP (inbound):* add a target socket `sep_smn_inbound_axi` on the
-   SEP platform that forwards into the internal `SimpleBus` as a new
-   initiator, reproducing the RTL's inbound global-to-local remap
-   (`u_inbound_global_to_local_addr_remap`, base = `sep_global_base_addr`).
+The 32↔64 width bridge is at the three boundary adapters
+(`sep_smc_global_port`, inbound remap, `outbound_filter_to_smn`).
 
-NOTE: The SEP internal TLM bus is 32-bit (`SEPMemory::tsock` is a default
-32-bit `simple_target_socket`); the SMC side is uniformly 64-bit. A width
-adapter (or 64-bit sockets with a 32-bit data-lane bridge at the SEP
-boundary) is required — see <<missing-sim>>.
+=== Step 2 — Model the SMU AXI crossbar (done)
 
-=== Step 2 — Model the SMU AXI crossbar
+`vp/platform/smu/inc/smu_axi_xbar.h`: 3x3 non-reflexive router. The SEP
+aperture follows the bound CSR ports; the SMC aperture is CCI. `ext_out`
+is the catch-all. Response routing is by TLM socket association (no
+ID-remap table at LT fidelity).
 
-Create `smc/smu_xbar` (or `vp/platform/smu/smu_xbar.h`) modeling
-`smu_axi_xbar` as a 3x3 non-reflexive router:
+=== Step 3 — Model the D2D link (done as AOU LT stub)
 
-* Initiator-side sockets: `sep_out`, `smc_out`, `ext_in`.
-* Target-side sockets: `sep_in`, `smc_in`, `ext_out`.
-* Runtime apertures as CCI parameters or CSR-mirrored values:
-  `sep_global_base`/`sep_region_size` and `smc_global_base`/`smc_region_size`
-  (defaults `0x4000_0000`/16 MiB per the RTL contract); `ext_out` is the
-  static catch-all.
-* Follow the repo rules: use `smc_axi_extension` for sideband metadata on
-  the SMC-facing legs, `sim_log.h` for route tracing, and CCI for the
-  aperture knobs. Model the RTL's ID-width conversion (xbar 10-bit -> port
-  6-bit) at least functionally (source-ID tagging so responses route back
-  correctly).
+The generic two-socket `d2d_link` sketched below was **not** built as a
+separate module. Single-die `smu-vp` uses `aou_core` on
+`ext_out`/`ext_in` plus an in-platform peer AOU as the remote-die
+stand-in — the OCAH placement (AoU between SMU/SMN and the UCIe PHY).
+No UCIe packetization, retry, or link training (RTL has no AoU; Boot ROM
+`train_d2d` is Unsupported).
 
-=== Step 3 — Model the D2D link (AXI-over-UCIe stand-in)
-
-For an LT virtual platform, the AoU bridge + UCIe PHY collapses to a
-**bidirectional TLM forwarder** with annotated transport delay:
+A future two-die system would still look like:
 
 [source]
 ----
- die0 smu_vp.ext_out --> [d2d_link] --> die1 smu_vp.ext_in
- die1 smu_vp.ext_out --> [d2d_link] --> die0 smu_vp.ext_in
+  +------------------+                      +------------------+
+  | die0  smu-vp     |                      | die1  smu-vp     |
+  |                  |     AOU / D2D        |                  |
+  |   ext_out o------+--------------------->+----> o ext_in    |
+  |   ext_in  o<-----+<---------------------+----- o ext_out   |
+  +------------------+                      +------------------+
 ----
 
-* One `d2d_link` module with two target sockets (one per die) and two
-  initiator sockets; each transaction is forwarded unchanged (LT, AT
-  optional later) with a configurable latency/bandwidth annotation
-  (CCI params `link_delay_ns`, `max_bytes_per_beat`).
-* This deliberately does **not** model UCIe packetization, retry, or link
-  training — matching the RTL situation (AoU bridge is not in OCAH; D2D
-  training is `train_d2d`, "not implemented in SMC Boot ROM",
-  `fw/.../specification/smc_rom.adoc`).
+=== Step 4 — Assemble `smu-vp` (single-die done; two-die open)
 
-=== Step 4 — Assemble `smu-vp` and (optionally) a two-die system
+Wiring is in `vp/platform/smu/main.cpp` (no separate `smu_platform`
+class): dedicated remap, all four crossbar legs, AOU on `ext_in`/`ext_out`.
+`smu-d2d-vp` (two `smu_platform`s joined by a link, non-overlapping
+apertures) is not built.
 
-1. `vp/platform/smu/smu_platform.hpp/.cpp`: instantiate `smc_platform` +
-   SEP subsystem + `smu_xbar`; wire:
-   ** SEP `sep_ext_to_smc_axi` -> window-remap functor -> SMC
-      `sep_axi_in` (dedicated path, Step 1.1). The remap must subtract
-      `0x4000_0000` (RTL `SEP_SMC_REGION_BASE`) so addresses arrive 0-based
-      at `sep_axi_in`, exactly like `axi_window_remap` in `smu.sv`.
-   ** SMC `output_axi` -> xbar `smc_out`; SEP outbound (new socket from
-      Step 1.2's sibling) -> xbar `sep_out`; xbar `sep_in` -> SEP
-      `sep_smn_inbound_axi`; xbar `smc_in` -> SMC `sys_axi_in`.
-   ** xbar `ext_in`/`ext_out` exported as the `smu-vp` boundary.
-2. Single-die `smu-vp`: bind `ext_in`/`ext_out` to the D2D link model in
-   loopback, or to stubs, for bring-up.
-3. Two-die `smu-d2d-vp`: instantiate two `smu_platform`s joined by
-   `d2d_link`; each die's firmware programs non-overlapping global apertures
-   (e.g. die0 SMC at `0x4000_0000`, die1 SMC at a distinct slot chosen by
-   the integrator envelope).
+=== Step 5 — Firmware/address-map bring-up contract (done)
 
-=== Step 5 — Firmware/address-map bring-up contract
+`sep_cpu_ctrl` drives `sep_global_base_addr_o` / `sep_region_size_o`;
+`smu-vp` binds those signals into the xbar so a firmware reprogram
+moves both sides together. CCI presets seed the CSRs (and the SMC
+aperture) at elaboration — see <<as-built>>. Catch-all (miss both
+apertures) is `ext_out`, gated by AOU ENABLED.
 
-Reproduce the RTL programming order in the sim:
+=== Step 6 — Sideband/extension mapping (done by construction)
 
-1. SMC firmware programs `GLOBAL_BASE` / `REGION_SIZE` (fabric CSRs at
-   `0xC001_0000`-window) — the model already implements these.
-2. SEP firmware programs `SEP_GLOBAL_BASE_ADDR` / `SEP_REGION_SIZE`
-   (`sep_cpu_ctrl` CSRs) — the SEP VP must mirror these into the xbar model
-   (CCI or a registered callback).
-3. Only then issue cross-subsystem traffic. The xbar model should
-  `SIM_LOG_DEBUG`-flag transactions that miss all apertures (they would
-   fall to `ext_out` on hardware).
+SMC-facing sockets carry `smc::smc_axi_extension`. The SEP boundary does
+not use that type; the xbar forwards payloads unchanged. TLM call
+association replaces the RTL ID-remap table.
 
-=== Step 6 — Sideband/extension mapping
+=== Step 7 — Tests (done for single-die)
 
-* SMC-facing sockets carry `smc::smc_axi_extension` (canonical header
-  `smc/common/include/smc_axi_extension.h`). The SEP subsystem does not use
-  this type; the xbar model must *translate*, not reinterpret: on the
-  SMC-bound leg, attach a fresh `smc_axi_extension` (e.g. `source_id =
-  SYS_ID` for external/D2D-origin traffic, per the fabric's inbound-filter
-  expectations); on the SEP-bound leg, drop it.
-* Preserve AXI ID enough to route responses (the RTL uses `axi_iw_converter`
-  with max 16 unique IDs / 8 transactions per ID — a functional stand-in is
-  a small ID-remap table in the xbar model).
-
-=== Step 7 — Tests
-
-* Unit: `smu_xbar` route/deny tests (Release/ASan/Coverage >= 95% per repo
-  rules), window-remap functor tests, `d2d_link` delay/forwarding tests.
-* Platform: `sw/smc-vp-tests`-style firmware test where SEP firmware writes
-  the SMC scratchpad via `0x4006_0000` and the SMC firmware (running on
-  `smc-vp` CPUs in the same `smu-vp` process) reads it — replacing today's
-  seeded `smc_global` stub handshake with real transactions.
-* Two-die: die0 SMC reads die1 SMC scratchpad over `d2d_link`.
+Unit tests for the crossbar, window remap, and AOU; platform firmware
+in `sw/smu-vp-tests/` (link, xbar tokens, 50-beat traffic, AOU ext-out
+from both CPUs). Two-die scratchpad-over-link is not written.
 
 [[missing]]
 == Missing Interconnect — Callouts
@@ -430,28 +560,33 @@ therefore the correct fidelity until AoU/SMN RTL exists.
    ID-width conversion is a no-op at LT fidelity.
 3. ~~SEP VP has no external AXI boundary~~ — **done**: Step 1 landed as
    `sep_smc_global_port` (forward/stub switch `forward_en`) +
-   `sep_smn_inbound_axi` on `och_sep_ss`.
+   `sep_smn_inbound_axi` + `sep_smn_outbound_axi` on `och_sep_ss`.
 4. ~~TLM bus-width mismatch~~ — **done**: bridged at the SEP boundary
-   (32<->64 inside `sep_smc_global_port` and `fwd_sep_inbound`).
+   (32<->64 inside `sep_smc_global_port`, inbound remap, and
+   `outbound_filter_to_smn`).
 5. ~~Sideband type translation~~ — **done (by construction)**: the SEP
    boundary neither consumes nor produces `smc_axi_extension`; the xbar
    forwards payloads unchanged, so no bytes are reinterpreted.
 6. ~~No SMU-level platform/executable~~ — **done**: `vp/platform/smu`
-   (`smu-vp`). CI coverage alongside the `smc-vp`/`sep-vp` jobs is still
-   to be wired.
+   (`smu-vp`). CI jobs `smu-vp` / `smu-vp-rhel8` build the platform and
+   run `sw/smu-vp-tests/run_smu_vp_tests.sh`.
 7. ~~SMC `output_axi` not exported~~ — **done**: `output_axi` (plus
    `sys_axi_in`/`jtag_axi_in`/`sep_axi_in`) are platform sockets;
    standalone `smc-vp` re-binds its terminators.
-8. **SEP aperture CSRs not plumbed out** — the RTL exports
-   `sep_global_base_addr_o` / `sep_region_size_o` from `sep_cpu_ctrl` to the
-   xbar; the SEP VP needs an equivalent notification path (CCI param handle
-   or callback) so the xbar model sees aperture reprogramming (Step 5).
-   *Still open — today the integrator keeps the two sides consistent via
-   matching CCI presets (enforced for the base by `smu-vp`).*
+8. ~~SEP aperture CSRs not plumbed out~~ — **done** (PR #102):
+   `sep_cpu_ctrl` exports `sep_global_base_addr_o` / `sep_region_size_o`;
+   `smu-vp` binds them into `smu_axi_xbar`. Binding only one of the two
+   inputs is an elaboration error.
 9. **No SMC mailbox IP** — the SMC fabric's `to_mailbox` is a stub, while
    the SEP VP has a real mailbox model; RTL-style SMC<->SEP mailbox interop
    (DV `smc_sep_interoperability_test`) cannot be reproduced until an SMC
    mailbox model exists. *Still open.*
+10. **No two-die `smu-d2d-vp`** — single-die `smu-vp` uses the in-platform
+    peer AOU as a remote-die stand-in. A second `smu_platform` joined by
+    a link, with non-overlapping apertures, is not built (Step 4).
+11. **Inbound D2D is idle** — peer AOU `axi_s` has no remote SMU master,
+    so `ext_in` never carries live inbound traffic. Catch-all coverage
+    is outbound-only (`smu-aou-ext-test`).
 
 [[references]]
 == References
@@ -476,12 +611,23 @@ therefore the correct fidelity until AoU/SMN RTL exists.
   `smc_sep_interoperability_test` (SMC+SEP firmware mailbox interop)
 
 .tt-oca-sim (this repository)
+* `vp/platform/smu/main.cpp` — `smu-vp` composition and socket bindings
+* `vp/platform/smu/inc/smu_axi_xbar.h`,
+  `vp/platform/smu/inc/axi_window_remap.h` — SMU interconnect models
+* `vp/platform/smu/README.md` — operator guide for `smu-vp`
+* `aou/` — AOU LT model (`aou_core`); CSRs at SMC `0xC000_4000`
 * `vp/platform/smc/smc_platform.hpp`, `vp/platform/smc/src/smc_platform.cpp` —
-  boundary sockets and forwarding
-* `vp/platform/smc/main.cpp` — idle initiators / `stub_sysmem` bindings
+  boundary sockets (`output_axi`, `sep_axi_in`, `aou_axi_s`/`aou_axi_m`)
+* `vp/platform/smc/main.cpp` — standalone idle / `stub_sysmem` bindings
 * `smc/smc_fabric/` — fabric model (aperture CSRs, filters, `output_axi`)
-* `vp/platform/sep/och_sep_ss.hpp`, `vp/platform/sep/inc/Args.hpp` —
-  `smc_global` stub window and seeded SMC<->SEP boot handshake
+* `vp/platform/sep/och_sep_ss.hpp` — chiplet sockets
+  `sep_ext_to_smc_axi`, `sep_smn_inbound_axi`, `sep_smn_outbound_axi`
+* `vp/platform/sep/inc/adapters.h` — `sep_smc_global_port`,
+  `outbound_filter_mux`, inbound remap
+* `sep/peripherals/sep_cpu_ctrl/` — inbound-window CSR exports
+  (`sep_global_base_addr_o` / `sep_region_size_o`)
+* `sw/smu-vp-tests/` — platform firmware suite (`smu-link-test`,
+  `smu-xbar-test`, `smu-traffic-test`, `smu-aou-ext-test`)
 * `smc/common/include/smc_axi_extension.h` — canonical SMC TLM sideband
   extension
 * `smc/doc/systemc_tlm2_integration_guide.adoc`,
