@@ -207,6 +207,11 @@ if(BUILD_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
   )
 
+  # The suite checks with assert(), which the Release NDEBUG above would compile
+  # out — leaving a testbench that passes without verifying anything. Release is
+  # what ./run_tests.sh builds by default, so keep asserts live for this target.
+  target_compile_options(el2_pic_testbench PRIVATE -UNDEBUG)
+
   enable_testing()
   add_test(NAME el2_pic_testbench COMMAND el2_pic_testbench)
 endif()
