@@ -19,7 +19,7 @@
 #  sep-vp-rhel8          Build the sep-vp binary
 #  sep-unit-tests-rhel8  Run SEP peripheral unit tests
 #  smc-unit-tests-rhel8  Run SMC peripheral unit tests (includes the new DMA
-#                        and PVT wrapper peripheral unit tests)
+#                        and PVT wrapper peripheral unit tests, and AOU)
 #  smc-fabric-tests-rhel8  Run SMC Fabric tests
 #
 #  smc-vp-rhel8          Build smc-vp and run SMC VP firmware tests (needs
@@ -30,8 +30,10 @@
 #  smu-unit-tests-rhel8  SMU interconnect unit tests (Release + Coverage;
 #                        ASAN skipped — gcc-toolset-12 ASAN runtime is not
 #                        packaged on AlmaLinux 8).
-#  smu-vp-rhel8          Build smu-vp and run SMU VP firmware tests (Whisper
-#                        rebuilt -fPIC; xpack RISC-V toolchain for RV32+RV64).
+#  smu-vp-rhel8          Build smu-vp and run SMU VP firmware tests
+#                        (smu-link-test, smu-xbar-test, smu-traffic-test,
+#                        smu-aou-ext-test). Whisper rebuilt -fPIC; xpack
+#                        RISC-V toolchain for RV32+RV64.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI (RHEL 8)
@@ -453,7 +455,7 @@ jobs:
         run: |
           smc/run_all_smc_tests.sh \
             bootrom clint dma i3c_controller plic pvt_wrap reset_unit scratchpad_ram \
-            telemetry_receiver
+            telemetry_receiver aou
 
       - name: Upload SMC peripheral test logs
         if: always()

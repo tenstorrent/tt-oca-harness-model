@@ -16,6 +16,7 @@ Design document: [doc/smc-sep-d2d-interconnect.adoc](../../../doc/smc-sep-d2d-in
 SEP (och_sep_ss1)                              SMC (dut)
 sep_ext_to_smc_axi --[axi_window_remap]--> sep_axi_in     (dedicated path)
 sep_smn_inbound_axi <---[smu_axi_xbar]----- output_axi    (crossbar path)
+sep_smn_outbound_axi -->[smu_axi_xbar]----> sys_axi_in / ext_out
                        ---[smu_axi_xbar]----> sys_axi_in
 
                        smu_axi_xbar.ext_out --> aou_axi_s (local AOU TX)
@@ -32,8 +33,8 @@ sep_smn_inbound_axi <---[smu_axi_xbar]----- output_axi    (crossbar path)
   (`0xC000_0000 | (addr & 0x1FF_FFFF)`).
 * **Crossbar paths** — `smu_axi_xbar` is a 3x3 non-reflexive router with
   CCI-programmable apertures: `smc_out`→`sep_in`/`ext_out`,
-  `sep_out`→`smc_in`/`ext_out` (SEP outbound is idle-terminated today),
-  `ext_in`→`sep_in`/`smc_in` (D2D inbound). `ext_out` is the static
+  `sep_out`→`smc_in`/`ext_out` (SEP `smn_outbound_axi`, after the outbound
+  filter), `ext_in`→`sep_in`/`smc_in` (D2D inbound). `ext_out` is the static
   catch-all, as on RTL.
 * **D2D (AoU stub)** — `ext_out`/`ext_in` bind through the local AOU
   (`dut.aou_axi_s` / `dut.aou_axi_m`). The peer AOU inside `smc_platform`

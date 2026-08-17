@@ -16,7 +16,8 @@
 #
 #  smc-unit-tests  Run every SMC peripheral unit test via each
 #                  smc/peripherals/<ip>/run_tests.sh (needs build-deps).
-#                  Includes the new DMA and PVT wrapper peripheral unit tests.
+#                  Includes the new DMA and PVT wrapper peripheral unit tests
+#                  and the AOU LT model (aou/).
 #                  The cpu_cluster is skipped — it requires the Tenstorrent-
 #                  internal Whisper ISS (WHISPER_HOME); enable it locally once
 #                  WHISPER_HOME is available.
@@ -35,9 +36,10 @@
 #                    via vp/platform/smu/run_tests.sh (Release + ASAN + Coverage).
 #
 #  smu-vp            Build smu-vp and run SMU VP firmware tests
-#                    (sw/smu-vp-tests/run_smu_vp_tests.sh).  Needs Whisper built
-#                    -fPIC (linked into libsmc_cluster_smu.so) plus a dual-width
-#                    RISC-V toolchain (RV64 SMC + RV32 SEP).
+#                    (sw/smu-vp-tests/run_smu_vp_tests.sh): smu-link-test,
+#                    smu-xbar-test, smu-traffic-test, smu-aou-ext-test.
+#                    Needs Whisper built -fPIC (linked into libsmc_cluster_smu.so)
+#                    plus a dual-width RISC-V toolchain (RV64 SMC + RV32 SEP).
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: CI
@@ -269,7 +271,7 @@ jobs:
         run: |
           smc/run_all_smc_tests.sh \
             bootrom clint dma i3c_controller plic pvt_wrap reset_unit scratchpad_ram \
-            telemetry_receiver
+            telemetry_receiver aou
 
       - name: Upload SMC peripheral test logs
         if: always()

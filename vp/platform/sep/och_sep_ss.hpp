@@ -731,6 +731,10 @@ inline void och_sep_ss::create_modules() {
     inbound_filter       = new sep_filter_ctrl_ip("inbound_filter",  sep_filter_ctrl_ip::InstanceType::INBOUND);
     reset_ctrl           = new sep_reset_ctrl_ip("reset_ctrl");
     cpu_ctrl             = new sep_cpu_ctrl_ip("cpu_ctrl");
+    // Re-add the live SMU window base on the mux SMU leg (SimpleBus strips it).
+    outbound_mux->smu_window_base_fn = [this]() {
+        return static_cast<uint64_t>(cpu_ctrl->SMU_GLOBAL_BASE_ADDR) & 0x00FF'FFFF'FFFF'FFFFULL;
+    };
     local_alias_remap    = new local_alias_remap_ip("local_alias_remap");
     // Fixed remapper (axi_local_alias_remap.sv) — reads cpu_ctrl's live
     // SEP_LOCAL_BASE_ADDR/SEP_REGION_SIZE so firmware changes to those CSRs

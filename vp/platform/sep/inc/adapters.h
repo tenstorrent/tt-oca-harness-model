@@ -5,6 +5,7 @@
 #include <systemc>
 #include <cassert>
 #include <cstring>
+#include <functional>
 #include "sep_cpu_ctrl.h"
 #include "sep_axi_extension.h"
 
@@ -283,6 +284,11 @@ public:
 
     SC_HAS_PROCESS(outbound_filter_mux);
 
+    // SimpleBus subtracts SMU_GLOBAL_BASE_ADDR before delivery. RTL's
+    // SEP_EXT_TO_SMU demux leg carries the full global address into the
+    // outbound filter, so the SMU input re-adds the live CSR base.
+    std::function<uint64_t()> smu_window_base_fn;
+
     outbound_filter_mux(sc_core::sc_module_name n)
         : sc_module(n), ap_tgt("ap_tgt"), stee_tgt("stee_tgt"), smu_tgt("smu_tgt"), ini("ini")
     {
@@ -290,16 +296,34 @@ public:
         ap_tgt.register_transport_dbg(this, &outbound_filter_mux::transport_dbg);
         stee_tgt.register_b_transport(this, &outbound_filter_mux::b_transport);
         stee_tgt.register_transport_dbg(this, &outbound_filter_mux::transport_dbg);
-        smu_tgt.register_b_transport(this, &outbound_filter_mux::b_transport);
-        smu_tgt.register_transport_dbg(this, &outbound_filter_mux::transport_dbg);
+        smu_tgt.register_b_transport(this, &outbound_filter_mux::b_transport_smu);
+        smu_tgt.register_transport_dbg(this, &outbound_filter_mux::transport_dbg_smu);
     }
 
 private:
+    uint64_t smu_base() const {
+        return smu_window_base_fn ? smu_window_base_fn() : 0x80000000ULL;
+    }
+
     void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
         ini->b_transport(trans, delay);
     }
     unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
         return ini->transport_dbg(trans);
+    }
+
+    void b_transport_smu(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
+        const uint64_t local = trans.get_address();
+        trans.set_address(smu_base() + local);
+        ini->b_transport(trans, delay);
+        trans.set_address(local);
+    }
+    unsigned int transport_dbg_smu(tlm::tlm_generic_payload& trans) {
+        const uint64_t local = trans.get_address();
+        trans.set_address(smu_base() + local);
+        const unsigned n = ini->transport_dbg(trans);
+        trans.set_address(local);
+        return n;
     }
 };
 

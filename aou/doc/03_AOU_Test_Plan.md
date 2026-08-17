@@ -39,9 +39,23 @@ Hart-0 MMIO through `smc-vp` at `SMC_AOU_BASE` (`0xC000_4000`):
 cd sw/smc-vp-tests && ./run_smc_vp_tests.sh smc-aou-test
 ```
 
-## 3. Pass criteria
+## 3. SMU platform (`sw/smu-vp-tests/smu-aou-ext-test`)
+
+Both CPUs, after `aou_init.activate_start`:
+
+| # | Check |
+|---|--------|
+| 1 | SMC write/readback of catch-all `0xA000_1000` through `xbar.ext_out` → AOU → peer |
+| 2 | SEP reads AOU `ip_version` at `0x4000_4000` (dedicated SEP→SMC window) |
+| 3 | SEP programs outbound filter 0, then write/readback `0xA000_1008` through `smn_outbound` → xbar → AOU |
+
+```bash
+cd sw/smu-vp-tests && ./run_smu_vp_tests.sh smu-aou-ext-test
+```
+
+## 4. Pass criteria
 
 - Unit: `ALL TESTS PASSED`
 - Coverage: `./run_tests.sh --coverage` ≥ 95% line on touched sources
 - ASan: `./run_tests.sh --asan` when `libasan` is available
-- VP: firmware test prints `ALL TESTS PASSED` under `smc-vp`
+- VP: `smc-aou-test` and `smu-aou-ext-test` both print PASS on every firmware half

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # sw/smu-vp-tests/smu-aou-ext-test/Makefile
 #
-# Port of tt-oca-hw smu_sep_ext_axi (SMC->ext_out via AOU catch-all).
+# Port of tt-oca-hw smu_sep_ext_axi (SMC + SEP -> ext_out via AOU catch-all).
 
 VP        ?= ../../../vp/build_smc/bin/smu-vp
 SMC_INI   ?= ../../../vp/platform/smu/config/smc_smu_vp.ini
