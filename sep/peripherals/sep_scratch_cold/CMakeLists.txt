@@ -147,13 +147,26 @@ peripheral_add_model_library(sep_scratch_cold_model ${MODEL_SRCS})
 target_include_directories(sep_scratch_cold_model PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-# Vendored SEP_MSG_* status-name snapshot (see docs/01_sep_scratch_cold_Specification/
-# status_values.h) — baked in as an absolute path so name lookup never depends on the
-# process's working directory or on sw/tt-oca-hw-main being checked out at a fixed
+# SEP_MSG_* status-name table, baked in as an absolute path so name lookup never depends
+# on the process's working directory or on a source tree being checked out at a fixed
 # relative location.
+#
+# Defaults to the vendored snapshot in docs/01_sep_scratch_cold_Specification/. That
+# snapshot drifts from whatever firmware is actually running, so it is a cache variable:
+# a consumer that owns the canonical table can point every build at it without patching
+# this file, e.g.
+#
+#   vp/configure_vp.sh -- -DSEP_SCRATCH_COLD_STATUS_VALUES_PATH=/path/to/status_values.tsv
+#
+# The file may be a TSV (NAME<ws>0xVALUE) or a C header of #defines — StatusDecoder::
+# parse_tsv accepts both.
+set(SEP_SCRATCH_COLD_STATUS_VALUES_PATH
+  "${CMAKE_CURRENT_SOURCE_DIR}/docs/01_sep_scratch_cold_Specification/status_values.h"
+  CACHE FILEPATH "SEP_MSG_* status-name table (TSV rows or C #defines)")
 target_compile_definitions(sep_scratch_cold_model PRIVATE
-  SEP_SCRATCH_COLD_STATUS_VALUES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/docs/01_sep_scratch_cold_Specification/status_values.h"
+  SEP_SCRATCH_COLD_STATUS_VALUES_PATH="${SEP_SCRATCH_COLD_STATUS_VALUES_PATH}"
 )
+message(STATUS "  - SEP_SCRATCH_COLD_STATUS_VALUES_PATH: ${SEP_SCRATCH_COLD_STATUS_VALUES_PATH}")
 target_link_libraries(sep_scratch_cold_model PUBLIC csml_logger SystemC::systemc Threads::Threads)
 if(CCI_FOUND)
   target_link_libraries(sep_scratch_cold_model PUBLIC ${CCI_LIBRARIES})
