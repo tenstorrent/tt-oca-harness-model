@@ -141,6 +141,32 @@ macOS from `./run_tests.sh --coverage` llvm-cov **src/** line coverage (15-Aug-2
   require pin-level JTAG, scan, or DTP CSRs are out of scope.
 - **Unmodeled IPs**: Tests referencing the following will fail or produce no output:
   - `och_sep_cdns_spi_ctrl`
+  - Adams Bridge (`abr_top`). Instantiated in SEP RTL by `sep_crypto.sv` with CSRs
+    at `0x1094_0000`, so the six `sep_abr_*` firmware tests are in scope for the
+    SEP platform but have no model to run against.
+- **eFuse fuse state comes from an image, not per-field parameters**: the array is
+  loaded from a `.preload` file in the RTL's `+sep_preload_efuse` format, and a
+  platform run defaults to the RTL's own `default_efuse.preload`, so the VP starts
+  from the same part the RTL does. The per-field parameters (`lc_state`, `locks_lo`,
+  `chiplet_uid`, ...) remain for standalone peripheral testbenches, but an image and
+  those parameters are alternatives rather than a base and an overlay: when
+  `fuse_preload_file` is set the image defines the array and the parameters are
+  ignored. Combining them could only mean ORing, since fuses go 0->1, and ORing two
+  encodings of one field corrupts it — `LC_STATE` holds `{~raw[3:0], raw[3:0]}`, so
+  0xF0 (TEST_DEV) ORed with the encoding of raw 1 gives 0xF1, which is not a legal
+  code at all. To run with different fuses, change the image.
+- **Lifecycle state has one source**: `sep_lifecycle_ctrl.sv` reads it from the eFuse
+  shadow, so `och_sep_ss` now wires `lc_ctrl` from the eFuse model and `FEAT_CTRL` is
+  computed from the fuse. `och_sep_ss1.lc_ctrl.lc_state` no longer applies on a
+  platform run — it is only for a standalone lifecycle testbench, where there is no
+  eFuse to ask. Note that an erased array reads 0x00, which is not a legal
+  differential code, so a blank part has no valid lifecycle state and `FEAT_CTRL`
+  comes up zeroed; that matches the RTL.
+- **Mailbox 64-bit register halves**: a 32-bit write to the upper half of any
+  mailbox register other than `WRITE_DATA` is refused with an error response.
+  `WRITE_DATA` and `READ_DATA` follow the RTL, pushing and popping once per bus
+  transaction with the unaddressed half zeroed; the remaining registers would
+  need byte-enable-aware forwarding to be updated a half at a time.
 - **Stubbed IP — `och_sep_spi_mux_ctrl`**: mapped at `0x20001000` as a functional RW
   register stub that reads back the `0x00000002` silicon reset default, so a driver's
   mux-select write does not fault. SPI leg selection and forced chip-select are not

@@ -81,7 +81,7 @@ they refer to `$(OCH_ROOT)/meta/...`, `$(OCH_ROOT)/dv/...` and so on, and
 
 Almost everything the tests need could be copied. One thing could not.
 
-**picolibc.** Nearly all 124 tests use `printf`, and `common/init_stdout.c`
+**picolibc.** Nearly every test uses `printf`, and `common/init_stdout.c`
 wires `stdout` to the VP's STDOUT register with picolibc's `FDEV_SETUP_STREAM`,
 so the library is not interchangeable with newlib. No RISC-V toolchain ships
 it — upstream builds it inside the VeeR EL2 checkout via `bender` and meson.
@@ -109,7 +109,23 @@ Kept to a minimum, and all of them are about running somewhere other than a TT
 machine. Every one is commented in place.
 
 - **`fw/sep/tests/vp_test_env.sh`** (new) — path, toolchain and `sep-vp`
-  discovery, shared by both runner scripts.
+  discovery, shared by both runner scripts. Also `vp_base_config`, which hands
+  the three `spi_ot_flash_*` tests `accellera_config_no_spipreload.ini`: the
+  default config preloads the boot image into the SPI flash so the ROM flow has
+  something to boot from, and since the flash model can only clear bits (as real
+  flash does), a test that programs its own pattern over preloaded bytes reads
+  back `pattern & boot_byte`. The RTL testbench starts from erased flash, so
+  upstream never has to think about this.
+
+  `vp_base_config` also mirrors the one eFuse override in the testlist. The VP
+  preloads the fuse array with `default_efuse.preload`, the same image
+  `sep_test_template` loads via `+sep_preload_efuse`, but the three
+  `sep_efuse_fw_*` tests override their `run_flags` with `+SEP_EFUSE_NO_PRELOAD`
+  because they program fuses themselves and have to start from a blank part: a
+  preloaded field cannot be programmed to a different value, since fuses only go
+  0->1. `vp_efuse_blank_config` derives that config with `sed`, taking a copy of
+  both `accellera_config.ini` and the `efuse_vp.ini` it includes, since the image
+  is named in the latter.
 - **`run_test.sh` / `run_all_tests.sh`** — resolve paths through
   `vp_test_env.sh` rather than counting `../`; replaced bash 4 associative
   arrays and GNU `timeout(1)`, neither of which macOS has, with a polling loop
@@ -130,6 +146,33 @@ machine. Every one is commented in place.
   is full of CSR writes and the ROM builds with a plain `-march=rv32im`), and a
   `PYTHON3` that prefers the venv, since `tools/elf-to-vmem.py` now needs
   pyelftools.
+- **`rom_no_tcm_preload_mem_init/Makefile`** — the same `PYTHON3`, for the same
+  reason. This is one of the two tests that does not include `common.mk`, so it
+  hardcoded `python3` and never saw the venv.
+- **`fw/smc/tests/*/src/*_protocol.h`** (added) — six SMC/SMU co-tests under
+  `fw/sep/tests` include a protocol header from the *`fw/smc`* tree, which this
+  copy does not otherwise carry. Their Makefiles already point at
+  `$(OCH_ROOT)/fw/smc/tests/<name>/src`, so mirroring just the headers there is
+  enough to build them.
+
+### Per-test deviations that must survive a re-sync
+
+Everything above is infrastructure. These are edits to test *sources*, which is
+a higher bar, so each one is justified individually below. All are commented in
+place. Re-syncing them from `tt-oca-hw` verbatim has been tried and measured:
+it turns each of these back into a failure or a hang.
+
+| Test | Why it differs from upstream |
+|---|---|
+| `kmac_prefix_test` | Upstream's `PREFIX` does not start with `encode_string("KMAC")`, which NIST SP 800-185 requires. The RTL feeds raw `PREFIX` bytes into `bytepad` without checking, so upstream gets a different digest by accident; the VP model raises `IncorrectFunctionName` (ERR 0x07) and the result is undefined. The local value is the conforming encoding. |
+| `kmac_key_length_test` | Upstream configures `mode = 0x2`. Per `kmac.hjson` a KMAC operation needs cSHAKE (`0x3`) with `kmac_en = 1`; with `0x2` the key length is not consumed and every key length yields the same digest. |
+| `local_alias_sanity` | Upstream still assumes the pre-#3711 alias base of `0xC000_0000` with `target_base = 0`. The register header it now ships with has already moved to `0xD000_0000` / `0x1000_0000`, so the upstream test contradicts its own header. |
+| `wdt_count_overflow_test` | Step 6 needs NMI and reset to arrive at distinguishable times. The VP fires both in one delta cycle because the power-manager latency that separates them on silicon is not modelled, so the upstream step waits forever. The local step 6 tests near-max counter preload plus bark and pet, with `BARK_THOLD < BITE_THOLD`. |
+| `wdt_cfg_lock_test` | Uses the mailbox `nmi_set_vector()` rather than `nmi_set_vector_reg()` / `nmi_lock_vector_reg()`, and a `0x1000` bark threshold. With the upstream pair the test hangs rather than reaching its assertions. |
+
+When a re-sync overwrites one of these, the symptom is a hang or a fresh failure
+in that single test — not a build break — so it is easy to miss. Check this
+table first before investigating.
 
 ## The Boot ROM
 
@@ -158,35 +201,105 @@ PASSED`. The ROM then parks the core in `wfi`, so the run needs a `Ctrl-C`.
 
 ## Current results
 
-All 124 test directories build, and 125 binaries run — `spi_crc_test` and
-`spi_phy_reg_test` each produce a second OT-mode ELF. 101 pass. `bl1_pass_test`
-is excluded upstream (it is the BL1 boot flow, not a VP test), as are the
-`common`, `common_otbn` and `logs` directories.
+The tree now mirrors all 181 test directories in `tt-oca-hw/fw/sep/tests`.
+141 run and **125 pass (88%)**; 14 fail, 2 hang, 43 are excluded. Each has a log
+in `fw/sep/tests/logs/<test>.log`.
 
-Upstream's `uart` test is not carried over: SEP has no UART model, so there is
-nothing for it to exercise. Its register headers were the only reason this
-directory needed the SystemRDL generator, which is gone with it.
+### Which failures are the VP's fault
 
-The 24 failures are functional differences between the VP models and the RTL
-these tests were written against, reported by the firmware itself — not build or
-environment problems. They cluster by IP:
+Not every test in `fw/sep/tests` runs in the *standalone* SEP testbench, and the
+distinction decides whether a failure here means anything. The authority is
+`tt-oca-hw/dv/sep/tb/tb_uvm/yaml/testlist_sep.yaml` versus
+`dv/smu/tb/tb_uvm/yaml/testlist_smu_chiplet.yaml`. Nineteen of these tests are
+enrolled only in the SMU chiplet list, so even on RTL they need SMU + SMC + SEP
+elaborated together; they are excluded rather than reported (see below).
 
-| Area | Failing tests |
-|---|---|
-| SPI / XSPI flash | `spi_sanity`, `spi_sanity_cadence`, `spi_crc_test`, `spi_phy_reg_test`, `spi_write_read_test`, `spi_xspi_dma_test`, `firmware_spi_dma_test`, `xspi_flash_jedec_id_test`, `xspi_flash_read_test`, `xspi_flash_sram_loopback_test`, `spi_ot_flash_dual_read_test`, `spi_ot_flash_quad_read_test`, `spi_ot_flash_write_read_test` |
-| DMA | `dma_hash_test` |
-| eFuse | `sep_efuse_fw_otp_rw_test`, `sep_efuse_fw_token_match_test` |
-| WDT | `wdt_cfg_lock_test`, `wdt_intr_clear_test` |
-| Address remap | `ap_stee_output_remap_test`, `global_alias_remap_sanity` |
-| Other | `rom_sanity_test`, `hmac_p2_sensreg_access_test`, `kmac_p2_sw_error_test`, `otbn_sw_error_test` |
+Of what remains, a test that passes in the standalone SEP TB *should* pass here,
+with one caveat: that testbench is not firmware-alone. It supplies eFuse and
+shadow-register preloads, `+CRYPTO_EDN_HACK`, a `+ROM_IFU_PATTERN` that writes
+instruction patterns into the boot ROM, cocotb handshakes that inject config
+through scratch registers, a second CPU (the key manager) running its own ROM, a
+UVM master driving external AXI, and an explicitly selected Winbond flash model.
+So the remaining 16 split into two kinds:
 
-Each has a log in `fw/sep/tests/logs/<test>.log`.
+| Kind | Count | Tests |
+|---|---|---|
+| **VP model gap** — the VP should be fixed | 4 | `hmac_p2_sensreg_access_test`, `otbn_sw_error_test`, `sep_aes_reset_clear_test`, `sep_reset_ctrl_csr_test` |
+| **VP harness gap** — the RTL TB provides something `sep-vp` has no equivalent for | 6 | `rom_sanity_test` (ROM instruction-pattern preload), `sep_aes_mb_stream_test` (cocotb scratch handshake), `sep_cpu_sram_aes_sram_test` and `sep_km_efuse_coexist_test` (key-manager CPU + its ROM), `lcc_inbound_filter_gating_test` and `sep_inbound_filter_decerr` (UVM master driving external AXI; both hang waiting for it) |
+| **No model at all** | 6 | `sep_abr_*`. Adams Bridge really is inside SEP — `sep_crypto.sv` instantiates `abr_top` and `sep_crypto_pkg.sv` puts its CSRs at `0x1094_0000` — so these are in scope for a SEP-only VP, they just need the block written. |
+
+The four model gaps in detail. The three eFuse tests that used to be here now pass:
+the shim moved to `0x2000_0000` in `SEP_EXTERNAL` where the register header puts it,
+a real fuse array sits behind program and read with the locks and token matching
+enforced against it, and the array is preloaded from the RTL's own
+`default_efuse.preload` — with the three `sep_efuse_fw_*` tests running on a blank
+array, as their `+SEP_EFUSE_NO_PRELOAD` asks for.
+
+- **HMAC.** `DIGEST_0..7` accept and echo software writes outside a context
+  restore, where silicon ignores them.
+- **OTBN.** `ERR_BITS` stays zero after a `BAD_DATA_ADDR`; software errors are
+  not reported.
+- **AES.** The `KEY_IV_DATA_IN_CLEAR` trigger leaves the IV registers unchanged.
+- **Reset controller.** Accesses to an isolated peripheral's port raise no NMI,
+  so none of the isolation checks observe anything.
+
+### Excluded, and why
+
+`bl1_pass_test` is the BL1 boot flow rather than a VP test, and `common`,
+`common_otbn`, `logs` and `otbn_km_sideload_keydump` (an `otbn_src/` asset tree
+with no Makefile, absent from `tt-oca-hw/fw/sep/Makefile` too) are not tests.
+Beyond those:
+
+- **Cadence xSPI (12).** `xspi_flash_*`, `spi_sanity`, `spi_sanity_cadence`,
+  `spi_write_read_test`, `spi_phy_reg_test`, `spi_crc_test`, `spi_xspi_dma_test`,
+  `firmware_spi_dma_test`. The VP models the OpenTitan SPI host and its flash;
+  the Cadence controller, its PHY and the XIP region are out of scope. Left
+  un-synced, so their sources still use the pre-rename `SEP_AXI_EXTENSION_*`
+  macros and would not compile against the current header. The 27 `spi_ot_*`
+  tests and `spi_sanity_ot` are unaffected.
+- **Six fabric P3 tests.** Do not compile upstream either:
+  `tt-oca-hw/fw/sep/Makefile` keeps the same set out of its own `DEFAULT_TESTS`
+  "temporarily disabled due to compilation errors", because each calls a helper
+  nobody defined. Synced verbatim so the mirror stays honest; they return when
+  upstream repairs them.
+- **`uart`.** Needs `uart_16550_*_reg.h`, which `tt-oca-hw` generates on demand
+  and does not commit, and the VP models no UART — `printf` goes to the
+  `0x8000_0000` mailbox instead.
+- **Eighteen SMU/SMC-level tests.** `sep_smu_*` (13), `sep_smc_interop`,
+  `sep_smc_mbox_irq`, `sep_smc_xbar`, `smu_cla_sep_cpu_debug`,
+  `smu_smc_stall_sep`. Wrong testbench, not a VP defect: these are enrolled in
+  `testlist_smu_chiplet.yaml`'s `Main_SMU_Level_SEP_Regression`, not in
+  `testlist_sep.yaml`. SEP firmware arrives via `+SEP_ITCM_HEX_FILE` while SMC
+  runs its own `+FW_TEST`, and the cocotb harness judges pass/fail from the SEP
+  program counter against a symbol table rather than the stdout banner `sep-vp`
+  watches for. `sep_smc_notify` is deliberately *not* excluded: it needs no peer
+  and passes here.
+- **`global_alias_remap_sanity`.** Superseded upstream, and in no regression
+  list: `tt-oca-hw` replaced it with the pure-UVM
+  `sep_global_alias_remap_uvm_test`, which runs with `+SEP_SKIP_CPU_RUN` and no
+  firmware at all, having previously needed a `Force` on `security_disable` plus
+  an external AXI master. A failure here would say nothing about the VP.
 
 ## Updating from tt-oca-hw
 
-Copy the new or changed test directories into `fw/sep/tests/` and re-run.
-Re-apply the `common.mk` / `otbn_app.mk` changes above if those files are part
-of the update; the runner scripts and `vp_test_env.sh` are local and should not
-be overwritten. If a new test pulls in a header from somewhere else in
-`tt-oca-hw`, add it under `dependencies/` and, if it lives in a directory that
-is not already symlinked at the top level, add the symlink.
+`rsync` the test directories into `fw/sep/tests/` and re-run. Three things need
+care:
+
+1. **The register header and the test sources move together.** Refreshing
+   `dependencies/meta/registers/c/och_sep_top_reg.h` on its own breaks the build
+   in ~46 files: upstream renamed `SEP_AXI_EXTENSION_*` to `SEP_EXTERNAL_*`,
+   moved `EFUSE_SHIM_CTRL` to `0x2000_0000` and renamed `EFUSE_WRITE_CTRL` to
+   `EFUSE_PROGRAM_CTRL`. Sync both and it compiles clean, because upstream has
+   already made the same move.
+2. **Do not overwrite the local infrastructure**: the runner scripts,
+   `vp_test_env.sh`, `common/common.mk`, `common_otbn/otbn_app.mk` and
+   `generate_otbn_c.py`, and the `PYTHON3` line in
+   `rom_no_tcm_preload_mem_init/Makefile`.
+3. **Check the per-test deviations table above** before re-syncing those five
+   files. Overwriting them costs five passing tests and the symptom is a hang,
+   not a build error.
+
+If a new test pulls in a header from elsewhere in `tt-oca-hw`, add it under
+`dependencies/` and, if it lives in a directory that is not already symlinked at
+the top level, add the symlink. Headers from a sibling firmware tree go in the
+mirrored path instead — see `fw/smc/tests/*/src`.
