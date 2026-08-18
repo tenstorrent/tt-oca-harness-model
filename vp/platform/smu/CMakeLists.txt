@@ -1,9 +1,14 @@
 # =============================================================================
 # vp/platform/smu/CMakeLists.txt
 #
-# SMU platform VP target — the on-die integration of the SMC and SEP virtual
-# platforms through the SMU AXI crossbar model (see
-# doc/smc-sep-d2d-interconnect.adoc).  Builds the `smu-vp` executable:
+# SMU platform VP target — same directory shape as vp/platform/smc and
+# vp/platform/sep:
+#   main.cpp + smu_platform.hpp + src/smu_platform.cpp + inc/ + config/ + docs/
+# Plus test/ + run_tests.sh for the interconnect unit suite.
+#
+# On-die integration of the SMC and SEP virtual platforms through the SMU
+# AXI crossbar model (see doc/smc-sep-d2d-interconnect.adoc). Builds
+# `smu-vp`:
 #
 #   smu-vp <smc-cci-ini> <smc-elf> <sep-cci-ini> [sim_time_ms]
 #
@@ -193,12 +198,13 @@ else()
 endif()
 
 # -----------------------------------------------------------------------------
-# smu-vp executable: SMU sc_main + the SMC platform module (the SEP platform
-# is header-only, compiled into main.cpp via och_sep_ss.hpp).
+# smu-vp executable: SMU sc_main + smu_platform + both subsystem modules.
 # -----------------------------------------------------------------------------
 add_executable(smu-vp
     main.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../smc/src/smc_platform.cpp)
+    src/smu_platform.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../smc/src/smc_platform.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../sep/src/sep_platform.cpp)
 
 target_include_directories(smu-vp
     PRIVATE
