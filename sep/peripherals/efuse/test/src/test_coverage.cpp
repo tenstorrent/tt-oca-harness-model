@@ -1,11 +1,22 @@
 #include "testbench.h"
 #include "efuse_basetest.h"
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 
 // ============================================================================
 // Coverage tests — exercise WOSET handlers and interface-ctrl pulse paths
 // in src/efuse.cpp that are not hit by Tests 1–8.
 // ============================================================================
+
+// std::to_string on a register value prints decimal, which reads as a different
+// number entirely next to a "0x".
+static std::string hex32(uint32_t v)
+{
+    std::ostringstream os;
+    os << std::hex << v;
+    return os.str();
+}
 
 void testbench::test_woset_locks_hi()
 {
@@ -38,35 +49,45 @@ void testbench::test_woset_locks_hi()
         report_test_fail("LOCKS_HI OR accumulation", "expected 0xF5 got 0x" + std::to_string(val));
 }
 
+/*
+ * LC_STATE is not a woset like its neighbours: the write goes through the transition
+ * machine and the register always ends up holding a legal differential code. The
+ * config puts the part in PROD, which is where the interesting refusals live -- from
+ * PROD the only way out is an RMA token, and there is no matching token yet.
+ */
 void testbench::test_woset_lc_state()
 {
-    report_test_start("Test 10: WOSET — LC_STATE");
+    report_test_start("Test 10: LC_STATE transition machine — refusals");
 
     uint32_t val = 0;
-    // The register holds the differential code, so the fuse-loaded value is the
-    // encoding of the raw parameter, not the parameter itself.
-    const uint32_t loaded = efuse_model::lc_state_encode(m_dut->lc_state.get_param_value());
+    const uint32_t prod = efuse_model::lc_state_encode(efuse_model::LC_RAW_PROD);
 
-    m_test->register_write_32(efuse_basetest::LC_STATE_OFFSET, 0x00000001);
-    wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
-    if (val == (loaded | 0x1u))
-        report_test_pass("LC_STATE: runtime WOSET ORs with fuse-loaded value");
-    else
-        report_test_fail("LC_STATE WOSET", "expected 0x" + std::to_string(loaded | 0x1u) +
-            " got 0x" + std::to_string(val));
+    auto expect_state = [&](uint32_t write, uint32_t want, const std::string &what) {
+        m_test->register_write_32(efuse_basetest::LC_STATE_OFFSET, write);
+        wait(1, SC_NS);
+        m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+        if (val == want)
+            report_test_pass(what);
+        else
+            report_test_fail(what, "expected 0x" + hex32(want) + " got 0x" + hex32(val));
+    };
 
-    // WOSET has just ORed a bit into a legal code, which makes it illegal: 0xE1 | 0x1
-    // is 0xE1 for raw 1, but for other states the extra bit breaks the {~raw, raw}
-    // relationship. The accessor must report INVALID rather than the low nibble, which
-    // is the whole point of the differential encoding.
-    const uint32_t expect_raw = efuse_model::lc_state_code_valid(val)
-                                  ? (val & 0xFu) : efuse_model::LC_STATE_RAW_INVALID;
-    if (m_dut->get_lc_state() == expect_raw)
-        report_test_pass("LC_STATE: get_lc_state() decodes the differential code");
+    expect_state(efuse_model::LC_RAW_PROD, prod,
+                 "LC_STATE: rewriting the current state is a no-op");
+    expect_state(efuse_model::LC_RAW_RMA_SIP_0, prod,
+                 "LC_STATE: RMA_SIP refused without a SiP token match");
+    expect_state(efuse_model::LC_RAW_PROD_END, prod,
+                 "LC_STATE: PROD_END is unreachable from PROD");
+    expect_state(0x4u, prod,
+                 "LC_STATE: a write whose destination is not a state is refused");
+    expect_state(0xFFFFFFFFu, prod,
+                 "LC_STATE: an all-ones write cannot force an illegal code");
+
+    if (m_dut->get_lc_state() == efuse_model::LC_RAW_PROD)
+        report_test_pass("LC_STATE: get_lc_state() still decodes PROD");
     else
-        report_test_fail("LC_STATE get_lc_state()", "expected raw 0x" +
-            std::to_string(expect_raw) + " got 0x" + std::to_string(m_dut->get_lc_state()));
+        report_test_fail("LC_STATE get_lc_state()", "expected raw 0x1 got 0x" +
+            hex32(m_dut->get_lc_state()));
 }
 
 void testbench::test_woset_sip_dis_hi()
@@ -856,6 +877,94 @@ void testbench::test_token_matching()
     wait(1, SC_NS);
 }
 
+/*
+ * The half of the transition machine that only opens with a matching token: the walk
+ * TEST_DEV -> RMA_SIP -> RMA_CHIPLET, and the stop at the far end. Both RMA digest
+ * fuses are planted with the digest of the all-zero token, which is what the token
+ * input registers already hold, so pulsing each go bit is enough to open its gate --
+ * see test_token_matching for where that digest comes from.
+ */
+void testbench::test_lc_state_transitions()
+{
+    report_test_start("Test 24: LC_STATE transition machine — token-gated path");
+
+    const uint32_t zero_token_digest[8] = {
+        0x0d5f2925u, 0x902a591du, 0x6ee233b3u, 0x08971485u,
+        0x8e9f8e20u, 0x6c8fc18bu, 0xf862bd77u, 0x66687aadu,
+    };
+
+    // RMA_SIP_TOKEN_DIGEST is shadow byte 0x24 (words 9-16), RMA_CHIPLET_TOKEN_DIGEST
+    // 0x44 (words 17-24), LC_STATE 0x08 (word 2), starting at TEST_DEV.
+    const std::string image = "/tmp/efuse_test_lc_walk.preload";
+    {
+        std::ofstream out(image);
+        for (unsigned int bit = 0; bit < 8192; bit++) {
+            const unsigned int word = bit / 32;
+            uint32_t word_val = 0;
+            if (word == 2)                        word_val = efuse_model::lc_state_encode(
+                                                                 efuse_model::LC_RAW_TEST_DEV);
+            else if (word >= 9  && word <= 16)    word_val = zero_token_digest[word - 9];
+            else if (word >= 17 && word <= 24)    word_val = zero_token_digest[word - 17];
+            out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
+        }
+    }
+    if (!m_dut->preload_fuses_from_file(image)) {
+        report_test_fail("LC walk setup", "digest image was rejected");
+        return;
+    }
+
+    uint32_t val = 0;
+    auto write_lc = [&](uint32_t v) {
+        m_test->register_write_32(efuse_basetest::LC_STATE_OFFSET, v);
+        wait(1, SC_NS);
+    };
+    auto check = [&](uint32_t want_raw, const std::string &what) {
+        const uint32_t want = efuse_model::lc_state_encode(want_raw);
+        m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+        if (val == want)
+            report_test_pass(what);
+        else
+            report_test_fail(what, "expected 0x" + hex32(want) + " got 0x" + hex32(val));
+    };
+
+    check(efuse_model::LC_RAW_TEST_DEV, "LC_STATE: image sensed as TEST_DEV");
+
+    // Bit 1 is gated on the SiP token. Stage a token that is not the all-zero one to
+    // put the gate in a known-shut state first, since earlier tests leave it open.
+    m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET, 0x1);
+    wait(1, SC_NS);
+    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 1u << 0);
+    wait(1, SC_NS);
+    write_lc(efuse_model::LC_RAW_RMA_SIP_0);
+    check(efuse_model::LC_RAW_TEST_DEV, "LC_STATE: RMA_SIP refused while the SiP token mismatches");
+
+    m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET, 0x0);
+    wait(1, SC_NS);
+    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 1u << 0);
+    wait(1, SC_NS);
+    write_lc(efuse_model::LC_RAW_RMA_SIP_0);
+    check(efuse_model::LC_RAW_RMA_SIP_0, "LC_STATE: SiP token match opens TEST_DEV -> RMA_SIP");
+
+    // Bit 2 has its own gate, and needs RMA_SIP established first — which it now is.
+    write_lc(0x4u);
+    check(efuse_model::LC_RAW_RMA_SIP_0, "LC_STATE: RMA_CHIPLET refused without its own token");
+
+    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 1u << 8);
+    wait(1, SC_NS);
+    write_lc(0x4u);
+    check(efuse_model::LC_RAW_RMA_CHIP_0, "LC_STATE: chiplet token match opens RMA_CHIPLET");
+
+    // RMA_CHIPLET is terminal: even a legal destination is refused.
+    write_lc(0x1u);
+    check(efuse_model::LC_RAW_RMA_CHIP_0, "LC_STATE: RMA_CHIPLET is terminal");
+
+    if (m_dut->get_lc_state() == efuse_model::LC_RAW_RMA_CHIP_0)
+        report_test_pass("LC_STATE: get_lc_state() follows the transitions");
+    else
+        report_test_fail("LC_STATE get_lc_state()", "expected raw 0x6 got 0x" +
+            hex32(m_dut->get_lc_state()));
+}
+
 void testbench::run_coverage_tests()
 {
     test_woset_locks_hi();
@@ -874,4 +983,6 @@ void testbench::run_coverage_tests()
     // Last: LOCKS is sticky, so anything this sets stays locked for whatever follows.
     test_lock_enforcement();
     test_token_matching();
+    // Depends on the matching SiP token test_token_matching leaves behind.
+    test_lc_state_transitions();
 }

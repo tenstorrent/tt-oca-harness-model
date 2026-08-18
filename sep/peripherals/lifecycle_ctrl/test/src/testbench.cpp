@@ -747,6 +747,60 @@ void testbench::test_prod_dbg_priority()
 }
 
 // =============================================================================
+// Test 20: the two outputs the rest of SEP consumes
+// =============================================================================
+
+void testbench::test_outputs_to_sep()
+{
+    report_test_start("Test 20: sep_debug and prod_dbg_active");
+
+    const uint32_t prod     = lifecycle_ctrl_model::lc_state_encode(0x1);
+    const uint32_t test_dev = lifecycle_ctrl_model::lc_state_encode(0x0);
+
+    // sep_debug is FEAT_CTRL[0], and the inbound filter is bypassed while it is set.
+    // PROD without a demote is the case that matters: the filter must be live there.
+    clear_demote();
+    drive_inputs(prod, 0, 0);
+    if (!m_dut->get_sep_debug() && m_dut->get_feat_ctrl() == read_feat_ctrl())
+        report_test_pass("PROD: sep_debug clear, and get_feat_ctrl() agrees with the register");
+    else
+        report_test_fail("PROD sep_debug", "sep_debug=" + std::to_string(m_dut->get_sep_debug()) +
+            " feat_ctrl=" + hex64(m_dut->get_feat_ctrl()));
+
+    // TEST_DEV enables everything, which includes sep_debug — a part out of reset with
+    // an unprogrammed fuse array has the filter bypassed, as it does on silicon.
+    drive_inputs(test_dev, 0, 0);
+    if (m_dut->get_sep_debug())
+        report_test_pass("TEST_DEV: sep_debug set");
+    else
+        report_test_fail("TEST_DEV sep_debug", "expected set, feat_ctrl=" +
+            hex64(m_dut->get_feat_ctrl()));
+
+    // A demote back into PROD_DBG restores the debug section, sep_debug with it.
+    drive_inputs(prod, 0, 0);
+    if (m_dut->get_prod_dbg_active())
+        report_test_fail("prod_dbg_active reset", "asserted with no demote written");
+    else
+        report_test_pass("prod_dbg_active: clear with no demote");
+
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x1);
+    wait(1, SC_NS);
+    if (m_dut->get_prod_dbg_active() && m_dut->get_sep_debug())
+        report_test_pass("PROD + demote_2: prod_dbg_active and sep_debug both set");
+    else
+        report_test_fail("prod_dbg_active demote", "prod_dbg=" +
+            std::to_string(m_dut->get_prod_dbg_active()) + " sep_debug=" +
+            std::to_string(m_dut->get_sep_debug()));
+
+    // The eFuse takes prod_dbg_active regardless of state, and qualifies it itself.
+    drive_inputs(test_dev, 0, 0);
+    if (m_dut->get_prod_dbg_active())
+        report_test_pass("prod_dbg_active: follows the demote bits, not the state");
+    else
+        report_test_fail("prod_dbg_active state", "deasserted by a state change");
+}
+
+// =============================================================================
 // Main test sequence
 // =============================================================================
 
@@ -781,6 +835,7 @@ void testbench::run_tests()
     test_demote_upper_words();
     test_lock_scope();
     test_prod_dbg_priority();
+    test_outputs_to_sep();
 
     report_test_summary();
 

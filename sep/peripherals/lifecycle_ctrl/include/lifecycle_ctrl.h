@@ -2,6 +2,8 @@
 #include "lifecycle_ctrl_base.h"
 #include "csml_logger.h"
 #include "csml_parameter.h"
+#include <functional>
+#include <utility>
 
 #ifndef CSML_DEFAULT_VERBOSITY
 #define CSML_DEFAULT_VERBOSITY 2
@@ -71,6 +73,47 @@ public:
     /// zeroes, exactly as it does in the RTL.
     bool get_lc_sigint_err() const { return m_lc_sigint_err; }
 
+    /// The live feature vector, as `feat_ctrl_o`. Same value software reads from
+    /// FEAT_CTRL_LO/HI, joined into the 64 bits the RTL struct actually is.
+    uint64_t get_feat_ctrl() const {
+        return (static_cast<uint64_t>(static_cast<uint32_t>(FEAT_CTRL_HI)) << 32)
+             |  static_cast<uint32_t>(FEAT_CTRL_LO);
+    }
+
+    /**
+     * @brief `feat_ctrl_o.sep_debug`, bit 0 of the vector.
+     *
+     * Called out separately because it is the only consumer of the feature vector
+     * inside SEP, and it is a security decision rather than a feature enable: sep.sv
+     * routes it to the inbound filter's `filter_skip_i`, which bypasses all match and
+     * permission checking.
+     */
+    bool get_sep_debug() const { return (get_feat_ctrl() & 0x1u) != 0; }
+
+    /**
+     * @brief `prod_dbg_active_o`, the OR of the two demote bits.
+     *
+     * sep_crypto.sv takes this straight back into the eFuse, where it freezes LC_STATE:
+     * a part demoted into PROD_DBG must not be able to walk itself onwards to another
+     * lifecycle state. Note that it is the raw demote bits, not "PROD and demoted" —
+     * the eFuse is what qualifies it with the current state.
+     */
+    bool get_prod_dbg_active() const {
+        return ((static_cast<uint32_t>(DEMOTE_1) | static_cast<uint32_t>(DEMOTE_2)) & 0x1u) != 0;
+    }
+
+    /**
+     * @brief Ask to be told when the feature vector changes.
+     *
+     * `feat_ctrl_o` is combinational, so anything driven from it has to follow the
+     * inputs. That is not hypothetical here: a demote write or a `woset` write to the
+     * eFuse SiP_DIS/SYS_DIS masks can flip `sep_debug`, and with it whether inbound
+     * traffic is filtered at all.
+     */
+    void set_feat_ctrl_change_callback(std::function<void()> cb) {
+        m_feat_ctrl_change_cb = std::move(cb);
+    }
+
     /**
      * @brief Live demotion state for the key manager's OTP_DEMOTION_STATE register.
      *
@@ -124,6 +167,7 @@ private:
 
     lc_inputs m_in;                  ///< Live inputs; see set_inputs().
     bool      m_lc_sigint_err = false;
+    std::function<void()> m_feat_ctrl_change_cb;
 
     bool on_demote_write(lc_ctrl::DEMOTE_type<32> &reg, const char *name, DT value);
     bool on_demote_hi_write(lc_ctrl::DEMOTE_HI_type<32> &reg, DT value);

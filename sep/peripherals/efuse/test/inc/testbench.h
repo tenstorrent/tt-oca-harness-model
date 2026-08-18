@@ -60,4 +60,5 @@ public:
     void test_fuse_program_out_of_range();
     void test_lock_enforcement();
     void test_token_matching();
+    void test_lc_state_transitions();
 };

@@ -798,6 +798,8 @@ void och_sep_ss::module_bind() {
     inbound_filter->rst_ni(reset_signal);
     // feat_ctrl_o.sep_debug drives only the inbound instance's filter_skip_i;
     // RTL ties the outbound one to 1'b0, which is what leaving it unbound does.
+    // The value comes from lc_ctrl at start_of_simulation, once the eFuse has been
+    // sensed and the feature vector computed; this is only the pre-elaboration default.
     sep_debug_signal.write(sep_debug.get_param_value());
     inbound_filter->filter_skip_i(sep_debug_signal);
 
@@ -891,6 +893,19 @@ void och_sep_ss::start_of_simulation() {
         in.secure_tm        = lc_ctrl->secure_tm.get_param_value();
         lc_ctrl->set_inputs(in);
     };
+
+    // sep.sv:952 gives feat_ctrl_o.sep_debug to the inbound filter's filter_skip_i, and
+    // it is the only consumer of the feature vector inside SEP. Registering before the
+    // first refresh means the signal is driven by the recompute that refresh triggers,
+    // and again on every later one — a demote, or a woset write to SiP_DIS/SYS_DIS, can
+    // change whether inbound traffic is filtered at all.
+    lc_ctrl->set_feat_ctrl_change_callback([this]() {
+        sep_debug_signal.write(lc_ctrl->get_sep_debug() || sep_debug.get_param_value());
+        // sep_crypto.sv:786 closes the other half of the loop, prod_dbg_active_o back
+        // into the eFuse, where it freezes LC_STATE. Storing a flag rather than
+        // notifying, so this does not bounce back through the shadow-change callback.
+        sep_efuse->set_prod_dbg_active(lc_ctrl->get_prod_dbg_active());
+    });
     refresh_lc_inputs();
     sep_efuse->set_shadow_change_callback(refresh_lc_inputs);
 

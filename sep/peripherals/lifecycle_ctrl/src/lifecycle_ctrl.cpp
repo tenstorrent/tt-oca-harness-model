@@ -126,6 +126,9 @@ void lifecycle_ctrl_model::compute_feat_ctrl()
 
     FEAT_CTRL_LO = static_cast<uint32_t>(feat_ctrl & 0xFFFFFFFF);
     FEAT_CTRL_HI = static_cast<uint32_t>(feat_ctrl >> 32);
+
+    if (m_feat_ctrl_change_cb)
+        m_feat_ctrl_change_cb();
 }
 
 /*

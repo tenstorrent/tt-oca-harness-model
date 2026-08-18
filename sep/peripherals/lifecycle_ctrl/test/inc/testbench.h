@@ -57,6 +57,7 @@ public:
     void test_demote_upper_words();
     void test_lock_scope();
     void test_prod_dbg_priority();
+    void test_outputs_to_sep();
 
 private:
     /// Apply an input bundle, as the eFuse model does through set_inputs().

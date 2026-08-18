@@ -370,11 +370,19 @@ private:
     csml_param<uint64_t>   smc_global_base;
     csml_param<uint64_t>   smc_region_size;
 
-    // feat_ctrl_o.sep_debug (sep.sv:952) — drives the inbound filter's
-    // filter_skip_i, bypassing all match/permission checking. The inbound filter
-    // is BlockByDefault, so a platform whose masters issue inbound traffic
-    // without programming the filter tables must raise this, exactly as SEP
-    // debug mode does on silicon. Defaults false (fail-closed, as on reset).
+    // The inbound filter's filter_skip_i (sep.sv:952), which bypasses all match and
+    // permission checking. Its producer is lc_ctrl: filter_skip_i is
+    // feat_ctrl_o.sep_debug, so the chain runs eFuse LC_STATE/SiP_DIS/SYS_DIS ->
+    // feature vector -> filter bypass, and start_of_simulation wires it up.
+    //
+    // Note where that leaves reset, because it is counter-intuitive: LC_STATE resets to
+    // TEST_DEV with no disables, so the vector is all ones and sep_debug is set. Silicon
+    // comes out of reset with the inbound filter bypassed, and a VP that always filters
+    // is more restrictive than the hardware, not less.
+    //
+    // sep_debug remains as a force-on override with no RTL counterpart, for a platform
+    // whose masters issue inbound traffic without programming the filter tables and
+    // whose fuse image does not already bypass it. Default false contributes nothing.
     csml_param<bool>                 sep_debug;
     sc_signal<bool, SC_MANY_WRITERS> sep_debug_signal;
 

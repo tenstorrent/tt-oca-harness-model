@@ -613,11 +613,67 @@ bool efuse_model::handle_write_LOCKS_HI(uint32_t value)
 // completes the bus transaction normally -- a locked write is silently dropped in
 // hardware, not turned into a fault.
 
+/*
+ * LC_STATE is the one shadow field that is not a plain woset: efuse_shadow_regs.sv
+ * runs the write through a transition machine and stores the differential encoding of
+ * the result, so the low byte is {~raw, raw} and a blind OR of the written word would
+ * corrupt it -- 0xF0 (TEST_DEV) OR 0xE1 (PROD) is 0xF1, which is not an encoding at
+ * all. The machine works on the raw nibble instead, which is also why firmware only
+ * has to put the destination state in the low nibble for the write to take.
+ *
+ * The rules, in the order the RTL applies them:
+ *   - PROD_END and both RMA_CHIPLET states are terminal, as is PROD once the lifecycle
+ *     controller reports a demote (prod_dbg_active); no write moves them.
+ *   - The intended destination, cur | write, must be a valid state, checked before any
+ *     per-bit gating so that a write which would land nowhere is rejected whole.
+ *   - Per bit: [0] PROD is ungated; [1] RMA_SIP needs the SiP token; [2] RMA_CHIPLET
+ *     needs the chiplet token, and RMA_SIP already established, and not PROD; [3]
+ *     PROD_END is unreachable from PROD.
+ *   - What gating produced is checked again, since dropping a gated bit can leave an
+ *     invalid state; if so the write is dropped.
+ *
+ * The RTL leaves the upper three bytes of the shadow word writable, but there they
+ * carry neighbouring fuse fields; this model gives every field its own register, so
+ * the upper bytes of this one name nothing and stay zero.
+ */
 bool efuse_model::handle_write_LC_STATE(uint32_t value)
 {
     if (is_write_locked(LC_STATE.offset))
         return true;
-    m_lc_state_val |= value;
+
+    const uint32_t cur     = m_lc_state_val & 0xFu;
+    const bool     is_prod = (cur == LC_RAW_PROD);
+    const bool     frozen  = cur == LC_RAW_PROD_END   ||
+                             cur == LC_RAW_RMA_CHIP_0 ||
+                             cur == LC_RAW_RMA_CHIP_1 ||
+                             (is_prod && m_prod_dbg_active);
+
+    uint32_t next = cur;
+
+    if (frozen) {
+        if (value & 0xFu)
+            CSML_REPORT(WARNING, "EFUSE", "LC_STATE transition ignored — state is terminal");
+    } else if (!lc_state_raw_valid(cur | (value & 0xFu))) {
+        CSML_REPORT(WARNING, "EFUSE", "LC_STATE write ignored — destination is not a valid state");
+    } else {
+        const uint32_t w         = value & 0xFu;
+        const bool     sip_match = static_cast<uint32_t>(RMA_SIP_TOKEN_MATCH) == TOKEN_MATCH;
+        const bool     chip_match= static_cast<uint32_t>(RMA_CHIPLET_TOKEN_MATCH) == TOKEN_MATCH;
+        const bool     sip_done  = (cur & 0x2u) != 0;
+
+        uint32_t cand = cur;
+        cand |= w & 0x1u;
+        if (sip_match)                            cand |= w & 0x2u;
+        if (!is_prod && sip_done && chip_match)   cand |= w & 0x4u;
+        if (!is_prod)                             cand |= w & 0x8u;
+
+        if (lc_state_raw_valid(cand))
+            next = cand;
+        else
+            CSML_REPORT(WARNING, "EFUSE", "LC_STATE write ignored — gating left an invalid state");
+    }
+
+    m_lc_state_val = lc_state_encode(next);
     LC_STATE = m_lc_state_val;
     notify_shadow_change();
     return true;

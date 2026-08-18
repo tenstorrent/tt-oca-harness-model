@@ -243,6 +243,39 @@ public:
     static constexpr uint32_t LC_STATE_RAW_INVALID = 0x4u;
     /** @} */
 
+    /**
+     * @name Raw lifecycle states and the transition machine's inputs
+     *
+     * efuse_pkg::lc_state_raw_e. Only these seven codes exist; everything else is
+     * invalid, and is_valid_lc_state() is what the transition machine consults twice
+     * per write -- once on the intended destination and once on what per-bit gating
+     * actually produced.
+     * @{
+     */
+    static constexpr uint32_t LC_RAW_TEST_DEV   = 0x0u;
+    static constexpr uint32_t LC_RAW_PROD       = 0x1u;
+    static constexpr uint32_t LC_RAW_RMA_SIP_0  = 0x2u;
+    static constexpr uint32_t LC_RAW_RMA_SIP_1  = 0x3u;
+    static constexpr uint32_t LC_RAW_RMA_CHIP_0 = 0x6u;
+    static constexpr uint32_t LC_RAW_RMA_CHIP_1 = 0x7u;
+    static constexpr uint32_t LC_RAW_PROD_END   = 0x8u;
+
+    static constexpr bool lc_state_raw_valid(uint32_t s) {
+        return s == LC_RAW_TEST_DEV  || s == LC_RAW_PROD       ||
+               s == LC_RAW_RMA_SIP_0 || s == LC_RAW_RMA_SIP_1  ||
+               s == LC_RAW_RMA_CHIP_0|| s == LC_RAW_RMA_CHIP_1 ||
+               s == LC_RAW_PROD_END;
+    }
+
+    /**
+     * @brief `prod_dbg_active_i`, from the lifecycle controller's demote bits.
+     *
+     * A platform feeds this back from lc_ctrl; a standalone testbench leaves it false.
+     * Combined with LC_STATE == PROD it makes the state terminal.
+     */
+    void set_prod_dbg_active(bool active) { m_prod_dbg_active = active; }
+    /** @} */
+
 private:
     /**
      * @brief One fuse field's extent, paired with the lock bits that govern it.
@@ -302,6 +335,8 @@ private:
     uint32_t m_chiplet_pubk_revoke_val;
     uint32_t m_bl1_version_val[8];
     uint32_t m_bl2_version_val[8];
+
+    bool m_prod_dbg_active = false;
 
     std::function<void()> m_shadow_change_cb;
     void notify_shadow_change() { if (m_shadow_change_cb) m_shadow_change_cb(); }
