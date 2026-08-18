@@ -7,7 +7,19 @@ SMC and SEP firmware that talks to each other, and to carry chiplet-facing
 AXI through the AOU (AXI-over-UCIe) LT stub on `ext_in`/`ext_out` (RTL
 `smu_axi_in`/`smu_axi_out`; see `tt-oca-hw` `doc/architecture.adoc`).
 
-Design document: [doc/smc-sep-d2d-interconnect.adoc](../../../doc/smc-sep-d2d-interconnect.adoc)
+Directory shape matches `vp/platform/smc` and `vp/platform/sep`:
+
+```
+main.cpp                  sc_main
+smu_platform.hpp          platform composition
+src/smu_platform.cpp      socket wiring
+inc/                      interconnect models
+config/                   CCI inis
+docs/                     this folder
+test/ + run_tests.sh      interconnect unit suite (SMU-only extra)
+```
+
+Design document: [doc/smc-sep-d2d-interconnect.adoc](../../../../doc/smc-sep-d2d-interconnect.adoc)
 (includes the as-built status section).
 
 ## Topology
@@ -124,15 +136,3 @@ slot land in the ROM and vanish (reads return 0).
   `sw/smu-vp-tests/run_smu_vp_tests.sh`. CI runs both the unit tests and
   this firmware suite (`smu-unit-tests` / `smu-vp` on Ubuntu,
   `smu-unit-tests-rhel8` / `smu-vp-rhel8` on RHEL 8).
-
-## Files
-
-| Path | Contents |
-|---|---|
-| `main.cpp` | `smu-vp` sc_main: arg parsing, CCI presets, instantiation, wiring |
-| `inc/smu_axi_xbar.h` | 3x3 non-reflexive SMU AXI crossbar (header-only) |
-| `inc/axi_window_remap.h` | `axi_window_remap` RTL block model (header-only) |
-| `config/smc_smu_vp.ini` | SMC-side CCI config for the SMU context |
-| `config/sep_smu_config.ini` | SEP-side CCI config for the SMU context |
-| `test/` | unit testbench + CMake for the two interconnect models |
-| `run_tests.sh` | Release/ASan/Coverage orchestrator for the unit tests |

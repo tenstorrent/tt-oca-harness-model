@@ -2,7 +2,7 @@
 
 Bare-metal firmware tests for the SMU Virtual Platform (`smu-vp`), which
 integrates the SMC and SEP platforms over the SMU on-die interconnect
-(see `vp/platform/smu/README.md`). Each test builds **two** firmware
+(see `vp/platform/smu/docs/README.md`). Each test builds **two** firmware
 halves — an RV64 image for the SMC CVA6 cluster and an RV32 image for the
 SEP VeeR core — reusing the `sw/smc-vp-tests/` and `sw/sep-vp-tests/`
 startup/printf/linker infrastructure, and runs them concurrently on
@@ -60,7 +60,7 @@ UART0, SEP on the virtconsole) and neither prints FAIL.
 
 Note the SMC scratchpad sits at `0xC006_0000`, not `0xC004_0000` (the
 `0xC004_0000` slot is the boot ROM) — see the caveat in
-`vp/platform/smu/README.md`.
+`vp/platform/smu/docs/README.md`.
 
 ## Address plan (smu-aou-ext-test)
 

@@ -141,20 +141,27 @@ tt-oca-sim/
 │   ├── CMakeLists.txt
 │   └── platform/
 │       ├── infra/                 ← bus, PLIC, CLINT, ELF loader (SEP)
-│       ├── sep/                   ← SEP platform wiring (och_sep_ss)
+│       ├── sep/                   ← SEP platform wiring (sep-vp)
 │       │   ├── main.cpp           ← sc_main entry point
-│       │   ├── och_sep_ss.hpp     ← top-level SEP platform module
-│       │   ├── inc/               ← SEP-specific headers (Args, memory map)
-│       │   └── config/
-│       │       ├── accellera_config.ini   ← CCI runtime parameters
-│       │       └── veeriss_config.json    ← VeeR EL2 ISS configuration
+│       │   ├── sep_platform.hpp   ← top-level SEP platform module (`och_sep_ss`)
+│       │   ├── src/sep_platform.cpp
+│       │   ├── inc/               ← helpers (Args, adapters, xbar policy, …)
+│       │   ├── config/            ← CCI / VeeR ISS runtime files
+│       │   └── docs/              ← abstractions and AXI notes
 │       └── smc/                   ← SMC platform wiring (smc-vp)
-│           ├── main.cpp           ← sc_main entry point (CCI ini + ELF load + UART drain)
+│           ├── main.cpp           ← sc_main entry point
 │           ├── smc_platform.hpp   ← top-level SMC platform module
 │           ├── src/smc_platform.cpp
 │           ├── inc/               ← helpers (addr_router, width_adapter, stub_target, …)
-│           └── config/
-│               └── smc_platform_vp.ini   ← CCI runtime parameters
+│           ├── config/            ← CCI runtime parameters
+│           └── docs/              ← platform notes
+│       └── smu/                   ← SMU platform (smu-vp): SMC + SEP + interconnect
+│           ├── main.cpp
+│           ├── smu_platform.hpp
+│           ├── src/smu_platform.cpp
+│           ├── inc/
+│           ├── config/
+│           └── docs/
 ├── sw/                            ← Firmware and DV tests
 │   ├── sep-vp-tests/              ← Vayavya peripheral verification tests (SEP)
 │   │   └── fw-tests-from-tt-oca-hw/   ← TT firmware test suite (fw/sep), self-contained
