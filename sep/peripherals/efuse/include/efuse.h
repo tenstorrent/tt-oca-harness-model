@@ -3,7 +3,9 @@
 #include "csml_logger.h"
 #include "csml_parameter.h"
 #include <array>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifndef CSML_DEFAULT_VERBOSITY
@@ -41,6 +43,44 @@ public:
     /// The raw LC_STATE fuse contents, i.e. what software reads from the register.
     uint32_t        get_lc_state_code() const { return m_lc_state_val; }
     const uint32_t* get_chiplet_uid()   const { return m_chiplet_uid_cache; }
+
+    /// The two 64-bit feature-disable masks from the shadow registers, as
+    /// sep_lifecycle_ctrl.sv reads them out of `shadow_regs_i`. Both are `woset`, so
+    /// they grow as firmware writes them and these accessors track that.
+    uint64_t get_sip_dis() const {
+        return (static_cast<uint64_t>(m_sip_dis_hi_val) << 32) | m_sip_dis_lo_val;
+    }
+    uint64_t get_sys_dis() const {
+        return (static_cast<uint64_t>(m_sys_dis_hi_val) << 32) | m_sys_dis_lo_val;
+    }
+
+    /**
+     * @brief Whether security disable is in force, as `security_disable_o`.
+     *
+     * efuse_security_tokens.sv computes `tt_rev_d_out[0] && (sec_disable_token_match ==
+     * TOKEN_MATCH)`: the token has to match *and* the silicon revision has to permit the
+     * feature, which prim_rev_cell exists to deny on A2/B1 parts. Matching a token is
+     * therefore not sufficient on its own, and sec_disable_rev_enable is how a run picks
+     * which side of that cut it models.
+     */
+    /// Not const: csml_param::get_param_value() is not a const member.
+    bool get_security_disable() {
+        return sec_disable_rev_enable.get_param_value()
+            && static_cast<uint32_t>(SEC_DISABLE_TOKEN_MATCH) == TOKEN_MATCH;
+    }
+
+    /**
+     * @brief Ask to be told when the shadow registers change.
+     *
+     * The shadow outputs are combinational in silicon, so consumers see a `woset` write
+     * to LC_STATE, SiP_DIS or SYS_DIS immediately. A VP consumer that sampled the
+     * accessors once at start of simulation would instead freeze at the boot value,
+     * which is wrong precisely when it matters: firmware disabling a feature through the
+     * eFuse has to reach whatever depends on it.
+     */
+    void set_shadow_change_callback(std::function<void()> cb) {
+        m_shadow_change_cb = std::move(cb);
+    }
 
     /**
      * @brief Backdoor-load the fuse array from a `.preload` image and sense it.
@@ -118,6 +158,17 @@ public:
      * parameter.
      */
     csml_param<std::vector<uint32_t>> sec_disable_token_digest;
+
+    /**
+     * Whether this silicon revision permits security disable at all.
+     *
+     * Models `tt_rev_d_out[0]` from the prim_rev_cell in efuse_security_tokens.sv, whose
+     * comment is "Disable sec_disable_feature during A2/B1": on those revisions the
+     * feature is metal-tied off and a matching token still does nothing. Defaults to
+     * true, the later-revision behaviour, since it has no effect until a token matches
+     * anyway.
+     */
+    csml_param<bool> sec_disable_rev_enable;
 
     /**
      * Path to a fuse array image in the RTL's `.preload` format: 8192 lines, one
@@ -251,6 +302,9 @@ private:
     uint32_t m_chiplet_pubk_revoke_val;
     uint32_t m_bl1_version_val[8];
     uint32_t m_bl2_version_val[8];
+
+    std::function<void()> m_shadow_change_cb;
+    void notify_shadow_change() { if (m_shadow_change_cb) m_shadow_change_cb(); }
 
     void register_callbacks();
     void load_fuses();

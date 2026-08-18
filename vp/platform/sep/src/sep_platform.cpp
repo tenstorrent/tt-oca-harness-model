@@ -870,12 +870,29 @@ void och_sep_ss::start_of_simulation() {
               otp.chiplet_uid);
     keymgr->set_otp_data(otp);
 
-    // The lifecycle controller has no state of its own in RTL — sep_lifecycle_ctrl.sv
-    // reads lc_state from the eFuse shadow. Driving it from the same place keeps
-    // FEAT_CTRL consistent with the fuse instead of relying on two configs agreeing by
-    // hand. Firmware has not run yet at start_of_simulation, so recomputing FEAT_CTRL
-    // here is still before anything can observe it.
-    lc_ctrl->set_lc_state(sep_efuse->get_lc_state());
+    // The lifecycle controller has no state of its own in RTL: sep_lifecycle_ctrl.sv
+    // takes shadow_regs_i, security_disable_i and secure_tm_i from the eFuse wrapper and
+    // is combinational on all three. Driving them from the same place keeps FEAT_CTRL
+    // consistent with the fuse instead of relying on two configs agreeing by hand.
+    //
+    // Re-running on every shadow change is the part that matters. SiP_DIS and SYS_DIS are
+    // software-writable woset fields, so firmware disabling a feature through the eFuse
+    // has to move FEAT_CTRL; sampling once here would freeze it at the boot value.
+    //
+    // secure_tm is the exception: it is not an eFuse value but the test_en strap, which
+    // sep_efuse_wrapper.sv latches when fuse sense completes. It stays a parameter and is
+    // forwarded from here.
+    auto refresh_lc_inputs = [this]() {
+        lifecycle_ctrl_model::lc_inputs in;
+        in.lc_state_code    = sep_efuse->get_lc_state_code();
+        in.sip_dis          = sep_efuse->get_sip_dis();
+        in.sys_dis          = sep_efuse->get_sys_dis();
+        in.security_disable = sep_efuse->get_security_disable();
+        in.secure_tm        = lc_ctrl->secure_tm.get_param_value();
+        lc_ctrl->set_inputs(in);
+    };
+    refresh_lc_inputs();
+    sep_efuse->set_shadow_change_callback(refresh_lc_inputs);
 
     // Backdoor-load the staged SPI flash image so the controller's command/FIFO reads see the
     // real manifest+payload images instead of erased 0xFF. start_of_simulation runs after

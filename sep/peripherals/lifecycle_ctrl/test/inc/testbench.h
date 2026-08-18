@@ -46,4 +46,29 @@ public:
     void test_rma_chiplet_state();
     void test_secure_tm();
     void test_security_disable();
+
+    // Tests driving the input bundle directly, the way the eFuse model does on a
+    // platform. These do not depend on the config, so they cover every state arm in one
+    // run rather than one arm per ini.
+    void test_all_state_arms();
+    void test_lc_sigint_fail_safe();
+    void test_live_feature_disable();
+    void test_demote_diff_encoding();
+    void test_demote_upper_words();
+    void test_lock_scope();
+    void test_prod_dbg_priority();
+
+private:
+    /// Apply an input bundle, as the eFuse model does through set_inputs().
+    void drive_inputs(uint32_t lc_code, uint64_t sip_dis = 0, uint64_t sys_dis = 0,
+                      bool security_disable = false, bool secure_tm = true);
+
+    /// Clear the W1S demote registers so a test can start un-demoted. Stands in for a
+    /// reset, which is the only thing that clears them in hardware either.
+    void clear_demote();
+
+    /// Read FEAT_CTRL as one 64-bit value.
+    uint64_t read_feat_ctrl();
+
+    void check_feat_ctrl(const std::string &name, uint64_t expected);
 };

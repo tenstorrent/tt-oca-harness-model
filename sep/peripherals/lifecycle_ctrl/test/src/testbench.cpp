@@ -1,6 +1,7 @@
 #include "testbench.h"
 #include "lifecycle_ctrl_basetest.h"
 #include "csml_parameter.h"
+#include <cstdio>
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -213,16 +214,18 @@ void testbench::test_demote_1_w1s()
     else
         report_test_fail("DEMOTE_1 W1S hold", "bit was cleared — expected bit 0 still set");
 
-    // In TEST_DEV demote only re-enables debug bits; with all dis=0 result is still all-ones
+    // In TEST_DEV demote only re-enables debug bits; with all dis=0 the result is
+    // all-ones, less the test section if secure_tm is deasserted.
     uint32_t val_lo = 0, val_hi = 0;
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_LO_OFFSET, val_lo);
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_HI_OFFSET, val_hi);
-    if (val_lo == 0xFFFFFFFF && val_hi == 0xFFFFFFFF)
-        report_test_pass("FEAT_CTRL: TEST_DEV+demote1=0xFFFF_FFFF_FFFF_FFFF");
+    const uint32_t exp_hi = m_dut->secure_tm.get_param_value() ? 0xFFFFFFFFu : 0xFFFF0000u;
+    if (val_lo == 0xFFFFFFFF && val_hi == exp_hi)
+        report_test_pass("FEAT_CTRL: TEST_DEV+demote1 correct");
     else
         report_test_fail("FEAT_CTRL TEST_DEV+demote1",
-            "expected 0xFFFFFFFF/0xFFFFFFFF got lo=0x" + std::to_string(val_lo) +
-            " hi=0x" + std::to_string(val_hi));
+            "expected 0xFFFFFFFF/0x" + std::to_string(exp_hi) + " got lo=0x" +
+            std::to_string(val_lo) + " hi=0x" + std::to_string(val_hi));
 }
 
 // =============================================================================
@@ -426,6 +429,324 @@ void testbench::test_security_disable()
 }
 
 // =============================================================================
+// Helpers for the input-driven tests
+//
+// The tests above read FEAT_CTRL as the config happens to leave it, so each one covers
+// a single state arm and skips otherwise. set_inputs() is how the eFuse model drives
+// this block on a platform, so using it here covers every arm in one run.
+// =============================================================================
+
+void testbench::drive_inputs(uint32_t lc_code, uint64_t sip_dis, uint64_t sys_dis,
+                             bool security_disable, bool secure_tm)
+{
+    lifecycle_ctrl_model::lc_inputs in;
+    in.lc_state_code    = lc_code;
+    in.sip_dis          = sip_dis;
+    in.sys_dis          = sys_dis;
+    in.security_disable = security_disable;
+    in.secure_tm        = secure_tm;
+    m_dut->set_inputs(in);
+}
+
+void testbench::clear_demote()
+{
+    m_dut->reset_all_registers();
+}
+
+uint64_t testbench::read_feat_ctrl()
+{
+    uint32_t lo = 0, hi = 0;
+    m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_LO_OFFSET, lo);
+    m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_HI_OFFSET, hi);
+    return (static_cast<uint64_t>(hi) << 32) | lo;
+}
+
+static std::string hex64(uint64_t v)
+{
+    char buf[19];
+    std::snprintf(buf, sizeof(buf), "0x%016llx", static_cast<unsigned long long>(v));
+    return buf;
+}
+
+static std::string hex32(uint32_t v)
+{
+    char buf[11];
+    std::snprintf(buf, sizeof(buf), "0x%x", v);
+    return buf;
+}
+
+void testbench::check_feat_ctrl(const std::string &name, uint64_t expected)
+{
+    const uint64_t got = read_feat_ctrl();
+    if (got == expected)
+        report_test_pass(name + " — FEAT_CTRL=" + hex64(got));
+    else
+        report_test_fail(name, "expected " + hex64(expected) + " got " + hex64(got));
+}
+
+// =============================================================================
+// Test 13: every LC state arm, driven through the input bundle
+// =============================================================================
+
+void testbench::test_all_state_arms()
+{
+    report_test_start("Test 13: FEAT_CTRL for every LC state arm");
+
+    clear_demote();
+
+    // Distinct masks so the arms are told apart rather than all collapsing to all-ones:
+    // one func bit and one debug bit in each, at different positions.
+    constexpr uint64_t SIP = 0x0001'0000'0000'0001ULL;
+    constexpr uint64_t SYS = 0x0002'0000'0000'0002ULL;
+    constexpr uint64_t FUNC = 0xFFFF'0000'0000'0000ULL;
+    constexpr uint64_t ALL  = 0xFFFF'FFFF'FFFF'FFFFULL;
+
+    struct arm { uint32_t raw; const char *name; uint64_t expected; };
+    const arm arms[] = {
+        // TEST_DEV: everything not disabled by either mask.
+        { 0x0, "TEST_DEV",       ~(SIP | SYS) },
+        // PROD and PROD_END: functional section only.
+        { 0x1, "PROD",           ~(SIP | SYS) & FUNC },
+        { 0x8, "PROD_END",       ~(SIP | SYS) & FUNC },
+        // RMA_SIP covers 4'b001x: SIP's mask applies, SYS's does not.
+        { 0x2, "RMA_SIP (0x2)",  ~SIP },
+        { 0x3, "RMA_SIP (0x3)",  ~SIP },
+        // RMA_CHIPLET covers 4'b011x: everything on, both masks ignored.
+        { 0x6, "RMA_CHIPLET (0x6)", ALL },
+        { 0x7, "RMA_CHIPLET (0x7)", ALL },
+        // Everything else is INVALID and fails closed.
+        { 0x4, "INVALID (0x4)",  0 },
+        { 0x5, "INVALID (0x5)",  0 },
+        { 0x9, "INVALID (0x9)",  0 },
+        { 0xF, "INVALID (0xF)",  0 },
+    };
+
+    for (const auto &a : arms) {
+        drive_inputs(lifecycle_ctrl_model::lc_state_encode(a.raw), SIP, SYS);
+        check_feat_ctrl(a.name, a.expected);
+    }
+
+    // The test section is gated last, after the state chain and after the
+    // security_disable override, so it applies to any arm.
+    constexpr uint64_t TEST_SECTION = 0x0000'FFFF'0000'0000ULL;
+    drive_inputs(lifecycle_ctrl_model::lc_state_encode(0x0), SIP, SYS,
+                 /*security_disable=*/false, /*secure_tm=*/false);
+    check_feat_ctrl("TEST_DEV with secure_tm deasserted",
+                    ~(SIP | SYS) & ~TEST_SECTION);
+
+    drive_inputs(lifecycle_ctrl_model::lc_state_encode(0x0), SIP, SYS,
+                 /*security_disable=*/true, /*secure_tm=*/false);
+    check_feat_ctrl("security_disable with secure_tm deasserted",
+                    ~TEST_SECTION);
+}
+
+// =============================================================================
+// Test 14: an illegal differential code raises lc_sigint_err and zeroes the vector
+// =============================================================================
+
+void testbench::test_lc_sigint_fail_safe()
+{
+    report_test_start("Test 14: lc_sigint_err fail-safe on an illegal LC code");
+
+    clear_demote();
+
+    // 0x00 is what an erased part reads and 0xFF a fully burned one; the rest are
+    // single-rail corruptions. Note 0x0F is *not* in this list: it is the legal encoding
+    // of raw 0xF, which is an invalid state but not a rail mismatch.
+    const uint32_t bad_codes[] = { 0x00u, 0xFFu, 0xF1u, 0x0Eu, 0xAAu };
+    for (uint32_t code : bad_codes) {
+        drive_inputs(code);
+        const std::string label = "code " + hex32(code);
+        if (m_dut->get_lc_sigint_err())
+            report_test_pass("lc_sigint_err raised for " + label);
+        else
+            report_test_fail("lc_sigint_err for " + label, "expected the error to be raised");
+        check_feat_ctrl("sigint fail-safe for " + label, 0);
+    }
+
+    // An invalid *state* is not the same thing as a corrupt code: 0x0F is a legal
+    // encoding of raw 0xF, so the vector is zero but no integrity error is reported.
+    drive_inputs(lifecycle_ctrl_model::lc_state_encode(0xF));
+    check_feat_ctrl("legal code for an invalid state", 0);
+    if (!m_dut->get_lc_sigint_err())
+        report_test_pass("invalid state alone does not raise lc_sigint_err");
+    else
+        report_test_fail("lc_sigint_err for a legal code", "raised for a well-formed pair");
+
+    // A legal code clears it again — the flag tracks the input, it is not sticky.
+    drive_inputs(lifecycle_ctrl_model::lc_state_encode(0x1));
+    if (!m_dut->get_lc_sigint_err())
+        report_test_pass("lc_sigint_err clears once the code is legal again");
+    else
+        report_test_fail("lc_sigint_err clear", "still raised for a legal code");
+
+    // security_disable is applied after the state chain in the RTL, so it overrides even
+    // this fail-safe. Worth pinning: it is the one case where a corrupt LC state does not
+    // disable everything.
+    drive_inputs(0x00u, 0, 0, /*security_disable=*/true);
+    check_feat_ctrl("security_disable overrides the sigint zero",
+                    0xFFFF'FFFF'FFFF'FFFFULL);
+    if (m_dut->get_lc_sigint_err())
+        report_test_pass("lc_sigint_err still reported while security_disable overrides");
+    else
+        report_test_fail("lc_sigint_err under security_disable", "expected it to stay raised");
+}
+
+// =============================================================================
+// Test 15: a live SiP_DIS/SYS_DIS change moves FEAT_CTRL
+// =============================================================================
+
+void testbench::test_live_feature_disable()
+{
+    report_test_start("Test 15: FEAT_CTRL follows a live feature-disable change");
+
+    clear_demote();
+
+    // Both eFuse masks are woset and software-writable, so firmware can disable a
+    // feature after boot. FEAT_CTRL has to move with it; sampling the masks once at
+    // elaboration would leave it frozen at the boot value.
+    drive_inputs(lifecycle_ctrl_model::lc_state_encode(0x0));
+    check_feat_ctrl("no disables", 0xFFFF'FFFF'FFFF'FFFFULL);
+
+    drive_inputs(lifecycle_ctrl_model::lc_state_encode(0x0), 0x0000'0000'0000'0001ULL);
+    check_feat_ctrl("after SiP_DIS bit 0 burns", ~0x1ULL);
+
+    drive_inputs(lifecycle_ctrl_model::lc_state_encode(0x0),
+                 0x0000'0000'0000'0001ULL, 0x0000'0000'0000'0002ULL);
+    check_feat_ctrl("after SYS_DIS bit 1 burns too", ~0x3ULL);
+}
+
+// =============================================================================
+// Test 16: the demote state handed to the key manager is differentially encoded
+// =============================================================================
+
+void testbench::test_demote_diff_encoding()
+{
+    report_test_start("Test 16: get_demote_state() is differentially encoded");
+
+    clear_demote();
+
+    // Each rail pair is {~v, v}, so an undemoted domain reads 2'b10 and the register
+    // resets to 0xA rather than 0x0. 2'b00 is not a legal code at all.
+    struct step { uint32_t offset; const char *label; uint32_t expected; };
+    const step steps[] = {
+        { 0,                                        "reset (neither demoted)", 0xA },
+        { lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, "demote_1 set",            0x9 },
+        { lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, "demote_2 set as well",    0x5 },
+    };
+
+    for (const auto &s : steps) {
+        if (s.offset != 0) {
+            m_test->register_write_32(s.offset, 0x1);
+            wait(1, SC_NS);
+        }
+        const uint32_t got = m_dut->get_demote_state();
+        if (got == s.expected)
+            report_test_pass(std::string("demote state at ") + s.label + " = " + hex32(got));
+        else
+            report_test_fail(std::string("demote encoding, ") + s.label,
+                "expected " + hex32(s.expected) + " got " + hex32(got));
+    }
+}
+
+// =============================================================================
+// Test 17: the DEMOTE upper words at 0xC and 0x14 are backed and woset
+// =============================================================================
+
+void testbench::test_demote_upper_words()
+{
+    report_test_start("Test 17: DEMOTE_1/2 upper words (rsvd[63:32])");
+
+    clear_demote();
+
+    const unsigned int offsets[] = { lifecycle_ctrl_basetest::DEMOTE_1_HI_OFFSET,
+                                     lifecycle_ctrl_basetest::DEMOTE_2_HI_OFFSET };
+    const char *names[] = { "DEMOTE_1_HI", "DEMOTE_2_HI" };
+
+    for (int i = 0; i < 2; i++) {
+        uint32_t val = 0xDEADBEEF;
+        m_test->register_read_32(offsets[i], val);
+        if (val == 0)
+            report_test_pass(std::string(names[i]) + " reads 0 at reset");
+        else
+            report_test_fail(std::string(names[i]) + " reset",
+                "expected 0 got " + hex32(val));
+
+        // rsvd is onwrite = woset, so two disjoint writes accumulate.
+        m_test->register_write_32(offsets[i], 0xF0F0F0F0);
+        wait(1, SC_NS);
+        m_test->register_write_32(offsets[i], 0x0F0F0F0F);
+        wait(1, SC_NS);
+        m_test->register_read_32(offsets[i], val);
+        if (val == 0xFFFFFFFF)
+            report_test_pass(std::string(names[i]) + " accumulates set bits (woset)");
+        else
+            report_test_fail(std::string(names[i]) + " woset",
+                "expected 0xFFFFFFFF got " + hex32(val));
+    }
+}
+
+// =============================================================================
+// Test 18: lock covers the demote bit only
+// =============================================================================
+
+void testbench::test_lock_scope()
+{
+    report_test_start("Test 18: lock write-protects demote but not rsvd");
+
+    clear_demote();
+
+    // swwe = ~lock is applied to the demote field alone in the RTL: lock and rsvd carry
+    // no swwe, so they stay writable once locked.
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x2);
+    wait(1, SC_NS);
+
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x8000'0001u);
+    wait(1, SC_NS);
+
+    uint32_t val = 0;
+    m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, val);
+
+    if ((val & 0x1u) == 0)
+        report_test_pass("locked DEMOTE_1: demote bit refused");
+    else
+        report_test_fail("locked DEMOTE_1 demote", "demote bit was set while locked");
+
+    if ((val & 0x8000'0000u) != 0)
+        report_test_pass("locked DEMOTE_1: rsvd bit still accepted");
+    else
+        report_test_fail("locked DEMOTE_1 rsvd", "rsvd bit was blocked by the lock");
+}
+
+// =============================================================================
+// Test 19: PROD_DBG_1 takes priority over PROD_DBG_2
+// =============================================================================
+
+void testbench::test_prod_dbg_priority()
+{
+    report_test_start("Test 19: demote_1 wins over demote_2 in PROD");
+
+    constexpr uint64_t SIP  = 0x0001'0000'0000'0000ULL;
+    constexpr uint64_t SYS  = 0x0002'0000'0000'0000ULL;
+    constexpr uint64_t FUNC = 0xFFFF'0000'0000'0000ULL;
+    constexpr uint64_t DBG  = 0x0000'0000'FFFF'FFFFULL;
+    const uint32_t prod = lifecycle_ctrl_model::lc_state_encode(0x1);
+
+    // demote_2 alone gives PROD_DBG_2, whose functional section comes from ~SYS_DIS.
+    clear_demote();
+    drive_inputs(prod, SIP, SYS);
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x1);
+    wait(1, SC_NS);
+    check_feat_ctrl("PROD + demote_2 (PROD_DBG_2, ~SYS_DIS)", (~SYS & FUNC) | DBG);
+
+    // With both set, PROD_DBG_1 wins, so the functional section comes from ~SIP_DIS
+    // instead. Masking on the wrong one is the failure this pins down.
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x1);
+    wait(1, SC_NS);
+    check_feat_ctrl("PROD + both demotes (PROD_DBG_1 wins, ~SIP_DIS)", (~SIP & FUNC) | DBG);
+}
+
+// =============================================================================
 // Main test sequence
 // =============================================================================
 
@@ -450,6 +771,16 @@ void testbench::run_tests()
     test_rma_chiplet_state();
     test_secure_tm();
     test_security_disable();
+
+    // These drive the inputs themselves, so they run last: they leave the DUT holding
+    // whatever state the last case set rather than the configured one.
+    test_all_state_arms();
+    test_lc_sigint_fail_safe();
+    test_live_feature_disable();
+    test_demote_diff_encoding();
+    test_demote_upper_words();
+    test_lock_scope();
+    test_prod_dbg_priority();
 
     report_test_summary();
 

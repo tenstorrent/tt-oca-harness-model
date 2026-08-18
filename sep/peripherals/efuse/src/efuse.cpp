@@ -50,6 +50,7 @@ efuse_model::efuse_model(sc_module_name n, int log_verbosity)
     , public_key_0("public_key_0", k_zero8)
     , public_key_1("public_key_1", k_zero8)
     , sec_disable_token_digest("sec_disable_token_digest", k_zero8)
+    , sec_disable_rev_enable("sec_disable_rev_enable", true)
     , fuse_preload_file("fuse_preload_file", std::string())
     , m_req_error(false)
     , m_program_addr_error(false)
@@ -215,6 +216,9 @@ bool efuse_model::handle_write_TOKEN_EOP(uint32_t value)
     }
 
     TOKEN_EOP = 0u;
+
+    // A SEC_DISABLE match asserts security_disable_o, which lifecycle_ctrl consumes.
+    notify_shadow_change();
     return true;
 }
 
@@ -439,6 +443,8 @@ void efuse_model::sense_fuses_into_shadows()
         m_bl2_version_val[i]  = memory.memory_block[BL2_VERSION[i].offset];
         m_chiplet_uid_cache[i] = memory.memory_block[CHIPLET_UID[i].offset];
     }
+
+    notify_shadow_change();
 }
 
 // =============================================================================
@@ -613,6 +619,7 @@ bool efuse_model::handle_write_LC_STATE(uint32_t value)
         return true;
     m_lc_state_val |= value;
     LC_STATE = m_lc_state_val;
+    notify_shadow_change();
     return true;
 }
 
@@ -622,6 +629,7 @@ bool efuse_model::handle_write_SIP_DIS_LO(uint32_t value)
         return true;
     m_sip_dis_lo_val |= value;
     SIP_DIS_LO = m_sip_dis_lo_val;
+    notify_shadow_change();
     return true;
 }
 
@@ -631,6 +639,7 @@ bool efuse_model::handle_write_SIP_DIS_HI(uint32_t value)
         return true;
     m_sip_dis_hi_val |= value;
     SIP_DIS_HI = m_sip_dis_hi_val;
+    notify_shadow_change();
     return true;
 }
 
@@ -640,6 +649,7 @@ bool efuse_model::handle_write_SYS_DIS_LO(uint32_t value)
         return true;
     m_sys_dis_lo_val |= value;
     SYS_DIS_LO = m_sys_dis_lo_val;
+    notify_shadow_change();
     return true;
 }
 
@@ -649,6 +659,7 @@ bool efuse_model::handle_write_SYS_DIS_HI(uint32_t value)
         return true;
     m_sys_dis_hi_val |= value;
     SYS_DIS_HI = m_sys_dis_hi_val;
+    notify_shadow_change();
     return true;
 }
 

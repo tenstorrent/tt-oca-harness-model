@@ -149,7 +149,8 @@ public:
     //   from lc_ctrl. Returns a 4-bit packed value:
     //     bits[1:0] = demote_1_value (domain-1, BL1 firmware)
     //     bits[3:2] = demote_2_value (domain-2, BL2 firmware)
-    //   Default stub returns 0 (no demotion — correct at cold reset).
+    //   Each 2-bit field is differentially encoded as {~v, v}, so the undemoted value
+    //   is 0xA and not 0x0 — 0b00 is not a legal code for either rail pair.
     //   Wired to lc_ctrl_model::get_demote_state() at start_of_simulation.
     // -----------------------------------------------------------------------
     using demote_fn_t = std::function<uint32_t()>;
@@ -262,7 +263,9 @@ private:
     km_mailbox&   m_mailbox;
     drbg_fn_t     m_get_random;
     key_xfer_fn_t m_key_xfer;       ///< Optional key-transfer callback
-    demote_fn_t   m_get_demote = []() { return 0u; };  ///< Live demotion state from lc_ctrl (0 at cold reset)
+    /// Live demotion state from lc_ctrl. The stub stands in for an unconnected OTP port
+    /// rather than for an undemoted part, which would read 0xA.
+    demote_fn_t   m_get_demote = []() { return 0u; };
 
     bool          m_initialized             = false;
     bool          m_sram_loaded             = false;

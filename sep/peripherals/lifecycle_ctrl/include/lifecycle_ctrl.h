@@ -27,49 +27,106 @@ public:
 
     void end_of_elaboration() override;
 
-    /**
-     * @brief Set the lifecycle state from the eFuse and recompute FEAT_CTRL.
-     *
-     * @param raw Raw 4-bit state, already decoded from the fuse's differential code
-     *            (efuse_model::get_lc_state() does that). A value matching none of the
-     *            LC_STATE_* encodings is INVALID and zeroes FEAT_CTRL.
-     */
-    void set_lc_state(uint32_t raw);
+    /// The encoding the eFuse LC_STATE field carries, `{~raw, raw}`, and its check.
+    static constexpr uint32_t lc_state_encode(uint32_t raw) {
+        return (((~raw) & 0xFu) << 4) | (raw & 0xFu);
+    }
+    static constexpr bool lc_state_code_valid(uint32_t code) {
+        return ((code >> 4) & 0xFu) == ((~code) & 0xFu);
+    }
 
-    /// Return live demotion state for KM KDF input.
-    /// Bits[1:0] = demote_1_value (domain-1, written by BL1 firmware).
-    /// Bits[3:2] = demote_2_value (domain-2, written by BL2 firmware).
+    /**
+     * @brief The block's inputs, every one of which comes from the eFuse wrapper.
+     *
+     * sep_lifecycle_ctrl.sv is combinational on `shadow_regs_i`, `security_disable_i`
+     * and `secure_tm_i`, so this is the whole port bundle and FEAT_CTRL is recomputed
+     * from it on each call. Passing the bundle rather than offering a setter per input
+     * preserves that: there is no state here that can be left half-updated.
+     *
+     * These are inputs and not configuration because two of them are software-writable
+     * in silicon -- eFuse `SiP_DIS` (0x14) and `SYS_DIS` (0x1C) are `sw = rw` with
+     * `onwrite = woset` -- so firmware disabling a feature has to reach FEAT_CTRL while
+     * the simulation is running.
+     *
+     * `lc_state_code` is the 8-bit fuse word rather than a decoded state, because
+     * decoding is this block's job: the RTL reads it as a `{diff_n, diff_p}` pair
+     * through prim_diff_decode_multi, and a pair that is not a legal encoding raises
+     * `lc_sigint_err_o` and zeroes the vector. That fail-safe is the reason the state is
+     * encoded this way at all, so a tampered -- or blank -- lifecycle state has to
+     * produce it here too.
+     */
+    struct lc_inputs {
+        uint32_t lc_state_code    = lc_state_encode(LC_STATE_TEST_DEV);
+        uint64_t sip_dis          = 0;
+        uint64_t sys_dis          = 0;
+        bool     security_disable = false;
+        bool     secure_tm        = true;
+    };
+
+    /// Apply a new input bundle and recompute FEAT_CTRL.
+    void set_inputs(const lc_inputs &in);
+
+    /// True when the last LC_STATE code was not a legal differential pair. Mirrors
+    /// `lc_sigint_err_o`; note that `security_disable` still overrides the vector it
+    /// zeroes, exactly as it does in the RTL.
+    bool get_lc_sigint_err() const { return m_lc_sigint_err; }
+
+    /**
+     * @brief Live demotion state for the key manager's OTP_DEMOTION_STATE register.
+     *
+     * Bits[1:0] are demote_1 (domain-1, written by BL1) and bits[3:2] demote_2
+     * (domain-2, written by BL2). Each pair is differentially encoded, because
+     * sep_crypto.sv drives this interface from prim_diff_encode_multi, whose output is
+     * `{diff_n, diff_p}` with `diff_n = ~data` -- so each rail pair is `{~v, v}` and an
+     * undemoted domain reads `2'b10`, not `2'b00`.
+     *
+     * That makes 0xA the reset value rather than 0x0. It matters because `2'b00` is not
+     * a legal code at all: firmware that dual-rail checks this register would read the
+     * un-encoded form as an integrity error.
+     */
     uint32_t get_demote_state() const {
-        uint8_t d1 = static_cast<uint32_t>(DEMOTE_1) & 0x1u;
-        uint8_t d2 = static_cast<uint32_t>(DEMOTE_2) & 0x1u;
-        return (d2 << 2) | d1;
+        const uint32_t d1 = static_cast<uint32_t>(DEMOTE_1) & 0x1u;
+        const uint32_t d2 = static_cast<uint32_t>(DEMOTE_2) & 0x1u;
+        return (((~d2) & 0x1u) << 3) | (d2 << 2) | (((~d1) & 0x1u) << 1) | d1;
     }
 
     // -----------------------------------------------------------------------
     // CCI parameters — all configurable via ini file, no recompile needed
     // -----------------------------------------------------------------------
+    /**
+     * These parameters seed the input bundle at end_of_elaboration and are what a
+     * standalone testbench configures, since it has no eFuse to ask. On a platform the
+     * eFuse model overrides them through set_inputs() before simulation starts and again
+     * whenever the shadow registers change, matching sep_lifecycle_ctrl.sv, which has no
+     * state of its own.
+     *
+     * lc_state is the raw 4-bit value here, not the differential code, so configs stay
+     * readable; it is encoded when it seeds the bundle.
+     */
     CsmlLogger           logger;
     csml_param<int>      verbosity;
-    /**
-     * 4-bit LC state (default: 0x0 = TEST_DEV).
-     *
-     * Only consulted when nothing calls set_lc_state(). On a platform the eFuse model
-     * drives the state, matching sep_lifecycle_ctrl.sv, which reads it from the eFuse
-     * shadow rather than having a state of its own.
-     */
-    csml_param<uint32_t> lc_state;
-    csml_param<uint32_t> sip_dis_lo;      ///< SIP feature disable mask [31:0]
-    csml_param<uint32_t> sip_dis_hi;      ///< SIP feature disable mask [63:32]
-    csml_param<uint32_t> sys_dis_lo;      ///< SYS feature disable mask [31:0]
-    csml_param<uint32_t> sys_dis_hi;      ///< SYS feature disable mask [63:32]
+    csml_param<uint32_t> lc_state;         ///< Raw 4-bit LC state (default: 0x0 = TEST_DEV)
+    csml_param<uint32_t> sip_dis_lo;       ///< SIP feature disable mask [31:0]
+    csml_param<uint32_t> sip_dis_hi;       ///< SIP feature disable mask [63:32]
+    csml_param<uint32_t> sys_dis_lo;       ///< SYS feature disable mask [31:0]
+    csml_param<uint32_t> sys_dis_hi;       ///< SYS feature disable mask [63:32]
     csml_param<bool>     security_disable; ///< When true, forces FEAT_CTRL=all-ones
-    csml_param<bool>     secure_tm;        ///< When false, clears test bits [47:32] in FEAT_CTRL
+    /**
+     * The test_en strap, which gates the test section of FEAT_CTRL: false clears bits
+     * [47:32]. Unlike the others this is not an eFuse value -- sep_efuse_wrapper.sv
+     * latches it from `sep_straps_i.test_straps.test_en` when fuse sense completes -- so
+     * it stays a parameter on a platform too, and defaults to the strap being deasserted.
+     */
+    csml_param<bool>     secure_tm;
 
 private:
     void compute_feat_ctrl();
 
-    uint32_t m_lc_state = 0;   ///< Live state: from the eFuse, or the parameter if unset.
+    lc_inputs m_in;                  ///< Live inputs; see set_inputs().
+    bool      m_lc_sigint_err = false;
 
+    bool on_demote_write(lc_ctrl::DEMOTE_type<32> &reg, const char *name, DT value);
+    bool on_demote_hi_write(lc_ctrl::DEMOTE_HI_type<32> &reg, DT value);
     bool on_demote_1_write(DT value);
     bool on_demote_2_write(DT value);
 };
