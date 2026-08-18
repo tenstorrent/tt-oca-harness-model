@@ -438,6 +438,7 @@ public:
         m_wdog_regwen_locked(false),
         m_intr_state_wkup(false),
         m_intr_state_bark(false),
+        m_wdog_bark_latched(false),
         m_wkup_cause_active(false),
         m_wkup_threshold_latched(false),
         m_wdog_bite_active(false),
@@ -629,6 +630,23 @@ private:
     * threshold comparisons and cleared by W1C writes to INTR_STATE.
     */
    bool m_intr_state_bark;
+
+   /**
+    * @brief Watchdog bark threshold crossing latch.
+    *
+    * Edge memory for the bark condition, mirroring the RTL's prim_edge_detector:
+    * aon_timer.sv feeds prim_intr_hw from q_posedge_pulse_o, so INTR_STATE is set
+    * by the *rising edge* of (enabled && count >= bark_thold), never by its level.
+    * Without a separate latch, a W1C that clears m_intr_state_bark also re-arms
+    * the detector, and the very next tick re-asserts the bit because the counter
+    * is still above the threshold -- software can then never clear the interrupt
+    * from its own handler. The latch clears when the condition goes false (a pet,
+    * a disable, or a raised threshold), which re-arms the edge for the next
+    * crossing.
+    *
+    * Reset to false by both rst_n and rst_aon_n.
+    */
+   bool m_wdog_bark_latched;
 
    /**
     * @brief Live wakeup request active flag.
@@ -1531,6 +1549,7 @@ private:
 
             m_intr_state_wkup      = false;
             m_intr_state_bark      = false;
+            m_wdog_bark_latched    = false;
             m_lc_escalate_active   = false;
             m_sleep_mode_active    = false;
             m_fatal_fault_pending  = false;
