@@ -27,6 +27,15 @@ public:
 
     void end_of_elaboration() override;
 
+    /**
+     * @brief Set the lifecycle state from the eFuse and recompute FEAT_CTRL.
+     *
+     * @param raw Raw 4-bit state, already decoded from the fuse's differential code
+     *            (efuse_model::get_lc_state() does that). A value matching none of the
+     *            LC_STATE_* encodings is INVALID and zeroes FEAT_CTRL.
+     */
+    void set_lc_state(uint32_t raw);
+
     /// Return live demotion state for KM KDF input.
     /// Bits[1:0] = demote_1_value (domain-1, written by BL1 firmware).
     /// Bits[3:2] = demote_2_value (domain-2, written by BL2 firmware).
@@ -41,7 +50,14 @@ public:
     // -----------------------------------------------------------------------
     CsmlLogger           logger;
     csml_param<int>      verbosity;
-    csml_param<uint32_t> lc_state;        ///< 4-bit LC state (default: 0x0 = TEST_DEV)
+    /**
+     * 4-bit LC state (default: 0x0 = TEST_DEV).
+     *
+     * Only consulted when nothing calls set_lc_state(). On a platform the eFuse model
+     * drives the state, matching sep_lifecycle_ctrl.sv, which reads it from the eFuse
+     * shadow rather than having a state of its own.
+     */
+    csml_param<uint32_t> lc_state;
     csml_param<uint32_t> sip_dis_lo;      ///< SIP feature disable mask [31:0]
     csml_param<uint32_t> sip_dis_hi;      ///< SIP feature disable mask [63:32]
     csml_param<uint32_t> sys_dis_lo;      ///< SYS feature disable mask [31:0]
@@ -51,6 +67,8 @@ public:
 
 private:
     void compute_feat_ctrl();
+
+    uint32_t m_lc_state = 0;   ///< Live state: from the eFuse, or the parameter if unset.
 
     bool on_demote_1_write(DT value);
     bool on_demote_2_write(DT value);

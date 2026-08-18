@@ -511,7 +511,9 @@ void och_sep_ss::module_bind() {
                 return size ? std::make_pair(base, base + size - 1)
                             : std::make_pair(uint64_t(1), uint64_t(0));
             }, *outbound_mux);
-        // SPI mux ctrl (0x20000000–0x2000000B)
+        // eFuse shim CSR (0x20000000–0x20000043), the eFuse model's second window
+        bus->ports[it++] = new PortMapping(opt.efuse_shim_ctrl_start_addr, opt.efuse_shim_ctrl_end_addr, *sep_efuse);
+        // SPI mux ctrl (0x20001000–0x2000100B)
         bus->ports[it++] = new PortMapping(opt.spi_mux_ctrl_start_addr,    opt.spi_mux_ctrl_end_addr,    *spi_mux);
         // SEP software reset controller (0x10803000–0x10803007)
         bus->ports[it++] = new PortMapping(opt.reset_ctrl_start_addr,      opt.reset_ctrl_end_addr,      *reset_ctrl);
@@ -606,6 +608,7 @@ void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(inbound_filter->target_socket);
         bus->isocks[it++].bind(smc_global->tgt32);
         bus->isocks[it++].bind(outbound_mux->smu_tgt);
+        bus->isocks[it++].bind(sep_efuse->shim_target_socket);
         bus->isocks[it++].bind(spi_mux->tsock);
         bus->isocks[it++].bind(reset_ctrl->target_socket);
         bus->isocks[it++].bind(cpu_ctrl->target_socket);
@@ -866,6 +869,13 @@ void och_sep_ss::start_of_simulation() {
               sep_efuse->get_chiplet_uid() + 8,
               otp.chiplet_uid);
     keymgr->set_otp_data(otp);
+
+    // The lifecycle controller has no state of its own in RTL — sep_lifecycle_ctrl.sv
+    // reads lc_state from the eFuse shadow. Driving it from the same place keeps
+    // FEAT_CTRL consistent with the fuse instead of relying on two configs agreeing by
+    // hand. Firmware has not run yet at start_of_simulation, so recomputing FEAT_CTRL
+    // here is still before anything can observe it.
+    lc_ctrl->set_lc_state(sep_efuse->get_lc_state());
 
     // Backdoor-load the staged SPI flash image so the controller's command/FIFO reads see the
     // real manifest+payload images instead of erased 0xFF. start_of_simulation runs after

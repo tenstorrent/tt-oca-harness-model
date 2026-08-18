@@ -93,12 +93,31 @@ static constexpr unsigned int RMA_CHIPLET_TOKEN_MATCH_OFFSET  = 0x568;
 static constexpr unsigned int SEC_DISABLE_TOKEN_MATCH_OFFSET  = 0x56C;
 
 // ============================================================================
-// EFUSE_SHIM_CTRL register offsets  (block base 0x10930600)
-// Samsung eFuse physical-layer shim — R/W stubs in VP; no functional effect.
+// Window sizes
+//
+// The eFuse peripheral answers on two disjoint address windows, as it does in
+// silicon: efuse_interface_controller.sv decodes
+// [EFUSE_MAP_REG_MAP_BASE_ADDR : EFUSE_MMR_REG_MAP_END_ADDR] onto its internal
+// APB path and routes everything else on its slave to the shim's own AXI-Lite
+// port (fuse_bank_ctrl_req_o).  The two are separate windows in the register
+// map, not neighbours in one block: the shim lives in SEP_EXTERNAL while the
+// map, interface CSRs and MMR stay in the sep_efuse window.
 // ============================================================================
-static constexpr unsigned int SHIM_EFUSE_CTRL_STATUS_OFFSET   = 0x600;
-static constexpr unsigned int SHIM_EFUSE_CTRL_STATUS_1_OFFSET = 0x604;
-static constexpr unsigned int SHIM_EFUSE_TIMING_CTRL_OFFSET   = 0x608; ///< [15] × 4 bytes (TIMING_CTRL_0..14)
+static constexpr unsigned int EFUSE_WINDOW_SIZE      = 0x570; ///< map + interface ctrl + MMR
+static constexpr unsigned int SHIM_CTRL_WINDOW_SIZE  = 0x044; ///< SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_SIZE
+
+// ============================================================================
+// EFUSE_SHIM_CTRL register offsets
+//
+// Offsets are relative to the shim's own window base, which the register header
+// places at SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_BASE_ADDR = 0x20000000 — not
+// inside the sep_efuse window.  Samsung eFuse physical-layer shim: R/W stubs in
+// the VP, no functional effect, since nothing here changes what software reads
+// back from the fuses.
+// ============================================================================
+static constexpr unsigned int SHIM_EFUSE_CTRL_STATUS_OFFSET   = 0x000;
+static constexpr unsigned int SHIM_EFUSE_CTRL_STATUS_1_OFFSET = 0x004;
+static constexpr unsigned int SHIM_EFUSE_TIMING_CTRL_OFFSET   = 0x008; ///< [15] × 4 bytes (TIMING_CTRL_0..14)
 
 
 // ============================================================================
@@ -1269,15 +1288,25 @@ public:
     using typename csml_reg<N>::memory_type;
     typedef typename csml_word<N>::wordtype DT;
 
-    // read_mask=0xFFFFFFFF, write_mask=0x0, reset=0x1
+    // read_mask=0xFFFFFFFF, write_mask=0x700, reset=0x1
+    //
+    // The error bits [6:4] are status: hardware sets them and software cannot
+    // write them. Software clears them through the separate W1S clear bits
+    // [10:8], which is why the write mask is 0x700 rather than 0 -- a fully RO
+    // register makes the clear a bus error, and firmware doing the documented
+    // clear-then-retry takes a store fault instead.
     EFUSE_INTERFACE_CTRL_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0x0, 0x00000001),
+      : csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000700, 0x00000001),
         efuse_sense_done  (reg_name + ".efuse_sense_done",   *this,  0,  1),
         reserved0         (reg_name + ".reserved0",          *this,  1,  3),
         efuse_req_error   (reg_name + ".efuse_req_error",    *this,  4,  1),
-        reserved1         (reg_name + ".reserved1",          *this,  5,  3),
+        efuse_program_addr_error(reg_name + ".efuse_program_addr_error", *this, 5, 1),
+        efuse_read_addr_error   (reg_name + ".efuse_read_addr_error",    *this, 6, 1),
+        reserved1         (reg_name + ".reserved1",          *this,  7,  1),
         efuse_req_err_clear(reg_name + ".efuse_req_err_clear",*this,  8,  1),
-        reserved2         (reg_name + ".reserved2",          *this,  9, 23)
+        efuse_program_addr_error_clear(reg_name + ".efuse_program_addr_error_clear", *this, 9, 1),
+        efuse_read_addr_error_clear  (reg_name + ".efuse_read_addr_error_clear",    *this, 10, 1),
+        reserved2         (reg_name + ".reserved2",          *this, 11, 21)
     {
         this->set_read_write_restrictions(memory);
     }
@@ -1296,10 +1325,14 @@ public:
 
     csml_bitfield<N> efuse_sense_done;   ///< [0]    1 = OTP sense operation complete (always 1 in VP)
     csml_bitfield<N> reserved0;          ///< [3:1]
-    csml_bitfield<N> efuse_req_error;    ///< [4]    1 = last OTP request returned an error
-    csml_bitfield<N> reserved1;          ///< [7:5]
-    csml_bitfield<N> efuse_req_err_clear;///< [8]    Write 1 to clear efuse_req_error (W1C; stub in VP)
-    csml_bitfield<N> reserved2;          ///< [31:9]
+    csml_bitfield<N> efuse_req_error;    ///< [4]    1 = last OTP request was refused (locked or gated)
+    csml_bitfield<N> efuse_program_addr_error; ///< [5] 1 = program address was out of range
+    csml_bitfield<N> efuse_read_addr_error;    ///< [6] 1 = read address was out of range
+    csml_bitfield<N> reserved1;          ///< [7]
+    csml_bitfield<N> efuse_req_err_clear;      ///< [8]  Write 1 to clear efuse_req_error
+    csml_bitfield<N> efuse_program_addr_error_clear; ///< [9]  Write 1 to clear bit [5]
+    csml_bitfield<N> efuse_read_addr_error_clear;    ///< [10] Write 1 to clear bit [6]
+    csml_bitfield<N> reserved2;          ///< [31:11]
 };
 
 /**
@@ -1591,8 +1624,8 @@ public:
  *
  * Each go-bit triggers the SHA-256 comparison for its token type. Bits
  * are singlepulse (hardware clears after one cycle). Read returns 0.
- * In the VP, SHA-256 is not computed; TOKEN_MATCH values are preset via
- * the rma_sip_token_match / rma_chiplet_token_match / sec_disable_token_match CCI params.
+ * The comparison runs to completion inside the triggering write, so the
+ * matching result register is already updated by the next read.
  *
  * Access : Write-Only (read_mask=0x0; singlepulse bits)
  * Reset  : 0x00000000
@@ -1640,11 +1673,12 @@ public:
 /**
  * TOKEN_MATCH_type — Token Match Result register
  *
- * RTL: hardware-written triple-redundant comparator result (hw=w, sw=r).
- * VP: R/W so CCI params can preset the result before tests run.
- * Encoding: 0x15 (6'b010101)=match, 0x2A (6'b101010)=mismatch, 0x3F=error.
+ * Hardware-written triple-redundant comparator result (hw=w, sw=r): the model
+ * writes it when TOKEN_EOP triggers a comparison, and software can only read it.
+ * Encoding: 0x15 (6'b010101)=match, 0x2A (6'b101010)=mismatch, 0x3F=error,
+ * 0x00=no comparison completed yet, which is also the reset value.
  *
- * Access : Read-Write (VP-specific; RTL is Read-Only)
+ * Access : Read-Only to software
  * Reset  : 0x00000000
  */
 template<unsigned int N>
@@ -1654,9 +1688,9 @@ public:
     using typename csml_reg<N>::memory_type;
     typedef typename csml_word<N>::wordtype DT;
 
-    // read_mask=0x3F, write_mask=0x3F, reset=0x0
+    // read_mask=0x3F, write_mask=0x0, reset=0x0
     TOKEN_MATCH_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x3f, 0x3f, 0x0),
+      : csml_reg<N>(reg_name, memory, offset, 0x3f, 0x0, 0x0),
         token_match_status(reg_name + ".token_match_status", *this, 0,  6),
         reserved0         (reg_name + ".reserved0",          *this, 6, 26)
     {

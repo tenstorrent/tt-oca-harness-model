@@ -8,12 +8,18 @@ class efuse_basetest : public sc_module
 {
 public:
     tlm_utils::simple_initiator_socket<efuse_basetest, 32> initiator_socket;
+    // Second window: EFUSE_SHIM_CTRL, which the register map places in
+    // SEP_EXTERNAL rather than next to the block's other registers.
+    tlm_utils::simple_initiator_socket<efuse_basetest, 32> shim_initiator_socket;
 
     // -------------------------------------------------------------------------
-    // Register offsets — byte addresses within the model's TLM window
-    // Shadow registers:      0x000–0x3FC
-    // EFUSE_INTERFACE_CTRL:  0x400–0x418
-    // EFUSE_MMR:             0x500–0x56C
+    // Register offsets — byte addresses within the model's TLM windows
+    // sep_efuse window (initiator_socket):
+    //   Shadow registers:      0x000–0x3FC
+    //   EFUSE_INTERFACE_CTRL:  0x400–0x418
+    //   EFUSE_MMR:             0x500–0x56C
+    // EFUSE_SHIM_CTRL window (shim_initiator_socket): 0x000–0x043.  Its offsets
+    // restart at zero, so the SHIM_* names below repeat values used above.
     // -------------------------------------------------------------------------
     enum Register_offset
     {
@@ -78,7 +84,11 @@ public:
         TOKEN_EOP_OFFSET               = 0x560,
         RMA_SIP_TOKEN_MATCH_OFFSET     = 0x564,
         RMA_CHIPLET_TOKEN_MATCH_OFFSET = 0x568,
-        SEC_DISABLE_TOKEN_MATCH_OFFSET = 0x56C
+        SEC_DISABLE_TOKEN_MATCH_OFFSET = 0x56C,
+        // EFUSE_SHIM_CTRL — offsets into the shim window, not the one above
+        SHIM_STATUS_OFFSET             = 0x000,
+        SHIM_STATUS_1_OFFSET           = 0x004,
+        SHIM_TIMING_CTRL_OFFSET        = 0x008   ///< [15] × 4 bytes
     };
 
     enum Register_Read_Access

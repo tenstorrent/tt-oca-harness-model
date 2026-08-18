@@ -73,13 +73,14 @@ public:
     static constexpr unsigned int INIT_COUNT = 6;
     // Targets: sram, rom, dma, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
-    //          keymgr_kpvlp, efuse, lc_ctrl, entropy_src, edn,
+    //          keymgr_kpvlp, efuse, efuse_shim, lc_ctrl, entropy_src, edn,
     //          scratch_cold, scratch_warm,
     //          local_alias_remap_csr, local_alias_remap_data,
     //          ap_remap_csr, ap_remap_data, stee_remap_csr, stee_remap_data,
     //          outbound_filter_csr,
     //          inbound_filter_csr,
-    //          smc_global, smu (-> outbound_filter_mux), spi_mux, reset_ctrl, cpu_ctrl
+    //          smc_global, smu (-> outbound_filter_mux),
+    //          efuse_shim_ctrl, spi_mux, reset_ctrl, cpu_ctrl
     //          (PIC is internal to VeeRISSTlm; SEP has no external PLIC/CLINT
     //          or SEP-side GPIO/AVBbus in real silicon — none of these were
     //          ever part of the register map, they were VP-only scaffolding)
@@ -95,7 +96,10 @@ public:
     // SMU window has no stub of its own — it forwards straight into
     // outbound_filter_mux, since real RTL merges it with AP/STEE before the
     // Outbound Filter rather than terminating it locally.
-    static constexpr unsigned int TARG_COUNT = 35;
+    // efuse and efuse_shim are two windows on one model (sep_efuse at 0x10930000
+    // and EFUSE_SHIM_CTRL at 0x20000000), so they count as two targets here while
+    // being a single peripheral.
+    static constexpr unsigned int TARG_COUNT = 36;
 
     SC_HAS_PROCESS(och_sep_ss);
 

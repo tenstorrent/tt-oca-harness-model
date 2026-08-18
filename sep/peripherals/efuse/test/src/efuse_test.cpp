@@ -1,7 +1,11 @@
 #include "efuse_test.h"
 #include <tlm.h>
 
-void efuse_test::register_read_32(unsigned int offset, uint32_t &read_value)
+namespace {
+
+typedef tlm_utils::simple_initiator_socket<efuse_basetest, 32> init_socket_t;
+
+void read_32(init_socket_t &socket, unsigned int offset, uint32_t &read_value)
 {
     tlm::tlm_generic_payload trans;
     uint32_t data = 0;
@@ -16,13 +20,13 @@ void efuse_test::register_read_32(unsigned int offset, uint32_t &read_value)
     trans.set_dmi_allowed(false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-    initiator_socket->b_transport(trans, delay);
+    socket->b_transport(trans, delay);
 
     if (trans.is_response_ok())
         read_value = data;
 }
 
-void efuse_test::register_write_32(unsigned int offset, uint32_t write_value)
+void write_32(init_socket_t &socket, unsigned int offset, uint32_t write_value)
 {
     tlm::tlm_generic_payload trans;
     uint32_t data = write_value;
@@ -37,5 +41,27 @@ void efuse_test::register_write_32(unsigned int offset, uint32_t write_value)
     trans.set_dmi_allowed(false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-    initiator_socket->b_transport(trans, delay);
+    socket->b_transport(trans, delay);
+}
+
+} // namespace
+
+void efuse_test::register_read_32(unsigned int offset, uint32_t &read_value)
+{
+    read_32(initiator_socket, offset, read_value);
+}
+
+void efuse_test::register_write_32(unsigned int offset, uint32_t write_value)
+{
+    write_32(initiator_socket, offset, write_value);
+}
+
+void efuse_test::shim_read_32(unsigned int offset, uint32_t &read_value)
+{
+    read_32(shim_initiator_socket, offset, read_value);
+}
+
+void efuse_test::shim_write_32(unsigned int offset, uint32_t write_value)
+{
+    write_32(shim_initiator_socket, offset, write_value);
 }

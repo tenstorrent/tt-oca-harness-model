@@ -34,6 +34,18 @@ lifecycle_ctrl_model::lifecycle_ctrl_model(sc_module_name n, int log_verbosity)
 
 void lifecycle_ctrl_model::end_of_elaboration()
 {
+    // Seed from the parameter. On a full platform the eFuse model overrides this via
+    // set_lc_state() before simulation starts, because the fuse is the real source;
+    // the parameter is what a standalone peripheral testbench uses.
+    m_lc_state = lc_state.get_param_value() & 0xFu;
+    compute_feat_ctrl();
+}
+
+void lifecycle_ctrl_model::set_lc_state(uint32_t raw)
+{
+    // sep_lifecycle_ctrl.sv takes lc_state from the eFuse shadow registers, so on a
+    // platform this is how the value arrives and FEAT_CTRL is recomputed from it.
+    m_lc_state = raw & 0xFu;
     compute_feat_ctrl();
 }
 
@@ -44,7 +56,7 @@ void lifecycle_ctrl_model::compute_feat_ctrl()
     uint64_t sys_dis = ((uint64_t)sys_dis_hi.get_param_value() << 32) | sys_dis_lo.get_param_value();
     bool     demote1 = (static_cast<uint32_t>(DEMOTE_1) & 0x1) != 0;
     bool     demote2 = (static_cast<uint32_t>(DEMOTE_2) & 0x1) != 0;
-    uint8_t  lc      = lc_state.get_param_value() & 0xF;
+    uint8_t  lc      = static_cast<uint8_t>(m_lc_state);
 
     uint64_t feat_ctrl = 0;
 
