@@ -163,8 +163,16 @@ target_include_directories(sep_scratch_cold_model PUBLIC
 set(SEP_SCRATCH_COLD_STATUS_VALUES_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/docs/01_sep_scratch_cold_Specification/status_values.h"
   CACHE FILEPATH "SEP_MSG_* status-name table (TSV rows or C #defines)")
+# Normalise to an absolute, forward-slash path so the baked-in literal is always
+# independent of the process working directory, even when the user supplies a
+# relative path via -DSEP_SCRATCH_COLD_STATUS_VALUES_PATH=...
+get_filename_component(_sep_status_abs "${SEP_SCRATCH_COLD_STATUS_VALUES_PATH}" ABSOLUTE)
+file(TO_CMAKE_PATH "${_sep_status_abs}" _sep_status_abs)
+if(NOT EXISTS "${_sep_status_abs}")
+  message(FATAL_ERROR "SEP_SCRATCH_COLD_STATUS_VALUES_PATH does not exist: ${_sep_status_abs}")
+endif()
 target_compile_definitions(sep_scratch_cold_model PRIVATE
-  SEP_SCRATCH_COLD_STATUS_VALUES_PATH="${SEP_SCRATCH_COLD_STATUS_VALUES_PATH}"
+  SEP_SCRATCH_COLD_STATUS_VALUES_PATH="${_sep_status_abs}"
 )
 message(STATUS "  - SEP_SCRATCH_COLD_STATUS_VALUES_PATH: ${SEP_SCRATCH_COLD_STATUS_VALUES_PATH}")
 target_link_libraries(sep_scratch_cold_model PUBLIC csml_logger SystemC::systemc Threads::Threads)
