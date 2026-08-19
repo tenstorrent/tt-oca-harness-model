@@ -62,8 +62,12 @@ class BasicOptions : public Args {
         addr_t keymgr_mb_end_addr      = 0x1092001B;  // KM_MAILBOX_SEP size 0x1C
         addr_t keymgr_kpvlp_start_addr = 0x10921000;  // KM_KPV_KPVLP base
         addr_t keymgr_kpvlp_end_addr   = 0x10921FFF;  // KM_KPV_KPVLP 4K block
+        // sep_efuse window: shadow map + EFUSE_INTERFACE_CTRL + EFUSE_MMR. Ends at
+        // 0x1093056F, the same boundary efuse_interface_controller.sv decodes onto its
+        // internal APB path ([EFUSE_MAP_REG_MAP_BASE_ADDR:EFUSE_MMR_REG_MAP_END_ADDR]);
+        // the shim CSRs are a separate window, below.
         addr_t sep_efuse_start_addr    = 0x10930000;
-        addr_t sep_efuse_end_addr      = 0x10930643;  // EFUSE_SHIM_CTRL end (0x10930600 + 0x44 - 1)
+        addr_t sep_efuse_end_addr      = 0x1093056F;
         addr_t lc_ctrl_start_addr      = 0x10918000;
         addr_t lc_ctrl_end_addr        = 0x10918017;  // SEP_LIFECYCLE_CTRL size 0x18
         addr_t entropy_src_start_addr  = 0x10916000;  // ENTROPY_SOURCE_BASE (sep_crypto_pkg.sv)
@@ -100,10 +104,18 @@ class BasicOptions : public Args {
         addr_t local_alias_remap_data_start_addr = 0xC0000000;
         addr_t local_alias_remap_data_end_addr   = 0xFFFFFFFF;
 
-        // SPI mux ctrl: SPI_MUX_CTRL + CRC_LOW + CRC_HIGH (3 × 4 B = 12 B). Moved here
-        // from 0x20000000 when the efuse shim CSRs claimed that base, leaving the mux one
-        // 4 KiB page up (och_sep_top_reg.h:
-        // SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_REG_MAP_BASE_ADDR = 0x20001000).
+        // eFuse shim CSRs, the first sub-block of SEP_EXTERNAL (och_sep_top_reg.h:
+        // SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_BASE_ADDR = 0x20000000, size 0x44).
+        // Routed to the eFuse model's second socket, because silicon reaches it over a
+        // second AXI-Lite port on the same block: sep.sv demuxes this range out of
+        // SEP_EXTERNAL and hands it to sep_efuse_wrapper rather than to a peripheral of
+        // its own.
+        addr_t efuse_shim_ctrl_start_addr = 0x20000000;
+        addr_t efuse_shim_ctrl_end_addr   = 0x20000043;
+
+        // SPI mux ctrl: SPI_MUX_CTRL + CRC_LOW + CRC_HIGH (3 × 4 B = 12 B). Sits one
+        // 4 KiB page above the efuse shim, which owns the SEP_EXTERNAL base
+        // (och_sep_top_reg.h: SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_REG_MAP_BASE_ADDR).
         addr_t spi_mux_ctrl_start_addr   = 0x20001000;
         addr_t spi_mux_ctrl_end_addr     = 0x2000100B;
 

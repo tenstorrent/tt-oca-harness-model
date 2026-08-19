@@ -9,5 +9,8 @@ public:
     void register_read_32(unsigned int offset, uint32_t &read_value);
     void register_write_32(unsigned int offset, uint32_t write_value);
 
+    void shim_read_32(unsigned int offset, uint32_t &read_value);
+    void shim_write_32(unsigned int offset, uint32_t write_value);
+
     ~efuse_test() {}
 };

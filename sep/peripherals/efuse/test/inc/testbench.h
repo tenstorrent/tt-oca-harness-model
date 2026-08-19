@@ -54,4 +54,11 @@ public:
     void test_efuse_write_ctrl_go();
     void test_efuse_read_ctrl_go();
     void test_otp_accessors();
+    void test_shim_ctrl_window();
+    void test_fuse_array_program_read();
+    void test_fuse_preload_file();
+    void test_fuse_program_out_of_range();
+    void test_lock_enforcement();
+    void test_token_matching();
+    void test_lc_state_transitions();
 };

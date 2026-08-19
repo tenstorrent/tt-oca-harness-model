@@ -26,6 +26,7 @@ testbench::testbench(sc_module_name name)
     logger.setFunctionTrace(false);
 
     m_test->initiator_socket.bind(m_dut->target_socket);
+    m_test->shim_initiator_socket.bind(m_dut->shim_target_socket);
 
     SC_THREAD(run_tests);
 }
@@ -79,8 +80,9 @@ void testbench::test_fuse_load_ro_registers()
 
     uint32_t val = 0;
 
+    // The parameter is the raw state; the register holds its differential encoding.
     m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
-    if (val == m_dut->lc_state.get_param_value())
+    if (val == efuse_model::lc_state_encode(m_dut->lc_state.get_param_value()))
         report_test_pass("LC_STATE fuse load");
     else
         report_test_fail("LC_STATE fuse load",
@@ -196,31 +198,36 @@ void testbench::test_woset_locks()
 
     uint32_t val = 0;
 
-    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, 0x00000003);
+    // Bits 26..31 (SIP_UID, SYS_PUBK, SYS_UID) are chosen deliberately: LOCKS is
+    // sticky with no software clear, so whatever this test sets stays locked for
+    // every test after it. These three fields are read-only to software and nothing
+    // else in the suite touches them, so exercising WOSET here cannot deny an access
+    // a later test depends on. Test 22 covers enforcement on its own fields.
+    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, 0x0C000000);
     wait(1, SC_NS);
     m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, val);
-    if (val == 0x00000003)
-        report_test_pass("LOCKS_LO: first write sets bits 0x3");
+    if (val == 0x0C000000)
+        report_test_pass("LOCKS_LO: first write sets SIP_UID lock bits");
     else
-        report_test_fail("LOCKS_LO first write", "expected 0x3 got 0x" + std::to_string(val));
+        report_test_fail("LOCKS_LO first write", "expected 0xC000000 got 0x" + std::to_string(val));
 
-    // Attempt to clear bit 0 — should be ignored (WOSET)
-    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, 0x00000002);
+    // Attempt to clear bit 26 — should be ignored (WOSET)
+    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, 0x08000000);
     wait(1, SC_NS);
     m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, val);
-    if (val == 0x00000003)
-        report_test_pass("LOCKS_LO: bit 0 stays set after write-0 attempt");
+    if (val == 0x0C000000)
+        report_test_pass("LOCKS_LO: bit 26 stays set after write-0 attempt");
     else
-        report_test_fail("LOCKS_LO WOSET", "bit was cleared, expected 0x3 got 0x" + std::to_string(val));
+        report_test_fail("LOCKS_LO WOSET", "bit was cleared, expected 0xC000000 got 0x" + std::to_string(val));
 
     // Set additional bits
-    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, 0x000000F0);
+    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, 0xF0000000);
     wait(1, SC_NS);
     m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, val);
-    if (val == 0x000000F3)
+    if (val == 0xFC000000)
         report_test_pass("LOCKS_LO: additional bits ORed correctly");
     else
-        report_test_fail("LOCKS_LO OR accumulation", "expected 0xF3 got 0x" + std::to_string(val));
+        report_test_fail("LOCKS_LO OR accumulation", "expected 0xFC000000 got 0x" + std::to_string(val));
 }
 
 // =============================================================================
@@ -329,15 +336,19 @@ void testbench::test_efuse_read_ctrl_rw()
     else
         report_test_fail("EFUSE_READ_CTRL R/W", "expected 0x1234 got 0x" + std::to_string(val));
 
-    // Overwrite to confirm unrestricted; 0xABCC5678 keeps bit 16 (efuse_read_go) clear
-    // to avoid triggering the single-pulse handler which self-clears bits 16 and 24.
+    // Overwrite with a pattern that sets every software-writable bit. 0xABCC5678
+    // keeps bit 16 (efuse_read_go) clear so the program/read sequence does not run,
+    // and its bits 24 and 25 are dropped: read_busy/read_done/read_status are
+    // hardware-owned (hw=w, sw=r), so the readback is the pattern minus [26:24].
+    const uint32_t sw_writable = 0xABCC5678u & ~0x07000000u;
     m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, 0xABCC5678);
     wait(1, SC_NS);
     m_test->register_read_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, val);
-    if (val == 0xABCC5678)
-        report_test_pass("EFUSE_READ_CTRL: overwrite to 0xABCC5678 reads back correctly");
+    if (val == sw_writable)
+        report_test_pass("EFUSE_READ_CTRL: overwrite keeps hardware-owned status bits");
     else
-        report_test_fail("EFUSE_READ_CTRL overwrite", "expected 0xABCC5678 got 0x" + std::to_string(val));
+        report_test_fail("EFUSE_READ_CTRL overwrite", "expected 0x" + std::to_string(sw_writable) +
+            " got 0x" + std::to_string(val));
 }
 
 // =============================================================================

@@ -96,5 +96,42 @@ class DEMOTE_type : public csml_reg<N>
     csml_bitfield<N> reserved0;
 };
 
+/**
+ * Upper word of the 64-bit DEMOTE registers, at 0xC and 0x14.
+ *
+ * DEMOTE is regwidth 64 with rsvd[63:2], so bits [63:32] land in a second word.
+ * The field is documented "Not used" but is sw = rw with onwrite = woset, so it is
+ * backed here rather than left to read as an unmapped hole. Unlike the low word it
+ * carries no swwe, meaning the lock bit does not write-protect it.
+ */
+template<unsigned int N>
+class DEMOTE_HI_type : public csml_reg<N>
+{
+  public:
+    using typename csml_reg<N>::memory_type;
+    typedef typename csml_word<N>::wordtype DT;
+    // Write mask 0, as the low word has: the woset accumulation happens in the write
+    // callback, which assigns the register directly.
+    DEMOTE_HI_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000),
+      reserved1(reg_name + ".reserved1", *this, 0, 32)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+
+    using csml_reg<N>::operator=;
+    using csml_reg<N>::operator+=;
+    using csml_reg<N>::operator-=;
+    using csml_reg<N>::operator/=;
+    using csml_reg<N>::operator*=;
+    using csml_reg<N>::operator%=;
+    using csml_reg<N>::operator^=;
+    using csml_reg<N>::operator&=;
+    using csml_reg<N>::operator|=;
+    using csml_reg<N>::operator>>=;
+    using csml_reg<N>::operator<<=;
+    csml_bitfield<N> reserved1;
+};
+
 
 }
