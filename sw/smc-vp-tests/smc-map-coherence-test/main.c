@@ -129,6 +129,21 @@ int main(void)
     expect_ne("BEU0 ENABLE reset is live",
               (uint32_t)REG_READ64(SMC_BEU_BASE_N(0) + BEU_ENABLE), 0u);
 
+    /* cpu_ctrl.rdl register file, reached as cluster.ctrl on the front port.
+     * SCRATCH[16] occupies 0x080-0x0FF and 0x100 starts the read-only WB_PC
+     * array, so an offset table that confuses the two fails one of the checks
+     * below whichever way it drifted. */
+    printf("cpu_ctrl register file @ 0xC003_9000:\n");
+    expect_rw("cpu_ctrl SCRATCH0", SMC_CPU_CTRL_BASE + CPU_CTRL_SCRATCH(0),
+              0x11223344u, 0x11223344u);
+    expect_rw("cpu_ctrl SCRATCH15", SMC_CPU_CTRL_BASE + CPU_CTRL_SCRATCH(15),
+              0x0F150F15u, 0x0F150F15u);
+    REG_WRITE(SMC_CPU_CTRL_BASE + CPU_CTRL_SCRATCH(0), 0u);
+    REG_WRITE(SMC_CPU_CTRL_BASE + CPU_CTRL_SCRATCH(15), 0u);
+    REG_WRITE(SMC_CPU_CTRL_BASE + CPU_CTRL_WB_PC(0, 0), 0x11223344u);
+    expect_ne("cpu_ctrl WB_PC_CORE0 is read-only, not SCRATCH",
+              REG_READ(SMC_CPU_CTRL_BASE + CPU_CTRL_WB_PC(0, 0)), 0x11223344u);
+
     /* ---- Named stubs: identity token at offset 0 --------------------- */
     printf("Named stubs at RTL bases:\n");
     expect_eq("GPIO stub", REG_READ(SMC_GPIO_INTF_BASE), SMC_STUB_MAGIC_GPIO);

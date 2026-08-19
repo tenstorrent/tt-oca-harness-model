@@ -119,13 +119,20 @@
 #define RESET_SS_WARM_RESET_N    0x44u
 #define RESET_SS_COLD_RESET_LOCK 0x70u
 
-/* CPU control register offsets */
-#define CPU_CTRL_SCRATCH(idx)         (0x100u + 8u * (idx))
+/* CPU control register offsets, per cpu_ctrl.rdl (the live path at
+ * SMC_CPU_CTRL_BASE is cluster.ctrl, which implements that map). */
+#define CPU_CTRL_RESET_VECTOR(core)   (0x000u + 8u * (core))
+#define CPU_CTRL_RESET_CTRL           0x020u
+#define CPU_CTRL_RESET_TIMEOUT        0x030u
+#define CPU_CTRL_REFERENCE_COUNTER    0x040u
 #define CPU_CTRL_WDT_TIMEOUT          0x050u
 #define CPU_CTRL_WDT_TIMEOUT_RESET    0x058u
-#define CPU_CTRL_REFERENCE_COUNTER    0x060u
-#define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
-#define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
+#define CPU_CTRL_TEST_CTRL            0x060u
+#define CPU_CTRL_SCRATCH(idx)         (0x080u + 8u * (idx))
+#define CPU_CTRL_WB_PC(core, idx)     (0x100u + 0x40u * (core) + 8u * (idx))
+#define CPU_CTRL_SMC_ATTRIBUTES       0x200u
+#define CPU_CTRL_MUTEX(idx)           (0x240u + 8u * (idx))
+#define CPU_CTRL_SEMA(idx)            (0x260u + 8u * (idx))
 
 /* PVT wrapper register offsets */
 #define PVT_PROCESS_CTRL            0x00u
