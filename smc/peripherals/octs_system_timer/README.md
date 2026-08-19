@@ -143,7 +143,7 @@ Reading the 64-bit count needs the usual two-register dance (`LO`, `HI`, re-read
 
 ## SMC platform integration
 
-Wired into `smc-vp` (`vp/platform/smc/`) at **0xC000_E000**, the base
+Wired into `smc-vp` (`vp/platform/smc/`) at **0xC000_A000**, the base
 `smc_top.rdl` assigns to `system_timer_octs` (it owns the whole 0x1000
 peripheral slot; offsets above the 0x24 register window fault). The window hangs
 off `periph_router`, behind the fabric's `to_periph` port.

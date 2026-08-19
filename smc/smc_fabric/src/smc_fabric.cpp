@@ -555,7 +555,9 @@ smc_fabric::local_decode(uint32_t a)
 
     if ((a >= PERIPH_MAIN_BASE && a < PERIPH_MAIN_END) ||
         (a >= PERIPH_EXT_BASE  && a < PERIPH_EXT_END)  ||
-        (a >= PERIPH_I3C_BASE  && a < PERIPH_I3C_END))
+        (a >= PERIPH_I3C_BASE  && a < PERIPH_I3C_END)  ||
+        // VP-only AOU park — see AOU_PARK_BASE in the header.
+        (a >= AOU_PARK_BASE    && a < AOU_PARK_END))
         return &to_periph;
 
     // No matching local target → caller issues TLM_ADDRESS_ERROR_RESPONSE.

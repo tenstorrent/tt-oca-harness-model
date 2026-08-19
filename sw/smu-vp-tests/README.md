@@ -49,7 +49,7 @@ UART0, SEP on the virtconsole) and neither prints FAIL.
 | `smu-link-test` | (VP original) | Bidirectional SMU on-die link: SEP→SMC over the dedicated `sep_ext_to_smc_axi` path (SEP writes magic+doorbell into the SMC scratchpad via the `0x4000_0000` window; SMC polls it), then SMC→SEP over the SMU crossbar (SMC writes a response into SEP SRAM via the `0x5000_0000` global aperture; SEP polls it). The SEP also reads its own writes back through the dedicated path to prove the forward path (not the fallback stub) carried them. |
 | `smu-xbar-test` | `fw/smc/tests/smc_sep_xbar` + `smu_bidirect` / `fw/sep/tests/sep_smu_bidirect` | Same two AXI paths with the hardware handshake tokens (`0x13579BDF` / `0xC001CAFE` / `0x5E9ACCE5` / `0xD0E0F00D`). CLA / fuse-sense / filter programming omitted. |
 | `smu-traffic-test` | DV `smc_cpu_traffic_sep_axi_test` | 50 SMC→SEP write+readback beats through `output_axi` → xbar → SEP SRAM. |
-| `smu-aou-ext-test` | `fw/smc/tests/smu_sep_ext_axi` | Activate AOU, then both CPUs write/readback a catch-all address through `xbar.ext_out` → local AOU → peer → `stub_sysmem`. SEP also reads AOU `ip_version` through the dedicated SMC window (`0x4000_4000`) and programs the outbound filter before its `smn_outbound` beat. |
+| `smu-aou-ext-test` | `fw/smc/tests/smu_sep_ext_axi` | Activate AOU, then both CPUs write/readback a catch-all address through `xbar.ext_out` → local AOU → peer → `stub_sysmem`. SEP also reads AOU `ip_version` through the dedicated SMC window (`0x4000_C000`) and programs the outbound filter before its `smn_outbound` beat. |
 
 ## Address plan (smu-link-test)
 
@@ -68,7 +68,7 @@ Hardware uses catch-all `0x8000_1000`. On the VP that address is inside
 cluster fast-mem `[0x8000_0000, 0x9000_0000)`, so the store would never
 leave the ISS. The VP test uses `0xA000_1000` (MMIO window, misses both
 SMU apertures). SEP uses `0xA000_1008` on the same page after programming
-outbound filter 0, and reads AOU `ip_version` at `0x4000_4000`.
+outbound filter 0, and reads AOU `ip_version` at `0x4000_C000`.
 
 ## Not ported (VP does not model the stimulus)
 

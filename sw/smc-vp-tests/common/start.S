@@ -106,12 +106,12 @@ trap_handler:
  * uart_init: configure UART0 for 8N1, divisor=1, DLAB=0.
  * Mirrors the init sequence used by the historical smc/platform test firmware.
  * Constants inlined (assembler cannot parse smc_common.h).
- *   UART0 base = 0xC000A000
+ *   UART0 base = 0xC0006100 (16550; D3=U1)
  *   THR/DLL = 0x00, IER/DLM = 0x04, LCR = 0x0C
  * ---------------------------------------------------------------------------- */
     .section .text.init, "ax"
 uart_init:
-    li      t0, 0xC000A000         /* SMC_UART0_BASE */
+    li      t0, 0xC0006100         /* SMC_UART0_BASE */
     li      t1, 0x80               /* DLAB=1 */
     sw      t1, 0x0C(t0)           /* LCR = 0x80 */
     li      t1, 0x01               /* DLL = 1 */

@@ -408,22 +408,24 @@ The key base addresses are:
 | WDT core 0 | `0xC0000000` |
 | Reset unit | `0xC0002000` |
 | MISC/scratch | `0xC0002800` |
-| GPIO | `0xC0004000` |
-| PVT | `0xC0007000` |
-| AVSBus | `0xC0008000` |
-| I2C | `0xC0009000` |
-| UART | `0xC000A000` |
-| eFuse map | `0xC000B000` |
-| eFuse controller/shim | `0xC000C000` |
-| Telemetry | `0xC000D000` |
-| OCTS | `0xC000E000` |
-| DTP/DFT | `0xC000F000` |
+| GPIO | `0xC0003000` |
+| AVSBus | `0xC0004000` |
+| I2C | `0xC0005000` |
+| UART wrap | `0xC0006000` (16550 at `+0x100`, stride `0x400`) |
+| eFuse map | `0xC0007000` |
+| eFuse controller/shim | `0xC0008000` |
+| Telemetry | `0xC0009000` |
+| OCTS | `0xC000A000` |
+| DTP | `0xC000B000` |
+| DFX | `0xC000B800` |
 | CPU control | `0xC0010000` |
 | Remap/filter CSRs | `0xC0012000` - `0xC0016FFF` |
 | Mailbox | `0xC0018000` |
 | DMA/zeroer | `0xC0038000` |
 | ROM | `0xC0040000` |
 | Scratch SRAM | `0xC0060000` |
+| PLL wrapper (`smc_external`) | `0xC0402000` |
+| PVT wrapper (`smc_external`) | `0xC0403000` |
 | PLIC | `0xC4000000` |
 | CLINT | `0xC8000000` |
 | BEU | `0xC8010000 + N * 0x1000` |

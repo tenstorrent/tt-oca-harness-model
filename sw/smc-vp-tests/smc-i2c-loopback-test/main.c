@@ -85,6 +85,13 @@ int main(void)
     REG_WRITE(SMC_I2C1_BASE + I2C_TXDATA, 0xCAu);
     REG_WRITE(SMC_I2C1_BASE + I2C_TXDATA, 0xFEu);
 
+    /* Let loosely-timed host FMT drain observe the TX FIFO fill.  Without a
+     * short pause, Whisper can issue the read FMT in the same quantum and
+     * target_read() sees an empty TX FIFO (RDATA=0). */
+    for (volatile unsigned i = 0; i < 64u; ++i) {
+        __asm__ volatile("nop");
+    }
+
     REG_WRITE(SMC_I2C0_BASE + I2C_FDATA,
               ((I2C_TARGET_ADDR << 1u) | 1u) | I2C_FDATA_START);
     REG_WRITE(SMC_I2C0_BASE + I2C_FDATA,

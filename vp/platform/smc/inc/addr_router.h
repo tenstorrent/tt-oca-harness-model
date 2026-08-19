@@ -6,11 +6,18 @@
 // fabric's `to_front_port` and `to_periph` initiator sockets across multiple
 // downstream peripheral targets.
 //
-// One `tgt` target socket receives transactions; an `out[i]` initiator socket
+// The `tgt` target socket receives transactions; an `out[i]` initiator socket
 // forwards each transaction whose address falls in route `i`'s [base, base+size)
 // window, with `base` subtracted before forwarding (downstream targets are
 // offset-relative).  Routes are matched longest-window-first so a small
 // sub-window can override a larger enclosing one.
+//
+// `tgt` is a multi-bind socket because one device set can have more than one
+// upstream master.  The front-port router is reached both by the fabric (for
+// external masters coming through the local crossbar) and directly by the CPU
+// cluster, which in RTL talks to its own PLIC/CLINT/BEU over the rocket-chip
+// periphery bus rather than through the SMC fabric.  Every bound master is
+// routed identically, so the bound-initiator index is ignored.
 //
 // Unmapped accesses complete with TLM_ADDRESS_ERROR_RESPONSE so unintended
 // decode holes surface immediately rather than silently hanging firmware.
@@ -22,8 +29,8 @@
 
 #include <systemc>
 #include <tlm.h>
+#include <tlm_utils/multi_passthrough_target_socket.h>
 #include <tlm_utils/simple_initiator_socket.h>
-#include <tlm_utils/simple_target_socket.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -38,7 +45,7 @@ template <unsigned InBus = 64, unsigned OutBus = InBus>
 class addr_router : public sc_core::sc_module
 {
 public:
-    tlm_utils::simple_target_socket<addr_router, InBus> tgt{"tgt"};
+    tlm_utils::multi_passthrough_target_socket<addr_router, InBus> tgt{"tgt"};
 
     sc_core::sc_vector<tlm_utils::simple_initiator_socket<addr_router, OutBus>> out{"out"};
 
@@ -77,7 +84,10 @@ private:
         std::string label;
     };
 
-    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
+    // Leading int is the bound-initiator index from the multi-socket; all
+    // upstream masters are routed identically, so it is unused.
+    void b_transport(int, tlm::tlm_generic_payload& trans,
+                     sc_core::sc_time& delay)
     {
         const uint64_t addr = trans.get_address();
 

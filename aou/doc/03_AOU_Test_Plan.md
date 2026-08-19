@@ -27,7 +27,7 @@ cd aou && ./run_tests.sh
 
 ## 2. Platform smoke (`sw/smc-vp-tests/smc-aou-test`)
 
-Hart-0 MMIO through `smc-vp` at `SMC_AOU_BASE` (`0xC000_4000`):
+Hart-0 MMIO through `smc-vp` at `SMC_AOU_BASE` (`0xC000_C000`):
 
 | # | Case |
 |---|------|
@@ -46,7 +46,7 @@ Both CPUs, after `aou_init.activate_start`:
 | # | Check |
 |---|--------|
 | 1 | SMC write/readback of catch-all `0xA000_1000` through `xbar.ext_out` → AOU → peer |
-| 2 | SEP reads AOU `ip_version` at `0x4000_4000` (dedicated SEP→SMC window) |
+| 2 | SEP reads AOU `ip_version` at `0x4000_C000` (dedicated SEP→SMC window) |
 | 3 | SEP programs outbound filter 0, then write/readback `0xA000_1008` through `smn_outbound` → xbar → AOU |
 
 ```bash

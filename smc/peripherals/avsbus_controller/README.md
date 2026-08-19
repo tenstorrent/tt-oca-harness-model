@@ -1,7 +1,7 @@
 # SMC AVSBus Controller — SystemC / TLM-2.0 Loosely-Timed Model
 
 Register-accurate functional model of the SMC **AVSBus 1.3.1** controller
-(`hw/ip/avsbus_controller`), mapped at `0xC000_8000`.
+(`hw/ip/avsbus_controller`), mapped at `0xC000_4000`.
 
 | Doc | Role |
 |-----|------|

@@ -2,7 +2,7 @@
  * SEP half of smu_sep_ext_axi: SEP reaches AOU two ways, matching OCH
  * (tt-oca-harness smu.sv + aou on smu_axi_in/out):
  *
- *   1. CSRs via the dedicated SEP->SMC window (0x4000_4000 == SMC 0xC000_4000).
+ *   1. CSRs via the dedicated SEP->SMC window (0x4000_C000 == SMC 0xC000_C000).
  *   2. Catch-all AXI via smn_outbound -> xbar.sep_out -> ext_out -> AOU
  *      (after programming the outbound filter; BlockByDefault=1).
  *
@@ -17,8 +17,8 @@ extern int printf(const char *format, ...);
 #define SPIN_LIMIT          50000000u
 #define REG32(addr)         (*(volatile uint32_t *)(uintptr_t)(addr))
 
-/* AOU CSRs through the SEP SMC window (local 0xC000_4000). */
-#define SEP_AOU_BASE        0x40004000u
+/* AOU CSRs through the SEP SMC window (local 0xC000_C000). */
+#define SEP_AOU_BASE        0x4000C000u
 #define AOU_IP_VERSION      0x00u
 #define AOU_IP_VERSION_EXP  0x00010000u
 

@@ -204,9 +204,9 @@ public:
     // Demux the 64 KiB BEU alias window into NUM_BEU per-core 4 KiB targets.
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
-    // cpu_ctrl, i3c, pvt_wrap, pll_wrap, avsbus, aou, octs_system_timer,
-    // catch-all stub (17).
-    addr_router<64, 32>         periph_router{"periph_router", 17};
+    // gpio stub, i3c, pvt_wrap, pll_wrap, avsbus, aou, octs_system_timer,
+    // catch-all stub, misc/efuse/dtp stubs (21).
+    addr_router<64, 32>         periph_router{"periph_router", 21};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
@@ -254,6 +254,12 @@ public:
     stub_target<64> stub_ibf{"stub_ibf"};
     stub_target<64> stub_obf{"stub_obf"};
     stub_target<32> stub_periph_misc{"stub_periph_misc"};
+    // Named stubs for unmodeled RTL periph slots (Phase-1 map realignment).
+    stub_target<32> stub_gpio_intf{"stub_gpio_intf"};
+    stub_target<32> stub_misc_wrap{"stub_misc_wrap"};
+    stub_target<32> stub_efuse_map{"stub_efuse_map"};
+    stub_target<32> stub_efuse_ctrl{"stub_efuse_ctrl"};
+    stub_target<32> stub_dtp_ctrl{"stub_dtp_ctrl"};
     // stub_cluster_ctrl / stub_ifetch / stub_data accept multiple initiator
     // binds (multi_stub_target) so that an always-bound idle initiator and a
     // cluster-only initiator (out[1]/cluster.ifetch/cluster.data) can share
@@ -356,7 +362,7 @@ public:
     sc_core::sc_vector<sc_core::sc_signal<bool>> plic_src_sig{"plic_src_sig", NUM_PLIC_SRC};
     // Dummy sinks for every stub_target's irq_o (stubs don't drive the PLIC in
     // Phase 1; their irq_drive_method still requires a bound port).
-    sc_core::sc_vector<sc_core::sc_signal<bool>> stub_irq_sig{"stub_irq_sig", 20};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> stub_irq_sig{"stub_irq_sig", 25};
     // BEU IRQ: local (NMI-like) is wired to cluster.beu_nmi_in in Phase C;
     // PLIC outputs stay on sinks — OCA RTL uses the per-tile buserror/NMI path
     // (cpu_interrupts.adoc has no BEU PLIC source ID).
@@ -437,6 +443,8 @@ private:
     // satisfied.  Peer axi_m terminates on stub_sysmem (remote SMN stub).
     tlm_utils::simple_initiator_socket<smc_platform, 64> idle_aou_peer_init_{"idle_aou_peer_init_"};
     tlm_utils::simple_initiator_socket<smc_platform, 32> idle_aou_peer_apb_init_{"idle_aou_peer_apb_init_"};
+    // Dual periph-bus cpu_ctrl bind removed; keep the IP elaboratable.
+    tlm_utils::simple_initiator_socket<smc_platform, 32> idle_cpu_ctrl_init_{"idle_cpu_ctrl_init_"};
 
     void fwd_sys_axi (tlm::tlm_generic_payload&, sc_core::sc_time&);
     void fwd_jtag_axi(tlm::tlm_generic_payload&, sc_core::sc_time&);

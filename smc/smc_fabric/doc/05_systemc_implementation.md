@@ -263,11 +263,12 @@ address to select the downstream socket. Ranges are verbatim from
 | `0xC004_0000 – 0xC015_FFFF` | `to_front_port` | Scratchpad memory (SPM) |
 | `0xC400_0000 – 0xC7FF_FFFF` | `to_front_port` | PLIC (outside alias aperture) |
 | `0xC800_0000 – 0xC801_FFFF` | `to_front_port` | CLINT / BEU (outside alias aperture) |
-| `0xC003_8000 – 0xC003_FFFF` | `to_data_accel_ctrl` | DMA + memory-zeroer control |
-| `0xC000_2000 – 0xC000_E7FF` | `to_periph` | Peripheral main (UART, I2C, GPIO, …) |
+| `0xC003_8000 – 0xC003_8FFF` | `to_data_accel_ctrl` | DMA + memory-zeroer control |
+| `0xC000_2000 – 0xC000_B7FF` | `to_periph` | Peripheral main (UART, I2C, GPIO, …) |
+| `0xC000_C000 – 0xC000_CFFF` | `to_periph` | **VP-only** AOU CSR park (no RTL slot; realignment D1=A) |
 | `0xC040_0000 – 0xC07F_FFFF` | `to_periph` | Peripheral extended |
 | `0xC016_0000 – 0xC025_FFFF` | `to_dfd_apb` | DFD registers (APB) |
-| `0xC000_F800 – 0xC000_FFFF` | `to_dft_csr` | DFT CSRs |
+| `0xC000_B800 – 0xC000_BFFF` | `to_dft_csr` | DFT / DFX CSRs |
 | `0xC001_0000 – 0xC001_1FFF` | internal CSR decode | CPU control + fabric global CSRs |
 | `0xC001_2000 – 0xC001_2FFF` | `to_aR_ctrl` | Alias remap CSRs |
 | `0xC001_3000 – 0xC001_3FFF` | `to_mR_ctrl` | M-mode remap CSRs |
