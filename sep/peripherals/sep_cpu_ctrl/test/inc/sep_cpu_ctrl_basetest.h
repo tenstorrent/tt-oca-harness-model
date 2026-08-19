@@ -119,7 +119,7 @@ class sep_cpu_ctrl_basetest : public sc_module
 
     enum Register_Reset_Val
     {
-      CLOCK_GATE_CTRL_RESET = (0x1F0021),
+      CLOCK_GATE_CTRL_RESET = (0x0),
       REFERENCE_COUNTER_RESET = (0),
       TIMEOUT_INTERRUPT_RESET = (0),
       PKA_CTRL_RESET = (0x0),

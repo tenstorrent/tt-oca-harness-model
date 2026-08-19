@@ -406,12 +406,21 @@ void aon_timer_ip::evaluate_wkup_threshold()
 void aon_timer_ip::evaluate_bark_threshold()
 {
    if (m_wdog_enabled && (m_wdog_counter >= m_wdog_bark_threshold)) {
-      if (!m_intr_state_bark) {
-         m_intr_state_bark = true;
-         /* Update INTR_STATE shadow: set bit[1] (wdog_timer_bark). */
-         INTR_STATE.wdog_timer_bark = 1;
-         /* Defer bark/NMI port writes to drive_outputs() SC_METHOD. */
-         m_ev_output_update.notify(SC_ZERO_TIME);
+      /* INTR_STATE.wdog_timer_bark is set on the posedge of the bark condition,
+       * matching aon_timer.sv, which drives prim_intr_hw from a
+       * prim_edge_detector's q_posedge_pulse_o rather than from the level. The
+       * latch is what remembers the edge; m_intr_state_bark cannot serve that
+       * role because software clears it via W1C, which would re-arm the detector
+       * and re-fire on the next tick while the counter is still over threshold. */
+      if (!m_wdog_bark_latched) {
+         m_wdog_bark_latched = true;
+         if (!m_intr_state_bark) {
+            m_intr_state_bark = true;
+            /* Update INTR_STATE shadow: set bit[1] (wdog_timer_bark). */
+            INTR_STATE.wdog_timer_bark = 1;
+            /* Defer bark/NMI port writes to drive_outputs() SC_METHOD. */
+            m_ev_output_update.notify(SC_ZERO_TIME);
+         }
       }
       if (!m_wkup_cause_active) {
          m_wkup_cause_active = true;
@@ -420,6 +429,10 @@ void aon_timer_ip::evaluate_bark_threshold()
          /* Defer wkup_req port write to drive_outputs() SC_METHOD. */
          m_ev_output_update.notify(SC_ZERO_TIME);
       }
+   } else {
+      /* Condition false again (pet, disable, or raised threshold): re-arm the
+       * edge so the next crossing fires a fresh interrupt. */
+      m_wdog_bark_latched = false;
    }
 }
 
@@ -948,8 +961,11 @@ bool aon_timer_ip::handle_write_WDOG_COUNT(uint32_t value, uint32_t write_mask)
    /* Bark condition re-evaluation: counter is 0, so bark is false unless
     * threshold is also 0. If intr_state_bark was asserted, de-assert the
     * interrupt path. This clears the INTERRUPT path only — NOT WKUP_CAUSE. */
-   if (m_intr_state_bark) {
-      if (!m_wdog_enabled || (m_wdog_counter < m_wdog_bark_threshold)) {
+   if (!m_wdog_enabled || (m_wdog_counter < m_wdog_bark_threshold)) {
+      /* Bark condition is false again: re-arm the posedge latch so the counter
+       * growing back over the threshold fires a fresh interrupt. */
+      m_wdog_bark_latched = false;
+      if (m_intr_state_bark) {
          m_intr_state_bark = false;
          INTR_STATE.wdog_timer_bark = 0U;
          /* Defer bark/NMI port de-assertion to drive_outputs() SC_METHOD. */
@@ -1024,8 +1040,10 @@ bool aon_timer_ip::handle_write_INTR_STATE(uint32_t value, uint32_t write_mask)
    }
 
    /* Bits[31:2]: reserved; silently ignored. */
-   /* Re-assertion of cleared interrupts will occur at the next AON clock tick
-    * via the counter increment event handler if the threshold condition persists. */
+   /* A cleared bark interrupt is NOT re-asserted while the counter stays above
+    * the threshold: the bark posedge latch is deliberately left alone here, so
+    * re-assertion needs a fresh crossing (pet, or threshold raised then met
+    * again). See evaluate_bark_threshold() for the RTL correspondence. */
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());

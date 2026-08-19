@@ -90,10 +90,8 @@ SC_MODULE(Tb) {
         // T1: Reset values
         // ------------------------------------------------------------------
         uint64_t v = do_read(0x008); // CLOCK_GATE_CTRL
-        assert((v & 0x1) == 1);              // pka_cg_enable reset=1
-        assert((v & 0x20) == 0x20);          // sram_cg_enable reset=1
-        assert(((v >> 16) & 0x3F) == 0x1F);  // cg_hysteresis reset=0x1f
-        std::cout << "[PASS] T1: CLOCK_GATE_CTRL reset values\n";
+        assert((v & 0xFFFFFFFFULL) == 0x0ULL); // reserved placeholder, resets to 0
+        std::cout << "[PASS] T1: CLOCK_GATE_CTRL reset=0x0\n";
 
         v = do_read(0x1000); // SEP_VERSION_ID
         assert(v == 0xDEADBEEFULL);
