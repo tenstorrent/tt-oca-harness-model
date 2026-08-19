@@ -14,7 +14,9 @@ class lifecycle_ctrl_basetest : public sc_module
         FEAT_CTRL_LO_OFFSET = 0x0000,
         FEAT_CTRL_HI_OFFSET = 0x0004,
         DEMOTE_1_OFFSET     = 0x0008,
-        DEMOTE_2_OFFSET     = 0x0010
+        DEMOTE_1_HI_OFFSET  = 0x000C,
+        DEMOTE_2_OFFSET     = 0x0010,
+        DEMOTE_2_HI_OFFSET  = 0x0014
     };
 
     enum Register_Read_Access

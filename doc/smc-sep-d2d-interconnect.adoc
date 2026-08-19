@@ -219,7 +219,7 @@ to an idle initiator, and `aou_axi_m` to a remote stub. The local AOU is
 
 === SEP virtual platform (`vp/platform/sep`, executable `sep-vp`)
 
-Devices hang off an internal 32-bit `SimpleBus` (`och_sep_ss.hpp`). Three
+Devices hang off an internal 32-bit `SimpleBus` (`sep_platform.hpp`). Three
 chiplet-boundary sockets are exported:
 
 * `sep_ext_to_smc_axi` — 64-bit initiator for the dedicated SEP→SMC
@@ -249,7 +249,7 @@ FDI/UCIe PHY and a two-die `smu-d2d-vp` remain out of scope.
 
 === Topology (`smu-vp`)
 
-`vp/platform/smu/main.cpp` instantiates `smc_platform` (`dut`) +
+`vp/platform/smu/src/smu_platform.cpp` instantiates `smc_platform` (`dut`) +
 `och_sep_ss` (`och_sep_ss1`) + `smu_axi_xbar` + `axi_window_remap` and
 wires every on-die AXI path from `smu.sv`.
 
@@ -497,8 +497,9 @@ A future two-die system would still look like:
 
 === Step 4 — Assemble `smu-vp` (single-die done; two-die open)
 
-Wiring is in `vp/platform/smu/main.cpp` (no separate `smu_platform`
-class): dedicated remap, all four crossbar legs, AOU on `ext_in`/`ext_out`.
+Wiring is in `vp/platform/smu/src/smu_platform.cpp` (`smu_platform`
+owns both subsystems and the interconnect): dedicated remap, all four
+crossbar legs, AOU on `ext_in`/`ext_out`.
 `smu-d2d-vp` (two `smu_platform`s joined by a link, non-overlapping
 apertures) is not built.
 
@@ -611,17 +612,19 @@ therefore the correct fidelity until AoU/SMN RTL exists.
   `smc_sep_interoperability_test` (SMC+SEP firmware mailbox interop)
 
 .tt-oca-sim (this repository)
-* `vp/platform/smu/main.cpp` — `smu-vp` composition and socket bindings
+* `vp/platform/smu/smu_platform.hpp`, `vp/platform/smu/src/smu_platform.cpp` —
+  `smu-vp` composition and socket bindings
 * `vp/platform/smu/inc/smu_axi_xbar.h`,
   `vp/platform/smu/inc/axi_window_remap.h` — SMU interconnect models
-* `vp/platform/smu/README.md` — operator guide for `smu-vp`
+* `vp/platform/smu/docs/README.md` — operator guide for `smu-vp`
 * `aou/` — AOU LT model (`aou_core`); CSRs at SMC `0xC000_C000`
 * `vp/platform/smc/smc_platform.hpp`, `vp/platform/smc/src/smc_platform.cpp` —
   boundary sockets (`output_axi`, `sep_axi_in`, `aou_axi_s`/`aou_axi_m`)
 * `vp/platform/smc/main.cpp` — standalone idle / `stub_sysmem` bindings
 * `smc/smc_fabric/` — fabric model (aperture CSRs, filters, `output_axi`)
-* `vp/platform/sep/och_sep_ss.hpp` — chiplet sockets
-  `sep_ext_to_smc_axi`, `sep_smn_inbound_axi`, `sep_smn_outbound_axi`
+* `vp/platform/sep/sep_platform.hpp`, `vp/platform/sep/src/sep_platform.cpp` —
+  chiplet sockets `sep_ext_to_smc_axi`, `sep_smn_inbound_axi`,
+  `sep_smn_outbound_axi`
 * `vp/platform/sep/inc/adapters.h` — `sep_smc_global_port`,
   `outbound_filter_mux`, inbound remap
 * `sep/peripherals/sep_cpu_ctrl/` — inbound-window CSR exports

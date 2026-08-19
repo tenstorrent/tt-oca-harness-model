@@ -1,0 +1,3116 @@
+================================================================================
+LIFE CYCLE CONTROLLER (LCC) VERIFICATION PLAN
+================================================================================
+Project: OCAH SEP
+Component: Life Cycle Controller (LCC)
+Version: 2.2.1 (Corner Case Gap Analysis + sigint×DEMOTE)
+Date: January 2026 (Updated: 2026-03-19)
+Status: ACTIVE - 14 UVM tests IMPLEMENTED, 16 total (14 UVM + 2 Cocotb); 90% spec coverage
+Architecture Decision: Token matching in eFuse scope (confirmed)
+Verification Approach: Dual-layer (UVM hardware + Cocotb firmware)
+RTL Status: PR #1962 merged (PROD_DBG feat_ctrl fix)
+
+================================================================================
+DOCUMENT CONTROL
+================================================================================
+
+Purpose:
+  This document defines the verification test plan for the SEP Life Cycle
+  Controller (LCC) component in the OCAH project.
+
+Scope:
+  - Life Cycle state machine verification
+  - Two security domain support (Domain 1: local, Domain 2: downstream)
+  - Feature control vector evaluation
+  - DEMOTE_1/2 bit functionality
+  - Permission matrix validation
+  - LC state transitions
+  - Post-token-match handling (system inert + OTP update gate)
+  - Error detection and handling
+  - **NOTE**: Token matching mechanics (SHA256, triple-redundant) are in eFuse scope
+    (see SEP_EFUSE_TEST_PLAN.txt Suite 6). LCC verifies the post-match behavior:
+    feature disable and OTP update initiation.
+
+Interface:
+  - AXI4-Lite (CPU path + JTAG AXI-Lite debug path)
+
+References:
+  - OCAH_SEP_SPEC.txt (Lines 934-1136: LC Controller specification)
+  - TOKEN_MATCHING_EXPLAINED.txt (Token mechanism details)
+  - TOKEN_USE_CASES.txt (Real-world scenarios)
+  - efuse_comprehensive.md (Grendel vs OCAH comparison)
+  - Old tests: /proj_soc/user_dev/yenhenglai/tt_sep/tb/cocotb_tests/
+
+Related Vplans:
+  - SEP_EFUSE_TEST_PLAN.txt (Suite 6: token matching tests)
+  - Key Manager Vplan (key derivation with LC_STATE)
+  - Firmware Vplan (secure boot integration)
+
+================================================================================
+LC STATE ENCODING REFERENCE
+================================================================================
+
+Life Cycle State Encodings (4-bit raw values, differentially encoded to 8 bits in eFuse OTP) - per OCAH SPEC 2026-02-02:
+  Differential encoding: {~raw[3:0], raw[3:0]} = 8 bits
+
+  State Name        | Raw Encoding | Diff Encoded   | Description
+  ------------------|--------------|----------------|------------------------------------------
+  TEST_DEV          | 4'b0000      | 8'hF0          | Test/Development state (default)
+  PROD              | 4'b0001      | 8'hE1          | Production state
+  PROD_DBG          | 4'b0001*     | 8'hE1*         | Production Debug (PROD + DEMOTE_1 or DEMOTE_2=1; two flavours, see below)
+  RMA_SIP           | 4'b001X      | 8'hD2 or 8'hC3 | RMA System-in-Package (0x2 or 0x3)
+  RMA_CHIPLET       | 4'b011X      | 8'h96 or 8'h87 | RMA Chiplet level (0x6-0x7)
+  PROD_END          | 4'b1000      | 8'h78          | Production End (terminal state; no transitions except to INVALID)
+  INVALID           | 0x4-0x5,0x9-0xF | various     | Invalid state (error fallback, EOL)
+
+  Note: RMA state transitions require token matching authorization in eFuse
+        controller (see SEP_EFUSE_TEST_PLAN.txt Suite 6).
+        RMA_CHIPLET entry: from RMA_SIP (with RMA_CHIPLET_TOKEN) or
+        from TEST_DEV (with BOTH RMA_SIP_TOKEN AND RMA_CHIPLET_TOKEN match).
+        PROD → RMA_CHIPLET direct is NOT allowed.
+
+  *Note: PROD_DBG is not a separate encoding - it is PROD state (4'b0001, encoded 8'hE1) with
+         DEMOTE_1 or DEMOTE_2 CSR bit set to 1. Two flavours (per OCAH spec March 5th):
+         - PROD_DBG_1: BL1 firmware uses DEMOTE_1 + DEMOTE_LOCK_1 → full debug access
+         - PROD_DBG_2: BL2 firmware uses DEMOTE_2 + DEMOTE_LOCK_2 → restricted access
+         Both pairs (DEMOTE_1/2, DEMOTE_LOCK_1/2) are volatile and clear on cold reset.
+
+Security Domains (per OCAH spec March 5th — TWO domains):
+  - Domain 1: Controls debug access to LOCAL assets (BL1 firmware, DEMOTE_1)
+  - Domain 2: Controls debug access to DOWNSTREAM chiplets (BL2/SIP firmware, DEMOTE_2)
+
+State Transition Rules (updated per OCAH spec March 5th):
+  - TEST_DEV → PROD, PROD_END, RMA_SIP, RMA_CHIPLET
+  - PROD → RMA_SIP (NOT directly to RMA_CHIPLET or PROD_END)
+  - PROD ↔ PROD_DBG_1/2 (via DEMOTE_1/2 CSR, no eFuse change)
+  - RMA_SIP → RMA_CHIPLET (with RMA_CHIPLET_TOKEN)
+  - PROD_END is terminal (no transitions out); entered only from TEST_DEV
+  - RMA_CHIPLET is terminal (no transitions out)
+  - INVALID is error state (requires cold reset recovery)
+
+  RMA_CHIPLET entry rules:
+    - From TEST_DEV: Direct with BOTH RMA_SIP_TOKEN AND RMA_CHIPLET_TOKEN match
+    - From RMA_SIP: With RMA_CHIPLET_TOKEN (sequential from PROD)
+    - From PROD: BLOCKED (must go through RMA_SIP first)
+
+  Note: Transitions to RMA states require token authorization in eFuse
+        (see SEP_EFUSE_TEST_PLAN.txt Suite 6).
+        LCC reads authorized state from eFuse shadow registers after reset.
+
+================================================================================
+FEATURE CONTROL VECTOR BIT DEFINITIONS
+================================================================================
+
+Feature control vectors: SIP_DIS, SYS_DIS (per spec March 5th)
+Feature control is a function of LC_STATE and DIS vectors
+Note: CHP_DIS struck through in OCAH spec v0.86 — only SIP_DIS and SYS_DIS used in RTL
+
+Bit Field Layout (applies to each 64-bit DIS vector) - per OCAH SPEC 2026-02-02:
+
+  Bit Range | Field Name    | Description
+  ----------|---------------|--------------------------------------------
+  [4:0]     | Debug         | Debug feature disable bits
+            |   [0]         | SEP_DBG: SEP debug access
+            |   [1]         | SOC_DBG: SoC debug access
+            |   [2]         | AP_DBG: Application Processor debug
+            |   [3]         | AP_TRACE: AP trace functionality
+            |   [4]         | SIP_DBG: External debug not forwarded to outbound JTAG PTAP
+  ----------|---------------|--------------------------------------------
+  [31:5]    | (reserved)    | Reserved for future debug features
+  ----------|---------------|--------------------------------------------
+  32-36     | Test          | Test mode disable bits (individual bits)
+            |   [32]        | FUSE_TEST: eFuse test mode
+            |   [33]        | SEP_STEST: SEP screening test
+            |   [34]        | SEP_DTEST: SEP diagnostic test
+            |   [35]        | AP_STEST: AP screening test
+            |   [36]        | AP_DTEST: Diagnostic tests for non-SEP logic
+  ----------|---------------|--------------------------------------------
+  [47:37]   | (reserved)    | Reserved for future test features
+  ----------|---------------|--------------------------------------------
+  [63:48]   | Function      | Functional feature disable bits
+            |   [48]        | Feature-specific (implementation defined)
+            |   [49-63]     | Additional functional features
+  ----------|---------------|--------------------------------------------
+
+  Feature Control Per LC State (per OCAH spec March 5th):
+  SEC_DIS == False (1'b0):
+
+  LC State      | Debug [4:0]           | DFT (bits 32-36)      | Function [63:48]
+  --------------|----------------------|-----------------------|-------------------
+  TEST_DEV      | ~(SIP|SYS).DBG       | ~(SIP|SYS).DFT        | ~(SIP|SYS).FUNC
+  PROD          | All disabled (F)     | All disabled (F)      | ~(SIP|SYS).FUNC
+  PROD_DBG_1    | All enabled (T)      | All disabled (F)      | ~SIP.FUNC
+  PROD_DBG_2    | All enabled (T)      | All disabled (F)      | ~SYS.FUNC
+  PROD_END      | All disabled (F)     | All disabled (F)      | ~(SIP|SYS).FUNC
+  RMA_SIP       | ~SIP_DIS             | ~SIP_DIS              | ~SIP_DIS
+  RMA_CHIPLET   | All enabled (T)      | All enabled (T)       | All enabled (T)
+  INVALID       | All disabled (F)     | All disabled (F)      | All disabled (F)
+
+  SEC_DIS == True (1'b1):
+  All states: {T, T, T} - "Fully open device independent of LC state" (per spec)
+
+Note: SIP = SIP_DIS, SYS = SYS_DIS
+      ~ = bitwise NOT, | = bitwise OR
+      CHP_DIS struck through in OCAH spec v0.86 — only SIP_DIS and SYS_DIS used in RTL
+
+PROD_DBG_1/2 Feature Control (per OCAH spec March 5th):
+  - PROD_DBG_1 (via DEMOTE_1): Debug=T, DFT=F, Func=~SIP_DIS.FUNC
+    Full debug access; chiplet owner (BL1) controls
+  - PROD_DBG_2 (via DEMOTE_2): Debug=T, DFT=F, Func=~SYS_DIS.FUNC
+    Full debug access; SIP owner (BL2) controls
+  - DEMOTE_1/2 also enable all debug features in TEST_DEV and RMA_CHIPLET
+  - "The user has the freedom to determine how these demotion register
+    facilities are used and there are no hard-coded restrictions"
+
+SEC_DIS Override:
+  - When sec_dis signal from eFuse asserts (token matching in eFuse scope):
+    * {T, T, T} - All features enabled, "independent of LC state" (per spec)
+    * This includes INVALID state (spec does not exempt it)
+  - Note: SEC_DIS token matching performed in eFuse controller
+          (see SEP_EFUSE_TEST_PLAN.txt Suite 6)
+
+================================================================================
+EXECUTIVE SUMMARY
+================================================================================
+
+Test Count: 14 UVM tests (hardware) + 2 Cocotb tests (firmware) = 16 tests total
+Implemented: 14 UVM tests (TEST 0.1, 1.1, 1.3, 1.4, 2.1, 2.4, 3.1, 3.2, 3.4, 3.5, 3.6, 4.1, 4.3, 5.1)
+
+Implementation Status (2026-03-12):
+  - TEST 0.1 (reg_reset_test): ✅ PASS — 33 checks
+  - TEST 1.1 (state_transitions_test): ✅ PASS — 64 checks
+  - TEST 1.3 (rma_chiplet_token_test): ⚠️ IMPL — ~10 checks (expected fails pending RTL)
+  - TEST 2.1 (demote_comprehensive_test): ✅ PASS — 32 checks
+  - TEST 2.4 (prod_dbg_flavour_test): ⚠️ IMPL — ~12 checks
+  - TEST 3.1 (feature_control_basic_test): ✅ PASS — ~15 checks
+  - TEST 3.2 (feature_control_per_lc_state_test): ✅ PASS — 47 checks
+  - TEST 3.4 (feature_control_secure_tm_test): ⚠️ IMPL — ~11 checks
+  - TEST 3.5 (screening_vs_diagnostic_test): ✅ PASS — 26 checks
+  - TEST 4.1 (permission_matrix_comprehensive_test): ⚠️ IMPL — 128 checks (14 expected fails)
+  - TEST 4.3 (jtag_access_ctrl_test): ✅ PASS — 70 checks (4 spaces + gap × 5 LC states + sigint_err + recovery)
+  - TEST 5.1 (encoding_and_error_test): ✅ IMPL — ~21 checks (Phases A-F, incl. sigint×DEMOTE)
+
+Optimization History:
+  v2.2.2 (2026-03-16): TEST 4.3 fully passing — 70/70 checks, all frontdoor
+  - Replaced backdoor force with frontdoor cold_reset_and_set_state() per phase
+  - Added factory override (sep_efuse_item_lcc_feat_ctrl) in build_phase for clean OTP preload
+  - Phase F sigint_err: frontdoor corrupt write (0xF1) to LC_STATE shadow register
+  - Added verify_lc_state_input() per phase (+6 checks), recovery verify (+5 checks)
+  - Total: 70 checks, 7 cold resets, 0 backdoor access
+  v2.2.1 (2026-03-11): Updated TEST 4.3 with absolute addresses + full address space coverage
+  - Fixed addresses from default offsets to actual SEP absolute addresses (och_sep_top_reg.svh)
+  - Added EFUSE_INTERFACE_CTRL (0x10930400) as 4th JTAG-reachable space
+  - Added gap address (0x10930450) for APB ERR_DECODE coverage
+  - Increased from ~39 checks to ~64 checks
+  v2.2.0 (2026-03-11): Added TEST 4.3 JTAG access control — 14 → 15 tests
+  - NEW: JTAG AXI-Lite port access control per LC_STATE (virtual interface, not backdoor)
+  - Covers efuse_interface_controller JTAG demux (PROD/RMA_SIP restricted, TEST_DEV/RMA_CHIPLET open)
+  v2.1.0 (2026-03-12): Overlap consolidation — 19 tests → 14 tests
+  - Trimmed TEST 3.4 → Phases D/D2 only (latching focus)
+  - Merged TEST 4.2 → TEST 3.2 Phase D (SEC_DIS)
+  - TEST 3.1 retained for deterministic bit-level isolation
+  - Result: 14 tests, 0 coverage gaps
+
+Coverage Target:
+  - Hardware (UVM): 95% functional coverage (LCC registers, state machine)
+  - Firmware Integration (Cocotb): End-to-end boot flow validation
+Timeline: 4-4.5 weeks
+Effort Estimate: 15 days (13 UVM + 2 Cocotb)
+
+Architecture Decision: Token matching (SHA256 + triple-redundancy) confirmed
+                       in eFuse scope. Tests in SEP_EFUSE_TEST_PLAN.txt Suite 6.
+
+Test Methodology:
+  **Shadow Register Writes (NOT OTP Programming)**: LCC tests use frontdoor writes
+  to shadow registers, NOT actual OTP programming. DIS vectors (SIP_DIS, SYS_DIS)
+  come from eFuse preload (+EFUSE_RANDOM or defaults). LC_STATE is W1S (write-1-set)
+  and requires cold reset to clear. Cold reset reloads DIS from preload values.
+  This enables rapid state-space exploration without OTP programming delays.
+
+Test Breakdown by Reusability:
+
+**UVM Tests (Hardware - 14 tests):**
+  - 5 tests (38%): 75-90% reusable from Grendel UVM (REUSE+)
+  - 3 tests (23%): 50-70% reusable (REUSE+)
+  - 5 tests (38%): 0-40% reusable (NEW features or OCAH-specific)
+
+**Cocotb Tests (Firmware Integration - 2 tests):**
+  - 2 tests (100%): 60-80% reusable from Grendel Cocotb (REUSE+)
+
+Primary Reusable UVM Sequences from Grendel:
+  - sep_life_cycle_sequence.sv (31K) → TEST 0.1, 1.1, 2.1
+    * Location: /proj_soc/user_dev/yenhenglai/tt_sep/tb/uvm_sequences/
+    * Most comprehensive: 4 transition paths, DEMOTE, register access
+  - sep_efuse_demote_test_sequence.sv (4.2K) → TEST 0.1, 2.1
+    * DEMOTE lock/unlock patterns, reset clearing
+  - sep_life_cycle_sec_dis_seq.sv (4.0K) → TEST 4.2
+    * SEC_DIS override behavior
+  - sep_debug_feature_ctrl_secure_tm_*_test → TEST 3.4
+    * SECURE_TM test gating verification
+
+Primary Reusable Cocotb Tests from Grendel:
+  - sep_manifest_lc_state_test.py (12K) → TEST 6.1
+    * Location: /proj_soc/user_dev/yenhenglai/tt_sep/tb/cocotb_tests/
+    * ROM rejection of invalid LC states, manifest validation
+  - sep_demotion_test.py (24K) → TEST 6.2
+    * Firmware DEMOTE bit handling, bootloader decision-making
+
+Key Differences from Grendel:
+  - NEW: Two security domains (Domain 1: local, Domain 2: downstream)
+  - NEW: SIP_DIS, SYS_DIS feature vectors (CHP_DIS struck through in OCAH spec v0.86)
+  - NEW: DEMOTE_1/2 bits for PROD/PROD_DBG distinction
+  - Enhanced: Redundant LC state encoding
+  - VERIFY: SECURE_TM signal for dynamic test gating (Grendel had this)
+  - Note: SHA256 token matching is in eFuse scope (not LCC)
+
+================================================================================
+AI EXECUTION REFERENCE - CONSOLIDATED MAPPING FOR TEST GENERATION
+================================================================================
+
+This section provides consolidated information for AI-based test generation,
+adapting Grendel LCC sequences to OCAH. Use this block for automated adaptation.
+
+--------------------------------------------------------------------------------
+1. TEST-TO-SEQUENCE MAPPING TABLE (13 Tests)
+--------------------------------------------------------------------------------
+
+| Test  | Name (exact in plan)                  | Grendel Sequence / Source              | Reuse% | Status      |
+|-------|---------------------------------------|----------------------------------------|--------|-------------|
+| 0.1   | sep_lcc_uvm_reg_reset_test            | sep_life_cycle_sequence, sep_efuse_demote_test_sequence | 75%  | ADAPT       |
+| 1.1   | sep_lcc_uvm_state_transitions_test    | sep_life_cycle_sequence                | 90%    | ADAPT       |
+| 1.3   | sep_lcc_uvm_rma_chiplet_token_test     | NEW (OCAH RMA path rules)             | 30%    | NEW         |
+| 2.1   | sep_lcc_uvm_demote_comprehensive_test | sep_efuse_demote_test_sequence, sep_life_cycle_sequence | 85% | ADAPT       |
+| 2.4   | sep_lcc_uvm_prod_dbg_flavour_test     | NEW (PROD_DBG_1 vs PROD_DBG_2)         | 20%    | NEW         |
+| 3.2   | sep_lcc_uvm_feature_control_per_lc_state_test | sep_life_cycle_sequence        | 60%    | ADAPT+NEW   |
+| 3.4   | sep_lcc_uvm_feature_control_secure_tm_test | sep_debug_feature_ctrl_secure_tm_* | 40%    | ADAPT+NEW   |
+| 3.5   | sep_lcc_uvm_screening_vs_diagnostic_test | NEW (SIP integration distinction)   | 100%   | IMPLEMENTED |
+| 4.1   | sep_lcc_uvm_permission_matrix_comprehensive_test | Old permission tests          | 40%    | ADAPT+NEW   |
+| 4.2   | MERGED → TEST 3.2 Phase D             | sep_life_cycle_sec_dis_seq.sv         | --     | MERGED      |
+| 4.3   | sep_lcc_uvm_jtag_access_ctrl_test      | NEW (JTAG AXI-Lite access ctrl)      | 0%     | ✅ PASS     |
+| 1.4   | sep_lcc_uvm_token_gate_corner_test    | NEW (corner case gap analysis)        | 0%     | ✅ PASS     |
+| 3.6   | sep_lcc_uvm_random_lc_state_test       | NEW (random eFuse LC_STATE boot)       | 0%     | ✅ PASS     |
+| 5.1   | sep_lcc_uvm_encoding_and_error_test   | NEW (encoding errors+sigint×DEMOTE)   | 20%    | ✅ PASS     |
+| 5.2   | sep_lcc_uvm_alarm_handling_test       | NEW (alarm concepts)                  | 30%    | ADAPT+NEW   |
+| 6.1   | sep_lcc_firmware_lc_state_validation_test (Cocotb) | sep_manifest_lc_state_test.py | 80%    | ADAPT       |
+| 6.2   | sep_lcc_firmware_demote_handling_test (Cocotb) | sep_demotion_test.py            | 70%    | ADAPT       |
+
+Legend: ADAPT = Copy Grendel, update interface/names. ADAPT+NEW = Adapt + add new logic.
+
+--------------------------------------------------------------------------------
+2. INTERFACE DELTA: Grendel → OCAH (LCC)
+--------------------------------------------------------------------------------
+
+Method / Register Access:
+  OLD: troot_axi_write(addr, data)   → NEW: axi4lite_write_csr(addr, data)
+  OLD: troot_axi_read(addr, data)    → NEW: axi4lite_read_csr(addr, data)
+
+Naming (search-replace for adaptation):
+  OLD: SOP_DIS           → NEW: SIP_DIS
+  OLD: RMA_SOP            → NEW: RMA_SIP
+  OLD: SEP_ENV_RMA_SOP_*  → NEW: RMA_SIP (state constant)
+  OLD: Single LC_STATE   → NEW: Two security domains (Domain 1: local, Domain 2: downstream)
+
+Remove from LCC sequences (moved to eFuse):
+  - All token matching code (RMA token programming, token validation)
+  - SEC_DIS token programming via IJTAG (eFuse scope)
+
+--------------------------------------------------------------------------------
+3. LC STATE ENCODING QUICK REFERENCE (Use in Assertions)
+--------------------------------------------------------------------------------
+
+  TEST_DEV    = 4'b0000 (0x0, encoded 8'hF0)
+  PROD        = 4'b0001 (0x1, encoded 8'hE1)
+  PROD_DBG    = 4'b0001 + DEMOTE_1 or DEMOTE_2=1 (encoded 8'hE1; volatile; two flavours: PROD_DBG_1, PROD_DBG_2)
+  RMA_SIP     = 4'b001X (0x2 or 0x3, encoded 8'hD2 or 8'hC3)
+  RMA_CHIPLET = 4'b011X (0x6-0x7, encoded 8'h96-8'h87)
+  PROD_END    = 4'b1000 (0x8, encoded 8'h78)
+  INVALID     = All other values (0x4-0x5, 0x9-0xF)
+
+When writing LC_STATE to shadow register (W1S for LCC tests):
+  - PROD_END    → use 0x8 (not 0x3)
+  - RMA_SIP     → use 0x2 or 0x3 (not 0x4)
+  - RMA_CHIPLET → use 0x6-0x7 (requires bit[1] set, i.e. must go through RMA_SIP first)
+
+--------------------------------------------------------------------------------
+4. FEATURE CONTROL BITS QUICK REFERENCE
+--------------------------------------------------------------------------------
+
+Debug [4:0]:  [0]=SEP_DBG, [1]=SOC_DBG, [2]=AP_DBG, [3]=AP_TRACE, [4]=SIP_DBG
+Test [32-36]: [32]=FUSE_TEST, [33]=SEP_STEST, [34]=SEP_DTEST, [35]=AP_STEST, [36]=AP_DTEST
+Function [63:48]: Implementation-defined; per spec uses SIP_DIS, SYS_DIS.
+
+DEMOTE_1/2 scope: Affects Debug [4:0] only (not Test or Function).
+SECURE_TM scope: Affects Test [47:32] only.
+SEC_DIS scope: Overrides all states including INVALID (per spec).
+
+--------------------------------------------------------------------------------
+5. REGISTER ADDRESS MAP (LCC - Typical Offsets)
+--------------------------------------------------------------------------------
+
+Base: SEP_LCC_BASE = 0x1091_8000 (from sep_addr_map.svh).
+
+  | Register / Shadow     | Offset (example) | Purpose                    |
+  |------------------------|------------------|----------------------------|
+  | LC_STATE               | 0x000            | LC state from eFuse         |
+  | SIP_DIS                | 0x004            | SIP feature disable         |
+  | SYS_LC_STATE           | 0x020            | Domain 2 (downstream) LC state |
+  | SYS_DIS                | 0x024            | SYS feature disable         |
+  | DEMOTE_1                | 0x030            | W1S, 64-bit: bit[0]=demote, bit[1]=lock |
+  | DEMOTE_2                | 0x038            | W1S, 64-bit: bit[0]=demote, bit[1]=lock |
+  | FEAT_CTRL              | (RO output)      | 64-bit; read via status register |
+
+Note: DEMOTE lock is bit[1] within each DEMOTE register (not a separate register).
+The lock bit prevents further writes to bit[0] (demote). See RTL: `assign demote_wen_1 = ~demote_reg_1.lock;`
+
+--------------------------------------------------------------------------------
+6. EXPECTED VALUES AND PASS/FAIL CRITERIA (Summary)
+--------------------------------------------------------------------------------
+
+LC state readback: Match encoding table above (0x0, 0x1, 0x2/0x3, 0x6-0x7, 0x8).
+DEMOTE_1/2 write then reset: DEMOTE_1 and DEMOTE_2 must read 0 after cold reset.
+DEMOTE in PROD_END: Write DEMOTE_1=1 or DEMOTE_2=1 has no effect (terminal state).
+SEC_DIS=1: feature_disable_o = all enabled for ALL states including INVALID.
+SEC_DIS=0: feature_disable_o per LC state and DIS vectors (SIP_DIS, SYS_DIS).
+Invalid encoding (e.g. 0x9, 0xA, 0xF): LCC enters INVALID; feature_disable_o = all disabled.
+RMA_CHIPLET: Entering requires two token matches in eFuse (RMA_CHIPLET_TOKEN + RMA_SIP_TOKEN).
+
+--------------------------------------------------------------------------------
+7. GRENDEL SOURCE FILE LOCATIONS
+--------------------------------------------------------------------------------
+
+UVM Sequences:
+  /proj_soc/user_dev/yenhenglai/tt_sep/tb/uvm_sequences/
+    - sep_life_cycle_sequence.sv           (primary: state machine, DEMOTE, regs)
+    - sep_efuse_demote_test_sequence.sv    (DEMOTE lock, reset clear)
+    - sep_life_cycle_sec_dis_seq.sv        (SEC_DIS override)
+
+Cocotb Tests:
+  /proj_soc/user_dev/yenhenglai/tt_sep/tb/cocotb_tests/
+    - sep_manifest_lc_state_test.py        (invalid LC, manifest validation)
+    - sep_demotion_test.py                 (DEMOTE handling, boot flow)
+
+--------------------------------------------------------------------------------
+8. ADAPTATION CHECKLIST FOR EACH TEST
+--------------------------------------------------------------------------------
+
+For ADAPT (interface/name change only):
+  [ ] Copy Grendel sequence/test file
+  [ ] Replace troot_* with axi4lite_* register access
+  [ ] Apply SOP_DIS→SIP_DIS, RMA_SOP→RMA_SIP renames
+  [ ] Use LC state encodings 0x8, 0x2/0x3, 0x6-0x7 per Section 3
+  [ ] Remove token matching steps (eFuse scope)
+  [ ] Run and verify
+
+For ADAPT+NEW (interface + new logic):
+  [ ] Copy Grendel sequence/test file
+  [ ] Replace troot_* with axi4lite_*
+  [ ] Apply renames and encoding updates per Section 3
+  [ ] Add DIS vector reads (SIP_DIS, SYS_DIS) where needed
+  [ ] Add new phases (e.g. DEMOTE_LOCK, SECURE_TM, encoding error) per test description
+  [ ] Remove token matching steps
+  [ ] Run and verify
+
+For Cocotb:
+  [ ] Copy Grendel Python test
+  [ ] Update LC state constants to OCAH encodings (0x8, 0x2/0x3, 0x6-0x7)
+  [ ] Add PROD_END, two-domain, DEMOTE_1/2 scenarios per test description
+  [ ] Run and verify
+
+================================================================================
+SIP INTEGRATION CONTEXT
+================================================================================
+
+This section explains the architectural rationale for OCAH's two-domain
+lifecycle control approach, driven by System-in-Package (SiP) integration
+requirements from the OCAH specification Section 4.6.2.
+
+Background: Secure Lifecycle Control in SiP
+--------------------------------------------
+
+In SiP (System-in-Package) integration scenarios, chiplets often have security
+assets that belong only to the chiplet designers (not the SiP integrator). This
+creates a need for **distributed secure lifecycle control** - each chiplet must
+maintain its own security domains while participating in a shared package-level
+security architecture.
+
+Challenge 1: Misaligned Lifecycle States
+-----------------------------------------
+
+Different chiplets in a SiP may have different lifecycle states at any given
+time due to:
+  - Independent manufacturing and testing flows
+  - Different security policies (chiplet-level vs package-level)
+  - Asynchronous lifecycle transitions
+
+**Consequences of misalignment**:
+  1. Inconsistent debug/test access across chiplets
+  2. Divergent key derivation (keys derived from different LC states)
+  3. Security policy conflicts at package boundaries
+
+Challenge 2: Misaligned Lifecycle Control Schemes
+--------------------------------------------------
+
+Chiplets may implement different granularities of lifecycle control:
+  - Some chiplets: Coarse lifecycle (e.g., TEST, PROD, RMA only)
+  - Other chiplets: Fine-grained lifecycle (e.g., TEST_DEV, PROD, PROD_DBG, PROD_END, RMA_SIP, RMA_CHIPLET)
+  - Package integrator: May require additional package-level states
+
+**Consequences of misalignment**:
+  1. Cannot enforce uniform security policies across package
+  2. Difficult to coordinate multi-chiplet debug/test operations
+  3. Incompatible RMA (Return Merchandise Authorization) flows
+
+OCAH Solution: Two-Domain Security Architecture
+-----------------------------------------
+
+OCAH addresses these challenges with a **2-domain security architecture** (per spec March 5th):
+
+  Domain 1: Controls debug access to LOCAL assets
+    - BL1 firmware controls DEMOTE_1 / DEMOTE_LOCK_1
+    - Feature control uses SIP_DIS for PROD_DBG_1
+    - Chiplet-local security resources
+
+  Domain 2: Controls debug access to DOWNSTREAM chiplets
+    - BL2/SIP firmware controls DEMOTE_2 / DEMOTE_LOCK_2
+    - Feature control uses SYS_DIS for PROD_DBG_2
+    - Inter-chiplet security resources
+
+The final feature control vector uses the DIS vectors (per spec March 5th):
+  feature_disable_o = f(LC_STATE, SIP_DIS, SYS_DIS)
+  Note: CHP_DIS struck through in OCAH spec v0.86 — only SIP_DIS and SYS_DIS used
+
+This ensures that any domain can disable features for security, but no single
+domain can unilaterally enable features (defense in depth).
+
+Security Requirements (from OCAH Spec)
+---------------------------------------
+
+**[OPT-SEC-1]**: SiP Integration Best Practice
+  - SiP integrators SHOULD only expose chiplets that have sufficient secure
+    lifecycle control protection for security assets
+  - Rationale: Prevents integration of insecure chiplets into security-critical packages
+
+**[REQ-SEC-6]**: Debug/Test Traffic Forwarding Control
+  - Chiplets that forward debug/test traffic between themselves and other
+    chiplets MUST provide access control mechanisms
+  - Access control MUST protect BOTH:
+    1. Local chiplet debug/test resources
+    2. Debug/test traffic forwarded to other chiplets
+  - The lifecycle control policy for forwarded traffic MUST be controlled by
+    the SiP integrator (not local to the forwarding chiplet)
+  - Rationale: Prevents a compromised chiplet from enabling debug access to
+    other chiplets in the package
+
+**[REQ-SEC-7]**: Shared Security Domain Lifecycle Control
+  - For chiplets in a **Shared Security Domain** (security boundaries span
+    multiple chiplets), the lifecycle control policy MUST be controlled by the
+    SiP integrator only
+  - Local chiplet designers MUST NOT have unilateral control over lifecycle
+    policies that affect security assets shared across chiplets
+  - Rationale: Ensures consistent security policies across shared security boundaries
+
+Note on Security Domain Types:
+  - **Local Security Domains**: Implementation-defined, controlled by chiplet
+    designer (e.g., chiplet-local crypto keys, chiplet-local debug resources)
+  - **Shared Security Domains**: Controlled by SiP integrator (e.g., inter-chiplet
+    secure communication, package-level root-of-trust, shared debug infrastructure)
+
+Impact on LCC Verification
+---------------------------
+
+These SiP integration requirements drive the following verification priorities:
+
+1. **Two-Domain Feature Control (TEST 2.4, 3.2)**: Verify that Domain 1 (DEMOTE_1,
+   SIP_DIS) and Domain 2 (DEMOTE_2, SYS_DIS) operate independently
+2. **State Transitions (TEST 1.1)**: Verify all valid state transitions
+   including sequential RMA path
+3. **Debug/Test Isolation (Suite 3)**: Verify that feature control vectors
+   properly isolate debug/test resources
+4. **SEC_DIS Override (TEST 3.2 Phase D)**: Verify that SEC_DIS (representing SiP
+   integrator emergency access) overrides domain-specific policies
+5. **DEMOTE Security (Suite 2)**: Verify that DEMOTE_1/2 (volatile debug enable)
+   cannot bypass two-domain security policies
+
+The two-domain architecture ensures OCAH meets REQ-SEC-6 and REQ-SEC-7 while
+maintaining compatibility with both simple single-chiplet deployments and
+complex multi-chiplet SiP integrations.
+
+================================================================================
+TEST SUITE OVERVIEW (v2.1.0 — post overlap consolidation)
+================================================================================
+
+**UVM Tests (Hardware Verification - 13 tests):**
+
+Suite 0: Basic LC Controller Access (1 test)
+  - TEST 0.1: Comprehensive register and reset testing [IMPLEMENTED]
+
+Suite 1: LC State Machine (3 tests)
+  - TEST 1.1: State transitions + invalid states [IMPLEMENTED]
+  - TEST 1.3: RMA_CHIPLET dual token verification [IMPLEMENTED]
+  - TEST 1.4: Token gate corner cases (9 phases, 3 RTL issues) [IMPLEMENTED]
+
+Suite 2: DEMOTE_1/2 Bit Functionality (2 tests)
+  - TEST 2.1: DEMOTE comprehensive [IMPLEMENTED]
+  - TEST 2.4: PROD_DBG flavour independence [IMPLEMENTED]
+
+Suite 3: Feature Control Vectors (4 tests)
+  - TEST 3.1: Feature control basic — bit-level isolation + SIP/SYS OR [IMPLEMENTED]
+  - TEST 3.2: Per-LC-state feature control with random DIS [IMPLEMENTED]
+  - TEST 3.4: SECURE_TM latching (D/D2 phases) [IMPLEMENTED]
+  - TEST 3.5: Screening vs diagnostic test features [IMPLEMENTED]
+
+Suite 4: Permission Matrix (2 tests)
+  - TEST 4.1: Comprehensive permission matrix + OTP programming [IMPLEMENTED]
+  - TEST 4.3: JTAG AXI-Lite access control per LC_STATE [IMPLEMENTED]
+
+Suite 5: Error Detection (2 tests)
+  - TEST 5.1: LC encoding error injection + lockdown + sigint×DEMOTE [IMPLEMENTED]
+  - TEST 5.2: Alarm handling [DEFERRED — Gen2, AGP not implemented]
+
+**Cocotb Tests (Firmware Integration - 2 tests):**
+
+Suite 6: Firmware Integration (2 tests)
+  - TEST 6.1: ROM rejection of invalid LC states [FUTURE]
+  - TEST 6.2: Firmware DEMOTE_1/2 handling [FUTURE]
+
+Total: 16 tests (13 implemented + 3 future)
+
+**Token Matching**: Not in LCC scope. See SEP_EFUSE_TEST_PLAN.txt Suite 6.
+
+================================================================================
+TEST SUITE 0: BASIC LC CONTROLLER ACCESS
+================================================================================
+
+------------------------------------------------------------------------
+TEST 0.1: sep_lcc_uvm_reg_reset_test
+------------------------------------------------------------------------
+**Purpose**: Verify comprehensive register access, reset behavior, and initialization
+
+**Test Summary**:
+- Cold reset → shadow register reload → LC_STATE initialization
+- Two-domain register reads (SIP_DIS, SYS_DIS)
+- DEMOTE_1/2 write and reset clearing (volatile behavior)
+- Feature control shadow registers (read-only verification)
+- Reset during LC transition (safe interruption)
+
+**Reusability**: REUSE+ (75% from Grendel UVM sequences)
+  - sep_life_cycle_sequence.sv::read_all_life_cycle_related_regs() (lines 481-509)
+  - sep_efuse_demote_test_sequence.sv::body() (lines 67-103, reset behavior)
+  - NEW: Two-domain architecture, SIP_DIS/SYS_DIS, cold vs system reset distinction
+
+**Sequence**: sep_lcc_uvm_base_seq.sv (adapted from sep_base_seq.sv)
+  - Methods: axi4lite_write_csr(), axi4lite_read_csr()
+
+**Test Steps**:
+  Phase A: Cold Reset and Initialization
+    1. Assert cold reset (rst_ni)
+    2. BEFORE fuse sensing completes (backdoor check fuse_sense_done=0):
+       Verify feat_ctrl_o = {F,F,F} (all features disabled — LCC defaults to INVALID)
+       Spec: "On power up, the LC controller defaults to the INVALID state and waits
+       for the actual LC state to be retrieved from the OTP controller."
+    3. Wait for fuse sensing + reset sequence to complete
+    4. Verify DEMOTE_1 = 0 and DEMOTE_2 = 0 after reset
+    5. Verify LC_STATE readable (loaded from eFuse shadow)
+    6. Verify feat_ctrl_o now reflects loaded LC state (no longer INVALID defaults)
+
+  Phase B: Register Read Access
+    1. Read LC_STATE register (domain 0: CHIPLET)
+       Expected: PROD (0x1) from eFuse
+    2. Read LC_STATE register (domain 1: SIP)
+       Expected: Value from eFuse or default
+    3. Read LC_STATE register (domain 2: SYS)
+       Expected: Value from eFuse or default
+    4. Read DEMOTE_1 and DEMOTE_2 registers
+       Expected: 0x0 each (cleared on reset)
+    5. Read SIP_DIS shadow register
+       Expected: Value from eFuse
+    6. Read SYS_DIS shadow register
+       Expected: Value from eFuse
+
+  Phase C: DEMOTE_1/2 and DEMOTE_LOCK_1/2 Write and Lock Behavior
+    DEMOTE and DEMOTE_LOCK are W1S (write-1-to-set) registers.
+    Writing 0 has NO effect — only cold reset can clear these bits.
+    DEMOTE_1/2 W1S is additionally gated by DEMOTE_LOCK_1/2 via swwe
+    (software write enable = ~lock). When lock=0, W1S to DEMOTE works
+    normally. When lock=1, even W1S to DEMOTE is blocked (swwe=0).
+    DEMOTE_LOCK has no swwe gate (always settable via W1S).
+    Both are volatile (cold reset clears to 0).
+    NOTE: W1S behavior confirmed by simulation — writing 0 to DEMOTE
+          and DEMOTE_LOCK has no effect. TEST 0.1 Phase C steps that
+          claim "write DEMOTE=0 succeeds" are INCORRECT and must be
+          updated to use cold reset instead.
+
+    Part 1 - DEMOTE_1 + DEMOTE_LOCK_1 (BL1 pair):
+    1. Read FEAT_CTRL before DEMOTE_1
+    2. Write DEMOTE_1 = 1 (W1S)
+       Expected: Write succeeds (lock=0, swwe=1)
+    3. Read back DEMOTE_1
+       Expected: bit[0] = 1
+    4. Read FEAT_CTRL after DEMOTE_1
+       Expected: May change if in PROD state (PROD→PROD_DBG_1)
+    5. Verify full DEMOTE_1 register = 0x1 (demote=1, lock=0)
+    6. Issue cold reset to clear DEMOTE_1 (W1S — only reset can clear)
+       Expected: Reset completes
+    7. Set DEMOTE_LOCK_1 = 1 FIRST (W1S, while DEMOTE_1=0)
+       Expected: LOCK_1 bit = 1
+    8. Attempt to SET DEMOTE_1 = 1 (should be blocked by LOCK_1)
+       Expected: W1S write ignored because swwe = ~lock = 0
+    9. Read DEMOTE_1 - verify stays 0 (LOCK_1 prevents W1S)
+       Expected: DEMOTE_1 bit = 0 (LOCK protection working)
+   10. Verify full DEMOTE_1 register = 0x2 (demote=0, lock=1)
+   11. Issue cold reset (LOCK_1=1 should clear — volatile)
+       Expected: Reset completes
+   12. Verify DEMOTE_1 = 0 after reset (volatile cleared)
+   13. Verify DEMOTE_LOCK_1 = 0 after reset (volatile cleared)
+
+    Part 2 - DEMOTE_2 + DEMOTE_LOCK_2 (BL2 pair):
+   14. Read FEAT_CTRL before DEMOTE_2
+   15. Write DEMOTE_2 = 1 (W1S)
+       Expected: Write succeeds (lock=0, swwe=1)
+   16. Read back DEMOTE_2
+       Expected: bit[0] = 1
+   17. Read FEAT_CTRL after DEMOTE_2
+       Expected: May change if in PROD state (PROD→PROD_DBG_2)
+   18. Verify full DEMOTE_2 register = 0x1 (demote=1, lock=0)
+   19. Issue cold reset to clear DEMOTE_2 (W1S — only reset can clear)
+       Expected: Reset completes
+   20. Set DEMOTE_LOCK_2 = 1 FIRST (W1S, while DEMOTE_2=0)
+       Expected: LOCK_2 bit = 1
+   21. Attempt to SET DEMOTE_2 = 1 (should be blocked by LOCK_2)
+       Expected: W1S write ignored because swwe = ~lock = 0
+   22. Read DEMOTE_2 - verify stays 0 (LOCK_2 prevents W1S)
+       Expected: DEMOTE_2 bit = 0 (LOCK protection working)
+   23. Verify full DEMOTE_2 register = 0x2 (demote=0, lock=1)
+   24. Issue cold reset (LOCK_2=1 should clear — volatile)
+       Expected: Reset completes
+   25. Verify DEMOTE_2 = 0 after reset (volatile cleared)
+   26. Verify DEMOTE_LOCK_2 = 0 after reset (volatile cleared)
+
+  Phase D: Feature Control Shadow Registers (Read-Only)
+    1. Attempt write to SIP_DIS
+       Expected: Write ignored (read-only shadow)
+    2. Read back SIP_DIS
+       Expected: Unchanged value
+    3. Attempt write to SYS_DIS
+       Expected: Write ignored
+    4. Attempt write to SYS_DIS
+       Expected: Write ignored
+
+  Phase E: Reset Restores Safe State
+    1. Set DEMOTE_1 = 1 (simulate mid-operation state)
+    2. Set DEMOTE_2 = 1 (simulate mid-operation state)
+    3. Save FEAT_CTRL before reset
+    4. Issue cold reset via do_cold_reset_and_wait()
+    5. Verify DEMOTE_1 = 0 after reset (safe state)
+    6. Verify DEMOTE_2 = 0 after reset (safe state)
+    7. Verify FEAT_CTRL accessible after reset
+    8. Verify LC_STATE readable after reset
+    9. Log FEAT_CTRL change (informational - may reflect cleared DEMOTE_1/2)
+
+**Pass Criteria**:
+  [ ]  LCC defaults to INVALID (feat_ctrl={F,F,F}) before fuse sensing completes
+  [ ]  LCC transitions to correct LC state after fuse sensing completes
+  [ ]  Cold reset clears DEMOTE_1/2 and DEMOTE_LOCK_1/2 to 0 (volatile bits)
+  [ ]  All LCC registers readable after reset (FEAT_CTRL, DEMOTE_1/2, LC_STATE)
+  [ ]  DEMOTE_1/2 W1S behavior correct (write-1-to-set)
+  [ ]  DEMOTE_LOCK_1/2 W1S behavior correct (write-1-to-set)
+  [ ]  DEMOTE_LOCK_1/2 blocks W1S writes to DEMOTE_1/2 when LOCK=1
+  [ ]  FEAT_CTRL register is read-only (writes ignored)
+
+**Coverage**:
+  - Pre-sensing INVALID default (security-critical boot window)
+  - LCC register read access (FEAT_CTRL, DEMOTE_1/2)
+  - DEMOTE_1/2 and DEMOTE_LOCK_1/2 W1S write behavior
+  - DEMOTE_LOCK_1/2 blocks W1S writes to DEMOTE_1/2 (LOCK protection)
+  - Cold reset clears volatile bits (DEMOTE_1/2, DEMOTE_LOCK_1/2)
+  - FEAT_CTRL read-only verification
+  - Safe state restoration after reset (DEMOTE_1/2 cleared)
+
+**Estimated Runtime**: ~0.3 min (~1500 AXI transactions)
+
+
+================================================================================
+TEST SUITE 1: LC STATE MACHINE
+================================================================================
+
+------------------------------------------------------------------------
+TEST 1.1: sep_lcc_uvm_state_transitions_test
+------------------------------------------------------------------------
+**Purpose**: Verify all valid LC state transitions
+
+**Test Summary**:
+- TEST_DEV → PROD (Phase A)
+- PROD ↔ PROD_DBG_1/2 via DEMOTE_1/2 (Phase B)
+- PROD → RMA_SIP with token (Phase C)
+- RMA_SIP → RMA_CHIPLET with token (Phase D)
+- Invalid transitions blocked (Phase E)
+- TEST_DEV → PROD_END (Phase F — only valid source for PROD_END)
+- TEST_DEV → RMA_SIP with token (Phase G)
+- TEST_DEV → RMA_CHIPLET direct with both tokens (Phase H)
+- Total: 8 valid transitions tested
+- Note: PROD → RMA_CHIPLET is BLOCKED (must go through RMA_SIP)
+- Note: PROD → PROD_END is BLOCKED (only from TEST_DEV per spec)
+
+**Reusability**: REUSE+ (75% from sep_life_cycle_sequence.sv - UVM)
+  - OLD sequence: sep_life_cycle_sequence.sv::body()
+    * Location: /proj_soc/user_dev/yenhenglai/tt_sep/tb/uvm_sequences/
+    * Lines 226-400: 4 LC transition paths (A, B, C, D)
+  - NEW test adds: PROD_END terminal state, DEMOTE_1/2 transitions, two-domain
+  - Remove: Token matching steps (lines 138-372 - in eFuse scope)
+
+**Sequence**: sep_lcc_uvm_transition_seq.sv (adapted from sep_life_cycle_sequence.sv)
+
+**Test Steps** (using shadow register W1S writes, no OTP programming):
+  Phase A: Valid State Outputs (all 9 valid LC_STATE encodings)
+    W1S chains minimize cold resets:
+    - Chain 1: 0x0 → 0x1 → 0x3 → 0x7 (TEST_DEV → PROD → RMA_SIP_1 → RMA_CHIP_3)
+    - Chain 2: 0x0 → 0x2 → 0x6 (TEST_DEV → RMA_SIP_0 → RMA_CHIP_2)
+    - Chain 3: 0x0 → 0x4 → 0x5 (TEST_DEV → RMA_CHIP_0 → RMA_CHIP_1)
+    - Chain 4: 0x0 → 0x8 (TEST_DEV → PROD_END)
+    For each state: verify_lc_state_input() + verify_golden()
+
+  Phase D: Invalid Encodings (0x9-0xF) → Safe Lockdown
+    W1S chains:
+    - Chain 1: 0x0 → 0x9 → 0xB → 0xF
+    - Chain 2: 0x0 → 0xA → 0xE
+    - Chain 3: 0x0 → 0xC → 0xD
+    For each: verify feat_ctrl = 0 (safe lockdown)
+
+  Phase E: HW-Level Invalid Transition Probes
+    Tests RTL blocking of spec-invalid transitions:
+    - E.1: PROD → RMA_CHIPLET (via TRANSIENT_RMA_EN, skip RMA_SIP)
+    - E.2: PROD_END → SIP token auto-set (terminal escape)
+    - E.3: PROD_END → CHIPLET token auto-set (terminal escape)
+    - E.4: RMA_CHIPLET → APB write bit[3] (terminal escape)
+    - E.5: PROD → APB write bit[3] (PROD→PROD_END blocked)
+
+  Phase F: Exhaustive Transition Policy Validation
+    Pure software validation of is_transition_valid() for all from→to pairs:
+    - From TEST_DEV: PROD ✓, PROD_END ✓, RMA_SIP ✓, RMA_CHIPLET ✓
+    - From PROD: RMA_SIP ✓ only
+    - From RMA_SIP: RMA_CHIPLET ✓ only
+    - From PROD_END/RMA_CHIPLET/INVALID: none (terminal)
+
+  **Note**: DEMOTE behavior moved to TEST 2.1 for consolidation.
+
+**Pass Criteria**:
+  [ ]  All valid transitions complete successfully (8 transitions total)
+    - TEST_DEV → PROD
+    - TEST_DEV → PROD_END (no token, only valid source)
+    - TEST_DEV → RMA_SIP (with token)
+    - TEST_DEV → RMA_CHIPLET (with both tokens, direct)
+    - PROD ↔ PROD_DBG_1/2 (DEMOTE_1/2, volatile)
+    - PROD → RMA_SIP (with token)
+    - RMA_SIP → RMA_CHIPLET (with token)
+  [ ]  Invalid transitions are blocked:
+    - PROD_END → anything (terminal)
+    - RMA_SIP → TEST_DEV (no rollback)
+    - PROD → RMA_CHIPLET direct (must go through RMA_SIP)
+    - PROD → PROD_END (only from TEST_DEV)
+  [ ]  DEMOTE_1/2 controls PROD/PROD_DBG_1/2
+  [ ]  Terminal states (PROD_END, RMA_CHIPLET) cannot revert
+  [ ]  RMA_SIP is semi-terminal (forward only to RMA_CHIPLET, no rollback)
+  [ ]  Feature control updates correctly per state
+
+**Coverage**:
+  - All 10 valid LC state transitions (100% coverage)
+  - DEMOTE_1/2 bit functionality (PROD ↔ PROD_DBG)
+  - Terminal state enforcement (PROD_END, RMA_CHIPLET)
+  - Semi-terminal state (RMA_SIP forward transition)
+  - Feature control per state
+  - Progressive RMA use case (two-tier debug access)
+
+**Implementation Notes (Shadow Register W1S)**:
+  LC_STATE shadow register is W1S — bits can only be set, not cleared (until cold reset).
+  LC_STATE encoding: TEST_DEV=0x0, PROD=0x1, RMA_SIP=0x2/0x3, RMA_CHIPLET=0x6-0x7, PROD_END=0x8
+
+  **Methodology**: LCC tests use frontdoor writes to LC_STATE shadow register.
+  Cold reset clears all shadow register bits, allowing any state to be tested.
+  No actual OTP programming required — all verification via shadow registers.
+
+  **Execution Order** (single simulation, cold resets between incompatible W1S chains):
+    Chain 1: 0x0 → 0x1 → 0x3 → 0x7 (TEST_DEV → PROD → RMA_SIP_1 → RMA_CHIP_1)
+    Chain 2: 0x0 → 0x2 → 0x6 (TEST_DEV → RMA_SIP_0 → RMA_CHIP_0)
+    Chain 3: 0x0 → 0x8 (TEST_DEV → PROD_END)
+
+**Spec Note (TRANS_RMA_EN, REQ-TRMA-4)**:
+  When TRANS_RMA_EN == 1, token matching auto-updates LC_STATE shadow without
+  chip reset. RMA_CHIPLET_TOKEN match takes priority over RMA_SIP_TOKEN match.
+  Current tests use frontdoor_write_lc_state (token match + W1S) which exercises
+  this path. If explicit TRANS_RMA_EN=0 vs =1 testing is needed, add as Phase G
+  to this test.
+
+**Estimated Runtime**: ~3 min (10 cold resets total)
+
+
+------------------------------------------------------------------------
+TEST 1.3: sep_lcc_uvm_rma_chiplet_token_test  ✅ IMPLEMENTED
+------------------------------------------------------------------------
+**Purpose**: Verify dual-token requirement and token mismatch blocking for
+RMA_CHIPLET (4'b011X). W1S gating: bit[1] gated by SIP token, bit[2]
+gated by CHIPLET token.
+
+**Test Summary** (per OCAH spec March 5th):
+- RMA_CHIPLET requires BOTH RMA_SIP_TOKEN and RMA_CHIPLET_TOKEN
+- Partial token (CHIPLET-only from PROD) → W1S lands on INVALID (0x5)
+- Token mismatch blocks state transitions (state machine recovers after mismatch)
+- Cross-reference with eFuse token matching (SEP_EFUSE_TEST_PLAN.txt Suite 6)
+
+**Overlap Note** (trimmed from 6 planned phases to 2):
+- Golden path (PROD→SIP→CHIPLET): covered by TEST 1.1 Phase A Chain 1
+- TRANSIENT_RMA_EN skip-SIP probe: covered by TEST 1.1 Phase E.1
+- 0x4 via CHIPLET-only from TEST_DEV: covered by TEST 4.1 C.1
+- TEST_DEV→RMA_CHIPLET direct (both tokens): same W1S mechanism as 2-step chain
+This test focuses on: partial-token W1S path, token mismatch blocking.
+
+**Reusability**: NEW (30% - OCAH-specific dual token + mismatch rules)
+
+**Sequence**: sep_lcc_uvm_rma_chiplet_token_test_seq.sv
+**Test Class**: sep_lcc_uvm_rma_chiplet_token_test.sv
+
+**Test Steps** (2 cold resets):
+
+  Phase A: PROD + CHIPLET only (no SIP) → 0x5 INVALID  [1 cold reset]
+    1. cold_reset_to_state_tm0(4'h1) → PROD
+    2. verify_lc_state_input(4'h1) — confirm PROD baseline
+    3. perform_rma_chiplet_token_match(program_shadow=1) — CHIPLET match only
+    4. raw_write_lc_state(4'h7) — W1S targeting RMA_CHIPLET
+       W1S result: bit[0]=1(PROD) | bit[2]=1(CHIPLET matched) = 0x5
+       bit[1] blocked (SIP not matched) → NOT 0x6/0x7 (not RMA_CHIPLET)
+    5. read_lc_state → verify NOT RMA_CHIPLET (expect 0x5 INVALID)
+    6. verify_golden — feat_ctrl matches golden model for resulting state
+    NOTE: Differs from TEST 1.1 E.1 which uses TRANSIENT_RMA_EN auto-set path.
+          This phase tests the direct W1S path with partial token.
+
+  Phase B: Chained mismatch/match flow (single cold reset)  [1 cold reset]
+    B.1  SIP mismatch from PROD → stays PROD
+      1. cold_reset_to_state_tm0(4'h1) → PROD
+      2. verify_lc_state_input(4'h1) — confirm PROD baseline
+      3. perform_rma_sip_token_match(program_shadow=0) — SIP MISMATCH
+         (program_shadow=0 means use random token against default preload → mismatch)
+      4. raw_write_lc_state(4'h3) — attempt RMA_SIP
+         bit[1] blocked (SIP mismatch) → stays PROD
+      5. read_lc_state → verify LC_STATE = 0x1 (PROD unchanged)
+      6. verify_golden — feat_ctrl remains PROD
+
+    B.2  SIP match → RMA_SIP (recovery after mismatch)
+      7. frontdoor_write_lc_state(4'h3) — auto token match, transition_en=1
+         Proves state machine recovers correctly after B.1 mismatch.
+      8. verify_lc_state_input(4'h3) — confirm RMA_SIP
+      9. verify_golden — feat_ctrl at RMA_SIP
+
+    B.3  CHIPLET mismatch from RMA_SIP → stays RMA_SIP
+      10. perform_rma_chiplet_token_match(program_shadow=0) — CHIPLET MISMATCH
+      11. raw_write_lc_state(4'h7) — attempt RMA_CHIPLET
+          bit[2] blocked (CHIPLET mismatch) → stays RMA_SIP
+      12. read_lc_state → verify LC_STATE = 0x3 (RMA_SIP unchanged)
+      13. verify_golden — feat_ctrl remains RMA_SIP
+
+**Pass Criteria**:
+  [ ] A.3: CHIPLET-only from PROD does NOT reach RMA_CHIPLET (0x6/0x7)
+  [ ] A.4: feat_ctrl matches golden model for resulting INVALID state
+  [ ] B.1: SIP mismatch blocks PROD→RMA_SIP (state remains 0x1)
+  [ ] B.2: Valid SIP match transitions to RMA_SIP after prior mismatch
+  [ ] B.3: CHIPLET mismatch blocks RMA_SIP→RMA_CHIPLET (state remains 0x3)
+
+**Coverage**:
+  - Partial-token W1S (CHIPLET-only → INVALID, not RMA_CHIPLET)
+  - SIP token mismatch blocking from PROD
+  - CHIPLET token mismatch blocking from RMA_SIP
+  - State machine recovery after mismatch (B.1 mismatch → B.2 match succeeds)
+
+**Checks**: ~10 (5 state checks + 5 golden model checks)
+**Cold Resets**: 2
+**Estimated Runtime**: ~0.5 min
+
+
+------------------------------------------------------------------------
+TEST 1.4: sep_lcc_uvm_token_gate_corner_test  ✅ IMPLEMENTED
+------------------------------------------------------------------------
+**Purpose**: Corner case gap analysis covering 8 identified gaps in LCC/eFuse
+token gating behavior. Tests post-token-gate destination mismatch, PROD bit
+isolation, sequential RMA progression, terminal state + transient RMA guard,
+and PROD_DBG LC_STATE isolation.
+
+**Status**: ✅ IMPLEMENTED (2026-03-18)
+
+**Gap Analysis Summary**:
+  Gap #1: Post-token-gate destination mismatch (Phases A-D)
+  Gap #2: PROD bit isolation — overly restrictive pre-check (Phase E)
+  Gap #3: Sequential RMA guard missing from TEST_DEV (Phase F)
+  Gap #4: Terminal state + transient RMA interaction (Phase G)
+  Gap #5: SEC_DIS=1 + SECURE_TM=0 pipeline → already covered by TEST 3.2 Phase D
+  Gap #6: lc_sigint_err + DEMOTE interaction → covered by TEST 5.1 Phase E/F
+  Gap #7: APB access before fuse_sense_done → architecturally impossible
+  Gap #8: Transient RMA simultaneous token priority → covered by TEST 2.3 Phase B6
+
+**RTL Issues Discovered** (3):
+  1. Overly restrictive PROD pre-check: intended_dest must == 0x3 from PROD;
+     writing 0x6/0x7 with tokens is entirely blocked instead of allowing
+     per-bit SIP advancement to 0x3.
+  2. Missing sequential RMA guard: TEST_DEV (0x0) can directly set bit[2]
+     (RMA_CHIPLET) without bit[1] (RMA_SIP) being set first.
+  3. PROD_DBG fails to block LC_STATE transitions: shadow writes and
+     TRANSIENT_RMA_EN from PROD_DBG_1/2 are not blocked, leading to
+     privilege escalation (PROD_DBG → RMA_CHIPLET feat_ctrl).
+
+**Reusability**: NEW (corner cases specific to OCAH token gating)
+
+**Sequence**: sep_lcc_uvm_token_gate_corner_test_seq.sv
+**Test Class**: sep_lcc_uvm_token_gate_corner_test.sv
+
+**eFuse Preload**: +EFUSE_RANDOM with sep_efuse_item_lcc_feat_ctrl factory
+override (LC_STATE constrained to TEST_DEV=0x0, SIP_DIS/SYS_DIS randomized).
+
+**Test Steps** (~10 cold resets):
+
+  Phase A: Post-token-gate destination mismatch (SIP only)     [1 reset]
+    1. cold_reset_to_state_tm0(4'h2) → RMA_SIP_0
+    2. verify_lc_state_input(4'h2) — confirm baseline
+    3. perform_rma_sip_token_match(program_shadow=1) — SIP auth only
+    4. raw_write_lc_state(4'h7) — target RMA_CHIPLET
+       SIP token gates bit[1]: allowed → bit[1] sets
+       CHIPLET token not matched: bit[2] blocked → stays 0
+       Result: 0x2 | bit[1] = 0x3 (RMA_SIP_1)
+    5. verify_lc_state_input(4'h3) — partial advancement, not 0x7
+    6. verify_golden — feat_ctrl at RMA_SIP_1
+
+  Phase B: Negative — no token match                           [1 reset]
+    1. cold_reset_to_state_tm0(4'h2) → RMA_SIP_0
+    2. raw_write_lc_state(4'h7) — no tokens matched
+       Both bit[1] and bit[2] blocked → stays 0x2
+    3. verify_lc_state_input(4'h2) — unchanged
+
+  Phase C: Negative — CHIPLET token only                       [1 reset]
+    1. cold_reset_to_state_tm0(4'h2) → RMA_SIP_0
+    2. perform_rma_chiplet_token_match(program_shadow=1)
+    3. raw_write_lc_state(4'h7)
+       bit[1] blocked (no SIP auth), bit[2] blocked by sequential guard
+       Result: stays 0x2
+    4. verify_lc_state_input(4'h2) — unchanged
+
+  Phase D: Both tokens — full advancement                      [0 resets]
+    (continues from Phase C reset — RMA_SIP_0 with CHIPLET already matched)
+    1. perform_rma_sip_token_match(program_shadow=1) — add SIP auth
+    2. raw_write_lc_state(4'h7) — both tokens matched
+       bit[1] and bit[2] both pass through → 0x2 | 0x5 = 0x7
+    3. verify_lc_state_input(4'h7) — RMA_CHIPLET_1
+    4. verify_golden — feat_ctrl at RMA_CHIPLET
+
+  Phase E: PROD bit isolation (chained)                        [1 reset]
+    E.1: PROD write 0x7 with both tokens
+      1. cold_reset_to_state_tm0(4'h1) → PROD
+      2. perform_rma_sip_token_match + perform_rma_chiplet_token_match
+      3. raw_write_lc_state(4'h7) — target RMA_CHIPLET from PROD
+         RTL PROD pre-check: intended_dest(0x1|0x7=0x7) != 0x3 → blocks write
+         Expected per spec: per-bit SIP advancement → 0x3
+         **RTL ISSUE**: entire write blocked, stays 0x1
+      4. read_lc_state → expect 0x3 (spec) or 0x1 (RTL bug)
+    E.2: Chained from 0x3, write 0x7
+      5. raw_write_lc_state(4'h7) — from RMA_SIP, both tokens still valid
+      6. verify_lc_state_input(4'h7) — RMA_CHIPLET (0x3 | 0x4 = 0x7)
+
+  Phase F: Sequential RMA progression from TEST_DEV            [1 reset]
+    F.1: TEST_DEV write 0x6 with both tokens → expect 0x2 (sequential guard)
+      1. cold_reset_to_state_tm0(4'h0) → TEST_DEV
+      2. perform_rma_sip_token_match + perform_rma_chiplet_token_match
+      3. raw_write_lc_state(4'h6) — target RMA_CHIPLET
+         Sequential RMA guard: bit[2] requires bit[1] already set → blocked
+         Only bit[1] sets: 0x0 | bit[1] = 0x2
+         **RTL ISSUE**: may allow direct 0x0 → 0x6 (guard missing)
+      4. read_lc_state → expect 0x2 (spec) or 0x6 (RTL bug)
+    F.2: Write 0x6 again from 0x2 → expect 0x6
+      5. raw_write_lc_state(4'h6) — bit[1] already set, bit[2] now allowed
+      6. verify_lc_state_input(4'h6) — RMA_CHIPLET_0
+
+  Phase G: Terminal state + transient RMA                      [1 reset]
+    1. cold_reset_to_state_tm0(4'h3) → RMA_SIP_1
+    2. frontdoor_write_lc_state(4'h8) → PROD_END (bit[3] W1S)
+       Note: 0x3 | 0x8 = 0xB → INVALID; but testing terminal guard
+    3. Actually: cold_reset_to_state_tm0(4'h8) → PROD_END directly
+    4. perform_rma_sip_token_match + perform_rma_chiplet_token_match
+    5. set TRANSIENT_RMA_EN = 1
+    6. read_lc_state → verify 0x8 (terminal state blocks all changes)
+    7. verify_golden — feat_ctrl at PROD_END (not RMA)
+
+  Phase H: PROD_DBG_1 LC_STATE isolation                       [1 reset]
+    H.1: Establish PROD_DBG_1 baseline
+      1. cold_reset_to_state_tm0(4'h1) → PROD
+      2. set_secure_tm(1)
+      3. write_demote(1'b1) → PROD_DBG_1
+      4. verify_golden — feat_ctrl matches PROD_DBG_1 formula
+    H.2: Shadow write 0x2 → blocked, stays 0x1
+      5. raw_write_lc_state(4'h2) — attempt RMA_SIP
+      6. verify_lc_state_input(4'h1) — expect unchanged
+         **RTL ISSUE**: PROD_DBG does not block; may advance to 0x3
+    H.3: Shadow write 0x6 → blocked, stays 0x1
+      7. perform tokens + raw_write_lc_state(4'h6)
+      8. verify_lc_state_input → expect 0x1 (or 0x3 if H.2 succeeded)
+    H.4: TRANSIENT_RMA_EN → blocked
+      9. set TRANSIENT_RMA_EN = 1
+      10. verify_lc_state_input → expect unchanged
+      11. verify_golden — feat_ctrl should still be PROD_DBG_1
+          **RTL ISSUE**: if transitions succeed, feat_ctrl changes → escalation
+
+  Phase I: PROD_DBG_2 LC_STATE isolation                       [1 reset]
+    Same structure as Phase H, but with DEMOTE_2 instead of DEMOTE_1.
+    I.1: Establish PROD_DBG_2 baseline (write_demote_2)
+    I.2: Shadow write 0x2 → blocked
+    I.3: Shadow write 0x6 → blocked
+    I.4: TRANSIENT_RMA_EN → blocked
+    Same RTL issues expected.
+
+**Pass Criteria**:
+  [x] Phase A: SIP-only token from RMA_SIP_0 → partial advancement to 0x3
+  [x] Phase B: No tokens → state unchanged
+  [x] Phase C: CHIPLET-only → state unchanged (sequential guard)
+  [x] Phase D: Both tokens → full advancement to 0x7
+  [ ] Phase E: PROD write 0x7 → 0x3 (spec) — RTL blocks to 0x1 (known issue)
+  [ ] Phase F: TEST_DEV write 0x6 → 0x2 (spec) — RTL may allow 0x6 (known issue)
+  [x] Phase G: PROD_END terminal guard blocks transient RMA
+  [ ] Phase H: PROD_DBG_1 blocks LC_STATE transitions — RTL allows (known issue)
+  [ ] Phase I: PROD_DBG_2 blocks LC_STATE transitions — RTL allows (known issue)
+
+**Coverage**:
+  - Post-token-gate partial advancement (write mismatch)
+  - Per-bit token gating independence (SIP vs CHIPLET)
+  - PROD pre-check behavior with RMA tokens
+  - Sequential RMA requirement (bit[1] before bit[2])
+  - Terminal state immunity to TRANSIENT_RMA_EN
+  - PROD_DBG_1/2 LC_STATE isolation (shadow write + transient RMA)
+  - Privilege escalation detection (feat_ctrl change in PROD_DBG)
+
+**Checks**: ~30 (state + golden model + RTL issue detection)
+**Cold Resets**: ~10
+**Estimated Runtime**: ~2.0 min
+
+
+================================================================================
+TEST SUITE 2: DEMOTE_1/2 BIT FUNCTIONALITY
+================================================================================
+
+------------------------------------------------------------------------
+TEST 2.1: sep_lcc_uvm_demote_comprehensive_test
+------------------------------------------------------------------------
+**Purpose**: Comprehensive DEMOTE_1/2 bit functional verification
+
+**Test Summary**:
+- DEMOTE_1/2 in TEST_DEV: debug enabled per DEMOTE_1/2 (Phase A)
+- DEMOTE_1/2 in PROD: PROD ↔ PROD_DBG + scope verification (Phase B)
+  * DEMOTE_1/2 only affects Debug [4:0], NOT Test [32-36] or Function [63:48]
+  * Signal combination (1,1,0): DEMOTE_1 or DEMOTE_2=1 + SECURE_TM=1 + SEC_DIS=0 (steps 9-12)
+- DEMOTE_1/2 in PROD_END: no effect (terminal state) (Phase C)
+- DEMOTE_1/2 in RMA states: enables full debug (Phase D)
+- Key derivation: Key_DEMOTE_1/2=0 ≠ Key_DEMOTE_1/2=1 (Phase E)
+
+**Reusability**: REUSE+ (85% from sep_efuse_demote_test_sequence.sv - UVM)
+  - OLD sequence: sep_efuse_demote_test_sequence.sv::body()
+    * Lines 67-103: DEMOTE bit lock/unlock patterns
+    * Line 79: check_demote_feat_ctrl() - feature control verification
+  - OLD sequence: sep_life_cycle_sequence.sv::body()
+    * Lines 453-457: DEMOTE reset clearing verification
+  - NEW test adds: Key Manager integration, per-LC-state DEMOTE behavior
+
+**Sequence**: sep_lcc_uvm_demote_seq.sv (adapted from sep_efuse_demote_test_sequence.sv)
+
+**Test Steps**:
+  Phase A: DEMOTE_1/2 in TEST_DEV State
+    1. Set LC_STATE = TEST_DEV (from eFuse)
+    2. Write DEMOTE_1 = 1 (or DEMOTE_2 = 1)
+       Expected: Has effect (debug enabled per DEMOTE_1/2)
+    3. Verify feature_disable_o reflects DEMOTE_1/2 state
+    4. Verify key_diversification includes DEMOTE_1/2 bit
+
+  Phase B: DEMOTE_1/2 in PROD State (PROD ↔ PROD_DBG)
+    1. Set LC_STATE = PROD (from eFuse)
+    2. Write DEMOTE_1 = 0 (and DEMOTE_2 = 0)
+       Expected: PROD state, features per SIP_DIS/SYS_DIS
+    3. Read feature_disable_o
+       Expected: Debug disabled (per DIS vectors)
+    4. Write DEMOTE_1 = 1 (or DEMOTE_2 = 1)
+       Expected: PROD_DBG state, debug features enabled
+    5. Read feature_disable_o
+       Expected: Debug enabled (DEMOTE_1/2 overrides DIS)
+    6. Verify Test features [32-36] remain disabled
+       Expected: DEMOTE_1/2 has NO effect on Test group (only affects Debug [4:0])
+    7. Verify Function features [63:48] follow DIS vectors
+       Expected: DEMOTE_1/2 has NO effect on Function group
+    8. Verify DEMOTE_1/2 scope: Only Debug [4:0] affected (includes SIP_DBG bit 4), not Test or Function
+    **Note:** SECURE_TM interaction tested comprehensively in TEST 3.4.
+    DEMOTE_1/2 scope verification here confirms Debug-only effect without SECURE_TM overlap.
+
+  Phase C: DEMOTE_1/2 in PROD_END (Terminal State)
+    1. Set LC_STATE = PROD_END (from eFuse)
+    2. Write DEMOTE_1 = 1 (or DEMOTE_2 = 1)
+       Expected: Write accepted but NO effect
+    3. Verify PROD_END remains terminal (no PROD_DBG)
+    4. Verify debug features remain disabled
+
+  Phase D: DEMOTE_1/2 in RMA States
+    1. Set LC_STATE = RMA_SIP or RMA_CHIPLET
+    2. Write DEMOTE_1 = 1 (or DEMOTE_2 = 1)
+       Expected: DEMOTE_1/2 has effect (enables full debug)
+    3. Verify all features enabled regardless of DIS vectors
+
+  Phase E: DEMOTE_1/2 Key Derivation Impact
+    1. Set DEMOTE_1 = 0, DEMOTE_2 = 0; request key from Key Manager
+       Expected: Key derived with DEMOTE_1/2=0 input
+    2. Set DEMOTE_1 = 1 (or DEMOTE_2 = 1), request same key
+       Expected: Different key (DEMOTE_1/2=1 input)
+    3. Verify keys are distinct (prevents key reuse attack)
+
+**Pass Criteria**:
+  [ ] DEMOTE_1/2 controls PROD/PROD_DBG transition
+  [ ]  DEMOTE_1/2 has no effect in PROD_END (terminal)
+  [ ]  DEMOTE_1/2 affects Debug features [4:0] only (not Test or Function)
+  [ ]  DEMOTE_1/2 scope verified: Only Debug group affected
+  [ ]  Test features [47:32] remain disabled in PROD_DBG
+  [ ]  Function features [63:48] follow DIS vectors in PROD_DBG
+  [ ]  DEMOTE_1/2 input to Key Manager KDF verified
+  [ ]  Keys distinct between DEMOTE_1/2=0 and DEMOTE_1/2=1
+
+**Coverage**:
+  - DEMOTE_1/2 in all LC states
+  - Feature control impact (Debug vs Test vs Function groups)
+  - DEMOTE_1/2 scope verification (only Debug [4:0], includes bit 4 SIP_DBG)
+  - Key derivation impact
+  **Note:** SECURE_TM interaction covered in TEST 3.4 to avoid overlap
+
+**Estimated Runtime**: ~1.0 min (5000 cycles @ 800MHz)
+
+
+------------------------------------------------------------------------
+TEST 2.4: sep_lcc_uvm_prod_dbg_flavour_test  ✅ IMPLEMENTED
+------------------------------------------------------------------------
+**Purpose**: Verify DEMOTE_1/DEMOTE_2 register independence and cross-pair
+DEMOTE_LOCK isolation. Fills gaps not covered by TEST 2.1, TEST 3.2, TEST 0.1.
+
+**Test Summary** (per OCAH spec March 5th):
+- DEMOTE_1/DEMOTE_2 are independent W1S registers (same reset, no cross-talk)
+- DEMOTE_LOCK_1 blocks only DEMOTE_1, not DEMOTE_2 (and vice versa)
+- Key derivation distinction: SKIP (Key Manager not available in current RTL)
+
+**Overlap Note** (trimmed from 5 planned phases to 2):
+- PROD_DBG_1/2 feat_ctrl: covered by TEST 2.1 B.3-B.7, TEST 3.2 A.3-A.4
+- Flavour comparison (SIP vs SYS func): covered by TEST 2.1 (explicit)
+- DEMOTE priority: covered by TEST 2.1 B.8, TEST 3.2 A.5
+- DEMOTE_LOCK per-pair: covered by TEST 0.1 Phase C (each pair isolated)
+This test covers: register independence (same reset) and lock cross-pair isolation.
+
+**Reusability**: NEW (20% - OCAH-specific dual register independence)
+
+**Sequence**: sep_lcc_uvm_prod_dbg_flavour_test_seq.sv
+**Test Class**: sep_lcc_uvm_prod_dbg_flavour_test.sv
+
+**Test Steps** (2 cold resets):
+
+  Phase A: DEMOTE_1/DEMOTE_2 Register Independence  [1 cold reset]
+    1. cold_reset_to_state_tm0(4'h1) → PROD
+    2. A.1: Read DEMOTE_1=0, DEMOTE_2=0 (baseline)
+    3. A.2: write_demote(1) → read DEMOTE_1=1, DEMOTE_2=0 (unaffected)
+    4. A.3: verify_golden — feat_ctrl = PROD_DBG_1
+    5. A.4: write_demote_2(1) → read DEMOTE_1=1 (still set), DEMOTE_2=1
+    6. A.5: verify_golden — feat_ctrl = PROD_DBG_1 (priority over DEMOTE_2)
+
+  Phase B: DEMOTE_LOCK Cross-Pair Isolation  [1 cold reset]
+    1. cold_reset_to_state_tm0(4'h1) → PROD
+    2. B.1: write_demote_lock(1) → write_demote(1) → DEMOTE_1 stays 0 (blocked)
+    3. B.2: write_demote_2(1) → DEMOTE_2=1 (LOCK_1 does not block DEMOTE_2)
+    4. B.3: verify_golden — feat_ctrl = PROD_DBG_2 (demote_1=0 locked, demote_2=1)
+    5. B.4: write_demote_lock_2(1) — lock both pairs
+    6. B.5: Final state: D1=0, L1=1, D2=1, L2=1
+    7. B.5: verify_golden — feat_ctrl still PROD_DBG_2
+
+**Pass Criteria**:
+  [ ] A.1: Both DEMOTEs=0 after reset
+  [ ] A.2: DEMOTE_1 write does not affect DEMOTE_2
+  [ ] A.3: feat_ctrl = PROD_DBG_1
+  [ ] A.4: DEMOTE_2 write does not clear DEMOTE_1 (W1S)
+  [ ] A.5: DEMOTE_1 priority when both set
+  [ ] B.1: LOCK_1 blocks DEMOTE_1
+  [ ] B.2: LOCK_1 does not block DEMOTE_2
+  [ ] B.3: feat_ctrl = PROD_DBG_2 with DEMOTE_1 locked out
+  [ ] B.5: Final register state correct
+
+**Coverage**:
+  - DEMOTE_1/DEMOTE_2 cross-register independence (same reset cycle)
+  - DEMOTE_LOCK cross-pair isolation (LOCK_1 vs DEMOTE_2)
+  - feat_ctrl correctly follows the active (unlocked) DEMOTE
+
+**Checks**: ~12 (6 register checks + 4 golden model checks + 2 lock checks)
+**Cold Resets**: 2
+**Estimated Runtime**: ~0.4 min
+  Check: lcc_top.sv, sep_lifecycle_ctrl.sv for flavour signals.
+
+
+================================================================================
+TEST SUITE 3: FEATURE CONTROL VECTORS
+================================================================================
+
+------------------------------------------------------------------------
+TEST 3.2: sep_lcc_uvm_feature_control_per_lc_state_test
+------------------------------------------------------------------------
+**Purpose**: Verify feature control formulas with non-zero DIS vectors and
+dynamic SECURE_TM randomization across all LC states and SEC_DIS.
+
+**Test Summary**:
+- TEST 1.1 proved golden model with trivial inputs (DIS=0).
+  This test uses randomized SIP_DIS/SYS_DIS via +EFUSE_RANDOM to prove
+  per-state formulas actually differentiate.
+- Dynamic SECURE_TM: Every check is preceded by randomize_secure_tm()
+  (backdoor force via set_secure_tm).
+  Golden model reads actual secure_tm from RTL and adapts:
+    secure_tm=1 → test bits[47:32] pass through per DIS/LC_STATE formula
+    secure_tm=0 → test bits[47:32] forced to 0x0000
+    Debug[31:0] and Func[63:48] NOT affected by SECURE_TM
+- Phase D: SEC_DIS verified via Grendel-style VIF probe on feat_ctrl_o
+  (misc_vif.get_feat_ctrl), with CSR-vs-output consistency checks.
+
+**DIS Patterns**: Randomized by eFuse infrastructure (+EFUSE_RANDOM).
+  Constraints (sep_efuse_item_lcc_feat_ctrl):
+    - LC_STATE == TEST_DEV (test controls all transitions)
+    - SIP_DIS != SYS_DIS, both non-zero (differentiation)
+
+**Reusability**: 60% from sep_life_cycle_sequence concepts
+
+**Sequence**: sep_lcc_uvm_feature_control_per_lc_state_test_seq.sv
+
+**Test Steps** (13 cold resets total):
+
+  Phase A: Per-State Formula with Random DIS + Dynamic SECURE_TM [4 resets]
+    Each check: randomize_secure_tm() → verify_golden (CSR read)
+    A.1: TEST_DEV with random DIS → feat_ctrl = ~(sip|sys) [+ SECURE_TM gating]
+    A.2: PROD → {F, 0, ~(sip|sys).FUNC} [+ SECURE_TM gating]
+    A.3: PROD + DEMOTE_1 → PROD_DBG_1: {T, F, ~SIP.FUNC} [+ SECURE_TM gating]
+    --- cold reset ---
+    A.4: PROD + DEMOTE_2 → PROD_DBG_2: {T, F, ~SYS.FUNC} [+ SECURE_TM gating]
+    A.5: Both DEMOTE_1+2 → DEMOTE_1 priority (SIP!=SYS proves it)
+    --- cold reset ---
+    A.6: PROD_END → {F, F, ~(sip|sys).FUNC} [+ SECURE_TM gating]
+    --- cold reset ---
+    A.7: RMA_SIP → ~sip_dis [+ SECURE_TM gating]
+
+  Phase B: Cross-Reset DIS Consistency + Dynamic SECURE_TM [2 resets]
+    Verifies same random DIS values reload from preload after cold reset.
+    Each check: randomize_secure_tm() → verify_golden (CSR read)
+    B.1: TEST_DEV after fresh reset — DIS consistency
+    B.2: PROD after fresh reset — DIS consistency
+    --- cold reset ---
+    B.3: RMA_SIP after fresh reset — DIS consistency
+    --- cold reset ---
+    B.4: PROD_END after fresh reset — DIS consistency
+
+  Phase C: DEMOTE Debug Force in TEST_DEV + Dynamic SECURE_TM [1 reset]
+    Verifies DEMOTE overrides debug[31:0] to all-1s while func/test stay DIS-controlled.
+    Each check: randomize_secure_tm() → verify_feat_ctrl + golden model
+    C.1: TEST_DEV no DEMOTE — debug masked by DIS, test per SECURE_TM
+    C.2: TEST_DEV + DEMOTE_1 — debug[31:0] forced all-1s
+    C.3: Verify func[63:48] still DIS-controlled (DEMOTE doesn't force func)
+    C.4: Golden model cross-check for DEMOTE state
+
+  Phase D: SEC_DIS=1 All-State Walk + Dynamic SECURE_TM (VIF probe) [6 resets]
+    Activates SEC_DIS via token match (activate_sec_dis_token from sep_base_seq).
+    Each check: randomize_secure_tm() → verify_golden_on_output (VIF feat_ctrl_o)
+                + verify_csr_output_consistency (CSR vs output match)
+    Golden model with SEC_DIS: all-1s override → SECURE_TM gate on test[47:32]
+    D.1: TEST_DEV + SEC_DIS=1 [+ random SECURE_TM]
+    D.2: PROD + SEC_DIS=1 [+ random SECURE_TM]
+    D.3: PROD_DBG_1 + SEC_DIS=1 [+ random SECURE_TM]
+    --- cold reset + re-activate SEC_DIS ---
+    D.4: PROD_DBG_2 + SEC_DIS=1 [+ random SECURE_TM]
+    --- cold reset + re-activate SEC_DIS ---
+    D.5: PROD_END + SEC_DIS=1 [+ random SECURE_TM]
+    --- cold reset + re-activate SEC_DIS ---
+    D.6: RMA_SIP + SEC_DIS=1 [+ random SECURE_TM]
+    --- cold reset + re-activate SEC_DIS ---
+    D.7: RMA_CHIPLET + SEC_DIS=1 [+ random SECURE_TM]
+    --- cold reset + re-activate SEC_DIS ---
+    D.8: INVALID + SEC_DIS=1 [+ random SECURE_TM]
+    Cleanup: deactivate_sec_dis_token, set_secure_tm(0)
+
+**Pass Criteria**:
+  [ ] Feature control matches golden model for each LC state (Phase A)
+  [ ] SECURE_TM gating: test[47:32] zeroed when secure_tm=0, pass-through when 1
+  [ ] SECURE_TM scope: only affects Test[47:32], NOT Debug[31:0] or Func[63:48]
+  [ ] DIS vectors consistent across cold resets (Phase B)
+  [ ] DEMOTE forces debug[31:0]=all-1s, func/test stay DIS-controlled (Phase C)
+  [ ] DEMOTE_1 priority over DEMOTE_2 when both set (Phase A.5)
+  [ ] SEC_DIS=1 → feat_ctrl_o all-1s with SECURE_TM gating (Phase D)
+  [ ] FEAT_CTRL CSR matches feat_ctrl_o output under SEC_DIS (Phase D)
+  [ ] SEC_DIS overrides ALL states including INVALID (Phase D.8)
+  [ ] PROD_DBG_1: {T, F, ~SIP_DIS.FUNC} (Phase A.3)
+  [ ] PROD_DBG_2: {T, F, ~SYS_DIS.FUNC} (Phase A.4)
+
+**Coverage**:
+  - Feature control in 7 LC states + INVALID with random DIS vectors
+  - Dynamic SECURE_TM randomization (0/1) at every check point
+  - SEC_DIS × SECURE_TM × LC_STATE cross-product (Phase D)
+  - CSR-vs-output port consistency under SEC_DIS
+  - DEMOTE_1/2 priority and debug force behavior
+  - Cross-reset DIS preload consistency
+  - SEC_DIS dynamic assert/deassert via token matching
+
+**Overlap Note** (vs other tests):
+  - TEST 1.1: Covers all 16 encodings + DEMOTE + paths, but with DIS=0 (trivial)
+  - TEST 3.4: Comprehensive SECURE_TM testing (latching, timing, per-state)
+    This test provides randomized SECURE_TM cross-coverage, not comprehensive
+  - RMA_CHIPLET/INVALID: DIS-independent, proven by TEST 1.1 (only in Phase D here)
+
+**Estimated Runtime**: ~2.5 min (13 cold resets with full sequencing)
+
+
+------------------------------------------------------------------------
+TEST 3.4: sep_lcc_uvm_feature_control_secure_tm_test  [IMPLEMENTED]
+------------------------------------------------------------------------
+**Purpose**: Verify SECURE_TM latching behavior from TEST_EN strap.
+
+**Scope**: Phase D (normal latching) + Phase D2 (SEC_DIS early latching).
+  SECURE_TM latching timing requires HDL forcing of test_en/security_disable;
+  other SECURE_TM functional behavior is covered by TEST 3.2 (random TM) and
+  TEST 3.5 (targeted TM toggle).
+
+**Spec References**:
+  REQ-STM-2: "TEST_EN is latched when SEP fuse sensing is done if SEC_DIS not
+              asserted; latched on chiplet cold reset release if SEC_DIS asserted"
+  REQ-STM-5: "SECURE_TM TDR can only be cleared by chip reset"
+  REQ-SECDIS-5: "SEC_DIS → SEP can boot even if fuse sense logic never completes"
+
+**Sequence**: sep_lcc_uvm_feature_control_secure_tm_test_seq.sv
+
+**Test Steps** (2 phases, ~3 cold resets, ~7 checks):
+
+  Phase D: SECURE_TM Latching Behavior (Normal — SEC_DIS=0, test_en=0)
+    Spec: "TEST_EN is latched when SEP fuse sensing is done if SEC_DIS not asserted"
+
+    NOTE: test_en=1 without SEC_DIS is not a valid configuration. The
+    secure_tm_latch is transparent until fuse_sense_done. With test_en=1,
+    secure_tm=1 propagates immediately and efuse_guard blocks ALL fuse
+    commands (including auto-sense). Fuse sensing never completes, latch
+    never closes — by design, test mode requires SEC_DIS active.
+    The test_en=1 case is covered in Phase D2 (SEC_DIS early-latch path).
+
+    D.1: Cold reset with TEST_EN=0, wait fuse_sense_done → TM latched to 0
+    D.2: Change TEST_EN to 1 AFTER latch closed → TM must NOT change
+    D.3: Verify Test[47:32] = 0 (TM=0 gates Test bits)
+
+  Phase D2: SECURE_TM Latching Behavior (SEC_DIS Active — Early Latch)
+    Spec: "TEST_EN is latched on chiplet cold reset release if SEC_DIS asserted"
+    Critical for A0 brick-recovery: SEC_DIS + SECURE_TM must be available
+    even if fuse sensing never completes.
+
+    D2.1: Force SEC_DIS=1 + TEST_EN=1, cold reset → verify TM=1 at reset release
+          (does NOT wait for fuse_sense_done — SEC_DIS bypasses that gate)
+    D2.2: Verify test features enabled immediately (SEC_DIS overrides feat_ctrl)
+    D2.3: Negative — TEST_EN=0 + SEC_DIS=1 → TM latched to 0 at reset release
+    D2.4: Verify Test[47:32]=0 (TM=0 gates Test, even with SEC_DIS)
+
+**Pass Criteria**:
+  [ ] SECURE_TM latched at fuse_sense_done with test_en=0 (D.1)
+  [ ] SECURE_TM immutable after latch — only reset can change (D.2)
+  [ ] SECURE_TM=0 forces Test[47:32]=0 (D.3)
+  [ ] SECURE_TM latched at cold reset RELEASE when SEC_DIS active (D2.1)
+  [ ] SEC_DIS enables early boot even if fuse sense not complete (D2.2)
+  [ ] SECURE_TM=0 with SEC_DIS: Test=0 (D2.3, D2.4)
+
+**Coverage**:
+  - SECURE_TM latching timing (fuse_sense_done vs cold reset release)
+  - SECURE_TM immutability after latch (only reset clears)
+  - SEC_DIS early-latch mode for brick recovery
+  - Latching polarity (TEST_EN=0→TM=0, TEST_EN=1→TM=1)
+
+**Feature Control Formula with SECURE_TM** (reference):
+  ```
+  base_features = f(LC_STATE, SIP_DIS, SYS_DIS, DEMOTE_1, DEMOTE_2)
+  if (lc_sigint_err) base = 0
+  after_sec = SEC_DIS ? 64'hFFFF_FFFF_FFFF_FFFF : base_features
+  final[31:0]  = after_sec[31:0]                     (Debug — no change)
+  final[47:32] = secure_tm ? after_sec[47:32] : 0    (Test — gated!)
+  final[63:48] = after_sec[63:48]                     (Function — no change)
+  ```
+
+**Estimated Runtime**: ~0.5 min (~5 cold resets, ~10 checks)
+
+**Design Verification Status**:
+  ✅ **CONFIRMED**: OCAH LCC implements SECURE_TM signal (follows Grendel spec)
+  - TEST_EN strap exists in OCAH design
+  - secure_tm signal exists in LCC RTL interface
+  - This test is MANDATORY (P0 priority) — latching behavior is the unique
+    coverage gap not provided by TEST 3.2 randomized TM testing
+
+
+------------------------------------------------------------------------
+TEST 3.5: sep_lcc_uvm_screening_vs_diagnostic_test  [IMPLEMENTED]
+------------------------------------------------------------------------
+**Purpose**: Verify per-bit control of screening (STEST) vs diagnostic (DTEST)
+             test features, SIP_DIS|SYS_DIS OR veto logic on Test bits, and
+             per-LC-state Test bit behavior with targeted DIS patterns.
+
+**Test Summary**:
+- OCAH spec defines separate test feature bits for screening vs diagnostic:
+    Bit 33: SEP_STEST (SEP screening test)
+    Bit 34: SEP_DTEST (SEP diagnostic test)
+    Bit 35: AP_STEST (AP screening test)
+    Bit 36: AP_DTEST (AP diagnostic test, labeled "A_DTEST" in spec)
+- Screening tests: Hide internal design state (for SIP owner use case)
+- Diagnostic tests: Expose all design state (for CHIPLET owner use case)
+- SIP integrator should have access to screening tests but NOT diagnostic tests
+- CHIPLET owner should have access to both
+
+**Reusability**: NEW (25% - OCAH SIP integration feature)
+  - Grendel: Single test enable, no screening/diagnostic distinction
+  - OCAH: Explicit per-domain screening vs diagnostic control
+
+**Sequence**: sep_lcc_uvm_screening_vs_diagnostic_test_seq.sv
+
+**Methodology**: Default eFuse preload (DIS=0). Cold reset clears DIS to clean
+slate. Specific DIS bits set via shadow register frontdoor writes (W1S,
+secure_tm=0 required since DIS are SENSITIVE fields). Set secure_tm=1 before
+reading feat_ctrl (Test bits require TM=1 to be non-zero). Each sub-phase does
+a cold reset to clear accumulated W1S DIS bits.
+
+**Overlap Analysis (trimmed from 5 original phases to 3)**:
+  Already covered elsewhere:
+  - SECURE_TM gates Test[47:32] to 0: TEST 3.2 (randomized), TEST 3.4 (comprehensive)
+  - SEC_DIS overrides all bits: TEST 3.2 Phase D, TEST 4.1 Phase B
+  - SYS_DIS[33] alone: TEST 3.5 B.2
+  - Random DIS across states: TEST 3.2 Phase A
+  Unique gaps filled by this test:
+  - STEST vs DTEST bit-level isolation (walking individual bits 33-36)
+  - SIP_DIS alone vetoes a Test bit (SIP_DIS[x]=1, SYS_DIS[x]=0)
+  - SYS_DIS alone vetoes a Test bit (complement of above)
+  - RMA_SIP with targeted SIP_DIS on Test bits
+  - RMA_CHIPLET override with DIS set
+
+**Test Steps (7 cold resets, 26 checks)**:
+
+  Phase A: SEP STEST vs DTEST isolation in TEST_DEV          [2 resets]
+    A.1: SIP_DIS[34]=1 → DTEST off, STEST on
+      1. cold_reset_to_state_tm0(TEST_DEV)
+      2. write_sip_dis(1 << 34)
+      3. set_secure_tm(1)
+      4. verify_golden() — full 64-bit golden check
+      5. verify_bit_enabled(33) — SEP_STEST still enabled
+      6. verify_bit_disabled(34) — SEP_DTEST disabled
+    A.2: SIP_DIS[33]=1 → STEST off, DTEST on
+      1. cold_reset_to_state_tm0(TEST_DEV)
+      2. write_sip_dis(1 << 33)
+      3. set_secure_tm(1)
+      4. verify_golden() + verify_bit_disabled(33) + verify_bit_enabled(34)
+
+  Phase B: AP bits + SIP_DIS|SYS_DIS OR veto proof           [3 resets]
+    B.1: SIP_DIS[36]=1 → AP_DTEST off, AP_STEST on
+      1. cold_reset_to_state_tm0(TEST_DEV)
+      2. write_sip_dis(1 << 36)
+      3. set_secure_tm(1)
+      4. verify_golden() + verify_bit_enabled(35) + verify_bit_disabled(36)
+    B.2: SIP_DIS[35]=1, SYS_DIS[35]=0 → AP_STEST off (SIP alone vetoes)
+      1. cold_reset_to_state_tm0(TEST_DEV)
+      2. write_sip_dis(1 << 35) — only SIP sets bit
+      3. set_secure_tm(1)
+      4. verify_golden() + verify_bit_disabled(35)
+    B.3: SIP_DIS[35]=0, SYS_DIS[35]=1 → AP_STEST off (SYS alone vetoes)
+      1. cold_reset_to_state_tm0(TEST_DEV)
+      2. write_sys_dis(1 << 35) — only SYS sets bit
+      3. set_secure_tm(1)
+      4. verify_golden() + verify_bit_disabled(35)
+
+  Phase C: Per-LC-state targeted Test patterns                [2 resets]
+    C.1: RMA_SIP + SIP_DIS[33]=1 → STEST disabled, DTEST enabled
+      In RMA_SIP: Test = ~SIP_DIS (SYS_DIS irrelevant).
+      1. cold_reset_to_state_tm0(RMA_SIP = 4'h2)
+      2. write_sip_dis(1 << 33)
+      3. set_secure_tm(1)
+      4. verify_golden() + verify_bit_disabled(33) + verify_bit_enabled(34)
+    C.2: RMA_CHIPLET + SIP_DIS set → all-1s override
+      In RMA_CHIPLET: feat_ctrl = all-1s (hardcoded).
+      1. cold_reset_to_state_tm0(RMA_CHIPLET = 4'h7)
+      2. write_sip_dis((1 << 33) | (1 << 34)) — attempt to disable both
+      3. set_secure_tm(1)
+      4. verify_golden() + verify_bit_enabled(33) + verify_bit_enabled(34)
+         Both enabled despite SIP_DIS, proving RMA_CHIPLET override.
+
+  **Note:** SECURE_TM gating of screening/diagnostic tests covered by
+  TEST 3.4 Phase A (no duplication here).
+
+**Pass Criteria**:
+  [x] SEP_STEST (bit 33) and SEP_DTEST (bit 34) independently controlled (A.1, A.2)
+  [x] AP_STEST (bit 35) and AP_DTEST (bit 36) independently controlled (B.1)
+  [x] SIP_DIS alone can veto a Test bit (B.2)
+  [x] SYS_DIS alone can veto a Test bit (B.3)
+  [x] RMA_SIP respects SIP_DIS screening/diagnostic settings (C.1)
+  [x] RMA_CHIPLET enables all tests regardless of DIS (C.2)
+
+**Expected Failures**: None (default preload, no RTL/spec mismatch involved).
+
+**Coverage**:
+  - Screening vs diagnostic test distinction (OCAH-specific)
+  - Per-bit test feature control (bits 33-36)
+  - SIP_DIS / SYS_DIS individual veto proof on Test bits
+  - RMA_SIP targeted DIS masking
+  - RMA_CHIPLET all-1s override with DIS set
+
+**Estimated Runtime**: ~0.8 min (7 cold resets, 26 checks)
+
+
+================================================================================
+TEST SUITE 4: PERMISSION MATRIX
+================================================================================
+
+------------------------------------------------------------------------
+TEST 4.1: sep_lcc_uvm_permission_matrix_comprehensive_test
+------------------------------------------------------------------------
+**Purpose**: Verify feat_ctrl transition safety at state-change boundaries,
+INVALID state lockdown for all 9 INVALID encodings, and SEC_DIS/secure_tm
+combinations. Complements TEST 3.2 (steady-state formula verification) with
+boundary case testing.
+
+**Status**: ✅ IMPLEMENTED (2026-03-12)
+
+**Methodology**: +EFUSE_RANDOM preload for non-trivial DIS patterns.
+Factory override: sep_efuse_item_lcc_feat_ctrl (preload LC_STATE=TEST_DEV).
+Each sub-step: golden model check + CSR-vs-VIF consistency + VIF stability.
+
+**Sequence**: sep_lcc_uvm_permission_matrix_comprehensive_test_seq.sv
+
+**Test Steps** (12 cold resets total):
+
+  Phase A: feat_ctrl During LC Events                            [2 resets]
+    A.1: TEST_DEV -> PROD via LC_STATE frontdoor write
+      1. Cold reset → preload LC_STATE=TEST_DEV, secure_tm=1
+      2. Capture pre-transition feat_ctrl (CSR + VIF)
+      3. Temporarily set secure_tm=0, frontdoor_write_lc_state(PROD),
+         restore secure_tm=1 (SECURE_TM_LOCK blocks LC_STATE shadow write)
+      4. Capture post-transition feat_ctrl
+      5. Verify: pre=golden(TEST_DEV), post=golden(PROD)
+      6. CSR-vs-VIF consistency + VIF stability (5 rapid reads)
+
+    A.2: PROD -> PROD_DBG_1 via DEMOTE_1 (immediate, no cold reset)
+      1. Write DEMOTE_1=1 (W1S)
+      2. Verify feat_ctrl transitions to golden(PROD_DBG_1)
+
+    A.3: PROD -> PROD_DBG_2 via cold reset + DEMOTE_2
+      1. Cold reset to PROD, write DEMOTE_2=1
+      2. Verify feat_ctrl = golden(PROD_DBG_2)
+
+  Phase B: SEC_DIS Toggle Transitions                            [3 resets]
+    B.1: PROD state SEC_DIS cycle
+      1. Cold reset to PROD
+      2. Activate SEC_DIS via token match → verify feat_ctrl = all-1s
+      3. Deactivate SEC_DIS → verify feat_ctrl reverts to golden(PROD)
+
+    B.2: INVALID state (0xF) SEC_DIS cycle
+      1. Cold reset to 0x0, frontdoor_write to 0xF
+      2. Activate SEC_DIS → verify override (all-1s)
+      3. Deactivate SEC_DIS → verify revert to all-0s
+
+    B.3: TEST_DEV with random DIS + SEC_DIS override
+      1. Cold reset to TEST_DEV (random SIP_DIS, SYS_DIS from preload)
+      2. Activate SEC_DIS → verify all-1s overrides DIS vectors
+      3. VIF stability check
+
+  Phase C: INVALID State Lockdown Verification                   [7 resets]
+    C.1: Shadow write gate check — 0x4/0x5 MUST be blocked      [1 reset]
+      1. Cold reset to TEST_DEV (raw=0x0)
+      2. Attempt shadow write to 0x4 (via CHIPLET token match + W1S)
+         → If reachable: uvm_error (SPEC VIOLATION per March 5th)
+         → If blocked: PASS (RTL correctly prevents 0x4/0x5)
+      3. Same for 0x5
+
+    C.2: W1S chains for 0x9-0xF (7 INVALID values)              [3 resets]
+      Chain A: 0→0x9→0xB→0xF (1 cold reset)
+      Chain B: 0→0xA→0xE (1 cold reset)
+      Chain C: 0→0xC→0xD (1 cold reset)
+      For each INVALID state:
+        - Write-read back check (verify_lc_state_input)
+        - Verify feat_ctrl=0 with secure_tm=1 and secure_tm=0
+        - CSR-vs-VIF consistency
+
+    C.3: SEC_DIS override on 0x9 (token-free INVALID)            [1 reset]
+      1. Cold reset to 0x9
+      2. Verify baseline feat_ctrl=0 (secure_tm=1)
+      3. Activate SEC_DIS → verify all-1s (secure_tm=1 and secure_tm=0)
+      4. Deactivate SEC_DIS → verify revert to 0
+
+    C.4: OTP program raw=0x4 → resense → verify INVALID          [1 resense]
+      1. Set secure_tm=0 (guard global kill switch)
+      2. Perform rma_chiplet_token_match (efuse_guard requires it for bit[2])
+      3. configure_program_clock() + program_otp_bit(bit[2])
+      4. do_resense_cycle() → cold reset + fuse sense
+      5. Read LC_STATE shadow register → verify raw=0x4
+      6. Verify feat_ctrl=0 + SEC_DIS/secure_tm combinations
+      NOTE: Permanently modifies OTP — must run after all cold_reset_to_state_tm0() usage
+
+    C.5: OTP program raw=0x5 → resense → verify INVALID          [1 resense]
+      1. OTP already has bit[2] from C.4; program bit[0] (freely programmable)
+      2. do_resense_cycle() → verify raw=0x5
+      3. Verify feat_ctrl=0 + SEC_DIS/secure_tm combinations
+      NOTE: Must run after C.4 (OTP is W1S — bits accumulate)
+
+  ORDERING CONSTRAINT: C.4/C.5 (OTP programming) MUST run LAST in Phase C
+  because OTP modifications are permanent. After programming, cold_reset
+  would resense the modified OTP value instead of TEST_DEV.
+
+**Pass Criteria**:
+  [x] Phase A: feat_ctrl transitions match golden model at LC event boundaries
+  [x] Phase B: SEC_DIS activate/deactivate cycle with correct revert
+  [x] Phase C.1: 0x4/0x5 shadow write blocked (or flagged as spec violation)
+  [x] Phase C.2: All 7 remaining INVALID states → feat_ctrl=0
+  [x] Phase C.3: SEC_DIS override works on INVALID states
+  [x] Phase C.4/C.5: OTP→resense→LCC path produces INVALID for 0x4/0x5
+  [x] CSR-vs-VIF consistency on every check
+  [x] VIF stability (no glitches) on rapid reads
+
+**Coverage**:
+  - Transition boundary safety (feat_ctrl before/after state change)
+  - SEC_DIS activate/deactivate revert cycle
+  - All 9 INVALID LC_STATE encodings (0x4, 0x5, 0x9-0xF)
+  - OTP programming → resense → LCC data path for unreachable-via-shadow states
+  - Token gating of OTP programming (efuse_guard)
+  - secure_tm combinations with INVALID states
+
+**Known Expected Failures (until RTL update)**:
+  - C.1 reports 0x4/0x5 reachable via shadow write (current RTL treats as RMA_CHIPLET)
+  - C.4/C.5 reports feat_ctrl=all-1s for 0x4/0x5 (RTL not yet updated per March 5th spec)
+  - These 14 failures will resolve when RTL implements the new RMA_CHIPLET encoding
+
+**Estimated Runtime**: ~3.7 min (220s simulation), 12 cold resets
+
+
+------------------------------------------------------------------------
+TEST 4.2: MERGED → TEST 3.2 Phase D
+------------------------------------------------------------------------
+**Status**: MERGED into TEST 3.2 Phase D (v1.5.2)
+
+SEC_DIS dynamic override (assert/deassert via token matching) → TEST 3.2 Phase D
+SEC_DIS overrides INVALID (all features enabled) → TEST 3.2 Phase D.8
+
+**Spec Note** (retained for reference):
+  Per OCAH spec March 5th, SEC_DIS=True: "Fully open device independent
+  of LC state" → {T,T,T} for ALL states including INVALID.
+  VPlan updated in v1.5.0 to follow spec.
+
+
+------------------------------------------------------------------------
+TEST 4.3: sep_lcc_uvm_jtag_access_ctrl_test  [IMPLEMENTED]
+------------------------------------------------------------------------
+**Purpose**: Verify LC_STATE-based access control on the JTAG OTP debug
+AXI-Lite port (axil_sep_otp_jtag_req_i) in efuse_interface_controller,
+covering 5 LC states, lc_sigint_err lockdown, all 4 register spaces, and
+gap address APB ERR_DECODE.
+
+**Design Spec Reference** (efuse_interface_controller.sv):
+  The eFuse controller exposes a dedicated AXI-Lite slave port for JTAG/debug
+  access. An axi_lite_demux steers transactions to either the real eFuse logic
+  (port 0) or an error slave (port 1, responds SLVERR + 0xbadcab1e) based on
+  LC_STATE:
+
+    is_prod_or_rma_sip = lc_sigint_err ||
+                          (raw == 4'b0001) ||          // PROD
+                          (raw[3:1] == 3'b001)         // RMA_SIP (0x2, 0x3)
+
+  When is_prod_or_rma_sip:
+    - MMR space  (EFUSE_MMR range): ALLOWED  (token registers, select=0)
+    - Other addresses:              DENIED   (select=1 → error slave)
+  When NOT is_prod_or_rma_sip (TEST_DEV, RMA_CHIPLET, PROD_END, INVALID):
+    - All addresses: ALLOWED (full access, select=0)
+
+  SEP eFuse address map (absolute addresses from och_sep_top_reg.svh):
+    0x10930000-0x109303FF : EFUSE_MAP (shadow regs)     → INTERFACE_SEL → SHADOW_REG_MAP
+    0x10930400-0x1093041B : EFUSE_INTERFACE_CTRL (CSRs)  → INTERFACE_SEL → EFUSE_CSR_REG_MAP
+    0x10930500-0x1093056F : EFUSE_MMR (token input regs) → INTERFACE_SEL → EFUSE_MMR_REG_MAP
+    0x20000000-0x20000043 : EFUSE_SHIM_CTRL (fuse bank)  → SHIM_SEL → fuse_bank_ctrl
+        The shim is not adjacent to the block's other registers: it is the first
+        sub-block of SEP_EXTERNAL, and sep.sv demuxes that range out of the external
+        crossbar into sep_efuse_wrapper. SHIM_SEL is reached by falling through the
+        INTERFACE_SEL range check rather than by matching a range of its own.
+    Gaps (e.g. 0x10930450) :                              → INTERFACE_SEL → APB ERR_DECODE
+
+  JTAG demux boundary (HAS_LC_STATE=1):
+    [EFUSE_MAP_BASE:EFUSE_MMR_END] = [0x10930000:0x1093056F] → INTERFACE_SEL
+    Everything else (0x10930570+)                             → SHIM_SEL
+
+  After passing the JTAG demux, traffic merges with CPU AXI at axi_lite_mux.
+  write_lock, read_lock, secure_tm SENSITIVE gating all apply equally to both
+  JTAG and CPU paths. No prerequisites (secure_tm, SEC_DIS) needed for JTAG.
+
+  PROD_END (raw=0x8, 4'b1000) does NOT match is_prod_or_rma_sip conditions,
+  so JTAG access is UNRESTRICTED in PROD_END.
+
+**Verification Approach**: Virtual interface (sep_efuse_jtag_axil_if) connected
+  to the DUT's axil_sep_otp_jtag_req_i / resp_o ports in sep_wrap_uvm_top.sv.
+  Built-in AXI-Lite driver tasks (axil_read, axil_write) drive transactions
+  directly. No mux with the CPU AXI path — both paths operate independently.
+  Existing tests are unaffected (VIF idles when not driven).
+
+  LC_STATE is controlled via frontdoor cold_reset_and_set_state() from the
+  base sequence. Factory override (sep_efuse_item_lcc_feat_ctrl) in build_phase
+  constrains OTP preload to TEST_DEV, so each cold reset gives a clean starting
+  state. frontdoor_write_lc_state() then sets the target state in the shadow
+  register. Phase F (sigint_err) writes a corrupt diff-encoded value (0xF1)
+  directly to the LC_STATE shadow register via ral_write — all frontdoor.
+
+  Deny checks accept both SLVERR (2'b10, from APB ERR_DECODE) and DECERR
+  (2'b11, from prim_axi_lite_err_slv default) as valid error responses.
+
+**Reusability**: NEW (0% — OCAH-specific JTAG access control feature)
+
+**Sequence**: sep_lcc_uvm_jtag_access_ctrl_test_seq.sv
+**Test Class**: sep_lcc_uvm_jtag_access_ctrl_test.sv
+
+**Test Steps** (6 phases, 7 cold resets, 70 checks):
+  Each phase uses cold_reset_and_set_state() for clean LC_STATE setup (frontdoor).
+  Factory override ensures OTP preloads TEST_DEV after every cold reset.
+
+  Phase A: TEST_DEV (raw=0x0) — Full JTAG Access
+    1. cold_reset_and_set_state(0x0) + verify_lc_state_input(0x0)
+    2. JTAG read/write fuse-map   (0x10930000) → expect OKAY
+    3. JTAG read/write intf-ctrl  (0x10930400) → expect OKAY
+    4. JTAG read/write MMR        (0x10930500) → expect OKAY
+    5. JTAG read/write shim       (0x20000000) → expect OKAY
+    6. JTAG read/write gap        (0x10930450) → expect error (APB ERR_DECODE)
+    (11 checks: 1 state verify + 10 JTAG access)
+
+  Phase B: PROD (raw=0x1) — Restricted JTAG Access
+    1. cold_reset_and_set_state(0x1) + verify_lc_state_input(0x1)
+    2. JTAG read/write fuse-map   (0x10930000) → expect error (denied)
+    3. JTAG read/write intf-ctrl  (0x10930400) → expect error (denied)
+    4. JTAG read/write MMR        (0x10930500) → expect OKAY  (token regs exempt)
+    5. JTAG read/write shim       (0x20000000) → expect error (denied)
+    6. JTAG read/write gap        (0x10930450) → expect error (denied)
+    (11 checks: 1 state verify + 10 JTAG access)
+
+  Phase C: RMA_SIP (raw=0x3) — Restricted JTAG Access
+    1. cold_reset_and_set_state(0x3) + verify_lc_state_input(0x3)
+    2. JTAG read/write all 5 targets: same deny/allow as Phase B
+    (11 checks: 1 state verify + 10 JTAG access)
+
+  Phase D: RMA_CHIPLET (raw=0x7) — Full JTAG Access Restored
+    1. cold_reset_and_set_state(0x7) + verify_lc_state_input(0x7)
+    2. JTAG read/write all 5 targets: same allow/ERR_DECODE as Phase A
+    (11 checks: 1 state verify + 10 JTAG access)
+
+  Phase E: PROD_END (raw=0x8) — Full JTAG Access
+    PROD_END (4'b1000) does NOT match is_prod_or_rma_sip conditions.
+    1. cold_reset_and_set_state(0x8) + verify_lc_state_input(0x8)
+    2. JTAG read/write all 5 targets: same allow/ERR_DECODE as Phase A
+    (11 checks: 1 state verify + 10 JTAG access)
+
+  Phase F: lc_sigint_err Injection — Safe Lockdown
+    is_prod_or_rma_sip includes lc_sigint_err as first OR term.
+    1. cold_reset_and_set_state(0x0) — start from TEST_DEV
+    2. Frontdoor write corrupt diff-encoded value (0xF1) to LC_STATE shadow register
+       → 0xF1 = {4'hF, 4'h1}: upper nibble 0xF ≠ ~lower 0xE → lc_sigint_err = 1
+    3. JTAG read/write all 5 targets: same deny/allow as Phase B
+    4. Recovery: cold_reset_and_set_state(0x0) + verify_lc_state_input(0x0)
+       → verify 4 spaces OKAY (fuse-map, intf-ctrl, MMR, shim)
+    (15 checks: 10 restricted + 1 state verify + 4 recovery reads)
+
+**Pass Criteria**:
+  [ ] A: TEST_DEV — all 4 spaces OKAY; gap ERR_DECODE
+  [ ] B: PROD — fuse-map, intf-ctrl, shim, gap denied; MMR allowed
+  [ ] C: RMA_SIP — same restriction as PROD
+  [ ] D: RMA_CHIPLET — full access restored (all 4 OKAY; gap ERR_DECODE)
+  [ ] E: PROD_END — full access (NOT restricted despite being terminal)
+  [ ] F: lc_sigint_err — restricted; recovers after force release
+
+**Coverage**:
+  - All 4 JTAG-reachable spaces (absolute SEP addresses):
+      * EFUSE_MAP       (0x10930000) — shadow registers
+      * EFUSE_INTF_CTRL (0x10930400) — interface controller CSRs
+      * EFUSE_MMR       (0x10930500) — token input registers
+      * EFUSE_SHIM_CTRL (0x20000000) — fuse bank shim, in SEP_EXTERNAL
+  - Gap address (0x10930450) — APB ERR_DECODE (SLVERR + 0xbadcab1e)
+  - 5 LC_STATE values: TEST_DEV, PROD, RMA_SIP, RMA_CHIPLET, PROD_END
+  - lc_sigint_err signal integrity error → JTAG safe lockdown
+  - Error slave response (SLVERR + 0xbadcab1e) on denied reads
+  - is_prod_or_rma_sip logic: all 3 terms exercised
+      * lc_sigint_err (Phase F)
+      * raw==4'b0001 (Phase B)
+      * raw[3:1]==3'b001 (Phase C)
+  - Negative: PROD_END and TEST_DEV do NOT trigger restriction
+  - Recovery: lc_sigint_err release restores full access
+  - AXI-Lite demux boundary: INTERFACE_SEL vs SHIM_SEL routing verified
+  - Frontdoor LC_STATE control: factory override + cold_reset_and_set_state
+  - Frontdoor sigint_err injection: corrupt diff-encoded write to shadow register
+
+**Checks**: 70 (11+11+11+11+11+15)
+**Cold Resets**: 7 (one per phase + Phase F recovery)
+**Estimated Runtime**: ~5 sec (7 cold resets with fuse re-sensing per phase)
+
+
+================================================================================
+TEST SUITE 5: ERROR DETECTION
+================================================================================
+
+------------------------------------------------------------------------
+TEST 5.1: sep_lcc_uvm_encoding_and_error_test  ✅ IMPLEMENTED
+------------------------------------------------------------------------
+**Purpose**: Verify LC state differential encoding integrity check
+(lc_sigint_err_o) and its effect on feat_ctrl lockdown. Covers error
+injection via backdoor force on the prim_diff_decode_multi input, SEC_DIS
+override of lockdown, and cold reset recovery.
+(Covers alarm assertion via encoding corruption)
+
+**Status**: ✅ IMPLEMENTED (2026-03-12)
+
+**Reusability**: NEW (0% - new security feature)
+
+**Sequence**: sep_lcc_uvm_encoding_and_error_test_seq.sv
+**Test Class**: sep_lcc_uvm_encoding_and_error_test.sv
+
+**RTL Pipeline**:
+  prim_diff_decode_multi(shadow_regs_i.f.lc_state.lc_state[7:0])
+    → lc_sigint_err_o (any bit pair non-complementary → error)
+    → if (lc_sigint_err_o) feat_ctrl = 64'd0  (safe lockdown)
+    → feat_ctrl_sec_disable = security_disable_i ? all-1s : feat_ctrl
+    → feat_ctrl_secure_tm gates Test[47:32] when secure_tm=0
+
+**Error Injection Method**:
+  force `SEP_LIFECYCLE_CTRL_PATH.u_lc_state_dec.data_i = corrupt_val;
+  Valid: {~raw, raw} e.g. PROD=0xE1. Corrupt: 0xE0 (bit[0] pair both 0).
+
+**Test Steps** (~12 cold resets):
+
+  Phase A: Valid Encoding — No Error (baseline)              [5 resets]
+    A.1: TEST_DEV (0x0) — verify lc_sigint_err=0, feat_ctrl=golden
+    A.2: PROD (0x1) — W1S from TEST_DEV, verify sigint=0
+    A.3: RMA_SIP (0x2) — cold reset, verify sigint=0
+    A.4: PROD_END (0x8) — cold reset, verify sigint=0
+    A.5: RMA_CHIPLET (0x6) — cold reset, verify sigint=0
+
+  Phase B: Error Injection → Alarm + Lockdown                [0 resets]
+    B.1: Single-bit error (PROD 0xE1 → 0xE0) → sigint=1, feat_ctrl=0
+    B.2: Multi-bit error (all-F 0xFF) → sigint=1, feat_ctrl=0
+    B.3: Full lockdown verification (Debug+Test+Func = 0)
+
+  Phase C: SEC_DIS Overrides Lockdown                        [1 reset]
+    C.0: Inject error (all-zero 0x00) → sigint=1, feat_ctrl=0
+    C.1: Activate SEC_DIS → feat_ctrl = all-1s (SEC_DIS downstream of sigint)
+    C.2: Deactivate SEC_DIS → lockdown re-engages (feat_ctrl=0)
+
+  Phase D: Recovery via Cold Reset                           [2 resets]
+    D.0: Inject error (0xAA) → verify lockdown
+    D.1: Release force + cold reset → sigint=0 (alarm clears)
+    D.2: Verify feat_ctrl restored to normal formula
+    D.3: Golden model verification post-recovery
+
+**Pass Criteria**:
+  [x] Phase A: Valid encodings → lc_sigint_err = 0 (no false positive)
+  [x] Phase B: Single/multi-bit corruption → sigint=1, feat_ctrl=0
+  [x] Phase C: SEC_DIS overrides sigint lockdown → all-1s
+  [x] Phase C: Lockdown re-engages after SEC_DIS deactivation
+  [x] Phase D: Cold reset clears alarm and restores valid state
+  [x] Phase E: sigint lockdown overrides DEMOTE_1 → feat_ctrl=0
+  [x] Phase E: PROD_DBG_1 feat_ctrl restores after error release
+  [x] Phase F: sigint lockdown overrides DEMOTE_2 → feat_ctrl=0
+  [x] Phase F: PROD_DBG_2 feat_ctrl restores after error release
+
+  Phase E: sigint Lockdown Overrides DEMOTE_1 (PROD_DBG_1)    [2 resets]
+    E.1: Establish PROD_DBG_1 baseline
+      1. cold_reset_to_state_tm0(4'h1) → PROD
+      2. set_secure_tm(1)
+      3. write_demote(1'b1) → PROD_DBG_1
+      4. verify_golden — non-zero feat_ctrl (PROD_DBG_1 formula)
+    E.2: Inject encoding error
+      5. inject_encoding_error(8'hE0) — corrupt PROD diff encoding
+      6. verify_sigint = 1
+      7. verify_lockdown = 1 — feat_ctrl = 0 (overrides DEMOTE_1)
+    E.3: Release error → restore
+      8. release_encoding_error()
+      9. verify_sigint = 0
+      10. verify_golden — feat_ctrl restored to PROD_DBG_1 formula
+
+  Phase F: sigint Lockdown Overrides DEMOTE_2 (PROD_DBG_2)    [2 resets]
+    F.1: Establish PROD_DBG_2 baseline
+      1. cold_reset_to_state_tm0(4'h1) → PROD
+      2. set_secure_tm(1)
+      3. write_demote_2(1'b1) → PROD_DBG_2
+      4. verify_golden — non-zero feat_ctrl (PROD_DBG_2 formula)
+    F.2: Inject encoding error
+      5. inject_encoding_error(8'hE0) — corrupt PROD diff encoding
+      6. verify_sigint = 1
+      7. verify_lockdown = 1 — feat_ctrl = 0 (overrides DEMOTE_2)
+    F.3: Release error → restore
+      8. release_encoding_error()
+      9. verify_sigint = 0
+      10. verify_golden — feat_ctrl restored to PROD_DBG_2 formula
+
+**Future Extensions** (low priority):
+  - Phase G: Mid-transition error injection (during W1S)
+  - Phase H: SEC_DIS cross-reset retention (REQ-SECDIS-6)
+  - Phase I: SEC_DIS_ENABLE parameter override (REQ-SECDIS-8)
+
+**Coverage**:
+  - Differential encoding validation (prim_diff_decode_multi)
+  - Single/multi-bit error injection + alarm assertion
+  - Safe lockdown behavior (feat_ctrl forced to zeros on sigint error)
+  - Error recovery via cold reset
+  - SEC_DIS vs lc_sigint_err_o priority
+  - sigint lockdown vs DEMOTE_1 priority (PROD_DBG_1 → feat_ctrl=0)
+  - sigint lockdown vs DEMOTE_2 priority (PROD_DBG_2 → feat_ctrl=0)
+  - PROD_DBG feat_ctrl restoration after error release
+
+**Estimated Runtime**: ~1.5 min (~12 cold resets, ~21 checks)
+
+
+------------------------------------------------------------------------
+TEST 3.6: sep_lcc_uvm_random_lc_state_test  [NEW]
+------------------------------------------------------------------------
+**Purpose**: Maximum-randomization feat_ctrl verification. Boots into a
+random production-fused LC_STATE from eFuse, then exercises all LCC
+controls with randomized order, timing, and combinations.
+
+**Status**: ✅ PASS (2026-03-19) — 31 checks (seed=1, initial=RMA_SIP_1)
+
+**Reusability**: NEW (0% — unique test concept, no Grendel equivalent)
+
+**Sequence**: sep_lcc_uvm_random_lc_state_test_seq.sv
+**Test Class**: sep_lcc_uvm_random_lc_state_test.sv
+
+**Motivation**:
+  All existing LCC tests constrain eFuse LC_STATE to TEST_DEV (0x0) and use
+  W1S transitions to reach other states. This means no test verifies feat_ctrl
+  on a chip that boots directly into PROD, PROD_END, RMA_SIP, etc. from OTP.
+  Additionally, existing tests use fixed control sequences (DEMOTE_1 always
+  before DEMOTE_2, LOCK_1 always before LOCK_2, SEC_DIS at fixed points).
+  This test randomizes EVERYTHING to catch order-dependent bugs.
+
+**Randomized Variables** (14 total):
+  1. LC_STATE         — random from eFuse preload (weighted distribution)
+  2. SIP_DIS/SYS_DIS  — random non-zero, differ (from eFuse preload)
+  3. Non-critical LOCKS — 58 of 64 lock bits fully random (6 LCC-critical OFF)
+  4. SECURE_TM        — random toggle at EVERY verification point
+  5. DEMOTE order     — random: DEMOTE_1 first or DEMOTE_2 first
+  6. DEMOTE_LOCK order — random: LOCK_1 first or LOCK_2 first
+  7. SEC_DIS timing   — random: SEC_DIS before DEMOTE or DEMOTE before SEC_DIS
+  8. TRANSIENT_RMA_EN — random from eFuse preload (may auto-transition to RMA)
+  9. Inter-op delays  — random wait cycles (1-20) between operations
+  10. Cold reset count — random (1-3) consecutive resets in consistency check
+  11. W1S write data   — random 4-bit value (0x0-0xF) for transition fuzzing
+  12. Token state      — random SIP/CHIPLET token match (on/off per iteration)
+  13. PROD_DBG variant — random DEMOTE_1/DEMOTE_2/none when landing on PROD
+  14. Fuzz iterations  — random 6-10 transition attempts per run
+
+**Factory Override**: sep_efuse_item_lcc_random_state
+  - LC_STATE: base class weighted distribution (NOT constrained to TEST_DEV)
+    40% TEST_DEV, 30% PROD, 10% RMA_SIP_0, 5% RMA_SIP_1,
+    5% RMA_CHIP_0, 5% RMA_CHIP_1, 3% PROD_END (INVALID excluded)
+  - SIP_DIS != SYS_DIS, both non-zero
+  - 6 LCC-critical LOCKS OFF, 58 other bits random (80/20 distribution)
+    Bits OFF: TRANSIENT_RMA_EN wr/rd (4,5), SIP_DIS rd (7), SYS_DIS rd (9),
+              RMA_SIP_TOKEN wr (10), RMA_CHIPLET_TOKEN wr (12)
+    NOTE: LC_STATE bits (0,1) unconstrained — RTL ignores LOCKS for LC_STATE
+  - TRANSIENT_RMA_EN: fully random (test adapts to auto-transitions)
+
+**Test Steps** (variable cold resets depending on initial state + randomization):
+
+  Phase A: Boot Verification                                       [0 resets]
+    A.1: Read initial LC_STATE from shadow regs (random from eFuse preload)
+    A.2: Verify feat_ctrl with SECURE_TM=0 (default) + CSR-vs-output
+    A.3: Randomize SECURE_TM, random delay, verify feat_ctrl again
+
+  Phase B: Upward Transitions + Random SECURE_TM + Delays         [0-3 resets]
+    For each state reachable via W1S from the initial state:
+    B.N: frontdoor_write_lc_state(target), random delay,
+         randomize SECURE_TM, verify feat_ctrl + CSR-vs-output
+    If landed on PROD (0x1): randomly set DEMOTE_1 or DEMOTE_2 → verify
+    PROD_DBG feat_ctrl (W1S blocking tested in Phase F)
+    Between transitions: cold reset to reload initial state from eFuse
+    Reachable states per starting state:
+      TEST_DEV (0x0) → PROD, RMA_SIP, PROD_END (3 targets)
+      PROD     (0x1) → RMA_SIP (1 target)
+      RMA_SIP  (0x2) → RMA_SIP_1, RMA_CHIPLET (2 targets)
+      RMA_SIP  (0x3) → RMA_CHIPLET (1 target)
+      RMA_CHIP (0x6) → RMA_CHIP_1 (1 target)
+      RMA_CHIP (0x7), PROD_END (0x8) → terminal (0 targets, skip)
+
+  Phase C: Random DEMOTE Order + DEMOTE_LOCK Order                 [2 resets]
+    C.1: Sub-phase: Random DEMOTE order
+      C.1.1: Baseline DEMOTE_1=0, DEMOTE_2=0
+      C.1.2: Set RANDOM-first DEMOTE, random delay, random SECURE_TM, verify
+      C.1.3: Set other DEMOTE, verify DEMOTE_1 priority
+      C.1.4: Verify both DEMOTEs read back correctly
+    C.2: Sub-phase: Random DEMOTE_LOCK order
+      C.2.1: Set RANDOM-first LOCK
+      C.2.2: Try locked DEMOTE write → blocked
+      C.2.3: Write unlocked DEMOTE → succeeds (cross-pair isolation)
+      C.2.4: Verify feat_ctrl with random SECURE_TM
+      C.2.5: Set second LOCK, verify both locks active
+
+  Phase D: SEC_DIS Random Timing                                   [1 reset]
+    Random choice: SEC_DIS first or DEMOTE first
+    Path A (SEC_DIS first):
+      D.1: Activate SEC_DIS → verify override (all-1s)
+      D.2: Set DEMOTE_1 → verify override persists
+      D.3: Deactivate SEC_DIS → DEMOTE_1 effect appears
+    Path B (DEMOTE first):
+      D.1: Set DEMOTE_1 → verify feat_ctrl
+      D.2: Activate SEC_DIS → verify override takes over
+      D.3: Deactivate SEC_DIS → DEMOTE_1 re-emerges
+    All steps: random SECURE_TM + random delays + CSR-vs-output
+
+  Phase E: Multi-Reset Consistency                                  [1-3 resets]
+    Random 1-3 consecutive cold resets, verify at each:
+    E.N: LC_STATE = initial, feat_ctrl = golden, CSR = output
+    Tests eFuse → shadow → LCC pipeline determinism
+
+  Phase F: Random State Transition Fuzzer                           [6-10 resets]
+    Random 6-10 iterations, each:
+    F.N: Cold reset → initial state
+         Random write_data (0x0-0xF, covers valid + invalid destinations)
+         Random token state (SIP match on/off, CHIPLET match on/off)
+         Predict outcome via predict_lc_state_write_outcome()
+         Execute raw W1S write to LC_STATE shadow register
+         Read back actual state, verify matches prediction
+         Random SECURE_TM, verify feat_ctrl at resulting state
+    If landed on PROD (0x1): randomly set DEMOTE → PROD_DBG_1/2
+      Verify feat_ctrl, then W1S write with both tokens matched
+      → must be blocked (PROD_DBG blocks all LC_STATE transitions per spec)
+    Covers: valid transitions, invalid destinations (rejected),
+            terminal blocking, token gating, PROD restriction,
+            PROD_DBG transition blocking, partial-token writes
+
+**Pass Criteria**:
+  [ ] Phase A: feat_ctrl correct at random initial state + random SECURE_TM
+  [ ] Phase B: feat_ctrl correct at each reachable state with random timing
+  [ ] Phase C: DEMOTE order independence (either order → same result)
+  [ ] Phase C: DEMOTE_LOCK cross-pair isolation (either lock order)
+  [ ] Phase D: SEC_DIS override correct regardless of activation timing
+  [ ] Phase E: feat_ctrl deterministic across multiple consecutive resets
+  [ ] Phase F: Random W1S writes match predict_lc_state_write_outcome()
+  [ ] Phase F: feat_ctrl correct at each resulting state (valid or unchanged)
+  [ ] Phase F: PROD_DBG blocks W1S writes even with both tokens matched
+
+**Coverage**:
+  - Random initial LC_STATE from eFuse preload (not just TEST_DEV)
+  - Random non-critical LOCKS (59 bits free) — no interference with feat_ctrl
+  - DEMOTE order independence (DEMOTE_1 first vs DEMOTE_2 first)
+  - DEMOTE_LOCK order independence (LOCK_1 first vs LOCK_2 first)
+  - SEC_DIS activation timing (before vs after DEMOTE)
+  - Random SECURE_TM at every verification point
+  - Random inter-operation delays (pipeline settling)
+  - Multi-reset consistency (random 1-3 consecutive resets)
+  - TRANSIENT_RMA_EN auto-transition handling (random from eFuse)
+  - Random state transition fuzzing (valid + invalid, random tokens)
+  - Token gating with random match state (SIP/CHIPLET on/off)
+  - PROD_DBG transition blocking (W1S with both tokens matched → must be blocked)
+  - feat_ctrl formula correctness at production-fused states
+
+**Estimated Runtime**: ~3.3 min (variable, 10-19 cold resets depending on state + fuzz iterations)
+
+
+------------------------------------------------------------------------
+TEST 5.2: sep_lcc_uvm_alarm_handling_test  [DEFERRED — Gen2]
+------------------------------------------------------------------------
+**Purpose**: Verify alarm generation and interrupt handling
+**Status**: Deferred to Gen2 — AGP (Alarm Aggregation Processor) not implemented in Gen1 SEP.
+  Per spec: "This module will not be implemented in the first generation SEP
+  and will be deferred to the second generation."
+
+**Reusability**: NEW (30% reusable alarm concepts)
+
+**Sequence**: sep_lcc_uvm_alarm_seq.sv (new)
+
+**Test Steps**:
+  Phase A: LC State Error Alarm
+    1. Inject LC state encoding error
+    2. Verify lc_state_error alarm asserts
+    3. Verify alarm interrupt to CPU (if connected)
+    4. Read alarm status register
+       Expected: lc_state_error bit set
+
+  Phase B: Invalid State Alarm
+    1. Load invalid LC_STATE from eFuse
+    2. Verify invalid_lc_state alarm asserts
+    3. Read alarm status register
+       Expected: invalid_lc_state bit set
+
+  Phase C: Alarm Clearing
+    1. Assert alarm (any type)
+    2. Write alarm status register to clear
+    3. Verify alarm bit clears
+    4. Verify interrupt de-asserts
+
+  Phase D: Alarm Priority
+    1. Assert multiple alarms simultaneously
+    2. Verify highest priority alarm reported first
+    3. Verify all alarms logged in status register
+
+**Pass Criteria**:
+  [ ] All alarm types assert correctly
+  [ ]  Alarm status register readable
+  [ ]  Alarms clearable via register write
+  [ ]  Interrupt asserts/de-asserts correctly
+  [ ]  Multiple alarms handled correctly
+
+**Coverage**:
+  - All alarm types
+  - Alarm clearing
+  - Interrupt handling
+
+**Estimated Runtime**: ~0.4 min (2000 cycles @ 800MHz)
+
+
+================================================================================
+TEST SUITE 6: FIRMWARE INTEGRATION (COCOTB)
+================================================================================
+
+**Purpose**: Validate firmware-level LC and DEMOTE_1/2 handling
+**Test Type**: Cocotb (Python-based firmware integration testing)
+**Dependencies**: ROM bootcode, firmware binary, manifest generator
+
+------------------------------------------------------------------------
+TEST 6.1: sep_lcc_firmware_lc_state_validation_test (Cocotb)
+------------------------------------------------------------------------
+**Purpose**: Verify ROM correctly validates LC state from hardware and rejects invalid values
+
+**Reusability**: REUSE+ (80% from sep_manifest_lc_state_test.py - Cocotb)
+  - OLD test: sep_manifest_lc_state_test.py
+    * Location: /proj_soc/user_dev/yenhenglai/tt_sep/tb/cocotb_tests/
+    * Lines 32-62: Test scenarios for invalid LC state rejection
+  - NEW test adds: OCAH-specific LC states, two-domain handling
+
+**Test Framework**: Cocotb
+  - Uses: sep_binary_preloader, sep_util, sep_test_config
+  - Method: Generate manifest with invalid LC state, boot ROM, check log patterns
+
+**Test Steps**:
+  Phase A: Valid LC State Boot
+    1. Generate manifest with LC_STATE = PROD (valid)
+    2. Preload firmware binary to memory
+    3. Start SEP boot sequence
+    4. Expected patterns:
+       - "STATUS: BOOTROM_START"
+       - "STATUS: START_MANIFEST_VALIDATION"
+       - "STATUS: MANIFEST_VALIDATED"
+       - "STATUS: EXEC_IMAGE"
+    5. Verify boot completes successfully
+
+  Phase B: Invalid LC State - Primary Manifest
+    1. Generate primary manifest with LC_STATE = 0x9 (invalid/reserved)
+    2. Generate backup manifest with LC_STATE = PROD (valid)
+    3. Start SEP boot sequence
+    4. Expected patterns:
+       - "STATUS: BOOTROM_START"
+       - "STATUS: START_MANIFEST_VALIDATION"
+       - "Warning: Failed to verify life_cycle_states"
+       - "WARNING: MANIFEST_LIFECYCLE_INVALID"
+       - "Primary manifest failed, re-init SPI before trying backup manifest"
+       - "STATUS: START_MANIFEST_VALIDATION"  (backup attempt)
+       - "STATUS: MANIFEST_VALIDATED"  (backup succeeds)
+       - "STATUS: EXEC_IMAGE"
+    5. Verify ROM rejects primary, falls back to backup
+
+  Phase C: Invalid LC State - Both Manifests
+    1. Generate primary manifest with invalid identifier
+    2. Generate backup manifest with LC_STATE = 0xF (invalid)
+    3. Start SEP boot sequence
+    4. Expected patterns:
+       - "STATUS: BOOTROM_START"
+       - "STATUS: START_MANIFEST_VALIDATION"
+       - "Warning: Invalid manifest_identifier"
+       - "WARNING: INVALID_MANIFEST_ID"
+       - "Primary manifest failed, re-init SPI before trying backup manifest"
+       - "STATUS: START_MANIFEST_VALIDATION"  (backup attempt)
+       - "ERROR: MANIFEST_LIFECYCLE_INVALID"  (backup fails)
+    5. Verify ROM rejects both manifests, boot fails safely
+
+  Phase D: PROD_END State Validation
+    1. Generate manifest with LC_STATE = PROD_END (0x8, 4'b1000, encoded 8'h78)
+    2. Verify ROM accepts terminal state
+    3. Expected: Boot succeeds, no DEMOTE_1/2 effect allowed
+
+  Phase E: Two-Domain LC States
+    1. Generate manifest with domain-specific configuration
+       - Domain 1 (local): DEMOTE_1 controls local debug
+       - Domain 2 (downstream): DEMOTE_2 controls downstream debug
+    2. Verify ROM validates both domains
+    3. Expected: Boot succeeds if configuration valid
+
+**Pass Criteria**:
+  [ ] ROM boots successfully with valid LC states
+  [ ]  ROM rejects invalid LC states (0x9-0xF)
+  [ ]  ROM falls back to backup manifest on primary failure
+  [ ]  ROM fails safely when both manifests invalid
+  [ ]  ROM validates PROD_END terminal state
+  [ ]  ROM validates two-domain configuration
+
+**Coverage**:
+  - ROM LC state validation logic
+  - Manifest primary/backup fallback
+  - Invalid state rejection at firmware level
+  - Two-domain configuration handling
+
+**Estimated Runtime**: ~2-5 min (depends on boot sequence)
+
+
+------------------------------------------------------------------------
+TEST 6.2: sep_lcc_firmware_demote_handling_test (Cocotb)
+------------------------------------------------------------------------
+**Purpose**: Verify firmware correctly reads and handles DEMOTE_1/2 bits from hardware
+
+**Reusability**: REUSE+ (70% from sep_demotion_test.py - Cocotb)
+  - OLD test: sep_demotion_test.py
+    * Location: /proj_soc/user_dev/yenhenglai/tt_sep/tb/cocotb_tests/
+    * Lines 42-54: DEMOTION_ENABLED test scenario
+  - NEW test adds: Direct hardware DEMOTE_1/2 registers, two-domain DEMOTE
+
+**Test Framework**: Cocotb
+  - Uses: sep_binary_preloader, sep_util, manifest generator
+  - Method: Set DEMOTE_1/2 in HW register, generate manifest, boot, verify firmware reads it
+
+**Test Steps**:
+  Phase A: DEMOTE_1=0, DEMOTE_2=0 Boot (PROD State)
+    1. Set hardware: LC_STATE = PROD, DEMOTE_1 = 0, DEMOTE_2 = 0
+    2. Generate manifest with selector_bits[17]=1 (BL1 decides DEMOTE)
+    3. Generate manifest with usage_flags[0]=0 (demotion disabled)
+    4. Start boot sequence
+    5. Expected patterns:
+       - "STATUS: BOOTROM_START"
+       - "STATUS: START_MANIFEST_VALIDATION"
+       - "STATUS: MANIFEST_VALIDATED"
+       - No "STATUS: DEMOTION_SELECTED"
+       - "STATUS: EXEC_IMAGE"
+    6. Verify firmware proceeds without demotion
+
+  Phase B: DEMOTE_1=1 Boot (PROD_DBG_1 State)
+    1. Set hardware: LC_STATE = PROD, DEMOTE_1 = 1
+    2. Generate manifest with selector_bits[17]=1
+    3. Generate manifest with usage_flags[0]=1 (demotion enabled)
+    4. Start boot sequence
+    5. Expected patterns:
+       - "STATUS: BOOTROM_START"
+       - "STATUS: START_MANIFEST_VALIDATION"
+       - "STATUS: MANIFEST_VALIDATED"
+       - "STATUS: DEMOTION_SELECTED"  ← Firmware detected DEMOTE_1=1
+       - "STATUS: EXEC_IMAGE"
+    6. Verify firmware enters PROD_DBG_1 mode
+
+  Phase C: DEMOTE_1/2 in TEST_DEV State
+    1. Set hardware: LC_STATE = TEST_DEV, DEMOTE_1 = 1
+    2. Generate manifest with usage_flags[0]=1
+    3. Expected: DEMOTE_1 enables all debug in TEST_DEV
+    4. Verify "STATUS: DEMOTION_SELECTED"
+
+  Phase D: DEMOTE_1/2 in PROD_END State (Terminal)
+    1. Set hardware: LC_STATE = PROD_END, DEMOTE_1 = 1
+    2. Generate manifest with usage_flags[0]=1
+    3. Expected: DEMOTE_1/2 has NO effect (terminal state)
+    4. Verify no "STATUS: DEMOTION_SELECTED"
+    5. Verify boot proceeds as PROD_END (not PROD_DBG)
+
+  Phase E: DEMOTE_1/2 Key Derivation Impact
+    1. Boot with DEMOTE_1=0/DEMOTE_2=0, capture key derivation info from logs
+    2. Boot with DEMOTE_1=1, capture key derivation info
+    3. Verify firmware includes DEMOTE_1 bit in key derivation input
+    4. Expected: Different key derivation paths
+
+  Phase F: Authenticated vs Unauthenticated Boot
+    1. Set flag_args[30]=1 (secure boot enabled), DEMOTE_1=1
+       Expected: DEMOTE_1 allowed, "STATUS: DEMOTION_SELECTED"
+    2. Set flag_args[30]=0 (secure boot disabled), DEMOTE_1=1
+       Expected: DEMOTE_1 allowed, "STATUS: DEMOTION_SELECTED"
+    3. Set flag_args[31]=1 (skip SHA256), DEMOTE_1=1
+       Expected: DEMOTE_1 allowed, "STATUS: DEMOTION_SELECTED"
+
+**Pass Criteria**:
+  [ ] Firmware correctly reads DEMOTE_1/2 bits from hardware registers
+  [ ]  Firmware reports "DEMOTION_SELECTED" when DEMOTE_1=1 or DEMOTE_2=1
+  [ ]  Firmware does NOT report demotion when DEMOTE_1=0 and DEMOTE_2=0
+  [ ]  DEMOTE_1/2 works in TEST_DEV and PROD states
+  [ ]  DEMOTE_1/2 has NO effect in PROD_END (terminal state)
+  [ ]  Firmware includes DEMOTE_1/2 in key derivation
+  [ ]  DEMOTE_1/2 works in both authenticated and unauthenticated boot
+
+**Coverage**:
+  - Firmware DEMOTE_1/2 bit reading from hardware
+  - Bootloader demotion decision-making
+  - DEMOTE_1/2 per LC state behavior at firmware level
+  - Key derivation with DEMOTE_1/2 input
+  - Secure/unsecure boot with DEMOTE_1/2
+
+**Estimated Runtime**: ~3-7 min (multiple boot sequences)
+
+
+================================================================================
+OPTIMIZATION SUMMARY
+================================================================================
+
+Simulation Time Optimization:
+  - UVM Tests:
+    * TEST 3.1: Smart sampling (20 of 64 bits per domain) → 95% time reduction
+    * TEST 3.4: SECURE_TM comprehensive testing → ~1.2 min
+    * TEST 4.1: Smart sampling (20 representative cases) → 97% time reduction
+    * TEST 1.3: Dual token verification → ~0.8 min (NEW)
+    * TEST 2.4: PROD_DBG flavour test → ~0.8 min (NEW)
+    * TEST 3.5: Screening vs diagnostic → ~1.0 min (NEW)
+    * Total UVM time: ~14.0 min (was ~11.2 min, +3 new tests)
+  - Cocotb Tests:
+    * TEST 6.1: ~2-5 min per boot sequence (3 scenarios)
+    * TEST 6.2: ~3-7 min per boot sequence (6 scenarios)
+    * Total Cocotb time: ~15-25 min (boot-dependent)
+
+Total Verification Time: ~29-39 min (UVM + Cocotb) - includes 3 new OCAH-specific tests
+
+Coverage Maintained:
+  - Statistical confidence: >99% (representative sampling)
+  - Corner cases: All included
+  - Error cases: All included
+  - Firmware integration: End-to-end boot validation
+  - SECURE_TM test gating: All 5 phases covered
+
+Test Priorities:
+  Week 1: Core UVM (TEST 0.1, 1.1, 2.1)
+  Week 2: Feature Control (TEST 3.2, 3.4, 3.5, 2.4)
+  Week 3: Advanced (TEST 1.3, 4.1, 5.1, 5.2)
+  Week 4: Cocotb + Integration (TEST 6.1, 6.2)
+
+
+================================================================================
+IMPLEMENTATION NOTES
+================================================================================
+
+Sequences to Create:
+  1. sep_lcc_uvm_base_seq.sv - Base sequence with AXI4-Lite methods
+     - Similar to sep_base_seq.sv from eFuse tests
+     - Methods: axi4lite_write_csr(), axi4lite_read_csr()
+
+  2. sep_lcc_uvm_transition_seq.sv - LC state transition sequence
+     - Write LC_STATE shadow register (W1S)
+     - Trigger cold reset (for W1S clearing)
+     - Verify new state via golden model
+
+  3. sep_lcc_uvm_demote_seq.sv - DEMOTE_1/2 bit manipulation
+     - Write DEMOTE_1/2 and DEMOTE_LOCK_1/2 registers
+     - Verify feature control changes
+
+  4. sep_lcc_uvm_feature_control_seq.sv - Feature control evaluation
+     - Read SIP_DIS, SYS_DIS from shadow (preloaded via +EFUSE_RANDOM)
+     - Read feature_disable_o outputs
+
+  5. sep_lcc_uvm_permission_seq.sv - Permission matrix testing
+     - Configure LC_STATE, SEC_DIS, DIS vectors
+     - Verify access permissions
+
+  6. sep_lcc_uvm_error_seq.sv - Error injection sequence
+     - Backdoor force bit flips
+     - Verify error detection
+
+**Token Matching Sequences**: See SEP_EFUSE_TEST_PLAN.txt (token matching in eFuse scope)
+
+================================================================================
+REUSABLE SEQUENCES FROM GRENDEL
+================================================================================
+
+This section documents how old Grendel UVM sequences can be adapted for OCAH
+LCC testing. Reusability percentages indicate how much existing code can be
+leveraged vs. new code required.
+
+Location: /proj_soc/user_dev/yenhenglai/tt_sep/tb/uvm_sequences/
+
+--------------------------------------------------------------------------------
+1. sep_life_cycle_sequence.sv (31K - 512 lines) ⭐ MOST IMPORTANT
+--------------------------------------------------------------------------------
+**File Size**: 31,424 bytes (512 lines)
+**Reusability**: 75% for state transitions, 60% overall (token matching removed)
+
+**Reusable Methods**:
+
+  a) read_all_life_cycle_related_regs() (lines 481-509)
+     - Reads all LC-related CSRs: LC_STATE, SOP_DIS, SYS_DIS, DEMOTE, FEAT_CTRL
+     - Maps to OCAH tests: TEST 0.1, 1.1
+     - Modifications needed:
+       * Update SOP_DIS → SIP_DIS (naming change)
+       * Add DIS vector reads (SIP_DIS, SYS_DIS)
+       * Interface: troot_axi_read() → axi4lite_read_csr()
+
+  b) LC State Transition Paths A, B, C, D (lines 226-400)
+     - Path A: TEST_DEV → RMA_CHIPLET_FROM_TEST
+     - Path B: TEST_DEV → PROD → RMA_CHIPLET_FROM_PROD
+     - Path C: TEST_DEV → RMA_SOP → RMA_CHIPLET_FROM_RMA_TEST
+     - Path D: TEST_DEV → PROD → RMA_SOP → RMA_CHIPLET_FROM_RMA_PROD
+     - Maps to OCAH tests: TEST 1.1
+     - Modifications needed:
+       * Update RMA_SOP → RMA_SIP (naming change in OCAH)
+       * Update state constants: SEP_ENV_* → OCAH LC state encodings
+       * Add PROD_END terminal state transitions
+       * Remove token matching steps (lines 138-372) - handled by eFuse
+
+  c) Invalid Transition Checking (lines 416-448)
+     - Tests invalid LC state transitions (PROD_END → PROD, INVALID states)
+     - Maps to OCAH tests: TEST 1.1, 5.1
+     - Modifications needed:
+       * Add OCAH-specific invalid states (0x9-0xF)
+       * Update PROD_INVALID_STATE handling for OCAH
+
+  d) DEMOTE Reset Behavior (lines 453-457)
+     - Verifies DEMOTE bit clears on reset
+     - Maps to OCAH tests: TEST 0.1, 2.1
+     - Fully reusable (minimal changes)
+
+**Code to Remove** (token matching in eFuse scope):
+  - Lines 138-372: RMA token programming and validation
+  - Lines 174-223: RMA_SOP token bit flipping tests
+  - Lines 265-373: RMA_CHIPLET token bit flipping tests
+
+**Estimated Adaptation Effort**: 2-3 days (remove token code, update state names)
+
+--------------------------------------------------------------------------------
+2. sep_efuse_demote_test_sequence.sv (4.2K - 111 lines)
+--------------------------------------------------------------------------------
+**File Size**: 4,224 bytes (111 lines)
+**Reusability**: 85% for DEMOTE tests
+
+**Reusable Methods**:
+
+  a) DEMOTE Lock/Unlock Patterns (lines 67-103)
+     - Tests DEMOTE bit locking with DEMOTE_LOCK
+     - Maps to OCAH tests: TEST 0.1, 2.1
+     - Modifications needed:
+       * Verify per-LC-state DEMOTE behavior (PROD, PROD_END, RMA)
+       * Add Key Manager integration checks
+
+  b) Reset and DEMOTE Clearing (lines 82-91)
+     - Verifies cold reset clears DEMOTE
+     - Maps to OCAH tests: TEST 0.1
+     - Fully reusable
+
+  c) check_demote_feat_ctrl() Method (line 79)
+     - Verifies feature control outputs with DEMOTE=1
+     - Maps to OCAH tests: TEST 2.1
+     - Modifications needed:
+       * Add two-domain feature control checks
+       * Verify SIP_DIS, SYS_DIS interaction with DEMOTE_1/2
+
+**Estimated Adaptation Effort**: 0.5-1 day (straightforward adaptation)
+
+--------------------------------------------------------------------------------
+3. sep_life_cycle_sec_dis_seq.sv (4.0K - 117 lines)
+--------------------------------------------------------------------------------
+**File Size**: 4,096 bytes (117 lines)
+**Reusability**: 40% for SEC_DIS override tests (token code removed)
+
+**Reusable Methods**:
+
+  a) check_sec_dis_feat_ctrl() Call (line 105)
+     - Verifies feature control with SEC_DIS=1
+     - Maps to OCAH tests: TEST 4.2
+     - Modifications needed:
+       * Verify SEC_DIS overrides DIS vectors per LC state
+       * Verify SEC_DIS overrides INVALID state (all features enabled per spec)
+       * Remove SEC_DIS token programming (lines 83-97) - moved to eFuse scope
+
+**Not Reusable** (token matching moved to eFuse):
+  - Lines 83-97: SEC_DIS token programming via IJTAG
+  - All token writing and matching logic
+
+**Estimated Adaptation Effort**: 0.5 day (remove token code, add two-domain checks)
+
+--------------------------------------------------------------------------------
+Summary of Interface Updates Needed
+--------------------------------------------------------------------------------
+
+**OLD Grendel Interface** → **NEW OCAH Interface**:
+  - troot_axi_write()       → axi4lite_write_csr()
+  - troot_axi_read()        → axi4lite_read_csr()
+  - SEP_ENV_RMA_SOP_*       → RMA_SIP (naming change)
+  - SOP_DIS                 → SIP_DIS (naming change)
+  - Single LC_STATE         → Two security domains (Domain 1: local, Domain 2: downstream)
+  - Remove all token matching code (moved to eFuse scope)
+
+**Estimated Total Adaptation Effort**: 3-4 days for all UVM sequences
+  - Reduced from 4-5 days due to token matching removal
+  - Main work: interface updates, two-domain support, state name changes
+
+Cocotb Tests to Create (Suite 6):
+  Location: To be created in /proj_soc/user_dev/yenhenglai/tt-och/dv/sep/tb/cocotb_tests/
+
+  1. sep_lcc_firmware_lc_state_validation_test.py (TEST 6.1)
+     - Adapted from sep_manifest_lc_state_test.py
+     - Add: OCAH-specific LC states, two-domain validation
+     - Remove: Grendel-specific LC states
+
+  2. sep_lcc_firmware_demote_handling_test.py (TEST 6.2)
+     - Adapted from sep_demotion_test.py
+     - Add: Direct HW register DEMOTE_1/2, PROD_END terminal state
+     - Keep: Manifest generation, bootcode flow validation
+
+Reusable Cocotb Tests from Grendel:
+  Location: /proj_soc/user_dev/yenhenglai/tt_sep/tb/cocotb_tests/
+
+  1. sep_manifest_lc_state_test.py (12K) ⭐ HIGH PRIORITY
+     - Lines 32-62: Test scenario definitions (PRIMARY/BACKUP invalid LC)
+     - Lines 99-122: Pattern sequence validation
+     - Manifest generation with invalid LC_STATE
+     - ROM rejection and backup fallback flow
+
+  2. sep_demotion_test.py (24K)
+     - Lines 22-28: DEMOTE bit definitions (selector_bits[17], usage_flags[0])
+     - Lines 42-54: DEMOTION_ENABLED test scenario
+     - Lines 88-111: flag_args handling (AUTH_FLAG_0, UNAUTH_FLAG_0, UNAUTH_FLAG_30)
+     - Bootloader demotion decision-making
+
+Cocotb Framework Utilities (Reusable):
+  - sep_binary_preloader: Preload firmware binary to memory
+  - sep_util.run_manifest_generator: Generate manifest with LC_STATE
+  - sep_util.build_firmware: Build bootloader binary
+  - sep_util.find_pattern_sequence: Match expected log patterns
+  - sep_test_config: Test configuration and seed initialization
+
+
+================================================================================
+COVERAGE GOALS
+================================================================================
+
+Functional Coverage:
+  - LC state transitions: 100% (all valid transitions)
+  - LC state encoding: 100% (all valid encodings)
+  - Feature control bits: 95% (smart sampling)
+  - Permission matrix: 95% (representative cases)
+  - JTAG access control: 100% (5 LC_STATE × (4 spaces + gap) × read/write + sigint_err + recovery)
+  - Error conditions: 100% (all error types)
+  - DEMOTE_1/2 functionality: 100%
+  - Two-domain interaction: 100%
+  - **Note**: Token matching coverage in SEP_EFUSE_TEST_PLAN.txt Suite 6
+
+Code Coverage:
+  - Line coverage: >95%
+  - Branch coverage: >90%
+  - FSM coverage: 100% (all states and transitions)
+  - Expression coverage: >85%
+
+Assertion Coverage:
+  - All SVA assertions checked
+  - Critical security assertions: 100%
+  - Encoding error assertions: 100%
+
+
+================================================================================
+DEPENDENCIES AND PREREQUISITES
+================================================================================
+
+RTL Dependencies:
+  - LC Controller RTL integrated into SEP
+  - eFuse controller available (for LC_STATE shadow loading)
+  - Feature control output ports defined
+  - Alarm/interrupt connections defined
+  - Token matching in eFuse controller (architecture confirmed)
+
+Interface Dependencies:
+  - AXI4-Lite slave interface functional
+  - eFuse shadow register interface defined
+  - Key Manager interface (for DEMOTE_1/2 bit input)
+  - Reset controller interface (cold vs system reset)
+
+Verification Infrastructure:
+  - AXI4-Lite BFM available (CPU path)
+  - JTAG AXI-Lite virtual interface available (sep_efuse_jtag_axil_if, see TEST 4.3)
+  - eFuse shadow register backdoor access
+  - Error injection capabilities (backdoor forcing)
+  - Coverage collector infrastructure
+
+Documentation Dependencies:
+  - LC Controller register map (address offsets)
+  - Feature control bit definitions finalized
+  - Permission matrix values confirmed
+
+
+================================================================================
+TEST ENVIRONMENT SETUP REQUIREMENTS
+================================================================================
+
+Critical Note: security_disable Signal and LCC Testing Interaction
+-------------------------------------------------------------------
+
+**Background**:
+  The SEP testbench uses a `security_disable` signal that overrides ALL lifecycle
+  controller feature control logic. When `security_disable=1`, the LCC outputs
+  0xFFFF_FFFF_FFFF_FFFF (all features enabled), completely bypassing LC_STATE-based
+  restrictions.
+
+**Current SEP Test Infrastructure** (as of 2026-02-10):
+  - All AXI VIP-only tests (including eFuse tests) use `+SEP_SKIP_CPU_RUN` plusarg
+  - `+SEP_SKIP_CPU_RUN` automatically sets `security_disable=1` (see sep_base_seq.sv)
+  - Rationale: Without CPU firmware, inbound traffic filters would block AXI VIP access
+  - Result: security_disable=1 allows tests to run but BREAKS all LCC feature control
+
+**LCC Testing Requirement**:
+  LCC tests MUST operate with `security_disable=0` to verify proper lifecycle-based
+  feature control. However, setting `security_disable=0` requires inbound traffic
+  filters to be properly configured to allow AXI VIP access to LCC registers.
+
+**Recommended Workflow for LCC Tests** (TO BE IMPLEMENTED):
+
+  Phase 1: Initial Setup (security_disable=1)
+    1. Test starts with `security_disable=1` (bypass all filters)
+    2. Use AXI VIP to program inbound traffic filters
+    3. Configure filter to allow ONLY LCC register access from AXI VIP master
+    4. Set up any other required system initialization
+
+  Phase 2: LCC Testing (security_disable=0)
+    5. Set `security_disable=0` via sep_misc_if.set_security_disable(1'b0)
+    6. Verify filter allows LCC access (read/write LCC CSRs)
+    7. Execute LCC test phases (state transitions, feature control, etc.)
+    8. Verify all LC_STATE-based restrictions work correctly
+
+  Phase 3: Cleanup (optional)
+    9. Restore `security_disable=1` if needed for cleanup operations
+
+**Implementation Details**:
+  - Filter programming registers: TBD (depends on SEP inbound filter RTL)
+  - Filter configuration: Allow AXI VIP master ID, LCC address range only
+  - Verification: Read LCC CSR with security_disable=0 to confirm filter works
+
+**Testbench Infrastructure Changes Required**:
+  [ ] TODO: Implement filter programming sequence in sep_base_seq
+  [ ] TODO: Add helper task: program_inbound_filter_for_lcc()
+  [ ] TODO: Add helper task: verify_lcc_access_allowed()
+  [ ] TODO: Create LCC test template with security_disable workflow
+  [ ] TODO: Document filter register addresses once RTL is integrated
+
+**Example Test Sequence**:
+  ```systemverilog
+  task body();
+    // Phase 1: Setup with security_disable=1
+    misc_vif.set_security_disable(1'b1);
+    program_inbound_filter_for_lcc();  // Allow LCC access only
+
+    // Phase 2: LCC testing with security_disable=0
+    misc_vif.set_security_disable(1'b0);
+    verify_lcc_access_allowed();  // Confirm filter works
+
+    // Execute LCC test phases
+    test_lc_state_transitions();
+    test_feature_control_vectors();
+    verify_demote_behavior();
+
+    // Phase 3: Cleanup (optional)
+    misc_vif.set_security_disable(1'b1);
+  endtask
+  ```
+
+**Reference**:
+  - Grendel lifecycle controller: tt_sep_lifecycle_ctrl.sv line 38
+    `assign feat_ctrl_sec_disable = i_security_disable ? 64'hffff_ffff_ffff_ffff : feat_ctrl;`
+  - EFUSE_PERMISSION_MATRIX.md v3.5: SEC_DIS as highest priority override
+  - SEP testbench: dv/sep/tb/tb_uvm/common/sep_scoreboard/sep_misc_if.sv
+  - Base sequence: dv/sep/tb/tb_uvm/uvm_sequences/sep_base_seq.sv
+
+**Status**: Documented for future implementation (2026-02-10)
+**Priority**: CRITICAL - Must be implemented before any LCC tests
+**Estimated Effort**: 1-2 days (filter programming logic + helper tasks)
+
+
+================================================================================
+RISKS AND MITIGATION
+================================================================================
+
+Risk 1: Token Matching Architecture (RESOLVED)
+  - **Risk**: Unclear if SHA256/token matching is in LCC or eFuse
+  - **Resolution**: CONFIRMED in eFuse scope (December 2025)
+  - **Action**: Token matching tests moved to SEP_EFUSE_TEST_PLAN.txt Suite 6
+              Suite 6 repurposed for firmware integration tests (v1.2)
+  - **Status**: RESOLVED
+
+Risk 2: Two-Domain Implementation
+  - **Risk**: Two-domain LC states may not be fully implemented
+  - **Impact**: TEST 3.3 may fail or be N/A
+  - **Mitigation**: Verify RTL design, adapt test as needed
+  - **Status**: Low risk (spec clearly defines feature)
+
+Risk 3: Register Map Unknown
+  - **Risk**: LCC register addresses not yet defined
+  - **Impact**: Cannot implement tests until addresses known
+  - **Mitigation**: Define register map early, parameterize tests
+  - **Status**: Medium risk (awaiting integration)
+
+Risk 4: Feature Control Complexity
+  - **Risk**: Permission matrix has high complexity (7 states × 2 SEC_DIS × 64 bits)
+  - **Impact**: Full coverage impractical (896 cases)
+  - **Mitigation**: Smart sampling strategy (20 representative cases)
+  - **Status**: Mitigated (optimization applied)
+
+Risk 5: SiP Integration Requirements (PENDING RTL REVIEW)
+  - **Risk**: REQ-SEC-6 and REQ-SEC-7 may require additional verification
+    * REQ-SEC-6: SiP integrator control for forwarded debug/test traffic
+    * REQ-SEC-7: Exclusive SiP control for Shared Security Domains
+  - **Ambiguity**: Two possible interpretations:
+    1. Symmetric model (SIP_DIS | SYS_DIS) - any domain can veto
+    2. Asymmetric override - SiP can force enable/disable for shared domains
+  - **Impact**: May need TEST 3.5/3.6 if RTL implements asymmetric control
+  - **Mitigation**: Review LCC_TOP I/O after RTL implementation to determine:
+    * Are there separate signals for "forwarded traffic" vs "local" features?
+    * Do shared domain features use different control logic?
+    * Is the OR model symmetric or feature-specific?
+  - **Action**: Post-RTL review scheduled before test implementation
+  - **Status**: PENDING (wait for RTL, review I/O, then decide if new tests needed)
+
+
+================================================================================
+REVISION HISTORY
+================================================================================
+
+Version 1.0 (December 2025):
+  - Initial draft with 14 confirmed tests + 2 conditional (Suite 6)
+  - Based on OCAH_SEP_SPEC.txt (lines 934-1136)
+  - Reusability analysis from old Grendel tests
+  - Following SEP_EFUSE_TEST_PLAN.txt structure
+  - Suite 6 marked CONDITIONAL pending architecture decision
+
+Version 1.1 (December 2025):
+  - **Architecture decision: Token matching in eFuse scope**
+  - Removed Suite 6 (TEST 6.1, 6.2) - tests in SEP_EFUSE_TEST_PLAN.txt Suite 6
+  - Updated test count: 14 tests (final)
+  - Updated timeline: 4 weeks (was 5 weeks)
+  - Updated effort: 13 days (was 13-15 days)
+  - Status: FINAL
+
+Version 1.2 (December 2025):
+  - **Added Suite 6: Firmware Integration (Cocotb tests)**
+  - Added TEST 6.1: Firmware LC state validation (Cocotb)
+  - Added TEST 6.2: Firmware DEMOTE handling (Cocotb)
+  - Test count: 14 UVM tests + 2 Cocotb tests = 16 tests total
+  - Timeline: 4.5 weeks (4 weeks UVM + 0.5 week Cocotb integration)
+  - Effort: 15 days (13 UVM + 2 Cocotb)
+  - Coverage: Hardware (UVM) + Firmware Integration (Cocotb)
+  - Reusability: UVM 57% avg, Cocotb 60-80%
+  - Status: FINAL
+
+Version 1.3 (January 2026 - OPTIMIZED):
+  - **Optimization: Removed overlapping test coverage**
+  - Merged TEST 0.1 + TEST 0.2 → Single comprehensive register/reset test
+  - Merged TEST 1.2 into TEST 5.1 → Encoding validation + error detection
+  - Simplified TEST 4.2 → Removed redundant SEC_DIS per-state phases
+  - Test count: 11 UVM tests + 2 Cocotb tests = 13 tests total (was 16)
+  - Timeline: 3.5 weeks (reduced from 4.5 weeks)
+  - Effort: 11 days (9 UVM + 2 Cocotb) - reduced from 15 days (27% reduction)
+  - Coverage: 100% maintained (no gaps introduced by consolidation)
+  - Reusability: UVM 60% avg (improved), Cocotb 60-80%
+  - Status: FINAL - OPTIMIZED
+
+Rationale for Version 1.3 Optimization:
+  - Eliminated duplicate DEMOTE reset testing across 3 tests
+  - Consolidated encoding validation with error detection (related functionality)
+  - Removed SEC_DIS per-state testing redundancy (covered in TEST 3.2)
+  - Consolidated reset testing into single comprehensive test
+  - Result: Faster verification, same coverage, easier maintenance
+
+Version 1.3.2 (January 2026 - SECURE_TM Added):
+  - **Added TEST 3.4: SECURE_TM dynamic test gating**
+  - Based on Grendel spec Section 6.3 analysis
+  - Test count: 13 UVM tests + 2 Cocotb tests = 15 tests total
+  - Timeline: 3.5-4 weeks
+  - Effort: 12 days (10 UVM + 2 Cocotb) - was 11 days
+  - Coverage additions:
+    * SECURE_TM=0 global test gating
+    * SECURE_TM=1 pass-through behavior
+    * SECURE_TM × SEC_DIS priority (4 combinations)
+    * SECURE_TM latching from TEST_EN strap
+    * SECURE_TM per LC state interaction
+  - Feature Control Formula with SECURE_TM:
+    * base_features = f(LC_STATE, SIP_DIS, SYS_DIS, DEMOTE_1, DEMOTE_2)
+    * final_features[31:0] = base_features[31:0] (Debug - no SECURE_TM effect)
+    * final_features[47:32] = base_features[47:32] & {16{secure_tm}} (Test - gated!)
+    * final_features[63:48] = base_features[63:48] (Function - no SECURE_TM effect)
+    * if (SEC_DIS==1): final = 64'hFFFF_FFFF_FFFF_FFFF (per spec March 5th: all states)
+  - Updated TEST 3.1 Phase C: Added SECURE_TM verification steps
+  - Status: ✅ CONFIRMED - OCAH implements SECURE_TM (follows Grendel spec)
+  - References: Grendel spec Section 6.3, Table 15 (64-bit feature layout)
+
+Version 1.3.3 (January 2026 - FINAL REVIEW & DEMOTE_LOCK):
+  - **Clarification: TEST 1.2 kept separate from TEST 5.1**
+    * Rationale: Different error scenarios (invalid values vs encoding corruption)
+    * TEST 1.2: Invalid LC_STATE values (0x9-0xF) from eFuse
+    * TEST 5.1: Valid state with corrupted redundant encoding
+  - **Added TEST 2.3: DEMOTE_LOCK write protection**
+    * User confirmed: DEMOTE_LOCK exists in OCAH LCC CSR space (not shadow)
+    * Based on Grendel spec Section 2.3
+    * Comprehensive lock/unlock verification, reset behavior
+  - **Test count**: 14 UVM tests + 2 Cocotb tests = 16 tests total (was 14)
+    * Suite 2 expanded: 2 → 3 tests (added TEST 2.3)
+  - **Effort**: 13.5 days (11.5 UVM + 2 Cocotb) - was 12 days
+  - **Timeline**: 3.5-4 weeks (unchanged)
+  - **Grendel coverage**: 20/25 items (80%) - was 17/25 (68%)
+    * Item #22: DEMOTE scope (only affects Debug) - COVERED in TEST 2.1 Phase B
+    * Items #23-24: DEMOTE_LOCK protection/persistence - COVERED in TEST 2.3
+  - **Status**: ✅ FINAL - Ready for Implementation
+  - **Register Architecture Clarification**:
+    * Shadow registers (RO): LC_STATE, SIP_DIS, SYS_DIS ← from eFuse
+    * LCC CSRs (RW, volatile): DEMOTE_1, DEMOTE_LOCK_1, DEMOTE_2, DEMOTE_LOCK_2 ← LCC internal
+
+Version 1.3.4 (January 2026 - SIGNAL COMBINATION COVERAGE COMPLETE):
+  - **Added signal combination testing: TEST 2.1 Phase B steps 9-12**
+    * Tests combination (DEMOTE=1, SECURE_TM=1, SEC_DIS=0)
+    * Verifies signal independence (DEMOTE + SECURE_TM active simultaneously)
+    * Confirms DEMOTE affects only Debug [4:0], SECURE_TM affects only Test [47:32]
+  - **Signal combination coverage**: 80% → **100%** (5 of 5 essential combinations)
+    * (0,0,0): TEST 3.4 Phase A + TEST 2.1 Phase B
+    * (1,0,0): TEST 2.1 Phase B + TEST 3.4 Phase A
+    * (0,1,0): TEST 3.4 Phase C Case 3
+    * (1,1,0): TEST 2.1 Phase B steps 9-12 ✅ **NEW**
+    * (x,x,1): TEST 4.2 Phase A
+  - **Test count**: 16 tests (14 UVM + 2 Cocotb) - unchanged from v1.3.3
+  - **Effort**: 13.5 days (11.5 UVM + 2 Cocotb) - unchanged (negligible runtime addition)
+  - **Timeline**: 3.5-4 weeks (unchanged)
+  - **Documentation additions**:
+    * FEATURE_CONTROL_SIGNAL_REFERENCE.md - comprehensive signal interaction reference
+    * SIGNAL_COMBINATION_COVERAGE_MATRIX.md - detailed coverage matrix with all combinations
+  - **Status**: ✅ FINAL - Ready for Implementation - **100% Signal Combination Coverage**
+
+Version 1.3.5 (January 2026 - SIP INTEGRATION CONTEXT):
+  - **Added new section: SIP INTEGRATION CONTEXT**
+    * Explains architectural rationale for OCAH's two-domain lifecycle control
+    * Provides System-in-Package (SiP) integration context from OCAH spec Section 4.6.2
+    * Documents distributed secure lifecycle control requirements
+  - **Key content additions**:
+    * Challenge 1: Misaligned lifecycle states across chiplets
+      - Consequences: Inconsistent debug/test, divergent key derivation, policy conflicts
+    * Challenge 2: Misaligned lifecycle control schemes
+      - Consequences: Cannot enforce uniform policies, incompatible RMA flows
+    * OCAH Solution: 2-domain architecture (Domain 1: local, Domain 2: downstream)
+      - Feature control: f(LC_STATE, SIP_DIS, SYS_DIS)
+    * Security requirements from OCAH spec:
+      - [OPT-SEC-1]: SiP integrators should only expose chiplets with sufficient protection
+      - [REQ-SEC-6]: Debug/test forwarding must have SiP integrator access control
+      - [REQ-SEC-7]: Shared Security Domain lifecycle must be SiP integrator controlled
+    * Impact on verification: Maps requirements to specific test priorities
+  - **Added Risk 5**: SiP Integration Requirements (PENDING RTL REVIEW)
+    * Documents ambiguity in REQ-SEC-6/REQ-SEC-7 interpretation
+    * Two possible models: symmetric OR vs asymmetric override
+    * Action: Review LCC_TOP I/O after RTL implementation
+    * May require TEST 3.5/3.6 if asymmetric control is implemented
+  - **Section placement**: Between "Key Differences from Grendel" and "TEST SUITE OVERVIEW"
+  - **Test count**: 16 tests (14 UVM + 2 Cocotb) - unchanged from v1.3.4
+  - **Effort**: 13.5 days (11.5 UVM + 2 Cocotb) - unchanged (pending RTL review)
+  - **Timeline**: 3.5-4 weeks - unchanged (may extend if new tests needed)
+  - **Purpose**: Provides architectural context explaining WHY two-domain control exists
+  - **Status**: ✅ FINAL - Ready for Implementation - **100% Signal Combination Coverage + SiP Context**
+  - **Note**: Post-RTL review required to confirm if additional tests needed for REQ-SEC-6/SEC-7
+
+Version 1.3.6 (February 2026 - LC State Encoding Update):
+  - **Updated**: LC state encoding table per OCAH SPEC 2026-02-02
+  - **Added**: PROD_DBG clarification (PROD state + DEMOTE bit, two flavours)
+  - **Added**: RMA_CHIPLET token requirement note (dual token matching)
+  - **Added**: SIP_DBG renamed from SOP_DBG per SPEC
+  - **Test count**: 16 tests (14 UVM + 2 Cocotb) - unchanged
+  - **Status**: ✅ FINAL - Ready for Implementation
+
+Version 1.3.7 (February 2026 - security_disable Workflow Documentation):
+  - **Added**: "TEST ENVIRONMENT SETUP REQUIREMENTS" section
+  - **Documented**: security_disable signal impact on LCC testing
+  - **Documented**: Critical workflow for LCC tests:
+    * Phase 1: Start with security_disable=1 (bypass filters)
+    * Phase 2: Program inbound filters for LCC access
+    * Phase 3: Set security_disable=0 (enable normal security)
+    * Phase 4: Execute LCC tests with proper feature control
+  - **Added**: TODO checklist for testbench infrastructure (filter programming)
+  - **Added**: Example test sequence showing security_disable workflow
+  - **Rationale**: Current eFuse tests use security_disable=1 (all features enabled)
+                   which would break LCC feature control verification
+  - **Priority**: CRITICAL - Must implement filter programming before LCC tests
+  - **Estimated Effort**: 1-2 days for infrastructure changes
+  - **Test count**: 16 tests (14 UVM + 2 Cocotb) - unchanged
+  - **Status**: ✅ DOCUMENTED - Implementation pending (infrastructure changes needed)
+  - **Reference**: EFUSE_PERMISSION_MATRIX.md v3.5 (SEC_DIS as highest priority)
+
+Version 1.4.0 (February 2026 - OCAH-Specific Tests Added):
+  - **Added TEST 1.3**: sep_lcc_uvm_rma_chiplet_dual_token_test
+    * Verifies OCAH's dual token requirement for RMA_CHIPLET
+    * Tests all 4 combinations: both match, one match, neither match, swapped
+    * Cross-references with eFuse token matching (Suite 6)
+  - **Added TEST 2.4**: sep_lcc_uvm_prod_dbg_flavour_test
+    * Verifies PROD_DBG_1 (BL1/chiplet owner) vs PROD_DBG_2 (BL2/SIP owner)
+    * Tests different access levels and key derivation per flavour
+    * Documents RTL verification requirements before implementation
+  - **Added TEST 3.5**: sep_lcc_uvm_screening_vs_diagnostic_test
+    * Verifies screening (STEST) vs diagnostic (DTEST) distinction
+    * Tests SIP integration use case (bits 33-36 individual control)
+    * Validates REQ-SEC-6 and REQ-SEC-7 compliance
+  - **Test count**: 18 tests (16 UVM + 2 Cocotb) - was 16 tests
+  - **Timeline**: 4-4.5 weeks (was 3.5-4 weeks)
+  - **Effort**: 15 days (13 UVM + 2 Cocotb) - was 13.5 days
+  - **Coverage additions**:
+    * Dual token RMA_CHIPLET (OCAH-specific)
+    * PROD_DBG flavour distinction (OCAH-specific)
+    * Screening vs diagnostic test control (SIP integration)
+  - **Status**: ✅ UPDATED - Ready for implementation when DUT available
+  - **Reference**: Grendel-to-OCAH design differences documented in VPLAN revision history
+
+Version 1.4.1 (February 2026 - Overlap Resolution):
+  - **Overlap Analysis**: Created LCC_VPLAN_OVERLAP_ANALYSIS.md
+  - **Grendel Coverage**: Verified 100% coverage of all Grendel sequences
+  - **Resolved Overlaps**:
+    * TEST 1.1 Phase B: Simplified DEMOTE testing, detail in TEST 2.1
+    * TEST 2.1 Phase B: Removed SECURE_TM steps, moved to TEST 3.4
+    * TEST 3.1 Phase C: Removed SECURE_TM/Screening overlap, moved to TEST 3.4/3.5
+    * TEST 1.2/5.1: Added relationship note (invalid values vs encoding errors)
+  - **Test count**: 18 tests (16 UVM + 2 Cocotb) - unchanged
+  - **Status**: ✅ FINAL
+
+Version 1.4.2 (March 2026 - Redundancy Cleanup + Encoding Fix):
+  - **Fixed**: Invalid LC state range 0x6-0xE → 0x9-0xF (was inconsistent
+    with encoding table: 0x6/0x7 = RMA_CHIPLET, 0x8 = PROD_END)
+  - **Merged TEST 4.2 into TEST 3.2**:
+    * SEC_DIS dynamic override → TEST 3.2 Phase D
+    * SEC_DIS overrides INVALID → TEST 3.2 Phase D.8
+  - **Removed redundant phases**:
+    * TEST 1.1 Phase C: Removed DEMOTE-in-PROD_END steps (covered by TEST 2.1 Phase C)
+    * TEST 2.2: Removed Phase C DEMOTE-in-PROD_END (covered by TEST 2.1 Phase C)
+    * TEST 3.5: Removed Phase F SECURE_TM gating (covered by TEST 3.4 Phase A)
+  - **Simplified TEST 4.1**: Removed Phase A (covered by TEST 3.2), kept boundary cases
+  - **Test count**: 18 tests (16 UVM + 2 Cocotb) - was 19
+  - **Status**: ✅ FINAL - No redundant overlap
+
+Version 2.2.0 (March 2026 - Corner Case Gap Analysis + sigint×DEMOTE):
+  - **NEW TEST 1.4**: sep_lcc_uvm_token_gate_corner_test (9 phases A-I, ~30 checks)
+    * Gap #1: Post-token-gate destination mismatch (Phases A-D)
+    * Gap #2: PROD bit isolation — overly restrictive pre-check (Phase E)
+    * Gap #3: Sequential RMA guard missing from TEST_DEV (Phase F)
+    * Gap #4: Terminal state + transient RMA (Phase G)
+    * Gaps #5-#8: Confirmed already covered by existing tests
+    * Phase H-I: PROD_DBG_1/2 LC_STATE isolation (shadow write + transient RMA)
+    * Uses +EFUSE_RANDOM with sep_efuse_item_lcc_feat_ctrl factory override
+  - **Updated TEST 5.1**: Added Phase E (sigint×DEMOTE_1) and Phase F (sigint×DEMOTE_2)
+    * Verifies lc_sigint_err lockdown overrides DEMOTE in PROD_DBG states
+    * Confirms feat_ctrl restores to golden on error release
+  - **Updated base sequence checkers**:
+    * is_lc_raw_transition_valid(): removed invalid 0x0→0x6/0x7 direct path
+    * predict_lc_state_candidate(): added sequential RMA guard (bit[2] requires bit[1])
+    * predict_lc_state_write_outcome(): new full-pipeline predictor
+  - **3 RTL issues discovered**:
+    * Overly restrictive PROD pre-check (blocks valid per-bit SIP advancement)
+    * Missing sequential RMA guard (TEST_DEV → RMA_CHIPLET without RMA_SIP)
+    * PROD_DBG fails to block LC_STATE transitions (privilege escalation)
+  - **Test count**: 16 tests (13 implemented + 3 future) — was 15
+
+Version 2.2.1 (March 2026 - TEST 3.6 Random LC State):
+  - **NEW TEST 3.6**: sep_lcc_uvm_random_lc_state_test — ✅ PASS (31 checks)
+    * Maximum-randomization feat_ctrl verification from random eFuse LC_STATE
+    * 14 randomized variables: LC_STATE, LOCKS, tokens, DEMOTE order, SEC_DIS timing, etc.
+    * 6 phases: boot verify, upward transitions, DEMOTE order, SEC_DIS timing,
+      multi-reset consistency, random state transition fuzzer
+    * Phase F: predict-then-verify with predict_lc_state_write_outcome()
+    * PROD_DBG transition blocking: W1S with tokens matched → must be blocked (spec)
+    * Factory override: sep_efuse_item_lcc_random_state (6 LCC-critical LOCKS OFF)
+  - **Updated predictor**: predict_lc_state_write_outcome() gains demote_active parameter
+    * When PROD + DEMOTE active, all LC_STATE transitions blocked per spec
+    * Predictor follows spec (not RTL) — enables detection of state transition holes
+  - **Test count**: 16 tests (14 implemented + 2 future) — was 13 implemented
+
+Version 2.1.0 (March 2026 - Overlap Consolidation):
+  - Suite consolidation: 18 → 15 tests (after overlap analysis)
+
+Version 1.5.1 (March 2026 - Gap Analysis — 2 Spec Requirement Additions):
+  - **TEST 0.1**: Added Phase A pre-sensing INVALID default verification
+    * Spec (SPEC-LCC-01): "On power up, the LC controller defaults to the INVALID state"
+    * Verifies feat_ctrl_o = {F,F,F} before fuse sensing completes
+    * Verifies transition to correct state after fuse sensing
+  - **TEST 3.4**: Added Phase D2 — SECURE_TM latching with SEC_DIS active
+    * Spec (SPEC-FEAT-11): "TEST_EN is latched on chiplet cold reset release
+      if SEC_DIS asserted" (different trigger point than normal mode)
+    * Critical for A0 brick-recovery: SECURE_TM must be available even if
+      fuse sensing never completes
+  - **Test count**: 18 tests (16 UVM + 2 Cocotb) — unchanged (new phases in existing tests)
+
+Version 1.5.0 (March 2026 - OCAH Spec March 5th Alignment):
+  - **Aligned with SEP_OCAH_SPEC_March5th.txt** — comprehensive update
+  - **DEMOTE/DEMOTE_LOCK split** (throughout):
+    * Single DEMOTE → DEMOTE_1 (BL1, Domain 1) + DEMOTE_2 (BL2, Domain 2)
+    * Single DEMOTE_LOCK → DEMOTE_LOCK_1 + DEMOTE_LOCK_2
+    * Both pairs volatile, cleared by cold reset
+    * Updated all tests: 0.1, 1.1, 2.1, 2.2, 2.3, 2.4
+  - **Feature Control Table rewritten** (per spec):
+    * PROD_DBG_1: {T, F, ~SIP_DIS.FUNC} (was: per DEMOTE flavour, unspecified)
+    * PROD_DBG_2: {T, F, ~SYS_DIS.FUNC} (was: per DEMOTE flavour, unspecified)
+    * PROD_END: {F, F, ~(SIP_DIS|SYS_DIS)} (Debug/DFT now disabled — was open)
+    * CHP_DIS removed from feature control formulas (spec omits it)
+    * TEST_DEV: ~(SIP|SYS) only (CHP removed)
+    * Updated TEST 3.2 Phases C, D, G with new formulas
+  - **SEC_DIS override updated** (per spec):
+    * SEC_DIS=True now overrides ALL states INCLUDING INVALID
+    * Spec: "Fully open device independent of LC state"
+    * Previous stance (INVALID exempt) reversed to follow spec
+    * TEST 3.2 Phase D.8 covers SEC_DIS toggle in INVALID
+  - **RMA_CHIPLET entry rules** (per spec + designer clarification):
+    * From PROD: Must go through RMA_SIP first (PROD→RMA_CHIPLET BLOCKED)
+    * From TEST_DEV: Direct RMA_CHIPLET allowed (already open state)
+    * From RMA_SIP: Allowed (sequential from PROD)
+    * TEST 1.1: Phase E = RMA_SIP→RMA_CHIPLET, Phase I = TEST_DEV→RMA_CHIPLET (new)
+    * TEST 1.1 Phase F: PROD→RMA_CHIPLET direct is invalid (F.3)
+    * TEST 1.3: Renamed to rma_chiplet_token_test
+      Rewritten to test all valid/invalid paths including TEST_DEV direct
+  - **Security domains: 3 → 2** (per spec):
+    * Domain 1: Local assets (BL1, DEMOTE_1)
+    * Domain 2: Downstream chiplets (BL2/SIP, DEMOTE_2)
+    * TEST 3.3: Renamed from multi_domain → two_domain_test
+      Rewritten with 4 phases for 2-domain architecture
+  - **Test count**: 18 tests (16 UVM + 2 Cocotb) — unchanged
+  - **Effort Estimate**: 15 days (unchanged)
+  - **Status**: ✅ FINAL - Aligned with OCAH spec March 5th
+
+
+================================================================================
+APPROVAL
+================================================================================
+
+**Status**: v2.2.1 - ACTIVE - Random LC state test + PROD_DBG transition blocking
+**Critical Dependency**: Filter programming workflow must be implemented before LCC tests
+**Architecture Decision**: Token matching confirmed in eFuse scope (December 2025)
+**Verification Approach**: Dual-layer (UVM hardware + Cocotb firmware integration)
+
+**Test Count Evolution**:
+  - v1.2: 16 tests (14 UVM + 2 Cocotb) - baseline
+  - v1.3: 13 tests (11 UVM + 2 Cocotb) - optimized (merged tests)
+  - v1.3.3: 16 tests (14 UVM + 2 Cocotb) - kept TEST 1.2, added TEST 2.3
+  - v1.4.0: 18 tests (16 UVM + 2 Cocotb) - added TEST 1.3, 2.4, 3.5; merged 4.2
+  - v1.4.2: 18 tests (16 UVM + 2 Cocotb) - merged TEST 4.2 into TEST 3.2
+  - v1.5.0: 18 tests (16 UVM + 2 Cocotb) - OCAH spec March 5th alignment
+  - v1.5.1: 18 tests (16 UVM + 2 Cocotb) - gap analysis: 3 spec requirement additions
+  - v2.2.1: 16 tests (14 UVM + 2 Cocotb) - Random LC state + PROD_DBG blocking:
+    * NEW TEST 3.6: Random eFuse LC_STATE boot, 14 randomized variables, 6 phases
+    * Updated predictor: demote_active param for PROD_DBG transition blocking
+    * 14 implemented (was 13)
+  - v2.2.0: 16 tests (14 UVM + 2 Cocotb) - Corner case gap analysis + sigint×DEMOTE:
+    * NEW TEST 1.4: Token gate corner cases (9 phases, 3 known issues)
+    * Updated TEST 5.1: Phases E/F (sigint×DEMOTE_1/2)
+    * Updated base sequence checkers (sequential RMA guard, predictors)
+  - v2.1.0: 15 tests (13 UVM + 2 Cocotb) - Overlap consolidation
+  - v1.5.2: 18 tests (16 UVM + 2 Cocotb) - TEST 3.2 updated:
+    * Rewrote TEST 3.2 to match implemented phases (A-D, 13 cold resets)
+    * Added dynamic SECURE_TM randomization (randomize_secure_tm at every check)
+    * Phase D: SEC_DIS via Grendel-style VIF probe + CSR-vs-output consistency
+    * Reuses set_secure_tm from sep_base_seq
+    * Golden model reads actual secure_tm from RTL (adapts automatically)
+    * Updated verify_feat_ctrl_for_current_state to use actual secure_tm
+      (was hardcoded secure_tm=1; now reads from RTL after Issue 19 CSR fix)
+
+**Design Verification Status**:
+  1. ✅ **CONFIRMED**: OCAH LCC implements SECURE_TM signal
+     - TEST_EN strap exists in OCAH design
+     - secure_tm signal confirmed in LCC RTL interface
+     - TEST 3.4 is MANDATORY (P0 priority)
+     - OCAH follows Grendel spec with two security domains
+  2. ✅ **CONFIRMED**: DEMOTE_LOCK register exists in OCAH
+     - LCC CSR (not shadow register), 1-bit RW, volatile
+     - User confirmed: follows Grendel spec Section 2.3
+     - TEST 2.3 added for comprehensive verification
+
+**Implementation Prerequisites**:
+  1. Confirm LC Controller register map (addresses and offsets)
+  2. Verify 2-domain LC state machine implemented (Domain 1: local, Domain 2: downstream)
+  3. Define feature control output port names (feature_disable_o bit assignments)
+  4. Confirm eFuse/LCC interface signals (shadow_load_req/done, LC_STATE shadow registers)
+  5. Confirm DEMOTE_1/2 and DEMOTE_LOCK_1/2 register addresses
+  6. Confirm sequential RMA path enforcement in RTL (RMA_SIP required before RMA_CHIPLET)
+
+**Design Verification Status** ✅:
+  - SECURE_TM signal: CONFIRMED in OCAH LCC RTL
+  - DEMOTE_1/2, DEMOTE_LOCK_1/2: Per OCAH spec March 5th (two pairs, volatile)
+  - Two-domain architecture: Per OCAH spec March 5th (Domain 1: local, Domain 2: downstream)
+  - Token matching: CONFIRMED in eFuse scope (see SEP_EFUSE_TEST_PLAN.txt Suite 6)
+  - SEC_DIS override: Follows spec — "independent of LC state" (includes INVALID)
+
+
+================================================================================
+[End of LCC Verification Plan v2.2.1]
+================================================================================

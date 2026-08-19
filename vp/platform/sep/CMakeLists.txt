@@ -1,4 +1,12 @@
 # =============================================================================
+# vp/platform/sep/CMakeLists.txt
+#
+# SEP platform VP target — same directory shape as vp/platform/smc/:
+#   main.cpp + sep_platform.hpp + src/sep_platform.cpp + inc/ + config/ + docs/
+# Builds the `sep-vp` executable.
+# =============================================================================
+
+# =============================================================================
 # Add external models build tree
 # =============================================================================
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../sep ${CMAKE_CURRENT_BINARY_DIR}/sep/peripherals)
@@ -11,6 +19,7 @@ find_package(OpenSSL REQUIRED)
 # Include dirs for sep-vp main.cpp (Accellera only)
 # =============================================================================
   include_directories(
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/hmac/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/otbn/include
@@ -45,11 +54,9 @@ find_package(OpenSSL REQUIRED)
     include_directories(SYSTEM ${CCI_INCLUDE_DIR})
   endif()
 
-  file(GLOB_RECURSE HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.h ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
-
   add_executable(sep-vp
     main.cpp
-    ${HEADERS}
+    src/sep_platform.cpp
   )
 
   target_compile_options(sep-vp PRIVATE -ftemplate-depth=8192)

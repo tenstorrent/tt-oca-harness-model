@@ -8,7 +8,8 @@
 # invocation shape as `sep-vp <ini> <elf>`).
 #
 # This is the canonical SMC platform VP module re-structured to the
-# vp/platform/<subsys>/ layout (main.cpp + <module>.hpp + inc/ + config/).
+# vp/platform/<subsys>/ layout (main.cpp + <name>_platform.hpp +
+# src/<name>_platform.cpp + inc/ + config/ + docs/).
 # The historical smc/platform/ integration blob has been removed; the platform
 # is now built and tested only through this VP target.
 # =============================================================================

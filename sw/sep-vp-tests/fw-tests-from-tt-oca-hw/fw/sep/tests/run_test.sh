@@ -116,13 +116,18 @@ fi
 
 vp_find_sep_vp || exit 1
 
-# Select config — patch algorithm_type for OTBN tests
-RUN_CONFIG="$CONFIG"
+# Select config — pick the base the test needs, then patch algorithm_type for
+# OTBN tests
+RUN_CONFIG="$(vp_base_config "$TEST_NAME")"
 TEMP_CONFIG=""
+
+if [[ "$RUN_CONFIG" != "$CONFIG" ]]; then
+    echo "Using base config: $(basename "$RUN_CONFIG")"
+fi
 
 ALGO="$(vp_algo_override "$TEST_NAME")"
 if [[ -n "$ALGO" ]]; then
-    TEMP_CONFIG="$(vp_make_test_config "$ALGO")"
+    TEMP_CONFIG="$(vp_make_test_config "$ALGO" "$RUN_CONFIG")"
     RUN_CONFIG="$TEMP_CONFIG"
     echo "Using OTBN algorithm override: $ALGO"
 fi

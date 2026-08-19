@@ -5,7 +5,7 @@
 repository (branch `feature/smc-sep-integration`), its test status, and how it
 relates to the SMU DV tests in `tt-oca-hw`.
 **Companion documents:** `doc/smc-sep-d2d-interconnect.adoc` (design + as-built
-status), `vp/platform/smu/README.md` (user guide), `sw/smu-vp-tests/README.md`
+status), `vp/platform/smu/docs/README.md` (user guide), `sw/smu-vp-tests/README.md`
 (test guide).
 
 ---

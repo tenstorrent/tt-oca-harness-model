@@ -151,6 +151,48 @@ vp_algo_override() {
     esac
 }
 
+# Which base config a test needs.
+#
+# accellera_config.ini preloads the SPI flash with the boot image, because the
+# ROM boot flow needs something to boot from. The flash model programs the way
+# real flash does — it can only clear bits, never set them — so a test that
+# writes its own pattern over preloaded bytes reads back `pattern & boot_byte`
+# and sees garbage rather than what it wrote. In the RTL testbench the flash
+# starts erased, so upstream never has to think about this.
+# The eFuse array is preloaded with default_efuse.preload, the same image
+# sep_test_template loads via +sep_preload_efuse. The three sep_efuse_fw_* tests
+# override their run_flags with +SEP_EFUSE_NO_PRELOAD instead, because they program
+# fuses themselves and have to start from a blank part: a preloaded field cannot be
+# programmed to a different value, since fuses only go 0->1.
+vp_base_config() {
+    case "$1" in
+        spi_ot_flash_write_read_test|spi_ot_flash_dual_read_test|spi_ot_flash_quad_read_test)
+            echo "$(dirname "${CONFIG}")/accellera_config_no_spipreload.ini" ;;
+        sep_efuse_fw_otp_rw_test|sep_efuse_fw_shadow_rw_test|sep_efuse_fw_token_match_test)
+            vp_efuse_blank_config ;;
+        *) echo "${CONFIG}" ;;
+    esac
+}
+
+# The +SEP_EFUSE_NO_PRELOAD equivalent: echoes a config whose fuse array starts erased.
+#
+# fuse_preload_file lives in efuse_vp.ini, which accellera_config.ini @includes, so
+# dropping it takes a copy of both — the include with that line commented out, and a
+# top-level config pointing at the copy. Both are derived with sed on each call rather
+# than checked in, so they track edits to the shared config instead of drifting from it,
+# which is also why accellera_config_no_spipreload.ini is built that way.
+vp_efuse_blank_config() {
+    local dir top_blank
+    dir="$(dirname "${CONFIG}")"
+    top_blank="${dir}/accellera_config_efuse_blank.ini"
+    sed -E \
+        -e 's|^(och_sep_ss1\.sep_efuse\.[[:alnum:]_]+[[:space:]]*:[[:space:]]*)\[[^]]*\]|\1[0, 0, 0, 0, 0, 0, 0, 0]|' \
+        -e 's|^(och_sep_ss1\.sep_efuse\.[[:alnum:]_]+[[:space:]]*:[[:space:]]*)[0-9]+|\10|' \
+        "${dir}/efuse_vp.ini" > "${dir}/efuse_vp_blank.ini"
+    sed -E 's|^@include efuse_vp\.ini[[:space:]]*$|@include efuse_vp_blank.ini|' \
+        "${CONFIG}" > "${top_blank}"
+}
+
 # Tests whose Makefile emits a second ELF from the same sources.
 vp_extra_elfs() {
     case "$1" in
@@ -171,11 +213,11 @@ vp_test_dir_for() {
 
 # Write a copy of CONFIG with the OTBN algorithm patched in; echoes its path.
 vp_make_test_config() {
-    local algo="$1" config_dir tmp
-    config_dir="$(cd "$(dirname "${CONFIG}")" && pwd)"
+    local algo="$1" base="${2:-${CONFIG}}" config_dir tmp
+    config_dir="$(cd "$(dirname "${base}")" && pwd)"
     tmp="$(mktemp /tmp/sep_vp_config_XXXXXX.ini)"
     sed -e "s|algorithm_type *:.*|algorithm_type : ${algo}|g" \
         -e "s|configFile *:.*|configFile : ${config_dir}/veeriss_config.json|g" \
-        "${CONFIG}" > "${tmp}"
+        "${base}" > "${tmp}"
     echo "${tmp}"
 }

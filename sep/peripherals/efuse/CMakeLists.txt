@@ -85,6 +85,17 @@ endif()
 include(FindCCI)
 include(FindSystemC)
 
+# SHA-256, for the token match comparison. The platform already requires OpenSSL for
+# the HMAC model, so this adds no new dependency; guard against a double find_package
+# when this peripheral is built as a subproject of a platform that found it already.
+if(NOT TARGET OpenSSL::Crypto)
+  include(PeripheralOpenSSL)
+  peripheral_find_openssl()
+  if(NOT OPENSSL_FOUND)
+    message(FATAL_ERROR "OpenSSL not found. sep_efuse requires it for SHA-256 token matching.")
+  endif()
+endif()
+
 if(CCI_FOUND)
   include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
@@ -123,7 +134,7 @@ set(TEST_SRCS
 # -----------------------------------------------------------------------------
 peripheral_add_model_library(efuse_model ${MODEL_SRCS})
 target_include_directories(efuse_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(efuse_model PUBLIC csml_logger SystemC::systemc Threads::Threads ${CCI_LIBRARIES})
+target_link_libraries(efuse_model PUBLIC csml_logger SystemC::systemc Threads::Threads ${CCI_LIBRARIES} OpenSSL::Crypto)
 
 # -----------------------------------------------------------------------------
 # Test executable

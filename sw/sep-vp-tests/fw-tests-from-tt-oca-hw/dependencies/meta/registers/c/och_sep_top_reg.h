@@ -272,6 +272,18 @@
 
 
 //==============================================================================
+// Addresses for Address Map: sep_reset_ctrl
+//==============================================================================
+
+
+#define SEP_RESET_CTRL_REG_MAP_BASE_ADDR  (0x10803000)
+#define SEP_RESET_CTRL_REG_MAP_SIZE       (0x00000008)
+
+#define SEP_RESET_CTRL_SW_RESET_N_REG_OFFSET                                              (0x00000000)
+#define SEP_RESET_CTRL_SW_RESET_N_REG_ADDR                                                (0x10803000)
+
+
+//==============================================================================
 // Addresses for Address Map: otbn
 //==============================================================================
 
@@ -327,7 +339,7 @@
 
 
 #define AES_REG_MAP_BASE_ADDR  (0x10910000)
-#define AES_REG_MAP_SIZE       (0x00000088)
+#define AES_REG_MAP_SIZE       (0x0000008C)
 
 #define AES_ALERT_TEST_REG_OFFSET                                                         (0x00000000)
 #define AES_ALERT_TEST_REG_ADDR                                                           (0x10910000)
@@ -397,6 +409,8 @@
 #define AES_TRIGGER_REG_ADDR                                                              (0x10910080)
 #define AES_STATUS_REG_OFFSET                                                             (0x00000084)
 #define AES_STATUS_REG_ADDR                                                               (0x10910084)
+#define AES_CTRL_GCM_SHADOWED_REG_OFFSET                                                  (0x00000088)
+#define AES_CTRL_GCM_SHADOWED_REG_ADDR                                                    (0x10910088)
 
 
 //==============================================================================
@@ -719,1394 +733,6 @@
 
 
 //==============================================================================
-// Addresses for Address Map: km_kpv_kpvlp
-//==============================================================================
-
-
-#define KM_KPV_KPVLP_REG_MAP_BASE_ADDR  (0x10921000)
-#define KM_KPV_KPVLP_REG_MAP_SIZE       (0x00000884)
-
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[0]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__REG_FILE_BASE_ADDR  (0x10921000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_0__REG_ADDR                                  (0x10921000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_1__REG_ADDR                                  (0x10921004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_2__REG_ADDR                                  (0x10921008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_3__REG_ADDR                                  (0x1092100C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_4__REG_ADDR                                  (0x10921010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_5__REG_ADDR                                  (0x10921014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_6__REG_ADDR                                  (0x10921018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_7__REG_ADDR                                  (0x1092101C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_8__REG_ADDR                                  (0x10921020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_9__REG_ADDR                                  (0x10921024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_10__REG_ADDR                                 (0x10921028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_11__REG_ADDR                                 (0x1092102C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_12__REG_ADDR                                 (0x10921030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_13__REG_ADDR                                 (0x10921034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_14__REG_ADDR                                 (0x10921038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_0__WORD_15__REG_ADDR                                 (0x1092103C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[1]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__REG_FILE_BASE_ADDR  (0x10921040)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_0__REG_ADDR                                  (0x10921040)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_1__REG_ADDR                                  (0x10921044)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_2__REG_ADDR                                  (0x10921048)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_3__REG_ADDR                                  (0x1092104C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_4__REG_ADDR                                  (0x10921050)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_5__REG_ADDR                                  (0x10921054)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_6__REG_ADDR                                  (0x10921058)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_7__REG_ADDR                                  (0x1092105C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_8__REG_ADDR                                  (0x10921060)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_9__REG_ADDR                                  (0x10921064)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_10__REG_ADDR                                 (0x10921068)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_11__REG_ADDR                                 (0x1092106C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_12__REG_ADDR                                 (0x10921070)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_13__REG_ADDR                                 (0x10921074)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_14__REG_ADDR                                 (0x10921078)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_1__WORD_15__REG_ADDR                                 (0x1092107C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[2]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__REG_FILE_BASE_ADDR  (0x10921080)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_0__REG_ADDR                                  (0x10921080)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_1__REG_ADDR                                  (0x10921084)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_2__REG_ADDR                                  (0x10921088)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_3__REG_ADDR                                  (0x1092108C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_4__REG_ADDR                                  (0x10921090)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_5__REG_ADDR                                  (0x10921094)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_6__REG_ADDR                                  (0x10921098)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_7__REG_ADDR                                  (0x1092109C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_8__REG_ADDR                                  (0x109210A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_9__REG_ADDR                                  (0x109210A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_10__REG_ADDR                                 (0x109210A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_11__REG_ADDR                                 (0x109210AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_12__REG_ADDR                                 (0x109210B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_13__REG_ADDR                                 (0x109210B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_14__REG_ADDR                                 (0x109210B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_2__WORD_15__REG_ADDR                                 (0x109210BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[3]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__REG_FILE_BASE_ADDR  (0x109210C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_0__REG_ADDR                                  (0x109210C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_1__REG_ADDR                                  (0x109210C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_2__REG_ADDR                                  (0x109210C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_3__REG_ADDR                                  (0x109210CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_4__REG_ADDR                                  (0x109210D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_5__REG_ADDR                                  (0x109210D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_6__REG_ADDR                                  (0x109210D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_7__REG_ADDR                                  (0x109210DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_8__REG_ADDR                                  (0x109210E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_9__REG_ADDR                                  (0x109210E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_10__REG_ADDR                                 (0x109210E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_11__REG_ADDR                                 (0x109210EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_12__REG_ADDR                                 (0x109210F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_13__REG_ADDR                                 (0x109210F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_14__REG_ADDR                                 (0x109210F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_3__WORD_15__REG_ADDR                                 (0x109210FC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[4]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__REG_FILE_BASE_ADDR  (0x10921100)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_0__REG_ADDR                                  (0x10921100)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_1__REG_ADDR                                  (0x10921104)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_2__REG_ADDR                                  (0x10921108)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_3__REG_ADDR                                  (0x1092110C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_4__REG_ADDR                                  (0x10921110)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_5__REG_ADDR                                  (0x10921114)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_6__REG_ADDR                                  (0x10921118)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_7__REG_ADDR                                  (0x1092111C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_8__REG_ADDR                                  (0x10921120)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_9__REG_ADDR                                  (0x10921124)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_10__REG_ADDR                                 (0x10921128)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_11__REG_ADDR                                 (0x1092112C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_12__REG_ADDR                                 (0x10921130)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_13__REG_ADDR                                 (0x10921134)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_14__REG_ADDR                                 (0x10921138)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_4__WORD_15__REG_ADDR                                 (0x1092113C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[5]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__REG_FILE_BASE_ADDR  (0x10921140)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_0__REG_ADDR                                  (0x10921140)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_1__REG_ADDR                                  (0x10921144)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_2__REG_ADDR                                  (0x10921148)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_3__REG_ADDR                                  (0x1092114C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_4__REG_ADDR                                  (0x10921150)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_5__REG_ADDR                                  (0x10921154)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_6__REG_ADDR                                  (0x10921158)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_7__REG_ADDR                                  (0x1092115C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_8__REG_ADDR                                  (0x10921160)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_9__REG_ADDR                                  (0x10921164)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_10__REG_ADDR                                 (0x10921168)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_11__REG_ADDR                                 (0x1092116C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_12__REG_ADDR                                 (0x10921170)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_13__REG_ADDR                                 (0x10921174)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_14__REG_ADDR                                 (0x10921178)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_5__WORD_15__REG_ADDR                                 (0x1092117C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[6]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__REG_FILE_BASE_ADDR  (0x10921180)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_0__REG_ADDR                                  (0x10921180)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_1__REG_ADDR                                  (0x10921184)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_2__REG_ADDR                                  (0x10921188)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_3__REG_ADDR                                  (0x1092118C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_4__REG_ADDR                                  (0x10921190)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_5__REG_ADDR                                  (0x10921194)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_6__REG_ADDR                                  (0x10921198)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_7__REG_ADDR                                  (0x1092119C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_8__REG_ADDR                                  (0x109211A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_9__REG_ADDR                                  (0x109211A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_10__REG_ADDR                                 (0x109211A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_11__REG_ADDR                                 (0x109211AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_12__REG_ADDR                                 (0x109211B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_13__REG_ADDR                                 (0x109211B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_14__REG_ADDR                                 (0x109211B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_6__WORD_15__REG_ADDR                                 (0x109211BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[7]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__REG_FILE_BASE_ADDR  (0x109211C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_0__REG_ADDR                                  (0x109211C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_1__REG_ADDR                                  (0x109211C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_2__REG_ADDR                                  (0x109211C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_3__REG_ADDR                                  (0x109211CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_4__REG_ADDR                                  (0x109211D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_5__REG_ADDR                                  (0x109211D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_6__REG_ADDR                                  (0x109211D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_7__REG_ADDR                                  (0x109211DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_8__REG_ADDR                                  (0x109211E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_9__REG_ADDR                                  (0x109211E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_10__REG_ADDR                                 (0x109211E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_11__REG_ADDR                                 (0x109211EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_12__REG_ADDR                                 (0x109211F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_13__REG_ADDR                                 (0x109211F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_14__REG_ADDR                                 (0x109211F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_7__WORD_15__REG_ADDR                                 (0x109211FC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[8]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__REG_FILE_BASE_ADDR  (0x10921200)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_0__REG_ADDR                                  (0x10921200)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_1__REG_ADDR                                  (0x10921204)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_2__REG_ADDR                                  (0x10921208)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_3__REG_ADDR                                  (0x1092120C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_4__REG_ADDR                                  (0x10921210)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_5__REG_ADDR                                  (0x10921214)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_6__REG_ADDR                                  (0x10921218)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_7__REG_ADDR                                  (0x1092121C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_8__REG_ADDR                                  (0x10921220)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_9__REG_ADDR                                  (0x10921224)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_10__REG_ADDR                                 (0x10921228)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_11__REG_ADDR                                 (0x1092122C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_12__REG_ADDR                                 (0x10921230)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_13__REG_ADDR                                 (0x10921234)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_14__REG_ADDR                                 (0x10921238)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_8__WORD_15__REG_ADDR                                 (0x1092123C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[9]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__REG_FILE_BASE_ADDR  (0x10921240)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_0__REG_OFFSET                                (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_0__REG_ADDR                                  (0x10921240)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_1__REG_OFFSET                                (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_1__REG_ADDR                                  (0x10921244)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_2__REG_OFFSET                                (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_2__REG_ADDR                                  (0x10921248)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_3__REG_OFFSET                                (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_3__REG_ADDR                                  (0x1092124C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_4__REG_OFFSET                                (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_4__REG_ADDR                                  (0x10921250)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_5__REG_OFFSET                                (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_5__REG_ADDR                                  (0x10921254)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_6__REG_OFFSET                                (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_6__REG_ADDR                                  (0x10921258)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_7__REG_OFFSET                                (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_7__REG_ADDR                                  (0x1092125C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_8__REG_OFFSET                                (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_8__REG_ADDR                                  (0x10921260)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_9__REG_OFFSET                                (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_9__REG_ADDR                                  (0x10921264)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_10__REG_OFFSET                               (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_10__REG_ADDR                                 (0x10921268)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_11__REG_OFFSET                               (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_11__REG_ADDR                                 (0x1092126C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_12__REG_OFFSET                               (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_12__REG_ADDR                                 (0x10921270)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_13__REG_OFFSET                               (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_13__REG_ADDR                                 (0x10921274)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_14__REG_OFFSET                               (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_14__REG_ADDR                                 (0x10921278)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_15__REG_OFFSET                               (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_9__WORD_15__REG_ADDR                                 (0x1092127C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[10]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__REG_FILE_BASE_ADDR  (0x10921280)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_0__REG_ADDR                                 (0x10921280)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_1__REG_ADDR                                 (0x10921284)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_2__REG_ADDR                                 (0x10921288)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_3__REG_ADDR                                 (0x1092128C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_4__REG_ADDR                                 (0x10921290)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_5__REG_ADDR                                 (0x10921294)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_6__REG_ADDR                                 (0x10921298)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_7__REG_ADDR                                 (0x1092129C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_8__REG_ADDR                                 (0x109212A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_9__REG_ADDR                                 (0x109212A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_10__REG_ADDR                                (0x109212A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_11__REG_ADDR                                (0x109212AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_12__REG_ADDR                                (0x109212B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_13__REG_ADDR                                (0x109212B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_14__REG_ADDR                                (0x109212B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_10__WORD_15__REG_ADDR                                (0x109212BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[11]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__REG_FILE_BASE_ADDR  (0x109212C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_0__REG_ADDR                                 (0x109212C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_1__REG_ADDR                                 (0x109212C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_2__REG_ADDR                                 (0x109212C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_3__REG_ADDR                                 (0x109212CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_4__REG_ADDR                                 (0x109212D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_5__REG_ADDR                                 (0x109212D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_6__REG_ADDR                                 (0x109212D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_7__REG_ADDR                                 (0x109212DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_8__REG_ADDR                                 (0x109212E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_9__REG_ADDR                                 (0x109212E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_10__REG_ADDR                                (0x109212E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_11__REG_ADDR                                (0x109212EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_12__REG_ADDR                                (0x109212F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_13__REG_ADDR                                (0x109212F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_14__REG_ADDR                                (0x109212F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_11__WORD_15__REG_ADDR                                (0x109212FC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[12]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__REG_FILE_BASE_ADDR  (0x10921300)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_0__REG_ADDR                                 (0x10921300)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_1__REG_ADDR                                 (0x10921304)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_2__REG_ADDR                                 (0x10921308)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_3__REG_ADDR                                 (0x1092130C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_4__REG_ADDR                                 (0x10921310)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_5__REG_ADDR                                 (0x10921314)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_6__REG_ADDR                                 (0x10921318)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_7__REG_ADDR                                 (0x1092131C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_8__REG_ADDR                                 (0x10921320)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_9__REG_ADDR                                 (0x10921324)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_10__REG_ADDR                                (0x10921328)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_11__REG_ADDR                                (0x1092132C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_12__REG_ADDR                                (0x10921330)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_13__REG_ADDR                                (0x10921334)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_14__REG_ADDR                                (0x10921338)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_12__WORD_15__REG_ADDR                                (0x1092133C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[13]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__REG_FILE_BASE_ADDR  (0x10921340)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_0__REG_ADDR                                 (0x10921340)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_1__REG_ADDR                                 (0x10921344)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_2__REG_ADDR                                 (0x10921348)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_3__REG_ADDR                                 (0x1092134C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_4__REG_ADDR                                 (0x10921350)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_5__REG_ADDR                                 (0x10921354)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_6__REG_ADDR                                 (0x10921358)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_7__REG_ADDR                                 (0x1092135C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_8__REG_ADDR                                 (0x10921360)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_9__REG_ADDR                                 (0x10921364)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_10__REG_ADDR                                (0x10921368)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_11__REG_ADDR                                (0x1092136C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_12__REG_ADDR                                (0x10921370)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_13__REG_ADDR                                (0x10921374)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_14__REG_ADDR                                (0x10921378)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_13__WORD_15__REG_ADDR                                (0x1092137C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[14]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__REG_FILE_BASE_ADDR  (0x10921380)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_0__REG_ADDR                                 (0x10921380)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_1__REG_ADDR                                 (0x10921384)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_2__REG_ADDR                                 (0x10921388)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_3__REG_ADDR                                 (0x1092138C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_4__REG_ADDR                                 (0x10921390)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_5__REG_ADDR                                 (0x10921394)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_6__REG_ADDR                                 (0x10921398)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_7__REG_ADDR                                 (0x1092139C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_8__REG_ADDR                                 (0x109213A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_9__REG_ADDR                                 (0x109213A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_10__REG_ADDR                                (0x109213A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_11__REG_ADDR                                (0x109213AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_12__REG_ADDR                                (0x109213B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_13__REG_ADDR                                (0x109213B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_14__REG_ADDR                                (0x109213B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_14__WORD_15__REG_ADDR                                (0x109213BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[15]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__REG_FILE_BASE_ADDR  (0x109213C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_0__REG_ADDR                                 (0x109213C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_1__REG_ADDR                                 (0x109213C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_2__REG_ADDR                                 (0x109213C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_3__REG_ADDR                                 (0x109213CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_4__REG_ADDR                                 (0x109213D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_5__REG_ADDR                                 (0x109213D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_6__REG_ADDR                                 (0x109213D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_7__REG_ADDR                                 (0x109213DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_8__REG_ADDR                                 (0x109213E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_9__REG_ADDR                                 (0x109213E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_10__REG_ADDR                                (0x109213E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_11__REG_ADDR                                (0x109213EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_12__REG_ADDR                                (0x109213F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_13__REG_ADDR                                (0x109213F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_14__REG_ADDR                                (0x109213F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_15__WORD_15__REG_ADDR                                (0x109213FC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[16]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__REG_FILE_BASE_ADDR  (0x10921400)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_0__REG_ADDR                                 (0x10921400)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_1__REG_ADDR                                 (0x10921404)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_2__REG_ADDR                                 (0x10921408)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_3__REG_ADDR                                 (0x1092140C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_4__REG_ADDR                                 (0x10921410)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_5__REG_ADDR                                 (0x10921414)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_6__REG_ADDR                                 (0x10921418)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_7__REG_ADDR                                 (0x1092141C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_8__REG_ADDR                                 (0x10921420)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_9__REG_ADDR                                 (0x10921424)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_10__REG_ADDR                                (0x10921428)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_11__REG_ADDR                                (0x1092142C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_12__REG_ADDR                                (0x10921430)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_13__REG_ADDR                                (0x10921434)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_14__REG_ADDR                                (0x10921438)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_16__WORD_15__REG_ADDR                                (0x1092143C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[17]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__REG_FILE_BASE_ADDR  (0x10921440)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_0__REG_ADDR                                 (0x10921440)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_1__REG_ADDR                                 (0x10921444)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_2__REG_ADDR                                 (0x10921448)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_3__REG_ADDR                                 (0x1092144C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_4__REG_ADDR                                 (0x10921450)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_5__REG_ADDR                                 (0x10921454)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_6__REG_ADDR                                 (0x10921458)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_7__REG_ADDR                                 (0x1092145C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_8__REG_ADDR                                 (0x10921460)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_9__REG_ADDR                                 (0x10921464)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_10__REG_ADDR                                (0x10921468)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_11__REG_ADDR                                (0x1092146C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_12__REG_ADDR                                (0x10921470)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_13__REG_ADDR                                (0x10921474)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_14__REG_ADDR                                (0x10921478)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_17__WORD_15__REG_ADDR                                (0x1092147C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[18]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__REG_FILE_BASE_ADDR  (0x10921480)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_0__REG_ADDR                                 (0x10921480)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_1__REG_ADDR                                 (0x10921484)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_2__REG_ADDR                                 (0x10921488)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_3__REG_ADDR                                 (0x1092148C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_4__REG_ADDR                                 (0x10921490)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_5__REG_ADDR                                 (0x10921494)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_6__REG_ADDR                                 (0x10921498)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_7__REG_ADDR                                 (0x1092149C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_8__REG_ADDR                                 (0x109214A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_9__REG_ADDR                                 (0x109214A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_10__REG_ADDR                                (0x109214A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_11__REG_ADDR                                (0x109214AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_12__REG_ADDR                                (0x109214B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_13__REG_ADDR                                (0x109214B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_14__REG_ADDR                                (0x109214B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_18__WORD_15__REG_ADDR                                (0x109214BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[19]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__REG_FILE_BASE_ADDR  (0x109214C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_0__REG_ADDR                                 (0x109214C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_1__REG_ADDR                                 (0x109214C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_2__REG_ADDR                                 (0x109214C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_3__REG_ADDR                                 (0x109214CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_4__REG_ADDR                                 (0x109214D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_5__REG_ADDR                                 (0x109214D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_6__REG_ADDR                                 (0x109214D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_7__REG_ADDR                                 (0x109214DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_8__REG_ADDR                                 (0x109214E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_9__REG_ADDR                                 (0x109214E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_10__REG_ADDR                                (0x109214E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_11__REG_ADDR                                (0x109214EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_12__REG_ADDR                                (0x109214F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_13__REG_ADDR                                (0x109214F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_14__REG_ADDR                                (0x109214F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_19__WORD_15__REG_ADDR                                (0x109214FC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[20]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__REG_FILE_BASE_ADDR  (0x10921500)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_0__REG_ADDR                                 (0x10921500)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_1__REG_ADDR                                 (0x10921504)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_2__REG_ADDR                                 (0x10921508)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_3__REG_ADDR                                 (0x1092150C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_4__REG_ADDR                                 (0x10921510)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_5__REG_ADDR                                 (0x10921514)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_6__REG_ADDR                                 (0x10921518)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_7__REG_ADDR                                 (0x1092151C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_8__REG_ADDR                                 (0x10921520)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_9__REG_ADDR                                 (0x10921524)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_10__REG_ADDR                                (0x10921528)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_11__REG_ADDR                                (0x1092152C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_12__REG_ADDR                                (0x10921530)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_13__REG_ADDR                                (0x10921534)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_14__REG_ADDR                                (0x10921538)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_20__WORD_15__REG_ADDR                                (0x1092153C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[21]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__REG_FILE_BASE_ADDR  (0x10921540)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_0__REG_ADDR                                 (0x10921540)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_1__REG_ADDR                                 (0x10921544)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_2__REG_ADDR                                 (0x10921548)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_3__REG_ADDR                                 (0x1092154C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_4__REG_ADDR                                 (0x10921550)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_5__REG_ADDR                                 (0x10921554)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_6__REG_ADDR                                 (0x10921558)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_7__REG_ADDR                                 (0x1092155C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_8__REG_ADDR                                 (0x10921560)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_9__REG_ADDR                                 (0x10921564)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_10__REG_ADDR                                (0x10921568)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_11__REG_ADDR                                (0x1092156C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_12__REG_ADDR                                (0x10921570)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_13__REG_ADDR                                (0x10921574)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_14__REG_ADDR                                (0x10921578)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_21__WORD_15__REG_ADDR                                (0x1092157C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[22]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__REG_FILE_BASE_ADDR  (0x10921580)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_0__REG_ADDR                                 (0x10921580)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_1__REG_ADDR                                 (0x10921584)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_2__REG_ADDR                                 (0x10921588)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_3__REG_ADDR                                 (0x1092158C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_4__REG_ADDR                                 (0x10921590)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_5__REG_ADDR                                 (0x10921594)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_6__REG_ADDR                                 (0x10921598)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_7__REG_ADDR                                 (0x1092159C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_8__REG_ADDR                                 (0x109215A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_9__REG_ADDR                                 (0x109215A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_10__REG_ADDR                                (0x109215A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_11__REG_ADDR                                (0x109215AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_12__REG_ADDR                                (0x109215B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_13__REG_ADDR                                (0x109215B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_14__REG_ADDR                                (0x109215B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_22__WORD_15__REG_ADDR                                (0x109215BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[23]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__REG_FILE_BASE_ADDR  (0x109215C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_0__REG_ADDR                                 (0x109215C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_1__REG_ADDR                                 (0x109215C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_2__REG_ADDR                                 (0x109215C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_3__REG_ADDR                                 (0x109215CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_4__REG_ADDR                                 (0x109215D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_5__REG_ADDR                                 (0x109215D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_6__REG_ADDR                                 (0x109215D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_7__REG_ADDR                                 (0x109215DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_8__REG_ADDR                                 (0x109215E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_9__REG_ADDR                                 (0x109215E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_10__REG_ADDR                                (0x109215E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_11__REG_ADDR                                (0x109215EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_12__REG_ADDR                                (0x109215F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_13__REG_ADDR                                (0x109215F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_14__REG_ADDR                                (0x109215F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_23__WORD_15__REG_ADDR                                (0x109215FC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[24]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__REG_FILE_BASE_ADDR  (0x10921600)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_0__REG_ADDR                                 (0x10921600)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_1__REG_ADDR                                 (0x10921604)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_2__REG_ADDR                                 (0x10921608)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_3__REG_ADDR                                 (0x1092160C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_4__REG_ADDR                                 (0x10921610)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_5__REG_ADDR                                 (0x10921614)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_6__REG_ADDR                                 (0x10921618)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_7__REG_ADDR                                 (0x1092161C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_8__REG_ADDR                                 (0x10921620)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_9__REG_ADDR                                 (0x10921624)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_10__REG_ADDR                                (0x10921628)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_11__REG_ADDR                                (0x1092162C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_12__REG_ADDR                                (0x10921630)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_13__REG_ADDR                                (0x10921634)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_14__REG_ADDR                                (0x10921638)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_24__WORD_15__REG_ADDR                                (0x1092163C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[25]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__REG_FILE_BASE_ADDR  (0x10921640)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_0__REG_ADDR                                 (0x10921640)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_1__REG_ADDR                                 (0x10921644)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_2__REG_ADDR                                 (0x10921648)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_3__REG_ADDR                                 (0x1092164C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_4__REG_ADDR                                 (0x10921650)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_5__REG_ADDR                                 (0x10921654)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_6__REG_ADDR                                 (0x10921658)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_7__REG_ADDR                                 (0x1092165C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_8__REG_ADDR                                 (0x10921660)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_9__REG_ADDR                                 (0x10921664)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_10__REG_ADDR                                (0x10921668)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_11__REG_ADDR                                (0x1092166C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_12__REG_ADDR                                (0x10921670)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_13__REG_ADDR                                (0x10921674)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_14__REG_ADDR                                (0x10921678)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_25__WORD_15__REG_ADDR                                (0x1092167C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[26]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__REG_FILE_BASE_ADDR  (0x10921680)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_0__REG_ADDR                                 (0x10921680)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_1__REG_ADDR                                 (0x10921684)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_2__REG_ADDR                                 (0x10921688)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_3__REG_ADDR                                 (0x1092168C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_4__REG_ADDR                                 (0x10921690)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_5__REG_ADDR                                 (0x10921694)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_6__REG_ADDR                                 (0x10921698)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_7__REG_ADDR                                 (0x1092169C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_8__REG_ADDR                                 (0x109216A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_9__REG_ADDR                                 (0x109216A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_10__REG_ADDR                                (0x109216A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_11__REG_ADDR                                (0x109216AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_12__REG_ADDR                                (0x109216B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_13__REG_ADDR                                (0x109216B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_14__REG_ADDR                                (0x109216B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_26__WORD_15__REG_ADDR                                (0x109216BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[27]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__REG_FILE_BASE_ADDR  (0x109216C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_0__REG_ADDR                                 (0x109216C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_1__REG_ADDR                                 (0x109216C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_2__REG_ADDR                                 (0x109216C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_3__REG_ADDR                                 (0x109216CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_4__REG_ADDR                                 (0x109216D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_5__REG_ADDR                                 (0x109216D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_6__REG_ADDR                                 (0x109216D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_7__REG_ADDR                                 (0x109216DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_8__REG_ADDR                                 (0x109216E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_9__REG_ADDR                                 (0x109216E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_10__REG_ADDR                                (0x109216E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_11__REG_ADDR                                (0x109216EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_12__REG_ADDR                                (0x109216F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_13__REG_ADDR                                (0x109216F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_14__REG_ADDR                                (0x109216F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_27__WORD_15__REG_ADDR                                (0x109216FC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[28]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__REG_FILE_BASE_ADDR  (0x10921700)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_0__REG_ADDR                                 (0x10921700)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_1__REG_ADDR                                 (0x10921704)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_2__REG_ADDR                                 (0x10921708)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_3__REG_ADDR                                 (0x1092170C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_4__REG_ADDR                                 (0x10921710)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_5__REG_ADDR                                 (0x10921714)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_6__REG_ADDR                                 (0x10921718)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_7__REG_ADDR                                 (0x1092171C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_8__REG_ADDR                                 (0x10921720)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_9__REG_ADDR                                 (0x10921724)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_10__REG_ADDR                                (0x10921728)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_11__REG_ADDR                                (0x1092172C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_12__REG_ADDR                                (0x10921730)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_13__REG_ADDR                                (0x10921734)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_14__REG_ADDR                                (0x10921738)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_28__WORD_15__REG_ADDR                                (0x1092173C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[29]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__REG_FILE_BASE_ADDR  (0x10921740)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_0__REG_ADDR                                 (0x10921740)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_1__REG_ADDR                                 (0x10921744)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_2__REG_ADDR                                 (0x10921748)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_3__REG_ADDR                                 (0x1092174C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_4__REG_ADDR                                 (0x10921750)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_5__REG_ADDR                                 (0x10921754)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_6__REG_ADDR                                 (0x10921758)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_7__REG_ADDR                                 (0x1092175C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_8__REG_ADDR                                 (0x10921760)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_9__REG_ADDR                                 (0x10921764)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_10__REG_ADDR                                (0x10921768)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_11__REG_ADDR                                (0x1092176C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_12__REG_ADDR                                (0x10921770)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_13__REG_ADDR                                (0x10921774)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_14__REG_ADDR                                (0x10921778)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_29__WORD_15__REG_ADDR                                (0x1092177C)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[30]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__REG_FILE_BASE_ADDR  (0x10921780)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_0__REG_ADDR                                 (0x10921780)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_1__REG_ADDR                                 (0x10921784)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_2__REG_ADDR                                 (0x10921788)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_3__REG_ADDR                                 (0x1092178C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_4__REG_ADDR                                 (0x10921790)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_5__REG_ADDR                                 (0x10921794)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_6__REG_ADDR                                 (0x10921798)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_7__REG_ADDR                                 (0x1092179C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_8__REG_ADDR                                 (0x109217A0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_9__REG_ADDR                                 (0x109217A4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_10__REG_ADDR                                (0x109217A8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_11__REG_ADDR                                (0x109217AC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_12__REG_ADDR                                (0x109217B0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_13__REG_ADDR                                (0x109217B4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_14__REG_ADDR                                (0x109217B8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_30__WORD_15__REG_ADDR                                (0x109217BC)
-
-
-//==============================================================================
-// Register File: KPVLP_KEY_ENTRY[31]
-//==============================================================================
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__REG_FILE_BASE_ADDR  (0x109217C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__REG_FILE_SIZE       (0x00000040)
-
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_0__REG_OFFSET                               (0x00000000)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_0__REG_ADDR                                 (0x109217C0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_1__REG_OFFSET                               (0x00000004)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_1__REG_ADDR                                 (0x109217C4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_2__REG_OFFSET                               (0x00000008)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_2__REG_ADDR                                 (0x109217C8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_3__REG_OFFSET                               (0x0000000C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_3__REG_ADDR                                 (0x109217CC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_4__REG_OFFSET                               (0x00000010)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_4__REG_ADDR                                 (0x109217D0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_5__REG_OFFSET                               (0x00000014)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_5__REG_ADDR                                 (0x109217D4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_6__REG_OFFSET                               (0x00000018)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_6__REG_ADDR                                 (0x109217D8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_7__REG_OFFSET                               (0x0000001C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_7__REG_ADDR                                 (0x109217DC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_8__REG_OFFSET                               (0x00000020)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_8__REG_ADDR                                 (0x109217E0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_9__REG_OFFSET                               (0x00000024)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_9__REG_ADDR                                 (0x109217E4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_10__REG_OFFSET                              (0x00000028)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_10__REG_ADDR                                (0x109217E8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_11__REG_OFFSET                              (0x0000002C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_11__REG_ADDR                                (0x109217EC)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_12__REG_OFFSET                              (0x00000030)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_12__REG_ADDR                                (0x109217F0)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_13__REG_OFFSET                              (0x00000034)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_13__REG_ADDR                                (0x109217F4)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_14__REG_OFFSET                              (0x00000038)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_14__REG_ADDR                                (0x109217F8)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_15__REG_OFFSET                              (0x0000003C)
-#define KM_KPV_KPVLP_KPVLP_KEY_ENTRY_31__WORD_15__REG_ADDR                                (0x109217FC)
-#define KM_KPV_KPVLP_KPVLP_CTRL_0__REG_OFFSET                                             (0x00000800)
-#define KM_KPV_KPVLP_KPVLP_CTRL_0__REG_ADDR                                               (0x10921800)
-#define KM_KPV_KPVLP_KPVLP_CTRL_1__REG_OFFSET                                             (0x00000804)
-#define KM_KPV_KPVLP_KPVLP_CTRL_1__REG_ADDR                                               (0x10921804)
-#define KM_KPV_KPVLP_KPVLP_CTRL_2__REG_OFFSET                                             (0x00000808)
-#define KM_KPV_KPVLP_KPVLP_CTRL_2__REG_ADDR                                               (0x10921808)
-#define KM_KPV_KPVLP_KPVLP_CTRL_3__REG_OFFSET                                             (0x0000080C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_3__REG_ADDR                                               (0x1092180C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_4__REG_OFFSET                                             (0x00000810)
-#define KM_KPV_KPVLP_KPVLP_CTRL_4__REG_ADDR                                               (0x10921810)
-#define KM_KPV_KPVLP_KPVLP_CTRL_5__REG_OFFSET                                             (0x00000814)
-#define KM_KPV_KPVLP_KPVLP_CTRL_5__REG_ADDR                                               (0x10921814)
-#define KM_KPV_KPVLP_KPVLP_CTRL_6__REG_OFFSET                                             (0x00000818)
-#define KM_KPV_KPVLP_KPVLP_CTRL_6__REG_ADDR                                               (0x10921818)
-#define KM_KPV_KPVLP_KPVLP_CTRL_7__REG_OFFSET                                             (0x0000081C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_7__REG_ADDR                                               (0x1092181C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_8__REG_OFFSET                                             (0x00000820)
-#define KM_KPV_KPVLP_KPVLP_CTRL_8__REG_ADDR                                               (0x10921820)
-#define KM_KPV_KPVLP_KPVLP_CTRL_9__REG_OFFSET                                             (0x00000824)
-#define KM_KPV_KPVLP_KPVLP_CTRL_9__REG_ADDR                                               (0x10921824)
-#define KM_KPV_KPVLP_KPVLP_CTRL_10__REG_OFFSET                                            (0x00000828)
-#define KM_KPV_KPVLP_KPVLP_CTRL_10__REG_ADDR                                              (0x10921828)
-#define KM_KPV_KPVLP_KPVLP_CTRL_11__REG_OFFSET                                            (0x0000082C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_11__REG_ADDR                                              (0x1092182C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_12__REG_OFFSET                                            (0x00000830)
-#define KM_KPV_KPVLP_KPVLP_CTRL_12__REG_ADDR                                              (0x10921830)
-#define KM_KPV_KPVLP_KPVLP_CTRL_13__REG_OFFSET                                            (0x00000834)
-#define KM_KPV_KPVLP_KPVLP_CTRL_13__REG_ADDR                                              (0x10921834)
-#define KM_KPV_KPVLP_KPVLP_CTRL_14__REG_OFFSET                                            (0x00000838)
-#define KM_KPV_KPVLP_KPVLP_CTRL_14__REG_ADDR                                              (0x10921838)
-#define KM_KPV_KPVLP_KPVLP_CTRL_15__REG_OFFSET                                            (0x0000083C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_15__REG_ADDR                                              (0x1092183C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_16__REG_OFFSET                                            (0x00000840)
-#define KM_KPV_KPVLP_KPVLP_CTRL_16__REG_ADDR                                              (0x10921840)
-#define KM_KPV_KPVLP_KPVLP_CTRL_17__REG_OFFSET                                            (0x00000844)
-#define KM_KPV_KPVLP_KPVLP_CTRL_17__REG_ADDR                                              (0x10921844)
-#define KM_KPV_KPVLP_KPVLP_CTRL_18__REG_OFFSET                                            (0x00000848)
-#define KM_KPV_KPVLP_KPVLP_CTRL_18__REG_ADDR                                              (0x10921848)
-#define KM_KPV_KPVLP_KPVLP_CTRL_19__REG_OFFSET                                            (0x0000084C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_19__REG_ADDR                                              (0x1092184C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_20__REG_OFFSET                                            (0x00000850)
-#define KM_KPV_KPVLP_KPVLP_CTRL_20__REG_ADDR                                              (0x10921850)
-#define KM_KPV_KPVLP_KPVLP_CTRL_21__REG_OFFSET                                            (0x00000854)
-#define KM_KPV_KPVLP_KPVLP_CTRL_21__REG_ADDR                                              (0x10921854)
-#define KM_KPV_KPVLP_KPVLP_CTRL_22__REG_OFFSET                                            (0x00000858)
-#define KM_KPV_KPVLP_KPVLP_CTRL_22__REG_ADDR                                              (0x10921858)
-#define KM_KPV_KPVLP_KPVLP_CTRL_23__REG_OFFSET                                            (0x0000085C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_23__REG_ADDR                                              (0x1092185C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_24__REG_OFFSET                                            (0x00000860)
-#define KM_KPV_KPVLP_KPVLP_CTRL_24__REG_ADDR                                              (0x10921860)
-#define KM_KPV_KPVLP_KPVLP_CTRL_25__REG_OFFSET                                            (0x00000864)
-#define KM_KPV_KPVLP_KPVLP_CTRL_25__REG_ADDR                                              (0x10921864)
-#define KM_KPV_KPVLP_KPVLP_CTRL_26__REG_OFFSET                                            (0x00000868)
-#define KM_KPV_KPVLP_KPVLP_CTRL_26__REG_ADDR                                              (0x10921868)
-#define KM_KPV_KPVLP_KPVLP_CTRL_27__REG_OFFSET                                            (0x0000086C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_27__REG_ADDR                                              (0x1092186C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_28__REG_OFFSET                                            (0x00000870)
-#define KM_KPV_KPVLP_KPVLP_CTRL_28__REG_ADDR                                              (0x10921870)
-#define KM_KPV_KPVLP_KPVLP_CTRL_29__REG_OFFSET                                            (0x00000874)
-#define KM_KPV_KPVLP_KPVLP_CTRL_29__REG_ADDR                                              (0x10921874)
-#define KM_KPV_KPVLP_KPVLP_CTRL_30__REG_OFFSET                                            (0x00000878)
-#define KM_KPV_KPVLP_KPVLP_CTRL_30__REG_ADDR                                              (0x10921878)
-#define KM_KPV_KPVLP_KPVLP_CTRL_31__REG_OFFSET                                            (0x0000087C)
-#define KM_KPV_KPVLP_KPVLP_CTRL_31__REG_ADDR                                              (0x1092187C)
-#define KM_KPV_KPVLP_KPVLP_STATUS_REG_OFFSET                                              (0x00000880)
-#define KM_KPV_KPVLP_KPVLP_STATUS_REG_ADDR                                                (0x10921880)
-
-
-//==============================================================================
 // Addresses for Address Map: sep_efuse_map
 //==============================================================================
 
@@ -2208,8 +834,8 @@
 
 #define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_REG_OFFSET                       (0x00000000)
 #define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_REG_ADDR                         (0x10930400)
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_REG_OFFSET                                  (0x00000004)
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_REG_ADDR                                    (0x10930404)
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_REG_OFFSET                                (0x00000004)
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_REG_ADDR                                  (0x10930404)
 #define EFUSE_INTERFACE_CTRL_EFUSE_READ_CTRL_REG_OFFSET                                   (0x00000008)
 #define EFUSE_INTERFACE_CTRL_EFUSE_READ_CTRL_REG_ADDR                                     (0x10930408)
 #define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_INTERFACE_READ_DATA_REG_OFFSET                 (0x0000000C)
@@ -2286,50 +912,6 @@
 #define EFUSE_MMR_RMA_CHIPLET_TOKEN_MATCH_REG_ADDR                                        (0x10930568)
 #define EFUSE_MMR_SEC_DISABLE_TOKEN_MATCH_REG_OFFSET                                      (0x0000006C)
 #define EFUSE_MMR_SEC_DISABLE_TOKEN_MATCH_REG_ADDR                                        (0x1093056C)
-
-
-//==============================================================================
-// Addresses for Address Map: efuse_shim_ctrl
-//==============================================================================
-
-
-#define EFUSE_SHIM_CTRL_REG_MAP_BASE_ADDR  (0x10930600)
-#define EFUSE_SHIM_CTRL_REG_MAP_SIZE       (0x00000044)
-
-#define EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_REG_OFFSET                                      (0x00000000)
-#define EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_REG_ADDR                                        (0x10930600)
-#define EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_1_REG_OFFSET                                    (0x00000004)
-#define EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_1_REG_ADDR                                      (0x10930604)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_0_REG_OFFSET                                    (0x00000008)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_0_REG_ADDR                                      (0x10930608)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_1_REG_OFFSET                                    (0x0000000C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_1_REG_ADDR                                      (0x1093060C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_2_REG_OFFSET                                    (0x00000010)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_2_REG_ADDR                                      (0x10930610)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_3_REG_OFFSET                                    (0x00000014)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_3_REG_ADDR                                      (0x10930614)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_4_REG_OFFSET                                    (0x00000018)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_4_REG_ADDR                                      (0x10930618)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_5_REG_OFFSET                                    (0x0000001C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_5_REG_ADDR                                      (0x1093061C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_6_REG_OFFSET                                    (0x00000020)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_6_REG_ADDR                                      (0x10930620)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_7_REG_OFFSET                                    (0x00000024)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_7_REG_ADDR                                      (0x10930624)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_8_REG_OFFSET                                    (0x00000028)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_8_REG_ADDR                                      (0x10930628)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_9_REG_OFFSET                                    (0x0000002C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_9_REG_ADDR                                      (0x1093062C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_10_REG_OFFSET                                   (0x00000030)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_10_REG_ADDR                                     (0x10930630)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_11_REG_OFFSET                                   (0x00000034)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_11_REG_ADDR                                     (0x10930634)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_12_REG_OFFSET                                   (0x00000038)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_12_REG_ADDR                                     (0x10930638)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_13_REG_OFFSET                                   (0x0000003C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_13_REG_ADDR                                     (0x1093063C)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_14_REG_OFFSET                                   (0x00000040)
-#define EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_14_REG_ADDR                                     (0x10930640)
 
 
 //==============================================================================
@@ -4678,34 +3260,28 @@
 #define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_REG_ADDR                                           (0x10A30018)
 #define SEP_CPU_CTRL_PKA_CTRL_REG_OFFSET                                                  (0x00000020)
 #define SEP_CPU_CTRL_PKA_CTRL_REG_ADDR                                                    (0x10A30020)
-#define SEP_CPU_CTRL_SPACC_CTRL_REG_OFFSET                                                (0x00000030)
-#define SEP_CPU_CTRL_SPACC_CTRL_REG_ADDR                                                  (0x10A30030)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_TROOT_REG_OFFSET                                       (0x00000040)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_TROOT_REG_ADDR                                         (0x10A30040)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_DMA_REG_OFFSET                                         (0x00000048)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_DMA_REG_ADDR                                           (0x10A30048)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_SPACC_REG_OFFSET                                       (0x00000050)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_SPACC_REG_ADDR                                         (0x10A30050)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_SYS_IN_REG_OFFSET                                      (0x00000058)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_SYS_IN_REG_ADDR                                        (0x10A30058)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_INBOUND_REG_OFFSET                             (0x00000060)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_INBOUND_REG_ADDR                               (0x10A30060)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_OUTBOUND_REG_OFFSET                            (0x00000068)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_OUTBOUND_REG_ADDR                              (0x10A30068)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_WRITE_REG_OFFSET                               (0x00000070)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_WRITE_REG_ADDR                                 (0x10A30070)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_READ_REG_OFFSET                                (0x00000078)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_READ_REG_ADDR                                  (0x10A30078)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_FILTER_OUT_REG_OFFSET                                  (0x00000080)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_FILTER_OUT_REG_ADDR                                    (0x10A30080)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_ALIAS_REMAP_REG_OFFSET                                 (0x00000088)
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_ALIAS_REMAP_REG_ADDR                                   (0x10A30088)
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_REG_OFFSET                                            (0x00000090)
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_REG_ADDR                                              (0x10A30090)
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_REG_OFFSET                                             (0x00000098)
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_REG_ADDR                                               (0x10A30098)
-#define SEP_CPU_CTRL_TIMEOUT_MODE_REG_OFFSET                                              (0x000000A0)
-#define SEP_CPU_CTRL_TIMEOUT_MODE_REG_ADDR                                                (0x10A300A0)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_DMA_REG_OFFSET                                         (0x00000028)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_DMA_REG_ADDR                                           (0x10A30028)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_SYS_IN_REG_OFFSET                                      (0x00000030)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_SYS_IN_REG_ADDR                                        (0x10A30030)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_INBOUND_REG_OFFSET                             (0x00000038)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_INBOUND_REG_ADDR                               (0x10A30038)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_OUTBOUND_REG_OFFSET                            (0x00000040)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_MAILBOX_OUTBOUND_REG_ADDR                              (0x10A30040)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_WRITE_REG_OFFSET                               (0x00000048)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_WRITE_REG_ADDR                                 (0x10A30048)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_READ_REG_OFFSET                                (0x00000050)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_ENTROPY_READ_REG_ADDR                                  (0x10A30050)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_FILTER_OUT_REG_OFFSET                                  (0x00000058)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_FILTER_OUT_REG_ADDR                                    (0x10A30058)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_ALIAS_REMAP_REG_OFFSET                                 (0x00000060)
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_ALIAS_REMAP_REG_ADDR                                   (0x10A30060)
+#define SEP_CPU_CTRL_TIMEOUT_ENABLE_REG_OFFSET                                            (0x00000068)
+#define SEP_CPU_CTRL_TIMEOUT_ENABLE_REG_ADDR                                              (0x10A30068)
+#define SEP_CPU_CTRL_TIMEOUT_CLEAR_REG_OFFSET                                             (0x00000070)
+#define SEP_CPU_CTRL_TIMEOUT_CLEAR_REG_ADDR                                               (0x10A30070)
+#define SEP_CPU_CTRL_TIMEOUT_MODE_REG_OFFSET                                              (0x00000078)
+#define SEP_CPU_CTRL_TIMEOUT_MODE_REG_ADDR                                                (0x10A30078)
 #define SEP_CPU_CTRL_SEP_TEST_CTRL_REG_OFFSET                                             (0x000000B0)
 #define SEP_CPU_CTRL_SEP_TEST_CTRL_REG_ADDR                                               (0x10A300B0)
 #define SEP_CPU_CTRL_SEP_GLOBAL_BASE_ADDR_REG_OFFSET                                      (0x000000C0)
@@ -4736,20 +3312,10 @@
 #define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_REG_ADDR                                            (0x10A30190)
 #define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_LOCK_REG_OFFSET                                     (0x00000198)
 #define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_LOCK_REG_ADDR                                       (0x10A30198)
+#define SEP_CPU_CTRL_KM_WIPE_CTRL_REG_OFFSET                                              (0x000001A0)
+#define SEP_CPU_CTRL_KM_WIPE_CTRL_REG_ADDR                                                (0x10A301A0)
 #define SEP_CPU_CTRL_SEP_VERSION_ID_REG_OFFSET                                            (0x00001000)
 #define SEP_CPU_CTRL_SEP_VERSION_ID_REG_ADDR                                              (0x10A31000)
-
-
-//==============================================================================
-// Addresses for Address Map: sep_reset_ctrl
-//==============================================================================
-
-
-#define SEP_RESET_CTRL_REG_MAP_BASE_ADDR  (0x10803000)
-#define SEP_RESET_CTRL_REG_MAP_SIZE       (0x00000008)
-
-#define SEP_RESET_CTRL_SW_RESET_N_REG_OFFSET                                              (0x00000000)
-#define SEP_RESET_CTRL_SW_RESET_N_REG_ADDR                                                (0x10803000)
 
 
 //==============================================================================
@@ -4807,13 +3373,57 @@
 
 
 //==============================================================================
-// Addresses for Address Map: sep_axi_extension
+// Addresses for Address Map: sep_external
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_REG_MAP_BASE_ADDR  (0x20000000)
-#define SEP_AXI_EXTENSION_REG_MAP_SIZE       (0x20000000)
+#define SEP_EXTERNAL_REG_MAP_BASE_ADDR  (0x20000000)
+#define SEP_EXTERNAL_REG_MAP_SIZE       (0x20000000)
 
+
+
+//==============================================================================
+// Addresses for Address Map: efuse_shim_ctrl
+//==============================================================================
+
+
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_BASE_ADDR  (0x20000000)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_SIZE       (0x00000044)
+
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_REG_OFFSET                         (0x00000000)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_REG_ADDR                           (0x20000000)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_1_REG_OFFSET                       (0x00000004)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_CTRL_STATUS_1_REG_ADDR                         (0x20000004)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_0_REG_OFFSET                       (0x00000008)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_0_REG_ADDR                         (0x20000008)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_1_REG_OFFSET                       (0x0000000C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_1_REG_ADDR                         (0x2000000C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_2_REG_OFFSET                       (0x00000010)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_2_REG_ADDR                         (0x20000010)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_3_REG_OFFSET                       (0x00000014)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_3_REG_ADDR                         (0x20000014)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_4_REG_OFFSET                       (0x00000018)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_4_REG_ADDR                         (0x20000018)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_5_REG_OFFSET                       (0x0000001C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_5_REG_ADDR                         (0x2000001C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_6_REG_OFFSET                       (0x00000020)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_6_REG_ADDR                         (0x20000020)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_7_REG_OFFSET                       (0x00000024)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_7_REG_ADDR                         (0x20000024)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_8_REG_OFFSET                       (0x00000028)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_8_REG_ADDR                         (0x20000028)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_9_REG_OFFSET                       (0x0000002C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_9_REG_ADDR                         (0x2000002C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_10_REG_OFFSET                      (0x00000030)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_10_REG_ADDR                        (0x20000030)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_11_REG_OFFSET                      (0x00000034)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_11_REG_ADDR                        (0x20000034)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_12_REG_OFFSET                      (0x00000038)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_12_REG_ADDR                        (0x20000038)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_13_REG_OFFSET                      (0x0000003C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_13_REG_ADDR                        (0x2000003C)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_14_REG_OFFSET                      (0x00000040)
+#define SEP_EXTERNAL_EFUSE_SHIM_CTRL_EFUSE_TIMING_CTRL_14_REG_ADDR                        (0x20000040)
 
 
 //==============================================================================
@@ -4821,15 +3431,15 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_REG_MAP_BASE_ADDR  (0x20001000)
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_REG_MAP_SIZE       (0x0000000C)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_REG_MAP_BASE_ADDR  (0x20001000)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_REG_MAP_SIZE       (0x0000000C)
 
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_REG_OFFSET                    (0x00000000)
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_REG_ADDR                      (0x20001000)
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_LOW_REG_OFFSET                     (0x00000004)
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_LOW_REG_ADDR                       (0x20001004)
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_HIGH_REG_OFFSET                    (0x00000008)
-#define SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_HIGH_REG_ADDR                      (0x20001008)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_REG_OFFSET                         (0x00000000)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_REG_ADDR                           (0x20001000)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_LOW_REG_OFFSET                          (0x00000004)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_LOW_REG_ADDR                            (0x20001004)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_HIGH_REG_OFFSET                         (0x00000008)
+#define SEP_EXTERNAL_OCH_SEP_SPI_MUX_CTRL_SPI_CRC_HIGH_REG_ADDR                           (0x20001008)
 
 
 //==============================================================================
@@ -4837,47 +3447,47 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_REG_MAP_BASE_ADDR  (0x20001000)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_REG_MAP_SIZE       (0x00000064)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_REG_MAP_BASE_ADDR  (0x20002000)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_REG_MAP_SIZE       (0x00000064)
 
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CTRL_REG_OFFSET                       (0x00000000)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CTRL_REG_ADDR                         (0x20001000)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_OUTPUT_CTRL_REG_OFFSET                (0x00000008)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_OUTPUT_CTRL_REG_ADDR                  (0x20001008)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_DISCOVERY_CTRL_REG_OFFSET             (0x00000010)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_DISCOVERY_CTRL_REG_ADDR               (0x20001010)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_ADDR_CTRL_REG_OFFSET                  (0x00000018)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_ADDR_CTRL_REG_ADDR                    (0x20001018)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_RB_VALID_TIME_REG_OFFSET             (0x00000020)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_RB_VALID_TIME_REG_ADDR               (0x20001020)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQ_TIMING_REG_OFFSET             (0x00000024)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQ_TIMING_REG_ADDR               (0x20001024)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQS_TIMING_REG_OFFSET            (0x00000028)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQS_TIMING_REG_ADDR              (0x20001028)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_GATE_LPBK_CTRL_REG_OFFSET        (0x0000002C)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_GATE_LPBK_CTRL_REG_ADDR          (0x2000102C)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_SLAVE_CTRL_REG_OFFSET        (0x00000030)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_SLAVE_CTRL_REG_ADDR          (0x20001030)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_MASTER_CTRL_REG_OFFSET       (0x00000034)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_MASTER_CTRL_REG_ADDR         (0x20001034)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_MISC_REG_OFFSET                  (0x00000038)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_MISC_REG_ADDR                    (0x20001038)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_PHY_SIDEBAND_REG_OFFSET                   (0x00000040)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_PHY_SIDEBAND_REG_ADDR                     (0x20001040)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_0_REG_OFFSET          (0x00000044)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_0_REG_ADDR            (0x20001044)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_1_REG_OFFSET          (0x0000004C)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_1_REG_ADDR            (0x2000104C)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_BOOT_EN_REG_OFFSET                        (0x00000050)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_BOOT_EN_REG_ADDR                          (0x20001050)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_CTRL_REG_OFFSET                   (0x00000054)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_CTRL_REG_ADDR                     (0x20001054)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_LOW_REG_OFFSET                    (0x00000058)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_LOW_REG_ADDR                      (0x20001058)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_HIGH_REG_OFFSET                   (0x0000005C)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_HIGH_REG_ADDR                     (0x2000105C)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CLK_DIV_CTRL_REG_OFFSET               (0x00000060)
-#define SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CLK_DIV_CTRL_REG_ADDR                 (0x20001060)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CTRL_REG_OFFSET                            (0x00000000)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CTRL_REG_ADDR                              (0x20002000)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_OUTPUT_CTRL_REG_OFFSET                     (0x00000008)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_OUTPUT_CTRL_REG_ADDR                       (0x20002008)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_DISCOVERY_CTRL_REG_OFFSET                  (0x00000010)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_DISCOVERY_CTRL_REG_ADDR                    (0x20002010)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_ADDR_CTRL_REG_OFFSET                       (0x00000018)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_ADDR_CTRL_REG_ADDR                         (0x20002018)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_RB_VALID_TIME_REG_OFFSET                  (0x00000020)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_RB_VALID_TIME_REG_ADDR                    (0x20002020)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQ_TIMING_REG_OFFSET                  (0x00000024)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQ_TIMING_REG_ADDR                    (0x20002024)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQS_TIMING_REG_OFFSET                 (0x00000028)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQS_TIMING_REG_ADDR                   (0x20002028)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_GATE_LPBK_CTRL_REG_OFFSET             (0x0000002C)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_GATE_LPBK_CTRL_REG_ADDR               (0x2000202C)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_SLAVE_CTRL_REG_OFFSET             (0x00000030)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_SLAVE_CTRL_REG_ADDR               (0x20002030)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_MASTER_CTRL_REG_OFFSET            (0x00000034)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_MASTER_CTRL_REG_ADDR              (0x20002034)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_MISC_REG_OFFSET                       (0x00000038)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_MISC_REG_ADDR                         (0x20002038)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_PHY_SIDEBAND_REG_OFFSET                        (0x00000040)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_PHY_SIDEBAND_REG_ADDR                          (0x20002040)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_0_REG_OFFSET               (0x00000044)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_0_REG_ADDR                 (0x20002044)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_1_REG_OFFSET               (0x0000004C)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_PHY_GPIO_REG_STATUS_1_REG_ADDR                 (0x2000204C)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_BOOT_EN_REG_OFFSET                             (0x00000050)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_BOOT_EN_REG_ADDR                               (0x20002050)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_CTRL_REG_OFFSET                        (0x00000054)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_CTRL_REG_ADDR                          (0x20002054)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_LOW_REG_OFFSET                         (0x00000058)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_LOW_REG_ADDR                           (0x20002058)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_HIGH_REG_OFFSET                        (0x0000005C)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CRC_HIGH_REG_ADDR                          (0x2000205C)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CLK_DIV_CTRL_REG_OFFSET                    (0x00000060)
+#define SEP_EXTERNAL_OCH_SEP_CDNS_SPI_CTRL_SPI_CLK_DIV_CTRL_REG_ADDR                      (0x20002060)
 
 
 //==============================================================================
@@ -4885,8 +3495,8 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_REG_MAP_BASE_ADDR  (0x20002000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_REG_MAP_SIZE       (0x00001038)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_REG_MAP_BASE_ADDR  (0x20003000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_REG_MAP_SIZE       (0x00001038)
 
 
 
@@ -4895,45 +3505,45 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_REG_MAP_BASE_ADDR  (0x20002000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_REG_MAP_SIZE       (0x0000015C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_REG_MAP_BASE_ADDR  (0x20003000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_REG_MAP_SIZE       (0x0000015C)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG0_REG_OFFSET          (0x00000000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG0_REG_ADDR            (0x20002000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG1_REG_OFFSET          (0x00000004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG1_REG_ADDR            (0x20002004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG2_REG_OFFSET          (0x00000008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG2_REG_ADDR            (0x20002008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG3_REG_OFFSET          (0x0000000C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG3_REG_ADDR            (0x2000200C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG4_REG_OFFSET          (0x00000010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG4_REG_ADDR            (0x20002010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG5_REG_OFFSET          (0x00000014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG5_REG_ADDR            (0x20002014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_PTR_REG_OFFSET    (0x00000040)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_PTR_REG_ADDR      (0x20002040)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_REG_OFFSET        (0x00000044)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_REG_ADDR          (0x20002044)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CTRL_STATUS_REG_OFFSET       (0x00000100)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CTRL_STATUS_REG_ADDR         (0x20002100)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_STATUS_REG_OFFSET        (0x00000104)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_STATUS_REG_ADDR          (0x20002104)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_STATUS_REG_OFFSET       (0x00000110)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_STATUS_REG_ADDR         (0x20002110)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_ENABLE_REG_OFFSET       (0x00000114)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_ENABLE_REG_ADDR         (0x20002114)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_COMP_INTR_STATUS_REG_OFFSET  (0x00000120)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_COMP_INTR_STATUS_REG_ADDR  (0x20002120)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_STATUS_REG_OFFSET  (0x00000130)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_STATUS_REG_ADDR  (0x20002130)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_EN_REG_OFFSET  (0x00000134)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_EN_REG_ADDR   (0x20002134)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_L_REG_OFFSET  (0x00000150)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_L_REG_ADDR  (0x20002150)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_H_REG_OFFSET  (0x00000154)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_H_REG_ADDR  (0x20002154)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_BOOT_STATUS_REG_OFFSET       (0x00000158)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_BOOT_STATUS_REG_ADDR         (0x20002158)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG0_REG_OFFSET               (0x00000000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG0_REG_ADDR                 (0x20003000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG1_REG_OFFSET               (0x00000004)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG1_REG_ADDR                 (0x20003004)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG2_REG_OFFSET               (0x00000008)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG2_REG_ADDR                 (0x20003008)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG3_REG_OFFSET               (0x0000000C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG3_REG_ADDR                 (0x2000300C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG4_REG_OFFSET               (0x00000010)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG4_REG_ADDR                 (0x20003010)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG5_REG_OFFSET               (0x00000014)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_REG5_REG_ADDR                 (0x20003014)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_PTR_REG_OFFSET         (0x00000040)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_PTR_REG_ADDR           (0x20003040)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_REG_OFFSET             (0x00000044)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CMD_STATUS_REG_ADDR               (0x20003044)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CTRL_STATUS_REG_OFFSET            (0x00000100)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_CTRL_STATUS_REG_ADDR              (0x20003100)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_STATUS_REG_OFFSET             (0x00000104)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_STATUS_REG_ADDR               (0x20003104)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_STATUS_REG_OFFSET            (0x00000110)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_STATUS_REG_ADDR              (0x20003110)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_ENABLE_REG_OFFSET            (0x00000114)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_INTR_ENABLE_REG_ADDR              (0x20003114)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_COMP_INTR_STATUS_REG_OFFSET   (0x00000120)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_COMP_INTR_STATUS_REG_ADDR     (0x20003120)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_STATUS_REG_OFFSET  (0x00000130)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_STATUS_REG_ADDR    (0x20003130)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_EN_REG_OFFSET      (0x00000134)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_TRD_ERROR_INTR_EN_REG_ADDR        (0x20003134)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_L_REG_OFFSET     (0x00000150)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_L_REG_ADDR       (0x20003150)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_H_REG_OFFSET     (0x00000154)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_DMA_TARGET_ERROR_H_REG_ADDR       (0x20003154)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_BOOT_STATUS_REG_OFFSET            (0x00000158)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CMD_STAT_A_BOOT_STATUS_REG_ADDR              (0x20003158)
 
 
 //==============================================================================
@@ -4941,27 +3551,27 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_REG_MAP_BASE_ADDR  (0x20002200)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_REG_MAP_SIZE       (0x00000064)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_REG_MAP_BASE_ADDR  (0x20003200)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_REG_MAP_SIZE       (0x00000064)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_LONG_POLLING_REG_OFFSET    (0x00000008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_LONG_POLLING_REG_ADDR      (0x20002208)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SHORT_POLLING_REG_OFFSET   (0x0000000C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SHORT_POLLING_REG_ADDR     (0x2000220C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_CTRL_CONFIG_REG_OFFSET     (0x00000030)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_CTRL_CONFIG_REG_ADDR       (0x20002230)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DMA_SETTINGS_REG_OFFSET    (0x0000003C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DMA_SETTINGS_REG_ADDR      (0x2000223C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_SIZE_REG_OFFSET       (0x00000040)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_SIZE_REG_ADDR         (0x20002240)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_TRD_INFO_REG_OFFSET   (0x00000044)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_TRD_INFO_REG_ADDR     (0x20002244)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR0_REG_OFFSET      (0x0000004C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR0_REG_ADDR        (0x2000224C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR1_REG_OFFSET      (0x00000050)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR1_REG_ADDR        (0x20002250)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DISCOVERY_CONTROL_REG_OFFSET  (0x00000060)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DISCOVERY_CONTROL_REG_ADDR  (0x20002260)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_LONG_POLLING_REG_OFFSET         (0x00000008)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_LONG_POLLING_REG_ADDR           (0x20003208)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SHORT_POLLING_REG_OFFSET        (0x0000000C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SHORT_POLLING_REG_ADDR          (0x2000320C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_CTRL_CONFIG_REG_OFFSET          (0x00000030)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_CTRL_CONFIG_REG_ADDR            (0x20003230)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DMA_SETTINGS_REG_OFFSET         (0x0000003C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DMA_SETTINGS_REG_ADDR           (0x2000323C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_SIZE_REG_OFFSET            (0x00000040)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_SIZE_REG_ADDR              (0x20003240)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_TRD_INFO_REG_OFFSET        (0x00000044)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_TRD_INFO_REG_ADDR          (0x20003244)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR0_REG_OFFSET           (0x0000004C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR0_REG_ADDR             (0x2000324C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR1_REG_OFFSET           (0x00000050)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_SDMA_ADDR1_REG_ADDR             (0x20003250)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DISCOVERY_CONTROL_REG_OFFSET    (0x00000060)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CFG_COMMON_A_DISCOVERY_CONTROL_REG_ADDR      (0x20003260)
 
 
 //==============================================================================
@@ -4969,21 +3579,21 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_REG_MAP_BASE_ADDR  (0x20002380)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_REG_MAP_SIZE       (0x00000024)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_REG_MAP_BASE_ADDR  (0x20003380)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_REG_MAP_SIZE       (0x00000024)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_XIP_MODE_CFG_REG_OFFSET       (0x00000008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_XIP_MODE_CFG_REG_ADDR         (0x20002388)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_REG_OFFSET     (0x00000010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_REG_ADDR       (0x20002390)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_1_REG_OFFSET   (0x00000014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_1_REG_ADDR     (0x20002394)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_CFG_REG_OFFSET  (0x00000018)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_CFG_REG_ADDR    (0x20002398)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_REG_OFFSET  (0x0000001C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_REG_ADDR    (0x2000239C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_1_REG_OFFSET  (0x00000020)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_1_REG_ADDR  (0x200023A0)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_XIP_MODE_CFG_REG_OFFSET            (0x00000008)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_XIP_MODE_CFG_REG_ADDR              (0x20003388)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_REG_OFFSET          (0x00000010)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_REG_ADDR            (0x20003390)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_1_REG_OFFSET        (0x00000014)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_GLOBAL_SEQ_CFG_1_REG_ADDR          (0x20003394)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_CFG_REG_OFFSET       (0x00000018)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_CFG_REG_ADDR         (0x20003398)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_REG_OFFSET       (0x0000001C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_REG_ADDR         (0x2000339C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_1_REG_OFFSET     (0x00000020)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CMN_SEQ_REGS_A_DIRECT_ACCESS_RMP_1_REG_ADDR       (0x200033A0)
 
 
 //==============================================================================
@@ -4991,53 +3601,53 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_REG_MAP_BASE_ADDR  (0x20002400)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_REG_MAP_SIZE       (0x0000007C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_REG_MAP_BASE_ADDR  (0x20003400)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_REG_MAP_SIZE       (0x0000007C)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_0_REG_OFFSET      (0x00000000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_0_REG_ADDR        (0x20002400)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_1_REG_OFFSET      (0x00000004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_1_REG_ADDR        (0x20002404)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_0_REG_OFFSET      (0x00000010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_0_REG_ADDR        (0x20002410)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_1_REG_OFFSET      (0x00000014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_1_REG_ADDR        (0x20002414)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_2_REG_OFFSET      (0x00000018)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_2_REG_ADDR        (0x20002418)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_0_REG_OFFSET     (0x00000020)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_0_REG_ADDR       (0x20002420)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_1_REG_OFFSET     (0x00000024)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_1_REG_ADDR       (0x20002424)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_2_REG_OFFSET     (0x00000028)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_2_REG_ADDR       (0x20002428)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_0_REG_OFFSET     (0x00000030)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_0_REG_ADDR       (0x20002430)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_1_REG_OFFSET     (0x00000034)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_1_REG_ADDR       (0x20002434)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_2_REG_OFFSET     (0x00000038)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_2_REG_ADDR       (0x20002438)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_WE_SEQ_CFG_0_REG_OFFSET       (0x00000040)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_WE_SEQ_CFG_0_REG_ADDR         (0x20002440)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_0_REG_OFFSET     (0x00000050)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_0_REG_ADDR       (0x20002450)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_1_REG_OFFSET     (0x00000054)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_1_REG_ADDR       (0x20002454)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_2_REG_OFFSET     (0x00000058)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_2_REG_ADDR       (0x20002458)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_3_REG_OFFSET     (0x0000005C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_3_REG_ADDR       (0x2000245C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_4_REG_OFFSET     (0x00000060)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_4_REG_ADDR       (0x20002460)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_5_REG_OFFSET     (0x00000064)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_5_REG_ADDR       (0x20002464)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_7_REG_OFFSET     (0x0000006C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_7_REG_ADDR       (0x2000246C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_8_REG_OFFSET     (0x00000070)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_8_REG_ADDR       (0x20002470)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_9_REG_OFFSET     (0x00000074)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_9_REG_ADDR       (0x20002474)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_10_REG_OFFSET    (0x00000078)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_10_REG_ADDR      (0x20002478)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_0_REG_OFFSET           (0x00000000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_0_REG_ADDR             (0x20003400)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_1_REG_OFFSET           (0x00000004)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_RST_SEQ_CFG_1_REG_ADDR             (0x20003404)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_0_REG_OFFSET           (0x00000010)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_0_REG_ADDR             (0x20003410)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_1_REG_OFFSET           (0x00000014)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_1_REG_ADDR             (0x20003414)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_2_REG_OFFSET           (0x00000018)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_ERS_SEQ_CFG_2_REG_ADDR             (0x20003418)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_0_REG_OFFSET          (0x00000020)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_0_REG_ADDR            (0x20003420)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_1_REG_OFFSET          (0x00000024)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_1_REG_ADDR            (0x20003424)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_2_REG_OFFSET          (0x00000028)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_PROG_SEQ_CFG_2_REG_ADDR            (0x20003428)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_0_REG_OFFSET          (0x00000030)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_0_REG_ADDR            (0x20003430)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_1_REG_OFFSET          (0x00000034)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_1_REG_ADDR            (0x20003434)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_2_REG_OFFSET          (0x00000038)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_READ_SEQ_CFG_2_REG_ADDR            (0x20003438)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_WE_SEQ_CFG_0_REG_OFFSET            (0x00000040)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_WE_SEQ_CFG_0_REG_ADDR              (0x20003440)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_0_REG_OFFSET          (0x00000050)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_0_REG_ADDR            (0x20003450)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_1_REG_OFFSET          (0x00000054)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_1_REG_ADDR            (0x20003454)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_2_REG_OFFSET          (0x00000058)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_2_REG_ADDR            (0x20003458)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_3_REG_OFFSET          (0x0000005C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_3_REG_ADDR            (0x2000345C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_4_REG_OFFSET          (0x00000060)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_4_REG_ADDR            (0x20003460)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_5_REG_OFFSET          (0x00000064)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_5_REG_ADDR            (0x20003464)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_7_REG_OFFSET          (0x0000006C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_7_REG_ADDR            (0x2000346C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_8_REG_OFFSET          (0x00000070)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_8_REG_ADDR            (0x20003470)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_9_REG_OFFSET          (0x00000074)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_9_REG_ADDR            (0x20003474)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_10_REG_OFFSET         (0x00000078)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_DEV_SEQ_REGS_A_STAT_SEQ_CFG_10_REG_ADDR           (0x20003478)
 
 
 //==============================================================================
@@ -5045,13 +3655,13 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_REG_MAP_BASE_ADDR  (0x20002F00)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_REG_MAP_SIZE       (0x00000008)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_REG_MAP_BASE_ADDR  (0x20003F00)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_REG_MAP_SIZE       (0x00000008)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_XSPI_CTRL_VERSION_REG_OFFSET   (0x00000000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_XSPI_CTRL_VERSION_REG_ADDR     (0x20002F00)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_CTRL_FEATURES_REG_REG_OFFSET   (0x00000004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_CTRL_FEATURES_REG_REG_ADDR     (0x20002F04)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_XSPI_CTRL_VERSION_REG_OFFSET        (0x00000000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_XSPI_CTRL_VERSION_REG_ADDR          (0x20003F00)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_CTRL_FEATURES_REG_REG_OFFSET        (0x00000004)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_CTRL_CONSTS_A_CTRL_FEATURES_REG_REG_ADDR          (0x20003F04)
 
 
 //==============================================================================
@@ -5059,29 +3669,29 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_REG_MAP_BASE_ADDR  (0x20003000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_REG_MAP_SIZE       (0x00000038)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_REG_MAP_BASE_ADDR  (0x20004000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_REG_MAP_SIZE       (0x00000038)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_WP_SETTINGS_REG_OFFSET    (0x00000000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_WP_SETTINGS_REG_ADDR      (0x20003000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RESET_PIN_SETTINGS_REG_OFFSET  (0x00000004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RESET_PIN_SETTINGS_REG_ADDR  (0x20003004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_CLOCK_MODE_SETTINGS_REG_OFFSET  (0x00000008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_CLOCK_MODE_SETTINGS_REG_ADDR  (0x20003008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_JEDEC_RST_TIMING_REG_REG_OFFSET  (0x0000000C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_JEDEC_RST_TIMING_REG_REG_ADDR  (0x2000300C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_DELAY_REG_REG_OFFSET  (0x00000010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_DELAY_REG_REG_ADDR    (0x20003010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RST_RECOVERY_REG_REG_OFFSET  (0x00000014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RST_RECOVERY_REG_REG_ADDR  (0x20003014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_ACTIVE_MAX_REG_REG_OFFSET  (0x00000018)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_ACTIVE_MAX_REG_REG_ADDR  (0x20003018)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_HF_OFFSET_REG_REG_OFFSET  (0x00000020)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_HF_OFFSET_REG_REG_ADDR    (0x20003020)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_UPDATE_CNT_REG_OFFSET  (0x00000030)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_UPDATE_CNT_REG_ADDR  (0x20003030)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_CTRL_REG_OFFSET   (0x00000034)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_CTRL_REG_ADDR     (0x20003034)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_WP_SETTINGS_REG_OFFSET         (0x00000000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_WP_SETTINGS_REG_ADDR           (0x20004000)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RESET_PIN_SETTINGS_REG_OFFSET  (0x00000004)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RESET_PIN_SETTINGS_REG_ADDR    (0x20004004)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_CLOCK_MODE_SETTINGS_REG_OFFSET  (0x00000008)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_CLOCK_MODE_SETTINGS_REG_ADDR   (0x20004008)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_JEDEC_RST_TIMING_REG_REG_OFFSET  (0x0000000C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_JEDEC_RST_TIMING_REG_REG_ADDR  (0x2000400C)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_DELAY_REG_REG_OFFSET       (0x00000010)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_DELAY_REG_REG_ADDR         (0x20004010)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RST_RECOVERY_REG_REG_OFFSET    (0x00000014)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_RST_RECOVERY_REG_REG_ADDR      (0x20004014)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_ACTIVE_MAX_REG_REG_OFFSET  (0x00000018)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DEV_ACTIVE_MAX_REG_REG_ADDR    (0x20004018)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_HF_OFFSET_REG_REG_OFFSET       (0x00000020)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_HF_OFFSET_REG_REG_ADDR         (0x20004020)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_UPDATE_CNT_REG_OFFSET  (0x00000030)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_UPDATE_CNT_REG_ADDR    (0x20004030)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_CTRL_REG_OFFSET        (0x00000034)
+#define SEP_EXTERNAL_CDNS_XSPI_CTRL_REG_RF_MINICTRL_REGS_A_DLL_PHY_CTRL_REG_ADDR          (0x20004034)
 
 
 //==============================================================================
@@ -5089,8 +3699,8 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_REG_MAP_BASE_ADDR  (0x20004000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_REG_MAP_SIZE       (0x00002098)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_REG_MAP_BASE_ADDR  (0x20005000)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_REG_MAP_SIZE       (0x00002098)
 
 
 
@@ -5099,35 +3709,35 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_REG_MAP_BASE_ADDR  (0x20006000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_REG_MAP_SIZE       (0x00000078)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_REG_MAP_BASE_ADDR  (0x20007000)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_REG_MAP_SIZE       (0x00000078)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQ_TIMING_REG_REG_OFFSET  (0x00000000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQ_TIMING_REG_REG_ADDR  (0x20006000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQS_TIMING_REG_REG_OFFSET  (0x00000004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQS_TIMING_REG_REG_ADDR  (0x20006004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_GATE_LPBK_CTRL_REG_REG_OFFSET  (0x00000008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_GATE_LPBK_CTRL_REG_REG_ADDR  (0x20006008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_MASTER_CTRL_REG_REG_OFFSET  (0x0000000C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_MASTER_CTRL_REG_REG_ADDR  (0x2000600C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_SLAVE_CTRL_REG_REG_OFFSET  (0x00000010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_SLAVE_CTRL_REG_REG_ADDR  (0x20006010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_IE_TIMING_REG_REG_OFFSET  (0x00000014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_IE_TIMING_REG_REG_ADDR  (0x20006014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_OBS_REG_0_REG_OFFSET    (0x00000018)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_OBS_REG_0_REG_ADDR      (0x20006018)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_0_REG_OFFSET  (0x0000001C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_0_REG_ADDR  (0x2000601C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_1_REG_OFFSET  (0x00000020)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_1_REG_ADDR  (0x20006020)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_STATIC_TOGG_REG_REG_OFFSET  (0x00000028)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_STATIC_TOGG_REG_REG_ADDR  (0x20006028)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_WR_DESKEW_PD_CTRL_0_REG_REG_OFFSET  (0x00000034)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_WR_DESKEW_PD_CTRL_0_REG_REG_ADDR  (0x20006034)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_VERSION_REG_REG_OFFSET  (0x00000070)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_VERSION_REG_REG_ADDR    (0x20006070)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_FEATURES_REG_REG_OFFSET  (0x00000074)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_FEATURES_REG_REG_ADDR   (0x20006074)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQ_TIMING_REG_REG_OFFSET     (0x00000000)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQ_TIMING_REG_REG_ADDR       (0x20007000)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQS_TIMING_REG_REG_OFFSET    (0x00000004)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DQS_TIMING_REG_REG_ADDR      (0x20007004)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_GATE_LPBK_CTRL_REG_REG_OFFSET  (0x00000008)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_GATE_LPBK_CTRL_REG_REG_ADDR  (0x20007008)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_MASTER_CTRL_REG_REG_OFFSET  (0x0000000C)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_MASTER_CTRL_REG_REG_ADDR  (0x2000700C)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_SLAVE_CTRL_REG_REG_OFFSET  (0x00000010)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_SLAVE_CTRL_REG_REG_ADDR  (0x20007010)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_IE_TIMING_REG_REG_OFFSET     (0x00000014)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_IE_TIMING_REG_REG_ADDR       (0x20007014)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_OBS_REG_0_REG_OFFSET         (0x00000018)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_OBS_REG_0_REG_ADDR           (0x20007018)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_0_REG_OFFSET     (0x0000001C)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_0_REG_ADDR       (0x2000701C)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_1_REG_OFFSET     (0x00000020)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_DLL_OBS_REG_1_REG_ADDR       (0x20007020)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_STATIC_TOGG_REG_REG_OFFSET   (0x00000028)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_STATIC_TOGG_REG_REG_ADDR     (0x20007028)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_WR_DESKEW_PD_CTRL_0_REG_REG_OFFSET  (0x00000034)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_WR_DESKEW_PD_CTRL_0_REG_REG_ADDR  (0x20007034)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_VERSION_REG_REG_OFFSET       (0x00000070)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_VERSION_REG_REG_ADDR         (0x20007070)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_FEATURES_REG_REG_OFFSET      (0x00000074)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_DATASLICE_RFILE_A_PHY_FEATURES_REG_REG_ADDR        (0x20007074)
 
 
 //==============================================================================
@@ -5135,29 +3745,29 @@
 //==============================================================================
 
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_REG_MAP_BASE_ADDR  (0x20006080)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_REG_MAP_SIZE       (0x00000018)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_REG_MAP_BASE_ADDR  (0x20007080)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_REG_MAP_SIZE       (0x00000018)
 
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_CTRL_REG_REG_OFFSET           (0x00000000)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_CTRL_REG_REG_ADDR             (0x20006080)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_TSEL_REG_REG_OFFSET           (0x00000004)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_TSEL_REG_REG_ADDR             (0x20006084)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_0_REG_OFFSET        (0x00000008)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_0_REG_ADDR          (0x20006088)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_1_REG_OFFSET        (0x0000000C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_1_REG_ADDR          (0x2000608C)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_0_REG_OFFSET      (0x00000010)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_0_REG_ADDR        (0x20006090)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_1_REG_OFFSET      (0x00000014)
-#define SEP_AXI_EXTENSION_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_1_REG_ADDR        (0x20006094)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_CTRL_REG_REG_OFFSET                (0x00000000)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_CTRL_REG_REG_ADDR                  (0x20007080)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_TSEL_REG_REG_OFFSET                (0x00000004)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_TSEL_REG_REG_ADDR                  (0x20007084)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_0_REG_OFFSET             (0x00000008)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_0_REG_ADDR               (0x20007088)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_1_REG_OFFSET             (0x0000000C)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_CTRL_1_REG_ADDR               (0x2000708C)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_0_REG_OFFSET           (0x00000010)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_0_REG_ADDR             (0x20007090)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_1_REG_OFFSET           (0x00000014)
+#define SEP_EXTERNAL_CDNS_XSPI_PHY_REG_CTB_RFILE_A_PHY_GPIO_STATUS_1_REG_ADDR             (0x20007094)
 
 
 //==============================================================================
 // Memory: xip_region
 //==============================================================================
 
-#define SEP_AXI_EXTENSION_XIP_REGION_MEM_BASE_ADDR  (0x30000000)
-#define SEP_AXI_EXTENSION_XIP_REGION_MEM_SIZE       (0x10000000)
+#define SEP_EXTERNAL_XIP_REGION_MEM_BASE_ADDR  (0x30000000)
+#define SEP_EXTERNAL_XIP_REGION_MEM_SIZE       (0x10000000)
 
 
 
@@ -6033,6 +4643,22 @@ typedef union {
 
 
 typedef struct {
+    uint64_t km_sw_rst_n : 1;
+    uint64_t otbn_sw_rst_n : 1;
+    uint64_t aes_sw_rst_n : 1;
+    uint64_t hmac_sw_rst_n : 1;
+    uint64_t kmac_sw_rst_n : 1;
+} SEP_RESET_CTRL_SW_RESET_N_reg_t;
+
+typedef union {
+    uint64_t val;
+    SEP_RESET_CTRL_SW_RESET_N_reg_t f;
+} SEP_RESET_CTRL_SW_RESET_N_reg_u;
+
+#define SEP_RESET_CTRL_SW_RESET_N_REG_DEFAULT (0x0000001E)
+
+
+typedef struct {
     uint32_t done : 1;
 } OTBN_INTR_STATE_reg_t;
 
@@ -6275,7 +4901,7 @@ typedef union {
     AES_CTRL_SHADOWED_reg_t f;
 } AES_CTRL_SHADOWED_reg_u;
 
-#define AES_CTRL_SHADOWED_REG_DEFAULT (0x00001181)
+#define AES_CTRL_SHADOWED_REG_DEFAULT (0x000011FD)
 
 
 typedef struct {
@@ -6337,6 +4963,19 @@ typedef union {
 
 
 typedef struct {
+    uint32_t phase : 6;
+    uint32_t num_valid_bytes : 5;
+} AES_CTRL_GCM_SHADOWED_reg_t;
+
+typedef union {
+    uint32_t val;
+    AES_CTRL_GCM_SHADOWED_reg_t f;
+} AES_CTRL_GCM_SHADOWED_reg_u;
+
+#define AES_CTRL_GCM_SHADOWED_REG_DEFAULT (0x00000401)
+
+
+typedef struct {
     uint32_t hmac_done : 1;
     uint32_t fifo_empty : 1;
     uint32_t hmac_err : 1;
@@ -6389,23 +5028,6 @@ typedef union {
 
 #define HMAC_ALERT_TEST_REG_DEFAULT (0x00000000)
 
-
-typedef struct {
-    uint32_t hmac_en : 1;
-    uint32_t sha_en : 1;
-    uint32_t endian_swap : 1;
-    uint32_t digest_swap : 1;
-    uint32_t rsvd_0 : 1;
-    uint32_t digest_size : 4;
-    uint32_t key_length : 6;
-} HMAC_CFG_SHADOWED_reg_t;
-
-typedef union {
-    uint32_t val;
-    HMAC_CFG_SHADOWED_reg_t f;
-} HMAC_CFG_SHADOWED_reg_u;
-
-#define HMAC_MSG_FIFO_REG_ADDR                                                            (0x40089000)
 
 typedef struct {
     uint32_t hmac_en : 1;
@@ -6907,47 +5529,6 @@ typedef union {
 
 
 typedef struct {
-    uint32_t data : 32;
-} KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_t;
-
-typedef union {
-    uint32_t val;
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_t f;
-} KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u;
-
-#define KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_REG_DEFAULT (0x00000000)
-
-
-typedef struct {
-    uint32_t rsvd_0 : 4;
-    uint32_t extend : 3;
-    uint32_t rsvd_8_7 : 2;
-    uint32_t dest_valid : 8;
-    uint32_t last_dword : 4;
-    uint32_t rsvd_31_21 : 11;
-} KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_reg_t;
-
-typedef union {
-    uint32_t val;
-    KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_reg_t f;
-} KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_reg_u;
-
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_REG_DEFAULT (0x00000000)
-
-
-typedef struct {
-    uint32_t unlock_sep : 32;
-} KM_KPV_KPVLP_KPVLP_STATUS_REG_reg_t;
-
-typedef union {
-    uint32_t val;
-    KM_KPV_KPVLP_KPVLP_STATUS_REG_reg_t f;
-} KM_KPV_KPVLP_KPVLP_STATUS_REG_reg_u;
-
-#define KM_KPV_KPVLP_KPVLP_STATUS_REG_REG_DEFAULT (0x00000000)
-
-
-typedef struct {
     uint64_t lc_state_write_lock : 1;
     uint64_t lc_state_read_lock : 1;
     uint64_t sboot_dis_write_lock : 1;
@@ -7262,8 +5843,12 @@ typedef struct {
     uint32_t efuse_sense_done : 1;
     uint32_t rsvd_0 : 3;
     uint32_t efuse_req_error : 1;
-    uint32_t rsvd_1 : 3;
-    uint32_t efuse_req_err_clear : 1;
+    uint32_t efuse_program_addr_error : 1;
+    uint32_t efuse_read_addr_error : 1;
+    uint32_t rsvd_1 : 1;
+    uint32_t efuse_req_error_clear : 1;
+    uint32_t efuse_program_addr_error_clear : 1;
+    uint32_t efuse_read_addr_error_clear : 1;
 } EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_reg_t;
 
 typedef union {
@@ -7277,21 +5862,21 @@ typedef union {
 typedef struct {
     uint32_t efuse_addr : 16;
     uint32_t efuse_data : 1;
-    uint32_t efuse_write_go : 1;
+    uint32_t efuse_program_go : 1;
     uint32_t efuse_program_read_back : 1;
     uint32_t rsvd_0 : 5;
-    uint32_t write_busy : 1;
-    uint32_t write_done : 1;
-    uint32_t write_status : 1;
+    uint32_t program_busy : 1;
+    uint32_t program_done : 1;
+    uint32_t program_status : 1;
     uint32_t program_enable : 1;
-} EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_reg_t;
+} EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_reg_t;
 
 typedef union {
     uint32_t val;
-    EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_reg_t f;
-} EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_reg_u;
+    EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_reg_t f;
+} EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_reg_u;
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_REG_DEFAULT (0x00000000)
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_REG_DEFAULT (0x00000000)
 
 
 typedef struct {
@@ -7413,219 +5998,6 @@ typedef union {
 } EFUSE_MMR_TOKEN_MATCH_reg_u;
 
 #define EFUSE_MMR_TOKEN_MATCH_REG_DEFAULT (0x00000000)
-
-
-typedef struct {
-    uint32_t clock_divider_value : 8;
-    uint32_t clock_dutycycle : 8;
-    uint32_t clock_div_enable : 1;
-    uint32_t clock_div_set : 1;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_REG_DEFAULT (0x00010108)
-
-
-typedef struct {
-    uint32_t clk_period_ten_ps : 13;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_REG_DEFAULT (0x000003E8)
-
-
-typedef struct {
-    uint32_t tcs_cycles : 24;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_REG_DEFAULT (0x005B8D80)
-
-
-typedef struct {
-    uint32_t trw_cycles : 19;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_REG_DEFAULT (0x0001D4C0)
-
-
-typedef struct {
-    uint32_t tas_cycles : 16;
-    uint32_t tah_cycles : 16;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_REG_DEFAULT (0x09600960)
-
-
-typedef struct {
-    uint32_t tcsrst_cycles : 32;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_REG_DEFAULT (0x00B71B00)
-
-
-typedef struct {
-    uint32_t trwh_cycles : 16;
-    uint32_t trd_cycles : 16;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_REG_DEFAULT (0x320055F0)
-
-
-typedef struct {
-    uint32_t tpw_cycles : 19;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_REG_DEFAULT (0x00035B60)
-
-
-typedef struct {
-    uint32_t tcppw_cycles : 20;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_REG_DEFAULT (0x00061A80)
-
-
-typedef struct {
-    uint32_t tpgm_cycles : 21;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_REG_DEFAULT (0x000927C0)
-
-
-typedef struct {
-    uint32_t twwl_cycles : 12;
-    uint32_t tds_cycles : 12;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_REG_DEFAULT (0x00960960)
-
-
-typedef struct {
-    uint32_t tdh_cycles : 12;
-    uint32_t tdles_cycles : 12;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_REG_DEFAULT (0x00960960)
-
-
-typedef struct {
-    uint32_t tpes_cycles : 17;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_REG_DEFAULT (0x0000EA60)
-
-
-typedef struct {
-    uint32_t tcps_cycles : 18;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_REG_DEFAULT (0x0001D4C0)
-
-
-typedef struct {
-    uint32_t tcph_cycles : 17;
-    uint32_t tpgml_cycles : 12;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_REG_DEFAULT (0x12C0EA60)
-
-
-typedef struct {
-    uint32_t tpgrd_cycles : 12;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_REG_DEFAULT (0x00000960)
-
-
-typedef struct {
-    uint32_t tpeh_cycles : 18;
-    uint32_t trsts_cycles : 12;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_t;
-
-typedef union {
-    uint32_t val;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_t f;
-} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_u;
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_REG_DEFAULT (0x2581D4C0)
 
 
 typedef struct {
@@ -7814,10 +6186,10 @@ typedef union {
 
 
 typedef struct {
-    uint64_t read_en : 1;
-    uint64_t write_en : 1;
+    uint64_t read_allowed : 1;
+    uint64_t write_allowed : 1;
     uint64_t rsvd_0 : 2;
-    uint64_t addr_mode : 1;
+    uint64_t entry_enabled : 1;
     uint64_t rsvd_1 : 3;
     uint64_t allow_ns : 1;
     uint64_t rsvd_2 : 3;
@@ -7863,21 +6235,7 @@ typedef union {
 
 
 typedef struct {
-    uint64_t spacc_cg_enable : 1;
     uint64_t pka_cg_enable : 1;
-    uint64_t dma_cg_enable : 1;
-    uint64_t mailbox_cg_en : 1;
-    uint64_t fabric_cg_enable : 1;
-    uint64_t rsvd_0 : 1;
-    uint64_t filter_in_cg_enable : 1;
-    uint64_t sram_cg_enable : 1;
-    uint64_t zeroer_cg_enable : 1;
-    uint64_t alias_remap_cg_enable : 1;
-    uint64_t filter_out_cg_enable : 1;
-    uint64_t ot_hmac_cg_enable : 1;
-    uint64_t entropy_fifo_cg_enable : 1;
-    uint64_t rsvd_1 : 3;
-    uint64_t cg_hysteresis : 6;
 } SEP_CPU_CTRL_CLOCK_GATE_CTRL_reg_t;
 
 typedef union {
@@ -7885,7 +6243,7 @@ typedef union {
     SEP_CPU_CTRL_CLOCK_GATE_CTRL_reg_t f;
 } SEP_CPU_CTRL_CLOCK_GATE_CTRL_reg_u;
 
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_REG_DEFAULT (0x001F0083)
+#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_REG_DEFAULT (0x00000000)
 
 
 typedef struct {
@@ -7901,16 +6259,7 @@ typedef union {
 
 
 typedef struct {
-    uint64_t troot_timeout_int : 1;
-    uint64_t sys_in_timeout_int : 1;
-    uint64_t spacc_timeout_int : 1;
-    uint64_t dma_data_timeout_int : 1;
-    uint64_t alias_remap_timeout_int : 1;
-    uint64_t filter_out_timeout_int : 1;
-    uint64_t entropy_read_timeout_int : 1;
-    uint64_t entropy_write_timeout_int : 1;
-    uint64_t inbound_mailbox_timeout_int : 1;
-    uint64_t outbound_mailbox_timeout_int : 1;
+    uint64_t reserved : 1;
 } SEP_CPU_CTRL_TIMEOUT_INTERRUPT_reg_t;
 
 typedef union {
@@ -7922,39 +6271,21 @@ typedef union {
 
 
 typedef struct {
-    uint32_t pka_dpa_disable : 1;
-    uint32_t rsvd_0 : 7;
-    uint32_t pka_noise_src : 1;
-    uint32_t rsvd_1 : 7;
-    uint32_t pka_noise_src_valid : 1;
+    uint64_t pka_dpa_disable : 1;
+    uint64_t pka_noise_src : 1;
+    uint64_t pka_noise_src_valid : 1;
 } SEP_CPU_CTRL_PKA_CTRL_reg_t;
 
 typedef union {
-    uint32_t val;
+    uint64_t val;
     SEP_CPU_CTRL_PKA_CTRL_reg_t f;
 } SEP_CPU_CTRL_PKA_CTRL_reg_u;
 
-#define SEP_CPU_CTRL_PKA_CTRL_REG_DEFAULT (0x00000001)
+#define SEP_CPU_CTRL_PKA_CTRL_REG_DEFAULT (0x00000000)
 
 
 typedef struct {
-    uint32_t spacc_dpa_disable : 1;
-    uint32_t rsvd_0 : 7;
-    uint32_t spacc_dpa_rand : 1;
-    uint32_t rsvd_1 : 7;
-    uint32_t spacc_dpa_rand_vld : 1;
-} SEP_CPU_CTRL_SPACC_CTRL_reg_t;
-
-typedef union {
-    uint32_t val;
-    SEP_CPU_CTRL_SPACC_CTRL_reg_t f;
-} SEP_CPU_CTRL_SPACC_CTRL_reg_u;
-
-#define SEP_CPU_CTRL_SPACC_CTRL_REG_DEFAULT (0x00000001)
-
-
-typedef struct {
-    uint64_t data : 48;
+    uint64_t reserved : 1;
 } SEP_CPU_CTRL_TIMEOUT_COUNT_reg_t;
 
 typedef union {
@@ -7966,16 +6297,7 @@ typedef union {
 
 
 typedef struct {
-    uint64_t troot_timeout_en : 1;
-    uint64_t sys_in_timeout_en : 1;
-    uint64_t spacc_timeout_en : 1;
-    uint64_t dma_data_timeout_en : 1;
-    uint64_t alias_remap_timeout_en : 1;
-    uint64_t filter_out_timeout_en : 1;
-    uint64_t entropy_read_timeout_en : 1;
-    uint64_t entropy_write_timeout_en : 1;
-    uint64_t inbound_mailbox_timeout_en : 1;
-    uint64_t outbound_mailbox_timeout_en : 1;
+    uint64_t reserved : 1;
 } SEP_CPU_CTRL_TIMEOUT_ENABLE_reg_t;
 
 typedef union {
@@ -7987,16 +6309,7 @@ typedef union {
 
 
 typedef struct {
-    uint64_t troot_timeout_clear : 1;
-    uint64_t sys_in_timeout_clear : 1;
-    uint64_t spacc_timeout_clear : 1;
-    uint64_t dma_data_timeout_clear : 1;
-    uint64_t alias_remap_timeout_clear : 1;
-    uint64_t filter_out_timeout_clear : 1;
-    uint64_t entropy_read_timeout_clear : 1;
-    uint64_t entropy_write_timeout_clear : 1;
-    uint64_t inbound_mailbox_timeout_clear : 1;
-    uint64_t outbound_mailbox_timeout_clear : 1;
+    uint64_t reserved : 1;
 } SEP_CPU_CTRL_TIMEOUT_CLEAR_reg_t;
 
 typedef union {
@@ -8008,16 +6321,7 @@ typedef union {
 
 
 typedef struct {
-    uint64_t troot_timeout_mode : 2;
-    uint64_t sys_in_timeout_mode : 2;
-    uint64_t spacc_timeout_mode : 2;
-    uint64_t dma_data_timeout_mode : 2;
-    uint64_t alias_remap_timeout_mode : 2;
-    uint64_t filter_out_timeout_mode : 2;
-    uint64_t entropy_read_timeout_mode : 2;
-    uint64_t entropy_write_timeout_mode : 2;
-    uint64_t inbound_mailbox_timeout_mode : 2;
-    uint64_t outbound_mailbox_timeout_mode : 2;
+    uint64_t reserved : 1;
 } SEP_CPU_CTRL_TIMEOUT_MODE_reg_t;
 
 typedef union {
@@ -8029,9 +6333,8 @@ typedef union {
 
 
 typedef struct {
-    uint32_t rsvd_0 : 25;
+    uint32_t rsvd_0 : 26;
     uint32_t sep_standalone : 1;
-    uint32_t fast_spacc_en : 1;
     uint32_t fast_pka_en : 1;
     uint32_t fast_sram_en : 1;
     uint32_t fast_dccm_en : 1;
@@ -8068,7 +6371,7 @@ typedef union {
     SEP_CPU_CTRL_SEP_LOCAL_BASE_ADDR_reg_t f;
 } SEP_CPU_CTRL_SEP_LOCAL_BASE_ADDR_reg_u;
 
-#define SEP_CPU_CTRL_SEP_LOCAL_BASE_ADDR_REG_DEFAULT (0xC0000000)
+#define SEP_CPU_CTRL_SEP_LOCAL_BASE_ADDR_REG_DEFAULT (0xD0000000)
 
 
 typedef struct {
@@ -8195,7 +6498,7 @@ typedef union {
 
 
 typedef struct {
-    uint64_t sel : 2;
+    uint64_t sel : 3;
 } SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_reg_t;
 
 typedef union {
@@ -8203,7 +6506,7 @@ typedef union {
     SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_reg_t f;
 } SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_reg_u;
 
-#define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_REG_DEFAULT (0x00000003)
+#define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_REG_DEFAULT (0x00000007)
 
 
 typedef struct {
@@ -8219,6 +6522,18 @@ typedef union {
 
 
 typedef struct {
+    uint64_t wipe_state : 1;
+} SEP_CPU_CTRL_KM_WIPE_CTRL_reg_t;
+
+typedef union {
+    uint64_t val;
+    SEP_CPU_CTRL_KM_WIPE_CTRL_reg_t f;
+} SEP_CPU_CTRL_KM_WIPE_CTRL_reg_u;
+
+#define SEP_CPU_CTRL_KM_WIPE_CTRL_REG_DEFAULT (0x00000000)
+
+
+typedef struct {
     uint64_t version_id : 32;
 } SEP_CPU_CTRL_SEP_VERSION_ID_reg_t;
 
@@ -8228,22 +6543,6 @@ typedef union {
 } SEP_CPU_CTRL_SEP_VERSION_ID_reg_u;
 
 #define SEP_CPU_CTRL_SEP_VERSION_ID_REG_DEFAULT (0xDEADBEEF)
-
-
-typedef struct {
-    uint64_t km_sw_rst_n : 1;
-    uint64_t otbn_sw_rst_n : 1;
-    uint64_t aes_sw_rst_n : 1;
-    uint64_t hmac_sw_rst_n : 1;
-    uint64_t kmac_sw_rst_n : 1;
-} SEP_RESET_CTRL_SW_RESET_N_reg_t;
-
-typedef union {
-    uint64_t val;
-    SEP_RESET_CTRL_SW_RESET_N_reg_t f;
-} SEP_RESET_CTRL_SW_RESET_N_reg_u;
-
-#define SEP_RESET_CTRL_SW_RESET_N_REG_DEFAULT (0x0000001E)
 
 
 typedef struct {
@@ -8475,6 +6774,219 @@ typedef union {
 } REMAPPED_REGION_MEM_WORD_reg_u;
 
 #define REMAPPED_REGION_MEM_WORD_REG_DEFAULT (0x00000000)
+
+
+typedef struct {
+    uint32_t clock_divider_value : 8;
+    uint32_t clock_dutycycle : 8;
+    uint32_t clock_div_enable : 1;
+    uint32_t clock_div_set : 1;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_REG_DEFAULT (0x00010108)
+
+
+typedef struct {
+    uint32_t clk_period_ten_ps : 13;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_REG_DEFAULT (0x000003E8)
+
+
+typedef struct {
+    uint32_t tcs_cycles : 24;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_REG_DEFAULT (0x005B8D80)
+
+
+typedef struct {
+    uint32_t trw_cycles : 19;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_REG_DEFAULT (0x0001D4C0)
+
+
+typedef struct {
+    uint32_t tas_cycles : 16;
+    uint32_t tah_cycles : 16;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_REG_DEFAULT (0x09600960)
+
+
+typedef struct {
+    uint32_t tcsrst_cycles : 32;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_REG_DEFAULT (0x00B71B00)
+
+
+typedef struct {
+    uint32_t trwh_cycles : 16;
+    uint32_t trd_cycles : 16;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_REG_DEFAULT (0x320055F0)
+
+
+typedef struct {
+    uint32_t tpw_cycles : 19;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_REG_DEFAULT (0x00035B60)
+
+
+typedef struct {
+    uint32_t tcppw_cycles : 20;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_REG_DEFAULT (0x00061A80)
+
+
+typedef struct {
+    uint32_t tpgm_cycles : 21;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_REG_DEFAULT (0x000927C0)
+
+
+typedef struct {
+    uint32_t twwl_cycles : 12;
+    uint32_t tds_cycles : 12;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_REG_DEFAULT (0x00960960)
+
+
+typedef struct {
+    uint32_t tdh_cycles : 12;
+    uint32_t tdles_cycles : 12;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_REG_DEFAULT (0x00960960)
+
+
+typedef struct {
+    uint32_t tpes_cycles : 17;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_REG_DEFAULT (0x0000EA60)
+
+
+typedef struct {
+    uint32_t tcps_cycles : 18;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_REG_DEFAULT (0x0001D4C0)
+
+
+typedef struct {
+    uint32_t tcph_cycles : 17;
+    uint32_t tpgml_cycles : 12;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_REG_DEFAULT (0x12C0EA60)
+
+
+typedef struct {
+    uint32_t tpgrd_cycles : 12;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_REG_DEFAULT (0x00000960)
+
+
+typedef struct {
+    uint32_t tpeh_cycles : 18;
+    uint32_t trsts_cycles : 12;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_t;
+
+typedef union {
+    uint32_t val;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_t f;
+} EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_u;
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_REG_DEFAULT (0x2581D4C0)
 
 
 typedef struct {
@@ -10274,8 +8786,6 @@ typedef union {
     EL2_PIC_MEIGWCLR_reg_t f;
 } EL2_PIC_MEIGWCLR_reg_u;
 
-
-
 #define EL2_PIC_MEIGWCLR_REG_DEFAULT (0x00000000)
 
 
@@ -10361,6 +8871,7 @@ typedef struct {
     AON_TIMER_WKUP_CAUSE_reg_u wdt_timer_wkup_cause;
     SEP_SCRATCH_SCRATCH_reg_u sep_scratch_cold_scratch[8];
     SEP_SCRATCH_SCRATCH_reg_u sep_scratch_warm_scratch[8];
+    SEP_RESET_CTRL_SW_RESET_N_reg_u sep_reset_ctrl_sw_reset_n;
     OTBN_INTR_STATE_reg_u otbn_intr_state;
     OTBN_INTR_ENABLE_reg_u otbn_intr_enable;
     OTBN_INTR_TEST_reg_u otbn_intr_test;
@@ -10383,6 +8894,7 @@ typedef struct {
     AES_CTRL_AUX_REGWEN_reg_u aes_ctrl_aux_regwen;
     AES_TRIGGER_reg_u aes_trigger;
     AES_STATUS_reg_u aes_status;
+    AES_CTRL_GCM_SHADOWED_reg_u aes_ctrl_gcm_shadowed;
     HMAC_INTR_STATE_reg_u hmac_intr_state;
     HMAC_INTR_ENABLE_reg_u hmac_intr_enable;
     HMAC_INTR_TEST_reg_u hmac_intr_test;
@@ -10423,40 +8935,6 @@ typedef struct {
     KM_MAILBOX_SEP_IRQ_STATUS_REG_reg_u km_mailbox_sep_sep_irq_status;
     KM_MAILBOX_SEP_IRQ_ENABLE_REG_reg_u km_mailbox_sep_sep_irq_enable;
     KM_MAILBOX_SEP_CTRL_REG_reg_u km_mailbox_sep_sep_ctrl;
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_0__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_1__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_2__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_3__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_4__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_5__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_6__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_7__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_8__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_9__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_10__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_11__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_12__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_13__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_14__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_15__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_16__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_17__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_18__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_19__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_20__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_21__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_22__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_23__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_24__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_25__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_26__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_27__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_28__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_29__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_30__word[16];
-    KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_reg_u kpvlp_key_entry_31__word[16];
-    KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_reg_u km_kpv_kpvlp_kpvlp_ctrl[32];
-    KM_KPV_KPVLP_KPVLP_STATUS_REG_reg_u km_kpv_kpvlp_kpvlp_status;
     SEP_EFUSE_MAP_LOCKS_reg_u sep_efuse_map_locks;
     SEP_EFUSE_MAP_LC_STATE_reg_u sep_efuse_map_lc_state;
     SEP_EFUSE_MAP_SBOOT_DIS_reg_u sep_efuse_map_sboot_dis;
@@ -10478,7 +8956,7 @@ typedef struct {
     SEP_EFUSE_MAP_RESERVED_LAST_64_reg_u sep_efuse_map_reserved_last_64;
     SEP_EFUSE_MAP_RESERVED_LAST_32_reg_u sep_efuse_map_reserved_last_32;
     EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_reg_u efuse_interface_ctrl_efuse_interface_ctrl_status;
-    EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_reg_u efuse_interface_ctrl_efuse_write_ctrl;
+    EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_reg_u efuse_interface_ctrl_efuse_program_ctrl;
     EFUSE_INTERFACE_CTRL_EFUSE_READ_CTRL_reg_u efuse_interface_ctrl_efuse_read_ctrl;
     EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_INTERFACE_READ_DATA_reg_u efuse_interface_ctrl_efuse_program_interface_read_data;
     EFUSE_INTERFACE_CTRL_EFUSE_READ_INTERFACE_READ_DATA_reg_u efuse_interface_ctrl_efuse_read_interface_read_data;
@@ -10491,23 +8969,6 @@ typedef struct {
     EFUSE_MMR_TOKEN_MATCH_reg_u efuse_mmr_rma_sip_token_match;
     EFUSE_MMR_TOKEN_MATCH_reg_u efuse_mmr_rma_chiplet_token_match;
     EFUSE_MMR_TOKEN_MATCH_reg_u efuse_mmr_sec_disable_token_match;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_u efuse_shim_ctrl_efuse_ctrl_status;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_u efuse_shim_ctrl_efuse_ctrl_status_1;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_u efuse_shim_ctrl_efuse_timing_ctrl_0;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_u efuse_shim_ctrl_efuse_timing_ctrl_1;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_u efuse_shim_ctrl_efuse_timing_ctrl_2;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_u efuse_shim_ctrl_efuse_timing_ctrl_3;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_u efuse_shim_ctrl_efuse_timing_ctrl_4;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_u efuse_shim_ctrl_efuse_timing_ctrl_5;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_u efuse_shim_ctrl_efuse_timing_ctrl_6;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_u efuse_shim_ctrl_efuse_timing_ctrl_7;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_u efuse_shim_ctrl_efuse_timing_ctrl_8;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_u efuse_shim_ctrl_efuse_timing_ctrl_9;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_u efuse_shim_ctrl_efuse_timing_ctrl_10;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_u efuse_shim_ctrl_efuse_timing_ctrl_11;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_u efuse_shim_ctrl_efuse_timing_ctrl_12;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_u efuse_shim_ctrl_efuse_timing_ctrl_13;
-    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_u efuse_shim_ctrl_efuse_timing_ctrl_14;
     AXIL_MAILBOX_WRITE_DATA_reg_u outbound_mailbox_0_write_data;
     AXIL_MAILBOX_READ_DATA_reg_u outbound_mailbox_0_read_data;
     AXIL_MAILBOX_STATUS_reg_u outbound_mailbox_0_status;
@@ -10819,10 +9280,7 @@ typedef struct {
     SEP_CPU_CTRL_REFERENCE_COUNTER_reg_u sep_cpu_ctrl_reference_counter;
     SEP_CPU_CTRL_TIMEOUT_INTERRUPT_reg_u sep_cpu_ctrl_timeout_interrupt;
     SEP_CPU_CTRL_PKA_CTRL_reg_u sep_cpu_ctrl_pka_ctrl;
-    SEP_CPU_CTRL_SPACC_CTRL_reg_u sep_cpu_ctrl_spacc_ctrl;
-    SEP_CPU_CTRL_TIMEOUT_COUNT_reg_u sep_cpu_ctrl_timeout_count_troot;
     SEP_CPU_CTRL_TIMEOUT_COUNT_reg_u sep_cpu_ctrl_timeout_count_dma;
-    SEP_CPU_CTRL_TIMEOUT_COUNT_reg_u sep_cpu_ctrl_timeout_count_spacc;
     SEP_CPU_CTRL_TIMEOUT_COUNT_reg_u sep_cpu_ctrl_timeout_count_sys_in;
     SEP_CPU_CTRL_TIMEOUT_COUNT_reg_u sep_cpu_ctrl_timeout_count_mailbox_inbound;
     SEP_CPU_CTRL_TIMEOUT_COUNT_reg_u sep_cpu_ctrl_timeout_count_mailbox_outbound;
@@ -10848,8 +9306,8 @@ typedef struct {
     SEP_CPU_CTRL_SEP_NMI_VEC_LOCK_reg_u sep_cpu_ctrl_sep_nmi_vec_lock;
     SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_reg_u sep_cpu_ctrl_ext_trng_src_sel;
     SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_LOCK_reg_u sep_cpu_ctrl_ext_trng_src_sel_lock;
+    SEP_CPU_CTRL_KM_WIPE_CTRL_reg_u sep_cpu_ctrl_km_wipe_ctrl;
     SEP_CPU_CTRL_SEP_VERSION_ID_reg_u sep_cpu_ctrl_sep_version_id;
-    SEP_RESET_CTRL_SW_RESET_N_reg_u sep_reset_ctrl_sw_reset_n;
     SPI_CONTROLLER_INTR_STATUS_reg_u spi_controller_intr_status;
     SPI_CONTROLLER_INTR_ENABLE_reg_u spi_controller_intr_enable;
     SPI_CONTROLLER_INTR_TEST_reg_u spi_controller_intr_test;
@@ -10865,6 +9323,23 @@ typedef struct {
     SPI_CONTROLLER_EVENT_ENABLE_reg_u spi_controller_event_enable;
     REMAPPED_REGION_MEM_WORD_reg_u ap_region_mem_array[1048576];
     REMAPPED_REGION_MEM_WORD_reg_u stee_region_mem_array[1048576];
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_reg_u efuse_shim_ctrl_efuse_ctrl_status;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_reg_u efuse_shim_ctrl_efuse_ctrl_status_1;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_reg_u efuse_shim_ctrl_efuse_timing_ctrl_0;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_reg_u efuse_shim_ctrl_efuse_timing_ctrl_1;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_reg_u efuse_shim_ctrl_efuse_timing_ctrl_2;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_reg_u efuse_shim_ctrl_efuse_timing_ctrl_3;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_reg_u efuse_shim_ctrl_efuse_timing_ctrl_4;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_reg_u efuse_shim_ctrl_efuse_timing_ctrl_5;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_reg_u efuse_shim_ctrl_efuse_timing_ctrl_6;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_reg_u efuse_shim_ctrl_efuse_timing_ctrl_7;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_reg_u efuse_shim_ctrl_efuse_timing_ctrl_8;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_reg_u efuse_shim_ctrl_efuse_timing_ctrl_9;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_reg_u efuse_shim_ctrl_efuse_timing_ctrl_10;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_reg_u efuse_shim_ctrl_efuse_timing_ctrl_11;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_reg_u efuse_shim_ctrl_efuse_timing_ctrl_12;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_reg_u efuse_shim_ctrl_efuse_timing_ctrl_13;
+    EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_reg_u efuse_shim_ctrl_efuse_timing_ctrl_14;
     OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_reg_u och_sep_spi_mux_ctrl_spi_mux_ctrl;
     OCH_SEP_SPI_MUX_CTRL_SPI_CRC_LOW_reg_u och_sep_spi_mux_ctrl_spi_crc_low;
     OCH_SEP_SPI_MUX_CTRL_SPI_CRC_HIGH_reg_u och_sep_spi_mux_ctrl_spi_crc_high;
@@ -11214,6 +9689,21 @@ typedef struct {
 #define SEP_SCRATCH_SCRATCH_DATA_MASK  0xFFFFFFFF
 #define SEP_SCRATCH_SCRATCH_DATA_SHIFT 0
 
+#define SEP_RESET_CTRL_SW_RESET_N_KM_SW_RST_N_MASK  0x1
+#define SEP_RESET_CTRL_SW_RESET_N_KM_SW_RST_N_SHIFT 0
+
+#define SEP_RESET_CTRL_SW_RESET_N_OTBN_SW_RST_N_MASK  0x2
+#define SEP_RESET_CTRL_SW_RESET_N_OTBN_SW_RST_N_SHIFT 1
+
+#define SEP_RESET_CTRL_SW_RESET_N_AES_SW_RST_N_MASK  0x4
+#define SEP_RESET_CTRL_SW_RESET_N_AES_SW_RST_N_SHIFT 2
+
+#define SEP_RESET_CTRL_SW_RESET_N_HMAC_SW_RST_N_MASK  0x8
+#define SEP_RESET_CTRL_SW_RESET_N_HMAC_SW_RST_N_SHIFT 3
+
+#define SEP_RESET_CTRL_SW_RESET_N_KMAC_SW_RST_N_MASK  0x10
+#define SEP_RESET_CTRL_SW_RESET_N_KMAC_SW_RST_N_SHIFT 4
+
 #define OTBN_INTR_STATE_DONE_MASK  0x1
 #define OTBN_INTR_STATE_DONE_SHIFT 0
 
@@ -11396,6 +9886,12 @@ typedef struct {
 
 #define AES_STATUS_ALERT_FATAL_FAULT_MASK  0x40
 #define AES_STATUS_ALERT_FATAL_FAULT_SHIFT 6
+
+#define AES_CTRL_GCM_SHADOWED_PHASE_MASK  0x3F
+#define AES_CTRL_GCM_SHADOWED_PHASE_SHIFT 0
+
+#define AES_CTRL_GCM_SHADOWED_NUM_VALID_BYTES_MASK  0x7C0
+#define AES_CTRL_GCM_SHADOWED_NUM_VALID_BYTES_SHIFT 6
 
 #define HMAC_INTR_STATE_HMAC_DONE_MASK  0x1
 #define HMAC_INTR_STATE_HMAC_DONE_SHIFT 0
@@ -11736,27 +10232,6 @@ typedef struct {
 #define KM_MAILBOX_SEP_CTRL_REG_RSVD_MASK  0xFFFFFFF8
 #define KM_MAILBOX_SEP_CTRL_REG_RSVD_SHIFT 3
 
-#define KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_DATA_MASK  0xFFFFFFFF
-#define KPVLP_KEY_ENTRY_RF_KPVLP_KEY_WORD_REG_DATA_SHIFT 0
-
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_EXTEND_MASK  0x70
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_EXTEND_SHIFT 4
-
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_RSVD_8_7_MASK  0x180
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_RSVD_8_7_SHIFT 7
-
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_DEST_VALID_MASK  0x1FE00
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_DEST_VALID_SHIFT 9
-
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_LAST_DWORD_MASK  0x1E0000
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_LAST_DWORD_SHIFT 17
-
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_RSVD_31_21_MASK  0xFFE00000
-#define KM_KPV_KPVLP_KPVLP_CTRL_WRITABLE_REG_RSVD_31_21_SHIFT 21
-
-#define KM_KPV_KPVLP_KPVLP_STATUS_REG_UNLOCK_SEP_MASK  0xFFFFFFFF
-#define KM_KPV_KPVLP_KPVLP_STATUS_REG_UNLOCK_SEP_SHIFT 0
-
 #define SEP_EFUSE_MAP_LOCKS_LC_STATE_WRITE_LOCK_MASK  0x1
 #define SEP_EFUSE_MAP_LOCKS_LC_STATE_WRITE_LOCK_SHIFT 0
 
@@ -12069,32 +10544,44 @@ typedef struct {
 #define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_REQ_ERROR_MASK  0x10
 #define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_REQ_ERROR_SHIFT 4
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_REQ_ERR_CLEAR_MASK  0x100
-#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_REQ_ERR_CLEAR_SHIFT 8
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_PROGRAM_ADDR_ERROR_MASK  0x20
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_PROGRAM_ADDR_ERROR_SHIFT 5
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_ADDR_MASK  0xFFFF
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_ADDR_SHIFT 0
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_READ_ADDR_ERROR_MASK  0x40
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_READ_ADDR_ERROR_SHIFT 6
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_DATA_MASK  0x10000
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_DATA_SHIFT 16
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_REQ_ERROR_CLEAR_MASK  0x100
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_REQ_ERROR_CLEAR_SHIFT 8
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_WRITE_GO_MASK  0x20000
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_WRITE_GO_SHIFT 17
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_PROGRAM_ADDR_ERROR_CLEAR_MASK  0x200
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_PROGRAM_ADDR_ERROR_CLEAR_SHIFT 9
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_PROGRAM_READ_BACK_MASK  0x40000
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_EFUSE_PROGRAM_READ_BACK_SHIFT 18
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_READ_ADDR_ERROR_CLEAR_MASK  0x400
+#define EFUSE_INTERFACE_CTRL_EFUSE_INTERFACE_CTRL_STATUS_EFUSE_READ_ADDR_ERROR_CLEAR_SHIFT 10
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_WRITE_BUSY_MASK  0x1000000
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_WRITE_BUSY_SHIFT 24
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_ADDR_MASK  0xFFFF
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_ADDR_SHIFT 0
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_WRITE_DONE_MASK  0x2000000
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_WRITE_DONE_SHIFT 25
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_DATA_MASK  0x10000
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_DATA_SHIFT 16
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_WRITE_STATUS_MASK  0x4000000
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_WRITE_STATUS_SHIFT 26
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_PROGRAM_GO_MASK  0x20000
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_PROGRAM_GO_SHIFT 17
 
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_PROGRAM_ENABLE_MASK  0x8000000
-#define EFUSE_INTERFACE_CTRL_EFUSE_WRITE_CTRL_PROGRAM_ENABLE_SHIFT 27
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_PROGRAM_READ_BACK_MASK  0x40000
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_EFUSE_PROGRAM_READ_BACK_SHIFT 18
+
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_BUSY_MASK  0x1000000
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_BUSY_SHIFT 24
+
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_DONE_MASK  0x2000000
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_DONE_SHIFT 25
+
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_STATUS_MASK  0x4000000
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_STATUS_SHIFT 26
+
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_ENABLE_MASK  0x8000000
+#define EFUSE_INTERFACE_CTRL_EFUSE_PROGRAM_CTRL_PROGRAM_ENABLE_SHIFT 27
 
 #define EFUSE_INTERFACE_CTRL_EFUSE_READ_CTRL_EFUSE_ADDR_MASK  0xFFFF
 #define EFUSE_INTERFACE_CTRL_EFUSE_READ_CTRL_EFUSE_ADDR_SHIFT 0
@@ -12149,84 +10636,6 @@ typedef struct {
 
 #define EFUSE_MMR_TOKEN_MATCH_TOKEN_MATCH_STATUS_MASK  0x3F
 #define EFUSE_MMR_TOKEN_MATCH_TOKEN_MATCH_STATUS_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIVIDER_VALUE_MASK  0xFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIVIDER_VALUE_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DUTYCYCLE_MASK  0xFF00
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DUTYCYCLE_SHIFT 8
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_ENABLE_MASK  0x10000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_ENABLE_SHIFT 16
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_SET_MASK  0x20000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_SET_SHIFT 17
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_CLK_PERIOD_TEN_PS_MASK  0x1FFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_CLK_PERIOD_TEN_PS_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_TCS_CYCLES_MASK  0xFFFFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_TCS_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_TRW_CYCLES_MASK  0x7FFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_TRW_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAS_CYCLES_MASK  0xFFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAS_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAH_CYCLES_MASK  0xFFFF0000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAH_CYCLES_SHIFT 16
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_TCSRST_CYCLES_MASK  0xFFFFFFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_TCSRST_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRWH_CYCLES_MASK  0xFFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRWH_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRD_CYCLES_MASK  0xFFFF0000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRD_CYCLES_SHIFT 16
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_TPW_CYCLES_MASK  0x7FFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_TPW_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_TCPPW_CYCLES_MASK  0xFFFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_TCPPW_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_TPGM_CYCLES_MASK  0x1FFFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_TPGM_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TWWL_CYCLES_MASK  0xFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TWWL_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TDS_CYCLES_MASK  0xFFF000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TDS_CYCLES_SHIFT 12
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDH_CYCLES_MASK  0xFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDH_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDLES_CYCLES_MASK  0xFFF000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDLES_CYCLES_SHIFT 12
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_TPES_CYCLES_MASK  0x1FFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_TPES_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_TCPS_CYCLES_MASK  0x3FFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_TCPS_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TCPH_CYCLES_MASK  0x1FFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TCPH_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TPGML_CYCLES_MASK  0x1FFE0000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TPGML_CYCLES_SHIFT 17
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_TPGRD_CYCLES_MASK  0xFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_TPGRD_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TPEH_CYCLES_MASK  0x3FFFF
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TPEH_CYCLES_SHIFT 0
-
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TRSTS_CYCLES_MASK  0x3FFC0000
-#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TRSTS_CYCLES_SHIFT 18
 
 #define AXIL_MAILBOX_WRITE_DATA_WRITE_DATA_MASK  0xFFFFFFFFFFFFFFFF
 #define AXIL_MAILBOX_WRITE_DATA_WRITE_DATA_SHIFT 0
@@ -12309,14 +10718,14 @@ typedef struct {
 #define OUTPUT_REMAP_REGION_REGION_ATTRS_OFFSET_MASK  0xFFFFFFFFFFFFFF
 #define OUTPUT_REMAP_REGION_REGION_ATTRS_OFFSET_SHIFT 0
 
-#define FILTER_CTRL_FILTER_CONFIG_READ_EN_MASK  0x1
-#define FILTER_CTRL_FILTER_CONFIG_READ_EN_SHIFT 0
+#define FILTER_CTRL_FILTER_CONFIG_READ_ALLOWED_MASK  0x1
+#define FILTER_CTRL_FILTER_CONFIG_READ_ALLOWED_SHIFT 0
 
-#define FILTER_CTRL_FILTER_CONFIG_WRITE_EN_MASK  0x2
-#define FILTER_CTRL_FILTER_CONFIG_WRITE_EN_SHIFT 1
+#define FILTER_CTRL_FILTER_CONFIG_WRITE_ALLOWED_MASK  0x2
+#define FILTER_CTRL_FILTER_CONFIG_WRITE_ALLOWED_SHIFT 1
 
-#define FILTER_CTRL_FILTER_CONFIG_ADDR_MODE_MASK  0x10
-#define FILTER_CTRL_FILTER_CONFIG_ADDR_MODE_SHIFT 4
+#define FILTER_CTRL_FILTER_CONFIG_ENTRY_ENABLED_MASK  0x10
+#define FILTER_CTRL_FILTER_CONFIG_ENTRY_ENABLED_SHIFT 4
 
 #define FILTER_CTRL_FILTER_CONFIG_ALLOW_NS_MASK  0x100
 #define FILTER_CTRL_FILTER_CONFIG_ALLOW_NS_SHIFT 8
@@ -12342,194 +10751,38 @@ typedef struct {
 #define FILTER_CTRL_END_ADDR_END_ADDR_MASK  0xFFFFFFFFFFFFFF
 #define FILTER_CTRL_END_ADDR_END_ADDR_SHIFT 0
 
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_SPACC_CG_ENABLE_MASK  0x1
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_SPACC_CG_ENABLE_SHIFT 0
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_PKA_CG_ENABLE_MASK  0x2
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_PKA_CG_ENABLE_SHIFT 1
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_DMA_CG_ENABLE_MASK  0x4
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_DMA_CG_ENABLE_SHIFT 2
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_MAILBOX_CG_EN_MASK  0x8
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_MAILBOX_CG_EN_SHIFT 3
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_FABRIC_CG_ENABLE_MASK  0x10
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_FABRIC_CG_ENABLE_SHIFT 4
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_FILTER_IN_CG_ENABLE_MASK  0x40
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_FILTER_IN_CG_ENABLE_SHIFT 6
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_SRAM_CG_ENABLE_MASK  0x80
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_SRAM_CG_ENABLE_SHIFT 7
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_ZEROER_CG_ENABLE_MASK  0x100
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_ZEROER_CG_ENABLE_SHIFT 8
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_ALIAS_REMAP_CG_ENABLE_MASK  0x200
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_ALIAS_REMAP_CG_ENABLE_SHIFT 9
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_FILTER_OUT_CG_ENABLE_MASK  0x400
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_FILTER_OUT_CG_ENABLE_SHIFT 10
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_OT_HMAC_CG_ENABLE_MASK  0x800
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_OT_HMAC_CG_ENABLE_SHIFT 11
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_ENTROPY_FIFO_CG_ENABLE_MASK  0x1000
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_ENTROPY_FIFO_CG_ENABLE_SHIFT 12
-
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_CG_HYSTERESIS_MASK  0x3F0000
-#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_CG_HYSTERESIS_SHIFT 16
+#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_PKA_CG_ENABLE_MASK  0x1
+#define SEP_CPU_CTRL_CLOCK_GATE_CTRL_PKA_CG_ENABLE_SHIFT 0
 
 #define SEP_CPU_CTRL_REFERENCE_COUNTER_RC_MASK  0xFFFFFFFFFFFFFFFF
 #define SEP_CPU_CTRL_REFERENCE_COUNTER_RC_SHIFT 0
 
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_TROOT_TIMEOUT_INT_MASK  0x1
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_TROOT_TIMEOUT_INT_SHIFT 0
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_SYS_IN_TIMEOUT_INT_MASK  0x2
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_SYS_IN_TIMEOUT_INT_SHIFT 1
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_SPACC_TIMEOUT_INT_MASK  0x4
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_SPACC_TIMEOUT_INT_SHIFT 2
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_DMA_DATA_TIMEOUT_INT_MASK  0x8
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_DMA_DATA_TIMEOUT_INT_SHIFT 3
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_ALIAS_REMAP_TIMEOUT_INT_MASK  0x10
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_ALIAS_REMAP_TIMEOUT_INT_SHIFT 4
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_FILTER_OUT_TIMEOUT_INT_MASK  0x20
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_FILTER_OUT_TIMEOUT_INT_SHIFT 5
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_ENTROPY_READ_TIMEOUT_INT_MASK  0x40
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_ENTROPY_READ_TIMEOUT_INT_SHIFT 6
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_ENTROPY_WRITE_TIMEOUT_INT_MASK  0x80
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_ENTROPY_WRITE_TIMEOUT_INT_SHIFT 7
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_INBOUND_MAILBOX_TIMEOUT_INT_MASK  0x100
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_INBOUND_MAILBOX_TIMEOUT_INT_SHIFT 8
-
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_OUTBOUND_MAILBOX_TIMEOUT_INT_MASK  0x200
-#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_OUTBOUND_MAILBOX_TIMEOUT_INT_SHIFT 9
+#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_RESERVED_MASK  0x1
+#define SEP_CPU_CTRL_TIMEOUT_INTERRUPT_RESERVED_SHIFT 0
 
 #define SEP_CPU_CTRL_PKA_CTRL_PKA_DPA_DISABLE_MASK  0x1
 #define SEP_CPU_CTRL_PKA_CTRL_PKA_DPA_DISABLE_SHIFT 0
 
-#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_MASK  0x100
-#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_SHIFT 8
+#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_MASK  0x2
+#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_SHIFT 1
 
-#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_VALID_MASK  0x10000
-#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_VALID_SHIFT 16
+#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_VALID_MASK  0x4
+#define SEP_CPU_CTRL_PKA_CTRL_PKA_NOISE_SRC_VALID_SHIFT 2
 
-#define SEP_CPU_CTRL_SPACC_CTRL_SPACC_DPA_DISABLE_MASK  0x1
-#define SEP_CPU_CTRL_SPACC_CTRL_SPACC_DPA_DISABLE_SHIFT 0
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_RESERVED_MASK  0x1
+#define SEP_CPU_CTRL_TIMEOUT_COUNT_RESERVED_SHIFT 0
 
-#define SEP_CPU_CTRL_SPACC_CTRL_SPACC_DPA_RAND_MASK  0x100
-#define SEP_CPU_CTRL_SPACC_CTRL_SPACC_DPA_RAND_SHIFT 8
+#define SEP_CPU_CTRL_TIMEOUT_ENABLE_RESERVED_MASK  0x1
+#define SEP_CPU_CTRL_TIMEOUT_ENABLE_RESERVED_SHIFT 0
 
-#define SEP_CPU_CTRL_SPACC_CTRL_SPACC_DPA_RAND_VLD_MASK  0x10000
-#define SEP_CPU_CTRL_SPACC_CTRL_SPACC_DPA_RAND_VLD_SHIFT 16
+#define SEP_CPU_CTRL_TIMEOUT_CLEAR_RESERVED_MASK  0x1
+#define SEP_CPU_CTRL_TIMEOUT_CLEAR_RESERVED_SHIFT 0
 
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_DATA_MASK  0xFFFFFFFFFFFF
-#define SEP_CPU_CTRL_TIMEOUT_COUNT_DATA_SHIFT 0
+#define SEP_CPU_CTRL_TIMEOUT_MODE_RESERVED_MASK  0x1
+#define SEP_CPU_CTRL_TIMEOUT_MODE_RESERVED_SHIFT 0
 
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_TROOT_TIMEOUT_EN_MASK  0x1
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_TROOT_TIMEOUT_EN_SHIFT 0
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_SYS_IN_TIMEOUT_EN_MASK  0x2
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_SYS_IN_TIMEOUT_EN_SHIFT 1
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_SPACC_TIMEOUT_EN_MASK  0x4
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_SPACC_TIMEOUT_EN_SHIFT 2
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_DMA_DATA_TIMEOUT_EN_MASK  0x8
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_DMA_DATA_TIMEOUT_EN_SHIFT 3
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_ALIAS_REMAP_TIMEOUT_EN_MASK  0x10
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_ALIAS_REMAP_TIMEOUT_EN_SHIFT 4
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_FILTER_OUT_TIMEOUT_EN_MASK  0x20
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_FILTER_OUT_TIMEOUT_EN_SHIFT 5
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_ENTROPY_READ_TIMEOUT_EN_MASK  0x40
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_ENTROPY_READ_TIMEOUT_EN_SHIFT 6
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_ENTROPY_WRITE_TIMEOUT_EN_MASK  0x80
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_ENTROPY_WRITE_TIMEOUT_EN_SHIFT 7
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_INBOUND_MAILBOX_TIMEOUT_EN_MASK  0x100
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_INBOUND_MAILBOX_TIMEOUT_EN_SHIFT 8
-
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_OUTBOUND_MAILBOX_TIMEOUT_EN_MASK  0x200
-#define SEP_CPU_CTRL_TIMEOUT_ENABLE_OUTBOUND_MAILBOX_TIMEOUT_EN_SHIFT 9
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_TROOT_TIMEOUT_CLEAR_MASK  0x1
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_TROOT_TIMEOUT_CLEAR_SHIFT 0
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_SYS_IN_TIMEOUT_CLEAR_MASK  0x2
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_SYS_IN_TIMEOUT_CLEAR_SHIFT 1
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_SPACC_TIMEOUT_CLEAR_MASK  0x4
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_SPACC_TIMEOUT_CLEAR_SHIFT 2
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_DMA_DATA_TIMEOUT_CLEAR_MASK  0x8
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_DMA_DATA_TIMEOUT_CLEAR_SHIFT 3
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_ALIAS_REMAP_TIMEOUT_CLEAR_MASK  0x10
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_ALIAS_REMAP_TIMEOUT_CLEAR_SHIFT 4
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_FILTER_OUT_TIMEOUT_CLEAR_MASK  0x20
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_FILTER_OUT_TIMEOUT_CLEAR_SHIFT 5
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_ENTROPY_READ_TIMEOUT_CLEAR_MASK  0x40
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_ENTROPY_READ_TIMEOUT_CLEAR_SHIFT 6
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_ENTROPY_WRITE_TIMEOUT_CLEAR_MASK  0x80
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_ENTROPY_WRITE_TIMEOUT_CLEAR_SHIFT 7
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_INBOUND_MAILBOX_TIMEOUT_CLEAR_MASK  0x100
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_INBOUND_MAILBOX_TIMEOUT_CLEAR_SHIFT 8
-
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_OUTBOUND_MAILBOX_TIMEOUT_CLEAR_MASK  0x200
-#define SEP_CPU_CTRL_TIMEOUT_CLEAR_OUTBOUND_MAILBOX_TIMEOUT_CLEAR_SHIFT 9
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_TROOT_TIMEOUT_MODE_MASK  0x3
-#define SEP_CPU_CTRL_TIMEOUT_MODE_TROOT_TIMEOUT_MODE_SHIFT 0
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_SYS_IN_TIMEOUT_MODE_MASK  0xC
-#define SEP_CPU_CTRL_TIMEOUT_MODE_SYS_IN_TIMEOUT_MODE_SHIFT 2
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_SPACC_TIMEOUT_MODE_MASK  0x30
-#define SEP_CPU_CTRL_TIMEOUT_MODE_SPACC_TIMEOUT_MODE_SHIFT 4
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_DMA_DATA_TIMEOUT_MODE_MASK  0xC0
-#define SEP_CPU_CTRL_TIMEOUT_MODE_DMA_DATA_TIMEOUT_MODE_SHIFT 6
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_ALIAS_REMAP_TIMEOUT_MODE_MASK  0x300
-#define SEP_CPU_CTRL_TIMEOUT_MODE_ALIAS_REMAP_TIMEOUT_MODE_SHIFT 8
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_FILTER_OUT_TIMEOUT_MODE_MASK  0xC00
-#define SEP_CPU_CTRL_TIMEOUT_MODE_FILTER_OUT_TIMEOUT_MODE_SHIFT 10
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_ENTROPY_READ_TIMEOUT_MODE_MASK  0x3000
-#define SEP_CPU_CTRL_TIMEOUT_MODE_ENTROPY_READ_TIMEOUT_MODE_SHIFT 12
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_ENTROPY_WRITE_TIMEOUT_MODE_MASK  0xC000
-#define SEP_CPU_CTRL_TIMEOUT_MODE_ENTROPY_WRITE_TIMEOUT_MODE_SHIFT 14
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_INBOUND_MAILBOX_TIMEOUT_MODE_MASK  0x30000
-#define SEP_CPU_CTRL_TIMEOUT_MODE_INBOUND_MAILBOX_TIMEOUT_MODE_SHIFT 16
-
-#define SEP_CPU_CTRL_TIMEOUT_MODE_OUTBOUND_MAILBOX_TIMEOUT_MODE_MASK  0xC0000
-#define SEP_CPU_CTRL_TIMEOUT_MODE_OUTBOUND_MAILBOX_TIMEOUT_MODE_SHIFT 18
-
-#define SEP_CPU_CTRL_SEP_TEST_CTRL_SEP_STANDALONE_MASK  0x2000000
-#define SEP_CPU_CTRL_SEP_TEST_CTRL_SEP_STANDALONE_SHIFT 25
-
-#define SEP_CPU_CTRL_SEP_TEST_CTRL_FAST_SPACC_EN_MASK  0x4000000
-#define SEP_CPU_CTRL_SEP_TEST_CTRL_FAST_SPACC_EN_SHIFT 26
+#define SEP_CPU_CTRL_SEP_TEST_CTRL_SEP_STANDALONE_MASK  0x4000000
+#define SEP_CPU_CTRL_SEP_TEST_CTRL_SEP_STANDALONE_SHIFT 26
 
 #define SEP_CPU_CTRL_SEP_TEST_CTRL_FAST_PKA_EN_MASK  0x8000000
 #define SEP_CPU_CTRL_SEP_TEST_CTRL_FAST_PKA_EN_SHIFT 27
@@ -12591,29 +10844,17 @@ typedef struct {
 #define SEP_CPU_CTRL_SEP_NMI_VEC_LOCK_LOCK_MASK  0x1
 #define SEP_CPU_CTRL_SEP_NMI_VEC_LOCK_LOCK_SHIFT 0
 
-#define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_SEL_MASK  0x3
+#define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_SEL_MASK  0x7
 #define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_SEL_SHIFT 0
 
 #define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_LOCK_LOCK_MASK  0x1
 #define SEP_CPU_CTRL_EXT_TRNG_SRC_SEL_LOCK_LOCK_SHIFT 0
 
+#define SEP_CPU_CTRL_KM_WIPE_CTRL_WIPE_STATE_MASK  0x1
+#define SEP_CPU_CTRL_KM_WIPE_CTRL_WIPE_STATE_SHIFT 0
+
 #define SEP_CPU_CTRL_SEP_VERSION_ID_VERSION_ID_MASK  0xFFFFFFFF
 #define SEP_CPU_CTRL_SEP_VERSION_ID_VERSION_ID_SHIFT 0
-
-#define SEP_RESET_CTRL_SW_RESET_N_KM_SW_RST_N_MASK  0x1
-#define SEP_RESET_CTRL_SW_RESET_N_KM_SW_RST_N_SHIFT 0
-
-#define SEP_RESET_CTRL_SW_RESET_N_OTBN_SW_RST_N_MASK  0x2
-#define SEP_RESET_CTRL_SW_RESET_N_OTBN_SW_RST_N_SHIFT 1
-
-#define SEP_RESET_CTRL_SW_RESET_N_AES_SW_RST_N_MASK  0x4
-#define SEP_RESET_CTRL_SW_RESET_N_AES_SW_RST_N_SHIFT 2
-
-#define SEP_RESET_CTRL_SW_RESET_N_HMAC_SW_RST_N_MASK  0x8
-#define SEP_RESET_CTRL_SW_RESET_N_HMAC_SW_RST_N_SHIFT 3
-
-#define SEP_RESET_CTRL_SW_RESET_N_KMAC_SW_RST_N_MASK  0x10
-#define SEP_RESET_CTRL_SW_RESET_N_KMAC_SW_RST_N_SHIFT 4
 
 #define SPI_CONTROLLER_INTR_STATUS_ERROR_MASK  0x1
 #define SPI_CONTROLLER_INTR_STATUS_ERROR_SHIFT 0
@@ -12785,6 +11026,84 @@ typedef struct {
 
 #define REMAPPED_REGION_MEM_WORD_DATA_MASK  0xFFFFFFFFFFFFFFFF
 #define REMAPPED_REGION_MEM_WORD_DATA_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIVIDER_VALUE_MASK  0xFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIVIDER_VALUE_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DUTYCYCLE_MASK  0xFF00
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DUTYCYCLE_SHIFT 8
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_ENABLE_MASK  0x10000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_ENABLE_SHIFT 16
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_SET_MASK  0x20000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_CLOCK_DIV_SET_SHIFT 17
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_CLK_PERIOD_TEN_PS_MASK  0x1FFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_CTRL_STATUS_1_CLK_PERIOD_TEN_PS_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_TCS_CYCLES_MASK  0xFFFFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_0_TCS_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_TRW_CYCLES_MASK  0x7FFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_1_TRW_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAS_CYCLES_MASK  0xFFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAS_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAH_CYCLES_MASK  0xFFFF0000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_2_TAH_CYCLES_SHIFT 16
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_TCSRST_CYCLES_MASK  0xFFFFFFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_3_TCSRST_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRWH_CYCLES_MASK  0xFFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRWH_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRD_CYCLES_MASK  0xFFFF0000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_4_TRD_CYCLES_SHIFT 16
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_TPW_CYCLES_MASK  0x7FFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_5_TPW_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_TCPPW_CYCLES_MASK  0xFFFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_6_TCPPW_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_TPGM_CYCLES_MASK  0x1FFFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_7_TPGM_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TWWL_CYCLES_MASK  0xFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TWWL_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TDS_CYCLES_MASK  0xFFF000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_8_TDS_CYCLES_SHIFT 12
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDH_CYCLES_MASK  0xFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDH_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDLES_CYCLES_MASK  0xFFF000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_9_TDLES_CYCLES_SHIFT 12
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_TPES_CYCLES_MASK  0x1FFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_10_TPES_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_TCPS_CYCLES_MASK  0x3FFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_11_TCPS_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TCPH_CYCLES_MASK  0x1FFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TCPH_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TPGML_CYCLES_MASK  0x1FFE0000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_12_TPGML_CYCLES_SHIFT 17
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_TPGRD_CYCLES_MASK  0xFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_13_TPGRD_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TPEH_CYCLES_MASK  0x3FFFF
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TPEH_CYCLES_SHIFT 0
+
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TRSTS_CYCLES_MASK  0x3FFC0000
+#define EFUSE_SHIM_CTRL_SAMSUNG_EFUSE_TIMING_CTRL_14_TRSTS_CYCLES_SHIFT 18
 
 #define OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_SPI_SEL_MASK  0x1
 #define OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_SPI_SEL_SHIFT 0

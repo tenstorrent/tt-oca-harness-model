@@ -82,5 +82,5 @@ aou_.irq_o → aou_irq → intagg.src[21] → plic_src_sig[26] → plic_.src_in[
 ```
 
 Files: `vp/platform/smc/smc_platform.{hpp,cpp}`, `vp/platform/smc/main.cpp`,
-`vp/platform/smu/main.cpp`.
+`vp/platform/smu/src/smu_platform.cpp`.
 Firmware base: `SMC_AOU_BASE` in `sw/smc-vp-tests/common/smc_common.h`.
