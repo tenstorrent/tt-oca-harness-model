@@ -89,10 +89,10 @@ accepted write recomputes `FEAT_CTRL`.
   is recomputed synchronously whenever an input or a demote register changes.
 - **`FEAT_CTRL` is read-only to software.** Its write mask is `0x0`; the model writes it
   directly, bypassing the mask, because in hardware it is hardware-driven.
-- **Not modelled yet.** `feat_ctrl.sep_debug` reaches the inbound filter's skip input in
-  `sep.sv` and `prod_dbg_active` feeds back into the eFuse to freeze lifecycle transitions.
-  Neither loop exists in the VP; both are tracked as action items L2 and L3 in the
-  lifecycle RTL-versus-VP comparison.
+- **VP wiring for `feat_ctrl` consumers.** In the SEP VP platform, the
+  `feat_ctrl.sep_debug` path to the inbound filter and the `prod_dbg_active` feedback
+  path into eFuse are wired through `set_feat_ctrl_change_callback()` in
+  `vp/platform/sep/src/sep_platform.cpp`.
 
 ## Tests
 

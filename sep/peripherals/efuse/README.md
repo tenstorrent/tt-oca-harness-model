@@ -8,8 +8,9 @@ lifecycle.
 The model is behavioural, not a stub. An 8192-bit array is the source of truth, and the
 shadow registers are the same bits viewed as words — a field reads back identically
 whether software goes through the shadow map or through the OTP read CSR. Fuse contents
-come from a `.preload` image, from per-field CCI parameters, or both; parameters are ORed
-over the image, because fuses only ever go 0→1.
+come from either a `.preload` image or per-field CCI parameters. When
+`fuse_preload_file` is set and loads successfully, the image defines the array and
+per-field parameters are not applied.
 
 What is deliberately not modelled: cycle-level timing. The program and read handshakes
 and the token hash all complete inside the write that starts them, so software sees

@@ -174,8 +174,8 @@ public:
      * Path to a fuse array image in the RTL's `.preload` format: 8192 lines, one
      * ASCII '0' or '1' per line, LSB first, as consumed by +sep_preload_efuse.
      * Empty (the default) leaves the array erased, which is what
-     * +SEP_EFUSE_NO_PRELOAD gives on RTL. The per-field params above are applied
-     * on top of whatever the file provides.
+     * +SEP_EFUSE_NO_PRELOAD gives on RTL. When a preload image is supplied, it
+     * defines the fuse array and per-field params are not applied.
      */
     csml_param<std::string> fuse_preload_file;
 
