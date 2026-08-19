@@ -338,6 +338,9 @@ docs/och_source/_build/
 # to be staged there rather than beside the test. `make clean` removes both.
 # =============================================================================
 vp/platform/sep/config/accellera_config_no_spipreload.ini
+# Derived the same way, for the sep_efuse_fw_* tests that run on an erased fuse array.
+vp/platform/sep/config/accellera_config_efuse_blank.ini
+vp/platform/sep/config/efuse_vp_blank.ini
 vp/platform/sep/config/data/
 sw/sep-vp-tests/sep-spi-*-test/flash_fixture.bin
 sw/sep-vp-tests/sep-spi-*-test/.staged-mode

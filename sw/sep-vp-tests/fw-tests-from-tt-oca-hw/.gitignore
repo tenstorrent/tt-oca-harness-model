@@ -11,6 +11,7 @@ dependencies/el2/third_party/
 *.hex
 *.dis
 *.sym
+*.vmem
 *.map
 *.su
 *.cpp.s

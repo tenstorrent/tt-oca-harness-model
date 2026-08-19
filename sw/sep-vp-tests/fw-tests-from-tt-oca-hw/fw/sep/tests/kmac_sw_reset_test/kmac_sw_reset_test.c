@@ -1,7 +1,7 @@
 /*
  * TC_KMAC_014 (P1) - Software Reset Test
  *
- * Verifies KMAC software reset via SEP Reset Controller (0x10803000).
+ * Verifies KMAC software reset via SEP Reset Controller (0x10A50000).
  * Per OCH spec: KMAC starts in reset (kmac_sw_rst_n=0 by default);
  * firmware must write 1 to bit[4] to release before use.
  *
@@ -179,7 +179,7 @@ static int test_sw_reset(void) {
 }
 
 int main(void) {
- //   sep_outbound_filter_init();
+    sep_outbound_filter_init();
 
     printf("\n========================================\n");
     printf("  TC_KMAC_014: Software Reset Test\n");
