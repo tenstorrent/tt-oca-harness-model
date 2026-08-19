@@ -29,8 +29,13 @@
 #                    + RISC-V bare-metal toolchain).  Runs the smc-vp-tests
 #                    firmware suite via sw/smc-vp-tests/run_smc_vp_tests.sh,
 #                    including the new smc-dma-test and smc-pvt-wrap-test.
-#                    Then runs Zephyr hello_world + mmio_poke via
-#                    sw/zephyr-smc/zephyr_smc.sh ci (west workspace is cached).
+#                    Uploads the smc-vp binary for the Zephyr job.
+#
+#  smc-zephyr        Zephyr hello_world + mmio_poke via sw/zephyr-smc/zephyr_smc.sh
+#                    ci.  Own runner so the ~3.6 GB west cache is not unpacked
+#                    on top of Whisper + vp/build_smc (that combination OOM'd
+#                    the disk).  Reuses the smc-vp artifact; west update is
+#                    --narrow and skips unused vendor HALs.
 #
 #  smu-unit-tests    SMU interconnect unit tests (smu_axi_xbar + axi_window_remap)
 #                    via vp/platform/smu/run_tests.sh (Release + ASAN + Coverage).
@@ -326,8 +331,8 @@ jobs:
 # Job 6 — build smc-vp and run SMC VP firmware tests
 # The SMC platform requires the Tenstorrent-internal Whisper ISS.  We clone it,
 # build librvcore.a, then configure the VP with WHISPER_HOME and run all
-# bare-metal firmware tests under sw/smc-vp-tests, then Zephyr hello_world
-# and mmio_poke via sw/zephyr-smc/zephyr_smc.sh ci.
+# bare-metal firmware tests under sw/smc-vp-tests.  Zephyr lives in smc-zephyr
+# (separate runner) so the west workspace does not share this job's disk.
 # ─────────────────────────────────────────────────────────────────────────────
   smc-vp:
     name: SMC VP firmware tests
@@ -343,8 +348,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y g++ cmake make ninja-build gperf \
-            device-tree-compiler python3-pip python3-venv python3-setuptools \
+          sudo apt-get install -y g++ cmake make \
             libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
             libssl-dev gcc-riscv64-unknown-elf
 
@@ -441,9 +445,65 @@ jobs:
           cd sw/smc-vp-tests
           ./run_smc_vp_tests.sh
 
-      # Zephyr 4.3 emits -march=rv64imac_zicsr_zifencei.  Ubuntu 22.04's
-      # gcc-riscv64-unknown-elf (GCC 10) rejects the 'z' subsets; use the
-      # same xpack GCC 15 as smu-vp / RHEL.
+      - name: Upload smc-vp binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-vp-bin
+          path: vp/build_smc/bin/smc-vp
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload smc-vp logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-vp-logs
+          path: sw/smc-vp-tests/smc-*/run_*.log
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 7 — Zephyr on smc-vp (own runner: west cache must not share disk with
+# Whisper + vp/build_smc; that combination filled the runner on PR #106).
+# ─────────────────────────────────────────────────────────────────────────────
+  smc-zephyr:
+    name: Zephyr SMC VP tests
+    runs-on: ubuntu-22.04
+    needs: [build-deps, smc-vp]
+
+    steps:
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y g++ cmake ninja-build gperf \
+            device-tree-compiler python3-pip python3-venv python3-setuptools \
+            libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
+            libssl-dev wget
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Download smc-vp binary
+        uses: actions/download-artifact@v4
+        with:
+          name: smc-vp-bin
+          path: vp/build_smc/bin
+
       - name: Install RISC-V toolchain (xpack)
         run: |
           mkdir -p /home/runner/riscv
@@ -451,9 +511,11 @@ jobs:
           XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
           wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
           tar zxf "${XPACK}.tar.gz"
-          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          rm -f "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name 'xpack-riscv-none-elf-gcc-*' | head -1)
           mv "${EXTRACTED_DIR}" toolchain
           echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
+          df -h
 
       - name: Cache Zephyr west workspace
         id: cache-zephyr
@@ -462,40 +524,43 @@ jobs:
           path: |
             sw/zephyr-smc/.workspace
             sw/zephyr-smc/.venv
-          key: zephyr-${{ env.ZEPHYR_VERSION }}-${{ runner.os }}-west1
+          # west2: narrow clones + unused-HAL filter.  Do not reuse west1
+          # (~3.6 GB, includes hal_espressif git history).
+          key: zephyr-${{ env.ZEPHYR_VERSION }}-${{ runner.os }}-west2-narrow
 
       - name: Run Zephyr SMC VP tests
         env:
           SYSTEMC_HOME:    ${{ env.SYSTEMC_HOME }}
           CCI_HOME:        ${{ env.CCI_HOME }}
-          WHISPER_HOME:    /home/runner/whisper
           BOOST_DIR:       /usr
           ZEPHYR_VERSION:  ${{ env.ZEPHYR_VERSION }}
           ZEPHYR_SKIP_UPDATE: ${{ steps.cache-zephyr.outputs.cache-hit == 'true' && '1' || '0' }}
+          ZEPHYR_WEST_PROJECT_FILTER: "-hal_espressif,-hal_nordic,-hal_stm32,-hal_nxp,-hal_infineon,-hal_silabs,-hal_rpi_pico,-hal_altera,-hal_atmel,-hal_ti,-nrf_hw_models,-babblesim,-matter,-openthread,-tflite-micro,-trusted-firmware-m,-sof"
           RISCV_PREFIX:    riscv-none-elf-
           CROSS_COMPILE:   /home/runner/riscv/toolchain/bin/riscv-none-elf-
           SMC_VP:          ${{ github.workspace }}/vp/build_smc/bin/smc-vp
+          LD_LIBRARY_PATH: ${{ env.SYSTEMC_HOME }}/lib:${{ env.SYSTEMC_HOME }}/lib-linux64:${{ env.CCI_HOME }}/lib
         run: |
-          if [ ! -x "$SMC_VP" ]; then
-            SMC_VP="${{ github.workspace }}/vp/build/bin/smc-vp"
-          fi
-          export SMC_VP
+          chmod +x "$SMC_VP"
           test -x "$SMC_VP"
           cd sw/zephyr-smc
           ./zephyr_smc.sh ci
+          # Drop git metadata so the post-job cache save stays small.
+          if [ -d .workspace ]; then
+            find .workspace -name .git -type d -prune -exec rm -rf {} + || true
+          fi
+          df -h
 
-      - name: Upload smc-vp logs
+      - name: Upload Zephyr SMC VP logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smc-vp-logs
-          path: |
-            sw/smc-vp-tests/smc-*/run_*.log
-            sw/zephyr-smc/build/*/run.log
+          name: smc-zephyr-logs
+          path: sw/zephyr-smc/build/*/run.log
           retention-days: 7
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 7 — SMU interconnect unit tests
+# Job 8 — SMU interconnect unit tests
 # Header-only smu_axi_xbar + axi_window_remap; SystemC + CCI only (no Whisper).
 # Release + ASAN + Coverage as three separate run_tests.sh invocations.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -538,7 +603,7 @@ jobs:
           ./run_tests.sh --coverage
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 8 — build smu-vp and run SMU VP firmware tests
+# Job 9 — build smu-vp and run SMU VP firmware tests
 # smu-vp links Whisper into a shared library (libsmc_cluster_smu), so the
 # Whisper archives must be built -fPIC.  Firmware halves are RV64 (SMC) and
 # RV32 (SEP); the xpack riscv-none-elf toolchain covers both.
