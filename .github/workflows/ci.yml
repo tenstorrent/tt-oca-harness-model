@@ -544,6 +544,12 @@ jobs:
           chmod +x "$SMC_VP"
           test -x "$SMC_VP"
           cd sw/zephyr-smc
+          # If the cache restored an incomplete west workspace, allow zephyr_smc.sh
+          # to repair it by running west update.
+          if [ "${ZEPHYR_SKIP_UPDATE:-}" = "1" ] && [ ! -f ".workspace/zephyr/CMakeLists.txt" ]; then
+            echo "Incomplete Zephyr workspace in cache; forcing west update"
+            export ZEPHYR_SKIP_UPDATE=0
+          fi
           ./zephyr_smc.sh ci
           # Drop git metadata so the post-job cache save stays small.
           if [ -d .workspace ]; then
