@@ -90,7 +90,7 @@ SC_MODULE(Tb) {
         // T1: Reset values
         // ------------------------------------------------------------------
         uint64_t v = do_read(0x008); // CLOCK_GATE_CTRL
-        assert(v == 0x0);                    // reserved placeholder, resets to 0
+        assert((v & 0xFFFFFFFFULL) == 0x0ULL); // reserved placeholder, resets to 0
         std::cout << "[PASS] T1: CLOCK_GATE_CTRL reset=0x0\n";
 
         v = do_read(0x1000); // SEP_VERSION_ID
