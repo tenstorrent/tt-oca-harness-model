@@ -3,7 +3,7 @@
  *
  * AVSBus Controller platform smoke test.
  *
- * Hart 0 drives the AVSBus MMIO window (SMC_AVSBUS_BASE = 0xC000_8000)
+ * Hart 0 drives the AVSBus MMIO window (SMC_AVSBUS_BASE = 0xC000_4000)
  * through the fabric and confirms:
  *   1. CFG_0 / CFG_1 / CONFIG / INTERRUPT_MASK match RDL reset values.
  *   2. CFG_0 is writable (masked to [23:0]).

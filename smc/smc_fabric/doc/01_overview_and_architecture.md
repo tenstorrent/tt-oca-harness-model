@@ -174,7 +174,7 @@ Absolute address ranges (verbatim from `smc_local_xbar_pkg.sv` /
 
 | Absolute range | Destination | Contents |
 |----------------|-------------|----------|
-| `0xC000_F800 – 0xC000_FFFF` | `to_dft_csr` | DFT CSRs |
+| `0xC000_B800 – 0xC000_BFFF` | `to_dft_csr` | DFT / DFX CSRs |
 | `0xC001_0000 – 0xC001_1FFF` | internal `handle_global_csr`, else `to_cpu_ctrl` | GLOBAL/LOCAL_BASE, REGION_SIZE, else CPU ctrl |
 | `0xC001_2000 – 0xC001_2FFF` | internal (alias table) | `ALIAS_REMAP` CSRs |
 | `0xC001_3000 – 0xC001_3FFF` | internal (mmode table) | `MMODE_REMAP` CSRs |
@@ -186,8 +186,9 @@ Absolute address ranges (verbatim from `smc_local_xbar_pkg.sv` /
 | `0xC004_0000 – 0xC015_FFFF` | `to_front_port` | Scratchpad memory (SPM) |
 | `0xC400_0000 – 0xC7FF_FFFF` | `to_front_port` | PLIC (outside alias aperture) |
 | `0xC800_0000 – 0xC801_FFFF` | `to_front_port` | CLINT / BEU (outside alias aperture) |
-| `0xC003_8000 – 0xC003_FFFF` | `to_data_accel_ctrl` | DMA + zeroer ctrl |
-| `0xC000_2000 – 0xC000_E7FF` | `to_periph` | peripheral main (UART / I2C / GPIO / …) |
+| `0xC003_8000 – 0xC003_8FFF` | `to_data_accel_ctrl` | DMA + zeroer ctrl |
+| `0xC000_2000 – 0xC000_B7FF` | `to_periph` | peripheral main (UART / I2C / GPIO / …) |
+| `0xC000_C000 – 0xC000_CFFF` | `to_periph` | **VP-only** AOU CSR park (no RTL slot; realignment D1=A) |
 | `0xC040_0000 – 0xC07F_FFFF` | `to_periph` | peripheral extended |
 | `0xC016_0000 – 0xC025_FFFF` | `to_dfd_apb` | DFD registers (APB) |
 | any other local address | — | `TLM_ADDRESS_ERROR_RESPONSE` (deny) |

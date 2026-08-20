@@ -2,7 +2,7 @@
  * sw/smc-vp-tests/common/printf.c
  *
  * Minimal bare-metal printf for smc-vp firmware tests.  Output goes to
- * UART0 (0xC000A000) THR with LSR THRE polling.  UART0 is initialized in
+ * UART0 (0xC0006100) THR with LSR THRE polling.  UART0 is initialized in
  * start.S before main() is called.
  *
  * Supported specifiers (mirrors sw/sep-vp-tests/common/printf.c):

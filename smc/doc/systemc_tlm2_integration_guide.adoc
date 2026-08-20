@@ -1,7 +1,54 @@
 = SMC SystemC/TLM2.0 Integration Guide
 :toc:
 :toclevels: 4
-:sectnums:
+:sectnums:CLINT
+
+CLINT = Core-Local Interruptor
+
+It is associated closely with the CPU harts.
+
+In your SMC platform, CLINT provides:
+
+CLINT
+ ├── MSIP → Software interrupt
+ └── MTIP → Timer interrupt
+
+Your code connects:
+
+clint_.msip_o[h].bind(sig_irq_sw[h]);
+clint_.mtip_o[h].bind(sig_irq_timer[h]);
+
+So for hart 0:
+
+CLINT
+  |
+  +---- MSIP ──→ hart 0 software interrupt
+  |
+  +---- MTIP ──→ hart 0 timer interrupt
+PLIC
+
+PLIC = Platform-Level Interrupt Controller
+
+PLIC handles interrupts coming from external devices/peripherals.
+
+For example:
+
+UART ─────┐
+I2C ──────┤
+I3C ──────┤
+WDT ──────┤
+BEU ──────┤
+Telemetry ┤
+           ↓
+          PLIC
+           ↓
+      External IRQ
+           ↓
+         CPU
+
+So the PLIC essentially answers:
+
+"Which peripheral is requesting an interrupt, and which CPU/hart should receive it?"
 
 == Purpose
 
@@ -109,7 +156,54 @@ timing, but it must preserve the programmer-visible contract:
 |Whisper-backed RV64 cluster, 1 to 4 harts. Owns CPU-control register behavior
 for reset vectors, reset control, scratch, mutex/semaphore, dummy ROM words,
 and debug APIs.
+CLINT
 
+CLINT = Core-Local Interruptor
+
+It is associated closely with the CPU harts.
+
+In your SMC platform, CLINT provides:
+
+CLINT
+ ├── MSIP → Software interrupt
+ └── MTIP → Timer interrupt
+
+Your code connects:
+
+clint_.msip_o[h].bind(sig_irq_sw[h]);
+clint_.mtip_o[h].bind(sig_irq_timer[h]);
+
+So for hart 0:
+
+CLINT
+  |
+  +---- MSIP ──→ hart 0 software interrupt
+  |
+  +---- MTIP ──→ hart 0 timer interrupt
+PLIC
+
+PLIC = Platform-Level Interrupt Controller
+
+PLIC handles interrupts coming from external devices/peripherals.
+
+For example:
+
+UART ─────┐
+I2C ──────┤
+I3C ──────┤
+WDT ──────┤
+BEU ──────┤
+Telemetry ┤
+           ↓
+          PLIC
+           ↓
+      External IRQ
+           ↓
+         CPU
+
+So the PLIC essentially answers:
+
+"Which peripheral is requesting an interrupt, and which CPU/hart should receive it?"
 |`smc_fabric`
 |Implemented
 |Targets: `jtag_axi_in`, `mmio_in`, `data_accel_in`, `log_in`, `sys_axi_in`,
@@ -305,15 +399,16 @@ not a full JTAG/debug-module TLM target.
 No SystemC misc wrapper model exists yet.
 
 |PLL wrapper
-|`0xC000_3000`
+|`0xC040_2000`
 |4 KiB
-|Stub needed
-|RTL routes to top-level PLL shim AXI-Lite port. No SystemC SMC PLL model exists.
+|`pll_wrap` stub
+|In `smc_external`, not the local periph window. RTL routes to the top-level
+PLL shim AXI-Lite port. No SystemC SMC PLL model exists.
 
 |GPIO/padring
-|`0xC000_4000`
-|GPIO interface/control windows
-|Stub/model needed
+|`0xC000_3000`
+|`gpio_intf[65]`, stride `0x10`
+|Named stub
 |RTL connects 64 bonded + 4 unbonded GPIO wrappers, strap capture, GPIO
 interrupts, UART/I2C/I3C pad muxing, cool reset pin, and boot stall.
 
@@ -325,14 +420,14 @@ interrupts, UART/I2C/I3C pad muxing, cool reset pin, and boot stall.
 at `INSTANCE_SPACING=0x500` behind one aperture.
 
 |PVT
-|`0xC000_7000`
+|`0xC040_3000`
 |4 KiB
-|Stub needed
-|RTL routes PVT AXI-Lite to top-level shim and routes `temp_interrupt_i` into
-peripheral interrupt bit 27.
+|`pvt_wrap` stub
+|In `smc_external`, not the local periph window. RTL routes PVT AXI-Lite to the
+top-level shim and routes `temp_interrupt_i` into peripheral interrupt bit 27.
 
 |AVSBus
-|`0xC000_8000`
+|`0xC000_4000`
 |4 KiB
 |`avsbus_controller.reg_socket`
 |SystemC LT model exists (`smc/peripherals/avsbus_controller`). Platform
@@ -348,17 +443,17 @@ enable, and maps interrupt bit 22 → PLIC source 23.
 and interrupt bits 25:23.
 
 |UART/log engine wrapper
-|`0xC000_A000`
-|4 KiB
+|`0xC000_6000`
+|4 KiB (4 instances, stride `0x400`)
 |Four `uart` instances plus log-engine stubs
-|SystemC has one UART model. **Note:** RTL `uart_wrap` is at `0xC000_6000`;
-the sim still parks UARTs at `0xC000_A000` pending a separate map cleanup.
-UART/log interrupts are combined into peripheral bits 21:18.
+|Each instance's 16550 register block is at wrap `+0x100` and the log engine at
+`+0x200`, so `SMC_UARTn_BASE` = `0xC000_6100 + N×0x400`. UART/log interrupts are
+combined into peripheral bits 21:18.
 
 |eFuse map/interface/shim
-|`0xC000_B000..0xC000_C1FF`
+|`0xC000_7000` (`smc_efuse_map`), `0xC000_8000` (`efuse_interface_ctrl`)
 |Multiple subwindows
-|Stub/model needed
+|Named stubs
 |RTL connects `smc_efuse_wrapper`, JTAG AXI-Lite, lifecycle, shadow regs, shim
 command interface, fuse reset, fuse sense done, and locked-field interrupt bit
 28. No SMC SystemC eFuse model exists.
@@ -371,17 +466,18 @@ command interface, fuse reset, fuse sense done, and locked-field interrupt bit
 `0x100`. Wired in `smc-vp`; interrupts on peripheral bits 10:8.
 
 |System Timer OCTS
-|`0xC000_E000`
+|`0xC000_A000`
 |4 KiB
-|Stub/model needed
+|`octs_system_timer.reg_socket`
 |RTL connects primary/secondary timer sync through the padring and exposes
 `timer_count_o`.
 
-|DTP / DFT CSR
-|`0xC000_F000..0xC000_FFFF`
-|4 KiB
-|Stub/model needed
-|RTL routes DTP CSR externally and DFT control/status internally.
+|DTP / DFX CSR
+|`0xC000_B000` (`dtp_ctrl`), `0xC000_B800` (`dfx_ctrl`)
+|`0x800` each
+|Named stubs
+|RTL routes DTP CSR externally and DFX control/status internally. `0xC000_B800`
+is also where the fabric's DFT window now lands.
 
 |OCA I3C wraps
 |`0xC003_A000`
@@ -485,8 +581,9 @@ subtract the base address.
 |`0xC801_0000 + N*0x1000`
 |4 x `0x1000` (regs in low `0x30`)
 |`beu[N].reg_socket`
-|Per-core Rocket BEU model (`smc::beu`). Platform local alias is
-`0xC0C1_0000 + N*0x1000` via `front_port_router` → `beu_router`.
+|Per-core Rocket BEU model (`smc::beu`), reached via `front_port_router` →
+`beu_router`. Since the Phase-3 realignment the platform uses the RTL base
+directly — there is no separate local alias.
 |===
 
 == Fabric Integration
@@ -654,7 +751,8 @@ The current SystemC `uart` model represents one 16550-style UART. For SMC
 integration:
 
 * instantiate four UART models or wrap one model in a four-instance aperture,
-* decode the `SMC_UART_WRAP` subwindows under `0xC000_A000`,
+* decode the `SMC_UART_WRAP` subwindows under `0xC000_6000` (stride `0x400`,
+  16550 at `+0x100`, log engine at `+0x200`),
 * bind each UART interrupt into the combined UART/log interrupt source that
   eventually drives peripheral interrupt bits 21:18,
 * tie unused modem inputs high (`dsr_ni`, `ri_ni`, `dcd_ni`) to match RTL,

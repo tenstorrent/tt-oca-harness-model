@@ -1,0 +1,7 @@
+# Moved
+
+Implementation steps now live in Markdown:
+
+**[smc-vp-rtl-address-map-realignment-implementation.md](smc-vp-rtl-address-map-realignment-implementation.md)**
+
+Parent review plan: [smc-vp-rtl-address-map-realignment.adoc](smc-vp-rtl-address-map-realignment.adoc)

@@ -16,37 +16,52 @@
 namespace smc {
 
 // ---------------------------------------------------------------------------
-// Address-map constants (absolute local addresses; see integration guide).
+// Address-map constants (absolute local addresses; Phase-1 RTL realignment).
 // ---------------------------------------------------------------------------
 static constexpr uint64_t A_WDT_DEBUG   = 0xC000'0000ULL;
-static constexpr uint64_t A_CPU_CTRL_FP  = 0xC003'9000ULL;
+static constexpr uint64_t A_CPU_CTRL_FP  = 0xC003'9000ULL;  // cluster.ctrl (cpu_ctrl.rdl)
 static constexpr uint64_t A_BOOTROM      = 0xC004'0000ULL;
 static constexpr uint64_t A_SCRATCH      = 0xC006'0000ULL;
-static constexpr uint64_t A_PLIC         = 0xC080'0000ULL;
-static constexpr uint64_t A_CLINT        = 0xC0C0'0000ULL;
-static constexpr uint64_t A_BEU          = 0xC0C1'0000ULL;
+// Cluster-internal interrupt/error blocks (smc_addrmap_pkg SMC_TOP_SMC_CLUSTER_*).
+// These sit above the fabric's 16 MB local-alias window, so the harts reach them
+// straight off cluster.data rather than through fabric.mmio_in -- see the
+// cluster.data bind below.
+static constexpr uint64_t A_PLIC         = 0xC400'0000ULL;
+static constexpr uint64_t A_CLINT        = 0xC800'0000ULL;
+static constexpr uint64_t A_BEU          = 0xC801'0000ULL;
 static constexpr uint64_t A_DMA          = 0xC003'8000ULL;  // dma_cfg default base_addr
 
+// Phase-1 RTL-aligned peripheral bases (tt-oca-harness smc.rdl / smc_top).
 static constexpr uint64_t A_RESET        = 0xC000'2000ULL;
-static constexpr uint64_t A_PLL_WRAP     = 0xC000'3000ULL;  // pll_wrap.rdl base
+static constexpr uint64_t A_MISC_WRAP    = 0xC000'2800ULL;  // named stub
+static constexpr uint64_t A_GPIO_INTF    = 0xC000'3000ULL;  // named stub (was pll)
+static constexpr uint64_t A_AVSBUS       = 0xC000'4000ULL;
 static constexpr uint64_t A_I2C0         = 0xC000'5000ULL;  // RTL smc_i2c_wrap
-static constexpr uint64_t A_AVSBUS       = 0xC000'8000ULL;
-// AOU CSR window (0x80). Free gap between pll_wrap's 0x1000 window
-// (0xC000_3000-0xC000_3FFF) and i2c0 (0xC000_5000) — 0xC000_E000 is taken by
-// system_timer_octs per smc_top.rdl (see A_SYSTEM_TIMER_OCTS below).
-static constexpr uint64_t A_AOU          = 0xC000'4000ULL;
+// uart_wrap @ 0xC000_6000; route each 16550 at +0x100 (D3=U1).
+static constexpr uint64_t A_UART0_16550  = 0xC000'6100ULL;
+static constexpr uint64_t A_UART_STRIDE  = 0x400ULL;
+static constexpr uint64_t A_UART_WIN     = 0x100ULL;        // uart::WINDOW_SIZE
+static constexpr uint64_t A_EFUSE_MAP    = 0xC000'7000ULL;  // named stub
+static constexpr uint64_t A_EFUSE_CTRL   = 0xC000'8000ULL;  // named stub
 static constexpr uint64_t A_TELEMETRY    = 0xC000'9000ULL;  // RTL telemetry_receiver_wrap
-static constexpr uint64_t A_UART0        = 0xC000'A000ULL;  // sim location (RTL uart @ 0x6000)
+static constexpr uint64_t A_SYSTEM_TIMER_OCTS = 0xC000'A000ULL;
+static constexpr uint64_t A_DTP_CTRL     = 0xC000'B000ULL;  // named stub
+// AOU CSRs: D1=A VP-only park (not in smc_top); window 0x80.
+static constexpr uint64_t A_AOU          = 0xC000'C000ULL;
 static constexpr uint64_t A_I3C          = 0xC003'A000ULL;  // RTL oca_i3c_wrap_0
-static constexpr uint64_t A_CPU_CTRL    = 0xC040'0000ULL;
-static constexpr uint64_t A_PVT_WRAP    = 0xC040'2000ULL;
-// smc_top.rdl: system_timer_octs @ SMC_BASE + 0x000_E000 (window 0x24 B, but
-// it owns the whole 0x1000 peripheral slot).
-static constexpr uint64_t A_SYSTEM_TIMER_OCTS = 0xC000'E000ULL;
+static constexpr uint64_t A_PLL_WRAP     = 0xC040'2000ULL;  // smc_external + 0x2000
+static constexpr uint64_t A_PVT_WRAP     = 0xC040'3000ULL;  // smc_external + 0x3000
 static constexpr uint64_t A_PERIPH_MAIN_LO = 0xC000'2000ULL;
-static constexpr uint64_t A_PERIPH_MAIN_HI = 0xC000'E800ULL;
+static constexpr uint64_t A_PERIPH_MAIN_HI = 0xC000'E800ULL;  // Phase 2 → 0xB800
 static constexpr uint64_t A_PERIPH_EXT_LO  = 0xC040'0000ULL;
 static constexpr uint64_t A_PERIPH_EXT_HI  = 0xC080'0000ULL;
+
+// Stub identity tokens at offset 0 (map-coherence / decode checks).
+static constexpr uint32_t STUB_MAGIC_GPIO      = 0x4750494Fu;
+static constexpr uint32_t STUB_MAGIC_MISC      = 0x4D495343u;
+static constexpr uint32_t STUB_MAGIC_EFUSE_MAP = 0xEF05E000u;
+static constexpr uint32_t STUB_MAGIC_EFUSE_CTL = 0xEF05E001u;
+static constexpr uint32_t STUB_MAGIC_DTP       = 0x44545000u;
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -204,14 +219,19 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // cluster-only initiators add a second bind:
     //   out[1]      -> cluster.ctrl (cluster) / stub_cluster_ctrl (no-cluster)
     //   cluster.ifetch -> stub_ifetch   (cluster only)
-    //   cluster.data    -> stub_data     (cluster only)
     idle_ctrl_init_  .bind(stub_cluster_ctrl.reg_socket);
     idle_ifetch_init_.bind(stub_ifetch.reg_socket);
     idle_data_init_   .bind(stub_data.reg_socket);
 #ifdef SMC_PLATFORM_WITH_CLUSTER
     front_port_router.out[1].bind(cluster.ctrl);
     cluster.ifetch.bind(stub_ifetch.reg_socket);
-    cluster.data   .bind(stub_data.reg_socket);
+    // cluster.data carries everything outside the [mmio_lo, mmio_hi) carve-out,
+    // which after the Phase-3 move is exactly the cluster-internal PLIC / CLINT
+    // / BEU block.  In RTL those sit on the cluster's own periphery bus and the
+    // harts never route to them through smc_input_fabric, so bind straight to
+    // the front-port router instead of back through fabric.mmio_in (whose 16 MB
+    // local-alias demux would push 0xC400_0000 / 0xC800_0000 outbound).
+    cluster.data   .bind(front_port_router.tgt);
 #else
     front_port_router.out[1].bind(stub_cluster_ctrl.reg_socket);
 #endif
@@ -269,35 +289,33 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                           beu_inject2_src_p_.get_value(),
                           beu_inject2_addr_p_.get_value());
 
-    // -- periph_router: fabric.to_periph -----------------------------------
-    // Address map aligned with smc_top.rdl for I2C / telemetry / I3C.
+    // -- periph_router: fabric.to_periph (Phase-1 RTL-aligned map) ---------
     fabric.to_periph.bind(periph_router.tgt);
     periph_router.add_route(0, A_RESET,     0x200,  "reset");
     periph_router.add_route(1, A_I2C0,      0x200,  "i2c0");
     periph_router.add_route(2, A_I2C0 + 0x200,  0x200, "i2c1");
     periph_router.add_route(3, A_I2C0 + 0x400, 0x200, "i2c2");
     periph_router.add_route(4, A_TELEMETRY, 0x300,  "telemetry");
-    periph_router.add_route(5, A_UART0,      0x1000, "uart0");
-    periph_router.add_route(6, A_UART0 + 0x1000, 0x1000, "uart1");
-    periph_router.add_route(7, A_UART0 + 0x2000, 0x1000, "uart2");
-    periph_router.add_route(8, A_UART0 + 0x3000, 0x1000, "uart3");
-    periph_router.add_route(9, A_CPU_CTRL,  0x2000, "cpu_ctrl");
+    // 16550 windows (D3=U1); wrap base / log-engine fall to catch-all.
+    for (unsigned u = 0; u < NUM_UART; ++u) {
+        periph_router.add_route(5 + u, A_UART0_16550 + u * A_UART_STRIDE,
+                                A_UART_WIN,
+                                std::string("uart") + std::to_string(u));
+    }
+    // Named stubs for unmodeled RTL slots (map-coherence identity tokens).
+    periph_router.add_route(9,  A_GPIO_INTF,  0x1000, "gpio_intf_stub");
     // i3c_controller packs NUM_I3C instances at INSTANCE_SPACING=0x500.
     periph_router.add_route(10, A_I3C, 0x1E00, "i3c");
-    // pvt_wrap: PVT wrapper at 0xC040_2000.
     periph_router.add_route(11, A_PVT_WRAP, 0x1000, "pvt_wrap");
-    // pll_wrap: PLL wrapper (pll_cntl + 2x cgm + 2x awm) at 0xC000_3000.  Its
-    // 0x1000 window shadows the periph_main_misc catch-all below (routes match
-    // smallest-window-first), so PLL accesses reach the model instead of the
-    // stub.  The router rebases the absolute window to the wrapper's 0-based
-    // composed offsets.
     periph_router.add_route(12, A_PLL_WRAP, 0x1000, "pll_wrap");
-    // AVSBus: 4 KiB window at 0xC000_8000 (shadows the periph_misc catch-all).
     periph_router.add_route(13, A_AVSBUS,   0x1000, "avsbus");
-    // AOU CSRs: 0x80 window at 0xC000_4000.
+    // AOU CSRs: D1=A VP-only park at 0xC000_C000 (window 0x80).
     periph_router.add_route(14, A_AOU,      0x80,   "aou");
-    // octs_system_timer: 4 KiB window (shadows the periph_misc catch-all).
     periph_router.add_route(15, A_SYSTEM_TIMER_OCTS, 0x1000, "octs_system_timer");
+    periph_router.add_route(17, A_MISC_WRAP,  0x800,  "misc_wrap_stub");
+    periph_router.add_route(18, A_EFUSE_MAP,  0x1000, "efuse_map_stub");
+    periph_router.add_route(19, A_EFUSE_CTRL, 0x1000, "efuse_ctrl_stub");
+    periph_router.add_route(20, A_DTP_CTRL,   0x800,  "dtp_ctrl_stub");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
     periph_router.add_route(16, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
     periph_router.add_route(16, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
@@ -322,7 +340,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[6].bind(uart_[1].reg_socket);
     periph_router.out[7].bind(uart_[2].reg_socket);
     periph_router.out[8].bind(uart_[3].reg_socket);
-    periph_router.out[9].bind(cpu_ctrl_.reg_socket);
+    // Dual periph cpu_ctrl @ 0xC040_0000 dropped; live path is cluster.ctrl
+    // @ A_CPU_CTRL_FP. Keep the modeled IP elaboratable via idle initiator.
+    idle_cpu_ctrl_init_.bind(cpu_ctrl_.reg_socket);
+    periph_router.out[9].bind(stub_gpio_intf.reg_socket);
+    stub_gpio_intf.set_reset_value(0, STUB_MAGIC_GPIO);
     periph_router.out[10].bind(i3c.reg_socket);
     periph_router.out[11].bind(pvt_wrap_.reg_socket);
     periph_router.out[12].bind(pll_wrap.reg_socket);
@@ -331,6 +353,14 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[14].bind(aou_.apb_socket);
     periph_router.out[15].bind(octs_timer.reg_socket);
     periph_router.out[16].bind(stub_periph_misc.reg_socket);
+    periph_router.out[17].bind(stub_misc_wrap.reg_socket);
+    stub_misc_wrap.set_reset_value(0, STUB_MAGIC_MISC);
+    periph_router.out[18].bind(stub_efuse_map.reg_socket);
+    stub_efuse_map.set_reset_value(0, STUB_MAGIC_EFUSE_MAP);
+    periph_router.out[19].bind(stub_efuse_ctrl.reg_socket);
+    stub_efuse_ctrl.set_reset_value(0, STUB_MAGIC_EFUSE_CTL);
+    periph_router.out[20].bind(stub_dtp_ctrl.reg_socket);
+    stub_dtp_ctrl.set_reset_value(0, STUB_MAGIC_DTP);
 
     // AOU: CSRs on the SMC periph bus; AXI hop is the D2D data path
     // (tt-oca-hw: AoU on SMU smu_axi_in/out == xbar ext_in/ext_out).
@@ -576,6 +606,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         unsigned s = 0;
         for (auto* st : stubs64) st->irq_o.bind(stub_irq_sig[s++]);
         stub_periph_misc.irq_o.bind(stub_irq_sig[s++]);
+        stub_gpio_intf.irq_o.bind(stub_irq_sig[s++]);
+        stub_misc_wrap.irq_o.bind(stub_irq_sig[s++]);
+        stub_efuse_map.irq_o.bind(stub_irq_sig[s++]);
+        stub_efuse_ctrl.irq_o.bind(stub_irq_sig[s++]);
+        stub_dtp_ctrl.irq_o.bind(stub_irq_sig[s++]);
         stub_cluster_ctrl.irq_o.bind(stub_irq_sig[s++]);
         stub_ifetch.irq_o.bind(stub_irq_sig[s++]);
         stub_data.irq_o.bind(stub_irq_sig[s++]);

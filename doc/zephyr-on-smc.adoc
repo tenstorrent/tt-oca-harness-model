@@ -70,17 +70,17 @@ Zephyr boots on **hart 0 in M-mode**; harts 1..3 stay parked in `wfi`
 |`zephyr,sram = &ram0`
 
 |UART0 (NS16550, 32-bit stride)
-|`0xC000_A000`
+|`0xC000_6100` (16550 at `uart_wrap` + `0x100`)
 |`compatible = "ns16550"`; `reg-shift = <2>`;
 `CONFIG_UART_NS16550_ACCESS_WORD_ONLY=y` (the model rejects 1-byte TLM)
 
 |PLIC
-|`0xC080_0000`, window `0x40_0000`, 336 sources, 8 contexts
+|`0xC400_0000`, window `0x40_0000`, 336 sources, 8 contexts
 |`compatible = "sifive,plic-1.0.0"`; UART0 is source **19**
 (peripheral bit 18 + 1).  Context 0 is hart 0 M-mode.
 
 |CLINT / machine timer
-|`0xC0C0_0000` (`mtime` at `+0xBFF8`, `mtimecmp[0]` at `+0x4000`)
+|`0xC800_0000` (`mtime` at `+0xBFF8`, `mtimecmp[0]` at `+0x4000`)
 |`compatible = "riscv,machine-timer"`
 
 |Scratchpad / boot ROM / other MMIO
@@ -386,7 +386,7 @@ FIFO is flushed and the terminal is restored.
 Zephyr printk / shell
         │  sw/lw  (32-bit, reg-shift=2)
         ▼
-UART0 THR @ 0xC000_A000
+UART0 THR @ 0xC000_6100
         │  drain_tx() → tx_history_
         ▼
 smc-vp uart_console SC_THREAD

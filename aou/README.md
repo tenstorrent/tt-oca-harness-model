@@ -41,7 +41,7 @@ and the link fails with `cannot find -lasan`; this matches the same gap
 a 64-bit `libasan`, to exercise `--asan` locally.
 
 Linked into `smc-vp` (`vp/platform/smc/`). Platform smoke test:
-`sw/smc-vp-tests/smc-aou-test` (`SMC_AOU_BASE = 0xC000_4000`).
+`sw/smc-vp-tests/smc-aou-test` (`SMC_AOU_BASE = 0xC000_C000`).
 
 ## Abstraction
 

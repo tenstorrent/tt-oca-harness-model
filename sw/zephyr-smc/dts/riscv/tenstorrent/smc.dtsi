@@ -48,9 +48,9 @@
 		compatible = "simple-bus";
 		ranges;
 
-		uart0: uart@c000a000 {
+		uart0: uart@c0006100 {
 			compatible = "ns16550";
-			reg = <0xc000a000 0x100>;
+			reg = <0xc0006100 0x100>;
 			reg-shift = <2>;
 			clock-frequency = <1843200>;
 			current-speed = <115200>;
@@ -59,25 +59,25 @@
 			status = "okay";
 		};
 
-		clint: clint@c0c00000 {
+		clint: clint@c8000000 {
 			compatible = "sifive,clint0";
-			reg = <0xc0c00000 0x20000>;
+			reg = <0xc8000000 0x20000>;
 			interrupts-extended = <&cpu0_intc 3 &cpu0_intc 7>;
 		};
 
-		mtimer: timer@c0c0bff8 {
+		mtimer: timer@c800bff8 {
 			compatible = "riscv,machine-timer";
 			interrupts-extended = <&cpu0_intc 7>;
-			reg = <0xc0c0bff8 0x8 0xc0c04000 0x8>;
+			reg = <0xc800bff8 0x8 0xc8004000 0x8>;
 			reg-names = "mtime", "mtimecmp";
 		};
 
-		plic: interrupt-controller@c0800000 {
+		plic: interrupt-controller@c4000000 {
 			compatible = "sifive,plic-1.0.0";
 			#address-cells = <0>;
 			#interrupt-cells = <2>;
 			interrupt-controller;
-			reg = <0xc0800000 0x400000>;
+			reg = <0xc4000000 0x400000>;
 			riscv,max-priority = <7>;
 			riscv,ndev = <336>;
 			interrupts-extended = <&cpu0_intc 11>;

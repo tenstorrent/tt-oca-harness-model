@@ -205,7 +205,7 @@ The SMC platform exports the chiplet-facing boundary where the RTL has it:
 * `output_axi` — 64-bit initiator for outbound (global-aperture) traffic.
 * `aou_axi_s` / `aou_axi_m` — local AOU AXI slave/master, re-exported so
   `smu-vp` can bind the xbar `ext_out`/`ext_in` pair. AOU CSRs sit on the
-  periph router at `0xC000_4000` (window `0x80`); `irq_o` is aggregated
+  periph router at `0xC000_C000` (window `0x80`); `irq_o` is aggregated
   into PLIC source ID 27.
 * `smc_fabric` models alias remap, the local/global aperture split
   (`GLOBAL_BASE` / `LOCAL_BASE` / `REGION_SIZE`), the inbound filter on
@@ -349,7 +349,7 @@ fidelity.
 |`aou/include/aou_core.h`
 |LT AOU: APB CSR map (`aou-core.rdl`), activate/deactivate, AXI
 `axi_s[rp]` → peer `axi_m[dest_rp]`. No FDI flit/credit/QoS timing.
-CSRs at SMC `0xC000_4000`; SEP reaches them at `0x4000_4000` through the
+CSRs at SMC `0xC000_C000`; SEP reaches them at `0x4000_C000` through the
 dedicated window. `irq_o` → intagg → PLIC source 27.
 
 |`sep_smc_global_port`
@@ -424,7 +424,7 @@ ASan / Coverage. CI: `aou` in `smc/run_all_smc_tests.sh`.
 
 |`sw/smu-vp-tests/smu-aou-ext-test`
 |SMC activates AOU, write/readback catch-all `0xA000_1000` through
-`ext_out` → AOU → peer. SEP reads AOU `ip_version` at `0x4000_4000`,
+`ext_out` → AOU → peer. SEP reads AOU `ip_version` at `0x4000_C000`,
 programs outbound filter 0, write/readback `0xA000_1008` through
 `smn_outbound` → xbar → AOU. (VP uses `0xA000_1000` because hardware's
 `0x8000_1000` sits in cluster fast-mem.)
@@ -617,7 +617,7 @@ therefore the correct fidelity until AoU/SMN RTL exists.
 * `vp/platform/smu/inc/smu_axi_xbar.h`,
   `vp/platform/smu/inc/axi_window_remap.h` — SMU interconnect models
 * `vp/platform/smu/docs/README.md` — operator guide for `smu-vp`
-* `aou/` — AOU LT model (`aou_core`); CSRs at SMC `0xC000_4000`
+* `aou/` — AOU LT model (`aou_core`); CSRs at SMC `0xC000_C000`
 * `vp/platform/smc/smc_platform.hpp`, `vp/platform/smc/src/smc_platform.cpp` —
   boundary sockets (`output_axi`, `sep_axi_in`, `aou_axi_s`/`aou_axi_m`)
 * `vp/platform/smc/main.cpp` — standalone idle / `stub_sysmem` bindings

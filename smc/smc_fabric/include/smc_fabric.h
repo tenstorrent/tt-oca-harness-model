@@ -297,20 +297,37 @@ private:
     static constexpr uint32_t FRONT_CPU_CTRL_END   = 0xC003'A000u;
     static constexpr uint32_t FRONT_SPM_BASE       = 0xC004'0000u;  // scratchpad RAM
     static constexpr uint32_t FRONT_SPM_END        = 0xC016'0000u;
-    static constexpr uint32_t FRONT_PLIC_BASE      = 0xC080'0000u;  // local alias: 4 MB
-    static constexpr uint32_t FRONT_PLIC_END       = 0xC0C0'0000u;
-    static constexpr uint32_t FRONT_CLINT_BEU_BASE = 0xC0C0'0000u;  // local alias: 128 KB
-    static constexpr uint32_t FRONT_CLINT_BEU_END  = 0xC0C2'0000u;
+    // FRONT_PORT_PLIC_{BASE,SIZE} = 0xC400_0000 / 0x400_0000 and
+    // FRONT_PORT_CLINT_BEU_{BASE,SIZE} = 0xC800_0000 / 0x2_0000.
+    //
+    // Both lie above LOCAL_ALIAS_REGION_SIZE, so internal masters (jtag / mmio /
+    // dma / log) cannot reach them through this decode -- matching RTL, where
+    // these blocks live inside the cluster on the rocket-chip periphery bus and
+    // the harts reach them directly, never via smc_input_fabric.  This decode is
+    // the path for external masters (sys / sep) arriving through the front port.
+    static constexpr uint32_t FRONT_PLIC_BASE      = 0xC400'0000u;  // 64 MB window
+    static constexpr uint32_t FRONT_PLIC_END       = 0xC800'0000u;
+    static constexpr uint32_t FRONT_CLINT_BEU_BASE = 0xC800'0000u;  // 128 KB
+    static constexpr uint32_t FRONT_CLINT_BEU_END  = 0xC802'0000u;
 
     // data_accel_ctrl (AXI4) — smc_local_xbar_pkg.sv
-    // Ends at 0xC003_A000 so the OCA I3C wraps (smc_top.rdl oca_i3c_wrap_0
-    // @ 0xC003_A000) are not swallowed by the DMA/zeroer window.
+    // DATA_ACCEL_CTRL_DMA_ZEROER_{BASE,SIZE} = 0xC003_8000 / 0x1000, so the
+    // window ends at 0xC003_9000 and no longer overlaps cpu_ctrl.
     static constexpr uint32_t DACCEL_DMA_ZEROER_BASE = 0xC003'8000u;  // DMA + zeroer ctrl
-    static constexpr uint32_t DACCEL_DMA_ZEROER_END  = 0xC003'A000u;
+    static constexpr uint32_t DACCEL_DMA_ZEROER_END  = 0xC003'9000u;
 
     // periph_reg (AXI4-Lite 32) — smc_local_xbar_pkg.sv
+    // PERIPH_REG_PERIPH_MAIN_{BASE,SIZE} = 0xC000_2000 / 0x9800.
     static constexpr uint32_t PERIPH_MAIN_BASE = 0xC000'2000u;
-    static constexpr uint32_t PERIPH_MAIN_END  = 0xC000'E800u;
+    static constexpr uint32_t PERIPH_MAIN_END  = 0xC000'B800u;
+
+    // VP-ONLY: AOU CSR park (realignment decision D1=A).  The AOU is not part
+    // of smc_top, so it has no RTL slot; it is parked in the gap just above
+    // dfx_ctrl and routed to the peripheral port.  This window is the single
+    // deliberate deviation from smc_local_xbar_pkg.sv — every other range in
+    // this file is the RTL value.  Remove it if the AOU ever gains a real slot.
+    static constexpr uint32_t AOU_PARK_BASE = 0xC000'C000u;
+    static constexpr uint32_t AOU_PARK_END  = 0xC000'D000u;
     static constexpr uint32_t PERIPH_EXT_BASE  = 0xC040'0000u;
     static constexpr uint32_t PERIPH_EXT_END   = 0xC080'0000u;
     // OCA I3C wraps live above the DMA window (smc_top.rdl); routed to
@@ -323,8 +340,10 @@ private:
     static constexpr uint32_t DFD_REGS_END  = 0xC026'0000u;
 
     // local_reg → internal AXI-Lite sub-crossbar — smc_internal_axi_lite_xbar_pkg.sv
-    static constexpr uint32_t DFT_CSR_BASE   = 0xC000'F800u;
-    static constexpr uint32_t DFT_CSR_END    = 0xC001'0000u;
+    // DFX_CSR_DFX_CSR_{BASE,SIZE} = 0xC000_B800 / 0x800 (also LOCAL_REG_DFX_CTRL
+    // in smc_local_xbar_pkg.sv).  Decoded ahead of PERIPH_MAIN in route_local().
+    static constexpr uint32_t DFT_CSR_BASE   = 0xC000'B800u;
+    static constexpr uint32_t DFT_CSR_END    = 0xC000'C000u;
     static constexpr uint32_t SMC_BASE_CONFIG_BASE = 0xC001'0000u;
     static constexpr uint32_t SMC_BASE_CONFIG_END  = 0xC001'2000u;
     static constexpr uint32_t AR_CTRL_BASE   = 0xC001'2000u;  // alias remap CSRs

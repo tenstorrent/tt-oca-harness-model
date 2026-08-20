@@ -5,7 +5,7 @@
  *
  * Register-accurate functional model of the single-target AVSBus 1.3.1
  * controller used by the SMC (`hw/ip/avsbus_controller`).  Mapped at
- * `0xC000_8000` (4 KiB window); interrupt feeds peripheral bit 22 / PLIC
+ * `0xC000_4000` (4 KiB window); interrupt feeds peripheral bit 22 / PLIC
  * source 23 in the VP (`src_in[22]` → source ID = bit + 1).
  *
  * Authoritative references
@@ -159,7 +159,7 @@ struct avsbus_controller_cfg {
     unsigned command_fifo_depth  = 8;
     unsigned readback_fifo_depth = 8;
 
-    /// SMC allocates 4 KiB (`0xC000_8000`); used footprint is `0x00..0x5B`.
+    /// SMC allocates 4 KiB (`0xC000_4000`); used footprint is `0x00..0x5B`.
     static constexpr uint64_t WINDOW_SIZE = 0x1000;
     static constexpr unsigned REG_WIDTH   = 4;
 

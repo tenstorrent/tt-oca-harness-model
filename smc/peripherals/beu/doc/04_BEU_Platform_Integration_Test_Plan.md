@@ -36,7 +36,9 @@ regression once they are reachable from the platform).
 | Firmware test `sw/smc-vp-tests/smc-beu-test/` | **Missing** |
 | CI `smc-vp` job picks up new `smc-*` dirs automatically | Yes (directory discovery) — once the test dir exists |
 
-Evidence on `main` today:
+Evidence on `main` at the time this plan was written (historical baseline —
+the BEU is now integrated, and the Phase-3 realignment moved it to
+`0xC801_0000`, so the excerpts below no longer match the tree):
 
 - Platform still instantiates a stub:
 
@@ -81,14 +83,19 @@ reads return 0 — any firmware check of `ENABLE` reset (`0xE6`) will fail.
 
 ## 3. Address-map note (do not get confused)
 
-Two address views exist; both are intentional:
+There is now a single address view. The Phase-3 realignment removed the old
+`0xC0C1_0000` platform alias, so firmware and RTL agree:
 
 | View | Base | Notes |
 |------|------|--------|
-| **HW / RDL / memmap** | `0xC801_0000 + N×0x1000` | Per-core 4 KiB window (N = 0..3) |
-| **Platform local alias** (what firmware uses) | `0xC0C1_0000 + N×0x1000` | Same layout, remapped into the cluster MMIO alias aperture `[0xC000_0000, 0xC100_0000)` |
+| **HW / RDL / memmap and platform** | `0xC801_0000 + N×0x1000` | Per-core 4 KiB window (N = 0..3) |
 
-Firmware and `smc_common.h` must keep using **`SMC_BEU_BASE = 0xC0C10000`**.  
+This sits above the fabric's 16 MB local-alias aperture
+`[0xC000_0000, 0xC100_0000)` on purpose: the BEUs are cluster-internal, so the
+harts reach them straight off `cluster.data` → `front_port_router` rather than
+through `fabric.mmio_in`.
+
+Firmware and `smc_common.h` use **`SMC_BEU_BASE = 0xC8010000`**.  
 The model’s per-instance window size remains `0x1000`; the platform currently
 routes a **64 KiB** blob (`0x10000`) to one stub — that must become **four**
 `smc::beu` instances (or an `addr_router` with four outputs).
@@ -126,7 +133,7 @@ Files to touch:
 | `smc/doc/systemc_tlm2_integration_guide.adoc` | Update “Stub/model needed” → real model |
 | `vp/platform/smc/inc/stub_target.h` comment | Remove BEU from “unmodeled” list |
 
-**Routing detail:** today one route covers `0xC0C1_0000` size `0x10000`. Prefer:
+**Routing detail:** the original single route covered size `0x10000`. Prefer:
 
 - expand `front_port_router` outputs, **or**
 - insert a small `addr_router<64,64>` behind out[6] with 4 child routes of size `0x1000`.
@@ -233,7 +240,7 @@ sw/smc-vp-tests/smc-beu-test/
 #### E.2 Add register helpers to `smc_common.h`
 
 ```c
-/* Per-core BEU (local alias). N = 0..3 */
+/* Per-core BEU. N = 0..3 */
 #define SMC_BEU_BASE_N(n)   (SMC_BEU_BASE + 0x1000ULL * (n))
 
 #define BEU_CAUSE           0x00u
@@ -345,7 +352,7 @@ Estimate guidance (rough):
 ## 7. Checklist (copy into the PR)
 
 - [x] `smc_beu` linked into `smc-vp`
-- [x] `stub_beu` removed; 4 per-core windows at `0xC0C1_0000 + N*0x1000`
+- [x] `stub_beu` removed; 4 per-core windows at `0xC801_0000 + N*0x1000`
 - [x] `rst_n_i` bound on each BEU
 - [x] `smc_common.h` BEU offsets + 64-bit helpers + `beu_src` bit-position macros
 - [x] `sw/smc-vp-tests/smc-beu-test/` with Makefile + `main.c` (E1 register smoke)
