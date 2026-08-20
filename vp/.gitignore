@@ -3,3 +3,4 @@ build_17
 build_20
 build_smc
 compile_commands.json
+build-*/

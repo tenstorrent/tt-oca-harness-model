@@ -615,11 +615,11 @@ with the VP in mind. That directory's own README covers the layout, what
 sudo apt install gcc-riscv64-unknown-elf
 ```
 
-**RHEL / TT internal machines:**
+**Site / module-managed installs:**
 ```bash
-module load riscv-gnu-toolchain/2025.01.20-rhel-8.10
+module load riscv-gnu-toolchain/<version>
 # or:
-export RISCV_TOOLCHAIN_PATH=/tools_soc/opensrc/riscv-gnu-toolchain/2025.01.20-rhel-8.10
+export RISCV_TOOLCHAIN_PATH=/path/to/riscv-gnu-toolchain
 ```
 
 The scripts probe `PATH` for the toolchain themselves (`riscv64-unknown-elf-`,
