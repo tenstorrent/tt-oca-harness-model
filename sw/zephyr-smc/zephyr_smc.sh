@@ -112,6 +112,8 @@ cmd_setup() {
         filter="$(echo "$ZEPHYR_WEST_PROJECT_FILTER" | tr -d '[:space:]')"
         log "west project-filter: $filter"
         (cd "$WS" && "$west" config manifest.project-filter -- "$filter")
+    else
+        (cd "$WS" && "$west" config --delete manifest.project-filter 2>/dev/null || true)
     fi
     if [[ "${ZEPHYR_SKIP_UPDATE:-}" == "1" && -d "$WS/zephyr" ]]; then
         log "ZEPHYR_SKIP_UPDATE=1; skipping west update"
