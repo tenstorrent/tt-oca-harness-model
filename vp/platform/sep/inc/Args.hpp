@@ -58,10 +58,10 @@ class BasicOptions : public Args {
 
         addr_t aon_timer_start_addr   = 0x10801000;  // WDT_TIMER_REG base
         addr_t aon_timer_end_addr     = 0x10801037;  // WDT_TIMER_REG size 0x38
+        // The mailbox is the key manager's only SEP-visible window. The KPV sits
+        // behind the KM CPU's private crossbar, so 0x10921000 is unmapped.
         addr_t keymgr_mb_start_addr    = 0x10920000;
         addr_t keymgr_mb_end_addr      = 0x1092001B;  // KM_MAILBOX_SEP size 0x1C
-        addr_t keymgr_kpvlp_start_addr = 0x10921000;  // KM_KPV_KPVLP base
-        addr_t keymgr_kpvlp_end_addr   = 0x10921FFF;  // KM_KPV_KPVLP 4K block
         // sep_efuse window: shadow map + EFUSE_INTERFACE_CTRL + EFUSE_MMR. Ends at
         // 0x1093056F, the same boundary efuse_interface_controller.sv decodes onto its
         // internal APB path ([EFUSE_MAP_REG_MAP_BASE_ADDR:EFUSE_MMR_REG_MAP_END_ADDR]);

@@ -1,14 +1,19 @@
 /**
  * @file key_manager_func007_test.cpp
- * @brief CMD_KEY_GENERATE — KM-internal key derivation via HMAC-SHA256 KDF
+ * @brief CMD_KEY_GENERATE — KM-internal key provisioning from the DRBG
+ *
+ * KEY_SIZE is a word count minus one, not a slot count: the firmware draws
+ * KEY_SIZE+1 words from the DRBG and hands them to the same loader CMD_KEY_LOAD
+ * uses, which places them across as many slots as they need.
  *
  * Tests covered:
- *   007a - CMD_KEY_GENERATE(1 slot, DEST_HMAC) → RET_SUCCESS;
+ *   007a - CMD_KEY_GENERATE(1 word, DEST_HMAC) → RET_SUCCESS;
  *          ret_arg = key_handle [7:0], req_size [14:8], dest_valid [23:16]
  *   007b - A subsequent CMD_KEY_TRANSFER to HMAC delivers non-zero key material
  *          to the HMAC recording stub
- *   007c - Requesting more slots than available → RET_FAILURE
- *   007d - CMD_KEY_GENERATE with too-short payload → RET_INVALID_LEN
+ *   007c - Requesting keys until the vault cannot fit another → RET_FAILURE
+ *   007d - CMD_KEY_GENERATE with the wrong payload length → RET_INVALID_LEN
+ *   007e - DEST_VALID of zero → RET_INVALID_ARG naming payload word 1
  */
 
 #include "testbench.h"
@@ -50,8 +55,8 @@ int key_manager_func007_test(key_manager_test* test, key_manager_model* /*dut*/,
     const uint8_t DEST_HMAC   = keymgr_tt::km_firmware_handler::DEST_HMAC;
 
     // ------------------------------------------------------------------
-    // 007a: CMD_KEY_GENERATE(1 slot, DEST_HMAC) → RET_SUCCESS
-    //   Payload: [0]=req_size-1(=0 for 1 word/slot) | [1]=DEST_VALID (2 words)
+    // 007a: CMD_KEY_GENERATE(1 word, DEST_HMAC) → RET_SUCCESS
+    //   Payload: [0]=KEY_SIZE (words-1, so 0 asks for one word) | [1]=DEST_VALID
     // ------------------------------------------------------------------
     test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_GENERATE,
                           {0u, static_cast<uint32_t>(DEST_HMAC)});
@@ -68,7 +73,7 @@ int key_manager_func007_test(key_manager_test* test, key_manager_model* /*dut*/,
     uint32_t gen_reqsize = (ret_arg >> 8)  & 0x7Fu;
     uint32_t gen_dest    = (ret_arg >> 16) & 0xFFu;
     CHECK(gen_handle >= 1u && gen_handle <= 255u, "007a: ret_arg key_handle in [1..255]");
-    CHECK_EQ(gen_reqsize, 1u,                    "007a: ret_arg req_size = 1 (1 word/slot request echoed)");
+    CHECK_EQ(gen_reqsize, 0u,                    "007a: ret_arg req_size echoes the wire KEY_SIZE (0 = one word)");
     CHECK_EQ(gen_dest, (uint32_t)DEST_HMAC,      "007a: ret_arg DEST_VALID = DEST_HMAC");
     std::cout << "[INFO] 007a: generated key handle " << gen_handle << "\n";
 
@@ -107,13 +112,14 @@ int key_manager_func007_test(key_manager_test* test, key_manager_model* /*dut*/,
     CHECK(has_nonzero, "007b: reconstructed key material (SHARE0 XOR SHARE1) is non-zero");
 
     // ------------------------------------------------------------------
-    // 007c: Exhaust all remaining slots; next CMD_KEY_GENERATE → RET_FAILURE
+    // 007c: Keep asking for the widest key until the vault cannot fit one.
+    //   KEY_SIZE=127 is a 128-word key, which occupies eight consecutive slots,
+    //   so the 32-slot vault runs out within a handful of requests.
     // ------------------------------------------------------------------
     bool got_failure = false;
     for (int attempt = 0; attempt < 10; attempt++) {
-        // Request 8 slots each time (req_size-1=7 → 8 words/slot request)
         test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_GENERATE,
-                              {7u, static_cast<uint32_t>(DEST_HMAC)});
+                              {127u, static_cast<uint32_t>(DEST_HMAC)});
         got = test->mb_receive_frame(frame);
         parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
                                                  ret_code, ret_arg);
@@ -122,19 +128,34 @@ int key_manager_func007_test(key_manager_test* test, key_manager_model* /*dut*/,
             break;
         }
     }
-    CHECK(got_failure, "007c: CMD_KEY_GENERATE returns RET_FAILURE when no free slots");
+    CHECK(got_failure, "007c: CMD_KEY_GENERATE returns RET_FAILURE when no slot run fits");
 
     // ------------------------------------------------------------------
-    // 007d: Too-short payload (need 2 words, send 1) → RET_INVALID_LEN
+    // 007d: Wrong payload length → RET_INVALID_LEN, with the length received
+    //   echoed back as the return argument.
     // ------------------------------------------------------------------
     test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_GENERATE,
-                          {0u});  // only 1 word (need 2)
+                          {0u});  // only 1 word (need exactly 2)
     got = test->mb_receive_frame(frame);
     CHECK(got, "007d: short payload response received");
     parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
                                              ret_code, ret_arg);
     CHECK(parsed,          "007d: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -5, "007d: too-short payload → RET_INVALID_LEN (-5)");
+    CHECK_EQ(ret_code, -5, "007d: wrong payload length → RET_INVALID_LEN (-5)");
+    CHECK_EQ(ret_arg,  1u, "007d: ret_arg echoes the payload length received");
+
+    // ------------------------------------------------------------------
+    // 007e: A key with no permitted destination is rejected before generation.
+    // ------------------------------------------------------------------
+    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_GENERATE,
+                          {0u, 0u});
+    got = test->mb_receive_frame(frame);
+    CHECK(got, "007e: zero DEST_VALID response received");
+    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
+                                             ret_code, ret_arg);
+    CHECK(parsed,          "007e: response parses as RESP_CMD");
+    CHECK_EQ(ret_code, -7, "007e: DEST_VALID of zero → RET_INVALID_ARG (-7)");
+    CHECK_EQ(ret_arg,  1u, "007e: ret_arg names payload word 1");
 
     std::cout << "\n--- FUNC007 complete: " << failures << " failure(s) ---\n\n";
     return failures;

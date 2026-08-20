@@ -8,7 +8,7 @@
  *   Inbound  (SEP → KM)  : SEP writes words via MB_WDATA; KM firmware reads them
  *   Outbound (KM → SEP)  : KM firmware writes words; SEP reads via MB_RDATA
  *
- * Message framing (from KeyManager.md / mailbox diagram 2026-03-04):
+ * Message framing (see docs/01_key_manager_Specification/doc/architecture.adoc):
  *   - Each word is tagged with a separator flag (bit 31 of MB_WDATA/MB_RDATA)
  *   - When SEP or KM sets separator=1 on the last word of a message, the
  *     receiver is notified that a complete message is available.

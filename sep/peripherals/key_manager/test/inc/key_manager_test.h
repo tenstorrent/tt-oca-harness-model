@@ -92,6 +92,22 @@ public:
     /// Useful for injecting deliberately malformed frames in framing tests.
     void mb_send_raw_frame(const std::vector<uint32_t>& frame_words);
 
+    /// Provision a plaintext key through CMD_KEY_LOAD, the mailbox-only path that
+    /// replaced KPVLP. Sends the command, collects the response, and reports the
+    /// allocated handle.
+    ///   seq        — sequence counter; incremented once on use
+    ///   key_words  — plaintext key, 1..12 words
+    ///   dest_valid — permitted sideload destination bitmask
+    ///   handle_out — receives the KPV handle when the command succeeds
+    /// Returns the command return code, or RET_FAILURE (-1) if no response came back.
+    int32_t mb_load_key(uint8_t& seq, const std::vector<uint32_t>& key_words,
+                        uint8_t dest_valid, uint8_t& handle_out);
+
+    /// Block until the inbound FIFO has room for another word, as SEP firmware
+    /// does before each write. Returns early on timeout so a stuck KM shows up as
+    /// a failed command rather than a hung test.
+    void mb_wait_inbound_space(unsigned int timeout_ns = 2000);
+
     /// Read one complete response frame from the outbound mailbox.
     ///   Polls MB_IRQS bit[0] (OUTBOUND_DATA_AVAIL) up to timeout_ns (1 ns steps).
     ///   Returns true and fills frame_words on success; false on timeout.

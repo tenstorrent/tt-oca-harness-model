@@ -1,9 +1,9 @@
 /**
  * @file key_manager_func011_test.cpp
- * @brief Full key lifecycle — register → transfer → revoke chained flows
+ * @brief Full key lifecycle — load → transfer → revoke chained flows
  *
  * Tests covered:
- *   011a - Register key, transfer to HMAC, revoke; verify slot non-valid after revoke
+ *   011a - Load key, transfer to HMAC, revoke; verify handle unusable after revoke
  *   011b - CMD_KEY_GENERATE, transfer to AES, then engine shred; verify shred
  *          delivers non-zero (random) data after the key transfer had non-zero data
  *   011c - Multi-command sequence stays in sync (seq counter continuity)
@@ -63,37 +63,23 @@ int key_manager_func011_test(key_manager_test* test, key_manager_model* /*dut*/,
     const uint8_t LAST_DWORD = 7;
 
     // ------------------------------------------------------------------
-    // 011a: Register → Transfer → Revoke
-    //   1. Request 1 slot
-    //   2. Write key words, write CTRL, CMD_KEY_REGISTER
-    //   3. CMD_KEY_TRANSFER to HMAC → verify non-zero delivery
-    //   4. CMD_KEY_REVOKE → verify success
-    //   5. CMD_KEY_REVOKE again → verify RET_FAILURE (slot non-valid)
+    // 011a: Load → Transfer → Revoke
+    //   1. CMD_KEY_LOAD with a known key
+    //   2. CMD_KEY_TRANSFER to HMAC → verify non-zero delivery
+    //   3. CMD_KEY_REVOKE → verify success
+    //   4. CMD_KEY_REVOKE again → verify RET_FAILURE (handle freed)
     // ------------------------------------------------------------------
     uint32_t ret_arg = 0;
     int32_t  rc;
 
-    rc = send_receive(test, seq, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ,
-                      {0u}, &ret_arg);
-    CHECK(rc == 0, "011a: slot request success");
-    uint32_t slot_a = ret_arg & 0x1Fu;
-
     std::vector<uint32_t> key_a;
-    for (uint32_t w = 0; w <= LAST_DWORD; w++) {
+    for (uint32_t w = 0; w <= LAST_DWORD; w++)
         key_a.push_back(0xF1E20000u | w);
-        test->register_write_32(key_manager_basetest::kpvlp_key_offset(slot_a, w), key_a.back());
-    }
-    uint32_t ctrl_a = (static_cast<uint32_t>(DEST_HMAC) << 9)
-                    | (static_cast<uint32_t>(LAST_DWORD) << 17);
-    test->register_write_32(key_manager_basetest::kpvlp_ctrl_offset(slot_a), ctrl_a);
-    uint32_t crc_a = key_manager_test::crc32_payload(key_a.data(), key_a.size());
 
-    rc = send_receive(test, seq, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER,
-                      {slot_a, static_cast<uint32_t>(LAST_DWORD),
-                       static_cast<uint32_t>(DEST_HMAC), crc_a},
-                      &ret_arg);
-    CHECK(rc == 0, "011a: CMD_KEY_REGISTER success");
-    uint32_t handle_a = ret_arg & 0xFFu;
+    uint8_t loaded_a = 0;
+    rc = test->mb_load_key(seq, key_a, DEST_HMAC, loaded_a);
+    CHECK(rc == 0, "011a: CMD_KEY_LOAD success");
+    uint32_t handle_a = loaded_a;
 
     tb->hmac_stub.clear();
     rc = send_receive(test, seq, keymgr_tt::km_firmware_handler::CMD_KEY_TRANSFER,

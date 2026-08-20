@@ -1,4 +1,5 @@
 #include "key_manager_test.h"
+#include "km_firmware_handler.h"
 
 key_manager_test::key_manager_test(sc_module_name name)
   : key_manager_basetest(name),
@@ -19,15 +20,11 @@ void key_manager_test::initialize_signals()
 
 void key_manager_test::register_read_32(unsigned int offset, uint32_t &value)
 {
-    // Offsets >= KPVLP_KEY_BASE (0x1000) go to kpvlp_socket; strip the 0x1000 base.
-    bool is_kpvlp = (offset >= static_cast<unsigned int>(KPVLP_KEY_BASE));
-    unsigned int socket_offset = is_kpvlp ? (offset - KPVLP_KEY_BASE) : offset;
-
     tlm::tlm_generic_payload trans;
     sc_time delay = SC_ZERO_TIME;
 
     trans.set_command        (tlm::TLM_READ_COMMAND);
-    trans.set_address        (socket_offset);
+    trans.set_address        (offset);
     trans.set_data_ptr       (reinterpret_cast<unsigned char*>(&value));
     trans.set_data_length    (4);
     trans.set_streaming_width(4);
@@ -35,8 +32,7 @@ void key_manager_test::register_read_32(unsigned int offset, uint32_t &value)
     trans.set_dmi_allowed    (false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-    if (is_kpvlp) kpvlp_initiator_socket->b_transport(trans, delay);
-    else          initiator_socket->b_transport(trans, delay);
+    initiator_socket->b_transport(trans, delay);
 
     if (trans.get_response_status() != tlm::TLM_OK_RESPONSE)
         CSML_WARN(1, logger) << "register_read_32: bad response at offset 0x" << std::hex << offset;
@@ -44,14 +40,11 @@ void key_manager_test::register_read_32(unsigned int offset, uint32_t &value)
 
 void key_manager_test::register_write_32(unsigned int offset, uint32_t value)
 {
-    bool is_kpvlp = (offset >= static_cast<unsigned int>(KPVLP_KEY_BASE));
-    unsigned int socket_offset = is_kpvlp ? (offset - KPVLP_KEY_BASE) : offset;
-
     tlm::tlm_generic_payload trans;
     sc_time delay = SC_ZERO_TIME;
 
     trans.set_command        (tlm::TLM_WRITE_COMMAND);
-    trans.set_address        (socket_offset);
+    trans.set_address        (offset);
     trans.set_data_ptr       (reinterpret_cast<unsigned char*>(&value));
     trans.set_data_length    (4);
     trans.set_streaming_width(4);
@@ -59,8 +52,7 @@ void key_manager_test::register_write_32(unsigned int offset, uint32_t value)
     trans.set_dmi_allowed    (false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-    if (is_kpvlp) kpvlp_initiator_socket->b_transport(trans, delay);
-    else          initiator_socket->b_transport(trans, delay);
+    initiator_socket->b_transport(trans, delay);
 
     if (trans.get_response_status() != tlm::TLM_OK_RESPONSE)
         CSML_WARN(1, logger) << "register_write_32: bad response at offset 0x" << std::hex << offset;
@@ -76,6 +68,39 @@ void key_manager_test::trigger_reset(unsigned int cycles)
     // MB_CTRL bit[2] = FLUSH: calls sep_flush() (clears both FIFOs)
     // then update_level_irq_bits() → MB_IRQS = 0x2 (bit[1]=INBOUND_WRITE_SPACE_AVAIL).
     register_write_32(MB_CTRL_OFFSET, 0x4u);
+}
+
+// =============================================================================
+// Key provisioning helper
+// =============================================================================
+
+int32_t key_manager_test::mb_load_key(uint8_t& seq,
+                                      const std::vector<uint32_t>& key_words,
+                                      uint8_t dest_valid, uint8_t& handle_out)
+{
+    handle_out = 0;
+    if (key_words.empty()) return -1;
+
+    // Payload: [KEY_SIZE (words-1), DEST_VALID, key words...]
+    std::vector<uint32_t> payload;
+    payload.reserve(key_words.size() + 2);
+    payload.push_back(static_cast<uint32_t>(key_words.size() - 1));
+    payload.push_back(static_cast<uint32_t>(dest_valid));
+    payload.insert(payload.end(), key_words.begin(), key_words.end());
+
+    mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_LOAD, payload);
+
+    std::vector<uint32_t> frame;
+    if (!mb_receive_frame(frame)) return -1;
+
+    uint8_t  resp_id = 0, src_seq = 0, echoed_cmd = 0;
+    int32_t  ret_code = 0;
+    uint32_t ret_arg  = 0;
+    if (!parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg))
+        return -1;
+
+    if (ret_code == 0) handle_out = static_cast<uint8_t>(ret_arg & 0xFFu);
+    return ret_code;
 }
 
 // =============================================================================
@@ -119,6 +144,19 @@ uint32_t key_manager_test::crc32_payload(const uint32_t* words, size_t count)
 // Mailbox helpers
 // =============================================================================
 
+void key_manager_test::mb_wait_inbound_space(unsigned int timeout_ns)
+{
+    // MB_STATUS bit[1] is INBOUND_FULL. Real SEP firmware checks for room before
+    // each write rather than assuming the FIFO can take a whole message, which is
+    // what lets a frame longer than the FIFO be sent in instalments.
+    uint32_t status = 0;
+    for (unsigned int elapsed = 0; elapsed < timeout_ns; elapsed++) {
+        register_read_32(MB_STATUS_OFFSET, status);
+        if (!(status & 0x2u)) return;
+        wait(1, SC_NS);   // let the KM drain what it already has
+    }
+}
+
 void key_manager_test::mb_send_command(uint8_t seq, uint8_t cmd_id,
                                      const std::vector<uint32_t>& payload)
 {
@@ -130,16 +168,21 @@ void key_manager_test::mb_send_command(uint8_t seq, uint8_t cmd_id,
 
     if (payload.empty()) {
         // No payload: header is the only word; tag it as separator.
+        mb_wait_inbound_space();
         register_write_32(MB_WSEP_OFFSET, 1u);
         register_write_32(MB_WDATA_OFFSET, header);
     } else {
         uint32_t crc32_val = crc32_payload(payload.data(), payload.size());
 
+        mb_wait_inbound_space();
         register_write_32(MB_WDATA_OFFSET, header);
-        for (const uint32_t w : payload)
+        for (const uint32_t w : payload) {
+            mb_wait_inbound_space();
             register_write_32(MB_WDATA_OFFSET, w);
+        }
 
         // CRC32 word is the last — tag it as separator.
+        mb_wait_inbound_space();
         register_write_32(MB_WSEP_OFFSET, 1u);
         register_write_32(MB_WDATA_OFFSET, crc32_val);
     }
