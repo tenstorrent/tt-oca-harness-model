@@ -3,7 +3,7 @@
  * @brief CMD_KEY_REVOKE — force-shred a KPV slot chain
  *
  * Tests covered:
- *   009a - Register key, CMD_KEY_REVOKE → RET_SUCCESS; ret_arg = key handle
+ *   009a - Load a key, CMD_KEY_REVOKE → RET_SUCCESS; ret_arg = key handle
  *   009b - CMD_KEY_REVOKE on already-revoked (non-valid) slot → RET_FAILURE
  *   009c - CMD_KEY_REVOKE with too-short payload → RET_INVALID_LEN
  */
@@ -44,33 +44,17 @@ int key_manager_func009_test(key_manager_test* test, key_manager_model* /*dut*/,
     const uint8_t DEST_HMAC  = keymgr_tt::km_firmware_handler::DEST_HMAC;
     const uint8_t LAST_DWORD = 7;
 
-    // Grant and register a key
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {0u});
-    bool got = test->mb_receive_frame(frame);
-    bool parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                                  ret_code, ret_arg);
-    (void)got; (void)parsed;
-    uint32_t slot = ret_arg & 0x1Fu;
-
-    // Write 8 key words
+    // Provision a key through the mailbox
     std::vector<uint32_t> key_words;
-    for (uint32_t w = 0; w <= LAST_DWORD; w++) {
+    for (uint32_t w = 0; w <= LAST_DWORD; w++)
         key_words.push_back(0xC0DE0000u | w);
-        test->register_write_32(key_manager_basetest::kpvlp_key_offset(slot, w), key_words.back());
-    }
-    uint32_t ctrl_word = (static_cast<uint32_t>(DEST_HMAC) << 9)
-                       | (static_cast<uint32_t>(LAST_DWORD) << 17);
-    test->register_write_32(key_manager_basetest::kpvlp_ctrl_offset(slot), ctrl_word);
-    uint32_t key_crc = key_manager_test::crc32_payload(key_words.data(), key_words.size());
 
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER,
-                          {slot, static_cast<uint32_t>(LAST_DWORD),
-                           static_cast<uint32_t>(DEST_HMAC), key_crc});
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                             ret_code, ret_arg);
-    CHECK(parsed && ret_code == 0, "009-setup: key registered");
-    uint32_t handle = ret_arg & 0xFFu;
+    uint8_t loaded_handle = 0;
+    ret_code = test->mb_load_key(seq, key_words, DEST_HMAC, loaded_handle);
+    CHECK(ret_code == 0, "009-setup: key loaded");
+    uint32_t handle = loaded_handle;
+
+    bool got = false, parsed = false;
 
     // ------------------------------------------------------------------
     // 009a: CMD_KEY_REVOKE → RET_SUCCESS; ret_arg = key handle

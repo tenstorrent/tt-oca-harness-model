@@ -2,16 +2,17 @@
  * @file key_manager_register.h
  * @brief Key Manager TT - SEP-host-accessible register definitions (CSML format)
  *
- * Only registers visible to the SEP host processor are defined here:
- *   1. Mailbox SEP-side registers  (MB_*)    - SEP sends commands / receives responses
- *   2. KPVLP registers             (KPVLP_*) - SEP provisions keys into KPV slots
+ * The mailbox is the only KM block the SEP host can address: a single 4 KB
+ * window holding the seven SEP-side mailbox registers (MB_*). Key provisioning
+ * goes through mailbox commands (CMD_KEY_LOAD), not a register window.
  *
  * KM-internal registers (KPV, KMCSR, DRBG, OTP, crypto engine key storage)
- * are NOT modelled here — they are abstracted inside km_firmware_handler.
+ * sit behind the KM CPU's private AXI-Lite crossbar and are unreachable from
+ * SEP, so they are abstracted inside km_firmware_handler rather than modelled
+ * as TLM-visible registers.
  *
  * Register offsets confirmed from km_mailbox_sep_regs.h (auto-generated from
- * km_mailbox_sep.rdl). KPVLP offsets confirmed from km_kpv_kpvlp_regs.h.
- * Base address deferred to VP integration time.
+ * km_mailbox_sep.rdl). Base address deferred to VP integration time.
  */
 
 #pragma once
@@ -31,24 +32,6 @@ static constexpr unsigned int MB_STATUS_OFFSET   = 0x0C; ///< SEP_STATUS
 static constexpr unsigned int MB_IRQS_OFFSET     = 0x10; ///< SEP_IRQ_STATUS
 static constexpr unsigned int MB_IRQEN_OFFSET    = 0x14; ///< SEP_IRQ_ENABLE
 static constexpr unsigned int MB_CTRL_OFFSET     = 0x18; ///< SEP_CTRL
-
-// ============================================================================
-// KPVLP register offsets  (confirmed from km_kpv_kpvlp_regs.h)
-//   Key data  : slot n, word w  ->  KPVLP_KEY_OFFSET(n, w)
-//   Control   : slot n          ->  KPVLP_CTRL_OFFSET(n)
-//   Status    : single register ->  KPVLP_STATUS_OFFSET
-// ============================================================================
-static constexpr unsigned int KPVLP_KEY_WORDS_PER_SLOT = 16; // 512 bits / 32
-static constexpr unsigned int KPVLP_NUM_SLOTS          = 32;
-
-inline constexpr unsigned int KPVLP_KEY_OFFSET(unsigned int slot, unsigned int word) {
-    return 0x000 + slot * (KPVLP_KEY_WORDS_PER_SLOT * 4) + word * 4;
-}
-inline constexpr unsigned int KPVLP_CTRL_OFFSET(unsigned int slot) {
-    return 0x800 + slot * 4;
-}
-static constexpr unsigned int KPVLP_STATUS_OFFSET = 0x880;
-
 
 // ============================================================================
 // MAILBOX REGISTERS  (offsets confirmed from km_mailbox_sep_regs.h)
@@ -395,149 +378,5 @@ public:
     csml_bitfield<N> reserved0;              ///< [31:3]
 };
 
-
-// ============================================================================
-// KPVLP REGISTERS
-// ============================================================================
-
-/**
- * KPVLP_KEY_type — KPVLP Key Data Word
- *
- * Write-only. SEP writes key material for one 32-bit word of a KPV slot.
- * 32 slots × 16 words each = 512 instances.
- * Access conditioned on: unlock_sep=1 AND lock_write=0 for the target slot.
- *
- * Access : Write-Only (reads return 0 — key material must never be readable by SEP)
- * Reset  : 0x00000000
- */
-template<unsigned int N>
-class KPVLP_KEY_type : public csml_reg<N>
-{
-public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
-
-    // read_mask=0x0 (WO, key data must not be readable), write_mask=0xFFFFFFFF, reset=0x0
-    KPVLP_KEY_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x0, 0xFFFFFFFF, 0x0),
-        VAL(reg_name + ".VAL", *this, 0, 32)
-    {
-        this->set_read_write_restrictions(memory);
-    }
-
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-
-    csml_bitfield<N> VAL; ///< [31:0] 32-bit key data word
-};
-
-/**
- * KPVLP_CTRL_type — KPVLP Slot Control Register
- *
- * Write-only. SEP sets policy fields for a KPV key slot via KPVLP.
- * One per slot (32 instances). Writable fields are a subset of the full
- * KPV slot control register (KM CPU-side has broader access).
- *
- * Access : Write-Only for SEP (reads return 0)
- * Reset  : 0x00000000
- *
- * Bit layout matches KPV slot control register (KeyManager.md):
- *   [3:0]   reserved  (lock_write, lock_use, unlock_sep, clear — KM CPU only)
- *   [6:4]   EXTEND    — zero-indexed consecutive-slot count for wide keys
- *   [8:7]   reserved
- *   [16:9]  DEST_VALID — bitmask: HMAC[9] KMAC[10] AES[11] OTBN[12] rsvd[16:13]
- *   [20:17] LAST_DWORD — last valid key word index [1..15]
- *   [31:21] reserved
- */
-template<unsigned int N>
-class KPVLP_CTRL_type : public csml_reg<N>
-{
-public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
-
-    // SEP-writable bits: EXTEND[6:4]=0x70, DEST_VALID[16:9]=0x1FE00, LAST_DWORD[20:17]=0x1E0000
-    // write_mask = 0x70 | 0x1FE00 | 0x1E0000 = 0x1FFE70
-    // read_mask  = 0x0  (write-only from SEP side)
-    KPVLP_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x0, 0x1FFE70, 0x0),
-        reserved0  (reg_name + ".reserved0",   *this,  0,  4),  // [3:0]  KM-CPU-only bits
-        EXTEND     (reg_name + ".EXTEND",       *this,  4,  3),  // [6:4]
-        reserved1  (reg_name + ".reserved1",    *this,  7,  2),  // [8:7]
-        DEST_VALID (reg_name + ".DEST_VALID",   *this,  9,  8),  // [16:9]
-        LAST_DWORD (reg_name + ".LAST_DWORD",   *this, 17,  4),  // [20:17]
-        reserved2  (reg_name + ".reserved2",    *this, 21, 11)   // [31:21]
-    {
-        this->set_read_write_restrictions(memory);
-    }
-
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-
-    csml_bitfield<N> reserved0;   ///< [3:0]   KM-CPU-only (lock_write, lock_use, unlock_sep, clear)
-    csml_bitfield<N> EXTEND;      ///< [6:4]   Consecutive slots for wide keys (0=single slot)
-    csml_bitfield<N> reserved1;   ///< [8:7]
-    csml_bitfield<N> DEST_VALID;  ///< [16:9]  Permitted destination engines bitmask
-    csml_bitfield<N> LAST_DWORD;  ///< [20:17] Last valid key word index [1..15]
-    csml_bitfield<N> reserved2;   ///< [31:21]
-};
-
-/**
- * KPVLP_STATUS_type — KPVLP Slot Unlock Status
- *
- * Read-only. One bit per KPV slot indicating whether unlock_sep is set
- * (i.e. KM firmware has granted SEP access to that slot for provisioning).
- * SEP reads this before attempting a KPVLP write.
- *
- * Access : Read-Only
- * Reset  : 0x00000000 (no slots unlocked at reset)
- */
-template<unsigned int N>
-class KPVLP_STATUS_type : public csml_reg<N>
-{
-public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
-
-    // read_mask=0xFFFFFFFF (RO), write_mask=0x0, reset=0x0
-    KPVLP_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x0, 0x0),
-        UNLOCK_SEP(reg_name + ".UNLOCK_SEP", *this, 0, 32)
-    {
-        this->set_read_write_restrictions(memory);
-    }
-
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-
-    csml_bitfield<N> UNLOCK_SEP; ///< [31:0] One bit per slot: 1 = slot is unlocked for SEP write
-};
 
 } // namespace keymgr_tt

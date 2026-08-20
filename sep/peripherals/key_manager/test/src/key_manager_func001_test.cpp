@@ -9,9 +9,9 @@
  *   001d - W1C register: set MB_IRQS, verify sticky; write 1 to clear, verify cleared
  *   001e - WO register:  write MB_WDATA, verify read returns 0 (write-only)
  *   001f - RO register:  write MB_STATUS, verify value unchanged (read-only)
- *   001g - KPVLP reset:  KPVLP_STATUS reset value is 0 (no slots unlocked)
- *   001h - KPVLP_CTRL:   write writable fields, verify only masked bits stored
- *   001i - KPVLP_KEY:    write key word, verify read returns 0 (write-only)
+ *
+ * The mailbox is the whole SEP-visible register surface, so there is nothing
+ * else to cover here.
  */
 
 #include "testbench.h"
@@ -149,30 +149,6 @@ int key_manager_func001_test(key_manager_test* test, key_manager_model* dut, tes
     test->register_read_32 (key_manager_basetest::MB_STATUS_OFFSET, rdata);
     CHECK_EQ(rdata & (uint32_t)key_manager_basetest::MB_STATUS_READ, status_before,
              "001f: MB_STATUS is read-only — write is ignored");
-
-    // ------------------------------------------------------------------
-    // 001g: KPVLP_STATUS — reset value = 0 (no slots unlocked)
-    // ------------------------------------------------------------------
-    test->register_read_32(key_manager_basetest::KPVLP_STATUS_OFFSET, rdata);
-    CHECK_EQ(rdata, (uint32_t)key_manager_basetest::KPVLP_STATUS_RESET,
-             "001g: KPVLP_STATUS reset = 0x0 (no slots unlocked)");
-
-    // ------------------------------------------------------------------
-    // 001h: KPVLP_CTRL[0] — write all 1s, only writable bits should stick
-    // ------------------------------------------------------------------
-    test->register_write_32(key_manager_basetest::kpvlp_ctrl_offset(0), 0xFFFFFFFF);
-    test->register_read_32 (key_manager_basetest::kpvlp_ctrl_offset(0), rdata);
-    CHECK_EQ(rdata & (uint32_t)key_manager_basetest::KPVLP_CTRL_READ,
-             0x0u,  // WO: reads back 0 regardless
-             "001h: KPVLP_CTRL[0] is write-only — read returns 0");
-
-    // ------------------------------------------------------------------
-    // 001i: KPVLP_KEY[0][0] — write-only, read must return 0
-    // ------------------------------------------------------------------
-    test->register_write_32(key_manager_basetest::kpvlp_key_offset(0, 0), 0xCAFEBABE);
-    test->register_read_32 (key_manager_basetest::kpvlp_key_offset(0, 0), rdata);
-    CHECK_EQ(rdata & (uint32_t)key_manager_basetest::KPVLP_KEY_READ, 0x0u,
-             "001i: KPVLP_KEY[0][0] is write-only — read returns 0");
 
     // ------------------------------------------------------------------
     std::cout << "\n--- FUNC001 complete: " << failures << " failure(s) ---\n\n";
