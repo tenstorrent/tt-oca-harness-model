@@ -155,6 +155,8 @@ void key_manager_test::mb_wait_inbound_space(unsigned int timeout_ns)
         if (!(status & 0x2u)) return;
         wait(1, SC_NS);   // let the KM drain what it already has
     }
+    SC_REPORT_ERROR("key_manager_test",
+                    "mb_wait_inbound_space: timed out waiting for FIFO room");
 }
 
 void key_manager_test::mb_send_command(uint8_t seq, uint8_t cmd_id,

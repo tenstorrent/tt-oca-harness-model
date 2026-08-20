@@ -10,8 +10,9 @@
  *
  * Message framing (see docs/01_key_manager_Specification/doc/architecture.adoc):
  *   - Each word is tagged with a separator flag (bit 31 of MB_WDATA/MB_RDATA)
- *   - When SEP or KM sets separator=1 on the last word of a message, the
- *     receiver is notified that a complete message is available.
+ *   - The firmware thread is notified as each word arrives (to allow frames
+ *     that span multiple FIFO fills); a separator flag on the final word
+ *     signals that the complete message is available for processing.
  *
  * Usage in the model:
  *   - key_manager_model's b_transport override calls sep_write_wdata() /

@@ -96,7 +96,7 @@ public:
     /// replaced KPVLP. Sends the command, collects the response, and reports the
     /// allocated handle.
     ///   seq        — sequence counter; incremented once on use
-    ///   key_words  — plaintext key, 1..12 words
+    ///   key_words  — plaintext key, 1..128 words
     ///   dest_valid — permitted sideload destination bitmask
     ///   handle_out — receives the KPV handle when the command succeeds
     /// Returns the command return code, or RET_FAILURE (-1) if no response came back.
