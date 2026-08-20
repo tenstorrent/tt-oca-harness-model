@@ -60,7 +60,6 @@ struct MailboxBridge : public sc_core::sc_module {
 
     MailboxBridge(sc_core::sc_module_name n)
         : sc_module(n), tsock("tsock"), isock("isock")
-        , m_read_latch(0),  m_read_latch_valid(false), m_write_latch(0)
     {
         tsock.register_b_transport(this, &MailboxBridge::b_transport);
     }
@@ -87,21 +86,18 @@ struct MailboxBridge : public sc_core::sc_module {
             std::memcpy(&word, dptr, 4);
 
             if ((offset & ~static_cast<uint64_t>(0x7)) == WRITE_DATA_OFFSET) {
-                // WRITE_DATA is one 64-bit FIFO entry and this core issues only
-                // 32-bit accesses, so the halves are paired: the low write latches,
-                // the high write pushes the assembled entry.  Mirrors the READ_DATA
-                // path below.  Forwarding each half on its own would enqueue two
-                // zero-padded entries, leaving the CPU no way to put a full 64-bit
-                // value into the mailbox and desynchronising it from the reader.
-                if (is_high) {
-                    const uint64_t value =
-                        (static_cast<uint64_t>(word) << 32) | m_write_latch;
-                    m_write_latch = 0;
-                    forward_write64(reg_base, value, txn, delay);
-                } else {
-                    m_write_latch = word;
-                    txn.set_response_status(tlm::TLM_OK_RESPONSE);
-                }
+                // One push per bus transaction, with the unaddressed half zeroed.
+                // axi_lite_mailbox.sv does exactly this --
+                //   mbox_w_data_o[i*8+:8] = w.strb[i] ? w.data[i*8+:8] : '0
+                // -- so a narrowed 32-bit store enqueues a single zero-extended
+                // entry rather than half of one. Pairing the halves into one entry
+                // instead (as this bridge used to) makes a lone 32-bit write
+                // vanish: nothing is enqueued and no write-threshold interrupt is
+                // ever raised, which is what firmware writing a single word sees.
+                const uint64_t value = is_high
+                    ? (static_cast<uint64_t>(word) << 32)
+                    :  static_cast<uint64_t>(word);
+                forward_write64(reg_base, value, txn, delay);
             } else {
                 if (is_high) {
                     txn.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
@@ -112,25 +108,18 @@ struct MailboxBridge : public sc_core::sc_module {
 
         } else {
             if ((offset & ~static_cast<uint64_t>(0x7)) == READ_DATA_OFFSET) {
-                if (!is_high) {
-                    uint64_t val64 = 0;
-                    forward_read64(reg_base, val64, txn, delay);
-                    const uint32_t lo = static_cast<uint32_t>(val64 & 0xFFFFFFFFULL);
-                    std::memcpy(dptr, &lo, 4);
-                    m_read_latch       = static_cast<uint32_t>(val64 >> 32);
-                    m_read_latch_valid = true;
-                    txn.set_response_status(tlm::TLM_OK_RESPONSE);
-                } else {
-                    if (m_read_latch_valid) {
-                        std::memcpy(dptr, &m_read_latch, 4);
-                        m_read_latch_valid = false;
-                        txn.set_response_status(tlm::TLM_OK_RESPONSE);
-                    } else {
-                        uint32_t zeroes = 0;
-                        std::memcpy(dptr, &zeroes, 4);
-                        txn.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
-                    }
-                }
+                // One pop per bus transaction, mirroring the write side and
+                // axi_lite_mailbox.sv, which asserts mbox_r_pop_o for every read
+                // of this address and returns the whole entry for the fabric to
+                // narrow. Latching the upper half to serve a following +4 read
+                // would leave the reader's pop count out of step with the
+                // writer's push count as soon as either side used a lone 32-bit
+                // access.
+                uint64_t val64 = 0;
+                forward_read64(reg_base, val64, txn, delay);
+                const uint32_t part = static_cast<uint32_t>(
+                    is_high ? (val64 >> 32) : (val64 & 0xFFFFFFFFULL));
+                std::memcpy(dptr, &part, 4);
             } else {
                 if (is_high) {
                     uint32_t zeroes = 0;
@@ -147,10 +136,6 @@ struct MailboxBridge : public sc_core::sc_module {
     }
 
 private:
-    uint32_t m_read_latch;
-    bool     m_read_latch_valid;
-    uint32_t m_write_latch;
-
     void forward_write64(uint64_t addr, uint64_t value,
                          tlm::tlm_generic_payload& orig, sc_core::sc_time& delay)
     {

@@ -5,25 +5,32 @@
 /**
  * Combined SEP eFuse base module.
  *
- * Single csml_memory covers the full SEP efuse MMIO window:
+ * Two csml_memory instances, each with its own target socket, because the block
+ * occupies two disjoint windows in the register map rather than one contiguous
+ * range.  `memory` holds the sep_efuse window:
  *   0x000–0x3FC  Shadow registers      (SEP_EFUSE_MAP)
  *   0x400–0x418  Interface control     (EFUSE_INTERFACE_CTRL)
  *   0x419–0x4FF  Gap — returns 0
  *   0x500–0x56C  Token MMR             (EFUSE_MMR)
- *   0x56D–0x5FF  Gap — returns 0
- *   0x600–0x640  Shim control stubs    (EFUSE_SHIM_CTRL)
+ * for 0x570 bytes, matching the range efuse_interface_controller.sv decodes onto
+ * its internal APB path.
  *
- * Total memory size: 0x644 bytes.
- * Base address is assigned by the VP integrator at PortMapping time.
+ * `shim_memory` holds EFUSE_SHIM_CTRL (0x000–0x043, 0x44 bytes), which the
+ * register header places at 0x20000000 inside SEP_EXTERNAL.  Silicon reaches it
+ * over a second AXI-Lite port on the same block (fuse_bank_ctrl_req_o), so two
+ * sockets on one module is the faithful shape, not a VP convenience.
+ *
+ * Both base addresses are assigned by the VP integrator at PortMapping time.
  */
 class efuse_base : public sc_module
 {
 public:
     typedef typename csml_reg<32>::DT DT;
 
-    efuse_base(sc_module_name name, unsigned int memory_size)
+    efuse_base(sc_module_name name, unsigned int memory_size, unsigned int shim_memory_size)
         : sc_module(name),
           memory(std::string(name) + ".Memory", memory_size / sizeof(unsigned int)),
+          shim_memory(std::string(name) + ".ShimMemory", shim_memory_size / sizeof(unsigned int)),
 
           // ── Shadow registers ─────────────────────────────────────────────
           LOCKS_LO         (std::string(name) + ".LOCKS_LO",          memory, 0x000/4),
@@ -90,16 +97,19 @@ public:
           RMA_CHIPLET_TOKEN_MATCH(std::string(name) + ".RMA_CHIPLET_TOKEN_MATCH", memory, 0x568/4),
           SEC_DISABLE_TOKEN_MATCH(std::string(name) + ".SEC_DISABLE_TOKEN_MATCH", memory, 0x56C/4),
 
-          // ── EFUSE_SHIM_CTRL ──────────────────────────────────────────────
-          SHIM_EFUSE_CTRL_STATUS  (std::string(name) + ".SHIM_EFUSE_CTRL_STATUS",   memory, 0x600/4),
-          SHIM_EFUSE_CTRL_STATUS_1(std::string(name) + ".SHIM_EFUSE_CTRL_STATUS_1", memory, 0x604/4),
-          SHIM_EFUSE_TIMING_CTRL  (std::string(name) + ".SHIM_EFUSE_TIMING_CTRL",   memory, 0x608/4, 1)
+          // ── EFUSE_SHIM_CTRL (separate window; see class comment) ─────────
+          SHIM_EFUSE_CTRL_STATUS  (std::string(name) + ".SHIM_EFUSE_CTRL_STATUS",   shim_memory, 0x000/4),
+          SHIM_EFUSE_CTRL_STATUS_1(std::string(name) + ".SHIM_EFUSE_CTRL_STATUS_1", shim_memory, 0x004/4),
+          SHIM_EFUSE_TIMING_CTRL  (std::string(name) + ".SHIM_EFUSE_TIMING_CTRL",   shim_memory, 0x008/4, 1)
     {
         memory.bind_to_socket(target_socket);
+        shim_memory.bind_to_socket(shim_target_socket);
     }
 
     csml_memory<32> memory;
+    csml_memory<32> shim_memory;
     tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+    tlm_utils::simple_target_socket<csml_memory<32>, 32> shim_target_socket;
 
     // Shadow registers
     sep_efuse::LOCKS_LO_type<32>          LOCKS_LO;

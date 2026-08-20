@@ -18,7 +18,14 @@ class CLOCK_GATE_CTRL_type : public csml_reg<N>
     using typename csml_reg<N>::memory_type;
     typedef typename csml_word<N>::wordtype DT;
     CLOCK_GATE_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x3F07FF, 0x3F07FF, 0x1F0021),
+      // Reset 0x0, not 0x1F0021: sep_cpu_ctrl.rdl now declares this register a
+      // "reserved placeholder, not yet implemented" carrying a single
+      // pka_cg_enable field that resets to 0, and och_sep_top_reg.h agrees
+      // (SEP_CPU_CTRL_CLOCK_GATE_CTRL_REG_DEFAULT = 0x0). The named fields below
+      // are kept because they cost nothing and document the intended layout, but
+      // nothing gates a clock on them in the VP, so the old reset was inventing
+      // state that neither the RTL nor any model consumes.
+      csml_reg<N>(reg_name, memory, offset, 0x3F07FF, 0x3F07FF, 0x0),
       pka_cg_enable(reg_name + ".pka_cg_enable", *this, 0, 1),
       dma_cg_enable(reg_name + ".dma_cg_enable", *this, 1, 1),
       mailbox_cg_en(reg_name + ".mailbox_cg_en", *this, 2, 1),

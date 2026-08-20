@@ -29,6 +29,59 @@ LOGS_DIR="$SCRIPT_DIR/logs"
 # ---------------------------------------------------------------------------
 EXCLUDE=("bl1_pass_test" "common" "common_otbn" "logs")
 
+# Not a test: holds only an otbn_src/ subtree of OTBN assembly consumed by other
+# tests, with no Makefile and no entry in tt-oca-hw/fw/sep/Makefile. Listing it
+# here keeps it out of the skipped-build tally, where it looked like a failure.
+EXCLUDE+=("otbn_km_sideload_keydump")
+
+# Cadence xSPI path. The VP models the OpenTitan SPI host and its flash only —
+# the Cadence controller, its PHY and the XIP region are permanently out of
+# scope — so these can never pass here and are not synced from tt-oca-hw. They
+# are skipped before the build step because their sources still reference the
+# pre-rename SEP_AXI_EXTENSION_* macros, which the current register header no
+# longer defines. The OpenTitan spi_ot_* tests and spi_sanity_ot are unaffected.
+EXCLUDE+=("xspi_flash_jedec_id_test" "xspi_flash_multi_sector_test"
+          "xspi_flash_read_test" "xspi_flash_sram_loopback_test"
+          "xspi_flash_write_read_test" "spi_sanity" "spi_sanity_cadence"
+          "spi_write_read_test" "spi_phy_reg_test" "spi_crc_test"
+          "spi_xspi_dma_test" "firmware_spi_dma_test")
+
+# Do not compile upstream. tt-oca-hw/fw/sep/Makefile keeps this same set out of
+# its own DEFAULT_TESTS "temporarily disabled due to compilation errors": each
+# one calls a helper that nobody ever defined (write_alias_csr_register,
+# setup_axi_filter_wrap_entry, ...). They are synced verbatim so the tree still
+# mirrors the RTL repo, and they come back the moment upstream repairs them.
+EXCLUDE+=("fabric_alias_csr_toggle_p3_test" "fabric_alias_wrap_maximum_intensity_test"
+          "fabric_filter_wrap_edge_case_test" "fabric_local_alias_advanced_datapath_test"
+          "fabric_local_alias_remap_toggle_p3_test" "fabric_output_remap_advanced_p3_test")
+
+# Needs uart_16550_*_reg.h, which tt-oca-hw generates on demand and does not
+# commit, and the VP models no UART at all — printf goes to the 0x80000000
+# mailbox instead. Both halves would have to land before this can build or pass.
+EXCLUDE+=("uart")
+
+# Wrong testbench, not a VP defect. These are enrolled in
+# dv/smu/tb/tb_uvm/yaml/testlist_smu_chiplet.yaml (Main_SMU_Level_SEP_Regression),
+# not in testlist_sep.yaml, so even on RTL they need SMU + SMC + SEP elaborated
+# together: SEP firmware arrives via +SEP_ITCM_HEX_FILE while SMC runs its own
+# +FW_TEST, and the cocotb harness judges pass/fail from the SEP program counter
+# against a symbol table rather than the stdout banner sep-vp watches for. A
+# SEP-only platform has no peer to talk to, so they hang at the first handshake.
+# sep_smc_notify is deliberately absent: it needs no peer and passes here.
+EXCLUDE+=("sep_smu_aes" "sep_smu_bidirect" "sep_smu_boot_health" "sep_smu_dma"
+          "sep_smu_efuse" "sep_smu_ext_axi" "sep_smu_modules" "sep_smu_otbn"
+          "sep_smu_remap" "sep_smu_sanity" "sep_smu_spi" "sep_smu_spi_mux"
+          "sep_smu_wdt" "sep_smc_interop" "sep_smc_mbox_irq" "sep_smc_xbar"
+          "smu_cla_sep_cpu_debug" "smu_smc_stall_sep")
+
+# Superseded upstream. This firmware is in no regression list: tt-oca-hw replaced
+# it with the pure-UVM sep_global_alias_remap_uvm_test, which runs with
+# +SEP_SKIP_CPU_RUN and no firmware at all, having previously needed a Force on
+# security_disable plus an external AXI master. The firmware half was left in the
+# tree but is not exercised on RTL either, so a failure here says nothing about
+# the VP's alias remap.
+EXCLUDE+=("global_alias_remap_sanity")
+
 # Per-test OTBN algorithm overrides and multi-ELF variants live in
 # vp_test_env.sh as vp_algo_override / vp_extra_elfs — plain lookups rather than
 # associative arrays, which macOS bash 3.2 does not have.
@@ -130,12 +183,14 @@ run_test() {
     local logfile="$LOGS_DIR/${test_name}.log"
     TEST_RESULT="STUCK"
 
-    # Select config: use a patched temp config if this test has an algo override.
-    local run_config="$CONFIG"
+    # Select config: start from whichever base the test needs, then patch it if
+    # this test also has an OTBN algo override.
+    local run_config
+    run_config="$(vp_base_config "$test_name")"
     local algo
     algo="$(vp_algo_override "$test_name")"
     if [[ -n "$algo" ]]; then
-        TEMP_CONFIG="$(vp_make_test_config "$algo")"
+        TEMP_CONFIG="$(vp_make_test_config "$algo" "$run_config")"
         run_config="$TEMP_CONFIG"
     fi
 

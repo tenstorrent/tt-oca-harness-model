@@ -73,13 +73,14 @@ public:
     static constexpr unsigned int INIT_COUNT = 6;
     // Targets: sram, rom, dma, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
-    //          keymgr_kpvlp, efuse, lc_ctrl, entropy_src, edn,
+    //          efuse, efuse_shim, lc_ctrl, entropy_src, edn,
     //          scratch_cold, scratch_warm,
     //          local_alias_remap_csr, local_alias_remap_data,
     //          ap_remap_csr, ap_remap_data, stee_remap_csr, stee_remap_data,
     //          outbound_filter_csr,
     //          inbound_filter_csr,
-    //          smc_global, smu (-> outbound_filter_mux), spi_mux, reset_ctrl, cpu_ctrl
+    //          smc_global, smu (-> outbound_filter_mux),
+    //          efuse_shim_ctrl, spi_mux, reset_ctrl, cpu_ctrl
     //          (PIC is internal to VeeRISSTlm; SEP has no external PLIC/CLINT
     //          or SEP-side GPIO/AVBbus in real silicon — none of these were
     //          ever part of the register map, they were VP-only scaffolding)
@@ -95,6 +96,11 @@ public:
     // SMU window has no stub of its own — it forwards straight into
     // outbound_filter_mux, since real RTL merges it with AP/STEE before the
     // Outbound Filter rather than terminating it locally.
+    // efuse and efuse_shim are two windows on one model (sep_efuse at 0x10930000
+    // and EFUSE_SHIM_CTRL at 0x20000000), so they count as two targets here while
+    // being a single peripheral.
+    // The key manager holds a single target: the new RTL exposes only the
+    // mailbox to SEP, so there is no second KPVLP window.
     static constexpr unsigned int TARG_COUNT = 35;
 
     SC_HAS_PROCESS(och_sep_ss);
@@ -366,11 +372,19 @@ private:
     csml_param<uint64_t>   smc_global_base;
     csml_param<uint64_t>   smc_region_size;
 
-    // feat_ctrl_o.sep_debug (sep.sv:952) — drives the inbound filter's
-    // filter_skip_i, bypassing all match/permission checking. The inbound filter
-    // is BlockByDefault, so a platform whose masters issue inbound traffic
-    // without programming the filter tables must raise this, exactly as SEP
-    // debug mode does on silicon. Defaults false (fail-closed, as on reset).
+    // The inbound filter's filter_skip_i (sep.sv:952), which bypasses all match and
+    // permission checking. Its producer is lc_ctrl: filter_skip_i is
+    // feat_ctrl_o.sep_debug, so the chain runs eFuse LC_STATE/SiP_DIS/SYS_DIS ->
+    // feature vector -> filter bypass, and start_of_simulation wires it up.
+    //
+    // Note where that leaves reset, because it is counter-intuitive: LC_STATE resets to
+    // TEST_DEV with no disables, so the vector is all ones and sep_debug is set. Silicon
+    // comes out of reset with the inbound filter bypassed, and a VP that always filters
+    // is more restrictive than the hardware, not less.
+    //
+    // sep_debug remains as a force-on override with no RTL counterpart, for a platform
+    // whose masters issue inbound traffic without programming the filter tables and
+    // whose fuse image does not already bypass it. Default false contributes nothing.
     csml_param<bool>                 sep_debug;
     sc_signal<bool, SC_MANY_WRITERS> sep_debug_signal;
 

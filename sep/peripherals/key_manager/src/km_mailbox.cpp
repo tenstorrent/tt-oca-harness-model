@@ -40,10 +40,12 @@ bool km_mailbox::sep_write_wdata(uint32_t word)
 
     m_inbound.push_back({word, is_sep});
 
-    if (is_sep) {
-        m_inbound_msgs++;
-        m_inbound_ready.notify(SC_ZERO_TIME);  // wake firmware thread
-    }
+    if (is_sep) m_inbound_msgs++;
+
+    // Wake the firmware on every word, not just on the separator. In hardware
+    // INBOUND_READ_DATA_AVAIL tracks FIFO occupancy, and the firmware drains as
+    // words arrive — which is what lets a message longer than the FIFO through.
+    m_inbound_ready.notify(SC_ZERO_TIME);
     return true;
 }
 

@@ -309,10 +309,25 @@ resolve_vp() {
 # -----------------------------------------------------------------------------
 # Test discovery / execution
 # -----------------------------------------------------------------------------
+# A passing firmware test must print one of these.  Two conventions are in use:
+# the smc-* tests print "PASS: <what worked>", while smc-aou-test prints the
+# repo-wide unit-test string mandated by aou/doc/03_AOU_Test_Plan.md.
+FW_PASS_RE='(^|[[:space:]])(PASS:|ALL TESTS PASSED)'
+
 list_tests() {
     local tests=()
     for d in "${SCRIPT_DIR}"/smc-*/; do
-        [ -d "${d}" ] && [ -f "${d}/Makefile" ] && tests+=("$(basename "${d}")")
+        [ -d "${d}" ] || continue
+        if [ ! -f "${d}/Makefile" ]; then
+            # Warn rather than skip in silence: smc-dma-test sat here with a
+            # main.c and no Makefile while both CI workflows' comments claimed
+            # the suite covered it.
+            if compgen -G "${d}*.c" >/dev/null || compgen -G "${d}*.S" >/dev/null; then
+                log_warn "skipping $(basename "${d}"): has sources but no Makefile"
+            fi
+            continue
+        fi
+        tests+=("$(basename "${d}")")
     done
     if [ ${#tests[@]} -eq 0 ]; then
         log_error "no smc-* test directories found in ${SCRIPT_DIR}"
@@ -354,6 +369,16 @@ run_test() {
         if grep -q "FAIL:" "${sim_log}"; then
             rm -f "${sim_log}"
             log_error "firmware reported failure for $1"
+            return 1
+        fi
+        # Require an explicit pass line.  Treating "no FAIL:" as success reports
+        # a hang as a pass: the trap handler in common/start.S spins forever, so
+        # an access fault (or any early trap) ends the run at the sim time limit
+        # with exit 0 and no FAIL: line -- indistinguishable from a clean run.
+        if ! grep -Eq "${FW_PASS_RE}" "${sim_log}"; then
+            rm -f "${sim_log}"
+            log_error "no pass line from $1 (expected 'PASS:' or 'ALL TESTS PASSED')"
+            log_error "a hang, early trap, or truncated run looks exactly like this"
             return 1
         fi
         rm -f "${sim_log}"

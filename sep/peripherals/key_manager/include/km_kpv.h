@@ -5,30 +5,28 @@
  * Pure C++ class (no SystemC, no TLM). Used exclusively by km_firmware_handler.
  *
  * The KPV holds 32 key slots × 512 bits (16 × 32-bit words) and one 32-bit
- * control register per slot. All access-control rules from the spec are
- * enforced here:
+ * control register per slot. The vault sits behind the KM CPU's private
+ * crossbar, so SEP has no direct access path at all — every entry point here is
+ * a KM-firmware one.
  *
- *   KM firmware access  : km_*() methods — full read/write subject to lock bits
- *   SEP KPVLP access    : kpvlp_*() methods — restricted write-only subject to
- *                         unlock_sep && !lock_write
- *
- * Control register bit layout (matches KeyManager.md):
- *   [0]     lock_write  — prevents KM firmware writes until reset (write-one-only)
- *   [1]     lock_use    — prevents KM firmware reads until reset (write-one-only)
- *   [2]     unlock_sep  — allows KPVLP writes (set by KM via CMD_KPVLP_SLOT_REQ)
- *   [3]     clear       — clears key to zero if !lock_write (self-clearing)
- *   [6:4]   extend      — number of extra consecutive slots for wide keys (e.g. RSA)
- *   [8:7]   reserved
- *   [16:9]  dest_valid  — permitted destination engine bitmask
- *   [20:17] last_dword  — last valid key word index [1..15]
+ * Control register bit layout (km_kpv.rdl KEY_CTRL):
+ *   [0]     lock_write  — blocks key data writes until reset (write-one-to-set)
+ *   [1]     lock_use    — blocks key data reads until reset (write-one-to-set)
+ *   [2]     erase       — overwrites all 16 words and clears ctrl (self-clearing)
+ *   [3]     reserved
+ *   [6:4]   extend      — number of extra consecutive slots for wide keys
+ *   [16:7]  reserved
+ *   [20:17] last_dword  — last valid key word index [0..15]
  *   [31:21] reserved
  *
- * KPVLP may only write fields: extend [6:4], dest_valid [16:9], last_dword [20:17]
- * i.e. write mask = 0x001FFE70
+ * Sideload destination permissions are deliberately absent: in hardware the
+ * KPV stores opaque blobs and the permitted destinations live in the firmware
+ * key registry, so km_firmware_handler owns them.
  */
 #pragma once
 #include <cstdint>
 #include <array>
+#include <vector>
 #include <functional>
 
 namespace keymgr_tt {
@@ -40,12 +38,10 @@ using drbg_fn_t = std::function<uint32_t()>;
 // kpv_ctrl_t — decoded control register for one slot
 // ----------------------------------------------------------------------------
 struct kpv_ctrl_t {
-    bool    lock_write  = false;  ///< [0]     prevents KM writes; write-one-only
-    bool    lock_use    = false;  ///< [1]     prevents KM reads; write-one-only
-    bool    unlock_sep  = false;  ///< [2]     grants SEP KPVLP access to this slot
+    bool    lock_write  = false;  ///< [0]     blocks key data writes; write-one-to-set
+    bool    lock_use    = false;  ///< [1]     blocks key data reads; write-one-to-set
     uint8_t extend      = 0;     ///< [6:4]   zero-indexed extra consecutive slots
-    uint8_t dest_valid  = 0;     ///< [16:9]  permitted destination engines bitmask
-    uint8_t last_dword  = 0;     ///< [20:17] last valid word index [1..15]
+    uint8_t last_dword  = 0;     ///< [20:17] last valid word index [0..15]
 
     uint32_t to_uint32()        const;
     void     from_uint32(uint32_t v);
@@ -65,6 +61,14 @@ class km_kpv {
 public:
     static constexpr int NUM_SLOTS     = 32;
     static constexpr int WORDS_PER_KEY = 16;  ///< 512 bits per slot
+
+    /// Widest key the firmware will place in the vault, in 32-bit words.
+    /// The wire encoding is word-count-minus-1 in 7 bits, so 128 is the ceiling
+    /// (ROM_KM_MAX_KEY_WORDS).
+    static constexpr int MAX_KEY_WORDS = 128;
+
+    /// Slots a single key may span (ROM_KM_MAX_KEY_WORDS / WORDS_PER_KEY).
+    static constexpr int MAX_SLOTS_PER_KEY = MAX_KEY_WORDS / WORDS_PER_KEY;
 
     km_kpv() = default;
 
@@ -96,43 +100,61 @@ public:
     /// Assert lock_use on a slot (write-one-only; no unlock until reset).
     bool km_lock_use(int slot);
 
-    /// Grant KPVLP access to `count` consecutive slots starting at `base_slot`.
-    /// Sets unlock_sep on each slot.
-    bool km_grant_kpvlp(int base_slot, int count);
-
     /// Clear key data to all-zero. Requires !lock_write.
     bool km_clear_key(int slot);
 
-    /// Find the first base index for `count` consecutive free
-    /// (!lock_write && !valid) slots. Returns -1 if none found.
-    int km_find_free_slots(int count) const;
+    /// Hardware ERASE (ctrl bit 2): overwrite all 16 words with DRBG output and
+    /// clear the slot's control register. Not gated by lock_write or lock_use,
+    /// matching the RTL erase path. `get_random` supplies the fill words; when
+    /// null the slot is zero-filled.
+    bool km_erase_key(int slot, const drbg_fn_t& get_random = nullptr);
 
-    /// Write ctrl policy fields (extend, dest_valid, last_dword) via KM firmware
-    /// internal path.  Does NOT require unlock_sep; bypasses the KPVLP access check.
-    /// Used by CMD_KEY_GENERATE after writing DRBG key material.
+    /// Find a base index for `count` consecutive available slots, where a slot
+    /// is available when it is unlocked (neither lock_write nor lock_use) and
+    /// unassigned. Mirrors slot_available() in rom_keymgmt.c.
+    ///
+    /// When `get_random` is supplied the scan starts at a random index and wraps
+    /// once, as the firmware does; a run is never allowed to straddle the end of
+    /// the vault. Without it the scan starts at 0, which keeps tests reproducible.
+    /// Returns -1 if no run is available.
+    int km_find_free_slots(int count, const drbg_fn_t& get_random = nullptr) const;
+
+    /// Write ctrl geometry fields (extend, last_dword) from KM firmware.
     /// Requires !lock_write.  Returns false if slot is out of range or lock_write=1.
-    bool km_write_ctrl(int slot, uint8_t extend, uint8_t dest_valid, uint8_t last_dword);
+    bool km_write_ctrl(int slot, uint8_t extend, uint8_t last_dword);
+
+    // -----------------------------------------------------------------------
+    // Multi-slot key operations  (mirror rom_kpv.c)
+    //
+    // A key of `len` words occupies ceil(len/16) consecutive slots. The base
+    // slot carries EXTEND = (len-1)/16; the others carry 0. LAST_DWORD is 15 on
+    // every slot but the final one, which records the index of the last word it
+    // holds. Reading a key reconstructs its length from those two fields alone.
+    // -----------------------------------------------------------------------
+
+    /// Slots spanned by a key of `len` words. 0 if `len` is out of range.
+    static int slots_for_words(int len);
+
+    /// Write a key across consecutive slots starting at `base`, setting the
+    /// EXTEND and LAST_DWORD geometry on each. Fails if `len` is out of range or
+    /// any spanned slot is write-locked, in which case nothing is written.
+    bool km_write_key(int base, const uint32_t* words, int len);
+
+    /// Read a key back, using the base slot's EXTEND and the final slot's
+    /// LAST_DWORD to recover the length. Fails if any spanned slot has lock_use
+    /// set or if a non-final slot's LAST_DWORD is not 15.
+    bool km_read_key(int base, std::vector<uint32_t>& out) const;
+
+    /// Assert lock_write across every slot spanned by the key at `base`.
+    void km_write_lock_span(int base);
+
+    /// Erase every slot spanned by the key at `base`. The span is read before
+    /// the first erase, since erasing clears EXTEND.
+    void km_erase_span(int base, const drbg_fn_t& get_random = nullptr);
 
     /// Mark a slot as containing a valid key (set by firmware after key write).
     void km_set_valid(int slot, bool valid);
     bool km_is_valid(int slot) const;
-
-    // -----------------------------------------------------------------------
-    // KPVLP SEP-facing access  (kpvlp_* methods)
-    // -----------------------------------------------------------------------
-
-    /// Write one key word via the KPVLP port.
-    /// Conditions: unlock_sep=1 AND lock_write=0 for the target slot.
-    bool kpvlp_write_key_word(int slot, int word, uint32_t data);
-
-    /// Write ctrl fields (EXTEND, DEST_VALID, LAST_DWORD only) via KPVLP.
-    /// Conditions: unlock_sep=1 AND lock_write=0.
-    /// Bits outside the KPVLP write mask (0x001FFE70) are silently ignored.
-    bool kpvlp_write_ctrl(int slot, uint32_t ctrl_word);
-
-    /// Return KPVLP_STATUS: bitmask of unlock_sep across all 32 slots.
-    /// Bit i = 1 means slot i is currently accessible via KPVLP.
-    uint32_t kpvlp_status() const;
 
 private:
     std::array<kpv_entry_t, NUM_SLOTS> m_keys  = {};

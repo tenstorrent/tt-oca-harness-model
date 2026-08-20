@@ -105,11 +105,21 @@ cmd_setup() {
         mkdir -p "$(dirname "$WS")"
         "$west" init -m https://github.com/zephyrproject-rtos/zephyr --mr "$ZEPHYR_VERSION" "$WS"
     fi
+    # Optional comma-separated west project-filter (e.g. CI drops unused HALs
+    # so the workspace is not multi-GB).  Applied before west update.
+    if [[ -n "${ZEPHYR_WEST_PROJECT_FILTER:-}" ]]; then
+        local filter
+        filter="$(echo "$ZEPHYR_WEST_PROJECT_FILTER" | tr -d '[:space:]')"
+        log "west project-filter: $filter"
+        (cd "$WS" && "$west" config manifest.project-filter -- "$filter")
+    else
+        (cd "$WS" && "$west" config --delete manifest.project-filter 2>/dev/null || true)
+    fi
     if [[ "${ZEPHYR_SKIP_UPDATE:-}" == "1" && -d "$WS/zephyr" ]]; then
         log "ZEPHYR_SKIP_UPDATE=1; skipping west update"
     else
-        log "west update (this can take several minutes)"
-        (cd "$WS" && "$west" update)
+        log "west update --narrow (this can take several minutes)"
+        (cd "$WS" && "$west" update --narrow)
     fi
     (cd "$WS" && "$west" zephyr-export) || true
     if [[ -f "$WS/zephyr/scripts/requirements-base.txt" && -x "$HERE/.venv/bin/pip" ]]; then
@@ -250,6 +260,9 @@ Environment:
   ZEPHYR_WORKSPACE   west workspace (default: $HERE/.workspace)
   ZEPHYR_VERSION     git tag for west init (default: $ZEPHYR_VERSION)
   ZEPHYR_SKIP_UPDATE skip west update when the workspace already exists
+  ZEPHYR_WEST_PROJECT_FILTER
+                     comma-separated west project-filter applied before
+                     west update (e.g. -hal_espressif,-hal_nordic)
   CROSS_COMPILE / RISCV_PREFIX
   SMC_VP             path to smc-vp (else vp/build_smc/bin/smc-vp)
   SIM_TIME_MS        hello_world window (default: 500; poke default: 1500)

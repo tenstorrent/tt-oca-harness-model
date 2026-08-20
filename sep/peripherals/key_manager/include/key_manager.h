@@ -41,7 +41,9 @@ public:
 
     /// KM → crypto engine key storage (one socket per engine).
     /// CMD_KEY_TRANSFER / CMD_ENGINE_SHRED write key words to these sockets.
-    /// DEST_VALID bit mapping (KeyManager.md): bit0=HMAC, bit1=KMAC, bit2=AES, bit3=OTBN
+    /// DEST bit mapping: bit0=HMAC, bit1=KMAC, bit2=AES, bit3=OTBN.
+    /// Bits 4-7 select Adams Bridge seed ports, which have no VP model yet;
+    /// they are accepted and dropped (see key_transfer_via_socket).
     tlm_utils::simple_initiator_socket<key_manager_model, 32> hmac_key_socket;
     tlm_utils::simple_initiator_socket<key_manager_model, 32> kmac_key_socket;
     tlm_utils::simple_initiator_socket<key_manager_model, 32> aes_key_socket;
@@ -115,9 +117,5 @@ private:
     bool handle_write_MB_IRQS   (uint32_t value);
     bool handle_write_MB_CTRL   (uint32_t value);
 
-    // KPVLP  (slot/word index captured by lambda in register_all_callbacks)
-    bool handle_write_KPVLP_KEY (unsigned int slot, unsigned int word, uint32_t value);
-    bool handle_write_KPVLP_CTRL(unsigned int slot, uint32_t value);
-    bool handle_read_KPVLP_STATUS(uint32_t &value);
 };
 

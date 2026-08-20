@@ -2,190 +2,104 @@
 
 ## Overview
 
-`lc_ctrl` is a **SystemC TLM-2.0 functional model** of the Tenstorrent SEP (Secure Enclave Processor) Lifecycle Controller (`tt_sep_lifecycle_ctrl`). It mirrors the RTL logic in `lc_ctrl-knowledge-base/tt_sep_lifecycle_ctrl.sv` and provides a simulation-ready C++ model for integration testing and VP (Virtual Platform) work.
+`lc_ctrl` is a SystemC TLM-2.0 model of the SEP Lifecycle Controller, mirroring
+`hw/sep/sep_lifecycle_ctrl.sv`. Its job is narrow: given the lifecycle state and the
+fuse-programmed disable masks, compute the 64-bit `FEAT_CTRL` vector that gates the chip's
+debug, test and functional features, and let firmware demote into PROD_DBG.
 
-The controller's job is straightforward: given the device lifecycle state (read from OTP fuses) and a set of fuse-programmed disable masks, compute a 64-bit `FEAT_CTRL` output that gates debug, test, and functional features on the chip.
-
----
-
-## Directory Structure
-
-```
-lc_ctrl/
-├── CMakeLists.txt              Build configuration
-├── Summary.md                  This file
-├── csml/                       Register simulation library (CSML)
-│   ├── inc/                    Headers: register, memory, clock, test, logging
-│   └── src/                    Implementations
-├── docs/
-│   └── sections/
-│       └── lc_ctrl-register-map.csv   Register map source-of-truth
-├── lc_ctrl-knowledge-base/     Reference RTL and register specs
-│   ├── sep_lifecycle_ctrl.rdl  Register definition (RDL)
-│   ├── sep_lifecycle_ctrl.htm  Auto-generated HTML docs
-│   ├── tt_sep_lifecycle_ctrl.sv            Top-level RTL
-│   ├── tt_sep_lifecycle_ctrl_reg.sv        Generated register wrapper
-│   ├── tt_sep_lifecycle_ctrl_reg_inner.sv  Generated register internals
-│   ├── tt_sep_lifecycle_ctrl_reg_pkg.sv    Generated SV package
-│   └── otp_lcc_reg.h           Full OTP/LCC register address map (~5100 lines)
-├── model/
-│   ├── inc/
-│   │   ├── lc_ctrl.h           Top-level model class (lifecycle FSM + FEAT_CTRL logic)
-│   │   ├── lc_ctrl_base.h      Base class: registers + TLM socket
-│   │   └── lc_ctrl_register.h  Register type definitions (CSML templates)
-│   └── src/
-│       └── lc_ctrl_base.cpp    reset_all_registers() implementation
-└── test/
-    ├── inc/
-    │   ├── lc_ctrl_basetest.h  Register offsets, masks, reset values; TLM initiator
-    │   └── lc_ctrl_test.h      Derived test class with 8-bit read/write helpers
-    └── src/
-        └── lc_ctrl_basetest.cpp   Register property map (reg_map[3])
-```
-
----
+The register window is `0x1091_8000`, size `0x18`, per
+`meta/registers/rdl/sep_lifecycle_ctrl.rdl`.
 
 ## Register Map
 
-| Register      | Offset | Width | SW Access | Reset      | Description |
-|---------------|--------|-------|-----------|------------|-------------|
-| `FEAT_CTRL_LO` | 0x0000 | 32    | RO        | 0x00000000 | Lower 32 bits of feature control — written by hardware |
-| `FEAT_CTRL_HI` | 0x0004 | 32    | RO        | 0x00000000 | Upper 32 bits of feature control — written by hardware |
-| `DEMOTE`       | 0x1000 | 32    | RW (W1S)  | 0x00000000 | Demote control: bit[0]=demote (swwe-gated W1S), bit[1]=lock (W1S) |
+| Register | Offset | Width | SW Access | Reset | Description |
+|---|---|---|---|---|---|
+| `FEAT_CTRL_LO` | `0x0000` | 32 | RO | `0x0` | Feature vector `[31:0]` — hardware-written |
+| `FEAT_CTRL_HI` | `0x0004` | 32 | RO | `0x0` | Feature vector `[63:32]` |
+| `DEMOTE_1` | `0x0008` | 32 | RW (W1S) | `0x0` | `demote[0]`, `lock[1]`, `rsvd[31:2]` — written by BL1 |
+| `DEMOTE_1_HI` | `0x000C` | 32 | RW (W1S) | `0x0` | `rsvd[63:32]` |
+| `DEMOTE_2` | `0x0010` | 32 | RW (W1S) | `0x0` | Same layout, written by BL2 |
+| `DEMOTE_2_HI` | `0x0014` | 32 | RW (W1S) | `0x0` | `rsvd[63:32]` |
 
-`FEAT_CTRL_LO` and `FEAT_CTRL_HI` together form a 64-bit feature-enable vector. Both are hardware-written and software-read-only.
+`FEAT_CTRL` and `DEMOTE` are both `regwidth = 64` in the RDL; the model splits each into
+two 32-bit words because the bus is 32-bit.
 
----
+The feature vector has three sections, matching the generated
+`sep_efuse_map_lc_disable_reg_t` struct: debug `[31:0]`, test `[47:32]`, func `[63:48]`.
 
-## Lifecycle States
+## Inputs
 
-The model encodes five lifecycle states via a 4-bit `lc_state` value (sourced from `fuse_map.LC_STATE`):
+The block has no lifecycle state of its own, and neither does the RTL:
+`sep_lifecycle_ctrl.sv` is combinational on `shadow_regs_i`, `security_disable_i` and
+`secure_tm_i`, all from the eFuse wrapper. The model takes the same bundle through
+`set_inputs()` and recomputes `FEAT_CTRL` on each call.
 
-| State       | Encoding  | Feature Control Behavior |
-|-------------|-----------|--------------------------|
-| `TEST_DEV`  | `4'b0000` | All features enabled except those masked by `sop_dis \| sys_dis` |
-| `PROD`      | `4'b0001` | All debug disabled; if `demote=1` → PROD_DBG (same as TEST_DEV) |
-| `PROD_END`  | `4'b1000` | No debug; functional features follow fuse mask |
-| `RMA_SoP`   | `4'b001x` | All features enabled except `sop_dis` mask |
-| `RMA_CHIPLET`| `4'b01xx` | All features fully enabled (0xFFFFFFFF_FFFFFFFF) |
-
-A `security_disable` input overrides all states and forces full feature enablement.
-
----
-
-## Class Hierarchy
-
-```
-sc_module
-└── lc_ctrl_base          (csml_memory + 3 registers + TLM target socket)
-    └── lc_ctrl           (lifecycle FSM + FEAT_CTRL compute + DEMOTE callback)
-```
-
-### `lc_ctrl_base` (`model/inc/lc_ctrl_base.h`)
-- Owns a `csml_memory<32>` and a `tlm_utils::simple_target_socket`.
-- Instantiates `FEAT_CTRL_LO`, `FEAT_CTRL_HI`, `DEMOTE` register objects.
-- Provides `reset_all_registers()`.
-
-### `lc_ctrl` (`model/inc/lc_ctrl.h`)
-Key members:
-
-| Member | Type | Purpose |
-|---|---|---|
-| `lc_state_shadow` | `uint32_t` | LC state from OTP fuse |
-| `sop_dis_lo/hi` | `uint32_t` | SoP feature disable mask (from fuse) |
-| `sys_dis_lo/hi` | `uint32_t` | System feature disable mask (from fuse) |
-| `security_disable` | `bool` | Override: enables all features unconditionally |
-| `secure_tm` | `bool` | When false, clears test-mode bits in FEAT_CTRL |
-| `demote_swwe` | `bool` | Software write-enable gate for the demote bit |
-
-Key methods:
-
-| Method | Description |
+| Input | Source in silicon |
 |---|---|
-| `set_shadow_regs(lc, sop_lo, sop_hi, sys_lo, sys_hi)` | Load OTP shadow values and recompute FEAT_CTRL |
-| `compute_feat_ctrl()` | Core logic — mirrors RTL combinational block; writes FEAT_CTRL_LO/HI |
-| `on_demote_write(value)` | Write callback: enforces W1S, lock check, swwe gating, triggers recompute |
+| `lc_state_code` | eFuse `LC_STATE`, as the 8-bit differential code `{~raw, raw}` |
+| `sip_dis` / `sys_dis` | eFuse `SiP_DIS` / `SYS_DIS` — `woset`, so software-writable at runtime |
+| `security_disable` | eFuse `security_disable_o`: SEC_DISABLE token match, gated by the silicon revision |
+| `secure_tm` | The `test_en` strap, latched by `sep_efuse_wrapper.sv` at fuse-sense-done |
 
-### `lc_ctrl_register.h`
-CSML template register types inside `namespace lc_ctrl`:
-- `FEAT_CTRL_LO_type<N>` — read-mask `0xFFFFFFFF`, write-mask `0x0` (RO)
-- `FEAT_CTRL_HI_type<N>` — same as above
-- `DEMOTE_type<N>` — read/write-mask `0xFFFFFFFF`; fields: `demote[0]`, `lock[1]`, `reserved0[31:2]`
+On a platform, `och_sep_ss` drives all of these from the eFuse model and re-applies them
+whenever the eFuse shadow registers change, so a `woset` write to `SiP_DIS` moves
+`FEAT_CTRL` the way it does in silicon. The CCI parameters only seed the bundle, for a
+standalone testbench that has no eFuse to ask.
 
----
+## State to Feature Vector
 
-## DEMOTE Register Semantics
-
-The `DEMOTE` register implements hardware-enforced write-1-set (W1S) semantics:
-
-1. **Lock check** — if `lock` (bit 1) is set, all writes are silently ignored.
-2. **Demote bit (bit 0)** — can only be set (not cleared); requires `demote_swwe == true`.
-3. **Lock bit (bit 1)** — can only be set (not cleared); no `swwe` gate.
-4. After any accepted write, `compute_feat_ctrl()` is called to update `FEAT_CTRL`.
-
-This mirrors `tt_sep_lifecycle_ctrl_reg_inner.sv` behavior exactly.
-
----
-
-## CSML Library
-
-CSML (C++ System Modelling Library) is a thin abstraction layer over SystemC/TLM providing:
-
-| Module | File | Role |
+| State | Encoding | `FEAT_CTRL` |
 |---|---|---|
-| Register | `csml_register.h` | `csml_reg<N>`, `csml_bitfield<N>`, `csml_memory<N>`, register vectors |
-| Descriptor | `csml_descriptor.h` | Virtual register/field group management |
-| Clock | `csml_clock.h` | Clock source/receiver, posedge/negedge observer pattern |
-| Logger | `csml_logger.h` | Severity-based logging with `CSML_REPORT` macro |
-| Test | `csml_test.h` | `CSML_ASSERT*` macros and test-result aggregation |
-| Router | `csml_router.h` | TLM address router for multi-bank register maps |
-| Parameter | `csml_parameter.h` | CCI parameter integration |
+| `TEST_DEV` | `4'b0000` | `~(sip_dis \| sys_dis)`; a demote re-enables the whole debug section |
+| `PROD` | `4'b0001` | Func section only. `demote_1` → PROD_DBG_1: full debug plus `~sip_dis.func`. `demote_2` → PROD_DBG_2: full debug plus `~sys_dis.func` |
+| `PROD_END` | `4'b1000` | Func section only, as the PROD base |
+| `RMA_SIP` | `4'b001x` | `~sip_dis` |
+| `RMA_CHIPLET` | `4'b011x` | All ones |
+| anything else | — | Zero: every feature disabled |
 
----
+`demote_1` takes priority over `demote_2`. Two overrides are applied after this chain, in
+order: `security_disable` forces all ones, then `secure_tm` deasserted clears the test
+section. Because `security_disable` comes after the chain, it also overrides the fail-safe
+below — a part with security disabled reads all ones even with a corrupted LC code.
 
-## Build System
+## Differential Encoding
 
-Built with CMake (≥ 3.14), C++17. Produces:
+Two interfaces carry dual-rail values, and both matter for fidelity:
 
-| Artifact | Type | Contents |
-|---|---|---|
-| `liblc_ctrl_model.a` | Static library | `model/src/` compiled objects |
-| `lc_ctrl_testbench` | Executable | `test/src/` + `csml/src/` + linked against model and SystemC |
+- **`LC_STATE` in.** The RTL decodes `lc_state[7:0]` as `{diff_n, diff_p}` through
+  `prim_diff_decode_multi`. A pair that is not `{~raw, raw}` raises `lc_sigint_err_o`, which
+  forces `feat_ctrl = 0`. That is the block's fail-safe against a tampered lifecycle state,
+  and it is distinct from a legally encoded but unassigned state: both zero the vector, but
+  only the former reports an integrity error. `get_lc_sigint_err()` exposes it.
+- **Demote state out.** `sep_crypto.sv` drives the key manager's `OTP_DEMOTION_STATE` from
+  `prim_diff_encode_multi`, so each 2-bit field is `{~v, v}`. `get_demote_state()` returns
+  `demote_1` in `[1:0]` and `demote_2` in `[3:2]`, which makes `0xA` — not `0x0` — the
+  undemoted value.
 
-**Dependencies:** SystemC (default `/usr/local/systemc300`; override via `SYSTEMC_HOME` env var or CMake variable), pthreads.
+## DEMOTE Semantics
 
-Build flags: `-DSC_ALLOW_DEPRECATED_IEEE_API`, warnings via `-Wall -Wextra`.
+Every field is `onwrite = woset`: bits only ever set, and a reset is the only thing that
+clears them. `swwe = ~lock` applies to the `demote` bit alone — `lock` and `rsvd` carry no
+`swwe` and stay writable once locked, though rewriting a `woset` lock is a no-op. Any
+accepted write recomputes `FEAT_CTRL`.
 
----
+## Design Points
 
-## Test Infrastructure
+- **No `SC_THREAD` or `SC_METHOD`.** The model is combinational, like the RTL: `FEAT_CTRL`
+  is recomputed synchronously whenever an input or a demote register changes.
+- **`FEAT_CTRL` is read-only to software.** Its write mask is `0x0`; the model writes it
+  directly, bypassing the mask, because in hardware it is hardware-driven.
+- **VP wiring for `feat_ctrl` consumers.** In the SEP VP platform, the
+  `feat_ctrl.sep_debug` path to the inbound filter and the `prod_dbg_active` feedback
+  path into eFuse are wired through `set_feat_ctrl_change_callback()` in
+  `vp/platform/sep/src/sep_platform.cpp`.
 
-`lc_ctrl_basetest` provides:
-- A `tlm_utils::simple_initiator_socket` for driving TLM transactions.
-- Enums for all register offsets, read masks, write masks, and reset values.
-- A `Register_Property_t` struct and `reg_map[3]` array used by test cases.
+## Tests
 
-`lc_ctrl_test` extends `lc_ctrl_basetest` with byte-granularity `register_read_8` / `register_write_8` helpers.
+Tests 1-12 read `FEAT_CTRL` as the configuration leaves it, so each covers a single state
+arm and skips otherwise; the combos in `config/accellera_config.ini` select between them.
+Tests 13-19 drive the input bundle directly and cover every state arm, the `lc_sigint_err`
+fail-safe, the live feature-disable path, the demote encoding, the upper `DEMOTE` words, the
+lock scope and the PROD_DBG priority in one run.
 
----
-
-## Reference RTL (Knowledge Base)
-
-| File | Purpose |
-|---|---|
-| `sep_lifecycle_ctrl.rdl` | Authoritative register spec (used to generate SV wrappers) |
-| `tt_sep_lifecycle_ctrl.sv` | Top-level RTL with APB4 interface and LC state machine |
-| `tt_sep_lifecycle_ctrl_reg_inner.sv` | Bus protocol + W1S register field implementation |
-| `otp_lcc_reg.h` | Full SEP OTP/LCC register address map (base: `SEP_LIFECYCLE_CTRL = 0x01100000`) |
-
-The C++ model in `lc_ctrl.h:compute_feat_ctrl()` directly corresponds to the combinational `always_comb` block in `tt_sep_lifecycle_ctrl.sv`.
-
----
-
-## Key Design Points
-
-- **No SC_THREAD / SC_METHOD** — the model is purely combinational: shadow registers are set by the testbench and `compute_feat_ctrl()` runs synchronously on each update. There is no clock-driven process.
-- **FEAT_CTRL is read-only to software** — write-mask is `0x0`; the model writes these directly bypassing the mask.
-- **DEMOTE is the only software-writable register**, and only the two LSBs are meaningful.
-- **`security_disable` is a C++ member, not a register** — it must be set before simulation starts (or via a testbench method call); it has no TLM-mapped address.
-- The `secure_tm` gating (masking test bits from FEAT_CTRL when `secure_tm=false`) is stubbed — the exact test-bit mask is noted as TBD in the source.
+Run them with `./run_tests.sh`; see the [README](README.md) for the build options.

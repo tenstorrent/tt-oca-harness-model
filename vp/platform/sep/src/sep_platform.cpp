@@ -448,7 +448,6 @@ void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.mbox_start_addr,        opt.mbox_end_addr,        *mbox_bridge);
         bus->ports[it++] = new PortMapping(opt.aon_timer_start_addr,   opt.aon_timer_end_addr,   *aon_timer);
         bus->ports[it++] = new PortMapping(opt.keymgr_mb_start_addr,   opt.keymgr_mb_end_addr,   *keymgr);
-        bus->ports[it++] = new PortMapping(opt.keymgr_kpvlp_start_addr,opt.keymgr_kpvlp_end_addr,*keymgr);
         bus->ports[it++] = new PortMapping(opt.sep_efuse_start_addr,   opt.sep_efuse_end_addr,   *sep_efuse);
         bus->ports[it++] = new PortMapping(opt.lc_ctrl_start_addr,     opt.lc_ctrl_end_addr,     *lc_ctrl);
         bus->ports[it++] = new PortMapping(opt.entropy_src_start_addr, opt.entropy_src_end_addr, *entropy_src);
@@ -511,7 +510,9 @@ void och_sep_ss::module_bind() {
                 return size ? std::make_pair(base, base + size - 1)
                             : std::make_pair(uint64_t(1), uint64_t(0));
             }, *outbound_mux);
-        // SPI mux ctrl (0x20000000–0x2000000B)
+        // eFuse shim CSR (0x20000000–0x20000043), the eFuse model's second window
+        bus->ports[it++] = new PortMapping(opt.efuse_shim_ctrl_start_addr, opt.efuse_shim_ctrl_end_addr, *sep_efuse);
+        // SPI mux ctrl (0x20001000–0x2000100B)
         bus->ports[it++] = new PortMapping(opt.spi_mux_ctrl_start_addr,    opt.spi_mux_ctrl_end_addr,    *spi_mux);
         // SEP software reset controller (0x10803000–0x10803007)
         bus->ports[it++] = new PortMapping(opt.reset_ctrl_start_addr,      opt.reset_ctrl_end_addr,      *reset_ctrl);
@@ -582,7 +583,6 @@ void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(mbox_bridge->tsock);
         bus->isocks[it++].bind(aon_timer->target_socket);
         bus->isocks[it++].bind(keymgr->mailbox_socket);
-        bus->isocks[it++].bind(keymgr->kpvlp_socket);
         bus->isocks[it++].bind(sep_efuse->target_socket);
         bus->isocks[it++].bind(lc_ctrl->target_socket);
         bus->isocks[it++].bind(entropy_src->target_socket);
@@ -606,6 +606,7 @@ void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(inbound_filter->target_socket);
         bus->isocks[it++].bind(smc_global->tgt32);
         bus->isocks[it++].bind(outbound_mux->smu_tgt);
+        bus->isocks[it++].bind(sep_efuse->shim_target_socket);
         bus->isocks[it++].bind(spi_mux->tsock);
         bus->isocks[it++].bind(reset_ctrl->target_socket);
         bus->isocks[it++].bind(cpu_ctrl->target_socket);
@@ -795,6 +796,8 @@ void och_sep_ss::module_bind() {
     inbound_filter->rst_ni(reset_signal);
     // feat_ctrl_o.sep_debug drives only the inbound instance's filter_skip_i;
     // RTL ties the outbound one to 1'b0, which is what leaving it unbound does.
+    // The value comes from lc_ctrl at start_of_simulation, once the eFuse has been
+    // sensed and the feature vector computed; this is only the pre-elaboration default.
     sep_debug_signal.write(sep_debug.get_param_value());
     inbound_filter->filter_skip_i(sep_debug_signal);
 
@@ -866,6 +869,43 @@ void och_sep_ss::start_of_simulation() {
               sep_efuse->get_chiplet_uid() + 8,
               otp.chiplet_uid);
     keymgr->set_otp_data(otp);
+
+    // The lifecycle controller has no state of its own in RTL: sep_lifecycle_ctrl.sv
+    // takes shadow_regs_i, security_disable_i and secure_tm_i from the eFuse wrapper and
+    // is combinational on all three. Driving them from the same place keeps FEAT_CTRL
+    // consistent with the fuse instead of relying on two configs agreeing by hand.
+    //
+    // Re-running on every shadow change is the part that matters. SiP_DIS and SYS_DIS are
+    // software-writable woset fields, so firmware disabling a feature through the eFuse
+    // has to move FEAT_CTRL; sampling once here would freeze it at the boot value.
+    //
+    // secure_tm is the exception: it is not an eFuse value but the test_en strap, which
+    // sep_efuse_wrapper.sv latches when fuse sense completes. It stays a parameter and is
+    // forwarded from here.
+    auto refresh_lc_inputs = [this]() {
+        lifecycle_ctrl_model::lc_inputs in;
+        in.lc_state_code    = sep_efuse->get_lc_state_code();
+        in.sip_dis          = sep_efuse->get_sip_dis();
+        in.sys_dis          = sep_efuse->get_sys_dis();
+        in.security_disable = sep_efuse->get_security_disable();
+        in.secure_tm        = lc_ctrl->secure_tm.get_param_value();
+        lc_ctrl->set_inputs(in);
+    };
+
+    // sep.sv:952 gives feat_ctrl_o.sep_debug to the inbound filter's filter_skip_i, and
+    // it is the only consumer of the feature vector inside SEP. Registering before the
+    // first refresh means the signal is driven by the recompute that refresh triggers,
+    // and again on every later one — a demote, or a woset write to SiP_DIS/SYS_DIS, can
+    // change whether inbound traffic is filtered at all.
+    lc_ctrl->set_feat_ctrl_change_callback([this]() {
+        sep_debug_signal.write(lc_ctrl->get_sep_debug() || sep_debug.get_param_value());
+        // sep_crypto.sv:786 closes the other half of the loop, prod_dbg_active_o back
+        // into the eFuse, where it freezes LC_STATE. Storing a flag rather than
+        // notifying, so this does not bounce back through the shadow-change callback.
+        sep_efuse->set_prod_dbg_active(lc_ctrl->get_prod_dbg_active());
+    });
+    refresh_lc_inputs();
+    sep_efuse->set_shadow_change_callback(refresh_lc_inputs);
 
     // Backdoor-load the staged SPI flash image so the controller's command/FIFO reads see the
     // real manifest+payload images instead of erased 0xFF. start_of_simulation runs after

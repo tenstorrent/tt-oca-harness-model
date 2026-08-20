@@ -3,8 +3,8 @@
  * @brief Reset during operation — hardware reset clears all model state
  *
  * Tests covered:
- *   012a - Register a key; assert reset; verify KPVLP_STATUS = 0 after reset
- *          (all slots lose lock / unlock_sep bits — KPV shredded during boot)
+ *   012a - Load a key; assert reset; verify the handle no longer resolves
+ *          (handle registry and KPV are both cleared during boot)
  *   012b - After reset, firmware seq counter starts at 0; old seq is rejected
  *   012c - After reset, outbound FIFO is empty (any pending response discarded)
  */
@@ -43,30 +43,34 @@ int key_manager_func012_test(key_manager_test* test, key_manager_model* /*dut*/,
     uint8_t seq = 0;
 
     // ---- Set up some state before reset ----
-    // Request 2 slots
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {1u});
-    bool got = test->mb_receive_frame(frame);
-    bool parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                                  ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == 0, "012-setup: CMD_KPVLP_SLOT_REQ success");
+    // Load a key so there is a live handle and an occupied KPV slot.
+    uint8_t handle = 0;
+    ret_code = test->mb_load_key(seq, {0x1234ABCDu, 0x5678EF00u},
+                                 keymgr_tt::km_firmware_handler::DEST_HMAC, handle);
+    CHECK(ret_code == 0 && handle != 0, "012-setup: CMD_KEY_LOAD success");
 
-    uint32_t kpvlp_before = 0;
-    test->register_read_32(key_manager_basetest::KPVLP_STATUS_OFFSET, kpvlp_before);
-    CHECK(kpvlp_before != 0u, "012-setup: KPVLP_STATUS non-zero (slots unlocked before reset)");
+    bool got = false, parsed = false;
 
     // Advance seq counter a few steps
     seq++;  // pretend we sent another message (so seq != 0 after reset)
     seq++;
 
     // ------------------------------------------------------------------
-    // 012a: Assert reset; verify KPVLP_STATUS = 0 after reset
-    //   After reset, km_kpv::reset() clears all ctrl flags including unlock_sep.
+    // 012a: Assert reset; the pre-reset handle must no longer resolve.
+    //   The vault and the handle registry are both cleared on the way through
+    //   boot, so transferring the old handle can only fail.
     // ------------------------------------------------------------------
     test->trigger_reset();  // re-enters boot sequence
 
-    uint32_t kpvlp_after = 0xFFFFFFFFu;
-    test->register_read_32(key_manager_basetest::KPVLP_STATUS_OFFSET, kpvlp_after);
-    CHECK_EQ(kpvlp_after, 0u, "012a: KPVLP_STATUS = 0 after reset (all unlock_sep bits cleared)");
+    test->mb_send_command(0u, keymgr_tt::km_firmware_handler::CMD_KEY_TRANSFER,
+                          {static_cast<uint32_t>(handle),
+                           static_cast<uint32_t>(keymgr_tt::km_firmware_handler::DEST_HMAC)});
+    got = test->mb_receive_frame(frame);
+    CHECK(got, "012a: response received for stale handle after reset");
+    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
+                                             ret_code, ret_arg);
+    CHECK(parsed,          "012a: response parses as RESP_CMD");
+    CHECK_EQ(ret_code, -1, "012a: pre-reset handle is no longer valid → RET_FAILURE (-1)");
 
     // ------------------------------------------------------------------
     // 012b: After reset, firmware seq counter is 0; sending old seq > 0 → RET_CMD_NOSEQ
@@ -93,14 +97,16 @@ int key_manager_func012_test(key_manager_test* test, key_manager_model* /*dut*/,
     CHECK(outbound_empty, "012c: outbound FIFO empty after consuming the only response");
 
     // ------------------------------------------------------------------
-    // Verify normal operation resumes with seq=0
+    // Verify normal operation resumes on the next expected sequence number.
+    // 012a already consumed seq=0 after the reset, so the counter now expects 1;
+    // the rejected stale command in 012b did not advance it.
     // ------------------------------------------------------------------
-    test->mb_send_command(0u, keymgr_tt::km_firmware_handler::CMD_HW_VER, {});
+    test->mb_send_command(1u, keymgr_tt::km_firmware_handler::CMD_HW_VER, {});
     got = test->mb_receive_frame(frame);
-    CHECK(got, "012c-extra: CMD_HW_VER with seq=0 succeeds after reset");
+    CHECK(got, "012c-extra: CMD_HW_VER on the next expected seq succeeds after reset");
     parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
                                              ret_code, ret_arg);
-    CHECK(parsed && ret_code == 0, "012c-extra: normal seq=0 command succeeds after reset");
+    CHECK(parsed && ret_code == 0, "012c-extra: normal command succeeds after reset");
 
     std::cout << "\n--- FUNC012 complete: " << failures << " failure(s) ---\n\n";
     return failures;
