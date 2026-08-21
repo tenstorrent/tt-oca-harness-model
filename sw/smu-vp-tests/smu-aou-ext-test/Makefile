@@ -6,7 +6,10 @@
 VP        ?= ../../../vp/build_smc/bin/smu-vp
 SMC_INI   ?= ../../../vp/platform/smu/config/smc_smu_vp.ini
 SEP_INI   ?= ../../../vp/platform/smu/config/sep_smu_config.ini
-SIM_TIME_MS ?= 50
+# SEP waits for the SMC doorbell, then programs outbound filter 0 and does
+# an ext_out beat. 50 ms ends the run after the doorbell once Adams Bridge
+# is on the SEP bus (extra reset/elaboration work).
+SIM_TIME_MS ?= 200
 
 .PHONY: all smc sep sim clean
 
