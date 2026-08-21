@@ -25,8 +25,10 @@
 #  smc-vp-rhel8          Build smc-vp and run SMC VP firmware tests (needs
 #                        build-deps-rhel8 + Whisper ISS + RISC-V toolchain),
 #                        including the new smc-dma-test and smc-pvt-wrap-test.
-#                        Then runs Zephyr hello_world + mmio_poke via
-#                        sw/zephyr-smc/zephyr_smc.sh ci (west workspace cached).
+#                        Uploads the smc-vp binary for the Zephyr job.
+#  smc-zephyr-rhel8      Zephyr hello_world + mmio_poke on a separate AlmaLinux 8
+#                        runner so the west cache is not unpacked on top of
+#                        Whisper + vp/build_smc (same ENOSPC as Ubuntu PR #106).
 #  smu-unit-tests-rhel8  SMU interconnect unit tests (Release + Coverage;
 #                        ASAN skipped — gcc-toolset-12 ASAN runtime is not
 #                        packaged on AlmaLinux 8).
@@ -532,7 +534,8 @@ jobs:
 # Job 6 — build smc-vp and run SMC VP firmware tests on RHEL 8
 # The SMC platform requires the Tenstorrent-internal Whisper ISS.  We clone it,
 # build librvcore.a with gcc-toolset-12, then configure the VP with WHISPER_HOME
-# and run all bare-metal firmware tests under sw/smc-vp-tests.
+# and run all bare-metal firmware tests under sw/smc-vp-tests.  Zephyr lives in
+# smc-zephyr-rhel8 so the west workspace does not share this job's disk.
 # ─────────────────────────────────────────────────────────────────────────────
   smc-vp-rhel8:
     name: SMC VP firmware tests (RHEL 8)
@@ -553,8 +556,7 @@ jobs:
         run: |
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
-            cmake make git wget which ninja-build dtc \
-            python3.11 python3.11-pip python3.11-devel \
+            cmake make git wget which \
             zlib-devel readline-devel
 
       - name: Activate GCC Toolset 12
@@ -572,7 +574,8 @@ jobs:
           XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
           wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
           tar zxf "${XPACK}.tar.gz"
-          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          rm -f "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name 'xpack-riscv-none-elf-gcc-*' | head -1)
           mv "${EXTRACTED_DIR}" toolchain
           echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
 
@@ -696,6 +699,105 @@ jobs:
           cd sw/smc-vp-tests
           ./run_smc_vp_tests.sh
 
+      - name: Upload smc-vp binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-vp-bin-rhel8
+          path: vp/build_smc/bin/smc-vp
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload smc-vp logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smc-vp-logs-rhel8
+          path: sw/smc-vp-tests/smc-*/run_*.log
+          retention-days: 7
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 7 — Zephyr on smc-vp (RHEL 8).  Own AlmaLinux 8 container: west cache
+# must not share disk with Whisper + vp/build_smc (ENOSPC on PR #111).
+# ─────────────────────────────────────────────────────────────────────────────
+  smc-zephyr-rhel8:
+    name: Zephyr SMC VP tests (RHEL 8)
+    runs-on: ubuntu-22.04
+    container:
+      image: almalinux:8
+      options: --user root
+    needs: [build-deps-rhel8, smc-vp-rhel8]
+
+    steps:
+      - name: Enable EPEL and PowerTools
+        run: |
+          dnf install -y dnf-plugins-core
+          dnf install -y epel-release
+          dnf config-manager --set-enabled powertools
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            ${{ env.GCC_TOOLSET }} \
+            cmake make git wget which ninja-build dtc gperf \
+            python3.11 python3.11-pip python3.11-devel
+          dnf clean all
+
+      - name: Activate GCC Toolset 12
+        run: |
+          source /opt/rh/${{ env.GCC_TOOLSET }}/enable
+          echo "PATH=$PATH"                              >> "$GITHUB_ENV"
+          echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
+          echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Checkout (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore SystemC cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.SYSTEMC_HOME }}
+          key: systemc-${{ env.SYSTEMC_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Restore Boost cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BOOST_HOME }}
+          key: boost-${{ env.BOOST_VERSION }}-rhel8-pic
+
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-rhel8-boost${{ env.BOOST_VERSION }}-cxx${{ env.CXX_STD }}-libdir-lib
+
+      - name: Restore OpenSSL 3 cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OPENSSL3_HOME }}
+          key: openssl-${{ env.OPENSSL3_VERSION }}-rhel8-cxx${{ env.CXX_STD }}
+
+      - name: Download smc-vp binary
+        uses: actions/download-artifact@v4
+        with:
+          name: smc-vp-bin-rhel8
+          path: vp/build_smc/bin
+
+      - name: Install RISC-V toolchain
+        run: |
+          mkdir -p /home/runner/riscv
+          cd /home/runner/riscv
+          XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
+          wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
+          tar zxf "${XPACK}.tar.gz"
+          rm -f "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name 'xpack-riscv-none-elf-gcc-*' | head -1)
+          mv "${EXTRACTED_DIR}" toolchain
+          echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
+          df -h
+
       - name: Cache Zephyr west workspace
         id: cache-zephyr-rhel8
         uses: actions/cache@v4
@@ -703,43 +805,49 @@ jobs:
           path: |
             sw/zephyr-smc/.workspace
             sw/zephyr-smc/.venv
-          key: zephyr-${{ env.ZEPHYR_VERSION }}-rhel8-west1
+          # west2: narrow clones + unused-HAL filter.  Do not reuse west1
+          # (includes unused vendor HAL git history and fills the disk).
+          key: zephyr-${{ env.ZEPHYR_VERSION }}-rhel8-west2-narrow
 
       - name: Run Zephyr SMC VP tests
         env:
           SYSTEMC_HOME:         ${{ env.SYSTEMC_HOME }}
           CCI_HOME:             ${{ env.CCI_HOME }}
-          WHISPER_HOME:         /home/runner/whisper
           BOOST_DIR:            ${{ env.BOOST_HOME }}
           BOOST_ROOT:           ${{ env.BOOST_HOME }}
           OPENSSL_ROOT:         ${{ env.OPENSSL3_HOME }}
           OPENSSL_ROOT_DIR:     ${{ env.OPENSSL3_HOME }}
           RISCV_TOOLCHAIN_PATH: /home/runner/riscv/toolchain
           RISCV_PREFIX:         riscv-none-elf-
+          CROSS_COMPILE:        /home/runner/riscv/toolchain/bin/riscv-none-elf-
           ZEPHYR_VERSION:       ${{ env.ZEPHYR_VERSION }}
           ZEPHYR_SKIP_UPDATE:   ${{ steps.cache-zephyr-rhel8.outputs.cache-hit == 'true' && '1' || '0' }}
+          ZEPHYR_WEST_PROJECT_FILTER: "-hal_espressif,-hal_nordic,-hal_stm32,-hal_nxp,-hal_infineon,-hal_silabs,-hal_rpi_pico,-hal_altera,-hal_atmel,-hal_ti,-nrf_hw_models,-babblesim,-matter,-openthread,-tflite-micro,-trusted-firmware-m,-sof"
           SMC_VP:               ${{ github.workspace }}/vp/build_smc/bin/smc-vp
+          # gcc-toolset libstdc++ must stay on the path: smc-vp was built with
+          # GCC 12, and this env block would otherwise replace GITHUB_ENV's
+          # toolset LD_LIBRARY_PATH from the Activate step.
+          LD_LIBRARY_PATH: ${{ env.SYSTEMC_HOME }}/lib:${{ env.SYSTEMC_HOME }}/lib-linux64:${{ env.CCI_HOME }}/lib:${{ env.BOOST_HOME }}/lib:${{ env.BOOST_HOME }}/lib64:${{ env.OPENSSL3_HOME }}/lib:${{ env.OPENSSL3_HOME }}/lib64:/opt/rh/${{ env.GCC_TOOLSET }}/root/usr/lib64
         run: |
-          if [ ! -x "$SMC_VP" ]; then
-            SMC_VP="${{ github.workspace }}/vp/build/bin/smc-vp"
-          fi
-          export SMC_VP
+          chmod +x "$SMC_VP"
           test -x "$SMC_VP"
           cd sw/zephyr-smc
           ./zephyr_smc.sh ci
+          if [ -d .workspace ]; then
+            find .workspace -name .git -type d -prune -exec rm -rf {} + || true
+          fi
+          df -h
 
-      - name: Upload smc-vp logs
+      - name: Upload Zephyr SMC VP logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smc-vp-logs-rhel8
-          path: |
-            sw/smc-vp-tests/smc-*/run_*.log
-            sw/zephyr-smc/build/*/run.log
+          name: smc-zephyr-logs-rhel8
+          path: sw/zephyr-smc/build/*/run.log
           retention-days: 7
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 7 — SMU interconnect unit tests on RHEL 8
+# Job 8 — SMU interconnect unit tests on RHEL 8
 # SystemC + CCI only.  ASAN is skipped (gcc-toolset-12 ASAN runtime is not
 # packaged on AlmaLinux 8); Ubuntu CI covers ASAN.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -801,7 +909,7 @@ jobs:
           ./run_tests.sh --coverage
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 8 — build smu-vp and run SMU VP firmware tests on RHEL 8
+# Job 9 — build smu-vp and run SMU VP firmware tests on RHEL 8
 # Whisper archives must be PIC (libsmc_cluster_smu.so).  OpenSSL 3 is required
 # because smu-vp also links the SEP peripheral tree.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -842,7 +950,8 @@ jobs:
           XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
           wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
           tar zxf "${XPACK}.tar.gz"
-          EXTRACTED_DIR=$(tar tzf "${XPACK}.tar.gz" | head -1 | cut -d/ -f1)
+          rm -f "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name 'xpack-riscv-none-elf-gcc-*' | head -1)
           mv "${EXTRACTED_DIR}" toolchain
           echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
 

@@ -6,13 +6,11 @@
  *   010a - CMD_ENGINE_SHRED(DEST_HMAC) → RET_SUCCESS; HMAC stub receives
  *          17 writes (8 SHARE0 + 8 SHARE1 + KEY_CTRL; single pass, zeros)
  *   010b - CMD_ENGINE_SHRED(DEST_AES | DEST_KMAC) → both stubs receive writes
- *   010c - CMD_ENGINE_SHRED with empty payload → RET_FAILURE
+ *   010c - CMD_ENGINE_SHRED with an empty payload → RET_INVALID_LEN
  *   010d - CMD_ENGINE_SHRED(DEST_ABR_MLDSA_SEED) → ABR ML-DSA seed stub
  *          receives 17 writes
- *   010e - CMD_KEY_LOAD(8 words, DEST_ABR_MLDSA_SEED) + CMD_KEY_TRANSFER
+ *   010e - CMD_KEY_LOAD + CMD_KEY_TRANSFER to DEST_ABR_MLDSA_SEED
  *          → ABR stub receives a 17-write commit (KEY_CTRL=1)
- *   010f - CMD_KEY_LOAD with empty payload → RET_INVALID_LEN
- *   010g - CMD_KEY_LOAD size/payload mismatch → RET_INVALID_LEN
  */
 
 #include "testbench.h"
@@ -95,8 +93,8 @@ int key_manager_func010_test(key_manager_test* test, key_manager_model* /*dut*/,
              "010b: AES stub received 17 writes (8 SHARE0 + 8 SHARE1 + KEY_CTRL)");
 
     // ------------------------------------------------------------------
-    // 010c: CMD_ENGINE_SHRED with empty payload → RET_FAILURE
-    //   (firmware handler: p.size() < 1 → send_resp_cmd RET_FAILURE)
+    // 010c: CMD_ENGINE_SHRED takes exactly one payload word, so an empty payload
+    //   is rejected by the dispatcher's length check.
     // ------------------------------------------------------------------
     test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_ENGINE_SHRED, {});
     got = test->mb_receive_frame(frame);
@@ -104,7 +102,8 @@ int key_manager_func010_test(key_manager_test* test, key_manager_model* /*dut*/,
     parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
                                              ret_code, ret_arg);
     CHECK(parsed,          "010c: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -1, "010c: empty payload → RET_FAILURE (-1)");
+    CHECK_EQ(ret_code, -5, "010c: empty payload → RET_INVALID_LEN (-5)");
+    CHECK_EQ(ret_arg,  0u, "010c: ret_arg echoes the payload length received");
 
     // ------------------------------------------------------------------
     // 010d: CMD_ENGINE_SHRED(DEST_ABR_MLDSA_SEED) → 17 writes to ABR stub
@@ -128,17 +127,12 @@ int key_manager_func010_test(key_manager_test* test, key_manager_model* /*dut*/,
     // ------------------------------------------------------------------
     tb->abr_mldsa_seed_stub.clear();
     {
-        std::vector<uint32_t> load = { 7u, static_cast<uint32_t>(DEST_ABR_MLDSA) };
+        uint8_t handle = 0;
+        std::vector<uint32_t> key(8);
         for (uint32_t i = 0; i < 8; i++)
-            load.push_back(0x1000u + i);
-        test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_LOAD, load);
-        got = test->mb_receive_frame(frame);
-        CHECK(got, "010e: CMD_KEY_LOAD response received");
-        parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                                  ret_code, ret_arg);
-        CHECK(parsed,         "010e: KEY_LOAD parses as RESP_CMD");
+            key[i] = 0x1000u + i;
+        ret_code = test->mb_load_key(seq, key, DEST_ABR_MLDSA, handle);
         CHECK_EQ(ret_code, 0, "010e: KEY_LOAD ret_code = RET_SUCCESS");
-        const uint32_t handle = ret_arg & 0xFFu;
         CHECK(handle != 0u, "010e: KEY_LOAD returned a non-zero handle");
 
         test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_TRANSFER,
@@ -152,41 +146,6 @@ int key_manager_func010_test(key_manager_test* test, key_manager_model* /*dut*/,
         CHECK_EQ((uint32_t)tb->abr_mldsa_seed_stub.writes.size(), SHRED_WRITES,
                  "010e: ABR stub received 17 writes after KEY_TRANSFER");
     }
-
-    // ------------------------------------------------------------------
-    // 010f: CMD_KEY_LOAD empty payload → RET_INVALID_LEN
-    // ------------------------------------------------------------------
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_LOAD, {});
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "010f: empty KEY_LOAD response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                              ret_code, ret_arg);
-    CHECK(parsed,          "010f: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -5, "010f: empty payload → RET_INVALID_LEN (-5)");
-
-    // ------------------------------------------------------------------
-    // 010g: KEY_SIZE claims 4 words but only one word is supplied
-    // ------------------------------------------------------------------
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_LOAD,
-                          {3u, static_cast<uint32_t>(DEST_ABR_MLDSA), 0xA5A5A5A5u});
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "010g: mismatched KEY_LOAD response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                              ret_code, ret_arg);
-    CHECK(parsed,          "010g: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -5, "010g: size/payload mismatch → RET_INVALID_LEN (-5)");
-
-    // ------------------------------------------------------------------
-    // 010h: KEY_SIZE_M1=12 → 13 words, over the 12-word firmware cap
-    // ------------------------------------------------------------------
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_LOAD,
-                          {12u, static_cast<uint32_t>(DEST_ABR_MLDSA)});
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "010h: oversize KEY_LOAD response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                              ret_code, ret_arg);
-    CHECK(parsed,          "010h: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -5, "010h: KEY_SIZE > 12 → RET_INVALID_LEN (-5)");
 
     std::cout << "\n--- FUNC010 complete: " << failures << " failure(s) ---\n\n";
     return failures;

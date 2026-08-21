@@ -195,7 +195,9 @@ constexpr uint64_t A_PERIPH_MAIN = 0xC000'2000ULL;
 constexpr uint64_t A_SPM         = 0xC004'0000ULL;
 constexpr uint64_t A_DMA         = 0xC003'8000ULL;
 constexpr uint64_t A_DFD         = 0xC016'0000ULL;
-constexpr uint64_t A_DFT         = 0xC000'F800ULL;
+constexpr uint64_t A_DFT         = 0xC000'B800ULL;   // RTL DFX_CSR base
+constexpr uint64_t A_AOU_PARK    = 0xC000'C000ULL;   // VP-only AOU park
+constexpr uint64_t A_PERIPH_GONE = 0xC000'E000ULL;   // above RTL periph_main end
 constexpr uint64_t A_CPUCTRL     = 0xC003'9000ULL;
 constexpr uint64_t A_MAILBOX     = 0xC001'8000ULL;
 constexpr uint64_t A_AR          = 0xC001'2000ULL;
@@ -395,6 +397,26 @@ struct tb : sc_core::sc_module {
         d_mmio.write32(A_MAILBOX, 0x6666);
         EXPECT_EQ(1u, p_mbox.hits);
         std::cout << "  [PASS] local decode routing\n";
+
+        // ----------------------------------------------------------------
+        // 2b. Realignment Phase 2 window ends.
+        //     periph_main now stops at the RTL 0xC000_B800, so the old VP
+        //     tail (0xC000_C000..0xC000_E7FF) is no longer swallowed; only
+        //     the VP-only AOU park inside it still reaches the periph port.
+        // ----------------------------------------------------------------
+        {
+            const unsigned periph_before = p_periph.hits;
+            d_mmio.write32(A_AOU_PARK, 0x7777);
+            EXPECT_EQ(periph_before + 1u, p_periph.hits);
+            EXPECT_EQ(A_AOU_PARK, p_periph.last_addr);
+
+            uint32_t scratch = 0;
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      d_mmio.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_GONE,
+                                  &scratch));
+            EXPECT_EQ(periph_before + 1u, p_periph.hits);
+            std::cout << "  [PASS] phase-2 periph_main / AOU park ends\n";
+        }
 
         // ----------------------------------------------------------------
         // 3. smc_base_config CSR handled internally; cpu_ctrl goes to front_port.

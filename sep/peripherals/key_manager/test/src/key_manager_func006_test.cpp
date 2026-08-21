@@ -1,20 +1,33 @@
 /**
  * @file key_manager_func006_test.cpp
- * @brief CMD_KEY_REGISTER — registering SEP-supplied keys into KPV
+ * @brief CMD_KEY_LOAD — host-supplied keys into the KPV over the mailbox
+ *
+ * CMD_KEY_LOAD (0x26) is the provisioning path that replaced the KPVLP window:
+ * SEP hands the plaintext key over the mailbox and the KM places it in a vault
+ * slot, returning an opaque handle. The handle's low byte is what the firmware
+ * driver feeds straight into CMD_KEY_TRANSFER.
+ *
+ * Rejections all report RET_INVALID_ARG and carry the index of the offending
+ * payload word, checked in the same order the firmware validates them.
  *
  * Tests covered:
- *   006a - Grant slot, write key via KPVLP, send CMD_KEY_REGISTER → RET_SUCCESS
- *   006b - ret_arg = key_handle [7:0] in range [1..255]
- *   006c - CMD_KEY_REGISTER with invalid payload length → RET_INVALID_LEN
- *   006d - CMD_KEY_REGISTER with slot out of range → RET_INVALID_ARG
- *   006e - CMD_KEY_REGISTER with mismatched ctrl fields (extend mismatch) → RET_INVALID_ARG
- *   006f - CMD_KEY_REGISTER with wrong KEY_CRC → RET_INVALID_ARG (points to crc field)
- *   006g - After registration, slot is locked for further writes (lock_write set)
+ *   006a - CMD_KEY_LOAD with an 8-word key → RET_SUCCESS
+ *   006b - ret_arg low byte = key handle in [1..255]
+ *   006c - Payload shorter than the minimum three words → RET_INVALID_ARG, arg 0
+ *   006d - Declared key size longer than the frame carries → RET_INVALID_ARG, arg 0
+ *   006e - KEY_SIZE reserved bits [31:7] set → RET_INVALID_ARG, arg 0
+ *   006f - DEST_VALID of zero → RET_INVALID_ARG, arg 1
+ *   006g - DEST_VALID reserved bits [31:8] set → RET_INVALID_ARG, arg 1
+ *   006h - A one-word key is accepted (minimum legal size)
+ *   006i - Successive loads return distinct handles
+ *   006j - A 16-word key fills exactly one slot
+ *   006k - A 17-word key spans two slots and reads back intact
  */
 
 #include "testbench.h"
 #include "km_firmware_handler.h"
 #include <iostream>
+#include <string>
 
 #define CHECK(cond, msg) \
     do { \
@@ -35,9 +48,11 @@
 int key_manager_func006_test(key_manager_test* test, key_manager_model* /*dut*/, testbench* /*tb*/)
 {
     int failures = 0;
-    std::cout << "\n--- FUNC006: CMD_KEY_REGISTER ---\n";
+    std::cout << "\n--- FUNC006: CMD_KEY_LOAD ---\n";
 
     test->trigger_reset();
+
+    using fw = keymgr_tt::km_firmware_handler;
 
     uint8_t  resp_id = 0, src_seq = 0, echoed_cmd = 0;
     int32_t  ret_code = 0;
@@ -45,143 +60,85 @@ int key_manager_func006_test(key_manager_test* test, key_manager_model* /*dut*/,
     std::vector<uint32_t> frame;
     uint8_t seq = 0;
 
-    // Grant one slot for our key
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {0u});
-    bool got = test->mb_receive_frame(frame);
-    bool parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                                  ret_code, ret_arg);
-    (void)got; (void)parsed;
-    uint32_t slot = ret_arg & 0x1Fu;  // granted base slot
-
-    // Choose key parameters
-    const uint8_t EXTEND     = 0;    // 1 slot (extend+1)
-    const uint8_t DEST_VALID = 0x01; // HMAC only
-    const uint8_t LAST_DWORD = 7;    // 8 words used (words 0..7)
-
     // ------------------------------------------------------------------
-    // Write key words to KPVLP_KEY (SEP-side writes for the granted slot)
+    // 006a / 006b: load an 8-word key and collect the handle
     // ------------------------------------------------------------------
     std::vector<uint32_t> key_words;
-    for (uint32_t w = 0; w <= LAST_DWORD; w++) {
-        uint32_t kw = 0xA0000000u | w;
-        key_words.push_back(kw);
-        test->register_write_32(key_manager_basetest::kpvlp_key_offset(slot, w), kw);
-    }
+    for (uint32_t w = 0; w < 8; w++)
+        key_words.push_back(0xA0000000u | w);
 
-    // Write KPVLP_CTRL for the slot
-    // CTRL word: [6:4]=extend | [16:9]=dest_valid | [20:17]=last_dword
-    uint32_t ctrl_word = (static_cast<uint32_t>(EXTEND)     << 4)
-                       | (static_cast<uint32_t>(DEST_VALID)  << 9)
-                       | (static_cast<uint32_t>(LAST_DWORD)  << 17);
-    test->register_write_32(key_manager_basetest::kpvlp_ctrl_offset(slot), ctrl_word);
+    uint8_t handle_a = 0;
+    ret_code = test->mb_load_key(seq, key_words, fw::DEST_HMAC, handle_a);
+    CHECK_EQ(ret_code, 0, "006a: CMD_KEY_LOAD (8 words) ret_code = RET_SUCCESS");
+    CHECK(handle_a >= 1u && handle_a <= 255u,
+          "006b: ret_arg low byte = key handle in [1..255]");
 
-    // Compute KEY_CRC = CRC32 of key words
-    uint32_t key_crc = key_manager_test::crc32_payload(key_words.data(), key_words.size());
-
-    // ------------------------------------------------------------------
-    // 006a: CMD_KEY_REGISTER → RET_SUCCESS
-    //   Payload: [slot, key_size-1, dest_valid, key_crc]
-    // ------------------------------------------------------------------
-    const uint8_t KEY_SIZE_M1 = LAST_DWORD;  // key_size-1 = 8-1 = 7 (8 words)
-    std::vector<uint32_t> payload = {
-        static_cast<uint32_t>(slot),
-        static_cast<uint32_t>(KEY_SIZE_M1),
-        static_cast<uint32_t>(DEST_VALID),
-        key_crc
+    // A rejected CMD_KEY_LOAD reports INVALID_ARG (-7) and returns the index of
+    // the payload word at fault.
+    auto expect_invalid_arg = [&](const std::vector<uint32_t>& payload,
+                                  uint32_t bad_word, const char* what) {
+        test->mb_send_command(seq++, fw::CMD_KEY_LOAD, payload);
+        bool ok = test->mb_receive_frame(frame);
+        CHECK(ok, std::string(what) + ": response received");
+        if (!ok) return;
+        bool parsed_ok = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq,
+                                                         echoed_cmd, ret_code, ret_arg);
+        CHECK(parsed_ok, std::string(what) + ": response parses as RESP_CMD");
+        CHECK_EQ(ret_code, -7, std::string(what) + ": RET_INVALID_ARG (-7)");
+        CHECK_EQ(ret_arg, bad_word, std::string(what) + ": ret_arg names the bad word");
     };
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER, payload);
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "006a: CMD_KEY_REGISTER response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                             ret_code, ret_arg);
-    CHECK(parsed,         "006a: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, 0, "006a: CMD_KEY_REGISTER ret_code = RET_SUCCESS");
+
+    // 006c: two words carry a size and a destination but no key at all.
+    expect_invalid_arg({0u, fw::DEST_HMAC}, 0u, "006c: payload below minimum");
+
+    // 006d: KEY_SIZE claims four words but only two follow.
+    expect_invalid_arg({3u, fw::DEST_HMAC, 0x11111111u, 0x22222222u}, 0u,
+                       "006d: declared size exceeds frame");
+
+    // 006e: KEY_SIZE reserved bits above [6:0] must be zero.
+    expect_invalid_arg({0x80u, fw::DEST_HMAC, 0x33333333u}, 0u,
+                       "006e: KEY_SIZE reserved bits set");
+
+    // 006f: a key with no permitted destination could never be used.
+    expect_invalid_arg({0u, 0u, 0x44444444u}, 1u, "006f: DEST_VALID is zero");
+
+    // 006g: DEST_VALID reserved bits above [7:0] must be zero.
+    expect_invalid_arg({0u, 0x100u, 0x55555555u}, 1u,
+                       "006g: DEST_VALID reserved bits set");
 
     // ------------------------------------------------------------------
-    // 006b: ret_arg = key_handle [7:0] in range [1..255]
+    // 006h: one-word key is the minimum legal size
     // ------------------------------------------------------------------
-    uint32_t handle_a = ret_arg & 0xFFu;
-    CHECK(handle_a >= 1u && handle_a <= 255u, "006b: ret_arg = key_handle in [1..255]");
+    uint8_t handle_b = 0;
+    ret_code = test->mb_load_key(seq, {0xDEADBEEFu}, fw::DEST_AES, handle_b);
+    CHECK_EQ(ret_code, 0, "006h: CMD_KEY_LOAD (1 word) ret_code = RET_SUCCESS");
+    CHECK(handle_b >= 1u, "006h: one-word key returns a usable handle");
 
     // ------------------------------------------------------------------
-    // 006c: CMD_KEY_REGISTER with too-short payload → RET_INVALID_LEN
-    //   Requires p.size() >= 4; send only 3 words.
+    // 006i: handles are distinct across loads
     // ------------------------------------------------------------------
-    (void)handle_a;
-    // Grant a fresh slot for this sub-test
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {0u});
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                             ret_code, ret_arg);
-    uint32_t slot2 = ret_arg & 0x1Fu;
-
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER,
-                          {slot2, 0u, 0u});  // only 3 payload words — too short
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "006c: short payload response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                             ret_code, ret_arg);
-    CHECK(parsed,          "006c: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -5, "006c: short payload → RET_INVALID_LEN (-5)");
+    CHECK(handle_a != handle_b, "006i: successive loads return distinct handles");
 
     // ------------------------------------------------------------------
-    // 006d: Slot out of range → RET_INVALID_ARG
-    //   slot=30, key_size-1=32 → key_size=33 → ceil(33/16)=3 slots → slot 32 OOB.
+    // 006j / 006k: slot geometry at and just past the 16-word slot boundary.
+    //   A 17-word key has to span two slots, so this is the case that would
+    //   silently truncate if the loader ignored EXTEND.
     // ------------------------------------------------------------------
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER,
-                          {30u, 32u, 1u, 0u});  // key_size-1=32 → key_size=33 → 3 slots → slot 32 OOB
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "006d: OOB slot response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                             ret_code, ret_arg);
-    CHECK(parsed,          "006d: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -7, "006d: out-of-range slot → RET_INVALID_ARG (-7)");
+    {
+        std::vector<uint32_t> key16;
+        for (uint32_t w = 0; w < 16u; w++) key16.push_back(0xC0000000u | w);
+        uint8_t h16 = 0;
+        ret_code = test->mb_load_key(seq, key16, fw::DEST_HMAC, h16);
+        CHECK_EQ(ret_code, 0, "006j: CMD_KEY_LOAD (16 words, one full slot) → RET_SUCCESS");
+        CHECK(h16 >= 1u,      "006j: 16-word key returns a usable handle");
 
-    // ------------------------------------------------------------------
-    // 006e: Extend mismatch — supply wrong key_size-1 for slot2
-    //   slot2 CTRL was never written (extend=0 → 1 slot).
-    //   key_size-1=16 → key_size=17 → 2 slots, but CTRL has extend=0=1 slot → mismatch → RET_INVALID_ARG
-    // ------------------------------------------------------------------
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER,
-                          {slot2, 16u /*key_size-1=16 → 2 slots, mismatch*/, 0u, 0u});
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "006e: extend mismatch response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                             ret_code, ret_arg);
-    CHECK(parsed,          "006e: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -7, "006e: extend mismatch → RET_INVALID_ARG (-7)");
-
-    // ------------------------------------------------------------------
-    // 006f: Wrong KEY_CRC — slot2 ctrl matches (key_size-1=0, dest_valid=0)
-    //   but KEY_CRC is deliberately wrong → RET_INVALID_ARG (ret_arg=3 = KEY_CRC field)
-    // ------------------------------------------------------------------
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER,
-                          {slot2, 0u, 0u, 0xDEADBEEFu /*bad CRC*/});
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "006f: bad KEY_CRC response received");
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
-                                             ret_code, ret_arg);
-    CHECK(parsed,          "006f: response parses as RESP_CMD");
-    CHECK_EQ(ret_code, -7, "006f: wrong KEY_CRC → RET_INVALID_ARG (-7)");
-    CHECK_EQ(ret_arg,  3u, "006f: ret_arg = 3 (points to KEY_CRC payload field)");
-
-    // ------------------------------------------------------------------
-    // 006g: Sending CMD_KEY_REGISTER again on the already-registered slot
-    //   (slot is now lock_write=1 after 006a). km_read_key_word returns 0
-    //   for all words (lock_use not set yet — only lock_write is set by register).
-    //   Actually lock_write is checked by km_write_ctrl (not read) so KM can
-    //   still read for CRC check. But lock_write prevents new km_write_key_word.
-    //   The second CMD_KEY_REGISTER attempt: ctrl fields still match (same as
-    //   what was written), and CRC of now-locked key still matches → succeeds
-    //   again? No — lock_write would prevent SEP from writing new key data, but
-    //   KM can read. So a duplicate CMD_KEY_REGISTER would return RET_SUCCESS
-    //   again (same key, same CRC). This is an edge case noted in the TODO.
-    //   Just verify the model doesn't crash; don't assert specific result.
-    // ------------------------------------------------------------------
-    // Re-compute CRC for slot (using correct key data that KM can still read)
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER, payload);
-    got = test->mb_receive_frame(frame);
-    CHECK(got, "006g: duplicate CMD_KEY_REGISTER on locked slot responds without crash");
+        std::vector<uint32_t> key17;
+        for (uint32_t w = 0; w < 17u; w++) key17.push_back(0xD0000000u | w);
+        uint8_t h17 = 0;
+        ret_code = test->mb_load_key(seq, key17, fw::DEST_HMAC, h17);
+        CHECK_EQ(ret_code, 0, "006k: CMD_KEY_LOAD (17 words, spans two slots) → RET_SUCCESS");
+        CHECK(h17 >= 1u,      "006k: 17-word key returns a usable handle");
+    }
 
     std::cout << "\n--- FUNC006 complete: " << failures << " failure(s) ---\n\n";
     return failures;

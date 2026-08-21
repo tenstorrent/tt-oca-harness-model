@@ -451,7 +451,6 @@ void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.mbox_start_addr,        opt.mbox_end_addr,        *mbox_bridge);
         bus->ports[it++] = new PortMapping(opt.aon_timer_start_addr,   opt.aon_timer_end_addr,   *aon_timer);
         bus->ports[it++] = new PortMapping(opt.keymgr_mb_start_addr,   opt.keymgr_mb_end_addr,   *keymgr);
-        bus->ports[it++] = new PortMapping(opt.keymgr_kpvlp_start_addr,opt.keymgr_kpvlp_end_addr,*keymgr);
         bus->ports[it++] = new PortMapping(opt.sep_efuse_start_addr,   opt.sep_efuse_end_addr,   *sep_efuse);
         bus->ports[it++] = new PortMapping(opt.lc_ctrl_start_addr,     opt.lc_ctrl_end_addr,     *lc_ctrl);
         bus->ports[it++] = new PortMapping(opt.entropy_src_start_addr, opt.entropy_src_end_addr, *entropy_src);
@@ -588,7 +587,6 @@ void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(mbox_bridge->tsock);
         bus->isocks[it++].bind(aon_timer->target_socket);
         bus->isocks[it++].bind(keymgr->mailbox_socket);
-        bus->isocks[it++].bind(keymgr->kpvlp_socket);
         bus->isocks[it++].bind(sep_efuse->target_socket);
         bus->isocks[it++].bind(lc_ctrl->target_socket);
         bus->isocks[it++].bind(entropy_src->target_socket);

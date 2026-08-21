@@ -2,21 +2,22 @@
  * @file km_firmware_handler.h
  * @brief Key Manager TT — Firmware handler (KM CPU abstraction).
  *
- * Pure C++ class replacing PicoRV32 ISS. Implements the key management
- * firmware operations described in KM_FW.md and KeyManager.md.
+ * Pure C++ class replacing PicoRV32 ISS. Implements the key management firmware
+ * operations described in docs/01_key_manager_Specification/doc/firmware.adoc,
+ * whose ROM sources are under docs/01_key_manager_Specification/dv/fw/.
  *
  * The SC_THREAD (fw_thread) lives in key_manager_model and calls:
  *   1. boot()            — one-time initialisation (DRBG, KPV shred, engine init)
  *   2. process_messages()— called each time m_mailbox.inbound_msg_event() fires
  *
- * Message container format (from KM_FW.md):
+ * Message container format (firmware.adoc, message container):
  *   Word 0 (header): [31:24] HEADER_CRC8 | [23:16] PAYLOAD_LEN | [15:8] CMD_ID | [7:0] SEQ_NUM
  *   Words 1..N       payload words (PAYLOAD_LEN words)
  *   Word N+1         PAYLOAD_CRC32 (only present if PAYLOAD_LEN > 0)
  *   The last word in the message has the mailbox SEPARATOR bit set.
  *
- * RESP_CMD return argument bit layouts are confirmed from KM_FW.md
- * command response tables (lines 317–555).
+ * RESP_CMD return argument bit layouts are confirmed from the command
+ * response tables in firmware.adoc.
  */
 #pragma once
 #include "km_kpv.h"
@@ -35,35 +36,39 @@ namespace keymgr_tt {
 class km_firmware_handler {
 public:
     // -----------------------------------------------------------------------
-    // Command IDs  (KM_FW.md)
+    // Command IDs  (firmware.adoc)
     // -----------------------------------------------------------------------
     enum cmd_id_t : uint8_t {
-        CMD_HW_VER          = 0x00,
-        CMD_ROM_VER         = 0x01,
-        CMD_SRAM_VER        = 0x02,
-        CMD_STAT            = 0x03,
-        CMD_RECOV_ACK       = 0x04,  ///< Acknowledge recoverable fault (from rom_defs.h)
-        CMD_KPVLP_SLOT_REQ  = 0x20,
-        CMD_KEY_REGISTER    = 0x21,
-        CMD_KEY_GENERATE    = 0x22,
-        CMD_KEY_REVOKE      = 0x23,
-        CMD_KEY_TRANSFER    = 0x24,
-        CMD_ENGINE_SHRED    = 0x25,
-        CMD_KEY_LOAD        = 0x26,  ///< SEP-supplied key material (rom_defs.h)
+        CMD_HW_VER             = 0x00,
+        CMD_ROM_VER            = 0x01,
+        CMD_SRAM_VER           = 0x02,
+        CMD_STAT               = 0x03,
+        CMD_RECOV_ACK          = 0x04,  ///< Acknowledge recoverable fault (from rom_defs.h)
+        CMD_EXEC_ROM           = 0x10,  ///< Lock to ROM; disable mutable-firmware handover
+        CMD_SRAM_LOAD_EXEC     = 0x11,  ///< Load and run mutable firmware image
+        CMD_SRAM_EXEC          = 0x12,  ///< Jump to already-loaded mutable firmware
+        CMD_KEY_GENERATE       = 0x22,
+        CMD_KEY_REVOKE         = 0x23,
+        CMD_KEY_TRANSFER       = 0x24,
+        CMD_ENGINE_SHRED       = 0x25,
+        CMD_KEY_LOAD           = 0x26,  ///< Host-supplied key into the KPV
+        CMD_ABR_SK_TRANSFER      = 0x27,  ///< Capture ML-KEM shared key from Adams Bridge
+        CMD_OTP_READ_LOCK_COLD = 0x28,  ///< Cold-domain OTP read lock
     };
 
     // -----------------------------------------------------------------------
-    // Response IDs  (KM_FW.md)
+    // Response IDs  (firmware.adoc)
     // -----------------------------------------------------------------------
     enum resp_id_t : uint8_t {
-        RESP_CMD                 = 0x00,
-        RESP_KM_READY            = 0x55,  ///< Boot-complete announcement (from rom_defs.h)
-        RESP_RECOVERABLE_FAULT   = 0xFE,
-        RESP_UNRECOVERABLE_FAULT = 0xFF,
+        RESP_CMD                    = 0x00,
+        RESP_KM_READY               = 0x55,  ///< Boot-complete announcement (from rom_defs.h)
+        RESP_ABR_SHARED_KEY_READY   = 0x56,  ///< Never emitted: CMD_ABR_SK_TRANSFER not wired
+        RESP_RECOVERABLE_FAULT      = 0xFE,
+        RESP_UNRECOVERABLE_FAULT    = 0xFF,
     };
 
     // -----------------------------------------------------------------------
-    // Return codes  (KM_FW.md / rom_defs.h)
+    // Return codes  (firmware.adoc / rom_defs.h)
     //   Order confirmed from rom_defs.h enum rom_ret_code_e.
     // -----------------------------------------------------------------------
     enum ret_code_t : int32_t {
@@ -78,7 +83,7 @@ public:
     };
 
     // -----------------------------------------------------------------------
-    // Recoverable fault codes  (KM_FW.md §Recoverable Fault Codes)
+    // Recoverable fault codes  (firmware.adoc §Recoverable Fault Codes)
     //   Payload of RESP_RECOVERABLE_FAULT.
     // -----------------------------------------------------------------------
     enum recoverable_fault_code_t : int8_t {
@@ -90,7 +95,7 @@ public:
     };
 
     // -----------------------------------------------------------------------
-    // Unrecoverable fault codes  (KM_FW.md §Unrecoverable Fault Codes)
+    // Unrecoverable fault codes  (firmware.adoc §Unrecoverable Fault Codes)
     //   Payload of RESP_UNRECOVERABLE_FAULT.
     // -----------------------------------------------------------------------
     enum unrecoverable_fault_code_t : int8_t {
@@ -109,7 +114,9 @@ public:
     };
 
     // -----------------------------------------------------------------------
-    // DEST_VALID / DEST_ENGINE bitmask  (KM_FW.md)
+    // DEST_VALID / DEST_ENGINE bitmask  (rom_defs.h)
+    //   Bits 4-7 address the Adams Bridge seed ports, written through
+    //   key_manager_model::key_transfer_via_socket.
     // -----------------------------------------------------------------------
     enum dest_t : uint8_t {
         DEST_HMAC            = (1u << 0),
@@ -120,7 +127,13 @@ public:
         DEST_ABR_MLKEM_D     = (1u << 5),
         DEST_ABR_MLKEM_Z     = (1u << 6),
         DEST_ABR_MLKEM_MSG   = (1u << 7),
+        DEST_ABR_ALL         = 0xF0u,
     };
+
+    /// Largest key the vault will hold, in 32-bit words. The wire encoding is
+    /// word-count-minus-1 in 7 bits, so this is 128 (ROM_KM_MAX_KEY_WORDS), and a
+    /// key that wide spans MAX_SLOTS_PER_KEY consecutive slots.
+    static constexpr int KEY_LOAD_MAX_WORDS = km_kpv::MAX_KEY_WORDS;
 
     // -----------------------------------------------------------------------
     // Key-transfer callback type
@@ -145,8 +158,6 @@ public:
     static constexpr uint8_t ROM_MAJOR = 1;
     static constexpr uint8_t ROM_MINOR = 0;
     static constexpr uint8_t ROM_PATCH = 0;
-
-    static constexpr int KEY_GEN_WORDS   = 8;   ///< Standard 256-bit key words generated per slot
 
     // -----------------------------------------------------------------------
     // Demotion-state callback type
@@ -220,7 +231,8 @@ private:
     // Message I/O
     // -----------------------------------------------------------------------
 
-    /// Pop words from mailbox until separator seen; returns collected words.
+    /// Drain the inbound FIFO into m_rx_buffer, returning true and handing over
+    /// the words only once a separator completes the frame.
     bool receive_message(std::vector<uint32_t>& words);
 
     /// Build and push a complete response message into the outbound mailbox.
@@ -248,13 +260,16 @@ private:
     bool handle_cmd_sram_ver       (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_stat           (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_recov_ack      (uint8_t seq, const std::vector<uint32_t>& p);
-    bool handle_cmd_kpvlp_slot_req (uint8_t seq, const std::vector<uint32_t>& p);
-    bool handle_cmd_key_register   (uint8_t seq, const std::vector<uint32_t>& p);
+    bool handle_cmd_exec_rom       (uint8_t seq, const std::vector<uint32_t>& p);
+    bool handle_cmd_sram_load_exec (uint8_t seq, const std::vector<uint32_t>& p);
+    bool handle_cmd_sram_exec      (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_key_generate   (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_key_revoke     (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_key_transfer   (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_engine_shred   (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_key_load       (uint8_t seq, const std::vector<uint32_t>& p);
+    bool handle_cmd_abr_sk_transfer  (uint8_t seq, const std::vector<uint32_t>& p);
+    bool handle_cmd_otp_read_lock_cold(uint8_t seq, const std::vector<uint32_t>& p);
 
     // -----------------------------------------------------------------------
     // CRC helpers
@@ -284,23 +299,70 @@ private:
 
     km_otp_data_t m_otp_data;                        ///< OTP data pushed from sep_efuse at start-of-simulation
 
+    bool    m_rom_locked           = false;  ///< CMD_EXEC_ROM latched: handover refused
+    uint8_t m_otp_read_lock_cold   = 0;      ///< KMCSR OTP_READ_LOCK_COLD [5:0], write-one-to-set
+
+    /// Inbound reassembly buffer, sized like the firmware's SRAM message buffer:
+    /// header + ROM_KM_MAX_PAYLOAD_LEN + payload CRC. A message may be written by
+    /// SEP in several FIFO-sized instalments, so partial frames persist here
+    /// between calls to process_messages().
+    static constexpr size_t MSGBUF_WORDS = 1 + 255 + 1;
+    std::vector<uint32_t> m_rx_buffer;
+
     // -----------------------------------------------------------------------
     // Key handle registry
     //   Opaque handles (1..255) map to KPV base slot indices.
     //   Handle 0 is the null handle (never allocated).
+    //
+    //   Permitted sideload destinations live here rather than in the KPV
+    //   control register, mirroring hardware: the vault stores opaque blobs and
+    //   the firmware key registry owns the destination policy.
     // -----------------------------------------------------------------------
     struct km_handle_entry_t {
-        bool    valid     = false;
-        uint8_t base_slot = 0;
+        bool     valid      = false;
+        uint8_t  base_slot  = 0;
+        uint8_t  num_slots  = 0;   ///< Slots spanned; recorded at allocation
+        uint8_t  dest_valid = 0;   ///< Destinations this key may be transferred to
+        uint32_t crc32      = 0;   ///< CRC-32C over the key material as loaded
     };
     km_handle_entry_t m_handle_registry[256] = {};   ///< index = handle; [0] = null
 
-    /// Scan 1..255 for first invalid entry; mark valid, set base_slot, return handle.
-    /// Returns -1 if all handles are in use.
-    int  alloc_handle(uint8_t base_slot);
+    /// Next handle to hand out. Handles are issued monotonically and never
+    /// recycled (rom_keyreg_generate), so revoking a key frees its slots but not
+    /// its handle number. Exhausted once 255 handles have been issued.
+    uint8_t m_next_handle = 1;
 
-    /// Mark handle as invalid (free it back to the pool).
+    /// Record a new handle for the key based at `base_slot`. Returns the handle,
+    /// or -1 when the registry is exhausted.
+    int  alloc_handle(uint8_t base_slot, uint8_t num_slots, uint8_t dest_valid,
+                      uint32_t crc32);
+
+    /// Mark handle as invalid. The handle number is not returned to the pool.
     void free_handle(uint8_t handle);
+
+    // -----------------------------------------------------------------------
+    // Shared key provisioning  (rom_load_key)
+    //
+    // CMD_KEY_GENERATE and CMD_KEY_LOAD are one code path in firmware: generate
+    // fills a buffer from the DRBG and hands it to the same loader. Keeping that
+    // structure here is what stops the two commands drifting apart.
+    //
+    // Ordering matters and mirrors the firmware: the handle is registered before
+    // the vault is touched, so a registry-exhaustion failure cannot leave a
+    // written, write-locked slot stranded with no handle referring to it.
+    // -----------------------------------------------------------------------
+
+    /// Provisioning outcome, distinguishing the cases the firmware distinguishes.
+    enum load_key_rc_t : int {
+        LOAD_OK          =  0,
+        LOAD_BAD_ARGS    = -1,  ///< Bad length/destination, or no slot run fits
+        LOAD_NO_HANDLES  = -2,  ///< Handle registry exhausted; vault untouched
+        LOAD_KPV_FAILED  = -3,  ///< Vault write refused; handle rolled back
+    };
+
+    /// Place `words` in the vault and return a handle in `handle_out`.
+    load_key_rc_t load_key(const uint32_t* words, int len, uint8_t dest_valid,
+                           uint8_t& handle_out);
 };
 
 } // namespace keymgr_tt

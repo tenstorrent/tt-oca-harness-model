@@ -41,9 +41,8 @@ testbench::testbench(sc_module_name name)
     m_dut  = std::make_unique<key_manager_model>("keymgr_tt");
     m_test = std::make_unique<key_manager_test> ("key_manager_test");
 
-    // Bind TLM sockets: test initiators → DUT targets (two separate slave ports)
-    m_test->initiator_socket       .bind(m_dut->mailbox_socket);
-    m_test->kpvlp_initiator_socket .bind(m_dut->kpvlp_socket);
+    // Bind TLM sockets: test initiator → DUT mailbox, the only SEP-visible port
+    m_test->initiator_socket.bind(m_dut->mailbox_socket);
 
     // Bind DUT crypto-engine initiator sockets → recording stubs
     m_dut->hmac_key_socket.bind(hmac_stub.socket);

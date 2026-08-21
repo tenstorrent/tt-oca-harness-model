@@ -6,7 +6,7 @@ The AVSBus Controller is the SMC's Adaptive Voltage Scaling Bus master. It
 implements AVSBus **1.3.1** for a **single** target voltage regulator, exposing
 a 32-bit AXI4-Lite register window and one aggregated interrupt.
 
-SMC placement: base `0xC000_8000`, 4 KiB window, peripheral interrupt bit 22
+SMC placement: base `0xC000_4000`, 4 KiB window, peripheral interrupt bit 22
 (PLIC source 23).
 
 ## 2. Software-visible behaviour

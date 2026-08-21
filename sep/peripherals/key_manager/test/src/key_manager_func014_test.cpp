@@ -7,15 +7,18 @@
  *   - Outbound Mailbox Overflow
  *   - Outbound Mailbox Underflow & Underflow IRQ
  *   - Sequence number error with prior valid RX
- *   - KPVLP slot request resource exhaustion
+ *   - KPV slot resource exhaustion
  *   - Payload size/length validation error checks
+ *   - Destination policy enforcement, including accepted-but-dropped ABR ports
  *   - kpv_ctrl_t serialization roundtrip
- *   - km_kpv unused methods (km_clear_key, km_is_valid)
+ *   - km_kpv direct methods (km_clear_key, km_is_valid, km_erase_key)
  */
 
 #include "testbench.h"
 #include "km_firmware_handler.h"
 #include <iostream>
+#include <string>
+#include <vector>
 
 #define CHECK(cond, msg) \
     do { \
@@ -49,34 +52,13 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     // ------------------------------------------------------------------
     // 014a: Emergency Wipe via wipe_ni & Unrecoverable Fault / KM Flush Flow
     // ------------------------------------------------------------------
-    // Request 2 slots, write key words, and register a key to setup state
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {1u});
-    bool got = test->mb_receive_frame(frame);
-    bool parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == 0, "014a: CMD_KPVLP_SLOT_REQ success");
-    uint8_t base_slot = ret_arg & 0x1Fu;
+    // Load a key so the wipe has live vault state to destroy
+    uint8_t wipe_handle = 0;
+    ret_code = test->mb_load_key(seq, {0x11223344u, 0x55667788u},
+                                 keymgr_tt::km_firmware_handler::DEST_HMAC, wipe_handle);
+    CHECK(ret_code == 0 && wipe_handle != 0, "014a: CMD_KEY_LOAD success");
 
-    // Write key words via KPVLP
-    test->register_write_32(key_manager_basetest::kpvlp_key_offset(base_slot, 0), 0x11223344);
-    test->register_write_32(key_manager_basetest::kpvlp_key_offset(base_slot, 1), 0x55667788);
-
-    // Set control register
-    uint32_t ctrl_val = (1u << 9) | (7u << 17); // dest_valid=HMAC, last_dword=7
-    test->register_write_32(key_manager_basetest::kpvlp_ctrl_offset(base_slot), ctrl_val);
-
-    std::vector<uint32_t> reg_words = {0x11223344, 0x55667788, 0, 0, 0, 0, 0, 0};
-    uint32_t key_crc = test->crc32_payload(reg_words.data(), reg_words.size());
-    std::vector<uint32_t> reg_payload = {
-        base_slot,
-        7u, // KEY_SIZE_M1
-        1u, // DEST_VALID
-        key_crc
-    };
-
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER, reg_payload);
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == 0, "014a: CMD_KEY_REGISTER success");
+    bool got = false, parsed = false;
 
     // Trigger active-low emergency wipe
     tb->wipe_n_signal.write(false);
@@ -90,11 +72,6 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     uint32_t mb_irqs = 0;
     test->register_read_32(key_manager_basetest::MB_IRQS_OFFSET, mb_irqs);
     CHECK(mb_irqs & (1u << 4), "014a: FLUSHED_BY_KM IRQ set in MB_IRQS");
-
-    // Check KPVLP_STATUS is cleared
-    uint32_t kpvlp_status = 0xFFFFFFFFu;
-    test->register_read_32(key_manager_basetest::KPVLP_STATUS_OFFSET, kpvlp_status);
-    CHECK_EQ(kpvlp_status, 0u, "014a: KPVLP_STATUS is 0 after wipe");
 
     // Verify model is halted (subsequent commands ignored)
     test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_HW_VER, {});
@@ -205,39 +182,43 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     CHECK_EQ(ret_arg, 0, "014e: Last valid sequence number returned is 0");
 
     // ------------------------------------------------------------------
-    // 014f: KPVLP Slot Request Resource Exhaustion
+    // 014f: KPV Slot Resource Exhaustion
     // ------------------------------------------------------------------
     test->trigger_reset();
     seq = 0;
 
-    // Request 8 slots 4 times via CMD_KEY_GENERATE (total 32 slots) to occupy KPV
-    for (int i = 0; i < 4; i++) {
-        test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_GENERATE, {7u, 1u});
-        got = test->mb_receive_frame(frame);
-        parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-        CHECK(got && parsed && ret_code == 0, "014f: Allocated 8 slots successfully");
-    }
+    // Fill the vault with single-slot keys. KEY_SIZE is a word count, so asking
+    // for 16 words takes exactly one 16-word slot; 32 of those exhaust the vault.
+    // Some requests may fail early once the free slots are fragmented, so this
+    // keeps going until a load is refused rather than assuming a fixed count.
+    {
+        bool exhausted = false;
+        for (int i = 0; i < keymgr_tt::km_kpv::NUM_SLOTS + 4 && !exhausted; i++) {
+            test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_GENERATE,
+                                  {15u, 1u});
+            got = test->mb_receive_frame(frame);
+            parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
+                                                     ret_code, ret_arg);
+            if (got && parsed && ret_code == -1) exhausted = true;
+        }
+        CHECK(exhausted, "014f: CMD_KEY_GENERATE eventually reports RET_FAILURE on a full KPV");
 
-    // Now request 1 more slot via CMD_KPVLP_SLOT_REQ (should fail)
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {0u});
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == -1, "014f: Slot request on full KPV returns RET_FAILURE (-1)");
+        // With no slot free, a host-supplied key has nowhere to go either.
+        uint8_t full_handle = 0;
+        ret_code = test->mb_load_key(seq, {0xAAAAAAAAu},
+                                     keymgr_tt::km_firmware_handler::DEST_HMAC, full_handle);
+        CHECK_EQ(ret_code, -1, "014f: CMD_KEY_LOAD on full KPV returns RET_FAILURE (-1)");
+    }
 
     // ------------------------------------------------------------------
     // 014g: Payload Size & Length Validation Error Checks
     // ------------------------------------------------------------------
-    // CMD_KPVLP_SLOT_REQ with empty payload
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {});
+    // CMD_KEY_LOAD is variable-length, so it validates its own payload and
+    // reports INVALID_ARG naming the offending word rather than INVALID_LEN.
+    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_LOAD, {});
     got = test->mb_receive_frame(frame);
     parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == -5, "014g: CMD_KPVLP_SLOT_REQ with empty payload -> RET_INVALID_LEN");
-
-    // CMD_KEY_REGISTER with too short payload
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER, {0u, 0u});
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == -5, "014g: CMD_KEY_REGISTER with short payload -> RET_INVALID_LEN");
+    CHECK(got && parsed && ret_code == -7, "014g: CMD_KEY_LOAD with empty payload -> RET_INVALID_ARG");
 
     // CMD_KEY_GENERATE with too short payload
     test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_GENERATE, {});
@@ -255,13 +236,13 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_TRANSFER, {});
     got = test->mb_receive_frame(frame);
     parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == -1, "014g: CMD_KEY_TRANSFER with short payload -> RET_FAILURE");
+    CHECK(got && parsed && ret_code == -5, "014g: CMD_KEY_TRANSFER with short payload -> RET_INVALID_LEN");
 
     // CMD_ENGINE_SHRED with too short payload
     test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_ENGINE_SHRED, {});
     got = test->mb_receive_frame(frame);
     parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == -1, "014g: CMD_ENGINE_SHRED with short payload -> RET_FAILURE");
+    CHECK(got && parsed && ret_code == -5, "014g: CMD_ENGINE_SHRED with short payload -> RET_INVALID_LEN");
 
     // ------------------------------------------------------------------
     // 014h: CMD_RECOV_ACK Flow Check
@@ -272,41 +253,45 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     CHECK(got && parsed && ret_code == 0, "014h: CMD_RECOV_ACK processed successfully");
 
     // ------------------------------------------------------------------
-    // 014i: Key Register Policy Verification Failures (dest_valid / last_dword mismatch)
+    // 014i: Destination policy is enforced at transfer time
+    //   The policy travels with the handle, so a key loaded for AES must be
+    //   refused for HMAC. ABR destinations are accepted even though no engine
+    //   model exists.
     // ------------------------------------------------------------------
     test->trigger_reset();
     seq = 0;
 
-    // Request 1 slot (base_slot = 0)
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KPVLP_SLOT_REQ, {0u});
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    base_slot = ret_arg & 0x1Fu;
+    {
+        using fw = keymgr_tt::km_firmware_handler;
 
-    // Write a key word
-    test->register_write_32(key_manager_basetest::kpvlp_key_offset(base_slot, 0), 0x12345678);
+        uint8_t aes_handle = 0;
+        ret_code = test->mb_load_key(seq, {0x12345678u, 0x9ABCDEF0u},
+                                     fw::DEST_AES, aes_handle);
+        CHECK(ret_code == 0, "014i: key loaded with DEST_AES policy");
 
-    // Set control register (dest_valid=AES(4), last_dword=7)
-    ctrl_val = (4u << 9) | (7u << 17);
-    test->register_write_32(key_manager_basetest::kpvlp_ctrl_offset(base_slot), ctrl_val);
+        test->mb_send_command(seq++, fw::CMD_KEY_TRANSFER,
+                              {static_cast<uint32_t>(aes_handle),
+                               static_cast<uint32_t>(fw::DEST_HMAC)});
+        got = test->mb_receive_frame(frame);
+        parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
+        CHECK(got && parsed && ret_code == -1,
+              "014i: transfer to a destination outside the policy -> RET_FAILURE");
 
-    // Mismatched dest_valid: try to register with DEST_VALID = HMAC(1) instead of AES(4)
-    std::vector<uint32_t> short_words = {0x12345678, 0, 0, 0, 0, 0, 0, 0};
-    uint32_t short_crc = test->crc32_payload(short_words.data(), short_words.size());
-    std::vector<uint32_t> fail_payload1 = { base_slot, 7u, 1u, short_crc };
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER, fail_payload1);
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == -7, "014i: Mismatched dest_valid registration fails with RET_INVALID_ARG");
-    CHECK_EQ(ret_arg, 2u, "014i: Error argument field index is 2 (DEST_VALID mismatch)");
+        // A key loaded for an ABR seed port transfers successfully onto the
+        // ABR ML-DSA seed socket.
+        uint8_t abr_handle = 0;
+        ret_code = test->mb_load_key(seq, {0x0F0F0F0Fu},
+                                     fw::DEST_ABR_MLDSA_SEED, abr_handle);
+        CHECK(ret_code == 0, "014i: key loaded with an ABR seed destination");
 
-    // Mismatched last_dword: try to register with KEY_SIZE_M1 = 3 (last_dword=3) instead of 7
-    std::vector<uint32_t> fail_payload2 = { base_slot, 3u, 4u, short_crc };
-    test->mb_send_command(seq++, keymgr_tt::km_firmware_handler::CMD_KEY_REGISTER, fail_payload2);
-    got = test->mb_receive_frame(frame);
-    parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
-    CHECK(got && parsed && ret_code == -7, "014i: Mismatched last_dword registration fails with RET_INVALID_ARG");
-    CHECK_EQ(ret_arg, 1u, "014i: Error argument field index is 1 (KEY_SIZE_M1 mismatch)");
+        test->mb_send_command(seq++, fw::CMD_KEY_TRANSFER,
+                              {static_cast<uint32_t>(abr_handle),
+                               static_cast<uint32_t>(fw::DEST_ABR_MLDSA_SEED)});
+        got = test->mb_receive_frame(frame);
+        parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd, ret_code, ret_arg);
+        CHECK(got && parsed && ret_code == 0,
+              "014i: transfer to an ABR seed port is accepted");
+    }
 
     // ------------------------------------------------------------------
     // 014j: kpv_ctrl_t serialization roundtrip (Helper code coverage)
@@ -314,9 +299,7 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     keymgr_tt::kpv_ctrl_t ctrl_test;
     ctrl_test.lock_write = true;
     ctrl_test.lock_use = true;
-    ctrl_test.unlock_sep = true;
     ctrl_test.extend = 3;
-    ctrl_test.dest_valid = 5;
     ctrl_test.last_dword = 7;
     uint32_t ctrl_encoded = ctrl_test.to_uint32();
 
@@ -324,13 +307,11 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     ctrl_decoded.from_uint32(ctrl_encoded);
     CHECK(ctrl_decoded.lock_write == ctrl_test.lock_write, "014j: kpv_ctrl_t lock_write roundtrip");
     CHECK(ctrl_decoded.lock_use == ctrl_test.lock_use, "014j: kpv_ctrl_t lock_use roundtrip");
-    CHECK(ctrl_decoded.unlock_sep == ctrl_test.unlock_sep, "014j: kpv_ctrl_t unlock_sep roundtrip");
     CHECK_EQ(ctrl_decoded.extend, ctrl_test.extend, "014j: kpv_ctrl_t extend roundtrip");
-    CHECK_EQ(ctrl_decoded.dest_valid, ctrl_test.dest_valid, "014j: kpv_ctrl_t dest_valid roundtrip");
     CHECK_EQ(ctrl_decoded.last_dword, ctrl_test.last_dword, "014j: kpv_ctrl_t last_dword roundtrip");
 
     // ------------------------------------------------------------------
-    // 014k: km_kpv unused methods (km_clear_key, km_is_valid)
+    // 014k: km_kpv direct methods (km_clear_key, km_is_valid, km_erase_key)
     // ------------------------------------------------------------------
     keymgr_tt::km_kpv local_kpv;
     local_kpv.reset();
@@ -340,6 +321,104 @@ int key_manager_func014_test(key_manager_test* test, key_manager_model* /*dut*/,
     CHECK(local_kpv.km_is_valid(0) == true, "014k: km_is_valid returns true after set");
     local_kpv.km_clear_key(0);
     CHECK(local_kpv.km_is_valid(0) == false, "014k: km_is_valid returns false after clear");
+
+    // ERASE must work through a write lock — that is the point of the hardware
+    // path, since a locked slot would otherwise be unreclaimable.
+    local_kpv.km_write_key_word(1, 0, 0xA5A5A5A5u);
+    local_kpv.km_set_valid(1, true);
+    local_kpv.km_lock_write(1);
+    local_kpv.km_lock_use(1);
+    CHECK(local_kpv.ctrl(1).lock_write, "014k: slot 1 is write-locked before erase");
+
+    local_kpv.km_erase_key(1, []() { return 0xDEADBEEFu; });
+    CHECK(!local_kpv.ctrl(1).lock_write, "014k: km_erase_key clears the control register");
+    CHECK(!local_kpv.km_is_valid(1),     "014k: km_erase_key invalidates the slot");
+    {
+        uint32_t erased = 0;
+        CHECK(local_kpv.km_read_key_word(1, 0, erased),
+              "014k: erased slot is readable again (lock_use cleared)");
+        CHECK_EQ(erased, 0xDEADBEEFu, "014k: km_erase_key overwrote the key word");
+    }
+
+    // ------------------------------------------------------------------
+    // 014l: multi-slot key geometry round-trips through the vault
+    //   A key wider than one 16-word slot is packed across consecutive slots,
+    //   and its length is recovered from EXTEND plus the final slot's LAST_DWORD
+    //   alone. These are the sizes where an off-by-one in that packing shows up.
+    // ------------------------------------------------------------------
+    {
+        using keymgr_tt::km_kpv;
+
+        const int sizes[] = {1, 15, 16, 17, 32, 33, km_kpv::MAX_KEY_WORDS};
+        for (int len : sizes) {
+            km_kpv vault;
+            vault.reset();
+
+            std::vector<uint32_t> key(static_cast<size_t>(len));
+            for (int w = 0; w < len; w++)
+                key[static_cast<size_t>(w)] = 0xE0000000u | static_cast<uint32_t>(w);
+
+            const int expect_slots = (len - 1) / km_kpv::WORDS_PER_KEY + 1;
+            CHECK_EQ(km_kpv::slots_for_words(len), expect_slots,
+                     std::string("014l: slot count for ") + std::to_string(len) + " words");
+
+            CHECK(vault.km_write_key(0, key.data(), len),
+                  std::string("014l: wrote a ") + std::to_string(len) + "-word key");
+
+            std::vector<uint32_t> read_back;
+            CHECK(vault.km_read_key(0, read_back),
+                  std::string("014l: read back a ") + std::to_string(len) + "-word key");
+            CHECK(read_back == key,
+                  std::string("014l: ") + std::to_string(len) + "-word key round-trips intact");
+        }
+
+        // A key too wide for the vault is refused rather than truncated.
+        km_kpv vault;
+        vault.reset();
+        std::vector<uint32_t> too_wide(km_kpv::MAX_KEY_WORDS + 1, 0xFFFFFFFFu);
+        CHECK_EQ(km_kpv::slots_for_words(km_kpv::MAX_KEY_WORDS + 1), 0,
+                 "014l: a key beyond the maximum reports no slot count");
+        CHECK(!vault.km_write_key(0, too_wide.data(),
+                                  static_cast<int>(too_wide.size())),
+              "014l: an over-wide key is refused");
+    }
+
+    // ------------------------------------------------------------------
+    // 014m: handles are issued monotonically and never recycled, while the slots
+    //   behind a revoked key do return to the pool. This is also the ordering that
+    //   keeps a failed provisioning attempt from stranding a write-locked slot.
+    // ------------------------------------------------------------------
+    {
+        using fw = keymgr_tt::km_firmware_handler;
+        test->trigger_reset();
+        seq = 0;
+
+        uint8_t first = 0;
+        ret_code = test->mb_load_key(seq, {0x11112222u}, fw::DEST_HMAC, first);
+        CHECK(ret_code == 0 && first == 1u, "014m: the first key issued gets handle 1");
+
+        test->mb_send_command(seq++, fw::CMD_KEY_REVOKE, {static_cast<uint32_t>(first)});
+        got = test->mb_receive_frame(frame);
+        parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
+                                                 ret_code, ret_arg);
+        CHECK(got && parsed && ret_code == 0, "014m: the key is revoked");
+
+        uint8_t second = 0;
+        ret_code = test->mb_load_key(seq, {0x33334444u}, fw::DEST_HMAC, second);
+        CHECK(ret_code == 0,      "014m: a key still loads after the revoke");
+        CHECK(second != first,    "014m: the revoked handle is not handed out again");
+        CHECK(second == 2u,       "014m: handles advance monotonically");
+
+        // The revoked handle is gone for good, so using it fails.
+        test->mb_send_command(seq++, fw::CMD_KEY_TRANSFER,
+                              {static_cast<uint32_t>(first),
+                               static_cast<uint32_t>(fw::DEST_HMAC)});
+        got = test->mb_receive_frame(frame);
+        parsed = key_manager_test::parse_resp_cmd(frame, resp_id, src_seq, echoed_cmd,
+                                                 ret_code, ret_arg);
+        CHECK(got && parsed && ret_code == -1,
+              "014m: transferring a revoked handle -> RET_FAILURE");
+    }
 
     std::cout << "\n--- FUNC014 complete: " << failures << " failure(s) ---\n\n";
     return failures;

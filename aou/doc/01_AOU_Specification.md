@@ -9,7 +9,7 @@ FDI/flit simulation.
 Ground truth for software-visible CSRs:
 [`aou-rtl/csr/aou-core.rdl`](https://github.com/tenstorrent/aou-rtl).
 
-SMC VP placement: base **`0xC000_4000`**, window **`0x80`**.
+SMC VP placement: base **`0xC000_C000`** (D1=A VP-only park), window **`0x80`**.
 
 ## 2. Software-visible behaviour
 

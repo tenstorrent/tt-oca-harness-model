@@ -76,7 +76,7 @@ void key_manager_model::wipe_process()
         // Clear all KPV slots (flags + validity).
         m_kpv.reset();
 
-        // Clear all four crypto engine key stores with zeros once.
+        // Clear HMAC, KMAC, AES, OTBN and ABR key stores with zeros once.
         static const std::vector<uint32_t> zero_words(keymgr_tt::km_kpv::WORDS_PER_KEY, 0u);
         key_transfer_via_socket(
             keymgr_tt::km_firmware_handler::DEST_HMAC |
@@ -227,7 +227,7 @@ bool key_manager_model::key_transfer_via_socket(uint8_t dest_mask,
     for (auto& e : engines) {
         if (!(dest_mask & e.bit)) continue;
 
-        int actual = (count < e.max_words) ? count : e.max_words;
+        int key_len = (count < e.max_words) ? count : e.max_words;
 
         auto write_word = [&](uint32_t offset, uint32_t data) {
             tlm::tlm_generic_payload trans;
@@ -244,12 +244,17 @@ bool key_manager_model::key_transfer_via_socket(uint8_t dest_mask,
             if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) ok = false;
         };
 
-        // Dual XOR share write (rom_sideload.c: SHARE0=mask, SHARE1=key^mask)
+        // Dual XOR share write (rom_sideload.c: SHARE0=mask, SHARE1=key^mask).
+        // Both shares are written across the engine's full register width. A key
+        // shorter than that width is padded with fresh DRBG words rather than
+        // zeros or whatever the registers happened to hold, so a short key never
+        // leaves recoverable residue in the tail.
         uint32_t share1_base = static_cast<uint32_t>(e.max_words) * 4u;
-        for (int w = 0; w < actual; w++) {
-            uint32_t mask = get_random_word();
+        for (int w = 0; w < e.max_words; w++) {
+            uint32_t key_word = (w < key_len) ? words[w] : get_random_word();
+            uint32_t mask     = get_random_word();
             write_word(static_cast<uint32_t>(w) * 4u,          mask);          // SHARE0[w]
-            write_word(share1_base + static_cast<uint32_t>(w) * 4u, words[w] ^ mask);  // SHARE1[w]
+            write_word(share1_base + static_cast<uint32_t>(w) * 4u, key_word ^ mask);  // SHARE1[w]
         }
 
         // KEY_CTRL=1 commits key; KEY_CTRL=0 clears key_valid (rom_sideload.h)
@@ -330,32 +335,6 @@ void key_manager_model::register_all_callbacks()
         mb_memory.register_write_callback(cb, MB_CTRL.offset);
     }
 
-    // KPVLP_KEY[slot][word] — write: forward to km_kpv
-    for (unsigned int slot = 0; slot < keymgr_tt::KPVLP_NUM_SLOTS; slot++) {
-        for (unsigned int word = 0; word < keymgr_tt::KPVLP_KEY_WORDS_PER_SLOT; word++) {
-            unsigned int idx = slot * keymgr_tt::KPVLP_KEY_WORDS_PER_SLOT + word;
-            std::function<bool(uint32_t)> cb = [this, slot, word](uint32_t value) {
-                return this->handle_write_KPVLP_KEY(slot, word, value);
-            };
-            kpvlp_memory.register_write_callback(cb, KPVLP_KEY[idx].offset);
-        }
-    }
-
-    // KPVLP_CTRL[slot] — write: forward to km_kpv
-    for (unsigned int slot = 0; slot < keymgr_tt::KPVLP_NUM_SLOTS; slot++) {
-        std::function<bool(uint32_t)> cb = [this, slot](uint32_t value) {
-            return this->handle_write_KPVLP_CTRL(slot, value);
-        };
-        kpvlp_memory.register_write_callback(cb, KPVLP_CTRL[slot].offset);
-    }
-
-    // KPVLP_STATUS — read: return live km_kpv unlock_sep bitmask
-    {
-        std::function<bool(uint32_t &)> cb = [this](uint32_t &value) {
-            return this->handle_read_KPVLP_STATUS(value);
-        };
-        kpvlp_memory.register_read_callback(cb, KPVLP_STATUS.offset);
-    }
 }
 
 // =============================================================================
@@ -505,35 +484,3 @@ bool key_manager_model::handle_write_MB_CTRL(uint32_t value)
     return true;
 }
 
-// =============================================================================
-// KPVLP callback handlers
-// =============================================================================
-
-bool key_manager_model::handle_write_KPVLP_KEY(unsigned int slot, unsigned int word, uint32_t value)
-{
-    unsigned int idx = slot * keymgr_tt::KPVLP_KEY_WORDS_PER_SLOT + word;
-    KPVLP_KEY[idx] = value;  // update CSML storage (WO register, read returns 0)
-    if (!m_kpv.kpvlp_write_key_word(slot, word, value)) {
-        CSML_WARN(1, logger) << "KPVLP_KEY write to slot " << slot
-                             << " word " << word << " rejected (unlock_sep=0 or lock_write=1)";
-    }
-    return true;
-}
-
-bool key_manager_model::handle_write_KPVLP_CTRL(unsigned int slot, uint32_t value)
-{
-    uint32_t masked = value & KPVLP_CTRL[slot].write_bit_mask;
-    KPVLP_CTRL[slot] = masked;
-    if (!m_kpv.kpvlp_write_ctrl(slot, masked)) {
-        CSML_WARN(1, logger) << "KPVLP_CTRL write to slot " << slot
-                             << " rejected (unlock_sep=0 or lock_write=1)";
-    }
-    return true;
-}
-
-bool key_manager_model::handle_read_KPVLP_STATUS(uint32_t &value)
-{
-    value = m_kpv.kpvlp_status() & KPVLP_STATUS.read_bit_mask;
-    KPVLP_STATUS = value;  // keep CSML storage in sync
-    return true;
-}

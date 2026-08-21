@@ -14,46 +14,66 @@
 #include <stdint.h>
 
 /* SMC platform address map (local alias aperture).
- * Aligned with smc_top.rdl / smc_top_reg.svh for I2C, telemetry, and I3C:
+ * Aligned with tt-oca-harness smc.rdl (addrmap smc_top) + Phase-1 realignment:
+ *   AVSBus            @ 0xC000_4000
  *   I2C wrap          @ 0xC000_5000 (cores +0x200/+0x400)
+ *   uart_wrap         @ 0xC000_6000; 16550 @ +0x100 (D3=U1 macros below)
  *   telemetry wrap    @ 0xC000_9000 (instances +0x100, size 0x300)
+ *   system_timer_octs @ 0xC000_A000
+ *   AOU CSRs          @ 0xC000_C000 (D1=A VP-only park; not in smc_top)
  *   oca_i3c_wrap_0    @ 0xC003_A000
- * UART bases remain at the pre-existing sim locations (0xC000_A000+) until a
- * separate UART map cleanup; RTL places uart_wrap at 0xC000_6000. */
+ *   PLL / PVT         @ 0xC040_2000 / 0xC040_3000 (smc_external)
+ * PLIC/CLINT/BEU remain at VP local-alias bases until Phase 3 (D2=P1). */
 #define SMC_WDT_DEBUG_BASE   0xC0000000ULL
 #define SMC_WDT0_BASE        0xC0000000ULL
 #define SMC_WDT1_BASE        0xC0000400ULL
 #define SMC_WDT2_BASE        0xC0000800ULL
 #define SMC_WDT3_BASE        0xC0000C00ULL
 #define SMC_RESET_BASE       0xC0002000ULL
+#define SMC_MISC_WRAP_BASE   0xC0002800ULL  /* named stub (RTL misc_wrap) */
+#define SMC_GPIO_INTF_BASE   0xC0003000ULL  /* named stub (RTL gpio_intf) */
+#define SMC_AVSBUS_BASE      0xC0004000ULL
 #define SMC_I2C0_BASE        0xC0005000ULL
 #define SMC_I2C1_BASE        0xC0005200ULL
 #define SMC_I2C2_BASE        0xC0005400ULL
-#define SMC_AVSBUS_BASE      0xC0008000ULL
-/* AOU: free 0x1000 gap between pll_wrap (0xC000_3000-0xC000_3FFF) and i2c0
- * (0xC000_5000); 0xC000_E000 is system_timer_octs per smc_top.rdl. */
-#define SMC_AOU_BASE         0xC0004000ULL
+/* uart_wrap instance bases; software uses 16550 bases (D3=U1). */
+#define SMC_UART_WRAP_BASE   0xC0006000ULL
+#define SMC_UART0_BASE       0xC0006100ULL
+#define SMC_UART1_BASE       0xC0006500ULL
+#define SMC_UART2_BASE       0xC0006900ULL
+#define SMC_UART3_BASE       0xC0006D00ULL
+#define SMC_EFUSE_MAP_BASE   0xC0007000ULL  /* named stub */
+#define SMC_EFUSE_CTRL_BASE  0xC0008000ULL  /* named stub */
+/* AOU: D1=A VP-only park in the post-UART gap (not an smc_top slot). */
+#define SMC_AOU_BASE         0xC000C000ULL
 #define SMC_TELEMETRY_BASE   0xC0009000ULL
 #define SMC_TELEMETRY0_BASE  (SMC_TELEMETRY_BASE + 0x000ULL)
 #define SMC_TELEMETRY1_BASE  (SMC_TELEMETRY_BASE + 0x100ULL)
 #define SMC_TELEMETRY2_BASE  (SMC_TELEMETRY_BASE + 0x200ULL)
-#define SMC_UART0_BASE       0xC000A000ULL
-#define SMC_UART1_BASE       0xC000B000ULL
-#define SMC_UART2_BASE       0xC000C000ULL
-#define SMC_UART3_BASE       0xC000D000ULL
-#define SMC_CPU_CTRL_BASE    0xC0400000ULL
-#define SMC_PVT_WRAP_BASE    0xC0402000ULL
+#define SMC_OCTS_TIMER_BASE  0xC000A000ULL
+#define SMC_DTP_CTRL_BASE    0xC000B000ULL  /* named stub */
 #define SMC_CPU_CTRL_FP_BASE 0xC0039000ULL
+/* Live cpu_ctrl.rdl path is cluster.ctrl @ front-port; dual periph bind dropped. */
+#define SMC_CPU_CTRL_BASE    SMC_CPU_CTRL_FP_BASE
 #define SMC_DMA_BASE         0xC0038000ULL
 #define SMC_I3C_BASE         0xC003A000ULL
 #define SMC_BOOTROM_BASE     0xC0040000ULL
 #define SMC_SCRATCH_BASE     0xC0060000ULL
-#define SMC_PLIC_BASE        0xC0800000ULL
-#define SMC_CLINT_BASE       0xC0C00000ULL
-#define SMC_BEU_BASE         0xC0C10000ULL
+#define SMC_PLL_WRAP_BASE    0xC0402000ULL
+#define SMC_PVT_WRAP_BASE    0xC0403000ULL
+/* Cluster-internal blocks (smc_addrmap_pkg SMC_TOP_SMC_CLUSTER_*), Phase 3.
+ * Above the fabric's 16 MB local-alias window on purpose: the harts reach
+ * these over the cluster's own bus, not through the SMC fabric. */
+#define SMC_PLIC_BASE        0xC4000000ULL
+#define SMC_CLINT_BASE       0xC8000000ULL
+#define SMC_BEU_BASE         0xC8010000ULL
 #define SMC_ZEROER_BASE      0xC0038200ULL
-#define SMC_OCTS_TIMER_BASE  0xC000E000ULL
-#define SMC_PLL_WRAP_BASE     0xC0003000ULL
+/* Stub identity tokens (offset 0) for map-coherence / decode checks. */
+#define SMC_STUB_MAGIC_GPIO      0x4750494Fu  /* 'GPIO' */
+#define SMC_STUB_MAGIC_MISC      0x4D495343u  /* 'MISC' */
+#define SMC_STUB_MAGIC_EFUSE_MAP 0xEF05E000u
+#define SMC_STUB_MAGIC_EFUSE_CTL 0xEF05E001u
+#define SMC_STUB_MAGIC_DTP       0x44545000u  /* 'DTP\0' */
 
 /* Telemetry receiver register offsets (32-bit; one instance window = 0x100) */
 #define TEL_CTRL                   0x00u
@@ -99,13 +119,20 @@
 #define RESET_SS_WARM_RESET_N    0x44u
 #define RESET_SS_COLD_RESET_LOCK 0x70u
 
-/* CPU control register offsets */
-#define CPU_CTRL_SCRATCH(idx)         (0x100u + 8u * (idx))
+/* CPU control register offsets, per cpu_ctrl.rdl (the live path at
+ * SMC_CPU_CTRL_BASE is cluster.ctrl, which implements that map). */
+#define CPU_CTRL_RESET_VECTOR(core)   (0x000u + 8u * (core))
+#define CPU_CTRL_RESET_CTRL           0x020u
+#define CPU_CTRL_RESET_TIMEOUT        0x030u
+#define CPU_CTRL_REFERENCE_COUNTER    0x040u
 #define CPU_CTRL_WDT_TIMEOUT          0x050u
 #define CPU_CTRL_WDT_TIMEOUT_RESET    0x058u
-#define CPU_CTRL_REFERENCE_COUNTER    0x060u
-#define CPU_CTRL_MUTEX(idx)           (0x1040u + 8u * (idx))
-#define CPU_CTRL_SEMA(idx)            (0x1060u + 8u * (idx))
+#define CPU_CTRL_TEST_CTRL            0x060u
+#define CPU_CTRL_SCRATCH(idx)         (0x080u + 8u * (idx))
+#define CPU_CTRL_WB_PC(core, idx)     (0x100u + 0x40u * (core) + 8u * (idx))
+#define CPU_CTRL_SMC_ATTRIBUTES       0x200u
+#define CPU_CTRL_MUTEX(idx)           (0x240u + 8u * (idx))
+#define CPU_CTRL_SEMA(idx)            (0x260u + 8u * (idx))
 
 /* PVT wrapper register offsets */
 #define PVT_PROCESS_CTRL            0x00u
@@ -242,7 +269,7 @@
 /* AVSBus PLIC source ID (peripheral bit 22 -> PLIC source 23) */
 #define PLIC_SRC_AVSBUS   23u
 
-/* AVSBus Controller — base 0xC000_8000, 4 KiB window, 32-bit registers.
+/* AVSBus Controller — base 0xC000_4000, 4 KiB window, 32-bit registers.
  * Mirrors hw/ip/avsbus_controller RDL (AVSBus 1.3.1 single-target). */
 #define AVS_CMD                    0x00u
 #define AVS_READBACK               0x04u
@@ -312,8 +339,8 @@
 /* MCR bit masks */
 #define UART_MCR_LOOP     0x10   /* internal loopback mode */
 
-/* Bus Error Unit (BEU) — per-core alias, base 0xC0C1_0000, 4 KiB window
- * each (0xC0C1_0000 + N*0x1000, N = 0..NUM_HARTS-1).  Registers are 64-bit
+/* Bus Error Unit (BEU) — per-core, base 0xC801_0000, 4 KiB window
+ * each (0xC801_0000 + N*0x1000, N = 0..NUM_HARTS-1).  Registers are 64-bit
  * (accesswidth=64 in bus_error_unit.rdl) — use REG_READ64 / REG_WRITE64.
  * Interrupts bypass the PLIC: irq_local_o feeds the core's NMI-like input
  * directly, irq_plic_o is wired to the PLIC vector for completeness but is
@@ -353,7 +380,7 @@
 #define ZEROER_CTRL_INT_EN       (1ull << 0u)   /* completion interrupt enable */
 #define ZEROER_CTRL_BUSY         (1ull << 32u)  /* 1 while a job is running     */
 
-/* octs_system_timer (OCTS System Timer) — base 0xC000_E000, window 0x24.
+/* octs_system_timer (OCTS System Timer) — base 0xC000_A000, window 0x24.
  * Offsets and reset values come from system_timer_octs.rdl; they match the
  * SMC_SYSTEM_TIMER_OCTS_*_REG_OFFSET defines in the RTL firmware's
  * prod_rom/registers/smc_top_regs.h.
@@ -383,7 +410,7 @@
 
 #define OCTS_STATUS_MODE      (1u << 0)  /* 0 = PRIMARY, 1 = SECONDARY        */
 #define OCTS_STATUS_RUNNING   (1u << 4)  /* enable && count > 0               */
-/* PLL wrapper (pll_wrap.rdl) — base 0xC000_3000, window 0x1000.
+/* PLL wrapper (pll_wrap.rdl) — base 0xC040_2000 (smc_external), window 0x1000.
  * Composed map (matches vp/platform/smc periph_router route "pll_wrap"):
  *   pll_cntl @0x000, cgm_0 @0x100, cgm_1 @0x200, awm_0 @0x400, awm_1 @0xA00.
  * The firmware (fw/smc) accesses cgm/awm and the pll_cntl status registers

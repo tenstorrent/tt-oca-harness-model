@@ -54,7 +54,7 @@ class aou_core : public sc_module {
 Standalone `smc-vp`:
 
 ```
-cluster.mmio → fabric → periph_router @ 0xC000_4000 → aou_.apb_socket
+cluster.mmio → fabric → periph_router @ 0xC000_C000 → aou_.apb_socket
 aou_axi_s          ← idle initiator
 aou_.axi_m[0]      → aou_axi_m → stub_aou_remote
 aou_.connect_peer(&aou_peer_)
@@ -64,8 +64,8 @@ aou_peer_.axi_m[0] → stub_sysmem
 `smu-vp` (RTL: AoU on SMU `smu_axi_in`/`smu_axi_out` = xbar `ext_in`/`ext_out`):
 
 ```
-cluster.mmio → fabric → periph_router @ 0xC000_4000 → aou_.apb_socket
-SEP 0x4000_4000 → sep_ext_to_smc_axi → fabric → same APB window
+cluster.mmio → fabric → periph_router @ 0xC000_C000 → aou_.apb_socket
+SEP 0x4000_C000 → sep_ext_to_smc_axi → fabric → same APB window
 smu_axi_xbar.ext_out → aou_axi_s → aou_.axi_s[0]
   (SMC output_axi catch-all, or SEP smn_outbound after outbound filter)
 aou_.axi_m[0] → aou_axi_m → smu_axi_xbar.ext_in

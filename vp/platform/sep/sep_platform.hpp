@@ -74,7 +74,7 @@ public:
     static constexpr unsigned int INIT_COUNT = 6;
     // Targets: sram, rom, dma, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, abr, csrng, aes, mailbox, aon_timer, keymgr_mb,
-    //          keymgr_kpvlp, efuse, efuse_shim, lc_ctrl, entropy_src, edn,
+    //          efuse, efuse_shim, lc_ctrl, entropy_src, edn,
     //          scratch_cold, scratch_warm,
     //          local_alias_remap_csr, local_alias_remap_data,
     //          ap_remap_csr, ap_remap_data, stee_remap_csr, stee_remap_data,
@@ -100,7 +100,10 @@ public:
     // efuse and efuse_shim are two windows on one model (sep_efuse at 0x10930000
     // and EFUSE_SHIM_CTRL at 0x20000000), so they count as two targets here while
     // being a single peripheral.
-    static constexpr unsigned int TARG_COUNT = 37;
+    // The key manager holds a single target: the new RTL exposes only the
+    // mailbox to SEP, so there is no second KPVLP window. Adams Bridge adds
+    // one target on top of that mailbox-only map.
+    static constexpr unsigned int TARG_COUNT = 36;
 
     SC_HAS_PROCESS(och_sep_ss);
 
