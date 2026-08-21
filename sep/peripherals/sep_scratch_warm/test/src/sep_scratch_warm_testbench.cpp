@@ -11,7 +11,6 @@
 #include <systemc.h>
 #include <tlm.h>
 
-#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -73,7 +72,6 @@ class testbench : public sc_module
             std::cout << "[FAIL] " << what << std::endl;
             ++m_failures;
         }
-        assert(cond);
     }
 
     uint64_t read64(unsigned offset)
