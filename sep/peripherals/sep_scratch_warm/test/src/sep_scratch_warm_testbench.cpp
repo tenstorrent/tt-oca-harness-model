@@ -13,8 +13,15 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
+
+#ifdef __GNUC__
+#ifdef __COVERAGE__
+extern "C" void __gcov_dump(void);
+#endif
+#endif
 
 #include "sep_scratch_warm.h"
 #include "sep_scratch_warm_test.h"
@@ -214,5 +221,11 @@ int sc_main(int, char*[])
 {
     testbench tb("tb");
     sc_core::sc_start();
-    return tb.failures() == 0 ? 0 : 1;
+#ifdef __COVERAGE__
+    __gcov_dump();
+#endif
+    // Bypass SystemC/CCI teardown. Returning from sc_main leaks and aborts
+    // under ASan, which is why every other SEP peripheral testbench does this.
+    std::quick_exit(tb.failures() == 0 ? 0 : 1);
+    return 0;
 }
