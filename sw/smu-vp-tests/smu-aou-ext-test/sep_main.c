@@ -23,9 +23,10 @@ extern int printf(const char *format, ...);
 #define AOU_IP_VERSION_EXP  0x00010000u
 
 /* Outbound filter 0 (0x10A20000, 0x20-byte stride). Secure SEP CPU traffic
- * needs allow_ns=0; allow_burst widens the range to the enclosing 4 KiB page. */
+ * needs allow_ns=0; allow_burst (bit 24) widens the range to the enclosing
+ * 4 KiB page. 0x01000013 = read|write|enabled|allow_burst. */
 #define OUTBOUND_FILTER0    0x10A20000u
-#define FILTER_CONFIG       0x0000000100000013ULL
+#define FILTER_CONFIG       0x0000000001000013ULL
 #define FILTER_START        0x00000000A0001000ULL
 #define FILTER_END          0x00000000A0001FFFULL
 

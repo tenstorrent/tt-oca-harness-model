@@ -91,6 +91,11 @@ abr_ip::abr_ip(sc_core::sc_module_name n, unsigned int memory_size)
 
     m_qk.reset();
 
+    // Inactive until interrupt_update_thread computes the first live value.
+    // HMAC does the same; an uninitialized sc_out can glitch PIC sources 35/36.
+    intr_abr_error.initialize(false);
+    intr_abr_notif.initialize(false);
+
     // Identity registers are hardware-tied in RTL (RDL declares them hw=w with
     // no reset value), so seed both the live value and the reset value.
     MLDSA_NAME[0].reset_value = MLDSA_NAME0_VALUE;
@@ -522,7 +527,11 @@ bool abr_ip::mldsa_ctrl_write(DT value)
         CSML_DEBUG(3, logger) << "[ABR] MLDSA_CTRL invalid command " << cmd << std::endl;
         set_mldsa_busy();
         m_mldsa_cmd = abr::MldsaCmd::NONE;
-        finish_mldsa(false, true);
+        // Do not call finish_mldsa(): it may m_qk.sync()/wait(), and this
+        // callback runs inside b_transport.
+        MLDSA_STATUS.VALID = 0u;
+        MLDSA_STATUS.ERROR = 1u;
+        raise_error();
         return true;
     }
 
@@ -554,7 +563,10 @@ bool abr_ip::mlkem_ctrl_write(DT value)
         CSML_DEBUG(3, logger) << "[ABR] MLKEM_CTRL invalid command " << cmd << std::endl;
         set_mlkem_busy();
         m_mlkem_cmd = abr::MlkemCmd::NONE;
-        finish_mlkem(false, true);
+        // Same as MLDSA_CTRL: this is a b_transport callback, so no wait().
+        MLKEM_STATUS.VALID = 0u;
+        MLKEM_STATUS.ERROR = 1u;
+        raise_error();
         return true;
     }
 

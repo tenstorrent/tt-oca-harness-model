@@ -85,19 +85,9 @@ for t in $TESTS; do
         continue
     fi
 
-    # Per-test window from the test Makefile when the runner still has the
-    # default 50 ms. smu-aou-ext-test needs more: SEP only starts
-    # filter+ext_out after the SMC doorbell, and 50 ms expires first once
-    # Adams Bridge is on the SEP bus. An explicit SIM_TIME_MS still wins.
-    t_ms="$SIM_TIME_MS"
-    if [ "$SIM_TIME_MS" = "50" ]; then
-        makefile_ms=$(sed -nE 's/^SIM_TIME_MS[[:space:]]*\??=[[:space:]]*([0-9]+).*/\1/p' "$t/Makefile" | head -1)
-        [ -n "$makefile_ms" ] && t_ms="$makefile_ms"
-    fi
-
     log=$(mktemp -t smu_vp_test.XXXXXX)
     ( cd "$t" && "$VP" "$SMC_INI" "$(basename "$smc_elf")" \
-        "$SEP_INI" "$(basename "$sep_elf")" "$t_ms" ) >"$log" 2>&1
+        "$SEP_INI" "$(basename "$sep_elf")" "$SIM_TIME_MS" ) >"$log" 2>&1
 
     smc_pass=$(grep -c "PASS: .*SMC side" "$log")
     sep_pass=$(grep -c "PASS: .*SEP side" "$log")

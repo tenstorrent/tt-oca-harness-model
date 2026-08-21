@@ -32,8 +32,7 @@ runner auto-detects a few common prefixes.
 ```
 
 Environment overrides: `VP` (smu-vp binary), `SMC_INI`, `SEP_INI`,
-`SIM_TIME_MS` (default 50 ms; `smu-aou-ext-test` uses 200 ms unless you
-override), `RISCV_PREFIX`, `RISCV_TOOLCHAIN_PATH`.
+`SIM_TIME_MS` (default 50 ms), `RISCV_PREFIX`, `RISCV_TOOLCHAIN_PATH`.
 
 CI (Ubuntu and RHEL 8) runs the interconnect unit tests
 (`vp/platform/smu/run_tests.sh`, Release / ASan / coverage on Ubuntu;
