@@ -227,6 +227,7 @@ target_include_directories(smu-vp
         ${_sep_root}/peripherals/spi_controller/include
         ${_sep_root}/peripherals/spi_flash/include
         ${_sep_root}/peripherals/kmac/include
+        ${_sep_root}/peripherals/adams_bridge/include
         ${_sep_root}/peripherals/csrng/include
         ${_sep_root}/peripherals/aes/include
         ${_sep_root}/peripherals/mailbox/include
@@ -299,6 +300,7 @@ target_link_libraries(smu-vp
         spi_controller_model
         spi_flash_model
         kmac_model
+        adams_bridge_model
         csrng_model
         aes_model
         mailbox_model
