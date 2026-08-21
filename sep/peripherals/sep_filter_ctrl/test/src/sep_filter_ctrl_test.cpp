@@ -114,6 +114,30 @@ uint64_t sep_filter_ctrl_test::csr_read_64(uint32_t instance, uint32_t reg_offse
     return read_value;
 }
 
+void sep_filter_ctrl_test::csr_write_32_pair(uint32_t instance, uint32_t reg_offset, uint64_t value)
+{
+    const uint32_t addr = (instance * CSR_STRIDE) + reg_offset;
+    uint32_t lo = static_cast<uint32_t>(value);
+    uint32_t hi = static_cast<uint32_t>(value >> 32);
+
+    auto beat32 = [this](uint32_t byte_addr, uint32_t word) {
+        tlm::tlm_generic_payload trans;
+        sc_time delay = SC_ZERO_TIME;
+        trans.set_command(tlm::TLM_WRITE_COMMAND);
+        trans.set_address(byte_addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&word));
+        trans.set_data_length(4);
+        trans.set_streaming_width(4);
+        trans.set_byte_enable_ptr(0);
+        trans.set_dmi_allowed(false);
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        initiator_socket->b_transport(trans, delay);
+    };
+
+    beat32(addr, lo);
+    beat32(addr + 4, hi);
+}
+
 // =============================================================================
 // Test methods
 // =============================================================================
@@ -173,6 +197,9 @@ void sep_filter_ctrl_test::test_woset_locked_field()
     uint64_t config = csr_read_64(instance, 0x00);
     assert(((config & (1ULL << 63)) == 0) && "Locked should start as 0");
 
+    const uint64_t start_before = csr_read_64(instance, 0x08);
+    const uint64_t end_before   = csr_read_64(instance, 0x10);
+
     // Set locked bit
     csr_write_64(instance, 0x00, 1ULL << 63);
     config = csr_read_64(instance, 0x00);
@@ -182,6 +209,13 @@ void sep_filter_ctrl_test::test_woset_locked_field()
     csr_write_64(instance, 0x00, 0x0ULL);
     config = csr_read_64(instance, 0x00);
     assert(((config & (1ULL << 63)) != 0) && "Locked bit should remain set (WOSET)");
+
+    // START/END freeze with the lock (RDL write-once). A locked entry must
+    // ignore later START/END stores — the same path RV32 wr64 would take.
+    csr_write_64(instance, 0x08, 0x11110000ULL);
+    csr_write_64(instance, 0x10, 0x22220000ULL);
+    assert((csr_read_64(instance, 0x08) == start_before) && "START_ADDR must freeze when locked");
+    assert((csr_read_64(instance, 0x10) == end_before) && "END_ADDR must freeze when locked");
 
     std::cout << "WOSET locked field test PASSED" << std::endl;
 }

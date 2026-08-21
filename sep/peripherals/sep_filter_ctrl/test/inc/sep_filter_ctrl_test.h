@@ -16,6 +16,8 @@ public:
     // Per-instance CSR access (stride=0x20 B between entries)
     void     csr_write_64(uint32_t instance, uint32_t reg_offset, uint64_t value);
     uint64_t csr_read_64(uint32_t instance, uint32_t reg_offset);
+    // RV32 firmware path: two 32-bit stores into a 64-bit CSR (wr64).
+    void     csr_write_32_pair(uint32_t instance, uint32_t reg_offset, uint64_t value);
 
     // Test methods (shared by both outbound and inbound instances)
     void test_reset_values(uint32_t num_instances);

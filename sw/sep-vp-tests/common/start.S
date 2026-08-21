@@ -55,6 +55,10 @@ trap_handler:
 .global _nmi_handler
 
 _nmi_handler:
+    addi sp, sp, -16
+    sw   t0, 0(sp)
+    sw   t1, 4(sp)
+
     # Clear AON_INTR_STATE.wdog_timer_bark (bit 1)
     li   t0, 0x1080102C
     li   t1, 0x2
@@ -64,5 +68,7 @@ _nmi_handler:
     li   t0, 0x1080101C
     sw   zero, 0(t0)
 
-    # Return from NMI
+    lw   t0, 0(sp)
+    lw   t1, 4(sp)
+    addi sp, sp, 16
     mret

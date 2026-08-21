@@ -13,6 +13,8 @@
  *   A8  data path: default deny when entry active but no match
  *   A9  data path: read within allowed range
  *   A10 data_transport_dbg: same filter logic as b_transport, on the debug path
+ *   A12 RV32 wr64 (two 32-bit CSR stores) programs an entry without wiping it
+ *   A13 out-of-range get_filter_entry / FILTER_CONFIG callbacks
  *
  * Suite B — inbound instance (num_instances=16):
  *   B1  reset state independent from outbound
@@ -306,6 +308,41 @@ private:
         assert(ok && "A11: read from a read-only entry should be permitted");
         assert(outbound_stub.received && "A11: permitted read should reach filtered_socket");
         std::cout << "A11: read-only entry denies writes PASSED" << std::endl;
+
+        // A12: RV32 firmware programs 64-bit filter CSRs as two 32-bit stores
+        // (smu-aou-ext-test wr64). A high-half store of 0 must not wipe START/END
+        // or clear entry_enabled. Entry 4 is unused by A1–A11.
+        outbound_harness.csr_write_32_pair(4, 0x08, 0x00000000A0001000ULL);
+        outbound_harness.csr_write_32_pair(4, 0x10, 0x00000000A0001FFFULL);
+        outbound_harness.csr_write_32_pair(4, 0x00, 0x0000000100000013ULL);
+        assert((outbound_harness.csr_read_64(4, 0x08) == 0xA0001000ULL) &&
+               "A12: START_ADDR must survive a high-half store of 0");
+        assert((outbound_harness.csr_read_64(4, 0x10) == 0xA0001FFFULL) &&
+               "A12: END_ADDR must survive a high-half store of 0");
+        const uint64_t cfg4 = outbound_harness.csr_read_64(4, 0x00);
+        assert(((cfg4 & 0x13ULL) == 0x13ULL) &&
+               "A12: FILTER_CONFIG enable/rw bits must survive a high-half store");
+
+        outbound_stub.reset();
+        ok = outbound_data_init.write(0xA0001008ULL, 0x5E9A0A01ULL);
+        assert(ok && "A12: write inside wr64-programmed range should be permitted");
+        assert(outbound_stub.received && "A12: permitted wr64-programmed write should reach filtered_socket");
+        std::cout << "A12: RV32 32-bit CSR pair programming PASSED" << std::endl;
+
+        // A13: public backdoor/callback guards reject an out-of-range index.
+        {
+            const auto prev = sc_core::sc_report_handler::set_actions(
+                sc_core::SC_ERROR, sc_core::SC_LOG | sc_core::SC_DISPLAY);
+            const auto miss = outbound_dut.get_filter_entry(99);
+            assert(!miss.entry_enabled && "A13: OOB get_filter_entry returns a default entry");
+            assert(!outbound_dut.handle_filter_config_write(99, 0) &&
+                   "A13: OOB FILTER_CONFIG write must fail");
+            sep_filter_ctrl_ip::DT rd = 0;
+            assert(!outbound_dut.handle_filter_config_read(99, rd) &&
+                   "A13: OOB FILTER_CONFIG read must fail");
+            sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR, prev);
+        }
+        std::cout << "A13: out-of-range index guards PASSED" << std::endl;
     }
 
     // =========================================================================

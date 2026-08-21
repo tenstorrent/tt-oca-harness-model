@@ -2,6 +2,30 @@
 
 #include "sep_axi_extension.h"
 
+namespace {
+
+// CSML 64-bit words receive RV32 stores as two 32-bit TLM beats. The legacy
+// write callback is given only the bytes in this beat (other bytes zero), so
+// a high-half store of 0 would wipe START/END/FILTER_CONFIG. Merge with the
+// current word using the beat's byte-enable before applying register logic.
+uint64_t byte_enable_to_mask(uint8_t be)
+{
+    uint64_t mask = 0;
+    for (unsigned b = 0; b < 8; ++b) {
+        if ((be & static_cast<uint8_t>(1u << b)) != 0)
+            mask |= 0xFFull << (b * 8);
+    }
+    return mask;
+}
+
+uint64_t merge_be(uint64_t current, uint64_t value, uint8_t be)
+{
+    const uint64_t mask = byte_enable_to_mask(be);
+    return (current & ~mask) | (value & mask);
+}
+
+}  // namespace
+
 // =============================================================================
 // InstanceType constructor — delegates to the parametric constructor
 // =============================================================================
@@ -40,13 +64,17 @@ sep_filter_ctrl_ip::sep_filter_ctrl_ip(sc_module_name n, uint32_t num_instances)
 
     reset();
 
-    // Register RDL-compliant callbacks for all instances
+    // Register RDL-compliant callbacks for all instances. Write callbacks are
+    // byte-enable aware so a 32-bit RV32 store updates only that half of the
+    // 64-bit CSR (smu-aou-ext-test programs these with wr64 = two sw).
     for (uint32_t i = 0; i < num_instances_; ++i) {
         uint32_t offset = FILTER_CONFIG[i].offset;
 
-        memory.register_write_callback(
-            [this, i](DT value) -> bool {
-                return this->handle_filter_config_write(i, value);
+        memory.register_write_callback_with_be(
+            [this, i](DT value, uint8_t be) -> bool {
+                const DT merged = merge_be(static_cast<uint64_t>(FILTER_CONFIG[i]),
+                                           static_cast<uint64_t>(value), be);
+                return this->handle_filter_config_write(i, merged);
             },
             offset);
 
@@ -58,19 +86,23 @@ sep_filter_ctrl_ip::sep_filter_ctrl_ip(sc_module_name n, uint32_t num_instances)
 
         // START_ADDR / END_ADDR are frozen once this entry's locked bit is set
         // ("Write once register to lock filter configurations" — RDL).
-        memory.register_write_callback(
-            [this, i](DT value) -> bool {
+        memory.register_write_callback_with_be(
+            [this, i](DT value, uint8_t be) -> bool {
                 if (this->get_filter_entry(i).locked) return true;
-                bool ok = this->START_ADDR[i].handle_write(value, this->START_ADDR[i].write_bit_mask);
+                const DT merged = merge_be(static_cast<uint64_t>(START_ADDR[i]),
+                                           static_cast<uint64_t>(value), be);
+                bool ok = this->START_ADDR[i].handle_write(merged, this->START_ADDR[i].write_bit_mask);
                 this->auto_correct_start_end(i);
                 return ok;
             },
             START_ADDR[i].offset);
 
-        memory.register_write_callback(
-            [this, i](DT value) -> bool {
+        memory.register_write_callback_with_be(
+            [this, i](DT value, uint8_t be) -> bool {
                 if (this->get_filter_entry(i).locked) return true;
-                bool ok = this->END_ADDR[i].handle_write(value, this->END_ADDR[i].write_bit_mask);
+                const DT merged = merge_be(static_cast<uint64_t>(END_ADDR[i]),
+                                           static_cast<uint64_t>(value), be);
+                bool ok = this->END_ADDR[i].handle_write(merged, this->END_ADDR[i].write_bit_mask);
                 this->auto_correct_start_end(i);
                 return ok;
             },
