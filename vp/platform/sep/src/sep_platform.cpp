@@ -279,12 +279,10 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         constexpr uint64_t SMC_STRAPS_HI = 0x2094;  // SMC_STRAPS_HI_OFFSET
         uint32_t straps_lo = 0u;
         uint32_t straps_hi = 0u;
-        // Bit positions per the open tt-oca-harness ROM's contract
-        // (hw/sys/sep/bootrom/prod/include/sep_smc_interface.h): boot_recovery
-        // HI[23], bl0_pll_clk HI[24], rotate_update HI[29]. This undoes the
-        // 3bac66aa remap (recovery LO[19] / pll LO[20] / rotate HI[26]), which
-        // tracked an internal tt-oca-hw SMC refactor that never landed in the
-        // open tree; tt-oca-hw is locked, so the harness ROM is the contract.
+        // Bit positions per the open-tree SEP↔SMC interface contract:
+        // sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/include/sep_smc_interface.h.
+        // NOTE: If running under tt-oca-harness with a different ROM/contract, keep these
+        // bit positions in lockstep with that ROM’s sep_smc_interface.h.
         if (strap_primary_chiplet.get_param_value())       straps_lo |= (1u << 25);
         if (strap_status_report_disable.get_param_value()) straps_lo |= (1u << 21);
         if (strap_boot_recovery.get_param_value())         straps_hi |= (1u << 23);
