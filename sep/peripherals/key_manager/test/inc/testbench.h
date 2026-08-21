@@ -37,6 +37,10 @@ public:
     recording_engine_stub kmac_stub;
     recording_engine_stub aes_stub;
     recording_engine_stub otbn_stub;
+    recording_engine_stub abr_mldsa_seed_stub;
+    recording_engine_stub abr_mlkem_d_stub;
+    recording_engine_stub abr_mlkem_z_stub;
+    recording_engine_stub abr_mlkem_msg_stub;
 
     testbench(sc_module_name name);
 

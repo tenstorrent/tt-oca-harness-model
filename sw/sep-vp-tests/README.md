@@ -53,6 +53,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `otbn-dv-test/` | OTBN (OpenTitan Big Number) design-verification test |
 | `otbn-dv-p256-verify-test/` | OTBN P-256 ECDSA verification test |
 | `rom_test/` | ROM read test |
+| `fw-tests-from-tt-oca-hw/fw/sep/tests/sep_abr_*` | Adams Bridge (`abr_ip` @ `0x1094_0000`): CSR identity, software-seed keygen/sign, KAT, NIST ACVP, KM seed sideload. Run via `fw-tests-from-tt-oca-hw/fw/sep/tests/run_all_tests.sh` or `run_test.sh sep_abr_csr_test`. |
 
 ### Shared Support Code (`common/`)
 

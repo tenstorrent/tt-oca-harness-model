@@ -35,6 +35,8 @@ class BasicOptions : public Args {
         addr_t spi_end_addr      = 0x10B00037;  // SPI_CONTROLLER_REG size 0x38
         addr_t kmac_start_addr   = 0x10913000;
         addr_t kmac_end_addr     = 0x10913FFF;  // KMAC_REG size 0x1000
+        addr_t abr_start_addr    = 0x10940000;  // sep_crypto_pkg::abr_rule
+        addr_t abr_end_addr      = 0x1094FFFF;  // ABR aperture 64 KiB
         addr_t aes_start_addr    = 0x10910000;
         addr_t aes_end_addr      = 0x10910087;  // AES_REG size 0x88
         addr_t csrng_start_addr  = 0x10915000;  // DRBG_CSRNG_BASE (sep_crypto_pkg.sv)

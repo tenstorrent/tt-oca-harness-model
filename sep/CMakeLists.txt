@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(sep_models LANGUAGES CXX)
+project(sep_models LANGUAGES C CXX)
+enable_language(C)
 
 message(STATUS "==========================================================")
 message(STATUS "Building SEP Models")
@@ -61,6 +62,7 @@ set(_SEP_PERIPHERALS
   lifecycle_ctrl
   entropy_src
   edn
+  adams_bridge
 )
 
 message(STATUS "Configuring CPU models...")

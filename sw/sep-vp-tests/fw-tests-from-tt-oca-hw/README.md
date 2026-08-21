@@ -220,13 +220,16 @@ shadow-register preloads, `+CRYPTO_EDN_HACK`, a `+ROM_IFU_PATTERN` that writes
 instruction patterns into the boot ROM, cocotb handshakes that inject config
 through scratch registers, a second CPU (the key manager) running its own ROM, a
 UVM master driving external AXI, and an explicitly selected Winbond flash model.
-So the remaining 16 split into two kinds:
+So the remaining failures split into two kinds:
 
 | Kind | Count | Tests |
 |---|---|---|
 | **VP model gap** — the VP should be fixed | 4 | `hmac_p2_sensreg_access_test`, `otbn_sw_error_test`, `sep_aes_reset_clear_test`, `sep_reset_ctrl_csr_test` |
 | **VP harness gap** — the RTL TB provides something `sep-vp` has no equivalent for | 6 | `rom_sanity_test` (ROM instruction-pattern preload), `sep_aes_mb_stream_test` (cocotb scratch handshake), `sep_cpu_sram_aes_sram_test` and `sep_km_efuse_coexist_test` (key-manager CPU + its ROM), `lcc_inbound_filter_gating_test` and `sep_inbound_filter_decerr` (UVM master driving external AXI; both hang waiting for it) |
-| **No model at all** | 6 | `sep_abr_*`. Adams Bridge really is inside SEP — `sep_crypto.sv` instantiates `abr_top` and `sep_crypto_pkg.sv` puts its CSRs at `0x1094_0000` — so these are in scope for a SEP-only VP, they just need the block written. |
+
+Adams Bridge (`sep_abr_*`) is modeled: `abr_ip` is bound at `0x1094_0000` (PIC 35/36)
+with a FIPS 204/203 backend and key-manager DEST `0x10`/`0x20`/`0x40`/`0x80`
+sideload. The six firmware tests are in the `run_all_tests.sh` discovery set.
 
 The four model gaps in detail. The three eFuse tests that used to be here now pass:
 the shim moved to `0x2000_0000` in `SEP_EXTERNAL` where the register header puts it,

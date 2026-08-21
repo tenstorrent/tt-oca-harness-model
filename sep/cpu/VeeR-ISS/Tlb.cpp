@@ -1,4 +1,5 @@
 #include <cmath>
+#include <string>
 #include "VirtMem.hpp"
 #include <bitset>
 #include <sstream>

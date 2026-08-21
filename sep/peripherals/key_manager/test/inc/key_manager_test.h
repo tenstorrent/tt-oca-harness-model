@@ -9,7 +9,7 @@
 // ============================================================================
 // recording_engine_stub
 //   Attach to DUT's hmac_key_socket / kmac_key_socket / aes_key_socket /
-//   otbn_key_socket.  Records every TLM_WRITE in order so tests can verify
+//   otbn_key_socket / abr_*_socket.  Records every TLM_WRITE in order so tests can verify
 //   that the correct key material reached the crypto engine.
 // ============================================================================
 struct engine_write_t {

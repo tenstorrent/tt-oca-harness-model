@@ -37,6 +37,7 @@ och_sep_ss::~och_sep_ss() {
     delete dma_sys_adapter;
     delete hmac;
     delete kmac;
+    delete abr;
     delete otbn;
     delete otp_key_req_stub_inst;
     delete csrng;
@@ -394,6 +395,7 @@ void och_sep_ss::create_modules() {
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
     hmac            = new hmac_ip("hmac");
     kmac            = new kmac_ip("kmac");
+    abr             = new abr_ip("abr");
     otbn            = new otbn_ip("otbn", 0x10000);
     // otp_key_rsp stub not needed — sc_export bound internally by OTBN model
     otp_key_req_stub_inst = new otp_key_req_stub("otp_key_req_stub");
@@ -443,6 +445,7 @@ void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.stdout_start_addr,      opt.stdout_end_addr,      *stdout_dev);
         bus->ports[it++] = new PortMapping(opt.spi_start_addr,         opt.spi_end_addr,         *spi_controller);
         bus->ports[it++] = new PortMapping(opt.kmac_start_addr,        opt.kmac_end_addr,        *kmac);
+        bus->ports[it++] = new PortMapping(opt.abr_start_addr,         opt.abr_end_addr,         *abr);
         bus->ports[it++] = new PortMapping(opt.csrng_start_addr,       opt.csrng_end_addr,       *csrng);
         bus->ports[it++] = new PortMapping(opt.aes_start_addr,         opt.aes_end_addr,         *aes);
         bus->ports[it++] = new PortMapping(opt.mbox_start_addr,        opt.mbox_end_addr,        *mbox_bridge);
@@ -579,6 +582,7 @@ void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(stdout_dev->sock);
         bus->isocks[it++].bind(spi_controller->target_socket);
         bus->isocks[it++].bind(kmac->target_socket);
+        bus->isocks[it++].bind(abr->target_socket);
         bus->isocks[it++].bind(csrng->target_socket);
         bus->isocks[it++].bind(aes->target_socket);
         bus->isocks[it++].bind(mbox_bridge->tsock);
@@ -657,6 +661,18 @@ void och_sep_ss::module_bind() {
     kmac_clk_signal.write(true);
     kmac_lc_escalate_signal.write(false);
 
+    // Adams Bridge (SEP crypto aperture 0x1094_0000). No dedicated SW reset
+    // bit in sep_reset_ctrl; bind rst_ni to the global reset like CSRNG.
+    abr->clk_i(abr_clk_signal);
+    abr->rst_ni(reset_signal);
+    abr->intr_abr_error(abr_error_signal);
+    abr->intr_abr_notif(abr_notif_signal);
+    abr_clk_signal.write(100000000.0);  // 100 MHz
+    keymgr->abr_mldsa_seed_socket.bind(abr->keymgr_mldsa_seed_socket);
+    keymgr->abr_mlkem_d_socket.bind(abr->keymgr_mlkem_d_socket);
+    keymgr->abr_mlkem_z_socket.bind(abr->keymgr_mlkem_z_socket);
+    keymgr->abr_mlkem_msg_socket.bind(abr->keymgr_mlkem_msg_socket);
+
     // OTBN
     otbn->clk_core(otbn_clk_core_signal);
     otbn->rst_n(otbn_sw_rst_n_signal);
@@ -724,6 +740,8 @@ void och_sep_ss::module_bind() {
     pic_inputs[HMAC_FIFO_EMPTY_IRQ] = &hmac_fifo_empty_signal;
     pic_inputs[HMAC_HMAC_ERR_IRQ]   = &hmac_err_signal;
     pic_inputs[KMAC_IRQ]            = &kmac_intr_signal;
+    pic_inputs[ABR_ERROR_IRQ]       = &abr_error_signal;
+    pic_inputs[ABR_NOTIF_IRQ]       = &abr_notif_signal;
     pic_inputs[OTBN_IRQ]            = &otbn_intr_done_signal;
     pic_inputs[DMA_DONE_IRQ]        = &dma_done_intr_sig;
     pic_inputs[DMA_CHUNK_DONE_IRQ]  = &dma_chunk_done_intr_sig;

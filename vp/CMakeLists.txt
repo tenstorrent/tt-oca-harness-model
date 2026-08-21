@@ -89,6 +89,11 @@ endif()
     unset(_sc_aliased)
   endif()
 
+# Adams Bridge PQClean is C. Enable after FindSystemC so the pthread
+# try_compile stays a C++ probe (asan in CMAKE_EXE_LINKER_FLAGS would
+# otherwise fail a C probe against the sanitizer runtime).
+enable_language(C)
+
 include(PeripheralOpenSSL)
 peripheral_find_openssl()
 

@@ -31,7 +31,11 @@ testbench::testbench(sc_module_name name)
     hmac_stub     ("hmac_stub"),
     kmac_stub     ("kmac_stub"),
     aes_stub      ("aes_stub"),
-    otbn_stub     ("otbn_stub")
+    otbn_stub     ("otbn_stub"),
+    abr_mldsa_seed_stub("abr_mldsa_seed_stub"),
+    abr_mlkem_d_stub   ("abr_mlkem_d_stub"),
+    abr_mlkem_z_stub   ("abr_mlkem_z_stub"),
+    abr_mlkem_msg_stub ("abr_mlkem_msg_stub")
 {
     // Instantiate DUT and test harness
     m_dut  = std::make_unique<key_manager_model>("keymgr_tt");
@@ -46,6 +50,10 @@ testbench::testbench(sc_module_name name)
     m_dut->kmac_key_socket.bind(kmac_stub.socket);
     m_dut->aes_key_socket .bind(aes_stub.socket);
     m_dut->otbn_key_socket.bind(otbn_stub.socket);
+    m_dut->abr_mldsa_seed_socket.bind(abr_mldsa_seed_stub.socket);
+    m_dut->abr_mlkem_d_socket.bind(abr_mlkem_d_stub.socket);
+    m_dut->abr_mlkem_z_socket.bind(abr_mlkem_z_stub.socket);
+    m_dut->abr_mlkem_msg_socket.bind(abr_mlkem_msg_stub.socket);
 
     // Wire reset, wipe and IRQ signals
     m_dut ->rst_ni .bind(rst_n_signal);

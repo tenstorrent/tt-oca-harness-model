@@ -141,9 +141,6 @@ macOS from `./run_tests.sh --coverage` llvm-cov **src/** line coverage (15-Aug-2
   require pin-level JTAG, scan, or DTP CSRs are out of scope.
 - **Unmodeled IPs**: Tests referencing the following will fail or produce no output:
   - `och_sep_cdns_spi_ctrl`
-  - Adams Bridge (`abr_top`). Instantiated in SEP RTL by `sep_crypto.sv` with CSRs
-    at `0x1094_0000`, so the six `sep_abr_*` firmware tests are in scope for the
-    SEP platform but have no model to run against.
 - **eFuse fuse state comes from an image, not per-field parameters**: the array is
   loaded from a `.preload` file in the RTL's `+sep_preload_efuse` format, and a
   platform run defaults to the RTL's own `default_efuse.preload`, so the VP starts

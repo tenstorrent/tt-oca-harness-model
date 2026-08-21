@@ -26,6 +26,7 @@ find_package(OpenSSL REQUIRED)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/spi_controller/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/spi_flash/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/kmac/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/adams_bridge/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/csrng/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/aes/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/mailbox/include
@@ -80,6 +81,7 @@ find_package(OpenSSL REQUIRED)
     spi_controller_model
     spi_flash_model
     kmac_model
+    adams_bridge_model
     OpenSSL::Crypto
     csrng_model
     aes_model

@@ -48,8 +48,9 @@ void km_firmware_handler::boot()
     // Steps 3-7: KPV and engine initialisation.
     //   Random overwrites (Fisher-Yates, KEY_SHRED_ITER passes) are DPA countermeasures
     //   not observable by SEP — not modeled. Clear engine registers once with zeros.
-    static const uint8_t SHRED_ENGINES[4] = {
-        DEST_HMAC, DEST_KMAC, DEST_AES, DEST_OTBN
+    static const uint8_t SHRED_ENGINES[] = {
+        DEST_HMAC, DEST_KMAC, DEST_AES, DEST_OTBN,
+        DEST_ABR_MLDSA_SEED, DEST_ABR_MLKEM_D, DEST_ABR_MLKEM_Z, DEST_ABR_MLKEM_MSG
     };
     static const std::vector<uint32_t> zero_words(km_kpv::WORDS_PER_KEY, 0u);
     for (uint8_t dest : SHRED_ENGINES)
@@ -142,6 +143,7 @@ void km_firmware_handler::process_messages()
             case CMD_KEY_REVOKE:     handle_cmd_key_revoke    (rx_seq, payload); break;
             case CMD_KEY_TRANSFER:   handle_cmd_key_transfer  (rx_seq, payload); break;
             case CMD_ENGINE_SHRED:   handle_cmd_engine_shred  (rx_seq, payload); break;
+            case CMD_KEY_LOAD:       handle_cmd_key_load      (rx_seq, payload); break;
             default:
                 send_resp_cmd(rx_seq, cmd_id, RET_INVALID_CMD);
                 break;
@@ -558,6 +560,57 @@ bool km_firmware_handler::handle_cmd_engine_shred(
 
     uint32_t ret_arg = static_cast<uint32_t>(dest_req);
     send_resp_cmd_arg(seq, CMD_ENGINE_SHRED, RET_SUCCESS, ret_arg);
+    return true;
+}
+
+// 0x26 — CMD_KEY_LOAD (SEP-supplied key; used by sep_abr_km_seed_test)
+bool km_firmware_handler::handle_cmd_key_load(
+        uint8_t seq, const std::vector<uint32_t>& p)
+{
+    // Payload: [0]=KEY_SIZE_M1 [6:0], [1]=DEST_VALID [7:0], [2..]=key words
+    if (p.size() < 2) {
+        send_resp_cmd(seq, CMD_KEY_LOAD, RET_INVALID_LEN);
+        return false;
+    }
+    const int key_size = static_cast<int>((p[0] & 0x7Fu) + 1);
+    const uint8_t dest_valid = static_cast<uint8_t>(p[1] & 0xFFu);
+    if (key_size < 1 || key_size > 12 ||
+        p.size() < static_cast<size_t>(2 + key_size)) {
+        send_resp_cmd(seq, CMD_KEY_LOAD, RET_INVALID_LEN);
+        return false;
+    }
+
+    const int num_slots = (key_size + km_kpv::WORDS_PER_KEY - 1) / km_kpv::WORDS_PER_KEY;
+    const uint8_t extend = static_cast<uint8_t>(num_slots - 1);
+    const uint8_t last_dword = static_cast<uint8_t>((key_size - 1) % km_kpv::WORDS_PER_KEY);
+
+    const int base = m_kpv.km_find_free_slots(num_slots);
+    if (base < 0) {
+        send_resp_cmd(seq, CMD_KEY_LOAD, RET_FAILURE);
+        return false;
+    }
+
+    int word_i = 0;
+    for (int s = base; s < base + num_slots; s++) {
+        for (int w = 0; w < km_kpv::WORDS_PER_KEY; w++) {
+            const uint32_t word = (word_i < key_size)
+                ? p[static_cast<size_t>(2 + word_i)] : 0u;
+            m_kpv.km_write_key_word(s, w, word);
+            word_i++;
+        }
+        m_kpv.km_write_ctrl(s, extend, dest_valid, last_dword);
+        m_kpv.km_lock_write(s);
+        m_kpv.km_set_valid(s, true);
+    }
+
+    const int handle = alloc_handle(static_cast<uint8_t>(base));
+    if (handle < 0) {
+        send_resp_cmd(seq, CMD_KEY_LOAD, RET_FAILURE);
+        return false;
+    }
+
+    send_resp_cmd_arg(seq, CMD_KEY_LOAD, RET_SUCCESS,
+                      static_cast<uint32_t>(handle) & 0xFFu);
     return true;
 }
 

@@ -11,6 +11,10 @@ key_manager_model::key_manager_model(sc_module_name name, int log_verbosity)
     kmac_key_socket("kmac_key_socket"),
     aes_key_socket("aes_key_socket"),
     otbn_key_socket("otbn_key_socket"),
+    abr_mldsa_seed_socket("abr_mldsa_seed_socket"),
+    abr_mlkem_d_socket("abr_mlkem_d_socket"),
+    abr_mlkem_z_socket("abr_mlkem_z_socket"),
+    abr_mlkem_msg_socket("abr_mlkem_msg_socket"),
     verbosity("verbosity", log_verbosity)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());
@@ -78,7 +82,11 @@ void key_manager_model::wipe_process()
             keymgr_tt::km_firmware_handler::DEST_HMAC |
             keymgr_tt::km_firmware_handler::DEST_KMAC |
             keymgr_tt::km_firmware_handler::DEST_AES  |
-            keymgr_tt::km_firmware_handler::DEST_OTBN,
+            keymgr_tt::km_firmware_handler::DEST_OTBN |
+            keymgr_tt::km_firmware_handler::DEST_ABR_MLDSA_SEED |
+            keymgr_tt::km_firmware_handler::DEST_ABR_MLKEM_D    |
+            keymgr_tt::km_firmware_handler::DEST_ABR_MLKEM_Z    |
+            keymgr_tt::km_firmware_handler::DEST_ABR_MLKEM_MSG,
             zero_words.data(),
             keymgr_tt::km_kpv::WORDS_PER_KEY,
             false);  // emergency wipe: clear key_valid (KEY_CTRL=0)
@@ -205,10 +213,14 @@ bool key_manager_model::key_transfer_via_socket(uint8_t dest_mask,
         int      max_words;     ///< sideload register file capacity per share
     };
     engine_info engines[] = {
-        { 0x01u, &hmac_key_socket, 0x40u,  8 },
-        { 0x02u, &kmac_key_socket, 0x40u,  8 },
-        { 0x04u, &aes_key_socket,  0x40u,  8 },
-        { 0x08u, &otbn_key_socket, 0x60u, 12 },
+        { 0x01u, &hmac_key_socket,         0x40u,  8 },
+        { 0x02u, &kmac_key_socket,         0x40u,  8 },
+        { 0x04u, &aes_key_socket,          0x40u,  8 },
+        { 0x08u, &otbn_key_socket,         0x60u, 12 },
+        { 0x10u, &abr_mldsa_seed_socket,   0x40u,  8 },
+        { 0x20u, &abr_mlkem_d_socket,      0x40u,  8 },
+        { 0x40u, &abr_mlkem_z_socket,      0x40u,  8 },
+        { 0x80u, &abr_mlkem_msg_socket,    0x40u,  8 },
     };
 
     bool ok = true;

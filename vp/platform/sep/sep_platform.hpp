@@ -34,6 +34,7 @@
 #include "secure_dma.h"
 #include "hmac.h"
 #include "kmac.h"
+#include "adams_bridge.h"
 #include "otbn.h"
 #include "otbn_interfaces.h"
 #include "spi_controller.h"
@@ -72,7 +73,7 @@ public:
     //             here once an external driver feeds sep_smn_inbound_axi)
     static constexpr unsigned int INIT_COUNT = 6;
     // Targets: sram, rom, dma, hmac, otbn, itcm, dtcm,
-    //          stdout, spi, kmac, csrng, aes, mailbox, aon_timer, keymgr_mb,
+    //          stdout, spi, kmac, abr, csrng, aes, mailbox, aon_timer, keymgr_mb,
     //          keymgr_kpvlp, efuse, efuse_shim, lc_ctrl, entropy_src, edn,
     //          scratch_cold, scratch_warm,
     //          local_alias_remap_csr, local_alias_remap_data,
@@ -99,7 +100,7 @@ public:
     // efuse and efuse_shim are two windows on one model (sep_efuse at 0x10930000
     // and EFUSE_SHIM_CTRL at 0x20000000), so they count as two targets here while
     // being a single peripheral.
-    static constexpr unsigned int TARG_COUNT = 36;
+    static constexpr unsigned int TARG_COUNT = 37;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -182,6 +183,7 @@ private:
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
     hmac_ip*                          hmac               = nullptr;
     kmac_ip*                          kmac               = nullptr;
+    abr_ip*                           abr                = nullptr;
     otbn_ip*                          otbn               = nullptr;
     otp_key_req_stub*                 otp_key_req_stub_inst = nullptr;
     csrng_model*                      csrng              = nullptr;
@@ -236,6 +238,11 @@ private:
     sc_signal<bool, SC_MANY_WRITERS> kmac_lc_escalate_signal;
     sc_signal<bool, SC_MANY_WRITERS> kmac_idle_signal;
     sc_signal<bool, SC_MANY_WRITERS> kmac_intr_signal;
+
+    // Adams Bridge
+    sc_signal<double, SC_MANY_WRITERS> abr_clk_signal;
+    sc_signal<bool, SC_MANY_WRITERS>   abr_error_signal;
+    sc_signal<bool, SC_MANY_WRITERS>   abr_notif_signal;
 
     // OTBN
     sc_signal<double, SC_MANY_WRITERS> otbn_clk_core_signal;

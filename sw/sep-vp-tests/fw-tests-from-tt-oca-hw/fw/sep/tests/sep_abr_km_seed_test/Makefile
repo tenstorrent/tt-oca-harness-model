@@ -8,6 +8,8 @@ EXT_INCS += -I$(OCH_ROOT)/fw/sep/tests/common
 
 include $(OCH_ROOT)/fw/sep/tests/common/common.mk
 
+LD_ABI = $(ABI) -march=rv32imc
+
 all: $(TEST).elf
 
 .PHONY: help

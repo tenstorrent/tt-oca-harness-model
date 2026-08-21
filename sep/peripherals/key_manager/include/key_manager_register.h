@@ -454,7 +454,8 @@ public:
  *   [3:0]   reserved  (lock_write, lock_use, unlock_sep, clear — KM CPU only)
  *   [6:4]   EXTEND    — zero-indexed consecutive-slot count for wide keys
  *   [8:7]   reserved
- *   [16:9]  DEST_VALID — bitmask: HMAC[9] KMAC[10] AES[11] OTBN[12] rsvd[16:13]
+ *   [16:9]  DEST_VALID — bitmask: HMAC[9] KMAC[10] AES[11] OTBN[12]
+ *                                 ABR ML-DSA seed[13] ML-KEM D[14] Z[15] MSG[16]
  *   [20:17] LAST_DWORD — last valid key word index [1..15]
  *   [31:21] reserved
  */

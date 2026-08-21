@@ -1,0 +1,61 @@
+#ifndef PQCLEAN_MLDSA87_CLEAN_SIGN_H
+#define PQCLEAN_MLDSA87_CLEAN_SIGN_H
+#include "params.h"
+#include "poly.h"
+#include "polyvec.h"
+#include <stddef.h>
+#include <stdint.h>
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_keypair(uint8_t *pk, uint8_t *sk);
+
+/* Seeded KeyGen (FIPS 204 ML-DSA.KeyGen_internal). Used by Adams Bridge. */
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_keypair_internal(uint8_t *pk, uint8_t *sk,
+        const uint8_t seed[SEEDBYTES]);
+
+/* Sign from a precomputed mu and caller-supplied rnd (hedged if rnd != 0). */
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_signature_internal(uint8_t *sig, size_t *siglen,
+        const uint8_t mu[CRHBYTES], const uint8_t rnd[RNDBYTES],
+        const uint8_t *sk);
+
+/* Verify from a precomputed mu. Always writes the recomputed c-tilde. */
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_verify_internal(const uint8_t *sig, size_t siglen,
+        const uint8_t mu[CRHBYTES], const uint8_t *pk,
+        uint8_t ctilde_out[CTILDEBYTES]);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_signature_ctx(uint8_t *sig, size_t *siglen,
+        const uint8_t *m, size_t mlen,
+        const uint8_t *ctx, size_t ctxlen,
+        const uint8_t *sk);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_ctx(uint8_t *sm, size_t *smlen,
+        const uint8_t *m, size_t mlen,
+        const uint8_t *ctx, size_t ctxlen,
+        const uint8_t *sk);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_verify_ctx(const uint8_t *sig, size_t siglen,
+        const uint8_t *m, size_t mlen,
+        const uint8_t *ctx, size_t ctxlen,
+        const uint8_t *pk);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_open_ctx(uint8_t *m, size_t *mlen,
+        const uint8_t *sm, size_t smlen,
+        const uint8_t *ctx, size_t ctxlen,
+        const uint8_t *pk);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_signature(uint8_t *sig, size_t *siglen,
+        const uint8_t *m, size_t mlen,
+        const uint8_t *sk);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign(uint8_t *sm, size_t *smlen,
+                                      const uint8_t *m, size_t mlen,
+                                      const uint8_t *sk);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_verify(const uint8_t *sig, size_t siglen,
+        const uint8_t *m, size_t mlen,
+        const uint8_t *pk);
+
+int PQCLEAN_MLDSA87_CLEAN_crypto_sign_open(uint8_t *m, size_t *mlen,
+        const uint8_t *sm, size_t smlen,
+        const uint8_t *pk);
+
+#endif

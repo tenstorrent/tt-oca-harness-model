@@ -49,6 +49,7 @@ public:
         CMD_KEY_REVOKE      = 0x23,
         CMD_KEY_TRANSFER    = 0x24,
         CMD_ENGINE_SHRED    = 0x25,
+        CMD_KEY_LOAD        = 0x26,  ///< SEP-supplied key material (rom_defs.h)
     };
 
     // -----------------------------------------------------------------------
@@ -111,10 +112,14 @@ public:
     // DEST_VALID / DEST_ENGINE bitmask  (KM_FW.md)
     // -----------------------------------------------------------------------
     enum dest_t : uint8_t {
-        DEST_HMAC = (1u << 0),
-        DEST_KMAC = (1u << 1),
-        DEST_AES  = (1u << 2),
-        DEST_OTBN = (1u << 3),
+        DEST_HMAC            = (1u << 0),
+        DEST_KMAC            = (1u << 1),
+        DEST_AES             = (1u << 2),
+        DEST_OTBN            = (1u << 3),
+        DEST_ABR_MLDSA_SEED  = (1u << 4),
+        DEST_ABR_MLKEM_D     = (1u << 5),
+        DEST_ABR_MLKEM_Z     = (1u << 6),
+        DEST_ABR_MLKEM_MSG   = (1u << 7),
     };
 
     // -----------------------------------------------------------------------
@@ -249,6 +254,7 @@ private:
     bool handle_cmd_key_revoke     (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_key_transfer   (uint8_t seq, const std::vector<uint32_t>& p);
     bool handle_cmd_engine_shred   (uint8_t seq, const std::vector<uint32_t>& p);
+    bool handle_cmd_key_load       (uint8_t seq, const std::vector<uint32_t>& p);
 
     // -----------------------------------------------------------------------
     // CRC helpers

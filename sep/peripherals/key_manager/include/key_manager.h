@@ -41,11 +41,16 @@ public:
 
     /// KM → crypto engine key storage (one socket per engine).
     /// CMD_KEY_TRANSFER / CMD_ENGINE_SHRED write key words to these sockets.
-    /// DEST_VALID bit mapping (KeyManager.md): bit0=HMAC, bit1=KMAC, bit2=AES, bit3=OTBN
+    /// DEST_VALID bit mapping: bit0=HMAC, bit1=KMAC, bit2=AES, bit3=OTBN,
+    /// bit4=ABR ML-DSA seed, bit5=ABR ML-KEM D, bit6=ABR ML-KEM Z, bit7=ABR ML-KEM MSG.
     tlm_utils::simple_initiator_socket<key_manager_model, 32> hmac_key_socket;
     tlm_utils::simple_initiator_socket<key_manager_model, 32> kmac_key_socket;
     tlm_utils::simple_initiator_socket<key_manager_model, 32> aes_key_socket;
     tlm_utils::simple_initiator_socket<key_manager_model, 32> otbn_key_socket;
+    tlm_utils::simple_initiator_socket<key_manager_model, 32> abr_mldsa_seed_socket;
+    tlm_utils::simple_initiator_socket<key_manager_model, 32> abr_mlkem_d_socket;
+    tlm_utils::simple_initiator_socket<key_manager_model, 32> abr_mlkem_z_socket;
+    tlm_utils::simple_initiator_socket<key_manager_model, 32> abr_mlkem_msg_socket;
 
     CsmlLogger logger;
     csml_param<int> verbosity; ///< Logging verbosity (runtime-overridable via ini file)

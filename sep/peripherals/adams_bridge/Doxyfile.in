@@ -1,0 +1,68 @@
+# ------------------------------ Project ------------------------------
+PROJECT_NAME           = "@PROJECT_NAME@"
+PROJECT_NUMBER         =
+OUTPUT_DIRECTORY       = "@DOC_OUTPUT_DIR@"
+CREATE_SUBDIRS         = NO
+
+# ------------------------------ Input ------------------------------
+INPUT                  = @DOC_INPUT_DIRS@
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.hpp *.hh *.hxx *.inc *.ipp *.tpp *.c *.cc *.cpp *.cxx *.md
+EXTENSION_MAPPING      = ipp=C++ tpp=C++
+USE_MDFILE_AS_MAINPAGE = README.md
+
+# ------------------------------ Build control ------------------------------
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_CLASSES  = NO
+EXTRACT_ANON_NSPACES   = NO
+INTERNAL_DOCS          = NO
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = NO
+MULTILINE_CPP_IS_BRIEF = NO
+TAB_SIZE               = 4
+OPTIMIZE_OUTPUT_FOR_C  = NO
+OPTIMIZE_OUTPUT_JAVA   = NO
+OPTIMIZE_OUTPUT_VHDL   = NO
+MARKDOWN_SUPPORT       = YES
+ALIASES                =
+
+# Warnings (keep gentle by default)
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+
+# ------------------------------ HTML ------------------------------
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+SEARCHENGINE           = YES
+
+# ------------------------------ LaTeX/PDF ------------------------------
+GENERATE_LATEX         = NO
+
+# ------------------------------ Diagrams (Graphviz) ------------------------------
+HAVE_DOT               = @DOXY_HAVE_DOT@
+DOT_NUM_THREADS        = 0
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+CLASS_DIAGRAMS         = YES
+DOT_TRANSPARENT        = YES
+UML_LOOK               = YES
+UML_LIMIT_NUM_FIELDS   = 25
+DOT_GRAPH_MAX_NODES    = 200
+
+# ------------------------------ Source code browsing ------------------------------
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = NO
+REFERENCES_RELATION    = NO
+VERBATIM_HEADERS       = YES
+
+# ------------------------------ Misc ------------------------------
+GENERATE_TAGFILE       =
