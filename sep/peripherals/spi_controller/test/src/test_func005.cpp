@@ -157,8 +157,10 @@ void testbench::test_func005_error_recovery_flow()
     // Clear any existing errors
     clear_errors();
 
-    // Fill TX FIFO to capacity (TxDepth = 72 words)
-    for (uint32_t i = 0; i < m_tx_depth.get_param_value(); i++) {
+    // Fill TX FIFO to capacity. The byte_select stage counts as an extra word of
+    // storage, so capacity is TxDepth + 1 (73 for the default TxDepth of 72).
+    const uint32_t tx_capacity = m_tx_depth.get_param_value() + 1;
+    for (uint32_t i = 0; i < tx_capacity; i++) {
         test->write_register_32(TXDATA_OFFSET, 0xABCD0000 + i);
     }
     wait(10, SC_NS);
@@ -168,7 +170,7 @@ void testbench::test_func005_error_recovery_flow()
     uint32_t txqd = status_val & 0xFF;
     bool txfull = (status_val >> 29) & 0x1;
 
-    if (txfull && txqd == m_tx_depth.get_param_value()) {
+    if (txfull && txqd == tx_capacity) {
         CSML_INFO(2, logger) << "  [PASS] TX FIFO full: TXFULL=1, TXQD=" << txqd << std::endl;
         sub_tests_passed++;
     } else {

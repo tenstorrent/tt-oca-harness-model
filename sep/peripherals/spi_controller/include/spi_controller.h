@@ -28,6 +28,10 @@ public:
    sc_port<spi_if> spi_master;
 
    /// Interrupt outputs
+   ///
+   /// The IP has one interrupt pin in silicon (irq_o = error_intr || spi_event_intr);
+   /// error_irq and spi_event_irq expose the two classes separately for observability.
+   sc_out<bool> irq_o;  ///< Combined interrupt output — the pin the PIC sees
    sc_out<bool> error_irq;  ///< Error interrupt output for programming violations
    sc_out<bool> spi_event_irq;  ///< Event interrupt output for FIFO watermarks and status changes
 
@@ -237,14 +241,12 @@ private:
    void update_dma_trigger();
 
    /**
-    * @brief Update event interrupt state based on EVENT_ENABLE
-    */
-   void update_event_interrupt_state();
-
-   /**
     * @brief Level-sensitive recompute of INTR_STATUS.spi_event per RTL equation:
     *   spi_event_intr = (|(event_vector & event_mask) || INTR_TEST.spi_event) && INTR_ENABLE.spi_event
-    * Clears as well as sets — call whenever EVENT_ENABLE, INTR_ENABLE, or INTR_TEST changes.
+    *
+    * The RTL drives INTR_STATUS combinationally, so this both sets and clears.
+    * Call it wherever an event condition, EVENT_ENABLE, INTR_ENABLE or INTR_TEST
+    * can change — there is deliberately no edge-triggered latch alongside it.
     */
    void update_spi_event_intr_status();
 
@@ -318,9 +320,13 @@ private:
 
    /**
     * @brief Check if TX FIFO is full
+    *
+    * RTL's byte_select stage greedily pops the FIFO, so it counts as an extra
+    * word of storage: tx_full_o = (tx_qd >= TxDepth + 1).
+    *
     * @return True if TX FIFO is full, false otherwise
     */
-   bool is_tx_fifo_full() { return m_tx_fifo.size() >= get_tx_depth(); }
+   bool is_tx_fifo_full() { return m_tx_fifo.size() >= get_tx_depth() + 1u; }
 
    /**
     * @brief Check if TX FIFO is empty
@@ -423,7 +429,11 @@ private:
    /// Event signaled when dma_trigger transitions HIGH→LOW (TX FIFO reached watermark).
    /// Used by process_single_transaction to wait for a full DMA chunk before consuming,
    /// ensuring proper LOW→HIGH rising-edge visibility for the DMA handshake monitor.
-   sc_event m_tx_fifo_at_watermark;  ///< TX FIFO-at-watermark event (trigger HIGH→LOW)
+   sc_event m_tx_fifo_at_watermark;  ///< TX FIFO-at-watermark event (TX watermark condition HIGH→LOW)
+
+   /// Previous value of the TX watermark condition (tx_qd < TX_WATERMARK), used to
+   /// detect the edge that fires m_tx_fifo_at_watermark.
+   bool m_tx_below_wm_prev = false;
 
    /// Event signaled whenever a word is pushed to the TX FIFO (tx_fifo_push succeeds).
    /// Used to wake the TX stall wait when TX_WATERMARK=0 (no DMA watermark configured),
@@ -439,14 +449,6 @@ private:
     * @brief SC_METHOD to handle all signal writes (single driver)
     */
    void update_output_signals_method();
-
-   /// Previous STATUS values for edge detection
-   bool m_prev_ready;  ///< Previous READY status for edge detection
-   bool m_prev_active;  ///< Previous ACTIVE status for edge detection
-   bool m_prev_txempty;  ///< Previous TXEMPTY status for edge detection
-   bool m_prev_rxfull;  ///< Previous RXFULL status for edge detection
-   bool m_prev_txwm;  ///< Previous TX watermark state for edge detection
-   bool m_prev_rxwm;  ///< Previous RX watermark state for edge detection
 
    /// INTR_TEST state tracking for write-0-to-release semantics
    bool m_intr_test_error_forced;  ///< Tracks if error interrupt is test-forced

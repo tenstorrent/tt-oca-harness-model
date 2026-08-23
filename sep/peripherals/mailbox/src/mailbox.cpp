@@ -31,13 +31,14 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
     , b1("b1", 0x50)
     , socket0("socket0")
     , socket1("socket1")
-    , fifo_0_to_1("fifo_0_to_1", m_mailbox_depth)
-    , fifo_1_to_0("fifo_1_to_0", m_mailbox_depth)
     , logger()
     , verbosity("verbosity", log_verbosity)
 {
-    socket0.bind(b0.target_socket);
-    socket1.bind(b1.target_socket);
+    socket0.register_b_transport(this, &mailbox_ip::b_transport_port0);
+    socket1.register_b_transport(this, &mailbox_ip::b_transport_port1);
+
+    m_access_error[0] = false;
+    m_access_error[1] = false;
 
     // =====================================================================
     // CSML Logger Configuration
@@ -55,8 +56,8 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
     // =====================================================================
     // FUNC_005: Initialize Error Flag Shadow State (Per-Port)
     // =====================================================================
-    // Per RDL specification: ERROR_FLAGS.read_error reset value = 0x1 (FIFO
-    // is empty at reset, so read_error is pre-set). write_error reset = 0x0.
+    // Both flags reset to 0 (axil_mailbox.rdl: read_error = 0x0, write_error =
+    // 0x0). A flag is raised only by an actual failed access at runtime.
     m_error_flag_read_error[0] = false;
     m_error_flag_write_error[0] = false;
     m_error_flag_read_error[1] = false;
@@ -80,14 +81,14 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
     // =====================================================================
     // FUNC_003: Register Port 0 (b0) Callbacks
     // =====================================================================
-    // Use register_functional_write_callback so that write-to-full FIFO
-    // (callback returns false) propagates as TLM_GENERIC_ERROR_RESPONSE.
+    // A write-to-full FIFO raises m_access_error, which bus_access() turns into
+    // an error response to match the RTL's SLVERR.
     b0.memory.register_write_callback(
         [this](DT value) { return this->handle_write_WRITE_DATA(0, value, b0.WRITE_DATA.write_bit_mask); },
         b0.WRITE_DATA.offset);
 
-    // Use register_functional_read_callback so that read-from-empty FIFO
-    // (callback returns false) propagates as TLM_GENERIC_ERROR_RESPONSE.
+    // A read-from-empty FIFO raises m_access_error, which bus_access() turns
+    // into an error response plus the 0xFEEDDEAD sentinel, matching RTL.
     b0.memory.register_read_callback(
         [this](DT& value) { return this->handle_read_READ_DATA(0, value, b0.READ_DATA.read_bit_mask); },
         b0.READ_DATA.offset);
@@ -159,14 +160,14 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
     // =====================================================================
     // FUNC_003: Register Port 1 (b1) Callbacks — symmetric to Port 0
     // =====================================================================
-    // Use register_functional_write_callback so that write-to-full FIFO
-    // (callback returns false) propagates as TLM_GENERIC_ERROR_RESPONSE.
+    // A write-to-full FIFO raises m_access_error, which bus_access() turns into
+    // an error response to match the RTL's SLVERR.
     b1.memory.register_write_callback(
         [this](DT value) { return this->handle_write_WRITE_DATA(1, value, b1.WRITE_DATA.write_bit_mask); },
         b1.WRITE_DATA.offset);
 
-    // Use register_functional_read_callback so that read-from-empty FIFO
-    // (callback returns false) propagates as TLM_GENERIC_ERROR_RESPONSE.
+    // A read-from-empty FIFO raises m_access_error, which bus_access() turns
+    // into an error response plus the 0xFEEDDEAD sentinel, matching RTL.
     b1.memory.register_read_callback(
         [this](DT& value) { return this->handle_read_READ_DATA(1, value, b1.READ_DATA.read_bit_mask); },
         b1.READ_DATA.offset);
@@ -246,6 +247,98 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
     dont_initialize();
 }
 
+// =============================================================================
+// Bus access rules
+// =============================================================================
+
+void mailbox_ip::store_response_data(tlm::tlm_generic_payload& trans, uint64_t value)
+{
+    unsigned char* ptr = trans.get_data_ptr();
+    const unsigned int len = trans.get_data_length();
+    if (ptr == nullptr || len == 0) {
+        return;
+    }
+
+    // A narrowed access addresses one half of the 64-bit register, so shift the
+    // register value down to the byte lane the transaction starts at.
+    const unsigned int shift = static_cast<unsigned int>(trans.get_address() & 0x7ULL) * 8u;
+    const uint64_t lane = (shift >= 64u) ? 0ULL : (value >> shift);
+
+    for (unsigned int i = 0; i < len; ++i) {
+        ptr[i] = (i < 8u) ? static_cast<unsigned char>((lane >> (i * 8u)) & 0xFFu) : 0u;
+    }
+}
+
+/**
+ * @brief Apply the AXI-Lite decode and permission rules, then run the access
+ *
+ * csml_memory always answers TLM_OK_RESPONSE and silently ignores an illegal
+ * access, whereas the RTL slave answers SLVERR for an out-of-range offset, a
+ * write to a read-only register, a read of the write-only CTRL register, and
+ * for FIFO overflow/underflow. Those rules are enforced here so that firmware
+ * sees the same bus behaviour as on hardware.
+ */
+void mailbox_ip::bus_access(unsigned int port, tlm::tlm_generic_payload& trans,
+                            sc_core::sc_time& delay)
+{
+    const uint64_t addr = trans.get_address();
+    const uint64_t reg = addr & ~0x7ULL;
+    const bool is_write = (trans.get_command() == tlm::TLM_WRITE_COMMAND);
+
+    mailbox_base& regs = (port == 0) ? b0 : b1;
+
+    // Offsets beyond CTRL are unmapped. RTL decodes nothing above 0x4F in the
+    // 0x800 port aperture and answers SLVERR — an error from a target that
+    // exists, so a generic error rather than an address error, which the SEP
+    // bus treats as a missing target and turns into a fatal.
+    if (reg > 0x48ULL) {
+        CSML_WARN(1, logger) << "[MBX] Port " << port << " access to unmapped offset 0x"
+                             << std::hex << addr << std::dec;
+        store_response_data(trans, 0);
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
+    // Reading WRITE_DATA is the one write-only access RTL allows: it completes
+    // with OKAY and returns a fixed sentinel rather than erroring.
+    if (!is_write && reg == 0x00ULL) {
+        store_response_data(trans, SENTINEL_WRITE_DATA_READ);
+        trans.set_response_status(tlm::TLM_OK_RESPONSE);
+        return;
+    }
+
+    const bool read_only = (reg == 0x08ULL) || (reg == 0x10ULL) ||
+                           (reg == 0x18ULL) || (reg == 0x40ULL);
+    const bool write_only = (reg == 0x48ULL);
+
+    if (is_write && read_only) {
+        CSML_WARN(1, logger) << "[MBX] Port " << port << " write to read-only offset 0x"
+                             << std::hex << reg << std::dec;
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
+    if (!is_write && write_only) {
+        CSML_WARN(1, logger) << "[MBX] Port " << port << " read of write-only offset 0x"
+                             << std::hex << reg << std::dec;
+        store_response_data(trans, 0);
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
+    m_access_error[port] = false;
+    regs.memory.b_transport(trans, delay);
+
+    if (m_access_error[port]) {
+        m_access_error[port] = false;
+        // Underflow returns a recognisable pattern; overflow has no read data.
+        if (!is_write) {
+            store_response_data(trans, SENTINEL_READ_EMPTY);
+        }
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+    }
+}
+
 /**
  * @brief Reset handler implementation (FUNC_001: System Reset and Initialization)
  *
@@ -273,12 +366,10 @@ void mailbox_ip::handle_reset()
         m_irq_update_event[1].notify();
 
         // =====================================================================
-        // 3. FIFO State Initialization (drain sc_fifo channels)
+        // 3. FIFO State Initialization
         // =====================================================================
-        // sc_fifo has no clear(); drain by reading all available entries
-        uint64_t d;
-        while (fifo_0_to_1.num_available() > 0) fifo_0_to_1.nb_read(d);
-        while (fifo_1_to_0.num_available() > 0) fifo_1_to_0.nb_read(d);
+        m_fifo[0].clear();
+        m_fifo[1].clear();
 
         // =====================================================================
         // 4. Shadow State Initialization (FUNC_005, FUNC_006)
@@ -304,6 +395,8 @@ void mailbox_ip::handle_reset()
         m_irqen_rtirq[0] = false; m_irqen_rtirq[1] = false;
         m_irqen_eirq[0]  = false; m_irqen_eirq[1]  = false;
 
+        m_access_error[0] = false;
+        m_access_error[1] = false;
     }
 }
 
@@ -323,20 +416,21 @@ bool mailbox_ip::handle_write_WRITE_DATA(unsigned int port, DT value, DT write_m
     // =========================================================================
     // 1. Pre-Check: Validate FIFO Not Full
     // =========================================================================
-    auto* wfifo = write_fifo_for(port);
-    if (wfifo->num_free() == 0) {
+    auto& wfifo = write_fifo_for(port);
+    if (fifo_level(wfifo) >= m_mailbox_depth) {
         // FIFO is full — overflow error condition
         CSML_WARN(1, logger) << "[MBX] Port " << port << " WRITE_DATA: FIFO write-to-full error";
         m_error_flag_write_error[port] = true;
         m_irqs_eirq[port] = true;
+        m_access_error[port] = true;
         update_irqp_and_output(port);
         return false;
     }
 
     // =========================================================================
-    // 2. Enqueue Data to Outbound sc_fifo (non-blocking)
+    // 2. Enqueue Data to Outbound FIFO
     // =========================================================================
-    wfifo->nb_write(static_cast<uint64_t>(value));
+    wfifo.push_back(static_cast<uint64_t>(value));
     CSML_INFO(2, logger) << "[MBX] Port " << port << " WRITE_DATA: enqueued 0x" 
                          << std::hex << value << std::dec;
 
@@ -345,21 +439,13 @@ bool mailbox_ip::handle_write_WRITE_DATA(unsigned int port, DT value, DT write_m
     // =========================================================================
     unsigned int peer_port = 1 - port;
 
-    // Write FIFO fill level uses (depth - num_free()) rather than num_available()
-    // because nb_write() increments m_num_written immediately but m_num_readable
-    // is only updated at the next delta-cycle update() call.  num_free() =
-    // m_size - m_num_readable - m_num_written correctly accounts for both
-    // committed and pending (same-delta) writes, giving the true fill level.
-    unsigned int wfill = m_mailbox_depth - static_cast<unsigned int>(wfifo->num_free());
-    if (wfill > m_wirqt_threshold[port]) {
+    if (fifo_level(wfifo) > m_wirqt_threshold[port]) {
         m_irqs_wtirq[port] = true;
     }
 
-    // Peer's read FIFO fill = same fifo (write_fifo_for(port) == read_fifo_for(peer_port)).
-    // Use num_free()-based fill for the same delta-cycle accuracy reason.
-    auto* rfifo_peer = read_fifo_for(peer_port);
-    unsigned int rfill_peer = m_mailbox_depth - static_cast<unsigned int>(rfifo_peer->num_free());
-    if (rfill_peer > m_rirqt_threshold[peer_port]) {
+    // The FIFO this port writes into is the peer's read FIFO, so the same push
+    // may also cross the peer's read threshold.
+    if (fifo_level(read_fifo_for(peer_port)) > m_rirqt_threshold[peer_port]) {
         m_irqs_rtirq[peer_port] = true;
     }
 
@@ -387,22 +473,23 @@ bool mailbox_ip::handle_read_READ_DATA(unsigned int port, DT& value, DT read_mas
     // =========================================================================
     // 1. Pre-Check: Validate FIFO Not Empty
     // =========================================================================
-    auto* rfifo = read_fifo_for(port);
-    if (rfifo->num_available() == 0) {
+    auto& rfifo = read_fifo_for(port);
+    if (rfifo.empty()) {
         // FIFO is empty — underflow error condition
         CSML_WARN(1, logger) << "[MBX] Port " << port << " READ_DATA: FIFO read-from-empty error";
         m_error_flag_read_error[port] = true;
         m_irqs_eirq[port] = true;
+        m_access_error[port] = true;
         update_irqp_and_output(port);
-        return false;  // CSML skips buffer copy on false; value need not be set
+        return false;  // bus_access() substitutes the 0xFEEDDEAD sentinel
     }
 
     // =========================================================================
-    // 2. Dequeue Data from Inbound sc_fifo (non-blocking)
+    // 2. Dequeue Data from Inbound FIFO
     // =========================================================================
     unsigned int peer_port = 1 - port;
-    uint64_t data;
-    rfifo->nb_read(data);
+    const uint64_t data = rfifo.front();
+    rfifo.pop_front();
     value = static_cast<DT>(data);
     CSML_INFO(2, logger) << "[MBX] Port " << port << " READ_DATA: dequeued 0x" 
                          << std::hex << value << std::dec;
@@ -432,22 +519,15 @@ bool mailbox_ip::handle_read_STATUS(unsigned int port, DT& value, DT read_mask)
 {
     value = 0;
 
-    auto* rfifo = read_fifo_for(port);
-    auto* wfifo = write_fifo_for(port);
-
-    // Read-side fill: use num_available() = (m_num_readable - m_num_read).
-    // nb_read() increments m_num_read immediately, so num_available() reflects
-    // same-delta reads correctly. num_free() does NOT reflect same-delta reads
-    // (m_num_readable is only decremented in update() at the next delta cycle).
-    unsigned int rfill = static_cast<unsigned int>(rfifo->num_available());
-    unsigned int wfill = m_mailbox_depth - static_cast<unsigned int>(wfifo->num_free());
+    const unsigned int rfill = fifo_level(read_fifo_for(port));
+    const unsigned int wfill = fifo_level(write_fifo_for(port));
 
     // STATUS[0]: empty flag (inbound FIFO has no data to read)
     if (rfill == 0)
         value |= 0x1;
 
     // STATUS[1]: full flag (outbound FIFO has no free space)
-    if (wfifo->num_free() == 0)
+    if (wfill >= m_mailbox_depth)
         value |= 0x2;
 
     // STATUS[2]: write_level_above_thresh (outbound FIFO usage exceeds WIRQT)
@@ -519,11 +599,8 @@ bool mailbox_ip::handle_write_WIRQT(unsigned int port, DT value, DT write_mask)
 
     // =========================================================================
     // 3. Immediate Threshold Comparison (Retroactive Triggering)
-    // Use (depth - num_free()) for fill level to capture same-delta pending writes.
     // =========================================================================
-    auto* wf_port = write_fifo_for(port);
-    unsigned int wfill = m_mailbox_depth - static_cast<unsigned int>(wf_port->num_free());
-    if (wfill > m_wirqt_threshold[port]) {
+    if (fifo_level(write_fifo_for(port)) > m_wirqt_threshold[port]) {
         m_irqs_wtirq[port] = true;
     }
 
@@ -560,11 +637,8 @@ bool mailbox_ip::handle_write_RIRQT(unsigned int port, DT value, DT write_mask)
 
     // =========================================================================
     // 3. Immediate Threshold Comparison (Retroactive Triggering)
-    // Use (depth - num_free()) for fill level to capture same-delta pending writes.
     // =========================================================================
-    auto* rf_port = read_fifo_for(port);
-    unsigned int rfill = m_mailbox_depth - static_cast<unsigned int>(rf_port->num_free());
-    if (rfill > m_rirqt_threshold[port]) {
+    if (fifo_level(read_fifo_for(port)) > m_rirqt_threshold[port]) {
         m_irqs_rtirq[port] = true;
     }
 
@@ -812,9 +886,7 @@ bool mailbox_ip::handle_write_CTRL(unsigned int port, DT value, DT write_mask)
     // =========================================================================
     if (wflush) {
         CSML_INFO(1, logger) << "[MBX] Port " << port << " CTRL: flushing write FIFO";
-        uint64_t d;
-        auto* wf = write_fifo_for(port);
-        while (wf->num_available() > 0) wf->nb_read(d);
+        write_fifo_for(port).clear();
     }
 
     // =========================================================================
@@ -822,10 +894,12 @@ bool mailbox_ip::handle_write_CTRL(unsigned int port, DT value, DT write_mask)
     // =========================================================================
     if (rflush) {
         CSML_INFO(1, logger) << "[MBX] Port " << port << " CTRL: flushing read FIFO";
-        uint64_t d;
-        auto* rf = read_fifo_for(port);
-        while (rf->num_available() > 0) rf->nb_read(d);
+        read_fifo_for(port).clear();
     }
+
+    // CTRL is a strobe: the flush happens on the write and no value is retained,
+    // so clear the backing store rather than leaving the written bits visible.
+    regs_for(port).CTRL.reset();
 
     // =========================================================================
     // Update Interrupt Status for Both Ports

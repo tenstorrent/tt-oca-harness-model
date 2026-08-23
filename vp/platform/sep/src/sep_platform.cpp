@@ -35,6 +35,9 @@ och_sep_ss::~och_sep_ss() {
     delete stdout_dev;
     delete dma;
     delete dma_sys_adapter;
+    delete dma_alias_remap;
+    delete dma_ctn_deadend;
+    delete dma_sys_deadend;
     delete hmac;
     delete kmac;
     delete abr;
@@ -43,7 +46,6 @@ och_sep_ss::~och_sep_ss() {
     delete csrng;
     delete aes;
     delete mailbox;
-    delete mbox_host;
     delete mbox_bridge;
     delete aon_timer;
     delete sep_efuse;
@@ -91,6 +93,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , strap_status_report_disable("smc.status_report_disable", false)
     , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
     , spiPreload("spiPreload", "")
+    , spiBackdoorFile("spiBackdoorFile", "")
     , smn_inbound_to_filter("smn_inbound_to_filter")
     , outbound_filter_to_smn("outbound_filter_to_smn")
     , sep_global_base("sep_global_base", 0x0ULL)
@@ -154,17 +157,23 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         }
     }
 
-    spiPreloadPath = spiPreload.get_param_value();
-    if (not spiPreloadPath.empty()) {
-        std::filesystem::path preloadPath(spiPreloadPath);
-        if (preloadPath.is_relative()) {
+    // Both SPI image keys name a path relative to the .ini that set them.
+    auto resolveAgainstIniDir = [](std::string path) {
+        if (path.empty())
+            return path;
+        std::filesystem::path p(path);
+        if (p.is_relative()) {
             if (const char* baseDir = std::getenv("SEP_VP_INI_DIR"))
-                preloadPath = (std::filesystem::path(baseDir) / preloadPath).lexically_normal();
+                p = (std::filesystem::path(baseDir) / p).lexically_normal();
             else
-                preloadPath = std::filesystem::absolute(preloadPath).lexically_normal();
-            spiPreloadPath = preloadPath.string();
+                p = std::filesystem::absolute(p).lexically_normal();
+            return p.string();
         }
-    }
+        return path;
+    };
+
+    spiPreloadPath  = resolveAgainstIniDir(spiPreload.get_param_value());
+    spiBackdoorPath = resolveAgainstIniDir(spiBackdoorFile.get_param_value());
     if (args.verbose)
         std::cerr << "Loading ELF file " << elfFile << '\n';
 
@@ -393,6 +402,9 @@ void och_sep_ss::create_modules() {
     stdout_dev      = new stdout_device("stdout");
     dma             = new secure_dma_model("dma");
     dma_sys_adapter = new dma_sys_bus_adapter("dma_sys_adapter");
+    dma_alias_remap = new dma_alias_remap_adapter("dma_alias_remap", cpu_ctrl);
+    dma_ctn_deadend = new dead_manager_port_stub("dma_ctn_deadend");
+    dma_sys_deadend = new dead_manager_port_stub("dma_sys_deadend");
     hmac            = new hmac_ip("hmac");
     kmac            = new kmac_ip("kmac");
     abr             = new abr_ip("abr");
@@ -401,11 +413,12 @@ void och_sep_ss::create_modules() {
     otp_key_req_stub_inst = new otp_key_req_stub("otp_key_req_stub");
     csrng           = new csrng_model("csrng");
     aes             = new aes_model("aes");
-    mailbox         = new mailbox_ip("mailbox_ip");
-    mbox_host       = new mailbox_host_stub("mailbox_host_stub");
+    mailbox         = new mailbox_unit("mailbox_unit");
     mbox_bridge     = new MailboxBridge("mailbox_bridge");
     aon_timer       = new aon_timer_ip("aon_timer");
     sep_efuse       = new efuse_model("sep_efuse");
+    sep_efuse->locked_field_access_irq_o(efuse_locked_field_irq_sig);
+    efuse_locked_field_irq_sig.write(false);
     lc_ctrl         = new lifecycle_ctrl_model("lc_ctrl");
     entropy_src     = new entropy_src_ip("entropy_src");
     edn             = new edn_ip("edn");
@@ -531,15 +544,23 @@ void och_sep_ss::module_bind() {
         unsigned it = 0;
         riscv->setMasterId(it);
         bus->tsocks[it++].bind(riscv->initiator_socket);
-        bus->tsocks[it++].bind(dma->ot_initiator_socket);
-        bus->tsocks[it++].bind(dma->ctn_initiator_socket);
-        bus->tsocks[it++].bind(dma_sys_adapter->ini);
+        // Every DMA address passes through the alias window remap before it
+        // reaches the crossbar, exactly as u_dma_local_alias_remap does.
+        bus->tsocks[it++].bind(dma_alias_remap->ini);
+        dma->ot_initiator_socket.bind(dma_alias_remap->tgt);
         // local_alias_remap forwards remapped transactions back into the same bus
         bus->tsocks[it++].bind(local_alias_remap->remapped_socket);
         // smn_remap forwards inbound (external) transactions back into the same
         // bus, once an SMC/AP model binds sep_smn_inbound_axi
         bus->tsocks[it++].bind(smn_remap->ini);
+
+        // sep_dma_wrap grounds .sys_i and leaves the CTN response channel
+        // stubbed, so neither port reaches the fabric. Both go to a dead end
+        // rather than the bus, which turns a transfer programmed with ASID 0x9
+        // or 0xA into ERROR_CODE.bus_error instead of a silent success.
+        dma->ctn_initiator_socket.bind(dma_ctn_deadend->socket);
         dma->sys_initiator_socket.bind(dma_sys_adapter->tgt);
+        dma_sys_adapter->ini.bind(dma_sys_deadend->socket);
     }
 
     // Crossbar connectivity matrix (sep_local_axi_xbar.yaml; see
@@ -549,16 +570,13 @@ void och_sep_ss::module_bind() {
     {
         static constexpr sep_xbar::master BUS_MASTER[INIT_COUNT] = {
             sep_xbar::master::cpu,          // 0: riscv (ifu + lsu + dbg)
-            sep_xbar::master::dma,          // 1: dma OT leg
-            sep_xbar::master::dma,          // 2: dma CTN leg
-            sep_xbar::master::dma,          // 3: dma sys leg
-            sep_xbar::master::local_alias,  // 4: local-alias re-injection
-            sep_xbar::master::ext,          // 5: SMN inbound after remap
+            sep_xbar::master::dma,          // 1: dma OT leg, post alias remap
+            sep_xbar::master::local_alias,  // 2: local-alias re-injection
+            sep_xbar::master::ext,          // 3: SMN inbound after remap
         };
         bus->access_policy = [](unsigned initiator_id, uint64_t addr) {
             if (initiator_id >= INIT_COUNT) return true;
-            return sep_xbar::permits(BUS_MASTER[initiator_id],
-                                     sep_xbar::classify(addr));
+            return sep_xbar::permits(BUS_MASTER[initiator_id], addr);
         };
     }
 
@@ -690,6 +708,7 @@ void och_sep_ss::module_bind() {
     // SPI
     spi_controller->clk_i(spi_clk_signal);
     spi_controller->rst_ni(reset_signal);
+    spi_controller->irq_o(spi_irq_signal);
     spi_controller->error_irq(spi_error_irq_signal);
     spi_controller->spi_event_irq(spi_event_irq_signal);
     spi_controller->dma_trigger(dma_lsio_trigger[0]);  // SPI TX DMA handshake
@@ -698,12 +717,13 @@ void och_sep_ss::module_bind() {
     spi_clk_signal.write(true);
 
     // Mailbox
-    mbox_bridge->isock.bind(mailbox->socket0);
-    mbox_host->isock.bind(mailbox->socket1);
+    mbox_bridge->isock.bind(mailbox->target_socket);
     mailbox->clk_i(mbox_clk_signal);
     mailbox->rst_ni(reset_signal);
-    mailbox->irq_o[0](mbox_irq0_signal);
-    mailbox->irq_o[1](mbox_irq1_signal);
+    for (unsigned int m = 0; m < mailbox_unit::NUM_CHANNELS; ++m) {
+        mailbox->outbound_irq_o[m](mbox_outbound_irq_signal[m]);
+        mailbox->inbound_irq_o[m](mbox_inbound_irq_signal[m]);
+    }
     mbox_clk_signal.write(50000000.0);  // 50 MHz
 
     // AON Timer
@@ -728,12 +748,16 @@ void och_sep_ss::module_bind() {
     aon_racl_policies_signal.write(0);
 
     // PIC interrupt routing
-    // Note: aon_intr_wkup_signal, aon_intr_bark_signal, and
-    // spi_error_irq_signal have no silicon interrupt source (not part of
-    // sep_internal_interrupts[]) and are intentionally NOT routed to the PIC.
-    // Each is still driven by its peripheral model but has no reader.
+    // Note: aon_intr_wkup_signal and aon_intr_bark_signal have no silicon
+    // interrupt source (not part of sep_internal_interrupts[]) and are
+    // intentionally NOT routed to the PIC. Each is still driven by its
+    // peripheral model but has no reader.
+    //
+    // SPI has one interrupt line in silicon, spi_irq_i = error || event, so the
+    // slot is driven from the model's combined irq_o rather than either class
+    // signal; spi_error_irq_signal and spi_event_irq_signal remain for tracing.
     pic_inputs[KEYMGR_IRQ]          = &keymgr_irq_signal;
-    pic_inputs[SPI_EVENT_IRQ]       = &spi_event_irq_signal;
+    pic_inputs[SPI_EVENT_IRQ]       = &spi_irq_signal;
     pic_inputs[HMAC_DONE_IRQ]       = &hmac_done_signal;
     pic_inputs[HMAC_FIFO_EMPTY_IRQ] = &hmac_fifo_empty_signal;
     pic_inputs[HMAC_HMAC_ERR_IRQ]   = &hmac_err_signal;
@@ -744,8 +768,15 @@ void och_sep_ss::module_bind() {
     pic_inputs[DMA_DONE_IRQ]        = &dma_done_intr_sig;
     pic_inputs[DMA_CHUNK_DONE_IRQ]  = &dma_chunk_done_intr_sig;
     pic_inputs[DMA_ERROR_IRQ]       = &dma_error_intr_sig;
-    pic_inputs[MAILBOX_IRQ0]        = &mbox_irq0_signal;
-    pic_inputs[MAILBOX_IRQ1]        = &mbox_irq1_signal;
+    pic_inputs[DMA_ALERT_IRQ]       = &dma_alert_fatal_sig;
+    // A pulse, not a level: configure the gateway edge-triggered to catch it, as the
+    // RTL's one-cycle assertion requires there too.
+    pic_inputs[LOCKED_FIELD_ACCESS_IRQ] = &efuse_locked_field_irq_sig;
+    // sep.sv routes only the outbound interrupts to the SEP PIC, one source per
+    // channel; the inbound ones go out to the SMC instead.
+    for (unsigned int m = 0; m < mailbox_unit::NUM_CHANNELS; ++m) {
+        pic_inputs[MAILBOX_IRQ0 + m] = &mbox_outbound_irq_signal[m];
+    }
     pic_inputs[CS_CMD_REQ_DONE]     = &csrng_cs_cmd_req_done_signal;
     pic_inputs[CS_ENTROPY_REQ]      = &csrng_cs_entropy_req_signal;
     pic_inputs[CS_FATAL_ERR]        = &csrng_cs_fatal_err_signal;
@@ -897,16 +928,20 @@ void och_sep_ss::start_of_simulation() {
     // software-writable woset fields, so firmware disabling a feature through the eFuse
     // has to move FEAT_CTRL; sampling once here would freeze it at the boot value.
     //
-    // secure_tm is the exception: it is not an eFuse value but the test_en strap, which
-    // sep_efuse_wrapper.sv latches when fuse sense completes. It stays a parameter and is
-    // forwarded from here.
+    // secure_tm comes from the eFuse too, though it is not a fuse: it is the test_en
+    // strap, which sep_efuse_wrapper.sv latches when fuse sense completes and fans out
+    // to lc_ctrl alongside the shadow registers. Taking it from there rather than from
+    // lc_ctrl's own parameter is what makes it one strap — the same assertion that
+    // blocks fuse commands and zeroes the key manager's secrets is the one that opens
+    // FEAT_CTRL's test group. lc_ctrl.secure_tm keeps its meaning only standalone; on
+    // a platform, och_sep_ss1.sep_efuse.secure_tm is the knob.
     auto refresh_lc_inputs = [this]() {
         lifecycle_ctrl_model::lc_inputs in;
         in.lc_state_code    = sep_efuse->get_lc_state_code();
         in.sip_dis          = sep_efuse->get_sip_dis();
         in.sys_dis          = sep_efuse->get_sys_dis();
         in.security_disable = sep_efuse->get_security_disable();
-        in.secure_tm        = lc_ctrl->secure_tm.get_param_value();
+        in.secure_tm        = sep_efuse->get_secure_tm();
         lc_ctrl->set_inputs(in);
     };
 
@@ -953,13 +988,14 @@ void och_sep_ss::start_of_simulation() {
             }
             std::cout << "[spi_flash] spiPreload: loaded into flash from " << spiPreloadPath << '\n';
         }
-    } else {
-        // No spiPreload configured — fall back to the raw-binary backdoor file.
-        // The model opens data/flash_memory.bin relative to the working
-        // directory (the directory of the .ini passed to sep-vp; sep-vp chdir's
-        // there at startup). When nothing is staged this is a no-op that logs
-        // "... not found" and leaves the flash erased, so existing tests are
-        // unaffected.
-        spi_device->get_model()->load_memory_from_file();
+    } else if (not spiBackdoorPath.empty()) {
+        // spiBackdoorFile names a raw binary image, for fixtures that are not in
+        // the hex format above. This is deliberately opt-in: a run that names
+        // neither key starts from erased flash regardless of what happens to be
+        // lying in the working directory.
+        if (not spi_device->get_model()->load_memory_from_file(spiBackdoorPath)) {
+            std::cerr << "[spi_flash] spiBackdoorFile: cannot load " << spiBackdoorPath
+                      << " — flash left erased\n";
+        }
     }
 }

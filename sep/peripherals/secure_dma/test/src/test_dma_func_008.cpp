@@ -148,6 +148,9 @@ void testbench::test_func008_go_bit_transfer_initiation() {
   // ASID: OT_ADDR (0x7) for both source and destination
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4); // src_asid=0x7, dst_asid=0x7
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Addressing modes: Both increment
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001); // increment=1
@@ -233,6 +236,9 @@ void testbench::test_func008_go_bit_validation_failure() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   wait(10, SC_NS);
 
@@ -442,6 +448,9 @@ void testbench::test_func008_cfg_regwen_hardware_locking() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Write go bit to enter BUSY state
@@ -520,6 +529,9 @@ void testbench::test_func008_control_status_always_accessible() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Enter BUSY state
@@ -630,6 +642,9 @@ void testbench::test_abort_during_transfer() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4)); // OT->OT
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 1024);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 256);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2); // 4-byte
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x1);     // increment
@@ -713,6 +728,9 @@ void testbench::test_abort_status_clearing() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   uint32_t control_val = 0x80000000; // go=1
@@ -805,6 +823,9 @@ void testbench::test_abort_ot_transactions_complete() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2); // 4-byte

@@ -185,12 +185,11 @@ vp_efuse_blank_config() {
     local dir top_blank
     dir="$(dirname "${CONFIG}")"
     top_blank="${dir}/accellera_config_efuse_blank.ini"
-    sed -E \
-        -e 's|^(och_sep_ss1\.sep_efuse\.[[:alnum:]_]+[[:space:]]*:[[:space:]]*)\[[^]]*\]|\1[0, 0, 0, 0, 0, 0, 0, 0]|' \
-        -e 's|^(och_sep_ss1\.sep_efuse\.[[:alnum:]_]+[[:space:]]*:[[:space:]]*)[0-9]+|\10|' \
+    sed 's|^och_sep_ss1\.sep_efuse\.fuse_preload_file|#&|' \
         "${dir}/efuse_vp.ini" > "${dir}/efuse_vp_blank.ini"
     sed -E 's|^@include efuse_vp\.ini[[:space:]]*$|@include efuse_vp_blank.ini|' \
         "${CONFIG}" > "${top_blank}"
+    echo "${top_blank}"
 }
 
 # Tests whose Makefile emits a second ELF from the same sources.

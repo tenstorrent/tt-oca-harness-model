@@ -87,6 +87,9 @@ void testbench::bind_ports()
     // =========================================================================
     // 4. Interrupt Outputs
     // =========================================================================
+    dut->irq_o(sig_irq);
+    test->irq_o(sig_irq);
+
     dut->error_irq(sig_error_irq);
     test->error_irq(sig_error_irq);
 
@@ -293,16 +296,18 @@ void testbench::configure_spi_controller_basic(uint32_t clkdiv, uint32_t csid)
 }
 
 /**
- * @brief Clear all interrupt flags
+ * @brief Quiet the interrupt lines by removing their causes
+ *
+ * INTR_STATUS is read-only and tracks its inputs live, so it cannot be written
+ * clear. Drop the software-forced sources instead: INTR_TEST and any latched
+ * ERROR_STATUS bit. A level event that is still true (say TXEMPTY while idle)
+ * keeps INTR_STATUS.spi_event asserted — mask EVENT_ENABLE to silence those.
  */
 void testbench::clear_interrupts()
 {
-    uint32_t status_val;
-    test->read_register_32(spi_controller_regs::INTR_STATUS_OFFSET, status_val);
-    if (status_val != 0) {
-        test->write_register_32(spi_controller_regs::INTR_STATUS_OFFSET, status_val);  /// W1C
-        wait(10, SC_NS);
-    }
+    test->write_register_32(spi_controller_regs::INTR_TEST_OFFSET, 0x0);
+    clear_errors();
+    wait(10, SC_NS);
 }
 
 /**

@@ -3,7 +3,7 @@
  * @brief SPI Controller hardware register definitions
  * 
  * This header defines all hardware register types for the SPI Controller IP:
- * - INTR_STATUS - Interrupt status register (W1C)
+ * - INTR_STATUS - Interrupt status register (software read-only)
  * - INTR_ENABLE - Interrupt enable register
  * - INTR_TEST - Interrupt test register
  * - CTRL - Control register (SPIEN, SW_RST, OUTPUT_EN, watermarks)

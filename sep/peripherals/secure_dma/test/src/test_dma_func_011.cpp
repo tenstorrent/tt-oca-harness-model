@@ -197,11 +197,14 @@ void testbench::test_hw_handshake_trigger0() {
   // ASID: OT_ADDR for both
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Addressing: Source fixed (peripheral FIFO), destination increment (memory
   // buffer)
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET,
-                            0x00000000); // fixed
+                            0x00000002); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET,
                             0x00000001); // increment
 
@@ -593,8 +596,11 @@ void testbench::test_hw_handshake_auto_clear_ot_bus() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET,
-                            0x00000000); // fixed
+                            0x00000002); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET,
                             0x00000001); // increment
 
@@ -751,8 +757,11 @@ void testbench::test_hw_handshake_auto_clear_ctn_bus() {
   // ASID: OT_ADDR (0x7) for both source and destination
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET,
-                            0x00000000); // fixed
+                            0x00000002); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET,
                             0x00000001); // increment
 
@@ -876,7 +885,10 @@ void testbench::test_hw_handshake_go_bit_remains_set() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
-  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000002); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
   wait(10, SC_NS);
@@ -1020,7 +1032,10 @@ void testbench::test_hw_handshake_no_chunk_done_intr() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
-  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000002); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
   wait(10, SC_NS);
@@ -1179,7 +1194,10 @@ void testbench::test_hw_handshake_total_size_reached() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
-  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000002); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
   wait(10, SC_NS);
@@ -1318,7 +1336,10 @@ bool testbench::run_generic_hw_handshake_test(uint32_t trigger_index,
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
-  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000002); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
   wait(10, SC_NS);
@@ -1438,7 +1459,10 @@ void testbench::test_hw_handshake_no_drain_before_trigger() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET,
                             (0x7 << 0) | (0x7 << 4));
-  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x0); // fixed
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x2); // fixed FIFO (wrap, no increment)
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1); // increment
   wait(10, SC_NS);
   m_test->register_write_32(secure_dma_basetest::HANDSHAKE_INTR_ENABLE_OFFSET,
@@ -1556,6 +1580,9 @@ void testbench::test_hw_handshake_multichunk_reference_74() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET,
                             (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x1); // increment
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1); // increment
   wait(10, SC_NS);

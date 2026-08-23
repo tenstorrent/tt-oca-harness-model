@@ -3,9 +3,13 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <sstream>
+#include <vector>
 #include <openssl/sha.h>
 
 static const std::vector<uint32_t> k_zero8(8, 0u);
+
+const sc_core::sc_time efuse_model::LOCKED_FIELD_PULSE_WIDTH(1, sc_core::SC_NS);
 
 // =============================================================================
 // Constructor
@@ -51,6 +55,7 @@ efuse_model::efuse_model(sc_module_name n, int log_verbosity)
     , public_key_1("public_key_1", k_zero8)
     , sec_disable_token_digest("sec_disable_token_digest", k_zero8)
     , sec_disable_rev_enable("sec_disable_rev_enable", true)
+    , secure_tm("secure_tm", false)
     , fuse_preload_file("fuse_preload_file", std::string())
     , m_req_error(false)
     , m_program_addr_error(false)
@@ -68,6 +73,49 @@ efuse_model::efuse_model(sc_module_name n, int log_verbosity)
     logger.setFunctionTrace(false);
     reset_all_registers();
     register_callbacks();
+
+    SC_METHOD(drive_locked_field_irq);
+    sensitive << m_locked_field_raise << m_locked_field_pulse_end;
+    dont_initialize();
+}
+
+// =============================================================================
+// Locked-field access interrupt
+//
+// The refusal is detected inside b_transport, but the pin is driven from a process:
+// a signal may have only one driver, and the callers are whichever process happens to
+// be on the bus. So a refusal only requests the pulse, and drive_locked_field_irq --
+// the sole driver -- raises and lowers it.
+//
+// Refusals closer together than the pulse width merge into one pulse, since the
+// second finds the pin already high and only extends it. The RTL merges them the same
+// way within a cycle, and an interrupt with no count behind it cannot express "twice"
+// in any case.
+// =============================================================================
+
+void efuse_model::raise_locked_field_access()
+{
+    m_locked_field_pending = true;
+    m_locked_field_raise.notify(sc_core::SC_ZERO_TIME);
+}
+
+void efuse_model::drive_locked_field_irq()
+{
+    if (m_locked_field_pending) {
+        m_locked_field_pending = false;
+        locked_field_access_irq_o.write(true);
+        m_locked_field_pulse_end.notify(LOCKED_FIELD_PULSE_WIDTH);
+    } else {
+        locked_field_access_irq_o.write(false);
+    }
+}
+
+bool efuse_model::refuse_locked_write(unsigned int word)
+{
+    if (!is_write_locked(word))
+        return false;
+    raise_locked_field_access();
+    return true;
 }
 
 // =============================================================================
@@ -102,8 +150,8 @@ void efuse_model::register_callbacks()
             BL2_VERSION[i].offset);
     }
     memory.register_write_callback(
-        [this](uint32_t v){ return handle_write_EFUSE_WRITE_CTRL(v); },
-        EFUSE_WRITE_CTRL.offset);
+        [this](uint32_t v){ return handle_write_EFUSE_PROGRAM_CTRL(v); },
+        EFUSE_PROGRAM_CTRL.offset);
     memory.register_write_callback(
         [this](uint32_t v){ return handle_write_EFUSE_READ_CTRL(v); },
         EFUSE_READ_CTRL.offset);
@@ -217,9 +265,59 @@ bool efuse_model::handle_write_TOKEN_EOP(uint32_t value)
 
     TOKEN_EOP = 0u;
 
+    apply_transient_rma();
+
     // A SEC_DISABLE match asserts security_disable_o, which lifecycle_ctrl consumes.
     notify_shadow_change();
     return true;
+}
+
+/*
+ * Transient RMA: advance the lifecycle state on a token match alone.
+ *
+ * With the TRANSIENT_RMA_EN fuse set, efuse_shadow_regs.sv:338-346 moves LC_STATE with
+ * no software write at all -- a matching SiP token sets bit [1], a matching chiplet
+ * token sets bit [2]. It is the branch the RTL takes when no bus access is in flight,
+ * so it is continuous there; here the token comparison is what changes, and it only
+ * changes on a TOKEN_EOP write, so that is where this runs.
+ *
+ * The guards are the ones the software path already enforces, which is the point of
+ * the mechanism: transient RMA removes the need for the write, not the need for the
+ * token. Chiplet still requires RMA_SiP established and a state that is not PROD, and
+ * the chiplet branch does not fall through to the SiP one when its guard fails --
+ * matching a chiplet token must not quietly perform a SiP transition instead.
+ */
+void efuse_model::apply_transient_rma()
+{
+    if ((static_cast<uint32_t>(TRANSIENT_RMA_EN) & 0x1u) == 0)
+        return;
+
+    const uint32_t cur = m_lc_state_val & 0xFu;
+
+    // Terminal states short-circuit ahead of this branch in the RTL, so they are
+    // immovable here too, demoted PROD included.
+    if (cur == LC_RAW_PROD_END || cur == LC_RAW_RMA_CHIP_0 || cur == LC_RAW_RMA_CHIP_1 ||
+        (cur == LC_RAW_PROD && m_prod_dbg_active))
+        return;
+
+    const bool sip_match  = static_cast<uint32_t>(RMA_SIP_TOKEN_MATCH) == TOKEN_MATCH;
+    const bool chip_match = static_cast<uint32_t>(RMA_CHIPLET_TOKEN_MATCH) == TOKEN_MATCH;
+
+    uint32_t next = cur;
+    if (chip_match) {
+        if (cur != LC_RAW_PROD && (cur & 0x2u))
+            next = cur | 0x4u;
+    } else if (sip_match) {
+        next = cur | 0x2u;
+    }
+
+    if (next == cur || !lc_state_raw_valid(next))
+        return;
+
+    m_lc_state_val = lc_state_encode(next);
+    LC_STATE       = m_lc_state_val;
+    CSML_INFO(1, logger) << "transient RMA: LC_STATE advanced to 0x" << std::hex << next
+                         << std::dec << " on token match" << std::endl;
 }
 
 // =============================================================================
@@ -270,7 +368,9 @@ const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     { 0x314 / 4, 0x350 / 4, true,  20 },  // RESERVED_5[16]
     { 0x354 / 4, 0x390 / 4, true,  22 },  // RESERVED_6[16]
     { 0x394 / 4, 0x3D0 / 4, true,  24 },  // RESERVED_7[16]
-    { 0x3D4 / 4, 0x3FC / 4, true,  26 },  // RESERVED_LAST_256[8] + LAST_64 + LAST_32
+    { 0x3D4 / 4, 0x3F0 / 4, true,  26 },  // RESERVED_LAST_256[8]
+    { 0x3F4 / 4, 0x3F8 / 4, true,  28 },  // RESERVED_LAST_64_{LO,HI}
+    { 0x3FC / 4, 0x3FC / 4, true,  30 },  // RESERVED_LAST_32
 };
 
 const unsigned int efuse_model::k_lock_region_count =
@@ -314,7 +414,12 @@ void efuse_model::register_lock_read_callbacks()
              word <= k_lock_regions[i].last_word; word++) {
             memory.register_read_callback(
                 [this, word](uint32_t &value) {
-                    value = is_read_locked(word) ? DENY_WORD : memory.memory_block[word];
+                    if (is_read_locked(word)) {
+                        value = DENY_WORD;
+                        raise_locked_field_access();
+                    } else {
+                        value = memory.memory_block[word];
+                    }
                     return true;
                 }, word);
         }
@@ -381,35 +486,88 @@ bool efuse_model::load_preload_file(const std::string &path)
         return false;
     }
 
-    // RTL's +sep_preload_efuse format: one ASCII bit per line, LSB first, 8192
-    // lines for SEP. Longer files (the SMU/SMC variants run to 24576) are
-    // truncated to what this block actually implements rather than refused.
+    // Two image formats are in circulation and both are accepted:
     //
-    // Parsed into a scratch image and committed only on success, so a malformed
-    // file leaves the array as it was instead of half-loaded.
-    std::array<uint32_t, NUM_FUSE_WORDS> image{};
-    unsigned int bit = 0;
+    //   - one ASCII bit per line, LSB first, 8192 lines for SEP. What the OCA
+    //     testbench's +sep_preload_efuse consumes, and what this model has always read.
+    //   - $readmemh hex words, 256 of them, word 0 first, optionally with `@addr`
+    //     origin markers and `//` comments. What the harness DV images are, and what
+    //     Verilog's own $readmemh reads.
+    //
+    // Sniffed rather than configured: a token wider than one character cannot be a
+    // bit, and one that is not cannot be a hex word of any sensible width, so the two
+    // never collide in practice and a run does not have to declare which it has.
+    //
+    // Longer files (the SMU/SMC bit images run to 24576) are truncated to what this
+    // block implements rather than refused. Everything is parsed into a scratch image
+    // and committed only on success, so a malformed file leaves the array as it was
+    // instead of half-loaded.
+    std::vector<std::string> tokens;
     std::string line;
-    while (bit < NUM_FUSE_BITS && std::getline(in, line)) {
-        // Tolerate whitespace and blank lines; anything else is a format error.
-        const size_t first = line.find_first_not_of(" \t\r");
-        if (first == std::string::npos)
-            continue;
-        const char c = line[first];
-        if (c == '1')
-            image[bit / 32] |= (1u << (bit % 32));
-        else if (c != '0') {
-            CSML_ERROR(0, logger) << "fuse_preload_file: '" << resolved << "' line "
-                                  << (bit + 1) << " is '" << c
-                                  << "', expected 0 or 1" << std::endl;
-            return false;
+    while (std::getline(in, line)) {
+        const size_t comment = line.find("//");
+        if (comment != std::string::npos)
+            line.erase(comment);
+        std::istringstream ls(line);
+        std::string tok;
+        while (ls >> tok)
+            tokens.push_back(tok);
+    }
+
+    bool hex_words = false;
+    for (const std::string &t : tokens) {
+        if (t.size() > 1 && t[0] != '@') {
+            hex_words = true;
+            break;
         }
-        bit++;
+    }
+
+    std::array<uint32_t, NUM_FUSE_WORDS> image{};
+    unsigned int loaded_bits = 0;
+
+    if (hex_words) {
+        unsigned int word = 0;
+        for (const std::string &t : tokens) {
+            if (t[0] == '@') {
+                word = static_cast<unsigned int>(std::strtoul(t.c_str() + 1, nullptr, 16));
+                continue;
+            }
+            if (t.size() > 8 || t.find_first_not_of("0123456789abcdefABCDEF")
+                                    != std::string::npos) {
+                CSML_ERROR(0, logger) << "fuse_preload_file: '" << resolved
+                                      << "' has '" << t
+                                      << "' where a 32-bit hex word was expected"
+                                      << std::endl;
+                return false;
+            }
+            if (word < NUM_FUSE_WORDS) {
+                image[word] = static_cast<uint32_t>(std::stoul(t, nullptr, 16));
+                loaded_bits = (word + 1) * 32;
+            }
+            word++;
+        }
+    } else {
+        unsigned int bit = 0;
+        for (const std::string &t : tokens) {
+            if (bit >= NUM_FUSE_BITS)
+                break;
+            if (t == "1")
+                image[bit / 32] |= (1u << (bit % 32));
+            else if (t != "0") {
+                CSML_ERROR(0, logger) << "fuse_preload_file: '" << resolved
+                                      << "' bit " << bit << " is '" << t
+                                      << "', expected 0 or 1" << std::endl;
+                return false;
+            }
+            bit++;
+        }
+        loaded_bits = bit;
     }
 
     m_fuse = image;
-    CSML_INFO(1, logger) << "fuse_preload_file: loaded " << bit << " bits from '"
-                         << resolved << "'" << std::endl;
+    CSML_INFO(1, logger) << "fuse_preload_file: loaded " << loaded_bits << " bits from '"
+                         << resolved << "' (" << (hex_words ? "hex-word" : "bit-per-line")
+                         << " format)" << std::endl;
     return true;
 }
 
@@ -585,6 +743,14 @@ void efuse_model::load_non_fuse_defaults()
 
 void efuse_model::end_of_elaboration()
 {
+    // Sampled once: the strap is latched at reset in silicon and nothing changes it
+    // afterwards, so re-reading the parameter per access could only introduce a
+    // difference the hardware cannot have.
+    m_secure_tm_active = secure_tm.get_param_value();
+    if (m_secure_tm_active)
+        CSML_WARN(0, logger) << "secure_tm asserted — fuse commands are blocked and "
+                                "hardware secrets read as zero" << std::endl;
+
     load_fuses();
 }
 
@@ -638,7 +804,7 @@ bool efuse_model::handle_write_LOCKS_HI(uint32_t value)
  */
 bool efuse_model::handle_write_LC_STATE(uint32_t value)
 {
-    if (is_write_locked(LC_STATE.offset))
+    if (refuse_locked_write(LC_STATE.offset))
         return true;
 
     const uint32_t cur     = m_lc_state_val & 0xFu;
@@ -681,7 +847,7 @@ bool efuse_model::handle_write_LC_STATE(uint32_t value)
 
 bool efuse_model::handle_write_SIP_DIS_LO(uint32_t value)
 {
-    if (is_write_locked(SIP_DIS_LO.offset))
+    if (refuse_locked_write(SIP_DIS_LO.offset))
         return true;
     m_sip_dis_lo_val |= value;
     SIP_DIS_LO = m_sip_dis_lo_val;
@@ -691,7 +857,7 @@ bool efuse_model::handle_write_SIP_DIS_LO(uint32_t value)
 
 bool efuse_model::handle_write_SIP_DIS_HI(uint32_t value)
 {
-    if (is_write_locked(SIP_DIS_HI.offset))
+    if (refuse_locked_write(SIP_DIS_HI.offset))
         return true;
     m_sip_dis_hi_val |= value;
     SIP_DIS_HI = m_sip_dis_hi_val;
@@ -701,7 +867,7 @@ bool efuse_model::handle_write_SIP_DIS_HI(uint32_t value)
 
 bool efuse_model::handle_write_SYS_DIS_LO(uint32_t value)
 {
-    if (is_write_locked(SYS_DIS_LO.offset))
+    if (refuse_locked_write(SYS_DIS_LO.offset))
         return true;
     m_sys_dis_lo_val |= value;
     SYS_DIS_LO = m_sys_dis_lo_val;
@@ -711,7 +877,7 @@ bool efuse_model::handle_write_SYS_DIS_LO(uint32_t value)
 
 bool efuse_model::handle_write_SYS_DIS_HI(uint32_t value)
 {
-    if (is_write_locked(SYS_DIS_HI.offset))
+    if (refuse_locked_write(SYS_DIS_HI.offset))
         return true;
     m_sys_dis_hi_val |= value;
     SYS_DIS_HI = m_sys_dis_hi_val;
@@ -721,7 +887,7 @@ bool efuse_model::handle_write_SYS_DIS_HI(uint32_t value)
 
 bool efuse_model::handle_write_CHIPLET_PUBK_REVOKE(uint32_t value)
 {
-    if (is_write_locked(CHIPLET_PUBK_REVOKE.offset))
+    if (refuse_locked_write(CHIPLET_PUBK_REVOKE.offset))
         return true;
     m_chiplet_pubk_revoke_val |= value;
     CHIPLET_PUBK_REVOKE = m_chiplet_pubk_revoke_val;
@@ -730,7 +896,7 @@ bool efuse_model::handle_write_CHIPLET_PUBK_REVOKE(uint32_t value)
 
 bool efuse_model::handle_write_BL1_VERSION(int idx, uint32_t value)
 {
-    if (is_write_locked(BL1_VERSION[idx].offset))
+    if (refuse_locked_write(BL1_VERSION[idx].offset))
         return true;
     m_bl1_version_val[idx] |= value;
     BL1_VERSION[idx] = m_bl1_version_val[idx];
@@ -739,7 +905,7 @@ bool efuse_model::handle_write_BL1_VERSION(int idx, uint32_t value)
 
 bool efuse_model::handle_write_BL2_VERSION(int idx, uint32_t value)
 {
-    if (is_write_locked(BL2_VERSION[idx].offset))
+    if (refuse_locked_write(BL2_VERSION[idx].offset))
         return true;
     m_bl2_version_val[idx] |= value;
     BL2_VERSION[idx] = m_bl2_version_val[idx];
@@ -761,10 +927,32 @@ bool efuse_model::handle_write_BL2_VERSION(int idx, uint32_t value)
 // done, and letting that write clear done would hang the poll forever.
 static constexpr uint32_t HW_STATUS_BITS = (1u << 24) | (1u << 25) | (1u << 26);
 
-bool efuse_model::handle_write_EFUSE_WRITE_CTRL(uint32_t value)
+/*
+ * Secure test mode swallows fuse commands whole.
+ *
+ * efuse_guard.sv:110-114 replaces the request with an empty one and the response with
+ * the default, and is explicit that this is not an error capture: no status bit is set
+ * and req_error stays clear. Nothing is burned and nothing is read.
+ *
+ * Where the model has to differ: with the response tied off, the RTL's interface FSM
+ * waits for a completion that never arrives, so it stalls until the request timeout
+ * expires -- or forever, with the timeout disabled. b_transport cannot stall without
+ * wedging the kernel, so the command completes immediately here, reporting done with
+ * no error. The security-relevant half is exact; only the stall is missing.
+ */
+bool efuse_model::secure_tm_blocks_command(const char *what)
+{
+    if (!m_secure_tm_active)
+        return false;
+    CSML_WARN(1, logger) << what << " command dropped — secure_tm blocks the fuse "
+                                    "interface" << std::endl;
+    return true;
+}
+
+bool efuse_model::handle_write_EFUSE_PROGRAM_CTRL(uint32_t value)
 {
     value = (value & ~HW_STATUS_BITS)
-          | (static_cast<uint32_t>(EFUSE_WRITE_CTRL) & HW_STATUS_BITS);
+          | (static_cast<uint32_t>(EFUSE_PROGRAM_CTRL) & HW_STATUS_BITS);
 
     if (value & (1u << 17)) {   // efuse_program_go pulsed
         const uint32_t bit_addr  = value & 0xFFFFu;
@@ -777,6 +965,15 @@ bool efuse_model::handle_write_EFUSE_WRITE_CTRL(uint32_t value)
         value |=  (1u << 25);   // program_done = 1
 
         bool error = false;
+
+        if (secure_tm_blocks_command("program")) {
+            // Dropped before the guard's error paths, so no status and no req_error.
+            EFUSE_PROGRAM_INTERFACE_RD_DATA = 0u;
+            value &= ~(1u << 26);
+            EFUSE_PROGRAM_CTRL = value;
+            update_status_register();
+            return true;
+        }
 
         if (!enabled) {
             // program_enable gates the command; efuse_program_interface.sv answers
@@ -820,7 +1017,7 @@ bool efuse_model::handle_write_EFUSE_WRITE_CTRL(uint32_t value)
 
         update_status_register();
     }
-    EFUSE_WRITE_CTRL = value;
+    EFUSE_PROGRAM_CTRL = value;
     return true;
 }
 
@@ -838,6 +1035,14 @@ bool efuse_model::handle_write_EFUSE_READ_CTRL(uint32_t value)
         value |=  (1u << 25);   // read_done = 1
 
         bool error = false;
+
+        if (secure_tm_blocks_command("read")) {
+            EFUSE_READ_INTERFACE_RD_DATA = 0u;
+            value &= ~(1u << 26);
+            EFUSE_READ_CTRL = value;
+            update_status_register();
+            return true;
+        }
 
         if (!enabled) {
             error = true;

@@ -52,7 +52,8 @@
 // the platform leaves the ones it has no model for pointing at unused_irq_signal.
 const unsigned int PIC_NUM_INTERRUPTS = 256;
 
-// sep_mailbox_interrupt[1:0] → sources 1-2 (VP models channels 0 and 1 only)
+// sep_mailbox_interrupt[7:0] → sources 1-8, one per mailbox channel. These are
+// the outbound interrupts; the inbound ones go to the SMC, not to this PIC.
 const unsigned int MAILBOX_IRQ0        = 1;   //   [0] sep_mailbox_interrupt[0]
 const unsigned int MAILBOX_IRQ1        = 2;   //   [1] sep_mailbox_interrupt[1]
 const unsigned int MAILBOX_IRQ2        = 3;   //   [2] sep_mailbox_interrupt[2]
@@ -64,7 +65,7 @@ const unsigned int MAILBOX_IRQ7        = 8;   //   [7] sep_mailbox_interrupt[7]
 const unsigned int DMA_DONE_IRQ        = 9;   //   [8]  intr_dma_done
 const unsigned int DMA_CHUNK_DONE_IRQ  = 10;  //   [9]  intr_dma_chunk_done
 const unsigned int DMA_ERROR_IRQ       = 11;  //   [10] intr_dma_error
-const unsigned int DMA_ALERT_IRQ       = 12;  //   [11] dma_alert (no VP model)
+const unsigned int DMA_ALERT_IRQ       = 12;  //   [11] dma_alert
 const unsigned int WDT_ALERT_IRQ       = 13;  //   [12] wdt_alert (no VP model)
 const unsigned int SPI_EVENT_IRQ       = 14;  //   [13] spi_irq_i
 const unsigned int KEYMGR_IRQ          = 15;  //   [14] km_mbox_irq
@@ -86,7 +87,7 @@ const unsigned int OTBN_IRQ            = 30;  //   [29] intr_otbn_done
 const unsigned int KM_UNRECOVERABLE_ERR_IRQ = 31;  //   [30] km_unrecoverable_err (no VP model)
 const unsigned int KM_RECOVERABLE_ERR_IRQ   = 32;  //   [31] km_recoverable_err (no VP model)
 const unsigned int CRYPTO_ALERT_IRQ         = 33;  //   [32] crypto_alert (no VP model)
-const unsigned int LOCKED_FIELD_ACCESS_IRQ  = 34;  //   [33] locked_field_access_interrupt (no VP model)
+const unsigned int LOCKED_FIELD_ACCESS_IRQ  = 34;  //   [33] locked_field_access_interrupt
 const unsigned int ABR_ERROR_IRQ            = 35;  //   [34] intr_abr_error
 const unsigned int ABR_NOTIF_IRQ            = 36;  //   [35] intr_abr_notif
 const unsigned int ENTROPY_POOL_LOW_IRQ     = 37;  //   [36] entropy_pool_low (no VP model)

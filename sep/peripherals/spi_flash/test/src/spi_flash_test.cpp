@@ -1330,7 +1330,7 @@ static void test_model_backdoor_file_io()
     // Test 1: load from non-existent file
     {
         spi_flash_model m(256);
-        bool ok = m.load_memory_from_file();
+        bool ok = m.load_memory_from_file(spi_flash_model::BACKDOOR_FILE_PATH);
         TEST_ASSERT(ok == false, "load_memory_from_file returns false for missing file");
     }
 
@@ -1341,7 +1341,7 @@ static void test_model_backdoor_file_io()
         m.write_byte(1, 0x22);
         m.write_byte(255, 0xAA);
         
-        bool ok = m.save_memory_to_file();
+        bool ok = m.save_memory_to_file(spi_flash_model::BACKDOOR_FILE_PATH);
         TEST_ASSERT(ok == true, "save_memory_to_file returns true on success");
 
         // Verify file was written
@@ -1353,7 +1353,7 @@ static void test_model_backdoor_file_io()
         spi_flash_model m2(256);
         TEST_ASSERT(m2.read_byte(0) == 0xFF, "new model memory initially blank");
         
-        ok = m2.load_memory_from_file();
+        ok = m2.load_memory_from_file(spi_flash_model::BACKDOOR_FILE_PATH);
         TEST_ASSERT(ok == true, "load_memory_from_file returns true for existing file");
         TEST_ASSERT(m2.read_byte(0) == 0x11, "loaded byte 0 matches");
         TEST_ASSERT(m2.read_byte(1) == 0x22, "loaded byte 1 matches");
@@ -1366,7 +1366,7 @@ static void test_model_backdoor_file_io()
         f.close();
 
         spi_flash_model m(256);
-        bool ok = m.load_memory_from_file();
+        bool ok = m.load_memory_from_file(spi_flash_model::BACKDOOR_FILE_PATH);
         TEST_ASSERT(ok == false, "load_memory_from_file returns false for empty file");
     }
 
@@ -1479,6 +1479,62 @@ static void test_model_unknown_opcode()
 }
 
 // ============================================================================
+// D. Flash model — JEDEC ID (0x9F) and Status Register 2 (0x35)
+// ============================================================================
+static void test_model_jedec_id()
+{
+    TEST_SECTION("D. Model: JEDEC ID (0x9F) and READ_STATUS_2 (0x35)");
+
+    spi_flash_model m;
+
+    // Default ID matches the DV BFM: manufacturer 0x20, type 0xBA, capacity 0x18.
+    std::vector<uint8_t> rx(3, 0x00);
+    bool ok = m.process_command(spi_flash_opcodes::READ_JEDEC_ID, 0, rx);
+    TEST_ASSERT(ok, "RDID returns success");
+    TEST_ASSERT(rx[0] == 0x20 && rx[1] == 0xBA && rx[2] == 0x18,
+                "RDID streams 0x20, 0xBA, 0x18 in that order");
+
+    // Capacity byte 0x18 means 2^24 bytes, which must be what the array holds.
+    TEST_ASSERT(m.size() == (1u << 24), "Default array size matches advertised density");
+
+    // A test may override the ID to model a different part.
+    m.set_jedec_id(0xEF4018);
+    std::vector<uint8_t> rx2(3, 0x00);
+    m.process_command(spi_flash_opcodes::READ_JEDEC_ID, 0, rx2);
+    TEST_ASSERT(rx2[0] == 0xEF && rx2[1] == 0x40 && rx2[2] == 0x18, "RDID honours overridden ID");
+
+    std::vector<uint8_t> sr2(1, 0xAA);
+    ok = m.process_command(spi_flash_opcodes::READ_STATUS_2, 0, sr2);
+    TEST_ASSERT(ok && sr2[0] == 0x00, "RDSR2 returns SR2 (0x00 at reset)");
+}
+
+// ============================================================================
+// D. Flash model — page program wraps at the page boundary
+// ============================================================================
+static void test_model_page_program_wrap()
+{
+    TEST_SECTION("D. Model: page program wraps within its page");
+
+    spi_flash_model m(64 * 1024);
+
+    // Start 4 bytes before the end of page 0 and program 8 bytes. The first 4 land
+    // at 0xFC..0xFF; the rest wrap to 0x00..0x03 instead of spilling into page 1.
+    std::vector<uint8_t> rx;
+    m.process_command(spi_flash_opcodes::WRITE_ENABLE, 0, rx);
+
+    const std::vector<uint8_t> data = {0xA0, 0xA1, 0xA2, 0xA3, 0xB0, 0xB1, 0xB2, 0xB3};
+    bool ok = m.process_command(spi_flash_opcodes::PROGRAM, 0x0FC, rx, data);
+    TEST_ASSERT(ok, "Page program at 0x0FC succeeds");
+
+    TEST_ASSERT(m.read_byte(0x0FC) == 0xA0 && m.read_byte(0x0FF) == 0xA3,
+                "Bytes before the page boundary land in place");
+    TEST_ASSERT(m.read_byte(0x000) == 0xB0 && m.read_byte(0x003) == 0xB3,
+                "Bytes past the boundary wrap to the start of the same page");
+    TEST_ASSERT(m.read_byte(0x100) == 0xFF && m.read_byte(0x103) == 0xFF,
+                "Next page is left erased");
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -1536,6 +1592,8 @@ int main()
     test_model_chip_erase_guards();
     test_model_large_density();
     test_model_unknown_opcode();
+    test_model_jedec_id();
+    test_model_page_program_wrap();
 
     // --- Summary ---
     std::cout << "\n========================================\n";

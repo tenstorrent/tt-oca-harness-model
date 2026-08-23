@@ -133,15 +133,18 @@ void testbench::test_error_write_to_full() {
   // =========================================================================
   // Step 3: Attempt write-to-full (should record error in ERROR_FLAGS[1])
   // =========================================================================
-  // CSML Framework Note: The csml_memory b_transport() always returns TLM_OK_RESPONSE
-  // regardless of callback return values (see csml_register.h line 139). The AXI
-  // RESP_SLVERR is represented at the architectural level by ERROR_FLAGS[1] being set
-  // and IRQS[2] being set, which we verify in Steps 4 and 5. The TLM_OK_RESPONSE
-  // returned here is a framework abstraction constraint, not a model error.
-  CSML_INFO(2, logger) << "Step 3: Attempting write-to-full (expect ERROR_FLAGS[1] set)";
+  // axi_lite_mailbox.sv discards a write to a full mailbox and answers
+  // RESP_SLVERR, alongside the ERROR_FLAGS[1] and IRQS[2] side effects verified
+  // in Steps 4 and 5.
+  CSML_INFO(2, logger) << "Step 3: Attempting write-to-full (expect SLVERR)";
 
-  mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xDEADBEEFDEADBEEFULL);
-  CSML_INFO(2, logger) << "PASS: Write-to-full transaction issued (error flagged in ERROR_FLAGS)";
+  status = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xDEADBEEFDEADBEEFULL);
+  if (status == tlm::TLM_OK_RESPONSE) {
+    CSML_ERROR(0, logger) << "FAIL: Write-to-full returned OK, expected an error response";
+    test_passed = false;
+  } else {
+    CSML_INFO(2, logger) << "PASS: Write-to-full rejected with an error response";
+  }
 
   // =========================================================================
   // Step 4: Verify ERROR_FLAGS[1]=1 (write_error bit set)
@@ -312,15 +315,25 @@ void testbench::test_error_read_from_empty() {
   // =========================================================================
   // Step 2: Attempt read-from-empty (should record error in ERROR_FLAGS[0])
   // =========================================================================
-  // CSML Framework Note: The csml_memory b_transport() always returns TLM_OK_RESPONSE
-  // regardless of callback return values (see csml_register.h line 139). The AXI
-  // RESP_SLVERR is represented at the architectural level by ERROR_FLAGS[0] being set
-  // and IRQS[2] being set, which we verify in Steps 3 and 4. The TLM_OK_RESPONSE
-  // returned here is a framework abstraction constraint, not a model error.
-  CSML_INFO(2, logger) << "Step 2: Attempting read-from-empty (expect ERROR_FLAGS[0] set)";
+  // axi_lite_mailbox.sv answers a read of an empty mailbox with
+  //   r_chan = '{data: 32'hFEEDDEAD, resp: RESP_SLVERR}
+  // so both the error response and the sentinel data are checked here, on top of
+  // the ERROR_FLAGS[0] and IRQS[2] side effects verified in Steps 3 and 4.
+  CSML_INFO(2, logger) << "Step 2: Attempting read-from-empty (expect SLVERR + 0xFEEDDEAD)";
 
-  mailbox_read(0, mailbox_basetest::READ_DATA_OFFSET, read_value);
-  CSML_INFO(2, logger) << "PASS: Read-from-empty transaction issued (error flagged in ERROR_FLAGS)";
+  status = mailbox_read(0, mailbox_basetest::READ_DATA_OFFSET, read_value);
+  if (status == tlm::TLM_OK_RESPONSE) {
+    CSML_ERROR(0, logger) << "FAIL: Read-from-empty returned OK, expected an error response";
+    test_passed = false;
+  } else if (read_value != 0xFEEDDEADULL) {
+    std::ostringstream msg;
+    msg << "FAIL: Read-from-empty returned 0x" << std::hex << read_value
+        << ", expected 0xFEEDDEAD";
+    CSML_ERROR(0, logger) << msg.str();
+    test_passed = false;
+  } else {
+    CSML_INFO(2, logger) << "PASS: Read-from-empty returned 0xFEEDDEAD with an error response";
+  }
 
   // =========================================================================
   // Step 3: Verify ERROR_FLAGS[0]=1 (read_error bit set)

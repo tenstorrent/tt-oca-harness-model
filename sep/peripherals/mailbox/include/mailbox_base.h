@@ -2,12 +2,12 @@
  * @file mailbox_base.h
  * @brief Single-port register infrastructure for mailbox IP
  *
- * Each mailbox_base instance is a self-contained single-port TLM slave: one csml_memory,
- * one set of 10 registers, and one TLM target socket (target_socket) bound to the memory.
+ * Each mailbox_base instance holds the register state for one mailbox port: one
+ * csml_memory and one set of 10 registers.
  *
  * Two instances (b0, b1) are composed in mailbox_ip to form the complete dual-port mailbox.
- * mailbox_ip exposes socket0/socket1 as tlm::tlm_target_socket<32> hierarchically bound
- * to b0.target_socket and b1.target_socket respectively.
+ * mailbox_ip owns the TLM target sockets and drives these memories directly, so that it
+ * can apply the AXI-Lite access rules before the register access happens.
  */
 
 #pragma once
@@ -23,9 +23,7 @@
  * - One independent csml_memory<64> instance
  * - One set of 10 registers (WRITE_DATA through CTRL) at fixed word offsets
  *
- * Owns a TLM target socket (target_socket) bound to its csml_memory instance.
- * mailbox_ip composes two instances and hierarchically binds its socket0/socket1
- * to b0.target_socket and b1.target_socket respectively.
+ * Has no socket of its own; mailbox_ip calls memory.b_transport() directly.
  */
 class mailbox_base : public sc_module
 {
@@ -50,14 +48,10 @@ class mailbox_base : public sc_module
        IRQP(std::string(name)       + ".IRQP",       memory, 0x40/sizeof(unsigned long long)),
        CTRL(std::string(name)       + ".CTRL",       memory, 0x48/sizeof(unsigned long long))
        {
-         memory.bind_to_socket(target_socket);
        }
 
       /// @brief CSML memory backing store for registers
       csml_memory<64> memory;
-
-      /// @brief TLM target socket for register access (32-bit bus width)
-      tlm_utils::simple_target_socket<csml_memory<64>, 32> target_socket;
 
       // Registers (addresses 0x00-0x48)
       mailbox::WRITE_DATA_type<64> WRITE_DATA; ///< Write data register (0x00, WO)

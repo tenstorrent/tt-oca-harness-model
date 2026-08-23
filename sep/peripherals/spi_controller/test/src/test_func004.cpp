@@ -529,7 +529,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     CSML_INFO(1, logger) << "\n[Test 7] INTR_TEST Register - Force Interrupts" << std::endl;
 
-    // Clear all interrupts first
+    // Establish a quiet baseline. INTR_STATUS follows its causes, so masking
+    // every event is what makes SPI_EVENT drop: level conditions such as IDLE
+    // and TXEMPTY are still true here and would otherwise hold it asserted.
+    test->write_register_32(EVENT_ENABLE_OFFSET, 0x0);
     clear_interrupts();
     wait(10, SC_NS);
 
@@ -567,9 +570,8 @@ void testbench::test_func004_interrupt_driven_txrx()
         test_passed = false;
     }
 
-    // Clear the forced interrupt and INTR_TEST register
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);
-    test->write_register_32(INTR_TEST_OFFSET, 0x0);  // Clear INTR_TEST — m_intr_test_forced stays set otherwise
+    // Drop the forced source; INTR_STATUS.error follows it down.
+    test->write_register_32(INTR_TEST_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // Write to INTR_TEST to force SPI_EVENT interrupt (bit 4)
@@ -591,14 +593,14 @@ void testbench::test_func004_interrupt_driven_txrx()
         test_passed = false;
     }
 
-    // Clear the forced interrupt
-    test->write_register_32(INTR_STATUS_OFFSET, 0x10);
+    // Drop the forced source
+    test->write_register_32(INTR_TEST_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // =======================================================================
-    // Test 8: INTR_STATUS W1C Semantics - Direct Write Clear
+    // Test 8: INTR_STATUS is read-only — software writes are ignored
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 8] INTR_STATUS W1C (Write-1-to-Clear) Semantics" << std::endl;
+    CSML_INFO(1, logger) << "\n[Test 8] INTR_STATUS Read-Only Semantics" << std::endl;
 
     // Force both interrupts simultaneously using INTR_TEST
     test->write_register_32(INTR_TEST_OFFSET, 0x11);  // Bits 0 and 4
@@ -619,37 +621,33 @@ void testbench::test_func004_interrupt_driven_txrx()
         test_passed = false;
     }
 
-    // Clear only ERROR interrupt using W1C (write 1 to bit 0, leave bit 4 untouched)
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);
+    // Attempt a write-1-to-clear. The RDL declares both fields sw=r/hw=w, so the
+    // bus accepts the write and the hardware discards it.
+    test->write_register_32(INTR_STATUS_OFFSET, 0x11);
     wait(10, SC_NS);
 
-    // Verify only ERROR cleared, SPI_EVENT still set
     test->read_register_32(INTR_STATUS_OFFSET, status_val);
     error_bit = status_val & 0x1;
     spi_event_bit = (status_val >> 4) & 0x1;
 
-    if (!error_bit && spi_event_bit) {
-        CSML_INFO(2, logger) << "  [PASS] W1C selective clear: ERROR cleared, SPI_EVENT remains" << std::endl;
+    if (error_bit && spi_event_bit) {
+        CSML_INFO(2, logger) << "  [PASS] Write to INTR_STATUS ignored: ERROR=1, SPI_EVENT=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] W1C failed: ERROR=" << error_bit
-                  << ", SPI_EVENT=" << spi_event_bit << std::endl;
+        CSML_ERROR(2, logger) << "  [FAIL] Write to INTR_STATUS took effect: ERROR="
+                  << error_bit << ", SPI_EVENT=" << spi_event_bit << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    // Clear INTR_TEST first (triggers level re-assertion of spi_event), then W1C clears it cleanly.
-    // Order matters: INTR_TEST=0 → update_spi_event_intr_status re-sets spi_event=1 (level conditions
-    // are still met: FSM IDLE, TXEMPTY, etc). Subsequent W1C clears it; handle_write_INTR_STATUS
-    // does NOT call update_spi_event_intr_status so there is no re-assertion after the clear.
-    test->write_register_32(INTR_TEST_OFFSET, 0x0);   // Clear INTR_TEST first
-    test->write_register_32(INTR_STATUS_OFFSET, 0x10); // W1C spi_event after re-assertion
+    // Removing the cause is the only way to clear the bits. EVENT_ENABLE is still
+    // masked from Test 7, so SPI_EVENT will not re-assert on a level condition.
+    test->write_register_32(INTR_TEST_OFFSET, 0x0);
     wait(10, SC_NS);
 
-    // Verify both interrupts cleared
     test->read_register_32(INTR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] All interrupts cleared via W1C" << std::endl;
+        CSML_INFO(2, logger) << "  [PASS] Interrupts cleared once INTR_TEST was released" << std::endl;
         sub_tests_passed++;
     } else {
         CSML_ERROR(2, logger) << "  [FAIL] Interrupts not cleared: INTR_STATUS=0x"

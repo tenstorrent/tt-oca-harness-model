@@ -22,11 +22,12 @@
 // (VeeR EL2 PIC source 0 is the tied no-interrupt source). After the 8-slot
 // mailbox reallocation (#3004), the DMA interrupts moved up by 8:
 //   intr_dma_done       -> sep_internal_interrupts[8]  -> PIC source 9
-//   intr_dma_chunk_done -> sep_internal_interrupts[10] -> PIC source 11
-//   intr_dma_error      -> sep_internal_interrupts[11] -> PIC source 12
+//   intr_dma_chunk_done -> sep_internal_interrupts[9]  -> PIC source 10
+//   intr_dma_error      -> sep_internal_interrupts[10] -> PIC source 11
+// (source 12 is dma_alert, not intr_dma_error)
 #define EXT_INT_DMA_DONE        9
-#define EXT_INT_DMA_CHUNK_DONE  11
-#define EXT_INT_DMA_ERROR       12
+#define EXT_INT_DMA_CHUNK_DONE  10
+#define EXT_INT_DMA_ERROR       11
 
 // Flag set by interrupt handler
 static volatile uint32_t dma_interrupt_fired = 0;

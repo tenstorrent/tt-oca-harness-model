@@ -10,6 +10,8 @@
 //   sep_smn_outbound_axi -->[smu_axi_xbar]----> sys_axi_in / ext_out
 //
 //   ext_out / ext_in bind through the local AOU (AXI-over-UCIe LT stub).
+//
+//   Interrupts: sep.smc_mailbox_interrupt_o -> dut.sep_mailbox_interrupts_i.
 // ===========================================================================
 
 #include "smu_platform.hpp"
@@ -47,6 +49,12 @@ smu_platform::smu_platform(const char* smc_name, const char* sep_name)
     // Chiplet-facing boundary (RTL smu_axi_in/out) through local AOU.
     xbar.ext_out.bind(dut.aou_axi_s);
     dut.aou_axi_m.bind(xbar.ext_in);
+
+    // SEP inbound mailbox interrupts -> SMC (RTL smu.sv: sep.smc_mailbox_interrupt_o
+    // -> dut.sep_mailbox_interrupts_i).  The SMC lands them on peripheral bits
+    // 7:0, i.e. PLIC source IDs 257..264.
+    for (unsigned m = 0; m < smc::smc_platform::NUM_SEP_MAILBOX; ++m)
+        dut.sep_mailbox_irq_i[m](sep.mbox_inbound_irq_signal[m]);
 }
 
 }  // namespace smu

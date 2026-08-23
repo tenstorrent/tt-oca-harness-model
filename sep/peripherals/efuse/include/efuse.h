@@ -22,6 +22,28 @@ public:
 
     void end_of_elaboration() override;
 
+    /**
+     * @brief `locked_field_access_interrupt_o` — a shadow access the locks refused.
+     *
+     * efuse_shadow_reg_access_control.sv raises this on either offence: a read of a
+     * read-locked field, or a write to a write-locked one. Both still complete on the
+     * bus (the read returns DENY_WORD, the write is dropped), so this pin is the only
+     * notification software gets; there is no status bit to poll and nothing to clear.
+     *
+     * Note the scope. The OTP program and read commands are gated separately, by
+     * efuse_guard, which reports through req_error instead -- so a refused *fuse
+     * command* does not raise this, only a refused *shadow access* does.
+     *
+     * In silicon it is a combinational pulse, high for the cycle of the offending
+     * access. The model pulses it for LOCKED_FIELD_PULSE_WIDTH, which the PIC latches
+     * when the source is configured edge-triggered, exactly as it latches the RTL's.
+     */
+    sc_out<bool> locked_field_access_irq_o;
+
+    /// Width of that pulse. Arbitrary but non-zero: a delta-cycle pulse can be missed
+    /// by a level-configured gateway, and there is no clock here to be a cycle of.
+    static const sc_core::sc_time LOCKED_FIELD_PULSE_WIDTH;
+
     // OTP data accessors for other models (e.g. keymgr_tt, lifecycle_ctrl).
     // Safe to call after end_of_elaboration().
 
@@ -42,7 +64,21 @@ public:
 
     /// The raw LC_STATE fuse contents, i.e. what software reads from the register.
     uint32_t        get_lc_state_code() const { return m_lc_state_val; }
-    const uint32_t* get_chiplet_uid()   const { return m_chiplet_uid_cache; }
+
+    /**
+     * @brief The chiplet UID as the key manager receives it.
+     *
+     * Zeroed in secure test mode: efuse_shadow_regs.sv gates the hardware secret
+     * outputs on secure_tm, so a part strapped for test derives keys from nothing.
+     * The bus view is untouched -- this gate is on the hardware port, not the read
+     * path -- which is why it lives here and not in the read callbacks.
+     */
+    const uint32_t* get_chiplet_uid() const {
+        return m_secure_tm_active ? m_zero_uid : m_chiplet_uid_cache;
+    }
+
+    /// Whether secure test mode is in force, as `secure_tm_o`. Read by lc_ctrl.
+    bool get_secure_tm() const { return m_secure_tm_active; }
 
     /// The two 64-bit feature-disable masks from the shadow registers, as
     /// sep_lifecycle_ctrl.sv reads them out of `shadow_regs_i`. Both are `woset`, so
@@ -171,11 +207,32 @@ public:
     csml_param<bool> sec_disable_rev_enable;
 
     /**
-     * Path to a fuse array image in the RTL's `.preload` format: 8192 lines, one
-     * ASCII '0' or '1' per line, LSB first, as consumed by +sep_preload_efuse.
-     * Empty (the default) leaves the array erased, which is what
-     * +SEP_EFUSE_NO_PRELOAD gives on RTL. When a preload image is supplied, it
-     * defines the fuse array and per-field params are not applied.
+     * `secure_tm_i` — the latched test_en strap that puts the part in secure test mode.
+     *
+     * efuse_guard.sv empties every fuse command while this is asserted, and
+     * efuse_shadow_regs.sv zeroes the secrets handed to the key manager, so a part in
+     * secure test mode can neither burn nor read the array and yields no keys. It is a
+     * parameter here for the same reason it is a strap there: nothing in the design
+     * sets it, and a functional part never asserts it.
+     *
+     * The lifecycle controller consumes it too, to gate FEAT_CTRL's test group. On a
+     * platform it is sourced from here rather than from lc_ctrl's own parameter,
+     * because in silicon the eFuse wrapper is what latches the strap and fans it out.
+     */
+    csml_param<bool> secure_tm;
+
+    /**
+     * Path to a fuse array image, in either format the two testbenches use:
+     *
+     *   - the OCA `.preload` format, 8192 lines of one ASCII '0' or '1', LSB first,
+     *     as consumed by +sep_preload_efuse;
+     *   - a `$readmemh` image, 256 hex words with word 0 first, `@addr` origins and
+     *     `//` comments allowed, as the harness DV images are written.
+     *
+     * The format is detected from the file, not declared. Empty (the default) leaves
+     * the array erased, which is what +SEP_EFUSE_NO_PRELOAD gives on RTL. When an
+     * image is supplied, it defines the fuse array and per-field params are not
+     * applied.
      */
     csml_param<std::string> fuse_preload_file;
 
@@ -300,6 +357,18 @@ private:
     bool is_read_locked(unsigned int word) const;
     void register_lock_read_callbacks();
 
+    // Locked-field interrupt. Requested from a bus callback, driven from a process;
+    // see the comment on drive_locked_field_irq's definition.
+    sc_core::sc_event m_locked_field_raise;
+    sc_core::sc_event m_locked_field_pulse_end;
+    bool              m_locked_field_pending = false;
+    void raise_locked_field_access();
+    void drive_locked_field_irq();
+
+    /// True when a write to `word` must be refused, raising the interrupt if so.
+    /// Wraps is_write_locked() so no caller can refuse silently by accident.
+    bool refuse_locked_write(unsigned int word);
+
     /**
      * @brief The fuse array — the model's source of truth for fuse contents.
      *
@@ -323,6 +392,11 @@ private:
     bool m_read_addr_error;
 
     uint32_t m_chiplet_uid_cache[8] = {};  // stable pointer for get_chiplet_uid()
+    const uint32_t m_zero_uid[8] = {};     // what get_chiplet_uid() returns under secure_tm
+
+    // Sampled from the secure_tm parameter at elaboration, so the accessors and the
+    // command gate agree and neither has to reach into a csml_param on every call.
+    bool m_secure_tm_active = false;
 
     // WOSET shadow values — accumulate set bits across firmware writes
     uint32_t m_locks_lo_val;
@@ -368,12 +442,14 @@ private:
 
     // Token matching
     bool handle_write_TOKEN_EOP(uint32_t value);
+    void apply_transient_rma();
     static void sha256_token(const uint32_t token_words[8], uint32_t digest_words[8]);
     void evaluate_token(unsigned int token_base_word, const uint32_t reference[8],
                         sep_efuse::TOKEN_MATCH_type<32> &result);
 
     // Interface-ctrl program/read sequences and status clears
-    bool handle_write_EFUSE_WRITE_CTRL(uint32_t value);
+    bool secure_tm_blocks_command(const char *what);
+    bool handle_write_EFUSE_PROGRAM_CTRL(uint32_t value);
     bool handle_write_EFUSE_READ_CTRL(uint32_t value);
     bool handle_write_EFUSE_INTERFACE_CTRL_STATUS(uint32_t value);
 };

@@ -5,11 +5,12 @@ SystemC TLM2.0 model of the SPI master controller.  Paired with `spi_flash` to f
 ## Files
 
 ```
-model/inc/spi_controller_interface.h  spi_if and segment type definitions
-model/inc/spi_controller_base.h       Register map and TLM socket base
-model/inc/spi_controller.h            spi_controller_ip class declaration
-model/src/spi_controller_base.cpp     Base construction and register binding
-model/src/spi_controller.cpp          Transaction engine and b_transport handler
+include/spi_controller_interface.h    spi_if and segment type definitions
+include/spi_controller_register.h     Register type definitions
+include/spi_controller_base.h         Register map and TLM socket base
+include/spi_controller.h              spi_controller_ip class declaration
+src/spi_controller_base.cpp           Base construction and register binding
+src/spi_controller.cpp                Transaction engine and b_transport handler
 
 test/inc/testbench.h                  Testbench module header
 test/inc/spi_controller_basetest.h    Base test class
@@ -39,8 +40,16 @@ class spi_controller_ip : public spi_controller_base
 |---|---|---|
 | `target_socket` | target | TLM-2.0 32-bit register bus |
 | `spi_port` | `sc_port<spi_if>` | SPI transaction interface to flash |
-| `intr_o` | `sc_out<bool>` | Transfer complete interrupt |
+| `irq_o` | `sc_out<bool>` | Combined interrupt — the pin the PIC sees |
+| `error_irq` | `sc_out<bool>` | Error conditions (CMDBUSY, OVERFLOW, UNDERFLOW, CMDINVAL, CSIDINVAL, ACCESSINVAL) |
+| `spi_event_irq` | `sc_out<bool>` | Event conditions (IDLE, READY, TXEMPTY, RXFULL, TXWM, RXWM) |
+| `dma_trigger` | `sc_out<bool>` | DMA request on watermark crossing |
 | `rst_ni` | `sc_in<bool>` | Active-low reset |
+
+The IP has **one** interrupt pin in silicon, `irq_o = error_intr || spi_event_intr`, and that
+is the port SEP binds to its PIC slot. `error_irq` and `spi_event_irq` expose the two classes
+separately for observability only — nothing consumes them on a platform, and wiring them to
+separate PIC sources would model a device that does not exist.
 
 ## Behavior notes
 
@@ -49,6 +58,24 @@ class spi_controller_ip : public spi_controller_base
 **Software reset aborts in-flight transactions.** `CTRL.SW_RST` flushes the FIFOs, clears the command queue, and cleanly aborts a transaction that is currently stalled waiting for RX-FIFO space (back-pressure) or for TX-FIFO data, returning the engine to idle. It samples whether a transaction is in flight (FSM `ACTIVE`) *before* forcing the FSM idle, so the abort is armed only when there is really something to abort.
 
 **Back-to-back reads across a reset never drop the next command.** Firmware frames each flash read as `SW_RST` → push opcode+addr → TX command (`CSAAT`) → chained RX segments, and issues the next read's commands immediately. Because processing a segment consumes simulation time (bit-clock delay, back-pressure waits), a `SW_RST` and the next read's TX command can land while the previous read's tail segment is still completing. The transaction thread reads the queue front, processes it, then pops — but if a `SW_RST` cleared the queue mid-flight, the current front is now the *newly queued* command, not the segment just processed. The reset's abort flag suppresses that one stale pop (and is cleared at the next segment's processing entry), so the freshly queued opcode+address TX command is preserved and driven, rather than being silently discarded. This keeps `STATUS.CMDQD` accounting intact during processing (the in-flight segment stays counted until it legitimately completes).
+
+**FIFO status and watermark semantics.** `STATUS.TXFULL` asserts at `size >= TxDepth + 1`,
+because the RTL counts the word held in the shift register alongside the FIFO contents.
+`STATUS.RXWM` is a plain `rx_qd >= rx_watermark` comparison with no "watermark is non-zero"
+guard, so a watermark of zero reads as permanently met — that is what the hardware does. The
+`dma_trigger` output is the exception and keeps a non-empty term, since a DMA request on an
+empty FIFO would be meaningless.
+
+**`INTR_STATUS` is read-only to software.** Status bits are set and cleared by the hardware
+condition; software cannot poke them. The interrupt level is computed from one equation and
+there is no separate edge-triggered path, so the level equation is the only writer.
+
+**`ACCESSINVAL` escalates unconditionally**, matching the RTL's `error_mask`, rather than
+being suppressed when the corresponding enable is clear.
+
+**A CMD write is accepted while an error is latched.** A pending error does not gate command
+acceptance; a full command queue is the only reason a CMD write is refused. Firmware
+recovering from an error does not have to clear it first.
 
 ## Building and Testing
 
@@ -71,4 +98,6 @@ make -j$(nproc)
 
 ## Documentation
 
-[High-Level Design](docs/design-docs/spi_controller-high-level-design.md)
+- [High-Level Design](docs/02_spi_controller_HighLevel_Design.md)
+- [Test Plan](docs/03_spi_controller_Test_Plan.md)
+- RTL comparison: `md_files/SPI_CONTROLLER_RTL_VS_VP.md`

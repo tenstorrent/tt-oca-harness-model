@@ -52,7 +52,7 @@ Tests utilize the following port interfaces:
 ### 2.3 Register Map
 
 All 14 memory-mapped registers are verified:
-- 0x00: INTR_STATE (RW1C/RO)
+- 0x00: INTR_STATE (RO — software read-only; writes are accepted and change nothing)
 - 0x04: INTR_ENABLE (RW)
 - 0x08: INTR_TEST (WO)
 - 0x0C: ALERT_TEST (WO)
@@ -589,6 +589,28 @@ Execute the complete test suite:
 **Impact**:
 - SPI mode coverage: 100% (4/4 modes + FULLCYC)
 - FUNC-002 now has 34 sub-tests (previously 24)
+
+### 8.3 RTL compliance pass (2026-08)
+
+Seven behaviours were brought into line with `tt-oca-harness-main`. Tests written before this
+pass may encode the old behaviour, so each is spelled out:
+
+| Change | Old behaviour | Current behaviour |
+|---|---|---|
+| TXDATA byte enables | Rejected a fixed list (`0x0, 0x5, 0xA, 0x7, 0xB, 0xD, 0xE`) | Accepts exactly eight patterns — `0x1, 0x2, 0x4, 0x8, 0x3, 0x6, 0xC, 0xF` — and rejects everything else. `0x9` is now invalid: half-word writes must be aligned |
+| PIC wiring | `error_irq` and `spi_event_irq` on separate slots | One slot, driven by the model's combined `irq_o` (`error_intr \|\| spi_event_intr`), matching the single RTL pin |
+| `STATUS.TXFULL` | `size >= TxDepth` | `size >= TxDepth + 1`, counting the word in the shift register |
+| `STATUS.RXWM` | Guarded by `rx_watermark > 0` | Bare `rx_qd >= rx_watermark`; a watermark of 0 reads as met. Only `dma_trigger` keeps a non-empty term |
+| `INTR_STATUS` | Software-writable (W1C) | Software read-only; bits follow the live condition |
+| `ACCESSINVAL` | Suppressed when its enable was clear | Escalates unconditionally, as the RTL's `error_mask` does |
+| CMD acceptance | Refused while an error was latched | Accepted; a full command queue is the only refusal |
+
+There is also no longer a separate edge-triggered event path. The level equation is the sole
+writer of the interrupt outputs, so a test that expects a latched pulse from a
+momentarily-asserted condition is asserting behaviour the model no longer has — and that the
+RTL never had.
+
+Full reasoning and the RTL citations are in `md_files/SPI_CONTROLLER_RTL_VS_VP.md`.
 
 ---
 

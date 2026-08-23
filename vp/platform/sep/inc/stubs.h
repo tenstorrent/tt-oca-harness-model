@@ -7,58 +7,6 @@
 #include "otbn_interfaces.h"
 #include "sep_memory.h"
 
-// Host loopback stub for the OT Mailbox IP (Port 1, 64-bit side).
-// Polls the STATUS register and echoes any received message back via WRITE_DATA.
-struct mailbox_host_stub : public sc_core::sc_module {
-    tlm_utils::simple_initiator_socket<mailbox_host_stub> isock;
-
-    SC_HAS_PROCESS(mailbox_host_stub);
-
-    mailbox_host_stub(sc_core::sc_module_name name) : sc_module(name), isock("isock") {
-        SC_THREAD(run);
-    }
-
-    void run() {
-        while (true) {
-            uint64_t status = 0;
-            read64(0x10, status);
-            if ((status & 1) == 0) {
-                uint64_t data = 0;
-                read64(0x08, data);
-                write64(0x00, data);
-            }
-            sc_core::wait(sc_core::sc_time(1, sc_core::SC_US));
-        }
-    }
-
-private:
-    void read64(uint64_t addr, uint64_t& val) {
-        tlm::tlm_generic_payload txn;
-        txn.set_command(tlm::TLM_READ_COMMAND);
-        txn.set_address(addr);
-        txn.set_data_ptr(reinterpret_cast<unsigned char*>(&val));
-        txn.set_data_length(8);
-        txn.set_streaming_width(8);
-        txn.set_byte_enable_ptr(nullptr);
-        txn.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-        sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
-        isock->b_transport(txn, delay);
-    }
-
-    void write64(uint64_t addr, uint64_t val) {
-        tlm::tlm_generic_payload txn;
-        txn.set_command(tlm::TLM_WRITE_COMMAND);
-        txn.set_address(addr);
-        txn.set_data_ptr(reinterpret_cast<unsigned char*>(&val));
-        txn.set_data_length(8);
-        txn.set_streaming_width(8);
-        txn.set_byte_enable_ptr(nullptr);
-        txn.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-        sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
-        isock->b_transport(txn, delay);
-    }
-};
-
 // OTBN OTP key request stub — no-op; OTBN never receives a real scramble key in VP.
 class otp_key_req_stub : public otp_key_req_if, public sc_module {
 public:
@@ -111,5 +59,38 @@ private:
         }
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         return trans.get_data_length();
+    }
+};
+
+// Tied-off manager port — errors every transaction.
+//
+// sep_dma_wrap grounds the DMA's SYS port (.sys_i('0)) and stubs its CTN
+// response channel so d_valid never asserts, so only the OT-internal port is
+// usable from SEP. Silicon would hang on a transfer programmed with ASID 0x9
+// or 0xA; a VP that hangs is useless for debug, so this reports a bus error
+// instead, which surfaces as ERROR_CODE.bus_error and stops the transfer.
+// Models a manager port that SEP leaves tied off (the DMA's CTN and SYS legs).
+// sep_dma_wrap.sv grounds sys_i and stubs ctn_tl_d2h with d_valid low, so in
+// hardware these transactions never complete and the DMA stalls. b_transport
+// cannot express "never responds" without hanging the kernel, so this errors
+// instead: the transfer still fails, just visibly rather than by wedging.
+class dead_manager_port_stub : public sc_core::sc_module {
+public:
+    tlm_utils::simple_target_socket<dead_manager_port_stub> socket;
+
+    explicit dead_manager_port_stub(sc_core::sc_module_name n)
+        : sc_module(n), socket("socket") {
+        socket.register_b_transport(this,   &dead_manager_port_stub::b_transport);
+        socket.register_transport_dbg(this, &dead_manager_port_stub::transport_dbg);
+    }
+
+private:
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
+        delay = sc_core::SC_ZERO_TIME;
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+    }
+    unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return 0;
     }
 };

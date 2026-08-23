@@ -26,7 +26,7 @@ This test plan provides comprehensive test coverage for the `lc_ctrl` SystemC TL
 ### Critical Architectural Context
 
 - `FEAT_CTRL` is computed combinationally: no state machine, no time-varying internal state
-- All fuse-burned inputs are CCI parameters set via ini file — no recompile needed
+- All fuse-burned inputs are CCI parameters set via ini file — no recompile needed. This holds for the standalone testbench these tests run in; on a platform the eFuse model drives the same inputs through `set_inputs()` and the parameters are not consulted, so `secure_tm` in particular is set as `och_sep_ss1.sep_efuse.secure_tm` there.
 - Tests 4, 8, and 9 are **parametric**: they skip with a guidance message if the configured `lc_state` does not match their scenario
 - Test 10 is parametric on `secure_tm`: its expected value adapts to whichever value is in the ini file
 

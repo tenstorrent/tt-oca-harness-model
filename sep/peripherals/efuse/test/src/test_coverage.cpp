@@ -186,22 +186,22 @@ void testbench::test_woset_bl_version()
 
 void testbench::test_efuse_write_ctrl_go()
 {
-    report_test_start("Test 15: EFUSE_WRITE_CTRL — program_go without program_enable");
+    report_test_start("Test 15: EFUSE_PROGRAM_CTRL — program_go without program_enable");
 
     uint32_t val = 0;
 
     // Pulse bit 17 (program_go) with bit 24 (program_busy) set, but leave
     // program_enable (bit 27) clear. efuse_program_interface.sv answers
     // done-with-error rather than stalling or programming anything.
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, (1u << 17) | (1u << 24));
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, (1u << 17) | (1u << 24));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
 
     const uint32_t expected = (1u << 25) | (1u << 26);  // done=1, status=error, go/busy cleared
     if (val == expected)
-        report_test_pass("EFUSE_WRITE_CTRL: gated program reports done + error");
+        report_test_pass("EFUSE_PROGRAM_CTRL: gated program reports done + error");
     else
-        report_test_fail("EFUSE_WRITE_CTRL write_go", "expected 0x" + std::to_string(expected) +
+        report_test_fail("EFUSE_PROGRAM_CTRL write_go", "expected 0x" + std::to_string(expected) +
             " got 0x" + std::to_string(val));
 
     // The refusal is sticky in STATUS.efuse_req_error until explicitly cleared.
@@ -300,10 +300,10 @@ void testbench::test_fuse_array_program_read()
     // starts at byte 0x254, so word 0x254/4 = 149, bit 149*32 = 4768.
     const uint32_t test_bit = 4768u + 3u;
     const uint32_t enable_prog = (1u << 27) | (1u << 16);  // program_enable, data=1
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | (1u << 18) | test_bit);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && !(val & (1u << 26)))
         report_test_pass("enabled program completes without error");
     else
@@ -326,10 +326,10 @@ void testbench::test_fuse_array_program_read()
 
     // Programming data=0 is rejected outright rather than clearing the bit: the
     // array is one-time-programmable, so nothing can unburn bit 3.
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               (1u << 27) | (1u << 17) | test_bit);   // data=0
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if (val & (1u << 26))
         report_test_pass("program with data=0 is refused");
     else
@@ -411,23 +411,19 @@ void testbench::test_shim_ctrl_window()
     // the two windows were ever collapsed back into one.
     uint32_t val = 0;
 
-    m_test->shim_write_32(efuse_basetest::SHIM_STATUS_OFFSET, 0x0000ABCD);
-    wait(1, SC_NS);
-    m_test->shim_read_32(efuse_basetest::SHIM_STATUS_OFFSET, val);
-    if (val == 0x0000ABCD)
-        report_test_pass("SHIM_EFUSE_CTRL_STATUS: read-back at shim offset 0x000");
+    m_test->shim_read_32(efuse_basetest::EFUSE_BANK_INIT_TIME_OFFSET, val);
+    if (val == 0x00000020)
+        report_test_pass("EFUSE_BANK_INIT_TIME: reset value 0x20");
     else
-        report_test_fail("SHIM_EFUSE_CTRL_STATUS", "expected 0xABCD got 0x" + std::to_string(val));
+        report_test_fail("EFUSE_BANK_INIT_TIME reset", "expected 0x20 got 0x" + std::to_string(val));
 
-    // TIMING_CTRL_7 is the register efuse_sanity_csr_test touches.
-    const unsigned int timing_7 = efuse_basetest::SHIM_TIMING_CTRL_OFFSET + (7 * 4);
-    m_test->shim_write_32(timing_7, 0x00001234);
+    m_test->shim_write_32(efuse_basetest::EFUSE_BANK_INIT_TIME_OFFSET, 0x0000ABCD);
     wait(1, SC_NS);
-    m_test->shim_read_32(timing_7, val);
-    if (val == 0x00001234)
-        report_test_pass("SHIM_EFUSE_TIMING_CTRL_7: read-back");
+    m_test->shim_read_32(efuse_basetest::EFUSE_BANK_INIT_TIME_OFFSET, val);
+    if (val == 0x0000ABCD)
+        report_test_pass("EFUSE_BANK_INIT_TIME: read-back at shim offset 0x000");
     else
-        report_test_fail("SHIM_EFUSE_TIMING_CTRL_7", "expected 0x1234 got 0x" + std::to_string(val));
+        report_test_fail("EFUSE_BANK_INIT_TIME", "expected 0xABCD got 0x" + std::to_string(val));
 
     // The windows are disjoint: writing the shim must leave LOCKS_LO alone.
     m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, val);
@@ -527,10 +523,10 @@ void testbench::test_fuse_program_out_of_range()
 
     // 8192 is one past the last bit. The command completes with an error and
     // latches its own sticky flag, distinct from the read side's.
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               (1u << 27) | (1u << 16) | (1u << 17) | 8192u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && (val & (1u << 26)))
         report_test_pass("out-of-range program reports done + error");
     else
@@ -609,10 +605,10 @@ void testbench::test_lock_enforcement()
     else
         report_test_fail("unlocked shadow write", "expected 0x5 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | (bl1_bit + 2u));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && !(val & (1u << 26)))
         report_test_pass("unlocked: OTP program accepted");
     else
@@ -631,10 +627,10 @@ void testbench::test_lock_enforcement()
     else
         report_test_fail("write lock", "expected 0x5 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | (bl1_bit + 3u));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && (val & (1u << 26)))
         report_test_pass("write-locked: OTP program refused with done + error");
     else
@@ -839,10 +835,10 @@ void testbench::test_token_matching()
     // What the match authorises: LC_STATE bit 1 (array bit 65) can only be burned
     // while the SIP token matches. Restore the matching token first.
     const uint32_t enable_prog = (1u << 27) | (1u << 16);
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | 65u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if (val & (1u << 26))
         report_test_pass("LC_STATE RMA bit refused while the token mismatches");
     else
@@ -853,20 +849,20 @@ void testbench::test_token_matching()
     wait(1, SC_NS);
     m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | 65u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && !(val & (1u << 26)))
         report_test_pass("LC_STATE RMA bit accepted once the token matches");
     else
         report_test_fail("LC gating match", "expected done + no error, got 0x" + std::to_string(val));
 
     // The chiplet bit has its own gate, and its token has not matched.
-    m_test->register_write_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | 66u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_WRITE_CTRL_OFFSET, val);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if (val & (1u << 26))
         report_test_pass("LC_STATE chiplet bit still gated by its own token");
     else
@@ -965,6 +961,176 @@ void testbench::test_lc_state_transitions()
             hex32(m_dut->get_lc_state()));
 }
 
+/*
+ * locked_field_access_interrupt: raised by the shadow access controller, and only by
+ * it. Runs straight after test_lock_enforcement so it inherits the locks that test
+ * sets -- BL1_VERSION is both read- and write-locked by then, and LOCKS is sticky.
+ */
+void testbench::test_locked_field_interrupt()
+{
+    report_test_start("Test 25: locked_field_access_interrupt — shadow refusals only");
+
+    uint32_t val = 0;
+    take_locked_field_pulses();
+
+    // An access that is not refused must not raise it, or the interrupt says nothing.
+    m_test->register_read_32(efuse_basetest::BL2_VERSION_OFFSET, val);
+    wait(2, SC_NS);
+    if (take_locked_field_pulses() == 0)
+        report_test_pass("unlocked read is silent");
+    else
+        report_test_fail("unlocked read", "interrupt raised on a permitted access");
+
+    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET, val);
+    wait(2, SC_NS);
+    if (take_locked_field_pulses() == 1)
+        report_test_pass("read-locked shadow read raises the interrupt");
+    else
+        report_test_fail("locked read interrupt", "no pulse on a denied read");
+
+    m_test->register_write_32(efuse_basetest::BL1_VERSION_OFFSET, 0x55);
+    wait(2, SC_NS);
+    if (take_locked_field_pulses() == 1)
+        report_test_pass("write-locked shadow write raises the interrupt");
+    else
+        report_test_fail("locked write interrupt", "no pulse on a dropped write");
+
+    // The OTP path is guarded by efuse_guard, which reports through req_error instead.
+    // Sharing the interrupt would make it impossible to tell the two refusals apart.
+    const uint32_t bl1_bit = (efuse_basetest::BL1_VERSION_OFFSET / 4) * 32;
+    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+                              (1u << 28) | (1u << 16) | bl1_bit);
+    wait(2, SC_NS);
+    m_test->register_read_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, val);
+    const bool otp_refused = (val & (1u << 26)) != 0;
+    if (otp_refused && take_locked_field_pulses() == 0)
+        report_test_pass("refused OTP read reports req_error without the interrupt");
+    else
+        report_test_fail("OTP refusal interrupt",
+                         otp_refused ? "interrupt raised on the guard path"
+                                     : "OTP read was not refused");
+
+    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET,
+                              (1u << 8) | (1u << 9) | (1u << 10));
+    wait(1, SC_NS);
+}
+
+/*
+ * TRANSIENT_RMA_EN: the lifecycle advances on a token match alone, with no LC_STATE
+ * write. Both images plant the digest of the all-zero token in both RMA digest fuses,
+ * as test_token_matching does, so pulsing a go bit is what opens each gate.
+ */
+void testbench::test_transient_rma()
+{
+    report_test_start("Test 26: TRANSIENT_RMA_EN — token-driven auto-transition");
+
+    const uint32_t zero_token_digest[8] = {
+        0x0d5f2925u, 0x902a591du, 0x6ee233b3u, 0x08971485u,
+        0x8e9f8e20u, 0x6c8fc18bu, 0xf862bd77u, 0x66687aadu,
+    };
+
+    // TRANSIENT_RMA_EN is shadow byte 0x010, i.e. word 4.
+    auto write_image = [&](const std::string &path, bool transient) {
+        std::ofstream out(path);
+        for (unsigned int bit = 0; bit < 8192; bit++) {
+            const unsigned int word = bit / 32;
+            uint32_t word_val = 0;
+            if (word == 2)                     word_val = efuse_model::lc_state_encode(
+                                                              efuse_model::LC_RAW_TEST_DEV);
+            else if (word == 4 && transient)   word_val = 0x1u;
+            else if (word >= 9  && word <= 16) word_val = zero_token_digest[word - 9];
+            else if (word >= 17 && word <= 24) word_val = zero_token_digest[word - 17];
+            out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
+        }
+    };
+
+    uint32_t val = 0;
+    auto check = [&](uint32_t want_raw, const std::string &what) {
+        const uint32_t want = efuse_model::lc_state_encode(want_raw);
+        m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+        if (val == want)
+            report_test_pass(what);
+        else
+            report_test_fail(what, "expected 0x" + hex32(want) + " got 0x" + hex32(val));
+    };
+    auto match_token = [&](uint32_t go_bit) {
+        m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, go_bit);
+        wait(1, SC_NS);
+    };
+
+    // Match results are sticky and earlier tests leave both matched, so each step
+    // stages the token it wants and re-pulses rather than assuming a starting point.
+    auto stage_sip     = [&](uint32_t w0) {
+        m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET, w0);
+        wait(1, SC_NS);
+    };
+    auto stage_chiplet = [&](uint32_t w0) {
+        m_test->register_write_32(efuse_basetest::RMA_CHIPLET_TOKEN_I_OFFSET, w0);
+        wait(1, SC_NS);
+    };
+    for (int i = 1; i < 8; i++) {
+        m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET + i * 4, 0);
+        m_test->register_write_32(efuse_basetest::RMA_CHIPLET_TOKEN_I_OFFSET + i * 4, 0);
+    }
+    wait(1, SC_NS);
+
+    // Without the fuse, a match authorises a transition but does not perform one.
+    const std::string off_image = "/tmp/efuse_test_transient_off.preload";
+    const std::string on_image  = "/tmp/efuse_test_transient_on.preload";
+    write_image(off_image, false);
+    write_image(on_image,  true);
+
+    if (!m_dut->preload_fuses_from_file(off_image)) {
+        report_test_fail("transient RMA setup", "image was rejected");
+        return;
+    }
+    stage_sip(0);
+    match_token(1u << 0);
+    check(efuse_model::LC_RAW_TEST_DEV, "no transient fuse: SiP match leaves LC_STATE alone");
+
+    if (!m_dut->preload_fuses_from_file(on_image)) {
+        report_test_fail("transient RMA setup", "image was rejected");
+        return;
+    }
+    check(efuse_model::LC_RAW_TEST_DEV, "transient image sensed as TEST_DEV");
+
+    // Shut both gates first — every earlier test leaves them matched, and a latched
+    // match is enough on its own here, with no pulse of its own required.
+    // SiP first: while the chiplet match is still latched it is blocked anyway, so
+    // this only clears its result. Clearing the chiplet one first would let the
+    // latched SiP match advance the state before the test has begun.
+    stage_sip(0x1);
+    match_token(1u << 0);
+    stage_chiplet(0x1);
+    match_token(1u << 8);
+    check(efuse_model::LC_RAW_TEST_DEV, "neither token matching leaves LC_STATE alone");
+
+    stage_sip(0x0);
+    match_token(1u << 0);
+    check(efuse_model::LC_RAW_RMA_SIP_0, "SiP match advances TEST_DEV -> RMA_SIP with no write");
+
+    stage_chiplet(0x0);
+    match_token(1u << 8);
+    check(efuse_model::LC_RAW_RMA_CHIP_0, "chiplet match advances RMA_SIP -> RMA_CHIPLET");
+
+    // RMA_CHIPLET is terminal for the transient path too.
+    match_token(1u << 0);
+    check(efuse_model::LC_RAW_RMA_CHIP_0, "RMA_CHIPLET is terminal under transient RMA");
+
+    // A matched chiplet token blocks the SiP advance instead of falling through to it
+    // (efuse_shadow_regs.sv:342-343, whose empty branch says so in as many words). The
+    // chiplet match is still latched from above, so a fresh image at TEST_DEV is stuck:
+    // clearing the chiplet match is the only way out, which is worth pinning down since
+    // an if/else chain written the obvious way would quietly do the SiP transition.
+    if (!m_dut->preload_fuses_from_file(on_image)) {
+        report_test_fail("transient RMA setup", "image was rejected");
+        return;
+    }
+    stage_sip(0);
+    match_token(1u << 0);
+    check(efuse_model::LC_RAW_TEST_DEV, "a latched chiplet match blocks the SiP advance");
+}
+
 void testbench::run_coverage_tests()
 {
     test_woset_locks_hi();
@@ -980,9 +1146,12 @@ void testbench::run_coverage_tests()
     test_fuse_array_program_read();
     test_fuse_preload_file();
     test_fuse_program_out_of_range();
-    // Last: LOCKS is sticky, so anything this sets stays locked for whatever follows.
+    // LOCKS is sticky, so anything this sets stays locked for whatever follows —
+    // which the interrupt test relies on, and the preloads below then clear.
     test_lock_enforcement();
+    test_locked_field_interrupt();
     test_token_matching();
     // Depends on the matching SiP token test_token_matching leaves behind.
     test_lc_state_transitions();
+    test_transient_rma();
 }

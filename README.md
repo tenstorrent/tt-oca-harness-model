@@ -723,15 +723,19 @@ The following IPs are **not modeled** in the VP. Tests that exercise them will f
 ### Simulation aids (no hardware equivalent)
 
 - **SPI flash image backdoor-load** (`spi_flash` model, called from `start_of_simulation`): a
-  simulation-only way to preload the SPI NOR flash model's contents. The VP loads a staged image
-  from `data/flash_memory.bin` (relative to the run directory) so controller reads return the
-  real manifest+payload images (two software banks) instead of erased `0xFF`. On silicon the
-  flash is programmed by other means; this just stages that content for a run. When no image is
-  staged it is a no-op that logs a "... not found — using blank (0xFF) memory" line and leaves
-  the flash erased, so tests that stage nothing are unaffected. Alternatively, `och_sep_ss1.spiPreload`
-  parses a Verilog `$readmemh`-style `.spi_preload` file directly into the same backing memory —
-  see "Building and running the SEP Boot ROM (SPI boot)" above; `spiPreload` takes precedence
-  when set, otherwise this raw-binary path is used.
+  simulation-only way to preload the SPI NOR flash model's contents, so controller reads return
+  real manifest+payload images (two software banks) instead of erased `0xFF`. On silicon the flash
+  is programmed by other means; this just stages that content for a run. Two config keys select an
+  image, both resolved relative to the `.ini` file's directory when given as a relative path:
+
+  - `och_sep_ss1.spiPreload` parses a Verilog `$readmemh`-style `.spi_preload` text file — see
+    "Building and running the SEP Boot ROM (SPI boot)" above.
+  - `och_sep_ss1.spiBackdoorFile` loads a raw binary image, for tests that stage one directly.
+
+  `spiPreload` takes precedence when both are set. When neither is set the flash starts erased,
+  which is what tests asserting `0xFF` depend on — the model never probes for an image on its own.
+  Note that CCI requires string values to be JSON-quoted in the `.ini`, e.g.
+  `och_sep_ss1.spiBackdoorFile : "data/my_image.bin"`.
 
 ### Functional stubs (simplified models of real hardware)
 
