@@ -309,13 +309,22 @@ smc/platform/compile_commands.json
 !smc/peripherals/cpu_ctrl/doc/
 !smc/peripherals/cpu_ctrl/doc/**
 
-#*.md 
 *.svg
 !smc/cpu_cluster/doc/
 !smc/cpu_cluster/doc/**
 !smc/peripherals/cpu_ctrl/doc/
 !smc/peripherals/cpu_ctrl/doc/**
 !smc/peripherals/cpu_ctrl/README.md
+
+# Legacy peripheral Markdown (01/02/03 specs and OpenTitan copies).
+# Canonical pages are AsciiDoc: doc/{index,implementation,test_plan}.adoc.
+# These .md files stay on disk for local reference; they are not tracked.
+# IP-root README.md files remain tracked.
+smc/peripherals/*/doc/*.md
+smc/peripherals/*/doc/**/*.md
+sep/peripherals/*/docs/*.md
+sep/peripherals/*/docs/**/*.md
+sep/peripherals/*/doc/*.md
 
 # OCH GitHub Pages documentation is intentionally tracked under docs/och.
 !docs/
