@@ -334,10 +334,10 @@ private:
     // words (sep_smc_interface.h). Defaults: Secondary chiplet, status reporting
     // enabled, refclk.
     csml_param<bool>       strap_primary_chiplet;       // STRAPS_LO[25]
-    csml_param<bool>       strap_boot_recovery;         // STRAPS_LO[19]
-    csml_param<bool>       strap_rotate_update;         // STRAPS_HI[26]
+    csml_param<bool>       strap_boot_recovery;         // STRAPS_HI[23]
+    csml_param<bool>       strap_rotate_update;         // STRAPS_HI[29]
     csml_param<bool>       strap_status_report_disable; // STRAPS_LO[21]
-    csml_param<bool>       strap_bl0_pll_clk;           // STRAPS_LO[20]
+    csml_param<bool>       strap_bl0_pll_clk;           // STRAPS_HI[24]
 
     // Optional SPI flash preload: path to a Verilog $readmemh-style hex file
     // (e.g. fw/sep/bootcode/prebuilt/non_secure_boot.spi_preload) — "@addr" lines

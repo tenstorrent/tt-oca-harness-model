@@ -88,10 +88,7 @@ TOOLCHAIN_SEARCH_DIRS+=(
     "/opt/homebrew/bin"
     "/usr/local/bin"
 )
-# TT / RHEL common install tree
-for d in /tools_soc/opensrc/riscv-gnu-toolchain/*; do
-    [ -d "${d}/bin" ] && TOOLCHAIN_SEARCH_DIRS+=("${d}/bin")
-done
+# Site install trees: export RISCV_TOOLCHAIN_PATH (or put the toolchain on PATH).
 TOOLCHAIN_SEARCH_DIRS+=(
     "/opt/riscv/bin"
     "/usr/local/riscv/bin"

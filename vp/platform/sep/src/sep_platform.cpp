@@ -280,15 +280,15 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         constexpr uint64_t SMC_STRAPS_HI = 0x2094;  // SMC_STRAPS_HI_OFFSET
         uint32_t straps_lo = 0u;
         uint32_t straps_hi = 0u;
-        // Bit positions per fw/sep/bootcode/include/sep_smc_interface.h. The SEP
-        // GPIO/strap reorg moved boot_recovery (HI[23]->LO[19]), bl0_pll_clk
-        // (HI[24]->LO[20]) and rotate_update (HI[29]->HI[26]); keep these in lockstep
-        // with the SMC strap IDs the bootcode reads.
+        // Bit positions per the open-tree SEP↔SMC interface contract:
+        // sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/include/sep_smc_interface.h.
+        // NOTE: If running under tt-oca-harness with a different ROM/contract, keep these
+        // bit positions in lockstep with that ROM’s sep_smc_interface.h.
         if (strap_primary_chiplet.get_param_value())       straps_lo |= (1u << 25);
         if (strap_status_report_disable.get_param_value()) straps_lo |= (1u << 21);
-        if (strap_boot_recovery.get_param_value())         straps_lo |= (1u << 19);
-        if (strap_bl0_pll_clk.get_param_value())           straps_lo |= (1u << 20);
-        if (strap_rotate_update.get_param_value())         straps_hi |= (1u << 26);
+        if (strap_boot_recovery.get_param_value())         straps_hi |= (1u << 23);
+        if (strap_bl0_pll_clk.get_param_value())           straps_hi |= (1u << 24);
+        if (strap_rotate_update.get_param_value())         straps_hi |= (1u << 29);
         smc_global->load_data(reinterpret_cast<const char*>(&straps_lo),
                               SMC_STRAPS_LO, sizeof(straps_lo));
         smc_global->load_data(reinterpret_cast<const char*>(&straps_hi),

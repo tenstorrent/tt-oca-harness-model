@@ -71,20 +71,20 @@ static inline uint32_t sep_get_smc_base(void) {
 
 // STRAPS_LO (32-bit):
 #define SMC_STRAP_MEM_REPAIR_BYPASS_BIT     13
-#define SMC_STRAP_BOOT_RECOVERY_BIT         19  // absolute bit 19 (authoritative; matches SMC BOOT_RECOVERY_STRAP_ID=19)
-#define SMC_STRAP_BL0_PLLCLK_BIT            20
 #define SMC_STRAP_STATUS_RPT_DISABLE_BIT    21
 #define SMC_STRAP_PRIMARY_CHIPLET_BIT       25
 
 // STRAPS_HI (32-bit, representing bits [63:32] of the 64-bit strap word):
-#define SMC_STRAP_ROTATE_UPDATE_BIT_HI       26  // absolute bit 58 (pad 61 -> 58 after 68->65 shrink)
+#define SMC_STRAP_BOOT_RECOVERY_BIT_HI      23  // absolute bit 55
+#define SMC_STRAP_BL0_PLLCLK_BIT_HI         24  // absolute bit 56
+#define SMC_STRAP_ROTATE_UPDATE_BIT_HI       29  // absolute bit 61
 
 // Masks (applied to the corresponding 32-bit register read).
 #define SMC_STRAP_MEM_REPAIR_BYPASS_MASK    (1u << SMC_STRAP_MEM_REPAIR_BYPASS_BIT)
 #define SMC_STRAP_STATUS_RPT_DISABLE_MASK   (1u << SMC_STRAP_STATUS_RPT_DISABLE_BIT)
 #define SMC_STRAP_PRIMARY_CHIPLET_MASK      (1u << SMC_STRAP_PRIMARY_CHIPLET_BIT)
-#define SMC_STRAP_BOOT_RECOVERY_MASK        (1u << SMC_STRAP_BOOT_RECOVERY_BIT)
-#define SMC_STRAP_BL0_PLLCLK_MASK           (1u << SMC_STRAP_BL0_PLLCLK_BIT)
+#define SMC_STRAP_BOOT_RECOVERY_MASK        (1u << SMC_STRAP_BOOT_RECOVERY_BIT_HI)
+#define SMC_STRAP_BL0_PLLCLK_MASK           (1u << SMC_STRAP_BL0_PLLCLK_BIT_HI)
 #define SMC_STRAP_ROTATE_UPDATE_MASK        (1u << SMC_STRAP_ROTATE_UPDATE_BIT_HI)
 
 // ---------------------------------------------------------------------------
