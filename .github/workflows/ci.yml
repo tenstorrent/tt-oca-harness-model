@@ -523,10 +523,11 @@ jobs:
         with:
           path: |
             sw/zephyr-smc/.workspace
-            sw/zephyr-smc/.venv
-          # west2: narrow clones + unused-HAL filter.  Do not reuse west1
+          # west3: cache .workspace only. Do not cache .venv — venv shebangs
+          # are absolute and break when the checkout path changes (repo
+          # rename/port). west2 also bundled .venv. Do not reuse west1
           # (~3.6 GB, includes hal_espressif git history).
-          key: zephyr-${{ env.ZEPHYR_VERSION }}-${{ runner.os }}-west2-narrow
+          key: zephyr-${{ env.ZEPHYR_VERSION }}-${{ runner.os }}-west3-narrow
 
       - name: Run Zephyr SMC VP tests
         env:
