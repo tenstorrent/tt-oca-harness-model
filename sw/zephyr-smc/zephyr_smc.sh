@@ -13,8 +13,15 @@ BOARD="${BOARD:-smc_vp}"
 die() { echo "error: $*" >&2; exit 1; }
 log() { echo "==> $*"; }
 
+# A cached .venv can look present (west is +x) while its shebang still
+# points at another checkout path — e.g. after a repo rename/port.
+venv_usable() {
+    local py="$HERE/.venv/bin/python"
+    [[ -x "$HERE/.venv/bin/west" && -x "$py" ]] && "$py" -c "import sys" >/dev/null 2>&1
+}
+
 find_west() {
-    if [[ -x "$HERE/.venv/bin/west" ]]; then
+    if venv_usable; then
         echo "$HERE/.venv/bin/west"
         return
     fi
@@ -81,7 +88,11 @@ ensure_smc_vp() {
 }
 
 cmd_setup() {
-    if [[ ! -x "$HERE/.venv/bin/west" ]]; then
+    if ! venv_usable; then
+        if [[ -e "$HERE/.venv" ]]; then
+            log "cached .venv is unusable (stale shebang or missing interpreter); recreating"
+            rm -rf "$HERE/.venv"
+        fi
         local py=""
         for c in python3.12 python3.13 python3.11 python3; do
             if command -v "$c" >/dev/null 2>&1; then
