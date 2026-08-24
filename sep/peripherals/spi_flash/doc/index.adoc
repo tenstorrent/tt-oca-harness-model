@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[spi-flash]]
+==== SPI Flash (external BFM)
+
+This is **not SEP silicon**. There is no SPI NOR flash IP in the SEP
+RTL; the die talks to an off-chip part through the SPI host. This
+directory is a SystemC BFM of that part so firmware can program,
+erase, and read without a real device. Architecture and CSRs of the
+host itself are in the hardware TRM. This tree documents the BFM and
+how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

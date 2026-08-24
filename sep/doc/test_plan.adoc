@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-vp-test-plan]]
+=== Test Plan
+
+Set `SYSTEMC_HOME` and `CCI_HOME` in `vp/configure_vp.sh` (or export
+them) before any of the commands below.
+
+==== Standalone peripheral tests
+
+Each IP under `sep/peripherals/<ip>/` has `run_tests.sh`. From that
+directory:
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage --clean
+----
+
+All SEP models:
+
+[source,bash]
+----
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean aes hmac adams_bridge
+----
+
+Logs land in `sep/peripherals/logs/`. Case tables live in each IP's
+`doc/test_plan.adoc`.
+
+==== Build and run `sep-vp`
+
+[source,bash]
+----
+# from the repository root
+make sep-vp
+vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
+----
+
+==== Firmware tests on `sep-vp`
+
+Vayavya-style tests:
+
+[source,bash]
+----
+cd sw/sep-vp-tests/sep-hmac-test
+make
+make sim
+----
+
+Harness firmware suite (includes `sep_abr_*`):
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh sep_abr_csr_test
+./run_all_tests.sh
+----
+
+Those runners need a built `sep-vp` and a RISC-V bare-metal toolchain.

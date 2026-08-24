@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[key-manager-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`key_manager_model` is a loosely-timed TLM-2.0 model. There is no
+PicoRV32 ISS: ROM firmware behaviour lives in
+`km_firmware_handler` and runs at `SC_ZERO_TIME` once a mailbox
+frame is complete. The SEP-visible surface is the mailbox only.
+
+[source,cpp]
+----
+class key_manager_model : public key_manager_base
+----
+
+----
+key_manager_model     ports, sockets, fw_thread, IRQ     (key_manager.*)
+  ├─ key_manager_base mailbox csml_memory + mailbox_socket
+  ├─ km_kpv           32-slot vault (C++ state)
+  ├─ km_mailbox       inbound / outbound FIFOs
+  └─ km_firmware_handler  command dispatch, handles, boot
+----
+
+====== Threads and sockets
+
+`fw_thread` boots on `rst_ni` de-assert (`RESP_KM_READY`), then
+drains the inbound FIFO as words arrive so a frame wider than the
+16-word FIFO can reassemble. `reset_process` and `wipe_process`
+are `SC_METHOD`s. `irq_update_process` is the only writer of
+`irq`.
+
+`sep-vp` binds the mailbox target at the TRM KM mailbox aperture
+and the eight crypto DEST initiator sockets. OTP and demotion
+arrive as C++ callbacks, not TLM ports: `set_otp_data()` from
+`efuse_model` at `start_of_simulation`, `set_demote_callback()`
+from `lifecycle_ctrl_model` so KDF sees a live demote encoding.
+
+ABR DEST sockets are present and used. `CMD_KEY_TRANSFER` /
+`CMD_ENGINE_SHRED` dest bits 4–7 write dual XOR shares into
+`abr_mldsa_seed_socket`, `abr_mlkem_d_socket`,
+`abr_mlkem_z_socket`, and `abr_mlkem_msg_socket` (bound on
+`sep-vp` to Adams Bridge). `CMD_ABR_SK_TRANSFER` still returns
+`RET_FAILURE`; `RESP_ABR_SHARED_KEY_READY` is never sent.
+
+[cols="36%,28%,36%",options="header"]
+|===
+|Port |Type |Platform bind
+|`mailbox_socket` |TLM 32-bit target |`sep-vp` SimpleBus, KM mailbox window
+|`hmac_key_socket` |TLM 32-bit initiator |HMAC DEST (bit 0)
+|`kmac_key_socket` |TLM 32-bit initiator |KMAC DEST (bit 1)
+|`aes_key_socket` |TLM 32-bit initiator |AES DEST (bit 2)
+|`otbn_key_socket` |TLM 32-bit initiator |OTBN DEST (bit 3)
+|`abr_mldsa_seed_socket` |TLM 32-bit initiator |ABR DEST ML-DSA seed (bit 4)
+|`abr_mlkem_d_socket` |TLM 32-bit initiator |ABR DEST ML-KEM D (bit 5)
+|`abr_mlkem_z_socket` |TLM 32-bit initiator |ABR DEST ML-KEM Z (bit 6)
+|`abr_mlkem_msg_socket` |TLM 32-bit initiator |ABR DEST ML-KEM MSG (bit 7)
+|`rst_ni` |`sc_in<bool>` |SEP software-reset bit for KM
+|`wipe_ni` |`sc_in<bool>` |Active-low emergency wipe
+|`irq` |`sc_out<bool>` |SEP PIC key-manager source
+|===
+
+Mailbox writes notify `fw_thread` on every inbound word. Sideload
+writes SHARE0 (DRBG mask), SHARE1 (key XOR mask), then `KEY_CTRL`.
+Short keys are padded with DRBG words to the engine width.
+
+----
+  TLM MMIO ──► mailbox_socket ──► km_mailbox ──► fw_thread
+                                                   │
+                                                   ▼
+                                          km_firmware_handler
+                                                   │
+                          km_kpv ◄─────────────────┤
+                                                   │
+  hmac/kmac/aes/otbn/abr_*_socket ◄── dual-share ──┘
+  irq_update_process ──► irq
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No ISS, ROM image, or SRAM mutable firmware. SRAM/ROM execution
+  commands return `RET_FAILURE`.
+* Entropy is OpenSSL `RAND_bytes`, not the hardware DRBG / EDN.
+* KDF inputs are wired but unused; generate returns raw DRBG
+  output.
+* One reset pin: `OTP_READ_LOCK_COLD` does not survive a warm
+  reset.
+* Recoverable-fault command restriction is not modelled.
+* DPA shred is a single pass.
+* No KM-local eFuse pass-through window.

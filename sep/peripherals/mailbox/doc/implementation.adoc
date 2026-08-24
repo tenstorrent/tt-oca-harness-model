@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[mailbox-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`mailbox_ip` is a loosely-timed TLM-2.0 model of the dual-port
+AXI mailbox. Two `mailbox_base` register files sit behind
+`socket0` / `socket1`. Cross-port data moves through a pair of
+`sc_fifo<uint64_t>` channels of depth 8. Registers are 64-bit;
+the TLM sockets are 32-bit.
+
+[source,cpp]
+----
+class mailbox_ip : public sc_module
+----
+
+----
+mailbox_ip          FIFOs, IRQ, callbacks          (mailbox.*)
+  ├─ mailbox_base b0   Port 0 registers, no socket (mailbox_base.*)
+  └─ mailbox_base b1   Port 1 registers, no socket
+socket0 / socket1   hierarchical bind to b0 / b1
+----
+
+====== Threads and sockets
+
+`handle_reset` is an `SC_METHOD` on `rst_ni`. `irq_driver` is the
+only writer of `irq_o[0]` / `irq_o[1]`. FIFO enqueue/dequeue runs
+in the TLM callback (`nb_write` / `nb_read`).
+
+`sep-vp` maps the TRM mailbox aperture onto `MailboxBridge`,
+which issues 4- or 8-byte accesses into `socket0` (SEP side).
+`socket1` is bound to `mailbox_host_stub` (host side). Both IRQ
+pins go to the SEP PIC.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`socket0` |TLM 32-bit target |`MailboxBridge` at the mailbox window
+|`socket1` |TLM 32-bit target |`mailbox_host_stub`
+|`clk_i` |`sc_in<double>` |Frequency in Hz (unused for FIFO timing)
+|`rst_ni` |`sc_in<bool>` |Platform reset
+|`irq_o[0]` |`sc_out<bool>` |SEP PIC mailbox source 0
+|`irq_o[1]` |`sc_out<bool>` |SEP PIC mailbox source 1
+|===
+
+Port 0 writes `fifo_0_to_1`; Port 1 reads it. The reverse path
+uses `fifo_1_to_0`. Threshold writes saturate at `MailboxDepth-1`
+and re-evaluate immediately. `ERROR_FLAGS` is clear-on-read and
+does not clear `IRQS.eirq`.
+
+----
+  socket0 ──► b0 ──► fifo_0_to_1 ──► b1 ──► socket1
+  socket1 ──► b1 ──► fifo_1_to_0 ──► b0 ──► socket0
+                         │
+                irq_driver ──► irq_o[0/1]
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used. FIFO depth (8)
+and active-high IRQ polarity are compile-time constants, not CCI.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No AXI channel FSMs, IDs, or back-pressure.
+* `MailboxDepth`, `IrqEdgeTrig`, and `IrqActHigh` are not
+  constructor arguments in this build (depth 8, level, active-high).
+* `clk_i` is a frequency pin, not a toggling clock.
+* No testmode / DFT ports.

@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-scratch-cold-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`sep_scratch_cold_testbench` is a TLM initiator into the eight
+scratch words. It captures stdout for decoder tests and checks the
+VP-ack side effects.
+
+Success: every `[ PASS  ]` line holds; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/sep_scratch_cold`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean sep_scratch_cold
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Source: `test/src/sep_scratch_cold_testbench.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|001 |Reset values |All eight words 0 |Positive
+|002 |Basic RW |Per-entry write / readback |Positive
+|003 |Independence |One slot does not alias another |Positive
+|004 |Reserved bits |Masked out |Positive
+|005–007 |VP acks |Magic writes to [0]/[4]/[6] ack [1]/[5]/[7] |Positive
+|008 |No spurious acks |Non-magic writes leave neighbours |Positive
+|009 |CCI defaults |`sim_out.enable` / `sep_status.enable` |Positive
+|010 |Virt console |Decoder opcode paths |Positive
+|011 |Status decoder |Type / stage labels |Positive
+|===
+
+====== Platform firmware tests
+
+There is no dedicated scratch-cold firmware test. The bank is the
+SIM_OUT / SEP_STATUS path for every `sep-vp` image, and the VP acks
+are what let `ap_stee_output_remap_test` and
+`sep_aes_large_payload_test` complete without CocoTB.
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_all_tests.sh            # printf / status land on these words
+----

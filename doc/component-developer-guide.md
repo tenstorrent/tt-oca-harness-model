@@ -42,8 +42,8 @@ Work in the appropriate area of the tree:
 |-------------|------------------|
 | New or updated SEP IP model | `sep/peripherals/<ip>/` |
 | New or updated SMC IP model | `smc/peripherals/<ip>/` or `smc/cpu_cluster/` |
-| IP documentation | `<subsystem>/peripherals/<ip>/doc/` or `doc/` |
-| SMC architecture / test plan | `doc/01_SMC_Architecture.md`, `doc/02_SMC_IP_LowLevel_Design.md`, `doc/03_SMC_Test_Plan.md` |
+| IP documentation | `<subsystem>/peripherals/<ip>/doc/` — `implementation.adoc` + `test_plan.adoc` only |
+| SEP / SMC books | `sep/doc/`, `smc/doc/` — VP implementation and how to run tests, not TRM chapters |
 | Shared tooling | `scripts/` |
 | VP integration / platform | `vp/platform/` |
 | Firmware / DV test | `sw/` |
@@ -200,10 +200,10 @@ Every peripheral under `<subsystem>/peripherals/<ip>/` must follow this layout:
 ├── include/                # Public headers
 ├── src/                    # Implementation
 ├── test/                   # Self-checking testbench + CTest registration
-└── doc/                    # Numbered spec, LLD, test plan
-    ├── 01_<IP>_Specification.md
-    ├── 02_<IP>_LowLevel_Design.md
-    ├── 03_<IP>_Test_Plan.md
+└── doc/                    # VP only (AsciiDoc); architecture lives in the TRM
+    ├── index.adoc
+    ├── implementation.adoc
+    ├── test_plan.adoc
     └── figures/
 ```
 
@@ -221,8 +221,8 @@ Every peripheral under `<subsystem>/peripherals/<ip>/` must follow this layout:
 
 - Use **CCI 1.0** (`cci_param`) for runtime configuration
 - Place shared TLM extensions in `include/<subsystem>_tlm_extensions.h` (one canonical copy per subsystem)
-- Name documentation files with numeric prefixes (`01_`, `02_`, `03_`) for consistent ordering
-- Trace specifications to the hardware spec and RTL register definitions where applicable
+- Document the SystemC/TLM model and how to run its tests. Do not copy TRM architecture, register maps, or programming sequences.
+- Do not add new `01_` / `02_` / `03_` Markdown specifications.
 - Add the IP to the subsystem's top-level `CMakeLists.txt` when integrating into a VP build
 
 ---
@@ -285,17 +285,16 @@ When a change spans an IP model and VP integration (e.g., new register in `smc/p
 
 ### Documentation and PDF export
 
-Regenerate IP documentation PDFs from the IP's `doc/` directory:
+New IP and subsystem pages are AsciiDoc (`implementation.adoc` +
+`test_plan.adoc` only). The hardware TRM owns architecture. Render
+with Asciidoctor. See `doc/contributing/documentation.adoc`.
+
+Existing Markdown IP trees still use their local `doc/build_docs.sh`
+or the shared converter until they are converted:
 
 ```bash
 cd smc/peripherals/clint/doc
 ./build_docs.sh
-```
-
-Or convert any Markdown file using the shared script:
-
-```bash
-scripts/md-to-pdf.sh doc/01_SMC_Architecture.md
 scripts/md-to-pdf.sh smc/peripherals/clint/doc/
 ```
 

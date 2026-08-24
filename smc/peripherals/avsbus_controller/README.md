@@ -1,7 +1,14 @@
 # SMC AVSBus Controller — SystemC / TLM-2.0 Loosely-Timed Model
 
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 Register-accurate functional model of the SMC **AVSBus 1.3.1** controller
-(`hw/ip/avsbus_controller`), mapped at `0xC000_4000`.
+(`hw/ip/avsbus_controller`).
 
 | Doc | Role |
 |-----|------|
@@ -19,6 +26,8 @@ avsbus_controller/
 ├── run_tests.sh
 ├── deps.env.example
 ├── doc/
+│   ├── index.adoc / implementation.adoc / test_plan.adoc
+│   └── 01_ / 02_ / 03_ numbered Markdown
 ├── include/avsbus_controller.h
 ├── src/avsbus_controller.cpp
 └── test/

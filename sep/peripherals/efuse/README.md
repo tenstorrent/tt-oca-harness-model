@@ -31,6 +31,10 @@ test/inc/efuse_test.h         Test case declarations
 test/src/testbench.cpp        sc_main entry
 test/src/efuse_basetest.cpp   Common test infrastructure
 test/src/efuse_test.cpp       Test orchestration
+
+doc/index.adoc                VP set entry (includes the two pages)
+doc/implementation.adoc       SystemC/TLM model
+doc/test_plan.adoc            cases + run commands
 ```
 
 ## Address
@@ -155,4 +159,9 @@ make -j$(nproc)
 
 ## Documentation
 
-[High-Level Design](docs/design-docs/efuse-high-level-design.md)
+Architecture, CSRs, and programming sequences are in the hardware
+TRM. This tree documents the SystemC/TLM model:
+
+- [index](doc/index.adoc) — VP set entry
+- [implementation](doc/implementation.adoc) — sockets, threads, CCI, gaps
+- [test plan](doc/test_plan.adoc) — standalone cases and platform runs

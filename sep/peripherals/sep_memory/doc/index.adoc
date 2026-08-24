@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-memory]]
+==== SEP Memory
+
+The hardware contract (SRAM / ROM / ITCM / DTCM apertures) is in the
+hardware TRM. This directory documents the SystemC/TLM-2.0 store
+(`SEPMemory`) and how to build it. Sources live under `model/`, not
+`include/`.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

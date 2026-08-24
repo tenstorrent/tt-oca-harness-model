@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[bootrom-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::bootrom` is a loosely-timed TLM-2.0 read-only memory. Contents
+are fixed at elaboration from `init_file` (or zero-fill). Writes return
+`TLM_OK_RESPONSE` and leave `data_` unchanged. `b_transport` annotates
+`access_delay_ns` and never calls `wait()`. DMI is not granted.
+
+[source,cpp]
+----
+class bootrom : public sc_core::sc_module
+----
+
+Accepted accesses are naturally aligned 1/2/4/8 bytes. Out-of-window
+is an address error; misaligned / bad width / streaming mismatch is a
+burst error; byte-enables are rejected.
+
+====== Threads and sockets
+
+The only process is `reset_proc` (`SC_METHOD` on `rst_n_i`): it logs
+and clears nothing. There are no output ports.
+
+Preload formats: `hex` (one 64-bit big-endian ASCII word per line),
+`bin` (raw little-endian), or `auto` (`.img`/`.bin` → bin, else hex).
+An empty `init_file` zero-fills. Parser failure is `SC_REPORT_FATAL`.
+
+`smc-vp` binds `reg_socket` on the front-port bootrom route (window
+adapter) and `rst_n_i` to the platform reset.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM target |`front_port_router` → `wa_bootrom`
+|`rst_n_i` |`sc_in<bool>` |Platform reset (no-op for contents)
+|===
+
+----
+  TLM MMIO ──► reg_socket ──► data_[addr .. addr+len)
+  WRITE ──► TLM_OK, data_ unchanged
+  rst_n_i ──► reset_proc (log only)
+----
+
+====== CCI parameters
+
+Size and preload are immutable. `access_delay_ns` is re-read on every
+transaction.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`size_bytes` |`0x10000` |ROM size (non-zero multiple of 8)
+|`init_file` |`""` |Preload path; empty = zero-fill
+|`init_file_format` |`"auto"` |`hex`, `bin`, or `auto`
+|`access_delay_ns` |1.0 |Annotated TLM access delay
+|===
+
+`size_bytes == 0`, not a multiple of 8, or `access_delay_ns < 0` is
+`SC_REPORT_FATAL`.
+
+====== Modeling gaps versus RTL
+
+* No DMI fast-path (held for IP-suite parity).
+* Reset is a structural no-op; RTL pipeline registers are not modelled.
+* No CRC/hash check of the preload image.
+* No secure-region / key-disable lock.

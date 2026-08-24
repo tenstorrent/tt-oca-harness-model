@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[spi-controller-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`spi_controller_ip` is a loosely-timed TLM-2.0 model of the OpenTitan
+SPI host. Segment timing is `ClkPeriodNs` multiplied by CLKDIV and
+CS margins, not a pin-accurate SCK. The register file follows the
+HMAC / KMAC pattern: `spi_controller_base` is the CSML declaration
+so a map change lands in one header.
+
+[source,cpp]
+----
+class spi_controller_ip : public spi_controller_base
+----
+
+----
+spi_controller_ip     FSM, FIFOs, interrupts, DMA trigger   (spi_controller.*)
+  └─ spi_controller_base   csml_memory + software-visible words
+       └─ spi_controller_register.h   RO/WO/RW types
+spi_if / spi_segment_t    transaction contract (spi_controller_interface.h)
+----
+
+====== Threads and sockets
+
+`SC_THREAD(spi_transaction_thread)` drains the command queue. CMD
+writes enqueue a segment; the thread drives `spi_master` and waits
+on FIFO / watermark events. Output pins are written from one
+`SC_METHOD` so reset is not a second SystemC writer. `rst_ni` falling
+edge flushes FIFOs and parks the FSM in IDLE.
+
+`sep-vp` binds the TLM register target at the TRM SPI window, ties
+`spi_master` to the external flash BFM, and routes `spi_event_irq` to
+the PIC. `error_irq` is driven but has no PIC source.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, SPI window
+|`spi_master` |`sc_port<spi_if>` |`spi_flash::spi_target`
+|`clk_i` |`sc_in<bool>` |Held high; period comes from `ClkPeriodNs`
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
+|`error_irq` |`sc_out<bool>` |Unrouted on `sep-vp`
+|`spi_event_irq` |`sc_out<bool>` |SEP PIC SPI event source
+|`dma_trigger` |`sc_out<bool>` |Secure-DMA LSIO trigger 0
+|===
+
+CTRL writes set SPIEN / watermarks and honour SW_RST. CMD writes
+validate CSID / speed / direction, capture CFG into the CSID shadow
+slot, and enqueue. TXDATA / RXDATA are 32-bit FIFO ports. W1C error
+and interrupt registers recompute the pins.
+
+----
+  TLM MMIO ──► spi_controller_base::memory ──► spi_transaction_thread
+                                                      │
+                                                      ▼
+                                               spi_master (spi_if)
+                                                      │
+                      update_output_signals_method ──► error_irq /
+                                                       spi_event_irq /
+                                                       dma_trigger
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used. `TimeKeeperQuantumNs`
+greater than zero installs a TLM global quantum; the default 0 leaves
+the keeper off.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`NumCS` |1 |Chip-select count; sizes the CFG shadow array
+|`TxDepth` |72 |TX FIFO depth in 32-bit words
+|`RxDepth` |64 |RX FIFO depth in 32-bit words
+|`ByteOrder` |true (LE) |Word packing for TXDATA / RXDATA
+|`CmdDepth` |4 |Command-queue depth
+|`ClkPeriodNs` |10.0 |Core clock period for LT segment delay
+|`TimeKeeperQuantumNs` |0.0 |TLM quantum; 0 disables
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No SD / SCK / CSB pins. Dual and Quad are flags on `spi_if`, not
+  four-wire traces.
+* Pass-through / SPI_DEVICE mux is not modelled.
+* `clk_i` is a bind-required boolean, not a frequency. Segment delay
+  uses `ClkPeriodNs`.
+* CSAAT CS timing is a delay annotation, not a waveform.
+* RX segments larger than free FIFO space stream with back-pressure
+  rather than rejecting, matching firmware that chains large reads.
+* `error_irq` has no SEP PIC source; firmware watches `spi_event_irq`.

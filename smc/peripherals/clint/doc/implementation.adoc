@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[clint-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::clint` is a loosely-timed TLM-2.0 model of the RISC-V CLINT.
+`mtime` advances on a CCI tick (or via debug writes when the tick is
+disabled). Interrupt pins are level functions of the register file;
+there is no claim/complete.
+
+[source,cpp]
+----
+class clint : public sc_core::sc_module
+----
+
+----
+clint           mtime tick, msip/mtip outputs   (clint.*)
+----
+
+====== Threads and sockets
+
+Three `SC_METHOD` processes. `output_method` is the only writer of
+`msip_o` / `mtip_o`. `tick_method` increments `mtime` when
+`tick_period_ns > 0`. Reset parks each `mtimecmp` at `UINT64_MAX` so
+`mtip_o` is deasserted out of reset (RTL does not specify a reset
+value for the comparator).
+
+`smc-vp` binds the TLM target through `front_port_router` and a
+width adapter. `msip_o[h]` / `mtip_o[h]` feed the cluster software
+and timer IRQ pins and bypass the PLIC.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`smc-vp` front-port CLINT window (`wa_clint`)
+|`msip_o[h]` |`sc_out<bool>` |`cluster` software IRQ (`sig_irq_sw[h]`)
+|`mtip_o[h]` |`sc_out<bool>` |`cluster` timer IRQ (`sig_irq_timer[h]`)
+|`rst_n_i` |`sc_in<bool>` |Active-low; falling edge clears state
+|===
+
+The target accepts naturally aligned 32-bit and 64-bit accesses so
+firmware can split `mtime` / `mtimecmp` into halves. DMI is never
+granted. `dbg_set_mtime()` advances time in unit tests without waiting
+for the tick.
+
+----
+  TLM MMIO ──► clint::b_transport ──► msip / mtimecmp / mtime
+  tick_event_ ──► tick_method ──► mtime++
+                         │
+                         ▼
+               output_method ──► msip_o[*], mtip_o[*]
+----
+
+====== CCI parameters
+
+`num_harts` and `tick_period_ns` are immutable. `access_delay_ns` is
+re-read on every transaction.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`num_harts` |4 |MSIP / MTIMECMP / output count; immutable
+|`tick_period_ns` |100.0 |`mtime` period (10 MHz); 0 disables auto-tick
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|===
+
+====== Modeling gaps versus RTL
+
+* No approximately-timed request/response split.
+* No parity or lockstep on configuration registers or interrupt pins.
+* `tick_period_ns` cannot be changed after elaboration.
+* `smc_axi_extension` is forwarded and not enforced.

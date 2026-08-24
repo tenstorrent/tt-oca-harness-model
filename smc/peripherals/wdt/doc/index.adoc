@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[wdt]]
+==== WDT
+
+The hardware contract (per-core aperture, KEY/FEED/CTRL/CMP, stage-2
+handoff) is in the hardware TRM. This directory documents the
+SystemC/TLM-2.0 model (`smc::wdt`) and how to test it. Stage-2 countdown
+lives in `cpu_ctrl` / `smc_cpu_cluster`, not in this IP.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

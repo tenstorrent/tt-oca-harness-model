@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-scratch-cold]]
+==== SEP Scratch Cold
+
+The hardware contract (eight 64-bit scratch words, cold retention) is
+in the hardware TRM. This directory documents the SystemC/TLM-2.0
+model (`sep_scratch_cold_ip`) and how to test it. SIM_OUT and
+SEP_STATUS decoding are VP conveniences on top of two of those words.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

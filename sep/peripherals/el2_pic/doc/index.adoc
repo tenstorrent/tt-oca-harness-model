@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[el2-pic]]
+==== EL2 PIC
+
+The hardware contract (MMIO PIC registers, gateway polarity, priority
+order) is in the hardware TRM and the VeeR EL2 spec. This directory
+documents the SystemC/TLM-2.0 model (`el2_pic_model`) and how to test
+it. RISC-V PIC CSRs (`meivt`, `meipt`, `meihap`, …) live in the ISS
+wrapper, not here.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

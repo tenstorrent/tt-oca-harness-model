@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-scratch-warm-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`sep_scratch_warm_ip` is a loosely-timed TLM-2.0 model of the
+warm-reset scratch bank. The eight words are CSML storage with
+byte-enable merge so a 32-bit store does not wipe the other half of
+a 64-bit word. There is no engine thread and no CCI.
+
+[source,cpp]
+----
+class sep_scratch_warm_ip : public sep_scratch_warm_base
+----
+
+----
+sep_scratch_warm_ip     byte-enable merge + rst_ni   (sep_scratch_warm.*)
+  └─ sep_scratch_warm_base   csml_memory + SCRATCH[8]
+----
+
+====== Threads and sockets
+
+`SC_METHOD(reset_handler)` on `rst_ni` falling edge clears all eight
+words. `sep-vp` maps the TLM target at the TRM warm-scratch window
+and ties `rst_ni` to the platform reset.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, warm-scratch window
+|`rst_ni` |`sc_in<bool>` |Platform reset; falling edge clears the bank
+|===
+
+----
+  TLM MMIO ──► byte-enable merge ──► SCRATCH[i]
+  rst_ni ──► reset_all_registers
+----
+
+====== CCI parameters
+
+None.
+
+====== Modeling gaps versus RTL
+
+* No side-effects; unlike cold scratch there is no console or status
+  decoder.
+* Retention across a warm reset is not modelled: `rst_ni` always
+  clears. That is the hardware contract for this bank.

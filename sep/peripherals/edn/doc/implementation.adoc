@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[edn-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`edn_ip` is a loosely-timed TLM-2.0 model. Timing is quantum-keeper
+cycle counts, not a cycle-accurate CSRNG handshake. The register file
+lives in `edn_base` so a map change lands in one header.
+
+[source,cpp]
+----
+class edn_ip : public edn_base
+----
+
+----
+edn_ip          MAIN_SM, command FIFOs, interrupts, alerts   (edn.*)
+  └─ edn_base   csml_memory + software-visible words         (edn_base.*)
+       └─ edn_register.h   RO/WO/RW types
+edn_csrng_interface.h   csrng_app_if / csrng_genbits_if (test-harness only)
+----
+
+====== Threads and sockets
+
+Reset is an `SC_METHOD`. SW and HW CSRNG commands, boot instantiate /
+generate / uninstantiate, and auto-mode dispatch are `sc_spawn`'d so a
+register write can return. Interrupt and alert pins are driven from
+dedicated methods so reset is not a second SystemC writer.
+
+`sep-vp` binds the TLM register target at the TRM EDN aperture, `clk_i`
+/ `rst_ni`, and the two interrupt plus two alert pins. There are no
+CSRNG or endpoint sockets on `edn_ip`; `edn_csrng_interface.h` is
+implemented by the unit-test harness, and `sep-vp` does not connect EDN
+to `csrng` or `entropy_src`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`edn_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, EDN window
+|`clk_i` |`sc_in<double>` |Frequency in Hz (latency only)
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
+|`intr_edn_cmd_req_done` |`sc_out<bool>` |SEP PIC command-done
+|`intr_edn_fatal_err` |`sc_out<bool>` |SEP PIC fatal
+|`alert_recov_alert` |`sc_out<bool>` |Recoverable alert
+|`alert_fatal_alert` |`sc_out<bool>` |Fatal alert
+|===
+
+CTRL writes validate multi-bit enables and step MAIN_SM. SW_CMD_REQ
+accumulates a command then spawns CSRNG forwarding (mocked in the
+bench). RESEED_CMD / GENERATE_CMD feed auto-mode FIFOs. Entropy blocks
+in the standalone bench are pushed into `m_entropy_buffer`.
+
+----
+  TLM MMIO ──► edn_base::memory ──► sc_spawn process_sw_command_async
+                                 └► sc_spawn boot_mode_* / auto_mode_*
+                                           │
+                                           ▼
+                          test-harness CSRNG mock (not a model port)
+                      interrupt_driver ──► intr_edn_*
+                      alert_driver     ──► alert_*
+----
+
+====== CCI parameters
+
+Knobs are `csml_param`.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No `sc_port` / TLM sockets for CSRNG or the eight endpoint buses.
+* `sep-vp` does not bind EDN to `csrng` or `entropy_src`.
+* Endpoint distribution is a software-visible buffer in the unit test,
+  not pin-level `edn_req` / `edn_ack`.
+* MAIN_SM encodings are functional; hardened sparse-FSM checks are
+  incomplete versus RTL.
+* OpenSSL `RAND_bytes` may fill the entropy buffer when the harness
+  does not push genbits.

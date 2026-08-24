@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[telemetry-receiver-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/telemetry_receiver_tb.cpp` injects beats through
+`telemetry_encode_message()` / `push_atb_beats()` and programs the
+register aperture. `test/telemetry_receiver_neg_tb.cpp` covers TLM
+errors, empty-queue pop, flush precedence, threshold truncation, and
+the 32-counter geometry.
+
+Success: both benches print `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/telemetry_receiver`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh telemetry_receiver
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Sources: `test/telemetry_receiver_tb.cpp`,
+`test/telemetry_receiver_neg_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset values |Empty queue, `atready_o` high |Positive
+|2 |register RW/RO/masking |Pulse bits read 0 |Positive
+|3 |hand-derived beat stream decode |Encoder ↔ decoder |Positive
+|4 |multi-packet message decode |Assembly across packets |Positive
+|5 |per-counter valid bits |Four-block validity |Positive
+|6 |FIFO order / BUFFER_POP / STATUS |Oldest-first drain |Positive
+|7 |drop-oldest overflow |Newest telemetry survives |Positive
+|8 |BUFFER_THRESHOLD interrupt |Level IRQ |Positive
+|9 |INTR_TEST.BUFFER_THRESHOLD |Force level |Positive
+|10 |missing-last event + recovery |Sticky + W1C |Positive
+|11 |missing-last enable gating |Enable sampled at the event |Positive
+|12 |INTR_TEST.MISSING_LAST |Force sticky |Positive
+|13 |RX flush |Queue + assembly discarded |Positive
+|14 |TX flush handshake |`afvalid_o` / `afready_i` |Positive
+|15 |reset clears state / refuses beats |`push_atb_beat` false in reset |Positive
+|16 |transport_dbg / dbg_reg peek |Side-effect-free |Positive
+|17 |CCI introspection |Immutable geometry + delay |Positive
+|N1 |TLM command / burst / address error |Bus contract |Negative
+|N2 |in-window decode miss |Hole in the aperture |Negative
+|N3 |BUFFER_POP on empty queue |No underflow crash |Positive
+|N4 |RX_FLUSH takes precedence over BUFFER_POP |Combined CTRL write |Positive
+|N5 |BUFFER_THRESHOLD truncation |Pointer-width wrap |Positive
+|N6 |maximum 32-counter geometry |CCI max |Positive
+|N7 |missing-last on maximum geometry |Assembly full without last |Positive
+|===
+
+====== Platform firmware tests
+
+Build `smc-vp` first. The test `.ini` enables `tel_inject_*` so a
+message is queued before firmware runs.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-telemetry-test
+----

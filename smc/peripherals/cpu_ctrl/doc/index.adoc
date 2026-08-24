@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[cpu-ctrl]]
+==== CPU Control
+
+The hardware contract (fabric-control CSRs, scratch handoff) is in
+the hardware TRM. This directory documents the SystemC/TLM-2.0 model
+(`smc::cpu_ctrl`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

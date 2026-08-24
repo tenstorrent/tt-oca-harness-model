@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[i2c-controller]]
+==== I2C Controller
+
+The hardware contract (per-core CSRs, FMT/RX/TX/ACQ FIFOs, controller
+and target modes, interrupts) is in the hardware TRM. This directory
+documents the SystemC/TLM-2.0 model (`smc::i2c_controller`) and how to
+test it. One instance is one OCA I2C core, not the `i2c_wrap` bundle.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

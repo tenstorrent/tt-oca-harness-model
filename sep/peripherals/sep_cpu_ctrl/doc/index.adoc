@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-cpu-ctrl]]
+==== SEP CPU Control
+
+The hardware contract (system CSRs, NMI vector, inbound window,
+timeouts) is in the hardware TRM. This directory documents the
+SystemC/TLM-2.0 model (`sep_cpu_ctrl_ip`) and how to test it. Alias
+remap, output remap, and filter CSRs are separate peripherals, not
+folded into this class.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

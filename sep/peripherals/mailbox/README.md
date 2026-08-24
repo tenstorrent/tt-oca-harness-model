@@ -20,6 +20,10 @@ test/src/mailbox_test.cpp        Test orchestration
 test/src/test_mailbox_func001.cpp  }
   ...                              } Functional test cases (7 total)
 test/src/test_mailbox_func007.cpp  }
+
+doc/index.adoc                     VP set entry (includes the two pages)
+doc/implementation.adoc            SystemC/TLM model
+doc/test_plan.adoc                 cases + run commands
 ```
 
 ## Address
@@ -63,4 +67,9 @@ make -j$(nproc)
 
 ## Documentation
 
-[High-Level Design](docs/design-docs/mailbox-high-level-design.md)
+Architecture, CSRs, and programming sequences are in the hardware
+TRM. This tree documents the SystemC/TLM model:
+
+- [index](doc/index.adoc) — VP set entry
+- [implementation](doc/implementation.adoc) — sockets, threads, CCI, gaps
+- [test plan](doc/test_plan.adoc) — standalone cases and platform runs

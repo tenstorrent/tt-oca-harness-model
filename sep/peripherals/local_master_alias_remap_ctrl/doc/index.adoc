@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[local-master-alias-remap-ctrl]]
+==== Local Master Alias Remap Control
+
+The hardware contract (16-region START/END/ATTRS table, 4 KiB
+granularity) is in the hardware TRM. This directory documents the
+SystemC/TLM-2.0 model (`local_alias_remap_ip`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

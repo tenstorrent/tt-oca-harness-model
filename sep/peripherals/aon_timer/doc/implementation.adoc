@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[aon-timer-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`aon_timer_ip` is a loosely-timed TLM-2.0 model. Wakeup and
+watchdog tick at `clk_aon_freq`; SYS-to-AON CDC is a quantum-keeper
+delay, not a cycle-accurate datapath. Output pins are driven from
+`drive_outputs()` so TLM callbacks are not a second SystemC writer.
+
+[source,cpp]
+----
+class aon_timer_ip : public aon_timer_base
+----
+
+----
+aon_timer_ip        engines, ports, quantum keeper   (aon_timer.*)
+  └─ aon_timer_base csml_memory + target_socket      (aon_timer_base.*)
+----
+
+====== Threads and sockets
+
+Wakeup (`wkup_timer_tick_thread`) and watchdog
+(`wdog_timer_tick_thread`) each have an `SC_THREAD`. Reset is a
+third thread on `rst_n` / `rst_aon_n`. Escalation and sleep-mode
+are `SC_METHOD`s that notify the tick events.
+
+`sep-vp` binds the TLM register target at the TRM AON timer
+aperture. Both resets share the platform reset. `sleep_mode` and
+`lc_escalate_en` are tied inactive. Wakeup and bark interrupts
+are driven but are not PIC sources on this platform.
+
+[cols="36%,28%,36%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, AON timer window
+|`clk_aon_freq` |`sc_in<double>` |200 kHz on `sep-vp`
+|`clk_sys_freq` |`sc_in<double>` |100 MHz on `sep-vp` (CDC only)
+|`rst_n` |`sc_in<bool>` |SYS reset; full state clear
+|`rst_aon_n` |`sc_in<bool>` |AON reset; `wkup_req` / bite only
+|`sleep_mode` |`sc_in<bool>` |Tied false on `sep-vp`
+|`lc_escalate_en` |`sc_in<bool>` |Tied false on `sep-vp`
+|`intr_wkup_timer_expired` |`sc_out<bool>` |Not a PIC source
+|`intr_wdog_timer_bark` |`sc_out<bool>` |Not a PIC source
+|`nmi_wdog_timer_bark` |`sc_out<bool>` |Copy of bark
+|`wkup_req` |`sc_out<bool>` |Unbound consumer on `sep-vp`
+|`aon_timer_rst_req` |`sc_out<bool>` |Unbound consumer on `sep-vp`
+|`fatal_fault` |`sc_out<bool>` |ALERT_TEST pulse
+|`racl_policies` |`sc_in<uint32_t>` |Tied 0; `EnableRacl=false`
+|`racl_error` |`sc_out<bool>` |Inactive unless `EnableRacl`
+|===
+
+`EnableRacl` is a constructor argument, default false.
+
+----
+  TLM MMIO ──► aon_timer_base::memory
+                    │
+                    ├─► wkup_timer_tick_thread ──► evaluate_wkup_threshold
+                    └─► wdog_timer_tick_thread ──► bark / bite
+                              │
+                     drive_outputs() ──► intr_* / wkup_req / rst_req
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+Tick rate comes from `clk_aon_freq`. CDC annotation is two AON
+periods through `tlm_quantumkeeper`.
+
+====== Modeling gaps versus RTL
+
+* No pin-level clocks, jitter, or exact CDC synchronizer depth.
+* RACL enforcement is off on `sep-vp` (`EnableRacl=false`).
+* Wakeup and bark pins are not routed to the SEP PIC.
+* Not suitable for performance measurement.

@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[entropy-src-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`entropy_src_ip` is a loosely-timed TLM-2.0 model. Timing is a
+programmable startup hold-off plus a downsample period, not a
+cycle-accurate ring-oscillator pipeline. The register file lives in
+`entropy_src_base` so a map change lands in one header. Entropy words
+are OpenSSL `RAND_bytes()`, not a physical noise source.
+
+[source,cpp]
+----
+class entropy_src_ip : public entropy_src_base, public entropy_src_if
+----
+
+----
+entropy_src_ip          generation thread, FIFO, irq_o   (entropy_src.*)
+  └─ entropy_src_base   csml_memory + software-visible words
+       └─ entropy_src_register.h   RO/WO/RW types
+entropy_src_interface.h   register-callback contract
+----
+
+====== Threads and sockets
+
+`entropy_generation_thread` fills the FIFO while enabled. Reset is an
+`SC_METHOD` on `rst_ni`. `irq_o` is driven from
+`interrupt_output_method` so callbacks are not a second SystemC writer.
+
+`sep-vp` binds the TLM register target at the TRM entropy-source
+aperture, `rst_ni`, and `irq_o`. There is no `clk_i` pin. The model is
+not TLM-wired to `edn` or `csrng`; other blocks that need randomness
+call OpenSSL themselves.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`entropy_src_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, ENTROPY_SOURCE window
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
+|`irq_o` |`sc_out<bool>` |SEP PIC (`INTR_STATUS & INTR_ENABLE`)
+|===
+
+CTRL.RESET runs the software reset sequence. FIFO_RDATA pops the queue
+(underflow if empty). FIFO_CTRL gates the filler thread. Health-test
+enable is captured; the running tests are a stub.
+
+----
+  TLM MMIO ──► entropy_src_base::memory
+                         │
+                         ▼
+           entropy_generation_thread ──► m_fifo ──► FIFO_RDATA
+                         │
+           interrupt_output_method ──► irq_o
+----
+
+====== CCI parameters
+
+Knobs are `csml_param`. Startup delay and downsample come from CSRs, not
+CCI.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No ring oscillators, decorrelator datapath, or conditioner.
+* Health tests are register-visible stubs; they do not score samples.
+* No EDN / CSRNG output sockets; FIFO is MMIO-only.
+* No `clk_i`; iteration period is a constant nanosecond scale.
+* Firmware-visible health counters are not a NIST SP 800-90B lab.

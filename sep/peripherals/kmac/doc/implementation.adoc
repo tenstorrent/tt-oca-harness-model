@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[kmac-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`kmac_ip` is a loosely-timed TLM-2.0 model. Timing is quantum-keeper
+cycle counts, not a cycle-accurate Keccak datapath. The register file
+lives in `kmac_base` so a map change lands in one header. Hash and MAC
+work is OpenSSL EVP / EVP_MAC, not an inlined permutation.
+
+[source,cpp]
+----
+class kmac_ip : public kmac_base
+----
+
+----
+kmac_ip          FSM, app exports, KM sideload, quantum keeper   (kmac.*)
+  └─ kmac_base   csml_memory + software-visible words            (kmac_base.*)
+       └─ kmac_register.h   RO/WO/RW types
+kmac_interface.h   kmac_app_if (and unused kmac_keymgr_if)
+----
+
+====== Threads and sockets
+
+Reset and life-cycle escalate share one `SC_THREAD`. Idle and interrupt
+pins are driven from dedicated methods so reset is not a second SystemC
+writer. Application traffic arrives on `app_export[]` (`kmac_app_if`);
+the KeyMgr hash path is index 0, LC_CTRL index 1, ROM_CTRL index 2.
+
+`sep-vp` binds the TLM register target at the TRM KMAC aperture, the
+key-manager destination socket, `clk_i` / `rst_ni` / `lc_escalate_en_i`,
+and `idle_o` / `intr_o`. The three `app_export` sockets stay unbound on
+the platform; unit tests drive them.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`kmac_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, KMAC window
+|`keymgr_tl_socket` |TLM 32-bit target |KM KMAC key socket
+|`app_export` |`sc_export<kmac_app_if>*` |Unbound on `sep-vp`
+|`clk_i` |`sc_in<bool>` |Presence only
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
+|`lc_escalate_en_i` |`sc_in<bool>` |Escalate lock (reset-only recovery)
+|`idle_o` |`sc_out<bool>` |High while FSM is IDLE
+|`intr_o` |`sc_out<bool>` |SEP PIC (`INTR_STATE & INTR_ENABLE`)
+|===
+
+CMD writes walk IDLE / ABSORB / SQUEEZE. MSG_FIFO writes pack into the
+absorb FIFO. STATE reads return digest shares only in SQUEEZE. Sideload
+loads KM push buffers. SW entropy mode counts ENTROPY_SEED writes until
+the PRNG is marked ready.
+
+----
+  TLM MMIO ──► kmac_base::memory ──► CMD FSM (ABSORB / SQUEEZE)
+                                           │
+                                           ▼
+                                    OpenSSL EVP / KMAC
+  app_export[0..2] ──► handle_app_request ─┘
+  keymgr_tl_socket ──► XOR reconstruct ──► key shares
+                      idle_o_driver / intr_o_driver
+----
+
+====== CCI parameters
+
+Knobs are `csml_param`. `NumAppIntf` and `EnMasking` are constructor
+arguments (defaults 3 and true), not CCI.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No cycle-accurate Keccak rounds or DOM masked permutation.
+* No EDN port; SW-mode seeding is a write counter, not Bivium.
+* `clk_i` is a boolean; FIFO-full delay is a fixed cycle annotation.
+* `kmac_keymgr_if` is unused; sideload is the TLM socket.
+* `app_export` is not bound on `sep-vp`.
+* Masking splits the digest into shares; it is not a masked circuit.

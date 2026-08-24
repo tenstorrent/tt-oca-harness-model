@@ -6,6 +6,15 @@
 - Source lives under `docs/och_source/`; published HTML lives under `docs/och/`.
 - Rebuild locally with `docs/build_och_docs.sh`.
 
+Architecture and register specification live in the hardware TRM
+(tt-oca-hw). This repository documents the SystemC/TLM-2.0
+implementation, the test plan, and how to run tests. The split is
+defined in
+[`doc/contributing/documentation.adoc`](doc/contributing/documentation.adoc).
+Subsystem books: [`sep/doc/`](sep/doc/index.adoc),
+[`smc/doc/`](smc/doc/index.adoc). IP example:
+[`sep/peripherals/adams_bridge/doc/`](sep/peripherals/adams_bridge/doc/index.adoc).
+
 ## What is Open Chiplet Atlas?
 
 **Open Chiplet Atlas (OCA)** is Tenstorrent's chiplet-based System-in-Package (SiP)
@@ -58,7 +67,7 @@ that must be isolated from untrusted software:
 
 | Function              | Detail                                                                                |
 | --------------------- | ------------------------------------------------------------------------------------- |
-| Cryptographic engines | AES-256, HMAC-SHA-2, KMAC, OTBN (big-number co-processor), CSRNG, Entropy Source, EDN |
+| Cryptographic engines | AES-256, HMAC-SHA-2, KMAC, OTBN (big-number co-processor), Adams Bridge (ML-DSA-87 / ML-KEM-1024), CSRNG, Entropy Source, EDN |
 | Key management        | Key Manager, lifecycle-controlled key derivation, eFuse/OTP interface                 |
 | Lifecycle control     | Lifecycle Controller (ROM_EXT → DEV → PROD → RMA states)                              |
 | Secure DMA            | Isolated DMA with inbound/outbound filters                                            |
@@ -91,6 +100,7 @@ tt-oca-sim/
 ├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI, PeripheralCommon, …)
 ├── sep/                           ← SEP IP peripheral models
 │   ├── peripherals/               ← individual IP models
+│   │   ├── adams_bridge/          ← Adams Bridge PQC (ML-DSA-87 / ML-KEM-1024)
 │   │   ├── aes/                   ← AES-256 engine
 │   │   ├── aon_timer/             ← Always-On timer / watchdog
 │   │   ├── csrng/                 ← Cryptographically Secure RNG
@@ -378,10 +388,9 @@ Each peripheral under `sep/peripherals/<ip>/` follows this layout:
 ├── include/              ← public headers
 ├── src/                  ← implementation
 ├── test/                 ← CTest-registered unit tests
-└── docs/
-    ├── 01_<IP>_Specification/
-    ├── 02_<IP>_HighLevel_Design.md
-    └── 03_<IP>_Test_Plan.md
+└── doc/
+    ├── implementation.adoc   # SystemC/TLM-2.0 model (not a TRM copy)
+    └── test_plan.adoc        # cases + how to run
 ```
 
 #### Build environment (required)

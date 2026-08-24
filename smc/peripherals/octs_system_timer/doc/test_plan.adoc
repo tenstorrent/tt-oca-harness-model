@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[octs-system-timer-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/octs_system_timer_tb.cpp` instantiates three DUTs on one
+`sc_clock`: a PRIMARY, a SECONDARY wired to it (end-to-end protocol),
+and a standalone SECONDARY whose sync inputs the bench drives.
+Stimulus runs on the falling edge so cycle counts are exact.
+
+Success: the bench prints `ALL TESTS PASSED` with every `CHECK_EQ`
+green; `--asan` produces no `asan.log.*`; line coverage on the
+touched model sources meets the repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/octs_system_timer`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh octs_system_timer
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Source: `test/octs_system_timer_tb.cpp`. Names are the `banner()`
+titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Reset defaults |CTRL/STATUS/PRESET/COUNT after reset; MODE follows strap |Positive
+|3 |RW / RO / reserved-bit contracts |Reserved CTRL bits RAZ/WI; RO writes ignored |Positive
+|4 |Access rules |32-bit aligned only; window fault; annotated delay |Negative
+|5 |PRIMARY start + sync_load pulse |Singlepulse START, preset load, pulse width |Positive
+|6 |Credit pulse width and period |PRIMARY credit generator |Positive
+|7 |PRIMARY→SECONDARY constant-lag tracking |4-cycle synchroniser lag |Positive
+|8 |SECONDARY load and starvation |Halt + CREDIT_EXPIRED peak |Positive
+|9 |Replenish + CREDIT_EXPIRED clear |Credit pulse re-enables; write-to-clear |Positive
+|10 |Credit re-anchor with STEP |Over-run counter pulled back |Positive
+|11 |CTRL constraint warning |`CREDIT_VAL` vs `PULSE_WIDTH` `SC_WARNING` |Positive
+|12 |CCI parameter discovery + mutation |`access_delay_ns` |Positive
+|===
+
+====== Platform firmware tests
+
+Build `smc-vp` first. The secondary test uses its own `.ini` to
+strap `dut.octs_is_primary=false`. End-to-end PRIMARY→SECONDARY sync
+is unit-test only (`smc-vp` has one timer).
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-octs-timer-test
+./run_smc_vp_tests.sh smc-octs-timer-secondary-test
+----

@@ -1,0 +1,56 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-memory-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+There is no unit-test binary. `run_tests.sh` is a **build-only**
+check: it compiles `libsep_memory_model.a`. Functional coverage is
+the `sep-vp` firmware that fetches from ROM/ITCM and loads/stores
+SRAM/DTCM.
+
+Success: the library links; `--cppcheck` is clean if that target is
+requested.
+
+How to run (from `sep/peripherals/sep_memory`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build of the library
+./run_tests.sh --debug
+./run_tests.sh --clean
+./run_tests.sh --cppcheck
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean sep_memory
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first. There is no `--asan` / `--coverage` path: nothing
+executes.
+
+====== Standalone cases
+
+None. The bench is compile-only.
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh rom_sanity_test
+./run_test.sh sram_perf_test
+./run_all_tests.sh            # every firmware test uses these stores
+----
+
+`rom_sanity_test` writes ROM through the bus and checks the contents
+are unchanged (`b_transport` ignore-write). Every other firmware
+image is loaded into ROM or ITCM through `load_if` / `transport_dbg`.

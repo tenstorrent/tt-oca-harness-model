@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[avsbus-controller-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::avsbus_controller` is a loosely-timed TLM-2.0 model of the
+single-target AVSBus controller. Software writes enqueue into a
+command FIFO; `xfer_thread` waits `xfer_delay_ns` and pushes a slave
+subframe into the readback FIFO.
+
+[source,cpp]
+----
+class avsbus_controller : public sc_core::sc_module
+----
+
+----
+avsbus_controller   cmd/readback FIFOs, retry, IRQ   (avsbus_controller.*)
+----
+
+====== Threads and sockets
+
+`recompute_method` is the only writer of `irq_o` and
+`avs_gpio_enable_o`. `xfer_thread` (`SC_THREAD`) drains the command
+FIFO. `resync_method` ends a modelled resync pulse.
+`set_slave_model()` replaces the default happy-path responder
+(ACK=OK, echo/synthetic data). ACK busy/bad-CRC retries up to
+`MAX_RETRIES`.
+
+`smc-vp` binds `reg_socket` on `periph_router`. `irq_o` feeds
+`interrupt_aggregator`. `avs_gpio_enable_o` is a sink. There is no
+bit-serial AVS pad model.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`periph_router` AVSBus window
+|`rst_n_i` |`sc_in<bool>` |Active-low
+|`irq_o` |`sc_out<bool>` |`intagg` AVSBus source
+|`avs_gpio_enable_o` |`sc_out<bool>` |Sink
+|===
+
+----
+  TLM MMIO ──► AVS_CMD ──► cmd FIFO
+                    │
+                    ▼
+            xfer_thread ──► slave_model_ / default responder
+                    │
+                    ▼
+            readback FIFO ──► AVS_READBACK
+                    │
+                    ▼
+            recompute_method ──► irq_o, avs_gpio_enable_o
+----
+
+====== CCI parameters
+
+FIFO depths are immutable.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`command_fifo_depth` |8 |Command FIFO size; immutable
+|`readback_fifo_depth` |8 |Readback FIFO size; immutable
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|`xfer_delay_ns` |50.0 |Launch-to-response wait in `xfer_thread`
+|`resync_delay_ns` |20.0 |Modelled resync pulse width
+|===
+
+====== Modeling gaps versus RTL
+
+* No bit-serial AVS wire, clock mux/divider, or GPIO pad OE timing.
+  Clock/config words are stored and returned.
+* Slave traffic is a callback or `inject_readback()` /
+  `inject_interrupt()`, not a pin-level BFM.

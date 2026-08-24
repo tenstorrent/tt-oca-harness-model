@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[aon-timer]]
+==== AON Timer
+
+The hardware contract (wakeup and watchdog CSRs, interrupts, power
+manager requests) is in the hardware TRM. This directory documents the
+SystemC/TLM-2.0 model (`aon_timer_ip`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

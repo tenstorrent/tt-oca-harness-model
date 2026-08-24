@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-vp-implementation]]
+=== SystemC/TLM-2.0 Implementation
+
+`sep-vp` (`vp/platform/sep/`) is a loosely-timed virtual platform of
+the OCAH SEP. The VeeR EL2 ISS executes firmware. Modeled peripherals
+hang off one flat SimpleBus; the two RTL crossbars are not separate
+modules.
+
+`och_sep_ss` in `sep_platform.cpp` constructs each IP, maps its TLM
+target onto the TRM aperture, and binds clocks, resets, key-manager
+sideload sockets, and PIC inputs (`irq_map.h`).
+
+==== Platform pieces
+
+[cols="28%,36%,36%",options="header"]
+|===
+|Role |Tree |Notes
+|CPU + PIC |`sep/cpu`, `sep/peripherals/el2_pic` |ISS + TLM wrapper
+|Crypto IPs |`sep/peripherals/{aes,hmac,kmac,otbn,adams_bridge,csrng,edn,entropy_src,key_manager}` |LT TLM models
+|Fabric / ctrl |`sep/peripherals/sep_*`, remap, filter, mailbox, DMA |Decoded on the same bus
+|IO |`sep/peripherals/spi_controller` |`spi_flash` is an external BFM
+|Wiring |`vp/platform/sep/` |CCI INI + VeeR ISS JSON
+|===
+
+Every modeled IP has the two-page set under
+`sep/peripherals/<ip>/doc/` (`implementation.adoc` + `test_plan.adoc`).
+`gpio`, `uart_16550`, `sep_status_report`, and `sep_virt_console` are
+empty stub directories and have no model pages.
+
+==== Modeling gaps
+
+PIC sources that RTL drives but the VP does not yet model stay tied
+low (`irq_map.h` comments). `uart_16550` under `sep/peripherals/` is a
+VP convenience; SEP RTL does not instantiate a UART. The entropy-pool
+FIFO has reserved IRQs and no model.

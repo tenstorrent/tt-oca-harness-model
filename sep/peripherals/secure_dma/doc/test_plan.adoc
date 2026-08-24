@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[secure-dma-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`secure_dma_testbench` (`test/inc/testbench.h`) is a TLM
+initiator into the register aperture, three memory targets on
+the OT / CTN / SYS initiator sockets, `lsio_trigger[11]`
+drivers, and monitors for the three interrupt pins plus
+`alert_fatal_fault`.
+
+Success: every check in the 12 func files passes; `--asan`
+produces no `asan.log.*`; line coverage on the touched model
+sources meets the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/secure_dma`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --docs
+./run_tests.sh --cppcheck
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean secure_dma
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in
+`vp/configure_vp.sh` or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/test_dma_func_001.cpp` …
+`test_dma_func_012.cpp` plus `secure_dma_test.cpp`. The suite
+is large; rows below group it.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|001 |Registers / reset |Access types, REGWEN, reserved, reset |Mixed
+|002 |Interrupts |Done / chunk / error, RW1C, INTR_TEST, masking |Mixed
+|003 |Transfer width |1/2/4-byte, alignment, byte-enables, SHA width |Mixed
+|004 |Addressing |Fixed / increment / wrap, 32- vs 64-bit |Positive
+|005 |ASID / bus |OT/CTN/SYS decode, TLM payload, addr width |Mixed
+|006 |Errors |Opcode, size, bus, eight `ERROR_CODE` bits |Negative
+|007 |Security range |Allowed vs blocked OT-private ↔ SoC |Mixed
+|008 |Go / abort |Validation on `go`, CFG_REGWEN, abort drain |Mixed
+|009 |Transfer engine |Mem-to-mem, sizes, wrap, chunk_done |Positive
+|010 |Inline SHA-2 |SHA-256/384/512, swap, abort, digest valid |Positive
+|011 |Handshake |All 11 triggers, auto-clear, no drain before trigger |Positive
+|012 |Edges |Trigger off, hash without context, clear-bus error |Mixed
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build
+the VP first (`make sep-vp` from the repo root after
+`vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh dma_test
+./run_test.sh dma_path_test
+./run_test.sh dma_hash_test
+./run_test.sh dma_cpu_contention_test
+./run_test.sh spi_ot_dma_tx_test
+./run_test.sh spi_ot_dma_rx_test
+./run_all_tests.sh            # full firmware suite, includes the above
+----
+
+`spi_ot_dma_*` use `lsio_trigger[0]` from the SPI model.

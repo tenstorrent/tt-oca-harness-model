@@ -1,44 +1,31 @@
 # hmac
 
-SystemC TLM2.0 model of the HMAC / SHA-256 accelerator.  Supports standalone SHA-256 hashing and HMAC-SHA-256 message authentication.  Firmware writes message data into a streaming FIFO; the model computes the digest and raises an interrupt on completion.
+SystemC TLM-2.0 loosely-timed model of the SEP HMAC / SHA-2 accelerator.
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+## Status
+
+| Item | State |
+|---|---|
+| Register file + CMD/STATUS handshake | Implemented |
+| SHA-2 / HMAC engine (OpenSSL) | Implemented |
+| Interrupts, wipe, KM sideload | Implemented |
+| Standalone tests | `./run_tests.sh` |
+| Wired into `sep-vp` | HMAC window, PIC, KM socket |
 
 ## Files
 
 ```
-model/inc/hmac_base.h        Register map and TLM socket base
-model/inc/hmac_interface.h   hmac_if interface
-model/inc/hmac.h             hmac_ip class declaration
-model/src/hmac_base.cpp      Base construction and register binding
-model/src/hmac.cpp           SHA-256/HMAC engine and b_transport handler
-
-test/inc/testbench.h         Testbench module header
-test/inc/hmac_basetest.h     Base test class
-test/inc/hmac_test.h         Test case declarations
-test/src/testbench.cpp       sc_main entry
-test/src/hmac_basetest.cpp   Common test infrastructure
-test/src/hmac_test.cpp       Test orchestration
-test/src/basic_tests.cpp     Functional test cases
+include/hmac.h             hmac_ip
+include/hmac_base.h        CSML register declaration
+include/hmac_register.h    RO/WO/RW types
+src/                       LT implementation
+test/                      standalone bench
+doc/index.adoc             VP index
+doc/implementation.adoc    SystemC/TLM model
+doc/test_plan.adoc         cases + run commands
 ```
-
-## Address
-
-`0x10911000 – 0x10912FFF`  (0x2000 bytes, HMAC_REG)
-
-## Class
-
-```cpp
-class hmac_ip : public hmac_base
-```
-
-## Interface
-
-| Port / Socket | Direction | Description |
-|---|---|---|
-| `target_socket` | target | TLM-2.0 32-bit register bus |
-| `intr_hmac_done_o` | `sc_out<bool>` | Operation complete interrupt |
-| `intr_fifo_empty_o` | `sc_out<bool>` | Message FIFO empty interrupt |
-| `intr_hmac_err_o` | `sc_out<bool>` | Error interrupt |
-| `rst_ni` | `sc_in<bool>` | Active-low reset |
 
 ## Building and Testing
 
@@ -61,4 +48,6 @@ make -j$(nproc)
 
 ## Documentation
 
-[High-Level Design](docs/design-docs/hmac-high-level-design.md)
+- [doc/index.adoc](doc/index.adoc) — VP index
+- [doc/implementation.adoc](doc/implementation.adoc) — SystemC/TLM model
+- [doc/test_plan.adoc](doc/test_plan.adoc) — standalone cases and run commands

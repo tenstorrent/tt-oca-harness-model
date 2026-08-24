@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[otbn-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`otbn_test` (`test/inc/otbn_test.h`) is a TLM initiator into the
+register + IMEM/DMEM aperture, a KM initiator into `keymgr_tl_socket`,
+OTP / LC stubs, plus `clk_core` / `rst_n`. The DUT is `otbn_ip`. Switch
+algorithms with the `algorithm_type` CCI knob (or reconstruct the DUT).
+
+Success: every check in the standalone cases passes; `--asan` produces
+no `asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/otbn`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean otbn
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/testbench.cpp`, `otbn_test.cpp`,
+`test_coverage.cpp`. Grouped from the 69-row plan.
+
+[cols="12%,28%,44%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|Regs |Access / checksum |Reset, RO/WO/RW, LOAD_CHECKSUM |Positive
+|CMD |Execute / wipe |Algorithm spawn, DMEM/IMEM wipe |Mixed
+|FSM |States |IDLE, BUSY_*, LOCKED |Mixed
+|Memory |IMEM/DMEM windows |Busy-time illegal access |Mixed
+|Algo |C++ algorithms |DMEM API, INSN_CNT, summation |Positive
+|Err / IRQ |ERR_BITS, done, alerts |Fatal vs recoverable |Mixed
+|KM |Sideload |`keymgr_tl_socket` into WDRs |Positive
+|LC |Escalate / RMA |LOCKED, wipe, ack |Mixed
+|RND |Entropy callbacks |RND/URND without EDN ports |Positive
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+Native suite (`sw/sep-vp-tests`):
+
+[source,bash]
+----
+cd sw/sep-vp-tests
+./run_sep_vp_tests.sh otbn-dv-test
+./run_sep_vp_tests.sh otbn-dv-p256-verify-test
+----
+
+Hardware-tree firmware:
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh otbn_smoke_test
+./run_test.sh otbn_fw_control_test
+./run_test.sh otbn_plic_test
+./run_test.sh otbn_p256_verify_test
+./run_all_tests.sh            # full firmware suite, includes OTBN
+----
+
+`otbn_sw_error_test` is listed as a VP model gap in the firmware-suite
+README. These tests load OTBN images; the model still dispatches a C++
+algorithm rather than executing IMEM.

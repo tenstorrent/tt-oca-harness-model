@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[scratchpad-ram]]
+==== Scratchpad RAM
+
+The hardware contract (read-write `mem`, byte masks, SECDED) is in the
+hardware TRM. This directory documents the SystemC/TLM-2.0 model
+(`smc::scratchpad_ram`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

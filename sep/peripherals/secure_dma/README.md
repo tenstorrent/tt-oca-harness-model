@@ -19,6 +19,10 @@ test/src/secure_dma_test.cpp       Test orchestration
 test/src/test_dma_func_001.cpp     }
   ...                              } Functional test cases (12 total)
 test/src/test_dma_func_012.cpp     }
+
+doc/index.adoc                     VP set entry (includes the two pages)
+doc/implementation.adoc            SystemC/TLM model
+doc/test_plan.adoc                 cases + run commands
 ```
 
 ## Address
@@ -65,4 +69,9 @@ make -j$(nproc)
 
 ## Documentation
 
-[High-Level Design](docs/design-docs/secure_dma-high-level-design.md)
+Architecture, CSRs, and programming sequences are in the hardware
+TRM. This tree documents the SystemC/TLM model:
+
+- [index](doc/index.adoc) — VP set entry
+- [implementation](doc/implementation.adoc) — sockets, threads, CCI, gaps
+- [test plan](doc/test_plan.adoc) — standalone cases and platform runs

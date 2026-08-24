@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[local-master-alias-remap-ctrl-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`local_alias_remap_ip` is a loosely-timed TLM-2.0 model of
+`axi_alias_remap.sv`. CSR programming is the inherited target; the
+data path walks 16 regions, first valid hit wins, miss is passthrough.
+There is no engine thread and no CCI knobs.
+
+[source,cpp]
+----
+class local_alias_remap_ip : public local_alias_remap_base
+----
+
+----
+local_alias_remap_ip     match, additive offset, cacheable override
+  └─ local_alias_remap_base   csml_memory + REGION_START/END/ATTRS[16]
+       └─ local_alias_remap_register.h
+----
+
+====== Threads and sockets
+
+`SC_METHOD(reset_handler)` on `rst_ni`. `data_b_transport` /
+`data_transport_dbg` translate [55:12], keep [11:0], apply
+`cacheable` on `sep_axi_extension`, forward, then restore the
+caller's payload.
+
+`sep-vp` maps the CSR window onto `target_socket`. The data window
+goes through `local_alias_fixed_adapter` (live
+`SEP_LOCAL_BASE_ADDR` / `SEP_REGION_SIZE`) into `data_socket`.
+ITCM/DTCM decode first and shadow the overlap. `remapped_socket` is
+a SimpleBus initiator so a hit can land back in SEP memory.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |SimpleBus CSR window
+|`data_socket` |TLM target |`local_alias_fixed_adapter` (data window)
+|`remapped_socket` |TLM initiator |SimpleBus (loop back)
+|`rst_ni` |`sc_in<bool>` |Platform reset
+|===
+
+----
+  data_socket ──► match_region ──► apply_offset ──► remapped_socket
+       miss ──► passthrough (addr unchanged)
+----
+
+====== CCI parameters
+
+None. `NUM_REGIONS` (16) and `IDX_START` (12) are `static constexpr`.
+
+====== Modeling gaps versus RTL
+
+* Cache attribute travels on `sep_axi_extension`; TLM has no AXI
+  cache field.
+* No per-master ID filter; every initiator hitting `data_socket`
+  sees the same table.
+* Overflow of the [55:12] add is discarded, matching RTL.
+* `global_alias_remap_sanity` is not a VP regression (superseded
+  upstream).

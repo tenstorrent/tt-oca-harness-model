@@ -354,6 +354,10 @@ vp/platform/sep/config/data/
 sw/sep-vp-tests/sep-spi-*-test/flash_fixture.bin
 sw/sep-vp-tests/sep-spi-*-test/.staged-mode
 
+# Local slide decks — keep on disk, do not publish
+doc/AI_Agent_Usage.pptx
+doc/ai-systemc-generation.pptx
+
 # =============================================================================
 # End of .gitignore
 # =============================================================================

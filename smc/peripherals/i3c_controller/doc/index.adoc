@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[i3c-controller]]
+==== I3C Controller
+
+The hardware contract (HCI v1.2 CSRs, PIO queues, DAT/DCT, interrupts)
+is in the hardware TRM. This directory documents the SystemC/TLM-2.0
+model (`smc::i3c_controller`) and how to test it. One module packs all
+instances behind a single TLM target.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

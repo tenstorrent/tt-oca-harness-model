@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[lifecycle-ctrl-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`lifecycle_ctrl_model` is a combinational TLM-2.0 model. There is
+no clock, reset, or interrupt pin. `FEAT_CTRL` is recomputed from
+an input bundle and the two W1S demote registers, matching
+`sep_lifecycle_ctrl.sv`.
+
+[source,cpp]
+----
+class lifecycle_ctrl_model : public lifecycle_ctrl_base
+----
+
+----
+lifecycle_ctrl_model   set_inputs(), compute_feat_ctrl()   (lifecycle_ctrl.*)
+  └─ lifecycle_ctrl_base   csml_memory + target_socket     (lifecycle_ctrl_base.*)
+----
+
+====== Threads and sockets
+
+There are no SystemC threads. Demote writes call
+`compute_feat_ctrl()` from the TLM callback. On a platform the
+eFuse model pushes a new `lc_inputs` bundle through
+`set_inputs()` whenever shadow registers change.
+
+`sep-vp` binds the TLM register target at the TRM LC_CTRL
+aperture. `set_demote_callback()` on the key manager reads
+`get_demote_state()`. `set_feat_ctrl_change_callback()` drives
+`sep_debug` into the inbound filter and `prod_dbg_active` back
+into the eFuse.
+
+A legal LC_STATE code is the differential pair `{~raw, raw}`. An
+illegal pair raises `lc_sigint_err` and zeroes `FEAT_CTRL`;
+`security_disable` still overrides that, as in RTL. Undemoted
+`get_demote_state()` reads `0xA`, not `0x0`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, LC_CTRL window
+|===
+
+CCI parameters seed the bundle at `end_of_elaboration`. On
+`sep-vp` the eFuse overrides all of them except `secure_tm`,
+which is the `test_en` strap.
+
+----
+  TLM MMIO ──► lifecycle_ctrl_base::memory ──► DEMOTE W1S
+                                                 │
+  set_inputs(lc_inputs) ──► compute_feat_ctrl() ─┘
+                                                 │
+                                                 ▼
+                                            FEAT_CTRL_LO/HI
+  get_demote_state() ──► key_manager
+  get_sep_debug()    ──► inbound filter
+  get_prod_dbg_active() ──► efuse_model
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used. `lc_state` is
+the raw 4-bit value; encoding happens when it seeds the bundle.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|`lc_state` |0 (`TEST_DEV`) |Raw 4-bit lifecycle state
+|`sip_dis_lo` / `sip_dis_hi` |0 |SIP feature-disable mask
+|`sys_dis_lo` / `sys_dis_hi` |0 |SYS feature-disable mask
+|`security_disable` |false |Forces `FEAT_CTRL` all-ones
+|`secure_tm` |false |`test_en` strap; false clears TEST bits
+|===
+
+====== Modeling gaps versus RTL
+
+* No clock, reset, alert, or escalation ports.
+* No OTP bus; fuse-backed inputs arrive through `set_inputs()`.
+* Lifecycle transitions themselves live in the eFuse model.
+* All MMIO completes at `SC_ZERO_TIME`.

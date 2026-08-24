@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[kmac]]
+==== KMAC
+
+The hardware contract (aperture, CSRs, SHA-3 / SHAKE / cSHAKE / KMAC
+commands, application interfaces, entropy) is in the hardware TRM. This
+directory documents the SystemC/TLM-2.0 model (`kmac_ip`) and how to
+test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

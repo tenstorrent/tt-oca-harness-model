@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[memory-zeroer-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/memory_zeroer_tb.cpp` is a TLM register initiator plus a
+simple memory target on `dma_socket`. It programs DEST/SIZE, starts
+jobs, checks zero-fill and IRQ gating, and injects a failing DMA
+target.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/memory_zeroer`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh memory_zeroer
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Source: `test/memory_zeroer_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset clears registers and irq |DEST/SIZE/CTRL idle |Positive
+|2 |DEST_ADDR / SIZE R/W |Storage |Positive
+|3 |SIZE=0 does not start a job |No DMA when SIZE is 0 |Positive
+|4 |zero-fill + completion irq (int_en=1) |DMA zeros + IRQ |Positive
+|5 |multi-chunk zero-fill |`chunk_size` splitting |Positive
+|6 |completion with int_en=0 leaves irq low |IRQ gate |Positive
+|7 |status bit is software-RO |Busy bit write-ignored |Positive
+|8 |clearing int_en deasserts irq |Live mask |Positive
+|9 |bus error responses |Size / window / align |Negative
+|10 |failed DMA does not raise irq |Error path |Negative
+|11 |CCI discovery / mutation / immutability |`chunk_size` immutable |Positive
+|===
+
+====== Platform firmware tests
+
+Build `smc-vp` first. The test uses `smc_memory_zeroer_test.ini`.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-memory-zeroer-test
+----

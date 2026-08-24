@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-filter-ctrl]]
+==== SEP Filter Control
+
+The hardware contract (filter table, BlockByDefault, `filter_skip_i`)
+is in the hardware TRM. This directory documents the SystemC/TLM-2.0
+model (`sep_filter_ctrl_ip`) and how to test it. One class, two
+`sep-vp` instances (outbound 32 entries, inbound 16).
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

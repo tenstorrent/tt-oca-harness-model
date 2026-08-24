@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[key-manager-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`key_manager_testbench` (`test/inc/testbench.h`) is a TLM
+initiator into `mailbox_socket`, recording stubs on the eight
+DEST sockets, plus `clk`-less `rst_ni` / `wipe_ni` / `irq`.
+Command helpers build CRC-8 / CRC-32C frames.
+
+Success: every check in the 14 func files passes; `--asan`
+produces no `asan.log.*`; line coverage on the touched model
+sources meets the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/key_manager`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --docs
+./run_tests.sh --cppcheck
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean key_manager
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in
+`vp/configure_vp.sh` or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/key_manager_func001_test.cpp` …
+`key_manager_func014_test.cpp` (81 sub-tests). Names follow the
+func file.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |func001 register surface |Mailbox RO/WO/RW/W1C reset |Positive
+|2 |func002 framing and IRQ |End-to-end command, IRQ, underflow |Mixed
+|3 |func003 boot / info |`CMD_STAT` / versions; SRAM ver fails |Mixed
+|4 |func004 frame validation |CRC-8, length, CRC-32C, sequence |Negative
+|5 |func005 command surface |Retired `0x20`/`0x21`; ROM/SRAM/ABR/OTP |Mixed
+|6 |func006 `CMD_KEY_LOAD` |Provisioning, handles, multi-slot |Mixed
+|7 |func007 `CMD_KEY_GENERATE` |Word-count semantics, exhaustion |Mixed
+|8 |func008 `CMD_KEY_TRANSFER` |Sideload, `DEST_VALID`, one-shot |Mixed
+|9 |func009 `CMD_KEY_REVOKE` |Revoke, double revoke |Mixed
+|10 |func010 `CMD_ENGINE_SHRED` |Zero engines, including ABR dest |Mixed
+|11 |func011 full lifecycle |Chained load → transfer → revoke |Positive
+|12 |func012 reset |Handles, sequence, FIFOs cleared |Positive
+|13 |func013 dual-share |SHARE0 / SHARE1 encoding |Positive
+|14 |func014 extended |Wipe, FIFO faults, vault geometry |Mixed
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build
+the VP first (`make sep-vp` from the repo root after
+`vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh sep_abr_km_seed_test
+./run_test.sh kmac_key_sideload_test
+./run_all_tests.sh            # full firmware suite, includes the above
+
+# Standalone mailbox exerciser (not the fw-tests tree):
+cd sw/sep-vp-tests/sep-keymgr-test
+make
+----
+
+`sep_abr_km_seed_test` uses DEST bit 4 into Adams Bridge.
+`sep_km_efuse_coexist_test` needs a KM CPU the model does not
+have.

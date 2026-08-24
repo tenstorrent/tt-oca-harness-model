@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[octs-system-timer]]
+==== OCTS System Timer
+
+The hardware contract (PRIMARY/SECONDARY credit protocol, CSRs) is
+in the hardware TRM. This directory documents the SystemC model
+(`smc::octs_system_timer`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

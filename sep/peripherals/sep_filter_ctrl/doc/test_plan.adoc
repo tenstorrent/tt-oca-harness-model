@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-filter-ctrl-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`sep_filter_ctrl_testbench` instantiates an outbound DUT (32) and an
+inbound DUT (16), CSR and data-path initiators, and a stub on
+`filtered_socket`. Suites A–C run from `sc_main` without the
+scheduler; suite D starts it so `rst_ni` can fire.
+
+Success: every `assert` / PASSED line holds; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/sep_filter_ctrl`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean sep_filter_ctrl
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/sep_filter_ctrl_test.cpp`,
+`sep_filter_ctrl_testbench.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|A1 |Reset values |32 outbound entries |Positive
+|A2 |Basic CSR RW |CONFIG / START / END |Positive
+|A3 |WOSET locked |Lock sticks |Positive
+|A4 |data_bus_width RO |Always 3 |Positive
+|A5 |Unconfigured CSR |Entry-side unconfigured state |Positive
+|A6 |CSR scenarios |Range / NS / src / burst fields |Mixed
+|A7 |BlockByDefault |Datapath deny with no entries |Positive
+|A8 |Default deny |Access outside the programmed range |Positive
+|A9 |Read permitted |Matching read-allowed entry forwards |Positive
+|A10 |transport_dbg |Same match as `b_transport` |Positive
+|A11 |Read-only entry |Write denied |Negative
+|A12 |RV32 32-bit pair |Split programming of a 64-bit entry |Positive
+|A13 |Index guards |Out-of-range `get_filter_entry` |Positive
+|B2 |Inbound enforcement |16-entry instance |Positive
+|B3 |Instance isolation |Outbound write does not touch inbound |Positive
+|C1–C3 |filter_skip_i |Bypass miss, permission, and dbg |Positive
+|D1–D2 |rst_ni |Clears table; deny restored |Positive
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh fabric_filter_default_deny_reset_test
+./run_test.sh fabric_filter_datapath_matrix_p3_test
+./run_test.sh sep_inbound_filter_decerr
+./run_test.sh lcc_inbound_filter_gating_test
+./run_all_tests.sh            # full firmware suite
+----
+
+`fabric_filter_wrap_edge_case_test` is excluded: it does not compile
+upstream (undefined helpers).

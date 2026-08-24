@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-scratch-cold-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`sep_scratch_cold_ip` is a loosely-timed TLM-2.0 model of the
+cold-retention scratch bank. The eight words are plain CSML storage.
+Post-write callbacks on three of them implement the VP console, the
+status printer, and CocoTB-style handshake acks. There is no
+`rst_ni`: a platform reset does not wipe this bank.
+
+[source,cpp]
+----
+class sep_scratch_cold_ip : public sep_scratch_cold_base
+----
+
+----
+sep_scratch_cold_ip     post-write decoders + VP acks   (sep_scratch_cold.*)
+  └─ sep_scratch_cold_base   csml_memory + SCRATCH[8]
+       └─ virt_console_decoder.h / sep_status_decoder.h
+----
+
+====== Threads and sockets
+
+No SystemC thread and no extra sockets. `target_socket` is the CSR
+aperture. `sep-vp` maps it at the TRM cold-scratch window. The
+standalone SIM_OUT / SEP_STATUS peripherals are not instantiated;
+those consoles live in this model.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, cold-scratch window
+|===
+
+SCRATCH[2] feeds `VirtConsoleDecoder` (opcode/payload protocol,
+line-buffered stdout). SCRATCH[1] feeds `StatusDecoder` (names from
+the vendored `status_values.h` snapshot). Magic writes to SCRATCH[0],
+[4], and [6] ack into [1], [5], and [7] so firmware that polls CocoTB
+does not hang on a standalone VP.
+
+----
+  TLM MMIO ──► SCRATCH[2] ──► virt console ──► stdout
+            ──► SCRATCH[1] ──► SEP_STATUS  ──► stdout
+            ──► SCRATCH[0/4/6] ──► handshake ack into [1/5/7]
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`sim_out.enable` |true |Virtual console
+|`sep_status.enable` |true |Status printer
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* Console and status printers are VP-only; silicon has no stdout
+  side-effect on these words.
+* Handshake acks are VP stand-ins for CocoTB, not RTL.
+* No `rst_ni`. Warm reset in the VP does not clear cold scratch;
+  a process restart does, because the model has no persistence.

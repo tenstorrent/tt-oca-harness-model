@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-memory-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`SEPMemory` is a loosely-timed TLM-2.0 sparse store. One class covers
+SRAM, ROM, ITCM, and DTCM; the `read_only` constructor flag is the
+only difference. There is no CSR file.
+
+Sources: `model/inc/sep_memory.h`, `model/src/sep_memory.cpp`.
+Backing pages come from `sep/utils/paged-memory/paged_mem.h`.
+
+[source,cpp]
+----
+class SEPMemory : public sc_module, public load_if
+----
+
+----
+SEPMemory          TLM target + load_if + 10 ns annotation   (sep_memory.*)
+  └─ PagedMemory   4 KiB sparse pages (header-only)
+----
+
+====== Threads and sockets
+
+No SystemC thread. `b_transport`, `get_direct_mem_ptr`, and
+`transport_dbg` run in the initiator's call stack. Each
+`b_transport` adds 10 ns. ROM `b_transport` writes are accepted and
+discarded; `transport_dbg` writes ROM so ELF loaders can fill it.
+
+`sep-vp` constructs four instances and maps each at the TRM window.
+A fifth `SEPMemory("spi_mux")` is a functional stub for the SPI mux
+CTRL page, not instruction memory.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`tsock` |TLM target |SimpleBus: `sram`, `rom`, `itcm`, `dtcm` (and `spi_mux` stub)
+|===
+
+`load_data` / `load_zero` / `load_binary_file` implement `load_if`
+for the ELF loader. Unallocated pages read as zero; the first write
+allocates a 4 KiB page. DMI is granted only for already-allocated
+pages.
+
+----
+  SimpleBus ──► tsock::b_transport ──► PagedMemory
+            ──► get_direct_mem_ptr (allocated pages)
+            ──► transport_dbg (no timing; ROM writable)
+  ELF loader ──► load_if
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level; dumps at ≥ 5
+|===
+
+====== Modeling gaps versus RTL
+
+* No ECC, no SRAM/ROM BIST, no repair.
+* Fixed 10 ns per `b_transport`; no bank conflict or wait-states.
+* DMI is per allocated page, not the whole aperture.
+* `spi_mux` is a RW stub, not the mux CTRL RTL.

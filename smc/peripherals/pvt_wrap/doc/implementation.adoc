@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[pvt-wrap-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::pvt_wrap` is a loosely-timed TLM-2.0 model of the PVT sensor
+wrapper. Analog sensors are not modelled. Voltage and temperature
+status become ready when their enables are set, with constant
+stand-in codes. The process-clock counter advances on a CCI tick.
+
+[source,cpp]
+----
+class pvt_wrap : public sc_core::sc_module
+----
+
+----
+pvt_wrap        process counter, voltage/temp status   (pvt_wrap.*)
+----
+
+====== Threads and sockets
+
+`reset_proc` clears state on falling `rst_n_i`. `tick_method`
+advances the process-clock counter while count-enable is set.
+`output_method` is the only writer of the observation, voltage-code,
+and temperature-interrupt pins.
+
+`smc-vp` binds `reg_socket` on `periph_router`. All four outputs are
+sinks; `temp_interrupt_o` is not a PLIC source on this platform.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`periph_router` PVT wrap window
+|`rst_n_i` |`sc_in<bool>` |Active-low
+|`process_clk_obs_o` |`sc_out<bool>` |Sink
+|`process_clk_obs_en_o` |`sc_out<bool>` |Sink
+|`voltage_code_o` |`sc_out<uint32_t>` |Sink
+|`temp_interrupt_o` |`sc_out<bool>` |Sink (not wired to PLIC)
+|===
+
+----
+  TLM MMIO ──► CTRL words ──► enables
+  tick_event_ ──► tick_method ──► process_clock_counter
+                         │
+                         ▼
+               output_method ──► obs / voltage_code / temp_interrupt
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|`tick_period_ns` |10.0 |Process-counter tick; 0 disables auto-tick
+|===
+
+====== Modeling gaps versus RTL
+
+* No analog PVT macros. Voltage code and temperature output are
+  constants once the channel is enabled.
+* `temp_interrupt_o` is the AND of temperature-ready and
+  process-count-valid, not a compared threshold against a real
+  sensor.
+* Observation outputs are enable gates, not a toggling process clock.

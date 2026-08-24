@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[plic-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::plic` is a loosely-timed TLM-2.0 model of the RISC-V PLIC as
+instantiated in SMC. Timing is an annotated `b_transport` delay, not a
+cycle-accurate gateway. Sizing follows `plic_cfg` / CCI; the decode
+window matches the TRM RDL.
+
+[source,cpp]
+----
+class plic : public sc_core::sc_module
+----
+
+----
+plic            arbitration, claim/complete, ctx_out   (plic.*)
+----
+
+====== Threads and sockets
+
+Three `SC_METHOD` processes. `output_method` is the only writer of
+`ctx_out`; other paths mutate state and call `schedule_recompute()`
+at `SC_ZERO_TIME`. Pending latches on the rising edge of `src_in[i]`
+(source ID = `i + 1`) unless that source is in-flight between claim
+and complete.
+
+`smc-vp` binds the TLM target through `front_port_router` and a
+64-to-32 width adapter. `interrupt_aggregator` drives `src_in`.
+`ctx_out[0..3]` feed hart M-mode external IRQ; `ctx_out[4..7]` are
+the S-mode contexts.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`smc-vp` front-port PLIC window (`wa_plic`)
+|`src_in[i]` |`sc_in<bool>` |`intagg.plic_src[i]` (level, active-high)
+|`ctx_out[c]` |`sc_out<bool>` |`cluster.irq_ext[c]`
+|`rst_n_i` |`sc_in<bool>` |Active-low; falling edge clears state
+|===
+
+Only naturally aligned 32-bit accesses are accepted. DMI is never
+granted because CLAIM reads have a side-effect. `transport_dbg`
+returns the top pending source without claiming it.
+
+----
+  TLM MMIO ──► plic::b_transport ──► priority / enable / threshold
+  src_in[*] ──► src_method (edge latch) ──► pending_
+                         │
+                         ▼
+               output_method ──► ctx_out[*]
+  CLAIM read ──► claim(); COMPLETE write ──► complete()
+----
+
+====== CCI parameters
+
+`num_sources` and `num_contexts` are immutable (they size the
+`sc_vector` ports). `access_delay_ns` is re-read on every transaction.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`num_sources` |336 |Interrupt sources (IDs 1..N); immutable
+|`num_contexts` |8 |Hart × privilege contexts; immutable
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|===
+
+====== Modeling gaps versus RTL
+
+* No approximately-timed request/response split or fabric back-pressure.
+* No per-source clock-domain synchroniser; edges are zero-time in LT.
+* Every source is level-sensitive. There is no edge-only gateway mode.
+* `smc_axi_extension` is forwarded and not enforced; filtering belongs
+  to the upstream AXI filter.

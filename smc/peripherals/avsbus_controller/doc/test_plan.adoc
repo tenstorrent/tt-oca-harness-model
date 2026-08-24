@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[avsbus-controller-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/avsbus_controller_tb.cpp` covers the happy path: reset,
+register R/W, command/response, IRQ mask/clear, FIFO overflow and
+underflow, max retries, forced resync, and CCI.
+`test/avsbus_controller_neg_tb.cpp` covers TLM errors, RO/WO,
+back-pressure, ACK flavours, canned READ responses, CRC-3, and a
+constructor guard on zero FIFO depth.
+
+Success: both benches print `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/avsbus_controller`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh avsbus_controller
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Sources: `test/avsbus_controller_tb.cpp`,
+`test/avsbus_controller_neg_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset values |CFG reset, idle, IRQ masked |Positive
+|2 |register RW/RO |Stored config; status RO |Positive
+|3 |command/response path |FIFO + default slave + `xfer_thread` |Positive
+|4 |IRQ mask/clear |Aggregation and W1C |Positive
+|5 |cmd FIFO overflow |Overflow IRQ |Negative
+|6 |readback FIFO full after burst |Full status |Positive
+|7 |readback underflow |Underflow IRQ |Negative
+|8 |max retries |Busy ACK until `MAX_RETRIES` |Positive
+|9 |forced resync |Resync pulse + `resync_delay_ns` |Positive
+|10 |read voltage response |Canned READ data |Positive
+|11 |CCI / dbg |Delay knobs, `dbg_reg` |Positive
+|N1 |TLM error responses |Width / align / window / command |Negative
+|N2 |transport_dbg / dbg_reg |Debug path |Positive
+|N3 |RO/WO semantics |Write-ignore / read-as-zero |Positive
+|N4 |readback backpressure |Full FIFO holds |Positive
+|N5 |readback overflow inject |`inject_readback` |Negative
+|N6 |ACK_BAD_DATA / ACK_BUSY |Retry vs no-retry |Mixed
+|N7 |canned READ responses |Slave-model callback |Positive
+|N8 |resync vs pending xfer |Resync preempts |Positive
+|N9 |helpers / dump_state / crc3 |`crc3()` smoke |Positive
+|N10 |constructor guard rail |Zero FIFO depth fatal |Negative
+|===
+
+====== Platform firmware tests
+
+Build `smc-vp` first.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-avsbus-test
+----

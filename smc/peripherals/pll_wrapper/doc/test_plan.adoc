@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[pll-wrapper-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/pll_wrapper_tb.cpp` is a TLM initiator into the composed
+wrapper. It covers child independence, strobes, reserved-gap faults,
+sub-word RMW, firmware-style CGM/AWM lock polls, and CCI on the
+children.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/pll_wrapper`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh pll_wrapper
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Source: `test/pll_wrapper_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset defaults across pll_cntl / cgm / awm |Child windows at RDL reset |Positive
+|2 |RW write-back honours per-field write masks |`reg_block` wmask |Positive
+|3 |RO status registers are software read-only |Status poke vs software write |Positive
+|4 |single-pulse + self-clearing strobes |REG_UPDATE / SAMPLE_STROBE / postdiv |Positive
+|5 |sub-block instances are independent |cgm_0 vs cgm_1 |Positive
+|6 |reserved-gap accesses fault |Decode holes between children |Negative
+|7 |size / alignment errors |Bus contract |Negative
+|8 |HW-driven status readback via back door |`poke()` |Positive
+|9 |reset restores RDL defaults |Second reset |Positive
+|10 |CCI discovery / mutation per sub-block |Child `access_delay_ns` |Positive
+|11 |firmware CGM program + lock poll (16-bit) |Wrapper lock observe |Positive
+|12 |CGM disable + REG_UPDATE clears lock |Disable path |Positive
+|13 |AWM REG_UPDATE drives pll_cntl lock status |AWM0/AWM1 lock_detect |Positive
+|14 |16-bit RMW preserves 32-bit register high half |Sub-word merge |Positive
+|===
+
+====== Platform firmware tests
+
+Build `smc-vp` first.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-pll-wrapper-test
+----
