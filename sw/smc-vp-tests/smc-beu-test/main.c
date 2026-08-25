@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
-/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * sw/smc-vp-tests/smc-beu-test/main.c
  *
  * BEU (Bus Error Unit) register smoke test — Phase E1 of the BEU platform

@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
-/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * Port of tt-oca-hw fw/sep/tests/sep_smu_bidirect + smc_sep_xbar SEP half.
  */
 #include <stdint.h>

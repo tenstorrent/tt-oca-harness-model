@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
-/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * sw/smc-vp-tests/smc-pll-wrapper-test/main.c
  *
  * pll_wrapper integration test over the SMC fabric.

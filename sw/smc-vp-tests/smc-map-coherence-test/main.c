@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
-/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * sw/smc-vp-tests/smc-map-coherence-test/main.c
  *
  * Cumulative map-coherence ELF (D4=H1): prove modeled IPs sit at the
