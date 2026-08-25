@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[beu]]
+==== Bus Error Unit (BEU)
+
+The hardware contract (per-core windows, CAUSE encoding, CSRs) is in
+the hardware TRM. This directory documents the SystemC/TLM-2.0 model
+(`smc::beu`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

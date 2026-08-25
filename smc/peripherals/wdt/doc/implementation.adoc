@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[wdt-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::wdt` is a loosely-timed TLM-2.0 model of one SiFive / Chipyard
+TLWDT (stage 1). Timing is CCI event periods, not a cycle-accurate
+watchdog clock. One instance models one core; `smc-vp` instantiates
+`NUM_HARTS` copies.
+
+[source,cpp]
+----
+class wdt : public sc_core::sc_module
+----
+
+====== Threads and sockets
+
+`reset_proc` clears state and re-arms the tick. `tick_method` increments
+the 31-bit count when enabled. `output_method` is the sole writer of
+`irq_o` and `rst_sticky_o`. There is no `sc_clock`; `tick_period_ns = 0`
+disables auto-tick so benches drive `dbg_tick()`.
+
+Count enable is `wdogenalways || (wdogcoreawake && !core_rst_i)`.
+Elapsed is `(count >> scale)[15:0] >= CMP`: set IP; latch sticky when
+`wdogrsten`; clear count when `wdogzerocmp`. KEY unlocks one subsequent
+config write or FEED; FEED clears count and sticky.
+
+`smc-vp` demuxes the front-port WDT window onto `wdt_[i].reg_socket`,
+ties `rst_n_i` / `core_rst_i`, ORs `rst_sticky_o` into the cluster
+stage-2 path, and routes `irq_o` through the interrupt aggregator into
+the PLIC. Cluster `wdt_second_timeout_o` feeds `reset_unit`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM target |`wdt_demux` under front-port route 0
+|`rst_n_i` |`sc_in<bool>` |Platform reset (active-low)
+|`core_rst_i` |`sc_in<bool>` |Core-in-reset (active-high); gates awake
+|`irq_o` |`sc_out<bool>` |PLIC via interrupt aggregator
+|`rst_sticky_o` |`sc_out<bool>` |`cluster.wdt_timeout_cluster_i[i]`
+|===
+
+----
+  TLM MMIO ──► reg_socket ──► KEY / FEED / CTRL / COUNT
+                                    │
+                         tick_method (tick_event_)
+                                    │
+                         output_method ──► irq_o
+                                        └► rst_sticky_o ──► stage 2
+----
+
+====== CCI parameters
+
+Knobs are `cci_param`. `tick_period_ns` is immutable; `access_delay_ns`
+is re-read on every `b_transport`.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`tick_period_ns` |100.0 |Count period (ns). 0 disables auto-tick
+|`access_delay_ns` |2.0 |Annotated TLM access delay
+|===
+
+====== Modeling gaps versus RTL
+
+* No `clk_smc_i` port; RTL uncore-clock rate is expressed as
+  `tick_period_ns`.
+* Stage-2 `WDT_TIMEOUT` / `WDT_TIMEOUT_RESET` are not in this module.
+* SEP external WDT is a different IRQ and is not this TLWDT model.
+* In-window holes are RAZ/WI; out-of-window access is an address error.

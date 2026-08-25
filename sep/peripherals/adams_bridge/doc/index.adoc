@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[adams-bridge]]
+==== Adams Bridge
+
+The hardware contract (aperture, CSRs, ML-DSA / ML-KEM commands, Key
+Vault, interrupts) is in the hardware TRM. This directory documents
+the SystemC/TLM-2.0 model (`abr_ip`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

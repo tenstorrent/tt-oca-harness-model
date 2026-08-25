@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-cpu-ctrl-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`sep_cpu_ctrl_test` (`test/sep_cpu_ctrl_test.cpp`) is a TLM initiator
+into the CSR aperture plus `rst_ni` and the window / NMI outputs.
+It pokes `hwif_in` directly for fuse-sense, straps, and timeout bits.
+
+Success: every `[PASS] T*` line holds; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/sep_cpu_ctrl`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean sep_cpu_ctrl
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Source: `test/sep_cpu_ctrl_test.cpp`. Names are the `T*` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|T1 |Reset values |CLOCK_GATE, VERSION, local base, NMI, inbound window |Positive
+|T2 |Plain RW |CLOCK_GATE / PKA_CTRL fields |Positive
+|T3 |REFERENCE_COUNTER + RO |Reload on write; VERSION ignores writes |Positive
+|T4 |NMI vector lock |woset lock; `nmi_vec_o` |Positive
+|T5 |EXT_TRNG_SRC_SEL lock |Same lock pattern |Positive
+|T6 |TIMEOUT_CLEAR reads 0 |singlepulse |Positive
+|T7 |TIMEOUT_MODE reads 0 |WO from software |Positive
+|T8 |TIMEOUT_COUNT mask |48-bit DMA count |Positive
+|T9 |SEP_GLOBAL_BASE_ADDR mask |56-bit |Positive
+|T10 |Fuse-sense status |`hwif_in` reads |Positive
+|T11 |TIMEOUT_CLEAR write |Clears matching `hwif_in` bits |Positive
+|T12 |SEP_TEST_CTRL |fast_* / standalone from `hwif_in` |Positive
+|T13 |SEP_STRAPS |test_en / bypass_mem_repair |Positive
+|T14 |Inbound window exports |CSR writes and `publish_inbound_window()` |Positive
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh sep_reference_counter_test
+./run_test.sh nmi_sanity_test
+./run_all_tests.sh            # full firmware suite
+----

@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[csrng-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`csrng_model` is a loosely-timed TLM-2.0 model. Timing is quantum-keeper
+cycle counts, not a cycle-accurate AES-CTR datapath. The register file
+lives in `csrng_base` so a map change lands in one header. DRBG work
+uses OpenSSL, not an inlined CTR_DRBG.
+
+[source,cpp]
+----
+class csrng_model : public csrng_base
+----
+
+----
+csrng_model          CMD FSM, DRBG instances, interrupts, alerts   (csrng.*)
+  └─ csrng_base      csml_memory + software-visible words          (csrng_base.*)
+       └─ csrng_register.h   RO/WO/RW types
+----
+
+====== Threads and sockets
+
+`command_fsm_process` is an `SC_THREAD`; command bodies that need
+`wait()` run in `sc_spawn`'d `execute_command_async`. Interrupt and
+alert pins are driven from dedicated processes so reset is not a second
+SystemC writer.
+
+`sep-vp` binds the TLM register target at the TRM CSRNG aperture, clock
+and reset, the OTP SW-app-read enable, and the four interrupt plus two
+alert pins. There is no TLM connection to `entropy_src` or `edn`.
+Entropy requests call OpenSSL inside the model.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`csrng_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, CSRNG window
+|`clk_i` |`sc_in<bool>` |Presence only
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
+|`otp_en_csrng_sw_app_read` |`sc_in<uint8_t>` |OTP gate for SW GENBITS
+|`cs_cmd_req_done` |`sc_out<bool>` |SEP PIC command-done
+|`cs_entropy_req` |`sc_out<bool>` |SEP PIC entropy-request
+|`cs_hw_inst_exc` |`sc_out<bool>` |SEP PIC HW-instance exception
+|`cs_fatal_err` |`sc_out<bool>` |SEP PIC fatal
+|`recov_alert_o` |`sc_out<bool>` |Recoverable alert
+|`fatal_alert_o` |`sc_out<bool>` |Fatal alert
+|===
+
+CMD_REQ writes collect a header plus additional data, then notify the
+FSM. INSTANTIATE / GENERATE / RESEED / UPDATE / UNINSTANTIATE mutate
+per-instance V/Key. GENBITS is a sequential read of the output queue.
+
+----
+  TLM MMIO ──► csrng_base::memory ──► command_fsm_process
+                                 └► sc_spawn execute_command_async
+                                           │
+                                           ▼
+                                    OpenSSL DRBG
+                      interrupt_update_process ──► cs_*
+                      alert_update_process     ──► *_alert_o
+----
+
+====== CCI parameters
+
+Knobs are `csml_param`.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No cycle-accurate AES-CTR or hardware DRBG.
+* No `entropy_src` / EDN sockets; seed material is OpenSSL.
+* No hardware application command sockets; SW instance is the path
+  `sep-vp` exercises.
+* `clk_i` is a boolean; delays are LT annotations.
+* Multi-bit enable checks are functional, not the RTL sparse FSM
+  hardening.

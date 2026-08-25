@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[system-management-controller]]
+== System Management Controller (SMC)
+
+SMC architecture, peripherals, and the address map are in the hardware
+TRM. This book covers the `smc-vp` SystemC/TLM-2.0 platform and how to
+run its tests.
+
+include::implementation.adoc[leveloffset=0]
+include::test_plan.adoc[leveloffset=0]

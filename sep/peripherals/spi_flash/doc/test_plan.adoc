@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[spi-flash-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+Two binaries: `spi_flash_test` is pure C++ against `spi_flash_model`
+(no `sc_main`). `spi_flash_sc_test` wraps the model in `spi_flash`
+and drives `spi_if` segments.
+
+Default `./run_tests.sh` runs only `spi_flash_test`. `--ctest` and
+`--coverage` run both.
+
+Success: every `TEST_ASSERT` / `SC_TEST_SECTION` check passes;
+`--asan` produces no `asan.log.*`; line coverage on the touched model
+sources meets the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/spi_flash`):
+
+[source,bash]
+----
+./run_tests.sh              # Release: spi_flash_test only
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # both binaries; do not combine with --asan
+./run_tests.sh --ctest      # spi_flash_test + spi_flash_sc_test
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean spi_flash
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/spi_flash_test.cpp`, `spi_flash_sc_test.cpp`.
+Names are the `TEST_SECTION` / `SC_TEST_SECTION` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|A |SFDP DWORD1–16 |JESD216A field pack / unpack |Positive
+|B |SFDP ROM / table |Header, PTP, round-trip bytes |Positive
+|C |Parser helpers |addr-mode / QER strings and parse |Positive
+|D |Command set |blank read, WREN, program AND, erase, SFDP, suspend, 4-byte, 66h/99h, backdoor |Mixed
+|SC.1–11 |SystemC wrapper |CSAAT segments, `rst_ni`, unknown opcode |Mixed
+|===
+
+====== Platform firmware tests
+
+The BFM has no MMIO of its own. Firmware talks to it through the SPI
+host on `sep-vp`. Build the VP first (`make sep-vp` from the repo
+root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh spi_ot_flash_jedec_id_test
+./run_test.sh spi_ot_flash_read_test
+./run_test.sh spi_ot_flash_write_read_test
+./run_test.sh spi_ot_flash_sector_erase_test
+./run_test.sh spi_ot_flash_dual_read_test
+./run_test.sh spi_ot_flash_quad_read_test
+./run_all_tests.sh            # full firmware suite, includes the above
+----

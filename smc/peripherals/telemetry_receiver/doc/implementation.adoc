@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[telemetry-receiver-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::telemetry_receiver` is a loosely-timed TLM-2.0 model of one
+telemetry sink. There is no ATB initiator socket; beats enter through
+`push_atb_beat()`. `telemetry_encode_message()` is the matching
+encoder so benches and `smc-vp` share one packing path.
+
+[source,cpp]
+----
+class telemetry_receiver : public sc_core::sc_module
+----
+
+----
+telemetry_receiver   ATB assemble, queue, IRQ   (telemetry_receiver.*)
+----
+
+====== Threads and sockets
+
+`recompute_method` is the only writer of `irq_o`, `afvalid_o`,
+`atready_o`, and `debug_o`. `af_handshake_method` retires a TX flush
+when `afready_i` rises. `start_of_simulation()` forces an initial
+output drive.
+
+A completed packet with `last_packet` queues a message; filling the
+assembly buffer without that marker raises missing-last and drops the
+partial message. The software view is always the oldest queued
+message. Overflow drops the oldest.
+
+`smc-vp` instantiates three receivers behind `telemetry_router`
+(wrap stride). `afready_i` is tied low. `irq_o` feeds
+`interrupt_aggregator`. CCI `tel_inject_*` can push one encoded
+message at elaboration.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`telemetry_router.out[n]`
+|`rst_n_i` |`sc_in<bool>` |Active-low
+|`afready_i` |`sc_in<bool>` |Tied false (`telemetry_afready[n]`)
+|`irq_o` |`sc_out<bool>` |`intagg` telemetry sources
+|`afvalid_o` |`sc_out<bool>` |Sink
+|`atready_o` |`sc_out<bool>` |Sink
+|`debug_o` |`sc_out<uint32_t>` |Sink
+|===
+
+----
+  push_atb_beat ──► assembly buffer ──► decode ──► circular queue
+  TLM MMIO ──► BUFFER_POP / flush / threshold
+                         │
+                         ▼
+               recompute_method ──► irq_o, afvalid_o, atready_o
+----
+
+====== CCI parameters
+
+`buffer_depth` and `max_counters_per_message` are immutable (they
+size the queue and assembly buffer).
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`buffer_depth` |8 |Message-queue depth (≥ 2); immutable
+|`max_counters_per_message` |4 |Counters per message (1..32); immutable
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|===
+
+====== Modeling gaps versus RTL
+
+* `atready_o` tracks reset only. An RX flush finishes inside the
+  register write, so the RTL one-cycle ready dip has no cycle to occupy.
+* `debug_o` missing-last / assembly-full bits latch until RX flush or
+  reset instead of pulsing for one clock.
+* No ATB wire model or transmitter. Ingress is `push_atb_beat()`.
+* `CTRL.BUFFER_THRESHOLD` truncates to the pointer width, as in RTL.

@@ -1,21 +1,16 @@
 # SMC UART 16550 — SystemC / TLM-2.0 Loosely-Timed Model
 
 An NS16550A-compatible UART modeled in Accellera SystemC 2.3.x + TLM-2.0
-(Loosely-Timed). Implements the SMC UART IP described in:
+(Loosely-Timed). Architecture, CSRs, and programming are in the hardware
+TRM. Model and test docs:
 
-- `doc/01_UART_Specification.md` — externally-observable behaviour
-- `doc/02_UART_LowLevel_Design.md` — TLM interface, register map, internals
-- `doc/03_UART_Test_Plan.md` — verification strategy and test list
-- `doc/04_UART_Function_Flow.md` — function call graph and data-flow diagrams
-- `hw/comp/uart_16550/data/registers/rdl/uart_16550_*.rdl` — authoritative register maps
-- `hw/comp/uart_16550/rtl/uart_16550.sv` (+ `uart_core/uart_tx/uart_rx.sv`)
-  — functional reference RTL
+- `doc/index.adoc` — entry (includes the two pages below)
+- `doc/implementation.adoc` — SystemC/TLM model and `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
 
-The model is a drop-in `SC_MODULE` that the rest of the SMC SystemC IP
-library wires up exactly as specified in the low-level design. It is a
-**functional** model: register-level behaviour and character-level data flow
-are reproduced faithfully (and are bit-compatible with the RDL register
-layout), while bit-level serial timing is abstracted away.
+The model is a drop-in `SC_MODULE`. It is a **functional** model:
+register-level behaviour and character-level data flow are reproduced
+faithfully, while bit-level serial timing is abstracted away.
 
 ---
 
@@ -28,11 +23,9 @@ uart/
 ├── run_tests.sh                    Build + run convenience script
 ├── deps.env.example                Template for local dependency paths
 ├── doc/
-│   ├── 01_UART_Specification.md
-│   ├── 02_UART_LowLevel_Design.md
-│   ├── 03_UART_Test_Plan.md
-│   └── 04_UART_Function_Flow.md
-│   └── figures/01_block_diagram.svg
+│   ├── index.adoc
+│   ├── implementation.adoc
+│   └── test_plan.adoc
 ├── include/
 │   ├── smc_tlm_extensions.h        Shared GP extension (smc_axi_extension)
 │   └── uart.h                      SC_MODULE(uart) declaration
@@ -65,7 +58,9 @@ cp deps.env.example deps.env
 | `--asan` | Build with AddressSanitizer (Linux: + LeakSanitizer) |
 | `--coverage` | Build with coverage; print a line report |
 
-The test bench prints `ALL TESTS PASSED` on success.
+The test bench prints `ALL TESTS PASSED` on success. Platform firmware:
+`cd sw/smc-vp-tests && ./run_smc_vp_tests.sh smc-uart-test`. Full
+commands are in `doc/test_plan.adoc`.
 
 ---
 
@@ -114,4 +109,4 @@ needed):
 - `dbg_reg(off)` — side-effect-free register peek
 - `dump_state(os)` — human-readable state dump
 
-See `doc/02_UART_LowLevel_Design.md` §12 for details.
+See `doc/implementation.adoc` for TLM/process details.

@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[i3c-controller-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::i3c_controller` is a loosely-timed TLM-2.0 model of the
+multi-instance OCA I3C HCI. Timing is annotated `access_delay_ns` plus
+`xfer_delay_ns` from command enqueue to response. Bit-level SCL/SDA and
+OD/PP timing are not modelled. `b_transport` never calls `wait()`. DMI
+is never granted.
+
+[source,cpp]
+----
+class i3c_controller : public sc_core::sc_module
+----
+
+The single `reg_socket` carries `num_instances × INSTANCE_SPACING`.
+Decode is `inst = addr / spacing`, `loff = addr % spacing`, matching
+the RTL AXI-Lite demux.
+
+====== Threads and sockets
+
+`output_method` is the sole writer of every per-instance `sc_out`.
+`xfer_method` pops one pending instance, runs `process_command`, and
+re-notifies while `xfer_pending_` is non-empty. Bus and recovery pins
+are held idle.
+
+With `HC_CONTROL.BUS_ENABLE`, a completed 64-bit COMMAND_PORT
+descriptor schedules a transfer. The engine resolves the dynamic
+address from DAT, calls `bus_model_fn`, drains/fills TX/RX, and pushes
+a response. No bus model means address NACK. `inject_ibi` enqueues an
+IBI status + payload.
+
+`smc-vp` binds the one `reg_socket` on the peripheral router for the
+whole I3C aperture (`NUM_I3C` = 6). Per-instance `irq_o[i]` enters the
+interrupt aggregator. Instance 0 gets an echo bus model for
+`smc-i3c-loopback-test`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM target |`periph_router` I3C aperture
+|`irq_o[i]` |`sc_out<bool>` |PLIC via interrupt aggregator
+|`scl_o` `sda_o` `*_oe_o` `sel_od_pp_o` |`sc_out<bool>` |Held idle
+|`recovery_*_o[i]` |`sc_out<bool>` |Held idle
+|===
+
+----
+  TLM MMIO ──► reg_socket ──► inst = addr / 0x500
+                                    │
+                         COMMAND_PORT ──► cmd_q
+                                    │
+                         xfer_method ──► bus_model_fn
+                                    │
+                         RESP / RX / IBI queues
+                                    │
+                         output_method ──► irq_o[i]
+----
+
+====== CCI parameters
+
+Instance count and FIFO depths are immutable. Delays are mutable.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`num_instances` |6 |Instances (1..6); sizes `sc_vector` ports
+|`access_delay_ns` |2.0 |Annotated TLM access delay
+|`xfer_delay_ns` |100.0 |Enqueue-to-response latency
+|`cmd_fifo_depth` |8 |Command/response entries
+|`rx_fifo_depth` |64 |RX DWORDs
+|`tx_fifo_depth` |64 |TX DWORDs
+|`ibi_fifo_depth` |8 |IBI DWORDs
+|===
+
+`num_instances` outside 1..6, a negative delay, or a zero FIFO depth is
+`SC_REPORT_FATAL`.
+
+====== Modeling gaps versus RTL
+
+* SCL/SDA and OD/PP pins stay idle; data movement is the bus-model
+  callback.
+* PHY CDC synchronisers are not modelled.
+* Only the CSR-visible DAT/DCT windows are modelled (32 / 16 entries).
+  The RTL external 128-entry `dat_mem` / `dct_mem` tables are not.
+* HDR modes, TCRI recovery datapath, and scan/DFT are not modelled.
+  Recovery outputs stay idle.

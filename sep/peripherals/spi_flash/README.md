@@ -1,8 +1,23 @@
-# spi_flash
+# SPI Flash (external BFM)
 
-SystemC model of an SPI NOR flash device.  Implements the standard SPI flash command set (WREN, READ, PROGRAM, ERASE, READ_SFDP, SUSPEND/RESUME).  Connected to `spi_controller` via the `spi_if` interface — it has no direct memory-mapped bus address.
+SystemC BFM of an off-chip SPI NOR part. This is **not SEP silicon**:
+the SEP die has no flash IP; firmware reaches this model only through
+`spi_controller`. Architecture and CSRs of the host are in the
+hardware TRM. This tree has the BFM, its test plan, and how to run
+the tests.
 
-**Split implementation:** The model is layered into two parts — `spi_flash_model` (pure C++, no SystemC) handles all flash logic and is covered by a standalone unit test; `spi_flash` (sc_module) wraps it and is tested via a SystemC testbench.  This keeps the core logic testable without a simulator.
+The core (`spi_flash_model`) is pure C++. `spi_flash` is the
+`sc_module` wrapper that implements `spi_if`.
+
+## Status
+
+| Item | State |
+|---|---|
+| Profile-1 command set, SFDP, WREN, suspend | Implemented |
+| CSAAT-chained multi-segment reads | Implemented |
+| TLM / CSRs | None (not on the bus) |
+| Standalone tests | `./run_tests.sh` (C++ unit); `--ctest` also runs the SystemC wrapper |
+| Wired into `sep-vp` | Bound to `spi_controller::spi_master`; optional `spiPreload` |
 
 ## Files
 
@@ -17,6 +32,10 @@ test/inc/spi_flash_sfdp_utils.h   SFDP test utilities
 test/src/spi_flash_sfdp_utils.cpp SFDP parser / pretty-printer
 test/src/spi_flash_test.cpp       Pure C++ unit tests (no sc_main)
 test/src/spi_flash_sc_test.cpp    SystemC integration testbench (sc_main)
+
+doc/index.adoc                    VP set entry
+doc/implementation.adoc           SystemC/TLM model
+doc/test_plan.adoc                cases + run commands
 ```
 
 ## Class
@@ -61,26 +80,22 @@ as a shared naming convention for testbenches — nothing opens it implicitly.
 ## Building and Testing
 
 ```bash
-# Using run_tests.sh (recommended)
-./run_tests.sh              # Release build + run both tests
-./run_tests.sh --debug      # Debug build
-./run_tests.sh --asan       # AddressSanitizer
-./run_tests.sh --coverage   # lcov coverage report
-./run_tests.sh --ctest      # via CTest (verbose)
-./run_tests.sh --clean      # clean build dir first
-
-# Manual CMake
-mkdir -p build/debug && cd build/debug
-cmake ../.. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-make -j$(nproc)
-./bin/spi_flash_test        # pure C++ unit tests
-./bin/spi_flash_sc_test     # SystemC integration tests
+./run_tests.sh              # Release: spi_flash_test only
+./run_tests.sh --debug
+./run_tests.sh --asan       # AddressSanitizer + UBSan
+./run_tests.sh --coverage   # both binaries; do not combine with --asan
+./run_tests.sh --ctest      # spi_flash_test + spi_flash_sc_test
+./run_tests.sh --clean
 ```
+
+Platform firmware tests talk to this BFM through the SPI host. Full
+commands are in `doc/test_plan.adoc`.
 
 ## Documentation
 
-- [High-Level Design](docs/02_spi_flash_HighLevel_Design.md)
-- [Test Plan](docs/03_spi_flash_Test_Plan.md)
-- RTL comparison: `md_files/SPI_FLASH_RTL_VS_VP.md`
-- `docs/JESD216A.pdf` — the SFDP standard the ROM implements
-- `docs/jedec_basic_flash_commands_list` — opcode reference
+Architecture and host CSRs are in the hardware TRM. This tree
+documents the BFM:
+
+- [index](doc/index.adoc) — VP set entry
+- [implementation](doc/implementation.adoc) — SystemC/TLM model
+- [test plan](doc/test_plan.adoc) — standalone cases and platform runs

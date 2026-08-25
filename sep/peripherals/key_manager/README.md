@@ -45,6 +45,10 @@ test/src/key_manager_test.cpp      Test orchestration
 test/src/key_manager_func001_test.cpp  }
   ...                                  } Functional test cases (14 total)
 test/src/key_manager_func014_test.cpp  }
+
+doc/index.adoc               VP set entry (includes the two pages)
+doc/implementation.adoc      SystemC/TLM model
+doc/test_plan.adoc           cases + run commands
 ```
 
 ## Addresses
@@ -92,6 +96,9 @@ make -j$(nproc)
 
 ## Documentation
 
-- [Specification](docs/01_key_manager_Specification/) — the hardware team's own RTL, firmware and register documentation, vendored. Specification of record.
-- [High-Level Design](docs/02_key_manager_HighLevel_Design.md) — this model's design.
-- [Test Plan](docs/03_key_manager_Test_Plan.md) — what the IP-level suite covers.
+Architecture, CSRs, and programming sequences are in the hardware
+TRM. This tree documents the SystemC/TLM model:
+
+- [index](doc/index.adoc) — VP set entry
+- [implementation](doc/implementation.adoc) — sockets, threads, CCI, gaps
+- [test plan](doc/test_plan.adoc) — standalone cases and platform runs

@@ -1,6 +1,20 @@
-# spi_controller
+# SPI Controller
 
-SystemC TLM2.0 model of the SPI master controller.  Paired with `spi_flash` to form the subsystem.  Firmware programs transfer descriptors into memory-mapped registers; the controller drives the `spi_if` socket to execute SPI transactions on the attached flash device.
+SystemC TLM-2.0 loosely-timed model of the SEP SPI host. Architecture,
+CSRs, and programming sequences are in the hardware TRM. This tree has
+the model, its test plan, and how to run the tests. The off-chip NOR
+part is the `spi_flash` BFM, not this IP.
+
+## Status
+
+| Item | State |
+|---|---|
+| Register file + CMD/STATUS handshake | Implemented |
+| Standard / Dual / Quad segments, CSAAT, FIFOs | Implemented |
+| Interrupts, DMA trigger, SW_RST abort | Implemented |
+| Pass-through / SPI_DEVICE mux | Not modelled |
+| Standalone tests | `./run_tests.sh` |
+| Wired into `sep-vp` | SPI window, PIC event IRQ, DMA LSIO 0, `spi_flash` |
 
 ## Files
 
@@ -22,6 +36,10 @@ test/src/test_func000.cpp             }
   ...                                 } Functional test cases (11 total)
 test/src/test_func010.cpp             }
 test/src/test_coverage.cpp            Coverage-oriented regression
+
+doc/index.adoc                        VP set entry
+doc/implementation.adoc               SystemC/TLM model
+doc/test_plan.adoc                    cases + run commands
 ```
 
 ## Address
@@ -80,24 +98,31 @@ recovering from an error does not have to clear it first.
 ## Building and Testing
 
 ```bash
-# Using run_tests.sh (recommended)
 ./run_tests.sh              # Release build + run
-./run_tests.sh --debug      # Debug build
-./run_tests.sh --asan       # AddressSanitizer
-./run_tests.sh --coverage   # lcov coverage report
-./run_tests.sh --ctest      # via CTest (verbose)
-./run_tests.sh --clean      # clean build dir first
-./run_tests.sh --cppcheck   # for static analysis
-
-# Manual CMake
-mkdir -p build/debug && cd build/debug
-cmake ../.. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-make -j$(nproc)
-./bin/spi_controller_test
+./run_tests.sh --debug
+./run_tests.sh --asan       # AddressSanitizer + UBSan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
 ```
+
+Platform firmware tests on `sep-vp`:
+
+```bash
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh spi_ot_reg_test
+./run_test.sh spi_ot_flash_read_test
+./run_test.sh spi_ot_interrupt_test
+```
+
+Those need a built `sep-vp` and a RISC-V bare-metal toolchain. Full
+commands are in `doc/test_plan.adoc`.
 
 ## Documentation
 
-- [High-Level Design](docs/02_spi_controller_HighLevel_Design.md)
-- [Test Plan](docs/03_spi_controller_Test_Plan.md)
-- RTL comparison: `md_files/SPI_CONTROLLER_RTL_VS_VP.md`
+Architecture, CSRs, and programming sequences are in the hardware
+TRM. This tree documents the SystemC/TLM model:
+
+- [index](doc/index.adoc) — VP set entry
+- [implementation](doc/implementation.adoc) — sockets, threads, CCI, gaps
+- [test plan](doc/test_plan.adoc) — standalone cases and platform runs

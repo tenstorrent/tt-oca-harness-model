@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-reset-ctrl-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`sep_reset_ctrl_ip` is a loosely-timed TLM-2.0 model of the software
+reset controller. One 64-bit word drives per-IP `rst_n` outputs.
+There is no engine thread and no FIFO.
+
+[source,cpp]
+----
+class sep_reset_ctrl_ip : public sep_reset_ctrl_base
+----
+
+----
+sep_reset_ctrl_ip     SW_RESET_N → rst_n pins   (sep_reset_ctrl.*)
+  └─ sep_reset_ctrl_base   csml_memory + SW_RESET_N
+       └─ sep_reset_ctrl_register.h
+----
+
+====== Threads and sockets
+
+`SC_METHOD(update_rst_outputs)` fires on `sw_reset_changed_` after a
+CSR write. If the caller is an `SC_THREAD` (the ISS), the notify is
+deferred one delta so downstream reset methods see a falling edge in
+the next delta. `SC_METHOD(reset_handler)` on `global_rst_ni` restores
+the documented default so firmware writes do not survive a platform
+reset.
+
+`sep-vp` maps the TLM target at the TRM reset-ctrl window. Outputs
+feed key-manager, OTBN, AES, HMAC, and KMAC `rst_ni`. ABR stays on
+the global reset.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, reset-ctrl window
+|`global_rst_ni` |`sc_in<bool>` |Platform reset
+|`km_rst_ni` |`sc_out<bool>` |Key-manager `rst_ni` (starts asserted)
+|`otbn_rst_n` |`sc_out<bool>` |OTBN `rst_ni`
+|`aes_rst_ni` |`sc_out<bool>` |AES `rst_ni`
+|`hmac_rst_ni` |`sc_out<bool>` |HMAC `rst_ni`
+|`kmac_rst_ni` |`sc_out<bool>` |KMAC `rst_ni`
+|===
+
+AND of `global_rst_ni` and the matching SW_RESET_N bit. KM's bit
+resets to 0 (held in reset); the crypto bits reset to 1.
+
+----
+  TLM MMIO ──► SW_RESET_N write ──► sw_reset_changed_
+  global_rst_ni ──► reset_handler
+                         │
+                         ▼
+                  update_rst_outputs ──► km/otbn/aes/hmac/kmac rst_n
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* Only the five SW_RESET_N bits that this VP wires. Other RTL reset
+  consumers are not modelled here.
+* ABR / CSRNG / entropy are not behind this block on `sep-vp`.
+* No reset stretcher or synchronizer; the pin is a boolean.

@@ -2,6 +2,13 @@
 
 This directory contains a functional, loosely-timed SystemC/TLM-2.0 model of the SMC DMA controller.
 
+Architecture, CSRs, and programming are in the hardware TRM. Model and
+test docs:
+
+- `doc/index.adoc` — entry (includes the two pages below)
+- `doc/implementation.adoc` — SystemC/TLM model and `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 ## Build and test
 
 ```bash
@@ -11,7 +18,7 @@ cd smc/peripherals/dma
 ./run_tests.sh --coverage
 ```
 
-The script auto-detects `SYSTEMC_HOME` and `CCI_HOME` from common install paths. Local overrides can be placed in `deps.env` (gitignored).
+The script auto-detects `SYSTEMC_HOME` and `CCI_HOME` from common install paths. Local overrides can be placed in `deps.env` (gitignored). Also `--ctest` and `--clean`. Platform firmware: `cd sw/smc-vp-tests && ./run_smc_vp_tests.sh smc-dma-test`. Full commands are in `doc/test_plan.adoc`.
 
 ## CCI parameters
 

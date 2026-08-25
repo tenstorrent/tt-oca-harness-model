@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[beu-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::beu` is a loosely-timed TLM-2.0 model of one per-core Rocket
+Bus Error Unit. It is a passive recorder: cache and TileLink error
+ports are not present. Tests and `smc-vp` drive events through
+`inject_error()`.
+
+[source,cpp]
+----
+class beu : public sc_core::sc_module
+----
+
+----
+beu             first-error latch, accrued, IRQ   (beu.*)
+----
+
+====== Threads and sockets
+
+`recompute_method` is the only writer of `irq_local_o` /
+`irq_plic_o`. `b_transport` never `wait()`s; it annotates
+`access_delay_ns`. An injected source sets accrued status; if
+recording is enabled and CAUSE is clear, it latches cause and
+address. IRQ equations are the OR of accrued bits against each
+mask.
+
+`smc-vp` instantiates four units and demuxes them through
+`beu_router` (4 KiB each). `irq_local_o` binds to
+`cluster.beu_nmi_in`. `irq_plic_o` is parked on a sink — OCA RTL
+does not give BEU a PLIC source ID. CCI `beu_inject{0,1,2}_*`
+latches errors at elaboration for firmware tests.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 64-bit target |`beu_router.out[n]` (front-port BEU window)
+|`rst_n_i` |`sc_in<bool>` |Active-low
+|`irq_local_o` |`sc_out<bool>` |`cluster.beu_nmi_in[n]`
+|`irq_plic_o` |`sc_out<bool>` |Sink (`beu_irq_plic[n]`); not a PLIC source
+|===
+
+Accesses are 8-byte aligned. Offsets with no register decode return
+`TLM_ADDRESS_ERROR_RESPONSE`.
+
+----
+  TLM MMIO ──► beu::b_transport ──► CAUSE / ENABLE / accrued
+  inject_error() ──► accrued + optional first-error latch
+                         │
+                         ▼
+               recompute_method ──► irq_local_o, irq_plic_o
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|===
+
+Platform knobs `beu_inject0_enable` / `core` / `src` / `addr` (and
+slots 1 and 2) live on `smc_platform`, not on this module.
+
+====== Modeling gaps versus RTL
+
+* No TileLink, ICache, or DCache ports. Errors are a back-door.
+* No ECC syndrome datapath.
+* `irq_plic_o` is modeled but not connected to the PLIC on `smc-vp`.

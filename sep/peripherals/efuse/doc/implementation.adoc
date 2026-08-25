@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[efuse-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`efuse_model` is a loosely-timed TLM-2.0 model of the OTP array
+and its two MMIO windows. An 8192-bit array is the source of
+truth; shadow registers are the same bits viewed as words.
+Programming is one-way (`OR`). Timing is not modelled: program,
+read, and token-hash complete inside the write that starts them.
+
+[source,cpp]
+----
+class efuse_model : public efuse_base
+----
+
+----
+efuse_model        array, WOSET, tokens, CCI load   (efuse.*)
+  └─ efuse_base    two csml_memory + two sockets    (efuse_base.*)
+----
+
+====== Threads and sockets
+
+There is no clock or reset port. Fuse content is loaded at
+`end_of_elaboration()` from `fuse_preload_file` or from
+per-field CCI parameters (not both: a successful preload ignores
+the per-field params).
+
+`sep-vp` binds `target_socket` at the TRM `sep_efuse` window and
+`shim_target_socket` at `EFUSE_SHIM_CTRL` in `SEP_EXTERNAL`.
+`get_lc_state()` / `get_chiplet_uid()` feed the key manager.
+`set_shadow_change_callback()` refreshes `lifecycle_ctrl_model`
+inputs. `set_prod_dbg_active()` is driven from LC demote bits.
+
+LC_STATE in the array is `{~raw, raw}`. An erased array is not a
+legal code, so `get_lc_state()` reports INVALID rather than
+`TEST_DEV`.
+
+[cols="36%,28%,36%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, `sep_efuse` window
+|`shim_target_socket` |TLM 32-bit |`sep-vp` SimpleBus, `EFUSE_SHIM_CTRL`
+|===
+
+Shadow WOSET writes accumulate into the array. OTP program/read
+CSRs address bits. Locked shadow reads return `0xBADCAB1E` with
+a normal bus response. Token `TOKEN_EOP` hashes the staged token
+with SHA-256 and publishes `0x15` / `0x2A`.
+
+----
+  TLM MMIO ──► target_socket ──► shadow + OTP CSRs + MMR
+  TLM MMIO ──► shim_target_socket ──► EFUSE_SHIM_CTRL
+                       │
+                       ▼
+                 m_fuse[8192 bits]
+                       │
+  get_lc_state() / get_sip_dis() / get_sys_dis()
+                       │
+                       ▼
+                 lifecycle_ctrl_model::set_inputs()
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used. `lc_state` is
+the raw 4-bit value; it is encoded on the way into the array.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|`fuse_preload_file` |empty |`.preload` image; empty = erased
+|`lc_state` |0 |Raw lifecycle; encoded into the array
+|`locks_lo` |0 |Sticky lock bits (enforced)
+|`sip_dis_*` / `sys_dis_*` |0 |Feature-disable masks
+|`chiplet_uid` and other 256-bit vectors |zeros |Identity / keys / tokens
+|`sec_disable_token_digest` |zeros |Not fuse-backed; zeros never match
+|`sec_disable_rev_enable` |true |Models `tt_rev_d_out[0]`
+|===
+
+Scalar and vector fuse fields (locks, versions, SPI PHY, public
+keys, RMA token digests, match presets) are also `csml_param`.
+
+====== Modeling gaps versus RTL
+
+* No analog sense timing; `efuse_sense_done` is set at load.
+* Program / read / token-hash have no busy window.
+* `0x3F` tamper code is never produced.
+* No `rst_ni`; elaboration is the only load path besides
+  `preload_fuses_from_file()`.

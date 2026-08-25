@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[dma-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::dma` is a loosely-timed TLM-2.0 model of the SMC iDMA engine.
+Register access annotates `access_delay_ns`. A read of `NEXT_ID_N`
+latches the shared SRC/DST/LENGTH/STRIDE/REPETITIONS words and queues
+work for `transfer_thread`. Master bursts carry
+`smc::smc_axi_extension` with `source_id = smc::SMC_ID`.
+
+[source,cpp]
+----
+class dma : public sc_core::sc_module
+----
+
+====== Threads and sockets
+
+`reg_socket` is a 32-bit AXI-Lite-style target. `mst_socket` is a
+64-bit initiator used only by `transfer_thread`. There is no `sc_clock`
+and no `sc_in` reset: channel state is software-visible STATUS / DONE.
+
+`start_transfer` returns 0 for zero length. With `NUM_REPETITIONS > 0`
+and a non-zero stride the copy repeats `NUM_REPETITIONS + 1` times.
+`copy_chunk` splits the move into `max_burst_bytes` master
+transactions. `transfer_delay_ns` is added to each data move.
+
+`smc-vp` binds `reg_socket` on the data-accelerator router at the TRM
+DMA window and `mst_socket` to `fabric.data_accel_in` (shared with the
+memory_zeroer DMA master).
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`daccel_router` DMA window
+|`mst_socket` |TLM 64-bit initiator |`fabric.data_accel_in`
+|===
+
+----
+  TLM MMIO ──► reg_socket ──► NEXT_ID_N read
+                                    │
+                         pending_ + transfer_event_
+                                    │
+                         transfer_thread ──► mst_socket
+                                    │
+                         copy_chunk (src → dst, stride/reps)
+----
+
+====== CCI parameters
+
+Channel count, burst size, and base are immutable. Delays are mutable.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`num_channels` |16 |STATUS/NEXT_ID/DONE arrays (1..16)
+|`access_delay_ns` |2.0 |Register-access annotated delay
+|`transfer_delay_ns` |0.0 |Per data-move annotated delay
+|`max_burst_bytes` |64 |Max bytes per master `b_transport`
+|`base_addr` |0 |Absolute decode; 0 accepts offset-only benches
+|===
+
+`num_channels` outside 1..16 or `max_burst_bytes == 0` is
+`SC_REPORT_FATAL`. On `smc-vp`, `base_addr` is the TRM DMA window so
+absolute firmware addresses decode.
+
+====== Modeling gaps versus RTL
+
+* No cycle-accurate iDMA protocol or backend option bits beyond storing
+  CONFIG.
+* Transfers run in one `SC_THREAD`, not per-channel hardware streams.
+* SRC/DST/LENGTH/STRIDE/REPETITIONS are shared and latched at start.
+* No CDC, no interrupt pin (completion is STATUS/DONE only).
+* DMI is not granted on the register target.

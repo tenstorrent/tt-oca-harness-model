@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-output-remap-ctrl]]
+==== SEP Output Remap Control
+
+The hardware contract (REGION_ATTRS table, AP vs STEE windows) is in
+the hardware TRM. This directory documents the SystemC/TLM-2.0 model
+(`sep_output_remap_ctrl_ip`) and how to test it. One class, two
+`sep-vp` instances.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

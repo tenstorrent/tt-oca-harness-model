@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[secure-dma]]
+==== Secure DMA
+
+The hardware contract (transfer CSRs, ASIDs, range lock, SHA-2,
+handshake) is in the hardware TRM. This directory documents the
+SystemC/TLM-2.0 model (`secure_dma_model`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

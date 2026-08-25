@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[hmac-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`hmac_ip` is a loosely-timed TLM-2.0 model. Timing is wait-on-`clk_i`
+cycle counts, not a cycle-accurate SHA-2 datapath. The register file
+lives in `hmac_base` so a map change lands in one header. Hash and HMAC
+work is OpenSSL EVP, not an inlined compression function.
+
+[source,cpp]
+----
+class hmac_ip : public hmac_base
+----
+
+----
+hmac_ip          engine threads, interrupts, KM sideload   (hmac.*)
+  └─ hmac_base   csml_memory + software-visible words      (hmac_base.*)
+       └─ hmac_register.h   RO/WO/RW types
+hmac_interface.h   unused abstract `hmac_if` (ports are native sc_in/sc_out)
+----
+
+====== Threads and sockets
+
+Block absorb and digest finalize each have an `SC_THREAD` woken by their
+own start event. Interrupt pins are driven from a dedicated method so
+reset is not a second SystemC writer.
+
+`sep-vp` binds the TLM register target at the TRM HMAC aperture, the
+three interrupt pins plus fatal alert into the PIC / alert fabric, and
+the key-manager destination socket.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`hmac_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, HMAC window
+|`keymgr_tl_socket` |TLM 32-bit target |KM HMAC key socket
+|`clk_i` |`sc_in<double>` |Frequency in Hz (latency only)
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
+|`intr_hmac_done` |`sc_out<bool>` |SEP PIC done source
+|`intr_fifo_empty` |`sc_out<bool>` |SEP PIC FIFO-empty source
+|`intr_hmac_err` |`sc_out<bool>` |SEP PIC error source
+|`alert_fatal_fault` |`sc_out<bool>` |Fatal alert
+|===
+
+CMD writes notify the matching engine thread. MSG_FIFO writes pack
+strobed bytes into words and push the message FIFO. KEY writes fill
+internal WO storage; sideload XOR-reconstructs the KM shares into that
+storage. WIPE_SECRET overwrites key and digest. W1C / W1S interrupt
+registers recompute the pins.
+
+----
+  TLM MMIO ──► hmac_base::memory ──► block_processing_thread
+                                 └► digest_computation_thread
+                                           │
+                                           ▼
+                                    OpenSSL EVP / HMAC
+                                           │
+  keymgr_tl_socket ──► XOR reconstruct ──► key_storage
+                                           │
+                      interrupt_update ──► intr_hmac_*
+----
+
+====== CCI parameters
+
+Knobs are `csml_param`. Block and finalize costs are compile-time cycle
+constants, scaled by `clk_i`.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No cycle-accurate SHA-2 rounds.
+* FIFO depth is a software-visible counter, not a hardware RAM model.
+* `hmac_if` is not the bound port set; `sep-vp` uses the native pins.
+* No EDN / `entropy_src` ports.

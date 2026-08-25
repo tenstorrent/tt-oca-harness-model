@@ -1,44 +1,37 @@
 # otbn
 
-SystemC TLM2.0 model of the OpenTitan Big Number accelerator.  Implements a cryptographic coprocessor for public-key operations (RSA-2048, ECC).  Firmware loads instructions and data into IMEM/DMEM, starts execution, and waits for an interrupt on completion.
+SystemC TLM-2.0 loosely-timed model of the SEP OTBN accelerator.
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
 
-**C++ implementation approach:** OTBN does not run a second RISC-V ISS internally.  Each supported algorithm (RSA-2048, ECC, …) is implemented as a standalone C++ class (`otbn_algorithm` and its subclasses in `otbn.h`).  When firmware writes the `CMD.execute` register, the model dispatches to the appropriate C++ algorithm class, computes the result, writes it back to DMEM, and raises the done interrupt.  This gives correct functional behaviour without the overhead of instruction-level emulation.
+OTBN does not run a second ISS. Each supported algorithm is a C++
+`otbn_algorithm` subclass. A CMD execute dispatches to that class,
+writes DMEM, and raises done.
+
+## Status
+
+| Item | State |
+|---|---|
+| Register file + IMEM/DMEM windows | Implemented |
+| Algorithm dispatch (no ISA) | Implemented |
+| Interrupts, alerts, KM, LC | Implemented |
+| Standalone tests | `./run_tests.sh` |
+| Wired into `sep-vp` | OTBN window, PIC, KM socket, OTP stub |
 
 ## Files
 
 ```
-model/inc/otbn_base.h        Register map and TLM socket base
-model/inc/otbn.h             Algorithm C++ class hierarchy (otbn_algorithm, RSA, ECC, …)
-model/inc/otbn_ip.h          otbn_ip class declaration
-model/src/otbn_base.cpp      Base construction and register binding
-model/src/otbn.cpp           Algorithm dispatch and b_transport handler
-
-test/inc/testbench.h         Testbench module header
-test/inc/otbn_basetest.h     Base test class
-test/inc/otbn_test.h         Test case declarations
-test/src/testbench.cpp       sc_main entry
-test/src/otbn_basetest.cpp   Common test infrastructure
-test/src/otbn_test.cpp       Test orchestration
+include/otbn.h             otbn_ip + otbn_algorithm
+include/otbn_base.h        CSML register declaration
+include/otbn_register.h    RO/WO/RW types
+include/otbn_interfaces.h  OTP / LC interfaces
+algo/                      algorithm implementations
+src/                       LT implementation
+test/                      standalone bench
+doc/index.adoc             VP index
+doc/implementation.adoc    SystemC/TLM model
+doc/test_plan.adoc         cases + run commands
 ```
-
-## Address
-
-`0x10900000 – 0x1090BFFF`  (0xC000 bytes — registers + IMEM + DMEM)
-
-## Class
-
-```cpp
-class otbn_ip : public otbn_base
-```
-
-## Interface
-
-| Port / Socket | Direction | Description |
-|---|---|---|
-| `target_socket` | target | TLM-2.0 32-bit register + memory bus |
-| `intr_done_o` | `sc_out<bool>` | Execution complete interrupt |
-| `lc_escalate_en_i` | `sc_in<bool>` | Lifecycle escalation |
-| `rst_ni` | `sc_in<bool>` | Active-low reset |
 
 ## Building and Testing
 
@@ -61,4 +54,6 @@ make -j$(nproc)
 
 ## Documentation
 
-[High-Level Design](docs/design-docs/otbn-high-level-design.md)
+- [doc/index.adoc](doc/index.adoc) — VP index
+- [doc/implementation.adoc](doc/implementation.adoc) — SystemC/TLM model
+- [doc/test_plan.adoc](doc/test_plan.adoc) — standalone cases and run commands

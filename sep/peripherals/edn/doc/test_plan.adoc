@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[edn-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`edn_test` (`test/inc/edn_test.h`) is a TLM initiator into the register
+aperture plus `clk_i` / `rst_ni` and interrupt / alert monitors. CSRNG
+and endpoint behaviour is mocked inside the harness (`m_entropy_buffer`),
+not bound as DUT sockets. The DUT is `edn_ip`.
+
+Success: every check in the EDN_FUNC suites passes; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/edn`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean edn
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/test_edn_func_001.cpp` … `test_edn_func_014.cpp`.
+
+[cols="12%,28%,44%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|EDN_FUNC_001 |Register / TLM |Reset, access types, REGWEN |Positive
+|EDN_FUNC_002 |Init / config |CTRL fields after enable |Positive
+|EDN_FUNC_003 |MAIN_SM |State visibility and transitions |Positive
+|EDN_FUNC_004 |CSRNG commands |SW_CMD_REQ path (harness mock) |Positive
+|EDN_FUNC_005 |Endpoints |Buffer distribution (no DUT ports) |Positive
+|EDN_FUNC_006 |Multi-bit CTRL |Invalid encoding → recov alert |Negative
+|EDN_FUNC_007 |Command FIFOs |Overflow fatal |Negative
+|EDN_FUNC_008 |Bus consistency |Repeated genbits → recov alert |Negative
+|EDN_FUNC_009 |Interrupts |W1C, enable, INTR_TEST |Positive
+|EDN_FUNC_010 |Alerts / ERR_CODE |ALERT_TEST, ERR_CODE_TEST |Mixed
+|EDN_FUNC_011 |FIPS flag |Propagation on mocked blocks |Positive
+|EDN_FUNC_012 |Boot mode |Auto instantiate / generate |Positive
+|EDN_FUNC_013 |Auto mode |Generate / reseed FIFOs |Positive
+|EDN_FUNC_014 |SW port mode |Firmware command-by-command |Positive
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+Native suite (`sw/sep-vp-tests`):
+
+[source,bash]
+----
+cd sw/sep-vp-tests
+./run_sep_vp_tests.sh sep-edn-test
+----
+
+The hardware-tree firmware set under
+`sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep` has no EDN-named tests.

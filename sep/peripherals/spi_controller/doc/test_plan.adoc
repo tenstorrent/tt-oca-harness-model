@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[spi-controller-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`testbench` (`test/inc/testbench.h`) is a TLM initiator into the
+register aperture, a stub `spi_if` target, plus `clk_i` / `rst_ni`
+and helpers for CMD / FIFO / IRQ / DMA.
+
+Success: every check in the functional and coverage suites passes;
+`--asan` produces no `asan.log.*`; line coverage on the touched model
+sources meets the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/spi_controller`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean spi_controller
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/test_func000.cpp` … `test_func010.cpp`,
+`test_coverage.cpp`. Names are the `test_func*` / coverage titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|0 |Comprehensive reset |HW reset defaults; SW_RST flushes FIFOs |Positive
+|1 |Flash fast-read sequence |TX + dummy + RX with CSAAT |Positive
+|2 |Speed / SPI mode |Standard / Dual / Quad; CPOL/CPHA; illegal Dual+bidi |Mixed
+|3 |FIFO stall |TX underrun and RX overrun resume |Positive
+|4 |Interrupt-driven TX/RX |`spi_event_irq` watermarks |Positive
+|5 |Error recovery |CMDINVAL / CSID / ACCESSINVAL; SW_RST |Negative
+|6 |Multi-device CSID |CFG shadow per CS; CS switch |Positive
+|7 |Multi-segment CSAAT |Held CS across mixed directions |Positive
+|8 |Control flow |SPIEN gate; OUTPUT_EN; re-enable queued CMD |Positive
+|9 |Command queue depth |Queue full / CMDQD |Positive
+|10 |DMA trigger |TX/RX watermark rising and falling edges |Positive
+|C |Coverage extras |BE packing, INTR_TEST, FIFO overflow, SW_RST mid-queue |Mixed
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+They exercise the controller against the `spi_flash` BFM.
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh spi_ot_reg_test
+./run_test.sh spi_ot_sanity_test
+./run_test.sh spi_ot_standard_spi_txrx_test
+./run_test.sh spi_ot_dual_spi_test
+./run_test.sh spi_ot_quad_spi_test
+./run_test.sh spi_ot_multi_segment_test
+./run_test.sh spi_ot_flash_read_test
+./run_test.sh spi_ot_flash_write_read_test
+./run_test.sh spi_ot_interrupt_test
+./run_test.sh spi_ot_dma_rx_test
+./run_all_tests.sh            # full firmware suite, includes the above
+----
+
+Cadence xSPI tests are excluded: the VP models the OpenTitan host and
+its flash BFM only.

@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-output-remap-ctrl-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`sep_output_remap_ctrl_ip` is a loosely-timed TLM-2.0 model of
+`output_remap.sv`. CSR programming is the inherited target; the data
+path remaps then forwards. Index is taken from the window offset, not
+a range walk. There is no engine thread.
+
+[source,cpp]
+----
+class sep_output_remap_ctrl_ip : public sep_output_remap_ctrl_base
+----
+
+----
+sep_output_remap_ctrl_ip     remap_address, source-id re-tag   (sep_output_remap_ctrl.*)
+  └─ sep_output_remap_ctrl_base   csml_memory + REGION_ATTRS[16]
+       └─ sep_output_remap_ctrl_register.h
+----
+
+====== Threads and sockets
+
+`SC_METHOD(reset_handler)` on `rst_ni`. `data_b_transport` /
+`data_transport_dbg` remapped address, re-tag `sep_axi_extension`
+source-id to OTHERS, forward, then restore the caller's payload.
+
+`sep-vp` instantiates AP (`REGION_BASE` 0x1100_0000) and STEE
+(0x1180_0000). Each has a CSR window and an 8 MiB data window on
+SimpleBus. Both `remapped_socket`s bind `outbound_filter_mux`, which
+feeds the outbound filter.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |SimpleBus CSR (AP / STEE)
+|`data_socket` |TLM target |SimpleBus data window (AP / STEE)
+|`remapped_socket` |TLM initiator |`outbound_filter_mux` AP or STEE port
+|`rst_ni` |`sc_in<bool>` |Platform reset
+|===
+
+----
+  data_socket ──► remap_address(REGION_ATTRS[idx]) ──► remapped_socket
+                       │
+                       └ source_id → OTHERS (restored after forward)
+----
+
+====== CCI parameters
+
+Instance type (or explicit base / region count / idx_start) is a
+constructor argument, not CCI. Both silicon instances use 16 regions
+and `IDX_START` 19 (512 KiB granules).
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* Always remaps; there is no valid bit and no passthrough on a zero
+  offset — a zero REGION_ATTRS still splices zeros into the upper
+  bits.
+* AXI size / burst are unchanged; only address and source-id move.
+* No timeout into `sep_cpu_ctrl`.

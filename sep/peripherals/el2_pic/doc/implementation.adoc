@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[el2-pic-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`el2_pic_model` is a loosely-timed model of the VeeR EL2 programmable
+interrupt controller. It is **core-internal**: the TLM target is not
+on the SEP SimpleBus. `VeeRISSTlm` binds a private initiator to
+`target_socket` and holds a back-pointer for claim-id / EIP.
+
+256 slots (`NUM_INTERRUPTS`), source 0 reserved. This matches the SEP
+VeeR snapshot (`RV_PIC_TOTAL_INT_PLUS1 = 256`), not the RDL default of
+32.
+
+[source,cpp]
+----
+class el2_pic_model : public el2_pic_base   // namespace el2_pic
+----
+
+----
+el2_pic_model     gateways, arbitration, hart hand-off   (el2_pic.*)
+  └─ el2_pic_base   csml_memory + MEIPL/MEIE/MEIP/MEIGW*  (el2_pic_base.*)
+       └─ el2_pic_register.h
+----
+
+====== Threads and sockets
+
+`SC_METHOD(reset_process)` on `rst_ni` falling edge. Per-source
+gateways are `sc_spawn`'d methods in `before_end_of_elaboration`,
+sensitive to `irq_in[i]`. Unbound inputs are tied low so widening the
+PIC does not break existing parents. `clk_i` is bound but unused; all
+logic is event/callback-driven.
+
+On a winner change the model calls `VeeRISSTlm::set_pic_claim_id` and
+`trigger_external_interrupt` / `clear_external_interrupt`. Firmware
+writes to `meipt` / `meicurpl` notify the PIC through
+`notify_threshold_changed()`.
+
+`sep-vp` does not map this IP on SimpleBus. `och_sep_ss` fills
+`pic_inputs[]` (`irq_map.h`) and binds `riscv->get_pic().irq_in[i]`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`VeeRISSTlm::pic_isock_` (not SimpleBus)
+|`irq_in[0..255]` |`sc_vector<sc_in<bool>>` |`pic_inputs[]`; unused tied low
+|`clk_i` |`sc_in<bool>` |Internal `pic_clk_`; unused for timing
+|`rst_ni` |`sc_in<bool>` |Same net as the hart
+|===
+
+----
+  irq_in[i] ──► gateway_changed ──► source_pending_
+  MMIO / meipt ──► reevaluate_arbitration
+                         │
+                         ▼
+                  hart_->set_pic_claim_id / trigger_external_interrupt
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No meipt / meicurpl hardware stack. Nested interrupts above
+  threshold are not modelled; single-priority SEP firmware is
+  unaffected. The ISS also does not implement those CSRs, so the
+  compare uses threshold 0.
+* `clk_i` does not clock the gateways.
+* PIC sources that RTL drives but the VP does not model stay tied
+  low (`irq_map.h`).
+* `error_irq` from SPI has no PIC source.

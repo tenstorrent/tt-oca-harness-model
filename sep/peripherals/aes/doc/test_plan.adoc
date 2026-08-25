@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[aes-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`aes_test` (`test/inc/aes_test.h`) is a TLM initiator into the register
+aperture, a second initiator into `keymgr_tl_socket`, plus `clk_i` /
+`rst_ni` / `lc_escalate_en` and helpers that drive CTRL, DATA_IN, and
+TRIGGER. The DUT is `aes_model`.
+
+Success: every check in the FUNC-AES suites passes; `--asan` produces
+no `asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/aes`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean aes
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/testbench.cpp`, `aes_func001_test.cpp` …
+`aes_func009_test.cpp`. Suites are the FUNC-AES groups; do not treat
+the 99-row plan as something to paste here.
+
+[cols="12%,28%,44%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|Ports |Binding / reset / idle / alerts |`clk_i`, `rst_ni`, `idle_o`, alerts |Positive
+|FUNC-AES-001 |OpenSSL cipher equivalence |Modes × key lengths × directions |Positive
+|FUNC-AES-002 |Sideload and key protection |KM socket, write-ignore when busy |Mixed
+|FUNC-AES-003 |IV management |Chaining / CTR update vs ECB ignore |Positive
+|FUNC-AES-004 |Automatic operation |Auto-start, stall, OUTPUT_LOST |Mixed
+|FUNC-AES-005 |Manual operation |TRIGGER start and preconditions |Mixed
+|FUNC-AES-006 |Shadowed CTRL |Two-write protocol and REGWEN |Mixed
+|FUNC-AES-007 |Security register interface |Reseed-on-key-touch, TRIGGER clear |Positive
+|FUNC-AES-008 |Alerts and escalate |Fatal / recoverable, LC lock |Mixed
+|FUNC-AES-009 |LT timing |Quantum-keeper block delay |Positive
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh aes_sanity
+./run_test.sh aes_test
+./run_test.sh sep_aes_basic_smoke_test
+./run_test.sh sep_aes_all_modes_test
+./run_test.sh sep_aes_192_256_keylen_test
+./run_test.sh sep_aes_status_flow_test
+./run_all_tests.sh            # full firmware suite, includes the above
+----
+
+`sep_aes_mb_stream_test` needs a cocotb scratch handshake the VP does
+not provide. `sep_aes_reset_clear_test` is listed as a VP model gap in
+the firmware-suite README.

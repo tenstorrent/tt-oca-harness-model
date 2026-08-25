@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[otbn-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`otbn_ip` is a loosely-timed TLM-2.0 model. It does not run an OTBN ISS.
+A CMD execute spawns `otbn_algorithm::execute()`; instruction memory is
+loaded and checksummed but not decoded. The register file lives in
+`otbn_base` so a map change lands in one header.
+
+[source,cpp]
+----
+class otbn_ip : public otbn_base
+----
+
+----
+otbn_ip            CMD dispatch, IMEM/DMEM, KM, LC, alerts   (otbn.*)
+  └─ otbn_base     csml_memory + software-visible words      (otbn_base.*)
+       └─ otbn_register.h   RO/WO/RW types
+otbn_interfaces.h  otp_key_req_if / otp_key_rsp_if
+algo/              otbn_algorithm_* implementations
+----
+
+====== Threads and sockets
+
+EXECUTE, DMEM wipe, and IMEM wipe are `sc_spawn`'d. Life-cycle escalate
+is an `SC_METHOD` plus `lc_monitor_thread`. Interrupt and alert pins are
+driven from dedicated methods so reset is not a second SystemC writer.
+
+`sep-vp` binds the TLM register target at the TRM OTBN aperture (CSRs +
+IMEM + DMEM), the key-manager destination socket, OTP request to a stub
+(`otp_key_rsp` is bound internally), and the LC escalate / RMA pins.
+There is no EDN port; RND/URND use `rand()` / OpenSSL inside the model.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`otbn_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, OTBN window
+|`keymgr_tl_socket` |TLM target |KM OTBN key socket
+|`otp_key_req` |`sc_port<otp_key_req_if>` |`otp_key_req_stub`
+|`otp_key_rsp` |`sc_export<otp_key_rsp_if>` |Internal mock channel
+|`clk_core` |`sc_in<double>` |Frequency in Hz (latency only)
+|`rst_n` |`sc_in<bool>` |Active-low; falling edge clears state
+|`lc_escalate_req` |`sc_in<bool>` |Escalate into LOCKED
+|`lc_escalate_rsp` |`sc_out<bool>` |Escalate ack
+|`lc_rma_req` |`sc_in<bool>` |RMA wipe request
+|`lc_rma_rsp` |`sc_out<bool>` |RMA ack
+|`intr_done` |`sc_out<bool>` |SEP PIC done source
+|`alert_fatal` |`sc_out<bool>` |Fatal alert
+|`alert_recov` |`sc_out<bool>` |Recoverable alert
+|===
+
+CMD execute selects `algorithm_type` and runs it against a DMEM pointer.
+Algorithms may call CSR / WDR / RND callbacks. Secure wipe randomizes
+the matching memory. LOAD_CHECKSUM updates CRC-32-IEEE on IMEM writes.
+
+----
+  TLM MMIO ──► otbn_base::memory ──► sc_spawn execute_algorithm
+                                 └► sc_spawn secure_wipe_*
+                                           │
+                                           ▼
+                                    otbn_algorithm (algo/)
+  keymgr_tl_socket ──► WDR key shares
+  otp_key_req ──► stub
+                      interrupt_update_method ──► intr_done
+                      alert_update_method     ──► alert_*
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used. `algorithm_type` is
+applied at construction (`select_algorithm`).
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|`algorithm_type` |`rsa_2048` |Which `otbn_algorithm` to instantiate
+|===
+
+Constructor also takes `urnd_seed` (default `0x12345678`) for `srand()`.
+
+====== Modeling gaps versus RTL
+
+* No OTBN ISA execution; IMEM is storage plus checksum only.
+* INSN_CNT is the algorithm's mock count, not retired instructions.
+* No EDN ports; entropy is `rand()` / OpenSSL inside the model.
+* OTP scramble keys are a fixed mock on `otp_key_rsp`.
+* Host DMEM window vs protected tail is access-checked, not scrambled.
+* Wide-register file is a C++ array, not the RTL WDR datapath.

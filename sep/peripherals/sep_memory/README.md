@@ -1,51 +1,38 @@
-# sep_memory
+# SEP Memory
 
-SystemC TLM2.0 memory module for the SEP virtual platform.  A single `SEPMemory` class covers all four platform memory regions — SRAM, ROM, ITCM, and DTCM — differentiated only by the `read_only` constructor flag.
+SystemC TLM-2.0 loosely-timed sparse store used for SEP SRAM, ROM,
+ITCM, and DTCM. Apertures are in the hardware TRM. This tree has the
+model and how to build it. Sources live under `model/`, not `include/`.
+
+## Status
+
+| Item | State |
+|---|---|
+| TLM `b_transport` / DMI / `transport_dbg` | Implemented |
+| ROM ignore-write on `b_transport` | Implemented |
+| ECC / BIST | Not modelled |
+| Standalone tests | None; `./run_tests.sh` is build-only |
+| Wired into `sep-vp` | Four instances + `spi_mux` stub |
 
 ## Files
 
 ```
-model/inc/sep_memory.h      SEPMemory class declaration
-model/src/sep_memory.cpp    SEPMemory implementation
+model/inc/sep_memory.h         SEPMemory
+model/src/sep_memory.cpp       TLM + load_if
+doc/implementation.adoc        SystemC/TLM model
+doc/test_plan.adoc             how to build + platform tests
 ```
 
-Storage is provided by `PagedMemory` from `sep/utils/paged-memory/paged_mem.h` — a header-only pure-C++ sparse engine that lazily allocates 4 KB pages.
+Storage is `PagedMemory` from `sep/utils/paged-memory/paged_mem.h`.
 
-## Instantiation
+## Building and testing
 
-```cpp
-SEPMemory(sc_module_name name, bool read_only = false);
-
-// Platform usage (och_sep_ss.hpp):
-sram = new SEPMemory("sram", false);  // RW  — 0x10000000–0x1003FFFF (256 KB)
-rom  = new SEPMemory("rom",  true);   // RO  — 0x10040000–0x1004FFFF  (64 KB)
-itcm = new SEPMemory("itcm", false);  // RW  — 0xC0000000–0xC003FFFF (256 KB)
-dtcm = new SEPMemory("dtcm", false);  // RW  — 0xC0040000–0xC005FFFF (128 KB)
+```bash
+./run_tests.sh              # Release build of the library
+./run_tests.sh --debug
+./run_tests.sh --clean
 ```
 
-## Interfaces
-
-| Interface | Notes |
-|---|---|
-| `tsock` (`simple_target_socket`) | TLM2.0 bus connection |
-| `b_transport` | Read/write; ROM ignores writes; +10 ns timing annotation |
-| `get_direct_mem_ptr` | Per-page DMI for allocated pages only |
-| `transport_dbg` | Debug access, no timing, ROM writes permitted |
-| `load_data(src, addr, n)` | Bulk load from host pointer (ELF loader) |
-| `load_zero(addr, n)` | Zero-fill region (BSS init) |
-| `load_binary_file(filename, addr)` | mmap a file into the store |
-
-## Logging
-
-CSML logger with a `verbosity` CCI parameter. Override at runtime via `accellera_config.ini`:
-
-```ini
-och_sep_ss1.sram.verbosity : 1
-och_sep_ss1.rom.verbosity  : 1
-och_sep_ss1.itcm.verbosity : 1
-och_sep_ss1.dtcm.verbosity : 1
-```
-
-## Documentation
-
-- [High-Level Design](docs/design-docs/sram-high-level-design.md) — architecture, TLM interfaces, platform wiring, design decisions
+There is no unit-test binary. Firmware coverage is on `sep-vp`
+(`rom_sanity_test`, `sram_perf_test`, and every image loaded into
+ROM/ITCM). Commands are in `doc/test_plan.adoc`.

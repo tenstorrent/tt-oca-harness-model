@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[i3c-controller-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`i3c_controller_tb` and `i3c_controller_neg_tb` (`test/`). The primary
+bench uses a 3-instance DUT and a bus model for one target at dynamic
+address `0x42`. The negative bench probes constructor fatals without
+`sc_start`.
+
+Success: both benches print `ALL TESTS PASSED`; CTest reports 2/2;
+`--asan` produces no `asan.log.*`.
+
+How to run (from `smc/peripherals/i3c_controller`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run both benches
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh i3c_controller
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`.
+
+====== Standalone cases
+
+Sources: `test/i3c_controller_tb.cpp`, `i3c_controller_neg_tb.cpp`.
+Names follow `doc/03_I3C_CONTROLLER_Test_Plan.md`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Reset values |HCI_VERSION, HC_CONTROL MODE_SELECTOR, thresholds |Positive
+|2 |RW / RO / W1C |Round-trip; RO ignore; INTR_FORCE + W1C |Positive
+|3 |DAT / DCT windows |Direct-access write/read-back |Positive
+|4 |Bus enable |`PRESENT_STATE.AC_CURRENT_OWN` follows |Positive
+|5 |Private write |TX + command → SUCCESS; bus sees LE bytes |Positive
+|6 |Private read |Response + RX via XFER_DATA_PORT |Positive
+|7 |CCC write |CP=1 CCC → SUCCESS |Positive
+|8 |Address NACK |Empty DAT index → ADDRESS_NACK |Positive
+|9 |TX underflow |Short TX → OVERFLOW/UNDERFLOW + TRANSFER_ERR |Positive
+|10 |IBI injection |`inject_ibi` → IBI_PORT status + payload |Positive
+|11 |IRQ aggregation |RESP_READY signal → `irq_o[0]` |Positive
+|12 |RESET_CONTROL |CMD_QUEUE_RST self-clears |Positive
+|13 |Multi-instance |Instance 1 writes do not leak |Positive
+|14 |transport_dbg |DAT back-door matches `dbg_read` |Positive
+|15 |QUEUE_SIZE |Reflects configured depths |Positive
+|16 |CCI |Mutable delay; immutable instance count |Positive
+|N1 |Constructor guards |instances/delays/FIFO fatals |Negative
+|N2 |TLM errors |Width / align / BE / OOW / bad cmd |Negative
+|N3 |RAZ/WI hole |Unmapped in-window offset |Negative
+|N4 |transport_dbg reject |Non-table / malformed return 0 |Negative
+|===
+
+====== Platform firmware tests
+
+These run on `smc-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-i3c-loopback-test
+./run_smc_vp_tests.sh smc-i3c-test
+----
+
+`smc-i3c-loopback-test` uses the instance-0 echo bus model on `smc-vp`.
+`smc-i3c-test` is HCI_VERSION / HC_CONTROL / PIO_CONTROL;
+`sw/smc-vp-tests/README.md` currently lists that directory as
+documented but not present in the tree.

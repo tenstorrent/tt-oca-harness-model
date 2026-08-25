@@ -1,43 +1,31 @@
 # aes
 
-SystemC TLM2.0 model of the AES hardware accelerator.  Supports AES-128 and AES-256 encryption and decryption in ECB/CBC/CTR modes via a memory-mapped register interface.
+SystemC TLM-2.0 loosely-timed model of the SEP AES accelerator.
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+## Status
+
+| Item | State |
+|---|---|
+| Register file + CTRL/STATUS handshake | Implemented |
+| Cipher engine (OpenSSL EVP) | Implemented |
+| Sideload, alerts, LC escalate | Implemented |
+| Standalone tests | `./run_tests.sh` |
+| Wired into `sep-vp` | AES window, KM socket, PIC alerts |
 
 ## Files
 
 ```
-model/inc/aes_base.h           Register map and TLM socket base
-model/inc/aes.h                aes_model class declaration
-model/src/aes_base.cpp         Base construction and register binding
-model/src/aes.cpp              Cipher engine and b_transport handler
-
-test/inc/testbench.h           Testbench module header
-test/inc/aes_basetest.h        Base test class
-test/inc/aes_test.h            Test case declarations
-test/src/testbench.cpp         sc_main entry
-test/src/aes_basetest.cpp      Common test infrastructure
-test/src/aes_test.cpp          Test orchestration
-test/src/aes_func001_test.cpp  } Functional test cases
-test/src/aes_func00N_test.cpp  }
+include/aes.h              aes_model
+include/aes_base.h         CSML register declaration
+include/aes_register.h     RO/WO/RW types
+src/                       LT implementation
+test/                      standalone bench
+doc/index.adoc             VP index
+doc/implementation.adoc    SystemC/TLM model
+doc/test_plan.adoc         cases + run commands
 ```
-
-## Address
-
-`0x10910000 – 0x10910087`  (0x88 bytes, AES_REG)
-
-## Class
-
-```cpp
-class aes_model : public aes_base
-```
-
-## Interface
-
-| Port / Socket | Direction | Description |
-|---|---|---|
-| `target_socket` | target | TLM-2.0 32-bit register bus |
-| `intr_o` | `sc_out<bool>` | Interrupt output |
-| `rst_ni` | `sc_in<bool>` | Active-low reset |
-| `lc_escalate_en_i` | `sc_in<bool>` | Lifecycle escalation input |
 
 ## Building and Testing
 
@@ -60,4 +48,6 @@ make -j$(nproc)
 
 ## Documentation
 
-[High-Level Design](docs/design-docs/aes-high-level-design.md)
+- [doc/index.adoc](doc/index.adoc) — VP index
+- [doc/implementation.adoc](doc/implementation.adoc) — SystemC/TLM model
+- [doc/test_plan.adoc](doc/test_plan.adoc) — standalone cases and run commands

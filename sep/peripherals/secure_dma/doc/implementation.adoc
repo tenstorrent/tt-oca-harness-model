@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[secure-dma-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`secure_dma_model` is a loosely-timed TLM-2.0 model. The transfer
+engine issues blocking read-then-write pairs on the ASID-selected
+initiator socket. SHA-2 is OpenSSL. Timing uses
+`tlm_quantumkeeper` against `clk_i`.
+
+[source,cpp]
+----
+class secure_dma_model : public secure_dma_base
+----
+
+----
+secure_dma_model     engine, SHA-2, handshake, IRQ   (secure_dma.*)
+  └─ secure_dma_base csml_memory + target_socket     (secure_dma_base.*)
+----
+
+====== Threads and sockets
+
+`transfer_engine_thread` waits on `CONTROL.go` (or a handshake
+trigger). `handshake_monitor_thread` watches `lsio_trigger[10:0]`.
+`reset_thread` clears state. `interrupt_driver_method` is the only
+writer of the three interrupt pins.
+
+`sep-vp` binds the register target at the TRM DMA aperture. OT and
+CTN initiators go to the SEP xbar; the 64-bit SYS initiator goes
+through `dma_sys_bus_adapter`. SPI TX handshake drives
+`lsio_trigger[0]`. Done / chunk-done / error go to the PIC.
+
+Hardware-handshake RX does not drain on `go`. The engine waits
+for the first `lsio_trigger` so arming before a peripheral read
+does not empty an idle FIFO. Memory-to-memory still starts on
+`go`.
+
+[cols="36%,28%,36%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, DMA window
+|`ot_initiator_socket` |TLM 32-bit initiator |SEP xbar, DMA OT leg
+|`ctn_initiator_socket` |TLM 32-bit initiator |SEP xbar, DMA CTN leg
+|`sys_initiator_socket` |TLM 64-bit initiator |`dma_sys_bus_adapter`
+|`clk_i` |`sc_in<sc_time>` |10 ns period on `sep-vp`
+|`rst_ni` |`sc_in<bool>` |Platform reset
+|`lsio_trigger[11]` |`sc_in<bool>` |`[0]` from SPI; rest tied false
+|`dma_done_intr` |`sc_out<bool>` |SEP PIC
+|`dma_chunk_done_intr` |`sc_out<bool>` |SEP PIC
+|`dma_error_intr` |`sc_out<bool>` |SEP PIC
+|`alert_fatal_fault` |`sc_out<bool>` |ALERT_TEST; unbound consumer
+|===
+
+ASID `0x7` / `0x9` / `0xA` select OT / SYS / CTN. Security policy
+blocks OT-private ↔ SoC unless the transfer stages through the
+enabled DMA range.
+
+----
+  TLM MMIO ──► CONTROL.go ──► transfer_engine_thread
+                                  │
+  lsio_trigger[] ──► handshake_monitor_thread
+                                  │
+                    ot / ctn / sys initiator ──► memory
+                                  │
+                    OpenSSL SHA-2 ──► SHA2_DIGEST[]
+                                  │
+                    interrupt_driver_method ──► dma_*_intr
+----
+
+====== CCI parameters
+
+Knobs are `csml_param` and are re-read when used. Transfer rate
+comes from `clk_i`, not a cycle-count parameter.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* No cycle-accurate bus protocol or SHA-2 datapath.
+* Single channel; no burst packing.
+* Handshake interrupt-clear writes to SoC buses have no
+  completion guarantee, as in the TRM.
+* RACL on the system bus is not modelled as a separate port.
+* Not suitable for performance measurement.

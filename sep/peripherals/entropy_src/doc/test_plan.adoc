@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[entropy-src-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+The standalone bench (`test/inc/testbench.h`) is a TLM initiator into
+the register aperture plus `rst_ni` and an `irq_o` monitor. The DUT is
+`entropy_src_ip`.
+
+Success: every check in the FUNC suites passes; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/entropy_src`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean entropy_src
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/func001_tests.cpp` … `func008_tests.cpp`,
+`test_coverage.cpp`.
+
+[cols="12%,28%,44%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|FUNC-001 |TLM register transport |RO/RW/WO masks, identity |Positive
+|FUNC-002 |Interrupts |W1C, INTR_TEST, `irq_o` |Mixed
+|FUNC-003 |Config retention |Oscillator / decorrelator CSRs |Positive
+|FUNC-004 |Background fill |FIFO enable, downsample, startup delay |Positive
+|FUNC-005 |Health-test CSRs |Enable and status (stubbed tests) |Positive
+|FUNC-006 |FIFO queue |Push / pop / overflow / underflow |Mixed
+|FUNC-007 |Software reset |CTRL.RESET sequence |Positive
+|FUNC-008 |Added RDL regs |Reset and access on extra words |Positive
+|===
+
+====== Platform firmware tests
+
+The IP README does not name platform firmware tests. Neither
+`sw/sep-vp-tests` nor `fw-tests-from-tt-oca-hw/fw/sep` lists an
+entropy-source-named test. Register access is covered by the standalone
+bench above.

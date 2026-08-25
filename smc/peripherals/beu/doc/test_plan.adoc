@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[beu-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/beu_tb.cpp` is a TLM initiator plus `inject_error()`.
+`test/beu_neg_tb.cpp` covers TLM error codes, RO writes, and gated
+injection.
+
+Success: both benches print `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/beu`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh beu
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Sources: `test/beu_tb.cpp`, `test/beu_neg_tb.cpp`. Names are the
+`[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset values |ENABLE default; IRQs low |Positive
+|2 |register RW/RO/masking |Reserved bits, PHYS_ADDR RO |Positive
+|3 |basic error injection |Accrued + CAUSE/PHYS_ADDR latch |Positive
+|4 |first-error latching / re-arm |Second error accrues; CAUSE=0 re-arms |Positive
+|5 |recording-enable gating |Disabled source accrues only |Positive
+|6 |local + PLIC interrupt aggregation |OR of accrued × mask |Positive
+|7 |per-source mask selectivity |One source does not raise the other pin |Positive
+|8 |transport_dbg / dbg_reg peek |Side-effect-free |Positive
+|9 |CCI introspection |`access_delay_ns` |Positive
+|N1 |b_transport response codes |Width / align / window / command |Negative
+|N2 |RO PHYS_ADDR write ignored |Software RO |Positive
+|N3 |transport_dbg edge cases |Debug reject path |Negative
+|N4 |gated injection |Disabled source does not latch CAUSE |Positive
+|===
+
+====== Platform firmware tests
+
+These run on `smc-vp` with a RISC-V bare-metal toolchain. Build the
+VP first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-beu-test
+./run_smc_vp_tests.sh smc-beu-error-test
+----
+
+`smc-beu-test` is register smoke across the four per-core windows.
+`smc-beu-error-test` opts into `beu_inject*` in its `.ini` and checks
+accrual, software ack, and per-core isolation. The numbered Markdown
+`doc/04_BEU_Platform_Integration_Test_Plan.md` is the historical
+integration checklist; do not treat it as a second CSR spec.

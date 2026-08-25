@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[bootrom]]
+==== Boot ROM
+
+The hardware contract (read-only `mem`, preload, write-ignore) is in
+the hardware TRM. This directory documents the SystemC/TLM-2.0 model
+(`smc::bootrom`) and how to test it. The same module backs the SMC
+cluster boot path and the structurally identical SEP ROM; role is CCI
+presets only.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

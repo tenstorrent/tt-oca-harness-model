@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[key-manager]]
+==== Key Manager
+
+The hardware contract (mailbox aperture, command set, Key and Policy
+Vault, sideload, interrupts) is in the hardware TRM. This directory
+documents the SystemC/TLM-2.0 model (`key_manager_model`) and how to
+test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

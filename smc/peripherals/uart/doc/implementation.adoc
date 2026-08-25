@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[uart-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::uart` is a loosely-timed TLM-2.0 model of one NS16550A-compatible
+UART. Timing is annotated `access_delay_ns`, not bit-level serial
+timing. TX/RX are character-granularity. `b_transport` never calls
+`wait()`; the quantum keeper is the initiator's. DMI is never granted
+(RBR/IIR/MSR reads have side effects).
+
+[source,cpp]
+----
+class uart : public sc_core::sc_module
+----
+
+SCR / ECR / ITR use the shared `regmodel::Register8` map. DLAB-banked
+and side-effect registers stay in `reg_read` / `reg_write`.
+
+====== Threads and sockets
+
+`reset_proc` clears state. `modem_method` samples CTS/DSR/RI/DCD and
+sets MSR deltas. `rx_timeout_method` raises the RX-timeout interrupt
+after a coarse functional delay. `recompute_method` is the sole writer
+of every `sc_out` (`update_outputs()`). State-changing paths call
+`schedule_recompute()`.
+
+THR writes push and functionally drain the TX FIFO in one recompute.
+RX arrives through `inject_rx_char()` or system loopback. Line loopback
+(`MCR.LINE_LOOP`) takes precedence over system loopback (`MCR.LOOP`).
+Baud divisor 0 disables TX and RX.
+
+`smc-vp` instantiates `NUM_UART` (4) copies. The peripheral router binds
+each `reg_socket` at the TRM 16550 window. `irq_o` enters the interrupt
+aggregator; modem inputs are tied idle (`rx` high, `cts` asserted,
+`dsr`/`ri`/`dcd` high). `uart_[0]` can feed the platform console via
+`dbg_tx_pop()`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM target |`periph_router` UART windows
+|`rst_n_i` |`sc_in<bool>` |Platform reset
+|`rx_i` / `tx_o` |serial |Idle-high; console may drain TX
+|`cts_ni` `dsr_ni` `ri_ni` `dcd_ni` |`sc_in<bool>` |Tied idle on `smc-vp`
+|`rts_no` `dtr_no` `out1_no` `out2_no` |`sc_out<bool>` |Local signals
+|`rxrdy_o` `txrdy_o` |`sc_out<bool>` |DMA handshake (unbound consumer)
+|`err_o` |`sc_out<bool>` |Aggregate RX error
+|`irq_o` |`sc_out<bool>` |PLIC via interrupt aggregator
+|===
+
+----
+  TLM MMIO ──► reg_socket ──► DLAB decode / FIFOs
+  inject_rx_char / LOOP ──► RX FIFO
+  THR write ──► TX FIFO ──► drain_tx / dbg_tx_pop
+                                    │
+  modem_method / rx_timeout ──► schedule_recompute
+                                    │
+                         recompute_method ──► irq / DMA / modem outs
+----
+
+====== CCI parameters
+
+FIFO depths are immutable after construction. `access_delay_ns` is
+re-read on every transaction.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`tx_fifo_depth` |32 |TX FIFO bytes (1..4096)
+|`rx_fifo_depth` |32 |RX FIFO bytes (1..4096)
+|`access_delay_ns` |2.0 |Annotated TLM access delay
+|===
+
+====== Modeling gaps versus RTL
+
+* No bit-level serialisation. Baud rate only disables TX/RX when the
+  divisor is 0. Two models cannot handshake at a real baud rate.
+* RX timeout is a coarse `sc_event`, not 4 character-times.
+* No noise/glitch filter or input synchronisers.
+* TX FIFO drains in one recompute (LT: software always sees consistent
+  THRE/TEMT after its write).

@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[reset-unit-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`reset_unit_tb` and `reset_unit_neg_tb` (`test/`). The primary bench
+drives every input pin, `set_jtag_ctrl()`, and the register target.
+The negative bench probes constructor fatals without `sc_start`.
+
+Success: both benches print `ALL TESTS PASSED`; CTest reports 2/2;
+`--asan` produces no `asan.log.*`.
+
+How to run (from `smc/peripherals/reset_unit`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run both benches
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh reset_unit
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`.
+
+====== Standalone cases
+
+Sources: `test/reset_unit_tb.cpp`, `reset_unit_neg_tb.cpp`. Names
+follow `doc/03_RESET_UNIT_Test_Plan.md`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Out-of-reset derivation |Derived resets deasserted |Positive
+|2 |RW registers |Warm/hold defaults and round-trip |Positive
+|3 |Lock semantics |woset sticky; locked bits write-protect |Positive
+|4 |Per-subsystem bundle |SS_* bits map to `ss_reset_ctrl_o[i]` |Positive
+|5 |`ss_config_o` |SS_CONFIG reflected on the port |Positive
+|6 |Straps |STRAPS_LO/HI follow `captured_straps_i` |Positive
+|7 |Cold reset |Asserts cold/primary/core; clears regs |Positive
+|8 |WDT 2nd timeout |Core + WDT reset; primary stays up |Positive
+|9 |Fuse reset |Gates core only |Positive
+|10 |JTAG overrides |Forced cold / per-SS warm; clear restores |Positive
+|11 |Isolate logic |SW / pin-enable / VIS / skip_mem_repair |Positive
+|12 |FLR cool-reset |Latch, pulse, SW clear |Positive
+|13 |Reset domains |Cool keeps cold-domain FLR/isolate |Positive
+|14 |SYNC_REG |Drives `sync_irq_o` |Positive
+|15 |transport_dbg |Back-door write/read |Positive
+|16 |CCI |Discovery; mutable delay; immutable count |Positive
+|17 |dump_state |Snapshot fields |Positive
+|N1 |Constructor guards |subsystems 0/33, negative periods |Negative
+|N2 |TLM errors |Width / align / BE / OOW / bad cmd |Negative
+|N3 |RAZ/WI hole |Unmapped offset OK + zero |Negative
+|N4 |transport_dbg reject |Malformed returns 0 |Negative
+|===
+
+====== Platform firmware tests
+
+These run on `smc-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-reset-test
+----
+
+`smc-reset-test` is SS_CONFIG round-trip plus the two sticky locks.
+`sw/smc-vp-tests/README.md` currently lists that directory as
+documented but not present in the tree.

@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[csrng-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+The standalone bench (`test/inc/testbench.h`) is a TLM initiator into
+the register aperture plus `clk_i` / `rst_ni` /
+`otp_en_csrng_sw_app_read` and monitors for the four interrupt and two
+alert pins. The DUT is `csrng_model`.
+
+Success: every check in the FUNC suites passes; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/csrng`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean csrng
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/csrng_func001_drbg_lifecycle.cpp`,
+`csrng_func002_pseudorandom_generation.cpp`,
+`csrng_func003_seed_life_management.cpp`,
+`csrng_func005_command_interface_fsm.cpp`,
+`csrng_func008_register_callbacks.cpp`,
+`csrng_func009_control_configuration.cpp`.
+
+[cols="12%,28%,44%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|FUNC-001 |DRBG lifecycle |Instantiate / generate / reseed / update / uninstantiate |Mixed
+|FUNC-002 |GENBITS |Block queue, FIPS flag, OTP gate |Positive
+|FUNC-003 |Seed life |RESEED_INTERVAL and counter |Mixed
+|FUNC-005 |CMD FSM |SW_CMD_STS, MAIN_SM_STATE, interrupts |Mixed
+|FUNC-008 |Register callbacks |Reset, access types, locks |Positive
+|FUNC-009 |CTRL / REGWEN |Multi-bit enables, FIPS force |Mixed
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+Native suite (`sw/sep-vp-tests`):
+
+[source,bash]
+----
+cd sw/sep-vp-tests
+./run_sep_vp_tests.sh sep-crng-test
+----
+
+The hardware-tree firmware set under
+`sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep` has no CSRNG-named
+tests.

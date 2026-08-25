@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[pll-wrapper-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+The IP is `smc::pll::pll_wrapper`. Nested classes
+(`pll_cntl`, `cgm`, `awm`, `reg_block`) are sub-blocks of that
+wrapper, not standalone platform IPs. The wrapper presents one 32-bit
+target, decodes each access onto a child window, rebases the offset,
+and forwards over an internal initiator socket.
+
+[source,cpp]
+----
+class pll_wrapper : public sc_core::sc_module
+----
+
+----
+pll_wrapper          decode + REG_UPDATE lock observe   (pll_wrapper.*)
+  ├─ pll_cntl        CGM/AWM status, mux, counters      (pll_cntl.*)
+  ├─ cgm × 2         clock-gen CSRs                     (cgm.*)
+  ├─ awm × 2         GLOBAL + FREQUENCY + CGM maps      (awm.*)
+  └─ reg_block       table-driven 32-bit file           (pll_reg_block.*)
+----
+
+`reg_block` is a behaviour-free register file: RO/RW/WO masks and
+self-clearing strobes from a static `reg_spec` table. Hardware
+status stays at reset unless a test `poke()`s it or the wrapper's
+`observe_write` hook runs.
+
+====== Threads and sockets
+
+The wrapper has no `SC_THREAD`. `b_transport` on `reg_socket`
+forwards to `init_cntl_` / `init_cgm0_` / `init_cgm1_` /
+`init_awm0_` / `init_awm1_`. Each child has its own `reg_socket`
+and `rst_n_i`. Firmware uses mixed 16-bit and 32-bit MMIO;
+`reg_block` accepts naturally aligned 1/2/4-byte accesses within one
+32-bit word (RMW).
+
+A CGM or AWM `REG_UPDATE` strobe is the lock model: the wrapper sets
+the firmware-polled `pll_cntl` lock_detect bits immediately so
+busy-wait programming sequences complete. Reset clears lock.
+
+`smc-vp` binds `pll_wrap.reg_socket` on `periph_router` and
+`rst_n_i` to the platform reset.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`periph_router` PLL wrap window
+|`rst_n_i` |`sc_in<bool>` |Active-low (fans out to child `rst_n_i`)
+|===
+
+Child accessors `cntl()`, `cgm_0()`, `cgm_1()`, `awm_0()`,
+`awm_1()` are test/debug back-doors.
+
+----
+  TLM MMIO ──► pll_wrapper::b_transport ──► init_* ──► child reg_block
+  CGM/AWM REG_UPDATE ──► observe_write ──► pll_cntl lock_detect
+----
+
+====== CCI parameters
+
+Each `reg_block` (and therefore each child) has `access_delay_ns`
+(default 1.0 ns on this IP). The wrapper copies `pll_wrapper_cfg`
+into the children at construction; there is no wrapper-level CCI
+param.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`access_delay_ns` (per child) |1.0 |Annotated `b_transport` delay
+|===
+
+====== Modeling gaps versus RTL
+
+* No PLL analog, VCO, SSC, or clock datapath. Monitor/counter
+  status stays at reset unless `poke()`d.
+* Lock asserts on the `REG_UPDATE` strobe with no settle time.
+* AWM droop-detector companion in `awm_wrap` is not instantiated.
+* Firmware polls `pll_cntl` aggregated status, not the child's own
+  lock register — the wrapper is what makes that poll succeed.

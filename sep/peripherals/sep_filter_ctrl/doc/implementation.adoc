@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-filter-ctrl-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`sep_filter_ctrl_ip` is a loosely-timed TLM-2.0 model of
+`axi_filter_wrap` / `traffic_filter`. CSR programming is the inherited
+target; the data path is `data_socket` → match → `filtered_socket`.
+Deny is `TLM_ADDRESS_ERROR_RESPONSE`. There is no engine thread.
+
+[source,cpp]
+----
+class sep_filter_ctrl_ip : public sep_filter_ctrl_base
+----
+
+----
+sep_filter_ctrl_ip     match, skip, auto-correct start/end   (sep_filter_ctrl.*)
+  └─ sep_filter_ctrl_base   csml_memory + FILTER_CONFIG / START / END
+       └─ sep_filter_ctrl_register.h
+----
+
+====== Threads and sockets
+
+`SC_METHOD(reset_handler)` on `rst_ni`. `data_b_transport` /
+`data_transport_dbg` run in the initiator's call stack. Unbound
+`filter_skip_i` ties low (RTL constant on the outbound instance).
+
+`sep-vp` maps CSR targets only. Outbound data comes from
+`outbound_filter_mux` (AP remap + STEE remap + SMU). Inbound data
+comes from `smn_inbound_to_filter`. Outbound `filtered_socket` leaves
+the chiplet; inbound feeds `smn_remap`. Inbound `filter_skip_i` is
+`feat_ctrl_o.sep_debug`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`target_socket` |TLM 32-bit |SimpleBus CSR windows (outbound / inbound)
+|`data_socket` |TLM target |Mux (outbound) or SMN inbound (inbound)
+|`filtered_socket` |TLM initiator |SMN outbound / `smn_remap`
+|`rst_ni` |`sc_in<bool>` |Platform reset
+|`filter_skip_i` |`sc_in<bool>` |Tied low (outbound); SEP debug (inbound)
+|===
+
+Entry 0 wins. Range compare is page (burst) or 8-byte word, then
+source-id / NS / burst / R-W permission. Miss with BlockByDefault
+denies. `filter_skip_i` forwards everything.
+
+----
+  data_socket ──► match_entry ──► filtered_socket   (hit + allowed)
+                               └► TLM_ADDRESS_ERROR (miss or deny)
+  filter_skip_i ──► forward all
+----
+
+====== CCI parameters
+
+Instance type (or a raw entry count) is a constructor argument, not
+CCI.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level
+|===
+
+====== Modeling gaps versus RTL
+
+* AXI burst length is the TLM beat size, not an AXI LEN field.
+* `group_id` is stored and not used in the match.
+* No isolate-write/read sideband beyond the TLM error response.
+* Timeout / stall reporting into `sep_cpu_ctrl` is not modelled.

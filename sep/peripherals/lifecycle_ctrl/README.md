@@ -35,6 +35,10 @@ test/inc/lifecycle_ctrl_test.h        Test case declarations
 test/src/testbench.cpp                sc_main entry
 test/src/lifecycle_ctrl_basetest.cpp  Common test infrastructure
 test/src/lifecycle_ctrl_test.cpp      Test orchestration
+
+doc/index.adoc                        VP set entry (includes the two pages)
+doc/implementation.adoc               SystemC/TLM model
+doc/test_plan.adoc                    cases + run commands
 ```
 
 ## Address
@@ -110,5 +114,9 @@ the demote encoding and the lock scope in a single run.
 
 ## Documentation
 
-- [High-Level Design](docs/02_lifecycle_ctrl_HighLevel_Design.md)
-- [Test Plan](docs/03_lifecycle_ctrl_Test_Plan.md)
+Architecture, CSRs, and programming sequences are in the hardware
+TRM. This tree documents the SystemC/TLM model:
+
+- [index](doc/index.adoc) — VP set entry
+- [implementation](doc/implementation.adoc) — sockets, threads, CCI, gaps
+- [test plan](doc/test_plan.adoc) — standalone cases and platform runs

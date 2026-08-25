@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[scratchpad-ram-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::scratchpad_ram` is a loosely-timed TLM-2.0 SRAM. Reads and writes
+honour byte-enables. Reset does not clear the array. `b_transport`
+annotates `access_delay_ns` and never calls `wait()`. DMI is not
+granted (a DMI write would bypass SECDED re-encode).
+
+[source,cpp]
+----
+class scratchpad_ram : public sc_core::sc_module
+----
+
+Accepted accesses are naturally aligned 1/2/4/8 bytes. The RTL four-
+partition physical split is flattened into one `data_` vector.
+
+====== Threads and sockets
+
+The only process is `reset_proc` (`SC_METHOD` on `rst_n_i`): empty
+body; SRAM retains contents. There are no output ports.
+
+SECDED is behavioural. `dbg_inject_ecc_error(off, true)` marks a
+correctable error that the next read scrubs. `correctable=false` makes
+overlapping reads return `TLM_GENERIC_ERROR_RESPONSE` until the word is
+overwritten. `transport_dbg` bypasses ECC.
+
+Preload uses the same hex/bin/`auto` pipeline as bootrom.
+
+`smc-vp` binds `reg_socket` on the front-port scratch route (window
+adapter) and `rst_n_i` to the platform reset.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM target |`front_port_router` → `wa_scratch`
+|`rst_n_i` |`sc_in<bool>` |Platform reset (array retained)
+|===
+
+----
+  TLM MMIO ──► reg_socket ──► data_[addr .. addr+len)
+                                    │
+                         ecc_check (scrub / corrupt)
+  WRITE ──► byte-enables + ecc_clear_range
+  rst_n_i ──► reset_proc (retain)
+----
+
+====== CCI parameters
+
+Size, preload, and ECC enable are immutable. `access_delay_ns` is
+re-read on every transaction.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`size_bytes` |`0x10000` |RAM size (non-zero multiple of 8)
+|`init_file` |`""` |Optional preload; empty = zero-fill
+|`init_file_format` |`"auto"` |`hex`, `bin`, or `auto`
+|`access_delay_ns` |2.0 |Annotated TLM access delay
+|`ecc_enabled` |true |Injection / single-bit scrub
+|===
+
+`size_bytes == 0`, not a multiple of 8, or `access_delay_ns < 0` is
+`SC_REPORT_FATAL`.
+
+====== Modeling gaps versus RTL
+
+* No TileLink AMOs; writes are plain stores.
+* SECDED is an injection map, not a Hamming code.
+* No DMI (would skip the re-encode path).
+* Physical banks/partitions are not modelled.

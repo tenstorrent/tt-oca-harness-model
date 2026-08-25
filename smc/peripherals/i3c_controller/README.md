@@ -28,6 +28,13 @@ The model tracks the RTL instantiated in the SMC sub-system:
 - `tt-oca-hw/hw/smc/data/registers/rdl/smc_top.rdl` —
   `oca_i3c_wrap_0 @ BASE_ADDR + 0x000_5000`, six instances at 0x500 spacing.
 
+Architecture, CSRs, and programming are in the hardware TRM. Model and
+test docs:
+
+- `doc/index.adoc` — entry (includes the two pages below)
+- `doc/implementation.adoc` — SystemC/TLM model and `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 The model is a drop-in `SC_MODULE` that the rest of the SMC SystemC IP library
 wires up exactly as for the Boot ROM, PLIC, CLINT, Scratchpad RAM, and Reset
 Unit.
@@ -51,9 +58,9 @@ i3c_controller/
 │   ├── i3c_controller_tb.cpp       Primary self-checking bench
 │   └── i3c_controller_neg_tb.cpp   Negative-path / edge-case bench
 └── doc/
-    ├── 01_I3C_CONTROLLER_Specification.md     External contract (RTL-traceable)
-    ├── 02_I3C_CONTROLLER_LowLevel_Design.md   Internal SystemC + CCI design
-    └── 03_I3C_CONTROLLER_Test_Plan.md         Verification plan
+    ├── index.adoc
+    ├── implementation.adoc
+    └── test_plan.adoc
 ```
 
 ---
@@ -100,7 +107,7 @@ broker.set_preset_cci_value("smc.i3c.num_instances", cci::cci_value(6u));
 broker.set_preset_cci_value("smc.i3c.xfer_delay_ns", cci::cci_value(100.0));
 ```
 
-See `02_I3C_CONTROLLER_LowLevel_Design.md §4` for the full CCI catalogue.
+See `doc/implementation.adoc` for the CCI catalogue and `smc-vp` bind.
 
 ---
 
@@ -167,7 +174,8 @@ CCI_HOME=/Users/pdroy/local/cci-cxx20 \
 ```
 
 `SYSTEMC_HOME` and `CCI_HOME` are otherwise auto-probed for the common install
-locations.
+locations. Platform firmware: `cd sw/smc-vp-tests && ./run_smc_vp_tests.sh
+smc-i3c-loopback-test`. Full commands are in `doc/test_plan.adoc`.
 
 ---
 

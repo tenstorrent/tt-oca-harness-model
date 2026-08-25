@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-scratch-warm-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`sep_scratch_warm_testbench` is a TLM initiator into the eight
+scratch words plus `rst_ni`. The suite is small: reset, RW including
+byte enables, and a reset pulse that wipes programmed values.
+
+Success: every `check()` holds; `--asan` produces no `asan.log.*`;
+line coverage on the touched model sources meets the repository ≥ 95%
+gate.
+
+How to run (from `sep/peripherals/sep_scratch_warm`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean sep_scratch_warm
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Source: `test/src/sep_scratch_warm_testbench.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|001 |Power-on |All eight entries 0 |Positive
+|002a |Per-entry RW |Write / readback |Positive
+|002b |Data mask |Wide write respects the field mask |Positive
+|002c–d |Byte enables |Partial stores merge, do not zero the rest |Positive
+|003a–b |rst_ni |Programmed values survive until the pulse, then clear |Positive
+|===
+
+====== Platform firmware tests
+
+There is no dedicated warm-scratch firmware test. Firmware that
+parks state in this bank and then sees a platform reset will find
+zeros; that is covered only indirectly by `sep-vp` images that use
+the window.
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_all_tests.sh
+----

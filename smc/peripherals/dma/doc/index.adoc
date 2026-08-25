@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[dma]]
+==== DMA
+
+The hardware contract (iDMA CSRs, channel STATUS/NEXT_ID/DONE, 2D
+stride/repetition) is in the hardware TRM. This directory documents the
+SystemC/TLM-2.0 model (`smc::dma`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

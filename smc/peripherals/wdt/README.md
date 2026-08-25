@@ -8,8 +8,12 @@ as used by the SMC CPU cluster. Absolute bases:
 Stage-2 countdown (`WDT_TIMEOUT` / `WDT_TIMEOUT_RESET`) lives in
 `cpu_ctrl` / `smc_cpu_cluster`, not in this IP.
 
-See **`doc/00_Integration_and_Placement.md`** for fabric decode, RTL signal
-mapping, and VP binding notes.
+Architecture, CSRs, and programming are in the hardware TRM. Model and
+test docs:
+
+- `doc/index.adoc` — entry (includes the two pages below)
+- `doc/implementation.adoc` — SystemC/TLM model and `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
 
 ## Layout
 
@@ -22,6 +26,9 @@ wdt/
 ├── src/wdt.cpp
 ├── test/wdt_tb.cpp
 └── doc/
+    ├── index.adoc
+    ├── implementation.adoc
+    └── test_plan.adoc
 ```
 
 ## Ports
@@ -37,10 +44,16 @@ wdt/
 ## Build & test
 
 ```bash
-export SYSTEMC_HOME=…   # if needed
-export CCI_HOME=…       # if needed
-./run_tests.sh
+./run_tests.sh              # Release build + run
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --clean
 ```
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`. Platform firmware:
+`cd sw/smc-vp-tests && ./run_smc_vp_tests.sh smc-wdt-test`. Full
+commands are in `doc/test_plan.adoc`.
 
 ## References
 

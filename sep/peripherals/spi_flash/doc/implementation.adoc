@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[spi-flash-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`spi_flash` is a loosely-timed BFM. Commands complete in zero time.
+There is no TLM bus target and no CSML register file: the CPU never
+maps this module. All traffic arrives on `spi_if` from
+`spi_controller_ip`.
+
+[source,cpp]
+----
+class spi_flash : public sc_module, public spi_if
+class spi_flash_model   // pure C++; no SystemC
+----
+
+----
+spi_flash            sc_module + spi_if wrapper          (spi_flash.*)
+  └─ spi_flash_model   command set, array, SFDP ROM      (spi_flash_model.*)
+       └─ spi_flash_sfdp.h   JESD216A tables
+----
+
+====== Threads and sockets
+
+`SC_METHOD(reset_method)` on `rst_ni` falling edge clears WEL and
+suspend state; the array is left intact. There is no engine thread:
+`spi_transaction()` runs in the controller's call stack.
+
+`sep-vp` instantiates `spi_flash("spi_flash")`, binds
+`spi_controller->spi_master` to `spi_target`, and ties `rst_ni` to
+the platform reset. Optional `spiPreload` copies a host file into
+the array through `get_model()` before `sc_start`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`spi_target` |`sc_export<spi_if>` |`spi_controller_ip::spi_master`
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears WEL
+|===
+
+CSAAT-chained TX segments accumulate opcode + address + payload.
+Memory-read opcodes stream each RX segment from a running address.
+Other commands dispatch once on CS release (`csaat=false`). A bare
+RX with no header returns `0xFF`.
+
+----
+  spi_controller::spi_master ──► spi_flash::spi_transaction
+                                          │
+                                          ▼
+                                   spi_flash_model::process_command
+                                          │
+                                   32 MiB array + SFDP ROM
+----
+
+====== CCI parameters
+
+The BFM has no FIFO depths or cycle knobs. Capacity is a constructor
+argument (default 32 MiB).
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |CSML log level on the wrapper
+|===
+
+====== Modeling gaps versus a real NOR part
+
+* Instant program / erase. No tPP / tSE / tCE.
+* Profile-1 opcode set only (read, program, 4/32/64 KiB and chip
+  erase, WREN/WRDI, status, SFDP, EN4B, suspend/resume, 66h/99h).
+  No QPI, no XIP, no deep power-down side effects.
+* Dual / Quad are accepted on `spi_if`; the array is still bytes.
+* Not SEP silicon and not on the SimpleBus.

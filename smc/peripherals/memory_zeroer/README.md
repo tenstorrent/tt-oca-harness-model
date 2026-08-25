@@ -1,5 +1,12 @@
 # SMC memory_zeroer — SystemC / TLM-2.0 Loosely-Timed Model
 
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 Functional LT model of the SMC AXI memory-zeroer control block. Software
 programs a destination address and byte count, then writes `CTRL_STATUS` to
 start a blocking (LT) burst of zero-fills over an initiator DMA socket.
@@ -25,6 +32,10 @@ memory_zeroer/
 ├── README.md
 ├── run_tests.sh
 ├── deps.env.example
+├── doc/
+│   ├── index.adoc
+│   ├── implementation.adoc
+│   └── test_plan.adoc
 ├── include/
 │   ├── memory_zeroer.h
 │   └── smc_tlm_extensions.h

@@ -1,0 +1,86 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[octs-system-timer-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::octs_system_timer` is a **clock-driven** model of the OCTS
+system timer. Unlike the loosely-timed register files in this tree,
+it evaluates one RTL clock cycle per rising `clk_i` so pulse widths,
+credit periods, and synchroniser latency are observable.
+
+[source,cpp]
+----
+class octs_system_timer : public sc_core::sc_module
+----
+
+----
+octs_system_timer   PRIMARY/SECONDARY datapath, pulse FSM   (octs_system_timer.*)
+----
+
+====== Threads and sockets
+
+`tick_method` is sensitive to `clk_i.pos()`. `reset_method` is
+asynchronous assertion on `rst_n_i`. `output_method` is the only
+writer of the output ports (also sensitive to `is_primary_i`).
+`TIMER_START` is a singlepulse: a write of 1 arms `start_req_`,
+consumed for one cycle on the next rising edge.
+
+Sync inputs go through a four-flop chain
+(`SYNC_LATENCY_CYCLES = 4`) matching `prim_edge_detector`. PRIMARY
+ignores those inputs and emits `sync_load` / `credit` pulses.
+SECONDARY loads on `sync_load` and advances on a credit budget.
+
+`smc-vp` supplies a dedicated `sc_clock` (`octs_clk`, period from
+`octs_clk_period_ns`, default 10 ns). `octs_is_primary` straps the
+mode (default PRIMARY). Sync inputs are tied low; outputs land on
+sinks. The register window hangs off `periph_router`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`periph_router` OCTS window
+|`clk_i` |`sc_in<bool>` |`octs_clk`
+|`rst_n_i` |`sc_in<bool>` |Active-low
+|`is_primary_i` |`sc_in<bool>` |`octs_is_primary` CCI strap
+|`timer_sync_load_i` |`sc_in<bool>` |Tied low
+|`timer_cnt_credit_i` |`sc_in<bool>` |Tied low
+|`timer_sync_load_o` |`sc_out<bool>` |Sink
+|`timer_cnt_credit_o` |`sc_out<bool>` |Sink
+|`timer_count_o` |`sc_out<uint64_t>` |Sink
+|`timer_gpio_enable_o` |`sc_out<bool>` |Sink
+|`cur_credits_debug_o` |`sc_out<uint32_t>` |Sink
+|`credits_left_debug_o` |`sc_out<bool>` |Sink
+|===
+
+Only naturally aligned 32-bit accesses are accepted.
+
+----
+  TLM MMIO ──► START / CTRL / PRESET
+  clk_i.pos ──► tick_method ──► count / credit / pulse FSM
+  sync_*_i   ──► 4-cycle synchroniser ──► SECONDARY load / replenish
+                         │
+                         ▼
+               output_method ──► sync/credit/count/gpio/debug
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|===
+
+Platform knobs `octs_clk_period_ns` (immutable) and `octs_is_primary`
+live on `smc_platform`.
+
+====== Modeling gaps versus RTL
+
+* The model reproduces two RTL quirks rather than “fixing” them: an
+  unsynced SECONDARY still drains credits, and `CREDIT_EXPIRED` is a
+  peak tracker that lags one cycle.
+* `CREDIT_VAL` must be non-zero and greater than `PULSE_WIDTH`. The
+  model emits one `SC_WARNING` in place of the RTL assertion.
+* PRIMARY→SECONDARY wiring is a unit-test concern. `smc-vp` has one
+  instance; its sync outputs are not consumed.

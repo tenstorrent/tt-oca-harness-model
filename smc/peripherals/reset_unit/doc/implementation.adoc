@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[reset-unit-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::reset_unit` is a loosely-timed TLM-2.0 model of the SMC reset
+controller. Deglitch, extend, and powergood-stretch counters are
+abstracted to zero latency. Per-clock-domain synchronisers are
+pass-through. `b_transport` never calls `wait()`. DMI is never granted.
+
+[source,cpp]
+----
+class reset_unit : public sc_core::sc_module
+----
+
+`reset_ctrl_t` is the per-subsystem bundle on `ss_reset_ctrl_o`.
+`jtag_reset_ctrl` is applied through `set_jtag_ctrl()`.
+
+====== Threads and sockets
+
+`input_method` watches every input, tracks `ss_reset_complete_i`, and
+detects the FLR rising edge. `flr_assert_method` / `flr_deassert_method`
+pulse `flr_cool_n_`. `output_method` is the sole writer of every
+`sc_out`. `start_of_simulation()` seeds edge trackers and posts the
+first recompute.
+
+Derived levels (post-JTAG, post-abstraction):
+
+----
+stable_cold_rst_n = powergood & cold_reset_n
+rst_primary_n     = stable_cold_rst_n & rst_cool_ni & cool_from_flr_n
+rst_core_n        = (rst_ext_wdt_ni & ~wdt_2nd_timeout) & rst_primary_n
+                    & fuse_reset_n
+rst_wdt_n         = rst_ext_wdt_ni & ~wdt_2nd_timeout
+----
+
+Primary-domain assert clears the register block (SS_* except FLR /
+isolate). Cold-domain assert clears isolate / FLR counters, so those
+survive a cool/FLR reset. `ISOLATE_REQ_PINEN_REG` clears on cold only
+when the isolate pin is low.
+
+FLR: rising `cfg_flr_pf_active_i` sets `ISOLATE_REQ_SMC_REG.bit0`. If
+the reset-duration counter is non-zero, `rst_cool_no` asserts after
+`FLR_COUNTER_VALUE × ref_clk_period_ns` and holds for
+`FLR_RESET_COUNTER_VALUE × ref_clk_period_ns`.
+
+`smc-vp` binds `reg_socket` on the peripheral router and wires every
+reset pin to platform signals, including WDT first/second timeout from
+the cluster.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM target |`periph_router` reset window
+|`powergood_i` `rst_cold_ni` `fuse_reset_ni` |`sc_in<bool>` |Local signals
+|`rst_ext_wdt_ni` |`sc_in<bool>` |Tied deasserted
+|`smc_wdt_*_timeout_i` |`sc_in<bool>` |Cluster first/second timeout
+|`rst_cool_ni` `isolate_req_pin_i` `cfg_flr_pf_active_i` |`sc_in<bool>` |Local signals
+|`ss_reset_complete_i` `captured_straps_i` |`sc_in` |Local signals
+|`rst_*_no` / `powergood_stable_o` / `sync_irq_o` |`sc_out<bool>` |Local signals
+|`isolate_req_o` `ss_config_o` |`sc_out<uint32_t>` |Local signals
+|`ss_reset_ctrl_o[i]` |`sc_out<reset_ctrl_t>` |Per-subsystem bundles
+|===
+
+----
+  pins / JTAG / TLM ──► process_state_change ──► derive()
+  cfg_flr rising ──► flr_kick ──► flr_assert / flr_deassert
+                                    │
+                         output_method ──► rst_* / isolate / ss_reset_ctrl
+----
+
+====== CCI parameters
+
+Subsystem count and ref-clock period are immutable. `access_delay_ns`
+is re-read on every `b_transport`.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`num_subsystems` |32 |Sizes `ss_reset_ctrl_o[]` (1..32)
+|`ref_clk_period_ns` |10.0 |FLR counter time base
+|`access_delay_ns` |2.0 |Annotated TLM access delay
+|===
+
+Out-of-range subsystem count or a negative period is `SC_REPORT_FATAL`.
+
+====== Modeling gaps versus RTL
+
+* Four-deep reset/data synchronisers are zero-delay pass-through.
+* 32-cycle deglitch, 255-cycle extender, and powergood stretch are
+  omitted.
+* Scan / `test_mode` / `scan_rst_n` are not modelled.
+* `smc_wdt_first_timeout_i` is informational and is not in the reset
+  equation.

@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[memory-zeroer-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::memory_zeroer` is a loosely-timed TLM-2.0 model of the AXI
+memory-zeroer control block. A CTRL_STATUS write with SIZE ≠ 0
+starts a blocking burst of zero-fills on `dma_socket`. The job
+finishes inside that register write.
+
+[source,cpp]
+----
+class memory_zeroer : public sc_core::sc_module
+----
+
+----
+memory_zeroer   CSR target + DMA zero-fill initiator   (memory_zeroer.*)
+----
+
+====== Threads and sockets
+
+`reset_proc` clears registers and `irq_o`. There is no background
+thread: `trigger_job()` calls `perform_write_zeros()` from
+`b_transport`. Chunks are `chunk_size` bytes (default 4096).
+`irq_o` asserts on successful completion when `int_en` is set.
+A failed DMA chunk leaves IRQ low.
+
+`smc-vp` routes CSRs through `daccel_router` on
+`fabric.to_data_accel_ctrl` (shared with DMA). `dma_socket` goes
+through `wa_zeroer_dma` (32-to-64) into `fabric.data_accel_in`
+(multi-passthrough, shared with `smc_dma`). `irq_o` is parked on
+`sig_zeroer_irq` and is not an `intagg` source.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |`daccel_router` zeroer window
+|`dma_socket` |TLM 32-bit initiator |`wa_zeroer_dma` → `fabric.data_accel_in`
+|`rst_n_i` |`sc_in<bool>` |Active-low
+|`irq_o` |`sc_out<bool>` |Sink (`sig_zeroer_irq`); not a PLIC source
+|===
+
+----
+  TLM MMIO ──► CTRL_STATUS write ──► trigger_job()
+                         │
+                         ▼
+               dma_socket ──► zero chunks ──► fabric.data_accel_in
+                         │
+                         ▼
+               irq_o (if int_en and every chunk OK)
+----
+
+====== CCI parameters
+
+`chunk_size` is immutable.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`chunk_size` |4096 |DMA write chunk (bytes); immutable
+|`access_delay_ns` |2.0 |Annotated register-access delay
+|===
+
+====== Modeling gaps versus RTL
+
+* The zero job is blocking LT inside `b_transport`, not an AXI
+  outstanding burst with a later completion writeback.
+* Completion IRQ is not wired into the PLIC aggregator on `smc-vp`.
+* No AXI ID/burst-length modelling beyond chunked `b_transport`
+  writes of zeros.

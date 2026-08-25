@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[pvt-wrap-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/pvt_wrap_tb.cpp` is a TLM initiator plus the observation /
+voltage / interrupt pins. It enables channels, waits for the tick to
+validate the process counter, and checks TLM error paths.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/pvt_wrap`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh pvt_wrap
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Source: `test/pvt_wrap_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset defaults |CTRL/STATUS idle |Positive
+|2 |RW register access |Enable bits stick |Positive
+|3 |voltage / temperature status |Ready + stand-in codes |Positive
+|4 |process clock counter valid |Tick reaches programmed period |Positive
+|5 |temperature interrupt |Ready AND count-valid |Positive
+|6 |process clock observation outputs |Enable gates `process_clk_obs_*` |Positive
+|7 |voltage droop code output |`voltage_code_o` follows enable |Positive
+|8 |count_en disable clears valid |Counter valid drops |Positive
+|9 |decode miss |Out-of-window and unmapped |Negative
+|10 |transport_dbg back-door |Side-effect-free |Positive
+|11 |read-only registers ignore writes |Status RO |Positive
+|12 |malformed write length rejected |TLM burst error |Negative
+|13 |unknown TLM command rejected |Command error |Negative
+|14 |reset during counting |Tick cancelled |Positive
+|15 |reset clears state |Second reset |Positive
+|16 |CCI introspection |Delay / tick period |Positive
+|===
+
+====== Platform firmware tests
+
+Build `smc-vp` first.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-pvt-wrap-test
+----

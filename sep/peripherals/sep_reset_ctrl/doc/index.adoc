@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[sep-reset-ctrl]]
+==== SEP Reset Control
+
+The hardware contract (SW_RESET_N bits, which IPs start in reset) is
+in the hardware TRM. This directory documents the SystemC/TLM-2.0
+model (`sep_reset_ctrl_ip`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]
