@@ -324,10 +324,10 @@ smc/platform/compile_commands.json
 # Canonical pages are AsciiDoc: doc/{index,implementation,test_plan}.adoc.
 # These .md files stay on disk for local reference; they are not tracked.
 # IP-root README.md files remain tracked.
+# sep/peripherals/*/docs/ is ignored later, after !docs/**, so the OCH Pages
+# exception cannot re-track those trees.
 smc/peripherals/*/doc/*.md
 smc/peripherals/*/doc/**/*.md
-sep/peripherals/*/docs/*.md
-sep/peripherals/*/docs/**/*.md
 sep/peripherals/*/doc/*.md
 
 # OCH GitHub Pages documentation is intentionally tracked under docs/och.
@@ -369,6 +369,11 @@ doc/ai-systemc-generation.pptx
 # Repeated after directory un-ignore rules (!smc/cpu_cluster/doc/**, !docs/**
 # etc.) so those exceptions cannot re-track PDFs.
 *.pdf
+
+# Legacy SEP hardware-spec dumps (docs/, plural). Canonical pages are
+# AsciiDoc under doc/. Repeated after !docs/** so the OCH Pages exception
+# cannot re-track these trees. Files stay on disk for local reference.
+sep/peripherals/*/docs/
 
 # =============================================================================
 # End of .gitignore
