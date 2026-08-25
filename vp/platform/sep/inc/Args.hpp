@@ -106,14 +106,17 @@ class BasicOptions : public Args {
         addr_t local_alias_remap_data_start_addr = 0xC0000000;
         addr_t local_alias_remap_data_end_addr   = 0xFFFFFFFF;
 
-        // eFuse shim CSRs, the first sub-block of SEP_EXTERNAL (och_sep_top_reg.h:
-        // SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_BASE_ADDR = 0x20000000, size 0x44).
+        // eFuse shim CSRs, the first sub-block of SEP_EXTERNAL (sep_addrmap_pkg.sv:
+        // SEP_EXTERNAL_EFUSE_SHIM_CTRL_BASE_ADDR = 0x20000000, size 0x4). One register,
+        // EFUSE_BANK_INIT_TIME; the seventeen-register Samsung shim that used to fill
+        // 0x44 here is gone from the RDL and no longer decodes.
+        //
         // Routed to the eFuse model's second socket, because silicon reaches it over a
         // second AXI-Lite port on the same block: sep.sv demuxes this range out of
         // SEP_EXTERNAL and hands it to sep_efuse_wrapper rather than to a peripheral of
         // its own.
         addr_t efuse_shim_ctrl_start_addr = 0x20000000;
-        addr_t efuse_shim_ctrl_end_addr   = 0x20000043;
+        addr_t efuse_shim_ctrl_end_addr   = 0x20000003;
 
         // SPI mux ctrl: SPI_MUX_CTRL + CRC_LOW + CRC_HIGH (3 × 4 B = 12 B). Sits one
         // 4 KiB page above the efuse shim, which owns the SEP_EXTERNAL base

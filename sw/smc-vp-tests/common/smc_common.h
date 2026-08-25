@@ -99,6 +99,14 @@
 #define PLIC_SRC_TELEMETRY1  10u
 #define PLIC_SRC_TELEMETRY2  11u
 
+/* SEP mailbox PLIC source IDs.  RTL packs peripheral_interrupts_i at
+ * cpu_interrupts_o[NUM_EXT_INTERRUPTS+:32] with NUM_EXT_INTERRUPTS=256, so
+ * peripheral bit b is source 257 + b — the values SMC firmware uses
+ * (tt-oca-harness hw/sys/smc/dv/fw/include/tt_smc_interrupts.h).  The older
+ * IDs above omit that offset and do not match the harness firmware. */
+#define SEP_MAILBOX_INTERRUPT_ID(ch) (257u + (ch))
+#define SEP_MAILBOX_0_INTERRUPT_ID   257u
+
 /* CLINT register offsets (RISC-V standard layout) */
 #define CLINT_MSIP(hart)        (0x0000u + 4u * (hart))
 #define CLINT_MTIMECMP(hart)    (0x4000u + 8u * (hart))

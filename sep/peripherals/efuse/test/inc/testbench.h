@@ -16,6 +16,19 @@ public:
     std::unique_ptr<efuse_model> m_dut;
     std::unique_ptr<efuse_test>  m_test;
 
+    /// locked_field_access_irq_o, plus a count of its rising edges. The pulse is
+    /// too short to catch by polling, so it is counted as it happens.
+    sc_signal<bool> locked_field_irq;
+    unsigned int    m_locked_field_pulses = 0;
+    void count_locked_field_pulse() { m_locked_field_pulses++; }
+
+    /// Number of pulses since the last call — the form every assertion wants.
+    unsigned int take_locked_field_pulses() {
+        const unsigned int n = m_locked_field_pulses;
+        m_locked_field_pulses = 0;
+        return n;
+    }
+
     int m_tests_run;
     int m_tests_passed;
     int m_tests_failed;
@@ -61,4 +74,9 @@ public:
     void test_lock_enforcement();
     void test_token_matching();
     void test_lc_state_transitions();
+    void test_locked_field_interrupt();
+    void test_transient_rma();
+
+    /// The whole of the secure_tm run — see the comment on its definition.
+    void test_secure_tm_mode();
 };

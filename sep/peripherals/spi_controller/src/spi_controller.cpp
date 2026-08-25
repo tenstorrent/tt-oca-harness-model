@@ -22,6 +22,7 @@
 spi_controller_ip::spi_controller_ip(sc_module_name n, int log_verbosity)
    : spi_controller_base(n, "spi_controller", 0x100),
      spi_master("spi_master"),
+     irq_o("irq_o"),
      error_irq("error_irq"),
      spi_event_irq("spi_event_irq"),
      dma_trigger("dma_trigger"),
@@ -74,6 +75,7 @@ void spi_controller_ip::end_of_elaboration()
    SC_METHOD(reset_process);
    sensitive << rst_ni.negedge_event();
 
+   irq_o.initialize(false);
    error_irq.initialize(false);
    spi_event_irq.initialize(false);
    dma_trigger.initialize(false);
@@ -198,12 +200,7 @@ void spi_controller_ip::reset_process()
         m_command_queue.pop();
     }
 
-    m_prev_ready = false;
-    m_prev_active = false;
-    m_prev_txempty = true;
-    m_prev_rxfull = false;
-    m_prev_txwm = false;
-    m_prev_rxwm = false;
+    m_tx_below_wm_prev = false;
 
     // Clear INTR_TEST forced interrupt state
     m_intr_test_error_forced = false;
@@ -215,7 +212,7 @@ void spi_controller_ip::reset_process()
  */
 bool spi_controller_ip::tx_fifo_push(uint32_t data)
 {
-    if (m_tx_fifo.size() >= get_tx_depth()) {
+    if (is_tx_fifo_full()) {
         return false;
     }
     m_tx_fifo.push_back(data);
@@ -417,7 +414,7 @@ void spi_controller_ip::spi_transaction_thread()
         while (!m_command_queue.empty() && CTRL.SPIEN && CTRL.OUTPUT_EN &&
                (static_cast<uint32_t>(ERROR_STATUS) == 0)) {
             set_fsm_state(fsm_state_e::ACTIVE);
-            update_event_interrupt_state();
+            update_spi_event_intr_status();
 
             spi_segment_t segment = m_command_queue.front().first;
             spi_config_t config = m_command_queue.front().second;
@@ -467,7 +464,7 @@ void spi_controller_ip::spi_transaction_thread()
             }
 
             // Check for IDLE event
-            update_event_interrupt_state();
+            update_spi_event_intr_status();
         }
     }
 }
@@ -516,7 +513,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                 // transition is visible to the DMA handshake_monitor_thread as a
                 // rising edge on lsio_trigger.
                 update_dma_trigger();
-                update_event_interrupt_state();
+                update_spi_event_intr_status();
                 // When TX_WATERMARK=0 (no DMA), wake on any TX word pushed.
                 // When TX_WATERMARK>0 (DMA), wait for watermark chunk (HIGH→LOW on dma_trigger).
                 if (CTRL.TX_WATERMARK > 0) {
@@ -538,7 +535,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                     ERROR_STATUS.underflow = 1;
                     update_error_interrupt_state();
                     set_fsm_state(fsm_state_e::IDLE);
-                    update_event_interrupt_state();
+                    update_spi_event_intr_status();
                     return false;
                 }
             }
@@ -556,7 +553,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
 
         // Update FIFO status and check watermarks
         update_dma_trigger();
-        update_event_interrupt_state();
+        update_spi_event_intr_status();
     }
 
     // Calculate functional delay for this segment (loosely-timed modeling)
@@ -600,7 +597,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
             while (!rx_fifo_push(word)) {
                 // FIFO full: assert trigger so DMA/SW knows to drain, then wait for space.
                 update_dma_trigger();
-                update_event_interrupt_state();
+                update_spi_event_intr_status();
                 wait(m_rx_space_available_event);
 
                 // SW_RST while blocked on a full FIFO: abort this transaction.
@@ -611,11 +608,11 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
             }
 
             update_dma_trigger();
-            update_event_interrupt_state();
+            update_spi_event_intr_status();
         }
 
         update_dma_trigger();
-        update_event_interrupt_state();
+        update_spi_event_intr_status();
     }
 
     // Model bus-occupancy timing AFTER data is available (standard LT pattern)
@@ -646,6 +643,10 @@ void spi_controller_ip::update_output_signals_method()
     bool spi_event_irq_assert = (INTR_STATUS.spi_event && INTR_ENABLE.spi_event);
     spi_event_irq.write(spi_event_irq_assert);
 
+    // The IP has a single interrupt pin: irq_o = error_intr || spi_event_intr.
+    // error_irq/spi_event_irq are kept as observability signals only.
+    irq_o.write(error_irq_assert || spi_event_irq_assert);
+
     // Update dma_trigger
     uint32_t tx_depth = get_tx_fifo_depth();
     uint32_t rx_depth = get_rx_fifo_depth();
@@ -655,20 +656,35 @@ void spi_controller_ip::update_output_signals_method()
     // OT SPI Host RTL uses rx_qd >= rx_watermark for both lsio_trigger_o and
     // STATUS.RXWM. "At or above" allows DMA chunk_size == watermark to work:
     // SPI pushes exactly watermark words → trigger fires → DMA drains → trigger clears.
-    bool rx_above_wm = (rx_depth >= rx_watermark) && (rx_watermark > 0);
+    //
+    // The empty-FIFO term is a modelling guard, not part of the RTL expression.
+    // RTL re-evaluates the comparison every clock, so a watermark of zero holding
+    // rx_wm high over an empty FIFO is harmless there. Here the signal is refreshed
+    // by a deferred method, so it only settles when the core yields at a quantum
+    // boundary — firmware that writes CTRL twice within one quantum (the usual
+    // SW_RST-then-configure sequence momentarily leaves RX_WATERMARK at zero) would
+    // otherwise leave a stale high for the secure DMA to sample at arm time and
+    // drain a chunk from an empty FIFO. For every watermark of one or more the term
+    // is implied by the comparison, so this only diverges where the FIFO has nothing
+    // for the DMA to move. STATUS.RXWM and the RXWM event are computed on demand and
+    // stay RTL-exact.
+    bool rx_above_wm = (rx_depth >= rx_watermark) && (rx_depth > 0);
     bool dma_trigger_assert = tx_below_wm || rx_above_wm;
 
-    // Detect HIGH→LOW transition on dma_trigger.
-    // For TX DMA: trigger goes LOW when TX FIFO reaches watermark (DMA filled a full chunk).
-    // Notifies m_tx_fifo_at_watermark so process_single_transaction can start consuming.
+    dma_trigger.write(dma_trigger_assert);
+
+    // Detect the TX watermark condition going false: the TX FIFO has just been
+    // filled to or above TX_WATERMARK (DMA delivered a full chunk), which lets
+    // process_single_transaction start consuming. This tracks the TX half alone,
+    // not the combined trigger — the RX half is asserted whenever the RX level is
+    // at or above its watermark, which at RX_WATERMARK=0 is permanently true.
     // (RX DMA: m_rx_fifo_drained_event is notified in rx_fifo_pop when FIFO goes empty —
     //  firing it here on trigger HIGH→LOW is too early: DMA reads word 1 of 4, FIFO drops
     //  3<4 → trigger LOW, but 3 words remain unread → premature SPI push → no rising edge.)
-    bool old_trigger = dma_trigger.read();
-    dma_trigger.write(dma_trigger_assert);
-    if (!dma_trigger_assert && old_trigger) {
+    if (!tx_below_wm && m_tx_below_wm_prev) {
         m_tx_fifo_at_watermark.notify(SC_ZERO_TIME);
     }
+    m_tx_below_wm_prev = tx_below_wm;
 }
 
 /**
@@ -697,7 +713,13 @@ void spi_controller_ip::update_error_interrupt_state()
 
     // RTL: INTR_STATUS.error.next = (ERROR_STATUS.intr || INTR_TEST.error) && INTR_ENABLE.error
     // Level-sensitive: set OR clear based on current state, gated by INTR_ENABLE.
-    bool has_enabled_error = ((error_status & error_enable) != 0);
+    //
+    // ACCESSINVAL is a bus error with no ERROR_ENABLE bit — the RTL's error_mask
+    // hardcodes that lane to 1, so it escalates whatever the enable register says.
+    // Masking it against ERROR_ENABLE would silence it permanently.
+    constexpr uint32_t ACCESSINVAL_MASK = 1u << 20;
+    bool has_enabled_error =
+        ((error_status & (error_enable | ACCESSINVAL_MASK)) != 0);
     bool error_intr = (has_enabled_error || m_intr_test_error_forced) && (bool)INTR_ENABLE.error;
     INTR_STATUS.error = error_intr ? 1 : 0;
 
@@ -716,7 +738,7 @@ void spi_controller_ip::update_spi_event_intr_status()
     if ((event_enable & (1u << 0))  && is_rx_fifo_full())  any_event = true;
     if ((event_enable & (1u << 4))  && is_tx_fifo_empty()) any_event = true;
     if ((event_enable & (1u << 8))) {
-        if ((CTRL.RX_WATERMARK > 0) && (get_rx_fifo_depth() >= (uint32_t)CTRL.RX_WATERMARK))
+        if (get_rx_fifo_depth() >= (uint32_t)CTRL.RX_WATERMARK)
             any_event = true;
     }
     if ((event_enable & (1u << 12))) {
@@ -741,93 +763,17 @@ void spi_controller_ip::update_dma_trigger()
 }
 
 /**
- * @brief Update event interrupt state based on STATUS changes
- */
-void spi_controller_ip::update_event_interrupt_state()
-{
-    uint32_t event_enable = EVENT_ENABLE;
-    bool event_occurred = false;
-
-    // Check for IDLE event (ACTIVE goes low)
-    bool curr_active = (m_fsm_state == fsm_state_e::ACTIVE);
-    if (m_prev_active && !curr_active && (event_enable & (1 << 20))) {
-        event_occurred = true;
-    }
-    m_prev_active = curr_active;
-
-    // Check for READY event (READY goes high).
-    // RTL: STATUS.READY = ~command_busy — independent of error state.
-    bool fsm_ready = (m_fsm_state == fsm_state_e::IDLE ||
-                      m_fsm_state == fsm_state_e::IDLE_CSB_ACTIVE);
-    bool curr_ready = fsm_ready && !is_cmd_queue_full();
-
-    if (!m_prev_ready && curr_ready && (event_enable & (1 << 16))) {
-        event_occurred = true;
-    }
-    m_prev_ready = curr_ready;
-
-    // Check for TXEMPTY event
-    bool curr_txempty = is_tx_fifo_empty();
-    if (!m_prev_txempty && curr_txempty && (event_enable & (1 << 4))) {
-        event_occurred = true;
-    }
-    m_prev_txempty = curr_txempty;
-
-    // Check for RXFULL event
-    bool curr_rxfull = is_rx_fifo_full();
-    if (!m_prev_rxfull && curr_rxfull && (event_enable & (1 << 0))) {
-        event_occurred = true;
-    }
-    m_prev_rxfull = curr_rxfull;
-
-    // Check for TXWM event (TX FIFO below watermark) - edge-triggered
-    uint32_t tx_depth = get_tx_fifo_depth();
-    uint32_t tx_watermark = CTRL.TX_WATERMARK;
-    bool curr_txwm = (tx_depth < tx_watermark);
-    if (!m_prev_txwm && curr_txwm && (event_enable & (1 << 12))) {
-        event_occurred = true;
-    }
-    m_prev_txwm = curr_txwm;
-
-    // Check for RXWM event (RX FIFO at or above watermark) - edge-triggered
-    uint32_t rx_depth = get_rx_fifo_depth();
-    uint32_t rx_watermark = CTRL.RX_WATERMARK;
-    bool curr_rxwm = (rx_depth >= rx_watermark) && (rx_watermark > 0);
-    if (!m_prev_rxwm && curr_rxwm && (event_enable & (1 << 8))) {
-        event_occurred = true;
-    }
-    m_prev_rxwm = curr_rxwm;
-
-    // Update INTR_STATUS.spi_event if any event occurred
-    if (event_occurred && !INTR_STATUS.spi_event) {
-        INTR_STATUS.spi_event = 1;
-    }
-
-    // Update the actual interrupt port
-    update_spi_event_irq();
-}
-
-/**
- * @brief INTR_STATUS register write callback with W1C semantics
+ * @brief INTR_STATUS register write callback
+ *
+ * The RDL declares both fields sw=r, hw=w, and the RTL drives them as a live view
+ * of the gated interrupt lines rather than a sticky latch. Software writes are
+ * therefore accepted on the bus and discarded, as they are in silicon — the bits
+ * only clear when the underlying condition does.
  */
 bool spi_controller_ip::handle_write_INTR_STATUS(uint32_t value, uint32_t mask)
 {
-    // Read current INTR_STATUS value
-    uint32_t current = INTR_STATUS;
-
-    // Apply write bitmask before W1C logic
-    uint32_t masked_value = value & mask;
-
-    // W1C logic: Clear bits where write_value has 1s
-    uint32_t new_value = current & ~masked_value;
-
-    // Write back the new value
-    INTR_STATUS = new_value;
-
-    // Update both interrupt ports
-    update_error_irq();
-    update_spi_event_irq();
-
+    (void)value;
+    (void)mask;
     return true;
 }
 
@@ -928,67 +874,10 @@ bool spi_controller_ip::handle_write_EVENT_ENABLE(uint32_t value, uint32_t mask)
     uint32_t new_value = (value & mask) | (current & ~mask);
     EVENT_ENABLE = new_value;
 
-    // CRITICAL FIX: When EVENT_ENABLE bits are set, check if conditions are already met
-    // and set INTR_STATUS.spi_event immediately (not waiting for edge transition)
-    // This handles the case where watermarks/events are already true when enabled
-
-    bool event_already_met = false;
-
-    // Check TXWM condition: TX FIFO depth < TX_WATERMARK
-    if ((new_value & (1 << 12))) {
-        uint32_t tx_depth = get_tx_fifo_depth();
-        uint32_t tx_watermark = CTRL.TX_WATERMARK;
-        if (tx_depth < tx_watermark) {
-            event_already_met = true;
-        }
-    }
-
-    // Check RXWM condition: RX FIFO depth >= RX_WATERMARK (OT RTL: rx_qd >= rx_watermark)
-    if ((new_value & (1 << 8))) {
-        uint32_t rx_depth = get_rx_fifo_depth();
-        uint32_t rx_watermark = CTRL.RX_WATERMARK;
-        if ((rx_watermark > 0) && (rx_depth >= rx_watermark)) {
-            event_already_met = true;
-        }
-    }
-
-    // Check TXEMPTY condition
-    if ((new_value & (1 << 4))) {
-        if (is_tx_fifo_empty()) {
-            event_already_met = true;
-        }
-    }
-
-    // Check RXFULL condition
-    if ((new_value & (1 << 0))) {
-        if (is_rx_fifo_full()) {
-            event_already_met = true;
-        }
-    }
-
-    // Check IDLE condition (ACTIVE goes low)
-    if ((new_value & (1 << 20))) {
-        if (m_fsm_state != fsm_state_e::ACTIVE) {
-            event_already_met = true;
-        }
-    }
-
-    // Check READY condition — RTL: READY = ~command_busy, independent of error state.
-    if ((new_value & (1 << 16))) {
-        bool fsm_ready = (m_fsm_state == fsm_state_e::IDLE ||
-                          m_fsm_state == fsm_state_e::IDLE_CSB_ACTIVE);
-        if (fsm_ready && !is_cmd_queue_full()) {
-            event_already_met = true;
-        }
-    }
-
-    // RTL: spi_event_intr = (|(event_vector & event_mask) || INTR_TEST.spi_event) && INTR_ENABLE.spi_event
-    // Level-sensitive: set OR clear based on current event state and INTR_ENABLE gate.
-    bool spi_intr = (event_already_met || m_intr_test_spi_event_forced) && (bool)INTR_ENABLE.spi_event;
-    INTR_STATUS.spi_event = spi_intr ? 1 : 0;
-
-    // Also call update_event_interrupt_state to sync edge-tracking state (m_prev_xxx)
-    update_event_interrupt_state();
+    // The mask is part of the combinational equation, so enabling a bit whose
+    // condition already holds asserts the interrupt straight away, and disabling
+    // the last asserted bit drops it.
+    update_spi_event_intr_status();
 
     return true;
 }
@@ -1094,7 +983,7 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
 
     // Watermark changes affect interrupt and DMA trigger generation
     update_dma_trigger();
-    update_event_interrupt_state();
+    update_spi_event_intr_status();
 
     return true;
 }
@@ -1147,8 +1036,10 @@ bool spi_controller_ip::handle_read_STATUS(uint32_t& value, uint32_t mask)
     // Set watermark flags
     uint32_t tx_watermark = CTRL.TX_WATERMARK;
     uint32_t rx_watermark = CTRL.RX_WATERMARK;
+    // RTL compares unconditionally, so a zero RX watermark leaves RXWM permanently
+    // asserted (rx_qd >= 0 is always true).
     STATUS.TXWM = (STATUS.TXQD < tx_watermark) ? 1 : 0;
-    STATUS.RXWM = ((rx_watermark > 0) && (STATUS.RXQD >= rx_watermark)) ? 1 : 0;
+    STATUS.RXWM = (STATUS.RXQD >= rx_watermark) ? 1 : 0;
 
     // Return the computed status value with read bitmask applied
     value = STATUS & mask;
@@ -1180,37 +1071,21 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     CSML_DEBUG(2, logger) << "  DIRECTION: " << (int)cmd_direction << " (0=Dummy, 1=Rx, 2=Tx, 3=Bidir)" << std::endl;
 
     // ========================================================================
-    // Validation 0: Check if command queue is full
+    // Validation 0: the command queue must have room.
+    //
+    // This is the only "busy" condition the RTL knows: command_busy_o is just
+    // ~command_ready from the queue, STATUS.READY is ~command_busy, and
+    // error_busy_o (CMDBUSY) is command_valid & command_busy. A latched error
+    // does not block a CMD write — it disables the core through
+    // en = en_sw & ~enb_error, so the command sits in the queue until software
+    // clears ERROR_STATUS. process_single_transaction models that gate and
+    // handle_write_ERROR_STATUS restarts the engine when the last error clears.
     // ========================================================================
     if (is_cmd_queue_full()) {
         CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Command FIFO full (depth=" << get_cmd_queue_depth()
                   << "/" << get_cmd_depth() << "). Cannot accept new command segment. Setting ERROR_STATUS.CMDBUSY" << std::endl;
 
         ERROR_STATUS.CMDBUSY = 1;
-        update_error_interrupt_state();
-
-        return false;
-    }
-
-    // Validation 1: Check if ready to accept commands
-    // Per datasheet: "CMDBUSY: Indicates a write to CMD when STATUS.READY = 0"
-    // Per datasheet: "STATUS.READY indicates that there is room in the command FIFO"
-    // This validation must match the READY logic in handle_read_STATUS()
-    uint32_t error_status_check = ERROR_STATUS;
-    bool has_errors = (error_status_check != 0);
-
-    // NOTE: Validation 0 above already checked is_cmd_queue_full(), so this check
-    // for errors is technically the only remaining condition. However, we keep this
-    // validation for completeness and to match the STATUS.READY semantics exactly.
-    if (has_errors) {
-        CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] CMD written when STATUS.READY=0 (errors present). "
-                  << "ERROR_STATUS=0x" << std::hex << error_status_check << std::dec
-                  << ". Setting ERROR_STATUS.CMDBUSY" << std::endl;
-
-        // Set ERROR_STATUS.CMDBUSY
-        ERROR_STATUS.CMDBUSY = 1;
-
-        // Update error interrupt state and port
         update_error_interrupt_state();
 
         return false;
@@ -1333,20 +1208,19 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
 bool spi_controller_ip::handle_write_TXDATA(uint32_t value, uint8_t byte_enable, uint32_t mask)
 {
     // ========================================================================
-    // STRICT byte-enable validation per SPI Controller specification
-    // "Valid patterns are 0x1, 0x3, 0xF (contiguous from byte 0).
-    //                 Invalid patterns include 0x2, 0x4, 0x5, 0x6, 0x7, 0x8,
-    //                 0x9, 0xA, 0xB, 0xC, 0xD, 0xE"
-    // ONLY allow contiguous byte-enables starting from byte 0:
-    //   - 0x1 = 0b0001 = byte 0 only
-    //   - 0x3 = 0b0011 = bytes 0-1 (half-word)
-    //   - 0xF = 0b1111 = bytes 0-3 (full word)
+    // Byte-enable validation, matching the RTL's access_valid case statement:
+    // any single byte, either aligned half-word, or the full word. Anything
+    // else (a split or unaligned pattern) raises ACCESSINVAL.
     // ========================================================================
-    if (byte_enable != 0x1 && byte_enable != 0x3 && byte_enable != 0xF) {
+    const bool be_valid = (byte_enable == 0x1) || (byte_enable == 0x2) ||
+                          (byte_enable == 0x4) || (byte_enable == 0x8) ||
+                          (byte_enable == 0x3) || (byte_enable == 0x6) ||
+                          (byte_enable == 0xC) || (byte_enable == 0xF);
+    if (!be_valid) {
         CSML_ERROR(0, logger) << "[SPI_HOST/TXDATA ERROR] Invalid byte-enable pattern: 0x"
                               << std::hex << (int)byte_enable << std::dec
-                              << ". Valid patterns: 0x1 (byte 0), 0x3 (bytes 0-1), 0xF (all bytes). "
-                              << "Byte-enables must be contiguous starting from byte 0. "
+                              << ". Valid patterns: 0x1/0x2/0x4/0x8 (single byte), "
+                              << "0x3/0x6/0xC (aligned half-word), 0xF (full word). "
                               << "Setting ERROR_STATUS.ACCESSINVAL" << std::endl;
         ERROR_STATUS.ACCESSINVAL = 1;
         update_error_interrupt_state();
@@ -1379,7 +1253,7 @@ bool spi_controller_ip::handle_write_TXDATA(uint32_t value, uint8_t byte_enable,
         update_dma_trigger();
 
         // Update event interrupt state (TXEMPTY, TXWM events)
-        update_event_interrupt_state();
+        update_spi_event_intr_status();
     }
 
     return success;
@@ -1415,7 +1289,7 @@ bool spi_controller_ip::handle_read_RXDATA(uint32_t& value, uint32_t mask)
         update_dma_trigger();
 
         // Update event interrupt state (RXEMPTY, RXWM events)
-        update_event_interrupt_state();
+        update_spi_event_intr_status();
     } else {
         value = 0;
         CSML_WARN(1, logger) << "  Failed to pop from RX FIFO, returning 0" << std::endl;

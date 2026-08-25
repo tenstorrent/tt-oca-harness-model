@@ -365,7 +365,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces RANGE_REGWEN lock protection. Blocks writes when RANGE_REGWEN is locked (0x0).
+  * Enforces RANGE_REGWEN lock protection. Blocks writes when RANGE_REGWEN is locked (MuBi4False).
   */
   bool handle_write_ENABLED_MEMORY_RANGE_BASE(uint32_t value, uint32_t write_mask);
 
@@ -375,7 +375,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces RANGE_REGWEN lock protection. Blocks writes when RANGE_REGWEN is locked (0x0).
+  * Enforces RANGE_REGWEN lock protection. Blocks writes when RANGE_REGWEN is locked (MuBi4False).
   */
   bool handle_write_ENABLED_MEMORY_RANGE_LIMIT(uint32_t value, uint32_t write_mask);
 
@@ -385,7 +385,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces RANGE_REGWEN lock protection. Blocks writes when RANGE_REGWEN is locked (0x0).
+  * Enforces RANGE_REGWEN lock protection. Blocks writes when RANGE_REGWEN is locked (MuBi4False).
   */
   bool handle_write_RANGE_VALID(uint32_t value, uint32_t write_mask);
 
@@ -395,7 +395,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   * Per Configuration registers locked during active transfers.
   */
   bool handle_write_SRC_ADDR_LO(uint32_t value, uint32_t write_mask);
@@ -406,7 +406,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_SRC_ADDR_HI(uint32_t value, uint32_t write_mask);
 
@@ -416,7 +416,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_DST_ADDR_LO(uint32_t value, uint32_t write_mask);
 
@@ -426,7 +426,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_DST_ADDR_HI(uint32_t value, uint32_t write_mask);
 
@@ -436,7 +436,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_ADDR_SPACE_ID(uint32_t value, uint32_t write_mask);
 
@@ -446,7 +446,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_TOTAL_DATA_SIZE(uint32_t value, uint32_t write_mask);
 
@@ -456,7 +456,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_CHUNK_DATA_SIZE(uint32_t value, uint32_t write_mask);
 
@@ -466,7 +466,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_TRANSFER_WIDTH(uint32_t value, uint32_t write_mask);
 
@@ -476,7 +476,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_SRC_CONFIG(uint32_t value, uint32_t write_mask);
 
@@ -486,7 +486,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_DST_CONFIG(uint32_t value, uint32_t write_mask);
 
@@ -496,7 +496,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_HANDSHAKE_INTR_ENABLE(uint32_t value, uint32_t write_mask);
 
@@ -506,7 +506,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_CLEAR_INTR_SRC(uint32_t value, uint32_t write_mask);
 
@@ -516,7 +516,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_CLEAR_INTR_BUS(uint32_t value, uint32_t write_mask);
 
@@ -527,7 +527,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_INTR_SRC_ADDR(unsigned int index, uint32_t value, uint32_t write_mask);
 
@@ -538,7 +538,7 @@ private:
   * @param write_mask Writable bit mask
   * @return true to allow write, false to block
   *
-  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (0x0).
+  * Enforces CFG_REGWEN lock protection. Blocks writes when CFG_REGWEN is locked (MuBi4False).
   */
   bool handle_write_INTR_SRC_WR_VAL(unsigned int index, uint32_t value, uint32_t write_mask);
 
@@ -916,6 +916,18 @@ private:
   * if wrap mode is enabled."
   */
   void update_dst_addr_registers(uint64_t current_addr);
+
+  /**
+   * @brief Advance the visible address registers at a chunk boundary
+   *
+   * Applies the hardware writeback rule: only the fixed-address configuration
+   * (increment=0, wrap=0) rewrites SRC_ADDR/DST_ADDR, adding one whole
+   * CHUNK_DATA_SIZE per chunk. Increment and wrap modes leave the registers at
+   * the value software programmed.
+   *
+   * @param chunk_size Configured CHUNK_DATA_SIZE in bytes
+   */
+  void apply_chunk_end_address_writeback(uint32_t chunk_size);
 
   /**
   * @brief Validate address wrap boundaries
@@ -1345,7 +1357,7 @@ private:
   *
   * 3. State Machine Lifecycle Management:
   *  - IDLE state: m_dma_busy=false, CFG_REGWEN=0x6, STATUS.busy=0
-  *  - BUSY state: m_dma_busy=true, CFG_REGWEN=0x0, STATUS.busy=1
+  *  - BUSY state: m_dma_busy=true, CFG_REGWEN=0x9, STATUS.busy=1
   *  - Transitions: IDLE→BUSY (go bit), BUSY→IDLE (abort or completion)
   *
   * 4. Configuration Validation Triggering:
@@ -1708,6 +1720,14 @@ private:
   * @note Bus selection: 0=use ADDR_SPACE_ID routing, 1=force OT-internal bus
   */
   bool perform_interrupt_clearing_write(int trigger_index);
+
+  /**
+   * @brief Latch ERROR_CODE.bus_error and return the engine to idle
+   *
+   * Used when a failed automatic interrupt-clearing write has to stop the
+   * transfer before any chunk data moves.
+   */
+  void halt_transfer_on_bus_error();
 
   /**
   * @brief Register (Hardware Handshaking Mechanism) callbacks

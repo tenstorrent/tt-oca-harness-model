@@ -8,9 +8,11 @@ lifecycle.
 The model is behavioural, not a stub. An 8192-bit array is the source of truth, and the
 shadow registers are the same bits viewed as words — a field reads back identically
 whether software goes through the shadow map or through the OTP read CSR. Fuse contents
-come from either a `.preload` image or per-field CCI parameters. When
+come from either a preload image or per-field CCI parameters. When
 `fuse_preload_file` is set and loads successfully, the image defines the array and
-per-field parameters are not applied.
+per-field parameters are not applied. Either image format is accepted, detected from the
+file rather than declared: the OCA testbench's one-ASCII-bit-per-line `.preload`, or the
+harness DV's `$readmemh` hex words with optional `@addr` origins and `//` comments.
 
 What is deliberately not modelled: cycle-level timing. The program and read handshakes
 and the token hash all complete inside the write that starts them, so software sees
@@ -44,7 +46,7 @@ Two disjoint windows, as in the register map:
 | Window | Range | Contents | Socket |
 |---|---|---|---|
 | `sep_efuse` | `0x10930000 – 0x1093056F` | shadow map, `EFUSE_INTERFACE_CTRL`, `EFUSE_MMR` | `target_socket` |
-| `SEP_EXTERNAL` | `0x20000000 – 0x20000043` | `EFUSE_SHIM_CTRL` | `shim_target_socket` |
+| `SEP_EXTERNAL` | `0x20000000 – 0x20000003` | `EFUSE_SHIM_CTRL` (one register) | `shim_target_socket` |
 
 The split follows the hardware: `efuse_interface_controller.sv` decodes
 `[EFUSE_MAP_REG_MAP_BASE_ADDR : EFUSE_MMR_REG_MAP_END_ADDR]` onto its internal APB
@@ -53,7 +55,7 @@ path and routes everything else on its slave to the shim's own AXI-Lite port, wh
 
 ## Behaviour
 
-**Fuse array.** 8192 bits, 256 words, bit-addressable through `EFUSE_WRITE_CTRL` /
+**Fuse array.** 8192 bits, 256 words, bit-addressable through `EFUSE_PROGRAM_CTRL` /
 `EFUSE_READ_CTRL`. Programming is one-way: the Samsung macro ORs new data over old
 (`d_latch = din | fuse`), so a burned bit cannot be cleared, and programming data=0 is
 refused outright rather than treated as a no-op. Out-of-range addresses latch their own
@@ -85,6 +87,28 @@ digest.
 `0x3F` (tamper) is never produced: it requires a fault in the redundant comparison lanes
 that the model has no way to inject.
 
+**Transient RMA.** With the `TRANSIENT_RMA_EN` fuse burned, a token match advances
+`LC_STATE` on its own, with no software write: SiP sets bit [1], chiplet sets bit [2].
+The guards are the ones the software path enforces — the mechanism removes the need for
+the write, not the need for the token. Two details worth knowing, both faithful to
+`efuse_shadow_regs.sv`: a matched chiplet token whose guard fails *blocks* rather than
+falling through to the SiP transition, and match results are sticky, so a chiplet match
+left over from an earlier comparison keeps blocking until it is re-evaluated.
+
+**Locked-field interrupt.** A refused shadow access — a read of a read-locked field or a
+write to a write-locked one — pulses `locked_field_access_irq_o`. The access still
+completes on the bus, so this pin is the only notification; there is no status bit and
+nothing to clear. It covers the shadow path only. A refused *fuse command* is a different
+mechanism (`efuse_guard`) and reports through `req_error` instead.
+
+**Secure test mode.** With `secure_tm` set, every fuse command is dropped and the secrets
+handed to the key manager read as zero, while the shadow bus is untouched: the gate is on
+the hardware ports and the OTP interface, not on the read path. One divergence, and it is
+forced: in silicon the dropped command's response is tied off, so the interface stalls
+until its request timeout. `b_transport` cannot stall without wedging the kernel, so the
+command completes immediately with `done` and no error — RTL is explicit that a block is
+not an error capture. Nothing is burned and nothing is read either way.
+
 ## Class
 
 ```cpp
@@ -98,6 +122,7 @@ class efuse_model : public efuse_base
 | `target_socket` | target | TLM-2.0 32-bit register bus, `sep_efuse` window |
 | `shim_target_socket` | target | TLM-2.0 32-bit register bus, `EFUSE_SHIM_CTRL` window |
 | `rst_ni` | `sc_in<bool>` | Active-low reset |
+| `locked_field_access_irq_o` | `sc_out<bool>` | Pulses when the locks refuse a shadow access |
 
 ## CCI Configuration (efuse_vp.ini)
 
@@ -107,10 +132,15 @@ parameters. These are alternatives, not a base and an overlay: when
 are ignored.
 
 ```ini
-# Whole-array image in the RTL's +sep_preload_efuse format: 8192 lines, one ASCII
-# '0' or '1' each, LSB first. A relative path is relative to the .ini naming it.
-# Empty (the default) leaves the array erased, matching +SEP_EFUSE_NO_PRELOAD.
+# Whole-array image, in either the +sep_preload_efuse format (8192 lines, one ASCII
+# '0' or '1' each, LSB first) or a $readmemh image (256 hex words, word 0 first).
+# The format is detected from the file. A relative path is relative to the .ini
+# naming it. Empty (the default) leaves the array erased, as +SEP_EFUSE_NO_PRELOAD does.
 och_sep_ss1.sep_efuse.fuse_preload_file : ../../path/to/default_efuse.preload
+
+# The test_en strap. Blocks every fuse command and zeroes the key manager's secrets;
+# lc_ctrl reads it from here on a platform, so this one knob covers both.
+och_sep_ss1.sep_efuse.secure_tm : false
 
 # Per-field alternative, for a standalone testbench with no image to point at.
 och_sep_ss1.sep_efuse.lc_state    : 1             # raw lifecycle state, encoded on load

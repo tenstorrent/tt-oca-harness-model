@@ -7,7 +7,8 @@
  *      seeded reset default 0x00000002 (cs_force_high=1, spi_sel=0).
  *   2. The SPI flash READ path returns bytes from the staged image. Built without
  *      -DFLASH_STAGED it asserts erased 0xFF (no image staged); built with -DFLASH_STAGED it
- *      asserts the known fixture bytes (image staged to data/flash_memory.bin).
+ *      asserts the known fixture bytes (image staged to data/sep_spi_mux_test_flash.bin and
+ *      named by och_sep_ss1.spiBackdoorFile).
  */
 
 #include <stdint.h>

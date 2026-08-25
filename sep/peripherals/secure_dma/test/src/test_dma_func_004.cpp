@@ -1492,6 +1492,9 @@ void testbench::test_func004_src_addr_hi_overflow_update() {
 
   // Configure ASID for System bus (64-bit addressing): ADDR_SPACE_ID.src_asid = 0x9
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000009);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Program source address near 32-bit overflow: 0x00000001_FFFFFFFC
@@ -1626,6 +1629,9 @@ void testbench::test_func004_dst_addr_hi_overflow_update() {
   m_test->register_read_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, addr_space_id);
   addr_space_id = (addr_space_id & 0xFFF0FFFF) | (0x9 << 16); // Set dst_asid = 0x9
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, addr_space_id);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Program destination address near 32-bit overflow: 0x00000001_FFFFFFFC
@@ -1692,6 +1698,9 @@ void testbench::test_func004_32bit_src_address_ot_bus() {
 
   // Configure ASID for OT_ADDR: src_asid = 0x7
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000007);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Program 32-bit source address: 0x00001000 (upper 32 bits = 0)
@@ -1759,6 +1768,9 @@ void testbench::test_func004_64bit_src_address_sys_bus() {
 
   // Configure ASID for SYS_ADDR: src_asid = 0x9
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000009);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Program 64-bit source address: 0x00000001_20000000
@@ -1828,6 +1840,9 @@ void testbench::test_func004_32bit_dst_address_ctn_bus() {
   m_test->register_read_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, addr_space_id);
   addr_space_id = (addr_space_id & 0xFFFFFF0F) | (0xA << 4); // Set dst_asid = 0xA
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, addr_space_id);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Program 32-bit destination address: 0x00002000 (upper 32 bits = 0)
@@ -1897,6 +1912,9 @@ void testbench::test_func004_64bit_dst_address_sys_bus() {
   m_test->register_read_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, addr_space_id);
   addr_space_id = (addr_space_id & 0xFFFFFF0F) | (0x9 << 4); // Set dst_asid = 0x9
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, addr_space_id);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Program 64-bit destination address: 0x00000002_30000000
@@ -2188,6 +2206,9 @@ void testbench::test_func004_boundary_overflow_detection() {
 
   // Configure ASID for System bus (64-bit): src_asid = 0x9
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000009);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   wait(5, SC_NS);
 
   // Configure source address near 64-bit maximum: 0xFFFFFFFF_FFFFF000

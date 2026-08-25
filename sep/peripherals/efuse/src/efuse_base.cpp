@@ -50,7 +50,7 @@ void efuse_base::reset_all_registers()
 
     // EFUSE_INTERFACE_CTRL — STATUS reset=0x1 (efuse_sense_done=1)
     EFUSE_INTERFACE_CTRL_STATUS.reset();
-    EFUSE_WRITE_CTRL.reset();
+    EFUSE_PROGRAM_CTRL.reset();
     EFUSE_READ_CTRL.reset();
     EFUSE_PROGRAM_INTERFACE_RD_DATA.reset();
     EFUSE_READ_INTERFACE_RD_DATA.reset();
@@ -65,4 +65,8 @@ void efuse_base::reset_all_registers()
     RMA_SIP_TOKEN_MATCH.reset();
     RMA_CHIPLET_TOKEN_MATCH.reset();
     SEC_DISABLE_TOKEN_MATCH.reset();
+
+    // EFUSE_SHIM_CTRL — the only register in the map with a non-zero reset, so
+    // unlike the stubs it replaced it has to be reset explicitly.
+    EFUSE_BANK_INIT_TIME.reset();
 }

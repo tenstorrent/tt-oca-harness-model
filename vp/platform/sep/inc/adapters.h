@@ -31,22 +31,26 @@ private:
  * @brief 32-to-64 bit bus adapter for the OT Mailbox IP (Port 0, SEP side).
  *
  * The mailbox registers are 64-bit wide (regwidth=64, accesswidth=64 per RDL)
- * but the SEP RISC-V core uses a 32-bit data bus. This adapter sits between
- * the SEP SimpleBus and mailbox Port 0, transparently handling split 32-bit
- * accesses so software only needs to do normal 32-bit loads/stores.
+ * but the SEP RISC-V core uses a 32-bit data bus. This adapter sits between the
+ * SEP SimpleBus and the mailbox unit, doing the width conversion that
+ * axi_lite_dw_converter does in RTL, so software only needs normal 32-bit
+ * loads and stores.
  *
- * Split access rules
- * ------------------
- * WRITE_DATA (base+0x00 / base+0x04) — FIFO push must be atomic:
- *   32-bit write to base+0x00  → latch low word, do NOT push FIFO yet
- *   32-bit write to base+0x04  → combine with latch → single 64-bit push
+ * The adapter is channel-agnostic: it widens the access and passes the address
+ * through untouched, leaving the channel/port decode to the mailbox unit. Only
+ * the register offset within a block matters here, which is why the FIFO
+ * registers are recognised modulo the 0x800 block size.
  *
- * READ_DATA (base+0x08 / base+0x0C) — FIFO pop must be atomic:
- *   32-bit read  from base+0x08 → pop 64-bit from FIFO, return low word, latch high
- *   32-bit read  from base+0x0C → return latched high word (no second pop)
+ * Access rules
+ * ------------
+ * WRITE_DATA / READ_DATA — one FIFO push or pop per bus transaction, matching
+ * the RTL, which asserts push/pop for any access to the register regardless of
+ * which byte lanes are active.
  *
- * All other registers have functional bits only in [31:0], so a 32-bit access
- * to the low word is zero-extended to 64-bit and forwarded immediately.
+ * All other registers have functional bits only in [31:0]. A low-word access is
+ * zero-extended and forwarded; an access to the upper half touches reserved
+ * bits only, so a read returns zero and a write is dropped, both with a normal
+ * response as the RTL byte-lane logic would give.
  */
 struct MailboxBridge : public sc_core::sc_module {
 
@@ -55,6 +59,9 @@ struct MailboxBridge : public sc_core::sc_module {
 
     static constexpr uint64_t WRITE_DATA_OFFSET = 0x00;
     static constexpr uint64_t READ_DATA_OFFSET  = 0x08;
+
+    /// @brief Address span of one mailbox register block (axil_mailbox_*_wrap.rdl)
+    static constexpr uint64_t MAILBOX_BLOCK_SIZE = 0x800;
 
     SC_HAS_PROCESS(MailboxBridge);
 
@@ -77,15 +84,18 @@ struct MailboxBridge : public sc_core::sc_module {
 
         assert(len == 4 && "MailboxBridge: only 4-byte or 8-byte accesses supported");
 
-        const uint64_t offset   = addr;
         const uint64_t reg_base = addr & ~static_cast<uint64_t>(0x7);
-        const bool     is_high  = (offset & 0x4) != 0;
+        const bool     is_high  = (addr & 0x4) != 0;
+
+        // Register offset within the addressed channel/port block, so the FIFO
+        // registers are recognised on every channel rather than only channel 0.
+        const uint64_t reg_off  = (addr % MAILBOX_BLOCK_SIZE) & ~static_cast<uint64_t>(0x7);
 
         if (txn.is_write()) {
             uint32_t word = 0;
             std::memcpy(&word, dptr, 4);
 
-            if ((offset & ~static_cast<uint64_t>(0x7)) == WRITE_DATA_OFFSET) {
+            if (reg_off == WRITE_DATA_OFFSET) {
                 // One push per bus transaction, with the unaddressed half zeroed.
                 // axi_lite_mailbox.sv does exactly this --
                 //   mbox_w_data_o[i*8+:8] = w.strb[i] ? w.data[i*8+:8] : '0
@@ -100,14 +110,15 @@ struct MailboxBridge : public sc_core::sc_module {
                 forward_write64(reg_base, value, txn, delay);
             } else {
                 if (is_high) {
-                    txn.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+                    // Upper half of a non-FIFO register is reserved: dropped.
+                    txn.set_response_status(tlm::TLM_OK_RESPONSE);
                     return;
                 }
                 forward_write64(reg_base, static_cast<uint64_t>(word), txn, delay);
             }
 
         } else {
-            if ((offset & ~static_cast<uint64_t>(0x7)) == READ_DATA_OFFSET) {
+            if (reg_off == READ_DATA_OFFSET) {
                 // One pop per bus transaction, mirroring the write side and
                 // axi_lite_mailbox.sv, which asserts mbox_r_pop_o for every read
                 // of this address and returns the whole entry for the fabric to
@@ -122,9 +133,10 @@ struct MailboxBridge : public sc_core::sc_module {
                 std::memcpy(dptr, &part, 4);
             } else {
                 if (is_high) {
+                    // Upper half of a non-FIFO register is reserved: reads zero.
                     uint32_t zeroes = 0;
                     std::memcpy(dptr, &zeroes, 4);
-                    txn.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+                    txn.set_response_status(tlm::TLM_OK_RESPONSE);
                     return;
                 }
                 uint64_t val64 = 0;
@@ -186,6 +198,74 @@ private:
  * local address on `ini` (back into local_alias_remap_ip's programmable
  * 16-region table, which is a separate hardware block).
  */
+/**
+ * @brief Local-alias window remap on the DMA's egress path
+ *
+ * Models u_dma_local_alias_remap in sep_dma_wrap.sv, an axi_window_remap
+ * instance sitting between the DMA's AXI master and the local crossbar:
+ *
+ *   local_alias_base_i = sep_local_base_addr   (cpu_ctrl.SEP_LOCAL_BASE_ADDR)
+ *   region_size_i      = SEP_LOCAL_ALIAS_REGION_SIZE = 0x3000_0000
+ *   target_base_i      = SEP_LOCAL_ALIAS_REGION_BASE = 0x1000_0000
+ *
+ * so an address inside the window becomes
+ * `addr - local_base + 0x1000_0000`, and anything outside passes through
+ * untouched. At the reset base of 0xD000_0000 that is a flat -0xC000_0000,
+ * which is why the CPU TCMs at 0xC000_xxxx sit below the window and stay
+ * directly reachable — the RTL comment above the instance calls this out as
+ * deliberate.
+ *
+ * Unlike local_alias_remap_adapter, which serves the CPU path and works in
+ * port-local coordinates against the programmable region size, this one is on
+ * an initiator and works in global bus addresses with the fixed region
+ * constants the RTL hard-wires.
+ */
+class dma_alias_remap_adapter : public sc_core::sc_module {
+public:
+    tlm_utils::simple_target_socket<dma_alias_remap_adapter>    tgt;
+    tlm_utils::simple_initiator_socket<dma_alias_remap_adapter> ini;
+
+    static constexpr uint64_t REGION_SIZE = 0x30000000ULL;
+    static constexpr uint64_t TARGET_BASE = 0x10000000ULL;
+
+    SC_HAS_PROCESS(dma_alias_remap_adapter);
+
+    dma_alias_remap_adapter(sc_core::sc_module_name n, sep_cpu_ctrl_ip* cpu_ctrl)
+        : sc_module(n), tgt("tgt"), ini("ini"), cpu_ctrl_(cpu_ctrl)
+    {
+        tgt.register_b_transport(this, &dma_alias_remap_adapter::b_transport);
+        tgt.register_transport_dbg(this, &dma_alias_remap_adapter::transport_dbg);
+    }
+
+private:
+    sep_cpu_ctrl_ip* cpu_ctrl_;
+
+    uint64_t remap(uint64_t addr) const {
+        const uint64_t local_base =
+            static_cast<uint64_t>(cpu_ctrl_->SEP_LOCAL_BASE_ADDR);
+
+        if (addr >= local_base && addr < local_base + REGION_SIZE)
+            return addr - local_base + TARGET_BASE;
+
+        return addr;
+    }
+
+    void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {
+        const uint64_t orig = trans.get_address();
+        trans.set_address(remap(orig));
+        ini->b_transport(trans, delay);
+        trans.set_address(orig);
+    }
+
+    unsigned int transport_dbg(tlm::tlm_generic_payload& trans) {
+        const uint64_t orig = trans.get_address();
+        trans.set_address(remap(orig));
+        unsigned int ret = ini->transport_dbg(trans);
+        trans.set_address(orig);
+        return ret;
+    }
+};
+
 class local_alias_remap_adapter : public sc_core::sc_module {
 public:
     tlm_utils::simple_target_socket<local_alias_remap_adapter>    tgt;

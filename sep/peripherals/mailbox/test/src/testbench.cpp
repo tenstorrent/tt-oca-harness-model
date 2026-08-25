@@ -462,15 +462,21 @@ void testbench::test_write_only_register_protection() {
   // -------------------------------------------------------------------------
   // WRITE_DATA (WO)
   // -------------------------------------------------------------------------
-  // 1. Read protection: attempt read → buffer must remain the sentinel.
+  // 1. Read behaviour: this is the one write-only register the RTL lets you
+  //    read. axi_lite_mailbox.sv answers OKAY and returns a fixed sentinel
+  //    (MBOXW: r_chan = '{data: 32'hFEEDC0DE, resp: RESP_OKAY}).
   read_val = sentinel;
-  mailbox_read(0, mailbox_basetest::WRITE_DATA_OFFSET, read_val);
-  if (read_val == sentinel) {
-    CSML_INFO(2, logger) << "  WRITE_DATA: Read rejected (buffer unchanged) - PASS";
-  } else {
-    CSML_ERROR(0, logger) << "  WRITE_DATA: Read accepted (buffer changed to 0x"
-                          << std::hex << read_val << std::dec << ") - FAIL";
-    all_pass = false;
+  {
+    tlm::tlm_response_status st =
+        mailbox_read(0, mailbox_basetest::WRITE_DATA_OFFSET, read_val);
+    if (st == tlm::TLM_OK_RESPONSE && read_val == 0xFEEDC0DEULL) {
+      CSML_INFO(2, logger) << "  WRITE_DATA: Read returns 0xFEEDC0DE with OKAY - PASS";
+    } else {
+      CSML_ERROR(0, logger) << "  WRITE_DATA: expected 0xFEEDC0DE/OK, got 0x"
+                            << std::hex << read_val << std::dec
+                            << " status=" << st << " - FAIL";
+      all_pass = false;
+    }
   }
 
   // 2. Write acceptance: write a word and verify STATUS[0] (empty flag)
@@ -495,15 +501,20 @@ void testbench::test_write_only_register_protection() {
   // -------------------------------------------------------------------------
   // CTRL (WO)
   // -------------------------------------------------------------------------
-  // 1. Read protection: attempt read → buffer must remain the sentinel.
+  // 1. Read protection: CTRL is write-only with no read path, so the RTL
+  //    decodes the access as an error and returns zero data with SLVERR.
   read_val = sentinel;
-  mailbox_read(0, mailbox_basetest::CTRL_OFFSET, read_val);
-  if (read_val == sentinel) {
-    CSML_INFO(2, logger) << "  CTRL: Read rejected (buffer unchanged) - PASS";
-  } else {
-    CSML_ERROR(0, logger) << "  CTRL: Read accepted (buffer changed to 0x"
-                          << std::hex << read_val << std::dec << ") - FAIL";
-    all_pass = false;
+  {
+    tlm::tlm_response_status st =
+        mailbox_read(0, mailbox_basetest::CTRL_OFFSET, read_val);
+    if (st != tlm::TLM_OK_RESPONSE && read_val == 0) {
+      CSML_INFO(2, logger) << "  CTRL: Read rejected with error response - PASS";
+    } else {
+      CSML_ERROR(0, logger) << "  CTRL: expected 0x0 with error, got 0x"
+                            << std::hex << read_val << std::dec
+                            << " status=" << st << " - FAIL";
+      all_pass = false;
+    }
   }
 
   // 2. Write acceptance: issue wflush (bit[0]=1) on port 0 to drain the word

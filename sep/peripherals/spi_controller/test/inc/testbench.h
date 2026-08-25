@@ -77,6 +77,7 @@ private:
     /// Signal declarations for connecting DUT and test ports
 
     /// Interrupt signals (DUT output -> Test input)
+    sc_signal<bool> sig_irq;
     sc_signal<bool> sig_error_irq;
     sc_signal<bool> sig_spi_event_irq;
 

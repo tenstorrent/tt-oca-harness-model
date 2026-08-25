@@ -220,6 +220,7 @@ public:
 
 
    /// Interrupt inputs (complement of model's outputs)
+   sc_in<bool> irq_o;  ///< Combined interrupt line, as seen by the PIC
    sc_in<bool> error_irq;
    sc_in<bool> spi_event_irq;
 
@@ -244,6 +245,7 @@ public:
     */
    spi_controller_test(sc_module_name name) : spi_controller_basetest(name),
                                         spi_master("spi_master"),
+                                        irq_o("irq_o"),
                                         error_irq("error_irq"),
                                         spi_event_irq("spi_event_irq"),
                                         dma_trigger("dma_trigger"),

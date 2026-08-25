@@ -282,6 +282,15 @@ Beyond those:
   `sep_global_alias_remap_uvm_test`, which runs with `+SEP_SKIP_CPU_RUN` and no
   firmware at all, having previously needed a `Force` on `security_disable` plus
   an external AXI master. A failure here would say nothing about the VP.
+- **`efuse_sanity_csr_test`.** Reads `SEP_EXTERNAL_EFUSE_SHIM_CTRL_n_7` at
+  `0x2000_0024`, one of the seventeen Samsung shim registers the stale
+  `och_sep_top_reg.h` still describes. Current RTL gives the SEP shim one
+  register, `EFUSE_BANK_INIT_TIME` at offset 0
+  (`hw/ip/efuse/dv/models/regs/efuse_shim_ctrl.rdl`), so the window is `0x4` wide
+  and that address decodes nowhere — the run traps with mcause 7 rather than
+  failing a check. The Samsung block moved to the SMC side as
+  `SMC_EXTERNAL_MANDATORY_EFUSE_SHIM_CTRL_ln`. Re-syncing the register header
+  brings this back. The counts above predate this exclusion.
 
 ## Updating from tt-oca-hw
 

@@ -6,11 +6,11 @@
 
 #include "spi_flash_model.h"
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <system_error>
 
 // ============================================================================
 // CONSTRUCTOR
@@ -21,8 +21,10 @@ spi_flash_model::spi_flash_model(uint32_t size_bytes)
     , m_write_enabled(false)
     , m_op_suspended(false)
     , m_status_reg(0x00)
+    , m_status_reg_2(0x00)
     , m_4byte_address_mode(false)
     , m_reset_enabled(false)
+    , m_jedec_id(DEFAULT_JEDEC_ID)
 {
     // Build SFDP ROM — populate with default parameters that describe this model:
     //   density  = size_bytes * 8 bits
@@ -49,6 +51,7 @@ void spi_flash_model::reset()
     m_write_enabled = false;
     m_op_suspended  = false;
     m_status_reg    = 0x00;
+    m_status_reg_2  = 0x00;
     m_4byte_address_mode = false;
     m_reset_enabled = false;
     std::cout << "[spi_flash] Reset: device state cleared, memory preserved\n";
@@ -91,11 +94,11 @@ void spi_flash_model::update_sfdp_rom()
 // BACKDOOR FILE I/O
 // ============================================================================
 
-bool spi_flash_model::load_memory_from_file()
+bool spi_flash_model::load_memory_from_file(const std::string& path)
 {
-    std::ifstream file(BACKDOOR_FILE_PATH, std::ios::binary | std::ios::ate);
+    std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        std::cout << "[spi_flash] Backdoor: " << BACKDOOR_FILE_PATH
+        std::cout << "[spi_flash] Backdoor: " << path
                   << " not found — using blank (0xFF) memory\n";
         return false;
     }
@@ -114,17 +117,19 @@ bool spi_flash_model::load_memory_from_file()
     file.close();
 
     std::cout << "[spi_flash] Backdoor: loaded " << load_size
-              << " bytes from " << BACKDOOR_FILE_PATH << "\n";
+              << " bytes from " << path << "\n";
     return true;
 }
 
-bool spi_flash_model::save_memory_to_file() const
+bool spi_flash_model::save_memory_to_file(const std::string& path) const
 {
-    // Ensure data/ directory exists
-    struct stat info;
-    if (stat("data", &info) != 0) mkdir("data", 0755);
+    const std::filesystem::path parent = std::filesystem::path(path).parent_path();
+    if (not parent.empty()) {
+        std::error_code ec;
+        std::filesystem::create_directories(parent, ec);
+    }
 
-    std::ofstream file(BACKDOOR_FILE_PATH, std::ios::binary);
+    std::ofstream file(path, std::ios::binary);
     if (!file.is_open()) return false;
 
     bool ok = !!file.write(reinterpret_cast<const char*>(m_mem.data()),
@@ -132,7 +137,7 @@ bool spi_flash_model::save_memory_to_file() const
     file.close();
     if (ok)
         std::cout << "[spi_flash] Backdoor: saved " << m_mem.size()
-                  << " bytes to " << BACKDOOR_FILE_PATH << "\n";
+                  << " bytes to " << path << "\n";
     return ok;
 }
 
@@ -172,9 +177,13 @@ bool spi_flash_model::handle_program(uint32_t address,
               << ") @ 0x" << std::hex << address
               << " len=" << std::dec << tx_buffer.size() << "\n";
 
-    // Flash semantics: program can only clear bits (AND operation)
+    // Flash semantics: program can only clear bits (AND operation), and a program
+    // that runs past the end of its page wraps to the page start rather than
+    // spilling into the next one.
+    const uint32_t page_base = address & ~(PAGE_SIZE - 1u);
+    const uint32_t page_off  = address & (PAGE_SIZE - 1u);
     for (size_t i = 0; i < tx_buffer.size(); ++i) {
-        uint32_t addr = static_cast<uint32_t>(address + i);
+        uint32_t addr = page_base + ((page_off + static_cast<uint32_t>(i)) % PAGE_SIZE);
         write_byte(addr, read_byte(addr) & tx_buffer[i]);
     }
 
@@ -248,6 +257,24 @@ void spi_flash_model::handle_control(uint8_t opcode, std::vector<uint8_t>& rx_bu
                           << std::hex << std::setw(2) << std::setfill('0')
                           << static_cast<int>(m_status_reg) << std::dec << "\n";
             }
+            break;
+
+        case READ_STATUS_2:
+            if (!rx_buffer.empty()) {
+                rx_buffer[0] = m_status_reg_2;
+                std::cout << "[spi_flash] RDSR2: SR2=0x"
+                          << std::hex << std::setw(2) << std::setfill('0')
+                          << static_cast<int>(m_status_reg_2) << std::dec << "\n";
+            }
+            break;
+
+        case READ_JEDEC_ID:
+            // Manufacturer byte first, then memory type, then capacity.
+            for (size_t i = 0; i < rx_buffer.size() && i < 3u; ++i)
+                rx_buffer[i] = static_cast<uint8_t>(m_jedec_id >> (8u * (2u - i)));
+            std::cout << "[spi_flash] RDID: JEDEC ID=0x"
+                      << std::hex << std::setw(6) << std::setfill('0')
+                      << m_jedec_id << std::dec << "\n";
             break;
 
         case EN4B:
@@ -357,6 +384,8 @@ bool spi_flash_model::process_command(uint8_t opcode,
         case WRITE_ENABLE:
         case WRITE_DISABLE:
         case READ_STATUS:
+        case READ_STATUS_2:
+        case READ_JEDEC_ID:
         case EN4B:
         case EX4B:
         case RESET_ENABLE:

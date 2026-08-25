@@ -27,6 +27,11 @@ testbench::testbench(sc_module_name name)
 
     m_test->initiator_socket.bind(m_dut->target_socket);
     m_test->shim_initiator_socket.bind(m_dut->shim_target_socket);
+    m_dut->locked_field_access_irq_o(locked_field_irq);
+
+    SC_METHOD(count_locked_field_pulse);
+    sensitive << locked_field_irq.posedge_event();
+    dont_initialize();
 
     SC_THREAD(run_tests);
 }
@@ -352,6 +357,89 @@ void testbench::test_efuse_read_ctrl_rw()
 }
 
 // =============================================================================
+// Secure test mode — the whole of the secure_tm run
+//
+// efuse_guard.sv empties every fuse command while the strap is asserted, and
+// efuse_shadow_regs.sv zeroes the secrets going to the key manager. Neither touches
+// the shadow bus, which is the distinction worth pinning down: software reads the
+// same values it always did, and only the hardware ports and the OTP interface change.
+// =============================================================================
+
+void testbench::test_secure_tm_mode()
+{
+    report_test_start("Secure test mode — fuse commands blocked, secrets zeroed");
+
+    uint32_t val = 0;
+
+    if (m_dut->get_secure_tm())
+        report_test_pass("secure_tm strap latched at elaboration");
+    else
+        report_test_fail("secure_tm strap", "the config did not reach the model");
+
+    // The gate is on the hardware port, not the read path.
+    m_test->register_read_32(efuse_basetest::CHIPLET_UID_OFFSET, val);
+    const uint32_t uid0 = val;
+    if (uid0 != 0)
+        report_test_pass("shadow bus still returns CHIPLET_UID");
+    else
+        report_test_fail("shadow read under secure_tm",
+                         "CHIPLET_UID reads zero, so this proves nothing about the port");
+
+    bool uid_zeroed = true;
+    for (int i = 0; i < 8; i++)
+        if (m_dut->get_chiplet_uid()[i] != 0)
+            uid_zeroed = false;
+    if (uid_zeroed)
+        report_test_pass("get_chiplet_uid() is zeroed for the key manager");
+    else
+        report_test_fail("secret zeroing", "the key manager would still receive the UID");
+
+    // A program command is dropped, not refused: RTL is explicit that this is not an
+    // error capture, so no status bit and no req_error.
+    const uint32_t enable_prog = (1u << 27) | (1u << 16);
+    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
+                              enable_prog | (1u << 17) | (1u << 18) | 700u);
+    wait(1, SC_NS);
+    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    if ((val & (1u << 25)) && !(val & (1u << 26)))
+        report_test_pass("program command completes with done and no error");
+    else
+        report_test_fail("secure_tm program", "expected done without error, got 0x" +
+                         std::to_string(val));
+
+    m_test->register_read_32(efuse_basetest::EFUSE_PROG_INTF_RD_DATA_OFFSET, val);
+    if (val == 0)
+        report_test_pass("program read-back returns zero");
+    else
+        report_test_fail("secure_tm read-back", "expected 0x0 got 0x" + std::to_string(val));
+
+    // A read of a word the shadow path just returned non-zero for: the OTP interface
+    // returns nothing regardless.
+    const uint32_t uid_bit = (efuse_basetest::CHIPLET_UID_OFFSET / 4) * 32;
+    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+                              (1u << 28) | (1u << 16) | uid_bit);
+    wait(1, SC_NS);
+    m_test->register_read_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, val);
+    if ((val & (1u << 25)) && !(val & (1u << 26)))
+        report_test_pass("read command completes with done and no error");
+    else
+        report_test_fail("secure_tm read", "expected done without error, got 0x" +
+                         std::to_string(val));
+
+    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    if (val == 0)
+        report_test_pass("OTP read returns zero for a word the shadow path shows");
+    else
+        report_test_fail("secure_tm OTP read", "expected 0x0 got 0x" + std::to_string(val));
+
+    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    if (val == 0x1)
+        report_test_pass("STATUS unchanged: a blocked command is not an error");
+    else
+        report_test_fail("secure_tm status", "expected 0x1 got 0x" + std::to_string(val));
+}
+
+// =============================================================================
 // Main test sequence
 // =============================================================================
 
@@ -363,6 +451,17 @@ void testbench::run_tests()
     CSML_INFO(1, logger) << "\n========================================"
                          << "\nSEP_EFUSE IP TESTBENCH"
                          << "\n========================================" << std::endl;
+
+    // secure_tm is a strap: it cannot be flipped once the run has started, so the
+    // secure-mode behaviour gets a run of its own rather than a test in this list.
+    // run_tests.sh launches the binary a second time with the config that sets it.
+    if (m_dut->get_secure_tm()) {
+        test_secure_tm_mode();
+        report_test_summary();
+        wait(100, SC_NS);
+        sc_stop();
+        return;
+    }
 
     test_fuse_load_ro_registers();
     test_fuse_load_array_registers();

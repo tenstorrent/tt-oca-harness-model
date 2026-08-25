@@ -756,7 +756,7 @@ public:
   void test_abort_terminates_transfer_loop();
   void test_hw_handshake_trigger_ignored_when_go_not_set();
   void test_hash_initial_transfer_zero_no_context();
-  void test_hw_handshake_auto_clear_bus_error_continue();
+  void test_hw_handshake_auto_clear_bus_error_halts();
   void test_sha2_requires_four_byte_width_size_error();
   void test_chunk_size_exceeds_total_size_warning();
   void test_hash_init_frees_previous_context_after_failed_transfer();

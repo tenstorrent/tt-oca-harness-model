@@ -82,6 +82,16 @@ EXCLUDE+=("sep_smu_aes" "sep_smu_bidirect" "sep_smu_boot_health" "sep_smu_dma"
 # the VP's alias remap.
 EXCLUDE+=("global_alias_remap_sanity")
 
+# Reads registers that current RTL no longer has. The test walks
+# SEP_EXTERNAL_EFUSE_SHIM_CTRL_n_7 at 0x2000_0024, from the seventeen-register
+# Samsung shim the stale och_sep_top_reg.h still describes. In
+# hw/ip/efuse/dv/models/regs/efuse_shim_ctrl.rdl the SEP shim is one register,
+# EFUSE_BANK_INIT_TIME at offset 0, so the window is 0x4 wide and that address
+# decodes nowhere — the run traps with mcause 7. The Samsung block still exists,
+# but on the SMC side as SMC_EXTERNAL_MANDATORY_EFUSE_SHIM_CTRL_ln. Re-sync the
+# register header from tt-oca-hw and this comes back on its own.
+EXCLUDE+=("efuse_sanity_csr_test")
+
 # Per-test OTBN algorithm overrides and multi-ELF variants live in
 # vp_test_env.sh as vp_algo_override / vp_extra_elfs — plain lookups rather than
 # associative arrays, which macOS bash 3.2 does not have.

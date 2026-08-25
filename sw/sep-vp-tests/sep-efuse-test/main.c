@@ -40,18 +40,18 @@ extern int printf(const char *format, ...);
 
 /* EFUSE_INTERFACE_CTRL */
 #define EFUSE_STATUS          (EFUSE_BASE + 0x400u)
-#define EFUSE_WRITE_CTRL      (EFUSE_BASE + 0x404u)
+#define EFUSE_PROGRAM_CTRL      (EFUSE_BASE + 0x404u)
 #define EFUSE_READ_CTRL       (EFUSE_BASE + 0x408u)
 #define EFUSE_PROGRAM_RD_DATA (EFUSE_BASE + 0x40Cu)
 #define EFUSE_READ_RD_DATA    (EFUSE_BASE + 0x410u)
 
-/* EFUSE_WRITE_CTRL bits. Bits [15:0] are the bit address within the array. */
+/* EFUSE_PROGRAM_CTRL bits. Bits [15:0] are the bit address within the array. */
 #define WC_PROGRAM_DATA     (1u << 16)
-#define WC_WRITE_GO         (1u << 17)
+#define WC_PROGRAM_GO       (1u << 17)
 #define WC_READ_BACK        (1u << 18)
-#define WC_WRITE_BUSY       (1u << 24)
-#define WC_WRITE_DONE       (1u << 25)
-#define WC_WRITE_STATUS     (1u << 26)
+#define WC_PROGRAM_BUSY     (1u << 24)
+#define WC_PROGRAM_DONE     (1u << 25)
+#define WC_PROGRAM_STATUS   (1u << 26)
 #define WC_PROGRAM_ENABLE   (1u << 27)
 
 /* EFUSE_READ_CTRL bits */
@@ -159,7 +159,7 @@ static void test_woset_locks(void)
 }
 
 /* ------------------------------------------------------------------ */
-/* Test 4: EFUSE_WRITE_CTRL — program handshake                        */
+/* Test 4: EFUSE_PROGRAM_CTRL — program handshake                        */
 /*                                                                     */
 /* A go pulse always completes in the same access: the interface never  */
 /* stalls, it answers done and reports the outcome in status. A command */
@@ -168,27 +168,27 @@ static void test_woset_locks(void)
 /* ------------------------------------------------------------------ */
 static void test_program_handshake(void)
 {
-    printf("\nTest 4: EFUSE_WRITE_CTRL program handshake\n");
+    printf("\nTest 4: EFUSE_PROGRAM_CTRL program handshake\n");
 
-    REG_WRITE(EFUSE_WRITE_CTRL, WC_WRITE_GO | WC_PROGRAM_DATA | SPARE_BIT_ADDR);
-    uint32_t ctrl = REG_READ(EFUSE_WRITE_CTRL);
+    REG_WRITE(EFUSE_PROGRAM_CTRL, WC_PROGRAM_GO | WC_PROGRAM_DATA | SPARE_BIT_ADDR);
+    uint32_t ctrl = REG_READ(EFUSE_PROGRAM_CTRL);
     printf("  after go without program_enable: 0x%08x\n", ctrl);
 
-    check("write_go cleared",       (ctrl >> 17) & 1u, 0u);
-    check("write_busy=0",           (ctrl >> 24) & 1u, 0u);
-    check("write_done=1",           (ctrl >> 25) & 1u, 1u);
-    check("write_status=1 (denied)", (ctrl >> 26) & 1u, 1u);
+    check("program_go cleared",       (ctrl >> 17) & 1u, 0u);
+    check("program_busy=0",           (ctrl >> 24) & 1u, 0u);
+    check("program_done=1",           (ctrl >> 25) & 1u, 1u);
+    check("program_status=1 (denied)", (ctrl >> 26) & 1u, 1u);
 
     /* Same command with program_enable set, plus read_back so the interface
      * returns the word it just burned. */
-    REG_WRITE(EFUSE_WRITE_CTRL,
-              WC_WRITE_GO | WC_PROGRAM_DATA | WC_READ_BACK | WC_PROGRAM_ENABLE |
+    REG_WRITE(EFUSE_PROGRAM_CTRL,
+              WC_PROGRAM_GO | WC_PROGRAM_DATA | WC_READ_BACK | WC_PROGRAM_ENABLE |
               SPARE_BIT_ADDR);
-    ctrl = REG_READ(EFUSE_WRITE_CTRL);
+    ctrl = REG_READ(EFUSE_PROGRAM_CTRL);
     printf("  after go with program_enable: 0x%08x\n", ctrl);
 
-    check("write_done=1",            (ctrl >> 25) & 1u, 1u);
-    check("write_status=0 (allowed)", (ctrl >> 26) & 1u, 0u);
+    check("program_done=1",            (ctrl >> 25) & 1u, 1u);
+    check("program_status=0 (allowed)", (ctrl >> 26) & 1u, 0u);
     check("read_back shows burned bit",
           REG_READ(EFUSE_PROGRAM_RD_DATA) & 1u, 1u);
 }

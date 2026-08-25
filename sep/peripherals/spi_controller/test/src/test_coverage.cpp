@@ -473,7 +473,7 @@ void testbench::test_coverage_signal_update_during_reset()
  * 2. Line 310 (RX FIFO pop empty return false) & 1415-1416 (RX FIFO Empty read warning)
  * 3. Lines 559-566 (TX FIFO underflow error path)
  * 4. Lines 626-628 (RX FIFO space available stall / resume)
- * 5. Lines 1201-1211 (CMD write when error/busy present -> CMDBUSY)
+ * 5. CMD write while an error is latched — queued, with CMDBUSY and READY untouched
  */
 void testbench::test_coverage_fifo_overflow_underflow()
 {
@@ -487,9 +487,9 @@ void testbench::test_coverage_fifo_overflow_underflow()
     wait(100, SC_NS);
 
     // 1. TX FIFO Overflow Test
-    // Pushing more than TxDepth (72 words)
+    // Pushing more than capacity (TxDepth + 1 = 73 words, incl. the byte_select stage)
     CSML_INFO(0, test->logger) << "[Sub-Test 1] TX FIFO Overflow" << std::endl;
-    for (int i = 0; i < 73; i++) {
+    for (int i = 0; i < 74; i++) {
         test->write_register_32(TXDATA_OFFSET, 0x11223340 + i);
     }
     wait(10, SC_NS);
@@ -553,18 +553,47 @@ void testbench::test_coverage_fifo_overflow_underflow()
         test_passed = false;
     }
 
-    // 4. CMD Write when Error/Busy Present (CMDBUSY)
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 4] CMD Write during Error (CMDBUSY)" << std::endl;
-    // With underflow set, write to CMD register
+    // 4. CMD Write while an error is latched — accepted, not rejected.
+    // RTL: command_busy is only "the command queue is full", so READY stays high
+    // and CMDBUSY stays clear. A latched error disables the core through
+    // en = en_sw & ~enb_error, which stalls execution but does not refuse the
+    // write; the segment waits in the queue until software clears ERROR_STATUS.
+    CSML_INFO(0, test->logger) << "\n[Sub-Test 4] CMD Write during Error (queued, no CMDBUSY)" << std::endl;
+
+    uint32_t status_before = 0;
+    test->read_register_32(STATUS_OFFSET, status_before);
+    uint32_t cmdqd_before = (status_before >> 16) & 0xF;
+
     test->write_register_32(CMD_OFFSET, BUILD_CMD(3, 2, 0, 0));
     wait(10, SC_NS);
 
     test->read_register_32(ERROR_STATUS_OFFSET, err_status);
-    if (err_status & 0x1) { // CMDBUSY is bit 0
-        CSML_INFO(0, test->logger) << "[PASS] CMDBUSY detected: ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
-    } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] CMDBUSY bit not set in ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
+    if (err_status & 0x1) {
+        CSML_ERROR(0, test->logger) << "[FAIL] CMDBUSY set on a CMD write with room in the queue: ERROR_STATUS = 0x"
+                                    << std::hex << err_status << std::dec << std::endl;
         test_passed = false;
+    } else {
+        CSML_INFO(0, test->logger) << "[PASS] CMDBUSY stayed clear: ERROR_STATUS = 0x"
+                                   << std::hex << err_status << std::dec << std::endl;
+    }
+
+    uint32_t status_after = 0;
+    test->read_register_32(STATUS_OFFSET, status_after);
+    uint32_t cmdqd_after = (status_after >> 16) & 0xF;
+    if (cmdqd_after > cmdqd_before) {
+        CSML_INFO(0, test->logger) << "[PASS] Command queued while the core is held off: CMDQD "
+                                   << cmdqd_before << " -> " << cmdqd_after << std::endl;
+    } else {
+        CSML_ERROR(0, test->logger) << "[FAIL] Command was not queued: CMDQD "
+                                    << cmdqd_before << " -> " << cmdqd_after << std::endl;
+        test_passed = false;
+    }
+
+    if (!(status_after & (1u << 31))) {
+        CSML_ERROR(0, test->logger) << "[FAIL] STATUS.READY dropped because of a latched error" << std::endl;
+        test_passed = false;
+    } else {
+        CSML_INFO(0, test->logger) << "[PASS] STATUS.READY unaffected by the latched error" << std::endl;
     }
 
     // Clear error status

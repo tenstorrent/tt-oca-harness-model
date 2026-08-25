@@ -74,7 +74,7 @@ static constexpr unsigned int RESERVED_LAST_32_OFFSET       = 0x3FC;
 // EFUSE_INTERFACE_CTRL register offsets
 // ============================================================================
 static constexpr unsigned int EFUSE_INTERFACE_CTRL_STATUS_OFFSET      = 0x400;
-static constexpr unsigned int EFUSE_WRITE_CTRL_OFFSET                 = 0x404;
+static constexpr unsigned int EFUSE_PROGRAM_CTRL_OFFSET               = 0x404;
 static constexpr unsigned int EFUSE_READ_CTRL_OFFSET                  = 0x408;
 static constexpr unsigned int EFUSE_PROGRAM_INTERFACE_RD_DATA_OFFSET  = 0x40C;
 static constexpr unsigned int EFUSE_READ_INTERFACE_RD_DATA_OFFSET     = 0x410;
@@ -104,20 +104,22 @@ static constexpr unsigned int SEC_DISABLE_TOKEN_MATCH_OFFSET  = 0x56C;
 // map, interface CSRs and MMR stay in the sep_efuse window.
 // ============================================================================
 static constexpr unsigned int EFUSE_WINDOW_SIZE      = 0x570; ///< map + interface ctrl + MMR
-static constexpr unsigned int SHIM_CTRL_WINDOW_SIZE  = 0x044; ///< SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_SIZE
+static constexpr unsigned int SHIM_CTRL_WINDOW_SIZE  = 0x004; ///< SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_SIZE
 
 // ============================================================================
 // EFUSE_SHIM_CTRL register offsets
 //
-// Offsets are relative to the shim's own window base, which the register header
-// places at SEP_EXTERNAL_EFUSE_SHIM_CTRL_REG_MAP_BASE_ADDR = 0x20000000 — not
-// inside the sep_efuse window.  Samsung eFuse physical-layer shim: R/W stubs in
-// the VP, no functional effect, since nothing here changes what software reads
-// back from the fuses.
+// Offsets are relative to the shim's own window base, which the address map
+// places at SEP_EXTERNAL_EFUSE_SHIM_CTRL_BASE_ADDR = 0x20000000 — not inside
+// the sep_efuse window.
+//
+// One register, not a block.  Earlier silicon exposed a Samsung physical-layer
+// shim here: two status registers and fifteen timing controls, 0x44 in all.
+// That is gone.  efuse_shim_ctrl.rdl now declares a single EFUSE_BANK_INIT_TIME
+// and sep_addrmap_pkg.sv gives the window a size of 0x4, so the old registers
+// are not merely unused — they do not decode.
 // ============================================================================
-static constexpr unsigned int SHIM_EFUSE_CTRL_STATUS_OFFSET   = 0x000;
-static constexpr unsigned int SHIM_EFUSE_CTRL_STATUS_1_OFFSET = 0x004;
-static constexpr unsigned int SHIM_EFUSE_TIMING_CTRL_OFFSET   = 0x008; ///< [15] × 4 bytes (TIMING_CTRL_0..14)
+static constexpr unsigned int EFUSE_BANK_INIT_TIME_OFFSET = 0x000;
 
 
 // ============================================================================
@@ -270,9 +272,12 @@ public:
         RESERVED_6_READ_LOCK         (reg_name + ".RESERVED_6_READ_LOCK",   *this, 23, 1),
         RESERVED_7_WRITE_LOCK        (reg_name + ".RESERVED_7_WRITE_LOCK",  *this, 24, 1),
         RESERVED_7_READ_LOCK         (reg_name + ".RESERVED_7_READ_LOCK",   *this, 25, 1),
-        RESERVED_8_WRITE_LOCK        (reg_name + ".RESERVED_8_WRITE_LOCK",  *this, 26, 1),
-        RESERVED_8_READ_LOCK         (reg_name + ".RESERVED_8_READ_LOCK",   *this, 27, 1),
-        LOCKS_HI_RESERVED            (reg_name + ".LOCKS_HI_RESERVED",      *this, 28, 4)
+        RESERVED_LAST_256_WRITE_LOCK (reg_name + ".RESERVED_LAST_256_WRITE_LOCK", *this, 26, 1),
+        RESERVED_LAST_256_READ_LOCK  (reg_name + ".RESERVED_LAST_256_READ_LOCK",  *this, 27, 1),
+        RESERVED_LAST_64_WRITE_LOCK  (reg_name + ".RESERVED_LAST_64_WRITE_LOCK",  *this, 28, 1),
+        RESERVED_LAST_64_READ_LOCK   (reg_name + ".RESERVED_LAST_64_READ_LOCK",   *this, 29, 1),
+        RESERVED_LAST_32_WRITE_LOCK  (reg_name + ".RESERVED_LAST_32_WRITE_LOCK",  *this, 30, 1),
+        RESERVED_LAST_32_READ_LOCK   (reg_name + ".RESERVED_LAST_32_READ_LOCK",   *this, 31, 1)
     {
         this->set_read_write_restrictions(memory);
     }
@@ -315,9 +320,12 @@ public:
     csml_bitfield<N> RESERVED_6_READ_LOCK;           ///< [23]
     csml_bitfield<N> RESERVED_7_WRITE_LOCK;          ///< [24]
     csml_bitfield<N> RESERVED_7_READ_LOCK;           ///< [25]
-    csml_bitfield<N> RESERVED_8_WRITE_LOCK;          ///< [26]
-    csml_bitfield<N> RESERVED_8_READ_LOCK;           ///< [27]
-    csml_bitfield<N> LOCKS_HI_RESERVED;              ///< [31:28]
+    csml_bitfield<N> RESERVED_LAST_256_WRITE_LOCK;   ///< [26]
+    csml_bitfield<N> RESERVED_LAST_256_READ_LOCK;    ///< [27]
+    csml_bitfield<N> RESERVED_LAST_64_WRITE_LOCK;    ///< [28]
+    csml_bitfield<N> RESERVED_LAST_64_READ_LOCK;     ///< [29]
+    csml_bitfield<N> RESERVED_LAST_32_WRITE_LOCK;    ///< [30]
+    csml_bitfield<N> RESERVED_LAST_32_READ_LOCK;     ///< [31]
 };
 
 /**
@@ -1227,26 +1235,27 @@ public:
 };
 
 /**
- * rw_stub_type — Generic Read/Write stub register
+ * EFUSE_BANK_INIT_TIME — the whole of EFUSE_SHIM_CTRL
  *
- * Used for EFUSE_SHIM_CTRL registers (Samsung eFuse timing parameters).
- * Accepts any write and returns the written value on read. No functional
- * effect in the VP — the Samsung OTP macro is not modelled.
+ * Cycles to wait for the OTP macro to initialise before sensing may begin
+ * (efuse_shim_ctrl.rdl). The VP keeps the register because software reads and
+ * writes it, but not its effect: sensing here is instantaneous, so there is no
+ * initialisation window for the count to cover.
  *
- * Access : Read/Write (read_mask=0xFFFFFFFF, write_mask=0xFFFFFFFF)
- * Reset  : 0x00000000
+ * Access : Read/Write (sw=rw, hw=r)
+ * Reset  : 0x00000020
  */
 template<unsigned int N>
-class rw_stub_type : public csml_reg<N>
+class EFUSE_BANK_INIT_TIME_type : public csml_reg<N>
 {
 public:
     using typename csml_reg<N>::memory_type;
     typedef typename csml_word<N>::wordtype DT;
 
-    // read_mask=0xFFFFFFFF, write_mask=0xFFFFFFFF, reset=0x0
-    rw_stub_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
-        data(reg_name + ".data", *this, 0, 32)
+    // read_mask=0xFFFFFFFF, write_mask=0xFFFFFFFF, reset=0x20
+    EFUSE_BANK_INIT_TIME_type(std::string reg_name, memory_type &memory, unsigned int offset)
+      : csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x00000020),
+        init_time(reg_name + ".init_time", *this, 0, 32)
     {
         this->set_read_write_restrictions(memory);
     }
@@ -1263,7 +1272,7 @@ public:
     using csml_reg<N>::operator>>=;
     using csml_reg<N>::operator<<=;
 
-    csml_bitfield<N> data; ///< [31:0] Register data (RW)
+    csml_bitfield<N> init_time; ///< [31:0] OTP macro initialisation time, in cycles
 };
 
 
@@ -1336,33 +1345,34 @@ public:
 };
 
 /**
- * EFUSE_WRITE_CTRL — eFuse Write Control
+ * EFUSE_PROGRAM_CTRL — eFuse Programming Control
  *
- * Controls raw OTP cell programming. In the VP, fuse programming is not
- * modelled; this register is a simple R/W stub so firmware initialisation
- * code can proceed without faults.
+ * Burns one OTP bit per `efuse_program_go` pulse, with optional read-back
+ * verification. The command completes inside the triggering write, so
+ * `program_busy` is never observed set; `program_done` and `program_status`
+ * carry the result.
  *
- * Access : Read-Write (VP stub; programming not modelled)
+ * Access : Read-Write, with [26:24] hardware-owned (sw=r)
  * Reset  : 0x00000000
  */
 template<unsigned int N>
-class EFUSE_WRITE_CTRL_type : public csml_reg<N>
+class EFUSE_PROGRAM_CTRL_type : public csml_reg<N>
 {
 public:
     using typename csml_reg<N>::memory_type;
     typedef typename csml_word<N>::wordtype DT;
 
     // read_mask=0xFFFFFFFF, write_mask=0xFFFFFFFF, reset=0x0
-    EFUSE_WRITE_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset)
+    EFUSE_PROGRAM_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset)
       : csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x00000000),
         efuse_addr            (reg_name + ".efuse_addr",             *this,  0, 16),
         efuse_data            (reg_name + ".efuse_data",             *this, 16,  1),
-        efuse_write_go        (reg_name + ".efuse_write_go",         *this, 17,  1),
+        efuse_program_go      (reg_name + ".efuse_program_go",       *this, 17,  1),
         efuse_program_read_back(reg_name + ".efuse_program_read_back",*this, 18,  1),
         reserved0             (reg_name + ".reserved0",              *this, 19,  5),
-        write_busy            (reg_name + ".write_busy",             *this, 24,  1),
-        write_done            (reg_name + ".write_done",             *this, 25,  1),
-        write_status          (reg_name + ".write_status",           *this, 26,  1),
+        program_busy          (reg_name + ".program_busy",           *this, 24,  1),
+        program_done          (reg_name + ".program_done",           *this, 25,  1),
+        program_status        (reg_name + ".program_status",         *this, 26,  1),
         program_enable        (reg_name + ".program_enable",         *this, 27,  1),
         reserved1             (reg_name + ".reserved1",              *this, 28,  4)
     {
@@ -1383,12 +1393,12 @@ public:
 
     csml_bitfield<N> efuse_addr;             ///< [15:0]  OTP cell address to program
     csml_bitfield<N> efuse_data;             ///< [16]    Data bit to program into the cell
-    csml_bitfield<N> efuse_write_go;         ///< [17]    Write 1 to initiate programming (singlepulse)
+    csml_bitfield<N> efuse_program_go;       ///< [17]    Write 1 to initiate programming (singlepulse)
     csml_bitfield<N> efuse_program_read_back;///< [18]    1 = read back and verify after programming
     csml_bitfield<N> reserved0;              ///< [23:19]
-    csml_bitfield<N> write_busy;             ///< [24]    1 = programming operation in progress (hw=w)
-    csml_bitfield<N> write_done;             ///< [25]    1 = programming operation complete (hw=w)
-    csml_bitfield<N> write_status;           ///< [26]    0 = pass, 1 = fail (hw=w)
+    csml_bitfield<N> program_busy;           ///< [24]    1 = programming operation in progress (hw=w)
+    csml_bitfield<N> program_done;           ///< [25]    1 = programming operation complete (hw=w)
+    csml_bitfield<N> program_status;         ///< [26]    0 = pass, 1 = fail (hw=w)
     csml_bitfield<N> program_enable;         ///< [27]    1 = enable programming path
     csml_bitfield<N> reserved1;              ///< [31:28]
 };

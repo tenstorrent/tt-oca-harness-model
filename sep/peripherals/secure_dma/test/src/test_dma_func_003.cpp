@@ -457,6 +457,9 @@ void testbench::test_error_2byte_misaligned() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000000); // aligned dst
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
   wait(10, SC_NS);
@@ -489,6 +492,9 @@ void testbench::test_error_2byte_misaligned() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000001); // misaligned dst
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
   wait(10, SC_NS);
@@ -615,6 +621,9 @@ void testbench::test_error_4byte_misaligned() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000000); // aligned dst
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
   wait(10, SC_NS);
@@ -647,6 +656,9 @@ void testbench::test_error_4byte_misaligned() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000001); // misaligned dst
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
   wait(10, SC_NS);

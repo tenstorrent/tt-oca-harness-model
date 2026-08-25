@@ -45,7 +45,7 @@
 #include <openssl/rand.h>
 #include <cstring>
 #include "aes.h"
-#include "mailbox.h"
+#include "mailbox_unit.h"
 #include "adapters.h"
 #include "smc_global_port.h"
 #include "stubs.h"
@@ -68,10 +68,14 @@ class och_sep_ss : public sc_module {
 
 public:
     // VP bus topology
-    // Initiators: riscv, dma_ot, dma_ctn, dma_sys_adapter, local_alias_remap_out,
+    // Initiators: riscv, dma_ot, local_alias_remap_out,
     //             smn_remap_out (the SMU on-die inbound path re-enters the bus
     //             here once an external driver feeds sep_smn_inbound_axi)
-    static constexpr unsigned int INIT_COUNT = 6;
+    //
+    // The DMA's CTN and SYS legs are deliberately absent: sep_dma_wrap grounds
+    // the SYS port and stubs the CTN response channel, so only the OT-internal
+    // port reaches the fabric in SEP.
+    static constexpr unsigned int INIT_COUNT = 4;
     // Targets: sram, rom, dma, hmac, otbn, itcm, dtcm,
     //          stdout, spi, kmac, abr, csrng, aes, mailbox, aon_timer, keymgr_mb,
     //          efuse, efuse_shim, lc_ctrl, entropy_src, edn,
@@ -151,6 +155,14 @@ public:
     sc_signal<uint64_t> sep_global_base_addr_signal{"sep_global_base_addr_signal"};
     sc_signal<uint64_t> sep_region_size_signal{"sep_region_size_signal"};
 
+    // Inbound mailbox interrupts (sep.sv: smc_mailbox_interrupt_o), one per
+    // channel.  Exported for the same reason as the window signals above:
+    // standalone sep-vp has no parent to bind an sc_out to.  An enclosing
+    // platform binds the SMC's inputs to these; in sep-vp they simply have no
+    // reader.  The outbound half stays private — it never leaves the subsystem.
+    sc_signal<bool, SC_MANY_WRITERS>
+        mbox_inbound_irq_signal[mailbox_unit::NUM_CHANNELS];
+
     och_sep_ss(sc_module_name name, BasicOptions& opt_in);
     explicit och_sep_ss(sc_module_name name);
     ~och_sep_ss();
@@ -184,6 +196,11 @@ private:
     stdout_device*                    stdout_dev         = nullptr;
     secure_dma_model*                 dma                = nullptr;
     dma_sys_bus_adapter*              dma_sys_adapter    = nullptr;
+    // u_dma_local_alias_remap on the DMA's egress path
+    dma_alias_remap_adapter*          dma_alias_remap    = nullptr;
+    // Tie-offs for the DMA manager ports SEP does not connect
+    dead_manager_port_stub*           dma_ctn_deadend    = nullptr;
+    dead_manager_port_stub*           dma_sys_deadend    = nullptr;
     hmac_ip*                          hmac               = nullptr;
     kmac_ip*                          kmac               = nullptr;
     abr_ip*                           abr                = nullptr;
@@ -191,8 +208,7 @@ private:
     otp_key_req_stub*                 otp_key_req_stub_inst = nullptr;
     csrng_model*                      csrng              = nullptr;
     aes_model*                        aes                = nullptr;
-    mailbox_ip*                       mailbox            = nullptr;
-    mailbox_host_stub*                mbox_host          = nullptr;
+    mailbox_unit*                     mailbox            = nullptr;
     MailboxBridge*                    mbox_bridge        = nullptr;
     aon_timer_ip*                     aon_timer          = nullptr;
     efuse_model*                      sep_efuse          = nullptr;
@@ -225,6 +241,7 @@ private:
 
     // SPI
     sc_signal<bool, SC_MANY_WRITERS> spi_clk_signal;
+    sc_signal<bool, SC_MANY_WRITERS> spi_irq_signal;  ///< Combined SPI interrupt — the line the PIC sees
     sc_signal<bool, SC_MANY_WRITERS> spi_error_irq_signal;
     sc_signal<bool, SC_MANY_WRITERS> spi_event_irq_signal;
     sc_signal<bool, SC_MANY_WRITERS> spi_dma_trigger_signal;
@@ -280,12 +297,16 @@ private:
     sc_signal<bool, SC_MANY_WRITERS>   dma_error_intr_sig;
     sc_signal<sc_core::sc_time>        dma_clk_signal;
     sc_signal<bool>                    dma_lsio_trigger[11];
-    sc_signal<bool>                    dma_alert_fatal_sig;
+    sc_signal<bool, SC_MANY_WRITERS>   dma_alert_fatal_sig;
+
+    // eFuse
+    sc_signal<bool, SC_MANY_WRITERS>   efuse_locked_field_irq_sig;
 
     // Mailbox
     sc_signal<double, SC_MANY_WRITERS> mbox_clk_signal;
-    sc_signal<bool, SC_MANY_WRITERS>   mbox_irq0_signal;
-    sc_signal<bool, SC_MANY_WRITERS>   mbox_irq1_signal;
+    // Outbound interrupts reach the SEP PIC; the inbound half leaves the
+    // subsystem towards the SMC and is declared with the exported signals above.
+    sc_signal<bool, SC_MANY_WRITERS>   mbox_outbound_irq_signal[mailbox_unit::NUM_CHANNELS];
 
     // AON Timer
     sc_signal<double, SC_MANY_WRITERS> aon_clk_aon_freq_signal;
@@ -344,10 +365,16 @@ private:
     // set the write cursor, subsequent lines are whitespace-separated hex byte
     // pairs. Parsed directly into spi_flash's backing memory in
     // start_of_simulation via spi_flash_model::write_byte(); no conversion to a
-    // raw .bin is needed. Empty (default) falls back to the existing
-    // data/flash_memory.bin raw-binary backdoor load.
+    // raw .bin is needed.
     csml_param<std::string> spiPreload;
     std::string              spiPreloadPath;
+
+    // Optional SPI flash backdoor: path to a raw binary image, for fixtures that
+    // are not in the hex format spiPreload parses. Both keys are opt-in and
+    // default to empty, so a run that names neither always starts from erased
+    // (0xFF) flash. spiPreload wins if both are set.
+    csml_param<std::string> spiBackdoorFile;
+    std::string              spiBackdoorPath;
 
     // Relays sep_smn_inbound_axi (external-facing, 64-bit) into the 32-bit
     // internal inbound chain at inbound_filter->data_socket.

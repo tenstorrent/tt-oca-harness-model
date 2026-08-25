@@ -296,11 +296,12 @@ void testbench::test_func008_control_flow()
                          << "------------------------------------------------------" << std::endl;
 
     // Step 1: Fill TX FIFO to capacity
-    CSML_INFO(2, logger) << "[8.4.1] Filling TX FIFO (72 words = 288 bytes)..." << std::endl;
+    // Capacity is TxDepth + 1: the byte_select stage holds one extra word.
+    CSML_INFO(2, logger) << "[8.4.1] Filling TX FIFO (73 words = 292 bytes)..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0x80000000);  /// SPIEN=1, OUTPUT_EN=0 (prevent draining)
     wait(10, SC_NS);
 
-    for (int i = 0; i < 72; i++) {
+    for (int i = 0; i < 73; i++) {
         test->write_register_32(TXDATA_OFFSET, 0x12340000 + i);
         wait(5, SC_NS);
     }
@@ -310,8 +311,8 @@ void testbench::test_func008_control_flow()
     bool txfull = (status_val >> 29) & 0x1;
     txqd = status_val & 0xFF;
 
-    if (txfull && txqd == 72) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO full: TXFULL=1, TXQD=72" << std::endl;
+    if (txfull && txqd == 73) {
+        CSML_INFO(2, logger) << "  [PASS] TX FIFO full: TXFULL=1, TXQD=73" << std::endl;
         sub_tests_passed++;
     } else {
         CSML_ERROR(2, logger) << "  [FAIL] TX FIFO not full: TXFULL=" << txfull << ", TXQD=" << txqd << std::endl;
