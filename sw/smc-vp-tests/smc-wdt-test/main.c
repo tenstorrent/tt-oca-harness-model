@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
+/* SPDX-License-Identifier: Apache-2.0 */
 /* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+/*
  * sw/smc-vp-tests/smc-wdt-test/main.c
  *
  * Platform-level smoke test for the SiFive TLWDT (stage 1) on the SMC VP
