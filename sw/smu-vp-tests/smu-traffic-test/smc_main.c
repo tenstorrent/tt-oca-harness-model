@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
+/* SPDX-License-Identifier: Apache-2.0 */
 /* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+/*
  * Port of tt-oca-hw dv/smu smc_cpu_traffic_sep_axi_test (50-transaction
  * SMC CPU traffic into the SEP aperture).  VP: 50 write+readback beats
  * through output_axi -> smu_axi_xbar -> sep_in -> SEP SRAM.
