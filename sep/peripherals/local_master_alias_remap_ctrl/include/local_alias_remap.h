@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file local_alias_remap.h
  * @brief Functional SystemC TLM model for the local_master_alias_remap_ctrl peripheral.

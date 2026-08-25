@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * sw/smc-vp-tests/smc-aou-test/main.c
  *
  * AOU LT smoke test: CSR reset image + activate/deactivate via MMIO.

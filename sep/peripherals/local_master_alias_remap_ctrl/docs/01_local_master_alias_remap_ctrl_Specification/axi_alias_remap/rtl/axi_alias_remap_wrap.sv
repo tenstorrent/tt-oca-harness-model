@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //-----------------------------------------------------------------------------
 // Alias Remap Wrapper - Connects register interface to axi_alias_remap
 //

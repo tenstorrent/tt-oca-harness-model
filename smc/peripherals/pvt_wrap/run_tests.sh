@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build (if needed) and run the SMC PVT Wrapper SystemC test bench.
 #
 # Usage:
@@ -15,7 +17,7 @@
 #   SYSTEMC_HOME  Path to an Accellera SystemC install. If unset the script
 #                 probes common macOS (Homebrew) and Linux locations.
 #   CCI_HOME      Path to an Accellera SystemC CCI install. If unset the
-#                 script probes /Users/pdroy/cci, /usr/local/cci,
+#                 script probes "${HOME}/cci", /usr/local/cci,
 #                 /opt/homebrew/opt/systemc-cci.
 #   BUILD_TYPE    CMake build type (default: Release; Debug for --coverage).
 #   JOBS          Parallel build jobs (default: all available cores).
@@ -67,7 +69,7 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -z "${SYSTEMC_HOME:-}" ]]; then
     for _candidate in \
-        /Users/pdroy/local/systemc-3.0.2-cxx20 \
+        "${HOME}/local/systemc-3.0.2-cxx20" \
         /opt/homebrew/opt/systemc \
         /usr/local/opt/systemc \
         /usr/local \
@@ -92,8 +94,8 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -z "${CCI_HOME:-}" ]]; then
     for _candidate in \
-        /Users/pdroy/local/cci-cxx20 \
-        /Users/pdroy/cci \
+        "${HOME}/local/cci-cxx20" \
+        "${HOME}/cci" \
         /usr/local/cci \
         /opt/homebrew/opt/systemc-cci
     do

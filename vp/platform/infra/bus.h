@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #ifndef RISCV_ISA_BUS_H
 #define RISCV_ISA_BUS_H
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build SystemC_Virtual_Platform_Customer_Guide.pdf with the house table style
 # (light-blue header, full vertical grid) via the pandoc-grid-tables Lua filter.
 #

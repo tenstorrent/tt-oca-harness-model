@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file octs_system_timer.h
  * @brief SystemC/TLM-2.0 cycle-accurate model of the OCTS System Timer.

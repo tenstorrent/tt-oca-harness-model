@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
 /**
  * @file csrng_func008_register_callbacks.cpp
  * @brief Test implementation for CRNG_FUNC_008 - Register Callbacks

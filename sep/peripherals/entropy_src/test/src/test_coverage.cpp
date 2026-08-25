@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file test_coverage.cpp
  * @brief Targeted coverage tests for entropy_src.cpp thread paths

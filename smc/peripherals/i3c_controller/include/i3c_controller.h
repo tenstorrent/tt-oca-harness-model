@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file i3c_controller.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the OCA I3C Controller.

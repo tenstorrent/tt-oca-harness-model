@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * sw/smc-vp-tests/smc-dma-test/main.c
  *
  * DMA scratchpad-to-scratchpad copy over the SMC fabric.

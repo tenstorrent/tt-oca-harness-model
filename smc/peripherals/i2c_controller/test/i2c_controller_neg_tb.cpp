@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // i2c_controller_neg_tb.cpp -- negative-path / edge-case coverage for the OCA
 // I2C Controller model.

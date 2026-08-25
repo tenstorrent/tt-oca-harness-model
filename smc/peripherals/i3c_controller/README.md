@@ -168,8 +168,8 @@ This repository mandates **C++20** (the local SystemC / CCI installs are
 built `-std=c++20`).  Point the helper at the C++20 toolchain:
 
 ```bash
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
 ./run_tests.sh --clean
 ```
 

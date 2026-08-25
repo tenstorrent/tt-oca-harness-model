@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
+/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+/*
  * SEP half of smc_cpu_traffic_sep_axi_test: arm SRAM mailbox, then verify
  * 50 beats written by the SMC through the SMU xbar.
  */

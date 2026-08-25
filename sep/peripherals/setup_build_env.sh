@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Shared build environment for sep/peripherals/* run_tests.sh and run_all_peripherals.sh.
 #
 # REQUIRED: vp/configure_vp.sh must resolve valid install paths before peripheral tests run.

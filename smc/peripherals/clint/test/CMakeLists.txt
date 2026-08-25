@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(clint_tb clint_tb.cpp)
 target_link_libraries(clint_tb PRIVATE smc_clint SystemC::cci)
 target_compile_options(clint_tb PRIVATE -Wall -Wextra -Wpedantic

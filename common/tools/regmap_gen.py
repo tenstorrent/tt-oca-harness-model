@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 """SKETCH: generate C++ register mask/reset constants from SystemRDL.
 
 This is a *proposal sketch*, not yet part of the build. It closes the one

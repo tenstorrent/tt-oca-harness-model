@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file plic.cpp
  * @brief SMC PLIC — SystemC/TLM-2.0 LT implementation.

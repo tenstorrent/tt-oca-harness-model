@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file test_edn_func_003.h
  * @brief EDN_FUNC_003 Test Suite - State Machine Management and Observability Verification

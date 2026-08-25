@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 cmake_minimum_required(VERSION 3.20)
 project(smc_cpu_cluster
         VERSION   0.1.0

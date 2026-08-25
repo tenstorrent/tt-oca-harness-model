@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include <stdio.h>
 #include "test_completion.h"
 #include "sep_outbound_filter.h"

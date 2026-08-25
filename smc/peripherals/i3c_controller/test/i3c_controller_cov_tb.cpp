@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // i3c_controller_cov_tb.cpp — coverage-completion testbench for the OCA I3C
 // Controller model.  Targets the ~15 % of branches left uncovered by the

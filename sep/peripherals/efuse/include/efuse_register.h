@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file efuse_register.h
  * @brief SEP eFuse OTP Controller — register type definitions (CSML format)

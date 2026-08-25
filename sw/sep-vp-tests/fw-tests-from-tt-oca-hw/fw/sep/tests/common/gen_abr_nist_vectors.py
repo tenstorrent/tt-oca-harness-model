@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 """Generate abr_nist_vectors.h from NIST ACVP-Server ML-DSA-87 vectors.
 
 The golden inputs/outputs are the official NIST ACVP "internalProjection" files

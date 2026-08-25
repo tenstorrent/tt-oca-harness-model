@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 // Test-only stand-in for the real cpu/VeeR-ISSTlm/model/inc/VeeR-ISSTlm.hpp.
 //

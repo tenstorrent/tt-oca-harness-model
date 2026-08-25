@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file abr_pqc_mldsa.c
  * @brief PQClean ML-DSA-87 wrappers (seeded keygen, external-mu sign/verify).

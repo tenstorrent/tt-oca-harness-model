@@ -3,6 +3,7 @@
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
+// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
  *
  * CRNG Testbench
  * Top-level testbench that instantiates CRNG DUT and test infrastructure

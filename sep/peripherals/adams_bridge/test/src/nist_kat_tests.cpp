@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file nist_kat_tests.cpp
  * @brief Drive the firmware NIST ACVP vectors through the default FIPS backend.

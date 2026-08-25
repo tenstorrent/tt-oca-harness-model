@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file secure_dma_basetest.cpp
  * @brief DMA Controller base test infrastructure implementation

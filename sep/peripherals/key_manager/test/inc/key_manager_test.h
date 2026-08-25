@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 #include "key_manager_basetest.h"
 #include "csml_logger.h"

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file reg_map.h
  * @brief Offset -> Register<Word> dispatch table built on reg_access.h.

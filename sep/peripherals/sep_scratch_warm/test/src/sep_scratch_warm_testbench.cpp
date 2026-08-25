@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file sep_scratch_warm_testbench.cpp
  * @brief Testbench for the warm-domain scratch register bank.

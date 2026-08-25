@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Run release / asan / coverage / ctest for every peripheral model
 # (except sep_memory and cpu, which are excluded by design).
 #

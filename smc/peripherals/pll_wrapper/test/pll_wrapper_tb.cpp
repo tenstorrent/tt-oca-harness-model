@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // pll_wrapper_tb.cpp -- self-checking test bench for the composed SMC PLL
 // wrapper.  Drives the wrapper's single 32-bit register target and exercises

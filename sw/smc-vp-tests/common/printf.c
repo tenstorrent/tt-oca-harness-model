@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * sw/smc-vp-tests/common/printf.c
  *
  * Minimal bare-metal printf for smc-vp firmware tests.  Output goes to

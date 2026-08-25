@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*******************************************************************************
  * SEP eFuse JTAG/EL2 CPU mux arbitration firmware.
  *

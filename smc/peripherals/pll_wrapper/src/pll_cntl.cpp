@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file pll_cntl.cpp
  * @brief PLL control register table (from pll_cntl.rdl) + model construction.

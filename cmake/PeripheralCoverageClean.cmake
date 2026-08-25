@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Remove stale .gcda files before a coverage run.
 # Usage: cmake -DBUILD_DIR=/path/to/build -P PeripheralCoverageClean.cmake
 if(NOT DEFINED BUILD_DIR)

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file aon_timer_interface.h
  * @brief AON Timer abstract interface class for TLM-2.0 register access.

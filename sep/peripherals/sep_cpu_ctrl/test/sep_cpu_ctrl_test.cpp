@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // =============================================================================
 // sep_cpu_ctrl_test.cpp  —  smoke test for sep_cpu_ctrl_ip (CSML style)
 // Addresses are register offsets — SimpleBus strips the base address.

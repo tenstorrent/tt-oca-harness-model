@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * HMAC Basic Register Test Program for SEP Platform
  * Tests HMAC peripheral register accessibility and basic functionality

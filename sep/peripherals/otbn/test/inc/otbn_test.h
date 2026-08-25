@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file otbn_test.h
  * @brief OTBN test infrastructure with TLM helpers and interface stubs

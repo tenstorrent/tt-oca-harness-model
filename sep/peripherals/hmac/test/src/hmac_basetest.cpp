@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "hmac_basetest.h"
 
 hmac_basetest::Register_Property_t reg_map[14] = {

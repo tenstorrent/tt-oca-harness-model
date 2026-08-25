@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # SMC memory_zeroer -- SystemC/TLM-2.0 LT model with SystemC CCI support.
 #
 # Builds a static library libsmc_memory_zeroer.a plus a self-checking test bench.
@@ -51,7 +53,7 @@ if(DEFINED ENV{CCI_HOME})
     set(CCI_HOME "$ENV{CCI_HOME}" CACHE PATH "Path to SystemC CCI installation")
 endif()
 if(NOT DEFINED CCI_HOME)
-    set(CCI_HOME "/Users/pdroy/cci" CACHE PATH "Path to SystemC CCI installation")
+    set(CCI_HOME "/usr/local/cci" CACHE PATH "Path to SystemC CCI installation")
 endif()
 message(STATUS "Using CCI from CCI_HOME=${CCI_HOME}")
 if(NOT EXISTS "${CCI_HOME}/include/cci_configuration")

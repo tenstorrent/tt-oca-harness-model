@@ -24,9 +24,9 @@ setup is non-standard, override detection with environment variables:
 
 ```bash
 RISCV_PREFIX=riscv64-elf- \
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
-WHISPER_HOME=/Users/pdroy/tt_whisper/whisper \
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
+WHISPER_HOME=/path/to/whisper \
 BOOST_DIR=/opt/homebrew/opt/boost \
 ./run_sep_vp_tests.sh
 ```

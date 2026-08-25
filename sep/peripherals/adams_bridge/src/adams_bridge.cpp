@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file adams_bridge.cpp
  * @brief Loosely-timed implementation of the Adams Bridge PQC engine.

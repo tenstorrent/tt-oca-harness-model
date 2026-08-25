@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*******************************************************************************
  * TC_WDT_006 (V3, P2) - WDT Interrupt Test (INTR_TEST injection)
  *

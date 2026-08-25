@@ -19,7 +19,7 @@
 #                  Includes the new DMA and PVT wrapper peripheral unit tests
 #                  and the AOU LT model (aou/).
 #                  The cpu_cluster is skipped — it requires the Tenstorrent-
-#                  internal Whisper ISS (WHISPER_HOME); enable it locally once
+#                  Whisper ISS (WHISPER_HOME); enable it locally once
 #                  WHISPER_HOME is available.
 #
 #  smc-fabric-tests  Build and run the SMC Fabric SystemC/TLM-2.0 testbench
@@ -238,7 +238,7 @@ jobs:
 # Runs through the run_all_smc_tests.sh orchestrator (Release + ASAN +
 # Coverage + CTest) for all peripherals under smc/peripherals/.
 # cpu_cluster is not in the orchestrator — it requires the Tenstorrent-
-# internal Whisper ISS (WHISPER_HOME).
+# Whisper ISS (WHISPER_HOME).
 # ─────────────────────────────────────────────────────────────────────────────
   smc-unit-tests:
     name: SMC peripheral unit tests
@@ -329,7 +329,7 @@ jobs:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Job 6 — build smc-vp and run SMC VP firmware tests
-# The SMC platform requires the Tenstorrent-internal Whisper ISS.  We clone it,
+# The SMC platform requires the Whisper ISS (https://github.com/tenstorrent/whisper).  We clone it,
 # build librvcore.a, then configure the VP with WHISPER_HOME and run all
 # bare-metal firmware tests under sw/smc-vp-tests.  Zephyr lives in smc-zephyr
 # (separate runner) so the west workspace does not share this job's disk.
@@ -397,8 +397,6 @@ jobs:
 
       - name: Build Whisper
         if: steps.whisper-libs.outputs.complete != 'true'
-        env:
-          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Create a minimal Boost root that only exposes the headers so the
           # Makefile does not add -isystem /usr, which shadows libc headers.
@@ -413,7 +411,7 @@ jobs:
             echo "reusing restored Whisper checkout; building missing artifacts"
           else
             git clone \
-              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              https://github.com/tenstorrent/whisper.git \
               /home/runner/whisper
           fi
           cd /home/runner/whisper
@@ -682,8 +680,6 @@ jobs:
 
       - name: Build Whisper (-fPIC)
         if: steps.whisper-libs-pic.outputs.complete != 'true'
-        env:
-          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /tmp/boost/include
           ln -s /usr/include/boost /tmp/boost/include/boost
@@ -692,7 +688,7 @@ jobs:
             echo "reusing restored Whisper checkout; building missing artifacts"
           else
             git clone \
-              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              https://github.com/tenstorrent/whisper.git \
               /home/runner/whisper
           fi
           cd /home/runner/whisper

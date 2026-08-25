@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // scratchpad_ram_neg_tb.cpp -- negative-path and edge-case coverage for the
 // SMC Scratchpad RAM model.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file scratchpad_ram.cpp
  * @brief SMC Scratchpad RAM — SystemC/TLM-2.0 LT implementation.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "sep_scratch_warm_base.h"
 
 void sep_scratch_warm_base::reset_all_registers()

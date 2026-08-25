@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "edn_basetest.h"
 
 edn_basetest::Register_Property_t reg_map[18] = {

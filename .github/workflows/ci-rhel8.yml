@@ -532,7 +532,7 @@ jobs:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Job 6 — build smc-vp and run SMC VP firmware tests on RHEL 8
-# The SMC platform requires the Tenstorrent-internal Whisper ISS.  We clone it,
+# The SMC platform requires the Whisper ISS (https://github.com/tenstorrent/whisper).  We clone it,
 # build librvcore.a with gcc-toolset-12, then configure the VP with WHISPER_HOME
 # and run all bare-metal firmware tests under sw/smc-vp-tests.  Zephyr lives in
 # smc-zephyr-rhel8 so the west workspace does not share this job's disk.
@@ -646,7 +646,6 @@ jobs:
       - name: Build Whisper
         if: steps.whisper-libs-rhel8.outputs.complete != 'true'
         env:
-          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BOOST_ROOT: ${{ env.BOOST_HOME }}
         run: |
           # Create a minimal Boost root that only exposes the headers so the
@@ -663,7 +662,7 @@ jobs:
             echo "reusing restored Whisper checkout; building missing artifacts"
           else
             git clone \
-              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              https://github.com/tenstorrent/whisper.git \
               /home/runner/whisper
           fi
           cd /home/runner/whisper
@@ -1010,7 +1009,6 @@ jobs:
       - name: Build Whisper (-fPIC)
         if: steps.whisper-libs-pic-rhel8.outputs.complete != 'true'
         env:
-          GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BOOST_ROOT: ${{ env.BOOST_HOME }}
         run: |
           mkdir -p /tmp/boost/include
@@ -1020,7 +1018,7 @@ jobs:
             echo "reusing restored Whisper checkout; building missing artifacts"
           else
             git clone \
-              https://x-access-token:${GIT_TOKEN}@github.com/tenstorrent/whisper.git \
+              https://github.com/tenstorrent/whisper.git \
               /home/runner/whisper
           fi
           cd /home/runner/whisper

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 
 // Pure (SystemC-free) decoder for the SEP bootcode "virtual console" protocol.

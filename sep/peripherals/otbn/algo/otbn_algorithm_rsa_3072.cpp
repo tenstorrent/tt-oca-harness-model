@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file otbn_algorithm_rsa_3072.cpp
  * @brief RSA-3072 PKCS#1 v1.5 verify algorithm implementation

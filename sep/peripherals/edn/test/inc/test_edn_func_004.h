@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file test_edn_func_004.h
  * @brief EDN_FUNC_004 Test Suite - CSRNG Interface and Command Management Verification

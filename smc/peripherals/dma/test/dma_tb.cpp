@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file dma_tb.cpp
  * @brief Self-checking test bench for the SMC DMA SystemC/TLM-2.0 LT model.

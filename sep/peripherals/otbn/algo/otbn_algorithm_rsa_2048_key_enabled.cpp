@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file otbn_algorithm_rsa_2048_key_enabled.cpp
  * @brief RSA-2048 Algorithm Implementation with Key Enabled

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*******************************************************************************
  * SEP-driven SMC bring-up over the SEP->SMC port (sep_axi_in) -- common helper.
  *

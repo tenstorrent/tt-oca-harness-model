@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file sim_log.h
  * @brief Ergonomic, leveled logging for SystemC/TLM models — a thin layer over

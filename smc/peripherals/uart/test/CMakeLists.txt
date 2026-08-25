@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(uart_tb uart_tb.cpp)
 target_link_libraries(uart_tb PRIVATE smc_uart SystemC::cci)
 target_compile_options(uart_tb PRIVATE -Wall -Wextra -Wpedantic

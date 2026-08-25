@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func004_test.cpp
  * @brief Test cases for FUNC-KMAC-004 (KMAC Message Authentication Code)
@@ -44,11 +46,11 @@
  * - RUN (0x31): Remain in SQUEEZE, generate next output block (extended MAC)
  * - DONE (0x16): SQUEEZE → IDLE
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Test Case Mapping: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md (TC-045 to TC-055, TC-172, TC-177, TC-178)
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md
- * Functionality: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality_list.md (FUNC-KMAC-004)
+ * Test Plan Reference: kmac-test-plan.md
+ * Test Case Mapping: kmac-functionality-testcases.md (TC-045 to TC-055, TC-172, TC-177, TC-178)
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md
+ * Functionality: kmac-functionality_list.md (FUNC-KMAC-004)
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

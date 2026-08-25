@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
 /**
  * @file csrng_func009_control_configuration.cpp
  * @brief Test implementation for CRNG_FUNC_009 - Control and Configuration

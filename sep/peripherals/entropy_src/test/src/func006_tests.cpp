@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file func006_tests.cpp
  * @brief FUNC-006 FIFO-Based Entropy Data Queue Operation — test case

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file reset_unit.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the SMC Reset Unit.

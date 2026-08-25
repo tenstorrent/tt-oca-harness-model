@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file aon_timer.h
  * @brief AON Timer top-level SystemC TLM-2.0 model class (aon_timer_ip).

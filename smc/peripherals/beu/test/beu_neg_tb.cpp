@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file beu_neg_tb.cpp
  * @brief Negative-path / edge-case test bench for the SMC Bus Error Unit.

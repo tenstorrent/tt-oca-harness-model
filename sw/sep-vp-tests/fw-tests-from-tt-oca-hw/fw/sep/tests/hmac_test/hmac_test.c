@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * HMAC SHA-256 Step-by-step Test (OpenTitan Programmer's Guide aligned)
  *

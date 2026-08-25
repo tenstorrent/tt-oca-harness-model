@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file el2_pic_base.cpp
  * @brief Reset implementation for the el2_pic register infrastructure.

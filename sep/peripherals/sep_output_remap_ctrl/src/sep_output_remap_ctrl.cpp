@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file sep_output_remap_ctrl.cpp
  * @brief Implementation of sep_output_remap_ctrl_ip — generic output remap model.

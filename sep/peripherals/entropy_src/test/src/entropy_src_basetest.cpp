@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "entropy_src_basetest.h"
 
 entropy_src_basetest::Register_Property_t reg_map[43] = {

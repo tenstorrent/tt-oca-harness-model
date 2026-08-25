@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Header-only platform helpers (bus.h, tlm_map.h, …). No compiled sources.
 add_library(platform-infra INTERFACE)
 

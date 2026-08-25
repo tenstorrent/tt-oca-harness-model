@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Shared helpers for peripheral standalone builds (all build types).
 #
 # macOS Coverage uses OBJECT model libraries so llvm-prof writes .gcda reliably;

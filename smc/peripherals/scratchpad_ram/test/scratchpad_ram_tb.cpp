@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // scratchpad_ram_tb.cpp -- self-checking test bench for the SMC Scratchpad
 // RAM (CCI-compliant).

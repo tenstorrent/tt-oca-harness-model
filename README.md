@@ -1,21 +1,16 @@
 # tt-oca-sim — Open Chiplet Atlas Virtual Platform
 
-## Published Documentation
+## Overview
 
-- **OCH Architecture and Implementation**: https://cuddly-barnacle-62pjzl3.pages.github.io/och/
-- Source lives under `docs/och_source/`; published HTML lives under `docs/och/`.
-- Rebuild locally with `docs/build_och_docs.sh`.
+`tt-oca-sim` is a SystemC/TLM-2.0 virtual platform for the **Open Chiplet
+Atlas Harness (OCAH)**. It models the System Management Controller (SMC) and
+the Secure Enclave Processor (SEP) so firmware and pre-silicon tests can run
+before silicon.
 
-Architecture and register specification live in the hardware TRM
-(tt-oca-hw). This repository documents the SystemC/TLM-2.0
-implementation, the test plan, and how to run tests. The split is
-defined in
-[`doc/contributing/documentation.adoc`](doc/contributing/documentation.adoc).
-Subsystem books: [`sep/doc/`](sep/doc/index.adoc),
-[`smc/doc/`](smc/doc/index.adoc). IP example:
-[`sep/peripherals/adams_bridge/doc/`](sep/peripherals/adams_bridge/doc/index.adoc).
-
-## What is Open Chiplet Atlas?
+This repository includes Tenstorrent models built on
+[riscv-vp-plusplus](https://github.com/ics-jku/riscv-vp-plusplus) (MIT).
+Tenstorrent modifications and new models are licensed under Apache 2.0; see
+[License](#license).
 
 **Open Chiplet Atlas (OCA)** is Tenstorrent's chiplet-based System-in-Package (SiP)
 architecture. It defines a standardized framework for building multi-chiplet systems
@@ -28,7 +23,25 @@ every chiplet — common subsystems, AXI fabric topology, inter-chiplet protocol
 (OCCP, OCTS), security boundaries, and management interfaces that all chiplets must
 implement to be OCAH-compliant.
 
----
+Architecture and register specification live in the hardware TRM
+(`tt-oca-hw`). This repository documents the SystemC/TLM-2.0 implementation,
+the test plan, and how to run tests. The split is defined in
+[`doc/contributing/documentation.adoc`](doc/contributing/documentation.adoc).
+Subsystem books: [`sep/doc/`](sep/doc/index.adoc),
+[`smc/doc/`](smc/doc/index.adoc). IP example:
+[`sep/peripherals/adams_bridge/doc/`](sep/peripherals/adams_bridge/doc/index.adoc).
+
+Published HTML for the OCH architecture notes is under [`docs/och/`](docs/och/).
+Rebuild locally with `docs/build_och_docs.sh` from sources in `docs/och_source/`.
+
+## Getting Started
+
+1. Install **CMake** 3.24+, a **C++17 or C++20** compiler, **SystemC** 3.0.2,
+   **CCI** 1.0.1+, **Boost** 1.84, and **OpenSSL**.
+2. Build the SEP virtual platform — [Building the SEP VP](#building-the-sep-vp).
+3. Build the SMC virtual platform — [Building the SMC VP](#building-the-smc-vp)
+   (requires the public [Whisper ISS](https://github.com/tenstorrent/whisper)).
+4. Run firmware tests under `sw/sep-vp-tests/` and `sw/smc-vp-tests/`.
 
 ## SMC and SEP in the Open Chiplet Harness
 
@@ -190,8 +203,14 @@ tt-oca-sim/
 │   └── SystemC_Virtual_Platform_Customer_Guide.md/.pdf
 ├── Makefile                       ← top-level: sep-vp, smc-vp, submodule-init, clean
 ├── RELEASE_NOTES.md
-├── LICENSE
-└── LICENSE.riscv-vp-plusplus      ← upstream MIT license attribution
+├── LICENSE                        ← Apache 2.0 (overall project license)
+├── LICENSE-DOCS                   ← CC-BY 4.0 (documentation and images)
+├── LICENSE_understanding.txt
+├── NOTICE                         ← third-party attributions
+├── CONTRIBUTING.md
+├── CODE_OF_CONDUCT.md
+├── SECURITY.md
+└── vp/LICENSE.riscv-vp-plusplus   ← upstream MIT license (riscv-vp-plusplus)
 ```
 
 ---
@@ -481,8 +500,8 @@ The SMC VP reuses SystemC, CCI, and Boost from the SEP build, and adds:
 
   ```bash
   git clone <whisper-repo> whisper && cd whisper
-  SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-  CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+  SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+  CCI_HOME=/path/to/cci-cxx20 \
   cmake -S . -B build -DCMAKE_CXX_STANDARD=20
   cmake --build build -j
   ```
@@ -513,8 +532,8 @@ Alternatively, configure a dedicated build tree so SEP and SMC caches don't
 poison each other:
 
 ```bash
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
 cmake -S vp -B vp/build_smc -DSMC_CXX_STANDARD=20
 cmake --build vp/build_smc --target smc-vp -j
 ```
@@ -879,3 +898,34 @@ grep CMAKE_CXX_COMPILER build/CMakeCache.txt
 | `doc/component-developer-guide.md`               | Day-to-day contributor workflow |
 | `doc/maintainer-guide.md`                        | Repository maintenance guide    |
 | `doc/SystemC_Virtual_Platform_Customer_Guide.md` | Customer-facing VP usage guide  |
+
+## Contributing
+
+We welcome contributions from the community:
+
+- **Report bugs**: [GitHub Issues](https://github.com/tenstorrent/tt-oca-harness-model/issues)
+- **Submit changes**: pull requests for bug fixes and new features
+- **Review process**: pull requests are reviewed on a weekly basis
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for coding standards, testing
+requirements, and commit guidance. All contributors are expected to follow the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security issues go through
+[SECURITY.md](SECURITY.md), not public issues.
+
+## License
+
+Overall license for this project, except where specified:
+[LICENSE](LICENSE) (Apache License, Version 2.0).
+
+License for all documentation and images only:
+[LICENSE-DOCS](LICENSE-DOCS) (Creative Commons Attribution 4.0 International).
+
+This repository includes a fork of
+[riscv-vp-plusplus](https://github.com/ics-jku/riscv-vp-plusplus), which remains
+under the MIT license; see [vp/LICENSE.riscv-vp-plusplus](vp/LICENSE.riscv-vp-plusplus).
+Tenstorrent modifications and new models are Apache 2.0.
+
+Third-party notices (VeeR ISS, SoftFloat, PQClean, OpenTitan, CSML, and others):
+[NOTICE](NOTICE).
+
+For the avoidance of doubt, see [LICENSE_understanding.txt](LICENSE_understanding.txt).

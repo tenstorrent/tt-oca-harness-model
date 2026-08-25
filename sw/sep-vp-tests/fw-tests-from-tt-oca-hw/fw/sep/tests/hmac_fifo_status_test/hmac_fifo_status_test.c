@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * HMAC FIFO Status Monitoring Test - TC_HMAC_004 (P0)
  *

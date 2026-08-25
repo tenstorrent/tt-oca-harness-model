@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /* GENERATED FILE - DO NOT EDIT. */
 /* Source of truth: meta/status/status_values.tsv  (regenerate: make -C meta/status) */
 #define SEP_MSG_LIFECYCLE_INVALID                        0x01

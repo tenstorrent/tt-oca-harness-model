@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file telemetry_receiver_tb.cpp
  * @brief Primary self-checking test bench for the SMC Telemetry Receiver model.

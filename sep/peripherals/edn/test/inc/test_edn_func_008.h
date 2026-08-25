@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file test_edn_func_008.h
  * @brief EDN_FUNC_008 Test Suite Header - Entropy Bus Consistency Checking

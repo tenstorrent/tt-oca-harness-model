@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "kmac_basetest.h"
 
 kmac_basetest::Register_Property_t reg_map[19] = {

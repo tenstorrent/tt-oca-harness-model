@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file dma_neg_tb.cpp
  * @brief Negative-path / edge-case coverage for the SMC DMA LT model.

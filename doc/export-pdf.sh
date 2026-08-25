@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Export component-developer-guide.md to PDF with a clickable table of contents.
 # Uses pandoc + typst (internal PDF links preserved in TOC).
 

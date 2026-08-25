@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // wdt_tick_tb.cpp — focused test for the WDT auto-tick engine.
 //

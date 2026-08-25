@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # ---------------------------------------------------------------------------
 # reset_unit_tb -- primary self-checking bench: register access, reset
 # derivation, JTAG overrides, subsystem reset-control bundles, locks, FLR

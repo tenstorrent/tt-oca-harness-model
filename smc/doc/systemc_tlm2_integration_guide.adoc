@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 = SMC SystemC/TLM2.0 Integration Guide
 :toc:
 :toclevels: 4
@@ -53,8 +55,8 @@ So the PLIC essentially answers:
 == Purpose
 
 This guide describes how to integrate the SMC SystemC/TLM2.0 models under
-`/Users/pdroy/tt-oca-sim/smc` so they track the RTL subsystem connected under
-`/Users/pdroy/tt_oca_hw/tt-oca-hw/hw/smc`.
+`/path/to/tt-oca-sim/smc` so they track the RTL subsystem connected under
+`/path/to/tt-oca-hw/hw/smc`.
 
 For building/running the platform tests and booting bare-metal firmware on
 the CPU cluster, see `smc/doc/platform_test_and_firmware_guide.adoc`.
@@ -1182,9 +1184,9 @@ Use the C++20 SystemC/CCI toolchain:
 
 [source,sh]
 ----
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
-cmake -S . -B build -DSMC_CXX_STANDARD=20 -DCCI_HOME=/Users/pdroy/local/cci-cxx20
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
+cmake -S . -B build -DSMC_CXX_STANDARD=20 -DCCI_HOME=/path/to/cci-cxx20
 cmake --build build
 ----
 

@@ -79,6 +79,10 @@ smc/platform/compile_commands.json
 # LLVM source-based coverage raw profiles (run_tests.sh --coverage).
 **/*.profraw
 
+# Generated documentation PDFs. Rebuild locally with scripts/build_docs.sh;
+# do not commit them.
+*.pdf
+
 # macOS
 .DS_Store
 
@@ -360,6 +364,11 @@ sw/sep-vp-tests/sep-spi-*-test/.staged-mode
 # Local slide decks — keep on disk, do not publish
 doc/AI_Agent_Usage.pptx
 doc/ai-systemc-generation.pptx
+
+# Documentation PDFs are local-only (rebuild with scripts/build_docs.sh).
+# Repeated after directory un-ignore rules (!smc/cpu_cluster/doc/**, !docs/**
+# etc.) so those exceptions cannot re-track PDFs.
+*.pdf
 
 # =============================================================================
 # End of .gitignore

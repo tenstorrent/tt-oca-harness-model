@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file awm.h
  * @brief SystemC/TLM-2.0 register model of the SMC AWM block (awm.rdl).

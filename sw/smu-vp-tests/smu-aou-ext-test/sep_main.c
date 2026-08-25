@@ -1,4 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
+/* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+/*
  * SEP half of smu_sep_ext_axi: SEP reaches AOU two ways, matching OCH
  * (tt-oca-harness smu.sv + aou on smu_axi_in/out):
  *

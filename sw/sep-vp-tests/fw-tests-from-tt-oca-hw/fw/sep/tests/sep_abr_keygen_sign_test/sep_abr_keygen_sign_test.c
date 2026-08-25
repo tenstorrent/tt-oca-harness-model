@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * SEP Adams Bridge ML-DSA-87 KeyGen+Sign test (software seed).
  *

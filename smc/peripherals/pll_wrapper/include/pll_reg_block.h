@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file pll_reg_block.h
  * @brief Shared table-driven register-file base for the SMC PLL wrapper models.

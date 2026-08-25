@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # =============================================================================
 # vp/platform/smu/test/CMakeLists.txt
 #
@@ -63,7 +65,7 @@ if(DEFINED ENV{CCI_HOME})
     set(CCI_HOME "$ENV{CCI_HOME}" CACHE PATH "Path to SystemC CCI installation")
 endif()
 if(NOT DEFINED CCI_HOME)
-    set(CCI_HOME "/Users/pdroy/cci" CACHE PATH "Path to SystemC CCI installation")
+    set(CCI_HOME "/usr/local/cci" CACHE PATH "Path to SystemC CCI installation")
 endif()
 if(NOT EXISTS "${CCI_HOME}/include/cci_configuration")
     message(FATAL_ERROR

@@ -2,8 +2,8 @@
 
 **Document:** `05_RTL_SystemC_Integration_Guide.md`  
 **Project:** SMC SystemC / TLM-2.0 model  
-**RTL reference:** `/Users/pdroy/tt_oca_hw/tt-oca-hw/hw/smc`  
-**Firmware reference:** `/Users/pdroy/tt_oca_hw/tt-oca-hw/fw/smc`
+**RTL reference:** `/path/to/tt-oca-hw/hw/smc`  
+**Firmware reference:** `/path/to/tt-oca-hw/fw/smc`
 
 ---
 
@@ -298,7 +298,7 @@ source toggles once their register models are present.
 Use the production ROM under:
 
 ```text
-/Users/pdroy/tt_oca_hw/tt-oca-hw/fw/smc/prod_rom
+/path/to/tt-oca-hw/fw/smc/prod_rom
 ```
 
 The RTL ROM documentation places ROM at `0xC0040000`, and the linker script
@@ -444,13 +444,13 @@ Recommended implementation rule:
 There is SMC firmware in `tt-oca-hw` that can be ported. The canonical tree is:
 
 ```text
-/Users/pdroy/tt_oca_hw/tt-oca-hw/fw/smc/prod_rom
+/path/to/tt-oca-hw/fw/smc/prod_rom
 ```
 
 There is also a mirrored copy under:
 
 ```text
-/Users/pdroy/tt_oca_hw/tt-oca-hw/hw/oss-example/tb/occp_i2c_rom_smoke/fw/prod_rom/source
+/path/to/tt-oca-hw/hw/oss-example/tb/occp_i2c_rom_smoke/fw/prod_rom/source
 ```
 
 Prefer the canonical `fw/smc/prod_rom` tree unless a specific OSS example test

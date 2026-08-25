@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func007_test.cpp
  * @brief Test cases for FUNC-KMAC-007 (Application Interface - KeyMgr Hash Operations)
@@ -34,11 +36,11 @@
  * - app_export[1]: LC_CTRL (medium priority)
  * - app_export[2]: ROM_CTRL (lowest priority)
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Test Case Mapping: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md (TC-093 to TC-103, TC-145)
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md
- * Functionality: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality_list.md (FUNC-KMAC-007)
+ * Test Plan Reference: kmac-test-plan.md
+ * Test Case Mapping: kmac-functionality-testcases.md (TC-093 to TC-103, TC-145)
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md
+ * Functionality: kmac-functionality_list.md (FUNC-KMAC-007)
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

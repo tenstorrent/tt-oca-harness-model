@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func013_024_test.h
  * @brief Test declarations for FUNC-KMAC-013 through FUNC-KMAC-024
@@ -20,8 +22,8 @@
  * - FUNC-KMAC-023: OpenSSL Cryptographic Delegation (12 tests)
  * - FUNC-KMAC-024: Temporal Decoupling and Timing Abstraction (4 tests)
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Functionality Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md
+ * Test Plan Reference: kmac-test-plan.md
+ * Functionality Reference: kmac-functionality-testcases.md
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # run_all_tests.sh — Build and run all VP firmware tests, report pass/fail counts.
 #
 # Usage:

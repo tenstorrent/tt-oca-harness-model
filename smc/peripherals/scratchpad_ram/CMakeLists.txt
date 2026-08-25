@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # SMC Scratchpad RAM -- SystemC/TLM-2.0 LT model with SystemC CCI support.
 #
 # Builds a static library libsmc_scratchpad_ram.a plus self-checking test
@@ -5,7 +7,7 @@
 # in 02_SMC_IP_LowLevel_Design.md "Build & packaging".
 #
 # CCI support: set CCI_HOME or the environment variable CCI_HOME to point at
-# an Accellera SystemC CCI installation (default: /Users/pdroy/cci).
+# an Accellera SystemC CCI installation (default: /usr/local/cci).
 
 cmake_minimum_required(VERSION 3.16)
 project(smc_scratchpad_ram CXX)
@@ -77,13 +79,13 @@ find_package(SystemCLanguage QUIET CONFIG)
 # Priority:
 #   1. -DCCI_HOME=<path> on the cmake command line
 #   2. CCI_HOME environment variable
-#   3. Hard-coded default (/Users/pdroy/cci)
+#   3. Hard-coded default (/usr/local/cci)
 # ---------------------------------------------------------------------------
 if(DEFINED ENV{CCI_HOME})
     set(CCI_HOME "$ENV{CCI_HOME}" CACHE PATH "Path to SystemC CCI installation")
 endif()
 if(NOT DEFINED CCI_HOME)
-    set(CCI_HOME "/Users/pdroy/cci" CACHE PATH "Path to SystemC CCI installation")
+    set(CCI_HOME "/usr/local/cci" CACHE PATH "Path to SystemC CCI installation")
 endif()
 message(STATUS "Using CCI from CCI_HOME=${CCI_HOME}")
 if(NOT EXISTS "${CCI_HOME}/include/cci_configuration")

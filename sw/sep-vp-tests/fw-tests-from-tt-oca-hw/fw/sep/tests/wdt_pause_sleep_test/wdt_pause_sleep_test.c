@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*******************************************************************************
  * TC_WDT_003 (V2, P1) - WDT Pause in Sleep Test
  *

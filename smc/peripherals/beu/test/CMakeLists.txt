@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # ---------------------------------------------------------------------------
 # beu_tb -- primary self-checking bench: register access (reset values, RW/RO
 # semantics, field masks, 64-bit access), error injection (accrued status,

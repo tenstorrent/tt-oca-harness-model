@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "lifecycle_ctrl.h"
 
 // Bit-range masks within the 64-bit FEAT_CTRL vector (from sep_lifecycle_ctrl.sv struct layout)

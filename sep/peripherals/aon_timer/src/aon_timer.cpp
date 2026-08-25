@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file aon_timer.cpp
  * @brief AON Timer model implementation - FUNC001 + FUNC002 + FUNC003 + FUNC004.

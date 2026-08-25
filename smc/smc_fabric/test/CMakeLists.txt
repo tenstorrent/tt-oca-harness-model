@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(smc_fabric_tb smc_fabric_tb.cpp)
 target_link_libraries(smc_fabric_tb PRIVATE smc_fabric)
 target_compile_options(smc_fabric_tb PRIVATE -Wall -Wextra -Wpedantic

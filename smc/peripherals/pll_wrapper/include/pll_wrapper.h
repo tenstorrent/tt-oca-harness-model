@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file pll_wrapper.h
  * @brief SystemC/TLM-2.0 model of the SMC PLL wrapper (pll_wrap.rdl).

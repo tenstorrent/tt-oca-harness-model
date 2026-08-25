@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * SEP_SMU_016  smu_sep_ext_axi_combined_probe_test  --  shared protocol contract.
  *
