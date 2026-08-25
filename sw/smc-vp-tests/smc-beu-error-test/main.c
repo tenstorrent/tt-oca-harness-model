@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
+/* SPDX-License-Identifier: Apache-2.0 */
 /* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+/*
  * sw/smc-vp-tests/smc-beu-error-test/main.c
  *
  * BEU (Bus Error Unit) error-injection + accrual + SW-ack test — Phases E2
