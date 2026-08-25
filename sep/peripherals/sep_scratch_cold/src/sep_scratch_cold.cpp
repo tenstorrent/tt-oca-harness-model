@@ -49,7 +49,7 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     });
 
     // Load SEP_MSG_* names from the vendored status_values.h snapshot (see
-    // docs/01_sep_scratch_cold_Specification/status_values.h) so [SEP_STATUS]
+    // include/status_values.h) so [SEP_STATUS]
     // lines show real names instead of SEP_MSG_UNKNOWN. Path is baked in by
     // CMake (SEP_SCRATCH_COLD_STATUS_VALUES_PATH), not resolved at runtime
     // relative to the process's working directory.

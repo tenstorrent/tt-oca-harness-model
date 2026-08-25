@@ -153,7 +153,7 @@ target_include_directories(sep_scratch_cold_model PUBLIC
 # on the process's working directory or on a source tree being checked out at a fixed
 # relative location.
 #
-# Defaults to the vendored snapshot in docs/01_sep_scratch_cold_Specification/. That
+# Defaults to the vendored snapshot in include/status_values.h. That
 # snapshot drifts from whatever firmware is actually running, so it is a cache variable:
 # a consumer that owns the canonical table can point every build at it without patching
 # this file, e.g.
@@ -163,7 +163,7 @@ target_include_directories(sep_scratch_cold_model PUBLIC
 # The file may be a TSV (NAME<ws>0xVALUE) or a C header of #defines — StatusDecoder::
 # parse_tsv accepts both.
 set(SEP_SCRATCH_COLD_STATUS_VALUES_PATH
-  "${CMAKE_CURRENT_SOURCE_DIR}/docs/01_sep_scratch_cold_Specification/status_values.h"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/status_values.h"
   CACHE FILEPATH "SEP_MSG_* status-name table (TSV rows or C #defines)")
 # Normalise to an absolute, forward-slash path so the baked-in literal is always
 # independent of the process working directory, even when the user supplies a
