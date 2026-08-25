@@ -47,7 +47,7 @@ void testbench::run_func012_tests() {
   test_abort_terminates_transfer_loop();
   test_hw_handshake_trigger_ignored_when_go_not_set();
   test_hash_initial_transfer_zero_no_context();
-  test_hw_handshake_auto_clear_bus_error_continue();
+  test_hw_handshake_auto_clear_bus_error_halts();
   test_sha2_requires_four_byte_width_size_error();
   test_chunk_size_exceeds_total_size_warning(); 
   test_hash_init_frees_previous_context_after_failed_transfer();
@@ -124,6 +124,9 @@ void testbench::test_hw_trigger_ctrl_off() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001); // increment
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001); // increment
 
@@ -218,6 +221,9 @@ void testbench::test_abort_terminates_transfer_loop() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET,
                             (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2); // 4-byte
@@ -306,6 +312,9 @@ void testbench::test_hw_handshake_trigger_ignored_when_go_not_set() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::HANDSHAKE_INTR_ENABLE_OFFSET,
@@ -389,6 +398,9 @@ void testbench::test_hash_initial_transfer_zero_no_context() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -446,19 +458,20 @@ void testbench::test_hash_initial_transfer_zero_no_context() {
 }
 
 /**
- * @brief Verify that when automatic interrupt clearing write returns bus error,
- *        DMA logs and continues with chunk transfer (no abort).
+ * @brief Verify that a bus error on the automatic interrupt-clearing write
+ *        halts the transfer.
  *
  * - Covers handshake_monitor_thread path: perform_interrupt_clearing_write()
- *   returns false (bus error) -> log "Interrupt clearing write failed..."
- *   and continue with m_handshake_trigger_event / chunk transfer.
+ *   returns false (bus error) -> halt_transfer_on_bus_error().
+ * - Mirrors secure_dma.sv DmaClearIntrSrc / DmaWaitIntrSrcResponse, where
+ *   intr_clear_tlul_rsp_error raises next_error[DmaBusErr] and moves the FSM to
+ *   DmaError, so the chunk is never moved.
  * - Uses inject_ot_write_bus_error_once() so the clearing write gets
- *   TLM_ADDRESS_ERROR_RESPONSE; transfer must still complete.
- *
+ *   TLM_ADDRESS_ERROR_RESPONSE.
  */
-void testbench::test_hw_handshake_auto_clear_bus_error_continue() {
+void testbench::test_hw_handshake_auto_clear_bus_error_halts() {
   std::string test_name =
-      "Hardware handshake: interrupt clear bus error -> continue transfer";
+      "Hardware handshake: interrupt clear bus error -> halt transfer";
   CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
@@ -490,6 +503,9 @@ void testbench::test_hw_handshake_auto_clear_bus_error_continue() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -527,22 +543,38 @@ void testbench::test_hw_handshake_auto_clear_bus_error_continue() {
   while (poll_count < 100) {
     wait(10, SC_NS);
     m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
-    if (status & 0x2)
+    if (status & 0x8) // error
       break;
     poll_count++;
   }
 
-  if ((status & 0x2) == 0) {
+  if ((status & 0x8) == 0) {
     passed = false;
-    msg << "STATUS.done not set after trigger with clearing-write bus error; ";
+    msg << "STATUS.error not set after clearing-write bus error; ";
+  }
+  if (status & 0x2) {
+    passed = false;
+    msg << "STATUS.done set even though the transfer should have halted; ";
+  }
+  if (status & 0x1) {
+    passed = false;
+    msg << "STATUS.busy not cleared after halting on bus error; ";
   }
 
-  // Optional: verify chunk was transferred despite clearing failure
-  uint8_t dst_byte = m_test->read_ot_memory_w_byte(dst_addr);
-  if (dst_byte != fifo_value) {
+  uint32_t error_code = 0;
+  m_test->register_read_32(secure_dma_basetest::ERROR_CODE_OFFSET, error_code);
+  if ((error_code & 0x10) == 0) {
     passed = false;
-    msg << "Destination data mismatch (expected 0x" << std::hex << (int)fifo_value
-        << " got 0x" << (int)dst_byte << "); ";
+    msg << "ERROR_CODE.bus_error not set (ERROR_CODE=0x" << std::hex
+        << error_code << std::dec << "); ";
+  }
+
+  // The clearing write happens before the chunk moves, so the destination must
+  // be untouched.
+  uint8_t dst_byte = m_test->read_ot_memory_w_byte(dst_addr);
+  if (dst_byte == fifo_value) {
+    passed = false;
+    msg << "Destination was written despite the halt; ";
   }
 
   if (passed) {
@@ -661,6 +693,9 @@ void testbench::test_chunk_size_exceeds_total_size_warning() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -738,6 +773,9 @@ void testbench::test_hash_init_frees_previous_context_after_failed_transfer() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 

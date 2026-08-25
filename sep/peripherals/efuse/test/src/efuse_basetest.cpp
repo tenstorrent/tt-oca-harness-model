@@ -51,7 +51,7 @@ efuse_basetest::Register_Property_t reg_map[] = {
     {efuse_basetest::RESERVED_LAST_32_OFFSET,      efuse_basetest::RESERVED_LAST_32_READ,      efuse_basetest::RESERVED_LAST_32_WRITE,      efuse_basetest::RESERVED_LAST_32_RESET,      "RESERVED_LAST_32"},
     // EFUSE_INTERFACE_CTRL
     {efuse_basetest::EFUSE_INTF_STATUS_OFFSET,       efuse_basetest::EFUSE_INTF_STATUS_READ,       efuse_basetest::EFUSE_INTF_STATUS_WRITE,       efuse_basetest::EFUSE_INTF_STATUS_RESET,       "EFUSE_INTF_STATUS"},
-    {efuse_basetest::EFUSE_WRITE_CTRL_OFFSET,        efuse_basetest::EFUSE_WRITE_CTRL_READ,        efuse_basetest::EFUSE_WRITE_CTRL_WRITE,        efuse_basetest::EFUSE_WRITE_CTRL_RESET,        "EFUSE_WRITE_CTRL"},
+    {efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,        efuse_basetest::EFUSE_PROGRAM_CTRL_READ,        efuse_basetest::EFUSE_PROGRAM_CTRL_WRITE,        efuse_basetest::EFUSE_PROGRAM_CTRL_RESET,        "EFUSE_PROGRAM_CTRL"},
     {efuse_basetest::EFUSE_READ_CTRL_OFFSET,         efuse_basetest::EFUSE_READ_CTRL_READ,         efuse_basetest::EFUSE_READ_CTRL_WRITE,         efuse_basetest::EFUSE_READ_CTRL_RESET,         "EFUSE_READ_CTRL"},
     {efuse_basetest::EFUSE_PROG_INTF_RD_DATA_OFFSET, efuse_basetest::EFUSE_PROG_INTF_RD_DATA_READ, efuse_basetest::EFUSE_PROG_INTF_RD_DATA_WRITE, efuse_basetest::EFUSE_PROG_INTF_RD_DATA_RESET, "EFUSE_PROG_INTF_RD_DATA"},
     {efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, efuse_basetest::EFUSE_READ_INTF_RD_DATA_READ, efuse_basetest::EFUSE_READ_INTF_RD_DATA_WRITE, efuse_basetest::EFUSE_READ_INTF_RD_DATA_RESET, "EFUSE_READ_INTF_RD_DATA"},

@@ -35,14 +35,14 @@
  * 5. Verify both FIFOs empty (STATUS[0]=1 for both ports)
  * 6. Verify all interrupt status cleared (IRQS=0x0)
  * 7. Verify all interrupt outputs deasserted
- * 8. Verify error flags reset to initial value (ERROR_FLAGS=0x1: read_error pre-set per RDL)
+ * 8. Verify error flags reset to initial value (ERROR_FLAGS=0x0: both flags clear per RDL)
  * 9. Test reset can recover from error states
  *
  * Expected Results (per test plan):
  * - Both FIFOs empty: STATUS[0]=1 for both ports
  * - All interrupt status cleared: IRQS=0x0 for both ports
  * - All interrupt outputs deasserted: irq_o[0]=inactive, irq_o[1]=inactive
- * - Error flags reset to initial value: ERROR_FLAGS=0x1 for both ports (read_error=1 per RDL)
+ * - Error flags reset to initial value: ERROR_FLAGS=0x0 for both ports (both flags clear per RDL)
  * - Reset recovers from all error conditions
  *
  * Pass Criteria:
@@ -238,8 +238,8 @@ void testbench::test_reset_fifo_interrupt_state() {
     CSML_INFO(2, logger) << "Port 1 IRQP = 0x0, interrupt output should be inactive (PASS)";
   }
 
-  // Step 8: Verify error flags reset to initial value (ERROR_FLAGS=0x1 per RDL: read_error=1, write_error=0)
-  CSML_INFO(2, logger) << "Step 8: Verifying ERROR_FLAGS reset to initial value (0x1: read_error pre-set per RDL)";
+  // Step 8: Verify error flags reset to initial value (ERROR_FLAGS=0x0 per RDL: read_error=0, write_error=0)
+  CSML_INFO(2, logger) << "Step 8: Verifying ERROR_FLAGS reset to initial value (0x0: both flags clear per RDL)";
 
   test_port0->register_read_64(mailbox_basetest::ERROR_FLAGS_OFFSET,
                                read_value);
@@ -250,7 +250,7 @@ void testbench::test_reset_fifo_interrupt_state() {
     CSML_ERROR(0, logger) << ss.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 0 ERROR_FLAGS = 0x1 after reset (read_error pre-set per RDL) (PASS)";
+    CSML_INFO(2, logger) << "Port 0 ERROR_FLAGS = 0x0 after reset (both flags clear per RDL) (PASS)";
   }
 
   test_port1->register_read_64(mailbox_basetest::ERROR_FLAGS_OFFSET,
@@ -281,7 +281,7 @@ void testbench::test_reset_fifo_interrupt_state() {
     CSML_INFO(2, logger) <<
                    "  - All interrupt outputs deasserted (IRQP=0x0)";
     CSML_INFO(2, logger) <<
-                   "  - ERROR_FLAGS reset to initial value (ERROR_FLAGS=0x1: read_error pre-set per RDL)";
+                   "  - ERROR_FLAGS reset to initial value (ERROR_FLAGS=0x0: both flags clear per RDL)";
     CSML_INFO(2, logger) << "  - Reset can recover from error states";
   } else {
     CSML_ERROR(0, logger) << "TEST RESULT: FAIL";

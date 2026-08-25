@@ -84,12 +84,13 @@ All tests PASSED!
 VP `chdir`s to the directory of the `.ini` it is given and resolves everything relative to
 it:
 
-- `data/flash_memory.bin` — the staged fixture, so the flash model has the data oracle.
-- `accellera_config_no_spipreload.ini` — the shared `accellera_config.ini` with
-  `och_sep_ss1.spiPreload` commented out. That setting loads the bootcode image directly
-  into the flash model's backing store, overwriting the fixture; with it enabled all four
-  transfers fail against boot data. The config is derived with `sed` at build time instead
-  of being checked in, so it picks up any edits to the shared config. The rule lives in
-  `../Makefile.common` as `NO_SPIPRELOAD_INI`; `sep-spi-mux-test` uses it too.
+- `data/sep_spi_dma_test_flash.bin` — the staged fixture, so the flash model has the data oracle.
+- `accellera_config_spi_dma_test.ini` — the shared `accellera_config.ini` with
+  `och_sep_ss1.spiPreload` commented out and `och_sep_ss1.spiBackdoorFile` pointed at the
+  fixture. `spiPreload` loads the bootcode image directly into the flash model's backing
+  store, overwriting the fixture; with it enabled all four transfers fail against boot data.
+  `spiBackdoorFile` is what loads the raw binary fixture — the model does not look for one
+  otherwise. Its value must be JSON-quoted or CCI rejects the file. The config is derived with
+  `sed` at build time instead of being checked in, so it picks up any edits to the shared config.
 
 Both are build artifacts, are git-ignored, and are removed by `make clean`.

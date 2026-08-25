@@ -40,7 +40,9 @@ namespace spi_flash_opcodes {
     constexpr uint8_t CHIP_ERASE      = 0x60;  ///< Chip Erase
     constexpr uint8_t WRITE_ENABLE    = 0x06;  ///< Write Enable (WREN)
     constexpr uint8_t WRITE_DISABLE   = 0x04;  ///< Write Disable (WRDI)
-    constexpr uint8_t READ_STATUS     = 0x05;  ///< Read Status Register
+    constexpr uint8_t READ_STATUS     = 0x05;  ///< Read Status Register 1
+    constexpr uint8_t READ_STATUS_2   = 0x35;  ///< Read Status Register 2
+    constexpr uint8_t READ_JEDEC_ID   = 0x9F;  ///< Read JEDEC ID (RDID)
     constexpr uint8_t SUSPEND_75      = 0x75;  ///< Suspend
     constexpr uint8_t SUSPEND_B0      = 0xB0;  ///< Suspend (alternate)
     constexpr uint8_t RESUME_30       = 0x30;  ///< Resume

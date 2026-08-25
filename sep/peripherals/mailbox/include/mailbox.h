@@ -11,6 +11,7 @@
 #include "mailbox_base.h"
 #include "csml_logger.h"
 #include "csml_parameter.h"
+#include <deque>
 
 #ifndef CSML_DEFAULT_VERBOSITY
 #define CSML_DEFAULT_VERBOSITY 2
@@ -23,10 +24,12 @@
  * Architecture (Composition):
  * - b0: Port 0 pure register container (10 registers, 1 memory, no socket)
  * - b1: Port 1 pure register container (10 registers, 1 memory, no socket)
- * - socket0: Top-level TLM target socket for Port 0 — hierarchically bound to b0.target_socket
- * - socket1: Top-level TLM target socket for Port 1 — hierarchically bound to b1.target_socket
- * - fifo_0_to_1: b0 writes → b1 reads  (Port 0 outbound / Port 1 inbound)
- * - fifo_1_to_0: b1 writes → b0 reads  (Port 1 outbound / Port 0 inbound)
+ * - socket0/socket1: TLM target sockets. mailbox_ip owns the b_transport entry
+ *   point so it can apply the AXI-Lite access rules (SLVERR on illegal access,
+ *   sentinel read data) that csml_memory cannot express, before delegating the
+ *   register access itself to b0.memory / b1.memory.
+ * - m_fifo[0]: b0 writes → b1 reads  (Port 0 outbound / Port 1 inbound)
+ * - m_fifo[1]: b1 writes → b0 reads  (Port 1 outbound / Port 0 inbound)
  *
  * All cross-port logic, interrupt shadow state, and sc_fifo management
  * reside in mailbox_ip. The mailbox_base instances are thin register containers.
@@ -55,31 +58,31 @@ public:
    /// @brief Port 1 pure register container (10 registers + independent csml_memory, no socket)
    mailbox_base b1;
 
-   /// @brief TLM target socket for Port 0 — hierarchically bound to b0.target_socket
-   tlm::tlm_target_socket<32> socket0;
+   /// @brief TLM target socket for Port 0
+   tlm_utils::simple_target_socket<mailbox_ip, 32> socket0;
 
-   /// @brief TLM target socket for Port 1 — hierarchically bound to b1.target_socket
-   tlm::tlm_target_socket<32> socket1;
+   /// @brief TLM target socket for Port 1
+   tlm_utils::simple_target_socket<mailbox_ip, 32> socket1;
 
    // =========================================================================
    // Bidirectional FIFOs
    // =========================================================================
 
    /**
-    * @brief Port 0 outbound FIFO — Port 1 inbound FIFO
+    * @brief The two cross-connected FIFOs, mirroring the pair of fifo_v3
+    *        instances inside the RTL's axi_lite_mailbox.
     *
-    * Data Flow: Port 0 writes WRITE_DATA → enqueued here → Port 1 reads READ_DATA.
-    * Width: uint64_t (64 bits). Depth: MailboxDepth entries (configurable, default 8).
-    */
-   sc_fifo<uint64_t> fifo_0_to_1;
-
-   /**
-    * @brief Port 1 outbound FIFO — Port 0 inbound FIFO
+    * m_fifo[0]: Port 0 writes WRITE_DATA → Port 1 reads READ_DATA.
+    * m_fifo[1]: Port 1 writes WRITE_DATA → Port 0 reads READ_DATA.
     *
-    * Data Flow: Port 1 writes WRITE_DATA → enqueued here → Port 0 reads READ_DATA.
-    * Width: uint64_t (64 bits). Depth: MailboxDepth entries (configurable, default 8).
+    * A plain deque rather than sc_fifo: every access happens inside
+    * b_transport, so the blocking interface is never needed, and sc_fifo's
+    * split of occupancy across num_available()/num_free() only becomes
+    * consistent at the next delta cycle. RTL compares a single `usage` value
+    * against the thresholds and for STATUS, so the model needs one occupancy
+    * number that is correct immediately, which fifo_level() provides.
     */
-   sc_fifo<uint64_t> fifo_1_to_0;
+   std::deque<uint64_t> m_fifo[2];
 
    // =========================================================================
    // Ports
@@ -117,20 +120,74 @@ private:
    // =========================================================================
 
    /**
-    * @brief Return pointer to port p's outbound FIFO (what p writes into)
+    * @brief Return port p's outbound FIFO (what p writes into)
     *
-    * Cross-connection: Port 0 outbound = Port 1 inbound (fifo_0_to_1)
-    *                   Port 1 outbound = Port 0 inbound (fifo_1_to_0)
+    * Cross-connection: Port 0 outbound = Port 1 inbound (m_fifo[0])
+    *                   Port 1 outbound = Port 0 inbound (m_fifo[1])
     */
-   sc_fifo<uint64_t>* write_fifo_for(unsigned int p) { return p==0 ? &fifo_0_to_1 : &fifo_1_to_0; }
+   std::deque<uint64_t>& write_fifo_for(unsigned int p) { return m_fifo[p]; }
 
    /**
-    * @brief Return pointer to port p's inbound FIFO (what p reads from)
+    * @brief Return port p's inbound FIFO (what p reads from)
     *
-    * Cross-connection: Port 0 inbound = Port 1 outbound (fifo_1_to_0)
-    *                   Port 1 inbound = Port 0 outbound (fifo_0_to_1)
+    * Cross-connection: Port 0 inbound = Port 1 outbound (m_fifo[1])
+    *                   Port 1 inbound = Port 0 outbound (m_fifo[0])
     */
-   sc_fifo<uint64_t>* read_fifo_for(unsigned int p)  { return p==0 ? &fifo_1_to_0 : &fifo_0_to_1; }
+   std::deque<uint64_t>& read_fifo_for(unsigned int p)  { return m_fifo[1 - p]; }
+
+   /// @brief Return the register container belonging to port @p p
+   mailbox_base& regs_for(unsigned int p) { return (p == 0) ? b0 : b1; }
+
+   /// @brief Occupancy of a FIFO, the model's equivalent of the RTL `usage` signal
+   unsigned int fifo_level(const std::deque<uint64_t>& f) const
+   {
+      return static_cast<unsigned int>(f.size());
+   }
+
+   // =========================================================================
+   // Bus access rules (AXI-Lite behaviour the register library cannot express)
+   // =========================================================================
+
+   /**
+    * @brief Common b_transport entry point for both ports
+    *
+    * Applies the decode and access-permission rules that RTL implements in
+    * axi_lite_mailbox.sv before handing the access to the register library:
+    * out-of-range offsets, writes to read-only registers and reads of CTRL all
+    * complete with an error response, and the two sentinel read values are
+    * produced here. FIFO overflow/underflow is detected by the register
+    * callbacks, which raise m_access_error for this method to turn into an
+    * error response.
+    */
+   void bus_access(unsigned int port, tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);
+
+   void b_transport_port0(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
+   {
+      bus_access(0, trans, delay);
+   }
+
+   void b_transport_port1(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
+   {
+      bus_access(1, trans, delay);
+   }
+
+   /// @brief Write @p value into the transaction data buffer, honouring length and byte lane
+   static void store_response_data(tlm::tlm_generic_payload& trans, uint64_t value);
+
+   /**
+    * @brief Set by the WRITE_DATA / READ_DATA callbacks when the FIFO access failed
+    *
+    * RTL answers a write-to-full or read-from-empty with SLVERR. The register
+    * callbacks cannot set the TLM response themselves, so they raise this flag
+    * and bus_access() converts it.
+    */
+   bool m_access_error[2];
+
+   /// @brief Read data returned by RTL for a read of the write-only WRITE_DATA register
+   static constexpr uint64_t SENTINEL_WRITE_DATA_READ = 0xFEEDC0DEULL;
+
+   /// @brief Read data returned by RTL for a read of READ_DATA while the FIFO is empty
+   static constexpr uint64_t SENTINEL_READ_EMPTY = 0xFEEDDEADULL;
 
    /**
     * @brief Reset handler (FUNC_001: System Reset and Initialization Behavior)

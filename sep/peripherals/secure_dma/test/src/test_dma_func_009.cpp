@@ -271,6 +271,9 @@ void testbench::test_mem_to_mem_single_chunk_4byte() {
   // ASID: OT_ADDR for both
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Addressing: Both increment
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET,
@@ -355,14 +358,16 @@ void testbench::test_mem_to_mem_single_chunk_4byte() {
     }
   }
 
-  // Verify source/destination address advancement for increment mode.
+  // In increment mode the address registers are not written back, so they
+  // still hold the programmed start address after the transfer.
   uint32_t src_addr_lo_final = 0;
   uint32_t dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
 
-  const uint32_t expected_src_final = src_addr + transfer_size;
-  const uint32_t expected_dst_final = dst_addr + transfer_size;
+  // Both ports increment, so neither address register is written back.
+  const uint32_t expected_src_final = src_addr;
+  const uint32_t expected_dst_final = dst_addr;
   if (src_addr_lo_final != expected_src_final) {
     passed = false;
     msg << "SRC_ADDR_LO final mismatch (exp=0x" << std::hex
@@ -445,6 +450,9 @@ void testbench::test_mem_to_mem_single_chunk_2byte() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, transfer_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000001); // TWO_BYTE
@@ -506,10 +514,10 @@ void testbench::test_mem_to_mem_single_chunk_2byte() {
   uint32_t src_addr_lo_final = 0, dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
-  if (src_addr_lo_final != (src_addr + transfer_size)) {
+  if (src_addr_lo_final != src_addr) {
     passed = false; msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_addr_lo_final != (dst_addr + transfer_size)) {
+  if (dst_addr_lo_final != dst_addr) {
     passed = false; msg << "DST_ADDR_LO final mismatch; ";
   }
 
@@ -575,6 +583,9 @@ void testbench::test_mem_to_mem_single_chunk_1byte() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, transfer_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000000); // ONE_BYTE
@@ -639,10 +650,10 @@ void testbench::test_mem_to_mem_single_chunk_1byte() {
   uint32_t src_addr_lo_final = 0, dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
-  if (src_addr_lo_final != (src_addr + transfer_size)) {
+  if (src_addr_lo_final != src_addr) {
     passed = false; msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_addr_lo_final != (dst_addr + transfer_size)) {
+  if (dst_addr_lo_final != dst_addr) {
     passed = false; msg << "DST_ADDR_LO final mismatch; ";
   }
 
@@ -711,6 +722,9 @@ void testbench::test_mem_to_mem_multi_chunk() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -832,10 +846,10 @@ void testbench::test_mem_to_mem_multi_chunk() {
   uint32_t src_addr_lo_final = 0, dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
-  if (src_addr_lo_final != (src_addr + total_size)) {
+  if (src_addr_lo_final != src_addr) {
     passed = false; msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_addr_lo_final != (dst_addr + total_size)) {
+  if (dst_addr_lo_final != dst_addr) {
     passed = false; msg << "DST_ADDR_LO final mismatch; ";
   }
 
@@ -912,6 +926,9 @@ void testbench::test_mem_to_mem_ctn_32bit() {
 
   // ASID=0xA (SOC_ADDR/CTN) for both source and destination
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0xA << 0) | (0xA << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, transfer_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
@@ -980,10 +997,10 @@ void testbench::test_mem_to_mem_ctn_32bit() {
   uint32_t src_addr_lo_final = 0, dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
-  if (src_addr_lo_final != (src_addr + transfer_size)) {
+  if (src_addr_lo_final != src_addr) {
     passed = false; msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_addr_lo_final != (dst_addr + transfer_size)) {
+  if (dst_addr_lo_final != dst_addr) {
     passed = false; msg << "DST_ADDR_LO final mismatch; ";
   }
 
@@ -1044,6 +1061,9 @@ void testbench::test_func009_mem_to_mem_ctn_64bit() {
   // ASID: SOC_ADDR (0xA) for CTN interface in 64-bit mode
   uint32_t asid_val = (0xA << 0) | (0xA << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -1133,6 +1153,9 @@ void testbench::test_func009_mem_to_mem_sys_64bit() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, dst_addr_hi);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x9 << 0) | (0x9 << 4)); // SYS_ADDR
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, transfer_size);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
@@ -1184,8 +1207,8 @@ void testbench::test_func009_mem_to_mem_sys_64bit() {
 
   const uint64_t src_final = (static_cast<uint64_t>(src_hi_final) << 32) | src_lo_final;
   const uint64_t dst_final = (static_cast<uint64_t>(dst_hi_final) << 32) | dst_lo_final;
-  if (src_final != (src_addr + transfer_size)) { passed = false; msg << "SRC_ADDR final mismatch; "; }
-  if (dst_final != (dst_addr + transfer_size)) { passed = false; msg << "DST_ADDR final mismatch; "; }
+  if (src_final != src_addr) { passed = false; msg << "SRC_ADDR final mismatch; "; }
+  if (dst_final != dst_addr) { passed = false; msg << "DST_ADDR final mismatch; "; }
 
   m_test->register_write_32(secure_dma_basetest::STATUS_OFFSET, 0x00000002); // clear done
   wait(10, SC_NS);
@@ -1247,6 +1270,9 @@ void testbench::test_transfer_size_16bytes() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, transfer_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -1311,10 +1337,10 @@ void testbench::test_transfer_size_16bytes() {
   uint32_t src_addr_lo_final = 0, dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
-  if (src_addr_lo_final != (src_addr + transfer_size)) {
+  if (src_addr_lo_final != src_addr) {
     passed = false; msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_addr_lo_final != (dst_addr + transfer_size)) {
+  if (dst_addr_lo_final != dst_addr) {
     passed = false; msg << "DST_ADDR_LO final mismatch; ";
   }
 
@@ -1377,6 +1403,9 @@ void testbench::test_transfer_size_1024bytes() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -1442,10 +1471,10 @@ void testbench::test_transfer_size_1024bytes() {
   uint32_t src_addr_lo_final = 0, dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
-  if (src_addr_lo_final != (src_addr + total_size)) {
+  if (src_addr_lo_final != src_addr) {
     passed = false; msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_addr_lo_final != (dst_addr + total_size)) {
+  if (dst_addr_lo_final != dst_addr) {
     passed = false; msg << "DST_ADDR_LO final mismatch; ";
   }
 
@@ -1509,6 +1538,9 @@ void testbench::test_transfer_size_4096bytes() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7 << 0) | (0x7 << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -1574,10 +1606,10 @@ void testbench::test_transfer_size_4096bytes() {
   uint32_t src_addr_lo_final = 0, dst_addr_lo_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
-  if (src_addr_lo_final != (src_addr + total_size)) {
+  if (src_addr_lo_final != src_addr) {
     passed = false; msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_addr_lo_final != (dst_addr + total_size)) {
+  if (dst_addr_lo_final != dst_addr) {
     passed = false; msg << "DST_ADDR_LO final mismatch; ";
   }
 
@@ -1658,6 +1690,9 @@ void testbench::test_src_increment_dst_increment() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Both increment mode: increment=1, wrap=0
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
@@ -1726,8 +1761,9 @@ void testbench::test_src_increment_dst_increment() {
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
 
-  const uint32_t expected_src_final = src_addr + transfer_size;
-  const uint32_t expected_dst_final = dst_addr + transfer_size;
+  // Both ports increment, so neither address register is written back.
+  const uint32_t expected_src_final = src_addr;
+  const uint32_t expected_dst_final = dst_addr;
   if (src_addr_lo_final != expected_src_final) {
     passed = false;
     msg << "SRC_ADDR_LO final mismatch (exp=0x" << std::hex
@@ -1818,6 +1854,9 @@ void testbench::test_src_fixed_dst_increment() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Source fixed (increment=0), destination increment (increment=1)
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET,
@@ -1899,8 +1938,10 @@ void testbench::test_src_fixed_dst_increment() {
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr_lo_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr_lo_final);
 
-  const uint32_t expected_src_final = src_addr;
-  const uint32_t expected_dst_final = dst_addr + transfer_size;
+  // Source is fixed, so hardware writes the chunk advance back to SRC_ADDR.
+  // Destination is incrementing, so DST_ADDR keeps its programmed value.
+  const uint32_t expected_src_final = src_addr + transfer_size;
+  const uint32_t expected_dst_final = dst_addr;
   if (src_addr_lo_final != expected_src_final) {
     passed = false;
     msg << "SRC_ADDR_LO final mismatch (exp=0x" << std::hex
@@ -1996,6 +2037,9 @@ void testbench::test_src_increment_dst_fixed() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Source increment (increment=1), destination fixed (increment=0) — FIFO-like
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
@@ -2140,6 +2184,9 @@ void testbench::test_src_fixed_dst_fixed() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Both fixed mode (increment=0)
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);
@@ -2268,6 +2315,9 @@ void testbench::test_dma_done_interrupt_assert() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -2397,6 +2447,9 @@ void testbench::test_dma_chunk_done_interrupt_assert() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -2582,6 +2635,9 @@ void testbench::test_chunk_size_not_divisor_of_total() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // 4-byte
@@ -2640,11 +2696,11 @@ void testbench::test_chunk_size_not_divisor_of_total() {
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_final);
 
-  if (src_final != (src_addr + total_size)) {
+  if (src_final != src_addr) {
     passed = false;
     msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_final != (dst_addr + total_size)) {
+  if (dst_final != dst_addr) {
     passed = false;
     msg << "DST_ADDR_LO final mismatch; ";
   }
@@ -2701,6 +2757,9 @@ void testbench::test_minimum_transfer_size_1byte() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 1);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000000); // ONE_BYTE
@@ -2756,11 +2815,11 @@ void testbench::test_minimum_transfer_size_1byte() {
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_final);
 
-  if (src_final != src_addr + 1) {
+  if (src_final != src_addr) {
     passed = false;
     msg << "SRC_ADDR_LO final mismatch; ";
   }
-  if (dst_final != dst_addr + 1) {
+  if (dst_final != dst_addr) {
     passed = false;
     msg << "DST_ADDR_LO final mismatch; ";
   }
@@ -2816,6 +2875,9 @@ void testbench::test_func009_minimum_transfer_size_4bytes() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -2889,6 +2951,9 @@ void testbench::test_maximum_transfer_size_4gb() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
 
@@ -2970,6 +3035,9 @@ void testbench::test_abort_during_multi_chunk() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -3037,35 +3105,17 @@ void testbench::test_abort_during_multi_chunk() {
     msg << "Copied byte count not 4-byte aligned (" << copied_bytes << "); ";
   }
 
-  // Cross-check with address advancement (allowing small implementation variance).
+  // The address registers cannot be used to cross-check progress here: both
+  // ports increment, so hardware never writes them back and they still hold the
+  // programmed start address regardless of how far the aborted transfer got.
   uint32_t src_final = 0, dst_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_final);
-  uint32_t src_adv = src_final - src_addr;
-  uint32_t dst_adv = dst_final - dst_addr;
-
-  // Pointers should stay in sync.
-if (src_adv != dst_adv) {
-  passed = false;
-  msg << "SRC/DST advancement mismatch (src_adv=" << src_adv
-      << ", dst_adv=" << dst_adv << "); ";
-}
-
-// Abort boundary tolerance:
-// committed data can lead pointer advancement by up to one transfer beat.
-const uint32_t beat_bytes = 4; // TRANSFER_WIDTH = FOUR_BYTE
-if (copied_bytes > dst_adv + beat_bytes) {
-  passed = false;
-  msg << "Copied prefix too far ahead of address advancement (dst_adv=" << dst_adv
-      << ", copied_bytes=" << copied_bytes << "); ";
-}
-
-// Also ensure we did not advance pointers beyond what is committed by >1 beat.
-if (dst_adv > copied_bytes + beat_bytes) {
-  passed = false;
-  msg << "Address advancement too far ahead of copied prefix (dst_adv=" << dst_adv
-      << ", copied_bytes=" << copied_bytes << "); ";
-}
+  if (src_final != src_addr || dst_final != dst_addr) {
+    passed = false;
+    msg << "Address registers changed during an incrementing transfer (src=0x"
+        << std::hex << src_final << ", dst=0x" << dst_final << std::dec << "); ";
+  }
 
   if (passed) {
     msg << "Abort during multi-chunk transfer verified: STATUS.aborted=1 with partial completion "
@@ -3135,6 +3185,9 @@ void testbench::test_src_wrap_mode() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Source: wrap/circular (increment=1, wrap=1) per test plan
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000003);
@@ -3273,6 +3326,9 @@ void testbench::test_dst_wrap_mode() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Source: increment (linear). Destination: wrap/circular (increment=1, wrap=1)
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
@@ -3416,6 +3472,9 @@ void testbench::test_both_wrap_mode() {
 
   uint32_t asid_val = (0x7 << 0) | (0x7 << 4);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
 
   // Both source and destination wrap (increment=1, wrap=1)
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000003);
@@ -3526,6 +3585,9 @@ void testbench::test_address_alignment_byte_boundary() {
     m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src);
     m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst);
     m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid);
+    // Hardware requires RANGE_VALID for every transfer, not just
+    // cross-boundary ones.
+    m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
     m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
     m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
     m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000000); // ONE_BYTE
@@ -3611,6 +3673,9 @@ void testbench::test_address_alignment_halfword_boundary() {
     m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src);
     m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst);
     m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid);
+    // Hardware requires RANGE_VALID for every transfer, not just
+    // cross-boundary ones.
+    m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
     m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
     m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
     m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000001); // TWO_BYTE
@@ -3693,6 +3758,9 @@ void testbench::test_address_alignment_word_boundary() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -3779,6 +3847,9 @@ void testbench::test_wrap_mode_chunk_boundary() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, transfer_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -3871,6 +3942,9 @@ void testbench::test_64bit_address_full_range() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, dst_hi);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x9u << 0) | (0x9u << 4)); // SYS_ADDR
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);     // increment
@@ -3955,6 +4029,9 @@ void testbench::test_32bit_address_max_value() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4)); // OT->OT
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000000); // ONE_BYTE
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000000);     // fixed
@@ -4033,6 +4110,9 @@ void testbench::test_sub_word_extract_1byte_lane0() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4)); // OT->OT
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000000); // ONE_BYTE
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);     // increment
@@ -4107,6 +4187,9 @@ void testbench::test_sub_word_extract_1byte_lane3() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4));
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000000); // ONE_BYTE
@@ -4173,6 +4256,9 @@ void testbench::test_sub_word_extract_2byte_lane0() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4)); // OT->OT
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000001); // TWO_BYTE
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);     // increment
@@ -4247,6 +4333,9 @@ void testbench::test_sub_word_extract_2byte_lane2() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4)); // OT->OT
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000001); // TWO_BYTE
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);     // increment

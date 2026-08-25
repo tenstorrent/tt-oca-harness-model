@@ -114,6 +114,13 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
           "Counter[0] value encoded into the injected ATB message.")
     , intagg("intagg", NUM_PERIPH_IRQ, NUM_PLIC_SRC,
              std::vector<unsigned>{
+                 // SEP mailbox[0..7] -> peripheral bits 7:0 -> PLIC source IDs
+                 // 257..264, matching SEP_MAILBOX_n_INTERRUPT_ID in the SMC
+                 // firmware's tt_smc_interrupts.h.
+                 NUM_EXT_INTERRUPTS + 0, NUM_EXT_INTERRUPTS + 1,
+                 NUM_EXT_INTERRUPTS + 2, NUM_EXT_INTERRUPTS + 3,
+                 NUM_EXT_INTERRUPTS + 4, NUM_EXT_INTERRUPTS + 5,
+                 NUM_EXT_INTERRUPTS + 6, NUM_EXT_INTERRUPTS + 7,
                  // telemetry[0..2] -> peripheral bits 10:8
                  8, 9, 10,
                  // i3c[0..5] -> peripheral bits 17:12
@@ -617,11 +624,14 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     }
 
     // -- Interrupt aggregator -> PLIC -------------------------------------
-    // Inputs: telemetry[0..2], i3c[0..5], uart[0..3], avsbus, i2c[0..2],
-    // wdt[0..3], aou (local core only — the peer stub models the remote die
-    // and its irq_o is not observable by local firmware).
+    // Inputs: sep_mailbox[0..7], telemetry[0..2], i3c[0..5], uart[0..3],
+    // avsbus, i2c[0..2], wdt[0..3], aou (local core only — the peer stub
+    // models the remote die and its irq_o is not observable by local
+    // firmware).  Order must match the plic_bits list passed above.
     {
         unsigned s = 0;
+        for (unsigned i = 0; i < NUM_SEP_MAILBOX; ++i)
+            intagg.src[s++].bind(sep_mailbox_irq_i[i]);
         for (unsigned i = 0; i < NUM_TELEMETRY; ++i)
             intagg.src[s++].bind(telemetry_irq[i]);
         for (unsigned i = 0; i < NUM_I3C; ++i)
@@ -689,6 +699,23 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         _oss << ", cluster OFF";
 #endif
         SIM_LOG_INFO(this, _oss.str());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Late elaboration
+// ---------------------------------------------------------------------------
+// smc-vp has no SEP above it to drive sep_mailbox_irq_i, and SystemC requires
+// every sc_in to be bound, so any channel the integrator left open is tied low
+// once binding is otherwise complete.  A parent's bind always wins; this only
+// fills gaps.
+void smc_platform::before_end_of_elaboration()
+{
+    for (unsigned i = 0; i < NUM_SEP_MAILBOX; ++i) {
+        if (!sep_mailbox_irq_i[i].get_interface()) {
+            sep_mailbox_irq_tie_low_[i].write(false);
+            sep_mailbox_irq_i[i](sep_mailbox_irq_tie_low_[i]);
+        }
     }
 }
 

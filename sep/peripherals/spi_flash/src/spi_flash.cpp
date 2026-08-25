@@ -88,6 +88,8 @@ int spi_flash::addr_bytes_for_opcode(uint8_t opcode) const
         case WRITE_ENABLE:
         case WRITE_DISABLE:
         case READ_STATUS:
+        case READ_STATUS_2:
+        case READ_JEDEC_ID:
         case SUSPEND_75:
         case SUSPEND_B0:
         case RESUME_30:

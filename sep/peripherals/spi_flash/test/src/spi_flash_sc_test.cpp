@@ -240,9 +240,42 @@ private:
         return rx;
     }
 
+    /**
+     * Read the 3-byte JEDEC ID.
+     * Segment 1: TX[ 0x9F ]  csaat=true
+     * Segment 2: RX[ 3 B ]   csaat=false
+     */
+    void cmd_read_jedec_id(uint8_t* id3)
+    {
+        uint8_t tx = spi_flash_opcodes::READ_JEDEC_ID;
+        spi_segment_t seg1{1, spi_direction_e::TX_ONLY,
+                           spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        spi_port->spi_transaction(seg1, m_cfg, &tx, nullptr);
+
+        spi_segment_t seg2{3, spi_direction_e::RX_ONLY,
+                           spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        spi_port->spi_transaction(seg2, m_cfg, nullptr, id3);
+    }
+
     // -----------------------------------------------------------------------
     // Test scenarios
     // -----------------------------------------------------------------------
+
+    void test_jedec_id()
+    {
+        SC_TEST_SECTION("SC.12: RDID (0x9F) over segments");
+
+        uint8_t id[3] = {0, 0, 0};
+        cmd_read_jedec_id(id);
+        SC_TEST_ASSERT(id[0] == 0x20 && id[1] == 0xBA && id[2] == 0x18,
+                       "RDID returns 0x20, 0xBA, 0x18");
+
+        // A second RDID must behave identically: the accumulator has to be clear.
+        uint8_t id2[3] = {0, 0, 0};
+        cmd_read_jedec_id(id2);
+        SC_TEST_ASSERT(id2[0] == 0x20 && id2[1] == 0xBA && id2[2] == 0x18,
+                       "RDID is repeatable");
+    }
 
     void test_wren_wrdi()
     {
@@ -595,6 +628,7 @@ private:
         test_4byte_modes();
         test_pure_rx_only();
         test_unknown_opcode_sc();
+        test_jedec_id();
 
         std::cout << "\n========================================\n";
         std::cout << "Results: " << s_tests_passed << "/"

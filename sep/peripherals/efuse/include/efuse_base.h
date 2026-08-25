@@ -15,8 +15,8 @@
  * for 0x570 bytes, matching the range efuse_interface_controller.sv decodes onto
  * its internal APB path.
  *
- * `shim_memory` holds EFUSE_SHIM_CTRL (0x000–0x043, 0x44 bytes), which the
- * register header places at 0x20000000 inside SEP_EXTERNAL.  Silicon reaches it
+ * `shim_memory` holds EFUSE_SHIM_CTRL (0x000–0x003, one register), which the
+ * address map places at 0x20000000 inside SEP_EXTERNAL.  Silicon reaches it
  * over a second AXI-Lite port on the same block (fuse_bank_ctrl_req_o), so two
  * sockets on one module is the faithful shape, not a VP convenience.
  *
@@ -81,7 +81,7 @@ public:
 
           // ── EFUSE_INTERFACE_CTRL ─────────────────────────────────────────
           EFUSE_INTERFACE_CTRL_STATUS    (std::string(name) + ".EFUSE_INTERFACE_CTRL_STATUS",     memory, 0x400/4),
-          EFUSE_WRITE_CTRL               (std::string(name) + ".EFUSE_WRITE_CTRL",                memory, 0x404/4),
+          EFUSE_PROGRAM_CTRL             (std::string(name) + ".EFUSE_PROGRAM_CTRL",              memory, 0x404/4),
           EFUSE_READ_CTRL                (std::string(name) + ".EFUSE_READ_CTRL",                 memory, 0x408/4),
           EFUSE_PROGRAM_INTERFACE_RD_DATA(std::string(name) + ".EFUSE_PROGRAM_INTERFACE_RD_DATA", memory, 0x40C/4),
           EFUSE_READ_INTERFACE_RD_DATA   (std::string(name) + ".EFUSE_READ_INTERFACE_RD_DATA",    memory, 0x410/4),
@@ -98,9 +98,7 @@ public:
           SEC_DISABLE_TOKEN_MATCH(std::string(name) + ".SEC_DISABLE_TOKEN_MATCH", memory, 0x56C/4),
 
           // ── EFUSE_SHIM_CTRL (separate window; see class comment) ─────────
-          SHIM_EFUSE_CTRL_STATUS  (std::string(name) + ".SHIM_EFUSE_CTRL_STATUS",   shim_memory, 0x000/4),
-          SHIM_EFUSE_CTRL_STATUS_1(std::string(name) + ".SHIM_EFUSE_CTRL_STATUS_1", shim_memory, 0x004/4),
-          SHIM_EFUSE_TIMING_CTRL  (std::string(name) + ".SHIM_EFUSE_TIMING_CTRL",   shim_memory, 0x008/4, 1)
+          EFUSE_BANK_INIT_TIME    (std::string(name) + ".EFUSE_BANK_INIT_TIME",     shim_memory, 0x000/4)
     {
         memory.bind_to_socket(target_socket);
         shim_memory.bind_to_socket(shim_target_socket);
@@ -160,7 +158,7 @@ public:
 
     // EFUSE_INTERFACE_CTRL registers
     sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_type<32>  EFUSE_INTERFACE_CTRL_STATUS;
-    sep_efuse::EFUSE_WRITE_CTRL_type<32>             EFUSE_WRITE_CTRL;
+    sep_efuse::EFUSE_PROGRAM_CTRL_type<32>           EFUSE_PROGRAM_CTRL;
     sep_efuse::EFUSE_READ_CTRL_type<32>              EFUSE_READ_CTRL;
     sep_efuse::EFUSE_READ_DATA_type<32>              EFUSE_PROGRAM_INTERFACE_RD_DATA;
     sep_efuse::EFUSE_READ_DATA_type<32>              EFUSE_READ_INTERFACE_RD_DATA;
@@ -176,10 +174,8 @@ public:
     sep_efuse::TOKEN_MATCH_type<32>             RMA_CHIPLET_TOKEN_MATCH;
     sep_efuse::TOKEN_MATCH_type<32>             SEC_DISABLE_TOKEN_MATCH;
 
-    // EFUSE_SHIM_CTRL registers (R/W stubs — Samsung OTP shim, no VP function)
-    sep_efuse::rw_stub_type<32>                           SHIM_EFUSE_CTRL_STATUS;
-    sep_efuse::rw_stub_type<32>                           SHIM_EFUSE_CTRL_STATUS_1;
-    csml_reg_vector<sep_efuse::rw_stub_type<32>, 15>      SHIM_EFUSE_TIMING_CTRL;
+    // EFUSE_SHIM_CTRL — one register, the OTP macro initialisation time
+    sep_efuse::EFUSE_BANK_INIT_TIME_type<32>              EFUSE_BANK_INIT_TIME;
 
     void reset_all_registers();
 };

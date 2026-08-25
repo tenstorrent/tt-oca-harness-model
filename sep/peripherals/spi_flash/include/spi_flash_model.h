@@ -6,8 +6,8 @@
  *
  * Implements flash memory emulation with:
  * - SFDP ROM (JESD216A compliant)
- * - Profile 1 command set (16 opcodes)
- * - 32 MB internal memory (std::vector<uint8_t>, initialised to 0xFF)
+ * - Profile 1 command set
+ * - 16 MB internal memory (std::vector<uint8_t>, initialised to 0xFF)
  * - Write-enable (WREN/WRDI) enforcement
  * - Suspend / Resume support
  * - Backdoor file I/O for memory persistence
@@ -35,18 +35,27 @@
  */
 class spi_flash_model {
 public:
-    /// Default flash size: 32 MB
-    static constexpr uint32_t DEFAULT_FLASH_SIZE = 32u * 1024u * 1024u;
+    /// Default flash size: 16 MB. Matches the capacity byte of DEFAULT_JEDEC_ID.
+    static constexpr uint32_t DEFAULT_FLASH_SIZE = 16u * 1024u * 1024u;
 
     /// Erase block size: 64 KB
     static constexpr uint32_t ERASE_BLOCK_SIZE   = 64u * 1024u;
 
-    /// Backdoor persistence file
+    /// Program page size: a program wraps within its page, as NOR devices do.
+    static constexpr uint32_t PAGE_SIZE          = 256u;
+
+    /// Default JEDEC ID, matching the DV flash BFM (ocah_spi_flash.py).
+    /// Capacity byte 0x18 encodes 2^24 bytes, so it tracks DEFAULT_FLASH_SIZE.
+    static constexpr uint32_t DEFAULT_JEDEC_ID   = 0x20BA18u;
+
+    /// Conventional name for a staged backdoor image. This is only a naming
+    /// convention for testbenches to share — the model never opens it on its
+    /// own; every load names its path explicitly.
     static constexpr const char* BACKDOOR_FILE_PATH = "data/flash_memory.bin";
 
     /**
      * @brief Constructor
-     * @param size_bytes Flash capacity in bytes (default 32 MB)
+     * @param size_bytes Flash capacity in bytes (default 16 MB)
      */
     explicit spi_flash_model(uint32_t size_bytes = DEFAULT_FLASH_SIZE);
 
@@ -63,7 +72,7 @@ public:
      *   Read:          0x03, 0x0B, 0xEE, 0x5A, 0x13
      *   Program:       0x02, 0x12
      *   Erase:         0x20, 0x52, 0x60, 0xD8, 0xDC
-     *   Control:       0x04, 0x05, 0x06, 0xB7, 0xE9, 0x66, 0x99
+     *   Control:       0x04, 0x05, 0x06, 0x35, 0x9F, 0xB7, 0xE9, 0x66, 0x99
      *   Suspend/Resume:0x75, 0xB0, 0x30, 0x7A, 0xD0
      *
      * @param opcode    Command opcode
@@ -115,16 +124,20 @@ public:
     // ------------------------------------------------------------------
 
     /**
-     * @brief Load flash memory from BACKDOOR_FILE_PATH
+     * @brief Load flash memory from a raw binary image
+     * @param path Image to read. Required: the caller decides where the image
+     *             lives, so a run that configures no image always starts from
+     *             erased memory rather than from whatever the working directory
+     *             happens to contain.
      * @return true if the file was found and loaded
      */
-    bool load_memory_from_file();
+    bool load_memory_from_file(const std::string& path);
 
     /**
-     * @brief Save flash memory to BACKDOOR_FILE_PATH
+     * @brief Save flash memory to a raw binary image
      * @return true if the file was written successfully
      */
-    bool save_memory_to_file() const;
+    bool save_memory_to_file(const std::string& path) const;
 
     /**
      * @brief Direct byte read (no command overhead)
@@ -141,6 +154,17 @@ public:
 
     /// Flash capacity in bytes
     uint32_t size() const { return static_cast<uint32_t>(m_mem.size()); }
+
+    /**
+     * @brief Set the 3-byte JEDEC ID returned by RDID (0x9F)
+     *
+     * Mirrors the DV BFM's +spi_flash_jedec_id override so a test can present a
+     * different part without rebuilding.
+     */
+    void set_jedec_id(uint32_t jedec_id) { m_jedec_id = jedec_id & 0xFFFFFFu; }
+
+    /// 3-byte JEDEC ID currently reported by RDID
+    uint32_t get_jedec_id() const { return m_jedec_id; }
 
 private:
     // ------------------------------------------------------------------
@@ -159,11 +183,13 @@ private:
     // ------------------------------------------------------------------
     // Device state
     // ------------------------------------------------------------------
-    bool    m_write_enabled;       ///< Write Enable Latch (WEL)
-    bool    m_op_suspended;        ///< Suspend flag
-    uint8_t m_status_reg;          ///< Status Register 1 (SR1)
-    bool    m_4byte_address_mode;  ///< Currently in 4-byte address mode via EN4B
-    bool    m_reset_enabled;       ///< Reset sequence initiated (66h)
+    bool     m_write_enabled;       ///< Write Enable Latch (WEL)
+    bool     m_op_suspended;        ///< Suspend flag
+    uint8_t  m_status_reg;          ///< Status Register 1 (SR1)
+    uint8_t  m_status_reg_2;        ///< Status Register 2 (SR2)
+    bool     m_4byte_address_mode;  ///< Currently in 4-byte address mode via EN4B
+    bool     m_reset_enabled;       ///< Reset sequence initiated (66h)
+    uint32_t m_jedec_id;            ///< 3-byte JEDEC ID reported by RDID (0x9F)
 
     // ------------------------------------------------------------------
     // Internal command handlers

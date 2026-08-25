@@ -68,6 +68,11 @@ VP_FLAGS = $(BASE_INI)
 # whatever the test staged (or over the erased state it expects). Such a test opts in with
 # `VP_FLAGS := $(NO_SPIPRELOAD_INI)` and lists it as a `sim` prerequisite. Derived with sed
 # rather than checked in, so it tracks edits to the shared config instead of drifting.
+#
+# This config names no flash image, so it guarantees erased flash. A test that wants a raw
+# image derives its own config instead and adds `och_sep_ss1.spiBackdoorFile`, pointing at a
+# test-specific filename -- see sep-spi-dma-test and sep-spi-mux-test. Keep the image out of
+# this shared config: several tests use it, and only some of them stage anything.
 NO_SPIPRELOAD_INI = $(dir $(BASE_INI))accellera_config_no_spipreload.ini
 GDB_ENABLED_FROM_INI := $(shell sed -n 's/^[[:space:]]*och_sep_ss1\.gdb[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p' $(VP_FLAGS) 2>/dev/null | head -n 1)
 GDB_ENABLED ?= $(if $(strip $(GDB_ENABLED_FROM_INI)),$(GDB_ENABLED_FROM_INI),false)

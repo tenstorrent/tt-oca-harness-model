@@ -415,8 +415,9 @@ void testbench::test_range_regwen_write_lock() {
 
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, range_regwen);
 
-  if (range_regwen != 0x00000000) {
-    msg << "RANGE_REGWEN should be 0x0 after lock";
+  // The register is MuBi4-encoded, so locking drives it to MuBi4False.
+  if (range_regwen != 0x00000009) {
+    msg << "RANGE_REGWEN should be 0x9 after lock";
     passed = false;
   }
 
@@ -669,15 +670,19 @@ void testbench::test_cfg_regwen_locked_registers() {
   // The initial values ARE the setup values for this test
   wait(10, SC_NS);
 
+  // Hardware refuses to start without a committed memory range, and the DMA has
+  // to actually go busy for CFG_REGWEN to lock.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+
   // Trigger DMA operation by setting CONTROL.go bit (bit 31)
-  // This will set m_dma_busy = true and lock CFG_REGWEN to 0x0
+  // This will set m_dma_busy = true and lock CFG_REGWEN to MuBi4False
   m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000000); // go=1
   wait(20, SC_NS);
 
-  // Verify CFG_REGWEN is now locked (0x0)
+  // Verify CFG_REGWEN is now locked (MuBi4False)
   m_test->register_read_32(secure_dma_basetest::CFG_REGWEN_OFFSET, cfg_regwen);
-  if (cfg_regwen != 0x0) {
-    msg << "CFG_REGWEN not locked when DMA busy (expected 0x0, got 0x"
+  if (cfg_regwen != 0x9) {
+    msg << "CFG_REGWEN not locked when DMA busy (expected 0x9, got 0x"
         << std::hex << cfg_regwen << "); ";
     passed = false;
   }
@@ -792,6 +797,9 @@ void testbench::test_control_status_always_accessible() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x10000000);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000077);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 0x00000100);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 0x00000100);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002);
@@ -804,7 +812,7 @@ void testbench::test_control_status_always_accessible() {
   // Verify DMA is busy (CFG_REGWEN locked)
   uint32_t cfg_regwen = 0;
   m_test->register_read_32(secure_dma_basetest::CFG_REGWEN_OFFSET, cfg_regwen);
-  if (cfg_regwen != 0x0) {
+  if (cfg_regwen != 0x9) {
     msg << "CFG_REGWEN not locked (DMA not busy); ";
     passed = false;
   }
@@ -857,6 +865,9 @@ void testbench::test_reset_during_idle() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0xCAFEBABE);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 0x12345678);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000000);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000000);
   wait(10, SC_NS);
 
@@ -961,6 +972,9 @@ void testbench::test_reset_during_active_transfer() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x10000000);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000077);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 0x00001000);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 0x00000100);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002);
@@ -975,8 +989,8 @@ void testbench::test_reset_during_active_transfer() {
   // Verify DMA is active (transfer aborted by reset)
   uint32_t cfg_regwen = 0;
   m_test->register_read_32(secure_dma_basetest::CFG_REGWEN_OFFSET, cfg_regwen);
-  if (cfg_regwen != 0x0) {
-    msg << "DMA not busy before reset (CFG_REGWEN not 0x0); ";
+  if (cfg_regwen != 0x9) {
+    msg << "DMA not busy before reset (CFG_REGWEN not 0x9); ";
     passed = false;
   }
 
@@ -1086,7 +1100,7 @@ void testbench::test_reset_unlocks_range_regwen() {
   uint32_t range_regwen = 0;
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, range_regwen);
 
-  if (range_regwen != 0x00000000) {
+  if (range_regwen != 0x00000009) {
     msg << "RANGE_REGWEN not locked";
     passed = false;
   }
@@ -1186,21 +1200,22 @@ void testbench::test_register_rw0c() {
     test_passed = false;
   }
 
-  // 2) Write 0x0 => lock
+  // 2) Write anything other than MuBi4True => lock, and the register settles
+  //    on MuBi4False rather than the written value.
   m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000000);
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, after);
-  if ((after & 0xF) != 0x0) {
-    CSML_ERROR(0, logger) << "RANGE_REGWEN lock failed (expected 0x0, got 0x"
+  if ((after & 0xF) != 0x9) {
+    CSML_ERROR(0, logger) << "RANGE_REGWEN lock failed (expected 0x9, got 0x"
                           << std::hex << (after & 0xF) << std::dec << ")" << std::endl;
     test_passed = false;
   }
 
-  // 3) Try to unlock by writing 0x6 => should be ignored (stay 0x0)
+  // 3) Try to unlock by writing 0x6 => should be ignored (stay 0x9)
   m_test->register_write_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, 0x00000006);
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, after);
-  if ((after & 0xF) != 0x0) {
+  if ((after & 0xF) != 0x9) {
     CSML_ERROR(0, logger) << "RANGE_REGWEN unexpectedly unlocked after write 0x6" << std::endl;
     test_passed = false;
   }
@@ -1239,6 +1254,9 @@ void testbench::test_register_rw1c() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x10000100);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x10000200);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000077);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 0x10);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 0x10);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);
@@ -1292,6 +1310,9 @@ void testbench::test_register_rw1c() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x10000100);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x10000200);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000077);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 0x1000); // long transfer
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 0x100);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);
@@ -1323,6 +1344,9 @@ void testbench::test_register_rw1c() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x10000100);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x10000200);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x00000077);
+  // Hardware requires RANGE_VALID for every transfer, not just
+  // cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 0x100);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 0x10); // multi-chunk
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);

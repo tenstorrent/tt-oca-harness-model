@@ -78,13 +78,24 @@ public:
     static constexpr unsigned NUM_PLIC_SRC   = 336;
     static constexpr unsigned NUM_PLIC_CTX   = 8;
     static constexpr unsigned NUM_SUBSYS     = 32;
-    // Peripheral IRQ inputs: telemetry[0..2], i3c[0..5], uart[0..3], avsbus, i2c[0..2], wdt[0..3]
+    // SEP mailbox channels feeding peripheral_interrupts_o[7:0] (sep_pkg::NUM_MAILBOXES).
+    static constexpr unsigned NUM_SEP_MAILBOX = 8;
+    // Peripheral IRQ inputs: SEP mailbox[0..7], telemetry[0..2], i3c[0..5],
+    // uart[0..3], avsbus, i2c[0..2], wdt[0..3]
     // (matches smc_peripherals.sv peripheral_interrupts_o composition), plus
     // the local AOU core's irq_o (PLIC source bit 26 — a VP-only assignment;
     // the real RTL's peripheral_interrupts_o composition does not yet include
     // AOU, see sw/tt-oca-hw-main/doc/aou.placeholder.adoc).
     static constexpr unsigned NUM_PERIPH_IRQ =
-        NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C + NUM_HARTS + 1;
+        NUM_SEP_MAILBOX + NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C
+        + NUM_HARTS + 1;
+    // RTL packs peripheral_interrupts_i at cpu_interrupts_o[NUM_EXT_INTERRUPTS+:32]
+    // and the PLIC's source ID is that bit index + 1, so peripheral bit b is
+    // source 256 + b + 1 in the 4-core config modeled here.  Only the SEP
+    // mailbox uses this offset today; the older entries in the aggregator's
+    // bit list omit it and so sit at the wrong source IDs (see
+    // md_files/MAILBOX_RTL_VS_VP.md).
+    static constexpr unsigned NUM_EXT_INTERRUPTS = 256;
 
     // -----------------------------------------------------------------------
     // Test-only BEU error-injection hook (Phase D1; see
@@ -152,6 +163,13 @@ public:
     tlm::tlm_initiator_socket<64>                        output_axi{"output_axi"};
     tlm_utils::simple_target_socket<smc_platform, 64>   aou_axi_s{"aou_axi_s"};
     tlm::tlm_initiator_socket<64>                        aou_axi_m{"aou_axi_m"};
+
+    // SEP mailbox interrupts entering the SMC (RTL smc.sv: sep_mailbox_interrupts_i),
+    // one per SEP mailbox channel.  smu-vp binds these to the SEP platform's
+    // inbound lines; smc-vp leaves them open and before_end_of_elaboration()
+    // ties them low, the same way el2_pic handles its undriven sources.
+    sc_core::sc_vector<sc_core::sc_in<bool>>
+        sep_mailbox_irq_i{"sep_mailbox_irq_i", NUM_SEP_MAILBOX};
 
     // -----------------------------------------------------------------------
     // Modeled blocks
@@ -445,6 +463,12 @@ private:
     tlm_utils::simple_initiator_socket<smc_platform, 32> idle_aou_peer_apb_init_{"idle_aou_peer_apb_init_"};
     // Dual periph-bus cpu_ctrl bind removed; keep the IP elaboratable.
     tlm_utils::simple_initiator_socket<smc_platform, 32> idle_cpu_ctrl_init_{"idle_cpu_ctrl_init_"};
+
+    // Tie-off for sep_mailbox_irq_i in integrations without a SEP above us.
+    sc_core::sc_vector<sc_core::sc_signal<bool>>
+        sep_mailbox_irq_tie_low_{"sep_mailbox_irq_tie_low_", NUM_SEP_MAILBOX};
+
+    void before_end_of_elaboration() override;
 
     void fwd_sys_axi (tlm::tlm_generic_payload&, sc_core::sc_time&);
     void fwd_jtag_axi(tlm::tlm_generic_payload&, sc_core::sc_time&);

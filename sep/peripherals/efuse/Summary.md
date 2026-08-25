@@ -97,20 +97,22 @@ These registers cache factory-burned eFuse contents and are loaded from `sep_efu
 | Offset | Register | Reset | Access | Description |
 |--------|----------|-------|--------|-------------|
 | 0x400 | EFUSE_INTERFACE_CTRL_STATUS | 0x1 | RO | [0] efuse_sense_done (always 1 in VP) |
-| 0x404 | EFUSE_WRITE_CTRL | 0x0 | R/W | eFuse write control |
+| 0x404 | EFUSE_PROGRAM_CTRL | 0x0 | R/W | eFuse programming control |
 | 0x408 | EFUSE_READ_CTRL | 0x0 | R/W | eFuse read control |
 | 0x40C | EFUSE_PROGRAM_INTERFACE_RD_DATA | 0x0 | RO | Program read-back data (hw writes) |
 | 0x410 | EFUSE_READ_INTERFACE_RD_DATA | 0x0 | RO | Read interface data (always 0 in VP) |
 | 0x414 | EFUSE_READ_REQ_TIMEOUT | 0x800000 | R/W | Read request timeout |
 | 0x418 | EFUSE_PROGRAM_REQ_TIMEOUT | 0x800000 | R/W | Program request timeout |
 
-### Samsung Shim Timing Registers (0x600–0x640)
+### EFUSE_SHIM_CTRL (separate window, SEP_EXTERNAL base 0x20000000, size 0x4)
 
 | Offset | Register | Reset | Access | Description |
 |--------|----------|-------|--------|-------------|
-| 0x600 | EFUSE_CTRL_STATUS | 0x00010108 | R/W | Clock divider and period config |
-| 0x604 | EFUSE_CTRL_STATUS_1 | 0x000003E8 | R/W | Additional status/control |
-| 0x608–0x640 | EFUSE_TIMING_CTRL_0–14 | Various | R/W | 15 OTP timing parameters (tCS, tRW, tAS, tAH, etc.) |
+| 0x000 | EFUSE_BANK_INIT_TIME | 0x20 | R/W | Cycles to wait for the OTP macro to initialise before sensing |
+
+One register, reached over the block's second AXI-Lite port. The seventeen-register
+Samsung physical-layer shim that used to live here (two status registers plus fifteen
+timing controls, 0x44 in all) is gone from the RDL and no longer decodes.
 
 ---
 
@@ -138,7 +140,7 @@ Registers: All security tokens, keys, UIDs, `SBOOT_DIS`, `TRANSIENT_RMA_EN`, `EF
 ### R/W (Read-Write)
 Unrestricted firmware access. `write_mask = 0xffffffff`.
 
-Registers: `EFUSE_WRITE_CTRL`, `EFUSE_READ_CTRL`, timeout registers, all SHIM timing registers.
+Registers: `EFUSE_PROGRAM_CTRL`, `EFUSE_READ_CTRL`, timeout registers, `EFUSE_BANK_INIT_TIME`.
 
 ---
 

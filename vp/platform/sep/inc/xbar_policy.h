@@ -8,10 +8,12 @@
 // The RTL crossbar is not fully connected: each master reaches only a listed
 // subset of subordinates, and an access outside that subset is a decode error
 // rather than a permitted transfer.  Several of those denials are load-bearing
-// for security — the external master cannot reach the core's TCMs, the reset
-// controller, or the system-peripheral CSR block, and the DMA cannot reach its
-// own CSRs — so a fully-connected model lets VP traffic through that silicon
-// would refuse.
+// for security — the external master cannot reach the core's TCMs or the reset
+// controller, and the DMA cannot reach its own CSRs — so a fully-connected
+// model lets VP traffic through that silicon would refuse.
+//
+// The peripherals block's own crossbar sits in front of this one for inbound
+// external traffic; see inner_peripherals_claim() below.
 //
 // The matrix is keyed on the *subordinate*, resolved from the address, rather
 // than on the VP's bus port index.  That is how the RTL decodes it, it survives
@@ -126,6 +128,33 @@ inline bool permits(master m, slave s) {
             && s != slave::sep_system_peripherals;
     }
     return true;
+}
+
+// The peripherals block has a crossbar of its own in front of the local one
+// (sep_system_peripherals_xbar_pkg.sv: inputs sep_local_from_remap and
+// smn_inbound, outputs mailbox / system_csr / smn_inbound_from_xbar, with every
+// input reaching every output).  RTL routes inbound SMN traffic into that
+// crossbar first and forwards only what it does not claim to the local
+// crossbar's ext port:
+//
+//   sep.sv  smn_inbound_axi_req_i -> u_sep_system_peripherals
+//                                 -> smn_inbound_to_sep_axi -> ext_axi_req_i
+//
+// which is why the local matrix below denies ext -> sep_system_peripherals: by
+// the time traffic reaches it, the peripherals have already had their turn.
+// The VP flattens both crossbars onto one bus, so that first stage has to be
+// modeled here, otherwise the SMC can never reach the SEP mailbox.
+inline bool inner_peripherals_claim(uint64_t addr) {
+    return in_window(addr, 0x10A00000ULL, 0x10000ULL)   // mailbox
+        || in_window(addr, 0x10A10000ULL, 0x40000ULL)   // system_csr main
+        || in_window(addr, 0x10802000ULL, 0x100ULL);    // system_csr scratch_region
+}
+
+// Both crossbar stages for one master and address, in RTL order.
+inline bool permits(master m, uint64_t addr) {
+    if (inner_peripherals_claim(addr))
+        return true;
+    return permits(m, classify(addr));
 }
 
 inline const char* name(slave s) {

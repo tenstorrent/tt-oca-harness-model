@@ -1132,6 +1132,8 @@ void testbench::test_soc_to_soc() {
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, static_cast<uint32_t>(dst_addr & 0xFFFFFFFFULL));
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, static_cast<uint32_t>(dst_addr >> 32));
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x9u << 0) | (0x9u << 4)); // SYS->SYS
+  // Hardware requires RANGE_VALID for every transfer, not just cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2); // 4-byte
@@ -1856,6 +1858,8 @@ void testbench::test_address_overflow_32bit() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_addr);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_addr);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, (0x7u << 0) | (0x7u << 4)); // OT->OT
+  // Hardware requires RANGE_VALID for every transfer, not just cross-boundary ones.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, total_size);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, chunk_size);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002); // FOUR_BYTE
@@ -1895,19 +1899,22 @@ void testbench::test_address_overflow_32bit() {
     }
   }
 
-  // Verify final address registers wrapped as expected: 0xFFFFFFFC + 8 = 0x00000004
+  // Both ports increment, so the address registers are not written back and
+  // still hold the programmed start. The wrap itself is proven by the data
+  // check above, which reads through 0xFFFFFFFF -> 0x00000000.
   uint32_t src_final = 0, dst_final = 0;
   m_test->register_read_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, src_final);
   m_test->register_read_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, dst_final);
-  if (src_final != 0x00000004u) { passed = false; msg << "SRC_ADDR_LO did not wrap to 0x00000004; "; }
-  if (dst_final != 0x00000004u) { passed = false; msg << "DST_ADDR_LO did not wrap to 0x00000004; "; }
+  if (src_final != src_addr) { passed = false; msg << "SRC_ADDR_LO unexpectedly changed; "; }
+  if (dst_final != dst_addr) { passed = false; msg << "DST_ADDR_LO unexpectedly changed; "; }
 
   if (!done_intr_seen && !dma_done_intr_signal.read()) {
     msg << "dma_done_intr not observed (status done passed); ";
   }
 
   if (passed) {
-    msg << "32-bit address overflow wrap verified: 0xFFFFFFFC + 8 -> 0x00000004.";
+    msg << "32-bit address overflow wrap verified: data copied through "
+           "0xFFFFFFFC + 8 -> 0x00000004.";
   }
 
   report_test_result(test_name, passed, msg.str());

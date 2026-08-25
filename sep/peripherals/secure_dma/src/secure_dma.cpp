@@ -14,6 +14,13 @@
 #include <openssl/sha.h>
 #include <sstream>
 
+namespace {
+// prim_mubi_pkg MuBi4 encodings. The two legal values are bitwise complements
+// so that a stuck-at fault on the register is detectable.
+constexpr uint32_t MUBI4_TRUE = 0x6;  // enabled / unlocked
+constexpr uint32_t MUBI4_FALSE = 0x9; // disabled / locked
+} // namespace
+
 // ============================================================================
 // Constructor
 // ============================================================================
@@ -248,10 +255,14 @@ void secure_dma_model::handshake_monitor_thread() {
         // AUTOMATIC INTERRUPT CLEARING (if enabled for this trigger)
         // -----------------------------------------------------------------------
 
+        // A failed clearing write is fatal to the transfer in hardware: the
+        // FSM takes DmaBusErr and moves to DmaError rather than starting the
+        // chunk. Leaving the peripheral's interrupt asserted would also
+        // re-trigger the handshake immediately.
         if (!perform_interrupt_clearing_write(i)) {
-          CSML_INFO(1, logger) << "Interrupt clearing write failed for trigger " << i << " (bus error or not enabled)" << std::endl;
-          // Continue with chunk transfer despite clearing failure
-          // (peripheral may auto-deassert or not require explicit clearing)
+          CSML_INFO(1, logger) << "Interrupt clearing write failed for trigger " << i << " - halting transfer" << std::endl;
+          halt_transfer_on_bus_error();
+          break;
         }
 
         // -----------------------------------------------------------------------
@@ -355,7 +366,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     // Validation passed - transition to BUSY state
     CSML_INFO(1, logger) << "Configuration validation PASSED - entering BUSY state" << std::endl;
 
-    // Set busy state (locks CFG_REGWEN to 0x0)
+    // Set busy state (locks CFG_REGWEN to MuBi4False)
     m_dma_busy_next = true;
     m_dma_busy = m_dma_busy_next;
 
@@ -364,7 +375,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     current_status |= 0x1; // Set STATUS.busy
     STATUS = current_status;
 
-    CSML_INFO(2, logger) << "DMA entered BUSY state - CFG_REGWEN now locked (0x0)" << std::endl;
+    CSML_INFO(2, logger) << "DMA entered BUSY state - CFG_REGWEN now locked (0x9)" << std::endl;
 
     // Initialize SHA-2 hash engine if hashing enabled and initial_transfer=1
     uint32_t opcode = value & 0xF;                    // Bits 3:0
@@ -628,29 +639,24 @@ bool secure_dma_model::handle_write_ALERT_TEST(uint32_t value, uint32_t write_ma
 bool secure_dma_model::handle_write_RANGE_REGWEN(uint32_t value, uint32_t write_mask) {
   CSML_INFO(2, logger) << "RANGE_REGWEN write: 0x" << std::hex << value << std::dec << std::endl;
 
-  uint32_t current_regwen = static_cast<uint32_t>(RANGE_REGWEN);
+  uint32_t current_regwen = static_cast<uint32_t>(RANGE_REGWEN) & 0xF;
 
-  // RW0C semantics: Only allow transition from 0x6 (unlocked) to 0x0 (locked)
-  // Once locked, cannot be unlocked until reset
-  if (current_regwen == 0x6) {
-    // Currently unlocked - allow write if value is 0x0
-    if ((value & 0xF) == 0x0) {
-      CSML_INFO(1, logger) << "RANGE_REGWEN: Locking memory range registers (0x6 -> 0x0)" << std::endl;
-      RANGE_REGWEN = 0x0;
-      return false; // We've updated the register
-    } else if ((value & 0xF) == 0x6) {
-      // Writing 0x6 when already 0x6 - no change
-      CSML_INFO(3, logger) << "RANGE_REGWEN: Write 0x6 when unlocked - no change" << std::endl;
-      return false;
-    }
-  } else {
-    // Already locked (0x0) - ignore all writes
-    CSML_INFO(2, logger) << "RANGE_REGWEN: Already locked - write ignored" << std::endl;
-    return false;
+  // Multi-bit-encoded RW0C, matching prim_subreg_arb's MuBi4 W0C arbitration:
+  //   wr_data = mubi4_and_hi(q, wd)
+  // which yields MuBi4True only when both the current value and the written
+  // value are True. Any other written value therefore locks the register, and
+  // it stays locked until reset. The register spec documents MuBi4False as the
+  // value software writes to lock.
+  const bool stays_unlocked =
+      (current_regwen == MUBI4_TRUE) && ((value & 0xF) == MUBI4_TRUE);
+
+  RANGE_REGWEN = stays_unlocked ? MUBI4_TRUE : MUBI4_FALSE;
+
+  if (!stays_unlocked && current_regwen == MUBI4_TRUE) {
+    CSML_INFO(1, logger) << "RANGE_REGWEN: Locking memory range registers (0x6 -> 0x9)" << std::endl;
   }
 
-  // Allow default write for other cases
-  return true;
+  return false; // Register already updated above
 }
 
 bool secure_dma_model::handle_write_ENABLED_MEMORY_RANGE_BASE(uint32_t value,
@@ -921,9 +927,9 @@ bool secure_dma_model::handle_write_INTR_SRC_WR_VAL(unsigned int index, uint32_t
 // ============================================================================
 
 bool secure_dma_model::handle_read_CFG_REGWEN(uint32_t &value, uint32_t read_mask) {
-  // Return hardware-managed lock status based on DMA busy state
-  // 0x0 = locked (busy), 0x6 = unlocked (idle)
-  value = m_dma_busy ? 0x0 : 0x6;
+  // Hardware-managed lock status, driven straight off the busy bit:
+  //   hw2reg.cfg_regwen.d = mubi4_bool_to_mubi(~status.busy.q)
+  value = m_dma_busy ? MUBI4_FALSE : MUBI4_TRUE;
 
   CSML_INFO(3, logger) << "CFG_REGWEN read: 0x" << std::hex << value << " (DMA " << (m_dma_busy ? "BUSY" : "IDLE") << ")" << std::dec << std::endl;
 
@@ -987,9 +993,10 @@ bool secure_dma_model::is_cfg_locked() const {
 }
 
 bool secure_dma_model::is_range_locked() const {
-  // RANGE_REGWEN is locked when register value is 0x0
+  // Locked unless the register holds MuBi4True. The gating in RTL is
+  // mubi4_test_true_strict(), so any value other than True denies the write.
   uint32_t regwen_value = static_cast<uint32_t>(RANGE_REGWEN);
-  return (regwen_value & 0xF) == 0x0;
+  return (regwen_value & 0xF) != MUBI4_TRUE;
 }
 
 // ============================================================================
@@ -1684,6 +1691,47 @@ void secure_dma_model::update_dst_addr_registers(uint64_t current_addr) {
   CSML_INFO(3, logger) << "Updated DST_ADDR registers - HI:LO = 0x" << std::hex << addr_hi << ":0x" << addr_lo << std::dec << std::endl;
 }
 
+/**
+ * @brief Advance the visible address registers at a chunk boundary
+ *
+ * Hardware rewrites SRC_ADDR/DST_ADDR only when the FSM returns to idle from a
+ * data-movement state, and only for the side configured as fixed-address
+ * (increment=0, wrap=0). It adds one whole CHUNK_DATA_SIZE, so a multi-chunk
+ * fixed-address transfer walks the buffer at chunk granularity while every
+ * beat within a chunk hits the same address.
+ *
+ * In increment or wrap mode hardware leaves the registers alone, so software
+ * can re-run the same transfer without reprogramming them.
+ *
+ * @param chunk_size Configured CHUNK_DATA_SIZE in bytes
+ */
+void secure_dma_model::apply_chunk_end_address_writeback(uint32_t chunk_size) {
+  bool src_increment = false, src_wrap = false;
+  bool dst_increment = false, dst_wrap = false;
+  get_source_addressing_mode(src_increment, src_wrap);
+  get_destination_addressing_mode(dst_increment, dst_wrap);
+
+  if (!src_increment && !src_wrap) {
+    uint64_t new_src = ((static_cast<uint64_t>(SRC_ADDR_HI) << 32) |
+                        static_cast<uint32_t>(SRC_ADDR_LO)) +
+                       chunk_size;
+    update_src_addr_registers(new_src);
+    // Fixed mode reloads the address from the register on every beat, so the
+    // engine's own pointer has to track the register.
+    m_current_src_addr = new_src;
+    m_chunk_start_src_addr = new_src;
+  }
+
+  if (!dst_increment && !dst_wrap) {
+    uint64_t new_dst = ((static_cast<uint64_t>(DST_ADDR_HI) << 32) |
+                        static_cast<uint32_t>(DST_ADDR_LO)) +
+                       chunk_size;
+    update_dst_addr_registers(new_dst);
+    m_current_dst_addr = new_dst;
+    m_chunk_start_dst_addr = new_dst;
+  }
+}
+
 
 /**
  * @brief Register callbacks (reserved for future use)
@@ -2090,6 +2138,8 @@ bool secure_dma_model::validate_transfer_size() {
  * 7. Destination ASID validity
  * 8. Source address width for selected bus
  * 9. Destination address width for selected bus
+ * 10. RANGE_VALID set
+ * 11. Security policy
  *
  * Per detailed design: "Configuration validation before transfer initiation"
  * ensures all parameters are valid before starting any bus transactions.
@@ -2190,7 +2240,18 @@ bool secure_dma_model::validate_transfer_configuration(
     }
   }
 
-  // Validation 10: Security policy enforcement
+  // Validation 10: RANGE_VALID must be set for every transfer, not only those
+  // that cross the OT/SoC boundary. RTL checks control_q.range_valid
+  // unconditionally in DmaAddrSetup, which is what stops the DMA operating at
+  // all before firmware has committed a memory range.
+  if ((static_cast<uint32_t>(RANGE_VALID) & 0x1) == 0) {
+    all_valid = false;
+    m_error_code |= (1U << 6); // ERROR_CODE.range_valid_error
+    ERROR_CODE = m_error_code;
+    CSML_INFO(1, logger) << "RANGE_VALID is not set - transfer rejected " << "(ERROR_CODE.range_valid_error set)" << std::endl;
+  }
+
+  // Validation 11: Security policy enforcement
   // Only perform if ASID validation passed for both source and destination
   if (validate_asid(src_asid, true) && validate_asid(dst_asid, false)) {
     uint64_t src_addr = (static_cast<uint64_t>(SRC_ADDR_HI) << 32) |
@@ -2231,9 +2292,9 @@ bool secure_dma_model::validate_transfer_configuration(
  * @brief Validate memory range configuration registers
  *
  * Validates ENABLED_MEMORY_RANGE configuration to ensure memory range is
- * properly configured for security boundary enforcement. Checks:
- * 1. BASE ≤ LIMIT (valid range relationship)
- * 2. RANGE_VALID is set when cross-boundary transfers are attempted
+ * properly configured for security boundary enforcement. Checks that
+ * BASE <= LIMIT. RANGE_VALID is checked separately, and unconditionally, by
+ * validate_transfer_configuration().
  *
  * Per detailed design: "ENABLED_MEMORY_RANGE_BASE is greater than
  * ENABLED_MEMORY_RANGE_LIMIT. Sets base_limit_error. This indicates
@@ -2372,15 +2433,8 @@ bool secure_dma_model::validate_security_policy(uint64_t src_addr, uint64_t dst_
       (src_is_ot && dst_is_soc) || (src_is_soc && dst_is_ot);
 
   if (crosses_boundary) {
-    // Verify RANGE_VALID is set for cross-boundary transfers
-    uint32_t range_valid = static_cast<uint32_t>(RANGE_VALID) & 0x1;
-    if (range_valid == 0) {
-      m_error_code |= (1U << 6); // Set ERROR_CODE.range_valid_error (bit 6)
-      ERROR_CODE = m_error_code;
-
-      CSML_INFO(1, logger) << "Security policy violation - " << "RANGE_VALID not set for cross-boundary transfer " << src_region << " → " << dst_region << " (ERROR_CODE.range_valid_error set)" << std::endl;
-      return false;
-    }
+    // RANGE_VALID itself is checked unconditionally by the caller, so only the
+    // BASE <= LIMIT relationship is left to confirm here.
 
     // Validate range configuration (BASE ≤ LIMIT)
     if (!validate_range_configuration()) {
@@ -2485,7 +2539,7 @@ bool secure_dma_model::validate_security_policy(uint64_t src_addr, uint64_t dst_
  *
  * 3. State Machine Lifecycle Management:
  * - IDLE state: m_dma_busy=false, CFG_REGWEN=0x6, STATUS.busy=0
- * - BUSY state: m_dma_busy=true, CFG_REGWEN=0x0, STATUS.busy=1
+ * - BUSY state: m_dma_busy=true, CFG_REGWEN=0x9, STATUS.busy=1
  * - Transitions: IDLE→BUSY (go bit), BUSY→IDLE (abort or completion)
  *
  * 4. Configuration Validation Triggering:
@@ -2674,9 +2728,10 @@ bool secure_dma_model::execute_transfer() {
     advance_destination_address(m_current_dst_addr, m_chunk_start_dst_addr,
                                 chunk_size, width_bytes);
 
-    // Update address registers for software visibility
-    update_src_addr_registers(m_current_src_addr);
-    update_dst_addr_registers(m_current_dst_addr);
+    // The visible SRC_ADDR/DST_ADDR registers are deliberately not updated per
+    // transaction; hardware only rewrites them at a chunk boundary, and only
+    // for the fixed-address configuration. See
+    // apply_chunk_end_address_writeback().
 
     // -----------------------------------------------------------------------
     // BYTE COUNTING: Decrement counters
@@ -2729,6 +2784,9 @@ bool secure_dma_model::execute_transfer() {
 
       clear_chunk_done_on_next_chunk_start = true;
 
+      // Advance the visible address registers for the next chunk
+      apply_chunk_end_address_writeback(chunk_size);
+
       // Reload chunk byte counter for next chunk
       m_current_chunk_bytes_remaining =
           (chunk_size < m_bytes_remaining) ? chunk_size : m_bytes_remaining;
@@ -2772,6 +2830,10 @@ bool secure_dma_model::execute_transfer() {
   // -------------------------------------------------------------------------
 
   CSML_INFO(1, logger) << "All data transferred successfully - " << total_size << " bytes completed" << std::endl;
+
+  // The final return to idle is also an address-register update point in
+  // hardware, including when the transfer ends through SHA finalisation.
+  apply_chunk_end_address_writeback(chunk_size);
 
   // -------------------------------------------------------------------------
   // HASH FINALIZATION (if hashing active)
@@ -3306,6 +3368,34 @@ uint32_t secure_dma_model::byte_swap_32(uint32_t word) {
  * @note Returns true if clearing not enabled (no error, just not needed)
  * @note Uses blocking b_transport (LT TLM semantics)
  */
+/**
+ * @brief Latch a bus error and return the engine to idle
+ *
+ * Used by the handshake path, where a failed automatic interrupt-clearing
+ * write has to stop the transfer before any chunk data moves. Mirrors the
+ * halt the transaction loop performs when a data beat errors.
+ */
+void secure_dma_model::halt_transfer_on_bus_error() {
+  m_error_code |= (1U << 4); // ERROR_CODE.bus_error
+  ERROR_CODE = m_error_code;
+
+  uint32_t status_reg = static_cast<uint32_t>(STATUS);
+  status_reg |= (1U << 3); // STATUS.error
+  status_reg &= ~0x1U;     // STATUS.busy
+  STATUS = status_reg;
+
+  set_interrupt_state(false, false, true);
+
+  m_dma_busy = false;
+  m_dma_busy_next = false;
+
+  uint32_t control_reg = static_cast<uint32_t>(CONTROL);
+  control_reg &= ~(1U << 31); // CONTROL.go
+  CONTROL = control_reg;
+
+  CSML_INFO(1, logger) << "Transfer halted on bus error (ERROR_CODE.bus_error set)" << std::endl;
+}
+
 bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
 
   // Read CLEAR_INTR_SRC register to check if clearing enabled for this trigger

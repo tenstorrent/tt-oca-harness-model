@@ -154,11 +154,11 @@ public:
 
 /**
  * @class ERROR_FLAGS_type
- * @brief Error condition flags register (Offset: 0x18, Access: RO, Reset: 0x1)
+ * @brief Error condition flags register (Offset: 0x18, Access: RO, Reset: 0x0)
  *
- * Error condition flags (clear-on-read). Reset value 0x1 indicates initial
- * read_error flag set (empty condition). Reading this register clears all error
- * flags.
+ * Error condition flags (clear-on-read). Both flags reset to 0; a flag is
+ * raised only by an access that actually fails. Reading this register clears
+ * all error flags.
  */
 template <unsigned int N> class ERROR_FLAGS_type : public csml_reg<N> {
 public:
@@ -172,7 +172,7 @@ public:
    */
   ERROR_FLAGS_type(std::string reg_name, memory_type &memory,
                    unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x0000000000000003, 0x0, 0x1),
+      : csml_reg<N>(reg_name, memory, offset, 0x0000000000000003, 0x0, 0x0),
         read_error(reg_name + ".read_error", *this, 0, 1),
         write_error(reg_name + ".write_error", *this, 1, 1),
         reserved0(reg_name + ".reserved0", *this, 2, 62) {

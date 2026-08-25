@@ -71,7 +71,7 @@ public:
         RESERVED_LAST_32_OFFSET      = 0x3FC,
         // EFUSE_INTERFACE_CTRL
         EFUSE_INTF_STATUS_OFFSET     = 0x400,
-        EFUSE_WRITE_CTRL_OFFSET      = 0x404,
+        EFUSE_PROGRAM_CTRL_OFFSET      = 0x404,
         EFUSE_READ_CTRL_OFFSET       = 0x408,
         EFUSE_PROG_INTF_RD_DATA_OFFSET = 0x40C,
         EFUSE_READ_INTF_RD_DATA_OFFSET = 0x410,
@@ -85,10 +85,8 @@ public:
         RMA_SIP_TOKEN_MATCH_OFFSET     = 0x564,
         RMA_CHIPLET_TOKEN_MATCH_OFFSET = 0x568,
         SEC_DISABLE_TOKEN_MATCH_OFFSET = 0x56C,
-        // EFUSE_SHIM_CTRL — offsets into the shim window, not the one above
-        SHIM_STATUS_OFFSET             = 0x000,
-        SHIM_STATUS_1_OFFSET           = 0x004,
-        SHIM_TIMING_CTRL_OFFSET        = 0x008   ///< [15] × 4 bytes
+        // EFUSE_SHIM_CTRL — offset into the shim window, not the one above
+        EFUSE_BANK_INIT_TIME_OFFSET    = 0x000
     };
 
     enum Register_Read_Access
@@ -141,7 +139,7 @@ public:
         RESERVED_LAST_32_READ      = 0xffffffff,
         // INTERFACE_CTRL
         EFUSE_INTF_STATUS_READ     = 0xffffffff,
-        EFUSE_WRITE_CTRL_READ      = 0xffffffff,
+        EFUSE_PROGRAM_CTRL_READ      = 0xffffffff,
         EFUSE_READ_CTRL_READ       = 0xffffffff,
         EFUSE_PROG_INTF_RD_DATA_READ = 0xffffffff,
         EFUSE_READ_INTF_RD_DATA_READ = 0xffffffff,
@@ -207,7 +205,7 @@ public:
         RESERVED_LAST_32_WRITE      = 0x0,
         // INTERFACE_CTRL
         EFUSE_INTF_STATUS_WRITE     = 0x0,          // RO: efuse_sense_done always 1
-        EFUSE_WRITE_CTRL_WRITE      = 0xffffffff,
+        EFUSE_PROGRAM_CTRL_WRITE      = 0xffffffff,
         EFUSE_READ_CTRL_WRITE       = 0xffffffff,
         EFUSE_PROG_INTF_RD_DATA_WRITE = 0x0,        // hw=w
         EFUSE_READ_INTF_RD_DATA_WRITE = 0x0,        // hw=w
@@ -273,7 +271,7 @@ public:
         RESERVED_LAST_32_RESET      = 0x00000000,
         // INTERFACE_CTRL
         EFUSE_INTF_STATUS_RESET     = 0x00000001,  // efuse_sense_done=1
-        EFUSE_WRITE_CTRL_RESET      = 0x00000000,
+        EFUSE_PROGRAM_CTRL_RESET      = 0x00000000,
         EFUSE_READ_CTRL_RESET       = 0x00000000,
         EFUSE_PROG_INTF_RD_DATA_RESET = 0x00000000,
         EFUSE_READ_INTF_RD_DATA_RESET = 0x00000000,

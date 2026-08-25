@@ -1713,6 +1713,9 @@ void testbench::test_error_code_bit4_bus_error() {
     m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001); // increment
     uint32_t asid_val = (0x7 << 0) | (0x7 << 4);                            // OT for both
     m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, asid_val);
+    // Hardware requires RANGE_VALID for every transfer, not just
+    // cross-boundary ones.
+    m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
     wait(10, SC_NS);
   };
 
@@ -2202,6 +2205,9 @@ void testbench::test_error_recovery_sequence() {
   m_test->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET,      0x10000000);
   m_test->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET,      0x20000000);
   m_test->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET,    0x00000077); // OT->OT valid
+  // Committed up front so the only fault in step 1 is the size error, and so the
+  // step 3 retry is genuinely valid.
+  m_test->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET,      0x1);
   m_test->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET,  64);
   m_test->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET,  64);
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET,   0x00000003); // invalid -> size_error
