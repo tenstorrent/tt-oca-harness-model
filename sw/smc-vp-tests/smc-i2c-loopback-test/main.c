@@ -1,5 +1,6 @@
-/* SPDX-License-Identifier: Apache-2.0
+/* SPDX-License-Identifier: Apache-2.0 */
 /* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
+/*
  * sw/smc-vp-tests/smc-i2c-loopback-test/main.c
  *
  * I2C0 (controller) -> I2C1 (target) loopback over the SMC fabric.
