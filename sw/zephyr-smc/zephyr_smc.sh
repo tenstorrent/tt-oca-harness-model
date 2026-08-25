@@ -13,11 +13,9 @@ BOARD="${BOARD:-smc_vp}"
 die() { echo "error: $*" >&2; exit 1; }
 log() { echo "==> $*"; }
 
-# A cached .venv can look present (west is +x) while its shebang still
-# points at another checkout path — e.g. after a repo rename/port.
 venv_usable() {
-    local py="$HERE/.venv/bin/python"
-    [[ -x "$HERE/.venv/bin/west" && -x "$py" ]] && "$py" -c "import sys" >/dev/null 2>&1
+    local west="$HERE/.venv/bin/west"
+    [[ -x "$west" ]] && "$west" --version >/dev/null 2>&1
 }
 
 find_west() {
