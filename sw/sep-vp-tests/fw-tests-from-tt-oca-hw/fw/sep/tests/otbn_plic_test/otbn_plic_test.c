@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * OTBN Interrupt to PLIC Test (INT-002, P1)
  *

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 """Generate a small SPI-flash fixture image for the mux/flash-loader test.
 
 Layout (mirrors the dual-bank software layout the VP boots from):

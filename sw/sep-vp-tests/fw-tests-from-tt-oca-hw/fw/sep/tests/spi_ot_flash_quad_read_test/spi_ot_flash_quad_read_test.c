@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * SPI OT Flash Quad Fast Read Test - TC_SPIOT_024 (P1)
  *

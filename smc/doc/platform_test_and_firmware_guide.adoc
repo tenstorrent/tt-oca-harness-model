@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 = SMC Platform Test & Firmware Run Guide
 :toc:
 :toclevels: 4
@@ -62,8 +63,8 @@ build at the C++20 installs:
 
 [source,bash]
 ----
-export SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20
-export CCI_HOME=/Users/pdroy/local/cci-cxx20
+export SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20
+export CCI_HOME=/path/to/cci-cxx20
 ----
 
 If `SYSTEMC_HOME` / `CCI_HOME` are unset, `run_tests.sh` probes a few common
@@ -78,7 +79,7 @@ Boost.  Set both to auto-enable the cluster:
 
 [source,bash]
 ----
-export WHISPER_HOME=/Users/pdroy/tt_whisper/whisper   # Whisper *source* tree
+export WHISPER_HOME=/path/to/whisper   # Whisper *source* tree
 export BOOST_DIR=/opt/homebrew/opt/boost              # Boost install root
 ----
 

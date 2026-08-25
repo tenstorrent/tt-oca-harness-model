@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smc-vp-tests/smc-memory-zeroer-test/main.c
  *
  * memory_zeroer (AXI zeroer) integration test over the SMC fabric.

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Regenerate SMC Fabric PDF documents from their Markdown sources.
 #
 # Usage:  ./doc/build_docs.sh

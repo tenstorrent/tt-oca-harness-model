@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func014_test.cpp
  * @brief Test cases for FUNC-KMAC-014 (Software Mode Entropy Management)
@@ -15,9 +17,9 @@
  * - TC-106-Ext2: Activation after 6th write
  * - TC-106-Ext3: Post-activation write rejection
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md (Section 1.5.2 SW Mode)
+ * Test Plan Reference: kmac-test-plan.md
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md (Section 1.5.2 SW Mode)
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

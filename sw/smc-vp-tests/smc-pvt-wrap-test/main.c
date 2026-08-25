@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smc-vp-tests/smc-pvt-wrap-test/main.c
  *
  * Basic PVT wrapper register access test on the SMC platform.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file entropy_src_interface.h
  * @brief Abstract interface class for the entropy_src TLM model

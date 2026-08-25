@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file testbench.cpp
  * @brief Harness implementation and sc_main for the Adams Bridge tests.

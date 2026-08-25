@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "local_alias_remap_base.h"
 
 void local_alias_remap_base::reset_all_registers()

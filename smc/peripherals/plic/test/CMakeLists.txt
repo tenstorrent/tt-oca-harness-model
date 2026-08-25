@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(plic_tb plic_tb.cpp)
 target_link_libraries(plic_tb PRIVATE smc_plic SystemC::cci)
 target_compile_options(plic_tb PRIVATE -Wall -Wextra -Wpedantic

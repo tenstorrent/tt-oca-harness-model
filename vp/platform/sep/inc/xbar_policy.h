@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // vp/platform/sep/inc/xbar_policy.h
 //

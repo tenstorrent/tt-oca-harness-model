@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file adams_bridge.h
  * @brief Loosely-timed TLM-2.0 model of the Adams Bridge (ABR) PQC engine.

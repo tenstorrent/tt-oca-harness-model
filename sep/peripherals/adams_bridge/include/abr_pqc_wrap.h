@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file abr_pqc_wrap.h
  * @brief C wrappers around the vendored PQClean ML-DSA-87 / ML-KEM-1024 APIs.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // uart_tb.cpp -- self-checking test bench for the SMC UART 16550 (CCI-compliant).
 //

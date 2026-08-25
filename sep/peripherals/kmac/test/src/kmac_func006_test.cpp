@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func006_test.cpp
  * @brief Test cases for FUNC-KMAC-006 (KeyMgr Sideloaded Key Interface)
@@ -31,12 +33,12 @@
  * - sideload=0: Use KEY_SHARE0/KEY_SHARE1 registers (KEY_LEN controls length)
  * - sideload=1: Use KeyMgr sideloaded key (KEY_LEN ignored, len from KeyMgr)
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Test Case Mapping: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md (TC-068 to TC-070)
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md
- * Functionality: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality_list.md (FUNC-KMAC-006)
- * Model Implementation: /home/shravanr/Documents/tvastaavp/kmac/model/src/kmac.cpp (lines 924-1033)
+ * Test Plan Reference: kmac-test-plan.md
+ * Test Case Mapping: kmac-functionality-testcases.md (TC-068 to TC-070)
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md
+ * Functionality: kmac-functionality_list.md (FUNC-KMAC-006)
+ * Model Implementation: sep/peripherals/kmac/src/kmac.cpp (lines 924-1033)
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func015_test.cpp
  * @brief Test cases for FUNC-KMAC-015 (Idle Mode Entropy Management)
@@ -17,9 +19,9 @@
  * - TC-118: Blocking until entropy ready
  * - TC-119: Non-blocking operation
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md (Section 1.5.3 Idle Mode)
+ * Test Plan Reference: kmac-test-plan.md
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md (Section 1.5.3 Idle Mode)
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

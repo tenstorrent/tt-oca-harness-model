@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file pll_wrapper.cpp
  * @brief PLL wrapper composition + address decode (from pll_wrap.rdl).

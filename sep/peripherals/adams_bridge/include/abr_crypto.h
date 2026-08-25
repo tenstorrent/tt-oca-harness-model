@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file abr_crypto.h
  * @brief Pluggable cryptographic backend for the Adams Bridge model.

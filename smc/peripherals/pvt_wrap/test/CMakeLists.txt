@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # pvt_wrap test bench
 
 cmake_minimum_required(VERSION 3.16)

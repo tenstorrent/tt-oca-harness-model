@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_func011_test.cpp
  * @brief Full key lifecycle — load → transfer → revoke chained flows

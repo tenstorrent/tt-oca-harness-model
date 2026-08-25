@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smc-vp-tests/smc-octs-timer-secondary-test/main.c
  *
  * octs_system_timer SECONDARY-mode test over the SMC fabric.

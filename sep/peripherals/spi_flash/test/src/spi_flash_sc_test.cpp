@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file spi_flash_sc_test.cpp
  * @brief SystemC testbench for the spi_flash SC wrapper

@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * Port of tt-oca-hw fw/smc/tests/smc_sep_xbar + smu_bidirect (SEP_SMU_003).
  *
  * VP-adapted: CLA / fuse-sense / outbound-filter programming is RTL DV

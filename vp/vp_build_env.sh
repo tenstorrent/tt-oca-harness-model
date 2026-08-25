@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Derived paths from SYSTEMC_HOME, CCI_HOME, OPENSSL_ROOT, BOOST_ROOT.
 # Set those four in configure_vp.sh (or export them before sourcing).
 #

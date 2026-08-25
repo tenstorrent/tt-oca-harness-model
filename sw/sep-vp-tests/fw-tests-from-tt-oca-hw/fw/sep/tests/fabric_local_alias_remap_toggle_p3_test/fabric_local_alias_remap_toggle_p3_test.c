@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * TC_FABRIC_064: fabric_local_alias_remap_toggle_p3_test
  *

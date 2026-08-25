@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file mailbox_unit.h
  * @brief Multi-channel mailbox unit — model of axi_lite_mailbox_unit.sv

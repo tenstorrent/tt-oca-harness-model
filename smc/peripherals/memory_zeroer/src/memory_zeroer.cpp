@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file memory_zeroer.cpp
  * @brief Implementation of the SMC AXI memory-zeroer LT model.

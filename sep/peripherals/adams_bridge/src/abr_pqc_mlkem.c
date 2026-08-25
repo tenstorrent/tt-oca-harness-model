@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file abr_pqc_mlkem.c
  * @brief PQClean ML-KEM-1024 wrappers (derandomized keygen / encaps).

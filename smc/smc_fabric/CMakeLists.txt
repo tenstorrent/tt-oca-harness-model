@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # SMC Fabric — SystemC/TLM-2.0 LT model
 #
 # Builds a static library libsmc_fabric.a.

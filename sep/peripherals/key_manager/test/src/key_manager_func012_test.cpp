@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_func012_test.cpp
  * @brief Reset during operation — hardware reset clears all model state

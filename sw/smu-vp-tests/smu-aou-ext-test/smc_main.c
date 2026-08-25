@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * Port of tt-oca-hw fw/smc/tests/smu_sep_ext_axi (SEP_SMU_016).  Catch-all
  * address 0xA0001000 misses both xbar apertures and exits
  * smu_axi_xbar.ext_out through the local AOU (RTL: smu_axi_out -> AoU).

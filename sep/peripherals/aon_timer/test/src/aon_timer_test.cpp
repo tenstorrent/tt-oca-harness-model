@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file aon_timer_test.cpp
  * @brief AON Timer test class implementation - register read/write helper methods.

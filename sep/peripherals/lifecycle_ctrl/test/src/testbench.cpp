@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "lifecycle_ctrl_basetest.h"
 #include "csml_parameter.h"

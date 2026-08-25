@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /**
  * @file test_mailbox_func002.cpp
  * @brief FUNC-002: Register Callback Verification — Test Suite

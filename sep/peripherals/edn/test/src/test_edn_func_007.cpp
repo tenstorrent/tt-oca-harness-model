@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file test_edn_func_007.cpp
  * @brief EDN_FUNC_007 Test Suite Implementation

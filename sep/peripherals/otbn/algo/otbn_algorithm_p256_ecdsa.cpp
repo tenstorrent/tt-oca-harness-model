@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file otbn_algorithm_p256_ecdsa.cpp
  * @brief P256 ECDSA Signature Verification Algorithm Implementation

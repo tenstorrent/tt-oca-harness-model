@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file sep_filter_ctrl.h
  * @brief Generic SEP filter controller model — single class for both outbound and inbound.

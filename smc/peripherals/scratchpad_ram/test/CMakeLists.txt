@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # ---------------------------------------------------------------------------
 # scratchpad_ram_tb — primary self-checking bench: read-write semantics,
 # sub-word + byte-enable accesses, preload, reset retention, CCI, ECC scrub.

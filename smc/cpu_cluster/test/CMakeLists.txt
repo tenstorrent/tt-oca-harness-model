@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Self-checking test bench (same pattern as peripherals/plic/test).
 
 add_executable(cluster_tb cluster_tb.cpp)

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // cluster_tb.cpp -- self-checking test bench for the SMC CPU cluster.
 // Same convention as peripherals/plic/test/plic_tb.cpp: one binary, macro

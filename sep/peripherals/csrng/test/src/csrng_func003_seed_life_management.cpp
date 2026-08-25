@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
 /**
  * @file csrng_func003_seed_life_management.cpp
  * @brief Test implementation for CRNG_FUNC_003 - Seed Life Management and Reseeding

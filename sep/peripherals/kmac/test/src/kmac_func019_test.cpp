@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func019_test.cpp
  * @brief FUNC-KMAC-019: Error Detection and Reporting Test Implementation
@@ -45,8 +47,8 @@
  * - 0x09: SwHashingWithoutEntropyReady - KMAC with masking but entropy not ready
  * - 0x80: Sha3Control - Internal FSM control error (paired with 0x08)
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Functionality Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md
+ * Test Plan Reference: kmac-test-plan.md
+ * Functionality Reference: kmac-functionality-testcases.md
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

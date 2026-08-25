@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func018_test.cpp
  * @brief Test cases for FUNC-KMAC-018 (STATE Window Access Control)
@@ -23,9 +25,9 @@
  * - EnMasking=0: Single share at 0x400-0x4C7, share1 region reads as 0
  * - EnMasking=1: Two shares (share0 XOR share1 = digest), both regions valid
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md
+ * Test Plan Reference: kmac-test-plan.md
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

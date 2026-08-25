@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(octs_system_timer_tb octs_system_timer_tb.cpp)
 target_link_libraries(octs_system_timer_tb
     PRIVATE smc_octs_system_timer SystemC::cci)

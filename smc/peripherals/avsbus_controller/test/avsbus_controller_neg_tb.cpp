@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file avsbus_controller_neg_tb.cpp
  * @brief Negative-path / edge-case bench for the SMC AVSBus Controller model.

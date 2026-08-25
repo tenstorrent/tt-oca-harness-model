@@ -573,7 +573,7 @@ The workflow has five parallel jobs (all run on `ubuntu-22.04`):
 in parallel.
 
 > **Note:** The `smc/cpu_cluster` tests are **not** run in CI because they require
-> the Tenstorrent-internal Whisper ISS (`WHISPER_HOME`). Run them locally once
+> the Whisper ISS (https://github.com/tenstorrent/whisper) (`WHISPER_HOME`). Run them locally once
 > `WHISPER_HOME` is set.
 
 ### 10.2 Dependency Caching

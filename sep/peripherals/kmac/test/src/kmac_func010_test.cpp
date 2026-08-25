@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func010_test.cpp
  * @brief Test cases for FUNC-KMAC-010 (Message FIFO and Packer)
@@ -19,10 +21,10 @@
  * - SwPushedMsgFifo error (0x02) for invalid write timing
  * - Register callback behavior (handle_write_MSG_FIFO)
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Functionality Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md
+ * Test Plan Reference: kmac-test-plan.md
+ * Functionality Reference: kmac-functionality-testcases.md
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
 /**
  * @file csrng_func002_pseudorandom_generation.cpp
  * @brief Test implementation for CRNG_FUNC_002 - Pseudorandom Bit Generation

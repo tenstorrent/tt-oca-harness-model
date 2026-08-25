@@ -3,6 +3,7 @@
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
+// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
  *
  * CRNG Test Component - Enhanced Version
  * Comprehensive test infrastructure with register access and port management

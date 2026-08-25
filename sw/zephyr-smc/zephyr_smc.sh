@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Setup / build / run Zephyr on the SMC virtual platform.
 # See doc/zephyr-on-smc.adoc.
 set -euo pipefail

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 
 /// FUNC-009: Command Queue Depth (CMDQD) Testing

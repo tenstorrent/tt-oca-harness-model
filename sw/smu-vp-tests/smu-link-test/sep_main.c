@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smu-vp-tests/smu-link-test/sep_main.c
  *
  * SEP side of the SMU on-die link test (runs on smu-vp).

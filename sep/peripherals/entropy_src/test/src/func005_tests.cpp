@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file func005_tests.cpp
  * @brief FUNC-005 Health Test Subsystem Behavior — test case implementations

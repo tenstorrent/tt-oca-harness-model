@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # FindCCI.cmake
 # -------------
 # Locate CCI (Configuration, Control and Inspection) library and headers

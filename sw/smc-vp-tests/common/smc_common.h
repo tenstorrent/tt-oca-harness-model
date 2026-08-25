@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smc-vp-tests/common/smc_common.h
  *
  * SMC platform peripheral base addresses (local alias aperture

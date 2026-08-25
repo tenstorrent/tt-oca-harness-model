@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # sw/smu-vp-tests/run_smu_vp_tests.sh
 #
 # Build and run the SMU platform tests on smu-vp (SMC + SEP integrated over

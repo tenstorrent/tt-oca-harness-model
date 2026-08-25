@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file otbn_algorithm_otbn_loop.cpp
  * @brief OTBN Loop/Loopi Example Algorithm Implementation

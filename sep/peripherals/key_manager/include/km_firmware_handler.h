@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file km_firmware_handler.h
  * @brief Key Manager TT — Firmware handler (KM CPU abstraction).

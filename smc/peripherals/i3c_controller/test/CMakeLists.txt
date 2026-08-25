@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # ---------------------------------------------------------------------------
 # i3c_controller_tb -- primary self-checking bench: register access (reset
 # values, RW/RO/W1C semantics), multi-instance address decode, DAT/DCT

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Pin OpenSSL to OPENSSL_ROOT_DIR / ENV{OPENSSL_ROOT}.
 # On macOS, find_package(OpenSSL) often picks Homebrew via pkg-config instead.
 #

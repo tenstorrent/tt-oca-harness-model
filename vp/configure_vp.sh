@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Configure and run CMake for the SEP Virtual Platform.
 #
 #   source ./configure_vp.sh              # export env only

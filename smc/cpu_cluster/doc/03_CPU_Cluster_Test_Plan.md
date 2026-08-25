@@ -164,11 +164,11 @@ A failing test is a hard error — no retries, no flaky regression flags.
 | Optional              | `gcovr` for §A.4 coverage; `ctest` via `run_tests.sh --ctest` |
 
 Reproducible commands:
-/home/rmalhotra/.cursor/plans/whisper_cpu_cluster_55f098d3.plan.md
+
 ```bash
-export SYSTEMC_HOME=/localdev/rmalhotra/systemc-2.3.4
-export WHISPER_HOME=/localdev/rmalhotra/whisper/whisper
-export BOOST_DIR=/localdev/ctr-mharshavardhana/library/boost-1.84.0
+export SYSTEMC_HOME=/path/to/systemc
+export WHISPER_HOME=/path/to/whisper
+export BOOST_DIR=/path/to/boost
 
 cmake -S cpu_cluster -B cpu_cluster/build -DCMAKE_BUILD_TYPE=Release
 cmake --build cpu_cluster/build -j

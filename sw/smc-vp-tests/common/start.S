@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smc-vp-tests/common/start.S
  *
  * Bare-metal RV64 startup for smc-vp firmware tests.  Linked at 0x80000000

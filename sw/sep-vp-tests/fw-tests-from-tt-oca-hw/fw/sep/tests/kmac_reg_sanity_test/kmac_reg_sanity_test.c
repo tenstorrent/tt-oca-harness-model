@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * TC_KMAC_001 (P0) - KMAC Register Defaults and Read/Write Sanity Test
  *

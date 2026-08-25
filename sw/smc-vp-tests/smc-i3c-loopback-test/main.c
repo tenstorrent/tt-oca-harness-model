@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smc-vp-tests/smc-i3c-loopback-test/main.c
  *
  * I3C0 controller -> echo target over the SMC fabric.

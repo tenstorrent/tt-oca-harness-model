@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * SPI OT Flash Sector Erase Test - TC_SPIOT_022 (P1)
  *

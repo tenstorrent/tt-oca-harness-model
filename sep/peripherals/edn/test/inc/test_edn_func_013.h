@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file test_edn_func_013.h
  * @brief EDN_FUNC_013 Test Suite - Auto Request Mode Operation

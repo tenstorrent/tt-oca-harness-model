@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "sep_reset_ctrl_basetest.h"
 
 sep_reset_ctrl_basetest::Register_Property_t reg_map[1] = {

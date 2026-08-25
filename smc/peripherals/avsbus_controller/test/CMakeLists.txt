@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # ---------------------------------------------------------------------------
 # avsbus_controller_tb -- primary self-checking bench
 # ---------------------------------------------------------------------------

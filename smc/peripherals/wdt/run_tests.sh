@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build (if needed) and run the SMC WDT SystemC test bench.
 #
 # Usage:
@@ -116,7 +118,7 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -z "${CCI_HOME:-}" ]]; then
     for _candidate in \
-        /Users/pdroy/cci \
+        "${HOME}/cci" \
         /usr/local/cci \
         /opt/homebrew/opt/systemc-cci
     do

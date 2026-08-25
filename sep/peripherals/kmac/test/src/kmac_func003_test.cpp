@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file kmac_func003_test.cpp
  * @brief Test cases for FUNC-KMAC-003 (cSHAKE Customizable Hash Function)
@@ -39,11 +41,11 @@
  * - RUN (0x31): Remain in SQUEEZE, generate next output block
  * - DONE (0x16): SQUEEZE → IDLE
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Test Case Mapping: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md (TC-038 to TC-044)
- * Architecture Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-architecture-behaviour-map.json
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md
- * Functionality: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality_list.md (FUNC-KMAC-003)
+ * Test Plan Reference: kmac-test-plan.md
+ * Test Case Mapping: kmac-functionality-testcases.md (TC-038 to TC-044)
+ * Architecture Reference: kmac-architecture-behaviour-map.json
+ * Detailed Design: kmac-detailed-design.md
+ * Functionality: kmac-functionality_list.md (FUNC-KMAC-003)
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/

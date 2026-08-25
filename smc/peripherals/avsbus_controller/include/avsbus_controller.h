@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file avsbus_controller.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the SMC AVSBus Controller.

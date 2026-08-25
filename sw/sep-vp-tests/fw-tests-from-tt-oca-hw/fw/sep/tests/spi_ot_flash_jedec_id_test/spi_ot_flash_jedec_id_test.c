@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * SPI OT Flash JEDEC ID Test - TC_SPIOT_019 (P1)
  *

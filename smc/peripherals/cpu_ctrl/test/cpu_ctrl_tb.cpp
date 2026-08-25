@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // cpu_ctrl_tb.cpp -- self-checking test bench for SMC CPU Control (LT + CCI).
 

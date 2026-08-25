@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func008_tests.cpp
  * @brief Basic Register Access Tests for New Registers added from RDL Update

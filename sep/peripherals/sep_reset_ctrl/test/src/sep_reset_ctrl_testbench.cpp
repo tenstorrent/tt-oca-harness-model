@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file sep_reset_ctrl_testbench.cpp
  * @brief Comprehensive testbench for SEP Reset Controller

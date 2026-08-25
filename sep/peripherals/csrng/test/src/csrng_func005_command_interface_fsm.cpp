@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
 /**
  * @file csrng_func005_command_interface_fsm.cpp
  * @brief Test implementation for CRNG_FUNC_005 - Command Interface and FSM

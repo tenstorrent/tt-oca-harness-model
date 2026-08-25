@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file test_dma_func_010.cpp
  * @brief FUNC-010: Inline SHA-2 Hash Computation test implementation

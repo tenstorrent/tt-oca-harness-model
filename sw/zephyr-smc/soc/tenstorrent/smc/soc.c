@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
 #include <zephyr/kernel.h>
 
 void sys_arch_reboot(int type)

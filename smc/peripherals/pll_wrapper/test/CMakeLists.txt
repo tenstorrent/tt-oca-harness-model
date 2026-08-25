@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(pll_wrapper_tb pll_wrapper_tb.cpp)
 target_link_libraries(pll_wrapper_tb PRIVATE smc_pll_wrapper SystemC::cci)
 target_compile_options(pll_wrapper_tb PRIVATE -Wall -Wextra -Wpedantic

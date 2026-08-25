@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Record which PeakRDL-regblock produced the RTL; the generator is installed from
 # an unpinned git fork (@main), so its emitted syntax drifts between regenerations.
 PEAKRDL_REGBLOCK_VERSION=$(python3 -c "from importlib.metadata import version; print(version('peakrdl-regblock'))" 2>/dev/null || echo "unknown")

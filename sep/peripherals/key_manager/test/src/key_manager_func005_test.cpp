@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_func005_test.cpp
  * @brief Command surface — retired commands are rejected, new ones respond

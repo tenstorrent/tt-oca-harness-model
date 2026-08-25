@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * SEP_SMU_003  smc_sep_xbar  --  shared protocol contract (single source of truth).
  *

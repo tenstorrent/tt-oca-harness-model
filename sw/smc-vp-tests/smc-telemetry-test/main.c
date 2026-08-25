@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * sw/smc-vp-tests/smc-telemetry-test/main.c
  *
  * Telemetry receiver platform smoke test — register map + optional ATB inject.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_func007_test.cpp
  * @brief CMD_KEY_GENERATE — KM-internal key provisioning from the DRBG

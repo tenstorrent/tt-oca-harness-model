@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * SEP half of the SEP->SMC mailbox interrupt test.
  *
  * Waits for the SMC to arm channel 0's inbound side, pushes a payload into the

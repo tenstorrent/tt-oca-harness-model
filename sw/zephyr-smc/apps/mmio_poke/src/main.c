@@ -1,5 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  *
  * Reachability poke of SMC peripherals that have no Zephyr driver (so they
  * do not appear in `device list`).  Uses the same MMIO map as

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file el2_pic_register.h
  * @brief Register type definitions for the VeeR EL2 PIC peripheral.

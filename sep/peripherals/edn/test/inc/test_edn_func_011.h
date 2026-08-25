@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file test_edn_func_011.h
  * @brief EDN_FUNC_011 Test Suite - FIPS Compliance Status Propagation Verification

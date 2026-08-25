@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // i3c_controller_tb.cpp -- self-checking test bench for the OCA I3C Controller
 // SystemC/TLM-2.0 LT model (CCI-compliant).

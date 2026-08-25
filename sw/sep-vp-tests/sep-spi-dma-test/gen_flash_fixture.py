@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 """Generate the SPI-flash fixture for the SPI -> secure-DMA streaming integration test.
 
 The image is a simple position-dependent oracle:

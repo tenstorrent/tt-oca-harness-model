@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * Tenstorrent CONFIDENTIAL
  * Copyright (c) 2024-2026 Tenstorrent Inc. All Rights Reserved.

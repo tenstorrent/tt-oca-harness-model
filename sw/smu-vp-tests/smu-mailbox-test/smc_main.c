@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+/* SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc. */
  * SMC half of the SEP->SMC mailbox interrupt test.
  *
  * Covers the path RTL builds as

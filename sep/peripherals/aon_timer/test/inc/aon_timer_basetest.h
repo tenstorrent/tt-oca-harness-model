@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file aon_timer_basetest.h
  * @brief AON Timer base test class providing register map constants and TLM infrastructure.

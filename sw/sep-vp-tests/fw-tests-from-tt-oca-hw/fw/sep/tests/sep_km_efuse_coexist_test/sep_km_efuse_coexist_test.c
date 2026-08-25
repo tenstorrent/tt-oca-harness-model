@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*******************************************************************************
  * SEP eFuse KM/EL2 mux coexistence firmware (eFuse Suite 10.3).
  *

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /*
  * TC_HMAC_010 (P1) - Hash stop/continue for multi-part hashing
  *

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # ---------------------------------------------------------------------------
 # telemetry_receiver_tb -- primary self-checking bench: reset values, register
 # RW/RO/masking semantics, ATB beat assembly and message decode (hand-built

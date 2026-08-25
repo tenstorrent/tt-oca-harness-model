@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build-only check for the sep_memory model.
 # No standalone unit tests exist; functional testing is done at VP level.
 #

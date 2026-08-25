@@ -13,17 +13,17 @@ symbol.
 
 ## Reference toolchain (C++20)
 
-- SystemC: `/Users/pdroy/local/systemc-3.0.2-cxx20`
-- CCI:     `/Users/pdroy/local/cci-cxx20`
+- SystemC: `/path/to/systemc-3.0.2-cxx20`
+- CCI:     `/path/to/cci-cxx20`
 
 ## When configuring CMake / running tests
 
 Force C++20 and point at the C++20 installs:
 
 ```bash
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
-cmake -S . -B build -DSMC_CXX_STANDARD=20 -DCCI_HOME=/Users/pdroy/local/cci-cxx20
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
+cmake -S . -B build -DSMC_CXX_STANDARD=20 -DCCI_HOME=/path/to/cci-cxx20
 ```
 
 The `smc/cmake/SmcSystemCStd.cmake` helper auto-detects the standard from the

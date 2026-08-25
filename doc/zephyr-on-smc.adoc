@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 = Porting and Booting Zephyr RTOS on the SMC Virtual Platform
 :toc:
 :toclevels: 4
@@ -123,9 +124,9 @@ Canonical env vars on this machine (override to match your install):
 
 [source,bash]
 ----
-export SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20
-export CCI_HOME=/Users/pdroy/local/cci-cxx20
-export WHISPER_HOME=/Users/pdroy/tt_whisper/whisper
+export SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20
+export CCI_HOME=/path/to/cci-cxx20
+export WHISPER_HOME=/path/to/whisper
 export BOOST_DIR=/opt/homebrew/opt/boost
 export RISCV_PREFIX=riscv64-elf-          # or riscv64-unknown-elf-
 ----

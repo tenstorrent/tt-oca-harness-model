@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /**
  * @file test_mailbox_func006.cpp
  * @brief FUNC-006: Programmable Threshold-Based Interrupt System — Test Suite

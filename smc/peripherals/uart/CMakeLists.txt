@@ -1,10 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # SMC UART 16550 -- SystemC/TLM-2.0 LT model with SystemC CCI support.
 #
 # Builds a static library libsmc_uart.a plus a self-checking test bench.
 # Mirrors the build conventions of peripherals/plic.
 #
 # CCI support: set CCI_HOME or the environment variable CCI_HOME to point
-# at an Accellera SystemC CCI installation (default: /Users/pdroy/cci).
+# at an Accellera SystemC CCI installation (default: /usr/local/cci).
 
 cmake_minimum_required(VERSION 3.16)
 project(smc_uart CXX)
@@ -81,7 +83,7 @@ if(DEFINED ENV{CCI_HOME})
     set(CCI_HOME "$ENV{CCI_HOME}" CACHE PATH "Path to SystemC CCI installation")
 endif()
 if(NOT DEFINED CCI_HOME)
-    set(CCI_HOME "/Users/pdroy/cci" CACHE PATH "Path to SystemC CCI installation")
+    set(CCI_HOME "/usr/local/cci" CACHE PATH "Path to SystemC CCI installation")
 endif()
 message(STATUS "Using CCI from CCI_HOME=${CCI_HOME}")
 if(NOT EXISTS "${CCI_HOME}/include/cci_configuration")

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file octs_system_timer_tb.cpp
  * @brief Self-checking unit testbench for the OCTS System Timer model.

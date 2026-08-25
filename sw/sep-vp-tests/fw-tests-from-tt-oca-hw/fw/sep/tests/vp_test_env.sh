@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # =============================================================================
 # vp_test_env.sh — shared environment discovery for run_test.sh / run_all_tests.sh
 #

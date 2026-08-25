@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file wdt.cpp
  * @brief SMC SiFive TLWDT — SystemC/TLM-2.0 LT implementation (stage 1).

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(dma_tb dma_tb.cpp)
 target_link_libraries(dma_tb PRIVATE smc_dma SystemC::cci)
 target_compile_options(dma_tb PRIVATE -Wall -Wextra -Wpedantic

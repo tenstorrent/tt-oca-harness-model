@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
 /******************************************************************************
  * @file func002_tests.cpp
  * @brief FUNC-002 Interrupt Controller Behavior — test case implementations

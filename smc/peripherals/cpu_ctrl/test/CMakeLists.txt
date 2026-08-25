@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(cpu_ctrl_tb cpu_ctrl_tb.cpp)
 target_link_libraries(cpu_ctrl_tb PRIVATE smc_cpu_ctrl SystemC::cci)
 target_compile_options(cpu_ctrl_tb PRIVATE -Wall -Wextra -Wpedantic

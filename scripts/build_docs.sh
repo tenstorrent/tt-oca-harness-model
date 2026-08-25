@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Convert one or more Markdown files to PDF at any location in the repo.
 #
 # Pipeline: pandoc (Markdown -> standalone HTML5 with embedded CSS)
