@@ -76,24 +76,55 @@ vp_select_std_prefixes
 # Helpers
 # ---------------------------------------------------------------------------
 
-# find_prefix VARNAME "label" "probe-relative-path" candidate...
+# Adequacy checks (beyond probe-file existence) -------------------------------
+# A prefix that merely *has* the probe file may still be too old to compile the
+# VP; these filters reject such prefixes at configure time so the failure is a
+# clear message here instead of a cryptic compile error much later.
+
+# Always-adequate (SystemC/CCI: the probe file is the whole contract).
+vp_ok_true() { return 0; }
+
+# Boost: under C++20, >= VP_BOOST_MIN (default 107400 = 1.74.0) is required —
+# e.g. RHEL 8's 1.66 fails at compile time (std::allocator::allocate(n, hint)
+# was removed in C++20). C++17 builds keep the old accept-anything behavior.
+vp_boost_ok() {
+  [[ "${CMAKE_CXX_STANDARD}" == "20" ]] || return 0
+  local v
+  v=$(sed -n 's/^#define BOOST_VERSION \([0-9][0-9]*\)$/\1/p' \
+      "$1/include/boost/version.hpp" 2>/dev/null)
+  [[ -n "${v}" && "${v}" -ge "${VP_BOOST_MIN:-107400}" ]]
+}
+
+# OpenSSL: hmac/kmac need the 3.x EVP_MAC API (openssl/core_names.h).
+vp_openssl_ok() { [[ -e "$1/include/openssl/core_names.h" ]]; }
+
+# find_prefix VARNAME "label" "probe-relative-path" checkfn "requirement" candidate...
+#   checkfn PREFIX must return 0 when the prefix is adequate; "requirement" is
+#   the human-readable adequacy rule shown when a prefix is rejected.
 find_prefix() {
-  local varname="$1" label="$2" probe="$3"; shift 3
+  local varname="$1" label="$2" probe="$3" checkfn="$4" requirement="$5"; shift 5
   local current="${!varname:-}"
 
   if [[ -n "${current}" ]]; then
-    if [[ -e "${current}/${probe}" ]]; then
-      printf '  %-18s = %s  (from environment)\n' "${varname}" "${current}"
-      return 0
-    else
+    if [[ ! -e "${current}/${probe}" ]]; then
       printf 'warning: %s="%s" set but "%s" not found there — probing anyway\n' \
         "${varname}" "${current}" "${probe}" >&2
+    elif ! "${checkfn}" "${current}"; then
+      printf 'warning: %s="%s" is inadequate (%s) — probing anyway\n' \
+        "${varname}" "${current}" "${requirement}" >&2
+    else
+      printf '  %-18s = %s  (from environment)\n' "${varname}" "${current}"
+      return 0
     fi
   fi
 
   local candidate
   for candidate in "$@"; do
     if [[ -e "${candidate}/${probe}" ]]; then
+      if ! "${checkfn}" "${candidate}"; then
+        printf '  %-18s : skipping %s (%s)\n' "${varname}" "${candidate}" "${requirement}"
+        continue
+      fi
       printf -v "${varname}" '%s' "${candidate}"
       printf '  %-18s = %s  (auto-discovered)\n' "${varname}" "${candidate}"
       return 0
@@ -103,6 +134,7 @@ find_prefix() {
   echo "" >&2
   echo "error: cannot find ${label}." >&2
   printf '  Probe file : %s\n' "${probe}" >&2
+  [[ -n "${requirement}" ]] && printf '  Requires   : %s\n' "${requirement}" >&2
   printf '  Searched   :\n' >&2
   for candidate in "$@"; do printf '    %s\n' "${candidate}"; done >&2
   echo "" >&2
@@ -117,7 +149,7 @@ if [[ -z "${VP_CONFIGURE_QUIET:-}" ]]; then
   echo "Discovering dependencies..."
 fi
 
-find_prefix SYSTEMC_HOME "SystemC" "include/systemc.h" \
+find_prefix SYSTEMC_HOME "SystemC" "include/systemc.h" vp_ok_true "" \
   "${HOME}/local/systemc-3.0.2-cxx20" \
   "${HOME}/local/systemc-3.0.2-cxx17" \
   "${HOME}/local/systemc-3.0.2" \
@@ -141,7 +173,7 @@ find_prefix SYSTEMC_HOME "SystemC" "include/systemc.h" \
   /usr/local/opt/libsystemc \
   /opt/local/libexec/systemc
 
-find_prefix CCI_HOME "CCI" "include/cci_configuration" \
+find_prefix CCI_HOME "CCI" "include/cci_configuration" vp_ok_true "" \
   "${HOME}/local/cci-cxx20" \
   "${HOME}/local/cci-1.0.2" \
   "${HOME}/local/cci-1.0.1" \
@@ -159,7 +191,8 @@ find_prefix CCI_HOME "CCI" "include/cci_configuration" \
   /usr/local/opt/systemc-cci \
   /opt/local/libexec/cci
 
-find_prefix BOOST_ROOT "Boost" "include/boost/version.hpp" \
+find_prefix BOOST_ROOT "Boost" "include/boost/version.hpp" vp_boost_ok \
+  "Boost >= 1.74 for C++20 builds (BOOST_VERSION >= ${VP_BOOST_MIN:-107400})" \
   /usr \
   /usr/local \
   "${HOME}/local/boost" \
@@ -168,7 +201,8 @@ find_prefix BOOST_ROOT "Boost" "include/boost/version.hpp" \
   /usr/local/opt/boost \
   /opt/local
 
-find_prefix OPENSSL_ROOT "OpenSSL" "include/openssl/ssl.h" \
+find_prefix OPENSSL_ROOT "OpenSSL" "include/openssl/ssl.h" vp_openssl_ok \
+  "OpenSSL >= 3.0 (openssl/core_names.h present; hmac/kmac use the EVP_MAC API)" \
   "${HOME}/local/openssl-3.3.2" \
   "${HOME}/local/openssl-3.3" \
   "${HOME}/local/openssl-3.0" \
@@ -238,7 +272,10 @@ unset _vp_configure_sourced
 # ---------------------------------------------------------------------------
 # Run CMake
 # ---------------------------------------------------------------------------
-BUILD_DIR="${VP_DIR}/build"
+# Overridable so callers can keep separate build trees per environment
+# (e.g. host vs container builds; vp/.gitignore already anticipates
+# build_17/build_20/build_smc siblings).
+BUILD_DIR="${BUILD_DIR:-${VP_DIR}/build}"
 CMAKE_ARGS=(
   -S "${VP_DIR}" -B "${BUILD_DIR}"
   -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}"
