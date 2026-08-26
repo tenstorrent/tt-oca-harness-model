@@ -7,7 +7,8 @@
 `hmac_ip` is a loosely-timed TLM-2.0 model. Timing is wait-on-`clk_i`
 cycle counts, not a cycle-accurate SHA-2 datapath. The register file
 lives in `hmac_base` so a map change lands in one header. Hash and HMAC
-work is OpenSSL EVP, not an inlined compression function.
+work runs on `sha2_engine`, an in-model SHA-2 core; see
+<<hmac-sha2-core>> for why it is not OpenSSL EVP.
 
 [source,cpp]
 ----
@@ -18,6 +19,7 @@ class hmac_ip : public hmac_base
 hmac_ip          engine threads, interrupts, KM sideload   (hmac.*)
   └─ hmac_base   csml_memory + software-visible words      (hmac_base.*)
        └─ hmac_register.h   RO/WO/RW types
+sha2_engine      SHA-256/384/512 core, loadable state      (sha2_engine.*)
 hmac_interface.h   unused abstract `hmac_if` (ports are native sc_in/sc_out)
 ----
 
@@ -55,12 +57,22 @@ registers recompute the pins.
                                  └► digest_computation_thread
                                            │
                                            ▼
-                                    OpenSSL EVP / HMAC
+                                 sha2_engine (+ ipad/opad)
                                            │
   keymgr_tl_socket ──► XOR reconstruct ──► key_storage
                                            │
                       interrupt_update ──► intr_hmac_*
 ----
+
+[[hmac-sha2-core]]
+====== Why the SHA-2 core is in-model
+
+`hash_continue` loads an arbitrary chaining state, which OpenSSL's
+supported interface does not allow: EVP exposes no digest mid-state, and
+`SHA256_CTX` / `SHA512_CTX` are deprecated in 3.x. `sha2_engine`
+therefore holds the chaining variables and bit count as first-class
+state, as the hardware does. HMAC layers ipad/opad on the same core.
+OpenSSL remains the reference the digests are checked against.
 
 ====== CCI parameters
 
@@ -75,7 +87,8 @@ constants, scaled by `clk_i`.
 
 ====== Modeling gaps versus RTL
 
-* No cycle-accurate SHA-2 rounds.
+* No cycle-accurate SHA-2 rounds; `sha2_engine` computes a whole block at
+  a time and the cost is charged as a `clk_i` delay.
 * FIFO depth is a software-visible counter, not a hardware RAM model.
 * `hmac_if` is not the bound port set; `sep-vp` uses the native pins.
 * No EDN / `entropy_src` ports.

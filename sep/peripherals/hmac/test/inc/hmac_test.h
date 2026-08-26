@@ -61,6 +61,11 @@ public:
    void assert_equal(uint32_t expected, uint32_t actual, const char* message);
    void assert_not_equal(uint32_t write_value, uint32_t read_value, const char* message);
 
+   // Assertion failures seen so far. These stop the simulation, which means the
+   // testbench's own per-test counter never gets a chance to record them, so
+   // sc_main has to consult this separately to return a non-zero exit code.
+   uint32_t m_assert_failures = 0;
+
    // Logger instance for structured logging
    CsmlLogger logger;
 

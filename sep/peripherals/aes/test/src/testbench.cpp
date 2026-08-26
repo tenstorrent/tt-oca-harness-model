@@ -376,6 +376,20 @@ void testbench::run_tests()
     test_alert_cleared_by_successful_write();
     test_multiple_consecutive_mismatches();
     test_shadowed_write_rejected_when_busy();
+    test_ctrl_shadowed_per_field_update_error();
+    test_ctrl_aux_shadowed_per_field_update_error();
+    test_ctrl_shadowed_sanitised_readback();
+
+    // Galois/Counter Mode
+    CSML_INFO(1, logger) << "\n========================================"
+                         << "Galois/Counter Mode"
+                         << "========================================" << std::endl;
+
+    test_gcm_ctrl_reset_and_sanitisation();
+    test_gcm_phase_transition_gating();
+    test_gcm_encrypt_nist_case4();
+    test_gcm_decrypt_nist_case4();
+    test_gcm_save_restore();
 
     // Run FUNC-AES-007 tests (Register Interface Tests for Security Features)
     CSML_INFO(1, logger) << "\n========================================"

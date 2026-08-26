@@ -49,6 +49,9 @@ void testbench::test_read_write_registers()
     CSML_INFO(1, logger) << "INTR_TEST is write-only, read returns 0x" << std::hex << read_val << std::dec << std::endl;
 
     // Test 3: CFG register (RW - read/write mask = 0x7fff)
+    // Reads return the sanitised digest_size and key_length rather than the raw
+    // written value, so 0x5A5A (key_length=0x2D, unsupported) reads back as
+    // 0x405A with key_length forced to Key_None.
     CSML_INFO(1, logger) << "\n--- Test 1.3: CFG register (offset 0x10) ---" << std::endl;
     write_val = 0x00005A5A;  // Write pattern within writable bits
     read_val = 0;
@@ -62,7 +65,8 @@ void testbench::test_read_write_registers()
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
 
-    test->assert_equal(write_val, read_val, "CFG read-write test");
+    test->assert_equal(expected_cfg_readback(write_val), read_val,
+                       "CFG read-write test (key_length sanitised to Key_None)");
 
     // DIGEST and MSG_LENGTH are only writable when the engine is IDLE; run these
     // before the CMD hash_start test which transitions to PROCESSING.
@@ -783,6 +787,8 @@ void testbench::test_readwrite_registers()
 
     // Test CFG register (RW)
     CSML_INFO(1, logger) << "\n--- Test 4.3: CFG Register (RW) ---" << std::endl;
+    // 0x5A5A carries key_length=0x2D, which is not a supported encoding, so it
+    // reads back as Key_None. digest_size=0x2 (SHA2_384) is legal and survives.
     write_val = 0x00005A5A;
     CSML_INFO(1, logger) << "Writing 0x" << std::hex << write_val << std::dec << " to CFG..." << std::endl;
     test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
@@ -790,7 +796,8 @@ void testbench::test_readwrite_registers()
 
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG read-write");
+    test->assert_equal(expected_cfg_readback(write_val), read_val,
+                       "CFG read-write (key_length sanitised to Key_None)");
 
     // Test DIGEST_0 register (RW)
     CSML_INFO(1, logger) << "\n--- Test 4.4: DIGEST_0 Register (RW) ---" << std::endl;

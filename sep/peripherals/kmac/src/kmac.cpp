@@ -115,9 +115,15 @@ kmac_ip::kmac_ip(sc_module_name n,
       verbosity("verbosity", CSML_DEFAULT_VERBOSITY),
       keymgr_tl_socket("keymgr_tl_socket"),
       app_export(nullptr), idle_o("idle_o"),
+      intr_kmac_done("intr_kmac_done"), intr_fifo_empty("intr_fifo_empty"),
+      intr_kmac_err("intr_kmac_err"),
+      alert_recov_operation_err("alert_recov_operation_err"),
+      alert_fatal_fault("alert_fatal_fault"),
       lc_escalate_en_i("lc_escalate_en_i"), rst_ni("rst_ni"), clk_i("clk_i"),
       NumAppIntf(num_app_intf), EnMasking(en_masking),
       fsm_state(KmacState::IDLE), idle_update_event("idle_update_event"),
+      alert_update_event("alert_update_event"), fifo_full_seen(false),
+      process_issued(false),
       status_update_event("status_update_event"), evp_md_ctx(nullptr),
       evp_mac(nullptr), evp_mac_ctx(nullptr), packer_position(0), fifo_depth(0),
       max_fifo_depth(10), digest_size(0), xof_output_offset(0),
@@ -126,7 +132,10 @@ kmac_ip::kmac_ip(sc_module_name n,
       app_operation_done(false), app_operation_error(false),
       sw_seed_write_count(0), entropy_sw_mode_ready(false),
       logger(),  // logger declared after app_handlers in class, so initialize after
-      m_qk() // FUNC-KMAC-024: Initialize quantum keeper for temporal decoupling
+      m_qk(), // FUNC-KMAC-024: Initialize quantum keeper for temporal decoupling
+      m_shadow_pending(false), m_shadow_pending_value(0),
+      m_threshold_shadow_pending(false), m_threshold_shadow_pending_value(0),
+      m_auto_reseed_count(0)
 {
   // FUNC-KMAC-024: Reset quantum keeper and set to default global quantum
   m_qk.reset();
@@ -187,6 +196,11 @@ kmac_ip::kmac_ip(sc_module_name n,
 
   // Initialize output ports to default values
   idle_o.initialize(true); // Start in IDLE state
+  intr_kmac_done.initialize(false);
+  intr_fifo_empty.initialize(false);
+  intr_kmac_err.initialize(false);
+  alert_recov_operation_err.initialize(false);
+  alert_fatal_fault.initialize(false);
 
   // Register main processing thread with reset sensitivity
   SC_THREAD(reset_and_escalation_process);
@@ -197,9 +211,21 @@ kmac_ip::kmac_ip(sc_module_name n,
   sensitive << idle_update_event;
   dont_initialize();
 
-  // Register intr_o driver SC_METHOD (single-writer pattern for interrupt output)
+  // Register interrupt driver SC_METHOD (single-writer pattern for the three
+  // interrupt outputs)
   SC_METHOD(intr_o_driver);
   sensitive << intr_update_event;
+  dont_initialize();
+
+  // Register alert driver SC_METHOD (single-writer pattern for the two alert
+  // outputs)
+  SC_METHOD(alert_o_driver);
+  sensitive << alert_update_event;
+  dont_initialize();
+
+  // Register the deferred FIFO drain
+  SC_METHOD(fifo_drain_process);
+  sensitive << fifo_drain_event;
   dont_initialize();
 
   // Initialize all registers to their reset values
@@ -296,6 +322,18 @@ kmac_ip::kmac_ip(sc_module_name n,
   CSML_INFO(2, logger) << "ENTROPY_PERIOD callback registered for FUNC-KMAC-017 "
                           "(CFG_REGWEN protection)";
 
+  // ENTROPY_REFRESH_THRESHOLD_SHADOWED is shadowed in the RDL, so it needs the
+  // same two-write protocol as CFG_SHADOWED rather than a plain storage write.
+  std::function<bool(uint32_t, uint8_t)> entropy_threshold_write =
+      [this](uint32_t value, uint8_t be) {
+        return this->handle_write_ENTROPY_REFRESH_THRESHOLD_SHADOWED(value, be);
+      };
+  memory.register_write_callback_with_be(
+      entropy_threshold_write, ENTROPY_REFRESH_THRESHOLD_SHADOWED.offset);
+
+  CSML_INFO(2, logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED callback "
+                          "registered (shadow write protocol)";
+
   // FUNC-KMAC-017: Register PREFIX write callbacks (CFG_REGWEN protected)
   // PREFIX is an array of 11 registers at offset 0xB4
   for (unsigned int i = 0; i < 11; i++) {
@@ -361,14 +399,14 @@ kmac_ip::kmac_ip(sc_module_name n,
     );
   }
 
-  // Register INTR_STATE write callback for W1C behavior and interrupt output update
-  // INTR_STATE is W1C (write-1-to-clear): writing 1 clears the corresponding bit
+  // Register INTR_STATE write callback. kmac_done and kmac_err are sw = rw with
+  // onwrite = woclr, so a written 1 clears them. fifo_empty is sw = r: it
+  // reflects a live hardware condition rather than a latched event, so writes
+  // to bit 1 are ignored and the bit only changes when the condition does.
   memory.register_write_callback_with_be(
       [this](uint32_t value, uint8_t be) {
-        // Implement W1C: clear bits where written value has 1s
-        uint32_t w1c_mask = value & 0x7; // Only bits [2:0] are W1C
+        uint32_t w1c_mask = value & 0x5;  // bits 0 and 2 only
         if (w1c_mask & 0x1) INTR_STATE.kmac_done = 0;
-        if (w1c_mask & 0x2) INTR_STATE.fifo_empty = 0;
         if (w1c_mask & 0x4) INTR_STATE.kmac_err = 0;
         // Trigger interrupt evaluation after clearing
         evaluate_interrupt();
@@ -376,8 +414,11 @@ kmac_ip::kmac_ip(sc_module_name n,
       },
       INTR_STATE.offset);
 
-  // Register INTR_TEST write callback - forces interrupt assertion for testing
-  // Writing 1 to a bit forces the corresponding interrupt in INTR_STATE
+  // Register INTR_TEST write callback - forces interrupt assertion for testing.
+  // Writing 1 to a bit forces the corresponding interrupt in INTR_STATE.
+  // fifo_empty is included because RTL's prim_intr_hw ORs intr_test into the
+  // status-type interrupt too, but the forced value only survives until the
+  // next recomputation of the live condition.
   memory.register_write_callback(
       [this](uint32_t value) {
         if (value & 0x1) {
@@ -535,6 +576,16 @@ void kmac_ip::reset_and_escalation_process() {
       // Clear FIFO and FIFO Depth
       msg_fifo = {};
       fifo_depth = 0;
+      fifo_full_seen = false;
+      process_issued = false;
+
+      // prim_subreg_shadow clears its phase bit on reset, so a shadow write
+      // interrupted by reset must not be completed by the next single write.
+      m_shadow_pending = false;
+      m_shadow_pending_value = 0;
+      m_threshold_shadow_pending = false;
+      m_threshold_shadow_pending_value = 0;
+      m_auto_reseed_count = 0;
 
       // Clear digest buffers
       digest_size = 0;
@@ -562,8 +613,10 @@ void kmac_ip::reset_and_escalation_process() {
         EVP_MD_CTX_reset(static_cast<EVP_MD_CTX *>(evp_md_ctx));
       }
 
-      // Notify driver to update idle_o port
+      // Notify drivers to update the output ports
       idle_update_event.notify(SC_ZERO_TIME);
+      evaluate_interrupt();
+      evaluate_alert();
 
       // Wait for reset deassertion
       wait(rst_ni.posedge_event());
@@ -584,8 +637,9 @@ void kmac_ip::reset_and_escalation_process() {
       // Immediate transition to ESCALATION_LOCKED state (blocks all operations)
       update_fsm_state(KmacState::ESCALATION_LOCKED);
 
-      // Set fatal error in STATUS.ALERT_FATAL_FAULT (bit 17)
+      // Set fatal error in STATUS.ALERT_FATAL_FAULT (bit 16)
       STATUS.ALERT_FATAL_FAULT = 1;
+      evaluate_alert();
 
       // Set ERR_CODE to indicate escalation (fatal error)
       // Use KeyNotValid (0x01) as fatal escalation indicator per architecture
@@ -671,36 +725,115 @@ void kmac_ip::idle_o_driver() {
 }
 
 /******************************************************************************
- * @brief intr_o port driver (single-writer pattern)
+ * @brief Interrupt port driver (single-writer pattern)
  *
- * Updates intr_o signal based on (INTR_STATE & INTR_ENABLE) != 0.
- * This is the ONLY method that writes to intr_o.
+ * Drives the three interrupt outputs, each from its own INTR_STATE bit gated
+ * by the matching INTR_ENABLE bit. They stay separate rather than being
+ * OR-reduced because sep.sv gives them three distinct PIC slots [20:22].
+ * This is the ONLY method that writes these ports.
  ******************************************************************************/
 void kmac_ip::intr_o_driver() {
-  // Compute combined interrupt: (INTR_STATE & INTR_ENABLE) != 0
-  uint32_t intr_state_val = (INTR_STATE.kmac_done & 0x1) |
-                            ((INTR_STATE.fifo_empty & 0x1) << 1) |
-                            ((INTR_STATE.kmac_err & 0x1) << 2);
-  uint32_t intr_enable_val = (INTR_ENABLE.kmac_done & 0x1) |
-                             ((INTR_ENABLE.fifo_empty & 0x1) << 1) |
-                             ((INTR_ENABLE.kmac_err & 0x1) << 2);
+  const bool done_active =
+      (INTR_STATE.kmac_done & 0x1) && (INTR_ENABLE.kmac_done & 0x1);
+  const bool fifo_empty_active =
+      (INTR_STATE.fifo_empty & 0x1) && (INTR_ENABLE.fifo_empty & 0x1);
+  const bool err_active =
+      (INTR_STATE.kmac_err & 0x1) && (INTR_ENABLE.kmac_err & 0x1);
 
-  bool intr_active = (intr_state_val & intr_enable_val) != 0;
-  intr_o.write(intr_active);
+  intr_kmac_done.write(done_active);
+  intr_fifo_empty.write(fifo_empty_active);
+  intr_kmac_err.write(err_active);
 
-  CSML_INFO(2, logger) << "intr_o updated to " << intr_active
-                       << " (INTR_STATE=0x" << std::hex << intr_state_val
-                       << " INTR_ENABLE=0x" << intr_enable_val << std::dec << ")";
+  CSML_INFO(2, logger) << "interrupts updated: kmac_done=" << done_active
+                       << " fifo_empty=" << fifo_empty_active
+                       << " kmac_err=" << err_active;
 }
 
 /******************************************************************************
- * @brief Evaluate and update interrupt output
+ * @brief Alert port driver (single-writer pattern)
+ *
+ * Mirrors the two STATUS alert bits onto the alert outputs. This is the ONLY
+ * method that writes these ports.
+ ******************************************************************************/
+void kmac_ip::alert_o_driver() {
+  const bool recov =
+      static_cast<uint32_t>(STATUS.ALERT_RECOV_CTRL_UPDATE_ERR) != 0;
+  const bool fatal = static_cast<uint32_t>(STATUS.ALERT_FATAL_FAULT) != 0;
+
+  alert_recov_operation_err.write(recov);
+  alert_fatal_fault.write(fatal);
+
+  CSML_INFO(2, logger) << "alerts updated: recov_operation_err=" << recov
+                       << " fatal_fault=" << fatal;
+}
+
+/******************************************************************************
+ * @brief Evaluate and update interrupt outputs
  *
  * Call this after any change to INTR_STATE or INTR_ENABLE registers.
  * Notifies intr_update_event to trigger intr_o_driver.
  ******************************************************************************/
 void kmac_ip::evaluate_interrupt() {
   intr_update_event.notify(SC_ZERO_TIME);
+}
+
+/******************************************************************************
+ * @brief Evaluate and update alert outputs
+ *
+ * Call this after any change to the STATUS alert mirrors.
+ ******************************************************************************/
+void kmac_ip::evaluate_alert() {
+  alert_update_event.notify(SC_ZERO_TIME);
+}
+
+/******************************************************************************
+ * @brief Recompute INTR_STATE.fifo_empty from the live FIFO condition
+ *
+ * See the declaration in kmac.h for why each precondition is here. Called from
+ * every site that can change the FIFO occupancy or the absorb phase.
+ ******************************************************************************/
+void kmac_ip::update_fifo_empty_interrupt() {
+  // i) not driven by a hardware application interface, ii) SHA3 absorbing,
+  // iii) Process not yet written. Plus the previously-full requirement, which
+  // both matches RTL and stops the Pass=1 pass-through path from retriggering
+  // on every word.
+  const bool msg_writable = !app_interface_active &&
+                            (fsm_state == KmacState::ABSORB) &&
+                            !process_issued;
+  const bool raise = msg_writable && fifo_full_seen && (fifo_depth == 0);
+
+  const uint32_t current = static_cast<uint32_t>(INTR_STATE.fifo_empty) & 0x1;
+  if (current == (raise ? 1u : 0u)) {
+    return;
+  }
+
+  INTR_STATE.fifo_empty = raise ? 1 : 0;
+  CSML_INFO(2, logger) << "INTR_STATE.fifo_empty -> " << raise
+                       << " (absorb=" << (fsm_state == KmacState::ABSORB)
+                       << " process_issued=" << process_issued
+                       << " full_seen=" << fifo_full_seen
+                       << " depth=" << fifo_depth << ")";
+  evaluate_interrupt();
+}
+
+/******************************************************************************
+ * @brief Drain the modelled FIFO occupancy once the engine has caught up
+ ******************************************************************************/
+void kmac_ip::fifo_drain_process() {
+  if (fifo_depth == 0) {
+    return;
+  }
+
+  CSML_INFO(2, logger) << "FIFO drained by engine (depth " << fifo_depth
+                       << " -> 0)";
+
+  // The bytes were absorbed into the digest as they were packed, so the queue
+  // holds no unconsumed data; only the occupancy has to be released.
+  msg_fifo = {};
+  fifo_depth = 0;
+
+  update_fifo_empty_interrupt();
+  status_update_event.notify(SC_ZERO_TIME);
 }
 
 /******************************************************************************
@@ -739,8 +872,11 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
     return false;
   }
 
-  static uint32_t shadow_pending_value = 0;
-  static bool shadow_pending = false;
+  // Phase tracking lives in members rather than function statics so that reset
+  // clears it, matching prim_subreg_shadow, and so two model instances do not
+  // share one phase bit.
+  uint32_t &shadow_pending_value = m_shadow_pending_value;
+  bool &shadow_pending = m_shadow_pending;
 
   if (!shadow_pending) {
     shadow_pending_value = value;
@@ -786,6 +922,7 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
       return true;
     } else {
       STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 1;
+      evaluate_alert();
       shadow_pending = false;
       CSML_ERROR(1, logger) << "CFG_SHADOWED shadow mismatch detected:";
       CSML_ERROR(1, logger) << "  First write:  0x" << std::hex
@@ -797,6 +934,108 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
       return false;
     }
   }
+}
+
+/******************************************************************************
+ * @brief ENTROPY_REFRESH_THRESHOLD_SHADOWED write callback handler
+ *
+ * The RDL marks this register shadowed, so it takes the same two-write
+ * protocol as CFG_SHADOWED: the first write is staged, the second commits it
+ * if it matches and raises a recoverable update error if it does not. Unlike
+ * CFG_SHADOWED this register is not gated by CFG_REGWEN or by the FSM state,
+ * because prim_subreg_shadow here has no regwen and entropy accounting is
+ * independent of the hash in flight.
+ ******************************************************************************/
+bool kmac_ip::handle_write_ENTROPY_REFRESH_THRESHOLD_SHADOWED(
+    uint32_t value, uint8_t byte_enable) {
+  if (fsm_state == KmacState::ESCALATION_LOCKED) {
+    CSML_ERROR(1, logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED write "
+                             "rejected: FSM in ESCALATION_LOCKED state";
+    return false;
+  }
+
+  const uint32_t masked = value & 0x3FF;  // threshold[9:0]
+
+  if (!m_threshold_shadow_pending) {
+    m_threshold_shadow_pending_value = masked;
+    m_threshold_shadow_pending = true;
+    CSML_INFO(2, logger)
+        << "ENTROPY_REFRESH_THRESHOLD_SHADOWED first write: value=0x"
+        << std::hex << masked << std::dec
+        << " (awaiting second write for shadow validation)";
+    return false;  // Staged only; storage must not change until it commits
+  }
+
+  m_threshold_shadow_pending = false;
+
+  if (masked != m_threshold_shadow_pending_value) {
+    STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 1;
+    evaluate_alert();
+    CSML_ERROR(1, logger)
+        << "ENTROPY_REFRESH_THRESHOLD_SHADOWED shadow mismatch detected:";
+    CSML_ERROR(1, logger) << "  First write:  0x" << std::hex
+                          << m_threshold_shadow_pending_value << std::dec;
+    CSML_ERROR(1, logger) << "  Second write: 0x" << std::hex << masked
+                          << std::dec;
+    CSML_ERROR(1, logger)
+        << "  STATUS.ALERT_RECOV_CTRL_UPDATE_ERR=1 (recoverable)";
+    return false;
+  }
+
+  ENTROPY_REFRESH_THRESHOLD_SHADOWED.threshold = masked;
+  CSML_INFO(2, logger)
+      << "ENTROPY_REFRESH_THRESHOLD_SHADOWED committed: threshold=" << masked;
+
+  // A newly lowered threshold can already be satisfied by the current count.
+  check_entropy_refresh_threshold();
+  return false;  // Field written directly; suppress the default storage write
+}
+
+/******************************************************************************
+ * @brief Trigger the automatic PRNG reseed when the hash count reaches the
+ *        configured threshold
+ *
+ * kmac_entropy.sv computes threshold_hit = |hash_threshold && (hash_threshold
+ * <= hash_cnt), latches it, and on the next entropy round reseeds the PRNG
+ * from EDN and clears both the latch and the hash counter. A threshold of zero
+ * disables the mechanism entirely, and only EDN mode has a seed source to
+ * request from.
+ *
+ * The seed itself is not software-visible, and this model abstracts entropy
+ * away rather than carrying PRNG state, so the reseed reduces to the one
+ * effect firmware can observe: the hash counter returning to zero. The reseed
+ * tally is kept so tests can distinguish "never fired" from "fired and the
+ * count happened to be zero".
+ ******************************************************************************/
+void kmac_ip::check_entropy_refresh_threshold() {
+  const uint32_t threshold =
+      static_cast<uint32_t>(ENTROPY_REFRESH_THRESHOLD_SHADOWED.threshold) &
+      0x3FF;
+  if (threshold == 0) {
+    return;  // Disabled
+  }
+
+  const uint32_t hash_cnt = static_cast<uint32_t>(ENTROPY_REFRESH_HASH_CNT) & 0x3FF;
+  if (hash_cnt < threshold) {
+    return;
+  }
+
+  const uint32_t entropy_mode = static_cast<uint32_t>(CFG_SHADOWED.entropy_mode);
+  if (entropy_mode != 0x1) {
+    CSML_INFO(2, logger)
+        << "Entropy refresh threshold reached (hash_cnt=" << hash_cnt
+        << " >= " << threshold << ") but entropy_mode=" << entropy_mode
+        << " is not EDN; no reseed requested";
+    return;
+  }
+
+  ENTROPY_REFRESH_HASH_CNT = 0;
+  m_auto_reseed_count++;
+
+  CSML_INFO(2, logger) << "Automatic entropy refresh: hash_cnt reached "
+                          "threshold "
+                       << threshold << ", PRNG reseeded and counter cleared "
+                       << "(reseed #" << m_auto_reseed_count << ")";
 }
 
 /******************************************************************************
@@ -1408,6 +1647,26 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // FUNC-KMAC-019: Error Detection on START Command
     // =====================================================================
 
+    // FUNC-KMAC-019: Check KeyNotValid error (0x01)
+    // kmac_app.sv StSw sets keymgr_key_used = kmac_en when keymgr_key_en_i
+    // (CFG_SHADOWED.sideload) is set, and any state with keymgr_key_used and an
+    // invalid keymgr key diverts to StKeyMgrErrKeyNotValid -> StError. So a
+    // SW-initiated keyed MAC on the sideload path aborts when KeyMgr has not
+    // committed a key. This is checked before the PREFIX comparison because
+    // kmac.sv priority-encodes app_err above errchecker_err.
+    if (kmac_en && CFG_SHADOWED.sideload == 1 && !m_keymgr_key_valid) {
+      CSML_ERROR(1, logger)
+          << "FUNC-KMAC-019: KeyNotValid error (0x01) - SW-initiated KMAC with "
+             "CFG_SHADOWED.sideload=1 but KeyMgr has not committed a valid key";
+
+      ERR_CODE = 0x01000000;
+      INTR_STATE.kmac_err = 1;
+      evaluate_interrupt();
+      update_fsm_state(KmacState::ERROR);
+
+      return false;
+    }
+
     // FUNC-KMAC-019: Check IncorrectEntropyMode error (0x05)
     // Raised when entropy_ready=1 but entropy_mode is invalid (not 0x0/idle,
     // 0x1/edn, 0x2/sw)
@@ -1764,10 +2023,8 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
                                     "(EnMasking=0, XOR applied)";
           }
 
-          // Note: For SW-initiated operations with sideload=1, no KeyNotValid
-          // error check per specification: "No error for SW-initiated ops with
-          // invalid sideloaded key" (Application interface operations handle
-          // KeyNotValid separately)
+          // Key validity was already gated at the top of the START handler, so
+          // reaching here means KeyMgr has committed a key.
 
         } else {
           // =================================================================
@@ -2113,7 +2370,15 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     // Configuration validation passed - transition to ABSORB state
     CSML_INFO(2, logger) << "START command: transitioning IDLE → ABSORB";
+
+    // A new message restarts the fifo_empty preconditions: nothing has filled
+    // yet and Process has not been issued for this message.
+    fifo_full_seen = false;
+    process_issued = false;
+    fifo_drain_event.cancel();
+
     update_fsm_state(KmacState::ABSORB);
+    update_fifo_empty_interrupt();
 
     // Auto-clear CFG_REGWEN.en (lock configuration)
     CFG_REGWEN.en = 0;
@@ -2160,6 +2425,11 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     CSML_INFO(2, logger)
         << "PROCESS command: finalizing digest with OpenSSL EVP_DigestFinal_ex";
+
+    // Software has no more data to supply, so the fifo_empty interrupt is
+    // suppressed from here until the next Start.
+    process_issued = true;
+    update_fifo_empty_interrupt();
 
     // =====================================================================
     // FUNC-KMAC-001 Phase 2: SHA3 Digest Finalization
@@ -2377,10 +2647,15 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       msg_fifo.pop();
     }
     fifo_depth = 0;
+    fifo_drain_event.cancel();
     CSML_INFO(2, logger) << "MSG_FIFO cleared (fifo_depth reset to 0)";
 
     // Transition to SQUEEZE state
     update_fsm_state(KmacState::SQUEEZE);
+
+    // Absorption is over, so the fifo_empty interrupt condition no longer
+    // holds regardless of occupancy.
+    update_fifo_empty_interrupt();
 
     // Generate kmac_done interrupt
     INTR_STATE.kmac_done = 1;
@@ -2631,6 +2906,9 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       msg_fifo.pop();
     }
     fifo_depth = 0;
+    fifo_full_seen = false;
+    process_issued = false;
+    fifo_drain_event.cancel();
 
     // Clear digest buffers (security: zeroize output)
     digest_size = 0;
@@ -2649,6 +2927,9 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     ENTROPY_REFRESH_HASH_CNT = (ENTROPY_REFRESH_HASH_CNT + 1) & 0x3FF; // 10-bit counter
     CSML_INFO(2, logger) << "FUNC-KMAC-013: ENTROPY_REFRESH_HASH_CNT incremented to "
                          << ENTROPY_REFRESH_HASH_CNT;
+
+    // FUNC-KMAC-013: Automatic reseed once the count reaches the threshold
+    check_entropy_refresh_threshold();
 
     // Auto-set CFG_REGWEN.en (unlock configuration)
     CFG_REGWEN.en = 1;
@@ -2914,6 +3195,10 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
             << "FIFO full (" << fifo_depth << "/" << max_fifo_depth
             << ") - applying backpressure with temporal decoupling";
 
+        // Having genuinely filled is the precondition RTL puts on the
+        // fifo_empty interrupt, so record it before the drain clears the depth.
+        fifo_full_seen = true;
+
         // FUNC-KMAC-024: Calculate backpressure delay based on clock frequency
         // Architecture map timing constraint: 100 cycles for SHA3 processing
         // Use abstract clock frequency input (default 100 MHz if not driven)
@@ -2930,6 +3215,11 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
         if (m_qk.need_sync()) {
           m_qk.sync();
         }
+
+        // Release the occupancy only after the engine would have consumed it,
+        // so software polling STATUS in between still sees fifo_full. Armed
+        // after the sync above, which can itself advance simulation time.
+        fifo_drain_event.notify(backpressure_delay);
 
         CSML_INFO(2, logger)
             << "FUNC-KMAC-024: Backpressure delay=" << backpressure_delay
@@ -3120,6 +3410,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
 
         // Set fatal error status
         STATUS.ALERT_FATAL_FAULT = 1;
+        evaluate_alert();
 
         // Application operation error flag
         app_operation_error = true;

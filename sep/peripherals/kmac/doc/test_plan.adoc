@@ -11,9 +11,10 @@ register aperture, a KM initiator into `keymgr_tl_socket`, app-interface
 drivers on `app_export[]`, plus `clk_i` / `rst_ni` / `lc_escalate_en_i`.
 The DUT is `kmac_ip`.
 
-Success: every check in the FUNC-KMAC suites passes; `--asan` produces
-no `asan.log.*`; line coverage on the touched model sources meets the
-repository ≥ 95% gate.
+Success: every check in the FUNC-KMAC suites passes (229 cases); `--asan`
+produces no `asan.log.*`; line coverage is 94.4%, just under the
+repository ≥ 95% gate, the residue being OpenSSL failure branches and
+`EnMasking = 0` paths.
 
 How to run (from `sep/peripherals/kmac`):
 
@@ -38,7 +39,7 @@ or export them first.
 
 ====== Standalone cases
 
-Sources: `test/src/kmac_func001_test.cpp` … `kmac_func025_test.cpp`.
+Sources: `test/src/kmac_func001_test.cpp` … `kmac_func026_test.cpp`.
 Group by FUNC-KMAC suite; do not paste the full plan.
 
 [cols="12%,28%,44%,16%",options="header"]
@@ -58,6 +59,7 @@ Group by FUNC-KMAC suite; do not paste the full plan.
 |FUNC-KMAC-016–018 |CFG lock / STATE window |Shadow, REGWEN, squeeze-only |Mixed
 |FUNC-KMAC-019–022 |Errors, reset, escalate, idle |ERR_CODE, `idle_o` |Mixed
 |FUNC-KMAC-023–024 |OpenSSL seam / LT delay |EVP path, quantum keeper |Positive
+|FUNC-KMAC-026 |Rejection and boundary paths |Wrong-state commands, XOF output-window bounds |Negative
 |===
 
 ====== Platform firmware tests

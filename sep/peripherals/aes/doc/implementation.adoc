@@ -60,6 +60,11 @@ buffers when that path is enabled.
                       update_idle_status   ──► idle_o
 ----
 
+GCM is driven a block at a time through `CTRL_GCM_SHADOWED.PHASE`
+(INIT / RESTORE / AAD / TEXT / SAVE / TAG) with the GHASH accumulator
+carried across phases, rather than as a single cipher call. The model
+keeps no length counters, matching the hardware.
+
 ====== CCI parameters
 
 Knobs are `csml_param` and are re-read when used. Block latency is
@@ -79,5 +84,4 @@ charged through `tlm_quantumkeeper::inc()` using `m_clk_freq_hz`
 * `clk_i` is a boolean; frequency does not come from the pin.
 * No EDN / `entropy_src` ports; reseeds call OpenSSL `RAND_bytes()`.
 * First-order masking is share storage plus XOR, not a masked circuit.
-* GCM / GHASH is not in the model.
 * No interrupt outputs (the RTL block has none either).

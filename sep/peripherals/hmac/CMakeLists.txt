@@ -127,24 +127,15 @@ if(CCI_FOUND)
 endif()
 
 # -----------------------------------------------------------------------------
-# OpenSSL Library (required for HMAC cryptographic operations)
-# -----------------------------------------------------------------------------
-include(PeripheralOpenSSL)
-peripheral_find_openssl()
-if(OPENSSL_FOUND)
-  message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
-  message(STATUS "  Include: ${OPENSSL_INCLUDE_DIR}")
-  message(STATUS "  Libraries: ${OPENSSL_LIBRARIES}")
-else()
-  message(FATAL_ERROR "OpenSSL not found. HMAC requires OpenSSL for cryptographic operations.")
-endif()
-
-# -----------------------------------------------------------------------------
 # Sources
 # -----------------------------------------------------------------------------
+# The SHA-2 core is built in-model rather than taken from OpenSSL: hash_stop and
+# hash_continue require loading an arbitrary chaining state into the hash, and
+# the EVP API exposes no digest mid-state.
 set(MODEL_SRCS
   src/hmac.cpp
   src/hmac_base.cpp
+  src/sha2_engine.cpp
 )
 
 set(TEST_SRCS
@@ -176,8 +167,6 @@ target_link_libraries(hmac_model PUBLIC
   csml_logger
   SystemC::systemc
   Threads::Threads
-  OpenSSL::SSL
-  OpenSSL::Crypto
   ${CCI_LIBRARIES}
 )
 

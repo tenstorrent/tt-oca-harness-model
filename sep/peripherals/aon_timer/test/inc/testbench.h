@@ -1652,6 +1652,17 @@ public:
     */
    void test_func007_tc031_wdog_bite_rst_req_independent_of_bark();
 
+   /**
+    * @brief TC_AON_061: aon_timer_rst_req is latched until reset.
+    *
+    * aon_timer.sv:272 assigns aon_rst_req_d = aon_rst_req_set | aon_rst_req_q, so
+    * once a bite fires the request is held until the AON reset. Verifies that
+    * neither petting nor disabling the watchdog withdraws it, and that a reset
+    * does. Without this, a model driving the port from the live bite condition
+    * lets firmware survive in simulation a bite that resets the chip in silicon.
+    */
+   void test_func007_tc061_wdog_bite_rst_req_latched_until_reset();
+
    // =========================================================================
    // FUNC008 Test Case Methods (TC_AON_032-036, TC_AON_044-047)
    // Security and Lifecycle Control

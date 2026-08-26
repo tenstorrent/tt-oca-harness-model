@@ -12,9 +12,6 @@
 #include "hmac.h"
 #include <iostream>
 #include <cstring>
-#include <openssl/evp.h>
-#include <openssl/params.h>
-#include <openssl/core_names.h>
 #include <tlm.h>
 #include <systemc.h>
 
@@ -43,15 +40,14 @@ hmac_ip::hmac_ip(sc_module_name n, unsigned int memory_size)
      keymgr_tl_socket("keymgr_tl_socket"),
      verbosity("verbosity", CSML_DEFAULT_VERBOSITY),
      current_state(State::IDLE),
+     process_stop_issued(false),
+     msg_allowed(false),
+     fifo_full_seen(false),
      packer_buffer(0),
      packer_bytes_count(0),
      message_length_bits(0),
      key_storage(32, 0),
-     m_keymgr_key_valid(false),
-     hash_context(nullptr),
-     hmac_context(nullptr),
-     current_md(nullptr),
-     hmac_mac(nullptr)
+     m_keymgr_key_valid(false)
 {
    CSML_FUNC_TRACE(logger);
    CSML_INFO(1, logger) << "Initializing HMAC IP with memory_size=" << memory_size << std::endl;
@@ -230,6 +226,8 @@ void hmac_ip::reset_handler() {
       // Active-low reset handling
       current_state = State::IDLE;
       process_stop_issued = false;
+      msg_allowed = false;
+      fifo_full_seen = false;
       packer_buffer = 0;
       packer_bytes_count = 0;
       message_length_bits = 0;
@@ -249,23 +247,11 @@ void hmac_ip::reset_handler() {
       m_keymgr_key_valid = false;
       CSML_DEBUG(2, logger) << "Key storage and sideload buffers cleared" << std::endl;
 
-      // Reset OpenSSL contexts
-      if (hash_context) {
-         EVP_MD_CTX_free(hash_context);
-         hash_context = nullptr;
-         CSML_DEBUG(2, logger) << "Hash context freed" << std::endl;
-      }
-      if (hmac_context) {
-         EVP_MAC_CTX_free(hmac_context);
-         hmac_context = nullptr;
-         CSML_DEBUG(2, logger) << "HMAC context freed" << std::endl;
-      }
-      if (hmac_mac) {
-         EVP_MAC_free(hmac_mac);
-         hmac_mac = nullptr;
-         CSML_DEBUG(2, logger) << "HMAC MAC freed" << std::endl;
-      }
-      current_md = nullptr;
+      // Reset the hash engine and any in-flight message state
+      m_sha.init(sha2_mode::sha256);
+      m_hmac_key.clear();
+      m_final_tail.clear();
+      CSML_DEBUG(2, logger) << "Hash engine reset" << std::endl;
 
       // Reset all registers
       // Note: Interrupts handled via INTR_STATE register reset
@@ -509,137 +495,205 @@ void hmac_ip::apply_endian_swap(uint32_t& data) {
 }
 
 /**
- * @brief Initialize OpenSSL context for hash or HMAC operation
+ * @brief Map the CFG digest_size encoding onto a hash engine mode
+ */
+bool hmac_ip::sha_mode_from_cfg(uint32_t digest_size, sha2_mode& mode) const {
+   switch (digest_size) {
+      case 0x1: mode = sha2_mode::sha256; return true;
+      case 0x2: mode = sha2_mode::sha384; return true;
+      case 0x4: mode = sha2_mode::sha512; return true;
+      default:  return false;
+   }
+}
+
+/**
+ * @brief Build one HMAC key block, XORed with the given pad byte
+ *
+ * Follows FIPS 198-1: a key shorter than the block is zero-extended, and a key
+ * longer than the block is replaced by its own hash. The hardware only accepts
+ * key lengths up to the block size for a given digest -- longer combinations are
+ * rejected as SwInvalidConfig -- so the pre-hash path is defensive only.
+ */
+std::vector<uint8_t> hmac_ip::key_block(uint8_t pad_byte) const {
+   const size_t block = m_sha.block_bytes();
+   std::vector<uint8_t> out(block, pad_byte);
+
+   std::vector<uint8_t> key = m_hmac_key;
+   if (key.size() > block) {
+      sha2_engine pre;
+      pre.init(m_sha.mode());
+      std::vector<uint8_t> hashed(pre.digest_bytes());
+      size_t full = (key.size() / block) * block;
+      for (size_t o = 0; o < full; o += block) pre.compress(key.data() + o);
+      pre.finalize(key.data() + full, key.size() - full, hashed.data());
+      key = hashed;
+   }
+
+   for (size_t i = 0; i < key.size(); i++) {
+      out[i] = static_cast<uint8_t>(key[i] ^ pad_byte);
+   }
+   return out;
+}
+
+/**
+ * @brief Start a fresh hash operation
  * @param algorithm Hash algorithm name ("SHA-256", "SHA-384", or "SHA-512")
  * @param hmac_en Whether HMAC mode is enabled
  * @param key_length Key length configuration value
  * @return true on success, false on error
- * 
- * Initializes the appropriate OpenSSL context (HMAC or hash) based on
- * the configuration. Sets up the message digest algorithm and prepares
- * the key for HMAC mode.
+ *
+ * Resets the hash engine to the initial chaining values for the selected
+ * digest. In HMAC mode the K^ipad block is absorbed here, so on return the
+ * engine sits exactly at the start of the message, which is also what makes the
+ * absorbed bit count differ from MSG_LENGTH by one block.
  */
-bool hmac_ip::initialize_openssl_context(const std::string& algorithm, bool hmac_en, uint32_t key_length) {
+bool hmac_ip::initialize_hash_context(const std::string& algorithm, bool hmac_en, uint32_t key_length) {
    CSML_FUNC_TRACE(logger);
-   CSML_INFO(1, logger) << "Initializing OpenSSL context: algorithm=" << algorithm
+   CSML_INFO(1, logger) << "Initializing hash context: algorithm=" << algorithm
                         << " hmac_en=" << hmac_en
                         << " key_length=0x" << std::hex << key_length << std::dec << std::endl;
 
-   // Free any existing OpenSSL contexts before creating new ones
-   if (hash_context) {
-      EVP_MD_CTX_free(hash_context);
-      hash_context = nullptr;
-      CSML_DEBUG(2, logger) << "Freed existing hash context" << std::endl;
-   }
-   if (hmac_context) {
-      EVP_MAC_CTX_free(hmac_context);
-      hmac_context = nullptr;
-      CSML_DEBUG(2, logger) << "Freed existing HMAC context" << std::endl;
-   }
-   if (hmac_mac) {
-      EVP_MAC_free(hmac_mac);
-      hmac_mac = nullptr;
-      CSML_DEBUG(2, logger) << "Freed existing HMAC MAC" << std::endl;
-   }
-   current_md = nullptr;
+   m_final_tail.clear();
+   m_hmac_key.clear();
 
-   // Select MD algorithm
+   sha2_mode mode;
    if (algorithm == "SHA-256") {
-      current_md = EVP_sha256();
-      CSML_DEBUG(2, logger) << "Selected SHA-256 algorithm" << std::endl;
+      mode = sha2_mode::sha256;
    } else if (algorithm == "SHA-384") {
-      current_md = EVP_sha384();
-      CSML_DEBUG(2, logger) << "Selected SHA-384 algorithm" << std::endl;
+      mode = sha2_mode::sha384;
    } else if (algorithm == "SHA-512") {
-      current_md = EVP_sha512();
-      CSML_DEBUG(2, logger) << "Selected SHA-512 algorithm" << std::endl;
+      mode = sha2_mode::sha512;
    } else {
       CSML_ERROR(0, logger) << "Error: Unsupported hash algorithm" << std::endl;
       report_error(0x6);
       return false;
    }
+   CSML_DEBUG(2, logger) << "Selected " << algorithm << " algorithm" << std::endl;
+
+   m_sha.init(mode);
 
    if (hmac_en) {
-      // HMAC mode using EVP_MAC API (OpenSSL 3.0+)
       CSML_INFO(1, logger) << "Initializing HMAC mode" << std::endl;
 
-      // Fetch HMAC algorithm
-      hmac_mac = EVP_MAC_fetch(nullptr, "HMAC", nullptr);
-      if (!hmac_mac) {
-         CSML_ERROR(0, logger) << "Error: Failed to fetch HMAC algorithm" << std::endl;
-         report_error(0x6);
-         return false;
-      }
-      CSML_DEBUG(2, logger) << "HMAC algorithm fetched successfully" << std::endl;
-
-      hmac_context = EVP_MAC_CTX_new(hmac_mac);
-      if (!hmac_context) {
-         CSML_ERROR(0, logger) << "Error: Failed to create HMAC context" << std::endl;
-         report_error(0x6);
-         return false;
-      }
-      CSML_DEBUG(2, logger) << "HMAC context created successfully" << std::endl;
-
-      // Prepare key from key_storage
-      std::vector<uint8_t> key_bytes;
       unsigned int key_words = 0;
       switch (key_length) {
-         case 0x01: key_words = 4; CSML_DEBUG(2, logger) << "Key length: 128-bit" << std::endl; break;   // 128-bit
-         case 0x02: key_words = 8; CSML_DEBUG(2, logger) << "Key length: 256-bit" << std::endl; break;   // 256-bit
-         case 0x04: key_words = 12; CSML_DEBUG(2, logger) << "Key length: 384-bit" << std::endl; break;  // 384-bit
-         case 0x08: key_words = 16; CSML_DEBUG(2, logger) << "Key length: 512-bit" << std::endl; break;  // 512-bit
-         case 0x10: key_words = 32; CSML_DEBUG(2, logger) << "Key length: 1024-bit" << std::endl; break;  // 1024-bit
+         case 0x01: key_words = 4; CSML_DEBUG(2, logger) << "Key length: 128-bit" << std::endl; break;
+         case 0x02: key_words = 8; CSML_DEBUG(2, logger) << "Key length: 256-bit" << std::endl; break;
+         case 0x04: key_words = 12; CSML_DEBUG(2, logger) << "Key length: 384-bit" << std::endl; break;
+         case 0x08: key_words = 16; CSML_DEBUG(2, logger) << "Key length: 512-bit" << std::endl; break;
+         case 0x10: key_words = 32; CSML_DEBUG(2, logger) << "Key length: 1024-bit" << std::endl; break;
       }
 
+      m_hmac_key.reserve(static_cast<size_t>(key_words) * 4u);
       for (unsigned int i = 0; i < key_words; i++) {
-         uint32_t word = key_storage[i];
-         key_bytes.push_back((word >> 24) & 0xFF);
-         key_bytes.push_back((word >> 16) & 0xFF);
-         key_bytes.push_back((word >> 8) & 0xFF);
-         key_bytes.push_back(word & 0xFF);
+         uint32_t word = effective_key_word(i);
+         m_hmac_key.push_back((word >> 24) & 0xFF);
+         m_hmac_key.push_back((word >> 16) & 0xFF);
+         m_hmac_key.push_back((word >> 8) & 0xFF);
+         m_hmac_key.push_back(word & 0xFF);
       }
 
-      // Set HMAC parameters (digest algorithm)
-      const char* digest_name = nullptr;
-      if (algorithm == "SHA-256") digest_name = "SHA256";
-      else if (algorithm == "SHA-384") digest_name = "SHA384";
-      else if (algorithm == "SHA-512") digest_name = "SHA512";
-
-      OSSL_PARAM params[2];
-      params[0] = OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST,
-                                                    const_cast<char*>(digest_name), 0);
-      params[1] = OSSL_PARAM_construct_end();
-
-      // Initialize HMAC with key and parameters
-      if (!EVP_MAC_init(hmac_context, key_bytes.data(), key_bytes.size(), params)) {
-         CSML_ERROR(0, logger) << "Error: HMAC initialization failed" << std::endl;
-         report_error(0x6);
-         return false;
-      }
-      CSML_INFO(1, logger) << "HMAC initialization successful" << std::endl;
+      // Absorb K^ipad. Hardware does the same, which is why its internal SHA
+      // length runs one block ahead of the MSG_LENGTH software sees.
+      const std::vector<uint8_t> ipad = key_block(0x36);
+      m_sha.compress(ipad.data());
+      CSML_INFO(1, logger) << "HMAC initialization successful (K^ipad absorbed)" << std::endl;
    } else {
-      // SHA-2 only mode
       CSML_INFO(1, logger) << "Initializing SHA-2 hash-only mode" << std::endl;
-
-      hash_context = EVP_MD_CTX_new();
-
-      if (!hash_context) {
-         CSML_ERROR(0, logger) << "Error: Failed to create digest context" << std::endl;
-         report_error(0x6);
-         return false;
-      }
-      CSML_DEBUG(2, logger) << "Digest context created successfully" << std::endl;
-
-      if (!EVP_DigestInit_ex(hash_context, current_md, nullptr)) {
-         CSML_ERROR(0, logger) << "Error: Digest initialization failed" << std::endl;
-         report_error(0x6);
-         return false;
-      }
-      CSML_INFO(1, logger) << "Digest initialization successful" << std::endl;
    }
 
-   CSML_INFO(1, logger) << "OpenSSL context initialization complete" << std::endl;
+   CSML_INFO(1, logger) << "Hash context initialization complete" << std::endl;
    return true;
+}
+
+/**
+ * @brief Write the engine's chaining state into the DIGEST registers
+ *
+ * Uses the same word mapping hardware applies to a completed digest: SHA-256
+ * puts one 32-bit chaining word per register and mirrors the result into the
+ * upper half, while SHA-384/512 split each 64-bit word high-then-low across a
+ * register pair.
+ */
+void hmac_ip::export_state_to_digest() {
+   CSML_FUNC_TRACE(logger);
+
+   if (m_sha.mode() == sha2_mode::sha256) {
+      for (unsigned int i = 0; i < 8; i++) {
+         DIGEST[i] = static_cast<uint32_t>(m_sha.chain(i));
+         DIGEST[i + 8] = DIGEST[i];
+      }
+   } else {
+      for (unsigned int i = 0; i < 8; i++) {
+         const uint64_t word = m_sha.chain(i);
+         DIGEST[i * 2]     = static_cast<uint32_t>(word >> 32);
+         DIGEST[i * 2 + 1] = static_cast<uint32_t>(word & 0xFFFFFFFFull);
+      }
+   }
+
+   CSML_DEBUG(2, logger) << "Exported chaining state to DIGEST registers" << std::endl;
+}
+
+/**
+ * @brief Reload the engine's chaining state from the DIGEST registers
+ *
+ * The inverse of export_state_to_digest(). The absorbed bit count is rebuilt
+ * from MSG_LENGTH, which counts only the message bits software has written; in
+ * HMAC mode the K^ipad block is added back, since it is absorbed by the engine
+ * but never reflected in MSG_LENGTH.
+ */
+void hmac_ip::import_state_from_digest() {
+   CSML_FUNC_TRACE(logger);
+
+   sha2_mode mode;
+   if (!sha_mode_from_cfg(CFG.digest_size, mode)) {
+      CSML_ERROR(0, logger) << "Cannot restore context: unsupported digest_size" << std::endl;
+      return;
+   }
+
+   m_sha.init(mode);
+
+   if (mode == sha2_mode::sha256) {
+      for (unsigned int i = 0; i < 8; i++) {
+         m_sha.set_chain(i, DIGEST[i]);
+      }
+   } else {
+      for (unsigned int i = 0; i < 8; i++) {
+         const uint64_t hi = DIGEST[i * 2];
+         const uint64_t lo = DIGEST[i * 2 + 1];
+         m_sha.set_chain(i, (hi << 32) | lo);
+      }
+   }
+
+   uint64_t bits = (static_cast<uint64_t>(MSG_LENGTH_UPPER) << 32) | MSG_LENGTH_LOWER;
+   if (CFG.hmac_en) {
+      bits += static_cast<uint64_t>(m_sha.block_bytes()) * 8u;
+   }
+   m_sha.set_absorbed_bits(bits);
+   message_length_bits = (static_cast<uint64_t>(MSG_LENGTH_UPPER) << 32) | MSG_LENGTH_LOWER;
+
+   // The key is needed again to close out the HMAC at finalization.
+   m_hmac_key.clear();
+   if (CFG.hmac_en) {
+      unsigned int key_words = 0;
+      switch (CFG.key_length) {
+         case 0x01: key_words = 4; break;
+         case 0x02: key_words = 8; break;
+         case 0x04: key_words = 12; break;
+         case 0x08: key_words = 16; break;
+         case 0x10: key_words = 32; break;
+      }
+      for (unsigned int i = 0; i < key_words; i++) {
+         uint32_t word = effective_key_word(i);
+         m_hmac_key.push_back((word >> 24) & 0xFF);
+         m_hmac_key.push_back((word >> 16) & 0xFF);
+         m_hmac_key.push_back((word >> 8) & 0xFF);
+         m_hmac_key.push_back(word & 0xFF);
+      }
+   }
+
+   m_final_tail.clear();
+
+   CSML_INFO(1, logger) << "Restored chaining state from DIGEST, absorbed_bits=" << bits << std::endl;
 }
 
 /**
@@ -672,18 +726,8 @@ void hmac_ip::process_message_block() {
       }
       CSML_DEBUG(3, logger) << "Extracted " << block_data.size() << " bytes from FIFO" << std::endl;
 
-      // Update OpenSSL with block
-      if (CFG.hmac_en) {
-         if (hmac_context) {
-            EVP_MAC_update(hmac_context, block_data.data(), block_data.size());
-            CSML_DEBUG(2, logger) << "Updated HMAC context with block data" << std::endl;
-         }
-      } else {
-         if (hash_context) {
-            EVP_DigestUpdate(hash_context, block_data.data(), block_data.size());
-            CSML_DEBUG(2, logger) << "Updated hash context with block data" << std::endl;
-         }
-      }
+      m_sha.compress(block_data.data());
+      CSML_DEBUG(2, logger) << "Absorbed block into hash engine" << std::endl;
 
       // Apply timing annotation
       double clock_freq = clk_i.read();
@@ -695,17 +739,62 @@ void hmac_ip::process_message_block() {
       // Update status
       update_status_register();
 
-      // Check for FIFO empty interrupt condition
-      // Check if FIFO was previously full and is now empty
-      if (msg_fifo.empty()  && current_state == State::PROCESSING &&
-          !process_stop_issued) {
-         CSML_INFO(1, logger) << "FIFO empty - setting fifo_empty interrupt" << std::endl;
+      // Raise fifo_empty only once per fill cycle. Hardware gates the interrupt
+      // on software being allowed to write the FIFO and on the FIFO having been
+      // full beforehand; without the latter the engine, which drains faster
+      // than software can fill, would assert it on essentially every block.
+      // STATUS.fifo_empty is the ungated value and is not affected by this.
+      if (msg_fifo.empty() && msg_allowed && fifo_full_seen &&
+          current_state == State::PROCESSING && !process_stop_issued) {
+         CSML_INFO(1, logger) << "FIFO empty after being full - setting fifo_empty interrupt" << std::endl;
          INTR_STATE.fifo_empty = 1;
          interrupt_update_event.notify(SC_ZERO_TIME);
-
       }
       CSML_INFO(1, logger) << "Message block processed successfully" << std::endl;
    }
+}
+
+/**
+ * @brief Push one word into the message FIFO
+ * @param word Word to enqueue, already endian-swapped if configured
+ *
+ * Hardware stalls the bus while the FIFO is full and releases the write once
+ * the engine consumes an entry. Hashing is untimed here, so the equivalent is
+ * to drain a block before enqueuing rather than to block the transaction.
+ *
+ * Also maintains fifo_full_seen, which gates the fifo_empty interrupt: it is
+ * set when the FIFO fills and cleared as soon as software starts refilling an
+ * empty FIFO, so the interrupt fires once per fill cycle instead of on every
+ * drain.
+ */
+void hmac_ip::push_fifo_word(uint32_t word) {
+   CSML_FUNC_TRACE(logger);
+
+   const size_t depth_limit = get_fifo_depth_limit();
+
+   if (msg_fifo.size() >= depth_limit) {
+      CSML_DEBUG(2, logger) << "FIFO full (" << msg_fifo.size()
+                            << ") - draining a block before accepting write" << std::endl;
+      process_message_block();
+   }
+
+   const bool was_empty = msg_fifo.empty();
+
+   msg_fifo.push(word);
+
+   if (was_empty) {
+      // Software is refilling an empty FIFO, so the previous full episode has
+      // been serviced and must not re-arm the interrupt.
+      fifo_full_seen = false;
+   }
+
+   if (msg_fifo.size() >= depth_limit) {
+      fifo_full_seen = true;
+      CSML_DEBUG(2, logger) << "FIFO reached full depth - arming fifo_empty interrupt" << std::endl;
+   }
+
+   CSML_DEBUG(3, logger) << "Pushed word to FIFO: 0x" << std::hex << word << std::dec
+                         << " (FIFO size now=" << msg_fifo.size() << ")" << std::endl;
 }
 
 /**
@@ -726,7 +815,7 @@ unsigned int hmac_ip::flush_packer_if_needed() {
       // Apply endian swap if configured (before pushing, same as normal accumulation)
       uint32_t word_to_push = packer_buffer;
       apply_endian_swap(word_to_push);
-      msg_fifo.push(word_to_push);
+      push_fifo_word(word_to_push);
       last_word_valid_bytes = packer_bytes_count;  // Remember how many bytes are valid
       packer_bytes_count = 0;
       packer_buffer = 0;
@@ -781,17 +870,10 @@ void hmac_ip::process_remaining_data(unsigned int last_word_valid_bytes) {
 
       CSML_DEBUG(3, logger) << "Extracted " << remaining_data.size() << " bytes total" << std::endl;
 
-      if (CFG.hmac_en) {
-         if (hmac_context) {
-            EVP_MAC_update(hmac_context, remaining_data.data(), remaining_data.size());
-            CSML_DEBUG(2, logger) << "Updated HMAC context with remaining data" << std::endl;
-         }
-      } else {
-         if (hash_context) {
-            EVP_DigestUpdate(hash_context, remaining_data.data(), remaining_data.size());
-            CSML_DEBUG(2, logger) << "Updated hash context with remaining data" << std::endl;
-         }
-      }
+      // The tail cannot be absorbed yet: padding depends on the total message
+      // length, so it is held until the digest is finalized.
+      m_final_tail = remaining_data;
+      CSML_DEBUG(2, logger) << "Held " << m_final_tail.size() << " tail byte(s) for finalization" << std::endl;
 
    CSML_INFO(1, logger) << "Remaining data processed successfully" << std::endl;
 }
@@ -807,56 +889,52 @@ bool hmac_ip::compute_and_write_digest() {
    CSML_FUNC_TRACE(logger);
    CSML_INFO(1, logger) << "Computing and writing digest" << std::endl;
 
-   // Check if context is still valid (might have been freed by hash_start)
-   if (CFG.hmac_en && !hmac_context) {
-      CSML_ERROR(0, logger) << "Error: HMAC context is null" << std::endl;
-      return false;
-   }
-   if (!CFG.hmac_en && !hash_context) {
-      CSML_ERROR(0, logger) << "Error: Hash context is null" << std::endl;
-      return false;
-   }
-
-   // Finalize and get digest
-   std::vector<uint8_t> digest_bytes(EVP_MAX_MD_SIZE);
-   size_t digest_len = 0;
+   // Close out the inner hash over the held tail.
+   std::vector<uint8_t> digest_bytes(m_sha.digest_bytes());
+   m_sha.finalize(m_final_tail.data(), m_final_tail.size(), digest_bytes.data());
+   m_final_tail.clear();
+   CSML_INFO(1, logger) << "Hash finalized: digest_len=" << digest_bytes.size() << " bytes" << std::endl;
 
    if (CFG.hmac_en) {
-      CSML_DEBUG(2, logger) << "Finalizing HMAC" << std::endl;
-      if (!EVP_MAC_final(hmac_context, digest_bytes.data(), &digest_len, EVP_MAX_MD_SIZE)) {
-         CSML_ERROR(0, logger) << "Error: HMAC finalization failed" << std::endl;
-         report_error(0x6);
-         return false;
-      }
-      CSML_INFO(1, logger) << "HMAC finalized: digest_len=" << digest_len << " bytes" << std::endl;
-   } else {
-      CSML_DEBUG(2, logger) << "Finalizing hash digest" << std::endl;
-      unsigned int len = 0;
-      if (!EVP_DigestFinal_ex(hash_context, digest_bytes.data(), &len)) {
-         CSML_ERROR(0, logger) << "Error: Digest finalization failed" << std::endl;
-         report_error(0x6);
-         return false;
-      }
-      digest_len = len;
-      CSML_INFO(1, logger) << "Hash finalized: digest_len=" << digest_len << " bytes" << std::endl;
-   }
+      // HMAC closes with a second, independent hash over K^opad and the inner
+      // digest. It holds no state across commands, so it is run here in full.
+      CSML_DEBUG(2, logger) << "Finalizing HMAC outer hash" << std::endl;
 
-   digest_bytes.resize(digest_len);  // Trim to actual digest size
+      const std::vector<uint8_t> opad = key_block(0x5C);
+
+      sha2_engine outer;
+      outer.init(m_sha.mode());
+      outer.compress(opad.data());
+
+      std::vector<uint8_t> mac(outer.digest_bytes());
+      outer.finalize(digest_bytes.data(), digest_bytes.size(), mac.data());
+      digest_bytes = mac;
+
+      CSML_INFO(1, logger) << "HMAC finalized: digest_len=" << digest_bytes.size() << " bytes" << std::endl;
+   }
 
    // Write digest to registers
    unsigned int digest_words = get_digest_size_words();
    CSML_DEBUG(2, logger) << "Writing digest to registers: " << digest_words << " words" << std::endl;
 
+   // Store the digest unswapped. digest_swap is a read-path transformation in
+   // hardware, so it is applied when software reads DIGEST rather than being
+   // baked in here; that way toggling the bit after a hash completes changes
+   // what subsequent reads return, as it does in RTL.
    for (unsigned int i = 0; i < digest_words && i < 16; i++) {
       uint32_t word = (digest_bytes[i*4] << 24) | (digest_bytes[i*4+1] << 16) |
                      (digest_bytes[i*4+2] << 8) | digest_bytes[i*4+3];
-      if (CFG.digest_swap) {
-         uint32_t original = word;
-         word = ((word & 0xFF) << 24) | ((word & 0xFF00) << 8) |
-          ((word & 0xFF0000) >> 8) | ((word & 0xFF000000) >> 24);
-         CSML_DEBUG(2, logger) << "Digest swap: DIGEST[" << i << "]=0x" << std::hex << original << " -> 0x" << word << std::dec << std::endl;
-      }
       DIGEST[i] = word;
+   }
+
+   // SHA-256 produces eight words but there are sixteen digest registers.
+   // Hardware mirrors the result into the upper half so that every DIGEST CSR
+   // holds defined data and WIPE_SECRET scrubs all of them uniformly.
+   if (digest_words == 8) {
+      for (unsigned int i = 0; i < 8; i++) {
+         DIGEST[i + 8] = DIGEST[i];
+      }
+      CSML_DEBUG(2, logger) << "Replicated DIGEST[0..7] into DIGEST[8..15] for SHA-256" << std::endl;
    }
 
    // Apply timing
@@ -882,14 +960,42 @@ bool hmac_ip::compute_and_write_digest() {
 }
 
 /**
+ * @brief Test whether the current configuration blocks a hash from starting
+ * @param digest_size Sanitised CFG.digest_size encoding
+ * @param key_length Sanitised CFG.key_length encoding
+ * @param hmac_en Whether keyed HMAC mode is selected
+ * @return true if hash_start/hash_continue must be refused with SwInvalidConfig
+ *
+ * Key length is only meaningful in HMAC mode; plain SHA-2 ignores it, including
+ * the Key_1024 restriction that otherwise applies to SHA-256.
+ */
+bool hmac_ip::is_invalid_config(uint32_t digest_size, uint32_t key_length, bool hmac_en) const {
+   return (digest_size == 0x8) ||
+          (hmac_en && (key_length == 0x20)) ||
+          (hmac_en && (key_length == 0x10) && (digest_size == 0x1));
+}
+
+/**
  * @brief Report an error condition
  * @param error_code Error code to set in ERR_CODE register
- * 
+ *
  * Sets the error code in ERR_CODE register and asserts the hmac_err
  * interrupt. Triggers interrupt output update.
+ *
+ * Only the first error of a series is captured: while hmac_err is still
+ * pending, ERR_CODE holds the code software has not yet read. Software must
+ * clear hmac_err (W1C) before a later error can be recorded.
  */
 void hmac_ip::report_error(uint32_t error_code) {
    CSML_FUNC_TRACE(logger);
+
+   if (INTR_STATE.hmac_err) {
+      CSML_INFO(1, logger) << "Error 0x" << std::hex << error_code << std::dec
+                           << " not recorded: hmac_err still pending with ERR_CODE=0x"
+                           << std::hex << static_cast<uint32_t>(ERR_CODE) << std::dec << std::endl;
+      return;
+   }
+
    CSML_ERROR(0, logger) << "Reporting error: error_code=0x" << std::hex << error_code << std::dec << std::endl;
 
    ERR_CODE = error_code;
@@ -1048,27 +1154,24 @@ bool hmac_ip::handle_write_CFG(uint32_t value, uint32_t write_mask) {
 
    CSML_DEBUG(2, logger) << "CFG parameters: digest_size=0x" << std::hex << digest_size << " key_length=0x" << key_length << " hmac_en=" << hmac_en << std::dec << std::endl;
 
-   // Check for invalid digest size (SHA2_None)
-   if ((digest_size != 0x1) && (digest_size != 0x2) && (digest_size != 0x4) ) {
-      CSML_ERROR(0, logger) << "Invalid digest size: 0x" << std::hex << digest_size << std::dec << std::endl;
-      report_error(0x6); // SwInvalidConfig
-      value &= ~(0xF << 5); // Clear digest_size field
-      value |= (0x8 << 5);  // Set to SHA-2_NONE
+   // Unsupported encodings read back as the "none" encoding. CFG is an external
+   // register in RTL: prim_subreg_ext has no storage, so reads return the
+   // sanitised digest_size/key_length rather than the raw value software wrote.
+   // The two fields are sanitised independently, and neither raises an error
+   // here — an illegal configuration is only reported at hash_start/hash_continue.
+   if ((digest_size != 0x1) && (digest_size != 0x2) && (digest_size != 0x4)) {
+      CSML_INFO(1, logger) << "Unsupported digest_size 0x" << std::hex << digest_size
+                           << std::dec << " reads back as SHA2_None" << std::endl;
+      value &= ~(0xF << 5);
+      value |= (0x8 << 5);  // SHA2_None
    }
 
-   // Check for invalid key length in HMAC mode (Key_None)
-   else if (hmac_en && ((key_length != 0x1) && (key_length != 0x2) &&
-      (key_length != 0x4) && (key_length != 0x8) && (key_length != 0x10))) {
-      CSML_ERROR(0, logger) << "Invalid key length in HMAC mode: 0x" << std::hex << key_length << std::dec << std::endl;
-      report_error(0x6);
-      value &= ~(0x3F << 9); // Clear key_length field
-      value |= (0x20 << 9);  // Set to Key_None
-   }
-
-   // Check for Key_1024 in SHA-256 mode
-   else if (hmac_en && (digest_size == 0x1 && key_length == 0x10)) {
-      CSML_ERROR(0, logger) << "Invalid configuration: Key_1024 not supported with SHA-256" << std::endl;
-      report_error(0x6);
+   if ((key_length != 0x1) && (key_length != 0x2) && (key_length != 0x4) &&
+       (key_length != 0x8) && (key_length != 0x10)) {
+      CSML_INFO(1, logger) << "Unsupported key_length 0x" << std::hex << key_length
+                           << std::dec << " reads back as Key_None" << std::endl;
+      value &= ~(0x3F << 9);
+      value |= (0x20 << 9);  // Key_None
    }
 
    // Manually write the value to CFG register with proper mask handling
@@ -1137,31 +1240,30 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
    if (value & 0x1) {
       CSML_INFO(1, logger) << "Processing hash_start command" << std::endl;
 
-      // Validate sha_en
-      if (!CFG.sha_en) {
-         CSML_ERROR(0, logger) << "hash_start rejected: sha_en is not set" << std::endl;
-         report_error(0x2); // SwHashStartWhenShaDisabled
-         return false;
-      }
-
-      // Validate engine is idle
-      if (current_state != State::IDLE) {
-         CSML_ERROR(0, logger) << "hash_start rejected: engine is not IDLE" << std::endl;
-         report_error(0x4); // SwHashStartWhenActive
-         return false;
-      }
-
-      // Validate configuration
       uint32_t digest_size = CFG.digest_size;
       uint32_t key_length = CFG.key_length;
       uint32_t hmac_en = CFG.hmac_en;
 
       CSML_DEBUG(2, logger) << "Configuration: digest_size=0x" << std::hex << digest_size << " key_length=0x" << key_length << " hmac_en=" << hmac_en << std::dec << std::endl;
 
-      if (digest_size == 0x8 || (hmac_en && key_length == 0x20) ||
-          (digest_size == 0x1 && key_length == 0x10)) {
+      // Checked in RTL's priority order: SwInvalidConfig outranks
+      // SwHashStartWhenShaDisabled, which outranks SwHashStartWhenActive.
+      // key_length only constrains HMAC mode; it is irrelevant for plain SHA-2.
+      if (is_invalid_config(digest_size, key_length, hmac_en)) {
          CSML_ERROR(0, logger) << "hash_start rejected: invalid configuration" << std::endl;
          report_error(0x6); // SwInvalidConfig
+         return false;
+      }
+
+      if (!CFG.sha_en) {
+         CSML_ERROR(0, logger) << "hash_start rejected: sha_en is not set" << std::endl;
+         report_error(0x2); // SwHashStartWhenShaDisabled
+         return false;
+      }
+
+      if (current_state != State::IDLE) {
+         CSML_ERROR(0, logger) << "hash_start rejected: engine is not IDLE" << std::endl;
+         report_error(0x4); // SwHashStartWhenActive
          return false;
       }
 
@@ -1174,19 +1276,15 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
          CSML_DEBUG(2, logger) << "Cleared " << fifo_size << " stale words from FIFO" << std::endl;
       }
 
-      // Load sideload key from key manager if valid; otherwise use SW-written key
+      // The key source is selected when the core consumes the key, not here, so
+      // the software key register is left untouched by a sideload operation.
       if (hmac_en && m_keymgr_key_valid) {
-         if (!load_sideload_key()) {
-            CSML_ERROR(0, logger) << "hash_start rejected: keymgr key marked valid but load failed" << std::endl;
-            report_error(0x6); // SwInvalidConfig
-            return false;
-         }
          CSML_INFO(1, logger) << "Using sideload key from key manager" << std::endl;
       }
 
       // Initialize OpenSSL context
       std::string algorithm = get_hash_algorithm();
-      if (!initialize_openssl_context(algorithm, hmac_en, key_length)) {
+      if (!initialize_hash_context(algorithm, hmac_en, key_length)) {
          return false;
       }
 
@@ -1194,6 +1292,8 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       current_state = State::PROCESSING;
       message_length_bits = 0;
       process_stop_issued = false;
+      msg_allowed = true;
+      fifo_full_seen = false;
       packer_bytes_count = 0;
       packer_buffer = 0;
 
@@ -1227,18 +1327,17 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
       // Mark that Process command has been issued (prevents fifo_empty interrupt during finalization)
       process_stop_issued = true;
+      // The packer has been flushed, so software may no longer write MSG_FIFO.
+      msg_allowed = false;
+      fifo_full_seen = false;
       CSML_DEBUG(2, logger) << "process_stop_issued flag set" << std::endl;
 
       // Convert the remaining data to bytes and update OpenSSL context
       process_remaining_data(last_word_valid_bytes);
 
-
-      if (msg_fifo.empty()  && current_state == State::PROCESSING) {
-         CSML_DEBUG(2, logger) << "Setting fifo_empty interrupt" << std::endl;
-         INTR_STATE.fifo_empty = 1;
-         interrupt_update_event.notify(SC_ZERO_TIME);
-
-      }
+      // No fifo_empty interrupt here: hash_process closes the FIFO to software
+      // and clears the was-full tracking, so hardware gates the interrupt off
+      // for the rest of the operation.
 
       CSML_INFO(1, logger) << "Triggering digest computation" << std::endl;
       digest_computation_event.notify(SC_ZERO_TIME);
@@ -1256,8 +1355,10 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       }
 
       process_stop_issued = true;
+      msg_allowed = false;
+      fifo_full_seen = false;
 
-      // Flush any complete blocks still in the FIFO to the OpenSSL context
+      // Flush any complete blocks still in the FIFO into the hash engine
       // synchronously before transitioning to IDLE. The block_processing_thread
       // cannot be relied on here because it checks current_state==PROCESSING
       // before draining — if hash_stop and the last MSG_FIFO write land in the
@@ -1274,22 +1375,38 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
             block_data.push_back((word >> 8)  & 0xFF);
             block_data.push_back( word        & 0xFF);
          }
-         if (CFG.hmac_en) {
-            if (hmac_context)
-               EVP_MAC_update(hmac_context, block_data.data(), block_data.size());
-         } else {
-            if (hash_context)
-               EVP_DigestUpdate(hash_context, block_data.data(), block_data.size());
-         }
-         CSML_INFO(1, logger) << "hash_stop: flushed one block to OpenSSL context" << std::endl;
+         m_sha.compress(block_data.data());
+         CSML_INFO(1, logger) << "hash_stop: flushed one block into the hash engine" << std::endl;
       }
-      // Discard any sub-block remainder — hardware clears the FIFO on hash_stop.
-      while (!msg_fifo.empty()) msg_fifo.pop();
+      // Any sub-block remainder stays where it is. The hardware FIFO has its
+      // clear input tied off and is never flushed, so leftover words and the
+      // packer's partial word survive the pause and are consumed when hashing
+      // resumes on hash_continue.
+      const bool block_aligned = msg_fifo.empty() && (packer_bytes_count == 0);
 
       current_state = State::IDLE;
       process_stop_issued = false;
-      INTR_STATE.hmac_done = 1;
-      CSML_INFO(1, logger) << "Transitioning to IDLE state - setting hmac_done interrupt" << std::endl;
+
+      if (block_aligned) {
+         // The chaining state is only defined between blocks, which is exactly
+         // where a well-formed hash_stop lands. Publish it so software can read
+         // it out of DIGEST, save it, and hand it back at hash_continue.
+         export_state_to_digest();
+
+         INTR_STATE.hmac_done = 1;
+         CSML_INFO(1, logger) << "Transitioning to IDLE state - setting hmac_done interrupt" << std::endl;
+      } else {
+         // The engine only ever completes whole blocks, so a hash_stop issued
+         // part-way through one leaves hmac_done deasserted. Software that
+         // waits on hmac_done alone will wait forever; this is a misuse of the
+         // command rather than a modelling shortcut, so make it visible.
+         CSML_ERROR(0, logger) << "hash_stop issued off a block boundary ("
+                               << msg_fifo.size() << " word(s) and "
+                               << static_cast<unsigned int>(packer_bytes_count)
+                               << " byte(s) pending): hmac_done is not asserted, "
+                               << "matching hardware, which completes whole blocks only"
+                               << std::endl;
+      }
 
       update_status_register();
       interrupt_update_event.notify(SC_ZERO_TIME);
@@ -1299,13 +1416,35 @@ bool hmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
    if (value & 0x8) {
       CSML_INFO(1, logger) << "Processing hash_continue command" << std::endl;
 
-      if (current_state != State::IDLE) {
-         CSML_ERROR(0, logger) << "hash_continue rejected: not in IDLE state" << std::endl;
+      // RTL gates hash_continue on the same conditions as hash_start, and
+      // reports the same errors in the same priority order.
+      if (is_invalid_config(CFG.digest_size, CFG.key_length, CFG.hmac_en)) {
+         CSML_ERROR(0, logger) << "hash_continue rejected: invalid configuration" << std::endl;
+         report_error(0x6); // SwInvalidConfig
          return false;
       }
 
-      // Restore context (DIGEST and MSG_LENGTH should already be written by software)
+      if (!CFG.sha_en) {
+         CSML_ERROR(0, logger) << "hash_continue rejected: sha_en is not set" << std::endl;
+         report_error(0x2); // SwHashStartWhenShaDisabled
+         return false;
+      }
+
+      if (current_state != State::IDLE) {
+         CSML_ERROR(0, logger) << "hash_continue rejected: engine is not IDLE" << std::endl;
+         report_error(0x4); // SwHashStartWhenActive
+         return false;
+      }
+
+      // Reload the chaining state software placed in DIGEST and the bit count it
+      // placed in MSG_LENGTH. This is the point of the whole stop/continue
+      // mechanism: the engine resumes mid-message from a state it never held.
+      import_state_from_digest();
+
       current_state = State::PROCESSING;
+      process_stop_issued = false;
+      msg_allowed = true;
+      fifo_full_seen = false;
       CSML_INFO(1, logger) << "Transitioning to PROCESSING state (context restored)" << std::endl;
       update_status_register();
    }
@@ -1340,23 +1479,14 @@ bool hmac_ip::handle_write_WIPE_SECRET(uint32_t value, uint32_t write_mask) {
    }
    CSML_DEBUG(2, logger) << "DIGEST registers wiped" << std::endl;
 
-   // Reset OpenSSL contexts
-   if (hash_context) {
-      EVP_MD_CTX_free(hash_context);
-      hash_context = nullptr;
-      CSML_DEBUG(2, logger) << "Hash context freed" << std::endl;
-   }
-   if (hmac_context) {
-      EVP_MAC_CTX_free(hmac_context);
-      hmac_context = nullptr;
-      CSML_DEBUG(2, logger) << "HMAC context freed" << std::endl;
-   }
-   if (hmac_mac) {
-      EVP_MAC_free(hmac_mac);
-      hmac_mac = nullptr;
-      CSML_DEBUG(2, logger) << "HMAC MAC freed" << std::endl;
-   }
-   current_md = nullptr;
+   // Scrub the hash engine too: the chaining state of an in-flight hash and the
+   // retained key are as sensitive as the registers just wiped.
+   m_sha.init(sha2_mode::sha256);
+   std::fill(m_hmac_key.begin(), m_hmac_key.end(), 0);
+   m_hmac_key.clear();
+   std::fill(m_final_tail.begin(), m_final_tail.end(), 0);
+   m_final_tail.clear();
+   CSML_DEBUG(2, logger) << "Hash engine state wiped" << std::endl;
 
    CSML_INFO(1, logger) << "Sensitive data wiped successfully" << std::endl;
 
@@ -1419,6 +1549,16 @@ bool hmac_ip::handle_read_DIGEST(unsigned int index, uint32_t& value, uint32_t r
    CSML_FUNC_TRACE(logger);
 
    value = DIGEST[index];
+
+   // digest_swap byte-reverses each 32-bit word on the way out, using the
+   // configuration in force at the time of the read.
+   if (CFG.digest_swap) {
+      const uint32_t raw = value;
+      value = byte_reverse32(value);
+      CSML_DEBUG(2, logger) << "Digest swap on read: DIGEST[" << index << "] 0x" << std::hex
+                            << raw << " -> 0x" << value << std::dec << std::endl;
+   }
+
    CSML_DEBUG(2, logger) << "Read from DIGEST[" << index << "]: value=0x" << std::hex << value << std::dec << std::endl;
 
    return true; // Callback handled the read
@@ -1441,6 +1581,12 @@ bool hmac_ip::handle_write_DIGEST(unsigned int index, uint32_t value, uint32_t w
    if (current_state != State::IDLE) {
       CSML_DEBUG(2, logger) << "DIGEST write rejected: not in IDLE state" << std::endl;
       return false; // Reject write
+   }
+
+   // Undo digest_swap on the way in so that storage always holds the raw word,
+   // mirroring the read path. Byte reversal is its own inverse.
+   if (CFG.digest_swap) {
+      value = byte_reverse32(value);
    }
 
    // Manually write the value to DIGEST register with proper mask handling
@@ -1578,8 +1724,7 @@ bool hmac_ip::handle_write_MSG_FIFO_with_be(uint32_t value, uint8_t byte_enable)
          uint32_t word_to_push = packer_buffer;
          apply_endian_swap(word_to_push);
 
-         msg_fifo.push(word_to_push);
-         CSML_DEBUG(3, logger) << "Pushed word to FIFO: 0x" << std::hex << word_to_push << std::dec << " (FIFO size now=" << msg_fifo.size() << ")" << std::endl;
+         push_fifo_word(word_to_push);
 
          packer_buffer = 0;
          packer_bytes_count = 0;
@@ -1654,45 +1799,39 @@ void hmac_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
 }
 
 /**
- * @brief XOR share0 and share1 into key_storage[0..7]; zeros key_storage[8..31]
+ * @brief Select the key word actually fed to the MAC
+ * @param index Key word index (0-31)
+ * @return Sideload key word when the key manager key is valid, else the
+ *         software-written key word
  *
- * Mirrors the RTL: key_to_core = {(key[0]^key[1]), 768'b0} — only 256 bits of
- * actual key material, MSB-justified in the 1024-bit key_storage vector.
- * Returns false when the sideload key is not valid.
+ * Hardware muxes between the software key register and the key-manager key at
+ * the point the core consumes it, rather than copying one over the other. The
+ * software key therefore survives a sideload operation and becomes visible
+ * again as soon as the key manager deasserts validity.
+ *
+ * The sideload key is the XOR of the two shares and carries only 256 bits of
+ * material, MSB-justified in the 1024-bit key vector.
  */
-bool hmac_ip::load_sideload_key() {
-   if (!m_keymgr_key_valid) return false;
-   for (unsigned int i = 0; i < 8; i++)
-      key_storage[i] = m_keymgr_share0[i] ^ m_keymgr_share1[i];
-   for (unsigned int i = 8; i < 32; i++)
-      key_storage[i] = 0;
-   CSML_INFO(1, logger) << "Sideload key loaded from key manager" << std::endl;
-   return true;
+uint32_t hmac_ip::effective_key_word(unsigned int index) const {
+   if (index >= 32) {
+      return 0;
+   }
+
+   if (!m_keymgr_key_valid) {
+      return key_storage[index];
+   }
+
+   return (index < 8) ? (m_keymgr_share0[index] ^ m_keymgr_share1[index]) : 0u;
 }
 
 /**
  * @brief Destructor
  *
- * Frees all OpenSSL contexts and resources to prevent memory leaks.
+ * The hash engine and its buffers are self-managing, so there is nothing to
+ * release here.
  */
 hmac_ip::~hmac_ip() {
    CSML_FUNC_TRACE(logger);
-   CSML_INFO(1, logger) << "Destroying HMAC IP - freeing OpenSSL contexts" << std::endl;
-
-   // Free OpenSSL contexts
-   if (hash_context) {
-       EVP_MD_CTX_free(hash_context);
-       CSML_DEBUG(2, logger) << "Hash context freed" << std::endl;
-   }
-   if (hmac_context) {
-       EVP_MAC_CTX_free(hmac_context);
-       CSML_DEBUG(2, logger) << "HMAC context freed" << std::endl;
-   }
-   if (hmac_mac) {
-       EVP_MAC_free(hmac_mac);
-       CSML_DEBUG(2, logger) << "HMAC MAC freed" << std::endl;
-   }
-
    CSML_INFO(1, logger) << "HMAC IP destroyed successfully" << std::endl;
 }
 

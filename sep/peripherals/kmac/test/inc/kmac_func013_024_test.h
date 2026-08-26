@@ -33,6 +33,48 @@
 #include "kmac_test.h"
 
 // =============================================================================
+// FUNC-KMAC-026: Rejection and boundary paths
+// =============================================================================
+//
+// Branches taken when the configuration or command sequence is invalid, plus
+// the output-window boundaries of the extendable-output modes. Identified from
+// a line-coverage run rather than from the register map. All use KMAC_CHECK.
+
+void test_entropy_req_outside_idle(kmac_test* test);
+void test_refresh_threshold_non_edn(kmac_test* test);
+void test_threshold_write_during_escalation(kmac_test* test);
+void test_app_request_during_escalation(kmac_test* test);
+void test_msg_fifo_write_during_app_operation(kmac_test* test);
+void test_run_invalid_kstrength(kmac_test* test);
+void test_run_exhausts_shake_output(kmac_test* test);
+void test_run_exhausts_kmac_output(kmac_test* test);
+void test_state_share1_masking_disabled(kmac_test* test);
+void test_state_read_straddles_digest_end(kmac_test* test);
+
+// =============================================================================
+// Check facility
+// =============================================================================
+//
+// The FUNC-016 and FUNC-019 groups originally used bare assert(). The default
+// build type is Release, which defines NDEBUG, so every one of those checks
+// compiled away to nothing and the tests could not fail. KMAC_CHECK records
+// the failure instead, and the testbench wrapper turns a non-zero count into a
+// reported test failure.
+
+/// @brief Number of KMAC_CHECK failures since the last reset
+extern unsigned int kmac_check_failures;
+
+/// @brief Reset the failure counter; call before running a test group
+void kmac_check_reset();
+
+/// @brief Record the outcome of one check
+/// @return the condition, so callers can branch on it if they need to
+bool kmac_check_report(bool condition, const char* expression, const char* file,
+                       int line);
+
+#define KMAC_CHECK(cond) kmac_check_report((cond), #cond, __FILE__, __LINE__)
+
+// =============================================================================
 // FUNC-KMAC-016: Configuration Shadow Register Protection
 // =============================================================================
 

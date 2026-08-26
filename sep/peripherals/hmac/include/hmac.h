@@ -17,9 +17,7 @@
 #include "csml_parameter.h"
 #include "hmac_base.h"
 #include <memory>
-#include <openssl/core_names.h>
-#include <openssl/evp.h> // OpenSSL library requires linking with -lssl -lcrypto
-#include <openssl/params.h>
+#include "sha2_engine.h"
 #include <queue>
 #include <tlm_utils/simple_target_socket.h>
 #include <vector>
@@ -127,8 +125,17 @@ private:
 
   // FIFO Management
 
-  // Message FIFO queue storing 32-bit words
+  // Message FIFO queue storing 32-bit words. Bounded to the depth reported by
+  // get_fifo_depth_limit(); pushes beyond that drain a block first, standing in
+  // for the bus backpressure hardware applies when the FIFO is full.
   std::queue<uint32_t> msg_fifo;
+  // Whether software is currently permitted to write MSG_FIFO. Set by
+  // hash_start/hash_continue and cleared once the packer has been flushed.
+  bool msg_allowed;
+  // Whether the FIFO has been observed full since the last command or since
+  // software last refilled it. Gates the fifo_empty interrupt so it is raised
+  // once per fill cycle rather than continuously.
+  bool fifo_full_seen;
   // Buffer for accumulating partial words from byte-level writes
   uint32_t packer_buffer;
   // Number of valid bytes currently in packer_buffer
@@ -149,16 +156,21 @@ private:
   bool m_keymgr_key_valid; // True when KM has committed a valid key (KEY_CTRL
                            // bit0=1)
 
-  // OpenSSL Cryptographic Contexts
+  // Hash Engine
+  //
+  // The SHA-2 core is implemented in-model rather than delegated to OpenSSL
+  // because hash_stop/hash_continue require loading an arbitrary chaining state
+  // into the hash, which the EVP API does not expose.
 
-  // Hash context for SHA-2 only mode
-  EVP_MD_CTX *hash_context;
-  // HMAC context for HMAC mode (EVP_MAC API, OpenSSL 3.0+)
-  EVP_MAC_CTX *hmac_context;
-  // Message digest algorithm selector (SHA-256/384/512)
-  const EVP_MD *current_md;
-  // HMAC MAC algorithm object
-  EVP_MAC *hmac_mac;
+  // Active hash. In HMAC mode this is the inner hash; the outer hash is run to
+  // completion at finalization and needs no persistent state.
+  sha2_engine m_sha;
+  // Key block for HMAC, already XORed with ipad at start and re-derived with
+  // opad at finalization. Empty in SHA-2 only mode.
+  std::vector<uint8_t> m_hmac_key;
+  // Trailing message bytes that did not fill a block, consumed when the digest
+  // is finalized.
+  std::vector<uint8_t> m_final_tail;
 
   // Configuration Parameters
 
@@ -208,6 +220,18 @@ private:
   // and applies timing annotation.
   void process_message_block();
 
+  // Reverse the byte order of a 32-bit word. Used for endian_swap and
+  // digest_swap, both of which are their own inverse.
+  static uint32_t byte_reverse32(uint32_t word) {
+    return ((word & 0x000000FFu) << 24) | ((word & 0x0000FF00u) << 8) |
+           ((word & 0x00FF0000u) >> 8)  | ((word & 0xFF000000u) >> 24);
+  }
+
+  // Push one word into the message FIFO, applying backpressure and maintaining
+  // the fifo_full_seen tracking used to gate the fifo_empty interrupt.
+  // If the FIFO is already full, a block is drained first to make room.
+  void push_fifo_word(uint32_t word);
+
   // Flush packer buffer to FIFO if needed
   // Returns: Number of valid bytes in the last word (0 if packer was empty)
   // If packer_buffer contains accumulated bytes, flushes them to msg_fifo
@@ -233,16 +257,30 @@ private:
   // data: Reference to 32-bit data word to swap
   void apply_endian_swap(uint32_t &data);
 
-  // Initialize OpenSSL context for hash or HMAC operation
+  // Start a fresh hash. In HMAC mode this also absorbs the K^ipad block, so on
+  // return the engine is positioned exactly where the message begins.
   // algorithm: Hash algorithm name ("SHA-256", "SHA-384", or "SHA-512")
   // hmac_en: Whether HMAC mode is enabled
   // key_length: Key length configuration value
   // Returns: true on success, false on error
-  // Initializes the appropriate OpenSSL context (HMAC or hash) based on
-  // the configuration. Sets up the message digest algorithm and prepares
-  // the key for HMAC mode.
-  bool initialize_openssl_context(const std::string &algorithm, bool hmac_en,
-                                  uint32_t key_length);
+  bool initialize_hash_context(const std::string &algorithm, bool hmac_en,
+                               uint32_t key_length);
+
+  // Map the CFG digest_size encoding onto the hash engine's mode.
+  // Returns false if the encoding is not a supported hash.
+  bool sha_mode_from_cfg(uint32_t digest_size, sha2_mode &mode) const;
+
+  // Build the HMAC key block: the key zero-padded (or pre-hashed, when longer)
+  // to the hash block size, then XORed with the given pad byte.
+  std::vector<uint8_t> key_block(uint8_t pad_byte) const;
+
+  // Write the engine's chaining state into the DIGEST registers, using the same
+  // word mapping hardware uses for a completed digest. Backs hash_stop.
+  void export_state_to_digest();
+
+  // Reload the engine's chaining state from the DIGEST registers and restore
+  // the absorbed bit count from MSG_LENGTH. Backs hash_continue.
+  void import_state_from_digest();
 
   // Register Callback Functions
 
@@ -318,9 +356,11 @@ private:
   // KM writes share0 (0x00-0x1C), share1 (0x20-0x3C), KEY_CTRL (0x40)
   void keymgr_b_transport(tlm::tlm_generic_payload &trans, sc_time &delay);
 
-  // XOR share0 and share1 into key_storage[0..7]; zeros key_storage[8..31]
-  // Returns false if keymgr key is not valid
-  bool load_sideload_key();
+  // Select the key word the core actually consumes: the key-manager sideload
+  // key (XOR of the two shares, 256 bits MSB-justified) when it is valid,
+  // otherwise the software-written key. Software KEY writes are never
+  // overwritten by a sideload operation.
+  uint32_t effective_key_word(unsigned int index) const;
 
   // Digest Register Callbacks
 
@@ -374,9 +414,17 @@ private:
 
   // Error Reporting
 
+  // Test whether the configuration blocks a hash from starting.
+  // Returns true when hash_start/hash_continue must be refused with
+  // SwInvalidConfig. key_length only constrains HMAC mode.
+  bool is_invalid_config(uint32_t digest_size, uint32_t key_length,
+                         bool hmac_en) const;
+
   // Report an error condition
   // error_code: Error code to set in ERR_CODE register
-  // Sets the error code and asserts the hmac_err interrupt.
+  // Sets the error code and asserts the hmac_err interrupt. Only the first
+  // error of a series is captured; while hmac_err is pending ERR_CODE holds
+  // the code software has not yet read.
   void report_error(uint32_t error_code);
 
   // Logger instance for structured logging

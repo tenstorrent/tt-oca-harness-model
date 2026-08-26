@@ -61,13 +61,41 @@ public:
     tlm_utils::simple_target_socket<kmac_ip, 32> keymgr_tl_socket;
 
     /// @brief Application interfaces array (KeyMgr, LC_CTRL, ROM_CTRL)
+    ///
+    /// Deliberately left unbound at the platform. kmac_wrapper.sv ties app_i to
+    /// zero and leaves app_o unused, so SEP has no hardware-initiated KMAC
+    /// operations in silicon either; the KeyMgr sideload key arrives over
+    /// keymgr_tl_socket instead. The handlers exist so the interface can be
+    /// exercised from the unit testbench, not because the platform will drive
+    /// them.
     sc_export<kmac_app_if>* app_export;
 
     /// @brief Idle status output (true when FSM in IDLE state)
     sc_out<bool> idle_o;
 
-    /// @brief Interrupt output (asserted when (INTR_STATE & INTR_ENABLE) != 0)
-    sc_out<bool> intr_o;
+    // Three independent interrupt outputs, matching the three vectors sep.sv
+    // places on sep_internal_interrupts[20:22]. Each carries one INTR_STATE bit
+    // gated by the matching INTR_ENABLE bit; they are not OR-reduced here
+    // because the PIC gives them separate slots.
+
+    /// @brief kmac_done interrupt (INTR_STATE.kmac_done & INTR_ENABLE.kmac_done)
+    sc_out<bool> intr_kmac_done;
+
+    /// @brief fifo_empty interrupt (INTR_STATE.fifo_empty & INTR_ENABLE.fifo_empty)
+    sc_out<bool> intr_fifo_empty;
+
+    /// @brief kmac_err interrupt (INTR_STATE.kmac_err & INTR_ENABLE.kmac_err)
+    sc_out<bool> intr_kmac_err;
+
+    // Alert outputs. sep_crypto.sv gives KMAC two alert channels and folds them,
+    // with every other crypto block's, into the single crypto_alert_o that
+    // sep.sv drives onto sep_internal_interrupts[32].
+
+    /// @brief Recoverable alert, mirrors STATUS.ALERT_RECOV_CTRL_UPDATE_ERR
+    sc_out<bool> alert_recov_operation_err;
+
+    /// @brief Fatal alert, mirrors STATUS.ALERT_FATAL_FAULT
+    sc_out<bool> alert_fatal_fault;
 
     /// @brief Life cycle escalation input (triggers security response)
     sc_in<bool> lc_escalate_en_i;
@@ -127,12 +155,50 @@ private:
     sc_event idle_update_event;
 
     /**
-     * @brief Event for intr_o port driver
+     * @brief Event for the interrupt port driver
      *
-     * Notified when INTR_STATE or INTR_ENABLE changes, triggers intr_o signal update.
-     * Implements single-writer pattern for intr_o port.
+     * Notified when INTR_STATE or INTR_ENABLE changes, triggers an update of
+     * the three interrupt outputs. Implements the single-writer pattern.
      */
     sc_event intr_update_event;
+
+    /**
+     * @brief Event for the alert port driver
+     *
+     * Notified when either STATUS alert mirror changes. Implements the
+     * single-writer pattern for the two alert outputs.
+     */
+    sc_event alert_update_event;
+
+    /**
+     * @brief Whether the message FIFO has been full since the last Start
+     *
+     * RTL only raises the fifo_empty interrupt once the FIFO has actually
+     * filled, so software is not interrupted while hardware is keeping up.
+     * Cleared on Start and on reset.
+     */
+    bool fifo_full_seen;
+
+    /**
+     * @brief Deferred drain of the message FIFO once the engine catches up
+     *
+     * Message bytes are absorbed into the digest as soon as they are packed,
+     * so the queue and fifo_depth exist purely to model occupancy. Draining
+     * them on a delayed event rather than inside the write keeps the full
+     * condition observable to software for the interval the engine would
+     * really have taken to consume a full FIFO, which is what makes the
+     * fill/stall/drain/refill handshake behave as it does in hardware.
+     */
+    sc_event fifo_drain_event;
+
+    /**
+     * @brief Whether the Process command has been issued for this message
+     *
+     * One of the three RDL preconditions for the fifo_empty interrupt: once
+     * Process is written, software has no more data to supply and the
+     * interrupt is pointless. Cleared on Start and on reset.
+     */
+    bool process_issued;
 
     /**
      * @brief Event for STATUS register dynamic updates
@@ -427,22 +493,63 @@ private:
     void idle_o_driver();
 
     /**
-     * @brief intr_o port driver SC_METHOD
+     * @brief Interrupt port driver SC_METHOD
      *
-     * Single-writer method for intr_o signal.
+     * Single-writer method for the three interrupt outputs.
      * Sensitive to intr_update_event.
-     * Updates intr_o based on (INTR_STATE & INTR_ENABLE) != 0.
+     * Drives each output from its own INTR_STATE bit gated by INTR_ENABLE.
      */
     void intr_o_driver();
 
     /**
-     * @brief Evaluate and update interrupt output
+     * @brief Alert port driver SC_METHOD
      *
-     * Computes intr_o = (INTR_STATE & INTR_ENABLE) != 0
-     * and notifies intr_update_event to trigger the driver.
+     * Single-writer method for the two alert outputs. Sensitive to
+     * alert_update_event, which is notified whenever the STATUS alert mirrors
+     * change.
+     */
+    void alert_o_driver();
+
+    /**
+     * @brief Evaluate and update interrupt outputs
+     *
+     * Notifies intr_update_event to trigger the driver.
      * Call this after any change to INTR_STATE or INTR_ENABLE.
      */
     void evaluate_interrupt();
+
+    /**
+     * @brief Evaluate and update alert outputs
+     *
+     * Notifies alert_update_event. Call this after any change to
+     * STATUS.ALERT_RECOV_CTRL_UPDATE_ERR or STATUS.ALERT_FATAL_FAULT.
+     */
+    void evaluate_alert();
+
+    /**
+     * @brief Recompute INTR_STATE.fifo_empty from the live FIFO condition
+     *
+     * fifo_empty is a status interrupt in RTL: sw = r, driven directly by
+     * hardware rather than latched and cleared by software. It is raised only
+     * while the message FIFO is genuinely writable by software, which the RDL
+     * defines as no application interface active, SHA3 in Absorb, and Process
+     * not yet issued. The FIFO must also have been full at some point since
+     * the last Start, otherwise the engine drains faster than software can
+     * fill it and interrupting would be pointless. That last precondition also
+     * suppresses the continuous retrigger the FIFO's Pass=1 behaviour would
+     * otherwise cause, since data passes straight through and leaves the depth
+     * at zero.
+     */
+    void update_fifo_empty_interrupt();
+
+    /**
+     * @brief Drain the modelled FIFO occupancy after the engine catches up
+     *
+     * SC_METHOD sensitive to fifo_drain_event. Clears the occupancy and
+     * re-evaluates the fifo_empty interrupt, which is where the interrupt
+     * actually gets raised in a fill/stall/drain sequence.
+     */
+    void fifo_drain_process();
 
     // FUNC-KMAC-005: Key Management Callback Handlers
 
@@ -451,6 +558,26 @@ private:
      * @return true if write successful
      */
     bool handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable);
+
+    /**
+     * @brief ENTROPY_REFRESH_THRESHOLD_SHADOWED write callback handler
+     *
+     * Implements the two-write shadow protocol the RDL requires for this
+     * register: stage the first write, commit on a matching second write, and
+     * raise STATUS.ALERT_RECOV_CTRL_UPDATE_ERR on a mismatch.
+     * @return false always, because the handler owns the field update
+     */
+    bool handle_write_ENTROPY_REFRESH_THRESHOLD_SHADOWED(uint32_t value,
+                                                         uint8_t byte_enable);
+
+    /**
+     * @brief Trigger the automatic PRNG reseed once the hash count reaches the
+     *        configured threshold
+     *
+     * Called after every hash-count change and after a threshold commit, since
+     * lowering the threshold can satisfy the comparison immediately.
+     */
+    void check_entropy_refresh_threshold();
 
     /**
      * @brief KEY_SHARE0 register write callback handler (CFG_REGWEN protected)
@@ -703,4 +830,15 @@ private:
     // Fixed: Member variables for CFG_SHADOWED state (replacing static locals)
     bool m_shadow_pending;
     uint32_t m_shadow_pending_value;
+
+    // ENTROPY_REFRESH_THRESHOLD_SHADOWED is a second shadowed register and
+    // carries its own independent phase tracking; a partial write to one must
+    // not be completed by a write to the other.
+    bool m_threshold_shadow_pending;
+    uint32_t m_threshold_shadow_pending_value;
+
+    /// @brief Number of automatic threshold-triggered reseeds since reset.
+    /// Not a register; exists so tests can tell an automatic reseed apart from
+    /// a hash counter that simply never advanced.
+    uint32_t m_auto_reseed_count;
 };

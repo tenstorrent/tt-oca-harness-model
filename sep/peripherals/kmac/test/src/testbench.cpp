@@ -128,9 +128,20 @@ void testbench::bind_ports()
     test->idle_i(idle_sig);
     CSML_INFO(2, logger) << "  [BOUND] idle_o ↔ idle_i via signal";
 
-    // Interrupt output: Model output → Signal (for monitoring)
-    dut->intr_o(intr_sig);
-    CSML_INFO(2, logger) << "  [BOUND] intr_o → intr_sig (interrupt output)";
+    // Interrupt outputs: three independent lines, matching the three PIC slots
+    // sep.sv gives KMAC rather than a single OR-reduction
+    dut->intr_kmac_done(intr_done_sig);
+    dut->intr_fifo_empty(intr_fifo_empty_sig);
+    dut->intr_kmac_err(intr_err_sig);
+    CSML_INFO(2, logger) << "  [BOUND] intr_kmac_done / intr_fifo_empty / "
+                            "intr_kmac_err → signals";
+
+    // Alert outputs: monitored so shadow-update and fatal faults are
+    // observable at the port, not only in STATUS
+    dut->alert_recov_operation_err(alert_recov_sig);
+    dut->alert_fatal_fault(alert_fatal_sig);
+    CSML_INFO(2, logger) << "  [BOUND] alert_recov_operation_err / "
+                            "alert_fatal_fault → signals";
 
     // Life cycle escalation: Test output → Signal → Model input
     test->lc_escalate_en_o(lc_escalate_en_sig);
@@ -701,6 +712,13 @@ void testbench::run_tests()
     test_sideload_key_len_clamp();
     test_defensive_error_paths();
 
+    // =========================================================================
+    // FUNC-KMAC-016 and FUNC-KMAC-019: shadow protection and error reporting
+    // =========================================================================
+    test_func_kmac_016_shadow_protection();
+    test_func_kmac_019_error_reporting();
+    test_func_kmac_026_rejection_paths();
+
     // Wait for simulation time to advance
     wait(1, SC_MS);
 
@@ -967,6 +985,126 @@ void testbench::report_test_summary()
 extern void kmac_func008_test_main(kmac_test* test);
 
 /******************************************************************************
+ * @brief Run one FUNC-016/019 test function and report its outcome
+ *
+ * These test groups report through KMAC_CHECK, which only counts failures.
+ * This wrapper turns that count into the pass/fail bookkeeping the rest of the
+ * suite uses, and resets the DUT between cases so an error state left by one
+ * does not leak into the next.
+ ******************************************************************************/
+void testbench::run_checked_case(const char* label,
+                                 void (*body)(kmac_test*))
+{
+    report_test_start(label);
+    apply_reset();
+    kmac_check_reset();
+
+    body(test);
+
+    if (kmac_check_failures == 0) {
+        report_test_pass(label);
+    } else {
+        report_test_fail(label, std::to_string(kmac_check_failures) +
+                                    " check(s) failed");
+    }
+}
+
+/******************************************************************************
+ * @brief FUNC-KMAC-016: Configuration Shadow Register Protection
+ *
+ * Covers both shadowed registers, CFG_SHADOWED and
+ * ENTROPY_REFRESH_THRESHOLD_SHADOWED, along with the recoverable update-error
+ * alert each raises on a mismatched second write.
+ ******************************************************************************/
+void testbench::test_func_kmac_016_shadow_protection()
+{
+    run_checked_case("TC-012: test_shadow_register_cfg_shadowed_duplicate_write",
+                     test_shadow_register_cfg_shadowed_duplicate_write);
+    run_checked_case("TC-013: test_shadow_register_cfg_shadowed_mismatch",
+                     test_shadow_register_cfg_shadowed_mismatch);
+    run_checked_case("TC-014: test_shadow_register_entropy_threshold_duplicate_write",
+                     test_shadow_register_entropy_threshold_duplicate_write);
+    run_checked_case("TC-015: test_shadow_register_entropy_threshold_mismatch",
+                     test_shadow_register_entropy_threshold_mismatch);
+    run_checked_case("TC-158: test_alert_recov_ctrl_update_err_bit",
+                     test_alert_recov_ctrl_update_err_bit);
+    run_checked_case("TC-163: test_callback_cfg_shadowed_write_validation",
+                     test_callback_cfg_shadowed_write_validation);
+    run_checked_case("TC-165: test_callback_entropy_refresh_threshold_validation",
+                     test_callback_entropy_refresh_threshold_validation);
+}
+
+/******************************************************************************
+ * @brief FUNC-KMAC-019: Error Detection and Reporting
+ *
+ * Walks the ERR_CODE enumeration and the alert bits, including the error
+ * recovery sequence driven by CMD.err_processed.
+ ******************************************************************************/
+void testbench::test_func_kmac_019_error_reporting()
+{
+    run_checked_case("TC-140: test_err_code_keynotvalid_0x01",
+                     test_err_code_keynotvalid_0x01);
+    run_checked_case("TC-141: test_err_code_swpushedmsgfifo_0x02",
+                     test_err_code_swpushedmsgfifo_0x02);
+    run_checked_case("TC-142: test_err_code_swissuedcmdinappactive_0x03_detailed",
+                     test_err_code_swissuedcmdinappactive_0x03_detailed);
+    run_checked_case("TC-147: test_err_code_waittimerexpired_0x04",
+                     test_err_code_waittimerexpired_0x04);
+    run_checked_case("TC-148: test_err_code_incorrectentropymode_0x05",
+                     test_err_code_incorrectentropymode_0x05);
+    run_checked_case("TC-149: test_err_code_unexpectedmodestrength_0x06",
+                     test_err_code_unexpectedmodestrength_0x06);
+    run_checked_case("TC-150: test_err_code_incorrectfunctionname_0x07",
+                     test_err_code_incorrectfunctionname_0x07);
+    run_checked_case("TC-151: test_err_code_swcmdsequence_0x08_detailed",
+                     test_err_code_swcmdsequence_0x08_detailed);
+    run_checked_case("TC-152: test_err_code_swhashingwithoutentropy_0x09",
+                     test_err_code_swhashingwithoutentropy_0x09);
+    run_checked_case("TC-153: test_err_code_sha3control_0x80",
+                     test_err_code_sha3control_0x80);
+    run_checked_case("TC-154: test_err_code_persistence_across_interrupt_clear",
+                     test_err_code_persistence_across_interrupt_clear);
+    run_checked_case("TC-155: test_err_code_cleared_on_done",
+                     test_err_code_cleared_on_done);
+    run_checked_case("TC-156: test_error_recovery_sequence",
+                     test_error_recovery_sequence);
+    run_checked_case("TC-157: test_alert_fatal_fault_bit",
+                     test_alert_fatal_fault_bit);
+    run_checked_case("TC-158-Detailed: test_alert_recov_ctrl_update_err_bit_detailed",
+                     test_alert_recov_ctrl_update_err_bit_detailed);
+}
+
+/******************************************************************************
+ * @brief FUNC-KMAC-026: Rejection and boundary paths
+ *
+ * Branches taken when a command or configuration is refused, and the output
+ * window boundaries of the extendable-output modes.
+ ******************************************************************************/
+void testbench::test_func_kmac_026_rejection_paths()
+{
+    run_checked_case("TC-220: test_entropy_req_outside_idle",
+                     test_entropy_req_outside_idle);
+    run_checked_case("TC-221: test_refresh_threshold_non_edn",
+                     test_refresh_threshold_non_edn);
+    run_checked_case("TC-222: test_threshold_write_during_escalation",
+                     test_threshold_write_during_escalation);
+    run_checked_case("TC-223: test_app_request_during_escalation",
+                     test_app_request_during_escalation);
+    run_checked_case("TC-224: test_msg_fifo_write_during_app_operation",
+                     test_msg_fifo_write_during_app_operation);
+    run_checked_case("TC-225: test_run_invalid_kstrength",
+                     test_run_invalid_kstrength);
+    run_checked_case("TC-226: test_run_exhausts_shake_output",
+                     test_run_exhausts_shake_output);
+    run_checked_case("TC-227: test_run_exhausts_kmac_output",
+                     test_run_exhausts_kmac_output);
+    run_checked_case("TC-228: test_state_share1_masking_disabled",
+                     test_state_share1_masking_disabled);
+    run_checked_case("TC-229: test_state_read_straddles_digest_end",
+                     test_state_read_straddles_digest_end);
+}
+
+/******************************************************************************
  * @brief FUNC-KMAC-008: Application Interface - LC_CTRL Hash Operations
  *
  * Wrapper function that calls the external test orchestrator for FUNC-KMAC-008.
@@ -1005,7 +1143,8 @@ int sc_main(int argc, char* argv[])
     CSML_INFO(2, logger) << "  KMAC SystemC TLM Testbench" << std::endl;
     CSML_INFO(2, logger) << "====================================================" << std::endl;
 
-    testbench tb("kmac_testbench");
+    // Heap-allocated so the teardown path can be run explicitly below.
+    testbench* tb = new testbench("kmac_testbench");
 
     CSML_INFO(2, logger) << "Starting simulation..." << std::endl;
 
@@ -1015,9 +1154,17 @@ int sc_main(int argc, char* argv[])
     CSML_INFO(2, logger) << "  Simulation Complete" << std::endl;
     CSML_INFO(2, logger) << "====================================================" << std::endl;
 
+    const unsigned int failed = tb->m_tests_failed;
+
+    // quick_exit skips destructors, so the model's cleanup path (OpenSSL
+    // context teardown and the app handler arrays) never ran and could not
+    // regress unnoticed. Destroy the hierarchy explicitly first; the run is
+    // over, so nothing else touches it.
+    delete tb;
+
 #ifdef __COVERAGE__
     __gcov_dump();  // Flush coverage data before quick_exit
 #endif
-    std::quick_exit(tb.m_tests_failed > 0 ? 1 : 0);
+    std::quick_exit(failed > 0 ? 1 : 0);
     return 0;
 }

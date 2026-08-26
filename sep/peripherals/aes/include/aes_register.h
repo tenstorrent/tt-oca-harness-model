@@ -241,7 +241,7 @@ class CTRL_SHADOWED_type : public csml_reg<N>
     using typename csml_reg<N>::memory_type;
     typedef typename csml_word<N>::wordtype DT;
     CTRL_SHADOWED_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x1181),
+      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x11FD),
       OPERATION(reg_name + ".OPERATION", *this, 0, 2), 
       MODE(reg_name + ".MODE", *this, 2, 6), 
       KEY_LEN(reg_name + ".KEY_LEN", *this, 8, 3), 
@@ -438,6 +438,46 @@ class STATUS_type : public csml_reg<N>
     csml_bitfield<N> ALERT_RECOV_CTRL_UPDATE_ERR; ///< Mirror of recoverable alert status
     csml_bitfield<N> ALERT_FATAL_FAULT;           ///< Mirror of fatal alert status
     csml_bitfield<N> reserved0;                   ///< Reserved bits
+};
+
+/**
+ * @class CTRL_GCM_SHADOWED_type
+ * @brief Register class for CTRL_GCM_SHADOWED (offset 0x88)
+ *
+ * Selects the Galois/Counter Mode phase and marks how many bytes of the current
+ * input block are valid. Shadowed like the other control registers, with one
+ * shadow primitive per field.
+ */
+template<unsigned int N>
+class CTRL_GCM_SHADOWED_type : public csml_reg<N>
+{
+  public:
+    using typename csml_reg<N>::memory_type;
+    typedef typename csml_word<N>::wordtype DT;
+    CTRL_GCM_SHADOWED_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x401),
+      PHASE(reg_name + ".PHASE", *this, 0, 6),
+      NUM_VALID_BYTES(reg_name + ".NUM_VALID_BYTES", *this, 6, 5),
+      reserved0(reg_name + ".reserved0", *this, 11, 21)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+
+    using csml_reg<N>::operator=;
+    using csml_reg<N>::operator+=;
+    using csml_reg<N>::operator-=;
+    using csml_reg<N>::operator/=;
+    using csml_reg<N>::operator*=;
+    using csml_reg<N>::operator%=;
+    using csml_reg<N>::operator^=;
+    using csml_reg<N>::operator&=;
+    using csml_reg<N>::operator|=;
+    using csml_reg<N>::operator>>=;
+    using csml_reg<N>::operator<<=;
+
+    csml_bitfield<N> PHASE;           ///< One-hot GCM phase: INIT/RESTORE/AAD/TEXT/SAVE/TAG
+    csml_bitfield<N> NUM_VALID_BYTES; ///< Valid bytes in the current input block (1..16)
+    csml_bitfield<N> reserved0;       ///< Reserved bits
 };
 
 }

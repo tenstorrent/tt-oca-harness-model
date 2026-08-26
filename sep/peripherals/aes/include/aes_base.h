@@ -51,7 +51,8 @@ class aes_base : public sc_module
        CTRL_AUX_SHADOWED(std::string(name) + ".CTRL_AUX_SHADOWED", memory, (0x78 + 0x00)/sizeof(unsigned int)), 
        CTRL_AUX_REGWEN(std::string(name) + ".CTRL_AUX_REGWEN", memory, (0x7C + 0x00)/sizeof(unsigned int)), 
        TRIGGER(std::string(name) + ".TRIGGER", memory, (0x80 + 0x00)/sizeof(unsigned int)), 
-       STATUS(std::string(name) + ".STATUS", memory, (0x84 + 0x00)/sizeof(unsigned int))
+       STATUS(std::string(name) + ".STATUS", memory, (0x84 + 0x00)/sizeof(unsigned int)),
+       CTRL_GCM_SHADOWED(std::string(name) + ".CTRL_GCM_SHADOWED", memory, (0x88 + 0x00)/sizeof(unsigned int))
        {
          memory.bind_to_socket(target_socket);
        }
@@ -87,6 +88,9 @@ class aes_base : public sc_module
       aes::TRIGGER_type<32> TRIGGER;                     ///< Trigger register for starting operations (offset 0x80)
 
       aes::STATUS_type<32> STATUS;                       ///< Module status register (offset 0x84)
+
+      aes::CTRL_GCM_SHADOWED_type<32> CTRL_GCM_SHADOWED; ///< Shadowed GCM control register (offset 0x88)
+
       
       /** @brief Resets all hardware registers to their default reset values */
       void reset_all_registers();

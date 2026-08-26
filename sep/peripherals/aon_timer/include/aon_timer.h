@@ -676,12 +676,18 @@ private:
    bool m_wkup_threshold_latched;
 
    /**
-    * @brief Watchdog bite condition active flag (FUNC002).
+    * @brief Watchdog bite request latch (FUNC002).
     *
-    * Set to true by evaluate_bite_threshold() when:
-    *   m_wdog_enabled == true AND m_wdog_counter >= m_wdog_bite_threshold.
-    * Cleared to false when the condition is no longer met (e.g., after watchdog
-    * petting or watchdog disable) or when a reset clears it.
+    * Set to true by evaluate_bite_threshold() when the watchdog is counting and
+    * m_wdog_counter >= m_wdog_bite_threshold.
+    *
+    * This is a latch, not a level. aon_timer.sv:272 assigns
+    *   aon_rst_req_d = aon_rst_req_set | aon_rst_req_q
+    * so once a bite fires the reset request is held until the AON reset. Petting
+    * the watchdog or disabling it does NOT withdraw the request -- that
+    * irrevocability is the property that makes a bite meaningful, and modelling
+    * it as a live level would let firmware survive in simulation a bite that
+    * resets the chip in silicon. reset_process() is the only place that clears it.
     *
     * This dedicated flag decouples the aon_timer_rst_req output drive from an
     * inline counter/threshold evaluation inside drive_outputs(), enabling the

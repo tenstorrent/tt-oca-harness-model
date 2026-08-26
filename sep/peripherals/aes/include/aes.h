@@ -112,7 +112,23 @@ protected:
       AES_CFB = 0x04, ///< Cipher Feedback Mode
       AES_OFB = 0x08, ///< Output Feedback Mode
       AES_CTR = 0x10, ///< Counter Mode
-      AES_NONE = 0x20 ///< No mode selected/Invalid configuration
+      AES_GCM = 0x20, ///< Galois/Counter Mode
+      AES_NONE = 0x3F ///< No mode selected/Invalid configuration
+   };
+
+   /**
+    * @enum GCMPhase
+    * @brief GCM phase selector (CTRL_GCM_SHADOWED.PHASE)
+    *
+    * Sparse one-hot encoding taken from gcm_phase_e in aes_pkg.sv.
+    */
+   enum class GCMPhase {
+      GCM_INIT    = 0x01, ///< Compute the hash subkey and encrypt J0
+      GCM_RESTORE = 0x02, ///< Reload a previously saved GHASH state
+      GCM_AAD     = 0x04, ///< Absorb additional authenticated data
+      GCM_TEXT    = 0x08, ///< Encrypt/decrypt payload and absorb ciphertext
+      GCM_SAVE    = 0x10, ///< Export the running GHASH state
+      GCM_TAG     = 0x20  ///< Absorb the length block and emit the tag
    };
 
    /**
@@ -192,6 +208,22 @@ protected:
    uint32_t m_ctrl_shadowed_shadow_value;        ///< Shadow storage for CTRL_SHADOWED
    bool m_ctrl_aux_shadowed_first_write_pending; ///< Tracks two-write protocol for CTRL_AUX_SHADOWED
    uint32_t m_ctrl_aux_shadowed_shadow_value;    ///< Shadow storage for CTRL_AUX_SHADOWED
+   bool m_ctrl_gcm_shadowed_first_write_pending; ///< Tracks two-write protocol for CTRL_GCM_SHADOWED
+   uint32_t m_ctrl_gcm_shadowed_shadow_value;    ///< Shadow storage for CTRL_GCM_SHADOWED
+
+   /// @name GCM State
+   ///
+   /// The hardware keeps no length counters: aes_ghash.sv feeds GCM_TAG from
+   /// DATA_IN, so software supplies the length block itself.
+   /// @{
+   GCMPhase m_gcm_phase;           ///< Committed CTRL_GCM_SHADOWED.PHASE
+   uint32_t m_gcm_num_valid_bytes; ///< Committed CTRL_GCM_SHADOWED.NUM_VALID_BYTES (1..16)
+   bool m_gcm_init_done;           ///< GCM_INIT has produced the hash subkey and S
+   bool m_gcm_first_block;         ///< No block absorbed yet since the last INIT/RESTORE
+   std::array<uint8_t, 16> m_gcm_hash_subkey; ///< H = E(K, 0^128)
+   std::array<uint8_t, 16> m_gcm_s;           ///< S = E(K, J0); added to form the tag
+   std::array<uint8_t, 16> m_gcm_ghash;       ///< Running GHASH accumulator
+   /// @}
 
    /// @name Security Hardening tracking
    uint32_t m_prng_reseed_rate;      ///< Rate at which automatically reseed
@@ -218,6 +250,16 @@ protected:
    // =============================================================================
    // Cipher Behavioral Operations
    // =============================================================================
+   /**
+    * @brief Marks the block busy at the point an operation is accepted
+    *
+    * Operations run in spawned processes, which do not start until the calling
+    * process yields. Software that writes a trigger and then polls STATUS.IDLE
+    * would otherwise still see the block idle and race ahead of the operation,
+    * so the status has to drop inside the transaction that accepts it.
+    */
+   void enter_busy(CipherState state);
+
    /** @brief Main cipher processing thread; manages FSM and functional delays */
    void perform_cipher_operation();
 
@@ -280,6 +322,32 @@ protected:
    bool handle_write_CTRL_AUX_REGWEN(uint32_t value, uint32_t write_mask);
    bool handle_write_TRIGGER(uint32_t value, uint32_t write_mask);
    bool handle_read_STATUS(uint32_t& value, uint32_t read_mask);
+   bool handle_write_CTRL_GCM_SHADOWED(uint32_t value, uint32_t write_mask);
+   bool handle_read_CTRL_GCM_SHADOWED(uint32_t& value, uint32_t read_mask);
+   /// @}
+
+   // =============================================================================
+   // GCM Datapath
+   // =============================================================================
+   /// @name GCM helpers
+   /// @{
+   /** @brief Multiplies the accumulator by the hash subkey in GF(2^128) */
+   void ghash_mul(std::array<uint8_t, 16>& acc) const;
+
+   /** @brief XORs a block into the accumulator and multiplies by H */
+   void ghash_absorb(const uint8_t* block, size_t len);
+
+   /** @brief Resolves an attempted PHASE write against the legal transitions */
+   uint32_t resolve_gcm_phase(uint32_t requested) const;
+
+   /** @brief Runs one GCM block according to the committed phase */
+   void perform_gcm_block();
+
+   /** @brief Derives H and S once the key and IV are available */
+   bool ensure_gcm_init();
+
+   /** @brief Encrypts one block with the raw block cipher (no mode chaining) */
+   bool aes_encrypt_block(const uint8_t* in, uint8_t* out);
    /// @}
 
    /** @brief Registers all TL-UL register callbacks with the underlying CSML model */

@@ -15,6 +15,7 @@
 #include <systemc.h>
 #include "../../include/kmac.h"
 #include "kmac_test.h"
+#include "kmac_func013_024_test.h"
 #include "csml_logger.h"
 #include <iostream>
 #include <iomanip>
@@ -110,8 +111,20 @@ private:
     /// @brief Idle status signal
     sc_signal<bool> idle_sig;
 
-    /// @brief Interrupt output signal (asserted when enabled interrupt pending)
-    sc_signal<bool> intr_sig;
+    /// @brief kmac_done interrupt output signal
+    sc_signal<bool> intr_done_sig;
+
+    /// @brief fifo_empty interrupt output signal
+    sc_signal<bool> intr_fifo_empty_sig;
+
+    /// @brief kmac_err interrupt output signal
+    sc_signal<bool> intr_err_sig;
+
+    /// @brief Recoverable alert output signal
+    sc_signal<bool> alert_recov_sig;
+
+    /// @brief Fatal alert output signal
+    sc_signal<bool> alert_fatal_sig;
 
     /// @brief Life cycle escalation signal
     sc_signal<bool> lc_escalate_en_sig;
@@ -416,6 +429,26 @@ public:
     void test_run_kmac_exhaust_output();
     void test_sideload_key_len_clamp();
     void test_defensive_error_paths();
+
+    // =========================================================================
+    // FUNC-KMAC-016 / FUNC-KMAC-019 groups
+    // =========================================================================
+
+    /// @brief Run the seven shadow-register protection cases
+    void test_func_kmac_016_shadow_protection();
+
+    /// @brief Run the fifteen error detection and reporting cases
+    void test_func_kmac_019_error_reporting();
+
+    /// @brief FUNC-KMAC-026: command/config rejection and output-window bounds
+    void test_func_kmac_026_rejection_paths();
+
+    /**
+     * @brief Run one KMAC_CHECK-based test case and record its outcome
+     * @param label Test identifier used in the pass/fail report
+     * @param body  Free function implementing the case
+     */
+    void run_checked_case(const char* label, void (*body)(kmac_test*));
 
     // =========================================================================
     // Helper Methods

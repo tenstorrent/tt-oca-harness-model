@@ -40,7 +40,7 @@ class BasicOptions : public Args {
         addr_t abr_start_addr    = 0x10940000;  // sep_crypto_pkg::abr_rule
         addr_t abr_end_addr      = 0x1094FFFF;  // ABR aperture 64 KiB
         addr_t aes_start_addr    = 0x10910000;
-        addr_t aes_end_addr      = 0x10910087;  // AES_REG size 0x88
+        addr_t aes_end_addr      = 0x1091008B;  // AES_REG size 0x8C (CTRL_GCM_SHADOWED @ 0x88)
         addr_t csrng_start_addr  = 0x10915000;  // DRBG_CSRNG_BASE (sep_crypto_pkg.sv)
         addr_t csrng_end_addr    = 0x109157FF;  // DRBG_CSRNG size 0x800
         addr_t mbox_start_addr   = 0x10A00000;

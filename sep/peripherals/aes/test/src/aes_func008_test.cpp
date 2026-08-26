@@ -348,7 +348,7 @@ void testbench::test_fatal_alert_recovery_requires_reset()
         }
 
         // Verify AES is operational: attempt a simple configuration write
-        uint32_t test_ctrl_value = (0x1) | (0x01 << 2) | (0x1 << 8);
+        uint32_t test_ctrl_value = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, test_ctrl_value);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, test_ctrl_value);
@@ -924,7 +924,7 @@ void testbench::test_recoverable_alert_no_error_state()
         }
 
         // Verify AES is still operational: attempt configuration write
-        uint32_t test_ctrl = (0x1) | (0x01 << 2) | (0x1 << 8);
+        uint32_t test_ctrl = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, test_ctrl);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, test_ctrl);

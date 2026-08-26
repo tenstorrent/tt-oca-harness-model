@@ -673,7 +673,11 @@ void och_sep_ss::module_bind() {
     kmac->rst_ni(kmac_sw_rst_n_signal);
     kmac->lc_escalate_en_i(kmac_lc_escalate_signal);
     kmac->idle_o(kmac_idle_signal);
-    kmac->intr_o(kmac_intr_signal);
+    kmac->intr_kmac_done(kmac_done_signal);
+    kmac->intr_fifo_empty(kmac_fifo_empty_signal);
+    kmac->intr_kmac_err(kmac_err_signal);
+    kmac->alert_recov_operation_err(kmac_alert_recov_signal);
+    kmac->alert_fatal_fault(kmac_alert_fatal_signal);
     keymgr->kmac_key_socket.bind(kmac->keymgr_tl_socket);
     kmac_clk_signal.write(true);
     kmac_lc_escalate_signal.write(false);
@@ -762,7 +766,9 @@ void och_sep_ss::module_bind() {
     pic_inputs[HMAC_DONE_IRQ]       = &hmac_done_signal;
     pic_inputs[HMAC_FIFO_EMPTY_IRQ] = &hmac_fifo_empty_signal;
     pic_inputs[HMAC_HMAC_ERR_IRQ]   = &hmac_err_signal;
-    pic_inputs[KMAC_IRQ]            = &kmac_intr_signal;
+    pic_inputs[KMAC_DONE_IRQ]       = &kmac_done_signal;
+    pic_inputs[KMAC_FIFO_EMPTY_IRQ] = &kmac_fifo_empty_signal;
+    pic_inputs[KMAC_ERR_IRQ]        = &kmac_err_signal;
     pic_inputs[ABR_ERROR_IRQ]       = &abr_error_signal;
     pic_inputs[ABR_NOTIF_IRQ]       = &abr_notif_signal;
     pic_inputs[OTBN_IRQ]            = &otbn_intr_done_signal;
@@ -770,6 +776,7 @@ void och_sep_ss::module_bind() {
     pic_inputs[DMA_CHUNK_DONE_IRQ]  = &dma_chunk_done_intr_sig;
     pic_inputs[DMA_ERROR_IRQ]       = &dma_error_intr_sig;
     pic_inputs[DMA_ALERT_IRQ]       = &dma_alert_fatal_sig;
+    pic_inputs[WDT_ALERT_IRQ]       = &aon_fatal_fault_signal;
     // A pulse, not a level: configure the gateway edge-triggered to catch it, as the
     // RTL's one-cycle assertion requires there too.
     pic_inputs[LOCKED_FIELD_ACCESS_IRQ] = &efuse_locked_field_irq_sig;
@@ -785,6 +792,7 @@ void och_sep_ss::module_bind() {
     pic_inputs[ENTROPY_SRC_IRQ]     = &entropy_src_irq_signal;
     pic_inputs[EDN_CMD_REQ_DONE]    = &edn_cmd_req_done_signal;
     pic_inputs[EDN_FATAL_ERR]       = &edn_fatal_err_signal;
+    pic_inputs[CRYPTO_ALERT_IRQ]    = &crypto_alert_signal;
 
     // CSRNG
     csrng->clk_i(csrng_clk_signal);
@@ -822,6 +830,17 @@ void och_sep_ss::module_bind() {
     edn->alert_recov_alert(edn_recov_alert_signal);
     edn->alert_fatal_alert(edn_fatal_alert_signal);
     edn_clk_signal.write(100.0);  // 100 MHz
+
+    // Collapse the crypto blocks' alerts onto the single PIC line sep.sv gives
+    // them. All eleven of sep_crypto.sv's channels are represented.
+    SC_METHOD(update_crypto_alert);
+    sensitive << hmac_alert_signal
+              << otbn_alert_fatal_signal << otbn_alert_recov_signal
+              << aes_alert_recov_signal << aes_alert_fatal_signal
+              << kmac_alert_recov_signal << kmac_alert_fatal_signal
+              << csrng_recov_alert_signal << csrng_fatal_alert_signal
+              << edn_recov_alert_signal << edn_fatal_alert_signal;
+    dont_initialize();
 
     // KeyMgr
     keymgr->rst_ni(km_sw_rst_n_signal);
@@ -874,6 +893,29 @@ void och_sep_ss::module_bind() {
     riscv->rst_ni(reset_signal);
     riscv->nmi_i(aon_nmi_bark_signal);
     riscv->nmi_vec_i(nmi_vec_signal);
+}
+
+// -----------------------------------------------------------------------------
+// crypto_alert aggregation — sep_crypto.sv gives AES, HMAC, OTBN, KMAC, CSRNG and
+// EDN an alert receiver each and ORs every channel into crypto_alert_o, which
+// sep.sv drives onto sep_internal_interrupts[32]. None of these blocks has a
+// dedicated alert interrupt, so without this reduction a fatal fault is only
+// visible by polling the owning block's STATUS register.
+// -----------------------------------------------------------------------------
+void och_sep_ss::update_crypto_alert() {
+    const bool any_alert = hmac_alert_signal.read()
+                        || otbn_alert_fatal_signal.read()
+                        || otbn_alert_recov_signal.read()
+                        || aes_alert_recov_signal.read()
+                        || aes_alert_fatal_signal.read()
+                        || kmac_alert_recov_signal.read()
+                        || kmac_alert_fatal_signal.read()
+                        || csrng_recov_alert_signal.read()
+                        || csrng_fatal_alert_signal.read()
+                        || edn_recov_alert_signal.read()
+                        || edn_fatal_alert_signal.read();
+
+    crypto_alert_signal.write(any_alert);
 }
 
 // -----------------------------------------------------------------------------

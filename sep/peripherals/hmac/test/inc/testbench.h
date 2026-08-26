@@ -6,6 +6,34 @@
 #include "hmac_test.h"
 #include "csml_logger.h"
 
+// Expected CFG read-back for a given written value.
+//
+// CFG is an external register: reads return the sanitised digest_size and
+// key_length rather than the raw value software wrote. Unsupported encodings
+// read back as SHA2_None (0x8) and Key_None (0x20) respectively, and the two
+// fields are sanitised independently of each other and of hmac_en. Plain SHA-2
+// tests that leave key_length at 0 therefore read back Key_None.
+static inline uint32_t expected_cfg_readback(uint32_t written)
+{
+    const uint32_t digest_size = (written >> 5) & 0xF;
+    const uint32_t key_length  = (written >> 9) & 0x3F;
+
+    uint32_t expected = written;
+
+    if (digest_size != 0x1 && digest_size != 0x2 && digest_size != 0x4) {
+        expected &= ~(0xFu << 5);
+        expected |= (0x8u << 5);
+    }
+
+    if (key_length != 0x1 && key_length != 0x2 && key_length != 0x4 &&
+        key_length != 0x8 && key_length != 0x10) {
+        expected &= ~(0x3Fu << 9);
+        expected |= (0x20u << 9);
+    }
+
+    return expected;
+}
+
 class testbench : public sc_module
 {
 public:
@@ -150,6 +178,13 @@ private:
     void test_keymgr_sideload_ignores_sw_key();
     void test_keymgr_sideload_xor_shares();
     void test_keymgr_sideload_cleared_on_reset();
+    void test_keymgr_sideload_preserves_sw_key();
+
+    // FIFO interrupt gating
+    void test_fifo_empty_interrupt_gating();
+
+    // hash_stop/hash_continue must reproduce a single-shot digest
+    void test_context_save_restore_digest(uint32_t cfg, bool hmac_mode, const char *label);
 
     // Security Tests
     void test_wipe_secret();
