@@ -174,10 +174,14 @@ public:
     csml_param<std::vector<uint32_t>> chiplet_uid;
     csml_param<std::vector<uint32_t>> sip_uid;
     csml_param<std::vector<uint32_t>> sys_uid;
-    csml_param<std::vector<uint32_t>> sip_pubk;
-    csml_param<std::vector<uint32_t>> sys_pubk;
-    csml_param<std::vector<uint32_t>> public_key_0;
-    csml_param<std::vector<uint32_t>> public_key_1;
+    csml_param<std::vector<uint32_t>> sip_pubk_hash0;
+    csml_param<std::vector<uint32_t>> sys_pubk_hash;
+    csml_param<std::vector<uint32_t>> chiplet_pubk_hash0;
+    csml_param<std::vector<uint32_t>> chiplet_pubk_hash1;
+    csml_param<std::vector<uint32_t>> sip_pubk_hash1;
+    csml_param<std::vector<uint32_t>> sep_chiplet_id;
+    csml_param<std::vector<uint32_t>> sep_sip_id;
+    csml_param<std::vector<uint32_t>> sep_sys_id;
 
     /**
      * Expected SHA-256 digest of the secure-disable token, as eight 32-bit words
