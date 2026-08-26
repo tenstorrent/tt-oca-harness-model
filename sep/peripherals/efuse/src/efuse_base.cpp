@@ -44,7 +44,7 @@ void efuse_base::reset_all_registers()
     for (size_t i = 0; i < 16; i++) RESERVED_4[i].reset();
     for (size_t i = 0; i < 16; i++) RESERVED_5[i].reset();
     for (size_t i = 0; i < 16; i++) RESERVED_6[i].reset();
-    for (size_t i = 0; i < 16; i++) RESERVED_7[i].reset();
+    for (size_t i = 0; i < 15; i++) RESERVED_7[i].reset();
     for (size_t i = 0; i < 8;  i++) RESERVED_LAST_256[i].reset();
     RESERVED_LAST_64_LO.reset();
     RESERVED_LAST_64_HI.reset();

@@ -339,37 +339,37 @@ void efuse_model::apply_transient_rma()
 
 const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     // first        last          hi     write-lock bit
-    { 0x008 / 4, 0x008 / 4, false,  0 },  // LC_STATE
-    { 0x00C / 4, 0x00C / 4, false,  2 },  // SBOOT_DIS
-    { 0x010 / 4, 0x010 / 4, false,  4 },  // TRANSIENT_RMA_EN
-    { 0x014 / 4, 0x018 / 4, false,  6 },  // SIP_DIS_{LO,HI}
-    { 0x01C / 4, 0x020 / 4, false,  8 },  // SYS_DIS_{LO,HI}
-    { 0x024 / 4, 0x040 / 4, false, 10 },  // RMA_SIP_TOKEN[8]
-    { 0x044 / 4, 0x060 / 4, false, 12 },  // RMA_CHIPLET_TOKEN[8]
-    { 0x064 / 4, 0x080 / 4, false, 14 },  // CLASS_KEY[8]
-    { 0x084 / 4, 0x084 / 4, false, 16 },  // CHIPLET_PUBK_REVOKE
-    { 0x088 / 4, 0x0A4 / 4, false, 18 },  // BL1_VERSION[8]
-    { 0x0A8 / 4, 0x0C4 / 4, false, 20 },  // BL2_VERSION[8]
-    { 0x0C8 / 4, 0x0E4 / 4, false, 22 },  // CHIPLET_UID[8]
-    { 0x0E8 / 4, 0x104 / 4, false, 24 },  // SIP_PUBK[8]
-    { 0x108 / 4, 0x124 / 4, false, 26 },  // SIP_UID[8]
-    { 0x128 / 4, 0x144 / 4, false, 28 },  // SYS_PUBK[8]
-    { 0x148 / 4, 0x164 / 4, false, 30 },  // SYS_UID[8]
-    { 0x168 / 4, 0x168 / 4, true,   0 },  // STATUS_RPT
-    { 0x16C / 4, 0x16C / 4, true,   2 },  // SEP_ROM_CTRL
+    { 0x00C / 4, 0x00C / 4, false,  0 },  // LC_STATE
+    { 0x010 / 4, 0x010 / 4, false,  2 },  // SBOOT_DIS
+    { 0x014 / 4, 0x014 / 4, false,  4 },  // TRANSIENT_RMA_EN
+    { 0x018 / 4, 0x01C / 4, false,  6 },  // SIP_DIS_{LO,HI}
+    { 0x020 / 4, 0x024 / 4, false,  8 },  // SYS_DIS_{LO,HI}
+    { 0x028 / 4, 0x044 / 4, false, 10 },  // RMA_SIP_TOKEN[8]
+    { 0x048 / 4, 0x064 / 4, false, 12 },  // RMA_CHIPLET_TOKEN[8]
+    { 0x068 / 4, 0x084 / 4, false, 14 },  // CLASS_KEY[8]
+    { 0x088 / 4, 0x088 / 4, false, 16 },  // CHIPLET_PUBK_REVOKE
+    { 0x08C / 4, 0x0A8 / 4, false, 18 },  // BL1_VERSION[8]
+    { 0x0AC / 4, 0x0C8 / 4, false, 20 },  // BL2_VERSION[8]
+    { 0x0CC / 4, 0x0E8 / 4, false, 22 },  // CHIPLET_UID[8]
+    { 0x0EC / 4, 0x108 / 4, false, 24 },  // SIP_PUBK[8]
+    { 0x10C / 4, 0x128 / 4, false, 26 },  // SIP_UID[8]
+    { 0x12C / 4, 0x148 / 4, false, 28 },  // SYS_PUBK[8]
+    { 0x14C / 4, 0x168 / 4, false, 30 },  // SYS_UID[8]
+    { 0x16C / 4, 0x16C / 4, true,   0 },  // STATUS_RPT
+    { 0x170 / 4, 0x170 / 4, true,   2 },  // SEP_ROM_CTRL
     // One pair covers the whole SPI control group: the field-enable register plus
     // the discovery and PHY timing registers that follow it.
-    { 0x170 / 4, 0x190 / 4, true,   4 },  // SEP_SPI_CTRL_FIELD_EN .. SPI_RB_VALID_TIME
-    { 0x194 / 4, 0x1B0 / 4, true,   6 },  // PUBLIC_KEY_0[8]
-    { 0x1B4 / 4, 0x1D0 / 4, true,   8 },  // PUBLIC_KEY_1[8]
-    { 0x1D4 / 4, 0x210 / 4, true,  10 },  // RESERVED_0[16]
-    { 0x214 / 4, 0x250 / 4, true,  12 },  // RESERVED_1[16]
-    { 0x254 / 4, 0x290 / 4, true,  14 },  // RESERVED_2[16]
-    { 0x294 / 4, 0x2D0 / 4, true,  16 },  // RESERVED_3[16]
-    { 0x2D4 / 4, 0x310 / 4, true,  18 },  // RESERVED_4[16]
-    { 0x314 / 4, 0x350 / 4, true,  20 },  // RESERVED_5[16]
-    { 0x354 / 4, 0x390 / 4, true,  22 },  // RESERVED_6[16]
-    { 0x394 / 4, 0x3D0 / 4, true,  24 },  // RESERVED_7[16]
+    { 0x174 / 4, 0x194 / 4, true,   4 },  // SEP_SPI_CTRL_FIELD_EN .. SPI_RB_VALID_TIME
+    { 0x198 / 4, 0x1B4 / 4, true,   6 },  // PUBLIC_KEY_0[8]
+    { 0x1B8 / 4, 0x1D4 / 4, true,   8 },  // PUBLIC_KEY_1[8]
+    { 0x1D8 / 4, 0x214 / 4, true,  10 },  // RESERVED_0[16]
+    { 0x218 / 4, 0x254 / 4, true,  12 },  // RESERVED_1[16]
+    { 0x258 / 4, 0x294 / 4, true,  14 },  // RESERVED_2[16]
+    { 0x298 / 4, 0x2D4 / 4, true,  16 },  // RESERVED_3[16]
+    { 0x2D8 / 4, 0x314 / 4, true,  18 },  // RESERVED_4[16]
+    { 0x318 / 4, 0x354 / 4, true,  20 },  // RESERVED_5[16]
+    { 0x358 / 4, 0x394 / 4, true,  22 },  // RESERVED_6[16]
+    { 0x398 / 4, 0x3D0 / 4, true,  24 },  // RESERVED_7[16]
     { 0x3D4 / 4, 0x3F0 / 4, true,  26 },  // RESERVED_LAST_256[8]
     { 0x3F4 / 4, 0x3F8 / 4, true,  28 },  // RESERVED_LAST_64_{LO,HI}
     { 0x3FC / 4, 0x3FC / 4, true,  30 },  // RESERVED_LAST_32
