@@ -365,13 +365,10 @@ sw/sep-vp-tests/sep-spi-*-test/.staged-mode
 doc/AI_Agent_Usage.pptx
 doc/ai-systemc-generation.pptx
 
-# Top-level doc/ is local-only except the customer-facing VP guide and the
-# scripts that rebuild its PDF. Other files stay on disk; they are not tracked.
+# Top-level doc/ is local-only except the customer-facing VP guide.
+# Other files stay on disk; they are not tracked.
 /doc/*
 !/doc/SystemC_Virtual_Platform_Customer_Guide.md
-!/doc/build_customer_guide.sh
-!/doc/export-pdf.sh
-!/doc/pandoc-grid-tables.lua
 
 # Documentation PDFs are local-only (rebuild with scripts/build_docs.sh).
 # Repeated after directory un-ignore rules (!smc/cpu_cluster/doc/**, !docs/**
