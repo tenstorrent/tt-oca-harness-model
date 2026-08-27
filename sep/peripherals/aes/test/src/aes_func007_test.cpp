@@ -100,10 +100,26 @@ void testbench::test_trigger_key_iv_data_in_clear()
         // Trigger KEY_IV_DATA_IN_CLEAR (TRIGGER bit 1)
         // Note: TRIGGER is write-only
         m_test->register_write_32(aes_basetest::TRIGGER_OFFSET, 0x00000002);
-        wait(5, SC_NS);
 
-        // Wait for clearing operation to complete
-        wait(50, SC_NS);
+        // STATUS.IDLE must be low once the trigger has been accepted, so that
+        // software polling for idle waits for the clear instead of racing it.
+        //
+        // This check cannot fully police that here: register_write_32 yields, so
+        // the spawned worker gets to run and lower the flag even if the trigger
+        // handler did not. The case where the busy status is published too late
+        // to help a non-yielding initiator is only reachable from firmware, and
+        // is covered by sep_aes_reset_clear_test. What this does catch is the
+        // busy status never being published at all.
+        uint32_t status_during_clear = 0;
+        m_test->register_read_32(aes_basetest::STATUS_OFFSET, status_during_clear);
+        if (status_during_clear & 0x1) {
+            report_test_fail("test_trigger_key_iv_data_in_clear",
+                             "STATUS.IDLE still set immediately after "
+                             "KEY_IV_DATA_IN_CLEAR trigger; software can race the clear");
+            return;
+        }
+
+        // Now let the clear run to completion.
         wait_for_idle(1000);
 
         // Verify IV registers were cleared (changed from original values)

@@ -21,7 +21,7 @@ void testbench::test_ctrl_shadowed_two_write_matching()
         wait_for_idle(1000);
 
         // Clear any existing alert from previous tests with a successful matching write
-        uint32_t ctrl_clear = (0x1) | (0x01 << 2) | (0x1 << 8);
+        uint32_t ctrl_clear = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_clear);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_clear);
@@ -39,7 +39,7 @@ void testbench::test_ctrl_shadowed_two_write_matching()
 
         // Configure CTRL_SHADOWED: AES-128 ECB Encryption, Automatic Mode
         // OPERATION=0x1 (ENC), MODE=0x01 (ECB), KEY_LEN=0x1 (128), MANUAL_OP=0
-        uint32_t ctrl_value = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x0 << 15);
+        uint32_t ctrl_value = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12) | (0x0 << 15);
 
         // First write
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value);
@@ -104,12 +104,12 @@ void testbench::test_ctrl_shadowed_two_write_mismatch()
         wait(10, SC_NS);
 
         // First write: AES-128 ECB Encryption
-        uint32_t ctrl_value1 = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x0 << 15);
+        uint32_t ctrl_value1 = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12) | (0x0 << 15);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value1);
         wait(10, SC_NS);
 
         // Second write: AES-256 CBC Encryption (different value - mismatch)
-        uint32_t ctrl_value2 = (0x1) | (0x02 << 2) | (0x4 << 8) | (0x0 << 15);
+        uint32_t ctrl_value2 = (0x1) | (0x02 << 2) | (0x4 << 8) | (0x1 << 12) | (0x0 << 15);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value2);
         wait(10, SC_NS);
 
@@ -164,7 +164,7 @@ void testbench::test_ctrl_aux_shadowed_two_write_matching()
         wait_for_idle(1000);
 
         // Clear any existing alert from previous tests with a successful matching write
-        uint32_t ctrl_clear = (0x1) | (0x01 << 2) | (0x1 << 8);
+        uint32_t ctrl_clear = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_clear);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_clear);
@@ -321,7 +321,7 @@ void testbench::test_shadowed_read_resets_sequence()
         wait_for_idle(1000);
 
         // Clear any existing alert from previous tests
-        uint32_t ctrl_clear = (0x1) | (0x01 << 2) | (0x1 << 8);
+        uint32_t ctrl_clear = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_clear);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_clear);
@@ -338,7 +338,7 @@ void testbench::test_shadowed_read_resets_sequence()
         }
 
         // First write to CTRL_SHADOWED
-        uint32_t ctrl_value1 = (0x1) | (0x01 << 2) | (0x1 << 8);  // AES-128 ECB ENC
+        uint32_t ctrl_value1 = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);  // AES-128 ECB ENC
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value1);
         wait(10, SC_NS);
 
@@ -348,7 +348,7 @@ void testbench::test_shadowed_read_resets_sequence()
         wait(10, SC_NS);
 
         // Write a different value (should be treated as NEW first write, not second write)
-        uint32_t ctrl_value2 = (0x1) | (0x02 << 2) | (0x4 << 8);  // AES-256 CBC ENC
+        uint32_t ctrl_value2 = (0x1) | (0x02 << 2) | (0x4 << 8) | (0x1 << 12);  // AES-256 CBC ENC
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value2);
         wait(10, SC_NS);
 
@@ -398,8 +398,8 @@ void testbench::test_alert_cleared_by_successful_write()
         wait_for_idle(1000);
 
         // Trigger a mismatch to set alert flag
-        uint32_t ctrl_value1 = (0x1) | (0x01 << 2) | (0x1 << 8);
-        uint32_t ctrl_value2 = (0x1) | (0x02 << 2) | (0x4 << 8);
+        uint32_t ctrl_value1 = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
+        uint32_t ctrl_value2 = (0x1) | (0x02 << 2) | (0x4 << 8) | (0x1 << 12);
 
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value1);
         wait(10, SC_NS);
@@ -424,7 +424,7 @@ void testbench::test_alert_cleared_by_successful_write()
         }
 
         // Perform successful matching write to clear alert
-        uint32_t ctrl_value_correct = (0x1) | (0x01 << 2) | (0x1 << 8);
+        uint32_t ctrl_value_correct = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value_correct);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value_correct);
@@ -468,8 +468,8 @@ void testbench::test_multiple_consecutive_mismatches()
         wait_for_idle(1000);
 
         // Mismatch 1
-        uint32_t ctrl_value1a = (0x1) | (0x01 << 2) | (0x1 << 8);
-        uint32_t ctrl_value1b = (0x1) | (0x02 << 2) | (0x1 << 8);
+        uint32_t ctrl_value1a = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
+        uint32_t ctrl_value1b = (0x1) | (0x02 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value1a);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value1b);
@@ -485,8 +485,8 @@ void testbench::test_multiple_consecutive_mismatches()
         }
 
         // Mismatch 2 (without clearing alert)
-        uint32_t ctrl_value2a = (0x1) | (0x01 << 2) | (0x4 << 8);
-        uint32_t ctrl_value2b = (0x1) | (0x02 << 2) | (0x4 << 8);
+        uint32_t ctrl_value2a = (0x1) | (0x01 << 2) | (0x4 << 8) | (0x1 << 12);
+        uint32_t ctrl_value2b = (0x1) | (0x02 << 2) | (0x4 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value2a);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value2b);
@@ -502,8 +502,8 @@ void testbench::test_multiple_consecutive_mismatches()
         }
 
         // Mismatch 3
-        uint32_t ctrl_value3a = (0x2) | (0x01 << 2) | (0x1 << 8);
-        uint32_t ctrl_value3b = (0x1) | (0x01 << 2) | (0x1 << 8);
+        uint32_t ctrl_value3a = (0x2) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
+        uint32_t ctrl_value3b = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value3a);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_value3b);
@@ -633,7 +633,7 @@ void testbench::test_shadowed_write_rejected_when_busy()
         }
 
         // Attempt to write CTRL_SHADOWED while busy (should be rejected)
-        uint32_t ctrl_new_value = (0x2) | (0x02 << 2) | (0x4 << 8);  // Different config
+        uint32_t ctrl_new_value = (0x2) | (0x02 << 2) | (0x4 << 8) | (0x1 << 12);  // Different config
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_new_value);
         wait(10, SC_NS);
         m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, ctrl_new_value);
@@ -776,5 +776,193 @@ void testbench::test_ctrl_aux_shadowed_read_resets_sequence()
 
     } catch (const std::exception& e) {
         report_test_fail("test_ctrl_aux_shadowed_read_resets_sequence", e.what());
+    }
+}
+
+// =============================================================================
+// Test Case: CTRL_SHADOWED update errors are per-field
+//
+// aes_ctrl_reg_shadowed.sv gives every field its own prim_subreg_shadow, so a
+// field whose two writes disagree holds its old value while the fields that do
+// agree still commit. Writing the whole word back on any mismatch would leave
+// the register stale in six fields instead of one.
+// =============================================================================
+void testbench::test_ctrl_shadowed_per_field_update_error()
+{
+    report_test_start("test_ctrl_shadowed_per_field_update_error");
+
+    try {
+        wait_for_idle(1000);
+
+        // Establish a known configuration: ENC, ECB, AES-128, PER_1.
+        const uint32_t baseline = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, baseline);
+        wait(10, SC_NS);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, baseline);
+        wait(10, SC_NS);
+
+        uint32_t readback = 0;
+        m_test->register_read_32(aes_basetest::CTRL_SHADOWED_OFFSET, readback);
+        wait(10, SC_NS);
+        if (readback != baseline) {
+            std::stringstream ss;
+            ss << "baseline not established: expected 0x" << std::hex << baseline
+               << ", got 0x" << readback;
+            report_test_fail("test_ctrl_shadowed_per_field_update_error", ss.str());
+            return;
+        }
+
+        // Two writes agreeing on MODE (CBC) but disagreeing on KEY_LEN.
+        const uint32_t first  = (0x1) | (0x02 << 2) | (0x4 << 8) | (0x1 << 12);
+        const uint32_t second = (0x1) | (0x02 << 2) | (0x2 << 8) | (0x1 << 12);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, first);
+        wait(10, SC_NS);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, second);
+        wait(10, SC_NS);
+
+        // MODE commits to CBC; KEY_LEN keeps AES-128 from the baseline, taking
+        // neither the first nor the second write's value.
+        const uint32_t expected = (0x1) | (0x02 << 2) | (0x1 << 8) | (0x1 << 12);
+        m_test->register_read_32(aes_basetest::CTRL_SHADOWED_OFFSET, readback);
+        wait(10, SC_NS);
+
+        if (readback != expected) {
+            std::stringstream ss;
+            ss << "per-field commit wrong: expected 0x" << std::hex << expected
+               << ", got 0x" << readback;
+            report_test_fail("test_ctrl_shadowed_per_field_update_error", ss.str());
+            return;
+        }
+
+        // The disagreeing field still raises the recoverable alert.
+        if ((read_status() & (1 << STATUS_ALERT_RECOV_BIT)) == 0) {
+            report_test_fail("test_ctrl_shadowed_per_field_update_error",
+                             "STATUS.ALERT_RECOV_CTRL_UPDATE_ERR not set by the mismatched field");
+            return;
+        }
+
+        report_test_pass("test_ctrl_shadowed_per_field_update_error");
+
+    } catch (const std::exception& e) {
+        report_test_fail("test_ctrl_shadowed_per_field_update_error", e.what());
+    }
+}
+
+// =============================================================================
+// Test Case: CTRL_AUX_SHADOWED update errors are per-field
+//
+// Same structure, on the two-field aux register: aes_reg_top.sv instantiates
+// u_ctrl_aux_shadowed_key_touch_forces_reseed and u_ctrl_aux_shadowed_force_masks
+// separately.
+// =============================================================================
+void testbench::test_ctrl_aux_shadowed_per_field_update_error()
+{
+    report_test_start("test_ctrl_aux_shadowed_per_field_update_error");
+
+    try {
+        wait_for_idle(1000);
+
+        // Baseline: both fields clear.
+        write_ctrl_aux_shadowed(0x0);
+        wait(10, SC_NS);
+
+        uint32_t readback = read_ctrl_aux_shadowed();
+        wait(10, SC_NS);
+        if (readback != 0x0) {
+            std::stringstream ss;
+            ss << "baseline not established: expected 0x0, got 0x" << std::hex << readback;
+            report_test_fail("test_ctrl_aux_shadowed_per_field_update_error", ss.str());
+            return;
+        }
+
+        // Agree on KEY_TOUCH_FORCES_RESEED, disagree on FORCE_MASKS.
+        m_test->register_write_32(aes_basetest::CTRL_AUX_SHADOWED_OFFSET, 0x3);
+        wait(10, SC_NS);
+        m_test->register_write_32(aes_basetest::CTRL_AUX_SHADOWED_OFFSET, 0x1);
+        wait(10, SC_NS);
+
+        readback = read_ctrl_aux_shadowed();
+        wait(10, SC_NS);
+        if (readback != 0x1) {
+            std::stringstream ss;
+            ss << "per-field commit wrong: expected 0x1, got 0x" << std::hex << readback;
+            report_test_fail("test_ctrl_aux_shadowed_per_field_update_error", ss.str());
+            return;
+        }
+
+        if ((read_status() & (1 << STATUS_ALERT_RECOV_BIT)) == 0) {
+            report_test_fail("test_ctrl_aux_shadowed_per_field_update_error",
+                             "STATUS.ALERT_RECOV_CTRL_UPDATE_ERR not set by the mismatched field");
+            return;
+        }
+
+        report_test_pass("test_ctrl_aux_shadowed_per_field_update_error");
+
+    } catch (const std::exception& e) {
+        report_test_fail("test_ctrl_aux_shadowed_per_field_update_error", e.what());
+    }
+}
+
+// =============================================================================
+// Test Case: CTRL_SHADOWED reads back the sanitised configuration
+//
+// The *_get always_comb blocks in aes_ctrl_reg_shadowed.sv map illegal encodings
+// onto legal ones before the value reaches the shadow primitives, and each
+// primitive's q output drives hw2reg. Software therefore reads the sanitised
+// value, not what it wrote. Because sanitisation happens before the comparison,
+// the same illegal value written twice agrees with itself and raises no alert.
+// =============================================================================
+void testbench::test_ctrl_shadowed_sanitised_readback()
+{
+    report_test_start("test_ctrl_shadowed_sanitised_readback");
+
+    try {
+        wait_for_idle(1000);
+
+        // Clear any alert left by an earlier test with a clean matching write.
+        const uint32_t clean = (0x1) | (0x01 << 2) | (0x1 << 8) | (0x1 << 12);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, clean);
+        wait(10, SC_NS);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, clean);
+        wait(10, SC_NS);
+
+        if ((read_status() & (1 << STATUS_ALERT_RECOV_BIT)) != 0) {
+            report_test_fail("test_ctrl_shadowed_sanitised_readback",
+                             "alert still set after a clean write - cannot proceed");
+            return;
+        }
+
+        // Every field illegal: OPERATION=0x3, MODE=0x03 (multi-bit),
+        // KEY_LEN=0x7, PRNG_RESEED_RATE=0x0.
+        const uint32_t illegal = (0x3) | (0x03 << 2) | (0x7 << 8) | (0x0 << 12);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, illegal);
+        wait(10, SC_NS);
+        m_test->register_write_32(aes_basetest::CTRL_SHADOWED_OFFSET, illegal);
+        wait(10, SC_NS);
+
+        // AES_ENC, AES_NONE, AES_256, PER_1.
+        const uint32_t expected = (0x1) | (0x3F << 2) | (0x4 << 8) | (0x1 << 12);
+        uint32_t readback = 0;
+        m_test->register_read_32(aes_basetest::CTRL_SHADOWED_OFFSET, readback);
+        wait(10, SC_NS);
+
+        if (readback != expected) {
+            std::stringstream ss;
+            ss << "readback not sanitised: expected 0x" << std::hex << expected
+               << ", got 0x" << readback;
+            report_test_fail("test_ctrl_shadowed_sanitised_readback", ss.str());
+            return;
+        }
+
+        if ((read_status() & (1 << STATUS_ALERT_RECOV_BIT)) != 0) {
+            report_test_fail("test_ctrl_shadowed_sanitised_readback",
+                             "identical illegal writes raised an update error");
+            return;
+        }
+
+        report_test_pass("test_ctrl_shadowed_sanitised_readback");
+
+    } catch (const std::exception& e) {
+        report_test_fail("test_ctrl_shadowed_sanitised_readback", e.what());
     }
 }

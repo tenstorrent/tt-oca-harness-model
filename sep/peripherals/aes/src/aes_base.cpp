@@ -41,4 +41,5 @@ void aes_base::reset_all_registers()
   CTRL_AUX_REGWEN.reset();
   TRIGGER.reset();
   STATUS.reset();
+  CTRL_GCM_SHADOWED.reset();
 }

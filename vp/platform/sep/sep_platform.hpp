@@ -258,7 +258,11 @@ private:
     sc_signal<bool, SC_MANY_WRITERS> kmac_clk_signal;
     sc_signal<bool, SC_MANY_WRITERS> kmac_lc_escalate_signal;
     sc_signal<bool, SC_MANY_WRITERS> kmac_idle_signal;
-    sc_signal<bool, SC_MANY_WRITERS> kmac_intr_signal;
+    sc_signal<bool, SC_MANY_WRITERS> kmac_done_signal;
+    sc_signal<bool, SC_MANY_WRITERS> kmac_fifo_empty_signal;
+    sc_signal<bool, SC_MANY_WRITERS> kmac_err_signal;
+    sc_signal<bool, SC_MANY_WRITERS> kmac_alert_recov_signal;
+    sc_signal<bool, SC_MANY_WRITERS> kmac_alert_fatal_signal;
 
     // Adams Bridge
     sc_signal<double, SC_MANY_WRITERS> abr_clk_signal;
@@ -291,6 +295,14 @@ private:
     sc_signal<bool, SC_MANY_WRITERS> aes_lc_escalate_signal;
     sc_signal<bool, SC_MANY_WRITERS> aes_alert_recov_signal;
     sc_signal<bool, SC_MANY_WRITERS> aes_alert_fatal_signal;
+
+    // sep_crypto.sv runs every crypto block's alert through its own alert receiver
+    // and collapses the lot into one line:
+    //   assign crypto_alert_o = (|crypto_alert_pulse) | (|crypto_alert_integ_fail);
+    // which sep.sv lands on sep_internal_interrupts[32]. Individual blocks have no
+    // alert interrupt of their own, so this OR is the only way an AES fatal fault
+    // or a shadowed-register update error becomes visible without polling STATUS.
+    sc_signal<bool, SC_MANY_WRITERS> crypto_alert_signal;
 
     // DMA
     sc_signal<bool, SC_MANY_WRITERS>   dma_done_intr_sig;
@@ -429,6 +441,10 @@ private:
     // =========================================================================
     void create_modules();
     void module_bind();
+
+    /// OR-reduces the crypto blocks' alert outputs onto crypto_alert_signal,
+    /// mirroring sep_crypto.sv's crypto_alert_o.
+    void update_crypto_alert();
     void start_of_simulation() override;
     void seed_inbound_window();
     void smn_inbound_b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay);

@@ -54,8 +54,36 @@
  ******************************************************************************/
 
 #include "kmac_func013_024_test.h"
-#include <cassert>
 #include <cstdio>
+
+// CFG_SHADOWED field encodings, from kmac.rdl and sha3_pkg.sv. Spelled out here
+// because the raw shift constants that used to be inlined in these cases did not
+// match the register map and silently produced legal-but-different configs.
+namespace {
+constexpr uint32_t CFG_KMAC_EN         = 1u << 0;   // kmac_en[0]
+constexpr uint32_t CFG_KSTRENGTH_SHIFT = 1;         // kstrength[3:1]
+constexpr uint32_t CFG_MODE_SHIFT      = 4;         // mode[5:4]
+constexpr uint32_t CFG_SIDELOAD        = 1u << 12;  // sideload[12]
+constexpr uint32_t CFG_ENT_MODE_SHIFT  = 16;        // entropy_mode[17:16]
+constexpr uint32_t CFG_ENTROPY_READY   = 1u << 24;  // entropy_ready[24]
+
+// keccak_strength_e
+constexpr uint32_t KSTRENGTH_L128 = 0;
+constexpr uint32_t KSTRENGTH_L224 = 1;
+constexpr uint32_t KSTRENGTH_L256 = 2;
+
+// sha3_mode_e
+constexpr uint32_t MODE_SHA3   = 0;
+constexpr uint32_t MODE_SHAKE  = 2;
+constexpr uint32_t MODE_CSHAKE = 3;
+
+constexpr uint32_t cfg_kstrength(uint32_t s) { return s << CFG_KSTRENGTH_SHIFT; }
+constexpr uint32_t cfg_mode(uint32_t m) { return m << CFG_MODE_SHIFT; }
+constexpr uint32_t cfg_entropy_mode(uint32_t e) { return e << CFG_ENT_MODE_SHIFT; }
+
+// SHA3-256: kmac_en=0, mode=SHA3, kstrength=L256
+constexpr uint32_t CFG_SHA3_256 = cfg_kstrength(KSTRENGTH_L256) | cfg_mode(MODE_SHA3);
+} // namespace
 
 /******************************************************************************
  * @brief TC-144: Error code KeyNotValid (0x01) test
@@ -97,7 +125,8 @@ void test_err_code_keynotvalid_0x01(kmac_test* test)
 
     // Step 2: Enable CFG_SHADOWED for KMAC mode with sideload
     printf("  Configuring for KMAC mode with sideload...\n");
-    uint32_t cfg = (1 << 0) | (1 << 4); // kmac_en=1, sideload=1
+    uint32_t cfg = CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256) |
+                   cfg_mode(MODE_CSHAKE) | CFG_SIDELOAD | CFG_ENTROPY_READY;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg); // Duplicate write
     wait(100, SC_NS);
@@ -109,10 +138,10 @@ void test_err_code_keynotvalid_0x01(kmac_test* test)
 
     // Step 4: Read ERR_CODE register
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE: 0x%02X\n", err_code & 0xFF);
+    printf("  ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
 
     // Step 5: Verify ERR_CODE = 0x01 (KeyNotValid)
-    assert((err_code & 0xFF) == 0x01);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x01);
     printf("  KeyNotValid error correctly detected\n");
 
     // Step 6: Read INTR_STATE
@@ -122,7 +151,7 @@ void test_err_code_keynotvalid_0x01(kmac_test* test)
     // Step 7: Verify INTR_STATE.kmac_err (bit 2) is set
     bool err_intr = (intr_state & (1 << 2)) != 0;
     printf("  INTR_STATE.kmac_err: %s\n", err_intr ? "SET" : "CLEAR");
-    assert(err_intr);
+    KMAC_CHECK(err_intr);
 
     // Step 8: Read STATUS to check FSM state
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
@@ -139,7 +168,7 @@ void test_err_code_keynotvalid_0x01(kmac_test* test)
 
     // Verify ERR_CODE cleared
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE after recovery: 0x%02X\n", err_code & 0xFF);
+    printf("  ERR_CODE after recovery: 0x%02X\n", (err_code >> 24) & 0xFF);
 
     printf("[TC-144] PASSED: KeyNotValid error correctly detected and recovered\n");
 }
@@ -191,7 +220,8 @@ void test_err_code_swissuedcmdinappactive_0x03_detailed(kmac_test* test)
 
     // Alternative: Test during any non-IDLE state where SW commands restricted
     // Configure and start operation
-    uint32_t cfg = (1 << 0); // kmac_en=1
+    uint32_t cfg = CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256) |
+                   cfg_mode(MODE_CSHAKE) | CFG_ENTROPY_READY;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -252,7 +282,7 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
     // Verify in IDLE state
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 0)) != 0); // sha3_idle bit
+    KMAC_CHECK((status_value & (1 << 0)) != 0); // sha3_idle bit
 
     // Attempt invalid MSG_FIFO write (offset 0x800)
     test->register_write_32(0x800, 0xDEADBEEF);
@@ -260,13 +290,13 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
 
     // Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x02); // SwPushedMsgFifo
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x02); // SwPushedMsgFifo
 
     // Check interrupt
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
     printf("    INTR_STATE: 0x%08X\n", intr_state);
-    assert((intr_state & (1 << 2)) != 0); // kmac_err set
+    KMAC_CHECK((intr_state & (1 << 2)) != 0); // kmac_err set
 
     // Recovery
     printf("    Performing error recovery...\n");
@@ -278,7 +308,7 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
     printf("  Test 2: Write MSG_FIFO in ABSORB state (valid)\n");
 
     // Configure for SHA3-256
-    uint32_t cfg = (1 << 0) | (3 << 8); // kmac_en=0 (SHA3), strength=L256
+    uint32_t cfg = CFG_SHA3_256;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -290,7 +320,7 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
     // Verify in ABSORB state
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 1)) != 0); // sha3_absorb bit
+    KMAC_CHECK((status_value & (1 << 1)) != 0); // sha3_absorb bit
 
     // Write MSG_FIFO (valid in ABSORB)
     test->register_write_32(0x800, 0x12345678);
@@ -298,8 +328,8 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
 
     // Verify no error
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE (should be 0): 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0); // No error
+    printf("    ERR_CODE (should be 0): 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0); // No error
 
     // Issue PROCESS to move to SQUEEZE
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x2E); // PROCESS
@@ -311,7 +341,7 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
     // Verify in SQUEEZE state
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 2)) != 0); // sha3_squeeze bit
+    KMAC_CHECK((status_value & (1 << 2)) != 0); // sha3_squeeze bit
 
     // Attempt invalid MSG_FIFO write
     test->register_write_32(0x800, 0xCAFEBABE);
@@ -319,8 +349,8 @@ void test_err_code_swpushedmsgfifo_0x02(kmac_test* test)
 
     // Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x02); // SwPushedMsgFifo
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x02); // SwPushedMsgFifo
 
     // Cleanup
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
@@ -366,9 +396,9 @@ void test_err_code_waittimerexpired_0x04(kmac_test* test)
 
     // Step 1: Configure EDN mode in CFG_SHADOWED
     printf("  Configuring EDN entropy mode...\n");
-    uint32_t cfg = (1 << 0) |        // kmac_en=1
-                   (1 << 10) |       // entropy_mode[0]=1 (EDN mode)
-                   (1 << 15);        // entropy_ready=1
+    uint32_t cfg = CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256) |
+                   cfg_mode(MODE_CSHAKE) | cfg_entropy_mode(0x1) |
+                   CFG_ENTROPY_READY;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -393,7 +423,7 @@ void test_err_code_waittimerexpired_0x04(kmac_test* test)
 
     // Step 5: Read ERR_CODE - should be 0 (no timeout since entropy always available)
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE: 0x%02X (expected 0x00 - no timeout)\n", err_code & 0xFF);
+    printf("  ERR_CODE: 0x%02X (expected 0x00 - no timeout)\n", (err_code >> 24) & 0xFF);
 
     // Step 6: Read STATUS
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
@@ -450,9 +480,9 @@ void test_err_code_incorrectentropymode_0x05(kmac_test* test)
     printf("  Configuring INVALID entropy mode...\n");
     // Valid modes: 0x0 (idle), 0x1 (EDN), 0x2 (SW)
     // Invalid mode: 0x3 (reserved)
-    uint32_t cfg = (1 << 0) |        // kmac_en=1
-                   (3 << 9) |        // entropy_mode=0x3 (INVALID)
-                   (1 << 15);        // entropy_ready=1
+    uint32_t cfg = CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256) |
+                   cfg_mode(MODE_CSHAKE) | cfg_entropy_mode(0x3) |
+                   CFG_ENTROPY_READY;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -468,16 +498,16 @@ void test_err_code_incorrectentropymode_0x05(kmac_test* test)
 
     // Step 3: Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE: 0x%02X\n", err_code & 0xFF);
+    printf("  ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
 
     // Step 4: Verify ERR_CODE = 0x05 (IncorrectEntropyMode)
-    assert((err_code & 0xFF) == 0x05);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x05);
     printf("  IncorrectEntropyMode error correctly detected\n");
 
     // Step 5: Verify interrupt
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
     printf("  INTR_STATE: 0x%08X\n", intr_state);
-    assert((intr_state & (1 << 2)) != 0); // kmac_err
+    KMAC_CHECK((intr_state & (1 << 2)) != 0); // kmac_err
 
     // Step 6: Recovery
     printf("  Performing error recovery...\n");
@@ -524,8 +554,8 @@ void test_err_code_unexpectedmodestrength_0x06(kmac_test* test)
 
     // Test Case 1: SHA3 mode with L128 strength (invalid)
     printf("  Test 1: SHA3 mode with L128 strength (INVALID)\n");
-    uint32_t cfg1 = (0 << 0) |  // kmac_en=0 (SHA3 mode)
-                    (2 << 8);   // keccak_strength=L128 (invalid for SHA3)
+    // SHA3 supports L224..L512; L128 is rejected as UnexpectedModeStrength.
+    uint32_t cfg1 = cfg_kstrength(KSTRENGTH_L128) | cfg_mode(MODE_SHA3);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg1);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg1);
     wait(100, SC_NS);
@@ -534,11 +564,11 @@ void test_err_code_unexpectedmodestrength_0x06(kmac_test* test)
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x06); // UnexpectedModeStrength
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x06); // UnexpectedModeStrength
 
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
-    assert((intr_state & (1 << 2)) != 0);
+    KMAC_CHECK((intr_state & (1 << 2)) != 0);
 
     // Recovery
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2));
@@ -547,9 +577,8 @@ void test_err_code_unexpectedmodestrength_0x06(kmac_test* test)
 
     // Test Case 2: SHAKE mode with L224 strength (invalid)
     printf("  Test 2: SHAKE mode with L224 strength (INVALID)\n");
-    uint32_t cfg2 = (0 << 0) |  // kmac_en=0 (SHAKE/SHA3 mode)
-                    (1 << 5) |  // keccak_mode=1 (SHAKE/cSHAKE)
-                    (0 << 8);   // keccak_strength=L224 (invalid for SHAKE)
+    // SHAKE supports only L128 and L256; L224 is rejected.
+    uint32_t cfg2 = cfg_kstrength(KSTRENGTH_L224) | cfg_mode(MODE_SHAKE);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg2);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg2);
     wait(100, SC_NS);
@@ -558,8 +587,8 @@ void test_err_code_unexpectedmodestrength_0x06(kmac_test* test)
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x06);
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x06);
 
     // Recovery
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2));
@@ -568,8 +597,7 @@ void test_err_code_unexpectedmodestrength_0x06(kmac_test* test)
 
     // Test Case 3: Valid combination for contrast (SHA3-256)
     printf("  Test 3: SHA3-256 (VALID combination)\n");
-    uint32_t cfg3 = (0 << 0) |  // kmac_en=0 (SHA3 mode)
-                    (3 << 8);   // keccak_strength=L256 (valid for SHA3)
+    uint32_t cfg3 = CFG_SHA3_256;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg3);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg3);
     wait(100, SC_NS);
@@ -578,8 +606,8 @@ void test_err_code_unexpectedmodestrength_0x06(kmac_test* test)
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE (should be 0): 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0); // No error for valid combo
+    printf("    ERR_CODE (should be 0): 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0); // No error for valid combo
 
     // Cleanup
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
@@ -623,7 +651,8 @@ void test_err_code_incorrectfunctionname_0x07(kmac_test* test)
     printf("  Test 1: KMAC mode with incorrect PREFIX (INVALID)\n");
 
     // Configure KMAC mode
-    uint32_t cfg = (1 << 0); // kmac_en=1 (KMAC mode)
+    uint32_t cfg = CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256) |
+                   cfg_mode(MODE_CSHAKE) | CFG_ENTROPY_READY;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -640,28 +669,34 @@ void test_err_code_incorrectfunctionname_0x07(kmac_test* test)
 
     // Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x07); // IncorrectFunctionName
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x07); // IncorrectFunctionName
 
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
-    assert((intr_state & (1 << 2)) != 0);
+    KMAC_CHECK((intr_state & (1 << 2)) != 0);
 
-    // Recovery
+    // Recovery. err_prefix does not block the command (kmac_errchk.sv leaves it
+    // out of block_swcmd), so the FSM is in ABSORB with CFG_REGWEN locked. Run
+    // the operation to completion to get back to IDLE before reconfiguring.
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2));
-    test->register_write_32(kmac_basetest::CMD_OFFSET, (1 << 10));
+    test->register_write_32(kmac_basetest::CMD_OFFSET, 0x2E); // PROCESS
+    wait(200, SC_NS);
+    test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
+    test->register_write_32(kmac_basetest::CMD_OFFSET, (1 << 10)); // err_processed
     wait(100, SC_NS);
 
     // Test Case 2: KMAC mode with CORRECT PREFIX
     printf("  Test 2: KMAC mode with correct PREFIX (VALID)\n");
 
+    // encode_string("KMAC") is kmac_pkg::EncodedStringKMAC = 48'h4341_4D4B_2001,
+    // which spans PREFIX_0[31:0] and PREFIX_1[15:0].
+    test->register_write_32(kmac_basetest::PREFIX_0_OFFSET, 0x4D4B2001);
+    test->register_write_32(kmac_basetest::PREFIX_1_OFFSET, 0x00004341);
+    wait(100, SC_NS);
+
     // Configure KMAC mode again
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
-    wait(100, SC_NS);
-
-    // Write CORRECT PREFIX_0 = encode_string("KMAC") = 0x01204B4D
-    // Note: Little-endian representation
-    test->register_write_32(kmac_basetest::PREFIX_0_OFFSET, 0x01204B4D);
     wait(100, SC_NS);
 
     // Issue START
@@ -670,8 +705,8 @@ void test_err_code_incorrectfunctionname_0x07(kmac_test* test)
 
     // Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE (should be 0): 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0); // No error with correct PREFIX
+    printf("    ERR_CODE (should be 0): 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0); // No error with correct PREFIX
 
     // Cleanup
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
@@ -716,7 +751,7 @@ void test_err_code_swcmdsequence_0x08_detailed(kmac_test* test)
 
     // Verify in IDLE
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
-    assert((status_value & (1 << 0)) != 0); // sha3_idle
+    KMAC_CHECK((status_value & (1 << 0)) != 0); // sha3_idle
 
     // Issue PROCESS without START (invalid)
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x2E); // PROCESS
@@ -724,11 +759,11 @@ void test_err_code_swcmdsequence_0x08_detailed(kmac_test* test)
 
     // Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x08); // SwCmdSequence
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x08); // SwCmdSequence
 
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
-    assert((intr_state & (1 << 2)) != 0);
+    KMAC_CHECK((intr_state & (1 << 2)) != 0);
 
     // Recovery
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2));
@@ -743,8 +778,8 @@ void test_err_code_swcmdsequence_0x08_detailed(kmac_test* test)
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x08); // SwCmdSequence
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x08); // SwCmdSequence
 
     // Recovery
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2));
@@ -755,7 +790,7 @@ void test_err_code_swcmdsequence_0x08_detailed(kmac_test* test)
     printf("  Test 3: Valid command sequence (START -> PROCESS -> DONE)\n");
 
     // Configure
-    uint32_t cfg = (0 << 0) | (3 << 8); // SHA3-256
+    uint32_t cfg = CFG_SHA3_256; // SHA3-256
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -774,8 +809,8 @@ void test_err_code_swcmdsequence_0x08_detailed(kmac_test* test)
 
     // Verify no error
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE (should be 0): 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0);
+    printf("    ERR_CODE (should be 0): 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0);
 
     printf("[TC-151] PASSED: SwCmdSequence error correctly detected\n");
 }
@@ -817,8 +852,9 @@ void test_err_code_swhashingwithoutentropy_0x09(kmac_test* test)
 
     // Configure KMAC with masking (requires entropy)
     // Note: EnMasking is a build parameter, but model checks entropy_ready
-    uint32_t cfg1 = (1 << 0) |       // kmac_en=1
-                    (0 << 15);       // entropy_ready=0 (NOT set!)
+    // Legal mode/strength so entropy_ready is the only thing missing.
+    uint32_t cfg1 = CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256) |
+                    cfg_mode(MODE_CSHAKE);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg1);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg1);
     wait(100, SC_NS);
@@ -829,11 +865,11 @@ void test_err_code_swhashingwithoutentropy_0x09(kmac_test* test)
 
     // Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x09); // SwHashingWithoutEntropyReady
+    printf("    ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x09); // SwHashingWithoutEntropyReady
 
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
-    assert((intr_state & (1 << 2)) != 0);
+    KMAC_CHECK((intr_state & (1 << 2)) != 0);
 
     // Recovery
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2));
@@ -843,8 +879,14 @@ void test_err_code_swhashingwithoutentropy_0x09(kmac_test* test)
     // Test Case 2: KMAC with entropy_ready set (VALID)
     printf("  Test 2: KMAC with entropy_ready=1 (VALID)\n");
 
-    uint32_t cfg2 = (1 << 0) |       // kmac_en=1
-                    (1 << 15);       // entropy_ready=1 (set!)
+    // encode_string("KMAC"), otherwise the non-blocking err_prefix (0x07) fires
+    // and masks the fact that the entropy error is gone.
+    test->register_write_32(kmac_basetest::PREFIX_0_OFFSET, 0x4D4B2001);
+    test->register_write_32(kmac_basetest::PREFIX_1_OFFSET, 0x00004341);
+    wait(100, SC_NS);
+
+    uint32_t cfg2 = CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256) |
+                    cfg_mode(MODE_CSHAKE) | CFG_ENTROPY_READY;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg2);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg2);
     wait(100, SC_NS);
@@ -853,8 +895,8 @@ void test_err_code_swhashingwithoutentropy_0x09(kmac_test* test)
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE (should be 0): 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0); // No error
+    printf("    ERR_CODE (should be 0): 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0); // No error
 
     // Cleanup
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16);
@@ -898,7 +940,7 @@ void test_err_code_sha3control_0x80(kmac_test* test)
 
     // Verify in IDLE
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
-    assert((status_value & (1 << 0)) != 0);
+    KMAC_CHECK((status_value & (1 << 0)) != 0);
 
     // Issue invalid PROCESS command in IDLE
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x2E);
@@ -906,7 +948,7 @@ void test_err_code_sha3control_0x80(kmac_test* test)
 
     // Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE: 0x%02X\n", err_code & 0xFF);
+    printf("  ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
 
     // Check for SwCmdSequence (0x08)
     bool cmd_seq_err = (err_code & 0x08) != 0;
@@ -917,16 +959,16 @@ void test_err_code_sha3control_0x80(kmac_test* test)
     printf("  Sha3Control (0x80): %s\n", sha3_ctrl_err ? "SET" : "CLEAR");
 
     // At minimum, SwCmdSequence should be set
-    assert(cmd_seq_err);
+    KMAC_CHECK(cmd_seq_err);
 
     // Sha3Control may or may not be set depending on implementation
     // If set, it indicates internal FSM control error alongside sequence error
     if (sha3_ctrl_err) {
         printf("  Both errors present (0x88) - indicates FSM control issue\n");
-        assert((err_code & 0xFF) == 0x88 || (err_code & 0xFF) == 0x08);
+        KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x88 || ((err_code >> 24) & 0xFF) == 0x08);
     } else {
         printf("  Only SwCmdSequence error (0x08) - simpler error reporting\n");
-        assert((err_code & 0xFF) == 0x08);
+        KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x08);
     }
 
     // Recovery
@@ -977,14 +1019,14 @@ void test_err_code_persistence_across_interrupt_clear(kmac_test* test)
 
     // Step 2: Read ERR_CODE
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    uint32_t initial_err_code = err_code & 0xFF;
+    uint32_t initial_err_code = (err_code >> 24) & 0xFF;
     printf("  Initial ERR_CODE: 0x%02X\n", initial_err_code);
-    assert(initial_err_code == 0x02); // SwPushedMsgFifo
+    KMAC_CHECK(initial_err_code == 0x02); // SwPushedMsgFifo
 
     // Step 3: Read INTR_STATE
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
     printf("  Initial INTR_STATE: 0x%08X\n", intr_state);
-    assert((intr_state & (1 << 2)) != 0); // kmac_err set
+    KMAC_CHECK((intr_state & (1 << 2)) != 0); // kmac_err set
 
     // Step 4: Clear INTR_STATE.kmac_err (W1C)
     printf("  Step 2: Clearing INTR_STATE.kmac_err interrupt bit...\n");
@@ -994,15 +1036,15 @@ void test_err_code_persistence_across_interrupt_clear(kmac_test* test)
     // Verify interrupt cleared
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
     printf("  INTR_STATE after clear: 0x%08X\n", intr_state);
-    assert((intr_state & (1 << 2)) == 0); // kmac_err should be clear
+    KMAC_CHECK((intr_state & (1 << 2)) == 0); // kmac_err should be clear
 
     // Step 5: Read ERR_CODE again
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    uint32_t persisted_err_code = err_code & 0xFF;
+    uint32_t persisted_err_code = (err_code >> 24) & 0xFF;
     printf("  ERR_CODE after interrupt clear: 0x%02X\n", persisted_err_code);
 
     // Step 6: Verify ERR_CODE PERSISTS (unchanged)
-    assert(persisted_err_code == initial_err_code);
+    KMAC_CHECK(persisted_err_code == initial_err_code);
     printf("  ERR_CODE correctly persisted (0x%02X == 0x%02X)\n",
            persisted_err_code, initial_err_code);
 
@@ -1013,8 +1055,8 @@ void test_err_code_persistence_across_interrupt_clear(kmac_test* test)
 
     // Verify ERR_CODE now cleared
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE after err_processed: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0); // Should be cleared
+    printf("  ERR_CODE after err_processed: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0); // Should be cleared
 
     printf("[TC-154] PASSED: ERR_CODE persistence verified\n");
 }
@@ -1056,8 +1098,8 @@ void test_err_code_cleared_on_done(kmac_test* test)
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) != 0); // Error present
+    printf("  ERR_CODE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) != 0); // Error present
 
     // Step 2: Recover from error
     printf("  Step 2: Recovering from error...\n");
@@ -1069,7 +1111,7 @@ void test_err_code_cleared_on_done(kmac_test* test)
     printf("  Step 3: Executing valid hash operation...\n");
 
     // Configure SHA3-256
-    uint32_t cfg = (0 << 0) | (3 << 8); // SHA3-256
+    uint32_t cfg = CFG_SHA3_256; // SHA3-256
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -1090,12 +1132,12 @@ void test_err_code_cleared_on_done(kmac_test* test)
     // Step 4: Verify back in IDLE
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("  STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 0)) != 0); // sha3_idle
+    KMAC_CHECK((status_value & (1 << 0)) != 0); // sha3_idle
 
     // Step 5: Verify ERR_CODE cleared
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("  ERR_CODE after DONE: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0); // Should be 0x00
+    printf("  ERR_CODE after DONE: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0); // Should be 0x00
 
     printf("[TC-155] PASSED: ERR_CODE cleared on DONE\n");
 }
@@ -1140,21 +1182,21 @@ void test_error_recovery_sequence(kmac_test* test)
     // Step 1: Read ERR_CODE
     printf("  Step 1: Read ERR_CODE to identify error...\n");
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE: 0x%02X (SwPushedMsgFifo)\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0x02);
+    printf("    ERR_CODE: 0x%02X (SwPushedMsgFifo)\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0x02);
 
     // Step 2: Clear INTR_STATE.kmac_err
     printf("  Step 2: Clear INTR_STATE.kmac_err interrupt...\n");
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
     printf("    INTR_STATE before clear: 0x%08X\n", intr_state);
-    assert((intr_state & (1 << 2)) != 0);
+    KMAC_CHECK((intr_state & (1 << 2)) != 0);
 
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2)); // W1C
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::INTR_STATE_OFFSET, intr_state);
     printf("    INTR_STATE after clear: 0x%08X\n", intr_state);
-    assert((intr_state & (1 << 2)) == 0);
+    KMAC_CHECK((intr_state & (1 << 2)) == 0);
 
     // Step 3: Set CMD.err_processed
     printf("  Step 3: Set CMD.err_processed to acknowledge error...\n");
@@ -1165,16 +1207,16 @@ void test_error_recovery_sequence(kmac_test* test)
     printf("  Step 4: Waiting for STATUS.sha3_idle = 1...\n");
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 0)) != 0); // sha3_idle
+    KMAC_CHECK((status_value & (1 << 0)) != 0); // sha3_idle
 
     // Verify ERR_CODE cleared
     test->register_read_32(kmac_basetest::ERR_CODE_OFFSET, err_code);
-    printf("    ERR_CODE after recovery: 0x%02X\n", err_code & 0xFF);
-    assert((err_code & 0xFF) == 0);
+    printf("    ERR_CODE after recovery: 0x%02X\n", (err_code >> 24) & 0xFF);
+    KMAC_CHECK(((err_code >> 24) & 0xFF) == 0);
 
     // Step 5: Verify system ready for next operation
     printf("  Phase 2: Verifying system ready for next operation...\n");
-    uint32_t cfg = (0 << 0) | (3 << 8); // SHA3-256
+    uint32_t cfg = CFG_SHA3_256; // SHA3-256
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     wait(100, SC_NS);
@@ -1184,7 +1226,7 @@ void test_error_recovery_sequence(kmac_test* test)
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS after START: 0x%08X\n", status_value);
-    assert((status_value & (1 << 1)) != 0); // sha3_absorb
+    KMAC_CHECK((status_value & (1 << 1)) != 0); // sha3_absorb
 
     // Cleanup
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
@@ -1197,7 +1239,7 @@ void test_error_recovery_sequence(kmac_test* test)
  * @brief TC-157: Alert fatal fault bit test
  *
  * Verification Objective:
- * Verify STATUS.ALERT_FATAL_FAULT (bit 14) indicates unrecoverable errors
+ * Verify STATUS.ALERT_FATAL_FAULT (bit 16) indicates unrecoverable errors
  * such as TL-UL integrity violations, shadow storage failures, counter errors,
  * FSM errors, or LFSR errors.
  *
@@ -1228,9 +1270,9 @@ void test_alert_fatal_fault_bit(kmac_test* test)
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
 
-    bool fatal_fault = (status_value & (1 << 14)) != 0;
+    bool fatal_fault = (status_value & (1 << 16)) != 0;
     printf("    ALERT_FATAL_FAULT: %s\n", fatal_fault ? "SET" : "CLEAR");
-    assert(!fatal_fault); // Should be clear on reset
+    KMAC_CHECK(!fatal_fault); // Should be clear on reset
 
     // Test 2: Trigger recoverable error and verify fatal fault NOT set
     printf("  Test 2: Trigger recoverable error, verify fatal fault NOT set...\n");
@@ -1240,13 +1282,13 @@ void test_alert_fatal_fault_bit(kmac_test* test)
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS after recoverable error: 0x%08X\n", status_value);
 
-    fatal_fault = (status_value & (1 << 14)) != 0;
-    bool recov_alert = (status_value & (1 << 15)) != 0;
+    fatal_fault = (status_value & (1 << 16)) != 0;
+    bool recov_alert = (status_value & (1 << 17)) != 0;
 
     printf("    ALERT_FATAL_FAULT: %s\n", fatal_fault ? "SET (ERROR!)" : "CLEAR (OK)");
     printf("    ALERT_RECOV_CTRL_UPDATE_ERR: %s\n", recov_alert ? "SET" : "CLEAR");
 
-    assert(!fatal_fault); // Should NOT be set for recoverable error
+    KMAC_CHECK(!fatal_fault); // Should NOT be set for recoverable error
 
     // Recovery
     test->register_write_32(kmac_basetest::INTR_STATE_OFFSET, (1 << 2));
@@ -1255,15 +1297,15 @@ void test_alert_fatal_fault_bit(kmac_test* test)
 
     // Test 3: Normal operation maintains clear fatal fault
     printf("  Test 3: Normal operation maintains clear fatal fault...\n");
-    uint32_t cfg = (0 << 0) | (3 << 8);
+    uint32_t cfg = CFG_SHA3_256;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x1D);
     wait(100, SC_NS);
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
-    fatal_fault = (status_value & (1 << 14)) != 0;
-    assert(!fatal_fault);
+    fatal_fault = (status_value & (1 << 16)) != 0;
+    KMAC_CHECK(!fatal_fault);
 
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
     wait(100, SC_NS);
@@ -1276,7 +1318,7 @@ void test_alert_fatal_fault_bit(kmac_test* test)
  * @brief TC-158: Alert recoverable control update error bit detailed test
  *
  * Verification Objective:
- * Comprehensive verification of STATUS.ALERT_RECOV_CTRL_UPDATE_ERR (bit 15)
+ * Comprehensive verification of STATUS.ALERT_RECOV_CTRL_UPDATE_ERR (bit 17)
  * for shadow register mismatch detection and recovery.
  *
  * This test is the detailed variant for FUNC-KMAC-019, complementing the
@@ -1314,8 +1356,8 @@ void test_alert_recov_ctrl_update_err_bit_detailed(kmac_test* test)
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 15)) != 0); // Recov alert
-    assert((status_value & (1 << 14)) == 0); // Not fatal
+    KMAC_CHECK((status_value & (1 << 17)) != 0); // Recov alert
+    KMAC_CHECK((status_value & (1 << 16)) == 0); // Not fatal
 
     // Recovery
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, 0x00000001);
@@ -1330,8 +1372,8 @@ void test_alert_recov_ctrl_update_err_bit_detailed(kmac_test* test)
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 15)) != 0); // Recov alert
-    assert((status_value & (1 << 14)) == 0); // Not fatal
+    KMAC_CHECK((status_value & (1 << 17)) != 0); // Recov alert
+    KMAC_CHECK((status_value & (1 << 16)) == 0); // Not fatal
 
     // Recovery
     test->register_write_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, 0x100);
@@ -1340,7 +1382,7 @@ void test_alert_recov_ctrl_update_err_bit_detailed(kmac_test* test)
 
     // Test 3: Verify system operational after recovery
     printf("  Test 3: Verify system operational after recovery...\n");
-    uint32_t cfg = (0 << 0) | (3 << 8);
+    uint32_t cfg = CFG_SHA3_256;
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x1D);
@@ -1348,7 +1390,7 @@ void test_alert_recov_ctrl_update_err_bit_detailed(kmac_test* test)
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 1)) != 0); // In ABSORB state
+    KMAC_CHECK((status_value & (1 << 1)) != 0); // In ABSORB state
 
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
     wait(100, SC_NS);

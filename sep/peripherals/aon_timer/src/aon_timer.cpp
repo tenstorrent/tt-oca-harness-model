@@ -361,10 +361,23 @@ sc_time aon_timer_ip::compute_cdc_delay() const
 void aon_timer_ip::evaluate_wkup_threshold()
 {
    if (m_wkup_enabled && (m_wkup_counter >= m_wkup_threshold)) {
-      /* INTR_STATE.wkup_timer_expired is level-sensitive: re-asserts at every
-       * AON tick if counter remains >= threshold. Set it whenever the condition
-       * is true, not just on the initial crossing. */
-      if (!m_intr_state_wkup) {
+      /* Whether the interrupt can re-fire after a W1C depends on the prescaler,
+       * because RTL feeds prim_intr_hw from a posedge detector on wkup_intr_o
+       * (aon_timer.sv:208) and wkup_intr_o = wkup_incr & (count >= thold):
+       *
+       *   prescaler == 0 : wkup_incr is high every AON cycle, so wkup_intr_o is a
+       *                    sustained level. One posedge, one interrupt; a W1C is
+       *                    final until the count drops back below the threshold.
+       *   prescaler  > 0 : wkup_incr pulses once per (prescaler + 1) cycles, so
+       *                    each tick is a fresh posedge and the interrupt does
+       *                    re-fire after a W1C.
+       *
+       * m_wkup_threshold_latched is read here before the WKUP_CAUSE block below
+       * sets it, so it still reports whether this tick is the first crossing. */
+      const bool prescaler_zero = (static_cast<uint32_t>(WKUP_CTRL.prescaler) == 0U);
+      const bool first_crossing = !m_wkup_threshold_latched;
+
+      if ((first_crossing || !prescaler_zero) && !m_intr_state_wkup) {
          m_intr_state_wkup = true;
          INTR_STATE.wkup_timer_expired = 1;
          m_ev_output_update.notify(SC_ZERO_TIME);
@@ -407,7 +420,14 @@ void aon_timer_ip::evaluate_wkup_threshold()
  */
 void aon_timer_ip::evaluate_bark_threshold()
 {
-   if (m_wdog_enabled && (m_wdog_counter >= m_wdog_bark_threshold)) {
+   /* Same gating as the bite path: wdog_intr_o = wdog_incr & (count >= bark_thold)
+    * in aon_timer_core.sv:83. Without the escalation and sleep-pause terms a
+    * register write could raise bark while the watchdog is halted. */
+   const bool wdog_incr = m_wdog_enabled &&
+                          !m_lc_escalate_active &&
+                          !(m_wdog_pause_in_sleep && sleep_mode.read());
+
+   if (wdog_incr && (m_wdog_counter >= m_wdog_bark_threshold)) {
       /* INTR_STATE.wdog_timer_bark is set on the posedge of the bark condition,
        * matching aon_timer.sv, which drives prim_intr_hw from a
        * prim_edge_detector's q_posedge_pulse_o rather than from the level. The
@@ -441,12 +461,11 @@ void aon_timer_ip::evaluate_bark_threshold()
 /**
  * @brief Evaluate watchdog bite threshold and update m_wdog_bite_active flag.
  *
- * Sets m_wdog_bite_active = true when:
- *   m_wdog_enabled == true AND m_wdog_counter >= m_wdog_bite_threshold.
+ * Sets m_wdog_bite_active = true when the watchdog is counting (enabled, not
+ * escalated, not paused in sleep) AND m_wdog_counter >= m_wdog_bite_threshold.
  *
- * Clears m_wdog_bite_active = false when the condition is no longer met
- * (e.g., after watchdog petting resets the counter to 0 below the bite
- * threshold, or when the watchdog is disabled).
+ * Never clears it. The bite request is latched until reset, matching
+ * aon_rst_req_d = aon_rst_req_set | aon_rst_req_q in aon_timer.sv:272.
  *
  * FUNC002: The dedicated m_wdog_bite_active flag replaces the previous inline
  * evaluation inside drive_outputs(). This decouples aon_timer_rst_req from
@@ -465,24 +484,33 @@ void aon_timer_ip::evaluate_bark_threshold()
  */
 void aon_timer_ip::evaluate_bite_threshold()
 {
-   /* Evaluate the bite condition: bite fires when watchdog is enabled and
-    * the counter has reached or exceeded the bite threshold. */
-   bool new_bite_active = m_wdog_enabled &&
-                          (m_wdog_counter >= m_wdog_bite_threshold);
+   /* Bite fires only while the watchdog is actually counting. This mirrors
+    * wdog_reset_req_o = wdog_incr & (count >= bite_thold) in aon_timer_core.sv:85,
+    * where wdog_incr carries the enable, the lifecycle-escalation term and the
+    * sleep-pause term. Testing the counter against the threshold without those
+    * terms lets a WDOG_COUNT or threshold write raise a reset request while the
+    * watchdog is halted, which the hardware cannot do. */
+   const bool wdog_incr = m_wdog_enabled &&
+                          !m_lc_escalate_active &&
+                          !(m_wdog_pause_in_sleep && sleep_mode.read());
 
-   if (new_bite_active != m_wdog_bite_active) {
-      m_wdog_bite_active = new_bite_active;
-      if (m_wdog_bite_active) {
-         CSML_INFO(1, logger) << name()
-            << ": WDOG bite active (counter=" << m_wdog_counter
-            << " threshold=" << m_wdog_bite_threshold << ")";
-      }
-      /* Defer aon_timer_rst_req port write to drive_outputs() SC_METHOD.
-       * drive_outputs() reads m_wdog_bite_active to drive the port. */
-      m_ev_output_update.notify(SC_ZERO_TIME);
-   } else if (new_bite_active) {
-      /* Bite is already active and remains active; still notify to ensure
-       * drive_outputs() re-drives the port if called after a reset cleared it. */
+   const bool bite_condition = wdog_incr &&
+                               (m_wdog_counter >= m_wdog_bite_threshold);
+
+   /* The request is a latch, not a level: aon_timer.sv:272 assigns
+    * aon_rst_req_d = aon_rst_req_set | aon_rst_req_q, so once bite fires the
+    * request is held until the AON reset. Software cannot withdraw it by petting
+    * or by disabling the watchdog, which is the property that makes a bite
+    * irrevocable. Only reset_process() may clear m_wdog_bite_active. */
+   if (bite_condition && !m_wdog_bite_active) {
+      m_wdog_bite_active = true;
+      CSML_INFO(1, logger) << name()
+         << ": WDOG bite latched (counter=" << m_wdog_counter
+         << " threshold=" << m_wdog_bite_threshold << ")";
+   }
+
+   if (m_wdog_bite_active) {
+      /* Re-notify so drive_outputs() restores the port if a prior reset cleared it. */
       m_ev_output_update.notify(SC_ZERO_TIME);
    }
 }
@@ -960,19 +988,15 @@ bool aon_timer_ip::handle_write_WDOG_COUNT(uint32_t value, uint32_t write_mask)
    /* Update register shadow to new value. */
    WDOG_COUNT.count = value;
 
-   /* Bark condition re-evaluation: counter is 0, so bark is false unless
-    * threshold is also 0. If intr_state_bark was asserted, de-assert the
-    * interrupt path. This clears the INTERRUPT path only — NOT WKUP_CAUSE. */
+   /* Petting drops the bark level, which re-arms the posedge detector so a later
+    * crossing fires a fresh interrupt. It does NOT acknowledge the interrupt:
+    * INTR_STATE.wdog_timer_bark is a prim_intr_hw status bit (aon_timer.sv:244)
+    * that hardware can only set and software clears with a W1C write. The two are
+    * separate mechanisms, and clearing the status here would let firmware that
+    * pets without acknowledging look clean in simulation while leaving a bark
+    * pending on silicon. See wdt_intr_clear_test.c, which pins this distinction. */
    if (!m_wdog_enabled || (m_wdog_counter < m_wdog_bark_threshold)) {
-      /* Bark condition is false again: re-arm the posedge latch so the counter
-       * growing back over the threshold fires a fresh interrupt. */
       m_wdog_bark_latched = false;
-      if (m_intr_state_bark) {
-         m_intr_state_bark = false;
-         INTR_STATE.wdog_timer_bark = 0U;
-         /* Defer bark/NMI port de-assertion to drive_outputs() SC_METHOD. */
-         m_ev_output_update.notify(SC_ZERO_TIME);
-      }
    }
 
    /* Bite condition re-evaluation: counter is 0, so bite is false unless

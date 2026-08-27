@@ -23,7 +23,8 @@ class aes_basetest : public sc_module
       CTRL_AUX_SHADOWED_OFFSET = (0x78 + 0x00), 
       CTRL_AUX_REGWEN_OFFSET = (0x7C + 0x00), 
       TRIGGER_OFFSET = (0x80 + 0x00), 
-      STATUS_OFFSET = (0x84 + 0x00)  
+      STATUS_OFFSET = (0x84 + 0x00), 
+      CTRL_GCM_SHADOWED_OFFSET = (0x88 + 0x00)  
     };
 
     enum Register_Read_Access
@@ -64,7 +65,7 @@ class aes_basetest : public sc_module
       IV_RESET = 0x0,
       DATA_IN_RESET = 0x0,
       DATA_OUT_RESET = 0x0,
-      CTRL_SHADOWED_RESET = 4481,        // 0x1181 in hex
+      CTRL_SHADOWED_RESET = 4605,        // 0x11FD in hex
       CTRL_AUX_SHADOWED_RESET = 0x1,
       CTRL_AUX_REGWEN_RESET = 0x1,
       TRIGGER_RESET = 14,                 // 0xe in hex

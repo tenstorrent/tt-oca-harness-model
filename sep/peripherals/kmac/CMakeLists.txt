@@ -88,7 +88,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
+  # Verbosity 3, not 1. CSML_LOG expands to "if (level > max) {} else csmlLog(...)",
+  # so a suppressed multi-line log statement leaves every continuation line of its
+  # << chain recorded as unexecuted. At verbosity 1 that reported 192 phantom
+  # uncovered lines in kmac.cpp and understated line coverage by roughly ten points,
+  # measuring log formatting rather than logic.
+  add_compile_definitions(CSML_DEFAULT_VERBOSITY=3 __COVERAGE__)
   message(STATUS "kmac: Coverage build enabled")
 endif()
 
@@ -186,7 +191,10 @@ if(BUILD_TESTS)
     peripheral_add_coverage_target(
       PRIMARY_TARGET kmac_testbench
       TEST_COMMANDS
-        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench ../config/accellera_config.ini
+        # Absolute path: the relative form resolved against the build directory,
+        # so the config never loaded and could not override the build verbosity.
+        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench
+                ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini
     )
   endif()
 

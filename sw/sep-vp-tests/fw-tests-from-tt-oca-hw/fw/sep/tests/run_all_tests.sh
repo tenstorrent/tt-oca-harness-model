@@ -9,6 +9,10 @@
 #   ./run_all_tests.sh --no-build   # run only (use existing ELFs)
 #   ./run_all_tests.sh -t 60        # override per-test timeout (default 25s)
 #   ./run_all_tests.sh -v           # verbose: show [VP]/PASS/FAIL lines per test
+#   ./run_all_tests.sh 'kmac_*'     # only tests whose name matches a glob
+#
+# Trailing arguments are globs matched against the test directory name; when any
+# are given, every other test is left out of the run entirely.
 #
 # Each test: sep-vp is launched, output is monitored for the PASSED/FAILED line,
 # then the process is killed (Ctrl+C equivalent) before starting the next test.
@@ -116,15 +120,31 @@ VERBOSE=0
 BUILD=1      # build before run by default
 CLEAN=0
 
+declare -a FILTERS=()
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -t|--timeout)  TIMEOUT="$2"; shift 2 ;;
         -v|--verbose)  VERBOSE=1;    shift   ;;
         --clean)       CLEAN=1;      shift   ;;
         --no-build)    BUILD=0;      shift   ;;
-        *) echo "Unknown option: $1"; exit 1 ;;
+        -*) echo "Unknown option: $1"; exit 1 ;;
+        *) FILTERS+=("$1"); shift ;;
     esac
 done
+
+# Returns 0 when the test should run: either no filter was given, or the name
+# matches one of them. Filtered-out tests are not counted anywhere, so the
+# summary reflects only the subset that was asked for.
+matches_filter() {
+    [[ ${#FILTERS[@]} -eq 0 ]] && return 0
+    local pattern
+    for pattern in "${FILTERS[@]}"; do
+        # shellcheck disable=SC2053
+        [[ "$1" == $pattern ]] && return 0
+    done
+    return 1
+}
 
 # ---------------------------------------------------------------------------
 # Counters and result lists
@@ -311,6 +331,8 @@ print_summary() {
 for test_dir in "$SCRIPT_DIR"/*/; do
     [[ -d "$test_dir" ]] || continue
     test_name=$(basename "$test_dir")
+
+    matches_filter "$test_name" || continue
 
     # Skip excluded directories
     is_excluded=0

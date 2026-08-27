@@ -65,7 +65,8 @@ public:
         AES_MODE_CFB  = 0x04,
         AES_MODE_OFB  = 0x08,
         AES_MODE_CTR  = 0x10,
-        AES_MODE_NONE = 0x20
+        AES_MODE_GCM  = 0x20,
+        AES_MODE_NONE = 0x3F
     };
 
     enum key_len_e {
@@ -229,6 +230,24 @@ public:
     void test_shadowed_write_rejected_when_busy();
     void test_ctrl_aux_regwen_cannot_unlock();
     void test_ctrl_aux_shadowed_read_resets_sequence();
+    void test_ctrl_shadowed_per_field_update_error();
+    void test_ctrl_aux_shadowed_per_field_update_error();
+    void test_ctrl_shadowed_sanitised_readback();
+
+    // =============================================================================
+    // Galois/Counter Mode
+    // =============================================================================
+
+    void test_gcm_ctrl_reset_and_sanitisation();
+    void test_gcm_phase_transition_gating();
+    void test_gcm_encrypt_nist_case4();
+    void test_gcm_decrypt_nist_case4();
+    void test_gcm_save_restore();
+
+    /// Drives one GCM phase write (two-write shadow sequence) and returns readback.
+    uint32_t write_gcm_phase(uint32_t phase, uint32_t num_valid_bytes);
+    /// Feeds one 16-byte block through the current GCM phase.
+    void gcm_feed_block(const uint8_t* block, uint8_t* out, bool expect_output);
 
 
     // =============================================================================

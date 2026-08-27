@@ -16,6 +16,129 @@
 #include <cstring>
 #include <random>
 
+namespace {
+
+/// One shadow primitive's worth of a control register. aes_ctrl_reg_shadowed.sv
+/// instantiates a prim_subreg_shadow per field precisely so an update error in one
+/// field does not prevent the others from committing, so the field boundaries are
+/// what the two-write protocol resolves against.
+struct shadow_field {
+    unsigned int lsb;
+    unsigned int width;
+};
+
+constexpr shadow_field CTRL_SHADOWED_FIELDS[] = {
+    {0, 2},   // OPERATION
+    {2, 6},   // MODE
+    {8, 3},   // KEY_LEN
+    {11, 1},  // SIDELOAD
+    {12, 3},  // PRNG_RESEED_RATE
+    {15, 1},  // MANUAL_OPERATION
+};
+
+constexpr shadow_field CTRL_AUX_SHADOWED_FIELDS[] = {
+    {0, 1},   // KEY_TOUCH_FORCES_RESEED
+    {1, 1},   // FORCE_MASKS
+};
+
+constexpr shadow_field CTRL_GCM_SHADOWED_FIELDS[] = {
+    {0, 6},   // PHASE
+    {6, 5},   // NUM_VALID_BYTES
+};
+
+/// Maps a raw PHASE write onto the sparse one-hot encoding of gcm_phase_e.
+/// This is only the first half of gcm_phase_get; the legal-transition filter
+/// that follows it needs model state and lives in resolve_gcm_phase().
+uint32_t legalise_gcm_phase(uint32_t phase)
+{
+    switch (phase) {
+        case 0x01: case 0x02: case 0x04:
+        case 0x08: case 0x10: case 0x20:
+            return phase;
+        default:
+            return 0x01;  // unsupported values map to GCM_INIT
+    }
+}
+
+/// Zero and anything above 16 are mapped to a full block.
+uint32_t sanitise_num_valid_bytes(uint32_t num_valid_bytes)
+{
+    return ((num_valid_bytes == 0u) || (num_valid_bytes > 16u)) ? 16u : num_valid_bytes;
+}
+
+constexpr uint32_t field_mask(const shadow_field &f)
+{
+    return ((f.width >= 32u) ? 0xFFFFFFFFu : ((1u << f.width) - 1u)) << f.lsb;
+}
+
+/// Map a raw CTRL_SHADOWED write onto the legal encodings, mirroring the
+/// `*_get` always_comb blocks of aes_ctrl_reg_shadowed.sv. The shadow primitives
+/// are fed these sanitised values, so both the update comparison and the value
+/// software reads back are post-sanitisation: writing an illegal MODE twice
+/// commits AES_NONE rather than raising an update error.
+uint32_t sanitise_ctrl_shadowed(uint32_t value)
+{
+    uint32_t operation = value & 0x3u;
+    switch (operation) {
+        case 0x1: case 0x2: break;
+        default: operation = 0x1; break;  // unsupported values map to AES_ENC
+    }
+
+    uint32_t mode = (value >> 2) & 0x3Fu;
+    switch (mode) {
+        case 0x01: case 0x02: case 0x04: case 0x08: case 0x10: case 0x20: break;
+        default: mode = 0x3F; break;      // unsupported values map to AES_NONE
+    }
+
+    uint32_t key_len = (value >> 8) & 0x7u;
+    switch (key_len) {
+        case 0x1: case 0x2: case 0x4: break;
+        default: key_len = 0x4; break;    // unsupported values map to AES_256
+    }
+
+    const uint32_t sideload = (value >> 11) & 0x1u;
+
+    uint32_t reseed_rate = (value >> 12) & 0x7u;
+    switch (reseed_rate) {
+        case 0x1: case 0x2: case 0x4: break;
+        default: reseed_rate = 0x1; break;  // unsupported values map to PER_1
+    }
+
+    const uint32_t manual_operation = (value >> 15) & 0x1u;
+
+    return operation | (mode << 2) | (key_len << 8) | (sideload << 11)
+         | (reseed_rate << 12) | (manual_operation << 15);
+}
+
+/// CTRL_AUX_SHADOWED is two single-bit fields with no illegal encodings.
+uint32_t sanitise_ctrl_aux_shadowed(uint32_t value)
+{
+    return value & 0x3u;
+}
+
+/// Resolve the second write of the two-write protocol. Fields whose staged and
+/// incoming values agree take the new value; the rest hold what they had.
+/// Returns true when every field committed.
+bool resolve_shadow_fields(uint32_t staged, uint32_t incoming, uint32_t current,
+                           const shadow_field *fields, size_t count, uint32_t &result)
+{
+    result = current;
+    bool all_committed = true;
+
+    for (size_t i = 0; i < count; ++i) {
+        const uint32_t mask = field_mask(fields[i]);
+        if ((staged & mask) == (incoming & mask)) {
+            result = (result & ~mask) | (incoming & mask);
+        } else {
+            all_committed = false;
+        }
+    }
+
+    return all_committed;
+}
+
+} // namespace
+
 // =============================================================================
 // Constructor and Destructor
 // =============================================================================
@@ -32,7 +155,7 @@
  */
     
 aes_model::aes_model(sc_module_name n)
-    : aes_base(n, 0x88)
+    : aes_base(n, 0x8C)
     , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
     , clk_i("clk_i")
     , rst_ni("rst_ni")
@@ -66,9 +189,18 @@ aes_model::aes_model(sc_module_name n)
     , m_ctrl_shadowed_shadow_value(0)
     , m_ctrl_aux_shadowed_first_write_pending(false)
     , m_ctrl_aux_shadowed_shadow_value(0)
+    , m_ctrl_gcm_shadowed_first_write_pending(false)
+    , m_ctrl_gcm_shadowed_shadow_value(0)
+    , m_gcm_phase(GCMPhase::GCM_INIT)
+    , m_gcm_num_valid_bytes(16)
+    , m_gcm_init_done(false)
+    , m_gcm_first_block(true)
+    , m_gcm_hash_subkey{}
+    , m_gcm_s{}
+    , m_gcm_ghash{}
     , m_prng_reseed_rate(1)
     , m_block_counter(0)
-    , m_key_touch_forces_reseed(false)
+    , m_key_touch_forces_reseed(true)
     , m_prng_reseed_needed(false)
     , m_cipher_ctx(nullptr)
 {
@@ -219,11 +351,23 @@ void aes_model::reset_process()
 
         m_ctrl_shadowed_first_write_pending = false;
         m_ctrl_aux_shadowed_first_write_pending = false;
+        m_ctrl_gcm_shadowed_first_write_pending = false;
 
-        // Reset PRNG reseed tracking ()
-        m_prng_reseed_rate = 1; // Default to PER_64
+        // Track the CTRL_GCM_SHADOWED reset value: GCM_INIT with a full block.
+        m_gcm_phase = GCMPhase::GCM_INIT;
+        m_gcm_num_valid_bytes = 16;
+        m_gcm_init_done = false;
+        m_gcm_first_block = true;
+        m_gcm_hash_subkey.fill(0);
+        m_gcm_s.fill(0);
+        m_gcm_ghash.fill(0);
+
+        // Reset PRNG reseed tracking (). Both defaults track the register reset
+        // values: CTRL_SHADOWED.PRNG_RESEED_RATE is PER_1 and
+        // CTRL_AUX_SHADOWED.KEY_TOUCH_FORCES_RESEED is 1.
+        m_prng_reseed_rate = 1; // PER_1
         m_block_counter = 0;
-        m_key_touch_forces_reseed = false;
+        m_key_touch_forces_reseed = true;
         m_prng_reseed_needed = false;
 
         // Clear internal arrays with pseudo-random data
@@ -716,6 +860,268 @@ void aes_model::perform_prng_reseed()
     update_status_register();
 }
 
+// =============================================================================
+// GCM Datapath
+// =============================================================================
+
+/**
+ * @brief Encrypts one block with the bare block cipher
+ *
+ * GCM needs the forward cipher on its own, independent of the configured
+ * OPERATION: the hash subkey, S and the counter blocks are all produced by
+ * encryption even when the module is decrypting.
+ */
+bool aes_model::aes_encrypt_block(const uint8_t* in, uint8_t* out)
+{
+    std::array<uint8_t, 32> full_key;
+    compute_full_key(full_key);
+
+    const EVP_CIPHER* cipher = nullptr;
+    switch (m_current_key_len) {
+        case AESKeyLen::AES_128: cipher = EVP_aes_128_ecb(); break;
+        case AESKeyLen::AES_192: cipher = EVP_aes_192_ecb(); break;
+        case AESKeyLen::AES_256: cipher = EVP_aes_256_ecb(); break;
+        default: return false;
+    }
+
+    if (!EVP_CipherInit_ex(m_cipher_ctx, cipher, nullptr, full_key.data(), nullptr, 1)) {
+        return false;
+    }
+    EVP_CIPHER_CTX_set_padding(m_cipher_ctx, 0);
+
+    int outlen = 0;
+    if (!EVP_CipherUpdate(m_cipher_ctx, out, &outlen, in, 16)) {
+        return false;
+    }
+
+    int final_len = 0;
+    return EVP_CipherFinal_ex(m_cipher_ctx, out + outlen, &final_len) != 0;
+}
+
+/**
+ * @brief Multiplies the accumulator by the hash subkey in GF(2^128)
+ *
+ * The GCM field uses the reversed bit order of the polynomial
+ * x^128 + x^7 + x^2 + x + 1, so the reduction constant appears as 0xE1 in the
+ * most significant byte. This is the functional equivalent of the parallel
+ * aes_gf_mult in aes_ghash.sv.
+ */
+void aes_model::ghash_mul(std::array<uint8_t, 16>& acc) const
+{
+    std::array<uint8_t, 16> z{};
+    std::array<uint8_t, 16> v = acc;
+
+    for (int bit = 0; bit < 128; ++bit) {
+        if ((m_gcm_hash_subkey[bit >> 3] >> (7 - (bit & 7))) & 1) {
+            for (int i = 0; i < 16; ++i) {
+                z[i] ^= v[i];
+            }
+        }
+
+        const bool lsb_set = (v[15] & 1) != 0;
+        for (int i = 15; i > 0; --i) {
+            v[i] = static_cast<uint8_t>((v[i] >> 1) | ((v[i - 1] & 1) << 7));
+        }
+        v[0] >>= 1;
+        if (lsb_set) {
+            v[0] ^= 0xE1;
+        }
+    }
+
+    acc = z;
+}
+
+/**
+ * @brief XORs a block into the accumulator and multiplies by H
+ *
+ * Blocks shorter than 16 bytes are zero-padded, which is what NUM_VALID_BYTES
+ * selects for the final AAD or payload block.
+ */
+void aes_model::ghash_absorb(const uint8_t* block, size_t len)
+{
+    for (size_t i = 0; i < len && i < 16; ++i) {
+        m_gcm_ghash[i] ^= block[i];
+    }
+    ghash_mul(m_gcm_ghash);
+}
+
+/**
+ * @brief Derives H and S once the key and IV are available
+ *
+ * GCM_INIT in aes_ghash.sv is two cipher passes: the hash subkey
+ * H = E(K, 0^128), then S = E(K, J0) with the GHASH state initialised to S and
+ * S subtracted again, which leaves the accumulator at zero. Software provides
+ * J0 in the IV registers.
+ *
+ * @return true once H and S are valid
+ */
+bool aes_model::ensure_gcm_init()
+{
+    if (m_gcm_init_done) {
+        return true;
+    }
+
+    // Both passes need the key; J0 comes from the IV registers.
+    if (!m_sideload_enabled) {
+        if (m_key_share0_written_mask != 0xFF || m_key_share1_written_mask != 0xFF) {
+            return false;
+        }
+    } else if (!load_sideload_key()) {
+        return false;
+    }
+
+    if (!m_iv_configured) {
+        return false;
+    }
+
+    const std::array<uint8_t, 16> zero_block{};
+    if (!aes_encrypt_block(zero_block.data(), m_gcm_hash_subkey.data())) {
+        CSML_ERROR(0, logger) << "[AES] GCM hash subkey derivation failed" << std::endl;
+        trigger_fatal_alert();
+        return false;
+    }
+
+    uint8_t j0[16];
+    for (int i = 0; i < 4; ++i) {
+        const uint32_t word = m_iv[i];
+        j0[i * 4 + 0] = (word >> 0) & 0xFF;
+        j0[i * 4 + 1] = (word >> 8) & 0xFF;
+        j0[i * 4 + 2] = (word >> 16) & 0xFF;
+        j0[i * 4 + 3] = (word >> 24) & 0xFF;
+    }
+
+    if (!aes_encrypt_block(j0, m_gcm_s.data())) {
+        CSML_ERROR(0, logger) << "[AES] GCM S derivation failed" << std::endl;
+        trigger_fatal_alert();
+        return false;
+    }
+
+    m_gcm_ghash.fill(0);
+    m_gcm_first_block = true;
+    m_gcm_init_done = true;
+    return true;
+}
+
+/**
+ * @brief Runs one GCM block according to the committed phase
+ *
+ * Mirrors the per-phase behaviour of the GHASH_IDLE arm of aes_ghash.sv:
+ * which operand is absorbed depends on the phase and, for GCM_TEXT, on the
+ * operation, since authentication always covers the ciphertext.
+ */
+void aes_model::perform_gcm_block()
+{
+    if (!ensure_gcm_init()) {
+        return;
+    }
+
+    uint8_t input_data[16];
+    for (int i = 0; i < 4; ++i) {
+        const uint32_t word = m_data_in[i];
+        input_data[i * 4 + 0] = (word >> 0) & 0xFF;
+        input_data[i * 4 + 1] = (word >> 8) & 0xFF;
+        input_data[i * 4 + 2] = (word >> 16) & 0xFF;
+        input_data[i * 4 + 3] = (word >> 24) & 0xFF;
+    }
+
+    const size_t valid = (m_gcm_num_valid_bytes > 16u) ? 16u : m_gcm_num_valid_bytes;
+    uint8_t output_data[16] = {0};
+    bool produces_output = false;
+
+    switch (m_gcm_phase) {
+        case GCMPhase::GCM_INIT:
+            // ensure_gcm_init() has already done the work; nothing is emitted.
+            break;
+
+        case GCMPhase::GCM_RESTORE:
+            // GCM_SAVE exported GHASH + S, so removing S recovers the accumulator.
+            for (int i = 0; i < 16; ++i) {
+                m_gcm_ghash[i] = input_data[i] ^ m_gcm_s[i];
+            }
+            m_gcm_first_block = false;
+            break;
+
+        case GCMPhase::GCM_AAD:
+            ghash_absorb(input_data, valid);
+            m_gcm_first_block = false;
+            break;
+
+        case GCMPhase::GCM_TEXT: {
+            // The payload is enciphered in counter mode, with the IV registers
+            // holding the counter block.
+            uint8_t counter[16];
+            for (int i = 0; i < 4; ++i) {
+                const uint32_t word = m_iv[i];
+                counter[i * 4 + 0] = (word >> 0) & 0xFF;
+                counter[i * 4 + 1] = (word >> 8) & 0xFF;
+                counter[i * 4 + 2] = (word >> 16) & 0xFF;
+                counter[i * 4 + 3] = (word >> 24) & 0xFF;
+            }
+
+            uint8_t keystream[16];
+            if (!aes_encrypt_block(counter, keystream)) {
+                CSML_ERROR(0, logger) << "[AES] GCM keystream generation failed" << std::endl;
+                trigger_fatal_alert();
+                return;
+            }
+
+            // Bytes past NUM_VALID_BYTES are not part of the message and must not
+            // reach either the output or the authentication tag.
+            for (size_t i = 0; i < 16; ++i) {
+                output_data[i] = (i < valid) ? (input_data[i] ^ keystream[i]) : 0;
+            }
+
+            uint8_t ciphertext[16];
+            for (size_t i = 0; i < 16; ++i) {
+                const uint8_t byte = (m_current_operation == AESOperation::AES_ENC)
+                                       ? output_data[i] : input_data[i];
+                ciphertext[i] = (i < valid) ? byte : 0;
+            }
+            ghash_absorb(ciphertext, 16);
+
+            increment_ctr_iv();
+            m_gcm_first_block = false;
+            produces_output = true;
+            break;
+        }
+
+        case GCMPhase::GCM_SAVE:
+            // Export GHASH + S so the accumulator never leaves the block in the clear.
+            for (int i = 0; i < 16; ++i) {
+                output_data[i] = m_gcm_ghash[i] ^ m_gcm_s[i];
+            }
+            produces_output = true;
+            break;
+
+        case GCMPhase::GCM_TAG:
+            // Software supplies the length block; the tag is the final GHASH plus S.
+            ghash_absorb(input_data, 16);
+            for (int i = 0; i < 16; ++i) {
+                output_data[i] = m_gcm_ghash[i] ^ m_gcm_s[i];
+            }
+            produces_output = true;
+            break;
+    }
+
+    if (m_current_mode != AESMode::AES_ECB) {
+        for (int i = 0; i < 4; ++i) {
+            IV[i] = m_iv[i];
+        }
+        m_iv_written_mask = 0;
+        m_iv_configured = true;
+    }
+
+    if (produces_output) {
+        for (int i = 0; i < 4; ++i) {
+            m_data_out[i] = (output_data[i * 4 + 0] << 0) |
+                            (output_data[i * 4 + 1] << 8) |
+                            (output_data[i * 4 + 2] << 16) |
+                            (output_data[i * 4 + 3] << 24);
+            DATA_OUT[i] = m_data_out[i];
+        }
+    }
+}
+
 /** 
  * @brief Checks if a PRNG reseed is needed and performs it if so
  * 
@@ -746,15 +1152,17 @@ void aes_model::check_and_perform_automatic_prng_reseed()
  * 3. Randomizes internal key, IV, and input buffers.
  * 4. Restores idle status and updates registers.
  */
-void aes_model::perform_key_iv_data_in_clear()
+void aes_model::enter_busy(CipherState state)
 {
-    // FUNC-AES-011: Asynchronous KEY_IV_DATA_IN_CLEAR operation
-    // This method is spawned to make STATUS.IDLE=0 observable during operation
-
-    // Enter CLEARING state
-    m_cipher_state = CipherState::CLEARING;
+    m_cipher_state = state;
     m_is_idle = false;
     update_status_register();
+}
+
+void aes_model::perform_key_iv_data_in_clear()
+{
+    // FUNC-AES-011: Asynchronous KEY_IV_DATA_IN_CLEAR operation.
+    // The busy status was already published by enter_busy() in the TRIGGER write.
 
     // Clear registers with pseudo-random data
     clear_registers_with_prng();
@@ -803,13 +1211,8 @@ void aes_model::perform_key_iv_data_in_clear()
  */
 void aes_model::perform_data_out_clear()
 {
-    // FUNC-AES-011: Asynchronous DATA_OUT_CLEAR operation
-    // This method is spawned to make STATUS.IDLE=0 observable during operation
-
-    // Enter CLEARING state
-    m_cipher_state = CipherState::CLEARING;
-    m_is_idle = false;
-    update_status_register();
+    // FUNC-AES-011: Asynchronous DATA_OUT_CLEAR operation.
+    // The busy status was already published by enter_busy() in the TRIGGER write.
 
     // Clear DATA_OUT registers with pseudo-random data
     for (auto& val : m_data_out) {
@@ -941,6 +1344,14 @@ bool aes_model::check_auto_start_conditions()
         }
     }
 
+    // GCM_INIT and GCM_SAVE take no input block, so they are driven by the
+    // CTRL_GCM_SHADOWED write rather than by DATA_IN completing.
+    if (m_current_mode == AESMode::AES_GCM) {
+        if (m_gcm_phase == GCMPhase::GCM_INIT || m_gcm_phase == GCMPhase::GCM_SAVE) {
+            return false;
+        }
+    }
+
     return true;
 }
 
@@ -960,6 +1371,13 @@ bool aes_model::check_auto_start_conditions()
  */
 void aes_model::execute_encryption_decryption()
 {
+    // GCM does not map onto a single EVP call: the phases drive GHASH and the
+    // counter separately, so it has its own datapath.
+    if (m_current_mode == AESMode::AES_GCM) {
+        perform_gcm_block();
+        return;
+    }
+
     // For CBC/CFB decryption, save the input ciphertext block before decryption
     // This will be used to update the IV after decryption completes
     if ((m_current_mode == AESMode::AES_CBC || m_current_mode == AESMode::AES_CFB)
@@ -1138,6 +1556,12 @@ void aes_model::perform_cipher_operation()
     // Check escalation before starting
     check_escalation();
     if (m_in_error_state) {
+        // The caller already published the busy status. Nothing will run now, so
+        // hand the idle indication back rather than stranding software polling
+        // for an operation that was abandoned before it began.
+        m_cipher_state = CipherState::IDLE;
+        m_is_idle = true;
+        update_status_register();
         return;
     }
 
@@ -1183,14 +1607,23 @@ void aes_model::perform_cipher_operation()
     // : Increment block counter for PRNG reseed tracking
     m_block_counter++;
 
-    // Check for output overwrite in manual mode
-    if (m_manual_operation && m_output_valid) {
-        m_output_lost = true;
-    }
+    // The GCM phases that only feed GHASH produce no result block, so there is
+    // nothing for software to collect and no reason to back-pressure on a read.
+    const bool produces_output = !(m_current_mode == AESMode::AES_GCM &&
+                                   (m_gcm_phase == GCMPhase::GCM_INIT ||
+                                    m_gcm_phase == GCMPhase::GCM_RESTORE ||
+                                    m_gcm_phase == GCMPhase::GCM_AAD));
 
-    // Set output valid
-    m_output_valid = true;
-    m_data_out_read_mask = 0;
+    if (produces_output) {
+        // Check for output overwrite in manual mode
+        if (m_manual_operation && m_output_valid) {
+            m_output_lost = true;
+        }
+
+        // Set output valid
+        m_output_valid = true;
+        m_data_out_read_mask = 0;
+    }
 
     // Clear input data written mask for next input
     m_data_in_written_mask = 0;
@@ -1200,7 +1633,7 @@ void aes_model::perform_cipher_operation()
 
     // FUNC-AES-012: In automatic mode, remain non-idle until output is read (back-pressure)
     // In manual mode, return to idle immediately
-    if (m_manual_operation) {
+    if (m_manual_operation || !produces_output) {
         m_is_idle = true;
     } else {
         // Automatic mode: stay non-idle until output read
@@ -1367,7 +1800,7 @@ bool aes_model::handle_write_IV(unsigned int index, uint32_t value, uint32_t wri
         // Check for auto-start conditions (same as DATA_IN callback)
         // Per OpenTitan spec: auto-start requires KEY + IV + DATA_IN all ready
         if (check_auto_start_conditions()) {
-            // Spawn cipher operation asynchronously
+            enter_busy(CipherState::INIT);
             sc_spawn(sc_bind(&aes_model::perform_cipher_operation, this));
         }
     }
@@ -1417,7 +1850,7 @@ bool aes_model::handle_write_DATA_IN(unsigned int index, uint32_t value, uint32_
 
     // Check for auto-start conditions
     if (check_auto_start_conditions()) {
-        // Spawn cipher operation asynchronously to allow tests to observe busy state
+        enter_busy(CipherState::INIT);
         sc_spawn(sc_bind(&aes_model::perform_cipher_operation, this));
     }
 
@@ -1488,84 +1921,89 @@ bool aes_model::handle_write_CTRL_SHADOWED(uint32_t value, uint32_t write_mask)
     }
 
     // Shadowed register two-write protocol
+    const uint32_t sanitised = sanitise_ctrl_shadowed(value);
+
     if (!m_ctrl_shadowed_first_write_pending) {
-        // First write: store shadow value
+        // First write: stage the sanitised value
         m_ctrl_shadowed_first_write_pending = true;
-        m_ctrl_shadowed_shadow_value = value;
+        m_ctrl_shadowed_shadow_value = sanitised;
         return false;
-    } else {
-        // Second write: check for match
-        if (m_ctrl_shadowed_shadow_value == value) {
-            // Match: update register
-            m_ctrl_shadowed_first_write_pending = false;
-
-            // Clear recoverable alert if set
-            if (m_alert_recoverable) {
-                m_alert_recoverable = false;
-                STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 0;
-                request_alert_update();
-            }
-
-            // Parse configuration fields
-            uint32_t operation = value & 0x3;
-            uint32_t mode = (value >> 2) & 0x3F;
-            uint32_t key_len = (value >> 8) & 0x7;
-            uint32_t sideload = (value >> 11) & 0x1;
-            uint32_t prng_reseed_rate = (value >> 12) & 0x7; // 
-            uint32_t manual_op = (value >> 15) & 0x1;
-
-            // Update configuration
-            switch (operation) {
-                case 0x1: m_current_operation = AESOperation::AES_ENC; break;
-                case 0x2: m_current_operation = AESOperation::AES_DEC; break;
-                default: m_current_operation = AESOperation::AES_ENC; break;
-            }
-
-            switch (mode) {
-                case 0x01: m_current_mode = AESMode::AES_ECB; break;
-                case 0x02: m_current_mode = AESMode::AES_CBC; break;
-                case 0x04: m_current_mode = AESMode::AES_CFB; break;
-                case 0x08: m_current_mode = AESMode::AES_OFB; break;
-                case 0x10: m_current_mode = AESMode::AES_CTR; break;
-                default: m_current_mode = AESMode::AES_NONE; break;
-            }
-
-            switch (key_len) {
-                case 0x1: m_current_key_len = AESKeyLen::AES_128; break;
-                case 0x2: m_current_key_len = AESKeyLen::AES_192; break;
-                case 0x4: m_current_key_len = AESKeyLen::AES_256; break;
-                default: m_current_key_len = AESKeyLen::AES_256; break;
-            }
-
-            m_sideload_enabled = (sideload != 0);
-            m_manual_operation = (manual_op != 0);
-
-            // : Store PRNG reseed rate configuration
-            m_prng_reseed_rate = prng_reseed_rate;
-            m_block_counter = 0; // Reset block counter on new configuration
-
-            // Writing CTRL_SHADOWED signals new message start
-            // Clear all tracking masks for new configuration
-            m_data_in_written_mask = 0;
-            m_iv_written_mask = 0;
-            m_iv_configured = false;
-            m_key_share0_written_mask = 0;
-            m_key_share1_written_mask = 0;
-            m_output_lost = false;
-            m_output_valid = false;
-            update_status_register();
-
-            // Write to register for readback (CSML requires explicit write in callback)
-            CTRL_SHADOWED = value;
-
-            return true;
-        } else {
-            // Mismatch: trigger recoverable alert
-            m_ctrl_shadowed_first_write_pending = false;
-            trigger_recoverable_alert();
-            return false;
-        }
     }
+
+    m_ctrl_shadowed_first_write_pending = false;
+
+    uint32_t committed = 0;
+    const bool all_committed = resolve_shadow_fields(
+        m_ctrl_shadowed_shadow_value, sanitised, static_cast<uint32_t>(CTRL_SHADOWED),
+        CTRL_SHADOWED_FIELDS,
+        sizeof(CTRL_SHADOWED_FIELDS) / sizeof(CTRL_SHADOWED_FIELDS[0]), committed);
+
+    if (all_committed) {
+        // Clear recoverable alert if set
+        if (m_alert_recoverable) {
+            m_alert_recoverable = false;
+            STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 0;
+            request_alert_update();
+        }
+    } else {
+        trigger_recoverable_alert();
+    }
+
+    // Internal configuration tracks the register, not the attempted write, so a
+    // field held back by an update error keeps driving its previous behaviour.
+    const uint32_t operation = committed & 0x3;
+    const uint32_t mode = (committed >> 2) & 0x3F;
+    const uint32_t key_len = (committed >> 8) & 0x7;
+    const uint32_t sideload = (committed >> 11) & 0x1;
+    const uint32_t prng_reseed_rate = (committed >> 12) & 0x7;
+    const uint32_t manual_op = (committed >> 15) & 0x1;
+
+    switch (operation) {
+        case 0x1: m_current_operation = AESOperation::AES_ENC; break;
+        case 0x2: m_current_operation = AESOperation::AES_DEC; break;
+        default: m_current_operation = AESOperation::AES_ENC; break;
+    }
+
+    switch (mode) {
+        case 0x01: m_current_mode = AESMode::AES_ECB; break;
+        case 0x02: m_current_mode = AESMode::AES_CBC; break;
+        case 0x04: m_current_mode = AESMode::AES_CFB; break;
+        case 0x08: m_current_mode = AESMode::AES_OFB; break;
+        case 0x10: m_current_mode = AESMode::AES_CTR; break;
+        case 0x20: m_current_mode = AESMode::AES_GCM; break;
+        default: m_current_mode = AESMode::AES_NONE; break;
+    }
+
+    switch (key_len) {
+        case 0x1: m_current_key_len = AESKeyLen::AES_128; break;
+        case 0x2: m_current_key_len = AESKeyLen::AES_192; break;
+        case 0x4: m_current_key_len = AESKeyLen::AES_256; break;
+        default: m_current_key_len = AESKeyLen::AES_256; break;
+    }
+
+    m_sideload_enabled = (sideload != 0);
+    m_manual_operation = (manual_op != 0);
+
+    // : Store PRNG reseed rate configuration
+    m_prng_reseed_rate = prng_reseed_rate;
+    m_block_counter = 0; // Reset block counter on new configuration
+
+    // Writing CTRL_SHADOWED signals new message start. aes_control_fsm.sv gates
+    // ctrl_we_o on the storage error alone, so an update error does not stop the
+    // write from clearing the key and IV state.
+    m_data_in_written_mask = 0;
+    m_iv_written_mask = 0;
+    m_iv_configured = false;
+    m_key_share0_written_mask = 0;
+    m_key_share1_written_mask = 0;
+    m_output_lost = false;
+    m_output_valid = false;
+    update_status_register();
+
+    // Write to register for readback (CSML requires explicit write in callback)
+    CTRL_SHADOWED = committed;
+
+    return all_committed;
 }
 
 /** 
@@ -1608,34 +2046,177 @@ bool aes_model::handle_write_CTRL_AUX_SHADOWED(uint32_t value, uint32_t write_ma
     }
 
     // Shadowed register two-write protocol
+    const uint32_t sanitised = sanitise_ctrl_aux_shadowed(value);
+
     if (!m_ctrl_aux_shadowed_first_write_pending) {
         m_ctrl_aux_shadowed_first_write_pending = true;
-        m_ctrl_aux_shadowed_shadow_value = value;
+        m_ctrl_aux_shadowed_shadow_value = sanitised;
         return false;
+    }
+
+    m_ctrl_aux_shadowed_first_write_pending = false;
+
+    uint32_t committed = 0;
+    const bool all_committed = resolve_shadow_fields(
+        m_ctrl_aux_shadowed_shadow_value, sanitised,
+        static_cast<uint32_t>(CTRL_AUX_SHADOWED), CTRL_AUX_SHADOWED_FIELDS,
+        sizeof(CTRL_AUX_SHADOWED_FIELDS) / sizeof(CTRL_AUX_SHADOWED_FIELDS[0]), committed);
+
+    if (all_committed) {
+        if (m_alert_recoverable) {
+            m_alert_recoverable = false;
+            STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 0;
+            request_alert_update();
+        }
     } else {
-        if (m_ctrl_aux_shadowed_shadow_value == value) {
-            m_ctrl_aux_shadowed_first_write_pending = false;
+        trigger_recoverable_alert();
+    }
 
-            if (m_alert_recoverable) {
-                m_alert_recoverable = false;
-                STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 0;
-                request_alert_update();
-            }
+    // : Extract KEY_TOUCH_FORCES_RESEED field
+    m_key_touch_forces_reseed = ((committed >> 0) & 0x1) != 0;
 
-            // : Extract KEY_TOUCH_FORCES_RESEED field
-            uint32_t key_touch = (value >> 0) & 0x1;
-            m_key_touch_forces_reseed = (key_touch != 0);
+    // Write to register for readback (CSML requires explicit write in callback)
+    CTRL_AUX_SHADOWED = committed;
 
-            // Write to register for readback (CSML requires explicit write in callback)
-            CTRL_AUX_SHADOWED = value;
+    return all_committed;
+}
 
-            return true;
-        } else {
-            m_ctrl_aux_shadowed_first_write_pending = false;
-            trigger_recoverable_alert();
-            return false;
+/**
+ * @brief Filters an attempted PHASE write against the legal transitions
+ * @param requested One-hot phase already legalised by legalise_gcm_phase()
+ * @return The phase that will actually be written
+ *
+ * Only a subset of transitions is accepted; a rejected request leaves the phase
+ * where it is rather than raising an error. Leaving GCM_INIT additionally
+ * requires the initialisation to have completed, and returning to AAD or TEXT
+ * from GCM_SAVE is only allowed once at least one block has been absorbed.
+ * Transcribed from the second unique case of gcm_phase_get.
+ */
+uint32_t aes_model::resolve_gcm_phase(uint32_t requested) const
+{
+    const uint32_t current = static_cast<uint32_t>(m_gcm_phase);
+
+    const uint32_t INIT    = static_cast<uint32_t>(GCMPhase::GCM_INIT);
+    const uint32_t RESTORE = static_cast<uint32_t>(GCMPhase::GCM_RESTORE);
+    const uint32_t AAD     = static_cast<uint32_t>(GCMPhase::GCM_AAD);
+    const uint32_t TEXT    = static_cast<uint32_t>(GCMPhase::GCM_TEXT);
+    const uint32_t SAVE    = static_cast<uint32_t>(GCMPhase::GCM_SAVE);
+    const uint32_t TAG     = static_cast<uint32_t>(GCMPhase::GCM_TAG);
+
+    switch (current) {
+        case 0x01:  // GCM_INIT
+            return (m_gcm_init_done &&
+                    (requested == RESTORE || requested == AAD ||
+                     requested == TEXT    || requested == TAG)) ? requested : current;
+
+        case 0x02:  // GCM_RESTORE
+            return (requested == INIT || requested == AAD ||
+                    requested == TEXT) ? requested : current;
+
+        case 0x04:  // GCM_AAD
+            return (requested == INIT ||
+                    requested == TEXT ||
+                    (requested == SAVE && !m_gcm_first_block) ||
+                    requested == TAG) ? requested : current;
+
+        case 0x08:  // GCM_TEXT
+            return (requested == INIT ||
+                    (requested == SAVE && !m_gcm_first_block) ||
+                    requested == TAG) ? requested : current;
+
+        case 0x10:  // GCM_SAVE
+        case 0x20:  // GCM_TAG
+            return (requested == INIT) ? requested : current;
+
+        default:
+            return current;
+    }
+}
+
+/**
+ * @brief Write callback for CTRL_GCM_SHADOWED
+ * @param value 32-bit data being written
+ * @param write_mask Bitmask of valid bits in the write transaction
+ * @return true if every field committed
+ *
+ * Shadowed exactly like the other control registers, with one primitive per
+ * field. GCM_INIT and GCM_SAVE consume no input block, so the phase write is
+ * what sets them running.
+ */
+bool aes_model::handle_write_CTRL_GCM_SHADOWED(uint32_t value, uint32_t write_mask)
+{
+    // : Reject writes when in terminal error state
+    if (m_in_error_state) {
+        return false;
+    }
+
+    // Ignore writes when not idle
+    if (!m_is_idle) {
+        return false;
+    }
+
+    // Sanitisation precedes the shadow comparison, as it does for CTRL_SHADOWED.
+    const uint32_t phase = resolve_gcm_phase(legalise_gcm_phase(value & 0x3Fu));
+    const uint32_t num_valid_bytes = sanitise_num_valid_bytes((value >> 6) & 0x1Fu);
+    const uint32_t sanitised = phase | (num_valid_bytes << 6);
+
+    if (!m_ctrl_gcm_shadowed_first_write_pending) {
+        m_ctrl_gcm_shadowed_first_write_pending = true;
+        m_ctrl_gcm_shadowed_shadow_value = sanitised;
+        return false;
+    }
+
+    m_ctrl_gcm_shadowed_first_write_pending = false;
+
+    uint32_t committed = 0;
+    const bool all_committed = resolve_shadow_fields(
+        m_ctrl_gcm_shadowed_shadow_value, sanitised,
+        static_cast<uint32_t>(CTRL_GCM_SHADOWED), CTRL_GCM_SHADOWED_FIELDS,
+        sizeof(CTRL_GCM_SHADOWED_FIELDS) / sizeof(CTRL_GCM_SHADOWED_FIELDS[0]), committed);
+
+    if (all_committed) {
+        if (m_alert_recoverable) {
+            m_alert_recoverable = false;
+            STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 0;
+            request_alert_update();
+        }
+    } else {
+        trigger_recoverable_alert();
+    }
+
+    m_gcm_phase = static_cast<GCMPhase>(committed & 0x3Fu);
+    m_gcm_num_valid_bytes = (committed >> 6) & 0x1Fu;
+
+    CTRL_GCM_SHADOWED = committed;
+
+    // These two phases are not driven by DATA_IN, so run them here.
+    if (m_current_mode == AESMode::AES_GCM) {
+        if (m_gcm_phase == GCMPhase::GCM_INIT) {
+            ensure_gcm_init();
+        } else if (m_gcm_phase == GCMPhase::GCM_SAVE) {
+            perform_gcm_block();
+            m_output_valid = true;
+            update_status_register();
         }
     }
+
+    return all_committed;
+}
+
+/**
+ * @brief Read callback for CTRL_GCM_SHADOWED
+ * @param[out] value 32-bit data read from the register
+ * @param read_mask Bitmask of valid bits in the read transaction
+ * @return true
+ *
+ * Reading resets the two-write sequence, matching the .re input of the shadow
+ * primitives.
+ */
+bool aes_model::handle_read_CTRL_GCM_SHADOWED(uint32_t& value, uint32_t read_mask)
+{
+    m_ctrl_gcm_shadowed_first_write_pending = false;
+    value = CTRL_GCM_SHADOWED;
+    return true;
 }
 
 /** 
@@ -1722,6 +2303,7 @@ bool aes_model::handle_write_TRIGGER(uint32_t value, uint32_t write_mask)
             }
 
             if (key_ready) {
+                enter_busy(CipherState::INIT);
                 sc_spawn(sc_bind(&aes_model::perform_cipher_operation, this));
             } else {
                 CSML_WARN(1, logger) << "[AES] TRIGGER.START ignored: key not ready" << std::endl;
@@ -1732,8 +2314,7 @@ bool aes_model::handle_write_TRIGGER(uint32_t value, uint32_t write_mask)
     // KEY_IV_DATA_IN_CLEAR bit
     if (value & 0x2) {
         if (m_is_idle) {
-            // FUNC-AES-011: Spawn asynchronous clearing operation
-            // This makes STATUS.IDLE=0 observable during operation
+            enter_busy(CipherState::CLEARING);
             sc_spawn(sc_bind(&aes_model::perform_key_iv_data_in_clear, this));
         }
     }
@@ -1743,6 +2324,7 @@ bool aes_model::handle_write_TRIGGER(uint32_t value, uint32_t write_mask)
     // output not yet consumed). DATA_OUT_CLEAR is one of the ways to exit stall.
     if (value & 0x4) {
         if (m_is_idle || m_output_valid) {
+            enter_busy(CipherState::CLEARING);
             sc_spawn(sc_bind(&aes_model::perform_data_out_clear, this));
         }
     }
@@ -1750,8 +2332,7 @@ bool aes_model::handle_write_TRIGGER(uint32_t value, uint32_t write_mask)
     // PRNG_RESEED bit ()
     if (value & 0x8) {
         if (m_is_idle) {
-            // FUNC-AES-011: Spawn asynchronous PRNG reseed operation
-            // This makes STATUS.IDLE=0 observable during operation
+            enter_busy(CipherState::CLEARING);
             sc_spawn(sc_bind(&aes_model::perform_prng_reseed_async, this));
         }
     }
@@ -1899,5 +2480,18 @@ void aes_model::register_all_callbacks()
             return this->handle_read_STATUS(value, STATUS.read_bit_mask);
         };
         memory.register_read_callback(read_cb, STATUS.offset);
+    }
+
+    // CTRL_GCM_SHADOWED
+    {
+        std::function<bool(uint32_t)> write_cb = [this](uint32_t value) {
+            return this->handle_write_CTRL_GCM_SHADOWED(value, CTRL_GCM_SHADOWED.write_bit_mask);
+        };
+        memory.register_write_callback(write_cb, CTRL_GCM_SHADOWED.offset);
+
+        std::function<bool(uint32_t&)> read_cb = [this](uint32_t& value) {
+            return this->handle_read_CTRL_GCM_SHADOWED(value, CTRL_GCM_SHADOWED.read_bit_mask);
+        };
+        memory.register_read_callback(read_cb, CTRL_GCM_SHADOWED.offset);
     }
 }

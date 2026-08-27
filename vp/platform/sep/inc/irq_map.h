@@ -68,7 +68,10 @@ const unsigned int DMA_DONE_IRQ        = 9;   //   [8]  intr_dma_done
 const unsigned int DMA_CHUNK_DONE_IRQ  = 10;  //   [9]  intr_dma_chunk_done
 const unsigned int DMA_ERROR_IRQ       = 11;  //   [10] intr_dma_error
 const unsigned int DMA_ALERT_IRQ       = 12;  //   [11] dma_alert
-const unsigned int WDT_ALERT_IRQ       = 13;  //   [12] wdt_alert (no VP model)
+// Only an ALERT_TEST write can raise this. The IP's sole hardware alert source is
+// intg_err_o from the register top, a TLUL command integrity error, and the VP is
+// reached over AXI-Lite through CSML with no integrity-protected bus to fail.
+const unsigned int WDT_ALERT_IRQ       = 13;  //   [12] wdt_alert
 const unsigned int SPI_EVENT_IRQ       = 14;  //   [13] spi_irq_i
 const unsigned int KEYMGR_IRQ          = 15;  //   [14] km_mbox_irq
 const unsigned int ENTROPY_SRC_IRQ     = 16;  //   [15] entropy_source_irq
@@ -76,9 +79,9 @@ const unsigned int EXT_TRNG_IRQ        = 17;  //   [16] ext_trng_irq (no VP mode
 const unsigned int HMAC_DONE_IRQ       = 18;  //   [17] intr_hmac_done
 const unsigned int HMAC_FIFO_EMPTY_IRQ = 19;  //   [18] intr_hmac_fifo_empty
 const unsigned int HMAC_HMAC_ERR_IRQ   = 20;  //   [19] intr_hmac_err
-const unsigned int KMAC_IRQ            = 21;  //   [20] intr_kmac_done
-const unsigned int KMAC_FIFO_EMPTY_IRQ = 22;  //   [21] intr_kmac_fifo_empty (no VP model)
-const unsigned int KMAC_ERR_IRQ        = 23;  //   [22] intr_kmac_err (no VP model)
+const unsigned int KMAC_DONE_IRQ       = 21;  //   [20] intr_kmac_done
+const unsigned int KMAC_FIFO_EMPTY_IRQ = 22;  //   [21] intr_kmac_fifo_empty
+const unsigned int KMAC_ERR_IRQ        = 23;  //   [22] intr_kmac_err
 const unsigned int CS_CMD_REQ_DONE     = 24;  //   [23] intr_cs_cmd_req_done
 const unsigned int CS_ENTROPY_REQ      = 25;  //   [24] intr_cs_entropy_req
 const unsigned int CS_HW_INST_EXC      = 26;  //   [25] intr_cs_hw_inst_exc
@@ -88,7 +91,7 @@ const unsigned int EDN_FATAL_ERR       = 29;  //   [28] intr_edn_fatal_err
 const unsigned int OTBN_IRQ            = 30;  //   [29] intr_otbn_done
 const unsigned int KM_UNRECOVERABLE_ERR_IRQ = 31;  //   [30] km_unrecoverable_err (no VP model)
 const unsigned int KM_RECOVERABLE_ERR_IRQ   = 32;  //   [31] km_recoverable_err (no VP model)
-const unsigned int CRYPTO_ALERT_IRQ         = 33;  //   [32] crypto_alert (no VP model)
+const unsigned int CRYPTO_ALERT_IRQ         = 33;  //   [32] crypto_alert (AES/HMAC/KMAC/OTBN/CSRNG/EDN OR)
 const unsigned int LOCKED_FIELD_ACCESS_IRQ  = 34;  //   [33] locked_field_access_interrupt
 const unsigned int ABR_ERROR_IRQ            = 35;  //   [34] intr_abr_error
 const unsigned int ABR_NOTIF_IRQ            = 36;  //   [35] intr_abr_notif

@@ -28,6 +28,11 @@ void testbench::test_func009_aes128_block_latency()
     report_test_start("test_func009_aes128_block_latency");
 
     try {
+        // KEY_TOUCH_FORCES_RESEED resets to 1, so writing a key queues a reseed that
+        // lands inside the measured window. These tests time the cipher, not the
+        // reseed, so clear it first.
+        write_ctrl_aux_shadowed(0x0);
+
         // Configure AES-128 ECB encryption
         configure_aes(AES_ENC, AES_MODE_ECB, AES_128, false);
         wait(10, SC_NS);
@@ -87,6 +92,10 @@ void testbench::test_func009_aes192_block_latency()
     report_test_start("test_func009_aes192_block_latency");
 
     try {
+        // See test_func009_aes128_block_latency: keep the key-touch reseed out of
+        // the measured window.
+        write_ctrl_aux_shadowed(0x0);
+
         // Configure AES-192 ECB encryption
         configure_aes(AES_ENC, AES_MODE_ECB, AES_192, false);
         wait(10, SC_NS);
@@ -143,6 +152,10 @@ void testbench::test_func009_aes256_block_latency()
     report_test_start("test_func009_aes256_block_latency");
 
     try {
+        // See test_func009_aes128_block_latency: keep the key-touch reseed out of
+        // the measured window.
+        write_ctrl_aux_shadowed(0x0);
+
         // Configure AES-256 ECB encryption
         configure_aes(AES_ENC, AES_MODE_ECB, AES_256, false);
         wait(10, SC_NS);
@@ -199,6 +212,10 @@ void testbench::test_func009_timing_across_modes()
     report_test_start("test_func009_timing_across_modes");
 
     try {
+        // See test_func009_aes128_block_latency: keep the key-touch reseed out of
+        // the measured window.
+        write_ctrl_aux_shadowed(0x0);
+
         uint32_t key_share0[8], key_share1[8], actual_key[8] = {0};
         generate_two_share_key(key_share0, key_share1, actual_key, 4);
 

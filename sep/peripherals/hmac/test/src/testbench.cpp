@@ -47,6 +47,7 @@ extern "C" void __gcov_dump(void);
 #define TEST_KEY_WRITE_DURING_PROCESSING
 #define TEST_HMAC_ERR_INTERRUPT
 #define TEST_KEYMGR_SIDELOAD
+#define TEST_FIFO_EMPTY_INTERRUPT_GATING
 
 void testbench::run_tests()
 {
@@ -199,6 +200,10 @@ void testbench::run_tests()
 
     #ifdef TEST_CONTEXT_SAVING
       test_context_save_basic();
+      // sha_en=1, digest_size=SHA2_256
+      test_context_save_restore_digest((1 << 1) | (0x1 << 5), false, "SHA-2 256");
+      // hmac_en=1, sha_en=1, digest_size=SHA2_256, key_length=Key_256
+      test_context_save_restore_digest((1 << 0) | (1 << 1) | (0x1 << 5) | (0x2 << 9), true, "HMAC-SHA-256");
     #endif
 
     #ifdef TEST_HASH_STOP_SYNC_FIFO_DRAIN
@@ -214,6 +219,11 @@ void testbench::run_tests()
     test_keymgr_sideload_ignores_sw_key();
     test_keymgr_sideload_xor_shares();
     test_keymgr_sideload_cleared_on_reset();
+    test_keymgr_sideload_preserves_sw_key();
+    #endif
+
+    #ifdef TEST_FIFO_EMPTY_INTERRUPT_GATING
+    test_fifo_empty_interrupt_gating();
     #endif
 
     CSML_INFO(1, logger) << "\n========================================" << std::endl;
@@ -248,7 +258,7 @@ void testbench::test_sha256_hash()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // Step 2: Issue hash_start command
     //CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -299,11 +309,35 @@ void testbench::test_sha256_hash()
     //CSML_INFO(1, logger) << "\n--- Step 6: Read Digest Output ---" << std::endl;
     //CSML_INFO(1, logger) << "Reading DIGEST registers (SHA-2 256 uses DIGEST_0 to DIGEST_7):" << std::endl;
 
+    // MSG_FIFO is a little-endian byte window, so a 32-bit word write places its
+    // LSByte at the lowest address and that byte is hashed first. The words below
+    // therefore feed the byte stream 6c6c6548... rather than the ASCII they look
+    // like. Reference: SHA-256 of that byte stream.
+    const uint32_t expected_digest[8] = {
+        0x5a1d7111, 0x40071b63, 0xdf07bd45, 0x09542fbb,
+        0x150c7d62, 0xde98f517, 0xfb79748b, 0xb6ea0c53
+    };
+
+    uint32_t err_val = 0;
     for (int i = 0; i < 8; i++) {
         uint32_t digest_val = 0;
         test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), digest_val);
         wait(5, SC_NS);
-        CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val << std::dec << std::endl;
+        if (digest_val != expected_digest[i]) {
+            err_val++;
+            CSML_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val
+                                  << " (expected 0x" << expected_digest[i] << ")" << std::dec << std::endl;
+        } else {
+            CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val
+                                 << " (EXPECTED)" << std::dec << std::endl;
+        }
+    }
+
+    if (err_val > 0) {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "TEST FAILED : SHA-256 Hash (Short Message)" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "TEST PASSED : SHA-256 Hash (Short Message)" << std::endl;
     }
 
     CSML_INFO(1, logger) << "\n--- Test Complete: SHA-256 Hash (Short Message) ---" << std::endl;
@@ -346,7 +380,7 @@ void testbench::test_sha256_endian_swap()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // Step 2: Issue hash_start command
     //CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -435,7 +469,7 @@ void testbench::test_sha256_digest_swap()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // Step 2: Issue hash_start command
     //CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -921,7 +955,7 @@ void testbench::test_sha384_hash()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 384");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 384");
 
     // Step 2: Issue hash_start command
     //CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -970,10 +1004,33 @@ void testbench::test_sha384_hash()
     //CSML_INFO(1, logger) << "\n--- Step 5: Read 384-bit Digest Output ---" << std::endl;
     //CSML_INFO(1, logger) << "Reading DIGEST registers (SHA-384 uses DIGEST_0 to DIGEST_11):" << std::endl;
 
+    // SHA-384 over the byte stream the little-endian MSG_FIFO window produces
+    // from the words above (64636261...), not over the ASCII they resemble.
+    const uint32_t expected_digest[12] = {
+        0xebffcece, 0x70ff0f66, 0xcc08db3c, 0xca5f34f6,
+        0x1951d3fe, 0xce976274, 0x087d53af, 0x039050dd,
+        0xd1d5a28a, 0xbaa721a5, 0xda757ee0, 0xe8e2a639
+    };
+
+    uint32_t err_val = 0;
     for (int i = 0; i < 12; i++) {
         test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), read_val);
         wait(5, SC_NS);
-        //CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << read_val << std::dec << std::endl;
+        if (read_val != expected_digest[i]) {
+            err_val++;
+            CSML_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << read_val
+                                  << " (expected 0x" << expected_digest[i] << ")" << std::dec << std::endl;
+        } else {
+            CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << read_val
+                                 << " (EXPECTED)" << std::dec << std::endl;
+        }
+    }
+
+    if (err_val > 0) {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "TEST FAILED : SHA-384 Hash" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "TEST PASSED : SHA-384 Hash" << std::endl;
     }
 
     CSML_INFO(1, logger) << "\n--- Test Complete: SHA-384 Hash ---" << std::endl;
@@ -1000,7 +1057,7 @@ void testbench::test_sha512_hash()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 512");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 512");
 
     // Step 2: Issue hash_start command
     //CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -1039,10 +1096,34 @@ void testbench::test_sha512_hash()
     //CSML_INFO(1, logger) << "\n--- Step 5: Read 512-bit Digest Output ---" << std::endl;
     //CSML_INFO(1, logger) << "Reading DIGEST registers (SHA-512 uses all DIGEST_0 to DIGEST_15):" << std::endl;
 
+    // SHA-512 over the 64-byte stream the little-endian MSG_FIFO window produces
+    // from the generated words (33323130 33323230 ...).
+    const uint32_t expected_digest[16] = {
+        0xdd3f74e3, 0xa8cb5edb, 0x8b461c39, 0x76934153,
+        0xd88281a4, 0x07198ec6, 0x94acd0b0, 0x5458790c,
+        0xf2b6559a, 0x05532433, 0x68314bfe, 0x21cebd8d,
+        0xddd8c723, 0xe20d49cb, 0x9cc1962c, 0x9b6fe26a
+    };
+
+    uint32_t err_val = 0;
     for (int i = 0; i < 16; i++) {
         test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), read_val);
         wait(5, SC_NS);
-        CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << read_val << std::dec << std::endl;
+        if (read_val != expected_digest[i]) {
+            err_val++;
+            CSML_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << read_val
+                                  << " (expected 0x" << expected_digest[i] << ")" << std::dec << std::endl;
+        } else {
+            CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << read_val
+                                 << " (EXPECTED)" << std::dec << std::endl;
+        }
+    }
+
+    if (err_val > 0) {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "TEST FAILED : SHA-512 Hash" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "TEST PASSED : SHA-512 Hash" << std::endl;
     }
 
     CSML_INFO(1, logger) << "\n--- Test Complete: SHA-512 Hash ---" << std::endl;
@@ -1149,7 +1230,7 @@ void testbench::test_hmac_sha256_key128()
 
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for HMAC-SHA256 with Key_128");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for HMAC-SHA256 with Key_128");
 
     // Step 3: Issue hash_start
     //CSML_INFO(1, logger) << "\n--- Step 3: Issue hash_start Command ---" << std::endl;
@@ -1262,7 +1343,7 @@ void testbench::test_hmac_sha256_key256()
 
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for HMAC-SHA256 with Key_256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for HMAC-SHA256 with Key_256");
 
     // Step 3: Issue hash_start
     CSML_INFO(1, logger) << "\n--- Step 3: Issue hash_start Command ---" << std::endl;
@@ -1382,7 +1463,7 @@ void testbench::test_hmac_sha256_key512()
 
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for HMAC-SHA256 with Key_512");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for HMAC-SHA256 with Key_512");
 
     // Step 3: Issue hash_start
     CSML_INFO(1, logger) << "\n--- Step 3: Issue hash_start Command ---" << std::endl;
@@ -1499,7 +1580,7 @@ void testbench::test_hmac_sha384_key384()
 
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for HMAC-SHA384 with Key_384");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for HMAC-SHA384 with Key_384");
 
     // Step 3: Issue hash_start
     CSML_INFO(1, logger) << "\n--- Step 3: Issue hash_start Command ---" << std::endl;
@@ -1649,7 +1730,7 @@ void testbench::test_hmac_sha512_key1024()
 
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for HMAC-SHA512 with Key_1024");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for HMAC-SHA512 with Key_1024");
 
     // Step 3: Issue hash_start
     CSML_INFO(1, logger) << "\n--- Step 3: Issue hash_start Command ---" << std::endl;
@@ -2111,7 +2192,7 @@ void testbench::test_cfg_write_protection()
 
     wait(5, SC_NS);
     
-    test->assert_equal(write_val, read_val, "CFG baseline write");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG baseline write");
 
     // Step 2: Start a hash operation so engine becomes busy
     CSML_INFO(1, logger) << "\n--- Step 2: Start hash to make engine active ---" << std::endl;
@@ -2139,7 +2220,7 @@ void testbench::test_cfg_write_protection()
     wait(5, SC_NS);
     CSML_INFO(1, logger) << "CFG = 0x" << std::hex << read_val << std::dec << std::endl;
 
-    bool cfg_unchanged = (read_val == write_val);
+    bool cfg_unchanged = (read_val == expected_cfg_readback(write_val));
 
     // Check ERR_CODE
     uint32_t err_val = 0;
@@ -2558,64 +2639,77 @@ void testbench::test_fifo_back_pressure()
     test->write_register_32(hmac_basetest::CMD_OFFSET, write_val);
     wait(10, SC_NS);
 
-    // Step 3: Fill FIFO to capacity (16 words for SHA-256)
-    CSML_INFO(1, logger) << "\n--- Step 3: Fill FIFO to Capacity (16 words) ---" << std::endl;
-    CSML_INFO(1, logger) << "Writing 16 words to fill entire FIFO..." << std::endl;
+    // Step 3: Write more words than the FIFO can hold. The FIFO is 32 words deep
+    // and a SHA-256 block is 16 words, so the engine drains as software fills.
+    // The property under test is that nothing is dropped along the way, which the
+    // digest comparison at the end establishes: a single lost or duplicated word
+    // changes it completely.
+    const int kWordCount = 40;
+    CSML_INFO(1, logger) << "\n--- Step 3: Write " << kWordCount
+                         << " words through a 32-word FIFO ---" << std::endl;
 
-    for (int i = 0; i < 16; i++) {
+    bool ever_full = false;
+    uint32_t max_depth = 0;
+
+    for (int i = 0; i < kWordCount; i++) {
         uint32_t data = 0x41424344 + (i << 20);
         test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, data);
         wait(5, SC_NS);
 
-        if (i == 15) {
-            // Check if FIFO is full after 16th write
-            test->read_register_32(hmac_basetest::STATUS_OFFSET, read_val);
-            wait(5, SC_NS);
-            bool fifo_full = (read_val >> 2) & 0x1;
-            uint32_t fifo_depth = (read_val >> 4) & 0x3F;
+        test->read_register_32(hmac_basetest::STATUS_OFFSET, read_val);
+        wait(5, SC_NS);
+        const uint32_t depth = (read_val >> 4) & 0x3F;
+        const bool full = (read_val >> 2) & 0x1;
 
-            CSML_INFO(1, logger) << "After 16 words: depth=" << fifo_depth;
-            CSML_INFO(1, logger) << ", full=" << fifo_full << std::endl;
+        if (depth > max_depth) max_depth = depth;
+        if (full) ever_full = true;
+
+        if (depth > 32) {
+            m_tests_failed++;
+            CSML_ERROR(0, logger) << "FAIL: FIFO depth " << depth
+                                  << " exceeds the 32-word capacity after word " << i << std::endl;
         }
     }
 
-    // Step 4: Attempt to write 17th word (should trigger back-pressure or automatic processing)
-    CSML_INFO(1, logger) << "\n--- Step 4: Attempt 17th Word Write ---" << std::endl;
-    CSML_INFO(1, logger) << "Writing 17th word - expect back-pressure or automatic block processing..." << std::endl;
+    CSML_INFO(1, logger) << "Peak FIFO depth observed: " << max_depth
+                         << ", fifo_full seen: " << ever_full << std::endl;
 
-    sc_time start_time = sc_time_stamp();
-    uint32_t data = 0xDEADBEEF;
-    test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, data);
-    wait(5, SC_NS);
-    sc_time end_time = sc_time_stamp();
-
-    double latency_ns = (end_time - start_time).to_seconds() * 1e9;
-    CSML_INFO(1, logger) << "Write latency: " << latency_ns << " ns" << std::endl;
-
-    // Step 5: Check FIFO status after 17th write
-    CSML_INFO(1, logger) << "\n--- Step 5: Verify FIFO Status After 17th Write ---" << std::endl;
-    test->read_register_32(hmac_basetest::STATUS_OFFSET, read_val);
-    wait(5, SC_NS);
-
-    uint32_t fifo_depth = (read_val >> 4) & 0x3F;
-    bool fifo_full = (read_val >> 2) & 0x1;
-
-    CSML_INFO(1, logger) << "After 17th word: depth=" << fifo_depth;
-    CSML_INFO(1, logger) << ", full=" << fifo_full << std::endl;
-
-    if (fifo_depth < 16) {
-        CSML_INFO(1, logger) << "PASS: Automatic block processing freed FIFO space" << std::endl;
-        CSML_INFO(1, logger) << "INFO: FIFO depth reduced from 16 to " << fifo_depth << std::endl;
-    } else if (fifo_depth == 16) {
-        CSML_INFO(1, logger) << "INFO: FIFO still at capacity" << std::endl;
-        CSML_INFO(1, logger) << "NOTE: Back-pressure may require explicit processing or timing" << std::endl;
+    if (max_depth <= 32) {
+        CSML_INFO(1, logger) << "PASS: FIFO never exceeded its 32-word capacity" << std::endl;
     }
 
-    // Step 6: Complete the message
-    CSML_INFO(1, logger) << "\n--- Step 6: Complete Message Processing ---" << std::endl;
-    write_val = 0x00000002;
+    // Step 4: Complete the message and check the digest
+    CSML_INFO(1, logger) << "\n--- Step 4: Complete Message and Verify Digest ---" << std::endl;
+    write_val = 0x00000002; // hash_process
     test->write_register_32(hmac_basetest::CMD_OFFSET, write_val);
-    wait(150, SC_NS);
+    wait(400, SC_NS);
+    wait_for_hmac_done();
+    test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x1); // W1C
+    wait(50, SC_NS);
+
+    // SHA-256 over the 160-byte stream the 40 word writes produce.
+    const uint32_t expected_digest[8] = {
+        0xfd4b824c, 0x37d1b587, 0x490acbb9, 0xeaa593af,
+        0xb8d7ae8b, 0x5eaa5805, 0xfa017abb, 0x279a403f
+    };
+
+    uint32_t err_val = 0;
+    for (int i = 0; i < 8; i++) {
+        test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), read_val);
+        wait(5, SC_NS);
+        if (read_val != expected_digest[i]) {
+            err_val++;
+            CSML_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << read_val
+                                  << " (expected 0x" << expected_digest[i] << ")" << std::dec << std::endl;
+        }
+    }
+
+    if (err_val > 0) {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "TEST FAILED: back-pressure lost or corrupted message data" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "TEST PASSED: all 40 words survived back-pressure intact" << std::endl;
+    }
 
     CSML_INFO(1, logger) << "\n--- Test Complete: FIFO Back-Pressure ---" << std::endl;
     CSML_INFO(1, logger) << "NOTE: Validates FIFO doesn't lose data when full" << std::endl;
@@ -2825,10 +2919,7 @@ void testbench::test_subword_writes_halfword()
 	wait(10, SC_NS);
 	test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
 	wait(5, SC_NS);
-	CSML_INFO(1, logger) << "ERR_CODE = 0x" << std::hex << read_val << std::dec << " (expected 0x5)" << std::endl;
-	if (read_val == 0x5) {
-		CSML_INFO(1, logger) << "PASS: SwPushMsgWhenShaDisabled -> SwPushMsgWhenDisallowed (0x5)" << std::endl;
-	}
+	test->assert_equal(0x5, read_val, "SwPushMsgWhenShaDisabled -> SwPushMsgWhenDisallowed (0x5)");
 	// Clear hmac_err interrupt (W1C)
 	write_val = 0x00000004;
 	test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, write_val);
@@ -2836,8 +2927,11 @@ void testbench::test_subword_writes_halfword()
 
 	// 2. SwHashStartWhenShaDisabled
 	// Issue hash_start with sha_en=0 -> Expect ERR_CODE = 0x1
+	// digest_size must be a legal encoding: SwInvalidConfig outranks
+	// SwHashStartWhenShaDisabled, so leaving it at 0 (which reads back as
+	// SHA2_None) would report 0x6 and mask the condition under test.
 	CSML_INFO(1, logger) << "\n[2] SwHashStartWhenShaDisabled: CMD.hash_start with sha_en=0" << std::endl;
-	write_val = 0x00000000; // ensure sha_en=0
+	write_val = (0x1 << 5); // sha_en=0, digest_size=SHA2_256
 	test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
 	wait(5, SC_NS);
 	write_val = 0x00000001; // hash_start
@@ -2845,10 +2939,7 @@ void testbench::test_subword_writes_halfword()
 	wait(10, SC_NS);
 	test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
 	wait(5, SC_NS);
-	CSML_INFO(1, logger) << "ERR_CODE = 0x" << std::hex << read_val << std::dec << " (expected 0x2)" << std::endl;
-	if (read_val == 0x2) {
-		CSML_INFO(1, logger) << "PASS: SwHashStartWhenShaDisabled (0x2)" << std::endl;
-	}
+	test->assert_equal(0x2, read_val, "SwHashStartWhenShaDisabled (0x2)");
 	// Clear hmac_err interrupt (W1C)
 	write_val = 0x00000004;
 	test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, write_val);
@@ -2870,10 +2961,7 @@ void testbench::test_subword_writes_halfword()
 	wait(10, SC_NS);
 	test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
 	wait(5, SC_NS);
-	CSML_INFO(1, logger) << "ERR_CODE = 0x" << std::hex << read_val << std::dec << " (expected 0x3)" << std::endl;
-	if (read_val == 0x3) {
-		CSML_INFO(1, logger) << "PASS: SwUpdateSecretKeyInProcess (0x3)" << std::endl;
-	}
+	test->assert_equal(0x3, read_val, "SwUpdateSecretKeyInProcess (0x3)");
 	// Clear hmac_err interrupt (W1C)
 	write_val = 0x00000004;
 	test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, write_val);
@@ -2887,10 +2975,7 @@ void testbench::test_subword_writes_halfword()
 	wait(10, SC_NS);
 	test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
 	wait(5, SC_NS);
-	CSML_INFO(1, logger) << "ERR_CODE = 0x" << std::hex << read_val << std::dec << " (expected 0x4)" << std::endl;
-	if (read_val == 0x4) {
-		CSML_INFO(1, logger) << "PASS: SwHashStartWhenActive (0x4)" << std::endl;
-	}
+	test->assert_equal(0x4, read_val, "SwHashStartWhenActive (0x4)");
 	// Clear hmac_err interrupt (W1C) and stop current operation to return to IDLE
 	write_val = 0x00000004;
 	test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, write_val);
@@ -2914,27 +2999,36 @@ void testbench::test_subword_writes_halfword()
 	wait(10, SC_NS);
 	test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
 	wait(5, SC_NS);
-	CSML_INFO(1, logger) << "ERR_CODE = 0x" << std::hex << read_val << std::dec << " (expected 0x5)" << std::endl;
-	if (read_val == 0x5) {
-		CSML_INFO(1, logger) << "PASS: SwPushMsgWhenDisallowed (0x5)" << std::endl;
-	}
+	test->assert_equal(0x5, read_val, "SwPushMsgWhenDisallowed (0x5)");
 	// Clear hmac_err interrupt (W1C)
 	write_val = 0x00000004;
 	test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, write_val);
 	wait(5, SC_NS);
 
 	// 6. SwInvalidConfig
-	// Program an invalid configuration (digest_size=0x8 or invalid key_length) -> Expect ERR_CODE = 0x6
-	CSML_INFO(1, logger) << "\n[6] SwInvalidConfig: Write invalid CFG (digest_size = SHA2_None)" << std::endl;
-	write_val = (0x8 << 5); // digest_size=0x8 (invalid), others 0
+	// An invalid CFG is not an error in itself: CFG is an external register with
+	// no storage, so hardware simply reads back the sanitised encoding. The error
+	// is only raised when a command tries to act on that configuration.
+	CSML_INFO(1, logger) << "\n[6] SwInvalidConfig: invalid CFG is reported at hash_start, not at the CFG write" << std::endl;
+	write_val = (0x8 << 5); // digest_size=0x8 (SHA2_None), others 0
 	test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
+	wait(10, SC_NS);
+
+	test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+	wait(5, SC_NS);
+	test->assert_equal(0x0, read_val & 0x4, "Invalid CFG write alone raises no error");
+
+	write_val = 0x00000001; // hash_start
+	test->write_register_32(hmac_basetest::CMD_OFFSET, write_val);
 	wait(10, SC_NS);
 	test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
 	wait(5, SC_NS);
-	CSML_INFO(1, logger) << "ERR_CODE = 0x" << std::hex << read_val << std::dec << " (expected 0x6)" << std::endl;
-	if (read_val == 0x6) {
-		CSML_INFO(1, logger) << "PASS: SwInvalidConfig (0x6)" << std::endl;
-	}
+	test->assert_equal(0x6, read_val, "SwInvalidConfig reported at hash_start (0x6)");
+
+	test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+	wait(5, SC_NS);
+	test->assert_equal(0x4, read_val & 0x4, "hmac_err asserted for SwInvalidConfig");
+
 	// Clear hmac_err interrupt (W1C)
 	write_val = 0x00000004;
 	test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, write_val);
@@ -3006,7 +3100,7 @@ void testbench::test_key_swap()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for HMAC-SHA256 with key_swap=0");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for HMAC-SHA256 with key_swap=0");
 
     // Issue hash_start
     CSML_INFO(1, logger) << "\n--- Issuing hash_start ---" << std::endl;
@@ -3269,7 +3363,7 @@ void testbench::test_reset_during_processing()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // Step 2: Set some non-default register values to verify they reset
     CSML_INFO(1, logger) << "\n--- Step 2: Set Non-Default Register Values ---" << std::endl;
@@ -3719,16 +3813,18 @@ void testbench::test_error_key1024_sha256()
 	test->rst_ni.write(true);
 	wait(10, SC_NS);
 
-	// Step 1: Configure SHA-2 256 mode with Key_1024 (invalid - key exceeds block size)
-	CSML_INFO(1, logger) << "--- Step 1: Configure SHA-2 256 Mode with Key_1024 ---" << std::endl;
+	// Step 1: Configure HMAC-SHA256 with Key_1024. A 1024-bit key exceeds the
+	// 512-bit SHA-256 block size, so this combination is rejected -- but only
+	// in HMAC mode, since key_length is meaningless for plain SHA-2.
+	CSML_INFO(1, logger) << "--- Step 1: Configure HMAC-SHA256 Mode with Key_1024 ---" << std::endl;
 	// CFG register:
-	// - hmac_en = 0 (bit 0) - SHA-2 only mode
+	// - hmac_en = 1 (bit 0) - keyed HMAC mode, where key_length applies
 	// - sha_en  = 1 (bit 1)
 	// - digest_size = SHA2_256 (0x1) at bits [8:5] -> (0x1 << 5) = 0x20
 	// - key_length  = Key_1024 (0x10) at bits [14:9] -> (0x10 << 9) = 0x2000
-	write_val = (1 << 1) | (0x1 << 5) | (0x10 << 9); // sha_en=1, digest_size=SHA2_256, key_length=Key_1024
+	write_val = (1 << 0) | (1 << 1) | (0x1 << 5) | (0x10 << 9);
 	CSML_INFO(1, logger) << "Writing CFG = 0x" << std::hex << write_val << std::dec
-	          << " (sha_en=1, digest_size=SHA2_256, key_length=Key_1024)" << std::endl;
+	          << " (hmac_en=1, sha_en=1, digest_size=SHA2_256, key_length=Key_1024)" << std::endl;
 	test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
 	wait(5, SC_NS);
 
@@ -3736,7 +3832,7 @@ void testbench::test_error_key1024_sha256()
 	test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
 	wait(5, SC_NS);
 	CSML_INFO(1, logger) << "CFG read back = 0x" << std::hex << read_val << std::dec << std::endl;
-    test->assert_equal(write_val, read_val, "CFG configuration with Key_1024 and SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration with Key_1024 and SHA-2 256");
 
 	// Step 2: Issue hash_start command
 	CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -3751,6 +3847,25 @@ void testbench::test_error_key1024_sha256()
 	wait(5, SC_NS);
 	CSML_INFO(1, logger) << "ERR_CODE = 0x" << std::hex << read_val << std::dec << std::endl;
 	test->assert_equal(0x6, read_val, "ERR_CODE should be 0x6 (SwInvalidConfig - key exceeds block size)");
+
+	// Step 4: The same key_length with hmac_en=0 is legal, because plain SHA-2
+	// ignores the key entirely. ERR_CODE is sticky and keeps the 0x6 from step
+	// 3, so the check is that hash_start raises no *new* error: clear hmac_err
+	// first, then confirm it stays clear.
+	CSML_INFO(1, logger) << "\n--- Step 4: Same key_length in SHA-2 only mode is accepted ---" << std::endl;
+	test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x4); // W1C hmac_err
+	wait(5, SC_NS);
+
+	write_val = (1 << 1) | (0x1 << 5) | (0x10 << 9); // hmac_en=0
+	test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
+	wait(5, SC_NS);
+	test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1); // hash_start
+	wait(10, SC_NS);
+
+	test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+	wait(5, SC_NS);
+	CSML_INFO(1, logger) << "INTR_STATE = 0x" << std::hex << read_val << std::dec << std::endl;
+	test->assert_equal(0x0, read_val & 0x4, "Key_1024 with SHA-2 only mode should not error");
 
 	CSML_INFO(1, logger) << "\n--- Test Complete: Key_1024 with SHA-2 256 Error ---" << std::endl;
 
@@ -3787,7 +3902,7 @@ void testbench::test_error_msg_fifo_after_process()
 	// Verify configuration
 	test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
 	wait(5, SC_NS);
-	test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+	test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
 	// Step 2: Issue hash_start command
 	CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -3897,9 +4012,12 @@ void testbench::test_error_recovery()
 	wait(5, SC_NS);
 	test->assert_equal(write_val, read_val, "INTR_ENABLE configuration (hmac_err enabled)");
 
-	// Step 2: Inject error condition - Configure with sha_en=0 (invalid)
+	// Step 2: Inject error condition - Configure with sha_en=0 (invalid).
+	// digest_size must still be a legal encoding: SwInvalidConfig outranks
+	// SwHashStartWhenShaDisabled, so leaving digest_size at SHA2_None would
+	// report 0x6 instead of the 0x2 this test is targeting.
 	CSML_INFO(1, logger) << "\n--- Step 2: Inject Error Condition (sha_en=0) ---" << std::endl;
-	write_val = 0x00000000; // sha_en=0, hmac_en=0 (invalid configuration)
+	write_val = (0x1 << 5); // sha_en=0, hmac_en=0, digest_size=SHA2_256
 	CSML_INFO(1, logger) << "Writing CFG = 0x" << std::hex << write_val << std::dec << " (sha_en=0 - invalid)" << std::endl;
 	test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
 	wait(5, SC_NS);
@@ -4132,7 +4250,7 @@ void testbench::test_minimum_length_transfer()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // Step 2: Issue hash_start command
     CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -4350,7 +4468,7 @@ void testbench::test_status_hmac_idle_transitions()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration");
 
     // Verify still in IDLE state after configuration
     bool idle_after_cfg = read_and_log_status("After CFG Configuration");
@@ -4901,7 +5019,7 @@ void testbench::test_context_save_basic()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // ========================================
     // Step 2: Issue hash_start Command
@@ -5310,7 +5428,7 @@ void testbench::test_block_boundary_message()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // Verify still in IDLE state after configuration
     bool idle_after_cfg = read_and_log_status("After CFG Configuration");
@@ -5661,7 +5779,7 @@ void testbench::test_maximum_length_transfer()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "CFG configuration for SHA-2 256");
+    test->assert_equal(expected_cfg_readback(write_val), read_val, "CFG configuration for SHA-2 256");
 
     // Step 2: Issue hash_start command
     CSML_INFO(1, logger) << "\n--- Step 2: Issue hash_start Command ---" << std::endl;
@@ -5953,8 +6071,9 @@ void testbench::test_context_sha_en_disable_clear()
     // Verify configuration
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    if (read_val != write_val) {
-        CSML_INFO(1, logger) << "ERROR: CFG readback mismatch. Expected 0x" << std::hex << write_val;
+    if (read_val != expected_cfg_readback(write_val)) {
+        CSML_INFO(1, logger) << "ERROR: CFG readback mismatch. Expected 0x" << std::hex
+                             << expected_cfg_readback(write_val);
         CSML_INFO(1, logger) << ", got 0x" << read_val << std::dec << std::endl;
         m_tests_failed++;
         test_passed = false;
@@ -6137,7 +6256,16 @@ int sc_main(int argc, char* argv[])
 #ifdef __COVERAGE__
     __gcov_dump();  // Flush coverage data before quick_exit
 #endif
-    std::quick_exit(tb.m_tests_failed > 0 ? 1 : 0);
+    // Two independent failure paths: checks written inline in the tests bump
+    // m_tests_failed, while assert_equal/assert_not_equal stop the simulation and
+    // record separately. Both must be consulted or a failing run exits zero.
+    const uint32_t failures = tb.m_tests_failed + (tb.test ? tb.test->m_assert_failures : 0);
+    if (failures > 0) {
+        CSML_ERROR(0, logger) << "\nTESTBENCH FAILED: " << failures << " failure(s)" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "\nTESTBENCH PASSED: no failures" << std::endl;
+    }
+    std::quick_exit(failures > 0 ? 1 : 0);
 
     return 0;
 }
@@ -6529,5 +6657,412 @@ void testbench::test_keymgr_sideload_cleared_on_reset()
     } else {
         CSML_INFO(1, logger) << "TEST PASSED: KeyMgr Sideload cleared on reset" << std::endl;
     }
+}
+
+// Verifies that a sideload operation does not destroy the software-written key.
+// Hardware muxes between the two key sources at the point the core consumes the
+// key, so once the key manager deasserts validity the software key is in force
+// again. Rather than hardcode a digest, this runs the same message three times
+// and compares: software key, then sideload, then software key again. The first
+// and third results must agree, and the middle one must differ.
+void testbench::test_keymgr_sideload_preserves_sw_key()
+{
+    CSML_INFO(1, logger) << "\n========================================" << std::endl;
+    CSML_INFO(1, logger) << "  KeyMgr Sideload: SW key survives sideload" << std::endl;
+    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+
+    const uint32_t cfg = (1 << 0) | (1 << 1) | (0x1 << 5) | (0x2 << 9); // HMAC, SHA-256, Key_256
+
+    const uint32_t message[16] = {
+        0x61626364, 0x65666768, 0x696A6B6C, 0x6D6E6F70,
+        0x71727374, 0x75767778, 0x797A3132, 0x33343536,
+        0x61626364, 0x65666768, 0x696A6B6C, 0x6D6E6F70,
+        0x71727374, 0x75767778, 0x797A3132, 0x33343536
+    };
+
+    auto run_hash = [&](uint32_t out_digest[8]) {
+        test->write_register_32(hmac_basetest::CFG_OFFSET, cfg);
+        wait(5, SC_NS);
+        test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1); // hash_start
+        wait(10, SC_NS);
+
+        for (int i = 0; i < 16; i++) {
+            test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, message[i]);
+            wait(5, SC_NS);
+        }
+
+        test->write_register_32(hmac_basetest::CMD_OFFSET, 0x2); // hash_process
+        wait(350, SC_NS);
+        wait_for_hmac_done();
+        test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x1); // W1C hmac_done
+        wait(150, SC_NS);
+
+        for (int i = 0; i < 8; i++) {
+            test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), out_digest[i]);
+            wait(5, SC_NS);
+        }
+    };
+
+    test->rst_ni.write(false);
+    wait(20, SC_NS);
+    test->rst_ni.write(true);
+    wait(20, SC_NS);
+    wait_for_hmac_idle();
+
+    // Step 1: software key only
+    CSML_INFO(1, logger) << "--- Step 1: hash with the software key ---" << std::endl;
+    for (int i = 0; i < 8; i++) {
+        test->write_register_32(hmac_basetest::KEY_OFFSET + (i * 4), 0xDEADBEEF);
+        wait(5, SC_NS);
+    }
+
+    uint32_t digest_sw_before[8] = {0};
+    run_hash(digest_sw_before);
+
+    // Step 2: activate a different sideload key and hash the same message
+    CSML_INFO(1, logger) << "\n--- Step 2: hash with the sideload key ---" << std::endl;
+    const uint32_t key_256[8] = {0x61626364, 0x65666768, 0x696a6b6c, 0x6d6e6f70,
+                                 0x71727374, 0x75767778, 0x797A3132, 0x33343536};
+    for (int i = 0; i < 8; i++) {
+        test->keymgr_write_word(hmac_test::KEYMGR_SHARE0_OFFSET + (i * 4), key_256[i]);
+        wait(5, SC_NS);
+    }
+    test->keymgr_write_word(hmac_test::KEYMGR_CTRL_OFFSET, 0x1);
+    wait(5, SC_NS);
+
+    uint32_t digest_sideload[8] = {0};
+    run_hash(digest_sideload);
+
+    bool sideload_differs = false;
+    for (int i = 0; i < 8; i++) {
+        if (digest_sideload[i] != digest_sw_before[i]) {
+            sideload_differs = true;
+        }
+    }
+    if (sideload_differs) {
+        CSML_INFO(1, logger) << "PASS: sideload key produced a different digest" << std::endl;
+    } else {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "FAIL: sideload key had no effect on the digest" << std::endl;
+    }
+
+    // Step 3: deactivate sideload; the software key must be back in force
+    CSML_INFO(1, logger) << "\n--- Step 3: deactivate sideload and hash again ---" << std::endl;
+    test->keymgr_write_word(hmac_test::KEYMGR_CTRL_OFFSET, 0x0);
+    wait(5, SC_NS);
+
+    uint32_t digest_sw_after[8] = {0};
+    run_hash(digest_sw_after);
+
+    uint32_t err_val = 0;
+    for (int i = 0; i < 8; i++) {
+        if (digest_sw_after[i] != digest_sw_before[i]) {
+            m_tests_failed++;
+            CSML_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_sw_after[i]
+                                  << " (expected 0x" << digest_sw_before[i] << ")" << std::dec << std::endl;
+            err_val++;
+        }
+    }
+
+    if (err_val > 0) {
+        CSML_ERROR(0, logger) << "TEST FAILED: software key did not survive the sideload operation" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "TEST PASSED: software key survives sideload" << std::endl;
+    }
+}
+
+// Verifies that fifo_empty is reported once per fill cycle rather than on every
+// drain. The interrupt is gated on the FIFO having been full beforehand, so:
+//   - SHA-512 takes a 1024-bit block, which is 32 words and exactly the FIFO
+//     depth, so feeding one block fills the FIFO and arms the interrupt.
+//   - SHA-256 takes a 512-bit block, which is 16 words, so the engine drains at
+//     half depth, the FIFO is never full, and the interrupt must stay silent.
+// Both cases end with an empty FIFO, so an ungated implementation would fire in
+// each of them.
+void testbench::test_fifo_empty_interrupt_gating()
+{
+    uint32_t read_val = 0;
+
+    CSML_INFO(1, logger) << "\n========================================" << std::endl;
+    CSML_INFO(1, logger) << "  Test: fifo_empty Interrupt Gating" << std::endl;
+    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+
+    // Block processing carries a timing annotation, and the gated check runs
+    // only after it. Wait past the longest block delay before sampling.
+    const sc_time block_settle(3000, SC_NS);
+
+    // ---- Case 1: FIFO reaches full depth, interrupt expected ----
+    CSML_INFO(1, logger) << "--- Case 1: SHA-512, one 32-word block fills the FIFO ---" << std::endl;
+
+    test->rst_ni.write(false);
+    wait(20, SC_NS);
+    test->rst_ni.write(true);
+    wait(20, SC_NS);
+    wait_for_hmac_idle();
+
+    test->write_register_32(hmac_basetest::INTR_ENABLE_OFFSET, 0x2); // fifo_empty
+    wait(5, SC_NS);
+
+    uint32_t cfg = (1 << 1) | (0x4 << 5); // sha_en=1, digest_size=SHA2_512
+    test->write_register_32(hmac_basetest::CFG_OFFSET, cfg);
+    wait(5, SC_NS);
+
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1); // hash_start
+    wait(10, SC_NS);
+
+    for (int i = 0; i < 32; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, 0xA5A5A500u + i);
+        wait(5, SC_NS);
+    }
+    wait(block_settle);
+
+    test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+    wait(5, SC_NS);
+    CSML_INFO(1, logger) << "INTR_STATE = 0x" << std::hex << read_val << std::dec << std::endl;
+    test->assert_equal(0x2, read_val & 0x2, "fifo_empty raised after FIFO was full");
+
+    bool port_fifo_empty = test->intr_fifo_empty.read();
+    if (port_fifo_empty) {
+        CSML_INFO(1, logger) << "PASS: intr_fifo_empty port asserted" << std::endl;
+    } else {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "FAIL: intr_fifo_empty port not asserted" << std::endl;
+    }
+
+    // ---- Case 2: FIFO never fills, interrupt must not fire ----
+    CSML_INFO(1, logger) << "\n--- Case 2: SHA-256, 16-word blocks never fill the FIFO ---" << std::endl;
+
+    test->rst_ni.write(false);
+    wait(20, SC_NS);
+    test->rst_ni.write(true);
+    wait(20, SC_NS);
+    wait_for_hmac_idle();
+
+    test->write_register_32(hmac_basetest::INTR_ENABLE_OFFSET, 0x2);
+    wait(5, SC_NS);
+
+    cfg = (1 << 1) | (0x1 << 5); // sha_en=1, digest_size=SHA2_256
+    test->write_register_32(hmac_basetest::CFG_OFFSET, cfg);
+    wait(5, SC_NS);
+
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1); // hash_start
+    wait(10, SC_NS);
+
+    // Two full blocks, each drained at 16 words, so occupancy never exceeds 16.
+    for (int i = 0; i < 32; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, 0x5A5A5A00u + i);
+        wait(5, SC_NS);
+    }
+    wait(block_settle);
+
+    test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+    wait(5, SC_NS);
+    CSML_INFO(1, logger) << "INTR_STATE = 0x" << std::hex << read_val << std::dec << std::endl;
+    test->assert_equal(0x0, read_val & 0x2, "fifo_empty stays clear when FIFO never fills");
+
+    CSML_INFO(1, logger) << "\n--- Test Complete: fifo_empty Interrupt Gating ---" << std::endl;
+}
+
+// Verifies that hash_stop and hash_continue actually save and restore the hash,
+// rather than merely moving the state machine between IDLE and PROCESSING.
+//
+// The same two-block message is hashed twice. The reference run feeds it in one
+// go. The split run stops after the first block, reads the intermediate state
+// out of DIGEST and MSG_LENGTH, then runs an unrelated hash to completion before
+// writing the saved state back and continuing. That intervening hash is what
+// makes the test meaningful: it overwrites whatever the engine was holding, so
+// the final digest can only be correct if the state genuinely came back from the
+// registers. The two digests must match.
+//
+// Run for plain SHA-2 and for HMAC. The HMAC case matters on its own: the engine
+// absorbs K^ipad before the message, so its internal bit count runs one block
+// ahead of MSG_LENGTH, and the restore path has to put that block back.
+void testbench::test_context_save_restore_digest(uint32_t cfg, bool hmac_mode, const char *label)
+{
+    uint32_t read_val = 0;
+
+    CSML_INFO(1, logger) << "\n========================================" << std::endl;
+    CSML_INFO(1, logger) << "  Test: Context Save/Restore Digest Equivalence (" << label << ")" << std::endl;
+    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+
+    const uint32_t cfg_sha256 = cfg;
+
+    // Two full SHA-256 blocks.
+    uint32_t message[32];
+    for (int i = 0; i < 32; i++) {
+        message[i] = 0x10203040u + static_cast<uint32_t>(i);
+    }
+
+    // Programmed after every reset, and left in place across the save/restore so
+    // that the restored HMAC closes with the same key it started with.
+    auto program_key = [&]() {
+        if (!hmac_mode) return;
+        for (int i = 0; i < 8; i++) {
+            test->write_register_32(hmac_basetest::KEY_OFFSET + (i * 4), 0xA5A50000u + static_cast<uint32_t>(i));
+            wait(5, SC_NS);
+        }
+    };
+
+    auto reset_dut = [&]() {
+        test->rst_ni.write(false);
+        wait(20, SC_NS);
+        test->rst_ni.write(true);
+        wait(20, SC_NS);
+        wait_for_hmac_idle();
+        program_key();
+    };
+
+    auto finish_and_read = [&](uint32_t out[8]) {
+        test->write_register_32(hmac_basetest::CMD_OFFSET, 0x2); // hash_process
+        wait(300, SC_NS);
+        wait_for_hmac_done();
+        test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x1); // W1C
+        wait(50, SC_NS);
+        for (int i = 0; i < 8; i++) {
+            test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), out[i]);
+            wait(5, SC_NS);
+        }
+    };
+
+    // ---- Reference: hash both blocks in a single operation ----
+    CSML_INFO(1, logger) << "--- Reference run: both blocks in one operation ---" << std::endl;
+    reset_dut();
+
+    test->write_register_32(hmac_basetest::CFG_OFFSET, cfg_sha256);
+    wait(5, SC_NS);
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1); // hash_start
+    wait(10, SC_NS);
+    for (int i = 0; i < 32; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, message[i]);
+        wait(5, SC_NS);
+    }
+
+    uint32_t digest_ref[8] = {0};
+    finish_and_read(digest_ref);
+
+    CSML_INFO(1, logger) << "Reference digest:" << std::endl;
+    for (int i = 0; i < 8; i++) {
+        CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_ref[i] << std::dec << std::endl;
+    }
+
+    // ---- Split run: stop after block 1, save, clobber, restore, continue ----
+    CSML_INFO(1, logger) << "\n--- Split run: hash_stop after first block ---" << std::endl;
+    reset_dut();
+
+    test->write_register_32(hmac_basetest::CFG_OFFSET, cfg_sha256);
+    wait(5, SC_NS);
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1); // hash_start
+    wait(10, SC_NS);
+    for (int i = 0; i < 16; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, message[i]);
+        wait(5, SC_NS);
+    }
+    wait(200, SC_NS);
+
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x4); // hash_stop
+    wait(100, SC_NS);
+
+    // hash_stop lands on a block boundary here, so it must report completion.
+    test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+    wait(5, SC_NS);
+    test->assert_equal(0x1, read_val & 0x1, "hash_stop on a block boundary sets hmac_done");
+    test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x1); // W1C
+    wait(5, SC_NS);
+
+    uint32_t saved_state[8] = {0};
+    for (int i = 0; i < 8; i++) {
+        test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), saved_state[i]);
+        wait(5, SC_NS);
+    }
+    uint32_t saved_len_lo = 0, saved_len_hi = 0;
+    test->read_register_32(hmac_basetest::MSG_LENGTH_LOWER_OFFSET, saved_len_lo);
+    wait(5, SC_NS);
+    test->read_register_32(hmac_basetest::MSG_LENGTH_UPPER_OFFSET, saved_len_hi);
+    wait(5, SC_NS);
+
+    CSML_INFO(1, logger) << "Saved context: MSG_LENGTH = " << saved_len_lo << " bits" << std::endl;
+    test->assert_equal(512, saved_len_lo, "MSG_LENGTH records one absorbed block");
+
+    // The saved state must not simply be the initial SHA-256 constants, or the
+    // comparison below would succeed without anything being carried across.
+    if (saved_state[0] == 0x6a09e667u) {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "FAIL: saved state is the SHA-256 IV, no progress was captured" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "PASS: saved state has advanced past the SHA-256 IV" << std::endl;
+    }
+
+    // Clobber the engine with an unrelated hash run to completion.
+    CSML_INFO(1, logger) << "\n--- Intervening unrelated hash to clobber engine state ---" << std::endl;
+    test->write_register_32(hmac_basetest::CFG_OFFSET, cfg_sha256);
+    wait(5, SC_NS);
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x1); // hash_start
+    wait(10, SC_NS);
+    for (int i = 0; i < 16; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, 0xFACEB00Cu + static_cast<uint32_t>(i));
+        wait(5, SC_NS);
+    }
+    uint32_t digest_other[8] = {0};
+    finish_and_read(digest_other);
+
+    bool clobbered = false;
+    for (int i = 0; i < 8; i++) {
+        if (digest_other[i] != saved_state[i]) clobbered = true;
+    }
+    if (clobbered) {
+        CSML_INFO(1, logger) << "PASS: intervening hash left different state in DIGEST" << std::endl;
+    } else {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "FAIL: intervening hash did not disturb DIGEST" << std::endl;
+    }
+
+    // Restore and continue.
+    CSML_INFO(1, logger) << "\n--- Restore saved context and continue ---" << std::endl;
+    test->write_register_32(hmac_basetest::CFG_OFFSET, cfg_sha256);
+    wait(5, SC_NS);
+    for (int i = 0; i < 8; i++) {
+        test->write_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), saved_state[i]);
+        wait(5, SC_NS);
+    }
+    test->write_register_32(hmac_basetest::MSG_LENGTH_LOWER_OFFSET, saved_len_lo);
+    wait(5, SC_NS);
+    test->write_register_32(hmac_basetest::MSG_LENGTH_UPPER_OFFSET, saved_len_hi);
+    wait(5, SC_NS);
+
+    test->write_register_32(hmac_basetest::CMD_OFFSET, 0x8); // hash_continue
+    wait(10, SC_NS);
+
+    for (int i = 16; i < 32; i++) {
+        test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, message[i]);
+        wait(5, SC_NS);
+    }
+
+    uint32_t digest_split[8] = {0};
+    finish_and_read(digest_split);
+
+    CSML_INFO(1, logger) << "\n--- Compare split digest against reference ---" << std::endl;
+    uint32_t err_val = 0;
+    for (int i = 0; i < 8; i++) {
+        if (digest_split[i] != digest_ref[i]) {
+            err_val++;
+            CSML_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_split[i]
+                                  << " (expected 0x" << digest_ref[i] << ")" << std::dec << std::endl;
+        } else {
+            CSML_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_split[i]
+                                 << " (EXPECTED)" << std::dec << std::endl;
+        }
+    }
+
+    if (err_val > 0) {
+        m_tests_failed++;
+        CSML_ERROR(0, logger) << "TEST FAILED (" << label
+                              << "): stop/continue digest differs from single-shot digest" << std::endl;
+    } else {
+        CSML_INFO(1, logger) << "TEST PASSED (" << label
+                             << "): stop/continue reproduces the single-shot digest" << std::endl;
+    }
+
+    CSML_INFO(1, logger) << "\n--- Test Complete: Context Save/Restore Digest Equivalence ("
+                         << label << ") ---" << std::endl;
 }
 

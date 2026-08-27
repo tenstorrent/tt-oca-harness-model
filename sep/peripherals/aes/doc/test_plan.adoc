@@ -39,8 +39,8 @@ or export them first.
 ====== Standalone cases
 
 Sources: `test/src/testbench.cpp`, `aes_func001_test.cpp` …
-`aes_func009_test.cpp`. Suites are the FUNC-AES groups; do not treat
-the 99-row plan as something to paste here.
+`aes_func009_test.cpp`, plus `aes_gcm_test.cpp`. Suites are the FUNC-AES
+groups; do not treat the 99-row plan as something to paste here.
 
 [cols="12%,28%,44%,16%",options="header"]
 |===
@@ -55,6 +55,7 @@ the 99-row plan as something to paste here.
 |FUNC-AES-007 |Security register interface |Reseed-on-key-touch, TRIGGER clear |Positive
 |FUNC-AES-008 |Alerts and escalate |Fatal / recoverable, LC lock |Mixed
 |FUNC-AES-009 |LT timing |Quantum-keeper block delay |Positive
+|GCM |Phase sequencing and NIST vectors |INIT/AAD/TEXT/SAVE/RESTORE/TAG, tag equivalence |Mixed
 |===
 
 ====== Platform firmware tests

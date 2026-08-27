@@ -799,6 +799,11 @@ void testbench::run_tests()
    test_func007_tc031_wdog_bite_rst_req_independent_of_bark();
    wait(5, SC_NS);
 
+   /* TC_AON_061: aon_timer_rst_req is a latch, not a level: once bite fires,
+    * neither petting nor disabling the watchdog withdraws the request. */
+   test_func007_tc061_wdog_bite_rst_req_latched_until_reset();
+   wait(5, SC_NS);
+
    /* =========================================================================
     * FUNC008: Security and Lifecycle Control
     * TC_AON_032-036, TC_AON_044-047
@@ -5957,22 +5962,28 @@ void testbench::test_func004_tc020_wdog_count_write_semantics()
 }
 
 // ---------------------------------------------------------------------------
-// TC_AON_021: Watchdog Petting Under Active Bark - Counter Resets and Interrupts Clear
+// TC_AON_021: Watchdog Petting Under Active Bark - Counter Resets, Interrupt Persists
 // ---------------------------------------------------------------------------
 
 /**
- * @brief TC_AON_021: Verify that petting the watchdog (writing WDOG_COUNT) while
- *        the bark condition is active clears the bark interrupt and de-asserts outputs.
+ * @brief TC_AON_021: Verify that petting the watchdog while bark is active resets
+ *        the counter but does NOT acknowledge the bark interrupt.
  *
  * Timing: BARK_THOLD=20. Advance 25 ticks to trigger bark (count >= 20).
  * Pet -> counter resets to 0 at the moment of the write, then immediately resumes
  * counting. The read-back reflects at most a few tick increments from the scheduling
- * window. With BARK_THOLD=20, even if the counter advances 4-5 ticks during the
- * read window, it remains well below the threshold, so bark de-asserts.
+ * window; with BARK_THOLD=20 it stays well below the threshold.
  *
- * Pass criteria: intr_wdog_timer_bark=0, nmi_wdog_timer_bark=0 after pet.
- *   Post-pet count must be < BARK_THOLD=20 (bark condition no longer met).
- * Reference: TC_AON_021 in aon_timer-test-plan.md, FUNC004.
+ * Petting and acknowledging are separate mechanisms in the RTL. The pet drops the
+ * wdog_intr_o level, which re-arms the prim_edge_detector so a later crossing can
+ * fire again, but INTR_STATE.wdog_timer_bark is a prim_intr_hw status bit that only
+ * a W1C write clears. This test previously asserted the opposite and passed against
+ * a model that cleared the status on pet.
+ *
+ * Pass criteria: post-pet count < BARK_THOLD; intr_wdog_timer_bark and
+ *   nmi_wdog_timer_bark still asserted after the pet; both clear after the W1C.
+ * Reference: TC_AON_021 in aon_timer-test-plan.md, FUNC004;
+ *   hw/sys/sep/dv/fw/tests/wdt_intr_clear_test/wdt_intr_clear_test.c.
  */
 void testbench::test_func004_tc021_wdog_petting_clears_bark()
 {
@@ -6046,25 +6057,49 @@ void testbench::test_func004_tc021_wdog_petting_clears_bark()
       all_pass = false;
    }
 
-   /* intr_wdog_timer_bark must de-assert (count 0 < bark_thold 5). */
-   if (!test->intr_wdog_timer_bark_sig.read())
+   /* The bark interrupt must SURVIVE the pet. INTR_STATE.wdog_timer_bark is a
+    * prim_intr_hw status bit (aon_timer.sv:244) that only a W1C write clears;
+    * petting merely drops the wdog_intr_o level and re-arms the posedge detector.
+    * A model that cleared the status here would let firmware which pets without
+    * acknowledging look clean in simulation while leaving a bark pending on
+    * silicon -- exactly what wdt_intr_clear_test.c exists to catch. */
+   if (test->intr_wdog_timer_bark_sig.read())
    {
-      CSML_INFO(1, logger) << "TC_AON_021: PASS  Step 2 - intr_wdog_timer_bark=0 after pet";
+      CSML_INFO(1, logger) << "TC_AON_021: PASS  Step 2 - intr_wdog_timer_bark still=1 "
+                           << "after pet (status bit needs W1C, not a pet)";
    }
    else
    {
-      CSML_ERROR(1, logger) << "TC_AON_021: FAIL  Step 2 - intr_wdog_timer_bark still=1 after pet";
+      CSML_ERROR(1, logger) << "TC_AON_021: FAIL  Step 2 - intr_wdog_timer_bark=0 after pet; "
+                            << "the pet must not acknowledge the interrupt";
       all_pass = false;
    }
 
-   /* nmi_wdog_timer_bark must de-assert simultaneously. */
-   if (!test->nmi_wdog_timer_bark_sig.read())
+   /* nmi_wdog_timer_bark mirrors the interrupt, so it must persist too. */
+   if (test->nmi_wdog_timer_bark_sig.read())
    {
-      CSML_INFO(1, logger) << "TC_AON_021: PASS  Step 2 - nmi_wdog_timer_bark=0 (mirrors bark)";
+      CSML_INFO(1, logger) << "TC_AON_021: PASS  Step 2 - nmi_wdog_timer_bark still=1 (mirrors bark)";
    }
    else
    {
-      CSML_ERROR(1, logger) << "TC_AON_021: FAIL  Step 2 - nmi_wdog_timer_bark still=1 after pet";
+      CSML_ERROR(1, logger) << "TC_AON_021: FAIL  Step 2 - nmi_wdog_timer_bark=0 after pet";
+      all_pass = false;
+   }
+
+   /* --------------------------------------------------------------------- *
+    * Step 3: W1C is what clears it. After the pet the counter is below the  *
+    * threshold, so the level is low and the write should stick.             *
+    * --------------------------------------------------------------------- */
+   test->write_register_32(aon_timer_basetest::INTR_STATE_OFFSET, 0x00000002U); /* W1C bit[1] */
+   wait(SC_ZERO_TIME);
+
+   if (!test->intr_wdog_timer_bark_sig.read())
+   {
+      CSML_INFO(1, logger) << "TC_AON_021: PASS  Step 3 - W1C cleared the bark interrupt";
+   }
+   else
+   {
+      CSML_ERROR(1, logger) << "TC_AON_021: FAIL  Step 3 - bark still asserted after W1C";
       all_pass = false;
    }
 
@@ -7301,18 +7336,28 @@ void testbench::test_func005_tc013_wkup_threshold_interrupt_generation()
 // ---------------------------------------------------------------------------
 
 /**
- * @brief TC_AON_014: Verify continuous re-triggering of intr_wkup_timer_expired
- *        after W1C while count >= threshold. The interrupt must re-assert on the
- *        next AON tick. Disabling the timer must prevent re-assertion.
+ * @brief TC_AON_014: Verify whether intr_wkup_timer_expired re-triggers after a
+ *        W1C while count >= threshold. The answer depends on the prescaler, and
+ *        this test covers both settings.
  *
- * Re-triggering mechanism: each AON tick evaluation checks the live threshold
- * condition; if count >= threshold AND timer enabled, INTR_STATE is set again.
+ * RTL feeds prim_intr_hw from a posedge detector on wkup_intr_o
+ * (aon_timer.sv:208), and wkup_intr_o = wkup_incr & (count >= thold):
+ *
+ *   prescaler == 0 : wkup_incr is high every AON cycle, so wkup_intr_o is a
+ *                    sustained level. One posedge, one interrupt; the W1C is
+ *                    final until the count falls back below the threshold.
+ *   prescaler  > 0 : wkup_incr pulses once per (prescaler + 1) cycles, so each
+ *                    increment is a fresh posedge and the interrupt re-fires.
+ *
+ * This test previously asserted unconditional re-triggering and passed against a
+ * model that set INTR_STATE from the live level rather than from an edge.
  *
  * AON clock = 200 kHz => 1 tick = 5000 SC_NS.
  * Setup: threshold=3, allow count to reach 5 (2 ticks above threshold).
  *
  * Pass criteria:
- *   - After W1C clear: INTR_STATE[0]=0 momentarily, then =1 after 1 AON tick.
+ *   - prescaler=0: after W1C, INTR_STATE[0] stays 0 across the next tick.
+ *   - prescaler=1: after W1C, INTR_STATE[0] returns to 1.
  *   - After disabling timer + W1C clear: no re-assertion for 5+ ticks.
  *
  * Reference: TC_AON_014 in aon_timer-test-plan.md, FUNC005.
@@ -7365,28 +7410,17 @@ void testbench::test_func005_tc014_wkup_interrupt_continuous_retriggering()
    }
 
    /* --------------------------------------------------------------------- *
-    * Step 1: W1C clear INTR_STATE. Because the timer is still enabled and *
-    * count >= threshold, the SC_THREAD re-evaluates the threshold          *
-    * condition in the next delta cycle and immediately re-asserts          *
-    * INTR_STATE[0] - this IS the correct continuous re-triggering         *
-    * behavior. We verify re-assertion occurs within 1 AON tick.           *
+    * Step 1: W1C clear INTR_STATE with prescaler=0.                        *
+    * wkup_incr is high every AON cycle at this prescaler, so wkup_intr_o is *
+    * a sustained level and the posedge detector feeding prim_intr_hw        *
+    * (aon_timer.sv:208) produced exactly one pulse. The W1C is therefore    *
+    * final until the count drops back below the threshold.                  *
     * --------------------------------------------------------------------- */
    test->write_register_32(aon_timer_basetest::INTR_STATE_OFFSET, 0x00000001U); /* W1C */
-   /* SC_ZERO_TIME allows the W1C write callback to propagate. After SC_ZERO_TIME,
-    * the model's threshold re-evaluation may have already re-set INTR_STATE.
-    * Either state (0 or 1) is acceptable here - it depends on whether the
-    * SC_THREAD fires in the same delta cycle or the next. What matters is
-    * that 1 tick later the interrupt is definitely re-asserted. */
    wait(SC_ZERO_TIME);
 
-   CSML_INFO(1, logger) << "TC_AON_014: W1C write sent (INTR_STATE cleared by write, may "
-                        << "immediately re-assert due to continuous threshold condition)";
-   CSML_INFO(1, logger) << "TC_AON_014: PASS  W1C write accepted (continuous re-triggering "
-                        << "is the correct architectural behavior)";
-
    /* --------------------------------------------------------------------- *
-    * Step 2: Advance 1 AON tick. Interrupt must be asserted (re-triggered) *
-    * because count is still >= threshold AND timer is enabled.             *
+    * Step 2: Advance 1 AON tick. The interrupt must STAY clear.            *
     * --------------------------------------------------------------------- */
    wait(5000, SC_NS); /* 1 AON tick */
    wait(SC_ZERO_TIME);
@@ -7397,24 +7431,61 @@ void testbench::test_func005_tc014_wkup_interrupt_continuous_retriggering()
    uint32_t cnt_retrig = 0xDEADBEEFU;
    test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, cnt_retrig);
 
-   CSML_INFO(1, logger) << "TC_AON_014: After 1 tick from W1C: count=" << cnt_retrig
+   CSML_INFO(1, logger) << "TC_AON_014: After 1 tick from W1C (prescaler=0): count=" << cnt_retrig
                         << " INTR_STATE=0x" << std::hex << intr_state_retrigger << std::dec
                         << " intr_wkup_timer_expired=" << intr_retrigger
-                        << " (count >= 3 expected to keep interrupt asserted)";
+                        << " (expected to stay clear: one level, one posedge)";
 
-   if ((intr_state_retrigger & 0x1U) == 0x1U && intr_retrigger)
+   if ((intr_state_retrigger & 0x1U) == 0x0U && !intr_retrigger)
    {
-      CSML_INFO(1, logger) << "TC_AON_014: PASS  Interrupt re-asserted after W1C within 1 tick "
-                           << "(continuous re-triggering: count=" << cnt_retrig
-                           << " >= threshold=3, timer enabled)";
+      CSML_INFO(1, logger) << "TC_AON_014: PASS  W1C is final at prescaler=0 (count="
+                           << cnt_retrig << " still >= threshold=3, but no new posedge)";
    }
    else
    {
-      CSML_ERROR(1, logger) << "TC_AON_014: FAIL  Interrupt did NOT re-assert within 1 tick "
-                            << "after W1C (count=" << cnt_retrig
-                            << " should be >= threshold=3) - "
-                            << "INTR_STATE=0x" << std::hex << intr_state_retrigger << std::dec
+      CSML_ERROR(1, logger) << "TC_AON_014: FAIL  Interrupt re-asserted after W1C at prescaler=0; "
+                            << "wkup_intr_o is a level here, so only one edge should reach "
+                            << "INTR_STATE - INTR_STATE=0x"
+                            << std::hex << intr_state_retrigger << std::dec
                             << " intr=" << intr_retrigger;
+      all_pass = false;
+   }
+
+   /* --------------------------------------------------------------------- *
+    * Step 2b: Switch to prescaler=1 (WKUP_CTRL bits[12:1]) and repeat.     *
+    * Now wkup_incr pulses once every two AON cycles, so wkup_intr_o pulses  *
+    * with it and every increment is a fresh posedge. Re-triggering after a  *
+    * W1C is the correct behaviour in this configuration -- the same model   *
+    * must do both, which is why the prescaler is part of the condition.     *
+    * --------------------------------------------------------------------- */
+   test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, 0x00000003U); /* en, prescaler=1 */
+   wait(SC_ZERO_TIME);
+   wait(20000, SC_NS); /* 4 AON cycles => 2 increments at prescaler=1 */
+   wait(SC_ZERO_TIME);
+
+   test->write_register_32(aon_timer_basetest::INTR_STATE_OFFSET, 0x00000001U); /* W1C */
+   wait(SC_ZERO_TIME);
+   wait(20000, SC_NS);
+   wait(SC_ZERO_TIME);
+
+   uint32_t intr_state_presc = 0xDEADBEEFU;
+   test->read_register_32(aon_timer_basetest::INTR_STATE_OFFSET, intr_state_presc);
+   bool intr_presc = test->intr_wkup_timer_expired_sig.read();
+
+   CSML_INFO(1, logger) << "TC_AON_014: After W1C at prescaler=1: INTR_STATE=0x"
+                        << std::hex << intr_state_presc << std::dec
+                        << " intr_wkup_timer_expired=" << intr_presc
+                        << " (expected re-assert: each increment is a fresh posedge)";
+
+   if ((intr_state_presc & 0x1U) == 0x1U && intr_presc)
+   {
+      CSML_INFO(1, logger) << "TC_AON_014: PASS  Interrupt re-triggered after W1C at prescaler=1";
+   }
+   else
+   {
+      CSML_ERROR(1, logger) << "TC_AON_014: FAIL  Interrupt did not re-trigger at prescaler=1; "
+                            << "INTR_STATE=0x" << std::hex << intr_state_presc << std::dec
+                            << " intr=" << intr_presc;
       all_pass = false;
    }
 
@@ -7986,18 +8057,18 @@ void testbench::test_func005_tc026_wkup_interrupt_deassertion_below_threshold()
 // ---------------------------------------------------------------------------
 
 /**
- * @brief TC_AON_027: Verify bark interrupt deassertion via watchdog petting.
- *        Writing to WDOG_COUNT resets the counter to 0 (below bark threshold),
- *        causing intr_wdog_timer_bark and nmi_wdog_timer_bark to both de-assert.
- *        Also verifies INTR_STATE W1C independently clears the stored status.
+ * @brief TC_AON_027: Verify the bark interrupt deassertion sequence.
+ *        Petting resets the counter below the bark threshold, which re-arms the
+ *        edge detector but leaves the interrupt asserted. Only the subsequent W1C
+ *        clears it, and it then stays clear while the watchdog is disabled.
  *
  * AON clock = 200 kHz => 1 tick = 5000 SC_NS.
- * WDOG_BARK_THOLD=5. Advance to count=6 (bark active). Pet. Verify clearance.
+ * WDOG_BARK_THOLD=5. Advance to count=6 (bark active). Pet, then W1C.
  *
  * Pass criteria:
- *   - After petting (WDOG_COUNT write), intr_wdog_timer_bark=0 and nmi=0.
- *   - INTR_STATE W1C clears stored bit[1] independently.
- *   - No spurious bark re-assertion after 3 ticks (count=3 < bark threshold=5).
+ *   - After petting, WDOG_COUNT < 5 but intr_wdog_timer_bark and nmi stay 1.
+ *   - INTR_STATE W1C then clears stored bit[1].
+ *   - No spurious bark re-assertion while the watchdog is disabled.
  *
  * Reference: TC_AON_027 in aon_timer-test-plan.md, FUNC005.
  */
@@ -8073,29 +8144,31 @@ void testbench::test_func005_tc027_wdog_bark_interrupt_deassertion()
       all_pass = false;
    }
 
-   /* intr_wdog_timer_bark must deassert (count < bark threshold). */
-   if (!bark_after_pet)
+   /* The pet drops the counter below the threshold, which re-arms the posedge
+    * detector, but it does not acknowledge the interrupt: INTR_STATE.wdog_timer_bark
+    * is set by hardware and cleared only by the W1C issued in Step 2 below. */
+   if (bark_after_pet)
    {
-      CSML_INFO(1, logger) << "TC_AON_027: PASS  intr_wdog_timer_bark=0 after pet "
-                           << "(count below bark threshold=5)";
+      CSML_INFO(1, logger) << "TC_AON_027: PASS  intr_wdog_timer_bark=1 after pet "
+                           << "(status persists until W1C)";
    }
    else
    {
-      CSML_ERROR(1, logger) << "TC_AON_027: FAIL  intr_wdog_timer_bark=1 after pet "
-                            << "(expected 0 when count < threshold)";
+      CSML_ERROR(1, logger) << "TC_AON_027: FAIL  intr_wdog_timer_bark=0 after pet "
+                            << "(a pet must not acknowledge the interrupt)";
       all_pass = false;
    }
 
-   /* nmi_wdog_timer_bark must deassert simultaneously with intr_wdog_timer_bark. */
-   if (!nmi_after_pet)
+   /* nmi_wdog_timer_bark mirrors intr_wdog_timer_bark, so it persists too. */
+   if (nmi_after_pet)
    {
-      CSML_INFO(1, logger) << "TC_AON_027: PASS  nmi_wdog_timer_bark=0 simultaneously "
-                           << "with intr_wdog_timer_bark de-assertion";
+      CSML_INFO(1, logger) << "TC_AON_027: PASS  nmi_wdog_timer_bark=1, mirroring "
+                           << "intr_wdog_timer_bark";
    }
    else
    {
-      CSML_ERROR(1, logger) << "TC_AON_027: FAIL  nmi_wdog_timer_bark=1 when "
-                            << "intr_wdog_timer_bark=0 (NMI should mirror bark)";
+      CSML_ERROR(1, logger) << "TC_AON_027: FAIL  nmi_wdog_timer_bark=0 when "
+                            << "intr_wdog_timer_bark=1 (NMI should mirror bark)";
       all_pass = false;
    }
 
@@ -9659,6 +9732,123 @@ void testbench::test_func007_tc031_wdog_bite_rst_req_independent_of_bark()
                        "aon_timer_rst_req independence from bark or INTR_STATE path failure; "
                        "verify bite comparator (m_wdog_bite_active) is architecturally separate "
                        "from INTR_STATE and WKUP_CAUSE register write paths");
+   }
+}
+
+// ---------------------------------------------------------------------------
+// TC_AON_061: Bite Reset Request Is Latched Until Reset
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief TC_AON_061: Verify aon_timer_rst_req is held once bite fires.
+ *
+ * aon_timer.sv:272 assigns aon_rst_req_d = aon_rst_req_set | aon_rst_req_q, so the
+ * reset request is a latch and not a live level. Software cannot take it back:
+ * petting the watchdog or disabling it entirely leaves the request asserted, and
+ * only a reset clears it. That irrevocability is the property that makes a bite
+ * meaningful, and a model that drove the port from the live bite condition would
+ * let firmware survive a bite in simulation that resets the chip in silicon.
+ *
+ * AON clock = 200 kHz => 1 tick = 5000 SC_NS. BITE_THOLD=5, bark held off at
+ * 0xFFFFFFFF so the test observes the bite path alone.
+ *
+ * Pass criteria:
+ *   - aon_timer_rst_req asserts once the counter reaches the bite threshold.
+ *   - It stays asserted after a pet, with the counter back below the threshold.
+ *   - It stays asserted after the watchdog is disabled.
+ *   - apply_reset() de-asserts it.
+ */
+void testbench::test_func007_tc061_wdog_bite_rst_req_latched_until_reset()
+{
+   const std::string TEST_NAME =
+      "TC_AON_061: Bite Reset Request Is Latched Until Reset";
+   report_test_start(TEST_NAME);
+
+   apply_reset();
+
+   bool all_pass = true;
+
+   /* Bark parked high so only the bite path drives anything. */
+   test->write_register_32(aon_timer_basetest::WDOG_BARK_THOLD_OFFSET, 0xFFFFFFFFU);
+   test->write_register_32(aon_timer_basetest::WDOG_BITE_THOLD_OFFSET, 0x00000005U);
+   test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET,       0x00000001U);
+   wait(SC_ZERO_TIME);
+
+   /* Step 1: reach the bite threshold. */
+   wait(35000, SC_NS); /* 7 AON ticks => count >= 5 */
+   wait(SC_ZERO_TIME);
+
+   if (test->aon_timer_rst_req_sig.read())
+   {
+      CSML_INFO(1, logger) << "TC_AON_061: PASS  Step 1 - aon_timer_rst_req asserted at bite";
+   }
+   else
+   {
+      CSML_ERROR(1, logger) << "TC_AON_061: FAIL  Step 1 - aon_timer_rst_req not asserted "
+                            << "after 7 ticks with BITE_THOLD=5";
+      all_pass = false;
+   }
+
+   /* Step 2: pet. The counter drops below the threshold; the request must not. */
+   test->write_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, 0x00000000U);
+   wait(SC_ZERO_TIME);
+
+   uint32_t count_after_pet = 0xDEADBEEFU;
+   test->read_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, count_after_pet);
+
+   if (test->aon_timer_rst_req_sig.read())
+   {
+      CSML_INFO(1, logger) << "TC_AON_061: PASS  Step 2 - request held after pet (count="
+                           << count_after_pet << " < BITE_THOLD=5)";
+   }
+   else
+   {
+      CSML_ERROR(1, logger) << "TC_AON_061: FAIL  Step 2 - pet withdrew the reset request "
+                            << "(count=" << count_after_pet << "); the request is a latch";
+      all_pass = false;
+   }
+
+   /* Step 3: disabling the watchdog must not withdraw it either. */
+   test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET, 0x00000000U);
+   wait(SC_ZERO_TIME);
+
+   if (test->aon_timer_rst_req_sig.read())
+   {
+      CSML_INFO(1, logger) << "TC_AON_061: PASS  Step 3 - request held after watchdog disable";
+   }
+   else
+   {
+      CSML_ERROR(1, logger) << "TC_AON_061: FAIL  Step 3 - disabling the watchdog withdrew "
+                            << "the reset request";
+      all_pass = false;
+   }
+
+   /* Step 4: only a reset clears it. */
+   apply_reset();
+   wait(SC_ZERO_TIME);
+
+   if (!test->aon_timer_rst_req_sig.read())
+   {
+      CSML_INFO(1, logger) << "TC_AON_061: PASS  Step 4 - reset de-asserted the request";
+   }
+   else
+   {
+      CSML_ERROR(1, logger) << "TC_AON_061: FAIL  Step 4 - request still asserted after reset";
+      all_pass = false;
+   }
+
+   test->write_register_32(aon_timer_basetest::WDOG_BARK_THOLD_OFFSET, 0x00000000U);
+   test->write_register_32(aon_timer_basetest::WDOG_BITE_THOLD_OFFSET, 0x00000000U);
+
+   if (all_pass)
+   {
+      report_test_pass(TEST_NAME);
+   }
+   else
+   {
+      report_test_fail(TEST_NAME,
+                       "aon_timer_rst_req must latch until reset "
+                       "(aon_rst_req_d = aon_rst_req_set | aon_rst_req_q)");
    }
 }
 

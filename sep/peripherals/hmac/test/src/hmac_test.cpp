@@ -135,6 +135,7 @@ void hmac_test::assert_equal(uint32_t expected, uint32_t actual, const char* mes
         CSML_ERROR(0, logger) << "      Expected: 0x" << std::hex << std::setw(8) << std::setfill('0')
                   << expected << ", Got: 0x" << std::setw(8) << std::setfill('0')
                   << actual << std::dec << std::endl;
+        m_assert_failures++;
         sc_stop();
     }
 }
@@ -152,6 +153,7 @@ void hmac_test::assert_not_equal(uint32_t write_value, uint32_t read_value, cons
         CSML_ERROR(0, logger) << "      Written value: 0x" << std::hex << std::setw(8) << std::setfill('0')
                   << write_value << ", Read value: 0x" << std::setw(8) << std::setfill('0')
                   << read_value << std::dec << std::endl;
+        m_assert_failures++;
         sc_stop();
     }
 }

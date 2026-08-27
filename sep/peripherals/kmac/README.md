@@ -28,6 +28,41 @@ doc/implementation.adoc    SystemC/TLM model
 doc/test_plan.adoc         cases + run commands
 ```
 
+## Address
+
+`0x10913000 – 0x10913FFF`  (0x1000 bytes, KMAC_REG)
+
+## Class
+
+```cpp
+class kmac_ip : public kmac_base
+```
+
+## Interface
+
+| Port / Socket | Direction | Description |
+|---|---|---|
+| `target_socket` | target | TLM-2.0 32-bit register bus |
+| `keymgr_tl_socket` | target | Key Manager sideload key input |
+| `intr_kmac_done` | `sc_out<bool>` | Operation complete, PIC slot 21 |
+| `intr_fifo_empty` | `sc_out<bool>` | Message FIFO drained during absorb, PIC slot 22 |
+| `intr_kmac_err` | `sc_out<bool>` | Error reported in `ERR_CODE`, PIC slot 23 |
+| `alert_recov_operation_err` | `sc_out<bool>` | Recoverable alert; shadow-register update error |
+| `alert_fatal_fault` | `sc_out<bool>` | Fatal alert; requires reset |
+| `idle_o` | `sc_out<bool>` | Idle status |
+| `lc_escalate_en_i` | `sc_in<bool>` | Lifecycle escalation |
+| `rst_ni` | `sc_in<bool>` | Active-low reset |
+| `clk_i` | `sc_in<bool>` | Clock |
+
+The three interrupts are separate ports rather than one OR-reduced line because RTL drives
+`sep_internal_interrupts[20:22]` independently. Both alert ports feed the platform's
+`crypto_alert` OR-reduction, mirroring `sep_crypto.sv`.
+
+`app_export[3]` (KeyMgr, LC_CTRL, ROM_CTRL) is deliberately left unbound at the platform:
+`kmac_wrapper.sv` ties `app_i` to zero and leaves `app_o` unused, so SEP has no
+hardware-initiated KMAC operations in silicon either. The handlers exist so the interface can be
+driven from the unit testbench.
+
 ## Building and Testing
 
 ```bash
@@ -46,6 +81,8 @@ cmake ../.. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 make -j$(nproc)
 ./bin/kmac_test
 ```
+
+The unit suite is 229 test cases. A run reports a summary and exits non-zero on any failure.
 
 ## Documentation
 
