@@ -6,6 +6,29 @@
 #include <iomanip>
 #include <sstream>
 
+// Fuse-array word indices for the registers the .preload images below populate.
+// Derived from the register offsets rather than written as literals: these used
+// to be hard-coded (LC_STATE at word 2, the token banks at 9..16 and 17..24) and
+// every one of them was wrong by a word after LOCKS_SPARE was added to the map,
+// which made a dozen unrelated lifecycle assertions fail with LC_STATE reading 0.
+namespace {
+constexpr unsigned int word_of(unsigned int byte_offset) { return byte_offset / 4u; }
+
+constexpr unsigned int LC_STATE_WORD         = word_of(sep_efuse::LC_STATE_OFFSET);
+constexpr unsigned int TRANSIENT_RMA_EN_WORD = word_of(sep_efuse::TRANSIENT_RMA_EN_OFFSET);
+constexpr unsigned int RMA_SIP_TOKEN_WORD0   = word_of(sep_efuse::RMA_SIP_TOKEN_OFFSET);
+constexpr unsigned int RMA_CHIPLET_TOKEN_WORD0 = word_of(sep_efuse::RMA_CHIPLET_TOKEN_OFFSET);
+constexpr unsigned int TOKEN_WORDS = 8u;   // both digests are 256-bit
+
+// OTP-interface bit addresses. The raw interface is addressed by fuse-array BIT,
+// so a register's base bit is its word index times 32. These were literals too
+// (LC_STATE at 64, BL1_VERSION at 34*32) and moved with everything else.
+constexpr unsigned int LC_STATE_BIT    = LC_STATE_WORD * 32u;
+constexpr unsigned int BL1_VERSION_BIT = word_of(sep_efuse::BL1_VERSION_OFFSET) * 32u;
+constexpr unsigned int CHIPLET_UID_BIT = word_of(sep_efuse::CHIPLET_UID_OFFSET) * 32u;
+constexpr unsigned int SPARE_TEST_BIT  = word_of(sep_efuse::SYS_PUBK_PQC_HASH_OFFSET) * 32u;
+}  // namespace
+
 // ============================================================================
 // Coverage tests — exercise WOSET handlers and interface-ctrl pulse paths
 // in src/efuse.cpp that are not hit by Tests 1–8.
@@ -26,25 +49,25 @@ void testbench::test_woset_locks_hi()
 
     uint32_t val = 0;
 
-    m_test->register_write_32(efuse_basetest::LOCKS_HI_OFFSET, 0x00000005);
+    m_test->register_write_32(sep_efuse::LOCKS_HI_OFFSET, 0x00000005);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::LOCKS_HI_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LOCKS_HI_OFFSET, val);
     if (val == 0x00000005)
         report_test_pass("LOCKS_HI: first write sets bits 0x5");
     else
         report_test_fail("LOCKS_HI first write", "expected 0x5 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::LOCKS_HI_OFFSET, 0x00000000);
+    m_test->register_write_32(sep_efuse::LOCKS_HI_OFFSET, 0x00000000);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::LOCKS_HI_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LOCKS_HI_OFFSET, val);
     if (val == 0x00000005)
         report_test_pass("LOCKS_HI: bit 0 stays set after write-0 attempt (WOSET)");
     else
         report_test_fail("LOCKS_HI WOSET", "expected 0x5 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::LOCKS_HI_OFFSET, 0x000000F0);
+    m_test->register_write_32(sep_efuse::LOCKS_HI_OFFSET, 0x000000F0);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::LOCKS_HI_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LOCKS_HI_OFFSET, val);
     if (val == 0x000000F5)
         report_test_pass("LOCKS_HI: additional bits ORed correctly");
     else
@@ -65,9 +88,9 @@ void testbench::test_woset_lc_state()
     const uint32_t prod = efuse_model::lc_state_encode(efuse_model::LC_RAW_PROD);
 
     auto expect_state = [&](uint32_t write, uint32_t want, const std::string &what) {
-        m_test->register_write_32(efuse_basetest::LC_STATE_OFFSET, write);
+        m_test->register_write_32(sep_efuse::LC_STATE_OFFSET, write);
         wait(1, SC_NS);
-        m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+        m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, val);
         if (val == want)
             report_test_pass(what);
         else
@@ -98,17 +121,17 @@ void testbench::test_woset_sip_dis_hi()
 
     uint32_t val = 0;
 
-    m_test->register_write_32(efuse_basetest::SIP_DIS_HI_OFFSET, 0x3);
+    m_test->register_write_32(sep_efuse::SIP_DIS_HI_OFFSET, 0x3);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::SIP_DIS_HI_OFFSET, val);
+    m_test->register_read_32(sep_efuse::SIP_DIS_HI_OFFSET, val);
     if (val == 0x3)
         report_test_pass("SIP_DIS_HI: bits 0,1 set");
     else
         report_test_fail("SIP_DIS_HI set", "expected 0x3 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::SIP_DIS_HI_OFFSET, 0x0);
+    m_test->register_write_32(sep_efuse::SIP_DIS_HI_OFFSET, 0x0);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::SIP_DIS_HI_OFFSET, val);
+    m_test->register_read_32(sep_efuse::SIP_DIS_HI_OFFSET, val);
     if (val == 0x3)
         report_test_pass("SIP_DIS_HI: WOSET holds after write-0");
     else
@@ -121,17 +144,17 @@ void testbench::test_woset_sys_dis_hi()
 
     uint32_t val = 0;
 
-    m_test->register_write_32(efuse_basetest::SYS_DIS_HI_OFFSET, 0x6);
+    m_test->register_write_32(sep_efuse::SYS_DIS_HI_OFFSET, 0x6);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::SYS_DIS_HI_OFFSET, val);
+    m_test->register_read_32(sep_efuse::SYS_DIS_HI_OFFSET, val);
     if (val == 0x6)
         report_test_pass("SYS_DIS_HI: bits 1,2 set");
     else
         report_test_fail("SYS_DIS_HI set", "expected 0x6 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::SYS_DIS_HI_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::SYS_DIS_HI_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::SYS_DIS_HI_OFFSET, val);
+    m_test->register_read_32(sep_efuse::SYS_DIS_HI_OFFSET, val);
     if (val == 0x7)
         report_test_pass("SYS_DIS_HI: additional bit ORed");
     else
@@ -145,9 +168,9 @@ void testbench::test_woset_chiplet_pubk_revoke()
     uint32_t val = 0;
     const uint32_t loaded = m_dut->chiplet_pubk_revoke.get_param_value();
 
-    m_test->register_write_32(efuse_basetest::CHIPLET_PUBK_REVOKE_OFFSET, 0x5);
+    m_test->register_write_32(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, 0x5);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::CHIPLET_PUBK_REVOKE_OFFSET, val);
+    m_test->register_read_32(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, val);
     if (val == (loaded | 0x5u))
         report_test_pass("CHIPLET_PUBK_REVOKE: runtime WOSET ORs with fuse value");
     else
@@ -161,25 +184,25 @@ void testbench::test_woset_bl_version()
 
     uint32_t val = 0;
 
-    m_test->register_write_32(efuse_basetest::BL1_VERSION_OFFSET, 0x00000001);
+    m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET, 0x00000001);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
     if (val == 0x1)
         report_test_pass("BL1_VERSION[0]: WOSET sets bit 0");
     else
         report_test_fail("BL1_VERSION[0]", "expected 0x1 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::BL1_VERSION_OFFSET + 4, 0x00000002);
+    m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET + 4, 0x00000002);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET + 4, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET + 4, val);
     if (val == 0x2)
         report_test_pass("BL1_VERSION[1]: per-word WOSET");
     else
         report_test_fail("BL1_VERSION[1]", "expected 0x2 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::BL2_VERSION_OFFSET, 0x00000004);
+    m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x00000004);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::BL2_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL2_VERSION_OFFSET, val);
     if (val == 0x4)
         report_test_pass("BL2_VERSION[0]: WOSET sets bit 2");
     else
@@ -195,9 +218,9 @@ void testbench::test_efuse_write_ctrl_go()
     // Pulse bit 17 (program_go) with bit 24 (program_busy) set, but leave
     // program_enable (bit 27) clear. efuse_program_interface.sv answers
     // done-with-error rather than stalling or programming anything.
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, (1u << 17) | (1u << 24));
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, (1u << 17) | (1u << 24));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
 
     const uint32_t expected = (1u << 25) | (1u << 26);  // done=1, status=error, go/busy cleared
     if (val == expected)
@@ -207,15 +230,15 @@ void testbench::test_efuse_write_ctrl_go()
             " got 0x" + std::to_string(val));
 
     // The refusal is sticky in STATUS.efuse_req_error until explicitly cleared.
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val & (1u << 4))
         report_test_pass("STATUS: efuse_req_error latched by the refused program");
     else
         report_test_fail("STATUS efuse_req_error", "expected bit 4 set, got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, (1u << 8));
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, (1u << 8));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val == 0x1u)
         report_test_pass("STATUS: efuse_req_err_clear clears it, sense_done still set");
     else
@@ -229,9 +252,9 @@ void testbench::test_efuse_read_ctrl_go()
     uint32_t val = 0;
 
     // Same shape as Test 15, on the read side: read_enable is bit 28.
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, (1u << 16) | (1u << 24));
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET, (1u << 16) | (1u << 24));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_CTRL_OFFSET, val);
 
     const uint32_t expected = (1u << 25) | (1u << 26);
     if (val == expected)
@@ -241,13 +264,13 @@ void testbench::test_efuse_read_ctrl_go()
             " got 0x" + std::to_string(val));
 
     // A refused read must not leave data behind for a caller that skips the status.
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (val == 0u)
         report_test_pass("EFUSE_READ_INTERFACE_READ_DATA: zero after a refused read");
     else
         report_test_fail("read data after refusal", "expected 0x0 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, (1u << 8));
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, (1u << 8));
     wait(1, SC_NS);
 }
 
@@ -262,20 +285,20 @@ void testbench::test_fuse_array_program_read()
     // The array and the shadow map are the same 8192 bits, so a fuse-backed field
     // must read identically through both paths. CHIPLET_UID is read-only to
     // software, so no earlier test has disturbed it: byte offset 0xC8 is array word
-    // 50, hence bit 1600.
+    // its word index, hence CHIPLET_UID_BIT.
     uint32_t shadow_uid = 0;
-    m_test->register_read_32(efuse_basetest::CHIPLET_UID_OFFSET, shadow_uid);
+    m_test->register_read_32(sep_efuse::CHIPLET_UID_OFFSET, shadow_uid);
 
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
-                              enable_read | (1u << 16) | 1600u);
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
+                              enable_read | (1u << 16) | CHIPLET_UID_BIT);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && !(val & (1u << 26)))
         report_test_pass("enabled read completes without error");
     else
         report_test_fail("enabled read", "expected done + no error, got 0x" + std::to_string(val));
 
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (val == shadow_uid)
         report_test_pass("OTP read agrees with the shadow register over the same bits");
     else
@@ -287,40 +310,41 @@ void testbench::test_fuse_array_program_read()
     // bits at the register interface leaves the corresponding fuses erased -- the
     // two deliberately diverge after any shadow write.
     uint32_t shadow_locks = 0;
-    m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, shadow_locks);
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    m_test->register_read_32(sep_efuse::LOCKS_LO_OFFSET, shadow_locks);
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               enable_read | (1u << 16) | 0u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (shadow_locks != 0u && val != shadow_locks)
         report_test_pass("shadow writes do not burn fuses (LOCKS diverges from the array)");
     else
         report_test_fail("shadow write isolation", "shadow 0x" + std::to_string(shadow_locks) +
             " unexpectedly equals OTP 0x" + std::to_string(val));
 
-    // Program a bit in a word nothing else uses, then read it back. RESERVED_2
-    // starts at byte 0x254, so word 0x254/4 = 149, bit 149*32 = 4768.
-    const uint32_t test_bit = 4768u + 3u;
+    // Program a bit in a word nothing else uses, then read it back. Any
+    // unlocked word will do; SYS_PUBK_PQC_HASH is one nothing in this suite
+    // touches. (This used to name RESERVED_2, a block the map no longer has.)
+    const uint32_t test_bit = SPARE_TEST_BIT + 3u;
     const uint32_t enable_prog = (1u << 27) | (1u << 16);  // program_enable, data=1
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | (1u << 18) | test_bit);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && !(val & (1u << 26)))
         report_test_pass("enabled program completes without error");
     else
         report_test_fail("enabled program", "expected done + no error, got 0x" + std::to_string(val));
 
-    m_test->register_read_32(efuse_basetest::EFUSE_PROG_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_INTERFACE_RD_DATA_OFFSET, val);
     if (val == (1u << 3))
         report_test_pass("program read-back returns the word with the new bit set");
     else
         report_test_fail("program read-back", "expected 0x8 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               enable_read | (1u << 16) | test_bit);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (val & (1u << 3))
         report_test_pass("programmed bit reads back as 1");
     else
@@ -328,37 +352,37 @@ void testbench::test_fuse_array_program_read()
 
     // Programming data=0 is rejected outright rather than clearing the bit: the
     // array is one-time-programmable, so nothing can unburn bit 3.
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
                               (1u << 27) | (1u << 17) | test_bit);   // data=0
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if (val & (1u << 26))
         report_test_pass("program with data=0 is refused");
     else
         report_test_fail("program data=0", "expected error status, got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               enable_read | (1u << 16) | test_bit);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (val & (1u << 3))
         report_test_pass("burned bit survives the attempt to clear it");
     else
         report_test_fail("program-once", "bit 3 was cleared, got 0x" + std::to_string(val));
 
     // Out-of-range addresses latch their own sticky error, distinct from req_error.
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               enable_read | (1u << 16) | 8192u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val & (1u << 6))
         report_test_pass("STATUS: read_addr_error latched by an out-of-range read");
     else
         report_test_fail("read_addr_error", "expected bit 6 set, got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, (1u << 8) | (1u << 10));
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, (1u << 8) | (1u << 10));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val == 0x1u)
         report_test_pass("STATUS: addr-error clear returns the register to sense_done only");
     else
@@ -373,7 +397,7 @@ void testbench::test_otp_accessors()
     // the latter is what software reads from the register.
     const uint32_t lc = m_dut->get_lc_state();
     uint32_t reg = 0;
-    m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, reg);
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, reg);
     if (m_dut->get_lc_state_code() == reg)
         report_test_pass("get_lc_state_code() matches LC_STATE register");
     else
@@ -391,7 +415,7 @@ void testbench::test_otp_accessors()
     bool match = true;
     for (int i = 0; i < 8; ++i) {
         uint32_t word = 0;
-        m_test->register_read_32(efuse_basetest::CHIPLET_UID_OFFSET + static_cast<unsigned>(i * 4), word);
+        m_test->register_read_32(sep_efuse::CHIPLET_UID_OFFSET + static_cast<unsigned>(i * 4), word);
         if (word != uid[i]) {
             match = false;
             break;
@@ -413,22 +437,22 @@ void testbench::test_shim_ctrl_window()
     // the two windows were ever collapsed back into one.
     uint32_t val = 0;
 
-    m_test->shim_read_32(efuse_basetest::EFUSE_BANK_INIT_TIME_OFFSET, val);
+    m_test->shim_read_32(sep_efuse::EFUSE_BANK_INIT_TIME_OFFSET, val);
     if (val == 0x00000020)
         report_test_pass("EFUSE_BANK_INIT_TIME: reset value 0x20");
     else
         report_test_fail("EFUSE_BANK_INIT_TIME reset", "expected 0x20 got 0x" + std::to_string(val));
 
-    m_test->shim_write_32(efuse_basetest::EFUSE_BANK_INIT_TIME_OFFSET, 0x0000ABCD);
+    m_test->shim_write_32(sep_efuse::EFUSE_BANK_INIT_TIME_OFFSET, 0x0000ABCD);
     wait(1, SC_NS);
-    m_test->shim_read_32(efuse_basetest::EFUSE_BANK_INIT_TIME_OFFSET, val);
+    m_test->shim_read_32(sep_efuse::EFUSE_BANK_INIT_TIME_OFFSET, val);
     if (val == 0x0000ABCD)
         report_test_pass("EFUSE_BANK_INIT_TIME: read-back at shim offset 0x000");
     else
         report_test_fail("EFUSE_BANK_INIT_TIME", "expected 0xABCD got 0x" + std::to_string(val));
 
     // The windows are disjoint: writing the shim must leave LOCKS_LO alone.
-    m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LOCKS_LO_OFFSET, val);
     if (val != 0x0000ABCD)
         report_test_pass("shim writes do not alias into the sep_efuse window");
     else
@@ -448,9 +472,11 @@ void testbench::test_fuse_preload_file()
     {
         std::ofstream out(good);
         for (unsigned int bit = 0; bit < 8192; bit++) {
-            // LC_STATE occupies bits 64..95; write 0xF0 into its low byte, the
-            // differential encoding of TEST_DEV that the RTL default image carries.
-            const bool set = (bit >= 68 && bit <= 71);
+            // Write 0xF0 into LC_STATE's low byte -- the differential encoding
+            // of TEST_DEV that the RTL default image carries. The window is
+            // computed from the register's offset so it follows the map.
+            const unsigned int lc_lsb = LC_STATE_WORD * 32u;
+            const bool set = (bit >= lc_lsb + 4u && bit <= lc_lsb + 7u);
             out << (set ? '1' : '0') << "\n";
         }
     }
@@ -460,17 +486,17 @@ void testbench::test_fuse_preload_file()
     else
         report_test_fail("preload accept", "a well-formed image was rejected");
 
-    m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, val);
     if (val == 0x000000F0u)
         report_test_pass("LC_STATE sensed from the image as 0xF0 (TEST_DEV)");
     else
         report_test_fail("preload sense", "expected 0xF0 got 0x" + std::to_string(val));
 
     // The image replaces the array wholesale, so previously programmed bits are gone.
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
-                              (1u << 28) | (1u << 16) | 64u);
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
+                              (1u << 28) | (1u << 16) | LC_STATE_BIT);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (val == 0x000000F0u)
         report_test_pass("OTP read of the LC_STATE word matches the image");
     else
@@ -488,7 +514,7 @@ void testbench::test_fuse_preload_file()
     else
         report_test_fail("preload reject", "a bad character was accepted");
 
-    m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, val);
     if (val == 0x000000F0u)
         report_test_pass("refused image left the array untouched");
     else
@@ -510,7 +536,7 @@ void testbench::test_fuse_preload_file()
     else
         report_test_fail("preload whitespace", "blank lines were treated as an error");
 
-    m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LOCKS_LO_OFFSET, val);
     if (val == 0x3u)
         report_test_pass("blank lines skipped: bits landed at 0 and 1");
     else
@@ -525,45 +551,45 @@ void testbench::test_fuse_program_out_of_range()
 
     // 8192 is one past the last bit. The command completes with an error and
     // latches its own sticky flag, distinct from the read side's.
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
                               (1u << 27) | (1u << 16) | (1u << 17) | 8192u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && (val & (1u << 26)))
         report_test_pass("out-of-range program reports done + error");
     else
         report_test_fail("oob program", "expected done + error, got 0x" + std::to_string(val));
 
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val & (1u << 5))
         report_test_pass("STATUS: program_addr_error latched");
     else
         report_test_fail("program_addr_error", "expected bit 5 set, got 0x" + std::to_string(val));
 
     // Clearing only the program flag must leave the others alone.
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, (1u << 9));
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, (1u << 9));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (!(val & (1u << 5)) && (val & (1u << 4)))
         report_test_pass("program_addr_error_clear is selective (req_error survives)");
     else
         report_test_fail("selective clear", "expected bit 5 clear and bit 4 set, got 0x" +
             std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET,
                               (1u << 8) | (1u << 9) | (1u << 10));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val == 0x1u)
         report_test_pass("all clears together return STATUS to sense_done only");
     else
         report_test_fail("clear all", "expected 0x1 got 0x" + std::to_string(val));
 
     // The refused program must not have burned anything at the wrapped address.
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               (1u << 28) | (1u << 16) | 0u);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if ((val & 0x1u) == 0x1u)
         report_test_pass("word 0 still holds only what the image put there");
     else
@@ -595,22 +621,22 @@ void testbench::test_lock_enforcement()
     // 1088), WOSET from software, and governed by LOCKS_LO bits 18 (write) and 19
     // (read). BL2_VERSION next door has its own pair and stays unlocked throughout,
     // so it witnesses that the policy is per field rather than global.
-    const uint32_t bl1_bit  = 34u * 32u;
+    const uint32_t bl1_bit  = BL1_VERSION_BIT;
     const uint32_t enable_read = (1u << 28);
     const uint32_t enable_prog = (1u << 27) | (1u << 16);   // program_enable, data=1
 
-    m_test->register_write_32(efuse_basetest::BL1_VERSION_OFFSET, 0x5);
+    m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET, 0x5);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
     if (val == 0x5)
         report_test_pass("unlocked: shadow write accepted");
     else
         report_test_fail("unlocked shadow write", "expected 0x5 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | (bl1_bit + 2u));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && !(val & (1u << 26)))
         report_test_pass("unlocked: OTP program accepted");
     else
@@ -618,71 +644,71 @@ void testbench::test_lock_enforcement()
 
     // Write lock only. Reads must keep working, which is what makes the two bits
     // independent rather than one coarse "locked" state.
-    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, (1u << 18));
+    m_test->register_write_32(sep_efuse::LOCKS_LO_OFFSET, (1u << 18));
     wait(1, SC_NS);
 
-    m_test->register_write_32(efuse_basetest::BL1_VERSION_OFFSET, 0x8);
+    m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET, 0x8);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
     if (val == 0x5)
         report_test_pass("write-locked: shadow write dropped, old value intact");
     else
         report_test_fail("write lock", "expected 0x5 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
                               enable_prog | (1u << 17) | (bl1_bit + 3u));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && (val & (1u << 26)))
         report_test_pass("write-locked: OTP program refused with done + error");
     else
         report_test_fail("write lock OTP", "expected done + error, got 0x" + std::to_string(val));
 
-    m_test->register_read_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, val);
     if (val & (1u << 4))
         report_test_pass("write-locked: req_error latched");
     else
         report_test_fail("write lock req_error", "expected bit 4 set, got 0x" + std::to_string(val));
 
     // Nothing was burned: bit 2 from the unlocked program is there, bit 3 is not.
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               enable_read | (1u << 16) | bl1_bit);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (val == 0x4)
         report_test_pass("write-locked: refused program burned nothing");
     else
         report_test_fail("write lock no-burn", "expected 0x4 got 0x" + std::to_string(val));
 
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
     if (val == 0x5)
         report_test_pass("write-locked: shadow still readable");
     else
         report_test_fail("write lock read path", "expected 0x5 got 0x" + std::to_string(val));
 
     // Read lock as well.
-    m_test->register_write_32(efuse_basetest::LOCKS_LO_OFFSET, (1u << 19));
+    m_test->register_write_32(sep_efuse::LOCKS_LO_OFFSET, (1u << 19));
     wait(1, SC_NS);
 
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
     if (val == 0xBADCAB1Eu)
         report_test_pass("read-locked: shadow read returns 0xBADCAB1E");
     else
         report_test_fail("read lock shadow", "expected 0xBADCAB1E got 0x" + std::to_string(val));
 
     // One lock pair covers all eight words of the field, not just the first.
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET + 7 * 4, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET + 7 * 4, val);
     if (val == 0xBADCAB1Eu)
         report_test_pass("read-locked: last word of the field denied too");
     else
         report_test_fail("read lock span", "expected 0xBADCAB1E got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET, (1u << 8));
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET, (1u << 8));
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               enable_read | (1u << 16) | bl1_bit);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && (val & (1u << 26)))
         report_test_pass("read-locked: OTP read refused with done + error");
     else
@@ -690,16 +716,16 @@ void testbench::test_lock_enforcement()
 
     // The OTP path reports the refusal in status and returns zero, rather than
     // returning the sentinel the shadow path uses.
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_INTF_RD_DATA_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, val);
     if (val == 0u)
         report_test_pass("read-locked: OTP read data is zero, not the sentinel");
     else
         report_test_fail("read lock OTP data", "expected 0x0 got 0x" + std::to_string(val));
 
     // BL2_VERSION shares no lock bits with BL1_VERSION and is still fully accessible.
-    m_test->register_write_32(efuse_basetest::BL2_VERSION_OFFSET, 0x9);
+    m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x9);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::BL2_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL2_VERSION_OFFSET, val);
     if (val == 0x9)
         report_test_pass("neighbouring field unaffected by BL1_VERSION's locks");
     else
@@ -707,13 +733,13 @@ void testbench::test_lock_enforcement()
 
     // LOCKS_LO governs other fields and is never itself lockable, so it has to stay
     // readable -- otherwise software could not tell what it had locked.
-    m_test->register_read_32(efuse_basetest::LOCKS_LO_OFFSET, val);
+    m_test->register_read_32(sep_efuse::LOCKS_LO_OFFSET, val);
     if (val == ((1u << 18) | (1u << 19)))
         report_test_pass("LOCKS_LO itself remains readable");
     else
         report_test_fail("LOCKS_LO readable", "expected 0xC0000 got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET,
                               (1u << 8) | (1u << 9) | (1u << 10));
     wait(1, SC_NS);
 }
@@ -744,8 +770,9 @@ void testbench::test_token_matching()
         for (unsigned int bit = 0; bit < 8192; bit++) {
             const unsigned int word = bit / 32;
             bool set = false;
-            if (word >= 9 && word <= 16)
-                set = (zero_token_digest[word - 9] >> (bit % 32)) & 1u;
+            if (word >= RMA_SIP_TOKEN_WORD0
+                && word < RMA_SIP_TOKEN_WORD0 + TOKEN_WORDS)
+                set = (zero_token_digest[word - RMA_SIP_TOKEN_WORD0] >> (bit % 32)) & 1u;
             out << (set ? '1' : '0') << "\n";
         }
     }
@@ -755,9 +782,9 @@ void testbench::test_token_matching()
         report_test_fail("token test setup", "digest image was rejected");
 
     // Token inputs reset to zero, so the staged token is already the all-zero one.
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::RMA_SIP_TOKEN_MATCH_OFFSET, val);
+    m_test->register_read_32(sep_efuse::RMA_SIP_TOKEN_MATCH_OFFSET, val);
     if (val == 0x15u)
         report_test_pass("zero token matches the digest fuse (status 0x15)");
     else
@@ -765,11 +792,11 @@ void testbench::test_token_matching()
 
     // Flip one bit of the token: the digest changes completely, so this is also a
     // check that the comparison looks at the whole 256 bits.
-    m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::RMA_SIP_TOKEN_MATCH_OFFSET, val);
+    m_test->register_read_32(sep_efuse::RMA_SIP_TOKEN_MATCH_OFFSET, val);
     if (val == 0x2Au)
         report_test_pass("altered token mismatches (status 0x2A)");
     else
@@ -780,11 +807,11 @@ void testbench::test_token_matching()
     // while still passing the all-zero case (which is order-independent).
     const uint32_t ordered_token[8] = { 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u };
     for (int i = 0; i < 8; i++)
-        m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET + i * 4, ordered_token[i]);
+        m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET + i * 4, ordered_token[i]);
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::RMA_SIP_TOKEN_MATCH_OFFSET, val);
+    m_test->register_read_32(sep_efuse::RMA_SIP_TOKEN_MATCH_OFFSET, val);
     if (val == 0x2Au)
         report_test_pass("ordered token mismatches a digest it was not built from");
     else
@@ -792,7 +819,7 @@ void testbench::test_token_matching()
 
     // Each token type has its own go bit, reference and result. Triggering SIP must
     // leave the other two results alone.
-    m_test->register_read_32(efuse_basetest::RMA_CHIPLET_TOKEN_MATCH_OFFSET, val);
+    m_test->register_read_32(sep_efuse::RMA_CHIPLET_TOKEN_MATCH_OFFSET, val);
     if (val == 0x0u)
         report_test_pass("untriggered chiplet result still reads 0x00");
     else
@@ -800,9 +827,9 @@ void testbench::test_token_matching()
 
     // The chiplet reference is all zeros in this image, so no token can match it --
     // exactly the situation an unprogrammed digest fuse leaves in silicon.
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 0x100);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x100);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::RMA_CHIPLET_TOKEN_MATCH_OFFSET, val);
+    m_test->register_read_32(sep_efuse::RMA_CHIPLET_TOKEN_MATCH_OFFSET, val);
     if (val == 0x2Au)
         report_test_pass("zero reference cannot be matched (chiplet mismatch)");
     else
@@ -810,25 +837,25 @@ void testbench::test_token_matching()
 
     // Same for secure disable, whose reference is the parameter rather than a fuse and
     // defaults to zero as the RTL parameter does.
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 0x10000);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x10000);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::SEC_DISABLE_TOKEN_MATCH_OFFSET, val);
+    m_test->register_read_32(sep_efuse::SEC_DISABLE_TOKEN_MATCH_OFFSET, val);
     if (val == 0x2Au)
         report_test_pass("sec-disable mismatches with the default zero reference");
     else
         report_test_fail("sec disable default", "expected 0x2A got 0x" + std::to_string(val));
 
     // Results are hardware-written; software cannot forge a match.
-    m_test->register_write_32(efuse_basetest::SEC_DISABLE_TOKEN_MATCH_OFFSET, 0x15);
+    m_test->register_write_32(sep_efuse::SEC_DISABLE_TOKEN_MATCH_OFFSET, 0x15);
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::SEC_DISABLE_TOKEN_MATCH_OFFSET, val);
+    m_test->register_read_32(sep_efuse::SEC_DISABLE_TOKEN_MATCH_OFFSET, val);
     if (val == 0x2Au)
         report_test_pass("match result is read-only to software");
     else
         report_test_fail("match RO", "software wrote the result, now 0x" + std::to_string(val));
 
     // TOKEN_EOP go bits are singlepulse and the register is write-only.
-    m_test->register_read_32(efuse_basetest::TOKEN_EOP_OFFSET, val);
+    m_test->register_read_32(sep_efuse::TOKEN_EOP_OFFSET, val);
     if (val == 0x0u)
         report_test_pass("TOKEN_EOP reads back zero (write-only singlepulse)");
     else
@@ -837,40 +864,40 @@ void testbench::test_token_matching()
     // What the match authorises: LC_STATE bit 1 (array bit 65) can only be burned
     // while the SIP token matches. Restore the matching token first.
     const uint32_t enable_prog = (1u << 27) | (1u << 16);
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
-                              enable_prog | (1u << 17) | 65u);
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
+                              enable_prog | (1u << 17) | (LC_STATE_BIT + 1u));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if (val & (1u << 26))
         report_test_pass("LC_STATE RMA bit refused while the token mismatches");
     else
         report_test_fail("LC gating", "expected error status, got 0x" + std::to_string(val));
 
     for (int i = 0; i < 8; i++)
-        m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET + i * 4, 0);
+        m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET + i * 4, 0);
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
-                              enable_prog | (1u << 17) | 65u);
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
+                              enable_prog | (1u << 17) | (LC_STATE_BIT + 1u));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if ((val & (1u << 25)) && !(val & (1u << 26)))
         report_test_pass("LC_STATE RMA bit accepted once the token matches");
     else
         report_test_fail("LC gating match", "expected done + no error, got 0x" + std::to_string(val));
 
     // The chiplet bit has its own gate, and its token has not matched.
-    m_test->register_write_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET,
-                              enable_prog | (1u << 17) | 66u);
+    m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
+                              enable_prog | (1u << 17) | (LC_STATE_BIT + 2u));
     wait(1, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
     if (val & (1u << 26))
         report_test_pass("LC_STATE chiplet bit still gated by its own token");
     else
         report_test_fail("LC gating chiplet", "expected error status, got 0x" + std::to_string(val));
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET,
                               (1u << 8) | (1u << 9) | (1u << 10));
     wait(1, SC_NS);
 }
@@ -899,10 +926,14 @@ void testbench::test_lc_state_transitions()
         for (unsigned int bit = 0; bit < 8192; bit++) {
             const unsigned int word = bit / 32;
             uint32_t word_val = 0;
-            if (word == 2)                        word_val = efuse_model::lc_state_encode(
-                                                                 efuse_model::LC_RAW_TEST_DEV);
-            else if (word >= 9  && word <= 16)    word_val = zero_token_digest[word - 9];
-            else if (word >= 17 && word <= 24)    word_val = zero_token_digest[word - 17];
+            if (word == LC_STATE_WORD)
+                word_val = efuse_model::lc_state_encode(efuse_model::LC_RAW_TEST_DEV);
+            else if (word >= RMA_SIP_TOKEN_WORD0
+                     && word < RMA_SIP_TOKEN_WORD0 + TOKEN_WORDS)
+                word_val = zero_token_digest[word - RMA_SIP_TOKEN_WORD0];
+            else if (word >= RMA_CHIPLET_TOKEN_WORD0
+                     && word < RMA_CHIPLET_TOKEN_WORD0 + TOKEN_WORDS)
+                word_val = zero_token_digest[word - RMA_CHIPLET_TOKEN_WORD0];
             out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
         }
     }
@@ -913,12 +944,12 @@ void testbench::test_lc_state_transitions()
 
     uint32_t val = 0;
     auto write_lc = [&](uint32_t v) {
-        m_test->register_write_32(efuse_basetest::LC_STATE_OFFSET, v);
+        m_test->register_write_32(sep_efuse::LC_STATE_OFFSET, v);
         wait(1, SC_NS);
     };
     auto check = [&](uint32_t want_raw, const std::string &what) {
         const uint32_t want = efuse_model::lc_state_encode(want_raw);
-        m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+        m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, val);
         if (val == want)
             report_test_pass(what);
         else
@@ -929,16 +960,16 @@ void testbench::test_lc_state_transitions()
 
     // Bit 1 is gated on the SiP token. Stage a token that is not the all-zero one to
     // put the gate in a known-shut state first, since earlier tests leave it open.
-    m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET, 0x1);
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 1u << 0);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 1u << 0);
     wait(1, SC_NS);
     write_lc(efuse_model::LC_RAW_RMA_SIP_0);
     check(efuse_model::LC_RAW_TEST_DEV, "LC_STATE: RMA_SIP refused while the SiP token mismatches");
 
-    m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET, 0x0);
+    m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET, 0x0);
     wait(1, SC_NS);
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 1u << 0);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 1u << 0);
     wait(1, SC_NS);
     write_lc(efuse_model::LC_RAW_RMA_SIP_0);
     check(efuse_model::LC_RAW_RMA_SIP_0, "LC_STATE: SiP token match opens TEST_DEV -> RMA_SIP");
@@ -947,7 +978,7 @@ void testbench::test_lc_state_transitions()
     write_lc(0x4u);
     check(efuse_model::LC_RAW_RMA_SIP_0, "LC_STATE: RMA_CHIPLET refused without its own token");
 
-    m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, 1u << 8);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 1u << 8);
     wait(1, SC_NS);
     write_lc(0x4u);
     check(efuse_model::LC_RAW_RMA_CHIP_0, "LC_STATE: chiplet token match opens RMA_CHIPLET");
@@ -976,21 +1007,21 @@ void testbench::test_locked_field_interrupt()
     take_locked_field_pulses();
 
     // An access that is not refused must not raise it, or the interrupt says nothing.
-    m_test->register_read_32(efuse_basetest::BL2_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL2_VERSION_OFFSET, val);
     wait(2, SC_NS);
     if (take_locked_field_pulses() == 0)
         report_test_pass("unlocked read is silent");
     else
         report_test_fail("unlocked read", "interrupt raised on a permitted access");
 
-    m_test->register_read_32(efuse_basetest::BL1_VERSION_OFFSET, val);
+    m_test->register_read_32(sep_efuse::BL1_VERSION_OFFSET, val);
     wait(2, SC_NS);
     if (take_locked_field_pulses() == 1)
         report_test_pass("read-locked shadow read raises the interrupt");
     else
         report_test_fail("locked read interrupt", "no pulse on a denied read");
 
-    m_test->register_write_32(efuse_basetest::BL1_VERSION_OFFSET, 0x55);
+    m_test->register_write_32(sep_efuse::BL1_VERSION_OFFSET, 0x55);
     wait(2, SC_NS);
     if (take_locked_field_pulses() == 1)
         report_test_pass("write-locked shadow write raises the interrupt");
@@ -999,11 +1030,11 @@ void testbench::test_locked_field_interrupt()
 
     // The OTP path is guarded by efuse_guard, which reports through req_error instead.
     // Sharing the interrupt would make it impossible to tell the two refusals apart.
-    const uint32_t bl1_bit = (efuse_basetest::BL1_VERSION_OFFSET / 4) * 32;
-    m_test->register_write_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET,
+    const uint32_t bl1_bit = (sep_efuse::BL1_VERSION_OFFSET / 4) * 32;
+    m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
                               (1u << 28) | (1u << 16) | bl1_bit);
     wait(2, SC_NS);
-    m_test->register_read_32(efuse_basetest::EFUSE_READ_CTRL_OFFSET, val);
+    m_test->register_read_32(sep_efuse::EFUSE_READ_CTRL_OFFSET, val);
     const bool otp_refused = (val & (1u << 26)) != 0;
     if (otp_refused && take_locked_field_pulses() == 0)
         report_test_pass("refused OTP read reports req_error without the interrupt");
@@ -1012,7 +1043,7 @@ void testbench::test_locked_field_interrupt()
                          otp_refused ? "interrupt raised on the guard path"
                                      : "OTP read was not refused");
 
-    m_test->register_write_32(efuse_basetest::EFUSE_INTF_STATUS_OFFSET,
+    m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET,
                               (1u << 8) | (1u << 9) | (1u << 10));
     wait(1, SC_NS);
 }
@@ -1037,11 +1068,16 @@ void testbench::test_transient_rma()
         for (unsigned int bit = 0; bit < 8192; bit++) {
             const unsigned int word = bit / 32;
             uint32_t word_val = 0;
-            if (word == 2)                     word_val = efuse_model::lc_state_encode(
-                                                              efuse_model::LC_RAW_TEST_DEV);
-            else if (word == 4 && transient)   word_val = 0x1u;
-            else if (word >= 9  && word <= 16) word_val = zero_token_digest[word - 9];
-            else if (word >= 17 && word <= 24) word_val = zero_token_digest[word - 17];
+            if (word == LC_STATE_WORD)
+                word_val = efuse_model::lc_state_encode(efuse_model::LC_RAW_TEST_DEV);
+            else if (word == TRANSIENT_RMA_EN_WORD && transient)
+                word_val = 0x1u;
+            else if (word >= RMA_SIP_TOKEN_WORD0
+                     && word < RMA_SIP_TOKEN_WORD0 + TOKEN_WORDS)
+                word_val = zero_token_digest[word - RMA_SIP_TOKEN_WORD0];
+            else if (word >= RMA_CHIPLET_TOKEN_WORD0
+                     && word < RMA_CHIPLET_TOKEN_WORD0 + TOKEN_WORDS)
+                word_val = zero_token_digest[word - RMA_CHIPLET_TOKEN_WORD0];
             out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
         }
     };
@@ -1049,30 +1085,30 @@ void testbench::test_transient_rma()
     uint32_t val = 0;
     auto check = [&](uint32_t want_raw, const std::string &what) {
         const uint32_t want = efuse_model::lc_state_encode(want_raw);
-        m_test->register_read_32(efuse_basetest::LC_STATE_OFFSET, val);
+        m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, val);
         if (val == want)
             report_test_pass(what);
         else
             report_test_fail(what, "expected 0x" + hex32(want) + " got 0x" + hex32(val));
     };
     auto match_token = [&](uint32_t go_bit) {
-        m_test->register_write_32(efuse_basetest::TOKEN_EOP_OFFSET, go_bit);
+        m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, go_bit);
         wait(1, SC_NS);
     };
 
     // Match results are sticky and earlier tests leave both matched, so each step
     // stages the token it wants and re-pulses rather than assuming a starting point.
     auto stage_sip     = [&](uint32_t w0) {
-        m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET, w0);
+        m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET, w0);
         wait(1, SC_NS);
     };
     auto stage_chiplet = [&](uint32_t w0) {
-        m_test->register_write_32(efuse_basetest::RMA_CHIPLET_TOKEN_I_OFFSET, w0);
+        m_test->register_write_32(sep_efuse::RMA_CHIPLET_TOKEN_I_OFFSET, w0);
         wait(1, SC_NS);
     };
     for (int i = 1; i < 8; i++) {
-        m_test->register_write_32(efuse_basetest::RMA_SIP_TOKEN_I_OFFSET + i * 4, 0);
-        m_test->register_write_32(efuse_basetest::RMA_CHIPLET_TOKEN_I_OFFSET + i * 4, 0);
+        m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET + i * 4, 0);
+        m_test->register_write_32(sep_efuse::RMA_CHIPLET_TOKEN_I_OFFSET + i * 4, 0);
     }
     wait(1, SC_NS);
 

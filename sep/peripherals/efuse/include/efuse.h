@@ -247,11 +247,16 @@ public:
     static constexpr unsigned int NUM_FUSE_WORDS = NUM_FUSE_BITS / 32;
 
     /**
-     * Bit index of LC_STATE in the array (sep_pkg::LC_STATE_BIT_POSITION). LOCKS is
-     * 64 bits wide and comes first, so LC_STATE starts at bit 64. Bits 65 and 66 --
-     * the two RMA advance bits -- are individually gated by the token matches.
+     * Bit index of LC_STATE in the array (sep_pkg::LC_STATE_BIT_POSITION). Derived
+     * from the register's own offset rather than reasoned out from what precedes
+     * it: this was written as a literal 64 on the argument that "LOCKS is 64 bits
+     * wide and comes first", which overlooked LOCKS_SPARE and so pointed the RMA
+     * gating at SBOOT_DIS's bits once the map was corrected. Bits +1 and +2 -- the
+     * two RMA advance bits -- are individually gated by the token matches, and
+     * gating the wrong bits means the token no longer authorises the transition.
      */
-    static constexpr unsigned int LC_STATE_BIT_POSITION = 64;
+    static constexpr unsigned int LC_STATE_BIT_POSITION =
+        (sep_efuse::LC_STATE_OFFSET / 4u) * 32u;
 
     /**
      * Value returned for an access the lock policy refuses. The shadow path
