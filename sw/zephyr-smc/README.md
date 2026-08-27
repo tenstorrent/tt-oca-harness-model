@@ -1,8 +1,7 @@
 # Zephyr on the SMC virtual platform
 
 Out-of-tree Zephyr port for `smc-vp`.  The kernel runs on hart 0 in M-mode
-(same ELF load path as `sw/smc-vp-tests/`).  UART0 is the console.  Full
-operator notes: `doc/zephyr-on-smc.adoc`.
+(same ELF load path as `sw/smc-vp-tests/`).  UART0 is the console.
 
 `device list` only shows peripherals that have a DTS node **and** a Zephyr
 driver (today: PLIC + UART0).  Everything else on the VP is still there —

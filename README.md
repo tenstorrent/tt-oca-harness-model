@@ -25,8 +25,7 @@ implement to be OCAH-compliant.
 
 Architecture and register specification live in the hardware TRM
 (`tt-oca-hw`). This repository documents the SystemC/TLM-2.0 implementation,
-the test plan, and how to run tests. The split is defined in
-[`doc/contributing/documentation.adoc`](doc/contributing/documentation.adoc).
+the test plan, and how to run tests.
 Subsystem books: [`sep/doc/`](sep/doc/index.adoc),
 [`smc/doc/`](smc/doc/index.adoc). IP example:
 [`sep/peripherals/adams_bridge/doc/`](sep/peripherals/adams_bridge/doc/index.adoc).
@@ -584,8 +583,8 @@ cd sw/smc-vp-tests
 
 Zephyr is the RTOS path for **SMC management firmware** (threads, timers,
 shell, later real drivers).  It is not Linux and it is not a replacement for
-`sw/smc-vp-tests/`.  The out-of-tree port lives in `sw/zephyr-smc/`; the
-operator guide is `doc/zephyr-on-smc.adoc`.
+`sw/smc-vp-tests/`.  The out-of-tree port lives in `sw/zephyr-smc/`; see
+[`sw/zephyr-smc/README.md`](sw/zephyr-smc/README.md).
 
 ```bash
 cd sw/zephyr-smc
@@ -893,11 +892,9 @@ grep CMAKE_CXX_COMPILER build/CMakeCache.txt
 
 ## Documentation
 
-| Document                                         | Description                     |
-| ------------------------------------------------ | ------------------------------- |
-| `doc/component-developer-guide.md`               | Day-to-day contributor workflow |
-| `doc/maintainer-guide.md`                        | Repository maintenance guide    |
-| `doc/SystemC_Virtual_Platform_Customer_Guide.md` | Customer-facing VP usage guide  |
+| Document                                         | Description                    |
+| ------------------------------------------------ | ------------------------------ |
+| `doc/SystemC_Virtual_Platform_Customer_Guide.md` | Customer-facing VP usage guide |
 
 ## Contributing
 

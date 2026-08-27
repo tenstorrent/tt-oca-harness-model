@@ -1,6 +1,6 @@
 # SMC CPU Cluster — Documentation
 
-Numbered documents follow the [Component Developer Guide](../../../doc/component-developer-guide.md) layout (`01` Specification, `02` LLD, `03` Test Plan).
+Numbered documents follow the `01` Specification, `02` LLD, `03` Test Plan layout.
 
 ## Document index
 
