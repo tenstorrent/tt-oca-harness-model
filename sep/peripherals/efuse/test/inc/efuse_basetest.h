@@ -2,11 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 // Register offsets come from the model's own header rather than a copy kept
-// here. The copy that used to live in this file was a fourth duplicate of the
-// map (after efuse_register.h, the efuse_base.h constructors and efuse.cpp's
-// lock table) and it silently went stale: it still carried CLASS_KEY at 0x064
-// after the model moved it to the RDL's 0x068, so these tests would have gone on
-// exercising an address the model no longer used.
+// here. 
 //
 // The READ/WRITE/RESET values below are genuine test data -- expected access
 // masks and reset values -- and have no counterpart in the model header, so they

@@ -29,9 +29,7 @@ namespace sep_efuse {
 static constexpr unsigned int LOCKS_LO_OFFSET               = 0x000;
 static constexpr unsigned int LOCKS_HI_OFFSET               = 0x004;
 // LOCKS_SPARE (RDL @0x008, 32-bit). Not modelled as a register -- nothing reads
-// it -- but the word MUST be reserved: omitting it is what previously placed
-// every register from LC_STATE onward 4 bytes below the RDL, so the ROM reading
-// CLASS_KEY at its real 0x068 got this model's word 1.
+// it -- but the word MUST be reserved
 static constexpr unsigned int LOCKS_SPARE_OFFSET            = 0x008;
 static constexpr unsigned int LC_STATE_OFFSET               = 0x00C;
 static constexpr unsigned int SBOOT_DIS_OFFSET              = 0x010;
