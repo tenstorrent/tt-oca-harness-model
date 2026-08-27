@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[aou-core-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/aou_core_tb.cpp` uses two `aou_core` instances with
+`connect_peer`, FDI tied high, and a peer memory on B.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*` when a 64-bit libasan is available; line coverage on
+`aou_core.cpp` meets the repository ≥ 95% gate.
+
+How to run (from `aou`):
+
+[source,bash]
+----
+cp deps.env.example deps.env   # first time; set SYSTEMC_HOME / CCI_HOME
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+----
+
+RHEL 8 toolset packages may lack 64-bit libasan; Ubuntu CI still runs
+`--asan`.
+
+====== Standalone cases
+
+Source: `test/aou_core_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |CSR reset |`ip_version`, `aou_con0`, DISABLED |Positive
+|2 |APB decode errors |Size / align / window |Negative
+|3 |named CSR read/write round trip |Write masks |Positive
+|4 |per-RP CSR bank read/write |Array decode |Positive
+|5 |AXI deny when disabled |`TLM_COMMAND_ERROR_RESPONSE` |Negative
+|6 |activate |Both ENABLED; IRQ then W1C |Positive
+|7 |soft reset while enabled |A resets; B stays ENABLED |Positive
+|8 |AXI loopback A->B |Bridge write/read |Positive
+|9 |AXI bridge dest_rp out-of-range |Address error |Negative
+|10 |deactivate |DISABLED |Positive
+|11 |aou_con0 IP_VERSION no-op + deactivate_force |WO / force |Mixed
+|===
+
+====== Platform firmware tests
+
+Build `smc-vp` first. `smu-aou-ext-test` needs `smu-vp`.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-aou-test
+
+cd sw/smu-vp-tests
+./run_smu_vp_tests.sh smu-aou-ext-test
+----

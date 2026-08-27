@@ -304,18 +304,13 @@ smc/platform/compile_commands.json
 # -----------------------------------------------------------------------------
 # Local-only doc tooling: stylesheets are developer helpers
 # (print stylesheets) and are intentionally not tracked.
-# CPU cluster IP docs under smc/cpu_cluster/doc/ are tracked (01/02/03 layout).
-# cpu_ctrl follows the same doc convention (see smc/peripherals/cpu_ctrl/doc/).
+# cpu_ctrl still tracks print.css under its doc/ tree.
 *.css
 **/*.css
-!smc/cpu_cluster/doc/
-!smc/cpu_cluster/doc/**
 !smc/peripherals/cpu_ctrl/doc/
 !smc/peripherals/cpu_ctrl/doc/**
 
 *.svg
-!smc/cpu_cluster/doc/
-!smc/cpu_cluster/doc/**
 !smc/peripherals/cpu_ctrl/doc/
 !smc/peripherals/cpu_ctrl/doc/**
 !smc/peripherals/cpu_ctrl/README.md
@@ -328,6 +323,10 @@ smc/peripherals/*/doc/*.md
 smc/peripherals/*/doc/**/*.md
 smc/smc_fabric/doc/*
 !smc/smc_fabric/doc/*.adoc
+smc/cpu_cluster/doc/*
+!smc/cpu_cluster/doc/*.adoc
+aou/doc/*
+!aou/doc/*.adoc
 sep/peripherals/*/doc/*.md
 
 # ======================================================================================

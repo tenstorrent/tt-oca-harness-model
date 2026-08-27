@@ -1,0 +1,93 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[smc-cpu-cluster-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::smc_cpu_cluster` is a loosely-timed TLM-2.0 wrapper around the
+Tenstorrent Whisper RISC-V ISS. Each hart is an `iss_hart` with a
+Whisper backend. The rest of the SMC library binds sockets and IRQ
+wires without including Whisper headers.
+
+[source,cpp]
+----
+class smc_cpu_cluster : public sc_core::sc_module
+----
+
+Outgoing transactions carry `smc::smc_axi_extension`.
+
+====== Threads and sockets
+
+One `SC_THREAD` per hart runs `step(quantum_insts)` under the TLM
+quantum. `irq_aggregator` (`SC_METHOD` per hart) packs
+`irq_sw` / `irq_timer` / `irq_ext` into MIP and wakes WFI.
+`beu_nmi_method` injects NMI on a rising edge of `beu_nmi_in`.
+Stage-2 WDT may tick from `wdt_stage2_tick_ns`.
+
+Addresses in `[mmio_lo, mmio_hi)` leave on `mmio`. Fast-mem
+`[fast_mem_lo, fast_mem_hi)` is an internal buffer. Everything else
+outside fast-mem leaves on `data`. `ifetch` is exposed for the TRM
+split; Whisper `MEM_CALLBACKS` does not distinguish fetch from load,
+so fetches currently share the data path internally.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind (`smc-vp`)
+|`mmio` |TLM 64-bit initiator |`fabric.mmio_in`
+|`data` |TLM 64-bit initiator |`front_port_router.tgt`
+|`ifetch` |TLM 64-bit initiator |ifetch stub
+|`ctrl` |TLM 64-bit target |`front_port_router` CPU-control window
+|`irq_sw[i]` |`sc_in<bool>` |CLINT MSIP
+|`irq_timer[i]` |`sc_in<bool>` |CLINT MTIP
+|`irq_ext[i]` |`sc_in<bool>` |PLIC MEIP
+|`beu_nmi_in[i]` |`sc_in<bool>` |BEU local / NMI
+|===
+
+----
+  Whisper hart ──► pick_socket
+        │              ├─ [mmio_lo, mmio_hi) → mmio → fabric
+        │              ├─ fast-mem window → internal buffer
+        │              └─ else → data → front_port_router
+        │
+  irq_sw/timer/ext ──► irq_aggregator ──► MIP / WFI wake
+  beu_nmi_in ──► beu_nmi_method ──► inject_nmi
+  TLM MMIO ──► ctrl ──► CPU-control CSRs
+----
+
+Debug API used by benches and `smc-vp`: `load_elf`, `hart(i)`,
+`inject_nmi`, `whisper_system()`.
+
+====== CCI parameters
+
+Sizing knobs are immutable. Quantum and AMO detect are mutable.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`num_harts` |1 |1..4; sizes IRQ vectors
+|`hart_id_base` |0 |Hart ID offset
+|`reset_pc` |`0x80000000` |Boot vector
+|`mem_size` |4 GiB |Whisper address space
+|`fast_mem_lo` / `fast_mem_hi` |0 / `0x80000000` |Internal buffer window
+|`mmio_lo` / `mmio_hi` |`0x80000000` / `0x90000000` |MMIO carve-out (`smc-vp` presets `0xC0000000`..`0xC1000000`)
+|`isa` |`rv64imafdc` |Whisper ISA string
+|`quantum_ns` |1000 |TLM quantum
+|`quantum_insts` |1000 |Instructions per `step(K)`
+|`amo_lock_detect` |true |Best-effort `prot[3]` on AMO / LR-SC
+|`source_id` |`0x10` |Extension source ID
+|`ctrl_size_bytes` |`0x1000` |CPU-control window
+|`local_base_default` |`0xC0000000` |Strap / debug
+|`wdt_stage2_tick_ns` |100.0 |0 disables auto-tick
+|===
+
+A legacy `config` struct remains for construction; broker presets
+override before elaboration.
+
+====== Modeling gaps versus RTL
+
+* No Spike or other ISS backend.
+* Fetch vs load is not split on the Whisper callback path.
+* AMO lock detect is best-effort (callbacks do not pass the opcode).
+* `cluster_tb` stubs CLINT as IRQ wires; full CLINT MMIO is
+  `peripherals/clint`.
+* Production firmware IRQ maps live in platform tests, not this IP.

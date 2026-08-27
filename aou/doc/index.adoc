@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[aou-core]]
+==== AOU Core
+
+The hardware contract (AXI-over-UCIe CSRs, FDI bring-up) is in the
+hardware TRM / `aou-core.rdl`. This directory documents the
+SystemC/TLM-2.0 model (`aou::aou_core`) and how to test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]

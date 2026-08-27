@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[aou-core-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`aou::aou_core` is a loosely-timed TLM-2.0 model of the AXI-over-UCIe
+bridge for firmware bring-up. CSRs use `regmodel::Register32`. There
+is no FDI flit, credit, or QoS timing.
+
+[source,cpp]
+----
+class aou_core : public sc_core::sc_module
+----
+
+`b_transport` never calls `wait()`. APB adds `access_delay_ns`; an AXI
+hop adds `bridge_delay_ns`.
+
+====== Threads and sockets
+
+No `SC_THREAD`. APB decode is a switch on offset. AXI
+`axi_s[rp]` forwards to the peer's `axi_m[dest]` when both ends are
+ENABLED (`dest` from `dest_rp`). `connect_peer()` wires the LT PHY
+stub; the peer auto-acks activate.
+
+`smc-vp` parks the APB window at `0xC000_C000` on `periph_router`.
+`irq_o` feeds `intagg` → PLIC source 27. `smu-vp` binds `axi_s[0]` /
+`axi_m[0]` to the SMU xbar `ext_out` / `ext_in`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`apb_socket` |TLM 32-bit target |`periph_router` AOU park (`smc-vp`)
+|`axi_s[rp]` |TLM 64-bit target |idle (`smc-vp`); xbar `ext_out` (`smu-vp`)
+|`axi_m[rp]` |TLM 64-bit initiator |remote stub / xbar `ext_in`
+|`fdi_active_i` |`sc_in<bool>` |tied true at elaboration
+|`irq_o` |`sc_out<bool>` |`intagg` → PLIC source 27
+|===
+
+----
+  TLM APB ──► apb_socket ──► activate / CSRs ──► update_irq → irq_o
+  axi_s[rp] ──► (both ENABLED?) ──► peer axi_m[dest_rp]
+----
+
+APB 32-bit aligned in `[0, 0x80)` is `TLM_OK_RESPONSE`. Wrong size or
+alignment is `TLM_GENERIC_ERROR_RESPONSE`. Outside the window is
+`TLM_ADDRESS_ERROR_RESPONSE`. AXI while disabled or with no peer is
+`TLM_COMMAND_ERROR_RESPONSE`. `dest_rp` past the peer `rp_count` is
+`TLM_ADDRESS_ERROR_RESPONSE`.
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`rp_count` |1 |1..4; sizes `axi_s` / `axi_m`; immutable
+|`access_delay_ns` |1.0 |APB annotated delay
+|`bridge_delay_ns` |0.0 |AXI hop annotated delay
+|===
+
+====== Modeling gaps versus RTL
+
+* No FDI flit packing, credits, stall, cancel, or bring-up FSM.
+* No early BRESP, AXI split/aggregator datapaths, or QoS timing.
+* `aou_interrupt_mask` is storage-only; activate/deactivate stickies
+  are unmasked, matching RTL for those bits.
+* Several CSR banks are storage-only (priorities, timers, RP extras).

@@ -42,7 +42,7 @@
 //
 // References
 // - 01_SMC_Architecture.md §6.1  -- canonical definition of sideband fields
-// - 02_CPU_Cluster_LowLevel_Design.md §4.7 -- sideband field semantics
+// - smc/cpu_cluster/doc/implementation.adoc -- sideband field semantics
 // ===========================================================================
 
 #pragma once

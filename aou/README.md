@@ -1,13 +1,14 @@
 # AOU_CORE — SystemC / TLM-2.0 Loosely-Timed Model
 
-AXI-over-UCIe bridge model for firmware bring-up and `smc-vp` integration.
-CSR ground truth: `aou-rtl/csr/aou-core.rdl`.
+Architecture, CSRs, and programming sequences are in the hardware TRM
+(`aou-core.rdl`). This tree has the model, its test plan, and how to
+run the tests.
 
-| Doc | Role |
-|------|------|
-| [doc/01_AOU_Specification.md](doc/01_AOU_Specification.md) | Software-visible behaviour |
-| [doc/02_AOU_LowLevel_Design.md](doc/02_AOU_LowLevel_Design.md) | TLM API, internals, VP wiring |
-| [doc/03_AOU_Test_Plan.md](doc/03_AOU_Test_Plan.md) | Unit + platform tests |
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, CCI, `smc-vp` / `smu-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
+AXI-over-UCIe bridge model for firmware bring-up and VP integration.
 
 ## Layout
 
@@ -18,6 +19,9 @@ aou/
 ├── run_tests.sh
 ├── deps.env.example
 ├── doc/
+│   ├── index.adoc
+│   ├── implementation.adoc
+│   └── test_plan.adoc
 ├── include/aou_core.h
 ├── src/aou_core.cpp
 └── test/aou_core_tb.cpp
@@ -28,8 +32,8 @@ aou/
 ```bash
 cp deps.env.example deps.env   # set SYSTEMC_HOME / CCI_HOME
 ./run_tests.sh
-./run_tests.sh --coverage      # aou_core.cpp: 100% line coverage
-./run_tests.sh --asan          # AddressSanitizer + UBSan, clean
+./run_tests.sh --coverage
+./run_tests.sh --asan
 ```
 
 `./run_tests.sh --asan` links `-fsanitize=address`, which requires a 64-bit
@@ -41,7 +45,8 @@ and the link fails with `cannot find -lasan`; this matches the same gap
 a 64-bit `libasan`, to exercise `--asan` locally.
 
 Linked into `smc-vp` (`vp/platform/smc/`). Platform smoke test:
-`sw/smc-vp-tests/smc-aou-test` (`SMC_AOU_BASE = 0xC000_C000`).
+`sw/smc-vp-tests/smc-aou-test` (`SMC_AOU_BASE = 0xC000_C000`). Full commands
+are in `doc/test_plan.adoc`.
 
 ## Abstraction
 

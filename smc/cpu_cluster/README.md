@@ -2,16 +2,14 @@
 
 A SystemC TLM-2.0 LT model of the SMC CPU Cluster IP, wrapping the
 Tenstorrent **Whisper** RISC-V ISS as the per-hart instruction-set
-simulator backend. Implements the cluster described in:
+simulator backend.
 
-- `doc/01_SMC_Architecture.pdf` §3 (IP #1) — modeling parameters and role
-- `doc/02_SMC_IP_LowLevel_Design.pdf` §3 — TLM interface, register map,
-  IRQ aggregation, control-register file, and bus-bridge routing
-- `doc/03_SMC_Test_Plan.pdf` §A.1 / §A.6 — verification tier matrix
-- `doc/01_CPU_Cluster_Specification.md` — IP specification (module boundary, config, requirements)
-- `doc/02_CPU_Cluster_LowLevel_Design.md` — architecture & implementation reference
-- `doc/03_CPU_Cluster_Test_Plan.md` — IP-specific test plan (`cluster_tb`, coverage ≥ 95%)
-- `doc/04_CCI_Integration_Guide.md` — SystemC CCI parameter guide (supplementary)
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, threads, CCI, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
 
 The model is a drop-in `sc_module` that the rest of the SMC SystemC IP
 library (PLIC, CLINT, fabric, mailbox, …) can wire up exactly as
@@ -29,13 +27,9 @@ cpu_cluster/
 ├── README.md                          (this file)
 ├── run_tests.sh                       Build-and-test driver script
 ├── doc/
-│   ├── README.md                      Document index
-│   ├── build_docs.sh                  Markdown → PDF (pandoc + Chrome)
-│   ├── print.css                      PDF stylesheet
-│   ├── 01_CPU_Cluster_Specification.md
-│   ├── 02_CPU_Cluster_LowLevel_Design.md
-│   ├── 03_CPU_Cluster_Test_Plan.md
-│   └── 04_CCI_Integration_Guide.md    (supplementary — CCI adoption)
+│   ├── index.adoc
+│   ├── implementation.adoc
+│   └── test_plan.adoc
 ├── external/
 │   └── whisper-cmake/                 CMake wrapper for the pre-built Whisper archive
 ├── include/                           Public headers (same layout as peripherals/plic)
@@ -77,7 +71,7 @@ SC_MODULE(smc_cpu_cluster) {
     sc_vector<sc_in<bool>> irq_ext;
 
     explicit smc_cpu_cluster(sc_module_name name);
-    smc_cpu_cluster(sc_module_name name, const config& cfg);  // legacy; see doc/04 CCI
+    smc_cpu_cluster(sc_module_name name, const config& cfg);  // legacy; CCI presets preferred
 };
 ```
 
@@ -145,14 +139,14 @@ These satisfy `03_SMC_Test_Plan.pdf` §A.3 inspection requirements.
 ## Verification scope
 
 Regression is the self-checking bench `test/cluster_tb` (see
-`doc/03_CPU_Cluster_Test_Plan.md`). It verifies the **cluster wrapper** and
+`doc/test_plan.adoc`). It verifies the **cluster wrapper** and
 **wiring to peer IPs**, not full SoC firmware or every peripheral matrix.
 
 | What | Where | In `cluster_tb`? |
 |------|--------|------------------|
 | PLIC IP matrix (sources, thresholds, claim rules) | `peripherals/plic` + `plic_tb` | Linked `plic.cpp` only; exhaustive cases stay in `plic_tb` |
-| **Cluster ↔ PLIC** (CPU MMIO, `irq_ext`, firmware ISR) | `03_CPU_Cluster_Test_Plan.md` §8.7 | **Yes** — CPU → PLIC → CPU |
-| CLINT IP (mtime / mtimecmp / MSIP MMIO) | `peripherals/clint` (future) | **No** — `irq_sw` / `irq_timer` wire stubs only (§8.6) |
+| **Cluster ↔ PLIC** (CPU MMIO, `irq_ext`, firmware ISR) | `doc/test_plan.adoc` | **Yes** — CPU → PLIC → CPU |
+| CLINT IP (mtime / mtimecmp / MSIP MMIO) | `peripherals/clint` | **No** — `irq_sw` / `irq_timer` wire stubs only |
 | Scratchpad map on `cluster.data` | Future fabric router | Init handshake only (`ScratchpadSramStub`, TC-CPU-004/005) |
 | Production `riscv_plic0.c` / full IRQ map | SMC firmware test plan | Open |
 
@@ -160,13 +154,8 @@ Regression is the self-checking bench `test/cluster_tb` (see
 
 ## Documentation
 
-Numbered docs under `doc/` follow the Component Developer Guide layout
-(`01` Specification, `02` LLD, `03` Test Plan). See `doc/README.md` for
-the index. Regenerate PDFs with:
-
-```bash
-./doc/build_docs.sh    # requires pandoc + Chrome/Chromium
-```
+Model and test pages are AsciiDoc under `doc/` (`index.adoc`,
+`implementation.adoc`, `test_plan.adoc`), matching the other SMC IPs.
 
 ---
 
