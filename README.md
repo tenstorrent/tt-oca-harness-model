@@ -30,9 +30,6 @@ Subsystem books: [`sep/doc/`](sep/doc/index.adoc),
 [`smc/doc/`](smc/doc/index.adoc). IP example:
 [`sep/peripherals/adams_bridge/doc/`](sep/peripherals/adams_bridge/doc/index.adoc).
 
-Published HTML for the OCH architecture notes is under [`docs/och/`](docs/och/).
-Rebuild locally with `docs/build_och_docs.sh` from sources in `docs/och_source/`.
-
 ## Getting Started
 
 1. Install **CMake** 3.24+, a **C++17 or C++20** compiler, **SystemC** 3.0.2,
