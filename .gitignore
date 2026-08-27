@@ -326,6 +326,7 @@ smc/platform/compile_commands.json
 # IP-root README.md files remain tracked.
 smc/peripherals/*/doc/*.md
 smc/peripherals/*/doc/**/*.md
+smc/smc_fabric/doc/*.md
 sep/peripherals/*/doc/*.md
 
 # ======================================================================================

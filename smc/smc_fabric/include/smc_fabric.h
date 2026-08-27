@@ -22,7 +22,7 @@
 //  sep_axi_in
 //    → to_local_addr() → route_local()  (always local, no filter)
 //
-// See doc/01_overview_and_architecture.md and doc/03_internal_architecture.md.
+// See doc/implementation.adoc.
 // ===========================================================================
 
 #pragma once
@@ -45,7 +45,7 @@ class smc_fabric : public sc_core::sc_module
 {
 public:
     // -----------------------------------------------------------------------
-    // Construction parameters (see doc/02_tlm_interface.md §1)
+    // Construction parameters (see doc/implementation.adoc)
     // -----------------------------------------------------------------------
     struct config {
         uint64_t local_base_addr      = 0xC000'0000ULL;
@@ -69,7 +69,7 @@ public:
     tlm_utils::simple_target_socket<smc_fabric, 64> mmio_in       {"mmio_in"};
     // data_accel_in fans in >1 upstream master (DMA engine + memory_zeroer's
     // DMA-write-back master both target this port on real platforms — see
-    // doc/02_tlm_interface.md), so it is a multi-bind socket; every other
+    // doc/implementation.adoc), so it is a multi-bind socket; every other
     // inbound-master socket here has exactly one upstream master and stays a
     // plain single-bind simple_target_socket.
     tlm_utils::multi_passthrough_target_socket<smc_fabric, 64> data_accel_in {"data_accel_in"};

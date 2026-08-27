@@ -722,7 +722,7 @@ void smc_fabric::handle_remap_entry(alias_region&             r,
     trans.set_response_status(tlm::TLM_OK_RESPONSE);
 }
 
-// Alias remap CSRs — 8 entries × 0x20 bytes each (doc/04 §2).
+// Alias remap CSRs — 8 entries × 0x20 bytes each.
 void smc_fabric::handle_alias_remap(tlm::tlm_generic_payload& trans,
                                      uint32_t                  sub_offset)
 {
@@ -778,7 +778,7 @@ void smc_fabric::handle_output_remap_entry(alias_region&             r,
 }
 
 // M-mode remap CSRs — 8 entries × one 64-bit REGION_ATTRS register each
-// (stride 0x08), bit-exact to output_remap.rdl (doc/04 §3).  Region slots
+// (stride 0x08), bit-exact to output_remap.rdl.  Region slots
 // are fixed by MMODE_REMAP_START/SIZE and IdxStart=20; the offset register
 // supplies the destination's upper address bits (see apply_output_remap).
 void smc_fabric::handle_mmode_remap(tlm::tlm_generic_payload& trans,
@@ -791,7 +791,7 @@ void smc_fabric::handle_mmode_remap(tlm::tlm_generic_payload& trans,
     invalidate_all_dmi();
 }
 
-// Xvisor remap — same layout as M-mode (doc/04 §4).
+// Xvisor remap — same layout as M-mode.
 void smc_fabric::handle_xvisor_remap(tlm::tlm_generic_payload& trans,
                                       uint32_t                  sub_offset)
 {
@@ -838,7 +838,7 @@ static void filter_cfg_unpack(smc_fabric::filter_entry& e, uint64_t cfg)
 
 // Shared helper for inbound_filter / outbound_filter CSR access.
 // sub_offset is relative to the filter array base.
-// Filter entry layout — bit-exact to filter_ctrl.rdl (doc/04 §5):
+// Filter entry layout — bit-exact to filter_ctrl.rdl:
 //   16 entries × 0x20 bytes; each entry holds three 64-bit registers:
 //   +0x00  FILTER_CONFIG  read_en[0] write_en[1] addr_mode[4] allow_ns[8]
 //                         data_bus_width[14:12](RO) src_id[19:16]

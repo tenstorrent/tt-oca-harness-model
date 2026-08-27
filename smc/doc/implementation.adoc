@@ -25,6 +25,7 @@ bug, not a second spec. The pending remap is
 
 Every modeled IP has the two-page set under
 `smc/peripherals/<ip>/doc/` (`implementation.adoc` + `test_plan.adoc`).
+The fabric uses the same layout in `smc/smc_fabric/doc/`.
 
 Existing integration notes in this directory
 (`systemc_tlm2_integration_guide.adoc`,

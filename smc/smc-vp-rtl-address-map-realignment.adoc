@@ -745,8 +745,7 @@ Work:
 . `DACCEL_DMA_ZEROER_END`: `0xC003_A000` → `0xC003_9000`.
 . Delete "verbatim from xbar pkg" comments that are still wrong
   (PLIC lines wait for Phase 3).
-. Update `smc/smc_fabric/doc/01_overview_and_architecture.md` and
-  `05_systemc_implementation.md`.
+. Update `smc/smc_fabric/doc/implementation.adoc`.
 . Fabric unit tests (`smc_fabric_tb`) that hard-code the old ends.
 
 [[phase-3]]
@@ -776,7 +775,7 @@ Touch list (non-exhaustive; grep `0xC000_E000`, `0xC000_A000`,
 * `smc/doc/systemc_tlm2_integration_guide.adoc`
 * `smc/doc/platform_test_and_firmware_guide.adoc`
 * `smc/cpu_cluster/doc/05_RTL_SystemC_Integration_Guide.md` §6
-* `smc/smc_fabric/doc/01_overview_and_architecture.md`
+* `smc/smc_fabric/doc/implementation.adoc`
 * `doc/zephyr-on-smc.adoc`
 * `doc/smc-sep-d2d-interconnect.adoc` (AOU `0xC000_4000`)
 * `aou/doc/01_AOU_Specification.md`, `02_AOU_LowLevel_Design.md`,

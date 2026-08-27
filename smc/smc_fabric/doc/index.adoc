@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[smc-fabric]]
+==== SMC Fabric
+
+The hardware contract (AXI fabric topology, alias/output remap, filter
+CSRs, local xbar decode) is in the hardware TRM. This directory
+documents the SystemC/TLM-2.0 model (`smc::smc_fabric`) and how to
+test it.
+
+include::implementation.adoc[]
+include::test_plan.adoc[]
