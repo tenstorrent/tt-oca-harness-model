@@ -388,6 +388,13 @@ private:
     // (0xFF) flash. spiPreload wins if both are set.
     csml_param<std::string> spiBackdoorFile;
     std::string              spiBackdoorPath;
+    /// Raw binary staged into the SMC SRAM window before the ROM runs, for the
+    /// recovery / secondary boot path where the manifest arrives from the SMC
+    /// rather than SPI flash. Offset is SMC-SRAM-relative and must agree with
+    /// the MANIFEST_ADDR the boot handshake publishes (scratch[8]).
+    csml_param<std::string> smcSramBackdoorFile;
+    csml_param<uint32_t>    smcSramBackdoorOffset;
+    std::string              smcSramBackdoorPath;
 
     // Relays sep_smn_inbound_axi (external-facing, 64-bit) into the 32-bit
     // internal inbound chain at inbound_filter->data_socket.

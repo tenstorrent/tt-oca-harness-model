@@ -95,6 +95,8 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , strap_bl0_pll_clk("smc.bl0_pll_clk", false)
     , spiPreload("spiPreload", "")
     , spiBackdoorFile("spiBackdoorFile", "")
+    , smcSramBackdoorFile("smcSramBackdoorFile", "")
+    , smcSramBackdoorOffset("smcSramBackdoorOffset", 0x2000u)
     , smn_inbound_to_filter("smn_inbound_to_filter")
     , outbound_filter_to_smn("outbound_filter_to_smn")
     , sep_global_base("sep_global_base", 0x0ULL)
@@ -158,7 +160,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         }
     }
 
-    // Both SPI image keys name a path relative to the .ini that set them.
+    // SPI image keys and other backdoor/preload paths are resolved relative to the .ini that set them.
     auto resolveAgainstIniDir = [](std::string path) {
         if (path.empty())
             return path;
@@ -175,6 +177,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
 
     spiPreloadPath  = resolveAgainstIniDir(spiPreload.get_param_value());
     spiBackdoorPath = resolveAgainstIniDir(spiBackdoorFile.get_param_value());
+    smcSramBackdoorPath = resolveAgainstIniDir(smcSramBackdoorFile.get_param_value());
     if (args.verbose)
         std::cerr << "Loading ELF file " << elfFile << '\n';
 
@@ -271,6 +274,50 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         const uint32_t ring_hdr[3] = { 0u, 0u, STATUS_RING_ENTRIES };  // head, tail, num_entries
         smc_global->load_data(reinterpret_cast<const char*>(ring_hdr),
                               STATUS_RING_LOCAL, sizeof(ring_hdr));
+
+        // Optional manifest staged into SMC SRAM, for the recovery / secondary
+        // boot path. On silicon the SMC firmware puts it there (having fetched
+        // it over I3C); the VP models no SMC, so a caller supplies the bytes and
+        // this presents the same contract the ROM sees.
+        //
+        // The offset must agree with the MANIFEST_ADDR published in scratch[8]
+        // above -- the ROM reads the manifest from smc_sram_base + that value,
+        // so staging it anywhere else is invisible to the ROM. Defaulting the
+        // param to the same 0x2000 keeps the two from drifting silently.
+        if (!smcSramBackdoorPath.empty()) {
+            std::ifstream f(smcSramBackdoorPath, std::ios::binary | std::ios::ate);
+            if (!f.is_open()) {
+                std::cerr << "smc_global: smcSramBackdoorFile: cannot open "
+                          << smcSramBackdoorPath << '\n';
+            } else {
+                const uint32_t off = smcSramBackdoorOffset.get_param_value();
+                const std::streamsize len = f.tellg();
+                if (len <= 0) {
+                    std::cerr << "smc_global: smcSramBackdoorFile: empty or unreadable file\n";
+                } else if (static_cast<uint64_t>(off) + static_cast<uint64_t>(len) > 0x100000ULL) {
+                    std::cerr << "smc_global: smcSramBackdoorFile: image ("
+                              << len << " bytes) at offset 0x" << std::hex << off << std::dec
+                              << " exceeds 1MiB SMC SRAM window\n";
+                } else {
+                    f.seekg(0, std::ios::beg);
+                    std::vector<char> buf(static_cast<size_t>(len));
+                    if (f.read(buf.data(), len)) {
+                        // Keep MANIFEST_ADDR (scratch[8]) in sync with the staged offset.
+                        smc_global->load_data(reinterpret_cast<const char*>(&off),
+                                              scratch_local(8), sizeof(off));
+                        smc_global->load_data(buf.data(),
+                                              static_cast<uint64_t>(SMC_SRAM_WINDOW_OFF) + off,
+                                              buf.size());
+                        std::cout << "smc_global: staged " << buf.size()
+                                  << " bytes from " << smcSramBackdoorPath
+                                  << " at SMC SRAM offset 0x" << std::hex << off << std::dec
+                                  << std::endl;
+                    } else {
+                        std::cerr << "smc_global: smcSramBackdoorFile: read failed\n";
+                    }
+                }
+            }
+        }
 
         // DFT_CTRL_STATUS_SMU (SMC reg @ 0xF800): memory-repair / MBIST status. The ROM's
         // dft_mem_repair_gate() (rom_main.c) halts with ROM_ERR_DFT_GATE_BLOCKED unless
