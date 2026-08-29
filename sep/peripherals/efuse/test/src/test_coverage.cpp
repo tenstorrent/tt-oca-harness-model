@@ -475,8 +475,7 @@ void testbench::test_fuse_preload_file()
             // Write 0xF0 into LC_STATE's low byte -- the differential encoding
             // of TEST_DEV that the RTL default image carries. The window is
             // computed from the register's offset so it follows the map.
-            const unsigned int lc_lsb = LC_STATE_WORD * 32u;
-            const bool set = (bit >= lc_lsb + 4u && bit <= lc_lsb + 7u);
+            const bool set = (bit >= LC_STATE_BIT + 4u && bit <= LC_STATE_BIT + 7u);
             out << (set ? '1' : '0') << "\n";
         }
     }
