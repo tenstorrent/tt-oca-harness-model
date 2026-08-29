@@ -290,20 +290,31 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
                 std::cerr << "smc_global: smcSramBackdoorFile: cannot open "
                           << smcSramBackdoorPath << '\n';
             } else {
+                const uint32_t off = smcSramBackdoorOffset.get_param_value();
                 const std::streamsize len = f.tellg();
-                f.seekg(0, std::ios::beg);
-                std::vector<char> buf(static_cast<size_t>(len));
-                if (f.read(buf.data(), len)) {
-                    const uint32_t off = smcSramBackdoorOffset.get_param_value();
-                    smc_global->load_data(buf.data(),
-                                          static_cast<uint64_t>(SMC_SRAM_WINDOW_OFF) + off,
-                                          buf.size());
-                    std::cout << "smc_global: staged " << buf.size()
-                              << " bytes from " << smcSramBackdoorPath
-                              << " at SMC SRAM offset 0x" << std::hex << off << std::dec
-                              << std::endl;
+                if (len <= 0) {
+                    std::cerr << "smc_global: smcSramBackdoorFile: empty or unreadable file\n";
+                } else if (static_cast<uint64_t>(off) + static_cast<uint64_t>(len) > 0x100000ULL) {
+                    std::cerr << "smc_global: smcSramBackdoorFile: image ("
+                              << len << " bytes) at offset 0x" << std::hex << off << std::dec
+                              << " exceeds 1MiB SMC SRAM window\n";
                 } else {
-                    std::cerr << "smc_global: smcSramBackdoorFile: read failed\n";
+                    f.seekg(0, std::ios::beg);
+                    std::vector<char> buf(static_cast<size_t>(len));
+                    if (f.read(buf.data(), len)) {
+                        // Keep MANIFEST_ADDR (scratch[8]) in sync with the staged offset.
+                        smc_global->load_data(reinterpret_cast<const char*>(&off),
+                                              scratch_local(8), sizeof(off));
+                        smc_global->load_data(buf.data(),
+                                              static_cast<uint64_t>(SMC_SRAM_WINDOW_OFF) + off,
+                                              buf.size());
+                        std::cout << "smc_global: staged " << buf.size()
+                                  << " bytes from " << smcSramBackdoorPath
+                                  << " at SMC SRAM offset 0x" << std::hex << off << std::dec
+                                  << std::endl;
+                    } else {
+                        std::cerr << "smc_global: smcSramBackdoorFile: read failed\n";
+                    }
                 }
             }
         }
