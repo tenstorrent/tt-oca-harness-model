@@ -160,7 +160,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         }
     }
 
-    // Both SPI image keys name a path relative to the .ini that set them.
+    // SPI image keys and other backdoor/preload paths are resolved relative to the .ini that set them.
     auto resolveAgainstIniDir = [](std::string path) {
         if (path.empty())
             return path;
