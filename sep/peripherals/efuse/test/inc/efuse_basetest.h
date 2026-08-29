@@ -33,8 +33,6 @@ public:
     // -------------------------------------------------------------------------
     enum Register_offset
     {
-        // EFUSE_INTERFACE_CTRL
-        // EFUSE_MMR
         // EFUSE_SHIM_CTRL — offset into the shim window, not the one above
         EFUSE_BANK_INIT_TIME_OFFSET    = 0x000
     };
