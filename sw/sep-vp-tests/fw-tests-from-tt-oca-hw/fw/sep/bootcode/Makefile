@@ -1,5 +1,5 @@
 SHELL := /usr/bin/env
-.SHELLFLAGS := bash -ec
+.SHELLFLAGS := bash -c
 
 # OSEP SEP Boot ROM
 #

@@ -1,5 +1,5 @@
 SHELL := /usr/bin/env
-.SHELLFLAGS := bash -ec
+.SHELLFLAGS := bash -c
 
 # SEP firmware build entrypoint (for TTEM cgen)
 #
