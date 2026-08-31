@@ -37,49 +37,56 @@ public:
           // ── Shadow registers ─────────────────────────────────────────────
           LOCKS_LO         (std::string(name) + ".LOCKS_LO",          memory, 0x000/4),
           LOCKS_HI         (std::string(name) + ".LOCKS_HI",          memory, 0x004/4),
-          LC_STATE         (std::string(name) + ".LC_STATE",           memory, 0x008/4),
-          SBOOT_DIS        (std::string(name) + ".SBOOT_DIS",          memory, 0x00C/4),
-          TRANSIENT_RMA_EN (std::string(name) + ".TRANSIENT_RMA_EN",   memory, 0x010/4),
-          SIP_DIS_LO       (std::string(name) + ".SIP_DIS_LO",         memory, 0x014/4),
-          SIP_DIS_HI       (std::string(name) + ".SIP_DIS_HI",         memory, 0x018/4),
-          SYS_DIS_LO       (std::string(name) + ".SYS_DIS_LO",         memory, 0x01C/4),
-          SYS_DIS_HI       (std::string(name) + ".SYS_DIS_HI",         memory, 0x020/4),
-          RMA_SIP_TOKEN    (std::string(name) + ".RMA_SIP_TOKEN",      memory, 0x024/4, 1),
-          RMA_CHIPLET_TOKEN(std::string(name) + ".RMA_CHIPLET_TOKEN",  memory, 0x044/4, 1),
-          CLASS_KEY        (std::string(name) + ".CLASS_KEY",           memory, 0x064/4, 1),
-          CHIPLET_PUBK_REVOKE(std::string(name) + ".CHIPLET_PUBK_REVOKE", memory, 0x084/4),
-          BL1_VERSION      (std::string(name) + ".BL1_VERSION",         memory, 0x088/4, 1),
-          BL2_VERSION      (std::string(name) + ".BL2_VERSION",         memory, 0x0A8/4, 1),
-          CHIPLET_UID      (std::string(name) + ".CHIPLET_UID",         memory, 0x0C8/4, 1),
-          SIP_PUBK         (std::string(name) + ".SIP_PUBK",            memory, 0x0E8/4, 1),
-          SIP_UID          (std::string(name) + ".SIP_UID",             memory, 0x108/4, 1),
-          SYS_PUBK         (std::string(name) + ".SYS_PUBK",            memory, 0x128/4, 1),
-          SYS_UID          (std::string(name) + ".SYS_UID",             memory, 0x148/4, 1),
-          STATUS_RPT       (std::string(name) + ".STATUS_RPT",          memory, 0x168/4),
-          SEP_ROM_CTRL     (std::string(name) + ".SEP_ROM_CTRL",        memory, 0x16C/4),
-          SEP_SPI_CTRL_FIELD_EN(std::string(name) + ".SEP_SPI_CTRL_FIELD_EN", memory, 0x170/4),
-          SPI_DISCOVERY_CTRL(std::string(name) + ".SPI_DISCOVERY_CTRL", memory, 0x174/4),
-          SPI_PHY_DQ_TIMING (std::string(name) + ".SPI_PHY_DQ_TIMING",  memory, 0x178/4),
-          SPI_PHY_DQS_TIMING(std::string(name) + ".SPI_PHY_DQS_TIMING", memory, 0x17C/4),
-          SPI_PHY_GATE_LPBK (std::string(name) + ".SPI_PHY_GATE_LPBK",  memory, 0x180/4),
-          SPI_PHY_DLL_SLAVE (std::string(name) + ".SPI_PHY_DLL_SLAVE",  memory, 0x184/4),
-          SPI_PHY_DLL_MASTER(std::string(name) + ".SPI_PHY_DLL_MASTER", memory, 0x188/4),
-          SPI_PHY_MISC      (std::string(name) + ".SPI_PHY_MISC",        memory, 0x18C/4),
-          SPI_RB_VALID_TIME (std::string(name) + ".SPI_RB_VALID_TIME",   memory, 0x190/4),
-          PUBLIC_KEY_0     (std::string(name) + ".PUBLIC_KEY_0",         memory, 0x194/4, 1),
-          PUBLIC_KEY_1     (std::string(name) + ".PUBLIC_KEY_1",         memory, 0x1B4/4, 1),
-          RESERVED_0       (std::string(name) + ".RESERVED_0",           memory, 0x1D4/4, 1),
-          RESERVED_1       (std::string(name) + ".RESERVED_1",           memory, 0x214/4, 1),
-          RESERVED_2       (std::string(name) + ".RESERVED_2",           memory, 0x254/4, 1),
-          RESERVED_3       (std::string(name) + ".RESERVED_3",           memory, 0x294/4, 1),
-          RESERVED_4       (std::string(name) + ".RESERVED_4",           memory, 0x2D4/4, 1),
-          RESERVED_5       (std::string(name) + ".RESERVED_5",           memory, 0x314/4, 1),
-          RESERVED_6       (std::string(name) + ".RESERVED_6",           memory, 0x354/4, 1),
-          RESERVED_7       (std::string(name) + ".RESERVED_7",           memory, 0x394/4, 1),
-          RESERVED_LAST_256(std::string(name) + ".RESERVED_LAST_256",    memory, 0x3D4/4, 1),
-          RESERVED_LAST_64_LO(std::string(name) + ".RESERVED_LAST_64_LO", memory, 0x3F4/4),
-          RESERVED_LAST_64_HI(std::string(name) + ".RESERVED_LAST_64_HI", memory, 0x3F8/4),
-          RESERVED_LAST_32   (std::string(name) + ".RESERVED_LAST_32",    memory, 0x3FC/4),
+          LC_STATE         (std::string(name) + ".LC_STATE",           memory, 0x00C/4),
+          SBOOT_DIS        (std::string(name) + ".SBOOT_DIS",          memory, 0x010/4),
+          TRANSIENT_RMA_EN (std::string(name) + ".TRANSIENT_RMA_EN",   memory, 0x014/4),
+          SIP_DIS_LO       (std::string(name) + ".SIP_DIS_LO",         memory, 0x018/4),
+          SIP_DIS_HI       (std::string(name) + ".SIP_DIS_HI",         memory, 0x01C/4),
+          SYS_DIS_LO       (std::string(name) + ".SYS_DIS_LO",         memory, 0x020/4),
+          SYS_DIS_HI       (std::string(name) + ".SYS_DIS_HI",         memory, 0x024/4),
+          RMA_SIP_TOKEN    (std::string(name) + ".RMA_SIP_TOKEN",      memory, 0x028/4, 1),
+          RMA_CHIPLET_TOKEN(std::string(name) + ".RMA_CHIPLET_TOKEN",  memory, 0x048/4, 1),
+          CLASS_KEY        (std::string(name) + ".CLASS_KEY",           memory, 0x068/4, 1),
+          CHIPLET_PUBK_REVOKE(std::string(name) + ".CHIPLET_PUBK_REVOKE", memory, 0x088/4),
+          BL1_VERSION      (std::string(name) + ".BL1_VERSION",         memory, 0x08C/4, 1),
+          BL2_VERSION      (std::string(name) + ".BL2_VERSION",         memory, 0x0AC/4, 1),
+          CHIPLET_UID      (std::string(name) + ".CHIPLET_UID",         memory, 0x0CC/4, 1),
+          SIP_PUBK_HASH0         (std::string(name) + ".SIP_PUBK_HASH0",            memory, 0x0EC/4, 1),
+          SIP_UID          (std::string(name) + ".SIP_UID",             memory, 0x10C/4, 1),
+          SYS_PUBK_HASH         (std::string(name) + ".SYS_PUBK_HASH",            memory, 0x12C/4, 1),
+          SYS_UID          (std::string(name) + ".SYS_UID",             memory, 0x14C/4, 1),
+          STATUS_RPT       (std::string(name) + ".STATUS_RPT",          memory, 0x16C/4),
+          SEP_ROM_CTRL     (std::string(name) + ".SEP_ROM_CTRL",        memory, 0x170/4),
+          SEP_SPI_CTRL_FIELD_EN(std::string(name) + ".SEP_SPI_CTRL_FIELD_EN", memory, 0x174/4),
+          SPI_DISCOVERY_CTRL(std::string(name) + ".SPI_DISCOVERY_CTRL", memory, 0x178/4),
+          SPI_PHY_DQ_TIMING (std::string(name) + ".SPI_PHY_DQ_TIMING",  memory, 0x17C/4),
+          SPI_PHY_DQS_TIMING(std::string(name) + ".SPI_PHY_DQS_TIMING", memory, 0x180/4),
+          SPI_PHY_GATE_LPBK (std::string(name) + ".SPI_PHY_GATE_LPBK",  memory, 0x184/4),
+          SPI_PHY_DLL_SLAVE (std::string(name) + ".SPI_PHY_DLL_SLAVE",  memory, 0x188/4),
+          SPI_PHY_DLL_MASTER(std::string(name) + ".SPI_PHY_DLL_MASTER", memory, 0x18C/4),
+          SPI_PHY_MISC      (std::string(name) + ".SPI_PHY_MISC",        memory, 0x190/4),
+          SPI_RB_VALID_TIME (std::string(name) + ".SPI_RB_VALID_TIME",   memory, 0x194/4),
+          CHIPLET_PUBK_HASH0     (std::string(name) + ".CHIPLET_PUBK_HASH0", memory, 0x198/4, 1),
+          CHIPLET_PUBK_HASH1     (std::string(name) + ".CHIPLET_PUBK_HASH1", memory, 0x1B8/4, 1),
+          CHIPLET_PUBK_PQC_HASH0 (std::string(name) + ".CHIPLET_PUBK_PQC_HASH0", memory, 0x1E0/4, 1),
+          CHIPLET_PUBK_PQC_HASH1 (std::string(name) + ".CHIPLET_PUBK_PQC_HASH1", memory, 0x200/4, 1),
+          SIP_PUBK_PQC_HASH0     (std::string(name) + ".SIP_PUBK_PQC_HASH0", memory, 0x220/4, 1),
+          SYS_PUBK_PQC_HASH      (std::string(name) + ".SYS_PUBK_PQC_HASH", memory, 0x240/4, 1),
+          SIP_PUBK_HASH1         (std::string(name) + ".SIP_PUBK_HASH1", memory, 0x260/4, 1),
+          SIP_PUBK_PQC_HASH1     (std::string(name) + ".SIP_PUBK_PQC_HASH1", memory, 0x280/4, 1),
+          SEP_CHIPLET_ID         (std::string(name) + ".SEP_CHIPLET_ID", memory, 0x2A0/4, 1),
+          SEP_SIP_ID             (std::string(name) + ".SEP_SIP_ID", memory, 0x2C0/4, 1),
+          SEP_SYS_ID             (std::string(name) + ".SEP_SYS_ID", memory, 0x2E0/4, 1),
+          SPARE0                 (std::string(name) + ".SPARE0", memory, 0x300/4, 1),
+          SPARE1                 (std::string(name) + ".SPARE1", memory, 0x320/4, 1),
+          SPARE2                 (std::string(name) + ".SPARE2", memory, 0x340/4, 1),
+          SPARE3                 (std::string(name) + ".SPARE3", memory, 0x360/4, 1),
+          SPARE4                 (std::string(name) + ".SPARE4", memory, 0x380/4, 1),
+          SPARE5                 (std::string(name) + ".SPARE5", memory, 0x3A0/4, 1),
+          SPARE6                 (std::string(name) + ".SPARE6", memory, 0x3C0/4, 1),
+          SPARE7                 (std::string(name) + ".SPARE7", memory, 0x3E0/4, 1),
+          REQUIRED_SIGNERS       (std::string(name) + ".REQUIRED_SIGNERS", memory, 0x1D8/4),
+          REQUIRED_ALGS          (std::string(name) + ".REQUIRED_ALGS", memory, 0x1DC/4),
 
           // ── EFUSE_INTERFACE_CTRL ─────────────────────────────────────────
           EFUSE_INTERFACE_CTRL_STATUS    (std::string(name) + ".EFUSE_INTERFACE_CTRL_STATUS",     memory, 0x400/4),
@@ -128,9 +135,9 @@ public:
     csml_reg_vector<sep_efuse::BL1_VERSION_type<32>,      8> BL1_VERSION;
     csml_reg_vector<sep_efuse::BL2_VERSION_type<32>,      8> BL2_VERSION;
     csml_reg_vector<sep_efuse::CHIPLET_UID_type<32>,      8> CHIPLET_UID;
-    csml_reg_vector<sep_efuse::SIP_PUBK_type<32>,         8> SIP_PUBK;
+    csml_reg_vector<sep_efuse::SIP_PUBK_type<32>,         8> SIP_PUBK_HASH0;
     csml_reg_vector<sep_efuse::SIP_UID_type<32>,          8> SIP_UID;
-    csml_reg_vector<sep_efuse::SYS_PUBK_type<32>,         8> SYS_PUBK;
+    csml_reg_vector<sep_efuse::SYS_PUBK_type<32>,         8> SYS_PUBK_HASH;
     csml_reg_vector<sep_efuse::SYS_UID_type<32>,          8> SYS_UID;
     sep_efuse::STATUS_RPT_type<32>            STATUS_RPT;
     sep_efuse::SEP_ROM_CTRL_type<32>          SEP_ROM_CTRL;
@@ -143,20 +150,27 @@ public:
     sep_efuse::ro_stub_type<32>               SPI_PHY_DLL_MASTER;
     sep_efuse::ro_stub_type<32>               SPI_PHY_MISC;
     sep_efuse::ro_stub_type<32>               SPI_RB_VALID_TIME;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  PUBLIC_KEY_0;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  PUBLIC_KEY_1;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_0;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_1;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_2;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_3;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_4;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_5;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_6;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>,16>  RESERVED_7;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  RESERVED_LAST_256;
-    sep_efuse::ro_stub_type<32>                      RESERVED_LAST_64_LO;
-    sep_efuse::ro_stub_type<32>                      RESERVED_LAST_64_HI;
-    sep_efuse::ro_stub_type<32>                      RESERVED_LAST_32;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH0;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH1;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH0;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH1;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_PQC_HASH0;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SYS_PUBK_PQC_HASH;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_HASH1;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_PQC_HASH1;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SEP_CHIPLET_ID;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SEP_SIP_ID;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SEP_SYS_ID;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE0;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE1;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE2;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE3;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE4;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE5;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE6;
+    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE7;
+    sep_efuse::ro_stub_type<32>                     REQUIRED_SIGNERS;
+    sep_efuse::ro_stub_type<32>                     REQUIRED_ALGS;
 
     // EFUSE_INTERFACE_CTRL registers
     sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_type<32>  EFUSE_INTERFACE_CTRL_STATUS;
