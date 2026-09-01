@@ -566,8 +566,21 @@ bool edn_ip::handle_write_SW_CMD_REQ(uint32_t value)
     // If this is the first word (header), parse clen field
     if (m_sw_cmd_buffer.empty())
     {
-        // Extract clen from bits [11:8] of header
-        uint32_t clen = (value >> 8) & 0xF;
+        // Extract clen from bits [7:4] of the header.
+        //
+        // The CSRNG application-command header is
+        //   {8'h0, glen[23:12], flag0[11:8], clen[7:4], acmd[3:0]}
+        // so clen is [7:4] and bits [11:8] are flag0. This previously read
+        // [11:8], i.e. it parsed flag0 AS clen -- and flag0=0x9 is the
+        // documented "use real entropy" value, so every correctly-formed
+        // Instantiate (0x901) was treated as a 10-word command. The buffer never
+        // reached that length, process_sw_command_async() was never called, and
+        // CMD_ACK never asserted: firmware issuing a textbook Instantiate waited
+        // forever for an acknowledgement the model could not produce.
+        //
+        // Commands with flag0=0 parsed correctly by accident, which is why this
+        // survived: it only bites once flag0 is non-zero.
+        uint32_t clen = (value >> 4) & 0xF;
         m_expected_sw_cmd_words = clen + 1;  // Total words = clen + 1
     }
 
@@ -695,8 +708,23 @@ bool edn_ip::handle_read_SW_CMD_STS(uint32_t& value)
         // CMD_REG_RDY: Always ready to accept register writes (TLM abstraction)
         SW_CMD_STS.CMD_REG_RDY = 1;
 
-        // CMD_RDY: Ready for new command if not currently processing
-        SW_CMD_STS.CMD_RDY = m_sw_cmd_processing ? 0 : 1;
+        // CMD_RDY: ready for a new SW command. This must agree with what
+        // handle_write_SW_CMD_REQ will actually ACCEPT, which is gated on the
+        // main state machine being in SWPortMode or AutoFirstAckWait -- not on
+        // m_sw_cmd_processing alone.
+        //
+        // Reporting ready while the FSM is still in AutoLoadIns made this an
+        // observable lie: firmware that follows the documented contract (poll
+        // CMD_RDY, then write SW_CMD_REQ) had its Instantiate REJECTED and then
+        // waited forever for a CMD_ACK that could never arrive, because the
+        // command was dropped rather than queued. The SEP boot ROM's entropy
+        // bring-up hits exactly that race -- it polls immediately after enabling
+        // EDN in auto mode, before the spawned auto_mode_init thread has reached
+        // AutoFirstAckWait.
+        const bool sw_cmd_accepted =
+            (m_main_sm_state == EdnMainSmState::SWPortMode ||
+             m_main_sm_state == EdnMainSmState::AutoFirstAckWait);
+        SW_CMD_STS.CMD_RDY = (m_sw_cmd_processing || !sw_cmd_accepted) ? 0 : 1;
 
         // CMD_ACK and CMD_STS remain as set by handle_write_SW_CMD_REQ callback
     }

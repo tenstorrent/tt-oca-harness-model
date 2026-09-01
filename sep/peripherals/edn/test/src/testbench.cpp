@@ -190,24 +190,39 @@ void testbench::initialize()
 void testbench::run_tests()
 {
     unsigned int failures = 0;
+    bool suite_ran = false;
     switch (m_suite_id) {
-        case 1: { if (auto* t = dynamic_cast<test_edn_func_001*>(test)) failures = t->run_all_tests(); break; }
-        case 2: { if (auto* t = dynamic_cast<test_edn_func_002*>(test)) failures = t->run_all_tests(); break; }
-        case 3: { if (auto* t = dynamic_cast<test_edn_func_003*>(test)) failures = t->run_all_tests(); break; }
-        case 4: { if (auto* t = dynamic_cast<test_edn_func_004*>(test)) failures = t->run_all_tests(); break; }
-        case 5: { if (auto* t = dynamic_cast<test_edn_func_005*>(test)) failures = t->run_all_tests(); break; }
-        case 6: { if (auto* t = dynamic_cast<test_edn_func_006*>(test)) failures = t->run_all_tests(); break; }
-        case 7: { if (auto* t = dynamic_cast<test_edn_func_007*>(test)) failures = t->run_all_tests(); break; }
-        case 8: { if (auto* t = dynamic_cast<test_edn_func_008*>(test)) failures = t->run_all_tests(); break; }
-        case 9: { if (auto* t = dynamic_cast<test_edn_func_009*>(test)) failures = t->run_all_tests(); break; }
-        case 10: { if (auto* t = dynamic_cast<test_edn_func_010*>(test)) failures = t->run_all_tests(); break; }
-        case 11: { if (auto* t = dynamic_cast<test_edn_func_011*>(test)) failures = t->run_all_tests(); break; }
-        case 12: { if (auto* t = dynamic_cast<test_edn_func_012*>(test)) failures = t->run_all_tests(); break; }
-        case 13: { if (auto* t = dynamic_cast<test_edn_func_013*>(test)) failures = t->run_all_tests(); break; }
-        case 14: { if (auto* t = dynamic_cast<test_edn_func_014*>(test)) failures = t->run_all_tests(); break; }
-        default: { if (auto* t = dynamic_cast<test_edn_func_004*>(test)) failures = t->run_all_tests(); break; }
+        case 1: { if (auto* t = dynamic_cast<test_edn_func_001*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 2: { if (auto* t = dynamic_cast<test_edn_func_002*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 3: { if (auto* t = dynamic_cast<test_edn_func_003*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 4: { if (auto* t = dynamic_cast<test_edn_func_004*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 5: { if (auto* t = dynamic_cast<test_edn_func_005*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 6: { if (auto* t = dynamic_cast<test_edn_func_006*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 7: { if (auto* t = dynamic_cast<test_edn_func_007*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 8: { if (auto* t = dynamic_cast<test_edn_func_008*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 9: { if (auto* t = dynamic_cast<test_edn_func_009*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 10: { if (auto* t = dynamic_cast<test_edn_func_010*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 11: { if (auto* t = dynamic_cast<test_edn_func_011*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 12: { if (auto* t = dynamic_cast<test_edn_func_012*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 13: { if (auto* t = dynamic_cast<test_edn_func_013*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        case 14: { if (auto* t = dynamic_cast<test_edn_func_014*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
+        default: { if (auto* t = dynamic_cast<test_edn_func_004*>(test)) { failures = t->run_all_tests(); suite_ran = true; } break; }
     }
     
+    // Carry the suite's verdict up. The per-test counters live in the suite
+    // class, not here, so without this the summary below reported its own
+    // never-incremented counters and printed ALL TESTS PASSED unconditionally --
+    // it would have said that with every test failing.
+    m_tests_failed += failures;
+
+    // A dynamic_cast miss means no suite ran at all. That is a harness fault,
+    // not a pass: silently reporting success for zero executed tests is the
+    // worst outcome available here.
+    if (!suite_ran) {
+        m_tests_failed++;
+        m_failed_tests.push_back("no test suite ran for the selected suite id");
+    }
+
     // Report final results and call sc_stop() to end simulation
     report_results();
 }
@@ -420,8 +435,17 @@ void testbench::report_results()
     CSML_INFO(1, logger) << "\n===========================================";
     CSML_INFO(1, logger) << "EDN Validation Test Results";
     CSML_INFO(1, logger) << "===========================================";
-    CSML_INFO(1, logger) << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << "Tests Passed: " << m_tests_passed;
+    // m_tests_run / m_tests_passed count only this class's own legacy checks.
+    // A FUNC suite keeps its own per-test counters and prints them itself
+    // ("Total Tests / Passed / Failed"), so these are 0 for a suite run. Print
+    // them only when they mean something rather than showing a bare "0" that
+    // reads as "nothing ran" next to a passing suite.
+    if (m_tests_run > 0) {
+        CSML_INFO(1, logger) << "Tests Run:    " << m_tests_run;
+        CSML_INFO(1, logger) << "Tests Passed: " << m_tests_passed;
+    } else {
+        CSML_INFO(1, logger) << "Per-test counts: see the suite's own summary above";
+    }
     CSML_INFO(1, logger) << "Tests Failed: " << m_tests_failed;
     CSML_INFO(1, logger) << "Tests Skipped: " << m_tests_skipped;
     CSML_INFO(1, logger) << "===========================================";

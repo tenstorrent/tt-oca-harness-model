@@ -37,6 +37,8 @@ void entropy_src_base::reset_all_registers()
   DECORRELATOR_CTRL.reset();
   DECORRELATOR_MASK.reset();
   STARTUP_CTRL.reset();
+  MAIN_SM_STATUS.reset();
+  FIPS_LOCK.reset();
   GENERATOR_0_HEALTH_STATUS.reset();
   GENERATOR_1_HEALTH_STATUS.reset();
   GENERATOR_2_HEALTH_STATUS.reset();

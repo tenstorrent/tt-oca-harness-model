@@ -343,6 +343,97 @@ class FIFO_CTRL_type : public csml_reg<N>
     csml_bitfield<N> reserved1;
 };
 
+/******************************************************************************
+ * @brief MAIN_SM_STATUS register (offset 0xB4, RO)
+ *
+ * Status of the entropy source's main state machine. Firmware polls
+ * BOOT_PHASE_DONE to learn that the startup health-test window has passed and
+ * entropy is reaching the whitener/FIFO -- the SEP boot ROM's entropy bring-up
+ * gates on exactly this bit before enabling EDN, and treats ALERT or ERR as a
+ * terminal startup-health failure.
+ *
+ * Fields: STATE[8:0], IDLE[9], ALERT[10], ERR[11], BOOT_PHASE_DONE[12],
+ * ALERT_CNTR_CLR_OK[13].
+ ******************************************************************************/
+template<unsigned int N>
+class MAIN_SM_STATUS_type : public csml_reg<N>
+{
+  public:
+    using typename csml_reg<N>::memory_type;
+    typedef typename csml_word<N>::wordtype DT;
+    MAIN_SM_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      csml_reg<N>(reg_name, memory, offset, 0x00003FFF, 0x00000000, 0x00000000),
+      STATE(reg_name + ".STATE", *this, 0, 9),
+      IDLE(reg_name + ".IDLE", *this, 9, 1),
+      ALERT(reg_name + ".ALERT", *this, 10, 1),
+      ERR(reg_name + ".ERR", *this, 11, 1),
+      BOOT_PHASE_DONE(reg_name + ".BOOT_PHASE_DONE", *this, 12, 1),
+      ALERT_CNTR_CLR_OK(reg_name + ".ALERT_CNTR_CLR_OK", *this, 13, 1),
+      reserved0(reg_name + ".reserved0", *this, 14, 18)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+
+    using csml_reg<N>::operator=;
+    using csml_reg<N>::operator+=;
+    using csml_reg<N>::operator-=;
+    using csml_reg<N>::operator/=;
+    using csml_reg<N>::operator*=;
+    using csml_reg<N>::operator%=;
+    using csml_reg<N>::operator^=;
+    using csml_reg<N>::operator&=;
+    using csml_reg<N>::operator|=;
+    using csml_reg<N>::operator>>=;
+    using csml_reg<N>::operator<<=;
+    csml_bitfield<N> STATE;
+    csml_bitfield<N> IDLE;
+    csml_bitfield<N> ALERT;
+    csml_bitfield<N> ERR;
+    csml_bitfield<N> BOOT_PHASE_DONE;
+    csml_bitfield<N> ALERT_CNTR_CLR_OK;
+    csml_bitfield<N> reserved0;
+};
+
+/******************************************************************************
+ * @brief FIPS_LOCK register (offset 0x154, W1S)
+ *
+ * Write-one-to-set lock over the certified entropy-source configuration
+ * (conditioning, health-test thresholds, compressor bypass). Once set it stays
+ * set until the entropy chain is reset; DEBUG_CTRL is intentionally outside it.
+ *
+ * The SEP boot ROM applies this by default after the startup health test passes
+ * and reads it back, failing the boot if it did not stick -- so it has to be a
+ * real settable bit here, not a stub that reads 0.
+ ******************************************************************************/
+template<unsigned int N>
+class FIPS_LOCK_type : public csml_reg<N>
+{
+  public:
+    using typename csml_reg<N>::memory_type;
+    typedef typename csml_word<N>::wordtype DT;
+    FIPS_LOCK_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      csml_reg<N>(reg_name, memory, offset, 0x00000001, 0x00000001, 0x00000000),
+      LOCK(reg_name + ".LOCK", *this, 0, 1),
+      reserved0(reg_name + ".reserved0", *this, 1, 31)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+
+    using csml_reg<N>::operator=;
+    using csml_reg<N>::operator+=;
+    using csml_reg<N>::operator-=;
+    using csml_reg<N>::operator/=;
+    using csml_reg<N>::operator*=;
+    using csml_reg<N>::operator%=;
+    using csml_reg<N>::operator^=;
+    using csml_reg<N>::operator&=;
+    using csml_reg<N>::operator|=;
+    using csml_reg<N>::operator>>=;
+    using csml_reg<N>::operator<<=;
+    csml_bitfield<N> LOCK;
+    csml_bitfield<N> reserved0;
+};
+
 template<unsigned int N>
 class FIFO_STATUS_type : public csml_reg<N>
 {

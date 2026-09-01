@@ -194,6 +194,10 @@ public:
             [this](DT v) { return this->handle_write_STARTUP_CTRL(v); },
             STARTUP_CTRL.offset);
 
+        memory.register_write_callback(
+            [this](DT v) { return this->handle_write_RING_OSC_ENABLE(v); },
+            RING_OSC_ENABLE.offset);
+
         memory.register_read_callback(
             [this](DT &v) { return this->handle_read_FIFO_RDATA(v); },
             FIFO_RDATA.offset);
@@ -296,6 +300,14 @@ public:
      * @return true always
      */
     bool handle_write_STARTUP_CTRL(uint32_t value) override;
+
+    /**
+     * @brief Write callback for RING_OSC_ENABLE (offset 0x90)
+     *
+     * Not part of the interface's virtual set -- added for the MAIN_SM_STATUS
+     * boot-phase model, so it is a plain member rather than an override.
+     */
+    bool handle_write_RING_OSC_ENABLE(uint32_t value);
 
     // =========================================================================
     // entropy_src_if — read callback implementation
