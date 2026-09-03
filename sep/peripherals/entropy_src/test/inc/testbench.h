@@ -2259,5 +2259,6 @@ public:
     bool tc_cov_hw_reset_rederive_state();
     bool tc_cov_new_rdl_register_access();
     bool tc_cov_fips_lock_w1s();
+    bool tc_cov_boot_phase_done_gate();
 
 };

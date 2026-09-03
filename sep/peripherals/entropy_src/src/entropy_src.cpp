@@ -723,11 +723,13 @@ bool entropy_src_ip::handle_write_STARTUP_CTRL(uint32_t value)
  * that bit, so without it the ROM waits forever and stops secure boot.
  *
  * The model asserts BOOT_PHASE_DONE as soon as at least one generator is enabled
- * while the module is enabled, and clears IDLE to match. It does NOT model the
- * health tests themselves: this is a functional model of the handshake firmware
- * observes, not of the analog startup behaviour. A test that needs a startup
- * FAILURE should drive ALERT/ERR through the health-test path rather than expect
- * this gate to withhold BOOT_PHASE_DONE.
+ * in RING_OSC_ENABLE, and clears IDLE to match. That is the only condition: it
+ * is NOT additionally gated on CTRL.MODULE_ENABLE, which this model's CTRL does
+ * not implement (see the comment on the gate below). It does NOT model the
+ * health tests themselves either: this is a functional model of the handshake
+ * firmware observes, not of the analog startup behaviour. A test that needs a
+ * startup FAILURE should drive ALERT/ERR through the health-test path rather
+ * than expect this gate to withhold BOOT_PHASE_DONE.
  *
  * @param value 32-bit value written to RING_OSC_ENABLE
  * @return true (write always accepted)

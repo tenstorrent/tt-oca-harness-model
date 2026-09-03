@@ -140,9 +140,7 @@ class entropy_src_base : public sc_module
       entropy_src::MARKOV_TEST_PROBABILITIES_type<32> MARKOV_TEST_PROBABILITIES;
       
       entropy_src::RING_OSC_ENABLE_type<32> RING_OSC_ENABLE;
-      entropy_src::MAIN_SM_STATUS_type<32> MAIN_SM_STATUS;
-      entropy_src::FIPS_LOCK_type<32> FIPS_LOCK;
-      
+
       entropy_src::RING_OSC_TUNE_type<32> RING_OSC_TUNE;
       
       entropy_src::RING_OSC_CTRL_type<32> RING_OSC_CTRL;
@@ -152,7 +150,13 @@ class entropy_src_base : public sc_module
       entropy_src::DECORRELATOR_MASK_type<32> DECORRELATOR_MASK;
       
       entropy_src::STARTUP_CTRL_type<32> STARTUP_CTRL;
-      
+
+      // Declared in constructor-initialiser order (STARTUP_CTRL, MAIN_SM_STATUS,
+      // FIPS_LOCK) so the members are built in the order they are listed there.
+      entropy_src::MAIN_SM_STATUS_type<32> MAIN_SM_STATUS;
+
+      entropy_src::FIPS_LOCK_type<32> FIPS_LOCK;
+
       entropy_src::GENERATOR_0_HEALTH_STATUS_type<32> GENERATOR_0_HEALTH_STATUS;
       
       entropy_src::GENERATOR_1_HEALTH_STATUS_type<32> GENERATOR_1_HEALTH_STATUS;
