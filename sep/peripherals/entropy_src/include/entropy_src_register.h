@@ -430,6 +430,21 @@ class FIPS_LOCK_type : public csml_reg<N>
     using csml_reg<N>::operator|=;
     using csml_reg<N>::operator>>=;
     using csml_reg<N>::operator<<=;
+
+    /**
+     * Write-one-to-set: OR the incoming set bits in and ignore the zeroes.
+     *
+     * The inherited csml_reg::handle_write is a plain read-modify-write, which
+     * would let a later write of 0 -- a full-word rewrite of the register file,
+     * say -- drop a lock that is architecturally one-way. Only reset() returns
+     * the bit to 0, which matches "stays set until the entropy chain is reset".
+     */
+    bool handle_write(DT value, DT bitmask) override
+    {
+        this->word_ref |= (value & bitmask);
+        return true;
+    }
+
     csml_bitfield<N> LOCK;
     csml_bitfield<N> reserved0;
 };

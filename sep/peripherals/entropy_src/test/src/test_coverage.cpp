@@ -190,3 +190,51 @@ bool testbench::tc_cov_new_rdl_register_access()
 
     return ok;
 }
+
+// Coverage: FIPS_LOCK (0x154) is write-one-to-set, not plain RW.
+//
+// The lock is one-way in hardware: firmware applies it after the startup health
+// test passes and reads it back to confirm it stuck. A later write of 0 -- a
+// full-word rewrite of the register file, say -- must not drop it. Only a reset
+// clears it.
+bool testbench::tc_cov_fips_lock_w1s()
+{
+    bool ok = true;
+    uint32_t rd_val = 0u;
+
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == entropy_src_basetest::FIPS_LOCK_RESET,
+        "TC-COV-006: FIPS_LOCK not clear after reset");
+
+    // Writing 0 to an already-clear lock leaves it clear.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0x00000000u);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000000u,
+        "TC-COV-006: FIPS_LOCK set by a write of 0");
+
+    // Writing 1 sets it, and the read-back firmware relies on sees it.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0x00000001u);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000001u,
+        "TC-COV-006: FIPS_LOCK did not stick when written to 1");
+
+    // W1S: a subsequent write of 0 must NOT clear it.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0x00000000u);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000001u,
+        "TC-COV-006: FIPS_LOCK cleared by a write of 0 (W1S violated)");
+
+    // Reserved bits [31:1] stay masked off, and the lock survives the attempt.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0xFFFFFFFEu);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000001u,
+        "TC-COV-006: FIPS_LOCK reserved bits not masked");
+
+    // Only a reset returns it to 0.
+    apply_reset();
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == entropy_src_basetest::FIPS_LOCK_RESET,
+        "TC-COV-006: FIPS_LOCK not cleared by reset");
+
+    return ok;
+}
