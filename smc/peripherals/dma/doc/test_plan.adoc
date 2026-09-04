@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[dma-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`dma_tb` and `dma_neg_tb` (`test/`). The primary bench binds
+`reg_socket` to a probe initiator and `mst_socket` to a simple memory
+target. The negative bench probes constructor fatals and TLM errors.
+
+Success: both benches print `ALL TESTS PASSED`; CTest reports 2/2;
+`--asan` produces no `asan.log.*`.
+
+How to run (from `smc/peripherals/dma`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run both benches
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh dma
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`. A local `deps.env`
+overrides those paths.
+
+====== Standalone cases
+
+Sources: `test/dma_tb.cpp`, `dma_neg_tb.cpp`. There is no legacy
+`03_*_Test_Plan.md` for this IP.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Reset values |CONFIG/STATUS/DONE idle; NEXT_ID unused |Positive
+|2 |CONFIG readback |RW config word |Positive
+|3 |Address/length assembly |LO/HI pair into 64-bit src/dst/len |Positive
+|4 |Simple transfer |NEXT_ID starts copy; dest matches src |Positive
+|4a |Transfer delay |`transfer_delay_ns` plus target delay is consumed before DONE |Positive
+|5 |STATUS and DONE |Busy then DONE increment |Positive
+|6 |Two channels |Independent NEXT_ID / DONE |Positive
+|7 |2D transfer |Repetitions + stride |Positive
+|8 |Transfer error |Master fail does not hang the thread |Positive
+|9 |Decode miss |Unmapped offset and past-window addresses → address error |Negative
+|10 |Invalid access |Bad width / command |Negative
+|11 |transport_dbg |Back-door register peek/poke; OOB returns 0 |Positive
+|N1 |Constructor guards |channels 0/17, burst 0 → FATAL |Negative
+|N2 |TLM errors |Null ptr, width, streaming, bad cmd |Negative
+|N3 |Misaligned / OOR arrays |STATUS/NEXT_ID/DONE reject |Negative
+|N4 |RO/trigger writes |STATUS/NEXT_ID/DONE write ignored |Negative
+|N5 |Zero length |NEXT_ID returns 0 |Negative
+|N6 |copy_chunk fail |Src-read / dst-write error paths |Negative
+|===
+
+====== Platform firmware tests
+
+These run on `smc-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-dma-test
+----
+
+`smc-dma-test` is a scratchpad-to-scratchpad copy through this model's
+master socket on `fabric.data_accel_in`.

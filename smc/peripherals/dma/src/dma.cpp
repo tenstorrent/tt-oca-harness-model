@@ -111,10 +111,15 @@ void dma::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
         return;
     }
 
-    // The DMA window is not a power of two (0x138), so use modulo rather than
-    // a bit-mask to obtain the register offset.  Accept absolute platform
-    // addresses (subtract base_addr) or standalone-bench offset-only addresses.
-    const uint64_t off = normalize_addr(adr) % dma_cfg::WINDOW_SIZE;
+    // Accept absolute platform addresses (subtract base_addr) or standalone-bench
+    // offset-only addresses.  The window is not a power of two, so reject
+    // anything outside [0, WINDOW_SIZE) rather than wrapping with modulo.
+    const uint64_t off = normalize_addr(adr);
+    if (off >= dma_cfg::WINDOW_SIZE) {
+        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        SIM_LOG_DEBUG(this, "b_transport out of window at addr=0x" << std::hex << adr);
+        return;
+    }
 
     // The canonical AXI sideband extension is read but not used for local
     // register access decisions; it is attached to outgoing master transactions.
@@ -147,10 +152,10 @@ void dma::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
 unsigned int dma::transport_dbg(tlm::tlm_generic_payload& gp)
 {
     const uint64_t adr = gp.get_address();
-    const uint64_t off = normalize_addr(adr) % dma_cfg::WINDOW_SIZE;
+    const uint64_t off = normalize_addr(adr);
     unsigned char* ptr = gp.get_data_ptr();
 
-    if (ptr == nullptr || gp.get_data_length() != 4) {
+    if (ptr == nullptr || gp.get_data_length() != 4 || off >= dma_cfg::WINDOW_SIZE) {
         return 0;
     }
 
@@ -430,13 +435,17 @@ bool dma::copy_chunk(uint64_t src, uint64_t dst, uint64_t len)
         gp.set_dmi_allowed(false);
         gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-        auto* ext = new smc::smc_axi_extension();
-        ext->source_id = smc::SMC_ID;
-        gp.set_extension(ext);
+        smc::smc_axi_extension ext;
+        ext.source_id = smc::SMC_ID;
+        gp.set_extension(&ext);
 
+        delay += sc_core::sc_time(transfer_delay_ns_p_.get_value(), sc_core::SC_NS);
         mst_socket->b_transport(gp, delay);
-        gp.release_extension(ext);
+        gp.clear_extension<smc::smc_axi_extension>();
 
+        if (delay > sc_core::SC_ZERO_TIME) {
+            sc_core::wait(delay);
+        }
         if (gp.get_response_status() != tlm::TLM_OK_RESPONSE) {
             return false;
         }
@@ -455,13 +464,17 @@ bool dma::copy_chunk(uint64_t src, uint64_t dst, uint64_t len)
         gp.set_dmi_allowed(false);
         gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-        auto* ext = new smc::smc_axi_extension();
-        ext->source_id = smc::SMC_ID;
-        gp.set_extension(ext);
+        smc::smc_axi_extension ext;
+        ext.source_id = smc::SMC_ID;
+        gp.set_extension(&ext);
 
+        delay += sc_core::sc_time(transfer_delay_ns_p_.get_value(), sc_core::SC_NS);
         mst_socket->b_transport(gp, delay);
-        gp.release_extension(ext);
+        gp.clear_extension<smc::smc_axi_extension>();
 
+        if (delay > sc_core::SC_ZERO_TIME) {
+            sc_core::wait(delay);
+        }
         if (gp.get_response_status() != tlm::TLM_OK_RESPONSE) {
             return false;
         }

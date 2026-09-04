@@ -24,7 +24,10 @@ and no `sc_in` reset: channel state is software-visible STATUS / DONE.
 `start_transfer` returns 0 for zero length. With `NUM_REPETITIONS > 0`
 and a non-zero stride the copy repeats `NUM_REPETITIONS + 1` times.
 `copy_chunk` splits the move into `max_burst_bytes` master
-transactions. `transfer_delay_ns` is added to each data move.
+transactions. `transfer_delay_ns` is annotated on each master beat and
+consumed with `wait()` so simulation time advances. Offsets at or
+beyond `WINDOW_SIZE` (`0x138`) return `TLM_ADDRESS_ERROR_RESPONSE`;
+the window is not a power of two, so the model does not wrap.
 
 `smc-vp` binds `reg_socket` on the data-accelerator router at the TRM
 DMA window and `mst_socket` to `fabric.data_accel_in` (shared with the
