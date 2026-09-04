@@ -213,6 +213,14 @@ int sc_main(int, char**)
     EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, 0x4C, 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE); // NEXT_ID misaligned
     EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, 0xCA, 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE); // DONE misaligned
 
+    // Addresses at or past WINDOW_SIZE must not wrap into the register file.
+    EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, dma_cfg::WINDOW_SIZE, 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    EXPECT_EQ(p.raw(tlm::TLM_WRITE_COMMAND, dma_cfg::WINDOW_SIZE, 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, 0x140, 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    EXPECT_EQ(p.raw(tlm::TLM_WRITE_COMMAND, 0x140, 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    EXPECT_EQ(p.dbg(tlm::TLM_READ_COMMAND, dma_cfg::WINDOW_SIZE, 4, &data), 0u);
+    EXPECT_EQ(p.dbg(tlm::TLM_READ_COMMAND, 0x140, 4, &data), 0u);
+
     // Out-of-range register offsets on a 1-channel model are rejected.
     EXPECT_EQ(p1.raw(tlm::TLM_READ_COMMAND, dma_cfg::status_offset(1), 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE); // STATUS out of range
     EXPECT_EQ(p1.raw(tlm::TLM_READ_COMMAND, dma_cfg::next_id_offset(1), 4, &data), tlm::TLM_ADDRESS_ERROR_RESPONSE); // NEXT_ID out of range
@@ -235,12 +243,9 @@ int sc_main(int, char**)
         EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, dma_cfg::OFF_NEXT_ID_0, 4, &zero), tlm::TLM_OK_RESPONSE);
     }
 
-    // start_transfer returns 0 for an invalid channel (out of range).  We
-    // cannot reach that path from a register offset, but we can hit it via
-    // transport_dbg by constructing an offset that modulo-maps to a valid
-    // channel but is beyond the model's window.  Instead, rely on the channel
-    // bound check exercised by the out-of-range NEXT_ID offsets above, which
-    // return ADDRESS_ERROR before start_transfer is called.
+    // start_transfer returns 0 for an invalid channel (out of range).  That
+    // path is not reachable from a decoded register offset; the out-of-range
+    // NEXT_ID offsets above return ADDRESS_ERROR before start_transfer.
 
     // copy_chunk error path: source read fails.
     {

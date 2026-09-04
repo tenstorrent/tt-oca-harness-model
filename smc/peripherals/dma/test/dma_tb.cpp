@@ -212,6 +212,7 @@ struct tb : sc_core::sc_module {
         test_config_readback();
         test_address_length_assembly();
         test_simple_transfer();
+        test_transfer_delay();
         test_status_and_done();
         test_two_channels();
         test_2d_transfer();
@@ -329,6 +330,46 @@ struct tb : sc_core::sc_module {
 
         for (uint64_t i = 0; i < len; ++i) {
             EXPECT_EQ(mem.data[dst + i], static_cast<unsigned char>(0xA0u + i));
+        }
+    }
+
+    void test_transfer_delay()
+    {
+        std::cout << "test_transfer_delay\n";
+        // One 16-byte chunk (max_burst_bytes=16): two master beats.  Each beat
+        // annotates transfer_delay_ns (CCI 0.5) plus the memory target's 1 ns,
+        // so the transfer thread consumes 3 ns before DONE increments.
+        const uint64_t src = 0x180;
+        const uint64_t dst = 0x580;
+        const uint64_t len = 16;
+
+        for (uint64_t i = 0; i < len; ++i) {
+            mem.data[src + i] = static_cast<unsigned char>(0x50u + i);
+        }
+        std::memset(&mem.data[dst], 0x00, len);
+
+        drv.write32(dma_cfg::OFF_SRC_ADDRESS_LO, static_cast<uint32_t>(src));
+        drv.write32(dma_cfg::OFF_SRC_ADDRESS_HI, static_cast<uint32_t>(src >> 32));
+        drv.write32(dma_cfg::OFF_DST_ADDRESS_LO, static_cast<uint32_t>(dst));
+        drv.write32(dma_cfg::OFF_DST_ADDRESS_HI, static_cast<uint32_t>(dst >> 32));
+        drv.write32(dma_cfg::OFF_LENGTH_LO, static_cast<uint32_t>(len));
+        drv.write32(dma_cfg::OFF_LENGTH_HI, static_cast<uint32_t>(len >> 32));
+        drv.write32(dma_cfg::OFF_NUM_REPETITIONS_LO, 0);
+        drv.write32(dma_cfg::OFF_NUM_REPETITIONS_HI, 0);
+
+        const uint32_t done_before = drv.read32(dma_cfg::done_offset(2));
+        EXPECT_EQ(drv.read32(dma_cfg::next_id_offset(2)), 1u);
+
+        sc_core::wait(1, sc_core::SC_NS);
+        EXPECT_EQ(drv.read32(dma_cfg::done_offset(2)), done_before);
+        EXPECT_EQ(drv.read32(dma_cfg::status_offset(2)), 1u);
+
+        sc_core::wait(5, sc_core::SC_NS);
+        EXPECT_EQ(drv.read32(dma_cfg::done_offset(2)), done_before + 1);
+        EXPECT_EQ(drv.read32(dma_cfg::status_offset(2)), 0u);
+
+        for (uint64_t i = 0; i < len; ++i) {
+            EXPECT_EQ(mem.data[dst + i], static_cast<unsigned char>(0x50u + i));
         }
     }
 
@@ -469,6 +510,12 @@ struct tb : sc_core::sc_module {
         // 0x44 is a hole between STATUS_15 (0x40) and NEXT_ID_0 (0x48).
         EXPECT_EQ(drv.raw_read(0x44, data), tlm::TLM_ADDRESS_ERROR_RESPONSE);
         EXPECT_EQ(drv.raw_write(0x44, 0xDEADBEEFu), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+
+        // Past the window must not wrap (0x138 → CONFIG, 0x140 → STATUS_1).
+        EXPECT_EQ(drv.raw_read(dma_cfg::WINDOW_SIZE, data), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        EXPECT_EQ(drv.raw_write(dma_cfg::WINDOW_SIZE, 0xDEADBEEFu), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        EXPECT_EQ(drv.raw_read(0x140, data), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        EXPECT_EQ(drv.raw_write(0x140, 0xDEADBEEFu), tlm::TLM_ADDRESS_ERROR_RESPONSE);
     }
 
     void test_invalid_access()
@@ -518,9 +565,13 @@ struct tb : sc_core::sc_module {
         EXPECT_EQ(dut.transport_dbg(gp), 4u);
         EXPECT_EQ(drv.read32(dma_cfg::OFF_CONFIG), 0xDEADBEEFu);
 
-        // Unmapped debug access returns 0 bytes.
+        // Unmapped / out-of-window debug access returns 0 bytes.
         gp.set_address(0x44);
         gp.set_command(tlm::TLM_READ_COMMAND);
+        EXPECT_EQ(dut.transport_dbg(gp), 0u);
+        gp.set_address(dma_cfg::WINDOW_SIZE);
+        EXPECT_EQ(dut.transport_dbg(gp), 0u);
+        gp.set_address(0x140);
         EXPECT_EQ(dut.transport_dbg(gp), 0u);
     }
 };

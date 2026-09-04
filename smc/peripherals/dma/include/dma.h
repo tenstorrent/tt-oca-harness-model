@@ -24,7 +24,9 @@
  * ## Register map (offsets relative to the DMA base address)
  *
  * All registers are 32-bit; the control interface decodes a 9-bit address
- * window (`WINDOW_SIZE = 0x138`).
+ * window (`WINDOW_SIZE = 0x138`).  Offsets at or beyond `WINDOW_SIZE`
+ * return `TLM_ADDRESS_ERROR_RESPONSE` (the window is not a power of two,
+ * so the model does not wrap with modulo).
  *
  * ```
  * Offset  Name                Access  Description
@@ -59,9 +61,11 @@
  * ---
  * ## Modeling notes
  *
- * - **Loosely-timed.** The model executes transfers synchronously inside the
- *   `NEXT_ID` read path using `b_transport` on the master socket; it does not
- *   call `wait()`.  Temporal decoupling is the initiator's responsibility.
+ * - **Loosely-timed.** A `NEXT_ID` read latches the shared transfer
+ *   descriptors and schedules work onto `transfer_thread`.  That thread
+ *   issues master `b_transport`s, annotates `transfer_delay_ns` on each
+ *   data move, and consumes the resulting delay with `wait()`.  Register
+ *   accesses annotate `access_delay_ns` on the initiator's delay.
  * - **Channel abstraction.** The hardware supports multiple control streams.
  *   The model exposes 16 software-visible channels, each with independent
  *   STATUS / NEXT_ID / DONE.  The SRC/DST/LENGTH/STRIDE/REPETITIONS registers
