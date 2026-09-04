@@ -1195,6 +1195,36 @@ struct cluster_tb_top : sc_core::sc_module
             pass("ctrl access widths, fast-mem edge, and batch step branches");
         }
 
+        // --- memory-safety: size cap, wrap-safe window, null data_ptr ----------
+        {
+            uint64_t d = 0;
+            EXPECT_FALSE(cluster.debug_mem_read(0, 0, d));
+            EXPECT_FALSE(cluster.debug_mem_read(0, 16, d));
+            EXPECT_FALSE(cluster.debug_mem_write(0, 16, 0));
+            EXPECT_TRUE(cluster.debug_mem_write(0x100, 4, 0xAABBCCDDu));
+            EXPECT_TRUE(cluster.debug_mem_read(0x100, 4, d));
+            EXPECT_EQ(d, 0xAABBCCDDu);
+
+            // Near UINT64_MAX: old `addr + size` wrap would treat this as
+            // in-window and index mem_buf_ out of range.
+            (void)cluster.debug_mem_read(0xFFFFFFFFFFFFFFF8ULL, 8, d);
+            (void)cluster.debug_mem_write(0xFFFFFFFFFFFFFFF8ULL, 8, 0);
+
+            tlm::tlm_generic_payload gp;
+            sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_address(0x080);
+            gp.set_data_ptr(nullptr);
+            gp.set_data_length(4);
+            gp.set_streaming_width(4);
+            gp.set_byte_enable_ptr(nullptr);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            ctrl.socket->b_transport(gp, delay);
+            EXPECT_EQ(gp.get_response_status(), tlm::TLM_GENERIC_ERROR_RESPONSE);
+
+            pass("MEM_CALLBACKS size/wrap guards and null ctrl data_ptr");
+        }
+
         wd.cancel();
         if (g_failures == 0) {
             std::cout << "\nALL TESTS PASSED\n";

@@ -166,6 +166,10 @@ public:
     bool dbg_wdt_second_timeout() const { return wdt_second_timeout_; }
     uint32_t dbg_wdt_stage2_count(unsigned core) const;
 
+    /// Invoke the Whisper MEM_CALLBACKS body (unit tests / debug).
+    bool debug_mem_read (uint64_t addr, unsigned size, uint64_t& data);
+    bool debug_mem_write(uint64_t addr, unsigned size, uint64_t  data);
+
 private:
     // -- CCI configuration (Phase 1 — defaults match struct config; broker
     //    presets override before construction).  Declared before processes so

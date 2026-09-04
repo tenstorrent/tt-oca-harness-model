@@ -95,6 +95,10 @@ secure_dma_model::secure_dma_model(sc_module_name n)
 // ============================================================================
 
 secure_dma_model::~secure_dma_model() {
+  if (m_hash_ctx != nullptr) {
+    EVP_MD_CTX_free(static_cast<EVP_MD_CTX *>(m_hash_ctx));
+    m_hash_ctx = nullptr;
+  }
   CSML_INFO(1, logger) << "DMA Controller model destroyed" << std::endl;
 }
 

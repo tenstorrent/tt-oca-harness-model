@@ -326,12 +326,24 @@ void smc_cpu_cluster::beu_nmi_method(unsigned i)
 // ===========================================================================
 // Memory callbacks (§3.6).  Fast-mem first, then TLM.
 // ===========================================================================
+namespace {
+
+bool access_in_fast_mem(uint64_t addr, unsigned size, uint64_t lo, uint64_t hi)
+{
+    return addr >= lo && addr < hi && static_cast<uint64_t>(size) <= (hi - addr);
+}
+
+} // namespace
+
 bool smc_cpu_cluster::mem_read_cb(uint64_t addr, unsigned size, uint64_t& data)
 {
-    if (addr >= fast_mem_lo_p_.get_value() &&
-        addr + size <= fast_mem_hi_p_.get_value())
-    {
-        const size_t off = size_t(addr - fast_mem_lo_p_.get_value());
+    if (size == 0 || size > 8) {
+        return false;
+    }
+    const uint64_t lo = fast_mem_lo_p_.get_value();
+    const uint64_t hi = fast_mem_hi_p_.get_value();
+    if (access_in_fast_mem(addr, size, lo, hi)) {
+        const size_t off = size_t(addr - lo);
         data = 0;
         for (unsigned k = 0; k < size; ++k) {
             data |= (uint64_t(mem_buf_[off + k]) << (8 * k));
@@ -343,10 +355,13 @@ bool smc_cpu_cluster::mem_read_cb(uint64_t addr, unsigned size, uint64_t& data)
 
 bool smc_cpu_cluster::mem_write_cb(uint64_t addr, unsigned size, uint64_t data)
 {
-    if (addr >= fast_mem_lo_p_.get_value() &&
-        addr + size <= fast_mem_hi_p_.get_value())
-    {
-        const size_t off = size_t(addr - fast_mem_lo_p_.get_value());
+    if (size == 0 || size > 8) {
+        return false;
+    }
+    const uint64_t lo = fast_mem_lo_p_.get_value();
+    const uint64_t hi = fast_mem_hi_p_.get_value();
+    if (access_in_fast_mem(addr, size, lo, hi)) {
+        const size_t off = size_t(addr - lo);
         for (unsigned k = 0; k < size; ++k) {
             mem_buf_[off + k] = uint8_t((data >> (8 * k)) & 0xFF);
         }
@@ -354,6 +369,16 @@ bool smc_cpu_cluster::mem_write_cb(uint64_t addr, unsigned size, uint64_t data)
     }
     uint64_t d = data;
     return tlm_access(tlm::TLM_WRITE_COMMAND, addr, size, d);
+}
+
+bool smc_cpu_cluster::debug_mem_read(uint64_t addr, unsigned size, uint64_t& data)
+{
+    return mem_read_cb(addr, size, data);
+}
+
+bool smc_cpu_cluster::debug_mem_write(uint64_t addr, unsigned size, uint64_t data)
+{
+    return mem_write_cb(addr, size, data);
 }
 
 // ===========================================================================
@@ -376,6 +401,9 @@ smc_cpu_cluster::pick_socket(uint64_t addr)
 bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
                                  unsigned size, uint64_t& data)
 {
+    if (size == 0 || size > 8) {
+        return false;
+    }
     uint8_t buf[8] = {};
     if (cmd == tlm::TLM_WRITE_COMMAND) {
         for (unsigned i = 0; i < size; ++i) {
@@ -463,6 +491,10 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
     const uint64_t off  = trans.get_address() % ctrl_size;
     const unsigned len  = trans.get_data_length();
     uint8_t* const ptr  = trans.get_data_ptr();
+    if (ptr == nullptr) {
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
 
     auto load_u32 = [&]() -> uint32_t {
         uint32_t v = 0;

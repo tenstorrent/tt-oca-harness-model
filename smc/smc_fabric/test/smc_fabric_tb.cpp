@@ -759,6 +759,10 @@ struct tb : sc_core::sc_module {
             EXPECT_EQ(0x1Eu, poison_buf[4]);
             EXPECT_EQ(0xABu, poison_buf[5]);
         }
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  d_mmio.raw(tlm::TLM_READ_COMMAND, A_UNMAPPED, 4, nullptr));
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  d_mmio.raw(tlm::TLM_READ_COMMAND, A_GBASE + 0x18, 4, nullptr));
         std::cout << "  [PASS] deny-read poison trailing bytes\n";
 
         // ----------------------------------------------------------------

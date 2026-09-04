@@ -591,6 +591,7 @@ void och_sep_ss::module_bind() {
     {
         unsigned it = 0;
         riscv->setMasterId(it);
+        bus->registerObserver(riscv);
         bus->tsocks[it++].bind(riscv->initiator_socket);
         // Every DMA address passes through the alias window remap before it
         // reaches the crossbar, exactly as u_dma_local_alias_remap does.

@@ -269,8 +269,9 @@ void smc_fabric::route_local(tlm::tlm_generic_payload& trans,
             "route_local " << tlm_cmd_str(trans) << " addr=0x" << std::hex << a
             << " -> smc_base_config_csr");
         if (!handle_global_csr(trans, a - SMC_BASE_CONFIG_BASE)) {
-            if (trans.is_read())
-                std::memset(trans.get_data_ptr(), 0, trans.get_data_length());
+            unsigned char* p = trans.get_data_ptr();
+            if (trans.is_read() && p != nullptr)
+                std::memset(p, 0, trans.get_data_length());
             trans.set_response_status(tlm::TLM_OK_RESPONSE); // unmodelled base_config regs: RAZ/WI
         }
         trans.set_dmi_allowed(false);
@@ -579,6 +580,9 @@ void smc_fabric::fill_deny_response(tlm::tlm_generic_payload& trans)
         constexpr uint32_t POISON = 0xBADC'AB1Eu;
         unsigned char* ptr = trans.get_data_ptr();
         unsigned int   len = trans.get_data_length();
+        if (ptr == nullptr) {
+            return;
+        }
 
         // Fill complete 32-bit words.
         const unsigned words = len / 4u;
