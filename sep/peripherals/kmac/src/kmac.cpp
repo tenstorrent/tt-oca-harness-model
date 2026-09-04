@@ -12,6 +12,7 @@
 
 #include "kmac.h"
 #include "csml_logger.h"
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
@@ -1935,25 +1936,29 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         uint8_t customization_string[256];
         size_t customization_len = 0;
 
-        // Parse encode_string(S) starting at byte 6
+        // Parse encode_string(S) starting at byte 6.  PREFIX is only 44
+        // bytes; cap the copy so a forged 0x02 bit-length cannot over-read.
+        auto copy_customization = [&](size_t src_off, size_t s_bytes) {
+          const size_t avail =
+              (src_off < sizeof(prefix_data)) ? (sizeof(prefix_data) - src_off)
+                                              : 0;
+          customization_len = std::min(s_bytes, avail);
+          customization_len =
+              std::min(customization_len, sizeof(customization_string));
+          if (customization_len > 0) {
+            std::memcpy(customization_string, &prefix_data[src_off],
+                        customization_len);
+          }
+        };
         if (prefix_data[6] == 0x01) {
           // left_encode format: 0x01 <length_byte>
-          uint8_t s_bits = prefix_data[7];
-          size_t s_bytes = (s_bits + 7) / 8; // Convert bits to bytes
-          customization_len = s_bytes;
-          if (customization_len > 0 && customization_len <= 256) {
-            std::memcpy(customization_string, &prefix_data[8],
-                        customization_len);
-          }
+          const uint8_t s_bits = prefix_data[7];
+          copy_customization(8, static_cast<size_t>((s_bits + 7) / 8));
         } else if (prefix_data[6] == 0x02) {
           // left_encode format: 0x02 <length_hi> <length_lo>
-          uint16_t s_bits = (prefix_data[7] << 8) | prefix_data[8];
-          size_t s_bytes = (s_bits + 7) / 8;
-          customization_len = s_bytes;
-          if (customization_len > 0 && customization_len <= 256) {
-            std::memcpy(customization_string, &prefix_data[9],
-                        customization_len);
-          }
+          const uint16_t s_bits = static_cast<uint16_t>(
+              (static_cast<uint16_t>(prefix_data[7]) << 8) | prefix_data[8]);
+          copy_customization(9, static_cast<size_t>((s_bits + 7) / 8));
         }
 
         CSML_INFO(2, logger)

@@ -220,8 +220,9 @@ struct SimpleBus : sc_core::sc_module {
 
 		if (isWrite) {
 			for (auto* obs : observers_) {
-				obs->notifyWrite(addr, size, id);
-				CSML_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << id << std::dec << std::endl;
+				// Pass the tagged initiator, not decode(addr) (target port).
+				obs->notifyWrite(addr, size, initiator_id);
+				CSML_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << initiator_id << std::dec << std::endl;
 			}
 		}
 
@@ -258,8 +259,9 @@ struct SimpleBus : sc_core::sc_module {
 
 		if (isWrite) {
 			for (auto* obs : observers_) {
-				obs->notifyWrite(addr, size, id);
-				CSML_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << id << std::dec << std::endl;
+				// Pass the tagged initiator, not decode(addr) (target port).
+				obs->notifyWrite(addr, size, initiator_id);
+				CSML_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << initiator_id << std::dec << std::endl;
 			}
 		}
 
