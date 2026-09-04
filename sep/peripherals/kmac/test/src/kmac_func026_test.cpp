@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+
 /******************************************************************************
  * @file kmac_func026_test.cpp
  * @brief FUNC-KMAC-026: Rejection and boundary paths

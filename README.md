@@ -1,8 +1,8 @@
-# tt-oca-sim — Open Chiplet Atlas Virtual Platform
+# tt-oca-harness-model — Open Chiplet Atlas Virtual Platform
 
 ## Overview
 
-`tt-oca-sim` is a SystemC/TLM-2.0 virtual platform for the **Open Chiplet
+`tt-oca-harness-model` is a SystemC/TLM-2.0 virtual platform for the **Open Chiplet
 Atlas Harness (OCAH)**. It models the System Management Controller (SMC) and
 the Secure Enclave Processor (SEP) so firmware and pre-silicon tests can run
 before silicon.
@@ -92,7 +92,7 @@ the trusted proxy through which the host interacts with the SEP.
 
 ## This Repository
 
-`tt-oca-sim` provides **SystemC/TLM-2.0 virtual platform simulation** for both
+`tt-oca-harness-model` provides **SystemC/TLM-2.0 virtual platform simulation** for both
 OCAH subsystems:
 
 | Subsystem | What is provided |
@@ -105,7 +105,7 @@ OCAH subsystems:
 ## Directory Structure
 
 ```
-tt-oca-sim/
+tt-oca-harness-model/
 ├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI, PeripheralCommon, …)
 ├── sep/                           ← SEP IP peripheral models
 │   ├── peripherals/               ← individual IP models
@@ -313,8 +313,8 @@ Then continue with configure/install:
 **Clone the repository:**
 
 ```bash
-git clone git@github.com:tenstorrent/tt-oca-sim.git
-cd tt-oca-sim
+git clone git@github.com:tenstorrent/tt-oca-harness-model.git
+cd tt-oca-harness-model
 git submodule update --init --recursive
 ```
 
