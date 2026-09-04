@@ -1048,10 +1048,6 @@ and other items in [RELEASE_NOTES.md](RELEASE_NOTES.md#current-limitations).
 
 ## FAQ
 
-**Why do some older docs say `tt-oca-sim`?**
-That was a former local/project name. The repository is
-`tenstorrent/tt-oca-harness-model`.
-
 **Do I need `tt-oca-hw` to build or run the VP?**
 No. Register maps and architecture live in that TRM, but this tree is
 self-contained. TT firmware tests were imported under
