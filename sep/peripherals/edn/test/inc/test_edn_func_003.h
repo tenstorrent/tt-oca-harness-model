@@ -53,7 +53,6 @@
  * @note This test suite implements all 13 test cases mapped to EDN_FUNC_003
  *       in the edn-functionality-testcases.md document.
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-12
  */
 

@@ -30,7 +30,6 @@
  * - T20: Reserved bits handling
  * - T21: Corner case - CTRL write when REGWEN locked
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-12
  */
 

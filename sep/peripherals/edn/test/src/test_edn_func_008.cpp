@@ -28,7 +28,6 @@
  * - Alert clear preserves m_prev_genbits
  * - Edge cases (zero values, all-ones values)
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

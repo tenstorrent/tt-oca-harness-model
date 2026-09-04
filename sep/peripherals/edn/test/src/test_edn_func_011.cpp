@@ -13,7 +13,6 @@
  * - Test 5: Software Port Mode Entropy Distribution with FIPS
  * - Test 6: FIPS Transition from Pre-FIPS to Approved
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

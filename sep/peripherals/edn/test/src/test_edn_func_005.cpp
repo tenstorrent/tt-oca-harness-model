@@ -29,7 +29,6 @@
  * - T19: Endpoint Interface After Reset
  * - T20: Buffer Refill During Active Distribution
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-13
  */
 

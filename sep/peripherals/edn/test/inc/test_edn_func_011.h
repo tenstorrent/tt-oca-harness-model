@@ -39,7 +39,6 @@
  * - Helper functions simplify entropy injection with specific FIPS values
  * - Assertions validate expected vs. observed FIPS indicators with diagnostics
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

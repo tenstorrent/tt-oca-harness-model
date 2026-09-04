@@ -57,7 +57,6 @@
  * - CSRNG error injection and dual alert mechanism validation
  * - Failed tests report detailed diagnostic information
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-13
  */
 

@@ -41,7 +41,6 @@
  * - Alert signal assertions verified for configuration errors
  * - Reset behavior validates configuration restoration
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-12
  */
 

@@ -22,7 +22,6 @@
  * - T12: Valid value after invalid (alert persistence)
  * - T13: Comprehensive invalid value coverage (all 4 fields × 14 invalid values)
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-13
  */
 

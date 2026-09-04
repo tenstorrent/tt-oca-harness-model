@@ -65,7 +65,6 @@
  * - alert_fatal_alert: Fatal alert output signal
  * - intr_edn_fatal_err: Fatal error interrupt (triggered by fatal alerts)
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

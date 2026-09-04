@@ -80,7 +80,6 @@
  * 3. Uninstantiate: Destroy instance before mode changes
  * 4. Sequencing violations: CSRNG returns error status
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-15
  */
 
