@@ -435,13 +435,13 @@ bool dma::copy_chunk(uint64_t src, uint64_t dst, uint64_t len)
         gp.set_dmi_allowed(false);
         gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-        auto* ext = new smc::smc_axi_extension();
-        ext->source_id = smc::SMC_ID;
-        gp.set_extension(ext);
+        smc::smc_axi_extension ext;
+        ext.source_id = smc::SMC_ID;
+        gp.set_extension(&ext);
 
         delay += sc_core::sc_time(transfer_delay_ns_p_.get_value(), sc_core::SC_NS);
         mst_socket->b_transport(gp, delay);
-        gp.release_extension(ext);
+        gp.clear_extension<smc::smc_axi_extension>();
 
         if (delay > sc_core::SC_ZERO_TIME) {
             sc_core::wait(delay);
@@ -464,13 +464,13 @@ bool dma::copy_chunk(uint64_t src, uint64_t dst, uint64_t len)
         gp.set_dmi_allowed(false);
         gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-        auto* ext = new smc::smc_axi_extension();
-        ext->source_id = smc::SMC_ID;
-        gp.set_extension(ext);
+        smc::smc_axi_extension ext;
+        ext.source_id = smc::SMC_ID;
+        gp.set_extension(&ext);
 
         delay += sc_core::sc_time(transfer_delay_ns_p_.get_value(), sc_core::SC_NS);
         mst_socket->b_transport(gp, delay);
-        gp.release_extension(ext);
+        gp.clear_extension<smc::smc_axi_extension>();
 
         if (delay > sc_core::SC_ZERO_TIME) {
             sc_core::wait(delay);
