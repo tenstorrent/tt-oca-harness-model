@@ -55,7 +55,7 @@ So the PLIC essentially answers:
 == Purpose
 
 This guide describes how to integrate the SMC SystemC/TLM2.0 models under
-`/path/to/tt-oca-sim/smc` so they track the RTL subsystem connected under
+`/path/to/tt-oca-harness-model/smc` so they track the RTL subsystem connected under
 `/path/to/tt-oca-hw/hw/smc`.
 
 For building/running the platform tests and booting bare-metal firmware on
@@ -85,7 +85,7 @@ timing, but it must preserve the programmer-visible contract:
 |`smc/cpu_cluster/include/smc_cpu_cluster.h`,
 `smc/cpu_cluster/src/smc_cpu_cluster.cpp`,
 `smc/cpu_cluster/test/cluster_tb.cpp`,
-`smc/cpu_cluster/doc/*.md`
+`smc/cpu_cluster/doc/*.adoc`
 
 |SystemC fabric
 |`smc/smc_fabric/include/smc_fabric.h`,

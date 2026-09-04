@@ -1,4 +1,4 @@
-# CI for tt-oca-sim — RHEL 8 compatibility
+# CI for tt-oca-harness-model — RHEL 8 compatibility
 #
 # Runs the same five job groups as ci.yml but inside an almalinux:8 container
 # (binary-compatible with RHEL 8).  Key differences vs the Ubuntu workflow:

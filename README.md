@@ -1,12 +1,11 @@
-# tt-oca-sim — Open Chiplet Atlas Virtual Platform
+# tt-oca-harness-model — Open Chiplet Atlas Virtual Platform
 
 The GitHub repository is
 [`tenstorrent/tt-oca-harness-model`](https://github.com/tenstorrent/tt-oca-harness-model).
-The project name used in documentation, binaries, and this tree is **tt-oca-sim**.
 
 ## Overview
 
-`tt-oca-sim` is a SystemC/TLM-2.0 virtual platform for the **Open Chiplet
+`tt-oca-harness-model` is a SystemC/TLM-2.0 virtual platform for the **Open Chiplet**
 Atlas Harness (OCAH)**. It models the System Management Controller (SMC),
 the Secure Enclave Processor (SEP), and the on-die SMU interconnect so
 firmware and pre-silicon tests can run before silicon.
@@ -875,7 +874,7 @@ Limitations (unmodeled or stubbed IP) are listed in
 ### Directory structure
 
 ```
-tt-oca-sim/                    (GitHub: tenstorrent/tt-oca-harness-model)
+tt-oca-harness-model/
 ├── cmake/                     shared CMake helpers (FindSystemC, FindCCI, …)
 ├── common/include/            shared register + logging helpers
 │                              (reg_access.h, reg_map.h, sim_log.h)
@@ -952,7 +951,7 @@ the hardware TRM (`tt-oca-hw`), not duplicated here.
 
 ## Deployment
 
-`tt-oca-sim` is a **local simulation toolchain**. There is no hosted service
+`tt-oca-harness-model` is a **local simulation toolchain**. There is no hosted service
 and no supported Docker/cloud image in this repository. You deploy by
 building the VP binaries on the machine that will run firmware.
 
@@ -1049,10 +1048,9 @@ and other items in [RELEASE_NOTES.md](RELEASE_NOTES.md#current-limitations).
 
 ## FAQ
 
-**What is the difference between `tt-oca-sim` and `tt-oca-harness-model`?**
-They are the same project. The GitHub repository is
-`tenstorrent/tt-oca-harness-model`. Documentation and binaries use the
-name `tt-oca-sim`.
+**Why do some older docs say `tt-oca-sim`?**
+That was a former local/project name. The repository is
+`tenstorrent/tt-oca-harness-model`.
 
 **Do I need `tt-oca-hw` to build or run the VP?**
 No. Register maps and architecture live in that TRM, but this tree is
