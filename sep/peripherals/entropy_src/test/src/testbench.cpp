@@ -1347,6 +1347,14 @@ void testbench::run_tests()
     record_result("TC-COV-005: new_rdl_register_access",
         tc_cov_new_rdl_register_access());
 
+    apply_reset();
+    record_result("TC-COV-006: fips_lock_w1s",
+        tc_cov_fips_lock_w1s());
+
+    apply_reset();
+    record_result("TC-COV-007: boot_phase_done_gate",
+        tc_cov_boot_phase_done_gate());
+
     // =========================================================================
     // Summary
     // =========================================================================

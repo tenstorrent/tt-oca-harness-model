@@ -712,6 +712,54 @@ bool entropy_src_ip::handle_write_STARTUP_CTRL(uint32_t value)
     return true;
 }
 
+/******************************************************************************
+ * @brief Write callback for RING_OSC_ENABLE register (offset 0x90)
+ *
+ * Models the startup health-test gate that MAIN_SM_STATUS.BOOT_PHASE_DONE
+ * reports. Firmware brings the entropy source up in two steps -- configure with
+ * the ring-oscillator generators OFF, then enable them -- and then polls
+ * BOOT_PHASE_DONE to learn that the startup window has passed and entropy is
+ * reaching the whitener/FIFO. The SEP boot ROM gates its EDN enable on exactly
+ * that bit, so without it the ROM waits forever and stops secure boot.
+ *
+ * The model asserts BOOT_PHASE_DONE as soon as at least one generator is enabled
+ * in RING_OSC_ENABLE, and clears IDLE to match. That is the only condition: it
+ * is NOT additionally gated on CTRL.MODULE_ENABLE, which this model's CTRL does
+ * not implement (see the comment on the gate below). It does NOT model the
+ * health tests themselves either: this is a functional model of the handshake
+ * firmware observes, not of the analog startup behaviour. A test that needs a
+ * startup FAILURE should drive ALERT/ERR through the health-test path rather
+ * than expect this gate to withhold BOOT_PHASE_DONE.
+ *
+ * @param value 32-bit value written to RING_OSC_ENABLE
+ * @return true (write always accepted)
+ ******************************************************************************/
+bool entropy_src_ip::handle_write_RING_OSC_ENABLE(uint32_t value)
+{
+    RING_OSC_ENABLE = value & static_cast<uint32_t>(RING_OSC_ENABLE.write_bit_mask);
+
+    // Gated on the generators alone, NOT on CTRL.MODULE_ENABLE: this model's CTRL
+    // does not implement that field. Its bit 0 is RESET and bits 1-3 are
+    // reserved, whereas the RDL defines bit 0 as reserved and bit 1 as
+    // MODULE_ENABLE (reset 1). That drift is pre-existing and left alone here --
+    // changing CTRL's layout would alter the software-reset behaviour existing
+    // tests rely on. It is harmless for this gate: firmware cannot usefully run
+    // the generators without the module enabled anyway.
+    const bool generators_on = (static_cast<uint32_t>(RING_OSC_ENABLE.ENABLE) != 0u);
+
+    if (generators_on) {
+        if (static_cast<uint32_t>(MAIN_SM_STATUS.BOOT_PHASE_DONE) == 0u) {
+            MAIN_SM_STATUS.BOOT_PHASE_DONE = 1;
+            MAIN_SM_STATUS.IDLE = 0;
+            CSML_INFO(3, logger)
+                << "RING_OSC_ENABLE: generators enabled -- "
+                << "MAIN_SM_STATUS.BOOT_PHASE_DONE asserted";
+        }
+    }
+
+    return true;
+}
+
 // =============================================================================
 // Read callbacks
 // =============================================================================

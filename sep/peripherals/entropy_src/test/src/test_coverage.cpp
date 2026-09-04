@@ -190,3 +190,93 @@ bool testbench::tc_cov_new_rdl_register_access()
 
     return ok;
 }
+
+// Coverage: FIPS_LOCK (0x154) is write-one-to-set, not plain RW.
+//
+// The lock is one-way in hardware: firmware applies it after the startup health
+// test passes and reads it back to confirm it stuck. A later write of 0 -- a
+// full-word rewrite of the register file, say -- must not drop it. Only a reset
+// clears it.
+bool testbench::tc_cov_fips_lock_w1s()
+{
+    bool ok = true;
+    uint32_t rd_val = 0u;
+
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == entropy_src_basetest::FIPS_LOCK_RESET,
+        "TC-COV-006: FIPS_LOCK not clear after reset");
+
+    // Writing 0 to an already-clear lock leaves it clear.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0x00000000u);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000000u,
+        "TC-COV-006: FIPS_LOCK set by a write of 0");
+
+    // Writing 1 sets it, and the read-back firmware relies on sees it.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0x00000001u);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000001u,
+        "TC-COV-006: FIPS_LOCK did not stick when written to 1");
+
+    // W1S: a subsequent write of 0 must NOT clear it.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0x00000000u);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000001u,
+        "TC-COV-006: FIPS_LOCK cleared by a write of 0 (W1S violated)");
+
+    // Reserved bits [31:1] stay masked off, and the lock survives the attempt.
+    test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0xFFFFFFFEu);
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000001u,
+        "TC-COV-006: FIPS_LOCK reserved bits not masked");
+
+    // Only a reset returns it to 0.
+    apply_reset();
+    test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
+    COV_CHECK(rd_val == entropy_src_basetest::FIPS_LOCK_RESET,
+        "TC-COV-006: FIPS_LOCK not cleared by reset");
+
+    return ok;
+}
+
+// Coverage: MAIN_SM_STATUS.BOOT_PHASE_DONE (0xB4 bit 12) tracks the
+// RING_OSC_ENABLE write, and MAIN_SM_STATUS itself is read-only.
+//
+// The gate is on the generators alone -- see handle_write_RING_OSC_ENABLE --
+// so enabling a single generator is enough to assert it.
+bool testbench::tc_cov_boot_phase_done_gate()
+{
+    bool ok = true;
+    uint32_t rd_val = 0u;
+
+    const uint32_t BOOT_PHASE_DONE = (1u << 12);
+    const uint32_t IDLE            = (1u << 9);
+
+    test->register_read_32(entropy_src_basetest::MAIN_SM_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == entropy_src_basetest::MAIN_SM_STATUS_RESET,
+        "TC-COV-007: MAIN_SM_STATUS not at reset default");
+
+    // Step 1 of the firmware sequence: configure with the generators off.
+    test->register_write_32(entropy_src_basetest::RING_OSC_ENABLE_OFFSET, 0x00000000u);
+    wait(sc_core::SC_ZERO_TIME);
+    test->register_read_32(entropy_src_basetest::MAIN_SM_STATUS_OFFSET, rd_val);
+    COV_CHECK((rd_val & BOOT_PHASE_DONE) == 0u,
+        "TC-COV-007: BOOT_PHASE_DONE asserted with all generators off");
+
+    // Step 2: enable one generator -- the startup window is modelled as passed.
+    test->register_write_32(entropy_src_basetest::RING_OSC_ENABLE_OFFSET, 0x00000001u);
+    wait(sc_core::SC_ZERO_TIME);
+    test->register_read_32(entropy_src_basetest::MAIN_SM_STATUS_OFFSET, rd_val);
+    COV_CHECK((rd_val & BOOT_PHASE_DONE) != 0u,
+        "TC-COV-007: BOOT_PHASE_DONE not asserted after generator enable");
+    COV_CHECK((rd_val & IDLE) == 0u,
+        "TC-COV-007: IDLE still set after generator enable");
+
+    // MAIN_SM_STATUS is RO: a write must not disturb it.
+    test->register_write_32(entropy_src_basetest::MAIN_SM_STATUS_OFFSET, 0xFFFFFFFFu);
+    test->register_read_32(entropy_src_basetest::MAIN_SM_STATUS_OFFSET, rd_val);
+    COV_CHECK((rd_val & BOOT_PHASE_DONE) != 0u && (rd_val & ~BOOT_PHASE_DONE) == 0u,
+        "TC-COV-007: MAIN_SM_STATUS RO enforcement failed");
+
+    return ok;
+}
