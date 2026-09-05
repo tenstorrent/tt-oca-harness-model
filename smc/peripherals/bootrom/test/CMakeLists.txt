@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 add_executable(bootrom_tb bootrom_tb.cpp)
 target_link_libraries(bootrom_tb PRIVATE smc_bootrom SystemC::cci)
 target_compile_options(bootrom_tb PRIVATE -Wall -Wextra -Wpedantic
@@ -32,5 +34,19 @@ target_compile_definitions(bootrom_bin_tb PRIVATE
     BOOTROM_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_test(NAME bootrom_bin_tb COMMAND bootrom_bin_tb)
 set_tests_properties(bootrom_bin_tb PROPERTIES
+    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+    FAIL_REGULAR_EXPRESSION "(^FAIL [^_]|FAILURE\\(S\\))")
+
+# ---------------------------------------------------------------------------
+# bootrom_neg_tb — constructor fatals and preload error paths that the
+# primary benches cannot reach without aborting.  Required for the src/
+# coverage gate: without this target CI reports ~85% on bootrom.cpp.
+# ---------------------------------------------------------------------------
+add_executable(bootrom_neg_tb bootrom_neg_tb.cpp)
+target_link_libraries(bootrom_neg_tb PRIVATE smc_bootrom SystemC::cci)
+target_compile_options(bootrom_neg_tb PRIVATE -Wall -Wextra -Wpedantic
+                                              -Wno-deprecated-declarations)
+add_test(NAME bootrom_neg_tb COMMAND bootrom_neg_tb)
+set_tests_properties(bootrom_neg_tb PROPERTIES
     PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
     FAIL_REGULAR_EXPRESSION "(^FAIL [^_]|FAILURE\\(S\\))")
