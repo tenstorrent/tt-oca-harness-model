@@ -673,7 +673,9 @@ int sc_main(int, char**)
 {
     sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR, sc_core::SC_DISPLAY);
 
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+
+    cci::cci_register_broker(broker);
     cci::cci_originator origin("platform_cfg");
     auto broker = cci::cci_get_global_broker(origin);
     broker.set_preset_cci_value("tb.reset_unit.ref_clk_period_ns", cci::cci_value(10.0));

@@ -842,7 +842,8 @@ int sc_main(int, char*[])
     simlog::set_level(simlog::level::info);
 
     // CCI parameters must be constructed against a registered broker.
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+    cci::cci_register_broker(broker);
 
     cci::cci_originator tb_cfg("tb_cfg");
     auto global_broker = cci::cci_get_global_broker(tb_cfg);

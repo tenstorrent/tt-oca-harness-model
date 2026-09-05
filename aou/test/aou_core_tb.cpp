@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file aou_core_tb.cpp
  * @brief Unit test for AOU_CORE LT model: CSR reset, activate, AXI loopback.
@@ -342,7 +343,8 @@ SC_MODULE(tb) {
 
 int sc_main(int, char**)
 {
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+    cci::cci_register_broker(broker);
     tb top("tb");
     sc_core::sc_start();
     return g_failures == 0 ? 0 : 1;

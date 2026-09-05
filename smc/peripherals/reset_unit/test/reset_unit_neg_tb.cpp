@@ -116,7 +116,9 @@ int sc_main(int, char**)
         sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
     sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR, sc_core::SC_DISPLAY);
 
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+
+    cci::cci_register_broker(broker);
 
     std::cout << "==== SMC Reset Unit negative-path TB ====\n";
 

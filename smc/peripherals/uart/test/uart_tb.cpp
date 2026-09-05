@@ -726,7 +726,8 @@ int sc_main(int, char**)
                                             sc_core::SC_DO_NOTHING);
 
     // CCI: register global broker before any cci_param is constructed.
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+    cci::cci_register_broker(broker);
 
     // Inject presets before tb / uart are constructed.
     cci::cci_originator platform_cfg("platform_cfg");

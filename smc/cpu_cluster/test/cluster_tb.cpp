@@ -1333,7 +1333,9 @@ int sc_main(int, char**)
         std::cout << "  [PASS] smoke: Whisper System constructs\n";
     }
 
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+
+    cci::cci_register_broker(broker);
 
     cluster_tb_top top("tb");
     sc_core::sc_start();

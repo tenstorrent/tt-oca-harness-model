@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // vp/platform/smu/test/smu_interconnect_tb.cpp
 //
@@ -431,7 +432,8 @@ private:
 int sc_main(int, char**)
 {
     // Global broker must exist before any cci_param is constructed.
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+    cci::cci_register_broker(broker);
 
     smu_interconnect_tb tb{"tb"};
     sc_core::sc_start();

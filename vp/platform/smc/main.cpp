@@ -324,7 +324,8 @@ int sc_main(int argc, char** argv)
     std::cout << "smc-vp: ELF '" << elf_path << "' entry=0x" << std::hex << entry << std::dec << "\n";
 
     // Register the global CCI broker BEFORE any cci_param is constructed.
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker broker("GlobalBroker");
+    cci::cci_register_broker(broker);
 
     // Defaults first, then ini overrides.
     apply_default_presets(top, entry);
