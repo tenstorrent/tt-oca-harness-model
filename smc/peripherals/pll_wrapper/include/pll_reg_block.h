@@ -126,12 +126,6 @@ public:
     /// Dump the register image (offset-ordered) to @p os.
     void dump_state(std::ostream& os = std::cout) const;
 
-protected:
-    void b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
-    void reset_proc();
-    void do_reset();
-    void build(const reg_spec* specs, std::size_t n);
-
     /// Replace the (per-register) write callback at @p offset with bespoke
     /// behaviour — e.g. W1C on a *_clear field, or a hardware side effect.
     /// @return false if @p offset is not a registered register.
@@ -139,6 +133,12 @@ protected:
     /// Replace the (per-register) read callback at @p offset (read side
     /// effects / hardware-computed value).  @return false on unknown offset.
     bool set_read_callback(uint64_t offset, regmodel::Register32::ReadFn fn);
+
+protected:
+    void b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
+    void reset_proc();
+    void do_reset();
+    void build(const reg_spec* specs, std::size_t n);
 
     cci::cci_param<double> access_delay_ns_p_;
 

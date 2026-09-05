@@ -249,6 +249,20 @@ if (( USE_ASAN )); then
     else
         echo ">> ASan: NO memory errors detected."
     fi
+    _asan_gate=""
+    _d="${SCRIPT_DIR}"
+    while [[ -n "${_d}" && "${_d}" != "/" ]]; do
+        if [[ -f "${_d}/smc/scripts/enforce_asan_clean.sh" ]]; then
+            _asan_gate="${_d}/smc/scripts/enforce_asan_clean.sh"
+            break
+        fi
+        _d="$(dirname "${_d}")"
+    done
+    if [[ -z "${_asan_gate}" ]]; then
+        echo "ERROR: enforce_asan_clean.sh not found" >&2
+        exit 1
+    fi
+    "${_asan_gate}" "${BUILD_DIR}" || exit 1
     exit "${TB_EXIT}"
 
 elif (( USE_COVERAGE )); then
@@ -383,6 +397,20 @@ elif (( USE_COVERAGE )); then
         echo ""
         echo ">> HTML coverage report: ${HTML_DIR}/index.html"
     fi
+
+    _gate=""
+    for _cand in \
+        "${SCRIPT_DIR}/../../scripts/enforce_line_coverage.sh" \
+        "${SCRIPT_DIR}/../scripts/enforce_line_coverage.sh" \
+        "${SCRIPT_DIR}/../smc/scripts/enforce_line_coverage.sh"
+    do
+        if [[ -f "${_cand}" ]]; then _gate="${_cand}"; break; fi
+    done
+    if [[ -z "${_gate}" ]]; then
+        echo "ERROR: enforce_line_coverage.sh not found" >&2
+        exit 1
+    fi
+    "${_gate}" "${SCRIPT_DIR}" "${BUILD_DIR}"
 
 elif (( USE_CTEST )); then
     echo ">> Running via ctest"

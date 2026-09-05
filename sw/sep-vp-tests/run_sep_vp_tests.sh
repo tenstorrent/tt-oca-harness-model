@@ -134,19 +134,32 @@ log_info "RISC-V toolchain prefix: ${RISCV_PREFIX}"
 VP_BUILD_DIR="${VP_BUILD_DIR:-${REPO_ROOT}/vp/build_sep}"
 
 find_vp_binary() {
-    local candidates=()
-    [ -n "${VP:-}" ] && candidates+=("${VP}")
-    candidates+=(
+    # Prefer an explicit VP. Otherwise pick the newest built sep-vp so a stale
+    # vp/build/bin/sep-vp (often months old) cannot shadow a freshly built
+    # vp/build_sep binary — that mismatch is what made sep-efuse-test fail
+    # after the model map was updated.
+    if [ -n "${VP:-}" ] && [ -x "${VP}" ]; then
+        echo "${VP}"
+        return 0
+    fi
+    local newest="" newest_mtime=0 c mtime
+    for c in \
+        "${VP_BUILD_DIR}/bin/sep-vp" \
+        "${REPO_ROOT}/vp/build_sep/bin/sep-vp" \
         "${REPO_ROOT}/vp/build/bin/sep-vp"
-        "${REPO_ROOT}/vp/build_sep/bin/sep-vp"
-        "${VP_BUILD_DIR}/bin/sep-vp"
-    )
-    for c in "${candidates[@]}"; do
+    do
         if [ -x "${c}" ]; then
-            echo "${c}"
-            return 0
+            mtime="$(stat -f %m "${c}" 2>/dev/null || stat -c %Y "${c}" 2>/dev/null || echo 0)"
+            if [ "${mtime}" -ge "${newest_mtime}" ]; then
+                newest="${c}"
+                newest_mtime="${mtime}"
+            fi
         fi
     done
+    if [ -n "${newest}" ]; then
+        echo "${newest}"
+        return 0
+    fi
     return 1
 }
 
@@ -260,6 +273,13 @@ build_vp() {
 
     log_info "building sep-vp ..."
     cmake --build "${VP_BUILD_DIR}" --target sep-vp -j
+    if [ ! -x "${VP_BUILD_DIR}/bin/sep-vp" ]; then
+        log_error "sep-vp build finished but ${VP_BUILD_DIR}/bin/sep-vp is missing"
+        exit 1
+    fi
+    # Force subsequent get_vp() lookups to the binary we just built.
+    VP="${VP_BUILD_DIR}/bin/sep-vp"
+    log_info "sep-vp ready: ${VP}"
 }
 
 get_vp() {

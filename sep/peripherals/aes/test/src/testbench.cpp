@@ -433,6 +433,22 @@ void testbench::run_tests()
     test_func009_aes192_block_latency();
     test_func009_aes256_block_latency();
     test_func009_timing_across_modes();
+
+    // Edge / error paths that the FUNC suites leave unhit.
+    CSML_INFO(1, logger) << "\n========================================"
+                         << "Coverage: extra edge paths"
+                         << "========================================" << std::endl;
+
+    m_test->trigger_reset();
+    wait(20, SC_NS);
+
+    test_coverage_keymgr_rejects_non_write();
+    test_coverage_prng_reseed_trigger_and_rates();
+    test_coverage_escalation_aborts_in_flight_cipher();
+    test_coverage_sideload_missing_key_and_manual_start();
+    test_coverage_error_state_and_busy_gcm_writes();
+    test_coverage_gcm_shadow_mismatch_and_init_gates();
+    test_coverage_trigger_readback_and_gcm_manual_init();
     
     // Run FUNC-AES-006 REGWEN locking tests LAST (these lock CTRL_AUX_REGWEN permanently)
     CSML_INFO(1, logger) << "\n========================================" 

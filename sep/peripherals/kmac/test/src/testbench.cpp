@@ -711,6 +711,8 @@ void testbench::run_tests()
     test_run_kmac_exhaust_output();
     test_sideload_key_len_clamp();
     test_defensive_error_paths();
+    test_coverage_unmasked_and_keylen();
+    test_coverage_app_and_cleanup();
 
     // =========================================================================
     // FUNC-KMAC-016 and FUNC-KMAC-019: shadow protection and error reporting
@@ -1102,6 +1104,10 @@ void testbench::test_func_kmac_026_rejection_paths()
                      test_state_share1_masking_disabled);
     run_checked_case("TC-229: test_state_read_straddles_digest_end",
                      test_state_read_straddles_digest_end);
+    run_checked_case("TC-230: test_keymgr_read_rejected",
+                     test_keymgr_read_rejected);
+    run_checked_case("TC-231: test_second_app_blocked_while_first_active",
+                     test_second_app_blocked_while_first_active);
 }
 
 /******************************************************************************

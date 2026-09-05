@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build (if needed) and run the SEP Boot ROM SystemC test bench.
 #
 # Usage:
@@ -19,7 +21,7 @@
 #                 probes common macOS (Homebrew) and Linux (/usr/local, /usr)
 #                 locations.  Set this if SystemC is in a non-standard prefix.
 #   CCI_HOME      Path to an Accellera SystemC CCI install.  If unset the
-#                 script probes /Users/pdroy/cci, /usr/local/cci,
+#                 script probes "${HOME}/cci", /usr/local/cci,
 #                 /opt/homebrew/opt/systemc-cci.
 #   BUILD_TYPE    CMake build type (default: Release; Debug for --coverage).
 #   JOBS          Parallel build jobs (default: all available cores).
@@ -102,7 +104,7 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -z "${CCI_HOME:-}" ]]; then
     for _candidate in \
-        /Users/pdroy/cci \
+        "${HOME}/cci" \
         /usr/local/cci \
         /opt/homebrew/opt/systemc-cci
     do
@@ -201,6 +203,20 @@ if (( USE_ASAN )); then
     else
         echo ">> ASan: NO memory errors detected."
     fi
+    _asan_gate=""
+    _d="${SCRIPT_DIR}"
+    while [[ -n "${_d}" && "${_d}" != "/" ]]; do
+        if [[ -f "${_d}/smc/scripts/enforce_asan_clean.sh" ]]; then
+            _asan_gate="${_d}/smc/scripts/enforce_asan_clean.sh"
+            break
+        fi
+        _d="$(dirname "${_d}")"
+    done
+    if [[ -z "${_asan_gate}" ]]; then
+        echo "ERROR: enforce_asan_clean.sh not found" >&2
+        exit 1
+    fi
+    "${_asan_gate}" "${BUILD_DIR}" || exit 1
     exit "${TB_EXIT}"
 
 elif (( USE_COVERAGE )); then
@@ -255,21 +271,18 @@ elif (( USE_COVERAGE )); then
         echo ">> Merging profile data (${PROFDATA_CMD}) …"
         ${PROFDATA_CMD} merge -sparse "${_PROFRAW_ARGS[@]}" -o "${PROFDATA}"
 
-        _OBJECT_ARGS=()
-        [[ -x "${BIN_TB_BIN}" ]] && _OBJECT_ARGS+=("-object=${BIN_TB_BIN}")
-        [[ -x "${NEG_TB_BIN}" ]] && _OBJECT_ARGS+=("-object=${NEG_TB_BIN}")
-
         echo ""
         echo "===== Line coverage summary ====="
+        # Primary TB only: extra binaries recompile bootrom.cpp and llvm-cov
+        # drops mismatched functions (b_transport) when they are passed as
+        # additional -object values.
         ${COV_CMD} report "${TB_BIN}" \
-            "${_OBJECT_ARGS[@]}" \
             -instr-profile="${PROFDATA}" \
             "${SOURCES[@]}"
 
         echo ""
         echo "===== Uncovered lines in bootrom.cpp ====="
         ${COV_CMD} show "${TB_BIN}" \
-            "${_OBJECT_ARGS[@]}" \
             -instr-profile="${PROFDATA}" \
             -sources "${SCRIPT_DIR}/src/bootrom.cpp" \
             -format=text \
@@ -278,7 +291,6 @@ elif (( USE_COVERAGE )); then
             || echo "(none — full coverage)"
 
         ${COV_CMD} show "${TB_BIN}" \
-            "${_OBJECT_ARGS[@]}" \
             -instr-profile="${PROFDATA}" \
             "${SOURCES[@]}" \
             -format=html \
@@ -325,6 +337,20 @@ elif (( USE_COVERAGE )); then
         echo ""
         echo ">> HTML coverage report: ${HTML_DIR}/index.html"
     fi
+
+    _gate=""
+    for _cand in \
+        "${SCRIPT_DIR}/../../scripts/enforce_line_coverage.sh" \
+        "${SCRIPT_DIR}/../scripts/enforce_line_coverage.sh" \
+        "${SCRIPT_DIR}/../smc/scripts/enforce_line_coverage.sh"
+    do
+        if [[ -f "${_cand}" ]]; then _gate="${_cand}"; break; fi
+    done
+    if [[ -z "${_gate}" ]]; then
+        echo "ERROR: enforce_line_coverage.sh not found" >&2
+        exit 1
+    fi
+    "${_gate}" "${SCRIPT_DIR}" "${BUILD_DIR}"
 
 elif (( USE_CTEST )); then
     echo ">> Running via ctest"

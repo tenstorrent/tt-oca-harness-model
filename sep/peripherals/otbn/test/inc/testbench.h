@@ -284,6 +284,12 @@ public:
     void test_cov_rsa3072_zero_modulus();
     void test_cov_csr_wdr_callback_execute();
     void test_cov_wdr_key_read_with_key();
+    void test_cov_otp_scramble_key_channel();
+    void test_cov_imem_oob_and_busy_block();
+    void test_cov_keymgr_ignore_and_invalid_cmd();
+    void test_cov_alert_fatal_and_err_bits_busy();
+    void test_cov_software_errs_fatal();
+    void test_cov_algorithm_standalone_error_paths();
 
     // Signals for port binding
     sc_signal<bool> intr_done_sig;

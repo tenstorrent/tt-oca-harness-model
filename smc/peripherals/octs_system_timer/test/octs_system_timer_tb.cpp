@@ -305,6 +305,7 @@ private:
     void test_secondary_reanchor_with_step();
     void test_ctrl_constraint_warning();
     void test_cci_parameter();
+    void test_tlm_error_paths();
 };
 
 // ---------------------------------------------------------------------------
@@ -333,6 +334,7 @@ void tb::run()
     test_secondary_reanchor_with_step();
     test_ctrl_constraint_warning();
     test_cci_parameter();
+    test_tlm_error_paths();
 
     std::cout << "\n=== " << (g_failures == 0 ? "ALL TESTS PASSED" : "TESTS FAILED")
               << ": " << (g_checks - g_failures) << "/" << g_checks
@@ -767,6 +769,72 @@ void tb::test_cci_parameter()
     std::cout << "CCI parameter discovery + mutation OK\n";
 }
 
+void tb::test_tlm_error_paths()
+{
+    banner("16. TLM error responses and dump_state CREDIT branch");
+
+    uint32_t buf = 0;
+    tlm::tlm_generic_payload gp;
+    sc_time delay = SC_ZERO_TIME;
+
+    gp.set_command(tlm::TLM_READ_COMMAND);
+    gp.set_address(cfg_t::OFF_CTRL);
+    gp.set_data_ptr(nullptr);
+    gp.set_data_length(4);
+    gp.set_streaming_width(4);
+    gp.set_byte_enable_ptr(nullptr);
+    gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    drv_x.sock->b_transport(gp, delay);
+    CHECK_EQ("null data_ptr is GENERIC_ERROR", gp.get_response_status(),
+             tlm::TLM_GENERIC_ERROR_RESPONSE);
+
+    gp.set_data_ptr(reinterpret_cast<unsigned char*>(&buf));
+    gp.set_data_length(0);
+    gp.set_streaming_width(0);
+    gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    drv_x.sock->b_transport(gp, delay);
+    CHECK_EQ("zero length is GENERIC_ERROR", gp.get_response_status(),
+             tlm::TLM_GENERIC_ERROR_RESPONSE);
+
+    uint8_t be[4] = {0xFF, 0xFF, 0xFF, 0xFF};
+    gp.set_data_length(4);
+    gp.set_streaming_width(4);
+    gp.set_byte_enable_ptr(be);
+    gp.set_byte_enable_length(4);
+    gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    drv_x.sock->b_transport(gp, delay);
+    CHECK_EQ("byte enables are BYTE_ENABLE_ERROR", gp.get_response_status(),
+             tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
+
+    gp.set_byte_enable_ptr(nullptr);
+    gp.set_byte_enable_length(0);
+    gp.set_streaming_width(1);
+    gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    drv_x.sock->b_transport(gp, delay);
+    CHECK_EQ("streaming_width < len is BURST_ERROR", gp.get_response_status(),
+             tlm::TLM_BURST_ERROR_RESPONSE);
+
+    gp.set_streaming_width(4);
+    gp.set_command(tlm::TLM_IGNORE_COMMAND);
+    gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    drv_x.sock->b_transport(gp, delay);
+    CHECK_EQ("IGNORE command is COMMAND_ERROR", gp.get_response_status(),
+             tlm::TLM_COMMAND_ERROR_RESPONSE);
+
+    // Reserved-hole default in reg_read/reg_write: 0x24 is past the window
+    // (ADDRESS_ERROR). There is no aligned hole inside WINDOW_SIZE.
+
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 10u);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x100u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 0x1u);
+    pulse(cc_drv, 2);
+    advance(1);
+    dut_x.dump_state();
+
+    std::cout << "TLM error paths OK\n";
+}
+
 // ---------------------------------------------------------------------------
 
 int sc_main(int, char*[])
@@ -774,7 +842,8 @@ int sc_main(int, char*[])
     simlog::set_level(simlog::level::info);
 
     // CCI parameters must be constructed against a registered broker.
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
 
     cci::cci_originator tb_cfg("tb_cfg");
     auto global_broker = cci::cci_get_global_broker(tb_cfg);

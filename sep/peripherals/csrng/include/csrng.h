@@ -82,6 +82,8 @@ public:
    CsmlLogger logger;  ///< Logger instance for diagnostic output
    /// @}
 
+   friend class testbench;
+
 protected:
    // =============================================================================
    // Internal Enumerations

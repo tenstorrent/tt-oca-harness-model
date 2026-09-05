@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // bootrom_bin_tb.cpp -- separate test binary that exercises the **binary**
 // preload path (init_file_format = "auto" with a `.img` filename → "bin").
@@ -155,7 +156,8 @@ int sc_main(int, char**)
 {
     sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR,
                                             sc_core::SC_DISPLAY);
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
     cci::cci_originator platform_cfg("platform_cfg");
     auto global_broker = cci::cci_get_global_broker(platform_cfg);
 

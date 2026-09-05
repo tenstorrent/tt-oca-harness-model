@@ -19,9 +19,6 @@ docs/                     this folder
 test/ + run_tests.sh      interconnect unit suite (SMU-only extra)
 ```
 
-Design document: [doc/smc-sep-d2d-interconnect.adoc](../../../../doc/smc-sep-d2d-interconnect.adoc)
-(includes the as-built status section).
-
 ## Topology
 
 ```
@@ -93,6 +90,16 @@ Both subsystems keep their standalone CCI namespaces: the SMC platform is
 `<sep-elf>` argument). Relative paths inside the SEP ini (`@include`,
 `configFile`) resolve against the ini's own directory — run with the ini in
 place, not a copy elsewhere.
+
+The process-wide TLM quantum is installed once in `smu-vp` `sc_main` before
+`smu_platform` constructs the SMC (`dut`) or SEP (`och_sep_ss1`) instances.
+Resolution: `global_quantum_ns`, else `och_sep_ss1.globalQuantumNs`, else
+`dut.cluster.quantum_ns`, else `simtlm::DEFAULT_GLOBAL_QUANTUM_NS` (1000 ns /
+1 µs). Both ISS sides and standalone `sep-vp` / `smc-vp` use that same
+default. Neither ISS overwrites a quantum already installed by `sc_main`.
+
+`dut` is the CCI hierarchical name of the SMC platform (same as standalone
+`smc-vp`), so `dut.cluster.*` keys from smc-vp INIs apply unchanged.
 
 `smu-vp` applies these integration presets after loading both inis:
 

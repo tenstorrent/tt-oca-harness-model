@@ -10,6 +10,7 @@
 #include "smc_cpu_cluster.h"
 #include "iss_backend_whisper.h"
 #include "smc_axi_extension.h"
+#include "tlm_quantum_policy.h"
 
 // sc_spawn / sc_spawn_options are NOT pulled in by the umbrella systemc.h
 // header in 2.3.4 -- include them explicitly here.
@@ -56,7 +57,8 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
     , isa_p_("isa", cfg.isa,
              "Whisper ISA configuration string (e.g. rv64imafdc).")
     , quantum_ns_p_("quantum_ns", cfg.quantum_ns,
-                    "TLM LT global quantum in nanoseconds.")
+                    "Fallback TLM LT global quantum in nanoseconds if "
+                    "sc_main has not already installed one.")
     , quantum_insts_p_("quantum_insts", cfg.quantum_insts,
                        "Instructions retired per step(K) slice.")
     , amo_lock_detect_p_("amo_lock_detect", cfg.amo_lock_detect,
@@ -141,8 +143,9 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
         });
 
     // ----- 7. Quantum keepers -----------------------------------------------
-    tlm_utils::tlm_quantumkeeper::set_global_quantum(
-        sc_core::sc_time(double(quantum_ns_p_.get_value()), sc_core::SC_NS));
+    // Do not overwrite a process-wide quantum already installed by sc_main
+    // (smu-vp / smc-vp). Standalone cluster tests still get this default.
+    simtlm::install_global_quantum_ns_if_unset(quantum_ns_p_.get_value());
     for (auto& qk : qk_) {
         qk.reset();
     }

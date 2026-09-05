@@ -436,9 +436,11 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 
 ## Modeling notes
 
-- **Loosely-timed**: each hart owns a `tlm_quantumkeeper`. The global
-  quantum (default 1 µs) is set at construction; `step(K)` runs `K`
-  instructions per scheduling slice (`quantum_insts`, default 1000).
+- **Loosely-timed**: each hart owns a `tlm_quantumkeeper`. The process-wide
+  TLM quantum is installed by `sc_main` when present; the cluster only
+  applies `quantum_ns` (default 1 µs) if the singleton is still unset.
+  `step(K)` runs `K` instructions per scheduling slice (`quantum_insts`,
+  default 1000).
 - **Per-hart concurrency**: one `SC_THREAD` per hart, cooperatively
   scheduled. Only one hart runs at a time inside `singleStep()`, so
   the memory callbacks safely use a single `current_hart_` for

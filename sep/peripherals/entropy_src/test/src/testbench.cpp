@@ -480,6 +480,12 @@ void testbench::run_tests()
     CSML_INFO(1, logger) << " entropy_src Testbench — Run Tests";
     CSML_INFO(1, logger) << "======================================";
 
+    // Coverage builds compile at CSML_DEFAULT_VERBOSITY=1, which skips the
+    // CSML_INFO(2/3) bodies in the model. Raise both loggers so callback and
+    // thread diagnostics actually execute when those paths run.
+    dut->logger.setMaxVerbosity(3);
+    logger.setMaxVerbosity(3);
+
     // Coverage: boot rst_n gate + initial STARTUP_DELAY before first SW reset.
     CSML_INFO(1, logger) << "--------------------------------------";
     CSML_INFO(1, logger) << " Coverage: thread boot / startup paths";
@@ -1354,6 +1360,18 @@ void testbench::run_tests()
     apply_reset();
     record_result("TC-COV-007: boot_phase_done_gate",
         tc_cov_boot_phase_done_gate());
+
+    apply_reset();
+    record_result("TC-COV-008: irq_overflow_underflow",
+        tc_cov_irq_overflow_underflow());
+
+    apply_reset();
+    record_result("TC-COV-009: reset_while_fifo_disabled",
+        tc_cov_reset_while_fifo_disabled());
+
+    apply_reset();
+    record_result("TC-COV-010: verbose_callbacks_and_recovery",
+        tc_cov_verbose_callbacks_and_recovery());
 
     // =========================================================================
     // Summary

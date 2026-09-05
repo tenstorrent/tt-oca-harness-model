@@ -284,6 +284,15 @@ public:
     void test_func009_aes256_block_latency();
     void test_func009_timing_across_modes();
 
+    // Edge paths not exercised by the FUNC suites (coverage gate).
+    void test_coverage_keymgr_rejects_non_write();
+    void test_coverage_prng_reseed_trigger_and_rates();
+    void test_coverage_escalation_aborts_in_flight_cipher();
+    void test_coverage_sideload_missing_key_and_manual_start();
+    void test_coverage_error_state_and_busy_gcm_writes();
+    void test_coverage_gcm_shadow_mismatch_and_init_gates();
+    void test_coverage_trigger_readback_and_gcm_manual_init();
+
     // Test helper reporting
     void report_test_start(const std::string& test_name);
     void report_test_pass(const std::string& test_name);

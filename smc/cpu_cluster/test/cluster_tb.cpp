@@ -28,6 +28,7 @@
 #include "smc_test_utils.h"
 #include "smc_cpu_cluster.h"
 #include "smc_axi_extension.h"
+#include "tlm_quantum_policy.h"
 
 unsigned g_failures = 0;
 
@@ -463,7 +464,13 @@ struct cluster_tb_top : sc_core::sc_module
 
     explicit cluster_tb_top(sc_core::sc_module_name n)
         : sc_module(n)
-        , cfg_(smc_test::make_default_cluster_cfg(NHARTS, RESET_PC))
+        , cfg_([] {
+              auto c = smc_test::make_default_cluster_cfg(NHARTS, RESET_PC);
+              // Non-zero period so wdt_stage2_tick_method is scheduled; tests
+              // still drive countdown via dbg_wdt_stage2_tick for determinism.
+              c.wdt_stage2_tick_ns = 10.0;
+              return c;
+          }())
         , strap_cfg_([] {
               auto c = smc_test::make_default_cluster_cfg(1, RESET_PC);
               c.mmio_lo         = c.mmio_hi = 0x80000000ULL;
@@ -771,6 +778,19 @@ struct cluster_tb_top : sc_core::sc_module
             EXPECT_FALSE(cluster.hart(i).is_wfi());
         }
         pass("4-hart construction and binding");
+
+        // First cluster installed the process-wide quantum; later clusters
+        // and a late install_if_unset must not steal it.
+        {
+            const auto q = tlm::tlm_global_quantum::instance().get();
+            EXPECT_TRUE(q == sc_core::sc_time(
+                static_cast<double>(simtlm::DEFAULT_GLOBAL_QUANTUM_NS),
+                sc_core::SC_NS));
+            EXPECT_FALSE(simtlm::global_quantum_is_unset());
+            EXPECT_FALSE(simtlm::install_global_quantum_ns_if_unset(1));
+            EXPECT_TRUE(tlm::tlm_global_quantum::instance().get() == q);
+            pass("process-wide quantum installed once");
+        }
 
         // --- reset-state matrix -------------------------------------------------
         for (unsigned i = 0; i < NHARTS; ++i) cluster.hart(i).reset();
@@ -1225,6 +1245,69 @@ struct cluster_tb_top : sc_core::sc_module
             pass("MEM_CALLBACKS size/wrap guards and null ctrl data_ptr");
         }
 
+        // --- stage-2 WDT + BEU NMI + remaining ctrl offsets -----------------
+        {
+            ctrl.write32(0x028, 0x11u);
+            EXPECT_EQ(ctrl.read32(0x028), 0x11u);
+            ctrl.write64(0x030, 0x22u);
+            EXPECT_EQ(ctrl.read64(0x030), 0x22u);
+            ctrl.write64(0x040, 0x33u);
+            EXPECT_EQ(ctrl.read64(0x040), 0x33u);
+            EXPECT_EQ(ctrl.read32(0x060), 0u);  // TEST_CTRL is RO
+
+            ctrl.write32(0x050, 4u);
+            EXPECT_EQ(ctrl.read32(0x050), 4u);
+            EXPECT_EQ(ctrl.read32(0x058), 0u);
+            ctrl.write32(0x058, 0x1u);  // pulse reload on hart 0
+            EXPECT_EQ(ctrl.read32(0x058), 0u);
+
+            cluster_wdt_sticky[0].write(true);
+            wait(sc_core::sc_time(1, sc_core::SC_NS));
+            EXPECT_TRUE(cluster.dbg_wdt_first_timeout());
+
+            cluster.dbg_wdt_stage2_tick(0);
+            cluster.dbg_wdt_stage2_tick(8);
+            EXPECT_TRUE(cluster.dbg_wdt_second_timeout());
+            EXPECT_EQ(cluster.dbg_wdt_stage2_count(0), 0u);
+            EXPECT_EQ(cluster.dbg_wdt_stage2_count(99), 0u);
+
+            wait(sc_core::sc_time(50, sc_core::SC_NS));  // auto-tick reset path
+            cluster_wdt_sticky[0].write(false);
+            wait(sc_core::sc_time(1, sc_core::SC_NS));
+
+            sig_nmi[0].write(true);
+            wait(sc_core::sc_time(1, sc_core::SC_NS));
+            sig_nmi[0].write(false);
+            wait(sc_core::sc_time(1, sc_core::SC_NS));
+
+            const smc::smc_cpu_cluster& cref = cluster;
+            EXPECT_EQ(cref.hart(0).get_pc(), cluster.hart(0).get_pc());
+
+            // Remaining ctrl windows: WB_PC, mutex, sema, dummy ROM, RAZ/WI.
+            (void)ctrl.read64(0x100);
+            EXPECT_EQ(ctrl.last_response(), tlm::TLM_OK_RESPONSE);
+            EXPECT_EQ(ctrl.read64(0x240), 1u);  // mutex available at reset
+            EXPECT_EQ(ctrl.read64(0x240), 0u);  // consumed
+            ctrl.write64(0x240, 1u);            // return the mutex
+            EXPECT_EQ(ctrl.read64(0x240), 1u);
+            EXPECT_EQ(ctrl.read32(0x260), 0u);
+            ctrl.write32(0x260, 3u);
+            EXPECT_EQ(ctrl.read32(0x260), 3u);
+            ctrl.write64(0x280, 0xA5A5A5A5u);
+            EXPECT_EQ(ctrl.read64(0x280), 0xA5A5A5A5u);
+            ctrl.write64(0x2A0, 0x5A5A5A5Au);
+            EXPECT_EQ(ctrl.read64(0x2A0), 0x5A5A5A5Au);
+            EXPECT_EQ(ctrl.read32(0x300), 0u);  // unmapped RAZ
+            ctrl.write32(0x300, 0xFFu);         // unmapped WI
+
+            cluster_rst_primary_n.write(false);
+            wait(sc_core::sc_time(20, sc_core::SC_NS));
+            cluster_rst_primary_n.write(true);
+            wait(sc_core::sc_time(10, sc_core::SC_NS));
+
+            pass("stage-2 WDT, BEU NMI, and remaining ctrl offsets");
+        }
+
         wd.cancel();
         if (g_failures == 0) {
             std::cout << "\nALL TESTS PASSED\n";
@@ -1250,7 +1333,9 @@ int sc_main(int, char**)
         std::cout << "  [PASS] smoke: Whisper System constructs\n";
     }
 
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+
+    cci::cci_register_broker(cci_global_broker);
 
     cluster_tb_top top("tb");
     sc_core::sc_start();

@@ -150,6 +150,10 @@ run_asan() {
 
   } > "${log_file}" 2>&1
   local status=$?
+  local asan_gate="${SCRIPT_DIR}/../../smc/scripts/enforce_asan_clean.sh"
+  if [[ -f "${asan_gate}" ]] && ! "${asan_gate}" "${build_dir}" "${log_file}"; then
+    return 1
+  fi
   return "${status}"
 }
 
@@ -176,6 +180,14 @@ extract_coverage() {
   # lcov summary line: "  lines......: 72.3% (1234 of 1706 lines)"
   # sed works on BSD/macOS and GNU; grep -oP is GNU-only.
   sed -n 's/.*lines\.*:[[:space:]]*\([0-9][0-9]*\.[0-9][0-9]*\)%.*/\1/p' "$log" | tail -1
+}
+
+# True if $1 is a number >= $2 (default 95).  "n/a" / empty fails the gate.
+COVERAGE_MIN_LINE_PCT="${COVERAGE_MIN_LINE_PCT:-95}"
+coverage_meets_min() {
+  local pct="$1" min="${2:-${COVERAGE_MIN_LINE_PCT}}"
+  [[ -z "${pct}" || "${pct}" == "n/a" ]] && return 1
+  awk -v p="${pct}" -v m="${min}" 'BEGIN { exit (p+0 < m+0) }'
 }
 
 # ── Helper: run coverage build + generate report, return status ──────────────
@@ -347,8 +359,11 @@ for name in "${PERIPHERALS[@]}"; do
   [ -z "$cov_pct" ] && cov_pct="n/a"
   if [ $cov_status -eq 3 ]; then
     skip; printf " (lcov not installed)\n"; cov_label="SKIP"
-  elif [ $cov_status -eq 0 ]; then
+  elif [ $cov_status -eq 0 ] && coverage_meets_min "${cov_pct}"; then
     pass; printf " (${cov_pct}%%)\n"; cov_label="PASS"
+  elif [ $cov_status -eq 0 ]; then
+    fail; printf " (${cov_pct}%% < ${COVERAGE_MIN_LINE_PCT}%%)\n"
+    cov_label="FAIL"; OVERALL_PASS=false
   else
     fail; echo; cov_label="FAIL"; OVERALL_PASS=false
   fi

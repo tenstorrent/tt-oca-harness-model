@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // vp/platform/smu/main.cpp
 //
@@ -10,6 +11,7 @@
 // ===========================================================================
 
 #include "smu_platform.hpp"
+#include "tlm_quantum_policy.h"
 #include "csml_logger.h"
 
 #include <systemc.h>
@@ -208,6 +210,29 @@ int sc_main(int argc, char** argv)
     }
 
     CsmlLogger::setGlobalLogFile("och_sep_ss.log");
+
+    // One process-wide quantum before either ISS is constructed. All
+    // platform defaults are simtlm::DEFAULT_GLOBAL_QUANTUM_NS (1 µs).
+    {
+        cci::cci_originator o("smu_vp_cfg");
+        auto broker = cci::cci_get_global_broker(o);
+        auto read_u64 = [&](const std::string& key, uint64_t& out) -> bool {
+            const cci::cci_value v = broker.get_preset_cci_value(key);
+            if (v.is_uint64()) { out = v.get_uint64(); return true; }
+            return false;
+        };
+        uint64_t qns = simtlm::DEFAULT_GLOBAL_QUANTUM_NS;
+        if (!read_u64("global_quantum_ns", qns) &&
+            !read_u64("och_sep_ss1.globalQuantumNs", qns) &&
+            !read_u64(smc_top + ".cluster.quantum_ns", qns)) {
+            qns = simtlm::DEFAULT_GLOBAL_QUANTUM_NS;
+        }
+        simtlm::set_global_quantum_ns(qns);
+        std::cout << "smu-vp: global TLM quantum " << qns << " ns\n";
+    }
+
+    // `dut` is the CCI hierarchical name of the SMC platform instance so
+    // standalone smc-vp INI keys (`dut.cluster.*`) apply unchanged.
     smu::smu_platform plat{smc_top.c_str(), "och_sep_ss1"};
 
     if (!plat.dut.cluster.load_elf({smc_elf})) {

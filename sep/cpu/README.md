@@ -27,26 +27,27 @@ Composed of two layers:
 ## Build
 
 ```bash
-cd sep/peripherals/cpu
-mkdir build && cd build
-cmake .. 
-make
+cd sep/cpu
+./run_tests.sh
 ```
 
-Produces `libveeriss_model.a`. Normally built as part of the full VP:
-
-```bash
-cd riscv-vp-plusplus/vp/build
-cmake .. && make sep-vp
-```
+Produces `libveeriss_model.a` and the standalone `veeriss_tb`. Normally also
+built as part of the full VP (`make sep-vp`).
 
 ## Test
 
-No standalone unit tests — functional validation is done at the VP level:
+Standalone TLM wrapper tests (Release / ASan / Coverage ≥ 95% on
+`VeeR-ISSTlm.cpp`):
 
 ```bash
-cd riscv-vp-plusplus/sw/sep-vp-tests/<test>
-make sim
+cd sep/cpu
+./run_tests.sh              # Release
+./run_tests.sh --asan
+./run_tests.sh --coverage
 ```
 
-See `docs/specification/VeeR_ISS_Integration.md` for upstream commit info and SEP-specific patches applied to `VeeR-ISS/`.
+Platform-level firmware tests remain under `sw/sep-vp-tests/` (`rom_test`,
+`sep-efuse-test`, …).
+
+See `docs/VeeR_ISS_Integration.md` for upstream commit info and SEP-specific
+patches applied to `VeeR-ISS/`.

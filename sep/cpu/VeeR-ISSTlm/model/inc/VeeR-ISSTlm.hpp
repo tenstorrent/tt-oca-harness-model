@@ -2032,4 +2032,6 @@ class VeeRISSTlm : public external_interrupt_target, public BusWriteObserver, pu
 		// model is event-driven and never reads it, but the port must be bound
 		// for elaboration to pass.
 		sc_core::sc_signal<bool> pic_clk_;
+
+		friend class veeriss_tb;
 };

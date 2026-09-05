@@ -333,6 +333,7 @@ void abr_testbench::main_thread()
     mlkem_tests(*this);
     nist_kat_tests(*this);
     interrupt_kv_tests(*this);
+    coverage_tests(*this);
 
     std::cout << "\n==========================================" << std::endl;
     std::cout << "Adams Bridge testbench summary" << std::endl;

@@ -296,6 +296,7 @@ target_include_directories(smc_cpu_cluster
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
 )
 
 target_link_libraries(smc_cpu_cluster

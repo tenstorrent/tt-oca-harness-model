@@ -404,7 +404,8 @@ void tb::run()
 
 int sc_main(int, char*[])
 {
-    cci::cci_register_broker(new cci_utils::consuming_broker("global_broker"));
+    static cci_utils::consuming_broker cci_global_broker("global_broker");
+    cci::cci_register_broker(cci_global_broker);
     tb t("tb");
     sc_core::sc_start();
     return g_failures == 0 ? 0 : 1;

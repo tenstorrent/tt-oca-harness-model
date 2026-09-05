@@ -28,59 +28,60 @@ namespace sep_efuse {
 // ============================================================================
 static constexpr unsigned int LOCKS_LO_OFFSET               = 0x000;
 static constexpr unsigned int LOCKS_HI_OFFSET               = 0x004;
-// LOCKS_SPARE (RDL @0x008, 32-bit). Not modelled as a register -- nothing reads
-// it -- but the word MUST be reserved
-static constexpr unsigned int LOCKS_SPARE_OFFSET            = 0x008;
-static constexpr unsigned int LC_STATE_OFFSET               = 0x00C;
-static constexpr unsigned int SBOOT_DIS_OFFSET              = 0x010;
-static constexpr unsigned int TRANSIENT_RMA_EN_OFFSET       = 0x014;
-static constexpr unsigned int SIP_DIS_LO_OFFSET             = 0x018;
-static constexpr unsigned int SIP_DIS_HI_OFFSET             = 0x01C;
-static constexpr unsigned int SYS_DIS_LO_OFFSET             = 0x020;
-static constexpr unsigned int SYS_DIS_HI_OFFSET             = 0x024;
-static constexpr unsigned int RMA_SIP_TOKEN_OFFSET          = 0x028; ///< [8] × 4 bytes each
-static constexpr unsigned int RMA_CHIPLET_TOKEN_OFFSET      = 0x048; ///< [8] × 4 bytes each
-static constexpr unsigned int CLASS_KEY_OFFSET              = 0x068; ///< [8] × 4 bytes each
-static constexpr unsigned int CHIPLET_PUBK_REVOKE_OFFSET    = 0x088;
-static constexpr unsigned int BL1_VERSION_OFFSET            = 0x08C; ///< [8] × 4 bytes each
-static constexpr unsigned int BL2_VERSION_OFFSET            = 0x0AC; ///< [8] × 4 bytes each
-static constexpr unsigned int CHIPLET_UID_OFFSET            = 0x0CC; ///< [8] × 4 bytes each
-static constexpr unsigned int SIP_PUBK_HASH0_OFFSET         = 0x0EC; ///< [8] × 4 bytes each
-static constexpr unsigned int SIP_UID_OFFSET                = 0x10C; ///< [8] × 4 bytes each
-static constexpr unsigned int SYS_PUBK_HASH_OFFSET          = 0x12C; ///< [8] × 4 bytes each
-static constexpr unsigned int SYS_UID_OFFSET                = 0x14C; ///< [8] × 4 bytes each
-static constexpr unsigned int STATUS_RPT_OFFSET             = 0x16C;
-static constexpr unsigned int SEP_ROM_CTRL_OFFSET           = 0x170;
-static constexpr unsigned int SEP_SPI_CTRL_FIELD_EN_OFFSET  = 0x174;
-static constexpr unsigned int SPI_DISCOVERY_CTRL_OFFSET     = 0x178;
-static constexpr unsigned int SPI_PHY_DQ_TIMING_OFFSET      = 0x17C;
-static constexpr unsigned int SPI_PHY_DQS_TIMING_OFFSET     = 0x180;
-static constexpr unsigned int SPI_PHY_GATE_LPBK_OFFSET      = 0x184;
-static constexpr unsigned int SPI_PHY_DLL_SLAVE_OFFSET      = 0x188;
-static constexpr unsigned int SPI_PHY_DLL_MASTER_OFFSET     = 0x18C;
-static constexpr unsigned int SPI_PHY_MISC_OFFSET           = 0x190;
-static constexpr unsigned int SPI_RB_VALID_TIME_OFFSET      = 0x194;
-static constexpr unsigned int CHIPLET_PUBK_HASH0_OFFSET     = 0x198; ///< [8] x 4 bytes each
-static constexpr unsigned int CHIPLET_PUBK_HASH1_OFFSET     = 0x1B8; ///< [8] x 4 bytes each
-static constexpr unsigned int REQUIRED_SIGNERS_OFFSET       = 0x1D8;
-static constexpr unsigned int REQUIRED_ALGS_OFFSET          = 0x1DC;
-static constexpr unsigned int CHIPLET_PUBK_PQC_HASH0_OFFSET = 0x1E0; ///< [8] x 4 bytes each
-static constexpr unsigned int CHIPLET_PUBK_PQC_HASH1_OFFSET = 0x200; ///< [8] x 4 bytes each
-static constexpr unsigned int SIP_PUBK_PQC_HASH0_OFFSET     = 0x220; ///< [8] x 4 bytes each
-static constexpr unsigned int SYS_PUBK_PQC_HASH_OFFSET      = 0x240; ///< [8] x 4 bytes each
-static constexpr unsigned int SIP_PUBK_HASH1_OFFSET         = 0x260; ///< [8] x 4 bytes each
-static constexpr unsigned int SIP_PUBK_PQC_HASH1_OFFSET     = 0x280; ///< [8] x 4 bytes each
-static constexpr unsigned int SEP_CHIPLET_ID_OFFSET         = 0x2A0; ///< [8] x 4 bytes each
-static constexpr unsigned int SEP_SIP_ID_OFFSET             = 0x2C0; ///< [8] x 4 bytes each
-static constexpr unsigned int SEP_SYS_ID_OFFSET             = 0x2E0; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE0_OFFSET                 = 0x300; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE1_OFFSET                 = 0x320; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE2_OFFSET                 = 0x340; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE3_OFFSET                 = 0x360; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE4_OFFSET                 = 0x380; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE5_OFFSET                 = 0x3A0; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE6_OFFSET                 = 0x3C0; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE7_OFFSET                 = 0x3E0; ///< [8] x 4 bytes each
+// LOCKS is 64 bits at 0x000. LC_STATE follows at 0x008 (och_sep_top_reg.h /
+// sep_efuse_map.rdl). A spare word must not occupy that address — firmware
+// and default_efuse.preload both use 0x008.
+static constexpr unsigned int LC_STATE_OFFSET               = 0x008;
+static constexpr unsigned int SBOOT_DIS_OFFSET              = 0x00C;
+// Remaining map matches och_sep_top_reg.h (TRANSIENT_RMA_EN at 0x010, not 0x014).
+static constexpr unsigned int TRANSIENT_RMA_EN_OFFSET       = 0x010;
+static constexpr unsigned int SIP_DIS_LO_OFFSET             = 0x014;
+static constexpr unsigned int SIP_DIS_HI_OFFSET             = 0x018;
+static constexpr unsigned int SYS_DIS_LO_OFFSET             = 0x01C;
+static constexpr unsigned int SYS_DIS_HI_OFFSET             = 0x020;
+static constexpr unsigned int RMA_SIP_TOKEN_OFFSET          = 0x024; ///< [8] × 4 bytes each
+static constexpr unsigned int RMA_CHIPLET_TOKEN_OFFSET      = 0x044; ///< [8] × 4 bytes each
+static constexpr unsigned int CLASS_KEY_OFFSET              = 0x064; ///< [8] × 4 bytes each
+static constexpr unsigned int CHIPLET_PUBK_REVOKE_OFFSET    = 0x084;
+static constexpr unsigned int BL1_VERSION_OFFSET            = 0x088; ///< [8] × 4 bytes each
+static constexpr unsigned int BL2_VERSION_OFFSET            = 0x0A8; ///< [8] × 4 bytes each
+static constexpr unsigned int CHIPLET_UID_OFFSET            = 0x0C8; ///< [8] × 4 bytes each
+static constexpr unsigned int SIP_PUBK_HASH0_OFFSET         = 0x0E8; ///< [8] × 4 bytes each
+static constexpr unsigned int SIP_UID_OFFSET                = 0x108; ///< [8] × 4 bytes each
+static constexpr unsigned int SYS_PUBK_HASH_OFFSET          = 0x128; ///< [8] × 4 bytes each
+static constexpr unsigned int SYS_UID_OFFSET                = 0x148; ///< [8] × 4 bytes each
+static constexpr unsigned int STATUS_RPT_OFFSET             = 0x168;
+static constexpr unsigned int SEP_ROM_CTRL_OFFSET           = 0x16C;
+static constexpr unsigned int SEP_SPI_CTRL_FIELD_EN_OFFSET  = 0x170;
+static constexpr unsigned int SPI_DISCOVERY_CTRL_OFFSET     = 0x174;
+static constexpr unsigned int SPI_PHY_DQ_TIMING_OFFSET      = 0x178;
+static constexpr unsigned int SPI_PHY_DQS_TIMING_OFFSET     = 0x17C;
+static constexpr unsigned int SPI_PHY_GATE_LPBK_OFFSET      = 0x180;
+static constexpr unsigned int SPI_PHY_DLL_SLAVE_OFFSET      = 0x184;
+static constexpr unsigned int SPI_PHY_DLL_MASTER_OFFSET     = 0x188;
+static constexpr unsigned int SPI_PHY_MISC_OFFSET           = 0x18C;
+static constexpr unsigned int SPI_RB_VALID_TIME_OFFSET      = 0x190;
+static constexpr unsigned int CHIPLET_PUBK_HASH0_OFFSET     = 0x194; ///< [8] x 4 bytes each
+static constexpr unsigned int CHIPLET_PUBK_HASH1_OFFSET     = 0x1B4; ///< [8] x 4 bytes each
+static constexpr unsigned int REQUIRED_SIGNERS_OFFSET       = 0x1D4;
+static constexpr unsigned int REQUIRED_ALGS_OFFSET          = 0x1D8;
+static constexpr unsigned int CHIPLET_PUBK_PQC_HASH0_OFFSET = 0x1DC; ///< [8] x 4 bytes each
+static constexpr unsigned int CHIPLET_PUBK_PQC_HASH1_OFFSET = 0x1FC; ///< [8] x 4 bytes each
+static constexpr unsigned int SIP_PUBK_PQC_HASH0_OFFSET     = 0x21C; ///< [8] x 4 bytes each
+static constexpr unsigned int SYS_PUBK_PQC_HASH_OFFSET      = 0x23C; ///< [8] x 4 bytes each
+static constexpr unsigned int SIP_PUBK_HASH1_OFFSET         = 0x25C; ///< [8] x 4 bytes each
+static constexpr unsigned int SIP_PUBK_PQC_HASH1_OFFSET     = 0x27C; ///< [8] x 4 bytes each
+static constexpr unsigned int SEP_CHIPLET_ID_OFFSET         = 0x29C; ///< [8] x 4 bytes each
+static constexpr unsigned int SEP_SIP_ID_OFFSET             = 0x2BC; ///< [8] x 4 bytes each
+static constexpr unsigned int SEP_SYS_ID_OFFSET             = 0x2DC; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE0_OFFSET                 = 0x2FC; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE1_OFFSET                 = 0x31C; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE2_OFFSET                 = 0x33C; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE3_OFFSET                 = 0x35C; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE4_OFFSET                 = 0x37C; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE5_OFFSET                 = 0x39C; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE6_OFFSET                 = 0x3BC; ///< [8] x 4 bytes each
+static constexpr unsigned int SPARE7_OFFSET                 = 0x3DC; ///< [8] x 4 bytes each
 
 // ============================================================================
 // EFUSE_INTERFACE_CTRL register offsets

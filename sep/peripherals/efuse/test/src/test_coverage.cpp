@@ -7,10 +7,9 @@
 #include <sstream>
 
 // Fuse-array word indices for the registers the .preload images below populate.
-// Derived from the register offsets rather than written as literals: these used
-// to be hard-coded (LC_STATE at word 2, the token banks at 9..16 and 17..24) and
-// every one of them was wrong by a word after LOCKS_SPARE was added to the map,
-// which made a dozen unrelated lifecycle assertions fail with LC_STATE reading 0.
+// Derived from the register offsets rather than written as literals so a map
+// change (LC_STATE is word 2 / byte 0x008, matching och_sep_top_reg.h) cannot
+// silently point the images at the wrong word.
 namespace {
 constexpr unsigned int word_of(unsigned int byte_offset) { return byte_offset / 4u; }
 
@@ -1168,6 +1167,75 @@ void testbench::test_transient_rma()
     check(efuse_model::LC_RAW_TEST_DEV, "a latched chiplet match blocks the SiP advance");
 }
 
+void testbench::test_consumer_accessors()
+{
+    report_test_start("Test 27: consumer accessors and prod_dbg freeze");
+
+    uint32_t sip_lo = 0, sip_hi = 0, sys_lo = 0, sys_hi = 0;
+    m_test->register_read_32(sep_efuse::SIP_DIS_LO_OFFSET, sip_lo);
+    m_test->register_read_32(sep_efuse::SIP_DIS_HI_OFFSET, sip_hi);
+    m_test->register_read_32(sep_efuse::SYS_DIS_LO_OFFSET, sys_lo);
+    m_test->register_read_32(sep_efuse::SYS_DIS_HI_OFFSET, sys_hi);
+
+    const uint64_t sip = m_dut->get_sip_dis();
+    const uint64_t sys = m_dut->get_sys_dis();
+    const uint64_t sip_want = (static_cast<uint64_t>(sip_hi) << 32) | sip_lo;
+    const uint64_t sys_want = (static_cast<uint64_t>(sys_hi) << 32) | sys_lo;
+    if (sip == sip_want)
+        report_test_pass("get_sip_dis() matches SIP_DIS_LO/HI");
+    else
+        report_test_fail("get_sip_dis()", "mismatch with shadow registers");
+    if (sys == sys_want)
+        report_test_pass("get_sys_dis() matches SYS_DIS_LO/HI");
+    else
+        report_test_fail("get_sys_dis()", "mismatch with shadow registers");
+
+    (void)m_dut->get_security_disable();
+    (void)m_dut->get_secure_tm();
+    report_test_pass("get_security_disable / get_secure_tm readable");
+
+    bool saw_cb = false;
+    m_dut->set_shadow_change_callback([&]{ saw_cb = true; });
+    m_test->register_write_32(sep_efuse::SIP_DIS_LO_OFFSET, 0x1);
+    wait(1, SC_NS);
+    if (saw_cb)
+        report_test_pass("shadow-change callback fires on a woset write");
+    else
+        report_test_fail("shadow-change callback", "callback was not invoked");
+    m_dut->set_shadow_change_callback(nullptr);
+
+    // Sense PROD so the demote pin can freeze a state the walk above left in RMA.
+    const std::string prod_img = "/tmp/efuse_test_prod_dbg.preload";
+    {
+        std::ofstream out(prod_img);
+        for (unsigned int bit = 0; bit < 8192; bit++) {
+            const unsigned int word = bit / 32;
+            uint32_t word_val = 0;
+            if (word == LC_STATE_WORD)
+                word_val = efuse_model::lc_state_encode(efuse_model::LC_RAW_PROD);
+            out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
+        }
+    }
+    if (!m_dut->preload_fuses_from_file(prod_img)) {
+        report_test_fail("prod_dbg setup", "PROD image was rejected");
+        return;
+    }
+
+    // prod_dbg_active + PROD is terminal: a write must be ignored.
+    uint32_t before = 0, after = 0;
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, before);
+    m_dut->set_prod_dbg_active(true);
+    m_test->register_write_32(sep_efuse::LC_STATE_OFFSET, efuse_model::LC_RAW_RMA_SIP_0);
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, after);
+    m_dut->set_prod_dbg_active(false);
+    if (after == before)
+        report_test_pass("prod_dbg_active freezes LC_STATE in PROD");
+    else
+        report_test_fail("prod_dbg freeze", "expected 0x" + hex32(before) +
+            " got 0x" + hex32(after));
+}
+
 void testbench::run_coverage_tests()
 {
     test_woset_locks_hi();
@@ -1191,4 +1259,5 @@ void testbench::run_coverage_tests()
     // Depends on the matching SiP token test_token_matching leaves behind.
     test_lc_state_transitions();
     test_transient_rma();
+    test_consumer_accessors();
 }

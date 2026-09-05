@@ -117,7 +117,9 @@ int sc_main(int, char**)
         sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
     sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR, sc_core::SC_DISPLAY);
 
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+
+    cci::cci_register_broker(cci_global_broker);
 
     std::cout << "==== OCA I3C Controller negative-path TB ====\n";
 

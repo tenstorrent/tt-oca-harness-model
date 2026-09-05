@@ -134,18 +134,11 @@ class edn_test : public edn_basetest
    sc_signal<bool> edn_fips[8];
 
    std::queue<uint32_t> m_mock_buffer;
-   bool m_mock_fips;
+   bool m_mock_fips = false;
+   unsigned int m_rr_index = 0;
+   bool m_clear_mock_outputs = false;
 
-   void mock_endpoint_process() {
-       for (int i = 0; i < 8; i++) {
-           if (edn_req[i].read() && !edn_ack[i].read() && !m_mock_buffer.empty()) {
-               edn_bus[i].write(m_mock_buffer.front());
-               m_mock_buffer.pop();
-               edn_fips[i].write(m_mock_fips);
-               edn_ack[i].write(true);
-           } else if (!edn_req[i].read()) {
-               edn_ack[i].write(false);
-           }
-       }
-   }
+   bool edn_is_enabled() const;
+   void clear_mock_endpoint_state();
+   void mock_endpoint_process();
 };

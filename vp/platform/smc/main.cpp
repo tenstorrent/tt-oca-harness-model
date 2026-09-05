@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // vp/platform/smc/main.cpp
 //
@@ -6,6 +7,7 @@
 //   smc-vp <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]
 //
 #include "smc_platform.hpp"
+#include "tlm_quantum_policy.h"
 
 #include <systemc.h>
 #include <tlm.h>
@@ -322,13 +324,26 @@ int sc_main(int argc, char** argv)
     std::cout << "smc-vp: ELF '" << elf_path << "' entry=0x" << std::hex << entry << std::dec << "\n";
 
     // Register the global CCI broker BEFORE any cci_param is constructed.
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
 
     // Defaults first, then ini overrides.
     apply_default_presets(top, entry);
     parse_ini(ini_path);
 
+    // One process-wide quantum, before any ISS/cci_param construction in dut.
+    {
+        cci::cci_originator o("smc_vp_cfg");
+        auto broker = cci::cci_get_global_broker(o);
+        uint64_t qns = simtlm::DEFAULT_GLOBAL_QUANTUM_NS;
+        const cci::cci_value v = broker.get_preset_cci_value(top + ".cluster.quantum_ns");
+        if (v.is_uint64())
+            qns = v.get_uint64();
+        simtlm::set_global_quantum_ns(qns);
+    }
+
     // Instantiate the platform (cluster is always wired in here).
+    // `dut` is the CCI instance name of the SMC platform, not a second quantum.
     smc::smc_platform dut{top.c_str()};
 
     // Bind idle initiators to the external inbound target sockets so their

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // bootrom_tb.cpp -- self-checking test bench for the SEP Boot ROM
 // (CCI-compliant).
@@ -507,7 +508,8 @@ int sc_main(int, char**)
                                             sc_core::SC_DISPLAY);
 
     // ── CCI: register global broker ──────────────────────────────────────
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
 
     cci::cci_originator platform_cfg("platform_cfg");
     auto global_broker = cci::cci_get_global_broker(platform_cfg);
