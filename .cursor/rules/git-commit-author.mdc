@@ -5,9 +5,9 @@ alwaysApply: true
 
 # Commit & push authorship
 
-Every commit must be attributed to the **human developer who authored the
-change**, using that developer's own configured git identity. Never attribute a
-commit to Cursor or any other AI agent.
+Every commit must be attributed **only** to the human developer who authored
+the change, using that developer's own configured git identity. The GitHub UI
+must show a single author — never "and Cursor" / any other AI agent.
 
 ## Rules
 
@@ -17,35 +17,56 @@ commit to Cursor or any other AI agent.
   hard-code a specific person's identity.
 - **Never** author or co-author a commit as an AI agent. In particular, do
   **not** add a `Co-authored-by: Cursor <cursoragent@cursor.com>` trailer (or
-  any other AI/agent co-author trailer) to commit messages.
-- Before any `git push`, verify the commits being pushed are authored by a real
-  developer and contain no AI/agent attribution.
+  any other AI/agent co-author trailer) to the commit message.
+- Cursor's git integration may **append that trailer after `git commit`
+  returns**, even when the agent did not pass it. Treat that as an automatic
+  rewrite of the message: inspect and strip it **before** any push.
+- Checking `git log --format='%an <%ae> | %s'` is **not** enough — `%s` is
+  only the subject. GitHub's "Co-authored-by" chip comes from the **message
+  body**. Always inspect `%B`.
 
-## How to enforce
+## After every commit (mandatory)
 
-Each developer sets their own identity once (do this per developer, not as a
-shared value):
+```bash
+git log -1 --format='%an <%ae>%n%B'
+```
+
+If the body contains `Co-authored-by: Cursor` (any email) or any other
+AI/agent trailer, strip it immediately:
+
+```bash
+# Last commit only (not yet pushed, or feature branch you are about to force-push):
+git log -1 --format='%B' | sed '/^Co-authored-by: Cursor/d' | git commit --amend -F - --no-edit
+```
+
+`--amend` is required here: the environment mutated the message after a
+successful commit. Then re-check `%B` until the trailer is gone.
+
+## If a stray trailer was already pushed on a feature branch
+
+```bash
+FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f \
+  --msg-filter 'sed "/^Co-authored-by: Cursor/d"' \
+  origin/main..HEAD
+git push --force-with-lease
+```
+
+Do **not** force-push `main`/`master`.
+
+## Verify before every push
+
+```bash
+git log origin/main..HEAD --format='%h %an <%ae>%n%B'
+```
+
+Author must be a real developer. Message body must contain **no**
+`Co-authored-by: Cursor` (or other AI/agent) line. If any commit still has
+it, strip first — do not push.
+
+Each developer sets their own identity once (per developer, not a shared
+value):
 
 ```bash
 git config user.name  "Your Name"
 git config user.email "you@tenstorrent.com"
-```
-
-If a commit is created with a stray `Co-authored-by: Cursor` trailer, strip it
-before pushing:
-
-```bash
-# Last commit only:
-git commit --amend --no-edit
-
-# Strip the trailer from the last N unpushed commits (N = range vs origin/main):
-FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f \
-  --msg-filter 'sed "/^Co-authored-by: Cursor <cursoragent@cursor.com>$/d"' \
-  origin/main..HEAD
-```
-
-Verify before pushing (author must be a real developer, never an AI agent):
-
-```bash
-git log origin/main..HEAD --format='%an <%ae> | %s'
 ```
