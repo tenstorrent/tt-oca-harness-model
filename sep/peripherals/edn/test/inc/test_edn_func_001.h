@@ -44,7 +44,6 @@
  * - Assertions validate expected vs. observed behavior
  * - Failed tests report detailed diagnostic information
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-12
  */
 

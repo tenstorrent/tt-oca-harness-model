@@ -12,7 +12,7 @@
 #   RV_ROOT    VeeR EL2 / picolibc location ($OCH_ROOT/deps/el2)
 #   GCC_PREFIX RISC-V toolchain prefix without the trailing dash, detected from
 #              PATH so the same tree builds on macOS, Ubuntu and RHEL
-#   SEP_VP     sep-vp executable, found by walking up to the tt-oca-sim root
+#   SEP_VP     sep-vp executable, found by walking up to the tt-oca-harness-model root
 #   CONFIG     accellera_config.ini that goes with it
 #
 # Every value can be overridden by exporting it before calling the runners.

@@ -51,7 +51,6 @@
  * - Multiple FIFO testing: Ensure independent overflow detection for both FIFOs
  * - Edge cases: Test consecutive overflows, mixed FIFO operations
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

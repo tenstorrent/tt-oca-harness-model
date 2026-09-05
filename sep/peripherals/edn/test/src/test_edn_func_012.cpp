@@ -16,7 +16,6 @@
  * - TC_EDN_BOOT_006: Boot Mode Exit Sequence
  * - TC_EDN_BOOT_007: Boot Mode State Transitions
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

@@ -248,7 +248,7 @@ URL if it is not on the public internet).  Place it next to this repo or
 anywhere you like:
 
 ```bash
-cd /path/to/parent/of/tt-oca-sim
+cd /path/to/parent/of/tt-oca-harness-model
 git clone <whisper-repo-url> whisper/whisper
 ```
 
@@ -262,7 +262,7 @@ Suggested layout (auto-detected without setting `WHISPER_HOME`):
 
 ```
 parent/
-├── tt-oca-sim/          ← this repo
+├── tt-oca-harness-model/ ← this repo
 └── whisper/whisper/     ← GNUmakefile here
 ```
 

@@ -37,7 +37,6 @@
  * - ERR_CODE: 0x3C (RO sticky)
  * - ERR_CODE_TEST: 0x40 (WO)
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

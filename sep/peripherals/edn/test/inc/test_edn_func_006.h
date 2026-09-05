@@ -44,7 +44,6 @@
  * - Comprehensive coverage of all 14 invalid values per field (0x0-0xF except 0x6, 0x9)
  * - Multiple simultaneous violations tested to verify independent alert tracking
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-13
  */
 
