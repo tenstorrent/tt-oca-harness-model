@@ -145,7 +145,26 @@ if(BUILD_TESTS)
   add_executable(efuse_test ${TEST_SRCS})
   peripheral_link_test_to_model(efuse_test efuse_model)
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    peripheral_add_coverage_target(PRIMARY_TARGET efuse_test)
+    # Match run_tests.sh: the default binary plus a second run with the
+    # secure_tm strap asserted. Coverage previously omitted that run, which
+    # left the strap-gated paths in src/efuse.cpp just under the 95% gate.
+    set(_efuse_exe "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/efuse_test")
+    set(_secure_ini "${CMAKE_BINARY_DIR}/accellera_config_secure_tm.ini")
+    file(WRITE "${_secure_ini}"
+"# Auto-generated: secure test mode strap asserted for coverage.
+[string]
+instance_prefix: testbench.efuse_dut
+chiplet_uid: [2684354560, 2684354561, 2684354562, 2684354563, 2684354564, 2684354565, 2684354566, 2684354567]
+[int]
+verbosity: 2
+[bool]
+secure_tm: true
+")
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET efuse_test
+      TEST_COMMANDS
+        COMMAND "${_efuse_exe}"
+        COMMAND "${_efuse_exe}" "${_secure_ini}")
   endif()
 
   enable_testing()

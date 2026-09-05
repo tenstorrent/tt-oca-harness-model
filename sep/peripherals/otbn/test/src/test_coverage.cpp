@@ -2,11 +2,17 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "otbn_basetest.h"
+
+#include <iostream>
 #include "otbn_algorithm_rsa_2048.h"
 #include "otbn_algorithm_rsa_2048_key_enabled.h"
 #include "otbn_algorithm_rsa_3072.h"
 #include "otbn_algorithm_summation.h"
 #include "otbn_algorithm_rnd_test.h"
+#include "otbn_algorithm_p256_ecdsa.h"
+#include "otbn_algorithm_smoke.h"
+#include "otbn_algorithm_otbn_loop.h"
+#include "otbn_algorithm_callback_cov.h"
 
 // ============================================================================
 // Coverage tests — exercise otbn.cpp and algorithm error paths not hit by the
@@ -720,6 +726,85 @@ void testbench::test_cov_algorithm_standalone_error_paths()
             passed = false;
         }
     }
+    {
+        otbn_algorithm_smoke algo(64);
+        char buf[64] = {};
+        algo.reset();
+        algo.message_objects(std::cout, std::cout);
+        (void)algo.get_instruction_count();
+        (void)algo.get_cycle_count();
+        if (algo.execute(buf) != otbn_algorithm::SUCCESS) {
+            CSML_INFO(1, logger) << "  FAIL: smoke standalone execute failed" << std::endl;
+            passed = false;
+        }
+    }
+    {
+        otbn_algorithm_otbn_loop algo(64);
+        char buf[64] = {};
+        algo.reset();
+        algo.message_objects(std::cout, std::cout);
+        if (algo.execute(buf) != otbn_algorithm::SUCCESS) {
+            CSML_INFO(1, logger) << "  FAIL: otbn_loop standalone execute failed" << std::endl;
+            passed = false;
+        }
+    }
+    {
+        otbn_algorithm_callback_cov algo(64);
+        char buf[64] = {};
+        algo.reset();
+        algo.message_objects(std::cout, std::cout);
+        if (algo.execute(buf) != otbn_algorithm::SUCCESS) {
+            CSML_INFO(1, logger) << "  FAIL: callback_cov standalone execute failed" << std::endl;
+            passed = false;
+        }
+    }
+    {
+        // Valid OpenSSL P-256 vector (same words as load_p256_test_data) so
+        // write_p256_value runs even in algorithm passes that skip the DUT
+        // happy path.
+        otbn_algorithm_p256_ecdsa algo(4096);
+        char buf[4096] = {};
+        auto* dw = reinterpret_cast<uint32_t*>(buf);
+        static const uint32_t msg[8] = {0xBE7DFBEA, 0xB71092A6, 0xB98DE50C,
+                                        0x0D3DC917, 0xBE9E25BA, 0xD2E8E857,
+                                        0x2404BEAF, 0xED4109AA};
+        static const uint32_t r[8] = {0x41991BEC, 0x8DC3060C, 0x890BC8AC,
+                                      0xCAFC6FDB, 0x1B99574C, 0x1B213D1B,
+                                      0x8C2F8DD0, 0x83F371A8};
+        static const uint32_t s[8] = {0x46A84F3A, 0xBBBD0F26, 0x713856D0,
+                                      0x109547DA, 0x13CEFB0A, 0xAF9F360A,
+                                      0xBBFA26C3, 0x3B6258F0};
+        static const uint32_t qx[8] = {0x4296164C, 0x79E7D74C, 0xEB97E5C1,
+                                       0xEDE9A495, 0x682D79BE, 0xF1AA16EA,
+                                       0xE1E12803, 0xEE28EC71};
+        static const uint32_t qy[8] = {0x1AB238AE, 0xD63E53F6, 0x5C3E0077,
+                                       0xACD9BE18, 0xEA12A8B1, 0xE6688EE7,
+                                       0x68012F20, 0xEECC45DF};
+        for (int i = 0; i < 8; i++) {
+            dw[(0x520 / 4) + i] = msg[i];
+            dw[(0x540 / 4) + i] = r[i];
+            dw[(0x560 / 4) + i] = s[i];
+            dw[(0x580 / 4) + i] = qx[i];
+            dw[(0x5A0 / 4) + i] = qy[i];
+        }
+        algo.reset();
+        algo.message_objects(std::cout, std::cout);
+        (void)algo.get_instruction_count();
+        if (algo.execute(buf) != otbn_algorithm::SUCCESS) {
+            CSML_INFO(1, logger) << "  FAIL: P256 standalone valid-vector execute failed"
+                                 << std::endl;
+            passed = false;
+        }
+    }
+
+    uint32_t rnd_words[8] = {};
+    if (dut->rnd_read_handler(rnd_words) != otbn_algorithm::SUCCESS) {
+        CSML_INFO(1, logger) << "  FAIL: rnd_read_handler did not succeed" << std::endl;
+        passed = false;
+    }
+    uint32_t csr_scratch = 0;
+    (void)dut->csr_read_handler(0x10, &csr_scratch);
+    (void)dut->csr_write_handler(0x10, 0xA5A5A5A5u);
 
     if (passed) {
         CSML_INFO(1, logger) << "  PASS: standalone algorithm error paths" << std::endl;
