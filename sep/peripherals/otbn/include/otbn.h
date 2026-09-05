@@ -255,6 +255,8 @@ public:
         int log_verbosity = CSML_DEFAULT_VERBOSITY);
    ~otbn_ip();
 
+   friend class testbench;
+
 private:
    // State machine and tracking variables
    otbn_state_t current_state;

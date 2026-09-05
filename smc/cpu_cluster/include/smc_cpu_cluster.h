@@ -51,6 +51,7 @@
 #include <vector>
 
 #include "iss_hart.h"
+#include "tlm_quantum_policy.h"
 
 // Forward declarations.
 namespace WdRiscv { template <typename URV> class System; }
@@ -83,7 +84,7 @@ public:
         uint64_t    mmio_hi      = 0x90000000;
 
         std::string isa          = "rv64imafdc";
-        uint64_t    quantum_ns   = 1000;               // TLM LT quantum (~1 us)
+        uint64_t    quantum_ns   = simtlm::DEFAULT_GLOBAL_QUANTUM_NS;
         unsigned    quantum_insts = 1000;              // K in step(K) per loop
 
         // §3.10 Atomicity: when true, the wrapper attempts to detect AMO/LR-SC

@@ -1175,6 +1175,12 @@ bool test_edn_func_001::test_main_sm_state_visibility()
     bool all_passed = true;
     uint32_t read_value;
 
+    // T18 injects ERR_CODE_TEST, which transitions MAIN_SM_STATE to Error (0x47).
+    // Reset first so this case observes the documented Idle reset value in both
+    // Release (-O3) and Coverage (-O0 / __COVERAGE__) builds.
+    apply_reset(100.0);
+    wait(10, SC_NS);
+
     // Read MAIN_SM_STATE reset value (should be 0xC1 = Idle)
     register_read_32(MAIN_SM_STATE_OFFSET, read_value);
     if (!verify_register_value("MAIN_SM_STATE (reset)", 0xC1, read_value)) {
@@ -1319,6 +1325,12 @@ bool test_edn_func_001::test_corner_ctrl_write_when_regwen_locked()
 
     bool all_passed = true;
     uint32_t read_value;
+
+    // Isolate from T18: ERR_CODE_TEST leaves the main SM in Error, where a
+    // subsequent CTRL write may not land 0x6666. Reset so REGWEN is unlocked
+    // and CTRL is writable in both Release and Coverage builds.
+    apply_reset(100.0);
+    wait(10, SC_NS);
 
     // Configure CTRL with specific value
     uint32_t config_value = 0x6666; // Valid multi-bit encoding

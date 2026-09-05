@@ -36,6 +36,7 @@ public:
     // way to read that instance's pending words.
     tlm_utils::simple_initiator_socket<testbench> unbound_isock;
     uint32_t unbound_read_32(unsigned byte_offset);
+    void     unbound_write_32(unsigned byte_offset, uint32_t value);
 
     // Test counters
     int m_tests_run    = 0;
@@ -130,4 +131,9 @@ public:
     // FUNC-EL2PIC-012: Unbound irq_in sources are tied low
     // -------------------------------------------------------------------------
     void test_unbound_sources_tied_low();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-015: Threshold CSRs, reserved source 0, null-hart arbiter
+    // -------------------------------------------------------------------------
+    void test_threshold_and_reserved_source();
 };

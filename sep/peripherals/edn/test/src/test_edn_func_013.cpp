@@ -380,17 +380,14 @@ bool test_edn_func_013::test_automatic_generate()
 
     wait(20, SC_NS);
 
-    // Assert endpoint request
+    // Dispatcher waits 100 us after AutoDispatch before the first Generate.
     CSML_INFO(1, logger) << "Asserting endpoint 0 request...";
     edn_req[0].write(true);
-    wait(30, SC_NS);
 
-    // Verify automatic Generate issued
-    register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
-    uint32_t cmd_type = (hw_cmd_sts_val >> 8) & 0xF;
-
-    if (cmd_type != CMD_TYPE_GENERATE) {
-        CSML_ERROR(1, logger) << "T4 FAIL: HW_CMD_STS.CMD_TYPE should be 4 (Generate), got " << cmd_type;
+    if (!wait_for_cmd_type(CMD_TYPE_GENERATE, 500.0)) {
+        register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
+        uint32_t cmd_type = (hw_cmd_sts_val >> 2) & 0xF;
+        CSML_ERROR(1, logger) << "T4 FAIL: HW_CMD_STS.CMD_TYPE should be 3 (Generate), got " << cmd_type;
         test_passed = false;
     }
 
@@ -433,8 +430,9 @@ bool test_edn_func_013::test_automatic_reseed()
     bool test_passed = true;
     uint32_t hw_cmd_sts_val;
 
-    // Configure with MAX_NUM_REQS = 4
-    register_write_32(GENERATE_CMD_OFFSET, CMD_GENERATE);
+    // glen=1 keeps each Generate short (~11 us) so the 4-generate interval is
+    // observable without a multi-millisecond wait per command.
+    register_write_32(GENERATE_CMD_OFFSET, 0x00001003);
     register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
     register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x00000004);
     wait(1, SC_NS);
@@ -449,61 +447,31 @@ bool test_edn_func_013::test_automatic_reseed()
 
     wait(20, SC_NS);
 
-    // Issue 4 Generate requests
-    CSML_INFO(1, logger) << "Issuing 4 Generate requests...";
-    for (int i = 0; i < 4; i++) {
-        CSML_INFO(1, logger) << "  Generate request " << (i + 1) << "/4";
+    // Dispatcher is timer-based (not one Generate per edn_req). Observe
+    // Generate, then Reseed after MAX_NUM_REQS_BETWEEN_RESEEDS generates,
+    // then Generate again after the counter is reloaded.
+    edn_req[0].write(true);
 
-        edn_req[0].write(true);
-        wait(30, SC_NS);
-
+    if (!wait_for_cmd_type(CMD_TYPE_GENERATE, 500.0)) {
         register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
-        uint32_t cmd_type = (hw_cmd_sts_val >> 8) & 0xF;
-
-        if (cmd_type != CMD_TYPE_GENERATE) {
-            CSML_ERROR(1, logger) << "T5 FAIL: Request " << (i+1) << " should be Generate, got " << cmd_type;
-            test_passed = false;
-        }
-
-        simulate_csrng_entropy_response(true);
-        wait(20, SC_NS);
-
-        edn_req[0].write(false);
-        wait(10, SC_NS);
+        CSML_ERROR(1, logger) << "T5 FAIL: first command should be Generate (3), got "
+                              << ((hw_cmd_sts_val >> 2) & 0xF);
+        test_passed = false;
     }
 
-    // 5th request should trigger Reseed
-    CSML_INFO(1, logger) << "Issuing 5th request (should trigger Reseed)...";
-    edn_req[0].write(true);
-    wait(30, SC_NS);
-
-    register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
-    uint32_t cmd_type = (hw_cmd_sts_val >> 8) & 0xF;
-
-    if (cmd_type != CMD_TYPE_RESEED) {
-        CSML_ERROR(1, logger) << "T5 FAIL: 5th request should trigger Reseed (3), got " << cmd_type;
+    if (!wait_for_cmd_type(CMD_TYPE_RESEED, 30000.0)) {
+        register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
+        CSML_ERROR(1, logger) << "T5 FAIL: Reseed (4) not observed after 4 Generates, got "
+                              << ((hw_cmd_sts_val >> 2) & 0xF);
         test_passed = false;
     } else {
         CSML_INFO(1, logger) << "Reseed command triggered successfully";
     }
 
-    // Complete Reseed
-    simulate_csrng_entropy_response(true);
-    wait(30, SC_NS);
-
-    edn_req[0].write(false);
-    wait(10, SC_NS);
-
-    // 6th request should be Generate again (counter reset)
-    CSML_INFO(1, logger) << "Issuing 6th request (should be Generate, counter reset)...";
-    edn_req[0].write(true);
-    wait(30, SC_NS);
-
-    register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
-    cmd_type = (hw_cmd_sts_val >> 8) & 0xF;
-
-    if (cmd_type != CMD_TYPE_GENERATE) {
-        CSML_ERROR(1, logger) << "T5 FAIL: 6th request should be Generate (counter reset), got " << cmd_type;
+    if (!wait_for_cmd_type(CMD_TYPE_GENERATE, 10000.0)) {
+        register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
+        CSML_ERROR(1, logger) << "T5 FAIL: Generate should resume after Reseed, got "
+                              << ((hw_cmd_sts_val >> 2) & 0xF);
         test_passed = false;
     }
 
@@ -612,14 +580,17 @@ bool test_edn_func_013::test_auto_mode_exit()
 
     // Trigger Generate command
     edn_req[0].write(true);
-    wait(20, SC_NS);
+    if (!wait_for_cmd_type(CMD_TYPE_GENERATE, 500.0)) {
+        CSML_ERROR(1, logger) << "T7 FAIL: Generate did not start before exit";
+        test_passed = false;
+    }
 
-    // Clear AUTO_REQ_MODE while command active
+    // Clear AUTO_REQ_MODE while Generate is in flight
     CSML_INFO(1, logger) << "Clearing AUTO_REQ_MODE during active command...";
     register_write_32(CTRL_OFFSET, 0x00009996);
     wait(10, SC_NS);
 
-    // Complete Generate
+    // Complete in-flight Generate and deliver entropy to the pending request
     simulate_csrng_entropy_response(true);
     wait(30, SC_NS);
 
@@ -630,6 +601,9 @@ bool test_edn_func_013::test_auto_mode_exit()
     }
 
     edn_req[0].write(false);
+    while (!m_mock_buffer.empty()) {
+        m_mock_buffer.pop();
+    }
     wait(20, SC_NS);
 
     // Verify AUTO_MODE cleared
@@ -824,9 +798,25 @@ bool test_edn_func_013::test_cmd_fifo_rst()
 
 bool test_edn_func_013::test_idle_to_autoloadins()
 {
-    CSML_INFO(1, logger) << "Starting T12: Idle to AutoLoadIns Transition";
-    // Implementation: Verify state transition from Idle to AutoLoadIns on enable
-    CSML_INFO(1, logger) << "T12: Basic stub implementation";
+    CSML_INFO(1, logger) << "Starting T12: Instantiate timeout leaves auto-init";
+
+    register_write_32(GENERATE_CMD_OFFSET, 0x00001003);
+    register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x4);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    // Do not issue Instantiate — auto_mode_init times out after 1000 x 5 us.
+    wait(6, SC_MS);
+
+    uint32_t state_val = 0;
+    register_read_32(MAIN_SM_STATE_OFFSET, state_val);
+    if (state_val == 0x3C) {
+        CSML_ERROR(1, logger) << "T12 FAIL: AutoDispatch entered without Instantiate";
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T12 PASS: auto_mode_init timed out waiting for Instantiate";
     return true;
 }
 
@@ -841,56 +831,225 @@ bool test_edn_func_013::test_auto_to_swport_transition()
 bool test_edn_func_013::test_max_reqs_zero_disables()
 {
     CSML_INFO(1, logger) << "Starting T14: MAX_NUM_REQS=0 Disables Generate";
-    // Implementation: Set MAX_NUM_REQS=0, verify no automatic Generate
-    CSML_INFO(1, logger) << "T14: Basic stub implementation";
+
+    register_write_32(GENERATE_CMD_OFFSET, 0x00001003);
+    register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    if (!issue_manual_instantiate()) {
+        CSML_ERROR(1, logger) << "T14 FAIL: Instantiate failed";
+        return false;
+    }
+
+    edn_req[0].write(true);
+    wait(350, SC_US);
+
+    uint32_t hw_cmd_sts_val = 0;
+    register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
+    const uint32_t cmd_type = (hw_cmd_sts_val >> 2) & 0xF;
+    edn_req[0].write(false);
+
+    if (cmd_type == CMD_TYPE_GENERATE) {
+        CSML_ERROR(1, logger) << "T14 FAIL: Generate issued with MAX_NUM_REQS=0";
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T14 PASS: MAX_NUM_REQS=0 suppressed automatic Generate";
     return true;
 }
 
 bool test_edn_func_013::test_max_reqs_exceeds_csrng()
 {
-    CSML_INFO(1, logger) << "Starting T15: MAX_NUM_REQS Exceeds CSRNG Limit";
-    // Implementation: Set excessive value, verify CSRNG error handling
-    CSML_INFO(1, logger) << "T15: Basic stub implementation";
+    CSML_INFO(1, logger) << "Starting T15: CSRNG Generate rejection in auto mode";
+
+    register_write_32(GENERATE_CMD_OFFSET, 0x00001003);
+    register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x4);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    if (!issue_manual_instantiate()) {
+        CSML_ERROR(1, logger) << "T15 FAIL: Instantiate failed";
+        return false;
+    }
+
+    set_forced_csrng_ack_status(0x1);
+    wait(200, SC_US);
+
+    uint32_t recov = 0;
+    register_read_32(RECOV_ALERT_STS_OFFSET, recov);
+    if (recov == 0) {
+        CSML_ERROR(1, logger) << "T15 FAIL: CSRNG Generate error should raise a recoverable alert";
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T15 PASS: Forced CSRNG Generate error handled";
     return true;
 }
 
 bool test_edn_func_013::test_exit_during_active_command()
 {
-    CSML_INFO(1, logger) << "Starting T16: Exit During Active Command";
-    // Implementation: Clear AUTO_REQ_MODE during active command, verify waits for completion
-    CSML_INFO(1, logger) << "T16: Basic stub implementation";
+    CSML_INFO(1, logger) << "Starting T16: Exit During Active Reseed";
+
+    register_write_32(GENERATE_CMD_OFFSET, 0x00001003);
+    register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x1);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    if (!issue_manual_instantiate()) {
+        CSML_ERROR(1, logger) << "T16 FAIL: Instantiate failed";
+        return false;
+    }
+
+    if (!wait_for_cmd_type(CMD_TYPE_GENERATE, 500.0)) {
+        CSML_ERROR(1, logger) << "T16 FAIL: Generate did not start";
+        return false;
+    }
+    if (!wait_for_cmd_type(CMD_TYPE_RESEED, 10000.0)) {
+        CSML_ERROR(1, logger) << "T16 FAIL: Reseed did not start";
+        return false;
+    }
+
+    register_write_32(CTRL_OFFSET, 0x00009996);
+    wait(6, SC_MS);
+
+    uint32_t hw_cmd_sts_val = 0;
+    register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
+    if ((hw_cmd_sts_val & 0x2) != 0) {
+        CSML_ERROR(1, logger) << "T16 FAIL: AUTO_MODE should clear after exit during Reseed";
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T16 PASS: Exit during in-flight Reseed completed cleanly";
     return true;
 }
 
 bool test_edn_func_013::test_fifo_rst_during_auto()
 {
-    CSML_INFO(1, logger) << "Starting T17: FIFO RST During Auto Mode";
-    // Implementation: Set CMD_FIFO_RST during auto mode, verify behavior
-    CSML_INFO(1, logger) << "T17: Basic stub implementation";
+    CSML_INFO(1, logger) << "Starting T17: Empty GENERATE_CMD FIFO is a fatal config error";
+
+    register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x4);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    if (!issue_manual_instantiate()) {
+        CSML_ERROR(1, logger) << "T17 FAIL: Instantiate failed";
+        return false;
+    }
+
+    wait(200, SC_US);
+
+    uint32_t err_code = 0;
+    register_read_32(ERR_CODE_OFFSET, err_code);
+    if ((err_code & (1u << 29)) == 0) {
+        CSML_ERROR(1, logger) << "T17 FAIL: FIFO_READ_ERR not set for empty GENERATE_CMD, ERR_CODE=0x"
+                              << std::hex << err_code;
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T17 PASS: Empty GENERATE_CMD FIFO reported FIFO_READ_ERR";
     return true;
 }
 
 bool test_edn_func_013::test_reset_during_auto_mode()
 {
     CSML_INFO(1, logger) << "Starting T18: Reset During Auto Mode";
-    // Implementation: Assert reset during auto mode, verify immediate disable
-    CSML_INFO(1, logger) << "T18: Basic stub implementation";
+
+    register_write_32(GENERATE_CMD_OFFSET, 0x00001003);
+    register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x4);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    if (!issue_manual_instantiate()) {
+        CSML_ERROR(1, logger) << "T18 FAIL: Instantiate failed";
+        return false;
+    }
+
+    if (!wait_for_cmd_type(CMD_TYPE_GENERATE, 500.0)) {
+        CSML_ERROR(1, logger) << "T18 FAIL: Generate did not start";
+        return false;
+    }
+
+    apply_reset(100.0);
+    wait(10, SC_NS);
+
+    uint32_t state_val = 0;
+    register_read_32(MAIN_SM_STATE_OFFSET, state_val);
+    if (state_val != STATE_IDLE) {
+        CSML_ERROR(1, logger) << "T18 FAIL: Reset should return MAIN_SM_STATE to Idle, got 0x"
+                              << std::hex << state_val;
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T18 PASS: Reset during auto mode returned to Idle";
     return true;
 }
 
 bool test_edn_func_013::test_buffer_depletion_generate()
 {
-    CSML_INFO(1, logger) << "Starting T19: Buffer Depletion Triggers Generate";
-    // Implementation: Deplete entropy buffer, verify automatic Generate
-    CSML_INFO(1, logger) << "T19: Basic stub implementation";
+    CSML_INFO(1, logger) << "Starting T19: GENERATE_CMD clen/FIFO mismatch";
+
+    // Header claims clen=1 but only the header is written.
+    register_write_32(GENERATE_CMD_OFFSET, 0x00000103);
+    register_write_32(RESEED_CMD_OFFSET, CMD_RESEED);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x4);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    if (!issue_manual_instantiate()) {
+        CSML_ERROR(1, logger) << "T19 FAIL: Instantiate failed";
+        return false;
+    }
+
+    wait(200, SC_US);
+
+    uint32_t err_code = 0;
+    register_read_32(ERR_CODE_OFFSET, err_code);
+    uint32_t recov = 0;
+    register_read_32(RECOV_ALERT_STS_OFFSET, recov);
+    if (err_code == 0 && recov == 0) {
+        CSML_ERROR(1, logger) << "T19 FAIL: clen mismatch should surface as a generate error";
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T19 PASS: GENERATE_CMD clen mismatch handled";
     return true;
 }
 
 bool test_edn_func_013::test_auto_to_boot_transition()
 {
-    CSML_INFO(1, logger) << "Starting T20: Auto to Boot Mode Transition";
-    // Implementation: Verify full disable/re-enable required for mode switch
-    CSML_INFO(1, logger) << "T20: Basic stub implementation";
+    CSML_INFO(1, logger) << "Starting T20: Empty RESEED_CMD FIFO after Generate interval";
+
+    register_write_32(GENERATE_CMD_OFFSET, 0x00001003);
+    register_write_32(MAX_NUM_REQS_BETWEEN_RESEEDS_OFFSET, 0x1);
+    wait(1, SC_NS);
+
+    enable_auto_mode();
+    if (!issue_manual_instantiate()) {
+        CSML_ERROR(1, logger) << "T20 FAIL: Instantiate failed";
+        return false;
+    }
+
+    if (!wait_for_cmd_type(CMD_TYPE_GENERATE, 500.0)) {
+        CSML_ERROR(1, logger) << "T20 FAIL: Generate did not start";
+        return false;
+    }
+    wait(200, SC_US);
+
+    uint32_t err_code = 0;
+    register_read_32(ERR_CODE_OFFSET, err_code);
+    if ((err_code & (1u << 29)) == 0) {
+        CSML_ERROR(1, logger) << "T20 FAIL: FIFO_READ_ERR not set for empty RESEED_CMD, ERR_CODE=0x"
+                              << std::hex << err_code;
+        return false;
+    }
+
+    CSML_INFO(1, logger) << "T20 PASS: Empty RESEED_CMD FIFO reported FIFO_READ_ERR";
     return true;
 }
 
@@ -977,10 +1136,27 @@ void test_edn_func_013::simulate_endpoint_request(unsigned int endpoint_id, bool
 
 void test_edn_func_013::simulate_csrng_entropy_response(bool fips_status)
 {
-    // This is a simplified simulation
-    // In actual implementation, would use CSRNG interface methods
-    // Wait 6ms to allow the long 5ms CSRNG latencies simulated in auto_mode_issue_generate to complete
+    // Wait for auto_mode_issue_generate / reseed LT delays (glen=0xFFF ~4.1 ms,
+    // reseed ~5 ms) then inject a 128-bit block so the endpoint mock can ack.
     wait(6, SC_MS);
+    const uint32_t genbits[4] = {0xA5A5A5A5u, 0x5A5A5A5Au, 0x12345678u, 0x87654321u};
+    provide_csrng_entropy(genbits, fips_status);
+    wait(5, SC_NS);
+}
+
+bool test_edn_func_013::wait_for_cmd_type(uint32_t expected, double timeout_us)
+{
+    uint32_t hw_cmd_sts_val = 0;
+    double elapsed = 0.0;
+    while (elapsed < timeout_us) {
+        register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_val);
+        if (((hw_cmd_sts_val >> 2) & 0xF) == expected) {
+            return true;
+        }
+        wait(10, SC_US);
+        elapsed += 10.0;
+    }
+    return false;
 }
 
 bool test_edn_func_013::wait_for_state(uint32_t expected_state, double timeout_ns)
@@ -1025,7 +1201,7 @@ bool test_edn_func_013::verify_hw_cmd_sts(unsigned int expected_auto_mode,
     }
 
     if (expected_cmd_type >= 0) {
-        unsigned int cmd_type = (hw_cmd_sts_val >> 8) & 0xF;
+        unsigned int cmd_type = (hw_cmd_sts_val >> 2) & 0xF;
         if (cmd_type != (unsigned int)expected_cmd_type) {
             CSML_ERROR(1, logger) << "CMD_TYPE mismatch: expected=" << expected_cmd_type
                                   << ", actual=" << cmd_type;

@@ -443,3 +443,57 @@ void test_state_read_straddles_digest_end(kmac_test* test)
     force_idle(test);
     printf("[TC-229] Out-of-range STATE read zero-filled\n");
 }
+
+/******************************************************************************
+ * TC-230: KeyMgr sideload socket rejects reads
+ *
+ * The sideload bus is write-only. A read must be refused with
+ * TLM_COMMAND_ERROR_RESPONSE rather than returning key material.
+ ******************************************************************************/
+void test_keymgr_read_rejected(kmac_test* test)
+{
+    printf("\n[TC-230] KeyMgr sideload read is rejected\n");
+
+    uint32_t value = 0xFFFFFFFFu;
+    tlm::tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    trans.set_command(tlm::TLM_READ_COMMAND);
+    trans.set_address(0x00);
+    trans.set_data_ptr(reinterpret_cast<uint8_t*>(&value));
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_byte_enable_ptr(0);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    test->keymgr_socket->b_transport(trans, delay);
+
+    KMAC_CHECK(trans.get_response_status() == tlm::TLM_COMMAND_ERROR_RESPONSE);
+    printf("[TC-230] KeyMgr read rejected with COMMAND_ERROR\n");
+}
+
+/******************************************************************************
+ * TC-231: A second application is blocked while another owns the datapath
+ *
+ * The app mux is exclusive. Once LC_CTRL has started a transfer (last=false),
+ * a ROM_CTRL request must be dropped rather than splicing into the message.
+ ******************************************************************************/
+void test_second_app_blocked_while_first_active(kmac_test* test)
+{
+    printf("\n[TC-231] Second app blocked while first is active\n");
+
+    test->app_port[1]->app_request(0x1122334455667788ULL, 0xFF, false);
+    wait(20, SC_NS);
+    test->app_port[2]->app_request(0x99AABBCCDDEEFF00ULL, 0xFF, false);
+    wait(20, SC_NS);
+
+    KMAC_CHECK(!test->app_port[2]->is_done());
+
+    test->app_port[1]->app_request(0ULL, 0xFF, true);
+    wait(50, SC_NS);
+    if (test->app_port[1]->is_done()) {
+        uint32_t s0[8] = {}, s1[8] = {};
+        test->app_port[1]->get_digest(s0, s1);
+    }
+    force_idle(test);
+    printf("[TC-231] Second application request dropped while first owned the mux\n");
+}

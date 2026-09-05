@@ -80,12 +80,10 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
 include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
-# ---------------------------------------------------------------------------
-# smc_axi_extension.h — canonical header in the SMC-shared common tree
-# ---------------------------------------------------------------------------
-set(SMC_AXI_EXTENSION_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../common/include"
-    CACHE PATH "Directory containing smc_axi_extension.h")
+# Canonical smc_axi_extension.h (shared across the SMC tree).
+# Not cached: a stale CACHE entry from before the header moved leaves
+# incremental build_asan/ / build_cov/ compiling against a missing -I.
+include(SmcAxiExtension)
 
 # ---------------------------------------------------------------------------
 # libsmc_fabric

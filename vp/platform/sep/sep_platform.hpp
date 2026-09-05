@@ -360,7 +360,7 @@ private:
     // =========================================================================
     WdRiscv::HartConfig    config;
     ArgsCSML*              argsCSML      = nullptr;
-    csml_param<uint64_t>   globalQuantumNs;
+    csml_param<uint64_t>   globalQuantumNs;  // fallback if sc_main has not set TLM global quantum
 
     // Boot straps latched by the (emulated) SMC reset unit, exposed as CCI params
     // so the ROM boot mode is selectable at invocation (accellera_config.ini) with

@@ -81,7 +81,12 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 elif [ "${BUILD_TYPE}" = "ASAN" ]; then
-  ASAN_OPTIONS="halt_on_error=0:detect_leaks=1:log_path=${BUILD_DIR}/asan.log" \
+  # LeakSanitizer is not packaged on Darwin; keep it on for Linux CI.
+  ASAN_LEAKS=1
+  if [ "$(uname -s)" = "Darwin" ]; then
+    ASAN_LEAKS=0
+  fi
+  ASAN_OPTIONS="halt_on_error=0:detect_leaks=${ASAN_LEAKS}:log_path=${BUILD_DIR}/asan.log" \
     "${BUILD_DIR}/bin/adams_bridge_test"
   # halt_on_error=0 keeps the run going, so a clean exit code is not proof of a
   # clean run: the log files are the gate.

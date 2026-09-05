@@ -9,7 +9,10 @@
 #                  separate clone is needed.  The cci_value_iterator C++20
 #                  regression present in 1.0.1 is fixed in 1.0.2.
 #
-#  sep-vp          Build the sep-vp executable (needs build-deps cache).
+#  sep-vp          Build the sep-vp executable and run the SEP firmware suite
+#                  via sw/sep-vp-tests/run_sep_vp_tests.sh (needs build-deps +
+#                  RISC-V bare-metal toolchain).  VeeR ISS is in-tree; no
+#                  Whisper required.
 #
 #  sep-unit-tests  Run every SEP peripheral unit test via
 #                  sep/peripherals/run_all_peripherals.sh (needs build-deps).
@@ -137,10 +140,13 @@ jobs:
           cmake --install build
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 2 — build sep-vp
+# Job 2 — build sep-vp and run SEP VP firmware tests
+# VeeR ISS is in-tree; no Whisper.  RISC-V gcc builds the RV32 firmware
+# (gcc-riscv64-unknown-elf with -march=rv32imc).  Pre-build sep-vp so the
+# runner does not try to rebuild the VP (that path would demand WHISPER_HOME).
 # ─────────────────────────────────────────────────────────────────────────────
   sep-vp:
-    name: Build sep-vp
+    name: SEP VP firmware tests
     runs-on: ubuntu-22.04
     needs: build-deps
 
@@ -153,9 +159,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y g++ cmake \
+          sudo apt-get install -y g++ cmake make \
             libboost-iostreams-dev libboost-program-options-dev libboost-log-dev \
-            libssl-dev
+            libssl-dev gcc-riscv64-unknown-elf
 
       - name: Restore SystemC cache
         uses: actions/cache@v4
@@ -185,6 +191,23 @@ jobs:
 
       - name: Verify binary exists
         run: test -x vp/build/bin/sep-vp
+
+      - name: Run SEP VP firmware tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+          VP:           ${{ github.workspace }}/vp/build/bin/sep-vp
+        run: |
+          cd sw/sep-vp-tests
+          ./run_sep_vp_tests.sh
+
+      - name: Upload sep-vp logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sep-vp-logs
+          path: sw/sep-vp-tests/logs/
+          retention-days: 7
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Job 3 — SEP peripheral unit tests
@@ -224,6 +247,15 @@ jobs:
           SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
           CCI_HOME:     ${{ env.CCI_HOME }}
         run: sep/peripherals/run_all_peripherals.sh
+
+      - name: Run SEP CPU (VeeR-ISS TLM) tests
+        env:
+          SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
+        run: |
+          sep/cpu/run_tests.sh
+          sep/cpu/run_tests.sh --asan
+          sep/cpu/run_tests.sh --coverage
 
       - name: Upload test logs
         if: always()

@@ -200,5 +200,6 @@ A C++ change is ready for review only when, for every touched target:
 
 Reference orchestrators: `smc/cpu_cluster/run_tests.sh`,
 `smc/peripherals/<target>/run_tests.sh`, `smc/cpu_cluster/run_all_smc_tests.sh`,
-`.github/workflows/ci.yml` (Ubuntu: Release + ASAN + Coverage; RHEL8: skips
-ASAN because the gcc-toolset-12 ASan runtime is not packaged).
+`.github/workflows/ci.yml` (Ubuntu: Release + ASAN + Coverage) and
+`.github/workflows/ci-rhel8.yml` (same three phases; ASan needs
+`gcc-toolset-12-libasan-devel` and `gcc-toolset-12-libubsan-devel`).

@@ -220,6 +220,7 @@ set(TEST_SRCS
   test/src/mlkem_tests.cpp
   test/src/interrupt_kv_tests.cpp
   test/src/nist_kat_tests.cpp
+  test/src/coverage_tests.cpp
 )
 
 # -----------------------------------------------------------------------------
@@ -260,6 +261,12 @@ if(BUILD_TESTS)
   target_include_directories(adams_bridge_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/common
   )
+  # macOS Coverage builds the model as OBJECT; TARGET_OBJECTS on that library
+  # do not reach the test binary, so the PQClean objects must be linked again.
+  if(APPLE AND CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    target_link_libraries(adams_bridge_test PRIVATE
+      abr_pqclean_common abr_pqclean_mldsa abr_pqclean_mlkem)
+  endif()
 
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     peripheral_add_coverage_target(PRIMARY_TARGET adams_bridge_test)

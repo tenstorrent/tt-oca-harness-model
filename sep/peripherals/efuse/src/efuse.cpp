@@ -343,42 +343,42 @@ void efuse_model::apply_transient_rma()
 
 const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     // first        last          hi     write-lock bit
-    { 0x00C / 4, 0x00C / 4, false,  0 },  // LC_STATE
-    { 0x010 / 4, 0x010 / 4, false,  2 },  // SBOOT_DIS
-    { 0x014 / 4, 0x014 / 4, false,  4 },  // TRANSIENT_RMA_EN
-    { 0x018 / 4, 0x01C / 4, false,  6 },  // SIP_DIS_{LO,HI}
-    { 0x020 / 4, 0x024 / 4, false,  8 },  // SYS_DIS_{LO,HI}
-    { 0x028 / 4, 0x044 / 4, false, 10 },  // RMA_SIP_TOKEN[8]
-    { 0x048 / 4, 0x064 / 4, false, 12 },  // RMA_CHIPLET_TOKEN[8]
-    { 0x068 / 4, 0x084 / 4, false, 14 },  // CLASS_KEY[8]
-    { 0x088 / 4, 0x088 / 4, false, 16 },  // CHIPLET_PUBK_REVOKE
-    { 0x08C / 4, 0x0A8 / 4, false, 18 },  // BL1_VERSION[8]
-    { 0x0AC / 4, 0x0C8 / 4, false, 20 },  // BL2_VERSION[8]
-    { 0x0CC / 4, 0x0E8 / 4, false, 22 },  // CHIPLET_UID[8]
-    { 0x0EC / 4, 0x108 / 4, false, 24 },  // SIP_PUBK_HASH0[8]
-    { 0x10C / 4, 0x128 / 4, false, 26 },  // SIP_UID[8]
-    { 0x12C / 4, 0x148 / 4, false, 28 },  // SYS_PUBK_HASH[8]
-    { 0x14C / 4, 0x168 / 4, false, 30 },  // SYS_UID[8]
-    { 0x16C / 4, 0x16C / 4, true,   0 },  // STATUS_RPT
-    { 0x170 / 4, 0x170 / 4, true,   2 },  // SEP_ROM_CTRL
+    { sep_efuse::LC_STATE_OFFSET / 4, sep_efuse::LC_STATE_OFFSET / 4, false,  0 },
+    { sep_efuse::SBOOT_DIS_OFFSET / 4, sep_efuse::SBOOT_DIS_OFFSET / 4, false,  2 },
+    { sep_efuse::TRANSIENT_RMA_EN_OFFSET / 4, sep_efuse::TRANSIENT_RMA_EN_OFFSET / 4, false,  4 },
+    { sep_efuse::SIP_DIS_LO_OFFSET / 4, sep_efuse::SIP_DIS_HI_OFFSET / 4, false,  6 },
+    { sep_efuse::SYS_DIS_LO_OFFSET / 4, sep_efuse::SYS_DIS_HI_OFFSET / 4, false,  8 },
+    { sep_efuse::RMA_SIP_TOKEN_OFFSET / 4, sep_efuse::RMA_SIP_TOKEN_OFFSET / 4 + 7, false, 10 },
+    { sep_efuse::RMA_CHIPLET_TOKEN_OFFSET / 4, sep_efuse::RMA_CHIPLET_TOKEN_OFFSET / 4 + 7, false, 12 },
+    { sep_efuse::CLASS_KEY_OFFSET / 4, sep_efuse::CLASS_KEY_OFFSET / 4 + 7, false, 14 },
+    { sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET / 4, sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET / 4, false, 16 },
+    { sep_efuse::BL1_VERSION_OFFSET / 4, sep_efuse::BL1_VERSION_OFFSET / 4 + 7, false, 18 },
+    { sep_efuse::BL2_VERSION_OFFSET / 4, sep_efuse::BL2_VERSION_OFFSET / 4 + 7, false, 20 },
+    { sep_efuse::CHIPLET_UID_OFFSET / 4, sep_efuse::CHIPLET_UID_OFFSET / 4 + 7, false, 22 },
+    { sep_efuse::SIP_PUBK_HASH0_OFFSET / 4, sep_efuse::SIP_PUBK_HASH0_OFFSET / 4 + 7, false, 24 },
+    { sep_efuse::SIP_UID_OFFSET / 4, sep_efuse::SIP_UID_OFFSET / 4 + 7, false, 26 },
+    { sep_efuse::SYS_PUBK_HASH_OFFSET / 4, sep_efuse::SYS_PUBK_HASH_OFFSET / 4 + 7, false, 28 },
+    { sep_efuse::SYS_UID_OFFSET / 4, sep_efuse::SYS_UID_OFFSET / 4 + 7, false, 30 },
+    { sep_efuse::STATUS_RPT_OFFSET / 4, sep_efuse::STATUS_RPT_OFFSET / 4, true,   0 },
+    { sep_efuse::SEP_ROM_CTRL_OFFSET / 4, sep_efuse::SEP_ROM_CTRL_OFFSET / 4, true,   2 },
     // One pair covers the whole SPI control group: the field-enable register plus
     // the discovery and PHY timing registers that follow it.
-    { 0x174 / 4, 0x194 / 4, true,   4 },  // SEP_SPI_CTRL_FIELD_EN .. SPI_RB_VALID_TIME
-    { 0x198 / 4, 0x1B4 / 4, true ,   6 },  // CHIPLET_PUBK_HASH0[8]
-    { 0x1B8 / 4, 0x1D4 / 4, true ,   8 },  // CHIPLET_PUBK_HASH1[8]
-    { 0x1D8 / 4, 0x1D8 / 4, true ,  10 },  // REQUIRED_SIGNERS
-    { 0x1DC / 4, 0x1DC / 4, true ,  12 },  // REQUIRED_ALGS
-    { 0x1E0 / 4, 0x1FC / 4, true ,  14 },  // CHIPLET_PUBK_PQC_HASH0[8]
-    { 0x200 / 4, 0x21C / 4, true ,  16 },  // CHIPLET_PUBK_PQC_HASH1[8]
-    { 0x220 / 4, 0x23C / 4, true ,  18 },  // SIP_PUBK_PQC_HASH0[8]
-    { 0x240 / 4, 0x25C / 4, true ,  20 },  // SYS_PUBK_PQC_HASH[8]
-    { 0x260 / 4, 0x27C / 4, true ,  22 },  // SIP_PUBK_HASH1[8]
-    { 0x280 / 4, 0x29C / 4, true ,  24 },  // SIP_PUBK_PQC_HASH1[8]
-    { 0x2A0 / 4, 0x2BC / 4, true ,  26 },  // SEP_CHIPLET_ID[8]
-    { 0x2C0 / 4, 0x2DC / 4, true ,  28 },  // SEP_SIP_ID[8]
-    { 0x2E0 / 4, 0x2FC / 4, true ,  30 },  // SEP_SYS_ID[8]
-    // SPARE0..7 (0x300..0x3E0) are locked by LOCKS_SPARE, not LOCKS. The model
-    // has no LOCKS_SPARE plumbing, so they are deliberately absent here rather
+    { sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET / 4, sep_efuse::SPI_RB_VALID_TIME_OFFSET / 4, true,   4 },
+    { sep_efuse::CHIPLET_PUBK_HASH0_OFFSET / 4, sep_efuse::CHIPLET_PUBK_HASH0_OFFSET / 4 + 7, true ,   6 },
+    { sep_efuse::CHIPLET_PUBK_HASH1_OFFSET / 4, sep_efuse::CHIPLET_PUBK_HASH1_OFFSET / 4 + 7, true ,   8 },
+    { sep_efuse::REQUIRED_SIGNERS_OFFSET / 4, sep_efuse::REQUIRED_SIGNERS_OFFSET / 4, true,  10 },
+    { sep_efuse::REQUIRED_ALGS_OFFSET / 4, sep_efuse::REQUIRED_ALGS_OFFSET / 4, true,  12 },
+    { sep_efuse::CHIPLET_PUBK_PQC_HASH0_OFFSET / 4, sep_efuse::CHIPLET_PUBK_PQC_HASH0_OFFSET / 4 + 7, true,  14 },
+    { sep_efuse::CHIPLET_PUBK_PQC_HASH1_OFFSET / 4, sep_efuse::CHIPLET_PUBK_PQC_HASH1_OFFSET / 4 + 7, true,  16 },
+    { sep_efuse::SIP_PUBK_PQC_HASH0_OFFSET / 4, sep_efuse::SIP_PUBK_PQC_HASH0_OFFSET / 4 + 7, true,  18 },
+    { sep_efuse::SYS_PUBK_PQC_HASH_OFFSET / 4, sep_efuse::SYS_PUBK_PQC_HASH_OFFSET / 4 + 7, true,  20 },
+    { sep_efuse::SIP_PUBK_HASH1_OFFSET / 4, sep_efuse::SIP_PUBK_HASH1_OFFSET / 4 + 7, true,  22 },
+    { sep_efuse::SIP_PUBK_PQC_HASH1_OFFSET / 4, sep_efuse::SIP_PUBK_PQC_HASH1_OFFSET / 4 + 7, true,  24 },
+    { sep_efuse::SEP_CHIPLET_ID_OFFSET / 4, sep_efuse::SEP_CHIPLET_ID_OFFSET / 4 + 7, true,  26 },
+    { sep_efuse::SEP_SIP_ID_OFFSET / 4, sep_efuse::SEP_SIP_ID_OFFSET / 4 + 7, true,  28 },
+    { sep_efuse::SEP_SYS_ID_OFFSET / 4, sep_efuse::SEP_SYS_ID_OFFSET / 4 + 7, true,  30 },
+    // SPARE0..7 are locked by LOCKS_SPARE, not LOCKS. The model has no
+    // LOCKS_SPARE plumbing, so they are deliberately absent here rather
     // than aimed at whatever LOCKS bit happened to be free.
 };
 

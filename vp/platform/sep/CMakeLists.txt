@@ -23,6 +23,7 @@ find_package(OpenSSL REQUIRED)
   include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/hmac/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/otbn/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/spi_controller/include

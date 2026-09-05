@@ -110,6 +110,8 @@ public:
   */
   ~secure_dma_model();
 
+  friend class testbench;
+
 private:
   /// Quantum keeper for temporal decoupling
   tlm_utils::tlm_quantumkeeper m_qk;

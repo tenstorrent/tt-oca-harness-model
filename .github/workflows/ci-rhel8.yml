@@ -6,6 +6,9 @@
 #  • Package manager : dnf with EPEL + PowerTools repos
 #  • C++ compiler    : GCC 12 via gcc-toolset-12 (SCL)
 #    Default GCC on RHEL 8 is 8.5 which does not support C++20.
+#  • ASan / UBSan    : gcc-toolset-12-libasan-devel + gcc-toolset-12-libubsan-devel
+#    (the compiler meta-package does not pull in the 64-bit sanitizer runtimes;
+#    without them -fsanitize=address fails with "cannot find -lasan").
 #  • OpenSSL         : Built from source (3.3.x) because RHEL 8 ships 1.1.1
 #    and the kmac peripheral requires EVP_MAC / openssl/core_names.h (≥ 3.0).
 #  • Library paths   : /usr/lib64  (not /usr/lib/x86_64-linux-gnu as on Ubuntu)
@@ -16,7 +19,9 @@
 # Jobs
 # ─────────────────────────────────────────────────────────────────────────────
 #  build-deps-rhel8      Build + cache SystemC 3.0.2, OpenSSL 3.3.x, CCI 1.0.2
-#  sep-vp-rhel8          Build the sep-vp binary
+#  sep-vp-rhel8          Build sep-vp and run SEP VP firmware tests (needs
+#                        build-deps-rhel8 + RISC-V xpack toolchain). VeeR ISS
+#                        is in-tree; no Whisper required.
 #  sep-unit-tests-rhel8  Run SEP peripheral unit tests
 #  smc-unit-tests-rhel8  Run SMC peripheral unit tests (includes the new DMA
 #                        and PVT wrapper peripheral unit tests, and AOU)
@@ -29,9 +34,7 @@
 #  smc-zephyr-rhel8      Zephyr hello_world + mmio_poke on a separate AlmaLinux 8
 #                        runner so the west cache is not unpacked on top of
 #                        Whisper + vp/build_smc (same ENOSPC as Ubuntu PR #106).
-#  smu-unit-tests-rhel8  SMU interconnect unit tests (Release + Coverage;
-#                        ASAN skipped — gcc-toolset-12 ASAN runtime is not
-#                        packaged on AlmaLinux 8).
+#  smu-unit-tests-rhel8  SMU interconnect unit tests (Release + ASAN + Coverage).
 #  smu-vp-rhel8          Build smu-vp and run SMU VP firmware tests
 #                        (smu-link-test, smu-xbar-test, smu-traffic-test,
 #                        smu-aou-ext-test). Whisper rebuilt -fPIC; xpack
@@ -86,9 +89,9 @@ jobs:
 
       - name: Install build tools
         run: |
-          # Use the full gcc-toolset-12 meta-package: it includes gcc-c++ plus
-          # the ASAN runtime (libasan_preinit.o, -lasan) that gcc-toolset-12-gcc-c++
-          # alone does not pull in on AlmaLinux 8.
+          # Full gcc-toolset-12 meta-package (gcc + g++).  ASan/UBSan runtimes
+          # are *not* included here; unit-test jobs install
+          # gcc-toolset-12-libasan-devel / libubsan-devel separately.
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
             cmake make \
@@ -226,10 +229,13 @@ jobs:
           cmake --install build
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Job 2 — build sep-vp on RHEL 8
+# Job 2 — build sep-vp and run SEP VP firmware tests on RHEL 8
+# VeeR ISS is in-tree; no Whisper.  xpack RISC-V gcc builds the RV32 firmware.
+# Pre-build sep-vp so the runner does not try to rebuild the VP (that path
+# would demand WHISPER_HOME).
 # ─────────────────────────────────────────────────────────────────────────────
   sep-vp-rhel8:
-    name: Build sep-vp (RHEL 8)
+    name: SEP VP firmware tests (RHEL 8)
     runs-on: ubuntu-22.04
     container:
       image: almalinux:8
@@ -247,7 +253,7 @@ jobs:
         run: |
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
-            cmake git python3 \
+            cmake make git wget which python3 procps-ng \
             zlib-devel readline-devel
 
       - name: Activate GCC Toolset 12
@@ -257,6 +263,18 @@ jobs:
           echo "CC=$(which gcc)"                         >> "$GITHUB_ENV"
           echo "CXX=$(which g++)"                        >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}"    >> "$GITHUB_ENV"
+
+      - name: Install RISC-V toolchain
+        run: |
+          mkdir -p /home/runner/riscv
+          cd /home/runner/riscv
+          XPACK="xpack-riscv-none-elf-gcc-${{ env.RISCV_XPACK_VERSION }}-linux-x64"
+          wget -q "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v${{ env.RISCV_XPACK_VERSION }}/${XPACK}.tar.gz"
+          tar zxf "${XPACK}.tar.gz"
+          rm -f "${XPACK}.tar.gz"
+          EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name 'xpack-riscv-none-elf-gcc-*' | head -1)
+          mv "${EXTRACTED_DIR}" toolchain
+          echo "/home/runner/riscv/toolchain/bin" >> "$GITHUB_PATH"
 
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
@@ -303,6 +321,29 @@ jobs:
       - name: Verify binary exists
         run: test -x vp/build/bin/sep-vp
 
+      - name: Run SEP VP firmware tests
+        env:
+          SYSTEMC_HOME:         ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:             ${{ env.CCI_HOME }}
+          BOOST_DIR:            ${{ env.BOOST_HOME }}
+          BOOST_ROOT:           ${{ env.BOOST_HOME }}
+          OPENSSL_ROOT:         ${{ env.OPENSSL3_HOME }}
+          OPENSSL_ROOT_DIR:     ${{ env.OPENSSL3_HOME }}
+          RISCV_TOOLCHAIN_PATH: /home/runner/riscv/toolchain
+          RISCV_PREFIX:         riscv-none-elf-
+          VP:                   ${{ github.workspace }}/vp/build/bin/sep-vp
+        run: |
+          cd sw/sep-vp-tests
+          ./run_sep_vp_tests.sh
+
+      - name: Upload sep-vp logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sep-vp-logs-rhel8
+          path: sw/sep-vp-tests/logs/
+          retention-days: 7
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Job 3 — SEP peripheral unit tests on RHEL 8
 # ─────────────────────────────────────────────────────────────────────────────
@@ -323,8 +364,13 @@ jobs:
 
       - name: Install build dependencies
         run: |
+          # libasan-devel / libubsan-devel are not pulled in by the
+          # gcc-toolset-12 meta-package; they supply the 64-bit -lasan/-lubsan
+          # used by --asan (SEP also enables UBSan).
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
+            ${{ env.GCC_TOOLSET }}-libasan-devel \
+            ${{ env.GCC_TOOLSET }}-libubsan-devel \
             cmake git python3 \
             zlib-devel readline-devel \
             lcov
@@ -375,10 +421,19 @@ jobs:
           BOOST_ROOT:       ${{ env.BOOST_HOME }}
           OPENSSL_ROOT:     ${{ env.OPENSSL3_HOME }}
           OPENSSL_ROOT_DIR: ${{ env.OPENSSL3_HOME }}
-          # ASAN runtime (libasan_preinit.o) is not packaged in gcc-toolset-12
-          # on AlmaLinux 8.  ASAN is covered by the Ubuntu CI; skip it here.
-          SKIP_ASAN:        "1"
         run: sep/peripherals/run_all_peripherals.sh
+
+      - name: Run SEP CPU (VeeR-ISS TLM) tests
+        env:
+          SYSTEMC_HOME:     ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:         ${{ env.CCI_HOME }}
+          BOOST_ROOT:       ${{ env.BOOST_HOME }}
+          OPENSSL_ROOT:     ${{ env.OPENSSL3_HOME }}
+          OPENSSL_ROOT_DIR: ${{ env.OPENSSL3_HOME }}
+        run: |
+          sep/cpu/run_tests.sh
+          sep/cpu/run_tests.sh --asan
+          sep/cpu/run_tests.sh --coverage
 
       - name: Upload test logs
         if: always()
@@ -411,6 +466,8 @@ jobs:
         run: |
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
+            ${{ env.GCC_TOOLSET }}-libasan-devel \
+            ${{ env.GCC_TOOLSET }}-libubsan-devel \
             cmake git \
             python3-pip
           pip3 install --quiet gcovr
@@ -451,9 +508,6 @@ jobs:
           SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
           CCI_HOME:     ${{ env.CCI_HOME }}
           BOOST_ROOT:   ${{ env.BOOST_HOME }}
-          # ASAN runtime (libasan_preinit.o) is not packaged in gcc-toolset-12
-          # on AlmaLinux 8.  ASAN is covered by the Ubuntu CI; skip it here.
-          SKIP_ASAN:    "1"
         run: |
           smc/run_all_smc_tests.sh \
             bootrom clint dma i3c_controller plic pvt_wrap reset_unit scratchpad_ram \
@@ -490,6 +544,8 @@ jobs:
         run: |
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
+            ${{ env.GCC_TOOLSET }}-libasan-devel \
+            ${{ env.GCC_TOOLSET }}-libubsan-devel \
             cmake git \
             python3-pip
           pip3 install --quiet gcovr
@@ -516,9 +572,6 @@ jobs:
       - name: Run SMC Fabric tests
         env:
           SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
-          # ASAN runtime (libasan_preinit.o) is not packaged in gcc-toolset-12
-          # on AlmaLinux 8.  ASAN is covered by the Ubuntu CI; skip it here.
-          SKIP_ASAN:    "1"
         run: |
           smc/run_all_smc_tests.sh smc_fabric
 
@@ -848,8 +901,8 @@ jobs:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Job 8 — SMU interconnect unit tests on RHEL 8
-# SystemC + CCI only.  ASAN is skipped (gcc-toolset-12 ASAN runtime is not
-# packaged on AlmaLinux 8); Ubuntu CI covers ASAN.
+# SystemC + CCI only.  Release + ASAN + Coverage as three separate
+# run_tests.sh invocations (same split as Ubuntu).
 # ─────────────────────────────────────────────────────────────────────────────
   smu-unit-tests-rhel8:
     name: SMU interconnect unit tests (RHEL 8)
@@ -870,6 +923,8 @@ jobs:
         run: |
           dnf install -y \
             ${{ env.GCC_TOOLSET }} \
+            ${{ env.GCC_TOOLSET }}-libasan-devel \
+            ${{ env.GCC_TOOLSET }}-libubsan-devel \
             cmake git \
             python3-pip
           pip3 install --quiet gcovr
@@ -906,6 +961,7 @@ jobs:
         run: |
           cd vp/platform/smu
           ./run_tests.sh
+          ./run_tests.sh --asan
           ./run_tests.sh --coverage
 
 # ─────────────────────────────────────────────────────────────────────────────

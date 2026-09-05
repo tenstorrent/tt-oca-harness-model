@@ -1094,11 +1094,19 @@ class test_edn_func_013 : public edn_test
     // Register Offsets and Constants
     // =========================================================================
 
-    // Command types for HW_CMD_STS.CMD_TYPE
+    // Command types for HW_CMD_STS.CMD_TYPE (CSRNG acmd / model encoding)
     static constexpr uint32_t CMD_TYPE_INSTANTIATE = 0x1;
-    static constexpr uint32_t CMD_TYPE_RESEED = 0x3;
-    static constexpr uint32_t CMD_TYPE_GENERATE = 0x4;
-    static constexpr uint32_t CMD_TYPE_UNINSTANTIATE = 0x6;
+    static constexpr uint32_t CMD_TYPE_GENERATE = 0x3;
+    static constexpr uint32_t CMD_TYPE_RESEED = 0x4;
+    static constexpr uint32_t CMD_TYPE_UNINSTANTIATE = 0x5;
+
+    /**
+     * @brief Poll HW_CMD_STS.CMD_TYPE until it matches or timeout
+     * @param expected Expected CMD_TYPE value
+     * @param timeout_us Timeout in microseconds
+     * @return true if the expected type was observed
+     */
+    bool wait_for_cmd_type(uint32_t expected, double timeout_us);
 
     // CTRL register multi-bit encoded values
     static constexpr uint32_t MBE_ENABLE = 0x6;

@@ -63,8 +63,13 @@ spi_controller_ip::spi_controller_ip(sc_module_name n, int log_verbosity)
    dont_initialize();
 
    if (TimeKeeperQuantumNs.get_param_value() > 0.0) {
-      sc_core::sc_time quantum(TimeKeeperQuantumNs.get_param_value(), sc_core::SC_NS);
-      tlm::tlm_global_quantum::instance().set(quantum);
+      // Keep the keeper aligned, but do not steal the process-wide quantum
+      // from a composing platform or ISS.
+      auto& gq = tlm::tlm_global_quantum::instance();
+      if (gq.get() == sc_core::SC_ZERO_TIME) {
+         gq.set(sc_core::sc_time(TimeKeeperQuantumNs.get_param_value(),
+                                 sc_core::SC_NS));
+      }
       m_time_keeper.reset();
    }
 }
@@ -1132,29 +1137,13 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
         return false;
     }
 
-    // Validation 5: RX segment must fit the per-transaction buffer.
-    // Real hardware streams an RX segment larger than the RX FIFO by stalling
-    // the serial clock while the FIFO is full and resuming as the drainer pops.
-    // process_single_transaction reproduces this: it fills the FIFO to capacity
-    // and waits on m_rx_space_available_event (fired when RXDATA is read), so an
-    // RX segment larger than the free FIFO space is NOT an error — do not reject
-    // it with ERROR_STATUS.OVERFLOW. Only reject a segment that exceeds the
-    // model's fixed per-transaction buffer (see rx_buffer[] in
-    // process_single_transaction), which is a genuine model limit.
+    // Validation 5: RX segment length is accepted. LEN is a 9-bit field
+    // (max 512 bytes), which already fits the per-transaction buffer, so a
+    // larger-than-512 rejection is unreachable. Hardware streams an RX
+    // segment that exceeds free FIFO space by stalling on
+    // m_rx_space_available_event rather than setting OVERFLOW.
     if (cmd_direction == 1 || cmd_direction == 3) {  // RX_ONLY or BIDIR
         uint32_t bytes_to_receive = cmd_len + 1;  // LEN is 0-based, so add 1
-
-        if (bytes_to_receive > 512) {
-            CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] RX segment of " << bytes_to_receive
-                << " bytes exceeds the model's per-transaction buffer (512 bytes). "
-                << "Split the read into smaller segments. Setting ERROR_STATUS.OVERFLOW" << std::endl;
-
-            ERROR_STATUS.overflow = 1;
-            update_error_interrupt_state();
-
-            return false;  // Reject command
-        }
-
         CSML_INFO(2, logger) << "[SPI_HOST/CMD] RX segment accepted: " << bytes_to_receive
             << " bytes (streams under back-pressure if it exceeds free FIFO space)" << std::endl;
     }

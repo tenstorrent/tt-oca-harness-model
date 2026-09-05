@@ -5,6 +5,7 @@
 // ===========================================================================
 
 #include "sep_platform.hpp"
+#include "tlm_quantum_policy.h"
 
 namespace {
     // Default options for och_sep_ss(sc_module_name) — delegates to two-arg ctor.
@@ -87,7 +88,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , opt(opt_in)
     , unused_irq_signal("unused_irq_signal")
     , pic_inputs(PIC_NUM_INTERRUPTS, &unused_irq_signal)
-    , globalQuantumNs("globalQuantumNs", 10)
+    , globalQuantumNs("globalQuantumNs", simtlm::DEFAULT_GLOBAL_QUANTUM_NS)
     , strap_primary_chiplet("smc.primary_chiplet", false)
     , strap_boot_recovery("smc.boot_recovery", false)
     , strap_rotate_update("smc.rotate_update", false)
@@ -136,9 +137,9 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
             return;
     }
 
-    tlm::tlm_global_quantum::instance().set(
-        sc_core::sc_time(static_cast<double>(globalQuantumNs.get_param_value()),
-                         sc_core::sc_time_unit::SC_NS));
+    // Process-wide quantum is owned by sc_main on composed platforms
+    // (smu-vp). Standalone sep-vp / unit tests still get this default.
+    simtlm::install_global_quantum_ns_if_unset(globalQuantumNs.get_param_value());
 
     create_modules();
 

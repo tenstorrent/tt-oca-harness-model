@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # =============================================================================
 # vp/platform/smu/CMakeLists.txt
 #
@@ -120,6 +122,7 @@ target_include_directories(smc_cluster_smu
     PUBLIC
         ${_smc_root}/cpu_cluster/include
         ${_smc_root}/common/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
     PRIVATE
         ${_w_incs})
 target_compile_definitions(smc_cluster_smu PRIVATE ${_w_defs})

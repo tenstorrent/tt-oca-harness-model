@@ -143,9 +143,9 @@ include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
 # Canonical smc_axi_extension.h (shared across the SMC tree).
-set(SMC_AXI_EXTENSION_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include"
-    CACHE PATH "Directory containing smc_axi_extension.h")
+# Not cached: a stale CACHE entry from before the header moved leaves
+# incremental build_asan/ / build_cov/ compiling against a missing -I.
+include(SmcAxiExtension)
 
 # ---------------------------------------------------------------------------
 # libsmc_clint

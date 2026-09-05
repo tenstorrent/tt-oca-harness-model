@@ -201,6 +201,9 @@ private:
     void test_hash_stop_sync_fifo_drain();
     void test_context_sha_en_disable_clear();
 
+    // Command rejects, leftover-FIFO start, SHA-384 stop/continue, keymgr read
+    void test_coverage_gap_paths();
+
     // Helper functions
     void wait_for_hmac_idle();
     void wait_for_hmac_done();

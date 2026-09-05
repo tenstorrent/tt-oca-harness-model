@@ -90,6 +90,8 @@ class entropy_src_ip : public entropy_src_base, public entropy_src_if
 public:
     SC_HAS_PROCESS(entropy_src_ip);
 
+    friend class testbench;
+
     // =========================================================================
     // Port declarations
     // =========================================================================

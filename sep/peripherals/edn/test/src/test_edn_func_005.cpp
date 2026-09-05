@@ -735,16 +735,17 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
     assert_endpoint_request(2);
     assert_endpoint_request(5);
     assert_endpoint_request(7);
-    wait(5, SC_NS);
 
-    // Monitor service order (should be 5 → 7 → 0 → 2 starting from arb index 4)
-    int service_order[4];
+    // Monitor service order (should be 5 → 7 → 0 → 2 starting from arb index 4).
+    // Deassert each endpoint as soon as it is acknowledged so the next RR
+    // grant is visible — waiting first lets all four acks pile up and the
+    // poll order {0,2,5,7} would be recorded instead of the grant order.
+    int service_order[4] = {0, 0, 0, 0};
     int service_count = 0;
 
     for (int iteration = 0; iteration < 500; iteration++) {
         for (int ep : {0, 2, 5, 7}) {
             if (edn_ack[ep].read()) {
-                // Check if this endpoint was already serviced
                 bool already_serviced = false;
                 for (int k = 0; k < service_count; k++) {
                     if (service_order[k] == ep) {
@@ -756,7 +757,8 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
                     service_order[service_count++] = ep;
                     CSML_INFO(1, logger) << "test_endpoint_round_robin_order: Service order[" << (service_count-1)
                                          << "] = endpoint " << ep;
-                    wait(5, SC_NS); // Allow ack to deassert before next
+                    deassert_endpoint_request(ep);
+                    wait(5, SC_NS);
                 }
             }
         }

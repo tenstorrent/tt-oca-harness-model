@@ -50,6 +50,8 @@ void test_run_exhausts_shake_output(kmac_test* test);
 void test_run_exhausts_kmac_output(kmac_test* test);
 void test_state_share1_masking_disabled(kmac_test* test);
 void test_state_read_straddles_digest_end(kmac_test* test);
+void test_keymgr_read_rejected(kmac_test* test);
+void test_second_app_blocked_while_first_active(kmac_test* test);
 
 // =============================================================================
 // Check facility

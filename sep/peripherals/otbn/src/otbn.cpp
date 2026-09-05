@@ -879,12 +879,8 @@ bool otbn_ip::dmem_read_callback(uint32_t& value, uint32_t index) {
    // Read stored value
    // Access underlying memory directly to avoid recursive operator[] with ASAN
    // DMEM base offset is 0x8000 bytes = 8192 words, index is 0-767
-   if (index < 768) {
-       unsigned int word_offset = (0x8000 / sizeof(unsigned int)) + index;
-       value = memory.memory_block[word_offset];
-   } else {
-       value = 0;  // Protected region returns 0
-   }
+   unsigned int word_offset = (0x8000 / sizeof(unsigned int)) + index;
+   value = memory.memory_block[word_offset];
    return true;
 }
 

@@ -306,7 +306,49 @@ struct tb : sc_core::sc_module {
                   drv.try_access(tlm::TLM_READ_COMMAND, 0x18, 8));
         EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
                   drv.try_access(tlm::TLM_WRITE_COMMAND, 0x4, 8)); // unaligned
-        std::cout << "  [PASS] bus error responses (size / window / align)\n";
+
+        {
+            tlm::tlm_generic_payload gp;
+            sc_time delay = SC_ZERO_TIME;
+            uint64_t data = 0;
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_address(0);
+            gp.set_data_ptr(nullptr);
+            gp.set_data_length(8);
+            gp.set_streaming_width(8);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, gp.get_response_status());
+
+            gp.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
+            uint8_t be[8] = {};
+            gp.set_byte_enable_ptr(be);
+            gp.set_byte_enable_length(8);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
+                      gp.get_response_status());
+
+            gp.set_byte_enable_ptr(nullptr);
+            gp.set_streaming_width(1);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE, gp.get_response_status());
+
+            gp.set_streaming_width(8);
+            gp.set_command(tlm::TLM_IGNORE_COMMAND);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE, gp.get_response_status());
+
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_data_length(0);
+            gp.set_streaming_width(0);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, gp.get_response_status());
+        }
+        std::cout << "  [PASS] bus error responses (size / window / align / TLM)\n";
 
         // DMA out-of-range fails without irq -------------------------------
         pulse_reset();

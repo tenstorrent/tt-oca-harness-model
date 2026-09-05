@@ -1,0 +1,76 @@
+{
+    "xlen"       : 32,
+    "nmi_vec"    : "0xC0000100",
+
+    "iccm": {
+        "region": "0xc",
+        "offset": "0x00000000",
+        "size":   "0x00040000"
+    },
+    "dccm": {
+        "region": "0xc",
+        "offset": "0x00040000",
+        "size":   "0x00020000"
+    },
+
+    "memory_mapped_registers": {
+        "address":  "0xc0080000",
+        "size":     "0x00006000",
+        "internal": "false"
+    },
+
+    "fast_interrupt_redirect" : true,
+
+    "enable_zfh" : "true",
+    "enable_zba" : "true",
+    "enable_zbb" : "true",
+    "abi_names"  : "true",
+    "enable_A"   : "true",
+    "enable_B"   : "true",
+    "enable_C"   : "true",
+    "enable_D"   : "true",
+    "enable_F"   : "true",
+    "enable_I"   : "true",
+    "enable_M"   : "true",
+    "enable_S"   : "true",
+    "enable_U"   : "true",
+    "enable_V"   : "true",
+
+    "csr" : {
+        "mrac" : {
+            "number" : "0x7c0",
+            "exists" : "true",
+            "reset"  : "0x0",
+            "mask"   : "0xffffffff",
+            "comment": "VeeR EL2 PMA control — stub, writes accepted and ignored in VP"
+        },
+        "meipt": {
+            "number": "0xbc9",
+            "reset":  "0x0",
+            "mask":   "0xf",
+            "poke_mask": "0xf",
+            "exists": true
+        },
+        "meicurpl": {
+            "number": "0xbcc",
+            "reset":  "0x0",
+            "mask":   "0xf",
+            "poke_mask": "0xf",
+            "exists": true
+        },
+        "meicpct": {
+            "number": "0xbca",
+            "reset":  "0x0",
+            "mask":   "0x0",
+            "poke_mask": "0xf",
+            "exists": true
+        },
+        "meicidpl": {
+            "number": "0xbcb",
+            "reset":  "0x0",
+            "mask":   "0xf",
+            "poke_mask": "0xf",
+            "exists": true
+        }
+    }
+}

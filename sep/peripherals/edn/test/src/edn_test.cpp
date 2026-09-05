@@ -32,11 +32,9 @@ edn_test::edn_test(sc_module_name name)
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    SC_METHOD(mock_endpoint_process);
-    for (int i = 0; i < 8; ++i) {
-        sensitive << edn_req[i];
-    }
-    dont_initialize();
+    // Poll so a pending request is served after entropy arrives or EDN is
+    // enabled without a new edn_req edge (T14 / T15 / T16).
+    SC_THREAD(mock_endpoint_process);
 
     CSML_INFO(2, logger) << "EDN test harness constructed";
 }
@@ -169,10 +167,73 @@ void edn_test::apply_reset(double duration_ns)
 
     rst_no.write(false);  // Assert reset (active-low)
     wait(duration_ns, SC_NS);
+    clear_mock_endpoint_state();
     rst_no.write(true);   // De-assert reset
     wait(10, SC_NS);      // Allow reset propagation
 
     CSML_INFO(1, logger) << "Reset sequence complete";
+}
+
+void edn_test::clear_mock_endpoint_state()
+{
+    while (!m_mock_buffer.empty()) {
+        m_mock_buffer.pop();
+    }
+    m_mock_fips = false;
+    m_rr_index = 0;
+    // edn_req is driven by the test thread (this process). Ack/bus/fips are
+    // driven only by mock_endpoint_process — request a clear there.
+    for (int i = 0; i < 8; ++i) {
+        edn_req[i].write(false);
+    }
+    m_clear_mock_outputs = true;
+}
+
+bool edn_test::edn_is_enabled() const
+{
+    if (!m_dut) {
+        return false;
+    }
+    // CTRL.EDN_ENABLE multi-bit: 0x6 = enabled, 0x9 = disabled (reset).
+    return (static_cast<uint32_t>(m_dut->CTRL) & 0xFu) == 0x6u;
+}
+
+void edn_test::mock_endpoint_process()
+{
+    while (true) {
+        wait(1, SC_NS);
+
+        if (m_clear_mock_outputs) {
+            for (int i = 0; i < 8; ++i) {
+                edn_ack[i].write(false);
+                edn_bus[i].write(0);
+                edn_fips[i].write(false);
+            }
+            m_clear_mock_outputs = false;
+        }
+
+        for (int i = 0; i < 8; ++i) {
+            if (!edn_req[i].read()) {
+                edn_ack[i].write(false);
+            }
+        }
+
+        if (!edn_is_enabled() || m_mock_buffer.empty()) {
+            continue;
+        }
+
+        for (unsigned int k = 0; k < 8; ++k) {
+            const unsigned int i = (m_rr_index + k) % 8u;
+            if (edn_req[i].read() && !edn_ack[i].read()) {
+                edn_bus[i].write(m_mock_buffer.front());
+                m_mock_buffer.pop();
+                edn_fips[i].write(m_mock_fips);
+                edn_ack[i].write(true);
+                m_rr_index = (i + 1u) % 8u;
+                break;
+            }
+        }
+    }
 }
 
 /**

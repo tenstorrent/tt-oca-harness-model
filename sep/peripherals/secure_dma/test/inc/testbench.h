@@ -762,4 +762,9 @@ public:
   void test_sha2_requires_four_byte_width_size_error();
   void test_chunk_size_exceeds_total_size_warning();
   void test_hash_init_frees_previous_context_after_failed_transfer();
+
+  void run_coverage_tests();
+  void test_cov_bus_name_and_hash_helpers();
+  void test_cov_handshake_already_high_on_arm();
+  void test_cov_hash_reset_frees_context();
 };

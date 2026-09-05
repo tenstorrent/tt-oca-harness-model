@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // test/include/smc_test_utils.h
 //
@@ -325,7 +327,7 @@ inline smc::smc_cpu_cluster::config make_default_cluster_cfg(unsigned num_harts 
     cfg.mmio_lo      = 0x80000000ULL;
     cfg.mmio_hi      = 0x90000000ULL;
     cfg.isa          = "rv64imafdc";
-    cfg.quantum_ns   = 1000;
+    cfg.quantum_ns   = simtlm::DEFAULT_GLOBAL_QUANTUM_NS;
     cfg.quantum_insts = 16;              // small K so unit tests are responsive
     cfg.wdt_stage2_tick_ns = 0.0;        // tests drive stage-2 via dbg_wdt_stage2_tick
     return cfg;

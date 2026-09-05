@@ -15,23 +15,10 @@ otbn_algorithm_rsa_2048::otbn_algorithm_rsa_2048(size_t dmem_size)
 
 otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     CSML_INFO(1, logger) << "[OTBN RSA-2048] Starting execution";
-    
-    // Check if key is required and validate key registration
-    if (m_is_key_required) {
-        CSML_INFO(1, logger) << "[OTBN RSA-2048] Key required, checking key registration status";
-        
-        // Check if keys are registered
-        if (!m_key_status_cb()) {
-            CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Keys not registered (KEY_INVALID)";
-            
-            // Set KEY_INVALID error bit
-            if (m_err_bits_write_cb) {
-                m_err_bits_write_cb(0x20);  // KEY_INVALID = bit 5 = 0x20
-            }
-            
-            return otbn_algorithm::ERROR;
-        }
-    }
+
+    // This algorithm is constructed with is_key_required=false; sideload
+    // checks live in otbn_algorithm_rsa_2048_key_enabled.
+
     // Verify DMEM size is sufficient for RSA-2048 operations
     if (m_dmem_size < 1024) {
         CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes, need >= 1024)";

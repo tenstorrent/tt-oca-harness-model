@@ -125,3 +125,4 @@ void mldsa_tests(abr_testbench &tb);
 void mlkem_tests(abr_testbench &tb);
 void interrupt_kv_tests(abr_testbench &tb);
 void nist_kat_tests(abr_testbench &tb);
+void coverage_tests(abr_testbench &tb);

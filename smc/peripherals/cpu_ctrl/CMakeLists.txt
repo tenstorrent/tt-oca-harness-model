@@ -78,9 +78,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
-set(SMC_AXI_EXTENSION_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include"
-    CACHE PATH "Directory containing smc_axi_extension.h")
+include(SmcAxiExtension)
 
 add_library(smc_cpu_ctrl STATIC src/cpu_ctrl.cpp)
 target_include_directories(smc_cpu_ctrl

@@ -2,6 +2,11 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "otbn_basetest.h"
+#include "otbn_algorithm_rsa_2048.h"
+#include "otbn_algorithm_rsa_2048_key_enabled.h"
+#include "otbn_algorithm_rsa_3072.h"
+#include "otbn_algorithm_summation.h"
+#include "otbn_algorithm_rnd_test.h"
 
 // ============================================================================
 // Coverage tests — exercise otbn.cpp and algorithm error paths not hit by the
@@ -436,11 +441,299 @@ void testbench::test_cov_wdr_key_read_with_key()
     report_test_result("Coverage: WDR key read with sideload key", passed);
 }
 
+void testbench::test_cov_otp_scramble_key_channel()
+{
+    CSML_INFO(1, logger) << "\nCoverage: OTP scramble-key response channel" << std::endl;
+
+    bool passed = true;
+    uint32_t key[4] = {0, 0, 0, 0};
+    uint32_t nonce = 0;
+    uint32_t seed = 0;
+
+    if (!dut->otp_key_rsp->key_available()) {
+        CSML_INFO(1, logger) << "  FAIL: key_available() returned false" << std::endl;
+        passed = false;
+    }
+    dut->otp_key_rsp->get_scramble_key(key, nonce, seed);
+    if (key[0] == 0 && key[1] == 0 && key[2] == 0 && key[3] == 0) {
+        CSML_INFO(1, logger) << "  FAIL: get_scramble_key returned all zeros" << std::endl;
+        passed = false;
+    } else if (nonce == 0 || seed == 0) {
+        CSML_INFO(1, logger) << "  FAIL: nonce/seed not populated" << std::endl;
+        passed = false;
+    } else {
+        CSML_INFO(1, logger) << "  PASS: OTP scramble key channel returned a mock key" << std::endl;
+    }
+
+    report_test_result("Coverage: OTP scramble-key channel", passed);
+}
+
+void testbench::test_cov_imem_oob_and_busy_block()
+{
+    CSML_INFO(1, logger) << "\nCoverage: IMEM OOB + IMEM/DMEM block in wipe/LOCKED" << std::endl;
+
+    bool passed = true;
+    apply_reset();
+    wait_for_idle("imem oob setup");
+
+    dut->logger.setMaxVerbosity(3);
+
+    if (dut->imem_write_callback(0xA5A5A5A5u, 2048u)) {
+        CSML_INFO(1, logger) << "  FAIL: IMEM write index 2048 accepted" << std::endl;
+        passed = false;
+    }
+    uint32_t imem_val = 0xFFFFFFFFu;
+    if (!dut->imem_read_callback(imem_val, 3000u) || imem_val != 0u) {
+        CSML_INFO(1, logger) << "  FAIL: IMEM read OOB expected 0" << std::endl;
+        passed = false;
+    }
+
+    // Non-fatal illegal bus: wipe states that are not BUSY_EXECUTE.
+    dut->current_state = OTBN_STATE_BUSY_SEC_WIPE_DMEM;
+    if (dut->imem_write_callback(0x1u, 0u)) {
+        CSML_INFO(1, logger) << "  FAIL: IMEM write during SEC_WIPE_DMEM accepted" << std::endl;
+        passed = false;
+    }
+    imem_val = 0xFFFFFFFFu;
+    if (!dut->imem_read_callback(imem_val, 0u) || imem_val != 0u) {
+        CSML_INFO(1, logger) << "  FAIL: IMEM read during wipe did not return 0" << std::endl;
+        passed = false;
+    }
+    if (dut->dmem_write_callback(0x2u, 0u)) {
+        CSML_INFO(1, logger) << "  FAIL: DMEM write during SEC_WIPE_DMEM accepted" << std::endl;
+        passed = false;
+    }
+    uint32_t dmem_val = 0xFFFFFFFFu;
+    if (!dut->dmem_read_callback(dmem_val, 0u) || dmem_val != 0u) {
+        CSML_INFO(1, logger) << "  FAIL: DMEM read during wipe did not return 0" << std::endl;
+        passed = false;
+    }
+
+    dut->current_state = OTBN_STATE_LOCKED;
+    imem_val = 0xFFFFFFFFu;
+    dut->imem_read_callback(imem_val, 0u);
+    dmem_val = 0xFFFFFFFFu;
+    dut->dmem_read_callback(dmem_val, 0u);
+    if (imem_val != 0u || dmem_val != 0u) {
+        CSML_INFO(1, logger) << "  FAIL: LOCKED IMEM/DMEM reads must return 0" << std::endl;
+        passed = false;
+    }
+
+    // CTRL / INSN_CNT writes ignored while not IDLE.
+    dut->current_state = OTBN_STATE_BUSY_EXECUTE;
+    test_model->register_write_32(otbn_regs::CTRL_OFFSET, 0x1);
+    test_model->register_write_32(otbn_regs::INSN_CNT_OFFSET, 0x0);
+    if (dut->err_bits_write_callback(0xFFFFFFFFu)) {
+        CSML_INFO(1, logger) << "  FAIL: ERR_BITS W1C accepted while BUSY" << std::endl;
+        passed = false;
+    }
+
+    dut->current_state = OTBN_STATE_IDLE;
+    apply_reset();
+    wait_for_idle("imem oob cleanup");
+
+    if (passed) {
+        CSML_INFO(1, logger) << "  PASS: OOB and wipe/LOCKED memory blocks" << std::endl;
+    }
+    report_test_result("Coverage: IMEM OOB + wipe/LOCKED block", passed);
+}
+
+void testbench::test_cov_keymgr_ignore_and_invalid_cmd()
+{
+    CSML_INFO(1, logger) << "\nCoverage: KeyMgr IGNORE command + invalid CMD opcode" << std::endl;
+
+    bool passed = true;
+    apply_reset();
+    wait_for_idle("keymgr ignore");
+
+    tlm::tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    unsigned char data[4] = {0x11, 0x22, 0x33, 0x44};
+    trans.set_command(tlm::TLM_IGNORE_COMMAND);
+    trans.set_address(0x00);
+    trans.set_data_ptr(data);
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_byte_enable_ptr(0);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    test_model->keymgr_tl_stub_inst->initiator_socket->b_transport(trans, delay);
+
+    if (trans.get_response_status() != tlm::TLM_COMMAND_ERROR_RESPONSE) {
+        CSML_INFO(1, logger) << "  FAIL: IGNORE expected COMMAND_ERROR, got "
+                             << static_cast<int>(trans.get_response_status()) << std::endl;
+        passed = false;
+    } else {
+        CSML_INFO(1, logger) << "  PASS: IGNORE rejected with COMMAND_ERROR" << std::endl;
+    }
+
+    if (dut->cmd_write_callback(0x00u)) {
+        CSML_INFO(1, logger) << "  FAIL: unrecognized CMD was accepted" << std::endl;
+        passed = false;
+    } else {
+        CSML_INFO(1, logger) << "  PASS: unrecognized CMD silently rejected" << std::endl;
+    }
+
+    dut->current_state = OTBN_STATE_LOCKED;
+    if (!dut->cmd_write_callback(0xd8u)) {
+        CSML_INFO(1, logger) << "  FAIL: CMD write in LOCKED should return true (ignore)" << std::endl;
+        passed = false;
+    }
+    dut->current_state = OTBN_STATE_BUSY_EXECUTE;
+    if (!dut->cmd_write_callback(0xd8u)) {
+        CSML_INFO(1, logger) << "  FAIL: CMD write in BUSY should return true (ignore)" << std::endl;
+        passed = false;
+    }
+    dut->current_state = OTBN_STATE_IDLE;
+
+    apply_reset();
+    wait_for_idle("keymgr ignore cleanup");
+    report_test_result("Coverage: KeyMgr IGNORE + invalid CMD", passed);
+}
+
+void testbench::test_cov_alert_fatal_and_err_bits_busy()
+{
+    CSML_INFO(1, logger) << "\nCoverage: ALERT_TEST.fatal + LOAD_CHECKSUM write" << std::endl;
+
+    bool passed = true;
+    apply_reset();
+    wait_for_idle("alert fatal");
+
+    test_model->register_write_32(otbn_regs::ALERT_TEST_OFFSET, 0x1u);
+    wait(5, SC_NS);
+    if (!alert_fatal_sig.read()) {
+        CSML_INFO(1, logger) << "  FAIL: alert_fatal not asserted after ALERT_TEST.fatal" << std::endl;
+        passed = false;
+    } else {
+        CSML_INFO(1, logger) << "  PASS: ALERT_TEST.fatal asserted alert_fatal" << std::endl;
+    }
+
+    test_model->register_write_32(otbn_regs::LOAD_CHECKSUM_OFFSET, 0x0u);
+    uint32_t csum = 0;
+    test_model->register_read_32(otbn_regs::LOAD_CHECKSUM_OFFSET, csum);
+
+    apply_reset();
+    wait_for_idle("alert fatal cleanup");
+    report_test_result("Coverage: ALERT_TEST.fatal", passed);
+}
+
+void testbench::test_cov_software_errs_fatal()
+{
+    CSML_INFO(1, logger) << "\nCoverage: CTRL.software_errs_fatal + algorithm ERROR" << std::endl;
+
+    bool passed = true;
+    apply_reset();
+    wait_for_idle("sw err fatal setup");
+    clear_all_errors();
+
+    test_model->register_write_32(otbn_regs::CTRL_OFFSET, 0x1u);
+    wait(2, SC_NS);
+
+    const std::string algo = dut->algorithm_type.get_param_value();
+    if (algo == "summation") {
+        for (uint32_t i = 0; i < 768; i++) {
+            load_dmem_word(i, 0);
+        }
+        write_dmem_byte(0, 0);
+    } else if (algo == "rsa_2048_key_enabled") {
+        load_rsa_test_data();
+    } else if (algo == "rsa_3072") {
+        for (uint32_t i = 0; i < 768; i++) {
+            load_dmem_word(i, 0);
+        }
+        write_dmem_byte(0x600 + 383, 5);
+    }
+
+    test_model->register_write_32(otbn_regs::CMD_OFFSET, otbn_constants::CMD_EXECUTE);
+    wait_for_idle("sw err fatal execute");
+
+    if (algo == "summation" || algo == "rsa_2048_key_enabled" || algo == "rsa_3072") {
+        uint32_t status = read_status();
+        uint32_t err_bits = read_err_bits();
+        if (status != 0xFF) {
+            CSML_INFO(1, logger) << "  FAIL: expected LOCKED after fatal software error, STATUS=0x"
+                                 << std::hex << status << std::dec << std::endl;
+            passed = false;
+        } else if ((err_bits & (1u << 23)) == 0u) {
+            CSML_INFO(1, logger) << "  FAIL: FATAL_SOFTWARE not set, ERR_BITS=0x"
+                                 << std::hex << err_bits << std::dec << std::endl;
+            passed = false;
+        } else {
+            CSML_INFO(1, logger) << "  PASS: software_errs_fatal locked OTBN" << std::endl;
+        }
+    } else {
+        CSML_INFO(1, logger) << "  PASS: CTRL.software_errs_fatal write exercised ("
+                             << algo << ")" << std::endl;
+    }
+
+    clear_all_errors();
+    apply_reset();
+    wait_for_idle("sw err fatal cleanup");
+    report_test_result("Coverage: software_errs_fatal", passed);
+}
+
+void testbench::test_cov_algorithm_standalone_error_paths()
+{
+    CSML_INFO(1, logger) << "\nCoverage: standalone algorithm DMEM/callback errors" << std::endl;
+
+    bool passed = true;
+
+    {
+        otbn_algorithm_rsa_2048 algo(512);
+        char buf[512] = {};
+        if (algo.execute(buf) != otbn_algorithm::ERROR) {
+            CSML_INFO(1, logger) << "  FAIL: RSA-2048 small DMEM did not ERROR" << std::endl;
+            passed = false;
+        }
+    }
+    {
+        otbn_algorithm_rsa_2048_key_enabled algo(512);
+        algo.register_key_status_cb([]() { return true; });
+        char buf[512] = {};
+        if (algo.execute(buf) != otbn_algorithm::ERROR) {
+            CSML_INFO(1, logger) << "  FAIL: RSA-2048-key small DMEM did not ERROR" << std::endl;
+            passed = false;
+        }
+    }
+    {
+        otbn_algorithm_rsa_3072 algo(100);
+        char buf[100] = {};
+        if (algo.execute(buf) != otbn_algorithm::ERROR) {
+            CSML_INFO(1, logger) << "  FAIL: RSA-3072 small DMEM did not ERROR" << std::endl;
+            passed = false;
+        }
+    }
+    {
+        otbn_algorithm_summation algo(10);
+        char buf[256] = {};
+        buf[0] = 20;  // N=20 requires 22 bytes
+        if (algo.execute(buf) != otbn_algorithm::ERROR) {
+            CSML_INFO(1, logger) << "  FAIL: summation N exceeds DMEM did not ERROR" << std::endl;
+            passed = false;
+        }
+    }
+    {
+        otbn_algorithm_rnd_test algo(64);
+        char buf[64] = {};
+        if (algo.execute(buf) != otbn_algorithm::ERROR) {
+            CSML_INFO(1, logger) << "  FAIL: RND with no callback did not ERROR" << std::endl;
+            passed = false;
+        }
+    }
+
+    if (passed) {
+        CSML_INFO(1, logger) << "  PASS: standalone algorithm error paths" << std::endl;
+    }
+    report_test_result("Coverage: standalone algorithm errors", passed);
+}
+
 void testbench::run_coverage_tests()
 {
     CSML_INFO(1, logger) << "\n========================================" << std::endl;
     CSML_INFO(1, logger) << "   OTBN Coverage Tests" << std::endl;
     CSML_INFO(1, logger) << "========================================\n" << std::endl;
+
+    dut->logger.setMaxVerbosity(3);
 
     test_cov_keymgr_tlm_read_error();
     test_cov_keymgr_tlm_bad_address();
@@ -465,4 +758,11 @@ void testbench::run_coverage_tests()
         test_cov_csr_wdr_callback_execute();
         test_cov_wdr_key_read_with_key();
     }
+
+    test_cov_otp_scramble_key_channel();
+    test_cov_imem_oob_and_busy_block();
+    test_cov_keymgr_ignore_and_invalid_cmd();
+    test_cov_alert_fatal_and_err_bits_busy();
+    test_cov_software_errs_fatal();
+    test_cov_algorithm_standalone_error_paths();
 }
