@@ -48,7 +48,7 @@ Options for `run_all_tests.sh`: `--clean` (rebuild from scratch), `--no-build`
 
 The scripts find both by themselves: the toolchain prefix is probed from `PATH`
 (`riscv64-unknown-elf-`, `riscv64-elf-`, `riscv-none-elf-`, …) and `sep-vp` is
-located by walking up to the `tt-oca-sim` root. Override with `GCC_PREFIX`,
+located by walking up to the `tt-oca-harness-model` root. Override with `GCC_PREFIX`,
 `RISCV_TOOLCHAIN_PATH`, `SEP_VP` or `CONFIG` if you need something else.
 
 ## Layout
@@ -185,7 +185,7 @@ SEP Boot ROM (SPI boot)" in the top-level `README.md`. In short:
 cd fw/sep/bootcode
 make GCC_PREFIX=riscv64-elf BOOT_SPI_CONTROLLER_OT=1 all
 
-cd ../../../../../..            # tt-oca-sim
+cd ../../../../../..            # tt-oca-harness-model
 vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini \
     sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/build/boot_rom.elf
 ```

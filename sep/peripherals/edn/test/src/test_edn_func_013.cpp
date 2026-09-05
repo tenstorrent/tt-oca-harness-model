@@ -29,7 +29,6 @@
  * - T19: Buffer depletion triggers Generate
  * - T20: Auto to boot mode transition
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

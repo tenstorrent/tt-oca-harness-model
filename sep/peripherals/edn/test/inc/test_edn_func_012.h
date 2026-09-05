@@ -47,7 +47,6 @@
  * - edn-memory-map-registers.md: BOOT_INS_CMD, BOOT_GEN_CMD registers
  * - edn.h: boot_mode_instantiate(), boot_mode_generate(), boot_mode_uninstantiate()
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

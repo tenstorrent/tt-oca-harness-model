@@ -41,7 +41,6 @@
  * - T31: Write without polling error
  * - T32: Concurrent access
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-15
  */
 

@@ -21,7 +21,6 @@
  * - T11: Reset restores REGWEN to unlocked state
  * - T12: Recommended initialization sequence validation
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-12
  */
 

@@ -38,7 +38,6 @@
  * - TC_028: Fatal Alert on CSRNG Error
  * - TC_029: Command Interruption by Disable
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-13
  */
 

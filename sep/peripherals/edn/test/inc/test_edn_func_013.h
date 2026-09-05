@@ -68,7 +68,6 @@
  * - Generate command type: 0x403 (cmd_type=4, clen=0)
  * - Reseed command type: 0x303 (cmd_type=3, clen=0)
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

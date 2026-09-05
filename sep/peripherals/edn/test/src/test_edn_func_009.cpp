@@ -26,7 +26,6 @@
  * 8. Multiple interrupts simultaneously
  * 9. Reset behavior for all interrupt registers
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

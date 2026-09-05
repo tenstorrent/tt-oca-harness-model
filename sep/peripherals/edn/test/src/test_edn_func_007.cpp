@@ -19,7 +19,6 @@
  * - T9:  ERR_CODE sticky behavior (read-only, reset clears)
  * - T10: FIFO clearing on reset
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

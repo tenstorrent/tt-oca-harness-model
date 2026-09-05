@@ -43,7 +43,6 @@
  * - edn-functionality-testcases.md: EDN_FUNC_008 mapping
  * - edn-architecture-behaviour-map.json: RECOV_ALERT_STS.EDN_BUS_CMP_ALERT
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 

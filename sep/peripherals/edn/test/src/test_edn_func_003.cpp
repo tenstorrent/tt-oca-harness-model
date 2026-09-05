@@ -22,7 +22,6 @@
  * - T12: Fatal alert on EDN_ACK_SM illegal state
  * - T13: Corner case - auto mode exit during active command
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-12
  */
 

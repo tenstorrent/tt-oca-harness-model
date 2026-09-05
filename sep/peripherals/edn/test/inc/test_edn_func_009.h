@@ -49,7 +49,6 @@
  * - intr_edn_cmd_req_done: Command completion interrupt output
  * - intr_edn_fatal_err: Fatal error interrupt output
  *
- * @author Claude Code (SystemC Test Case Artisan)
  * @date 2026-01-14
  */
 
