@@ -167,8 +167,8 @@ int sc_main(int, char**)
 {
     sc_core::sc_report_handler::set_actions("/Accellera/CCI/",
                                             sc_core::SC_DISPLAY);
-    static cci_utils::consuming_broker broker("GlobalBroker");
-    cci::cci_register_broker(broker);
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
     tb top("tb");
     sc_core::sc_start();
     return g_failures == 0 ? 0 : 1;

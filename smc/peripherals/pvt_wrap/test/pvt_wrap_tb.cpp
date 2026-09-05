@@ -432,8 +432,8 @@ struct tb : sc_core::sc_module {
 
 int sc_main(int, char**)
 {
-    static cci_utils::consuming_broker broker("GlobalBroker");
-    cci::cci_register_broker(broker);
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
 
     cci::cci_originator originator("pvt_wrap_tb");
     auto broker = cci::cci_get_global_broker(originator);

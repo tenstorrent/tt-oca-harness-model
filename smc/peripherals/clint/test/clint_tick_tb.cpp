@@ -207,9 +207,9 @@ int sc_main(int, char**)
     sc_core::sc_report_handler::set_actions(sc_core::SC_ID_LOGIC_X_TO_BOOL_,
                                             sc_core::SC_DO_NOTHING);
 
-    static cci_utils::consuming_broker broker("GlobalBroker");
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
 
-    cci::cci_register_broker(broker);
+    cci::cci_register_broker(cci_global_broker);
 
     cci::cci_originator cfg("platform_cfg");
     auto broker = cci::cci_get_global_broker(cfg);

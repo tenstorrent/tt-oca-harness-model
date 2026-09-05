@@ -708,9 +708,9 @@ int sc_main(int, char*[])
     sc_core::sc_report_handler::set_actions(
         sc_core::SC_WARNING, sc_core::SC_DO_NOTHING);
 
-    static cci_utils::consuming_broker broker("global_broker");
+    static cci_utils::consuming_broker cci_global_broker("global_broker");
 
-    cci::cci_register_broker(broker);
+    cci::cci_register_broker(cci_global_broker);
     tb t("tb");
     sc_core::sc_start();
     return g_failures == 0 ? 0 : 1;

@@ -141,9 +141,9 @@ int sc_main(int, char**)
         sc_core::SC_ERROR,
         sc_core::SC_DISPLAY);
 
-    static cci_utils::consuming_broker broker("GlobalBroker");
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
 
-    cci::cci_register_broker(broker);
+    cci::cci_register_broker(cci_global_broker);
     cci::cci_originator originator("originator");
     auto broker = cci::cci_get_global_broker(originator);
 

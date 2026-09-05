@@ -597,8 +597,8 @@ int sc_main(int, char**)
 
     // ── CCI: register global broker ──────────────────────────────────────
     // Must happen before ANY cci_param is constructed.
-    static cci_utils::consuming_broker broker("GlobalBroker");
-    cci::cci_register_broker(broker);
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
 
     // ── CCI: inject preset values before tb / plic are constructed ───────
     // Presets override the default values hard-coded in the DUT and TB.
