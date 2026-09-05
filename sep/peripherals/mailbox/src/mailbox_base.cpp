@@ -5,7 +5,7 @@
  * @brief Implementation of mailbox base register infrastructure
  *
  * Provides reset functionality for single-port mailbox register architecture.
- * TLM transport is handled by csml_memory; target_socket is bound to it in the constructor.
+ * TLM transport is handled by mailbox_ip calling memory.b_transport().
  */
 
 #include "mailbox_base.h"

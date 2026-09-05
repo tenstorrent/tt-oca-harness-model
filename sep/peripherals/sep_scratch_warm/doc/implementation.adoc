@@ -5,7 +5,7 @@
 ===== SystemC/TLM-2.0 Implementation
 
 `sep_scratch_warm_ip` is a loosely-timed TLM-2.0 model of the
-warm-reset scratch bank. The eight words are CSML storage with
+warm-reset scratch bank. The eight words are regmodel storage with
 byte-enable merge so a 32-bit store does not wipe the other half of
 a 64-bit word. There is no engine thread and no CCI.
 
@@ -16,7 +16,7 @@ class sep_scratch_warm_ip : public sep_scratch_warm_base
 
 ----
 sep_scratch_warm_ip     byte-enable merge + rst_ni   (sep_scratch_warm.*)
-  └─ sep_scratch_warm_base   csml_memory + SCRATCH[8]
+  └─ sep_scratch_warm_base   regmodel::Memory + SCRATCH[8]
 ----
 
 ====== Threads and sockets

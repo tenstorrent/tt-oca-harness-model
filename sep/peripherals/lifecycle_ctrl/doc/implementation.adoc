@@ -16,7 +16,7 @@ class lifecycle_ctrl_model : public lifecycle_ctrl_base
 
 ----
 lifecycle_ctrl_model   set_inputs(), compute_feat_ctrl()   (lifecycle_ctrl.*)
-  └─ lifecycle_ctrl_base   csml_memory + target_socket     (lifecycle_ctrl_base.*)
+  └─ lifecycle_ctrl_base   regmodel::Memory + target_socket     (lifecycle_ctrl_base.*)
 ----
 
 ====== Threads and sockets
@@ -61,13 +61,13 @@ which is the `test_en` strap.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used. `lc_state` is
+Knobs are `regmodel::Param` and are re-read when used. `lc_state` is
 the raw 4-bit value; encoding happens when it seeds the bundle.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |`lc_state` |0 (`TEST_DEV`) |Raw 4-bit lifecycle state
 |`sip_dis_lo` / `sip_dis_hi` |0 |SIP feature-disable mask
 |`sys_dis_lo` / `sys_dis_hi` |0 |SYS feature-disable mask

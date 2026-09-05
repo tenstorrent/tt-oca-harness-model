@@ -17,7 +17,7 @@
 #pragma once
 #include "otbn_basetest.h"
 #include "otbn_interfaces.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <vector>
 
@@ -301,13 +301,13 @@ public:
 class otbn_test : public otbn_basetest
 {
 public:
-   /// CSML Logger instance
-   CsmlLogger logger;  ///< Logger for debug and tracing
+   /// RegLogger instance
+   RegLogger logger;  ///< Logger for debug and tracing
 
    otbn_test(sc_module_name name) : otbn_basetest(name)
    {
       // Initialize logger
-      logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+      logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
       logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
       logger.setFunctionTrace(false);
 

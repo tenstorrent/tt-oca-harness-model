@@ -33,7 +33,7 @@ otbn_algorithm::status_t otbn_algorithm_otbn_loop::execute(char* dmem) {
     // Fixed instruction count, derived from the OpenTitan INSN_CNT test.
     instruction_count = 28;
 
-    CSML_INFO(1, logger) << "[OTBN otbn_loop] Completed nested loop: x2=" << x2 << ", INSN_CNT=" << instruction_count;
+    REG_INFO(1, logger) << "[OTBN otbn_loop] Completed nested loop: x2=" << x2 << ", INSN_CNT=" << instruction_count;
 
     return otbn_algorithm::SUCCESS;
 }

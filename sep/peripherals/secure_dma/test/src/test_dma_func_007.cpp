@@ -56,7 +56,7 @@
  * - Cross-boundary transfer validation
  */
 void testbench::run_func007_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-007: Security Isolation and Access Control Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -93,7 +93,7 @@ void testbench::run_func007_tests() {
   test_memory_range_above_limit();
   test_address_overflow_32bit();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-007 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -122,7 +122,7 @@ void testbench::run_func007_tests() {
  */
 void testbench::test_memory_range_base_limit_config() {
   std::string test_name = "Memory Range BASE/LIMIT Configuration";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -200,7 +200,7 @@ void testbench::test_memory_range_base_limit_config() {
  */
 void testbench::test_range_valid_bit_requirement() {
   std::string test_name = "RANGE_VALID Bit Requirement";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -266,7 +266,7 @@ void testbench::test_range_valid_bit_requirement() {
  */
 void testbench::test_func007_base_greater_than_limit_error() {
   std::string test_name = "FUNC-007 TC003: BASE Greater Than LIMIT Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -333,7 +333,7 @@ void testbench::test_func007_base_greater_than_limit_error() {
  */
  void testbench::test_error_range_not_valid() {
   std::string test_name = "Range Not Valid (Test Plan 89)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -423,7 +423,7 @@ void testbench::test_func007_base_greater_than_limit_error() {
  */
 void testbench::test_func007_range_regwen_write_lock() {
   std::string test_name = "FUNC-007 TC005: RANGE_REGWEN Write-Once Locking";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -493,7 +493,7 @@ void testbench::test_func007_range_regwen_write_lock() {
  */
 void testbench::test_range_regwen_lock_prevents_modifications() {
   std::string test_name = "RANGE_REGWEN Lock Prevents Modifications";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -583,7 +583,7 @@ void testbench::test_range_regwen_lock_prevents_modifications() {
  */
 void testbench::test_ot_private_to_ot_private() {
   std::string test_name = "OT Private to OT Private Transfer (Allowed)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -676,7 +676,7 @@ void testbench::test_ot_private_to_ot_private() {
  */
 void testbench::test_ot_private_to_ot_dma_enabled() {
   std::string test_name = "OT Private to OT DMA-enabled Transfer (Allowed)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -782,7 +782,7 @@ void testbench::test_ot_private_to_ot_dma_enabled() {
  */
 void testbench::test_ot_dma_enabled_to_ot_private() {
   std::string test_name = "OT DMA-enabled to OT Private Transfer (Allowed)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -889,7 +889,7 @@ void testbench::test_ot_dma_enabled_to_ot_private() {
  */
 void testbench::test_ot_dma_enabled_to_soc() {
   std::string test_name = "OT DMA-enabled to SoC Transfer (Allowed)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1000,7 +1000,7 @@ void testbench::test_ot_dma_enabled_to_soc() {
  */
 void testbench::test_soc_to_ot_dma_enabled() {
   std::string test_name = "SoC to OT DMA-enabled Transfer (Allowed)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1109,7 +1109,7 @@ void testbench::test_soc_to_ot_dma_enabled() {
  */
 void testbench::test_soc_to_soc() {
   std::string test_name = "FUNC-007 TC060: SoC to SoC Transfer (Allowed)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1204,7 +1204,7 @@ void testbench::test_soc_to_soc() {
  */
 void testbench::test_ot_private_to_soc_blocked() {
   std::string test_name = "OT Private to SoC Transfer (Blocked)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1301,7 +1301,7 @@ void testbench::test_ot_private_to_soc_blocked() {
  */
 void testbench::test_soc_to_ot_private_blocked() {
   std::string test_name = "FUNC-007 TC091: SoC to OT Private Transfer (Blocked)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1398,7 +1398,7 @@ void testbench::test_soc_to_ot_private_blocked() {
  */
 void testbench::test_memory_range_boundary_base() {
   std::string test_name = "Memory Range Boundary Base";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1499,7 +1499,7 @@ void testbench::test_memory_range_boundary_base() {
  */
 void testbench::test_memory_range_boundary_limit() {
   std::string test_name = "Memory Range Boundary Limit";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1597,7 +1597,7 @@ void testbench::test_memory_range_boundary_limit() {
  */
 void testbench::test_func007_address_outside_range_error() {
   std::string test_name = "FUNC-007 TC017: Address Outside Range Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1656,7 +1656,7 @@ void testbench::test_func007_address_outside_range_error() {
 
 void testbench::test_memory_range_below_base() {
   std::string test_name = "Memory Range Below Base Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1746,7 +1746,7 @@ void testbench::test_memory_range_below_base() {
 
 void testbench::test_memory_range_above_limit() {
   std::string test_name = "Memory Range Above Limit Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1834,7 +1834,7 @@ void testbench::test_memory_range_above_limit() {
 
 void testbench::test_address_overflow_32bit() {
   std::string test_name = "Address Overflow 32-bit";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

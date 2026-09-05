@@ -13,14 +13,14 @@
 
 #pragma once
 #include "aes_base.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 #include <tlm_utils/tlm_quantumkeeper.h>
 #include <tlm_utils/simple_target_socket.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <array>
 #include <vector>
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <openssl/rand.h>
 
 /**
@@ -39,10 +39,10 @@ class aes_model : public aes_base
 public:
    SC_HAS_PROCESS(aes_model);
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-   csml_param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+   regmodel::Param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
    /**
     * @brief Constructor for the AES model
     * @param n SystemC module name
@@ -79,9 +79,9 @@ public:
    sc_in<bool> lc_escalate_en;    ///< Life cycle escalation enable input (triggers fatal alert)
    /// @}
 
-   /// @name CSML Logger
+   /// @name regmodel Logger
    /// @{
-   CsmlLogger logger;  ///< Logger instance for diagnostic output
+   RegLogger logger;  ///< Logger instance for diagnostic output
    /// @}
 
 protected:
@@ -350,6 +350,6 @@ protected:
    bool aes_encrypt_block(const uint8_t* in, uint8_t* out);
    /// @}
 
-   /** @brief Registers all TL-UL register callbacks with the underlying CSML model */
+   /** @brief Registers all TL-UL register callbacks with the underlying regmodel model */
    void register_all_callbacks();
 };

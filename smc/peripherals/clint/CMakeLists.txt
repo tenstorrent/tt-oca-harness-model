@@ -142,10 +142,11 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
-# Canonical smc_axi_extension.h (shared across the SMC tree).
-set(SMC_AXI_EXTENSION_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include"
-    CACHE PATH "Directory containing smc_axi_extension.h")
+# Canonical smc_axi_extension.h (shared across the SMC tree). Do not CACHE this
+# path: a leftover value from before the header moved to smc/common/include
+# (cpu_cluster/include) silently drops the include and breaks --asan/--coverage.
+unset(SMC_AXI_EXTENSION_DIR CACHE)
+set(SMC_AXI_EXTENSION_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../common/include")
 
 # ---------------------------------------------------------------------------
 # libsmc_clint

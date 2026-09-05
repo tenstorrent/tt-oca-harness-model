@@ -15,7 +15,7 @@
  * tlm_utils::tlm_quantumkeeper, matching the other SEP crypto IPs (aes,
  * csrng, aon_timer):
  *
- *   - Register accesses are functional and untimed; csml_memory decodes them
+ *   - Register accesses are functional and untimed; regmodel::Memory decodes them
  *     straight off the target socket.
  *   - Command execution runs in an SC_THREAD per algorithm engine. The engine
  *     charges the modeled operation latency to the quantum keeper with
@@ -24,7 +24,7 @@
  *     simulated time without forcing a context switch per command.
  *   - Latency is derived from a modeled cycle count and the clk_i frequency,
  *     so it tracks the platform clock rather than being hard-coded. Cycle
- *     counts are csml_param tunables.
+ *     counts are regmodel::Param tunables.
  *   - No cycle accuracy is claimed or attempted: only the ready/valid
  *     handshake ordering that firmware observes is guaranteed.
  *
@@ -44,8 +44,8 @@
 #include "abr_base.h"
 #include "abr_crypto.h"
 
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 #include <tlm_utils/simple_target_socket.h>
 #include <tlm_utils/tlm_quantumkeeper.h>
@@ -55,8 +55,8 @@
 #include <memory>
 #include <vector>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 namespace abr {
@@ -168,21 +168,21 @@ class abr_ip : public abr_base
     // =========================================================================
 
     /// Logging verbosity: 0=error, 1=warn, 2=info, 3=debug.
-    csml_param<int> verbosity;
+    regmodel::Param<int> verbosity;
 
     /// Fallback clock frequency (Hz) used when clk_i is unbound or zero.
-    csml_param<double> default_clk_freq_hz;
+    regmodel::Param<double> default_clk_freq_hz;
 
     /// Modeled engine latencies, in core clock cycles.
     /// @{
-    csml_param<int> mldsa_keygen_cycles;
-    csml_param<int> mldsa_sign_cycles;
-    csml_param<int> mldsa_verify_cycles;
-    csml_param<int> mlkem_keygen_cycles;
-    csml_param<int> mlkem_encaps_cycles;
-    csml_param<int> mlkem_decaps_cycles;
-    csml_param<int> zeroize_cycles;
-    csml_param<int> kv_access_cycles;
+    regmodel::Param<int> mldsa_keygen_cycles;
+    regmodel::Param<int> mldsa_sign_cycles;
+    regmodel::Param<int> mldsa_verify_cycles;
+    regmodel::Param<int> mlkem_keygen_cycles;
+    regmodel::Param<int> mlkem_encaps_cycles;
+    regmodel::Param<int> mlkem_decaps_cycles;
+    regmodel::Param<int> zeroize_cycles;
+    regmodel::Param<int> kv_access_cycles;
     /// @}
 
     // =========================================================================
@@ -239,7 +239,7 @@ class abr_ip : public abr_base
     // Callback registration
     // =========================================================================
 
-    /// Install every functional read/write callback over the CSML defaults.
+    /// Install every functional read/write callback over the regmodel defaults.
     void register_callbacks();
 
     /// Flat KV sideload write path (`keymgr_tl_socket`).
@@ -408,5 +408,5 @@ class abr_ip : public abr_base
     sc_core::sc_event m_mlkem_start_ev;
     sc_core::sc_event m_intr_update_ev;
 
-    mutable CsmlLogger logger;
+    mutable RegLogger logger;
 };

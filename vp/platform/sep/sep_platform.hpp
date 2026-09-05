@@ -359,19 +359,19 @@ private:
     // Config / parameters
     // =========================================================================
     WdRiscv::HartConfig    config;
-    ArgsCSML*              argsCSML      = nullptr;
-    csml_param<uint64_t>   globalQuantumNs;
+    ArgsReg*               argsReg       = nullptr;
+    regmodel::Param<uint64_t>   globalQuantumNs;
 
     // Boot straps latched by the (emulated) SMC reset unit, exposed as CCI params
     // so the ROM boot mode is selectable at invocation (accellera_config.ini) with
     // no rebuild. The constructor composes them into the STRAPS_LO/STRAPS_HI
     // words (sep_smc_interface.h). Defaults: Secondary chiplet, status reporting
     // enabled, refclk.
-    csml_param<bool>       strap_primary_chiplet;       // STRAPS_LO[25]
-    csml_param<bool>       strap_boot_recovery;         // STRAPS_HI[23]
-    csml_param<bool>       strap_rotate_update;         // STRAPS_HI[29]
-    csml_param<bool>       strap_status_report_disable; // STRAPS_LO[21]
-    csml_param<bool>       strap_bl0_pll_clk;           // STRAPS_HI[24]
+    regmodel::Param<bool>       strap_primary_chiplet;       // STRAPS_LO[25]
+    regmodel::Param<bool>       strap_boot_recovery;         // STRAPS_HI[23]
+    regmodel::Param<bool>       strap_rotate_update;         // STRAPS_HI[29]
+    regmodel::Param<bool>       strap_status_report_disable; // STRAPS_LO[21]
+    regmodel::Param<bool>       strap_bl0_pll_clk;           // STRAPS_HI[24]
 
     // Optional SPI flash preload: path to a Verilog $readmemh-style hex file
     // (e.g. fw/sep/bootcode/prebuilt/non_secure_boot.spi_preload) — "@addr" lines
@@ -379,21 +379,21 @@ private:
     // pairs. Parsed directly into spi_flash's backing memory in
     // start_of_simulation via spi_flash_model::write_byte(); no conversion to a
     // raw .bin is needed.
-    csml_param<std::string> spiPreload;
+    regmodel::Param<std::string> spiPreload;
     std::string              spiPreloadPath;
 
     // Optional SPI flash backdoor: path to a raw binary image, for fixtures that
     // are not in the hex format spiPreload parses. Both keys are opt-in and
     // default to empty, so a run that names neither always starts from erased
     // (0xFF) flash. spiPreload wins if both are set.
-    csml_param<std::string> spiBackdoorFile;
+    regmodel::Param<std::string> spiBackdoorFile;
     std::string              spiBackdoorPath;
     /// Raw binary staged into the SMC SRAM window before the ROM runs, for the
     /// recovery / secondary boot path where the manifest arrives from the SMC
     /// rather than SPI flash. Offset is SMC-SRAM-relative and must agree with
     /// the MANIFEST_ADDR the boot handshake publishes (scratch[8]).
-    csml_param<std::string> smcSramBackdoorFile;
-    csml_param<uint32_t>    smcSramBackdoorOffset;
+    regmodel::Param<std::string> smcSramBackdoorFile;
+    regmodel::Param<uint32_t>    smcSramBackdoorOffset;
     std::string              smcSramBackdoorPath;
 
     // Relays sep_smn_inbound_axi (external-facing, 64-bit) into the 32-bit
@@ -409,14 +409,14 @@ private:
     // 0 and SEP firmware programs it, which is what the default preserves;
     // platforms that drive inbound traffic without running that firmware
     // (smu-vp) preset this to match the SMU crossbar's own sep_global_base.
-    csml_param<uint64_t>   sep_global_base;
+    regmodel::Param<uint64_t>   sep_global_base;
 
     // Value seeded into CPU_CTRL.SEP_REGION_SIZE, the other half of the inbound
     // window the remap checks. The CSR resets to 16 MiB, so an inbound aperture
     // wider than that (smu-vp routes 512 MiB) needs the CSR widened to match, or
     // hits above the reset window would pass through unremapped and land on the
     // internal bus as a global address. 0 keeps the reset value.
-    csml_param<uint64_t>   sep_region_size;
+    regmodel::Param<uint64_t>   sep_region_size;
 
     // RTL's smc_global_base_addr_i / smc_region_size_i: the SEP_EXT_TO_SMC demux
     // window, defined by the SMC and not by anything inside SEP.  Modelled as
@@ -424,8 +424,8 @@ private:
     // the defaults reproduce the window the static Args constants described.
     // An enclosing platform must keep these in step with whatever it puts on
     // sep_ext_to_smc_axi, or SEP will gate off part of the SMC it can reach.
-    csml_param<uint64_t>   smc_global_base;
-    csml_param<uint64_t>   smc_region_size;
+    regmodel::Param<uint64_t>   smc_global_base;
+    regmodel::Param<uint64_t>   smc_region_size;
 
     // The inbound filter's filter_skip_i (sep.sv:952), which bypasses all match and
     // permission checking. Its producer is lc_ctrl: filter_skip_i is
@@ -440,7 +440,7 @@ private:
     // sep_debug remains as a force-on override with no RTL counterpart, for a platform
     // whose masters issue inbound traffic without programming the filter tables and
     // whose fuse image does not already bypass it. Default false contributes nothing.
-    csml_param<bool>                 sep_debug;
+    regmodel::Param<bool>                 sep_debug;
     sc_signal<bool, SC_MANY_WRITERS> sep_debug_signal;
 
     // =========================================================================

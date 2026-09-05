@@ -49,7 +49,7 @@ Source: `test/src/sep_output_remap_ctrl_testbench.cpp`.
 |T5 |Datapath remap READ |Region 0 |Positive
 |T6 |Datapath remap WRITE |Region 3 |Positive
 |T7 |Address restored |Caller payload unchanged |Positive
-|T8 |Byte-enable / mask |csml 64-bit store |Positive
+|T8 |Byte-enable / mask |regmodel 64-bit store |Positive
 |T9 |transport_dbg |Same remap |Positive
 |T10 |rst_ni |Clears programmed regions |Positive
 |T11–T13 |source-id re-tag |OTHERS downstream; restore; no-extension |Positive

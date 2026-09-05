@@ -5031,7 +5031,8 @@ Hart<URV>::untilAddress(size_t address, FILE* traceFile)
   instStr.reserve(128);
 
   tlm_utils::tlm_quantumkeeper qk;
-  qk.set_global_quantum(sc_time(10, SC_NS));
+  if (tlm::tlm_global_quantum::instance().get() == sc_core::SC_ZERO_TIME)
+    qk.set_global_quantum(sc_time(1000, SC_NS));  // simtlm::DEFAULT_GLOBAL_QUANTUM_NS
 
   uint64_t limit = instCountLim_;
   bool doStats = instFreq_ or enableCounters_;

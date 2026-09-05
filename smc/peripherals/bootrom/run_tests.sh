@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build (if needed) and run the SEP Boot ROM SystemC test bench.
 #
 # Usage:
@@ -19,7 +21,7 @@
 #                 probes common macOS (Homebrew) and Linux (/usr/local, /usr)
 #                 locations.  Set this if SystemC is in a non-standard prefix.
 #   CCI_HOME      Path to an Accellera SystemC CCI install.  If unset the
-#                 script probes /Users/pdroy/cci, /usr/local/cci,
+#                 script probes "${HOME}/cci", /usr/local/cci,
 #                 /opt/homebrew/opt/systemc-cci.
 #   BUILD_TYPE    CMake build type (default: Release; Debug for --coverage).
 #   JOBS          Parallel build jobs (default: all available cores).
@@ -102,7 +104,7 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -z "${CCI_HOME:-}" ]]; then
     for _candidate in \
-        /Users/pdroy/cci \
+        "${HOME}/cci" \
         /usr/local/cci \
         /opt/homebrew/opt/systemc-cci
     do
@@ -324,6 +326,23 @@ elif (( USE_COVERAGE )); then
     if [[ -f "${HTML_DIR}/index.html" ]]; then
         echo ""
         echo ">> HTML coverage report: ${HTML_DIR}/index.html"
+    fi
+
+    _REPO="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
+    # shellcheck disable=SC1091
+    source "${_REPO}/scripts/coverage_gate.sh"
+    if [[ "${COVERAGE_TOOL:-}" == "llvm" && -n "${COV_CMD:-}" && -n "${PROFDATA:-}" && -f "${PROFDATA}" ]]; then
+        ${COV_CMD} report "${TB_BIN}" \
+            ${_OBJECT_ARGS[@]+"${_OBJECT_ARGS[@]}"} \
+            -instr-profile="${PROFDATA}" \
+            "${SOURCES[@]}" \
+            > "${BUILD_DIR}/coverage_summary.txt"
+        coverage_gate_from_log "${BUILD_DIR}/coverage_summary.txt" || exit 1
+    elif [[ -f "${BUILD_DIR}/coverage.info" ]]; then
+        coverage_gate_from_lcov_info "${BUILD_DIR}/coverage.info" || exit 1
+    else
+        echo ">> Coverage gate FAIL (no coverage summary to parse)" >&2
+        exit 1
     fi
 
 elif (( USE_CTEST )); then

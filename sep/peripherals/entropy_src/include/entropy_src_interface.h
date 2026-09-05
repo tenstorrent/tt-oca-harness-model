@@ -34,7 +34,7 @@
  * All eight callback methods correspond to side-effecting register operations
  * identified in the detailed design.  The concrete entropy_src class inherits
  * from this interface and provides implementations.  Pure storage registers
- * (34 total) are handled transparently by the CSML register layer and do not
+ * (34 total) are handled transparently by the regmodel register layer and do not
  * require explicit callbacks.
  ******************************************************************************/
 class entropy_src_if

@@ -57,7 +57,7 @@ Three runnable platforms ship from `vp/`:
 
 1. Install the host toolchain and libraries listed in [Requirements](#requirements)
    (CMake 3.24+, a C++20 compiler, SystemC 3.0.2, CCI 1.0.2, Boost, OpenSSL).
-2. Clone this repository and initialize submodules — [Installation](#installation).
+2. Clone this repository — [Installation](#installation).
 3. Build `sep-vp` — [Building the SEP VP](#building-the-sep-vp).
 4. To run SMC or SMU platforms, also install the public
    [Whisper ISS](https://github.com/tenstorrent/whisper) and a RISC-V GNU
@@ -70,7 +70,6 @@ Minimal SEP bring-up after dependencies are installed:
 ```bash
 git clone https://github.com/tenstorrent/tt-oca-harness-model.git
 cd tt-oca-harness-model
-git submodule update --init --recursive
 cd vp
 ./configure_vp.sh
 cd build && make sep-vp
@@ -94,7 +93,7 @@ current release.
 | [Whisper](https://github.com/tenstorrent/whisper) | public ISS | `smc-vp`, `smu-vp` | Build with `MEM_CALLBACKS=1` and C++20 |
 | RISC-V GNU toolchain | GCC 11+, `riscv64-unknown-elf-` (or `riscv64-elf-`) | Firmware tests | SMU tests need both RV64 (SMC) and RV32 (SEP) |
 | Python 3 | 3.x | Firmware / preload helpers | — |
-| Git | with submodule support | Clone | CSML lives in `sep/utils/csml` |
+| Git | — | Clone | No CSML submodule; SEP register models use `common/include` |
 
 Optional for docs and coverage:
 
@@ -131,6 +130,9 @@ OCAH subsystems:
 ```
 tt-oca-harness-model/
 ├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI, PeripheralCommon, …)
+├── common/include/                ← shared register + logging helpers
+│                                  (reg_file.h, reg_param.h, reg_logger.h,
+│                                   reg_access.h, reg_map.h, sim_log.h)
 ├── sep/                           ← SEP IP peripheral models
 │   ├── peripherals/               ← individual IP models
 │   │   ├── adams_bridge/          ← Adams Bridge PQC (ML-DSA-87 / ML-KEM-1024)
@@ -164,7 +166,6 @@ tt-oca-harness-model/
 │   │   └── run_all_peripherals.sh ← batch peripheral tests (sources vp/configure_vp.sh)
 │   ├── cpu/                       ← VeeR EL2 ISS + TLM-2.0 wrapper
 │   └── utils/
-│       ├── csml/                  ← Core SystemC Model Library (submodule — Vayavya CSML)
 │       └── paged-memory/          ← PagedMemory header-only sparse storage engine
 ├── smc/                           ← SMC IP model library
 │   ├── peripherals/               ← SMC peripheral models
@@ -374,7 +375,6 @@ make && sudo make install
 ```bash
 git clone git@github.com:tenstorrent/tt-oca-harness-model.git
 cd tt-oca-harness-model
-git submodule update --init --recursive
 ```
 
 SSH: `git clone git@github.com:tenstorrent/tt-oca-harness-model.git`
@@ -996,12 +996,12 @@ Limitations (unmodeled or stubbed IP) are listed in
 tt-oca-harness-model/
 ├── cmake/                     shared CMake helpers (FindSystemC, FindCCI, …)
 ├── common/include/            shared register + logging helpers
-│                              (reg_access.h, reg_map.h, sim_log.h)
+│                              (reg_file.h, reg_param.h, reg_logger.h,
+│                               reg_access.h, reg_map.h, sim_log.h)
 ├── sep/                       SEP IP peripheral models
 │   ├── peripherals/           individual IP models + run_all_peripherals.sh
 │   ├── cpu/                   VeeR EL2 ISS + TLM-2.0 wrapper
 │   └── utils/
-│       ├── csml/              Core SystemC Model Library (submodule)
 │       └── paged-memory/      sparse storage engine
 ├── smc/                       SMC IP model library
 │   ├── peripherals/           bootrom, clint, plic, uart, i2c, i3c, dma,
@@ -1055,15 +1055,16 @@ not a packaged language SDK. The programming surfaces are:
 | SEP book | [`sep/doc/index.adoc`](sep/doc/index.adoc) |
 | SMC book | [`smc/doc/index.adoc`](smc/doc/index.adoc) |
 | Per-IP model + test plan | `<subsystem>/peripherals/<ip>/doc/` |
-| Register access helpers | [`common/include/reg_access.h`](common/include/reg_access.h), [`common/include/reg_map.h`](common/include/reg_map.h) |
+| Register access helpers | [`common/include/reg_access.h`](common/include/reg_access.h), [`common/include/reg_map.h`](common/include/reg_map.h), [`common/include/reg_file.h`](common/include/reg_file.h) |
+| SEP register / CCI / log types | `regmodel::Reg` / `Memory` / `Param`, `RegLogger` in [`common/include`](common/include) (`reg_file.h`, `reg_param.h`, `reg_logger.h`) |
 | Transaction logging | [`common/include/sim_log.h`](common/include/sim_log.h) |
 | Canonical SMC AXI TLM extension | [`smc/common/include/smc_axi_extension.h`](smc/common/include/smc_axi_extension.h) |
-| Runtime knobs | Accellera CCI `cci::cci_param` in each module; preset from the platform INI |
-| CSML-based SEP models | `csml_param` / `csml_reg` in `sep/utils/csml` |
+| Runtime knobs | Accellera CCI `cci::cci_param` or `regmodel::Param` in each module; preset from the platform INI |
 
-Hand-written register models use `regmodel` (`apply_w1c`, `apply_woset`,
-`Register32`, `RegisterMap`) rather than inline mask arithmetic. Runtime
-configuration goes through CCI, not process-wide globals.
+Hand-written register models use in-house `regmodel` (`apply_w1c`, `apply_woset`,
+`Register32`, `RegisterMap`, and the SEP `Reg` / `Memory` types) rather than
+inline mask arithmetic. Runtime configuration goes through CCI, not
+process-wide globals.
 
 Firmware-facing register maps and programming sequences are specified in
 the hardware TRM (`tt-oca-hw`), not duplicated here.
@@ -1249,7 +1250,7 @@ This repository includes a fork of
 under the MIT license; see [vp/LICENSE.riscv-vp-plusplus](vp/LICENSE.riscv-vp-plusplus).
 Tenstorrent modifications and new models are Apache 2.0.
 
-Third-party notices (VeeR ISS, SoftFloat, PQClean, OpenTitan, CSML, and others):
+Third-party notices (VeeR ISS, SoftFloat, PQClean, OpenTitan, and others):
 [NOTICE](NOTICE).
 
 For the avoidance of doubt, see [LICENSE_understanding.txt](LICENSE_understanding.txt).

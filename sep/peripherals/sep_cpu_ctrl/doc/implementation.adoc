@@ -5,7 +5,7 @@
 ===== SystemC/TLM-2.0 Implementation
 
 `sep_cpu_ctrl_ip` is a loosely-timed TLM-2.0 model of the SEP system
-CSR block. Most words are plain CSML storage. A handful have
+CSR block. Most words are plain regmodel storage. A handful have
 callbacks: NMI vector + lock, TRNG source + lock, timeout clear /
 status, straps, fuse-sense, version, and the inbound window.
 
@@ -16,7 +16,7 @@ class sep_cpu_ctrl_ip : public sep_cpu_ctrl_base
 
 ----
 sep_cpu_ctrl_ip     callbacks, hwif_in, window exports   (sep_cpu_ctrl.*)
-  └─ sep_cpu_ctrl_base   csml_memory + software-visible words
+  └─ sep_cpu_ctrl_base   regmodel::Memory + software-visible words
        └─ sep_cpu_ctrl_register.h
 ----
 

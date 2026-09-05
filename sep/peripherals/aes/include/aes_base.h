@@ -6,7 +6,7 @@
  * 
  * This header defines the aes_base class which encapsulates the hardware 
  * register definitions and the memory-mapped interface for the AES module.
- * It uses the CSML (Common System Modeling Library) for register and 
+ * It uses the in-house regmodel library for register and 
  * memory modeling.
  */
 
@@ -30,7 +30,7 @@ class aes_base : public sc_module
 {
   public:
     /// @brief Data type for 32-bit registers
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
 
     /** 
      * @brief Constructor for the aes_base class
@@ -58,10 +58,10 @@ class aes_base : public sc_module
        }
 
       /// @brief Register memory storage for the module
-      csml_memory<32> memory;
+      regmodel::Memory<32> memory;
       
       /// @brief TLM target socket for memory-mapped register access
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
       // =========================================================================
       // Hardware Registers
@@ -69,15 +69,15 @@ class aes_base : public sc_module
 
       aes::ALERT_TEST_type<32> ALERT_TEST;               ///< Alert test register (offset 0x00)
 
-      csml_reg_vector<aes::KEY_SHARE0_type<32>, 8> KEY_SHARE0; ///< Key share 0 registers (0x04 - 0x20)
+      regmodel::RegVector<aes::KEY_SHARE0_type<32>, 8> KEY_SHARE0; ///< Key share 0 registers (0x04 - 0x20)
 
-      csml_reg_vector<aes::KEY_SHARE1_type<32>, 8> KEY_SHARE1; ///< Key share 1 registers (0x24 - 0x40)
+      regmodel::RegVector<aes::KEY_SHARE1_type<32>, 8> KEY_SHARE1; ///< Key share 1 registers (0x24 - 0x40)
 
-      csml_reg_vector<aes::IV_type<32>, 4> IV;           ///< Initialization vector registers (0x44 - 0x50)
+      regmodel::RegVector<aes::IV_type<32>, 4> IV;           ///< Initialization vector registers (0x44 - 0x50)
 
-      csml_reg_vector<aes::DATA_IN_type<32>, 4> DATA_IN; ///< Input data registers (0x54 - 0x60)
+      regmodel::RegVector<aes::DATA_IN_type<32>, 4> DATA_IN; ///< Input data registers (0x54 - 0x60)
 
-      csml_reg_vector<aes::DATA_OUT_type<32>, 4> DATA_OUT; ///< Output data registers (0x64 - 0x70)
+      regmodel::RegVector<aes::DATA_OUT_type<32>, 4> DATA_OUT; ///< Output data registers (0x64 - 0x70)
 
       aes::CTRL_SHADOWED_type<32> CTRL_SHADOWED;         ///< Shadowed control register (offset 0x74)
 

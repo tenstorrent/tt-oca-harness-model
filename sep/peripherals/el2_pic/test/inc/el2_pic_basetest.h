@@ -7,7 +7,7 @@
 #include <string>
 
 // Register byte offsets — computed from el2_pic_base.h constants:
-//   OFFS_*_BASE / 4 gives the csml word offset; byte addr = word_offset * 4.
+//   OFFS_*_BASE / 4 gives the regmodel word offset; byte addr = word_offset * 4.
 //
 //   MEIPL[s]       @ byte  s*4              (base 0x0000)
 //   MEIP[w]        @ byte  0x1000 + w*4

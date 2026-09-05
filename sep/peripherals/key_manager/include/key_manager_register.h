@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_register.h
- * @brief Key Manager TT - SEP-host-accessible register definitions (CSML format)
+ * @brief Key Manager TT - SEP-host-accessible register definitions (regmodel format)
  *
  * The mailbox is the only KM block the SEP host can address: a single 4 KB
  * window holding the seven SEP-side mailbox registers (MB_*). Key provisioning
@@ -20,7 +20,7 @@
 #pragma once
 #include <iostream>
 #include <systemc.h>
-#include "csml_register.h"
+#include "reg_file.h"
 
 namespace keymgr_tt {
 
@@ -50,33 +50,33 @@ static constexpr unsigned int MB_CTRL_OFFSET     = 0x18; ///< SEP_CTRL
  * Reset  : 0x00000000
  */
 template<unsigned int N>
-class MB_WDATA_type : public csml_reg<N>
+class MB_WDATA_type : public regmodel::Reg<N>
 {
 public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0x0 (WO), write_mask=0xFFFFFFFF, reset=0x0
     MB_WDATA_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x0, 0xFFFFFFFF, 0x0),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0xFFFFFFFF, 0x0),
         DATA(reg_name + ".DATA", *this, 0, 32)
     {
         this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
 
-    csml_bitfield<N> DATA;  ///< [31:0]  Full 32-bit message payload word
+    regmodel::Bitfield<N> DATA;  ///< [31:0]  Full 32-bit message payload word
 };
 
 /**
@@ -89,35 +89,35 @@ public:
  * Reset  : 0x00000000
  */
 template<unsigned int N>
-class MB_WSEP_type : public csml_reg<N>
+class MB_WSEP_type : public regmodel::Reg<N>
 {
 public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0x1 (RW), write_mask=0x1, reset=0x0
     MB_WSEP_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x1, 0x1, 0x0),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0x1, 0x1, 0x0),
         SET      (reg_name + ".SET",       *this, 0,  1),
         reserved0(reg_name + ".reserved0", *this, 1, 31)
     {
         this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
 
-    csml_bitfield<N> SET;       ///< [0]    Write 1 to tag the next MB_WDATA push as separator
-    csml_bitfield<N> reserved0; ///< [31:1]
+    regmodel::Bitfield<N> SET;       ///< [0]    Write 1 to tag the next MB_WDATA push as separator
+    regmodel::Bitfield<N> reserved0; ///< [31:1]
 };
 
 /**
@@ -130,33 +130,33 @@ public:
  * Reset  : 0x00000000
  */
 template<unsigned int N>
-class MB_RDATA_type : public csml_reg<N>
+class MB_RDATA_type : public regmodel::Reg<N>
 {
 public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0xFFFFFFFF (RO), write_mask=0x0, reset=0x0
     MB_RDATA_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x0, 0x0),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x0, 0x0),
         DATA(reg_name + ".DATA", *this, 0, 32)
     {
         this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
 
-    csml_bitfield<N> DATA;  ///< [31:0]  Full 32-bit response payload word
+    regmodel::Bitfield<N> DATA;  ///< [31:0]  Full 32-bit response payload word
 };
 
 /**
@@ -184,15 +184,15 @@ public:
  * Reset  : 0x00000005  (inbound_empty=1 at bit[0], outbound_empty=1 at bit[2])
  */
 template<unsigned int N>
-class MB_STATUS_type : public csml_reg<N>
+class MB_STATUS_type : public regmodel::Reg<N>
 {
 public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0x03FFFFFF (bits[25:0] readable), write_mask=0x00F00000 (bits[23:20] W1C), reset=0x5
     MB_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x03FFFFFFu, 0x00F00000u, 0x5u),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0x03FFFFFFu, 0x00F00000u, 0x5u),
         INBOUND_EMPTY     (reg_name + ".INBOUND_EMPTY",      *this,  0,  1),
         INBOUND_FULL      (reg_name + ".INBOUND_FULL",       *this,  1,  1),
         OUTBOUND_EMPTY    (reg_name + ".OUTBOUND_EMPTY",     *this,  2,  1),
@@ -210,31 +210,31 @@ public:
         this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
 
-    csml_bitfield<N> INBOUND_EMPTY;      ///< [0]     Inbound FIFO empty
-    csml_bitfield<N> INBOUND_FULL;       ///< [1]     Inbound FIFO full
-    csml_bitfield<N> OUTBOUND_EMPTY;     ///< [2]     Outbound FIFO empty
-    csml_bitfield<N> OUTBOUND_FULL;      ///< [3]     Outbound FIFO full
-    csml_bitfield<N> INBOUND_DEPTH;      ///< [11:4]  Words in inbound FIFO
-    csml_bitfield<N> OUTBOUND_DEPTH;     ///< [19:12] Words in outbound FIFO
-    csml_bitfield<N> INBOUND_OVERFLOW;   ///< [20]    Inbound overflow occurred
-    csml_bitfield<N> OUTBOUND_OVERFLOW;  ///< [21]    Outbound overflow occurred
-    csml_bitfield<N> INBOUND_UNDERFLOW;  ///< [22]    Inbound underflow occurred
-    csml_bitfield<N> OUTBOUND_UNDERFLOW; ///< [23]    Outbound underflow occurred
-    csml_bitfield<N> INBOUND_SEPARATOR;  ///< [24]    Last KM-popped inbound word was separator
-    csml_bitfield<N> OUTBOUND_SEPARATOR; ///< [25]    Last SEP-popped outbound word was separator
-    csml_bitfield<N> reserved0;          ///< [31:26]
+    regmodel::Bitfield<N> INBOUND_EMPTY;      ///< [0]     Inbound FIFO empty
+    regmodel::Bitfield<N> INBOUND_FULL;       ///< [1]     Inbound FIFO full
+    regmodel::Bitfield<N> OUTBOUND_EMPTY;     ///< [2]     Outbound FIFO empty
+    regmodel::Bitfield<N> OUTBOUND_FULL;      ///< [3]     Outbound FIFO full
+    regmodel::Bitfield<N> INBOUND_DEPTH;      ///< [11:4]  Words in inbound FIFO
+    regmodel::Bitfield<N> OUTBOUND_DEPTH;     ///< [19:12] Words in outbound FIFO
+    regmodel::Bitfield<N> INBOUND_OVERFLOW;   ///< [20]    Inbound overflow occurred
+    regmodel::Bitfield<N> OUTBOUND_OVERFLOW;  ///< [21]    Outbound overflow occurred
+    regmodel::Bitfield<N> INBOUND_UNDERFLOW;  ///< [22]    Inbound underflow occurred
+    regmodel::Bitfield<N> OUTBOUND_UNDERFLOW; ///< [23]    Outbound underflow occurred
+    regmodel::Bitfield<N> INBOUND_SEPARATOR;  ///< [24]    Last KM-popped inbound word was separator
+    regmodel::Bitfield<N> OUTBOUND_SEPARATOR; ///< [25]    Last SEP-popped outbound word was separator
+    regmodel::Bitfield<N> reserved0;          ///< [31:26]
 };
 
 /**
@@ -247,15 +247,15 @@ public:
  * Reset  : 0x00000000 (all disabled)
  */
 template<unsigned int N>
-class MB_IRQEN_type : public csml_reg<N>
+class MB_IRQEN_type : public regmodel::Reg<N>
 {
 public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0x1F, write_mask=0x1F, reset=0x0
     MB_IRQEN_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x1Fu, 0x1Fu, 0x0),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0x1Fu, 0x1Fu, 0x0),
         OUTBOUND_READ_DATA_AVAIL_EN (reg_name + ".OUTBOUND_READ_DATA_AVAIL_EN",  *this, 0, 1),
         INBOUND_WRITE_SPACE_AVAIL_EN(reg_name + ".INBOUND_WRITE_SPACE_AVAIL_EN", *this, 1, 1),
         INBOUND_OVERFLOW_EN         (reg_name + ".INBOUND_OVERFLOW_EN",          *this, 2, 1),
@@ -266,24 +266,24 @@ public:
         this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
 
-    csml_bitfield<N> OUTBOUND_READ_DATA_AVAIL_EN;  ///< [0] Enable IRQ: KM wrote response to outbound
-    csml_bitfield<N> INBOUND_WRITE_SPACE_AVAIL_EN; ///< [1] Enable IRQ: inbound FIFO has free space
-    csml_bitfield<N> INBOUND_OVERFLOW_EN;          ///< [2] Enable IRQ: inbound FIFO overflow
-    csml_bitfield<N> OUTBOUND_UNDERFLOW_EN;        ///< [3] Enable IRQ: outbound FIFO underflow
-    csml_bitfield<N> FLUSHED_BY_KM_EN;             ///< [4] Enable IRQ: KM firmware flushed mailbox
-    csml_bitfield<N> reserved0;                    ///< [31:5]
+    regmodel::Bitfield<N> OUTBOUND_READ_DATA_AVAIL_EN;  ///< [0] Enable IRQ: KM wrote response to outbound
+    regmodel::Bitfield<N> INBOUND_WRITE_SPACE_AVAIL_EN; ///< [1] Enable IRQ: inbound FIFO has free space
+    regmodel::Bitfield<N> INBOUND_OVERFLOW_EN;          ///< [2] Enable IRQ: inbound FIFO overflow
+    regmodel::Bitfield<N> OUTBOUND_UNDERFLOW_EN;        ///< [3] Enable IRQ: outbound FIFO underflow
+    regmodel::Bitfield<N> FLUSHED_BY_KM_EN;             ///< [4] Enable IRQ: KM firmware flushed mailbox
+    regmodel::Bitfield<N> reserved0;                    ///< [31:5]
 };
 
 /**
@@ -296,15 +296,15 @@ public:
  * Reset  : 0x00000000
  */
 template<unsigned int N>
-class MB_IRQS_type : public csml_reg<N>
+class MB_IRQS_type : public regmodel::Reg<N>
 {
 public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0x1F, write_mask=0x1C (bits[1:0] are level-sensitive RO, bits[4:2] are W1C), reset=0x0
     MB_IRQS_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x1Fu, 0x1Cu, 0x0),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0x1Fu, 0x1Cu, 0x0),
         OUTBOUND_READ_DATA_AVAIL(reg_name + ".OUTBOUND_READ_DATA_AVAIL",  *this, 0, 1),
         INBOUND_WRITE_SPACE_AVAIL(reg_name + ".INBOUND_WRITE_SPACE_AVAIL",*this, 1, 1),
         INBOUND_OVERFLOW        (reg_name + ".INBOUND_OVERFLOW",          *this, 2, 1),
@@ -315,24 +315,24 @@ public:
         this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
 
-    csml_bitfield<N> OUTBOUND_READ_DATA_AVAIL;  ///< [0] KM wrote response to outbound FIFO (W1C)
-    csml_bitfield<N> INBOUND_WRITE_SPACE_AVAIL; ///< [1] Inbound FIFO has write space (W1C)
-    csml_bitfield<N> INBOUND_OVERFLOW;          ///< [2] Write to full inbound FIFO (W1C)
-    csml_bitfield<N> OUTBOUND_UNDERFLOW;        ///< [3] Read from empty outbound FIFO (W1C)
-    csml_bitfield<N> FLUSHED_BY_KM;             ///< [4] KM firmware flushed mailbox (W1C)
-    csml_bitfield<N> reserved0;                 ///< [31:5]
+    regmodel::Bitfield<N> OUTBOUND_READ_DATA_AVAIL;  ///< [0] KM wrote response to outbound FIFO (W1C)
+    regmodel::Bitfield<N> INBOUND_WRITE_SPACE_AVAIL; ///< [1] Inbound FIFO has write space (W1C)
+    regmodel::Bitfield<N> INBOUND_OVERFLOW;          ///< [2] Write to full inbound FIFO (W1C)
+    regmodel::Bitfield<N> OUTBOUND_UNDERFLOW;        ///< [3] Read from empty outbound FIFO (W1C)
+    regmodel::Bitfield<N> FLUSHED_BY_KM;             ///< [4] KM firmware flushed mailbox (W1C)
+    regmodel::Bitfield<N> reserved0;                 ///< [31:5]
 };
 
 /**
@@ -345,15 +345,15 @@ public:
  * Reset  : 0x00000000
  */
 template<unsigned int N>
-class MB_CTRL_type : public csml_reg<N>
+class MB_CTRL_type : public regmodel::Reg<N>
 {
 public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0x7, write_mask=0x7, reset=0x0
     MB_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : csml_reg<N>(reg_name, memory, offset, 0x7u, 0x7u, 0x0),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0x7u, 0x7u, 0x0),
         INBOUND_OVERFLOW_RESP (reg_name + ".INBOUND_OVERFLOW_RESP",  *this, 0, 1),
         OUTBOUND_UNDERFLOW_RESP(reg_name + ".OUTBOUND_UNDERFLOW_RESP",*this, 1, 1),
         FLUSH                 (reg_name + ".FLUSH",                  *this, 2, 1),
@@ -362,22 +362,22 @@ public:
         this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
 
-    csml_bitfield<N> INBOUND_OVERFLOW_RESP;  ///< [0] Configure overflow response behavior
-    csml_bitfield<N> OUTBOUND_UNDERFLOW_RESP;///< [1] Configure underflow response behavior
-    csml_bitfield<N> FLUSH;                  ///< [2] Write 1 to flush both inbound and outbound FIFOs
-    csml_bitfield<N> reserved0;              ///< [31:3]
+    regmodel::Bitfield<N> INBOUND_OVERFLOW_RESP;  ///< [0] Configure overflow response behavior
+    regmodel::Bitfield<N> OUTBOUND_UNDERFLOW_RESP;///< [1] Configure underflow response behavior
+    regmodel::Bitfield<N> FLUSH;                  ///< [2] Write 1 to flush both inbound and outbound FIFOs
+    regmodel::Bitfield<N> reserved0;              ///< [31:3]
 };
 
 

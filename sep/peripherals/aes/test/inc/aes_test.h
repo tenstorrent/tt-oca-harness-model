@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 #include "aes_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 // =============================================================================
 // Test-side type definition for keymgr sideload key
@@ -39,7 +39,7 @@ struct keymgr_sideload_key_t {
 class aes_test : public aes_basetest
 {
 public:
-   CsmlLogger logger;
+   RegLogger logger;
 
    aes_test(sc_module_name name);
 
@@ -62,6 +62,8 @@ public:
    void set_keymgr_key(const aes_if::keymgr_sideload_key_t& key);
    void invalidate_keymgr_key();
    bool get_keymgr_key(aes_if::keymgr_sideload_key_t& key);
+   /// Returns true when the keymgr socket rejects a read (write-only port).
+   bool keymgr_read_rejected(uint64_t offset);
 
    // Alert Interfaces (Test monitors these)
    sc_in<bool> alert_recov_ctrl_update_err_i;  // Monitor recoverable alert

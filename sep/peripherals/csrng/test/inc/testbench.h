@@ -17,12 +17,12 @@
 #include <string>
 #include "csrng.h"
 #include "csrng_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 class testbench : public sc_module
 {
 public:
-    CsmlLogger logger;
+    RegLogger logger;
 
     SC_HAS_PROCESS(testbench);
 
@@ -389,6 +389,11 @@ public:
     void test_int_state_val_read_multiple_instances();
     void test_int_state_val_pointer_reset_on_int_state_num_write();
     void test_int_state_val_reseed_status_fips();
+
+    // Coverage: protected error paths, unused FSM states, REGWEN denies
+    void test_coverage_invalid_instance_and_helpers();
+    void test_coverage_fsm_states_and_genbits_repeat();
+    void test_coverage_int_state_and_regwen_denies();
 
 private:
     // DUT and test module instances

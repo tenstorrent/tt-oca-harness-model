@@ -5,8 +5,8 @@
 #include <systemc.h>
 #include "spi_controller.h"
 #include "spi_controller_test.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 /// =============================================================================
 /// SPI Controller Register Offset Definitions (Common for all tests)
@@ -93,9 +93,9 @@ private:
     sc_signal<bool> sig_rst_ni;
 
     /// Testbench configuration parameters (read from CCI broker, same values as DUT)
-    csml_param<uint32_t> m_tx_depth;
-    csml_param<uint32_t> m_rx_depth;
-    csml_param<bool>     m_byte_order;
+    regmodel::Param<uint32_t> m_tx_depth;
+    regmodel::Param<uint32_t> m_rx_depth;
+    regmodel::Param<bool>     m_byte_order;
 
     /// Test result tracking
     uint32_t m_tests_run;
@@ -103,8 +103,8 @@ private:
 public:
     uint32_t m_tests_failed;
 
-    /// CSML Logger instance
-    CsmlLogger logger;
+    /// RegLogger instance
+    RegLogger logger;
 
     /**
      * @brief Helper method to bind all ports

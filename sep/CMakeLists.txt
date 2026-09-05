@@ -26,15 +26,11 @@ else()
 endif()
 
 # -----------------------------------------------------------------------------
-# CSML Utility Library
-# -----------------------------------------------------------------------------
-message(STATUS "Configuring CSML utility library...")
-add_subdirectory(utils/csml)
-
-# -----------------------------------------------------------------------------
 # Peripheral Models
 # Ordered so dependencies come before dependents.
 # Each entry is skipped gracefully if its CMakeLists.txt is absent.
+# Register modeling is header-only from ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
+# (reg_param.h / reg_logger.h); each consumer adds that path itself.
 # -----------------------------------------------------------------------------
 message(STATUS "Configuring peripheral models...")
 

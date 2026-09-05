@@ -10,7 +10,7 @@
 
 #pragma once
 #include "secure_dma_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <memory>
 
 /**
@@ -314,8 +314,8 @@ public:
   void inject_ot_write_bus_error_once();
 
 private:
-   /// CSML logger instance for test diagnostics
-   CsmlLogger logger;
+   /// RegLogger instance for test diagnostics
+   RegLogger logger;
 
    /// Simulated OT destination memory used by OT bus writes (1MB)
    std::vector<uint8_t> m_ot_memory_w;

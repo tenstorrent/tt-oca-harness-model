@@ -14,27 +14,11 @@ otbn_algorithm_rsa_2048::otbn_algorithm_rsa_2048(size_t dmem_size)
     : otbn_algorithm(dmem_size, false), instruction_count(18889021) {}
 
 otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
-    CSML_INFO(1, logger) << "[OTBN RSA-2048] Starting execution";
-    
-    // Check if key is required and validate key registration
-    if (m_is_key_required) {
-        CSML_INFO(1, logger) << "[OTBN RSA-2048] Key required, checking key registration status";
-        
-        // Check if keys are registered
-        if (!m_key_status_cb()) {
-            CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Keys not registered (KEY_INVALID)";
-            
-            // Set KEY_INVALID error bit
-            if (m_err_bits_write_cb) {
-                m_err_bits_write_cb(0x20);  // KEY_INVALID = bit 5 = 0x20
-            }
-            
-            return otbn_algorithm::ERROR;
-        }
-    }
+    REG_INFO(1, logger) << "[OTBN RSA-2048] Starting execution";
+
     // Verify DMEM size is sufficient for RSA-2048 operations
     if (m_dmem_size < 1024) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes, need >= 1024)";
+        REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes, need >= 1024)";
         return ERROR;
     }
 
@@ -44,7 +28,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     // Create OpenSSL BIGNUM context
     BN_CTX* ctx = BN_CTX_new();
     if (!ctx) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Failed to create BN_CTX";
+        REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Failed to create BN_CTX";
         return ERROR;
     }
 
@@ -54,7 +38,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     BIGNUM* result = BN_new();
 
     if (!base || !exponent || !modulus || !result) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Failed to allocate BIGNUMs";
+        REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Failed to allocate BIGNUMs";
         BN_free(base); BN_free(exponent); BN_free(modulus); BN_free(result);
         BN_CTX_free(ctx);
         return ERROR;
@@ -70,7 +54,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
 
     // Validate inputs
     if (BN_is_zero(modulus)) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Modulus is zero";
+        REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Modulus is zero";
         if (m_err_bits_write_cb) m_err_bits_write_cb(0x1);  // BAD_DATA_ADDR = bit 0
         BN_free(base); BN_free(exponent); BN_free(modulus); BN_free(result);
         BN_CTX_free(ctx);
@@ -79,7 +63,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
 
     // Check if base >= modulus (invalid for RSA)
     if (BN_cmp(base, modulus) >= 0) {
-        CSML_WARN(1, logger) << "[OTBN RSA-2048] WARNING: Base >= Modulus, reducing base";
+        REG_WARN(1, logger) << "[OTBN RSA-2048] WARNING: Base >= Modulus, reducing base";
         BN_mod(base, base, modulus, ctx);
     }
 
@@ -87,11 +71,11 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     int bn_result = BN_mod_exp(result, base, exponent, modulus, ctx);
 
     if (bn_result != 1) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: BN_mod_exp failed";
+        REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: BN_mod_exp failed";
         unsigned long err = ERR_get_error();
         char err_buf[256];
         ERR_error_string_n(err, err_buf, sizeof(err_buf));
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] OpenSSL Error: " << err_buf;
+        REG_ERROR(0, logger) << "[OTBN RSA-2048] OpenSSL Error: " << err_buf;
         if (m_err_bits_write_cb) m_err_bits_write_cb(0x1);  // BAD_DATA_ADDR = bit 0
         BN_free(base); BN_free(exponent); BN_free(modulus); BN_free(result);
         BN_CTX_free(ctx);
@@ -102,7 +86,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     // Ensure result is exactly 256 bytes (pad with zeros if necessary)
     int result_len = BN_num_bytes(result);
     if (result_len > 256) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Result too large (" << result_len << " bytes)";
+        REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Result too large (" << result_len << " bytes)";
         BN_free(base); BN_free(exponent); BN_free(modulus); BN_free(result);
         BN_CTX_free(ctx);
         return ERROR;
@@ -115,7 +99,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     BN_bn2bin(result, &dmem_bytes[0x300 + (256 - result_len)]);
 
     // Debug output
-    CSML_INFO(1, logger) << "[OTBN RSA-2048] Execution successful";
+    REG_INFO(1, logger) << "[OTBN RSA-2048] Execution successful";
 
 
     // Cleanup

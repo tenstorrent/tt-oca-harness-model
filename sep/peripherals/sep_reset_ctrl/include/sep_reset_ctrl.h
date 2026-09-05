@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file sep_reset_ctrl.h
- * @brief SEP Software Reset Controller - CSML implementation
+ * @brief SEP Software Reset Controller - regmodel implementation
  * 
  * Migrated from knowledge-base design: controls software reset signals
  * for various SEP peripherals (KM, OTBN, AES, HMAC, KMAC).
@@ -17,12 +17,12 @@
 
 #pragma once
 #include "sep_reset_ctrl_base.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 #include <systemc.h>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 class sep_reset_ctrl_ip : public sep_reset_ctrl_base
@@ -30,7 +30,7 @@ class sep_reset_ctrl_ip : public sep_reset_ctrl_base
 public:
     SC_HAS_PROCESS(sep_reset_ctrl_ip);
     
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
     
     // Reset output ports (matches knowledge-base design)
     sc_core::sc_in<bool>  global_rst_ni{"global_rst_ni"};
@@ -40,8 +40,8 @@ public:
     sc_core::sc_out<bool> hmac_rst_ni{"hmac_rst_ni"};
     sc_core::sc_out<bool> kmac_rst_ni{"kmac_rst_ni"};
     
-    csml_param<int> verbosity;
-    CsmlLogger      logger;
+    regmodel::Param<int> verbosity;
+    RegLogger      logger;
 
     // Constructor
     explicit sep_reset_ctrl_ip(sc_module_name n);

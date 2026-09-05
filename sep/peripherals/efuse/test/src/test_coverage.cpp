@@ -7,10 +7,7 @@
 #include <sstream>
 
 // Fuse-array word indices for the registers the .preload images below populate.
-// Derived from the register offsets rather than written as literals: these used
-// to be hard-coded (LC_STATE at word 2, the token banks at 9..16 and 17..24) and
-// every one of them was wrong by a word after LOCKS_SPARE was added to the map,
-// which made a dozen unrelated lifecycle assertions fail with LC_STATE reading 0.
+// Derived from PeakRDL register offsets (LOCKS at 0x0, LC_STATE at 0x8 = word 2).
 namespace {
 constexpr unsigned int word_of(unsigned int byte_offset) { return byte_offset / 4u; }
 

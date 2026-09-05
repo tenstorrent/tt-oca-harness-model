@@ -12,7 +12,7 @@
 // Constructor - follow AES pattern exactly
 sep_reset_ctrl_ip::sep_reset_ctrl_ip(sc_module_name n)
     : sep_reset_ctrl_base(n, "sep_reset_ctrl", 0x8)
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
     , sw_reset_current_value_(0x1E)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());
@@ -93,7 +93,7 @@ bool sep_reset_ctrl_ip::handle_sw_reset_n_write(uint64_t value, uint64_t mask)
     // notification is merged and update_rst_outputs only ever fires with the
     // final (de-asserted) value, so peripheral registers are never cleared.
     //
-    // Only a thread may wait. csml's write_registers() takes an is_debug flag but
+    // Only a thread may wait. regmodel's write_registers() takes an is_debug flag but
     // ignores it, so a transport_dbg write — GDB poking this register, say —
     // reaches here with no process context at all, and an unguarded wait() would
     // be a fatal SystemC error. The debug path gets the event without the yield,

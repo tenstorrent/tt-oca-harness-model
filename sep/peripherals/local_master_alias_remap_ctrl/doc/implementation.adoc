@@ -16,7 +16,7 @@ class local_alias_remap_ip : public local_alias_remap_base
 
 ----
 local_alias_remap_ip     match, additive offset, cacheable override
-  └─ local_alias_remap_base   csml_memory + REGION_START/END/ATTRS[16]
+  └─ local_alias_remap_base   regmodel::Memory + REGION_START/END/ATTRS[16]
        └─ local_alias_remap_register.h
 ----
 

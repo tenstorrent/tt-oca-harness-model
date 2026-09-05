@@ -26,10 +26,10 @@ otbn_algorithm_rsa_3072::otbn_algorithm_rsa_3072(size_t dmem_size)
     : otbn_algorithm(dmem_size, false), instruction_count(63750000) {}
 
 otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
-    CSML_INFO(1, logger) << "[OTBN RSA-3072] Starting execution";
+    REG_INFO(1, logger) << "[OTBN RSA-3072] Starting execution";
 
     if (m_dmem_size < DMEM_INOUT_OFFSET + RSA3072_BYTES) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes)";
+        REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes)";
         return ERROR;
     }
 
@@ -44,7 +44,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
 
     BN_CTX* ctx = BN_CTX_new();
     if (!ctx) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Failed to allocate BN_CTX";
+        REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Failed to allocate BN_CTX";
         return ERROR;
     }
 
@@ -54,7 +54,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
     BIGNUM* res = BN_new();
 
     if (!n || !sig || !e || !res) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Failed to allocate BIGNUMs";
+        REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Failed to allocate BIGNUMs";
         BN_free(n); BN_free(sig); BN_free(e); BN_free(res);
         BN_CTX_free(ctx);
         return ERROR;
@@ -63,7 +63,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
     BN_set_word(e, 65537);   /* F4 exponent hardcoded in rsa_3072_app */
 
     if (BN_is_zero(n)) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Modulus is zero";
+        REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Modulus is zero";
         BN_free(n); BN_free(sig); BN_free(e); BN_free(res);
         BN_CTX_free(ctx);
         return ERROR;
@@ -73,7 +73,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
         unsigned long err = ERR_get_error();
         char err_buf[256];
         ERR_error_string_n(err, err_buf, sizeof(err_buf));
-        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: BN_mod_exp failed: " << err_buf;
+        REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: BN_mod_exp failed: " << err_buf;
         BN_free(n); BN_free(sig); BN_free(e); BN_free(res);
         BN_CTX_free(ctx);
         return ERROR;
@@ -82,7 +82,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
     /* Write result back to DMEM[0x600] in LSByte-first order */
     int res_len = BN_num_bytes(res);
     if (res_len > static_cast<int>(RSA3072_BYTES)) {
-        CSML_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Result too large (" << res_len << " bytes)";
+        REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Result too large (" << res_len << " bytes)";
         BN_free(n); BN_free(sig); BN_free(e); BN_free(res);
         BN_CTX_free(ctx);
         return ERROR;
@@ -94,7 +94,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
     memset(dw + DMEM_INOUT_OFFSET, 0, RSA3072_BYTES);
     reverse_bytes(be_res, dw + DMEM_INOUT_OFFSET, RSA3072_BYTES);
 
-    CSML_INFO(1, logger) << "[OTBN RSA-3072] Execution successful";
+    REG_INFO(1, logger) << "[OTBN RSA-3072] Execution successful";
 
     BN_free(n); BN_free(sig); BN_free(e); BN_free(res);
     BN_CTX_free(ctx);

@@ -195,7 +195,7 @@ std::string format_digest_hex(const unsigned char *digest, size_t length) {
  * - Register interface (SHA2_DIGEST reads)
  */
 void testbench::run_func010_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-010: Inline SHA-2 Hash Computation Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -238,7 +238,7 @@ void testbench::run_func010_tests() {
   // test_func010_digest_register_reads();
   // test_func010_digest_persistence();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-010 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -270,7 +270,7 @@ void testbench::run_func010_tests() {
  */
 void testbench::test_sha256_single_chunk() {
   std::string test_name = "SHA-256 Single-Chunk Hash";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -425,7 +425,7 @@ void testbench::test_sha256_single_chunk() {
  */
 void testbench::test_sha384_single_chunk() {
   std::string test_name = "SHA-384 Single-Chunk Hash";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -549,7 +549,7 @@ void testbench::test_sha384_single_chunk() {
  */
 void testbench::test_sha512_single_chunk() {
   std::string test_name = "SHA-512 Single-Chunk Hash";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -675,7 +675,7 @@ void testbench::test_sha512_single_chunk() {
  */
 void testbench::test_sha256_multi_chunk() {
   std::string test_name = "SHA-256 Multi-Chunk Accumulation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -807,7 +807,7 @@ void testbench::test_sha256_multi_chunk() {
  */
 void testbench::test_sha384_multi_chunk() {
   std::string test_name = "SHA-384 Multi-Chunk Accumulation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -926,7 +926,7 @@ void testbench::test_sha384_multi_chunk() {
 void testbench::test_sha512_multi_chunk() {
   std::string test_name =
       "SHA-512 Multi-Chunk with Varying Sizes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1046,7 +1046,7 @@ void testbench::test_sha512_multi_chunk() {
  */
 void testbench::test_digest_swap_endianness() {
   std::string test_name = "Digest Byte-Swap SHA-256";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1219,7 +1219,7 @@ void testbench::test_digest_swap_endianness() {
  */
 void testbench::test_func010_digest_swap_sha384() {
   std::string test_name = "FUNC-010 TC008: Digest Byte-Swap SHA-384";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1252,7 +1252,7 @@ void testbench::test_func010_digest_swap_sha384() {
  */
 void testbench::test_func010_digest_swap_sha512() {
   std::string test_name = "FUNC-010 TC009: Digest Byte-Swap SHA-512";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1292,7 +1292,7 @@ void testbench::test_func010_digest_swap_sha512() {
 void testbench::test_initial_transfer_bit_hash_reset() {
   std::string test_name =
       "FUNC-010 TC010: Initial Transfer Bit Resets Hash State";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1459,7 +1459,7 @@ void testbench::test_initial_transfer_bit_hash_reset() {
  */
 void testbench::test_func010_hash_state_continuation() {
   std::string test_name = "FUNC-010 TC011: Hash State Continuation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1492,7 +1492,7 @@ void testbench::test_func010_hash_state_continuation() {
  */
 void testbench::test_func010_multiple_independent_hashes() {
   std::string test_name = "FUNC-010 TC012: Multiple Independent Hash Sequences";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1526,7 +1526,7 @@ void testbench::test_func010_multiple_independent_hashes() {
  */
 void testbench::test_func010_hash_with_mem_to_mem() {
   std::string test_name = "FUNC-010 TC013: Hash with Memory-to-Memory Transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1560,7 +1560,7 @@ void testbench::test_func010_hash_with_mem_to_mem() {
 void testbench::test_func010_hash_with_addressing_modes() {
   std::string test_name =
       "FUNC-010 TC014: Hash with Different Addressing Modes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1594,7 +1594,7 @@ void testbench::test_func010_hash_with_addressing_modes() {
  */
 void testbench::test_func010_hash_with_different_bus_interfaces() {
   std::string test_name = "FUNC-010 TC015: Hash with Different Bus Interfaces";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1626,7 +1626,7 @@ void testbench::test_func010_hash_with_different_bus_interfaces() {
  */
 void testbench::test_func010_hash_with_maximum_transfer_size() {
   std::string test_name = "FUNC-010 TC016: Hash with Maximum Transfer Size";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1663,7 +1663,7 @@ void testbench::test_func010_hash_with_maximum_transfer_size() {
  */
 void testbench::test_func010_error_hash_width_mismatch() {
   std::string test_name = "FUNC-010 TC017: Error - Hash Width Mismatch";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1759,7 +1759,7 @@ void testbench::test_func010_error_hash_width_mismatch() {
 void testbench::test_abort_during_hashing() {
   std::string test_name =
       "FUNC-010 TC099: Abort During Inline Hashing Invalidates Digest";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1871,7 +1871,7 @@ void testbench::test_abort_during_hashing() {
  */
 void testbench::test_func010_reset_clears_digest_valid() {
   std::string test_name = "FUNC-010 TC019: Reset Clears Digest Valid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1905,7 +1905,7 @@ void testbench::test_func010_reset_clears_digest_valid() {
  */
 void testbench::test_sha2_digest_valid_bit() {
   std::string test_name = "FUNC-010 TC020: SHA2_DIGEST_VALID Bit Transitions";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2007,7 +2007,7 @@ void testbench::test_sha2_digest_valid_bit() {
  */
 void testbench::test_func010_digest_register_reads() {
   std::string test_name = "FUNC-010 TC021: Digest Register Reads";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2042,7 +2042,7 @@ void testbench::test_func010_digest_register_reads() {
  */
 void testbench::test_func010_digest_persistence() {
   std::string test_name = "FUNC-010 TC022: Digest Persistence";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

@@ -29,16 +29,16 @@
  *
  *  (1) Notify reset_event — interrupts the background SC_THREAD from any state.
  *  (2) Drain the internal FIFO queue; reset wptr and rptr to 0.
- *  (3) Write 0x00000000 to FIFO_STATUS (0x24) via CSML internal write.
+ *  (3) Write 0x00000000 to FIFO_STATUS (0x24) via regmodel internal write.
  *  (4) Write 0x00000000 to all 22 health test counter / status registers via
- *      CSML internal writes (HEALTH_TEST_STATUS, REPETITION_TEST_COUNT, the
+ *      regmodel internal writes (HEALTH_TEST_STATUS, REPETITION_TEST_COUNT, the
  *      four APT_PATTERN_COUNTs, MARKOV_TEST_COUNTS_0/1, MARKOV_TEST_PROBABILITIES,
  *      and all 12 GENERATOR_k_HEALTH_STATUS registers 0xC0–0xEC).
- *  (5) Write 0x00000000 to INTR_STATUS (0x10) via CSML internal write.
+ *  (5) Write 0x00000000 to INTR_STATUS (0x10) via regmodel internal write.
  *  (6) Call update_interrupt_outputs — drives all four sc_out<bool> ports to false.
  *  (7) Apply stabilization hold-off (minimum 20 APB clock cycles ≈ 100 ns as
  *      sc_time delay at 5 ns APB clock period).
- *  (8) Write 0x00000000 to CTRL (0x04) via CSML internal write (self-clear).
+ *  (8) Write 0x00000000 to CTRL (0x04) via regmodel internal write (self-clear).
  *
  * After the callback completes, the background thread restarts by re-reading
  * FIFO_CTRL to determine FIFO enable state, optionally applying startup_delay_cycles
@@ -55,23 +55,23 @@
  *  --------------------------------|----------------------------------
  *  CTRL (0x04)                     | 0x00000000 (self-cleared by action 8)
  *  INTR_STATUS (0x10)              | 0x00000000 (cleared by action 5)
- *  FIFO_CTRL (0x20)                | 0x00000001 (CSML default restored)
+ *  FIFO_CTRL (0x20)                | 0x00000001 (regmodel default restored)
  *  FIFO_STATUS (0x24)              | 0x00000000 (cleared by action 3)
- *  HEALTH_TEST_CTRL (0x30)         | 0x00000F07 (CSML default restored)
+ *  HEALTH_TEST_CTRL (0x30)         | 0x00000F07 (regmodel default restored)
  *  HEALTH_TEST_STATUS (0x40)       | 0x00000000 (cleared by action 4)
- *  DEBUG_CTRL (0x0C)               | 0x00000000 (CSML default)
- *  MARKOV_TEST_PROB_THRESHOLDS(0x38)| 0x64646464 (CSML default)
- *  RING_OSC_ENABLE (0x90)          | 0x00FFFFFF (CSML default)
- *  RING_OSC_TUNE (0x94)            | 0x00000000 (CSML default)
- *  RING_OSC_CTRL (0x98)            | 0x00000FFF (CSML default)
- *  DECORRELATOR_CTRL (0xA0)        | 0x0003F000 (CSML default)
- *  DECORRELATOR_MASK (0xA4)        | 0x000000FF (CSML default)
- *  STARTUP_CTRL (0xB0)             | 0x00000000 (CSML default)
+ *  DEBUG_CTRL (0x0C)               | 0x00000000 (regmodel default)
+ *  MARKOV_TEST_PROB_THRESHOLDS(0x38)| 0x64646464 (regmodel default)
+ *  RING_OSC_ENABLE (0x90)          | 0x00FFFFFF (regmodel default)
+ *  RING_OSC_TUNE (0x94)            | 0x00000000 (regmodel default)
+ *  RING_OSC_CTRL (0x98)            | 0x00000FFF (regmodel default)
+ *  DECORRELATOR_CTRL (0xA0)        | 0x0003F000 (regmodel default)
+ *  DECORRELATOR_MASK (0xA4)        | 0x000000FF (regmodel default)
+ *  STARTUP_CTRL (0xB0)             | 0x00000000 (regmodel default)
  *  All GENERATOR_k_HEALTH_STATUS   | 0x00000000 (cleared by action 4)
  *
  * ## Observability constraints
  *
- * Several register groups have CSML read_mask = 0x00000000, meaning TLM
+ * Several register groups have regmodel read_mask = 0x00000000, meaning TLM
  * b_transport reads always return 0x00000000 regardless of internal state.
  * Affected registers: INTR_STATUS, FIFO_STATUS, HEALTH_TEST_STATUS,
  * REPETITION_TEST_COUNT, all APT_PATTERN_COUNTs, all MARKOV_TEST_COUNTS,
@@ -79,7 +79,7 @@
  *
  * For these registers the "cleared to 0x00000000 after reset" assertion is
  * verified by confirming the TLM read returns 0x00000000 immediately after
- * apply_reset().  Since the CSML read restriction also returns 0x00000000
+ * apply_reset().  Since the regmodel read restriction also returns 0x00000000
  * for any non-reset state, these tests additionally confirm that the register
  * does not cause a TLM protocol error (i.e., TLM_OK_RESPONSE is maintained).
  * Interrupt status is verified via the sc_in<bool> interrupt port signals.
@@ -100,7 +100,7 @@
  *  - apply_reset() is called by run_tests() before each test case to
  *    guarantee a clean, defined register and FIFO state before the test's
  *    own pre-condition writes.
- *  - The FUNC007_CHECK macro sets ok = false and emits a CSML_ERROR log
+ *  - The FUNC007_CHECK macro sets ok = false and emits a REG_ERROR log
  *    entry naming both the expected and observed values.
  *  - The internal FIFO (FIFO_DEPTH=127) is the main observability vehicle
  *    for confirming background thread restart after reset.
@@ -133,7 +133,7 @@
     do {                                           \
         if (!(cond))                               \
         {                                          \
-            CSML_ERROR(0, logger) << msg_stream;   \
+            REG_ERROR(0, logger) << msg_stream;   \
             ok = false;                            \
         }                                          \
     } while (false)
@@ -263,19 +263,19 @@ bool testbench::tc_f007_component_id_immune_to_software_reset()
 {
     bool     ok         = true;
 
-    // CSML observability constraint: COMPONENT_ID has read_mask = 0x00000000,
-    // so CSML's read-restriction path does not write into the TLM data buffer.
-    // Initialise to 0u (the sentinel that the CSML restriction path leaves
+    // regmodel observability constraint: COMPONENT_ID has read_mask = 0x00000000,
+    // so regmodel's read-restriction path does not write into the TLM data buffer.
+    // Initialise to 0u (the sentinel that the regmodel restriction path leaves
     // unchanged).  The assertion is therefore that the buffer remains 0u,
     // confirming no corruption occurred.  The immunity property is verified by
-    // the fact that apply_reset() completes without raising a CSML error for
-    // COMPONENT_ID (i.e., the reset sequence did not attempt a CSML write to
+    // the fact that apply_reset() completes without raising a regmodel error for
+    // COMPONENT_ID (i.e., the reset sequence did not attempt a regmodel write to
     // the RO COMPONENT_ID register, which would generate an error log).
     uint32_t pre_reset  = 0u;
     uint32_t post_reset = 0u;
 
     // Step 1-2: Read COMPONENT_ID before the deliberate reset.
-    // CSML read restriction: buffer stays 0u (not updated by read-mask=0 path).
+    // regmodel read restriction: buffer stays 0u (not updated by read-mask=0 path).
     test->register_read_32(entropy_src_basetest::COMPONENT_ID_OFFSET, pre_reset);
 
     const uint32_t expected =
@@ -290,7 +290,7 @@ bool testbench::tc_f007_component_id_immune_to_software_reset()
 
     // Step 4-5: Read COMPONENT_ID after the reset.
     // Immunity confirmation: if the reset sequence incorrectly wrote to
-    // COMPONENT_ID the CSML framework would have logged a write-restriction
+    // COMPONENT_ID the regmodel framework would have logged a write-restriction
     // error (write_mask=0 enforcement).  The TLM read_mask=0 means the buffer
     // is again left at 0u regardless of internal register state.
     post_reset = 0u;
@@ -310,7 +310,7 @@ bool testbench::tc_f007_component_id_immune_to_software_reset()
 /******************************************************************************
  * @brief TC-F007-004: CTRL (0x04) reads 0x00000000 after software reset (CTRL reset value)
  *
- * Confirms reset action (8): handle_write_CTRL performs a CSML internal write
+ * Confirms reset action (8): handle_write_CTRL performs a regmodel internal write
  * of 0x00000000 to CTRL after the stabilization hold-off, self-clearing the
  * RESET bit and all other CTRL fields.
  *
@@ -500,7 +500,7 @@ bool testbench::tc_f007_software_reset_clears_all_health_test_counters()
  * apply_reset().  These 12 registers form the per-generator health status block
  * that the background thread updates during each health test iteration.
  *
- * Note: all 12 have CSML read_mask = 0x00000000.  This test verifies the
+ * Note: all 12 have regmodel read_mask = 0x00000000.  This test verifies the
  * cleared state is consistent (read returns 0x00000000) and that no TLM
  * protocol error is raised during the read.
  *
@@ -548,7 +548,7 @@ bool testbench::tc_f007_software_reset_clears_per_generator_health_status()
 /******************************************************************************
  * @brief TC-F007-111: Software reset clears INTR_STATUS to 0x00000000 (action 5)
  *
- * Confirms that reset action (5) writes 0x00000000 to INTR_STATUS via a CSML
+ * Confirms that reset action (5) writes 0x00000000 to INTR_STATUS via a regmodel
  * internal write, and that action (6) immediately calls update_interrupt_outputs,
  * deassesting all four interrupt output ports.
  *
@@ -569,7 +569,7 @@ bool testbench::tc_f007_software_reset_clears_per_generator_health_status()
  *  - All four ports false after reset.
  *  - INTR_STATUS TLM read returns 0x00000000.
  *
- * Note: INTR_STATUS has CSML read_mask = 0, so the TLM read always returns
+ * Note: INTR_STATUS has regmodel read_mask = 0, so the TLM read always returns
  * 0x00000000.  Port state is the authoritative observable for interrupt status.
  *
  * Test plan reference: software_reset_clears_intr_status
@@ -619,7 +619,7 @@ bool testbench::tc_f007_software_reset_clears_intr_status()
  *        completes (CTRL self-clear, reset action 8)
  *
  * Confirms that after the full eight-action reset sequence, CTRL reads back as
- * 0x00000000.  This verifies action (8): handle_write_CTRL performs a CSML
+ * 0x00000000.  This verifies action (8): handle_write_CTRL performs a regmodel
  * internal write of 0x00000000 to CTRL after the stabilization delay, clearing
  * RESET[0] and all other CTRL fields simultaneously.
  *
@@ -683,14 +683,14 @@ bool testbench::tc_f007_software_reset_ctrl_self_clears()
 }
 
 // =============================================================================
-// TC-F007-116 — RW registers restored to CSML reset defaults after software reset
+// TC-F007-116 — RW registers restored to regmodel reset defaults after software reset
 // =============================================================================
 
 /******************************************************************************
- * @brief TC-F007-116: Core RW registers return to their documented CSML reset
+ * @brief TC-F007-116: Core RW registers return to their documented regmodel reset
  *        defaults after software reset
  *
- * Verifies that the CSML reset-default mechanism correctly restores the following
+ * Verifies that the regmodel reset-default mechanism correctly restores the following
  * six RW registers after apply_reset():
  *   - CTRL                        (0x04)  → 0x00000000
  *   - DEBUG_CTRL                  (0x0C)  → 0x00000000

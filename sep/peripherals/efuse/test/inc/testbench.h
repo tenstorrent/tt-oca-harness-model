@@ -8,12 +8,12 @@
 #include <string>
 #include "efuse.h"
 #include "efuse_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 class testbench : public sc_module
 {
 public:
-    CsmlLogger logger;
+    RegLogger logger;
 
     std::unique_ptr<efuse_model> m_dut;
     std::unique_ptr<efuse_test>  m_test;

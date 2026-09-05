@@ -44,7 +44,7 @@
  * - Integration with FUNC-003 (transfer width) and FUNC-004 (64-bit addressing)
  */
 void testbench::run_func005_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-005: Multi-Bus Interface Transaction Routing Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -99,7 +99,7 @@ void testbench::run_func005_tests() {
   test_func005_func004_64bit_src_integration();
   test_func005_func004_64bit_dst_integration();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-005 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -125,7 +125,7 @@ void testbench::run_func005_tests() {
  */
 void testbench::test_func005_asid_decode_ot_internal() {
   std::string test_name = "FUNC-005 TC001: ASID Decode OT Internal (0x7)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -190,7 +190,7 @@ void testbench::test_func005_asid_decode_ot_internal() {
  */
 void testbench::test_func005_asid_decode_system_bus() {
   std::string test_name = "FUNC-005 TC002: ASID Decode System Bus (0x9)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -247,7 +247,7 @@ void testbench::test_func005_asid_decode_system_bus() {
  */
 void testbench::test_func005_asid_decode_ctn_bus() {
   std::string test_name = "FUNC-005 TC003: ASID Decode CTN Bus (0xA)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -305,7 +305,7 @@ void testbench::test_func005_asid_decode_ctn_bus() {
  */
 void testbench::test_func005_asid_decode_invalid() {
   std::string test_name = "FUNC-005 TC004: ASID Decode Invalid Values";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -364,7 +364,7 @@ void testbench::test_func005_asid_decode_invalid() {
  */
 void testbench::test_func005_asid_valid_multibit() {
   std::string test_name = "FUNC-005 TC005: ASID Validation Valid Multibit";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -423,7 +423,7 @@ void testbench::test_func005_asid_valid_multibit() {
  */
 void testbench::test_func005_asid_invalid_zero() {
   std::string test_name = "FUNC-005 TC006: ASID Invalid Zero (0x0)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -475,7 +475,7 @@ void testbench::test_func005_asid_invalid_zero() {
  */
 void testbench::test_func005_asid_invalid_reserved() {
   std::string test_name = "FUNC-005 TC007: ASID Invalid Reserved (0x5)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -527,7 +527,7 @@ void testbench::test_func005_asid_invalid_reserved() {
  */
 void testbench::test_func005_asid_invalid_all_ones() {
   std::string test_name = "FUNC-005 TC008: ASID Invalid All Ones (0xF)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -580,7 +580,7 @@ void testbench::test_func005_asid_invalid_all_ones() {
  */
 void testbench::test_func005_bus_selection_src_ot() {
   std::string test_name = "FUNC-005 TC009: Bus Selection Source OT Internal";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -638,7 +638,7 @@ void testbench::test_func005_bus_selection_src_ot() {
  */
 void testbench::test_func005_bus_selection_dst_ot() {
   std::string test_name = "FUNC-005 TC010: Bus Selection Destination OT Internal";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -696,7 +696,7 @@ void testbench::test_func005_bus_selection_dst_ot() {
  */
 void testbench::test_func005_bus_selection_src_dst_different() {
   std::string test_name = "FUNC-005 TC011: Bus Selection Independent Src/Dst";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -754,7 +754,7 @@ void testbench::test_func005_bus_selection_src_dst_different() {
  */
 void testbench::test_func005_bus_selection_ot_to_system() {
   std::string test_name = "FUNC-005 TC012: Bus Selection OT to System";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -812,7 +812,7 @@ void testbench::test_func005_bus_selection_ot_to_system() {
  */
 void testbench::test_func005_bus_selection_system_to_ctn() {
   std::string test_name = "FUNC-005 TC013: Bus Selection System to CTN";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -865,7 +865,7 @@ void testbench::test_func005_bus_selection_system_to_ctn() {
  */
 void testbench::test_func005_bus_selection_same_bus() {
   std::string test_name = "FUNC-005 TC014: Bus Selection Same Bus";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -918,7 +918,7 @@ void testbench::test_func005_bus_selection_same_bus() {
  */
 void testbench::test_func005_ot_bus_32bit_src_valid() {
   std::string test_name = "FUNC-005 TC015: OT Bus 32-bit Source Valid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -975,7 +975,7 @@ void testbench::test_func005_ot_bus_32bit_src_valid() {
  */
 void testbench::test_func005_ot_bus_64bit_src_invalid() {
   std::string test_name = "FUNC-005 TC016: OT Bus 64-bit Source Invalid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1033,7 +1033,7 @@ void testbench::test_func005_ot_bus_64bit_src_invalid() {
  */
 void testbench::test_func005_ot_bus_32bit_dst_valid() {
   std::string test_name = "FUNC-005 TC017: OT Bus 32-bit Destination Valid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1090,7 +1090,7 @@ void testbench::test_func005_ot_bus_32bit_dst_valid() {
  */
 void testbench::test_func005_ot_bus_64bit_dst_invalid() {
   std::string test_name = "FUNC-005 TC018: OT Bus 64-bit Destination Invalid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1148,7 +1148,7 @@ void testbench::test_func005_ot_bus_64bit_dst_invalid() {
  */
 void testbench::test_func005_ctn_bus_32bit_valid() {
   std::string test_name = "FUNC-005 TC019: CTN Bus 32-bit Valid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1208,7 +1208,7 @@ void testbench::test_func005_ctn_bus_32bit_valid() {
  */
 void testbench::test_func005_system_bus_64bit_src_valid() {
   std::string test_name = "FUNC-005 TC020: System Bus 64-bit Source Valid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1266,7 +1266,7 @@ void testbench::test_func005_system_bus_64bit_src_valid() {
  */
 void testbench::test_func005_system_bus_64bit_dst_valid() {
   std::string test_name = "FUNC-005 TC021: System Bus 64-bit Destination Valid";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1324,7 +1324,7 @@ void testbench::test_func005_system_bus_64bit_dst_valid() {
  */
 void testbench::test_func005_address_error_code_validation() {
   std::string test_name = "FUNC-005 TC022: Address Error Code Validation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1386,7 +1386,7 @@ void testbench::test_func005_address_error_code_validation() {
  */
 void testbench::test_func005_tlm_read_transaction() {
   std::string test_name = "FUNC-005 TC023: TLM Read Transaction Creation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1458,7 +1458,7 @@ void testbench::test_func005_tlm_read_transaction() {
  */
 void testbench::test_func005_tlm_write_transaction() {
   std::string test_name = "FUNC-005 TC024: TLM Write Transaction Creation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1530,7 +1530,7 @@ void testbench::test_func005_tlm_write_transaction() {
  */
 void testbench::test_func005_tlm_byte_enable_conversion() {
   std::string test_name = "FUNC-005 TC025: TLM Byte Enable Conversion";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1608,7 +1608,7 @@ void testbench::test_func005_tlm_byte_enable_conversion() {
  */
 void testbench::test_func005_tlm_transaction_parameters() {
   std::string test_name = "FUNC-005 TC026: TLM Transaction Parameters Integration";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1699,7 +1699,7 @@ void testbench::test_func005_tlm_transaction_parameters() {
  */
 void testbench::test_func005_src_addr_error_detection() {
   std::string test_name = "FUNC-005 TC027: Source Address Error Detection";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1754,7 +1754,7 @@ void testbench::test_func005_src_addr_error_detection() {
  */
 void testbench::test_func005_dst_addr_error_detection() {
   std::string test_name = "FUNC-005 TC028: Destination Address Error Detection";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1809,7 +1809,7 @@ void testbench::test_func005_dst_addr_error_detection() {
  */
 void testbench::test_func005_asid_error_src_detection() {
   std::string test_name = "FUNC-005 TC029: Source ASID Error Detection";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1862,7 +1862,7 @@ void testbench::test_func005_asid_error_src_detection() {
  */
 void testbench::test_func005_asid_error_dst_detection() {
   std::string test_name = "FUNC-005 TC030: Destination ASID Error Detection";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1915,7 +1915,7 @@ void testbench::test_func005_asid_error_dst_detection() {
  */
 void testbench::test_func005_func003_transfer_width_integration() {
   std::string test_name = "FUNC-005 TC031: FUNC-003 Transfer Width Integration";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1968,7 +1968,7 @@ void testbench::test_func005_func003_transfer_width_integration() {
  */
 void testbench::test_func005_func003_byte_enable_integration() {
   std::string test_name = "FUNC-005 TC032: FUNC-003 Byte Enable Integration";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2020,7 +2020,7 @@ void testbench::test_func005_func003_byte_enable_integration() {
  */
 void testbench::test_func005_func004_64bit_src_integration() {
   std::string test_name = "FUNC-005 TC033: FUNC-004 64-bit Source Integration";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2085,7 +2085,7 @@ void testbench::test_func005_func004_64bit_src_integration() {
  */
 void testbench::test_func005_func004_64bit_dst_integration() {
   std::string test_name = "FUNC-005 TC034: FUNC-004 64-bit Destination Integration";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

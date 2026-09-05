@@ -50,6 +50,11 @@ void test_run_exhausts_shake_output(kmac_test* test);
 void test_run_exhausts_kmac_output(kmac_test* test);
 void test_state_share1_masking_disabled(kmac_test* test);
 void test_state_read_straddles_digest_end(kmac_test* test);
+void test_keymgr_read_rejected(kmac_test* test);
+void test_invalid_key_len_on_kmac_start(kmac_test* test);
+void test_escalate_with_msg_fifo_data(kmac_test* test);
+void test_empty_app_message(kmac_test* test);
+void test_long_customization_string(kmac_test* test);
 
 // =============================================================================
 // Check facility

@@ -183,11 +183,7 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes)
 
 bool memory_zeroer::reg_read(uint64_t offset, uint64_t& data)
 {
-    if (uint64_t rv = 0; regmap_.read(offset, rv)) {
-        data = rv;
-        return true;
-    }
-    return false;
+    return regmap_.read(offset, data);
 }
 
 bool memory_zeroer::reg_write(uint64_t offset, uint64_t data)

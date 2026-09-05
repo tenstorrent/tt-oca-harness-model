@@ -21,18 +21,16 @@ applies to any hand-written model regardless of subsystem or register width.
 
 - **Any hand-written register model** in this repository -- SMC peripherals
   (`i3c_controller`, `reset_unit`, `uart`, ...), `smc_fabric`, SEP models,
-  VP platforms, and any future subsystem -- must use `regmodel` for masking logic.
-- **Models built on an external framework** (e.g. SEP peripherals that use the
-  CSML library, `csml_reg`/`csml_bitfield`/`csml_memory`) keep using that
-  framework's mechanisms; do not migrate them onto `regmodel` wholesale.
-  However, when such a model drops to raw C++ for a semantic that the framework
-  does not cover (a W1C/woset/lock-gated callback body, for example), use the
-  `regmodel` free functions for the masking arithmetic rather than re-deriving
-  it inline.
-- **New models with no framework** should default to `regmodel`.
+  VP platforms, and any future subsystem -- must use `regmodel` for masking
+  logic. There is no CSML (or other external register-framework) exception.
+- **SEP IPs and the SEP VP** use the class-per-register surface in
+  `common/include` (`reg_file.h`, `reg_param.h`, `reg_logger.h`:
+  `regmodel::Reg` / `Memory` / `Param`, `RegLogger`).
+- **New SMC-style models** should prefer `Register<Word>` + `RegisterMap`
+  from `reg_access.h` / `reg_map.h`.
 
 Add `common/include` to the target's `target_include_directories` and
-`#include "reg_access.h"`.
+`#include` the matching header (`reg_access.h`, `reg_file.h`, etc.).
 
 ## Semantic write patterns: use the free functions
 
@@ -84,8 +82,8 @@ cases -- but still use the `regmodel` free functions for the masking
 arithmetic. Do not force such registers into `Register<Word>` if it hurts
 clarity.
 
-See `doc/register-modeling-smc-vs-sep-csml.adoc` for why this exists instead
-of adopting SEP's CSML framework.
+See `doc/register-modeling-smc-vs-sep-csml.adoc` for the two in-house
+`regmodel` surfaces (SMC `Register`/`RegisterMap` vs SEP `Reg`/`Memory`).
 
 ## Offset dispatch: use `reg_map.h` where applicable
 

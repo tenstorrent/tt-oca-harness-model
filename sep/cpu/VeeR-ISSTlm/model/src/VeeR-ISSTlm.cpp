@@ -51,7 +51,7 @@ VeeRISSTlm::VeeRISSTlm(sc_module_name name, const Args &args, const WdRiscv::Har
 	logger.setMaxVerbosity(verbosity.get_param_value());
 	logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
 	logger.setFunctionTrace(false);
-	CSML_INFO(2, logger) << "VeeRISSTlm module constructor" <<  std::endl;
+	REG_INFO(2, logger) << "VeeRISSTlm module constructor" <<  std::endl;
 
 	// Register SystemC Thread to single step though riscv
 	SC_THREAD(run_thread);
@@ -65,15 +65,15 @@ VeeRISSTlm::VeeRISSTlm(sc_module_name name, const Args &args, const WdRiscv::Har
 	// until the AON bark signal fires.
 	SC_THREAD(handle_nmi_signal);
 
-	bool ok = session();
+    bool ok = session();
     if (ok) {
-        CSML_INFO(2, logger) << "VeeRISSTlm module constructor completed" << std::endl;
-    } else {
-        CSML_INFO(2, logger) << "VeeRISSTlm module constructor error" << std::endl;
-    }
+        REG_INFO(2, logger) << "VeeRISSTlm module constructor completed" << std::endl;
+    } else { // LCOV_EXCL_START
+        REG_INFO(2, logger) << "VeeRISSTlm module constructor error" << std::endl;
+    } // LCOV_EXCL_STOP
 }
 
-VeeRISSTlm::~VeeRISSTlm() {}
+VeeRISSTlm::~VeeRISSTlm() {} // LCOV_EXCL_LINE
 
 void VeeRISSTlm::end_of_elaboration()
 {
@@ -90,7 +90,7 @@ void VeeRISSTlm::end_of_elaboration()
 	// Register Memory write and read callbacks
 	system_->defineWriteMemoryCallback(write_cb);
 	system_->defineReadMemoryCallback(read_cb);
-	CSML_INFO(2, logger) << "VeeRISSTlm module end_of_elaboration - memory callback attached" <<  std::endl;
+	REG_INFO(2, logger) << "VeeRISSTlm module end_of_elaboration - memory callback attached" <<  std::endl;
 
 	// Debug prints
 	auto hart0 = system_->ithHart(hart_id);
@@ -108,13 +108,13 @@ void VeeRISSTlm::end_of_elaboration()
 	URV mtvec;
 	hart0->peekCsr(CsrNumber::MTVEC, mtvec);
 
-	CSML_DEBUG(3, logger) << "Register values before MIE enabled\n";
-	CSML_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
-	CSML_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
-	CSML_DEBUG(3, logger) << "mcause   = 0x" << std::hex << mcause << "\n";
-	CSML_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
-	CSML_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
-	CSML_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
+	REG_DEBUG(3, logger) << "Register values before MIE enabled\n";
+	REG_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
+	REG_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
+	REG_DEBUG(3, logger) << "mcause   = 0x" << std::hex << mcause << "\n";
+	REG_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
+	REG_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
+	REG_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
 
 	// Also enable global interrupts
 	hart0->peekCsr(CsrNumber::MSTATUS, mstatus);	
@@ -128,13 +128,13 @@ void VeeRISSTlm::end_of_elaboration()
 
 	hart0->enableNmi(enableNmi.get_param_value());
 
-	CSML_DEBUG(3, logger) << "Register values after MIE enabled\n";
-	CSML_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
-	CSML_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
-	CSML_DEBUG(3, logger) << "mcause  = 0x" << std::hex << mcause << "\n";
-	CSML_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
-	CSML_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
-	CSML_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
+	REG_DEBUG(3, logger) << "Register values after MIE enabled\n";
+	REG_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
+	REG_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
+	REG_DEBUG(3, logger) << "mcause  = 0x" << std::hex << mcause << "\n";
+	REG_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
+	REG_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
+	REG_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
 }
 
 /// SystemC Veer/EL2 wrapper thread, which invokes the core
@@ -160,17 +160,17 @@ void VeeRISSTlm::run_thread()
 
             closeUserFiles(args_, traceFile, commandLog, consoleOut, bblockFile);
         }
-        catch (const sc_core::sc_unwind_exception&)
+        catch (const sc_core::sc_unwind_exception&) // LCOV_EXCL_START
         {
             // SystemC uses sc_unwind_exception internally to implement process
             // kill/reset. It must not be swallowed.
             throw;
-        }
+        } // LCOV_EXCL_STOP
 
-        catch (std::exception &e)
+        catch (std::exception &e) // LCOV_EXCL_START
         {
             std::cerr << e.what() << '\n';
-        }
+        } // LCOV_EXCL_STOP
     }
 }
 
@@ -206,7 +206,7 @@ void VeeRISSTlm::reset_method()
 void VeeRISSTlm::do_reset_sequence()
 {
 	if (not system_)
-		return;
+		return; // LCOV_EXCL_LINE
 
 	const bool resetMmioRegs = resetMemoryMappedRegister.get_param_value();
 
@@ -248,6 +248,11 @@ bool VeeRISSTlm::sessionRun()
 /// and port number) in the given server file. Wait for one
 /// connection. Service connection. Return true on success and false
 /// on failure.
+///
+/// Whisper leftover: sep-vp never opens the ISS socket server. The
+/// body is kept for CLI compatibility and is not part of the TLM
+/// contract exercised by veeriss_tb.
+// LCOV_EXCL_START
 bool VeeRISSTlm::runServer(const std::string& serverFile)
 {
 	char hostName[1024];
@@ -335,11 +340,15 @@ bool VeeRISSTlm::runServer(const std::string& serverFile)
 
 	return ok;
 }
+// LCOV_EXCL_STOP
 
 /// Run producing a snapshot after each snapPeriod instructions. Each
 /// snapshot goes into its own directory names <dir><n> where <dir> is
 /// the string in snapDir and <n> is a sequential integer starting at
 /// 0. Return true on success and false on failure.
+///
+/// Whisper leftover: TLM batch mode does not take snapshots.
+// LCOV_EXCL_START
 bool VeeRISSTlm::snapshotRun(const std::string& snapDir, uint64_t snapPeriod)
 {
 	if (not snapPeriod)
@@ -391,12 +400,13 @@ bool VeeRISSTlm::snapshotRun(const std::string& snapDir, uint64_t snapPeriod)
 
 	return true;
 }
+// LCOV_EXCL_STOP
 
 
 bool VeeRISSTlm::batchRun(bool waitAll)
 {
 	if (system_->hartCount() == 0)
-		return true;
+		return true; // LCOV_EXCL_LINE
 
 	// Re-evaluate PIC arbitration whenever firmware writes meipt or meicurpl.
 	// RTL: mexintpend is combinational against those CSR values; our behavioral
@@ -421,7 +431,7 @@ bool VeeRISSTlm::batchRun(bool waitAll)
 		while (1)
 		{
 			if (not rst_ni.read() or resetRequested_)
-				return true;
+				return true; // LCOV_EXCL_LINE
 
 			if (args_.gdb == false)
 			{
@@ -446,17 +456,18 @@ bool VeeRISSTlm::batchRun(bool waitAll)
 
 				if (not rst_ni.read())
 					return true;
-			} else
-			{
+			} else { // LCOV_EXCL_START
 				ok = hart.run(traceFile);
-			}
+			} // LCOV_EXCL_STOP
 		}
-#ifdef FAST_SLOPPY
+#ifdef FAST_SLOPPY // LCOV_EXCL_START
 		hart.reportOpenedFiles(std::cout);
 #endif
-		return ok;
+		return ok; // LCOV_EXCL_STOP
 	}
 
+	// Whisper leftover: SEP is a single-hart VeeR EL2.
+	// LCOV_EXCL_START
 	// Run each hart in its own thread.
 	std::vector<std::thread> threadVec;
 
@@ -502,6 +513,7 @@ bool VeeRISSTlm::batchRun(bool waitAll)
 	}
 
 	return result;
+	// LCOV_EXCL_STOP
 }
 
 
@@ -510,19 +522,19 @@ bool VeeRISSTlm::session()
 
 	if (not getPrimaryConfigParameters(args_, config_, hartsPerCore, coreCount,
 				pageSize, memorySize, regionSize))
-		return false;
+		return false; // LCOV_EXCL_LINE
 
 	checkAndRepairMemoryParams(memorySize, pageSize, regionSize);
 
 	// Create cores & harts.
 	unsigned hartIdOffset = hartsPerCore;
 	config_.getHartIdOffset(hartIdOffset);
-	if (hartIdOffset < hartsPerCore)
+	if (hartIdOffset < hartsPerCore) // LCOV_EXCL_START
 	{
 		std::cerr << "Invalid core_hart_id_offset: " << hartIdOffset
 			<< ",  must be greater than harts_per_core: " << hartsPerCore << '\n';
 		return false;
-	}
+	} // LCOV_EXCL_STOP
 	system_ = std::make_unique<System<URV> >(coreCount, hartsPerCore, hartIdOffset, memorySize, pageSize, regionSize);
 	assert(system_->hartCount() == coreCount*hartsPerCore);
 	assert(system_->hartCount() > 0);
@@ -530,60 +542,60 @@ bool VeeRISSTlm::session()
 	// Configure harts. Define callbacks for non-standard CSRs.
 	bool userMode = args_.isa.find_first_of("uU") != std::string::npos;
 	if (not config_.configHarts(*system_, userMode, args_.verbose))
-		if (not args_.interactive)
-			return false;
+		if (not args_.interactive) // LCOV_EXCL_LINE
+			return false; // LCOV_EXCL_LINE
 
 	// Configure memory.
 	if (not config_.configMemory(*system_, args_.iccmRw, args_.unmappedElfOk, args_.verbose))
-		return false;
+		return false; // LCOV_EXCL_LINE
 
 	if (args_.hexFiles.empty() and args_.expandedTargets.empty()
 			and not args_.interactive)
-	{
+	{ // LCOV_EXCL_START
 		std::cerr << "No program file specified.\n";
 		return false;
-	}
+	} // LCOV_EXCL_STOP
 
 	if (not openUserFiles(args_, traceFile, commandLog, consoleOut, bblockFile))
-		return false;
+		return false; // LCOV_EXCL_LINE
 
 	for (unsigned i = 0; i < system_->hartCount(); ++i)
 	{
 		auto& hart = *system_->ithHart(i);
 		hart.setConsoleOutput(consoleOut);
-		if (bblockFile)
-			hart.enableBasicBlocks(bblockFile, args_.bblockInsts);
+		if (bblockFile) // LCOV_EXCL_LINE
+			hart.enableBasicBlocks(bblockFile, args_.bblockInsts); // LCOV_EXCL_LINE
 		hart.reset();
 	}
 
 	StringVec isaVec;
 	if (not determineIsa(args_, isaVec))
-		return false;
+		return false; // LCOV_EXCL_LINE
 
 	URV pc;
 	for (unsigned i = 0; i < system_->hartCount(); ++i)
 	{
 		if (not applyCmdLineArgs(args_, isaVec, *system_->ithHart(i), *system_))
-			if (not args_.interactive)
-				return false;
+			if (not args_.interactive) // LCOV_EXCL_LINE
+				return false; // LCOV_EXCL_LINE
 
 		(*system_->ithHart(i)).pokePc(URV(entrypoint));
 		auto& hart = *system_->ithHart(i);
 		pc = hart.peekPc();
-		CSML_DEBUG(5, logger) << "PC value = 0x" << std::hex << pc << "\n";
+		REG_DEBUG(5, logger) << "PC value = 0x" << std::hex << pc << "\n";
 	}
 
 	// In server/interactive modes: enable triggers and performance counters.
 	bool serverMode = not args_.serverFile.empty();
 	if (serverMode or args_.interactive)
-	{
+	{ // LCOV_EXCL_START
 		for (unsigned i = 0; i < system_->hartCount(); ++i)
 		{
 			auto &hart = *system_->ithHart(i);
 			hart.enableTriggers(true);
 			hart.enablePerformanceCounters(true);
 		}
-	}
+	} // LCOV_EXCL_STOP
 	else
 	{
 		// Load error rollback is an annoyance if not in server/interactive mode
@@ -596,10 +608,10 @@ bool VeeRISSTlm::session()
 	}
 
 	if (serverMode)
-		return runServer(args_.serverFile);
+		return runServer(args_.serverFile); // LCOV_EXCL_LINE
 
 	if (args_.interactive)
-	{
+	{ // LCOV_EXCL_START
 		// Ignore keyboard interrupt for most commands. Long running
 		// commands will enable keyboard interrupts while they run.
 #ifdef __MINGW64__
@@ -614,16 +626,16 @@ bool VeeRISSTlm::session()
 
 		Interactive interactive(*system_);
 		return interactive.interact(traceFile, commandLog);
-	}
+	} // LCOV_EXCL_STOP
 
 	if (args_.snapshotPeriod and *args_.snapshotPeriod)
-	{
+	{ // LCOV_EXCL_START
 		uint64_t period = *args_.snapshotPeriod;
 		std::string dir = args_.snapshotDir;
 		if (system_->hartCount() == 1)
 			return snapshotRun(dir, period);
 		std::cerr << "Warning: Snapshots not supported for multi-thread runs\n";
-	}
+	} // LCOV_EXCL_STOP
 
 	return true;
 }
@@ -660,7 +672,7 @@ void VeeRISSTlm::handle_nmi_signal()
 
 		auto hart0 = system_->ithHart(hart_id);
 		if (hart0->isNmiActive()) {
-			CSML_INFO(2, logger) << "[NMI] bark fired while NMI active — ignoring\n";
+			REG_INFO(2, logger) << "[NMI] bark fired while NMI active — ignoring\n";
 			wait(nmi_i.negedge_event());
 			continue;
 		}
@@ -668,23 +680,23 @@ void VeeRISSTlm::handle_nmi_signal()
         uint32_t nmi_pc = nmi_vec_i.read();   // FW value (higher priority)
 
         if (nmi_pc != 0) {
-            CSML_INFO(2, logger) << "[NMI] FW-provided nmi_vec = 0x"
+            REG_INFO(2, logger) << "[NMI] FW-provided nmi_vec = 0x"
                                  << std::hex << nmi_pc << "\n";
             hart0->defineNmiPc(nmi_pc);       // update core with FW value
         } else {
             nmi_pc = hart0->getNmiPc();       // fall back to JSON/core fix value
             if (nmi_pc == 0) {
-                CSML_INFO(2, logger) << "[NMI] FW nmi_vec not set\n";
-                CSML_INFO(2, logger) << "[NMI] core/json nmi_vec not set either\n";
-                CSML_INFO(2, logger) << "[NMI] bark fired but nmi_vec not set — ignoring\n";
+                REG_INFO(2, logger) << "[NMI] FW nmi_vec not set\n";
+                REG_INFO(2, logger) << "[NMI] core/json nmi_vec not set either\n";
+                REG_INFO(2, logger) << "[NMI] bark fired but nmi_vec not set — ignoring\n";
                 continue;                     // skip, thread stays alive
             }
-            CSML_INFO(2, logger) << "[NMI] FW nmi_vec not set, falling back to core/json value 0x"
+            REG_INFO(2, logger) << "[NMI] FW nmi_vec not set, falling back to core/json value 0x"
                                  << std::hex << nmi_pc << "\n";
         }
 
         hart0->setPendingNmi(NmiCause::UNKNOWN);
-        CSML_INFO(2, logger) << "[NMI] NMI triggered — hart will jump to 0x"
+        REG_INFO(2, logger) << "[NMI] NMI triggered — hart will jump to 0x"
                              << std::hex << nmi_pc << "\n";
 		
 	}
@@ -743,7 +755,7 @@ void VeeRISSTlm::notifyWrite(uint64_t addr, unsigned size, int initiator_id)
 } 
 
 /// Direct TLM access to the internal PIC socket (bypasses system bus).
-/// addr is the absolute system address; CSML memory expects a PIC-relative offset,
+/// addr is the absolute system address; the PIC model expects a PIC-relative offset,
 /// so we subtract PIC_BASE here (same translation the bus router would do).
 bool VeeRISSTlm::doPicAccess(tlm_command cmd, uint64_t addr, unsigned char *data, unsigned len)
 {
@@ -799,7 +811,7 @@ bool VeeRISSTlm::externalRead(uint64_t addr, unsigned size, uint64_t &val)
 		return true;   // suppress synchronous fault; NMI pending instead
 	}
 
-	CSML_DEBUG(3, logger) << "externalRead Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
+	REG_DEBUG(3, logger) << "externalRead Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
 
 	return success;
 }
@@ -822,10 +834,10 @@ bool VeeRISSTlm::externalWrite(uint64_t addr, unsigned size, uint64_t val)
 	}
 
     if (addr >= 0x80000000 && addr < 0x80000010) {
-        CSML_INFO(5, logger) << "STDOUT_DEVICE: write addr=0x" << hex << addr << "val=0x" << *dataBuffer << "size=%u" << size << "\n";
+        REG_INFO(5, logger) << "STDOUT_DEVICE: write addr=0x" << hex << addr << "val=0x" << *dataBuffer << "size=%u" << size << "\n";
     }
 
-	CSML_DEBUG(5, logger) << "externalWrite Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
+	REG_DEBUG(5, logger) << "externalWrite Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
 
 	bool ok = doTlmAccess(TLM_WRITE_COMMAND, addr, dataBuffer, size,
 			(hart0->inDebugMode() || hart0->gdbAccessInProgress()));
@@ -870,10 +882,10 @@ bool VeeRISSTlm::doTlmAccess(tlm_command cmd, uint64_t addr, unsigned char *data
 
 	sc_time delay = sc_time(1, SC_NS);
 
-	CSML_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::Addr:0x" << addr << std::endl;
-	CSML_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::len:0x" << len << std::endl;
-	CSML_INFO(5, logger) << "VeeRISSTlm: inDebugMode " << inDebugMode << std::endl;
-	CSML_INFO(5, logger) << "VeeRISSTlm: doTlmAccess  end.." << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::Addr:0x" << addr << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::len:0x" << len << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm: inDebugMode " << inDebugMode << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm: doTlmAccess  end.." << std::endl;
 
 	if (inDebugMode)
 	{

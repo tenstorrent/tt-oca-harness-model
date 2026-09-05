@@ -5,11 +5,11 @@
  * @brief Comprehensive testbench for local_master_alias_remap_ctrl peripheral.
  *
  * Ports test cases from knowledge-base/axi_alias_remap_tb.cpp into the
- * csml-style testbench pattern (mirrors ap_output_remap_ctrl/test pattern).
+ * regmodel-style testbench pattern (mirrors ap_output_remap_ctrl/test pattern).
  *
  * SEP local master alias remap configuration under test:
  *   NumRegions = 16, IdxStart = 12 (4 KB granularity)
- *   CSR base = 0x10A10000 (but accessed via csml flat layout)
+ *   CSR base = 0x10A10000 (but accessed via regmodel flat layout)
  *   Range-based address matching with additive remapping
  *
  * Wiring:
@@ -275,7 +275,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
 
         // ------------------------------------------------------------------
         // T2: Program region 0 and verify readback
-        // CSML interleaved layout: 4-word spacing between regions
+        // regmodel interleaved layout: 4-word spacing between regions
         // ------------------------------------------------------------------
         {
             // Program region 0: [0x10000, 0x11000) -> +0x2000000

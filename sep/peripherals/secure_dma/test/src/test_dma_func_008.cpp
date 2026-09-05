@@ -56,7 +56,7 @@
  * - CONTROL and STATUS register accessibility during transfers
  */
 void testbench::run_func008_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-008: Transfer Control and Abort Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -77,7 +77,7 @@ void testbench::run_func008_tests() {
   test_abort_ot_transactions_complete();
   test_abort_status_clearing();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-008 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -109,7 +109,7 @@ void testbench::run_func008_tests() {
  */
 void testbench::test_func008_go_bit_transfer_initiation() {
   std::string test_name = "FUNC-008 TC001: Go Bit Transfer Initiation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -217,7 +217,7 @@ void testbench::test_func008_go_bit_transfer_initiation() {
  */
 void testbench::test_func008_go_bit_validation_failure() {
   std::string test_name = "FUNC-008 TC002: Go Bit with Validation Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -326,7 +326,7 @@ void testbench::test_func008_go_bit_validation_failure() {
  */
 void testbench::test_func008_go_bit_auto_clear_on_completion() {
   std::string test_name = "FUNC-008 TC003: Go Bit Auto-Clear on Completion";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -399,7 +399,7 @@ void testbench::test_func008_go_bit_auto_clear_on_completion() {
  */
 void testbench::test_func008_cfg_regwen_hardware_locking() {
   std::string test_name = "FUNC-008 TC004: CFG_REGWEN Hardware Locking";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -513,7 +513,7 @@ void testbench::test_func008_cfg_regwen_hardware_locking() {
  */
 void testbench::test_func008_control_status_always_accessible() {
   std::string test_name = "FUNC-008 TC005: CONTROL and STATUS Always Accessible";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -629,7 +629,7 @@ void testbench::test_func008_control_status_always_accessible() {
  */
 void testbench::test_abort_during_transfer() {
   std::string test_name = "Abort During Transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -712,7 +712,7 @@ void testbench::test_abort_during_transfer() {
  */
 void testbench::test_abort_status_clearing() {
   std::string test_name = "FUNC-008 TC007: Abort Status Clearing";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -800,7 +800,7 @@ void testbench::test_abort_status_clearing() {
 void testbench::test_abort_ot_transactions_complete() {
   std::string test_name =
       "Abort OT Transactions Complete";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

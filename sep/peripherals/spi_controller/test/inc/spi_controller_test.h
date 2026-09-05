@@ -4,7 +4,7 @@
 #pragma once
 #include "spi_controller_basetest.h"
 #include "spi_controller_interface.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 /// =============================================================================
 /// Dummy SPI Interface Implementation (for test model)
@@ -30,8 +30,8 @@ private:
     bool m_last_csaat;
 
 public:
-    /// CSML Logger instance
-    CsmlLogger logger;
+    /// RegLogger instance
+    RegLogger logger;
 
     /**
      * @brief Constructor for the dummy SPI interface
@@ -61,14 +61,14 @@ public:
                                   const uint8_t* tx_data,
                                   uint8_t* rx_data) override
     {
-        CSML_INFO(2, logger) << "[SPI_IF_DUMMY] SPI transaction called: "
+        REG_INFO(2, logger) << "[SPI_IF_DUMMY] SPI transaction called: "
                   << "len=" << segment.len
                   << ", speed=" << (int)segment.speed
                   << ", direction=" << (int)segment.direction
                   << ", csid=" << (int)segment.csid
                   << ", csaat=" << segment.csaat << std::endl;
 
-        CSML_DEBUG(3, logger) << "[SPI_IF_DUMMY] Config: "
+        REG_DEBUG(3, logger) << "[SPI_IF_DUMMY] Config: "
                   << "clkdiv=" << config.clkdiv << std::endl;
 
         // Update statistics
@@ -79,19 +79,19 @@ public:
         // Handle TX data (capture from master)
         if (segment.direction == spi_direction_e::TX_ONLY ||
             segment.direction == spi_direction_e::BIDIR) {
-            CSML_DEBUG(3, logger) << "[SPI_IF_DUMMY] TX data: ";
+            REG_DEBUG(3, logger) << "[SPI_IF_DUMMY] TX data: ";
             for (uint16_t i = 0; i < segment.len; i++) {
-                CSML_DEBUG(3, logger) << "0x" << std::hex << (int)tx_data[i] << std::dec << " ";
+                REG_DEBUG(3, logger) << "0x" << std::hex << (int)tx_data[i] << std::dec << " ";
                 m_tx_captured.push_back(tx_data[i]);  /// Capture for verification
             }
-            CSML_DEBUG(3, logger) << std::endl;
+            REG_DEBUG(3, logger) << std::endl;
             m_total_tx_bytes += segment.len;
         }
 
         // Handle RX data (return to master)
         if (segment.direction == spi_direction_e::RX_ONLY ||
             segment.direction == spi_direction_e::BIDIR) {
-            CSML_DEBUG(3, logger) << "[SPI_IF_DUMMY] RX data: ";
+            REG_DEBUG(3, logger) << "[SPI_IF_DUMMY] RX data: ";
             for (uint16_t i = 0; i < segment.len; i++) {
                 // Priority 1: Use pre-loaded RX buffer if available
                 if (m_rx_buffer_index < m_rx_buffer.size()) {
@@ -105,13 +105,13 @@ public:
                 else {
                     rx_data[i] = 0xA5 + i;
                 }
-                CSML_DEBUG(3, logger) << "0x" << std::hex << (int)rx_data[i] << std::dec << " ";
+                REG_DEBUG(3, logger) << "0x" << std::hex << (int)rx_data[i] << std::dec << " ";
             }
-            CSML_DEBUG(3, logger) << std::endl;
+            REG_DEBUG(3, logger) << std::endl;
             m_total_rx_bytes += segment.len;
         }
 
-        CSML_DEBUG(2, logger) << "[SPI_IF_DUMMY] Transaction complete" << std::endl;
+        REG_DEBUG(2, logger) << "[SPI_IF_DUMMY] Transaction complete" << std::endl;
 
         return true;
     }
@@ -129,7 +129,7 @@ public:
         m_rx_buffer.clear();
         m_rx_buffer.assign(data, data + len);
         m_rx_buffer_index = 0;
-        CSML_DEBUG(2, logger) << "[SPI_IF_DUMMY] Loaded " << len << " bytes into RX buffer" << std::endl;
+        REG_DEBUG(2, logger) << "[SPI_IF_DUMMY] Loaded " << len << " bytes into RX buffer" << std::endl;
     }
 
     /**
@@ -139,7 +139,7 @@ public:
     void load_rx_data(const std::vector<uint8_t>& data) {
         m_rx_buffer = data;
         m_rx_buffer_index = 0;
-        CSML_DEBUG(2, logger) << "[SPI_IF_DUMMY] Loaded " << data.size() << " bytes into RX buffer" << std::endl;
+        REG_DEBUG(2, logger) << "[SPI_IF_DUMMY] Loaded " << data.size() << " bytes into RX buffer" << std::endl;
     }
 
     /**
@@ -155,7 +155,7 @@ public:
      */
     void clear_capture() {
         m_tx_captured.clear();
-        CSML_DEBUG(2, logger) << "[SPI_IF_DUMMY] Cleared TX capture buffer" << std::endl;
+        REG_DEBUG(2, logger) << "[SPI_IF_DUMMY] Cleared TX capture buffer" << std::endl;
     }
 
     /**
@@ -200,7 +200,7 @@ public:
         m_total_rx_bytes = 0;
         m_last_csid = 0;
         m_last_csaat = false;
-        CSML_DEBUG(2, logger) << "[SPI_IF_DUMMY] Reset complete" << std::endl;
+        REG_DEBUG(2, logger) << "[SPI_IF_DUMMY] Reset complete" << std::endl;
     }
 };
 
@@ -238,8 +238,8 @@ public:
    /// Dummy interface implementation (public for testbench access)
    spi_if_dummy m_spi_if_impl;
 
-   /// CSML Logger instance (mutable to allow logging in const functions)
-   mutable CsmlLogger logger;
+   /// RegLogger instance (mutable to allow logging in const functions)
+   mutable RegLogger logger;
 
    /**
     * @brief Test class for SPI Controller
@@ -361,15 +361,15 @@ public:
       bool match = (captured == expected);
 
       if (match) {
-         CSML_INFO(2, logger) << "[VERIFY] Slave RX matches expected TX data ("
+         REG_INFO(2, logger) << "[VERIFY] Slave RX matches expected TX data ("
                    << captured.size() << " bytes)" << std::endl;
       } else {
-         CSML_ERROR(2, logger) << "[VERIFY FAIL] Slave RX mismatch!" << std::endl;
-         CSML_ERROR(2, logger) << "  Expected: ";
-         for (auto b : expected) CSML_ERROR(2, logger) << "0x" << std::hex << (int)b << " ";
-         CSML_ERROR(2, logger) << std::endl << "  Captured: ";
-         for (auto b : captured) CSML_ERROR(2, logger) << "0x" << std::hex << (int)b << " ";
-         CSML_ERROR(2, logger) << std::dec << std::endl;
+         REG_ERROR(2, logger) << "[VERIFY FAIL] Slave RX mismatch!" << std::endl;
+         REG_ERROR(2, logger) << "  Expected: ";
+         for (auto b : expected) REG_ERROR(2, logger) << "0x" << std::hex << (int)b << " ";
+         REG_ERROR(2, logger) << std::endl << "  Captured: ";
+         for (auto b : captured) REG_ERROR(2, logger) << "0x" << std::hex << (int)b << " ";
+         REG_ERROR(2, logger) << std::dec << std::endl;
       }
 
       return match;

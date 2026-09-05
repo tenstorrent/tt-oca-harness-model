@@ -41,7 +41,7 @@
  * - Integration with transfer width configuration
  */
 void testbench::run_func004_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-004: Addressing Mode Management Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -98,7 +98,7 @@ void testbench::run_func004_tests() {
   test_func004_transfer_width_affects_increment();
   test_func004_alignment_maintained_during_advance();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-004 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -123,7 +123,7 @@ void testbench::run_func004_tests() {
  */
 void testbench::test_func004_src_fixed_mode_decode() {
   std::string test_name = "FUNC-004 TC001: Source Fixed Mode Decode (SRC_CONFIG[0]=0)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -177,7 +177,7 @@ void testbench::test_func004_src_fixed_mode_decode() {
  */
 void testbench::test_func004_src_incrementing_mode_decode() {
   std::string test_name = "FUNC-004 TC002: Source Incrementing Mode Decode (SRC_CONFIG[1:0]=0b01)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -235,7 +235,7 @@ void testbench::test_func004_src_incrementing_mode_decode() {
  */
 void testbench::test_func004_src_wrapping_mode_decode() {
   std::string test_name = "FUNC-004 TC003: Source Wrapping Mode Decode (SRC_CONFIG[1:0]=0b11)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -293,7 +293,7 @@ void testbench::test_func004_src_wrapping_mode_decode() {
  */
 void testbench::test_func004_dst_fixed_mode_decode() {
   std::string test_name = "FUNC-004 TC004: Destination Fixed Mode Decode (DST_CONFIG[0]=0)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -347,7 +347,7 @@ void testbench::test_func004_dst_fixed_mode_decode() {
  */
 void testbench::test_func004_dst_incrementing_mode_decode() {
   std::string test_name = "FUNC-004 TC005: Destination Incrementing Mode Decode (DST_CONFIG[1:0]=0b01)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -405,7 +405,7 @@ void testbench::test_func004_dst_incrementing_mode_decode() {
  */
 void testbench::test_func004_dst_wrapping_mode_decode() {
   std::string test_name = "FUNC-004 TC006: Destination Wrapping Mode Decode (DST_CONFIG[1:0]=0b11)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -465,7 +465,7 @@ void testbench::test_func004_dst_wrapping_mode_decode() {
  */
 void testbench::test_func004_src_fixed_address_unchanged() {
   std::string test_name = "FUNC-004 TC007: Source Fixed Mode Address Unchanged After Transactions";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -538,7 +538,7 @@ void testbench::test_func004_src_fixed_address_unchanged() {
  */
 void testbench::test_func004_dst_fixed_address_unchanged() {
   std::string test_name = "FUNC-004 TC008: Destination Fixed Mode Address Unchanged After Transactions";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -611,7 +611,7 @@ void testbench::test_func004_dst_fixed_address_unchanged() {
  */
 void testbench::test_func004_src_increment_1byte_width() {
   std::string test_name = "FUNC-004 TC009: Source Increment with 1-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -670,7 +670,7 @@ void testbench::test_func004_src_increment_1byte_width() {
  */
 void testbench::test_func004_src_increment_2byte_width() {
   std::string test_name = "FUNC-004 TC010: Source Increment with 2-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -729,7 +729,7 @@ void testbench::test_func004_src_increment_2byte_width() {
  */
 void testbench::test_func004_src_increment_4byte_width() {
   std::string test_name = "FUNC-004 TC011: Source Increment with 4-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -788,7 +788,7 @@ void testbench::test_func004_src_increment_4byte_width() {
  */
 void testbench::test_func004_dst_increment_1byte_width() {
   std::string test_name = "FUNC-004 TC012: Destination Increment with 1-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -847,7 +847,7 @@ void testbench::test_func004_dst_increment_1byte_width() {
  */
 void testbench::test_func004_dst_increment_2byte_width() {
   std::string test_name = "FUNC-004 TC013: Destination Increment with 2-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -906,7 +906,7 @@ void testbench::test_func004_dst_increment_2byte_width() {
  */
 void testbench::test_func004_dst_increment_4byte_width() {
   std::string test_name = "FUNC-004 TC014: Destination Increment with 4-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -966,7 +966,7 @@ void testbench::test_func004_dst_increment_4byte_width() {
  */
 void testbench::test_func004_src_wrap_single_iteration() {
   std::string test_name = "FUNC-004 TC015: Source Wrap Single Iteration Within Chunk";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1036,7 +1036,7 @@ void testbench::test_func004_src_wrap_single_iteration() {
  */
 void testbench::test_func004_src_wrap_boundary_crossing() {
   std::string test_name = "FUNC-004 TC016: Source Wrap Boundary Crossing";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1114,7 +1114,7 @@ void testbench::test_func004_src_wrap_boundary_crossing() {
  */
 void testbench::test_func004_src_wrap_multiple_iterations() {
   std::string test_name = "FUNC-004 TC017: Source Wrap Multiple Iterations";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1193,7 +1193,7 @@ void testbench::test_func004_src_wrap_multiple_iterations() {
  */
 void testbench::test_func004_dst_wrap_single_iteration() {
   std::string test_name = "FUNC-004 TC018: Destination Wrap Single Iteration Within Chunk";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1262,7 +1262,7 @@ void testbench::test_func004_dst_wrap_single_iteration() {
  */
 void testbench::test_func004_dst_wrap_boundary_crossing() {
   std::string test_name = "FUNC-004 TC019: Destination Wrap Boundary Crossing";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1338,7 +1338,7 @@ void testbench::test_func004_dst_wrap_boundary_crossing() {
  */
 void testbench::test_func004_dst_wrap_multiple_iterations() {
   std::string test_name = "FUNC-004 TC020: Destination Wrap Multiple Iterations";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1418,7 +1418,7 @@ void testbench::test_func004_dst_wrap_multiple_iterations() {
  */
 void testbench::test_func004_src_addr_lo_dynamic_update() {
   std::string test_name = "FUNC-004 TC021: SRC_ADDR_LO Dynamic Update Visibility";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1479,7 +1479,7 @@ void testbench::test_func004_src_addr_lo_dynamic_update() {
  */
 void testbench::test_func004_src_addr_hi_overflow_update() {
   std::string test_name = "FUNC-004 TC022: SRC_ADDR_HI Update on 32-bit Overflow";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1552,7 +1552,7 @@ void testbench::test_func004_src_addr_hi_overflow_update() {
  */
 void testbench::test_func004_dst_addr_lo_dynamic_update() {
   std::string test_name = "FUNC-004 TC023: DST_ADDR_LO Dynamic Update Visibility";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1612,7 +1612,7 @@ void testbench::test_func004_dst_addr_lo_dynamic_update() {
  */
 void testbench::test_func004_dst_addr_hi_overflow_update() {
   std::string test_name = "FUNC-004 TC024: DST_ADDR_HI Update on 32-bit Overflow";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1689,7 +1689,7 @@ void testbench::test_func004_dst_addr_hi_overflow_update() {
  */
 void testbench::test_func004_32bit_src_address_ot_bus() {
   std::string test_name = "FUNC-004 TC025: 32-bit Source Address (OT Internal Bus)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1759,7 +1759,7 @@ void testbench::test_func004_32bit_src_address_ot_bus() {
  */
 void testbench::test_func004_64bit_src_address_sys_bus() {
   std::string test_name = "FUNC-004 TC026: 64-bit Source Address (System Bus)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1828,7 +1828,7 @@ void testbench::test_func004_64bit_src_address_sys_bus() {
  */
 void testbench::test_func004_32bit_dst_address_ctn_bus() {
   std::string test_name = "FUNC-004 TC027: 32-bit Destination Address (CTN Bus)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1900,7 +1900,7 @@ void testbench::test_func004_32bit_dst_address_ctn_bus() {
  */
 void testbench::test_func004_64bit_dst_address_sys_bus() {
   std::string test_name = "FUNC-004 TC028: 64-bit Destination Address (System Bus)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1974,7 +1974,7 @@ void testbench::test_func004_64bit_dst_address_sys_bus() {
  */
 void testbench::test_func004_valid_wrap_boundaries() {
   std::string test_name = "FUNC-004 TC029: Valid Wrap Boundaries Configuration";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2052,7 +2052,7 @@ void testbench::test_func004_valid_wrap_boundaries() {
  */
 void testbench::test_func004_invalid_wrap_boundaries() {
   std::string test_name = "FUNC-004 TC030: Invalid Wrap Boundaries (Zero Chunk Size)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2115,7 +2115,7 @@ void testbench::test_func004_invalid_wrap_boundaries() {
  */
 void testbench::test_func004_chunk_size_alignment() {
   std::string test_name = "FUNC-004 TC031: Chunk Size Alignment Validation";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2193,7 +2193,7 @@ void testbench::test_func004_chunk_size_alignment() {
  */
 void testbench::test_func004_boundary_overflow_detection() {
   std::string test_name = "FUNC-004 TC032: Boundary Overflow Detection (64-bit)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2273,7 +2273,7 @@ void testbench::test_func004_boundary_overflow_detection() {
  */
 void testbench::test_func004_transfer_width_affects_increment() {
   std::string test_name = "FUNC-004 TC033: Transfer Width Integration (1/2/4 Byte Increments)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2345,7 +2345,7 @@ void testbench::test_func004_transfer_width_affects_increment() {
  */
 void testbench::test_func004_alignment_maintained_during_advance() {
   std::string test_name = "FUNC-004 TC034: Alignment Maintained During Address Advancement";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

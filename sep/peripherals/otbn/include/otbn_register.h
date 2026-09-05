@@ -4,7 +4,7 @@
  * @file otbn_register.h
  * @brief OTBN hardware register type definitions
  * 
- * This header defines all OTBN hardware register types using CSML register templates.
+ * This header defines all OTBN hardware register types using regmodel register templates.
  * Each register class includes:
  * - Bitfield accessors for register fields
  * - Reset values and access permissions
@@ -29,7 +29,7 @@
 
 #pragma once
 #include <systemc.h>
-#include "csml_register.h"
+#include "reg_file.h"
 
 /// @brief OTBN register type namespace - contains all hardware register class definitions
 namespace otbn {
@@ -41,32 +41,32 @@ namespace otbn {
  * Bit 0: done - Set when operation completes, cleared by writing 1
  */
 template<unsigned int N>
-class INTR_STATE_type : public csml_reg<N>
+class INTR_STATE_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     INTR_STATE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x1, 0x1, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x1, 0x1, 0),
       done(reg_name + ".done", *this, 0, 1), 
       Reserved0(reg_name + ".Reserved0", *this, 1, 31)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> done;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> done;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -76,32 +76,32 @@ class INTR_STATE_type : public csml_reg<N>
  * Bit 0: done - Enable/disable done interrupt
  */
 template<unsigned int N>
-class INTR_ENABLE_type : public csml_reg<N>
+class INTR_ENABLE_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     INTR_ENABLE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x1, 0x1, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x1, 0x1, 0),
       done(reg_name + ".done", *this, 0, 1), 
       Reserved0(reg_name + ".Reserved0", *this, 1, 31)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> done;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> done;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -111,32 +111,32 @@ class INTR_ENABLE_type : public csml_reg<N>
  * Writing 1 to bit 0 sets INTR_STATE.done
  */
 template<unsigned int N>
-class INTR_TEST_type : public csml_reg<N>
+class INTR_TEST_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     INTR_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x0, 0x1, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0x1, 0),
       done(reg_name + ".done", *this, 0, 1), 
       Reserved0(reg_name + ".Reserved0", *this, 1, 31)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> done;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> done;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -147,13 +147,13 @@ class INTR_TEST_type : public csml_reg<N>
  * Bit 1: recov - Trigger recoverable alert
  */
 template<unsigned int N>
-class ALERT_TEST_type : public csml_reg<N>
+class ALERT_TEST_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     ALERT_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x0, 0x3, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0x3, 0),
       fatal(reg_name + ".fatal", *this, 0, 1), 
       recov(reg_name + ".recov", *this, 1, 1), 
       Reserved0(reg_name + ".Reserved0", *this, 2, 30)
@@ -161,20 +161,20 @@ class ALERT_TEST_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> fatal;
-    csml_bitfield<N> recov;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> fatal;
+    regmodel::Bitfield<N> recov;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -184,32 +184,32 @@ class ALERT_TEST_type : public csml_reg<N>
  * Command values: 0xd8 (EXECUTE), 0xc3 (SEC_WIPE_DMEM), 0x1e (SEC_WIPE_IMEM)
  */
 template<unsigned int N>
-class CMD_type : public csml_reg<N>
+class CMD_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     CMD_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x0, 0xff, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0xff, 0),
       cmd(reg_name + ".cmd", *this, 0, 8), 
       Reserved0(reg_name + ".Reserved0", *this, 8, 24)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> cmd;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> cmd;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -219,32 +219,32 @@ class CMD_type : public csml_reg<N>
  * Bit 0: software_errs_fatal - If set, software errors cause fatal alert and LOCKED state
  */
 template<unsigned int N>
-class CTRL_type : public csml_reg<N>
+class CTRL_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x1, 0x1, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x1, 0x1, 0),
       software_errs_fatal(reg_name + ".software_errs_fatal", *this, 0, 1), 
       Reserved0(reg_name + ".Reserved0", *this, 1, 31)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> software_errs_fatal;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> software_errs_fatal;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -254,32 +254,32 @@ class CTRL_type : public csml_reg<N>
  * Values: 0x00 (IDLE), 0x01 (BUSY_EXECUTE), 0x02-0x04 (BUSY_SEC_WIPE), 0xFF (LOCKED)
  */
 template<unsigned int N>
-class STATUS_type : public csml_reg<N>
+class STATUS_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xff, 0x0, 4),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xff, 0x0, 4),
       status(reg_name + ".status", *this, 0, 8), 
       Reserved0(reg_name + ".Reserved0", *this, 8, 24)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> status;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> status;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -290,13 +290,13 @@ class STATUS_type : public csml_reg<N>
  * Bits 16-23: Fatal errors (integrity violations, illegal_bus_access, lifecycle_escalation, fatal_software)
  */
 template<unsigned int N>
-class ERR_BITS_type : public csml_reg<N>
+class ERR_BITS_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     ERR_BITS_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xff00ff, 0xff00ff, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xff00ff, 0xff00ff, 0),
       bad_data_addr(reg_name + ".bad_data_addr", *this, 0, 1), 
       bad_insn_addr(reg_name + ".bad_insn_addr", *this, 1, 1), 
       call_stack(reg_name + ".call_stack", *this, 2, 1), 
@@ -319,35 +319,35 @@ class ERR_BITS_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> bad_data_addr;
-    csml_bitfield<N> bad_insn_addr;
-    csml_bitfield<N> call_stack;
-    csml_bitfield<N> illegal_insn;
-    csml_bitfield<N> loop;
-    csml_bitfield<N> key_invalid;
-    csml_bitfield<N> rnd_rep_chk_fail;
-    csml_bitfield<N> rnd_fips_chk_fail;
-    csml_bitfield<N> Reserved0;
-    csml_bitfield<N> imem_intg_violation;
-    csml_bitfield<N> dmem_intg_violation;
-    csml_bitfield<N> reg_intg_violation;
-    csml_bitfield<N> bus_intg_violation;
-    csml_bitfield<N> bad_internal_state;
-    csml_bitfield<N> illegal_bus_access;
-    csml_bitfield<N> lifecycle_escalation;
-    csml_bitfield<N> fatal_software;
-    csml_bitfield<N> Reserved1;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> bad_data_addr;
+    regmodel::Bitfield<N> bad_insn_addr;
+    regmodel::Bitfield<N> call_stack;
+    regmodel::Bitfield<N> illegal_insn;
+    regmodel::Bitfield<N> loop;
+    regmodel::Bitfield<N> key_invalid;
+    regmodel::Bitfield<N> rnd_rep_chk_fail;
+    regmodel::Bitfield<N> rnd_fips_chk_fail;
+    regmodel::Bitfield<N> Reserved0;
+    regmodel::Bitfield<N> imem_intg_violation;
+    regmodel::Bitfield<N> dmem_intg_violation;
+    regmodel::Bitfield<N> reg_intg_violation;
+    regmodel::Bitfield<N> bus_intg_violation;
+    regmodel::Bitfield<N> bad_internal_state;
+    regmodel::Bitfield<N> illegal_bus_access;
+    regmodel::Bitfield<N> lifecycle_escalation;
+    regmodel::Bitfield<N> fatal_software;
+    regmodel::Bitfield<N> Reserved1;
 };
 
 /**
@@ -357,13 +357,13 @@ class ERR_BITS_type : public csml_reg<N>
  * Set when fatal alert is triggered, persists until reset.
  */
 template<unsigned int N>
-class FATAL_ALERT_CAUSE_type : public csml_reg<N>
+class FATAL_ALERT_CAUSE_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     FATAL_ALERT_CAUSE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xff, 0x0, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xff, 0x0, 0),
       imem_intg_violation(reg_name + ".imem_intg_violation", *this, 0, 1), 
       dmem_intg_violation(reg_name + ".dmem_intg_violation", *this, 1, 1), 
       reg_intg_violation(reg_name + ".reg_intg_violation", *this, 2, 1), 
@@ -377,26 +377,26 @@ class FATAL_ALERT_CAUSE_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> imem_intg_violation;
-    csml_bitfield<N> dmem_intg_violation;
-    csml_bitfield<N> reg_intg_violation;
-    csml_bitfield<N> bus_intg_violation;
-    csml_bitfield<N> bad_internal_state;
-    csml_bitfield<N> illegal_bus_access;
-    csml_bitfield<N> lifecycle_escalation;
-    csml_bitfield<N> fatal_software;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> imem_intg_violation;
+    regmodel::Bitfield<N> dmem_intg_violation;
+    regmodel::Bitfield<N> reg_intg_violation;
+    regmodel::Bitfield<N> bus_intg_violation;
+    regmodel::Bitfield<N> bad_internal_state;
+    regmodel::Bitfield<N> illegal_bus_access;
+    regmodel::Bitfield<N> lifecycle_escalation;
+    regmodel::Bitfield<N> fatal_software;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 /**
@@ -406,30 +406,30 @@ class FATAL_ALERT_CAUSE_type : public csml_reg<N>
  * Updated after algorithm completes. Can be cleared when IDLE or LOCKED.
  */
 template<unsigned int N>
-class INSN_CNT_type : public csml_reg<N>
+class INSN_CNT_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     INSN_CNT_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
       insn_cnt(reg_name + ".insn_cnt", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> insn_cnt;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> insn_cnt;
 };
 
 /**
@@ -439,30 +439,30 @@ class INSN_CNT_type : public csml_reg<N>
  * Updated on each memory write. Can be written to reset accumulator.
  */
 template<unsigned int N>
-class LOAD_CHECKSUM_type : public csml_reg<N>
+class LOAD_CHECKSUM_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     LOAD_CHECKSUM_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
       checksum(reg_name + ".checksum", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> checksum;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> checksum;
 };
 
 /**
@@ -472,30 +472,30 @@ class LOAD_CHECKSUM_type : public csml_reg<N>
  * Accessible only when IDLE. Writes update LOAD_CHECKSUM.
  */
 template<unsigned int N>
-class IMEM_type : public csml_reg<N>
+class IMEM_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     IMEM_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
       data(reg_name + ".data", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> data;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> data;
 };
 
 /**
@@ -506,30 +506,30 @@ class IMEM_type : public csml_reg<N>
  * Accessible only when IDLE. Writes update LOAD_CHECKSUM.
  */
 template<unsigned int N>
-class DMEM_type : public csml_reg<N>
+class DMEM_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     DMEM_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0),
       data(reg_name + ".data", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> data;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> data;
 };
 
 

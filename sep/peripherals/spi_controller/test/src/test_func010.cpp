@@ -12,7 +12,7 @@ void testbench::test_func010_dma_trigger()
     int sub_tests_passed = 0;
     int sub_tests_failed = 0;
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "[TEST FUNC-010] DMA Trigger Verification" << std::endl
                          << "========================================" << std::endl;
 
@@ -21,7 +21,7 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Initial Configuration
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host for DMA Testing" << std::endl;
+    REG_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host for DMA Testing" << std::endl;
 
     // CRITICAL: Perform software reset first to ensure clean initial state
     // This clears any residual data from previous test cases
@@ -46,10 +46,10 @@ void testbench::test_func010_dma_trigger()
     bool dma_trigger_state = sig_dma_trigger.read();
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] Initial DMA trigger state: HIGH (TX=0 < 8, DMA should refill TX)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Initial DMA trigger state: HIGH (TX=0 < 8, DMA should refill TX)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Initial DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Initial DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -57,15 +57,15 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Section 1: TX Watermark Tests
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Section 1: TX Watermark Tests" << std::endl
                          << "========================================" << std::endl;
 
     // =======================================================================
     // Test 1.1: TX Below Watermark - DMA Trigger Assertion
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 1.1] TX Below Watermark - DMA Trigger Assertion" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: TX FIFO depth < TX_WATERMARK (8)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 1.1] TX Below Watermark - DMA Trigger Assertion" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: TX FIFO depth < TX_WATERMARK (8)" << std::endl;
 
     // Load TX FIFO with 6 words (below watermark of 8)
     for (int i = 0; i < 6; i++) {
@@ -81,19 +81,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 6) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO depth: TXQD=6" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO depth: TXQD=6" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 6" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 6" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger asserted: HIGH (TX=6 < 8)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger asserted: HIGH (TX=6 < 8)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -101,8 +101,8 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test 1.2: TX At/Above Watermark - DMA Trigger De-assertion
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 1.2] TX At/Above Watermark - DMA Trigger De-assertion" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: TX FIFO depth >= TX_WATERMARK (8)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 1.2] TX At/Above Watermark - DMA Trigger De-assertion" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: TX FIFO depth >= TX_WATERMARK (8)" << std::endl;
 
     // Add 4 more words to reach 10 words (above watermark of 8)
     for (int i = 0; i < 4; i++) {
@@ -118,19 +118,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 10) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO depth: TXQD=10" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO depth: TXQD=10" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 10" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 10" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (!dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger de-asserted: LOW (TX=10 >= 8)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger de-asserted: LOW (TX=10 >= 8)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW, but got HIGH" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW, but got HIGH" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -138,8 +138,8 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test 1.3: TX Drain - DMA Trigger Re-assertion
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 1.3] TX Drain - DMA Trigger Re-assertion" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: Drain TX FIFO via transaction, trigger re-asserts" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 1.3] TX Drain - DMA Trigger Re-assertion" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: Drain TX FIFO via transaction, trigger re-asserts" << std::endl;
 
     // Issue command to drain 32 bytes (8 words) from TX FIFO
     uint32_t cmd1 = BUILD_CMD(31, 2, 0, 0);  /// LEN=31 (32 bytes), TX_ONLY
@@ -154,19 +154,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 2) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO drained: TXQD=2" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO drained: TXQD=2" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 2" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 2" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger re-asserted: HIGH (TX=2 < 8)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger re-asserted: HIGH (TX=2 < 8)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -182,15 +182,15 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Section 2: RX Watermark Tests
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Section 2: RX Watermark Tests" << std::endl
                          << "========================================" << std::endl;
 
     // =======================================================================
     // Test 2.1: RX Below Watermark - DMA Trigger Low
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 2.1] RX Below Watermark - DMA Trigger Low" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: RX FIFO depth < RX_WATERMARK (16)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 2.1] RX Below Watermark - DMA Trigger Low" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: RX FIFO depth < RX_WATERMARK (16)" << std::endl;
 
     // Pre-load slave with 32 bytes (8 words, below watermark of 16)
     std::vector<uint8_t> rx_data_1(32);
@@ -213,19 +213,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (rxqd == 8 && txqd == 0) {
-        CSML_INFO(2, logger) << "  [PASS] FIFO depths: TXQD=0, RXQD=8" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FIFO depths: TXQD=0, RXQD=8" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FIFO depths: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FIFO depths: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger HIGH: (TX=0 < 8? YES, RX=8 >= 16? NO) → OR logic HIGH" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger HIGH: (TX=0 < 8? YES, RX=8 >= 16? NO) → OR logic HIGH" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -233,8 +233,8 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test 2.2: RX At/Above Watermark - DMA Trigger Assertion
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 2.2] RX At/Above Watermark - DMA Trigger Assertion" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: RX FIFO depth >= RX_WATERMARK (16)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 2.2] RX At/Above Watermark - DMA Trigger Assertion" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: RX FIFO depth >= RX_WATERMARK (16)" << std::endl;
 
     // Pre-load slave with another 64 bytes (16 words total when added to existing 8)
     std::vector<uint8_t> rx_data_2(64);
@@ -256,19 +256,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (rxqd == 24) {
-        CSML_INFO(2, logger) << "  [PASS] RX FIFO depth: RXQD=24" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX FIFO depth: RXQD=24" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", expected 24" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", expected 24" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger asserted: HIGH (RX=24 >= 16)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger asserted: HIGH (RX=24 >= 16)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -276,8 +276,8 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test 2.3: RX Drain - DMA Trigger De-assertion
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 2.3] RX Drain - DMA Trigger De-assertion" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: Drain RX FIFO via reads, trigger de-asserts" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 2.3] RX Drain - DMA Trigger De-assertion" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: Drain RX FIFO via reads, trigger de-asserts" << std::endl;
 
     // Read 12 words from RX FIFO (24 - 12 = 12 remaining, below watermark)
     for (int i = 0; i < 12; i++) {
@@ -295,19 +295,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (rxqd == 12 && txqd == 0) {
-        CSML_INFO(2, logger) << "  [PASS] FIFO depths: TXQD=0, RXQD=12" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FIFO depths: TXQD=0, RXQD=12" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FIFO depths: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FIFO depths: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger HIGH: (TX=0 < 8? YES, RX=12 < 16? YES) → OR logic HIGH" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger HIGH: (TX=0 < 8? YES, RX=12 < 16? YES) → OR logic HIGH" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -324,15 +324,15 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Section 3: Combined TX and RX Tests
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Section 3: Combined TX and RX Tests" << std::endl
                          << "========================================" << std::endl;
 
     // =======================================================================
     // Test 3.1: OR Logic - TX Condition Alone
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 3.1] OR Logic - TX Condition Alone" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: TX < 8 (TRUE), RX < 16 (FALSE) → Trigger HIGH" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 3.1] OR Logic - TX Condition Alone" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: TX < 8 (TRUE), RX < 16 (FALSE) → Trigger HIGH" << std::endl;
 
     // Load TX FIFO with 5 words (below watermark)
     for (int i = 0; i < 5; i++) {
@@ -349,19 +349,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 5 && rxqd == 0) {
-        CSML_INFO(2, logger) << "  [PASS] FIFO state: TXQD=5, RXQD=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FIFO state: TXQD=5, RXQD=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FIFO state: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FIFO state: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger HIGH via TX condition only" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger HIGH via TX condition only" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -377,8 +377,8 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test 3.2: OR Logic - Both Conditions Met
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 3.2] OR Logic - Both Conditions Met" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: TX < 8 (TRUE), RX >= 16 (TRUE) → Trigger HIGH" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 3.2] OR Logic - Both Conditions Met" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: TX < 8 (TRUE), RX >= 16 (TRUE) → Trigger HIGH" << std::endl;
 
     // Load TX FIFO with 3 words (below watermark)
     for (int i = 0; i < 3; i++) {
@@ -407,19 +407,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 3 && rxqd == 20) {
-        CSML_INFO(2, logger) << "  [PASS] FIFO state: TXQD=3, RXQD=20 (both conditions TRUE)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FIFO state: TXQD=3, RXQD=20 (both conditions TRUE)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FIFO state: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FIFO state: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger HIGH via OR logic (both conditions)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger HIGH via OR logic (both conditions)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be HIGH, but got LOW" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -440,16 +440,16 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Section 4: Boundary and Dynamic Tests
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Section 4: Boundary and Dynamic Tests" << std::endl
                          << "========================================" << std::endl;
 
     // =======================================================================
     // Test 4.1: Watermark = 0 Boundary Case
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 4.1] Watermark = 0 Boundary Case" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: TX_WATERMARK=0, RX_WATERMARK=1" << std::endl;
-    CSML_INFO(2, logger) << "  Logic: (TX < 0) is always FALSE, (RX >= 1) controls trigger" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 4.1] Watermark = 0 Boundary Case" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: TX_WATERMARK=0, RX_WATERMARK=1" << std::endl;
+    REG_INFO(2, logger) << "  Logic: (TX < 0) is always FALSE, (RX >= 1) controls trigger" << std::endl;
 
     // Set TX_WATERMARK=0, RX_WATERMARK=1
     // CTRL: SPIEN(31)=1, OUTPUT_EN(29)=1, TX_WATERMARK=0, RX_WATERMARK=1
@@ -469,19 +469,19 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 1 && rxqd == 0) {
-        CSML_INFO(2, logger) << "  [PASS] FIFO state: TXQD=1, RXQD=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FIFO state: TXQD=1, RXQD=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FIFO state: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FIFO state: TXQD=" << txqd << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     if (!dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger LOW: (TX=1 < 0? NO, RX=0 >= 1? NO)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger LOW: (TX=1 < 0? NO, RX=0 >= 1? NO)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW, but got HIGH" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW, but got HIGH" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -496,10 +496,10 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (!dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] DMA trigger still LOW after drain: (TX=0 < 0? NO, RX=0 >= 1? NO)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DMA trigger still LOW after drain: (TX=0 < 0? NO, RX=0 >= 1? NO)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW, but got HIGH" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW, but got HIGH" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -510,8 +510,8 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test 4.2: Dynamic Watermark Change
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 4.2] Dynamic Watermark Change" << std::endl;
-    CSML_INFO(2, logger) << " Scenario: Change watermark while FIFOs have data" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 4.2] Dynamic Watermark Change" << std::endl;
+    REG_INFO(2, logger) << " Scenario: Change watermark while FIFOs have data" << std::endl;
 
     // Set TX_WATERMARK=20, RX_WATERMARK=10
     test->write_register_32(CTRL_OFFSET, 0xA0001410);
@@ -529,10 +529,10 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 15 && dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] Initial: TXQD=15, DMA trigger HIGH (TX=15 < 20)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Initial: TXQD=15, DMA trigger HIGH (TX=15 < 20)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Initial: TXQD=" << txqd << ", trigger=" << dma_trigger_state << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Initial: TXQD=" << txqd << ", trigger=" << dma_trigger_state << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -545,10 +545,10 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (!dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] After watermark change: DMA trigger LOW (TX=15 >= 10)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] After watermark change: DMA trigger LOW (TX=15 >= 10)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW after watermark change" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DMA trigger should be LOW after watermark change" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -564,8 +564,8 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test 4.3: Reset Behavior
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 4.3] Reset Behavior" << std::endl;
-    CSML_INFO(2, logger) << "  Scenario: SW_RST clears FIFOs, trigger recalculated" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 4.3] Reset Behavior" << std::endl;
+    REG_INFO(2, logger) << "  Scenario: SW_RST clears FIFOs, trigger recalculated" << std::endl;
 
     // Load TX FIFO with 5 words (below watermark, trigger should be HIGH)
     test->write_register_32(CTRL_OFFSET, 0xA0000810);  /// TX_WM=8, RX_WM=16
@@ -582,10 +582,10 @@ void testbench::test_func010_dma_trigger()
     txqd = status_val & 0xFF;
 
     if (txqd == 5 && dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] Before reset: TXQD=5, DMA trigger HIGH" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Before reset: TXQD=5, DMA trigger HIGH" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Before reset: TXQD=" << txqd << ", trigger=" << dma_trigger_state << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Before reset: TXQD=" << txqd << ", trigger=" << dma_trigger_state << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -602,11 +602,11 @@ void testbench::test_func010_dma_trigger()
     dma_trigger_state = sig_dma_trigger.read();
 
     if (txqd == 0 && rxqd == 0 && !dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] After reset: FIFOs cleared (TXQD=0, RXQD=0), DMA trigger LOW" << std::endl;
-        CSML_INFO(2, logger) << "         Watermarks set to TX_WM=0, RX_WM=1 to ensure trigger LOW when empty" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] After reset: FIFOs cleared (TXQD=0, RXQD=0), DMA trigger LOW" << std::endl;
+        REG_INFO(2, logger) << "         Watermarks set to TX_WM=0, RX_WM=1 to ensure trigger LOW when empty" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] After reset: TXQD=" << txqd << ", RXQD=" << rxqd
+        REG_ERROR(2, logger) << "  [FAIL] After reset: TXQD=" << txqd << ", RXQD=" << rxqd
                   << ", trigger=" << dma_trigger_state << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -622,7 +622,7 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Final Verification
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Final Verification] Clean State Check" << std::endl;
+    REG_INFO(1, logger) << "\n[Final Verification] Clean State Check" << std::endl;
 
     test->read_register_32(STATUS_OFFSET, status_val);
     bool ready = (status_val >> 31) & 0x1;
@@ -633,10 +633,10 @@ void testbench::test_func010_dma_trigger()
 
     // With TX_WM=8, RX_WM=16, and empty FIFOs (TX=0, RX=0), trigger should be HIGH (TX=0 < 8)
     if (ready && !active && txqd == 0 && rxqd == 0 && dma_trigger_state) {
-        CSML_INFO(2, logger) << "  [PASS] Clean state: READY=1, ACTIVE=0, TXQD=0, RXQD=0, DMA trigger=HIGH (TX refill needed)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Clean state: READY=1, ACTIVE=0, TXQD=0, RXQD=0, DMA trigger=HIGH (TX refill needed)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] State: READY=" << ready << ", ACTIVE=" << active
+        REG_ERROR(2, logger) << "  [FAIL] State: READY=" << ready << ", ACTIVE=" << active
                   << ", TXQD=" << txqd << ", RXQD=" << rxqd
                   << ", trigger=" << dma_trigger_state << std::endl;
         sub_tests_failed++;
@@ -646,11 +646,11 @@ void testbench::test_func010_dma_trigger()
     // =======================================================================
     // Test Summary
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Sub-tests Passed: " << sub_tests_passed << std::endl
                          << "Sub-tests Failed: " << sub_tests_failed << std::endl
                          << "========================================" << std::endl;
-    CSML_INFO(1, logger) << "Test Coverage:" << std::endl
+    REG_INFO(1, logger) << "Test Coverage:" << std::endl
                          << "  Section 1: TX Watermark Tests (3 tests)" << std::endl
                          << "    1.1: TX Below Watermark - Trigger Assertion" << std::endl
                          << "    1.2: TX At/Above Watermark - Trigger De-assertion" << std::endl
@@ -666,7 +666,7 @@ void testbench::test_func010_dma_trigger()
                          << "    4.1: Watermark = 0 Boundary Case" << std::endl
                          << "    4.2: Dynamic Watermark Change" << std::endl
                          << "    4.3: Reset Behavior" << std::endl;
-    CSML_INFO(1, logger) << "========================================" << std::endl
+    REG_INFO(1, logger) << "========================================" << std::endl
                          << "DMA Trigger Logic: trigger = (tx_depth < tx_wm) || (rx_depth >= rx_wm)" << std::endl
                          << "========================================\n" << std::endl;
 

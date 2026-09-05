@@ -7,7 +7,7 @@
 class lifecycle_ctrl_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
     lifecycle_ctrl_base(sc_module_name name, unsigned int memory_size)
         : sc_module(name),
           memory  (std::string(name) + ".Memory",      memory_size/sizeof(unsigned int)),
@@ -21,8 +21,8 @@ class lifecycle_ctrl_base : public sc_module
         memory.bind_to_socket(target_socket);
     }
 
-    csml_memory<32> memory;
-    tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+    regmodel::Memory<32> memory;
+    tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
     lc_ctrl::FEAT_CTRL_LO_type<32> FEAT_CTRL_LO;   // @ 0x0000  RO
     lc_ctrl::FEAT_CTRL_HI_type<32> FEAT_CTRL_HI;   // @ 0x0004  RO

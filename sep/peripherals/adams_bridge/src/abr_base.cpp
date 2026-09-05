@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file abr_base.cpp
  * @brief Reset behaviour for the Adams Bridge register block.
@@ -7,7 +9,7 @@
 
 namespace {
 
-/// Reset every element of a csml_reg_vector.
+/// Reset every element of a regmodel::RegVector.
 template <typename Vec>
 void reset_vector(Vec &vec)
 {

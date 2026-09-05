@@ -5,8 +5,8 @@
 ===== SystemC/TLM-2.0 Implementation
 
 `sep_reset_ctrl_ip` is a loosely-timed TLM-2.0 model of the software
-reset controller. One 64-bit word drives per-IP `rst_n` outputs.
-There is no engine thread and no FIFO.
+reset controller. One 64-bit word is regmodel storage that drives
+per-IP `rst_n` outputs. There is no engine thread and no FIFO.
 
 [source,cpp]
 ----
@@ -15,7 +15,7 @@ class sep_reset_ctrl_ip : public sep_reset_ctrl_base
 
 ----
 sep_reset_ctrl_ip     SW_RESET_N → rst_n pins   (sep_reset_ctrl.*)
-  └─ sep_reset_ctrl_base   csml_memory + SW_RESET_N
+  └─ sep_reset_ctrl_base   regmodel::Memory + SW_RESET_N
        └─ sep_reset_ctrl_register.h
 ----
 
@@ -60,7 +60,7 @@ resets to 0 (held in reset); the crypto bits reset to 1.
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

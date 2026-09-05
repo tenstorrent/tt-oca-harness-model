@@ -17,9 +17,9 @@ class mailbox_ip : public sc_module
 
 ----
 mailbox_ip          FIFOs, IRQ, callbacks          (mailbox.*)
-  ├─ mailbox_base b0   Port 0 registers, no socket (mailbox_base.*)
-  └─ mailbox_base b1   Port 1 registers, no socket
-socket0 / socket1   hierarchical bind to b0 / b1
+  ├─ mailbox_base b0   Port 0 regmodel::Memory + registers
+  └─ mailbox_base b1   Port 1 regmodel::Memory + registers
+socket0 / socket1   mailbox_ip b_transport → b0 / b1 memory
 ----
 
 ====== Threads and sockets
@@ -58,13 +58,13 @@ does not clear `IRQS.eirq`.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used. FIFO depth (8)
+Knobs are `regmodel::Param` and are re-read when used. FIFO depth (8)
 and active-high IRQ polarity are compile-time constants, not CCI.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

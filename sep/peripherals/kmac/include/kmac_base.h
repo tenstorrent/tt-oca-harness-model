@@ -7,7 +7,7 @@
 class kmac_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
     kmac_base(sc_module_name name, unsigned int memory_size = 0x1000) : sc_module(name), memory(std::string(name) + ".Memory", memory_size/sizeof(unsigned int)),
        INTR_STATE(std::string(name) + ".INTR_STATE", memory, (0x0 + 0x00)/sizeof(unsigned int)), 
        INTR_ENABLE(std::string(name) + ".INTR_ENABLE", memory, (0x4 + 0x00)/sizeof(unsigned int)), 
@@ -32,8 +32,8 @@ class kmac_base : public sc_module
          memory.bind_to_socket(target_socket);
        }
 
-      csml_memory<32> memory;
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      regmodel::Memory<32> memory;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
       
       kmac::INTR_STATE_type<32> INTR_STATE;
@@ -60,19 +60,19 @@ class kmac_base : public sc_module
       
       kmac::ENTROPY_SEED_type<32> ENTROPY_SEED;
       
-      csml_reg_vector<kmac::KEY_SHARE0_type<32>, 16> KEY_SHARE0;
+      regmodel::RegVector<kmac::KEY_SHARE0_type<32>, 16> KEY_SHARE0;
 
-      csml_reg_vector<kmac::KEY_SHARE1_type<32>, 16> KEY_SHARE1;
+      regmodel::RegVector<kmac::KEY_SHARE1_type<32>, 16> KEY_SHARE1;
       
       kmac::KEY_LEN_type<32> KEY_LEN;
       
-      csml_reg_vector<kmac::PREFIX_type<32>, 11> PREFIX;
+      regmodel::RegVector<kmac::PREFIX_type<32>, 11> PREFIX;
       
       kmac::ERR_CODE_type<32> ERR_CODE;
 
-      csml_reg_vector<kmac::STATE_type<32>, 128> STATE;
+      regmodel::RegVector<kmac::STATE_type<32>, 128> STATE;
 
-      csml_reg_vector<kmac::MSG_FIFO_type<32>, 512> MSG_FIFO;
+      regmodel::RegVector<kmac::MSG_FIFO_type<32>, 512> MSG_FIFO;
       
       void reset_all_registers();
 };

@@ -27,27 +27,27 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Initial Configuration
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[FUNC-002] Initial Configuration" << std::endl;
+    REG_INFO(1, logger) << "\n[FUNC-002] Initial Configuration" << std::endl;
 
     // Enable SPIEN and OUTPUT_EN (CTRL: bits 31=SPIEN, 30=OUTPUT_EN)
     test->write_register_32(CTRL_OFFSET, 0xE0000000);
     wait(10, SC_NS);
-    CSML_INFO(2, logger) << "  CTRL configured: SPIEN=1, OUTPUT_EN=1" << std::endl;
+    REG_INFO(2, logger) << "  CTRL configured: SPIEN=1, OUTPUT_EN=1" << std::endl;
 
     // Configure timing parameters (CLKDIV=10)
     test->write_register_32(CFG_OFFSET, 0x0000000A);
     wait(10, SC_NS);
-    CSML_INFO(2, logger) << "  CFG configured: CLKDIV=10" << std::endl;
+    REG_INFO(2, logger) << "  CFG configured: CLKDIV=10" << std::endl;
 
     // Select chip select 0
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
-    CSML_INFO(2, logger) << "  CSID=0 selected" << std::endl;
+    REG_INFO(2, logger) << "  CSID=0 selected" << std::endl;
 
     // =======================================================================
     // Test 1: DUAL Mode (Speed = 1) - TX Transfer (8 bytes)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 1] DUAL Mode - TX Transfer (8 bytes)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 1] DUAL Mode - TX Transfer (8 bytes)" << std::endl;
 
     // Load TX FIFO (8 bytes = 2 words)
     test->write_register_32(TXDATA_OFFSET, 0xA1B2C3D4);
@@ -59,10 +59,10 @@ void testbench::test_func002_speed_mode_validation()
     txqd = status_val & 0xFF;
     ready = (status_val >> 31) & 0x1;
     if (txqd == 2 && ready) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=2, READY=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=2, READY=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TXQD=" << txqd << ", READY=" << ready << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TXQD=" << txqd << ", READY=" << ready << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -77,10 +77,10 @@ void testbench::test_func002_speed_mode_validation()
     active = (status_val >> 30) & 0x1;
     txempty = (status_val >> 28) & 0x1;
     if (!active && txempty) {
-        CSML_INFO(2, logger) << "  [PASS] DUAL TX completed" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DUAL TX completed" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -88,10 +88,10 @@ void testbench::test_func002_speed_mode_validation()
     // Check no errors
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] No errors" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] No errors" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -108,15 +108,15 @@ void testbench::test_func002_speed_mode_validation()
             }
         }
         if (match) {
-            CSML_INFO(2, logger) << "  [PASS] Slave received correct DUAL TX data" << std::endl;
+            REG_INFO(2, logger) << "  [PASS] Slave received correct DUAL TX data" << std::endl;
             sub_tests_passed++;
         } else {
-            CSML_ERROR(2, logger) << "  [FAIL] DUAL TX data mismatch" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] DUAL TX data mismatch" << std::endl;
             sub_tests_failed++;
             test_passed = false;
         }
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Slave received " << captured_dual_tx.size() << " bytes" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Slave received " << captured_dual_tx.size() << " bytes" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -127,7 +127,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 2: DUAL Mode (Speed = 1) - RX Transfer (8 bytes)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 2] DUAL Mode - RX Transfer (8 bytes)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 2] DUAL Mode - RX Transfer (8 bytes)" << std::endl;
 
     // Pre-load slave with RX data
     std::vector<uint8_t> test2_rx_data = {0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47};
@@ -137,7 +137,7 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -155,10 +155,10 @@ void testbench::test_func002_speed_mode_validation()
     rxqd = (status_val >> 8) & 0xFF;
     rxempty = (status_val >> 24) & 0x1;
     if (!active && rxqd == 2 && !rxempty) {
-        CSML_INFO(2, logger) << "  [PASS] DUAL RX completed: RXQD=2" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] DUAL RX completed: RXQD=2" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ACTIVE=" << active << ", RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ACTIVE=" << active << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -166,10 +166,10 @@ void testbench::test_func002_speed_mode_validation()
     // Check no errors
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] No errors" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] No errors" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -201,10 +201,10 @@ void testbench::test_func002_speed_mode_validation()
         }
     }
     if (dual_rx_match) {
-        CSML_INFO(2, logger) << "  [PASS] All 8 bytes match expected DUAL RX data" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] All 8 bytes match expected DUAL RX data" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] DUAL RX data mismatch" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] DUAL RX data mismatch" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -214,10 +214,10 @@ void testbench::test_func002_speed_mode_validation()
     rxqd = (status_val >> 8) & 0xFF;
     rxempty = (status_val >> 24) & 0x1;
     if (rxqd == 0 && rxempty) {
-        CSML_INFO(2, logger) << "  [PASS] RX FIFO empty: RXQD=0, RXEMPTY=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX FIFO empty: RXQD=0, RXEMPTY=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RXQD=" << rxqd << ", RXEMPTY=" << rxempty << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RXQD=" << rxqd << ", RXEMPTY=" << rxempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -228,7 +228,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 3: QUAD Mode (Speed = 2) - TX Transfer (16 bytes)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 3] QUAD Mode - TX Transfer (16 bytes)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 3] QUAD Mode - TX Transfer (16 bytes)" << std::endl;
 
     // Load TX FIFO with test data (16 bytes = 4 words)
     test->write_register_32(TXDATA_OFFSET, 0x11223344);
@@ -241,10 +241,10 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     txqd = status_val & 0xFF;
     if (txqd == 4) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=4" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=4" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 4" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 4" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -252,7 +252,7 @@ void testbench::test_func002_speed_mode_validation()
     // Check READY
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -271,10 +271,10 @@ void testbench::test_func002_speed_mode_validation()
     txstall = (status_val >> 27) & 0x1;
 
     if (!active && txempty && !txstall) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0, TXEMPTY=1, TXSTALL=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0, TXEMPTY=1, TXSTALL=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Status: ACTIVE=" << active << ", TXEMPTY=" << txempty << ", TXSTALL=" << txstall << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Status: ACTIVE=" << active << ", TXEMPTY=" << txempty << ", TXSTALL=" << txstall << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -282,10 +282,10 @@ void testbench::test_func002_speed_mode_validation()
     // Check no errors
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] No errors after QUAD TX" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] No errors after QUAD TX" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -308,15 +308,15 @@ void testbench::test_func002_speed_mode_validation()
             }
         }
         if (tx_match) {
-            CSML_INFO(2, logger) << "  [PASS] Slave received correct 16-byte TX data" << std::endl;
+            REG_INFO(2, logger) << "  [PASS] Slave received correct 16-byte TX data" << std::endl;
             sub_tests_passed++;
         } else {
-            CSML_ERROR(2, logger) << "  [FAIL] QUAD TX data mismatch at slave" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] QUAD TX data mismatch at slave" << std::endl;
             sub_tests_failed++;
             test_passed = false;
         }
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Slave received only " << captured_quad_tx.size() << " bytes" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Slave received only " << captured_quad_tx.size() << " bytes" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -327,7 +327,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 4: QUAD Mode (Speed = 2) - RX Transfer (32 bytes)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 4] QUAD Mode - RX Transfer (32 bytes)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 4] QUAD Mode - RX Transfer (32 bytes)" << std::endl;
 
     // Pre-load slave with RX data
     std::vector<uint8_t> test4_rx_data(32);
@@ -340,7 +340,7 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -358,10 +358,10 @@ void testbench::test_func002_speed_mode_validation()
     rxstall = (status_val >> 23) & 0x1;
 
     if (!active && !rxstall) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0, RXSTALL=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0, RXSTALL=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Status: ACTIVE=" << active << ", RXSTALL=" << rxstall << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Status: ACTIVE=" << active << ", RXSTALL=" << rxstall << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -369,10 +369,10 @@ void testbench::test_func002_speed_mode_validation()
     // Check no errors
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] No errors after QUAD RX" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] No errors after QUAD RX" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -383,10 +383,10 @@ void testbench::test_func002_speed_mode_validation()
     rxempty = (status_val >> 24) & 0x1;
 
     if (rxqd == 8 && !rxempty) {
-        CSML_INFO(2, logger) << "  [PASS] RX FIFO contains expected data: RXQD=8" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX FIFO contains expected data: RXQD=8" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", RXEMPTY=" << rxempty << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", RXEMPTY=" << rxempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -420,10 +420,10 @@ void testbench::test_func002_speed_mode_validation()
     }
 
     if (quad_rx_match) {
-        CSML_INFO(2, logger) << "  [PASS] All 32 bytes match expected QUAD RX data" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] All 32 bytes match expected QUAD RX data" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] QUAD RX data mismatch" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] QUAD RX data mismatch" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -434,10 +434,10 @@ void testbench::test_func002_speed_mode_validation()
     rxempty = (status_val >> 24) & 0x1;
 
     if (rxqd == 0 && rxempty) {
-        CSML_INFO(2, logger) << "  [PASS] RX FIFO empty after read: RXQD=0, RXEMPTY=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX FIFO empty after read: RXQD=0, RXEMPTY=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RX FIFO not empty: RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RX FIFO not empty: RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -448,7 +448,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 5: STANDARD Mode - Bidirectional Transfer (4 bytes)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 5] STANDARD Mode - Bidirectional Transfer (4 bytes)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 5] STANDARD Mode - Bidirectional Transfer (4 bytes)" << std::endl;
 
     // Pre-load slave with RX data
     std::vector<uint8_t> test5_rx_data = {0xB1, 0xB2, 0xB3, 0xB4};
@@ -462,10 +462,10 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     txqd = status_val & 0xFF;
     if (txqd == 1) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -473,7 +473,7 @@ void testbench::test_func002_speed_mode_validation()
     // Check READY
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -493,10 +493,10 @@ void testbench::test_func002_speed_mode_validation()
     rxstall = (status_val >> 23) & 0x1;
 
     if (!active && txempty && !txstall && !rxstall) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0, TXEMPTY=1, no stalls" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0, TXEMPTY=1, no stalls" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Status: ACTIVE=" << active << ", TXEMPTY=" << txempty
+        REG_ERROR(2, logger) << "  [FAIL] Status: ACTIVE=" << active << ", TXEMPTY=" << txempty
                   << ", TXSTALL=" << txstall << ", RXSTALL=" << rxstall << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -505,10 +505,10 @@ void testbench::test_func002_speed_mode_validation()
     // Check no errors
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] No errors after STANDARD BIDIR" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] No errors after STANDARD BIDIR" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -526,15 +526,15 @@ void testbench::test_func002_speed_mode_validation()
             }
         }
         if (tx_match) {
-            CSML_INFO(2, logger) << "  [PASS] Bidirectional TX data correct" << std::endl;
+            REG_INFO(2, logger) << "  [PASS] Bidirectional TX data correct" << std::endl;
             sub_tests_passed++;
         } else {
-            CSML_ERROR(2, logger) << "  [FAIL] Bidirectional TX data mismatch" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] Bidirectional TX data mismatch" << std::endl;
             sub_tests_failed++;
             test_passed = false;
         }
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Slave received only " << captured_bidir_tx.size() << " bytes" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Slave received only " << captured_bidir_tx.size() << " bytes" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -544,7 +544,7 @@ void testbench::test_func002_speed_mode_validation()
     rxqd = (status_val >> 8) & 0xFF;
 
     if (rxqd == 1) {
-        CSML_INFO(2, logger) << "  [PASS] RX FIFO contains bidirectional RX data: RXQD=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX FIFO contains bidirectional RX data: RXQD=1" << std::endl;
         sub_tests_passed++;
 
         // Read and verify RX data
@@ -572,15 +572,15 @@ void testbench::test_func002_speed_mode_validation()
         }
 
         if (rx_match) {
-            CSML_INFO(2, logger) << "  [PASS] Bidirectional RX data correct" << std::endl;
+            REG_INFO(2, logger) << "  [PASS] Bidirectional RX data correct" << std::endl;
             sub_tests_passed++;
         } else {
-            CSML_ERROR(2, logger) << "  [FAIL] Bidirectional RX data mismatch" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] Bidirectional RX data mismatch" << std::endl;
             sub_tests_failed++;
             test_passed = false;
         }
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", expected 1" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", expected 1" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -591,7 +591,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 6: Negative Test - DUAL + Bidirectional (Should Trigger CMDINVAL)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 6] Negative Test - DUAL + Bidirectional (Invalid Combination)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 6] Negative Test - DUAL + Bidirectional (Invalid Combination)" << std::endl;
 
     // Per datasheet: Bidirectional with DUAL/QUAD modes should trigger CMDINVAL error
 
@@ -603,7 +603,7 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -620,7 +620,7 @@ void testbench::test_func002_speed_mode_validation()
     bool cmdinval = (status_val >> 12) & 0x1;  /// CMDINVAL at bit 12 per RDL spec
 
     if (cmdinval) {
-        CSML_INFO(2, logger) << "  [PASS] CMDINVAL error detected for DUAL+BIDIR (invalid combination)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for DUAL+BIDIR (invalid combination)" << std::endl;
         sub_tests_passed++;
 
         // Clear error
@@ -630,15 +630,15 @@ void testbench::test_func002_speed_mode_validation()
         // Verify error cleared
         test->read_register_32(ERROR_STATUS_OFFSET, status_val);
         if (status_val == 0) {
-            CSML_INFO(2, logger) << "  [PASS] ERROR_STATUS cleared successfully" << std::endl;
+            REG_INFO(2, logger) << "  [PASS] ERROR_STATUS cleared successfully" << std::endl;
             sub_tests_passed++;
         } else {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS not cleared" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS not cleared" << std::endl;
             sub_tests_failed++;
             test_passed = false;
         }
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CMDINVAL not set for invalid DUAL+BIDIR combination" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CMDINVAL not set for invalid DUAL+BIDIR combination" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -649,7 +649,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 7: CPOL=0, CPHA=1 (SPI Mode 1)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 7] SPI Mode 1 - CPOL=0, CPHA=1" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 7] SPI Mode 1 - CPOL=0, CPHA=1" << std::endl;
 
     // Software reset to ensure clean state before mode change
     test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SW_RST
@@ -670,10 +670,10 @@ void testbench::test_func002_speed_mode_validation()
     uint32_t cpha = (status_val >> 1) & 0x1;
 
     if (cpol == 0 && cpha == 1) {
-        CSML_INFO(2, logger) << "  [PASS] Mode 1 configured: CPOL=0, CPHA=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Mode 1 configured: CPOL=0, CPHA=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Mode 1 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 1 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -685,7 +685,7 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -702,10 +702,10 @@ void testbench::test_func002_speed_mode_validation()
     txempty = (status_val >> 28) & 0x1;
 
     if (!active && txempty) {
-        CSML_INFO(2, logger) << "  [PASS] Mode 1 transaction completed" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Mode 1 transaction completed" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Mode 1 transaction failed: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 1 transaction failed: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -716,7 +716,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 8: CPOL=1, CPHA=0 (SPI Mode 2)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 8] SPI Mode 2 - CPOL=1, CPHA=0" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 8] SPI Mode 2 - CPOL=1, CPHA=0" << std::endl;
 
     // Software reset to ensure clean state
     test->write_register_32(CTRL_OFFSET, 0xE0000000);
@@ -736,10 +736,10 @@ void testbench::test_func002_speed_mode_validation()
     cpha = (status_val >> 1) & 0x1;
 
     if (cpol == 1 && cpha == 0) {
-        CSML_INFO(2, logger) << "  [PASS] Mode 2 configured: CPOL=1, CPHA=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Mode 2 configured: CPOL=1, CPHA=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Mode 2 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 2 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -751,7 +751,7 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -768,10 +768,10 @@ void testbench::test_func002_speed_mode_validation()
     txempty = (status_val >> 28) & 0x1;
 
     if (!active && txempty) {
-        CSML_INFO(2, logger) << "  [PASS] Mode 2 transaction completed" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Mode 2 transaction completed" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Mode 2 transaction failed: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 2 transaction failed: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -782,7 +782,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 9: CPOL=1, CPHA=1 (SPI Mode 3)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 9] SPI Mode 3 - CPOL=1, CPHA=1" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 9] SPI Mode 3 - CPOL=1, CPHA=1" << std::endl;
 
     // Software reset to ensure clean state
     test->write_register_32(CTRL_OFFSET, 0xE0000000);
@@ -802,10 +802,10 @@ void testbench::test_func002_speed_mode_validation()
     cpha = (status_val >> 1) & 0x1;
 
     if (cpol == 1 && cpha == 1) {
-        CSML_INFO(2, logger) << "  [PASS] Mode 3 configured: CPOL=1, CPHA=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Mode 3 configured: CPOL=1, CPHA=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Mode 3 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 3 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -817,7 +817,7 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -834,10 +834,10 @@ void testbench::test_func002_speed_mode_validation()
     txempty = (status_val >> 28) & 0x1;
 
     if (!active && txempty) {
-        CSML_INFO(2, logger) << "  [PASS] Mode 3 transaction completed" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Mode 3 transaction completed" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Mode 3 transaction failed: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 3 transaction failed: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -848,7 +848,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 10: FULLCYC Sampling Mode
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 10] FULLCYC Sampling Mode" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 10] FULLCYC Sampling Mode" << std::endl;
 
     // Software reset to ensure clean state
     test->write_register_32(CTRL_OFFSET, 0xE0000000);
@@ -868,10 +868,10 @@ void testbench::test_func002_speed_mode_validation()
     uint32_t fullcyc = (status_val >> 2) & 0x1;
 
     if (fullcyc == 1) {
-        CSML_INFO(2, logger) << "  [PASS] FULLCYC mode configured" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FULLCYC mode configured" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FULLCYC not set" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FULLCYC not set" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -883,7 +883,7 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-002: Speed Mode Validation", test_passed);
@@ -899,10 +899,10 @@ void testbench::test_func002_speed_mode_validation()
     active = (status_val >> 30) & 0x1;
 
     if (!active) {
-        CSML_INFO(2, logger) << "  [PASS] FULLCYC transaction completed" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FULLCYC transaction completed" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FULLCYC transaction failed: ACTIVE=" << active << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FULLCYC transaction failed: ACTIVE=" << active << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -913,7 +913,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 11: Maximum LEN Value (255 bytes boundary)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 11] Maximum LEN Value (255 bytes)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 11] Maximum LEN Value (255 bytes)" << std::endl;
 
     software_reset();
     wait(10, SC_NS);
@@ -948,16 +948,16 @@ void testbench::test_func002_speed_mode_validation()
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
 
         if (!active && ready && error_status == 0) {
-            CSML_INFO(2, logger) << "  [PASS] Maximum LEN=255 transaction completed without error" << std::endl;
+            REG_INFO(2, logger) << "  [PASS] Maximum LEN=255 transaction completed without error" << std::endl;
             sub_tests_passed++;
         } else {
-            CSML_ERROR(2, logger) << "  [FAIL] LEN=255 transaction: ACTIVE=" << active
+            REG_ERROR(2, logger) << "  [FAIL] LEN=255 transaction: ACTIVE=" << active
                       << ", READY=" << ready << ", ERROR_STATUS=0x" << std::hex << error_status << std::dec << std::endl;
             sub_tests_failed++;
             test_passed = false;
         }
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before LEN=255 test" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before LEN=255 test" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -969,7 +969,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 12: Invalid LEN Values (Boundary Testing)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 12] Invalid LEN Values (>255)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 12] Invalid LEN Values (>255)" << std::endl;
 
     software_reset();
     wait(10, SC_NS);
@@ -990,7 +990,7 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Test 12a: LEN=256 (encoded as 255, but spec restricts to 255 max)
-    CSML_INFO(2, logger) << "  [Sub-test 12a] Testing LEN=256 (invalid)..." << std::endl;
+    REG_INFO(2, logger) << "  [Sub-test 12a] Testing LEN=256 (invalid)..." << std::endl;
 
     // Build command with LEN field = 255 (means 256 bytes, which exceeds spec)
     uint32_t cmd_invalid_len256 = (255 << 0) | (0 << 9) | (0 << 10) | (2 << 12);
@@ -1003,11 +1003,11 @@ void testbench::test_func002_speed_mode_validation()
     bool cmdinval_len256 = (error_status256 >> 12) & 0x1;
 
     if (cmdinval_len256) {
-        CSML_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=256 (ERROR_STATUS=0x"
+        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=256 (ERROR_STATUS=0x"
                   << std::hex << error_status256 << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_INFO(2, logger) << "  [INFO] CMDINVAL not detected for LEN=256 (ERROR_STATUS=0x"
+        REG_INFO(2, logger) << "  [INFO] CMDINVAL not detected for LEN=256 (ERROR_STATUS=0x"
                   << std::hex << error_status256 << std::dec << ") - may be allowed by implementation" << std::endl;
         // Don't fail test - this boundary case may be implementation-dependent
     }
@@ -1016,7 +1016,7 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Test 12b: LEN=300 (well beyond valid range)
-    CSML_INFO(2, logger) << "  [Sub-test 12b] Testing LEN=300 (invalid)..." << std::endl;
+    REG_INFO(2, logger) << "  [Sub-test 12b] Testing LEN=300 (invalid)..." << std::endl;
 
     // Build command with LEN field = 299 (9 bits can hold up to 511)
     uint32_t cmd_invalid_len300 = (299 << 0) | (0 << 9) | (0 << 10) | (2 << 12);
@@ -1029,10 +1029,10 @@ void testbench::test_func002_speed_mode_validation()
     bool cmdinval_len300 = (error_status300 >> 12) & 0x1;
 
     if (cmdinval_len300) {
-        CSML_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=300" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=300" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_INFO(2, logger) << "  [INFO] CMDINVAL not detected for LEN=300" << std::endl;
+        REG_INFO(2, logger) << "  [INFO] CMDINVAL not detected for LEN=300" << std::endl;
     }
 
     clear_errors();
@@ -1042,7 +1042,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 13: Invalid SPEED and DIRECTION Values
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 13] Invalid SPEED and DIRECTION Values" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 13] Invalid SPEED and DIRECTION Values" << std::endl;
 
     software_reset();
     wait(10, SC_NS);
@@ -1063,7 +1063,7 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Test 13a: Invalid SPEED=3 (valid range is 0-2: Standard/Dual/Quad)
-    CSML_INFO(2, logger) << "  [Sub-test 13a] Testing SPEED=3 (invalid)..." << std::endl;
+    REG_INFO(2, logger) << "  [Sub-test 13a] Testing SPEED=3 (invalid)..." << std::endl;
 
     uint32_t cmd_invalid_speed = BUILD_CMD(7, 2, 3, 0);  // SPEED=3 is invalid
     test->write_register_32(CMD_OFFSET, cmd_invalid_speed);
@@ -1075,11 +1075,11 @@ void testbench::test_func002_speed_mode_validation()
     bool cmdinval_speed3 = (error_status_speed >> 12) & 0x1;
 
     if (cmdinval_speed3) {
-        CSML_INFO(2, logger) << "  [PASS] CMDINVAL error detected for SPEED=3 (ERROR_STATUS=0x"
+        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for SPEED=3 (ERROR_STATUS=0x"
                   << std::hex << error_status_speed << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_WARN(1, logger) << "  [WARN] CMDINVAL not detected for SPEED=3 (ERROR_STATUS=0x"
+        REG_WARN(1, logger) << "  [WARN] CMDINVAL not detected for SPEED=3 (ERROR_STATUS=0x"
                   << std::hex << error_status_speed << std::dec << ")" << std::endl;
         // This SHOULD trigger error, so mark as potential issue but don't fail
     }
@@ -1088,7 +1088,7 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Test 13b: Invalid DIRECTION=4 (valid range is 0-3: Dummy/RX/TX/Bidir)
-    CSML_INFO(2, logger) << "  [Sub-test 13b] Testing DIRECTION=4 (invalid)..." << std::endl;
+    REG_INFO(2, logger) << "  [Sub-test 13b] Testing DIRECTION=4 (invalid)..." << std::endl;
 
     // Build command manually with DIRECTION=4 (bits 13:12)
     // CMD format: LEN(8:0), CSAAT(9), SPEED(11:10), DIRECTION(13:12)
@@ -1102,11 +1102,11 @@ void testbench::test_func002_speed_mode_validation()
     bool cmdinval_dir4 = (error_status_dir >> 12) & 0x1;
 
     if (cmdinval_dir4) {
-        CSML_INFO(2, logger) << "  [PASS] CMDINVAL error detected for DIRECTION=4 (ERROR_STATUS=0x"
+        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for DIRECTION=4 (ERROR_STATUS=0x"
                   << std::hex << error_status_dir << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_WARN(1, logger) << "  [WARN] CMDINVAL not detected for DIRECTION=4 (ERROR_STATUS=0x"
+        REG_WARN(1, logger) << "  [WARN] CMDINVAL not detected for DIRECTION=4 (ERROR_STATUS=0x"
                   << std::hex << error_status_dir << std::dec << ")" << std::endl;
     }
 
@@ -1117,7 +1117,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 14: Zero-Length Transaction (LEN=0 means 1 byte)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 14] Zero-Length Transaction (LEN=0 = 1 byte)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 14] Zero-Length Transaction (LEN=0 = 1 byte)" << std::endl;
 
     software_reset();
     wait(10, SC_NS);
@@ -1144,10 +1144,10 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(ERROR_STATUS_OFFSET, error_status_len0);
 
     if (!active && ready && error_status_len0 == 0) {
-        CSML_INFO(2, logger) << "  [PASS] LEN=0 (1 byte) transaction completed without error" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] LEN=0 (1 byte) transaction completed without error" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] LEN=0 transaction: ACTIVE=" << active
+        REG_ERROR(2, logger) << "  [FAIL] LEN=0 transaction: ACTIVE=" << active
                   << ", READY=" << ready << ", ERROR_STATUS=0x" << std::hex << error_status_len0 << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -1160,7 +1160,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test 15: CFG Register Access with Invalid CSID
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 15] CFG Register Access with Invalid CSID" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 15] CFG Register Access with Invalid CSID" << std::endl;
 
     software_reset();
     wait(10, SC_NS);
@@ -1170,7 +1170,7 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Set valid CSID first and write CFG (baseline)
-    CSML_INFO(2, logger) << "  [Sub-test 15a] Baseline: CFG write with valid CSID=0..." << std::endl;
+    REG_INFO(2, logger) << "  [Sub-test 15a] Baseline: CFG write with valid CSID=0..." << std::endl;
     test->write_register_32(CSID_OFFSET, 0);
     wait(10, SC_NS);
 
@@ -1181,24 +1181,24 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(CFG_OFFSET, read_val);
 
     if (read_val == 0x00001234) {
-        CSML_INFO(2, logger) << "  [PASS] CFG write/read with valid CSID=0 successful" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CFG write/read with valid CSID=0 successful" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CFG mismatch: wrote 0x1234, read 0x"
+        REG_ERROR(2, logger) << "  [FAIL] CFG mismatch: wrote 0x1234, read 0x"
                   << std::hex << read_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Now set INVALID CSID and try to write CFG
-    CSML_INFO(2, logger) << "  [Sub-test 15b] CFG write with invalid CSID=5..." << std::endl;
+    REG_INFO(2, logger) << "  [Sub-test 15b] CFG write with invalid CSID=5..." << std::endl;
     test->write_register_32(CSID_OFFSET, 5);  // NumCS=1, so 5 is invalid
     wait(10, SC_NS);
 
     // Verify CSID was written
     test->read_register_32(CSID_OFFSET, read_val);
     if (read_val == 5) {
-        CSML_INFO(2, logger) << "  [INFO] CSID set to invalid value: " << read_val << std::endl;
+        REG_INFO(2, logger) << "  [INFO] CSID set to invalid value: " << read_val << std::endl;
     }
 
     // Try to write CFG with invalid CSID
@@ -1211,23 +1211,23 @@ void testbench::test_func002_speed_mode_validation()
     test->read_register_32(CFG_OFFSET, read_val);
 
     if (read_val == 0 || read_val == 0x00001234) {
-        CSML_INFO(2, logger) << "  [PASS] CFG write rejected for invalid CSID (CFG=0x"
+        REG_INFO(2, logger) << "  [PASS] CFG write rejected for invalid CSID (CFG=0x"
                   << std::hex << read_val << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else if (read_val == 0x00005678) {
-        CSML_WARN(1, logger) << "  [WARN] CFG write succeeded despite invalid CSID (implementation allows)" << std::endl;
+        REG_WARN(1, logger) << "  [WARN] CFG write succeeded despite invalid CSID (implementation allows)" << std::endl;
         // Don't fail - implementation may allow this
     } else {
-        CSML_WARN(1, logger) << "  [INFO] CFG read returned: 0x"
+        REG_WARN(1, logger) << "  [INFO] CFG read returned: 0x"
                   << std::hex << read_val << std::dec << std::endl;
     }
 
     // Try to read CFG with invalid CSID
-    CSML_INFO(2, logger) << "  [Sub-test 15c] CFG read with invalid CSID=5..." << std::endl;
+    REG_INFO(2, logger) << "  [Sub-test 15c] CFG read with invalid CSID=5..." << std::endl;
 
     // The read itself should work (return 0 or warning)
     test->read_register_32(CFG_OFFSET, read_val);
-    CSML_INFO(2, logger) << "  [INFO] CFG read with invalid CSID returned: 0x"
+    REG_INFO(2, logger) << "  [INFO] CFG read with invalid CSID returned: 0x"
               << std::hex << read_val << std::dec << std::endl;
 
     // Restore valid CSID for cleanup
@@ -1237,10 +1237,10 @@ void testbench::test_func002_speed_mode_validation()
     // Verify restoration
     test->read_register_32(CSID_OFFSET, read_val);
     if (read_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] CSID restored to valid value: 0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CSID restored to valid value: 0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CSID not restored properly: " << read_val << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CSID not restored properly: " << read_val << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -1251,17 +1251,17 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Final Verification
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Final Check] Verify FSM Returned to IDLE" << std::endl;
+    REG_INFO(1, logger) << "\n[Final Check] Verify FSM Returned to IDLE" << std::endl;
 
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     active = (status_val >> 30) & 0x1;
 
     if (ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FSM not in IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FSM not in IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -1269,7 +1269,7 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     // Test Summary
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Sub-tests Passed: " << sub_tests_passed << std::endl
                          << "Sub-tests Failed: " << sub_tests_failed << std::endl
                          << "========================================" << std::endl

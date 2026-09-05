@@ -14,7 +14,7 @@
 
 #pragma once
 #include "edn_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <queue>
 
 class edn_ip;
@@ -119,8 +119,8 @@ class edn_test : public edn_basetest
     */
    void set_clock_frequency(double freq_hz);
 
-   /// CSML logger instance
-   CsmlLogger logger;
+   /// regmodel logger instance
+   RegLogger logger;
 
    // Dummy methods to satisfy legacy test calls after decoupling
    void request_entropy(unsigned int endpoint_id) { (void)endpoint_id; }
@@ -134,18 +134,10 @@ class edn_test : public edn_basetest
    sc_signal<bool> edn_fips[8];
 
    std::queue<uint32_t> m_mock_buffer;
-   bool m_mock_fips;
+   bool m_mock_fips = false;
+   unsigned int m_mock_rr_index = 0;
+   sc_core::sc_event m_mock_wakeup;
 
-   void mock_endpoint_process() {
-       for (int i = 0; i < 8; i++) {
-           if (edn_req[i].read() && !edn_ack[i].read() && !m_mock_buffer.empty()) {
-               edn_bus[i].write(m_mock_buffer.front());
-               m_mock_buffer.pop();
-               edn_fips[i].write(m_mock_fips);
-               edn_ack[i].write(true);
-           } else if (!edn_req[i].read()) {
-               edn_ack[i].write(false);
-           }
-       }
-   }
+   void notify_mock() { m_mock_wakeup.notify(SC_ZERO_TIME); }
+   void mock_endpoint_process();
 };

@@ -14,7 +14,7 @@
  * - Auto Request Mode: Hardware-managed continuous entropy distribution
  * - Software Port Mode: Firmware-controlled entropy generation
  *
- * @note This is a CSML-generated base class. User implementation should extend this class.
+ * @note This is a regmodel-generated base class. User implementation should extend this class.
  * @note Memory size is configurable at instantiation (default addresses 0x00-0x44).
  */
 
@@ -43,7 +43,7 @@
 class edn_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
 
     /**
      * @brief Constructor for EDN base module
@@ -81,11 +81,11 @@ class edn_base : public sc_module
          memory.bind_to_socket(target_socket);
        }
 
-      /// CSML memory infrastructure for register storage (32-bit memory template)
-      csml_memory<32> memory;
+      /// regmodel memory infrastructure for register storage (32-bit memory template)
+      regmodel::Memory<32> memory;
 
       /// TLM-2.0 simple target socket for register bus access (32-bit transactions)
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
       // === Interrupt Control Registers (0x00-0x08) ===
 

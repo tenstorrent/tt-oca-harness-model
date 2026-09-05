@@ -11,7 +11,7 @@
  ******************************************************************************/
 
 #include "kmac.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
@@ -113,7 +113,7 @@ kmac_ip::kmac_ip(sc_module_name n,
                  unsigned int memory_size,
                  unsigned int num_app_intf, bool en_masking)
     : kmac_base(n, memory_size),
-      verbosity("verbosity", CSML_DEFAULT_VERBOSITY),
+      verbosity("verbosity", REG_DEFAULT_VERBOSITY),
       keymgr_tl_socket("keymgr_tl_socket"),
       app_export(nullptr), idle_o("idle_o"),
       intr_kmac_done("intr_kmac_done"), intr_fifo_empty("intr_fifo_empty"),
@@ -170,7 +170,7 @@ kmac_ip::kmac_ip(sc_module_name n,
   // Initialize OpenSSL EVP context
   evp_md_ctx = EVP_MD_CTX_new();
   if (evp_md_ctx == nullptr) {
-    CSML_ERROR(1, logger) << "Failed to allocate OpenSSL EVP_MD_CTX";
+    REG_ERROR(1, logger) << "Failed to allocate OpenSSL EVP_MD_CTX";
   }
 
   // Initialize application interface state
@@ -189,7 +189,7 @@ kmac_ip::kmac_ip(sc_module_name n,
     for (unsigned int i = 0; i < NumAppIntf; i++) {
       app_handlers[i] = new kmac_app_handler(this, i);
       app_export[i](*app_handlers[i]);
-      CSML_INFO(2, logger) << "Application interface [" << i
+      REG_INFO(2, logger) << "Application interface [" << i
                            << "] handler created and bound (algorithm="
                            << app_algorithm[i] << ")";
     }
@@ -289,13 +289,13 @@ kmac_ip::kmac_ip(sc_module_name n,
   memory.register_write_callback_with_be(cfg_shadowed_write,
                                          CFG_SHADOWED.offset);
 
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger)
       << "KEY_SHARE0/1, KEY_LEN, CFG_SHADOWED callbacks registered";
-  CSML_INFO(2, logger) << "Key protection enabled:";
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger) << "Key protection enabled:";
+  REG_INFO(2, logger)
       << "  - CFG_REGWEN auto-clear on START, auto-set on DONE";
-  CSML_INFO(2, logger) << "  - Key zeroization on reset/error";
-  CSML_INFO(2, logger) << "  - Shadow register validation for CFG_SHADOWED";
+  REG_INFO(2, logger) << "  - Key zeroization on reset/error";
+  REG_INFO(2, logger) << "  - Shadow register validation for CFG_SHADOWED";
 
   // FUNC-KMAC-014: Register ENTROPY_SEED write callback
   std::function<bool(uint32_t, uint32_t)> entropy_seed_write =
@@ -309,7 +309,7 @@ kmac_ip::kmac_ip(sc_module_name n,
       },
       ENTROPY_SEED.offset);
 
-  CSML_INFO(2, logger) << "ENTROPY_SEED callback registered for FUNC-KMAC-014 "
+  REG_INFO(2, logger) << "ENTROPY_SEED callback registered for FUNC-KMAC-014 "
                           "(Software Mode entropy seeding)";
 
   // FUNC-KMAC-017: Register ENTROPY_PERIOD write callback (CFG_REGWEN protected)
@@ -320,7 +320,7 @@ kmac_ip::kmac_ip(sc_module_name n,
   memory.register_write_callback_with_be(entropy_period_write,
                                          ENTROPY_PERIOD.offset);
 
-  CSML_INFO(2, logger) << "ENTROPY_PERIOD callback registered for FUNC-KMAC-017 "
+  REG_INFO(2, logger) << "ENTROPY_PERIOD callback registered for FUNC-KMAC-017 "
                           "(CFG_REGWEN protection)";
 
   // ENTROPY_REFRESH_THRESHOLD_SHADOWED is shadowed in the RDL, so it needs the
@@ -332,7 +332,7 @@ kmac_ip::kmac_ip(sc_module_name n,
   memory.register_write_callback_with_be(
       entropy_threshold_write, ENTROPY_REFRESH_THRESHOLD_SHADOWED.offset);
 
-  CSML_INFO(2, logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED callback "
+  REG_INFO(2, logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED callback "
                           "registered (shadow write protocol)";
 
   // FUNC-KMAC-017: Register PREFIX write callbacks (CFG_REGWEN protected)
@@ -348,7 +348,7 @@ kmac_ip::kmac_ip(sc_module_name n,
     );
   }
 
-  CSML_INFO(2, logger) << "PREFIX[0..10] callbacks registered for FUNC-KMAC-017 "
+  REG_INFO(2, logger) << "PREFIX[0..10] callbacks registered for FUNC-KMAC-017 "
                           "(CFG_REGWEN protection)";
 
   // Register CMD write callback
@@ -411,7 +411,7 @@ kmac_ip::kmac_ip(sc_module_name n,
         if (w1c_mask & 0x4) INTR_STATE.kmac_err = 0;
         // Trigger interrupt evaluation after clearing
         evaluate_interrupt();
-        return false; // Don't let CSML do default write (we handled it)
+        return false; // Don't let regmodel do default write (we handled it)
       },
       INTR_STATE.offset);
 
@@ -424,15 +424,15 @@ kmac_ip::kmac_ip(sc_module_name n,
       [this](uint32_t value) {
         if (value & 0x1) {
           INTR_STATE.kmac_done = 1;
-          CSML_INFO(2, logger) << "INTR_TEST: Forcing kmac_done interrupt";
+          REG_INFO(2, logger) << "INTR_TEST: Forcing kmac_done interrupt";
         }
         if (value & 0x2) {
           INTR_STATE.fifo_empty = 1;
-          CSML_INFO(2, logger) << "INTR_TEST: Forcing fifo_empty interrupt";
+          REG_INFO(2, logger) << "INTR_TEST: Forcing fifo_empty interrupt";
         }
         if (value & 0x4) {
           INTR_STATE.kmac_err = 1;
-          CSML_INFO(2, logger) << "INTR_TEST: Forcing kmac_err interrupt";
+          REG_INFO(2, logger) << "INTR_TEST: Forcing kmac_err interrupt";
         }
         evaluate_interrupt();
         return false; // Write does not store in INTR_TEST register itself
@@ -449,21 +449,21 @@ kmac_ip::kmac_ip(sc_module_name n,
         if (be & 0x1) INTR_ENABLE.kmac_err = (value >> 2) & 0x1;
         // Trigger interrupt evaluation
         evaluate_interrupt();
-        CSML_INFO(2, logger) << "INTR_ENABLE written: 0x" << std::hex << value
+        REG_INFO(2, logger) << "INTR_ENABLE written: 0x" << std::hex << value
                              << std::dec << " - interrupt re-evaluated";
         return true;
       },
       INTR_ENABLE.offset);
 
-  CSML_INFO(2, logger) << "KMAC model instantiated with:"
+  REG_INFO(2, logger) << "KMAC model instantiated with:"
                        << " NumAppIntf=" << NumAppIntf
                        << " EnMasking=" << (EnMasking ? "true" : "false")
                        << " MemorySize=0x" << std::hex << memory_size
                        << std::dec;
-  CSML_INFO(2, logger) << "Registers initialized to reset values";
-  CSML_INFO(2, logger) << "MSG_FIFO window (0x800-0xFFC) and STATE window "
+  REG_INFO(2, logger) << "Registers initialized to reset values";
+  REG_INFO(2, logger) << "MSG_FIFO window (0x800-0xFFC) and STATE window "
                           "(0x400-0x5FC) callbacks registered";
-  CSML_INFO(2, logger) << "INTR_STATE/INTR_ENABLE callbacks registered for "
+  REG_INFO(2, logger) << "INTR_STATE/INTR_ENABLE callbacks registered for "
                           "interrupt output signaling";
 }
 
@@ -477,16 +477,6 @@ kmac_ip::~kmac_ip() {
   if (evp_md_ctx != nullptr) {
     EVP_MD_CTX_free(static_cast<EVP_MD_CTX *>(evp_md_ctx));
     evp_md_ctx = nullptr;
-  }
-
-  // Cleanup OpenSSL EVP_MAC contexts
-  if (evp_mac_ctx != nullptr) {
-    EVP_MAC_CTX_free(static_cast<EVP_MAC_CTX *>(evp_mac_ctx));
-    evp_mac_ctx = nullptr;
-  }
-  if (evp_mac != nullptr) {
-    EVP_MAC_free(static_cast<EVP_MAC *>(evp_mac));
-    evp_mac = nullptr;
   }
 
   // Cleanup application interface handlers
@@ -537,10 +527,10 @@ void kmac_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
     // KEY_CTRL: bit[0]=1 commits key valid, bit[0]=0 clears it
     m_keymgr_key_valid = (*data & 0x1u) != 0;
     if (m_keymgr_key_valid) {
-      CSML_INFO(2, logger) << "[KMAC] KeyMgr sideload key committed ("
+      REG_INFO(2, logger) << "[KMAC] KeyMgr sideload key committed ("
                            << m_keymgr_key_len_bytes << " bytes)";
     } else {
-      CSML_INFO(2, logger) << "[KMAC] KeyMgr sideload key invalidated";
+      REG_INFO(2, logger) << "[KMAC] KeyMgr sideload key invalidated";
     }
   }
 
@@ -561,7 +551,7 @@ void kmac_ip::reset_and_escalation_process() {
   while (true) {
     // Check for reset (active-low)
     if (!rst_ni.read()) {
-      CSML_INFO(2, logger) << "Reset asserted - reinitializing KMAC";
+      REG_INFO(2, logger) << "Reset asserted - reinitializing KMAC";
 
       // Reset all registers to default values
       reset_all_registers();
@@ -598,7 +588,7 @@ void kmac_ip::reset_and_escalation_process() {
       sw_seed_write_count = 0;
       entropy_sw_mode_ready = false;
       std::memset(sw_seed_buffer, 0, sizeof(sw_seed_buffer));
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "FUNC-KMAC-014: Software mode entropy state reset";
 
       // FUNC-KMAC-006: Clear KeyMgr sideload buffers on reset
@@ -607,7 +597,7 @@ void kmac_ip::reset_and_escalation_process() {
       std::memset(m_keymgr_share1, 0, sizeof(m_keymgr_share1));
       m_keymgr_key_valid = false;
       m_keymgr_key_len_bytes = 0;
-      CSML_INFO(2, logger) << "FUNC-KMAC-006: KeyMgr sideload buffers cleared";
+      REG_INFO(2, logger) << "FUNC-KMAC-006: KeyMgr sideload buffers cleared";
 
       // Reset OpenSSL context
       if (evp_md_ctx != nullptr) {
@@ -621,7 +611,7 @@ void kmac_ip::reset_and_escalation_process() {
 
       // Wait for reset deassertion
       wait(rst_ni.posedge_event());
-      CSML_INFO(2, logger) << "Reset deasserted - KMAC ready";
+      REG_INFO(2, logger) << "Reset deasserted - KMAC ready";
       continue;
     }
 
@@ -632,7 +622,7 @@ void kmac_ip::reset_and_escalation_process() {
     // FUNC-KMAC-021: Monitor escalation input (non-blocking check)
     // Escalation can occur at any time and is irreversible until reset
     if (lc_escalate_en_i.read() && fsm_state != KmacState::ESCALATION_LOCKED) {
-      CSML_ERROR(1, logger) << "FUNC-KMAC-021: Life cycle escalation detected "
+      REG_ERROR(1, logger) << "FUNC-KMAC-021: Life cycle escalation detected "
                                "- initiating security response";
 
       // Immediate transition to ESCALATION_LOCKED state (blocks all operations)
@@ -648,7 +638,7 @@ void kmac_ip::reset_and_escalation_process() {
       ERR_CODE = 0x01000000; // Fatal error - escalation
 
       // FUNC-KMAC-021: Immediate key zeroization - KEY_SHARE0 and KEY_SHARE1
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "FUNC-KMAC-021: Zeroizing KEY_SHARE0 and KEY_SHARE1 registers";
       zeroize_key_registers();
 
@@ -660,10 +650,6 @@ void kmac_ip::reset_and_escalation_process() {
       // FUNC-KMAC-021: Clear internal Keccak state (1600-bit state)
       if (evp_md_ctx != nullptr) {
         EVP_MD_CTX_reset(static_cast<EVP_MD_CTX *>(evp_md_ctx));
-      }
-      if (evp_mac_ctx != nullptr) {
-        EVP_MAC_CTX_free(static_cast<EVP_MAC_CTX *>(evp_mac_ctx));
-        evp_mac_ctx = nullptr;
       }
 
       // FUNC-KMAC-021: Clear internal buffers - packer, FIFO, digest
@@ -696,13 +682,13 @@ void kmac_ip::reset_and_escalation_process() {
       sw_seed_write_count = 0;
       entropy_sw_mode_ready = false;
 
-      CSML_ERROR(1, logger) << "FUNC-KMAC-021: Escalation response complete";
-      CSML_ERROR(1, logger) << "  - FSM locked in ESCALATION_LOCKED state";
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger) << "FUNC-KMAC-021: Escalation response complete";
+      REG_ERROR(1, logger) << "  - FSM locked in ESCALATION_LOCKED state";
+      REG_ERROR(1, logger)
           << "  - All keys, buffers, and internal state zeroized";
-      CSML_ERROR(1, logger) << "  - All operations blocked until reset";
-      CSML_ERROR(1, logger) << "  - STATUS.ALERT_FATAL_FAULT set (bit 17)";
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger) << "  - All operations blocked until reset";
+      REG_ERROR(1, logger) << "  - STATUS.ALERT_FATAL_FAULT set (bit 17)";
+      REG_ERROR(1, logger)
           << "  - Only rst_ni assertion can restore functionality";
     }
   }
@@ -721,7 +707,7 @@ void kmac_ip::idle_o_driver() {
   bool idle_value = (fsm_state == KmacState::IDLE);
   idle_o.write(idle_value);
 
-  CSML_INFO(2, logger) << "idle_o updated to " << idle_value
+  REG_INFO(2, logger) << "idle_o updated to " << idle_value
                        << " (fsm_state=" << static_cast<int>(fsm_state) << ")";
 }
 
@@ -745,7 +731,7 @@ void kmac_ip::intr_o_driver() {
   intr_fifo_empty.write(fifo_empty_active);
   intr_kmac_err.write(err_active);
 
-  CSML_INFO(2, logger) << "interrupts updated: kmac_done=" << done_active
+  REG_INFO(2, logger) << "interrupts updated: kmac_done=" << done_active
                        << " fifo_empty=" << fifo_empty_active
                        << " kmac_err=" << err_active;
 }
@@ -764,7 +750,7 @@ void kmac_ip::alert_o_driver() {
   alert_recov_operation_err.write(recov);
   alert_fatal_fault.write(fatal);
 
-  CSML_INFO(2, logger) << "alerts updated: recov_operation_err=" << recov
+  REG_INFO(2, logger) << "alerts updated: recov_operation_err=" << recov
                        << " fatal_fault=" << fatal;
 }
 
@@ -809,7 +795,7 @@ void kmac_ip::update_fifo_empty_interrupt() {
   }
 
   INTR_STATE.fifo_empty = raise ? 1 : 0;
-  CSML_INFO(2, logger) << "INTR_STATE.fifo_empty -> " << raise
+  REG_INFO(2, logger) << "INTR_STATE.fifo_empty -> " << raise
                        << " (absorb=" << (fsm_state == KmacState::ABSORB)
                        << " process_issued=" << process_issued
                        << " full_seen=" << fifo_full_seen
@@ -825,7 +811,7 @@ void kmac_ip::fifo_drain_process() {
     return;
   }
 
-  CSML_INFO(2, logger) << "FIFO drained by engine (depth " << fifo_depth
+  REG_INFO(2, logger) << "FIFO drained by engine (depth " << fifo_depth
                        << " -> 0)";
 
   // The bytes were absorbed into the digest as they were packed, so the queue
@@ -846,7 +832,7 @@ void kmac_ip::update_fsm_state(KmacState new_state) {
     KmacState old_state = fsm_state;
     fsm_state = new_state;
 
-    CSML_INFO(2, logger) << "FSM state transition: "
+    REG_INFO(2, logger) << "FSM state transition: "
                          << static_cast<int>(old_state) << " -> "
                          << static_cast<int>(new_state);
 
@@ -861,13 +847,13 @@ void kmac_ip::update_fsm_state(KmacState new_state) {
  ******************************************************************************/
 bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
   if (CFG_REGWEN.en == 0) {
-    CSML_INFO(2, logger) << "CFG_SHADOWED write rejected: CFG_REGWEN.en=0 "
+    REG_INFO(2, logger) << "CFG_SHADOWED write rejected: CFG_REGWEN.en=0 "
                             "(configuration locked)";
     return false;
   }
 
   if (fsm_state != KmacState::IDLE) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "CFG_SHADOWED write rejected: not in IDLE state (fsm_state="
         << static_cast<int>(fsm_state) << ")";
     return false;
@@ -882,7 +868,7 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
   if (!shadow_pending) {
     shadow_pending_value = value;
     shadow_pending = true;
-    CSML_INFO(2, logger) << "CFG_SHADOWED first write: value=0x" << std::hex
+    REG_INFO(2, logger) << "CFG_SHADOWED first write: value=0x" << std::hex
                          << value << std::dec
                          << " (awaiting second write for shadow validation)";
     return true;
@@ -901,9 +887,9 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
       CFG_SHADOWED.en_unsupported_modestrength = (value >> 26) & 0x1;
 
       shadow_pending = false;
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "CFG_SHADOWED second write matched: configuration committed";
-      CSML_INFO(2, logger) << "  kmac_en=" << CFG_SHADOWED.kmac_en << " mode=0x"
+      REG_INFO(2, logger) << "  kmac_en=" << CFG_SHADOWED.kmac_en << " mode=0x"
                            << std::hex << CFG_SHADOWED.mode << std::dec
                            << " kstrength=0x" << std::hex
                            << CFG_SHADOWED.kstrength << std::dec
@@ -916,7 +902,7 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
         sw_seed_write_count = 0;
         entropy_sw_mode_ready = false;
         std::memset(sw_seed_buffer, 0, sizeof(sw_seed_buffer));
-        CSML_INFO(2, logger) << "  FUNC-KMAC-014: SW entropy mode configured, "
+        REG_INFO(2, logger) << "  FUNC-KMAC-014: SW entropy mode configured, "
                              << "seed counter reset (ready for 6-write sequence)";
       }
       
@@ -925,12 +911,12 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
       STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 1;
       evaluate_alert();
       shadow_pending = false;
-      CSML_ERROR(1, logger) << "CFG_SHADOWED shadow mismatch detected:";
-      CSML_ERROR(1, logger) << "  First write:  0x" << std::hex
+      REG_ERROR(1, logger) << "CFG_SHADOWED shadow mismatch detected:";
+      REG_ERROR(1, logger) << "  First write:  0x" << std::hex
                             << shadow_pending_value << std::dec;
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger)
           << "  Second write: 0x" << std::hex << value << std::dec;
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger)
           << "  STATUS.ALERT_RECOV_CTRL_UPDATE_ERR=1 (recoverable)";
       return false;
     }
@@ -950,7 +936,7 @@ bool kmac_ip::handle_write_CFG_SHADOWED(uint32_t value, uint8_t byte_enable) {
 bool kmac_ip::handle_write_ENTROPY_REFRESH_THRESHOLD_SHADOWED(
     uint32_t value, uint8_t byte_enable) {
   if (fsm_state == KmacState::ESCALATION_LOCKED) {
-    CSML_ERROR(1, logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED write "
+    REG_ERROR(1, logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED write "
                              "rejected: FSM in ESCALATION_LOCKED state";
     return false;
   }
@@ -960,7 +946,7 @@ bool kmac_ip::handle_write_ENTROPY_REFRESH_THRESHOLD_SHADOWED(
   if (!m_threshold_shadow_pending) {
     m_threshold_shadow_pending_value = masked;
     m_threshold_shadow_pending = true;
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "ENTROPY_REFRESH_THRESHOLD_SHADOWED first write: value=0x"
         << std::hex << masked << std::dec
         << " (awaiting second write for shadow validation)";
@@ -972,19 +958,19 @@ bool kmac_ip::handle_write_ENTROPY_REFRESH_THRESHOLD_SHADOWED(
   if (masked != m_threshold_shadow_pending_value) {
     STATUS.ALERT_RECOV_CTRL_UPDATE_ERR = 1;
     evaluate_alert();
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "ENTROPY_REFRESH_THRESHOLD_SHADOWED shadow mismatch detected:";
-    CSML_ERROR(1, logger) << "  First write:  0x" << std::hex
+    REG_ERROR(1, logger) << "  First write:  0x" << std::hex
                           << m_threshold_shadow_pending_value << std::dec;
-    CSML_ERROR(1, logger) << "  Second write: 0x" << std::hex << masked
+    REG_ERROR(1, logger) << "  Second write: 0x" << std::hex << masked
                           << std::dec;
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "  STATUS.ALERT_RECOV_CTRL_UPDATE_ERR=1 (recoverable)";
     return false;
   }
 
   ENTROPY_REFRESH_THRESHOLD_SHADOWED.threshold = masked;
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger)
       << "ENTROPY_REFRESH_THRESHOLD_SHADOWED committed: threshold=" << masked;
 
   // A newly lowered threshold can already be satisfied by the current count.
@@ -1023,7 +1009,7 @@ void kmac_ip::check_entropy_refresh_threshold() {
 
   const uint32_t entropy_mode = static_cast<uint32_t>(CFG_SHADOWED.entropy_mode);
   if (entropy_mode != 0x1) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "Entropy refresh threshold reached (hash_cnt=" << hash_cnt
         << " >= " << threshold << ") but entropy_mode=" << entropy_mode
         << " is not EDN; no reseed requested";
@@ -1033,7 +1019,7 @@ void kmac_ip::check_entropy_refresh_threshold() {
   ENTROPY_REFRESH_HASH_CNT = 0;
   m_auto_reseed_count++;
 
-  CSML_INFO(2, logger) << "Automatic entropy refresh: hash_cnt reached "
+  REG_INFO(2, logger) << "Automatic entropy refresh: hash_cnt reached "
                           "threshold "
                        << threshold << ", PRNG reseeded and counter cleared "
                        << "(reseed #" << m_auto_reseed_count << ")";
@@ -1045,28 +1031,28 @@ void kmac_ip::check_entropy_refresh_threshold() {
 bool kmac_ip::handle_write_KEY_SHARE0(unsigned int index, uint32_t value,
                                       uint8_t byte_enable) {
   if (index >= 16) {
-    CSML_ERROR(1, logger) << "KEY_SHARE0 write rejected: invalid index "
+    REG_ERROR(1, logger) << "KEY_SHARE0 write rejected: invalid index "
                           << index;
     return false;
   }
 
   // FUNC-KMAC-021: Block all register writes when in ESCALATION_LOCKED state
   if (fsm_state == KmacState::ESCALATION_LOCKED) {
-    CSML_ERROR(1, logger) << "KEY_SHARE0[" << index
+    REG_ERROR(1, logger) << "KEY_SHARE0[" << index
                           << "] write rejected: FSM in ESCALATION_LOCKED state "
                              "(lc_escalate_en_i active)";
     return false;
   }
 
   if (CFG_REGWEN.en == 0) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "KEY_SHARE0[" << index
         << "] write rejected: CFG_REGWEN.en=0 (configuration locked)";
     return false;
   }
 
   if (fsm_state != KmacState::IDLE) {
-    CSML_INFO(2, logger) << "KEY_SHARE0[" << index
+    REG_INFO(2, logger) << "KEY_SHARE0[" << index
                          << "] write rejected: not in IDLE state (fsm_state="
                          << static_cast<int>(fsm_state) << ")";
     return false;
@@ -1083,7 +1069,7 @@ bool kmac_ip::handle_write_KEY_SHARE0(unsigned int index, uint32_t value,
   }
 
   KEY_SHARE0[index].key = masked_value;
-  CSML_INFO(2, logger) << "KEY_SHARE0[" << index << "] written: 0x" << std::hex
+  REG_INFO(2, logger) << "KEY_SHARE0[" << index << "] written: 0x" << std::hex
                        << masked_value << std::dec << " (be=0x" << std::hex
                        << (int)byte_enable << std::dec << ")";
   return true;
@@ -1095,28 +1081,28 @@ bool kmac_ip::handle_write_KEY_SHARE0(unsigned int index, uint32_t value,
 bool kmac_ip::handle_write_KEY_SHARE1(unsigned int index, uint32_t value,
                                       uint8_t byte_enable) {
   if (index >= 16) {
-    CSML_ERROR(1, logger) << "KEY_SHARE1 write rejected: invalid index "
+    REG_ERROR(1, logger) << "KEY_SHARE1 write rejected: invalid index "
                           << index;
     return false;
   }
 
   // FUNC-KMAC-021: Block all register writes when in ESCALATION_LOCKED state
   if (fsm_state == KmacState::ESCALATION_LOCKED) {
-    CSML_ERROR(1, logger) << "KEY_SHARE1[" << index
+    REG_ERROR(1, logger) << "KEY_SHARE1[" << index
                           << "] write rejected: FSM in ESCALATION_LOCKED state "
                              "(lc_escalate_en_i active)";
     return false;
   }
 
   if (CFG_REGWEN.en == 0) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "KEY_SHARE1[" << index
         << "] write rejected: CFG_REGWEN.en=0 (configuration locked)";
     return false;
   }
 
   if (fsm_state != KmacState::IDLE) {
-    CSML_INFO(2, logger) << "KEY_SHARE1[" << index
+    REG_INFO(2, logger) << "KEY_SHARE1[" << index
                          << "] write rejected: not in IDLE state (fsm_state="
                          << static_cast<int>(fsm_state) << ")";
     return false;
@@ -1133,7 +1119,7 @@ bool kmac_ip::handle_write_KEY_SHARE1(unsigned int index, uint32_t value,
   }
 
   KEY_SHARE1[index].key = masked_value;
-  CSML_INFO(2, logger) << "KEY_SHARE1[" << index << "] written: 0x" << std::hex
+  REG_INFO(2, logger) << "KEY_SHARE1[" << index << "] written: 0x" << std::hex
                        << masked_value << std::dec << " (be=0x" << std::hex
                        << (int)byte_enable << std::dec << ")";
   return true;
@@ -1144,13 +1130,13 @@ bool kmac_ip::handle_write_KEY_SHARE1(unsigned int index, uint32_t value,
  ******************************************************************************/
 bool kmac_ip::handle_write_KEY_LEN(uint32_t value, uint8_t byte_enable) {
   if (CFG_REGWEN.en == 0) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "KEY_LEN write rejected: CFG_REGWEN.en=0 (configuration locked)";
     return false;
   }
 
   if (fsm_state != KmacState::IDLE) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "KEY_LEN write rejected: not in IDLE state (fsm_state="
         << static_cast<int>(fsm_state) << ")";
     return false;
@@ -1159,7 +1145,7 @@ bool kmac_ip::handle_write_KEY_LEN(uint32_t value, uint8_t byte_enable) {
   uint32_t len_value = value & 0x7;
 
   if (len_value > 0x4) {
-    CSML_ERROR(1, logger) << "KEY_LEN write rejected: invalid len value 0x"
+    REG_ERROR(1, logger) << "KEY_LEN write rejected: invalid len value 0x"
                           << std::hex << len_value << std::dec
                           << " (valid range: 0x0-0x4)";
     return false;
@@ -1172,7 +1158,7 @@ bool kmac_ip::handle_write_KEY_LEN(uint32_t value, uint8_t byte_enable) {
   uint32_t key_bits = key_bits_table[len_value];
   uint32_t key_bytes = key_bytes_table[len_value];
 
-  CSML_INFO(2, logger) << "KEY_LEN written: len=0x" << std::hex << len_value
+  REG_INFO(2, logger) << "KEY_LEN written: len=0x" << std::hex << len_value
                        << std::dec << " (" << key_bits << " bits / "
                        << key_bytes << " bytes)";
   return true;
@@ -1186,13 +1172,13 @@ bool kmac_ip::handle_write_KEY_LEN(uint32_t value, uint8_t byte_enable) {
  ******************************************************************************/
 bool kmac_ip::handle_write_ENTROPY_PERIOD(uint32_t value, uint8_t byte_enable) {
   if (CFG_REGWEN.en == 0) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "ENTROPY_PERIOD write rejected: CFG_REGWEN.en=0 (configuration locked)";
     return false;
   }
 
   if (fsm_state != KmacState::IDLE) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "ENTROPY_PERIOD write rejected: not in IDLE state (fsm_state="
         << static_cast<int>(fsm_state) << ")";
     return false;
@@ -1212,7 +1198,7 @@ bool kmac_ip::handle_write_ENTROPY_PERIOD(uint32_t value, uint8_t byte_enable) {
   uint32_t valid_mask = 0xFFFF03FF;
   ENTROPY_PERIOD = masked_value & valid_mask;
 
-  CSML_INFO(2, logger) << "ENTROPY_PERIOD written: 0x" << std::hex << (masked_value & valid_mask)
+  REG_INFO(2, logger) << "ENTROPY_PERIOD written: 0x" << std::hex << (masked_value & valid_mask)
                        << std::dec << " (prescaler=" << (masked_value & 0x3FF)
                        << ", wait_timer=" << ((masked_value >> 16) & 0xFFFF) << ")";
   return true;
@@ -1226,13 +1212,13 @@ bool kmac_ip::handle_write_ENTROPY_PERIOD(uint32_t value, uint8_t byte_enable) {
  ******************************************************************************/
 bool kmac_ip::handle_write_PREFIX(unsigned int index, uint32_t value, uint8_t byte_enable) {
   if (CFG_REGWEN.en == 0) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "PREFIX[" << index << "] write rejected: CFG_REGWEN.en=0 (configuration locked)";
     return false;
   }
 
   if (fsm_state != KmacState::IDLE) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "PREFIX[" << index << "] write rejected: not in IDLE state (fsm_state="
         << static_cast<int>(fsm_state) << ")";
     return false;
@@ -1249,7 +1235,7 @@ bool kmac_ip::handle_write_PREFIX(unsigned int index, uint32_t value, uint8_t by
   }
 
   PREFIX[index].prefix = masked_value;
-  CSML_INFO(2, logger) << "PREFIX[" << index << "] written: 0x" << std::hex << masked_value
+  REG_INFO(2, logger) << "PREFIX[" << index << "] written: 0x" << std::hex << masked_value
                        << std::dec << " (be=0x" << std::hex << (int)byte_enable << std::dec << ")";
   return true;
 }
@@ -1258,7 +1244,7 @@ bool kmac_ip::handle_write_PREFIX(unsigned int index, uint32_t value, uint8_t by
  * @brief Helper function to zeroize key registers (FUNC-KMAC-005)
  ******************************************************************************/
 void kmac_ip::zeroize_key_registers() {
-  CSML_INFO(2, logger) << "Zeroizing key registers (security mechanism)";
+  REG_INFO(2, logger) << "Zeroizing key registers (security mechanism)";
 
   for (size_t i = 0; i < 16; i++) {
     KEY_SHARE0[i].key = 0;
@@ -1267,7 +1253,7 @@ void kmac_ip::zeroize_key_registers() {
 
   KEY_LEN.len = 0;
 
-  CSML_INFO(2, logger) << "Key registers zeroized: KEY_SHARE0[0-15]=0, "
+  REG_INFO(2, logger) << "Key registers zeroized: KEY_SHARE0[0-15]=0, "
                           "KEY_SHARE1[0-15]=0, KEY_LEN=0";
 }
 
@@ -1302,34 +1288,34 @@ bool kmac_ip::handle_write_ENTROPY_SEED(uint32_t value, uint32_t write_mask) {
   uint32_t entropy_mode = CFG_SHADOWED.entropy_mode;
   uint32_t entropy_ready = CFG_SHADOWED.entropy_ready;
 
-  CSML_INFO(2, logger) << "ENTROPY_SEED write: value=0x" << std::hex << value
+  REG_INFO(2, logger) << "ENTROPY_SEED write: value=0x" << std::hex << value
                        << std::dec << " entropy_mode=" << entropy_mode
                        << " entropy_ready=" << entropy_ready
                        << " sw_seed_write_count=" << sw_seed_write_count;
 
   // Validate entropy_mode = sw_mode (0x2) and entropy_ready = 1
   if (entropy_mode != 0x2) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "ENTROPY_SEED write ignored: entropy_mode != sw_mode (0x2), current="
         << entropy_mode;
     return false;
   }
 
   if (entropy_ready != 1) {
-    CSML_INFO(2, logger) << "ENTROPY_SEED write ignored: entropy_ready != 1";
+    REG_INFO(2, logger) << "ENTROPY_SEED write ignored: entropy_ready != 1";
     return false;
   }
 
   // Check if seeding already complete (6 writes already received)
   if (sw_seed_write_count >= 6) {
-    CSML_INFO(2, logger) << "ENTROPY_SEED write ignored: PRNG already seeded "
+    REG_INFO(2, logger) << "ENTROPY_SEED write ignored: PRNG already seeded "
                             "(6 writes complete)";
     return false; // PRNG already activated, further writes have no effect
   }
 
   // Load seed value into buffer at current write count index
   sw_seed_buffer[sw_seed_write_count] = value;
-  CSML_INFO(2, logger) << "ENTROPY_SEED chunk[" << sw_seed_write_count
+  REG_INFO(2, logger) << "ENTROPY_SEED chunk[" << sw_seed_write_count
                        << "] = 0x" << std::hex << value << std::dec
                        << " loaded into sw_seed_buffer";
 
@@ -1341,12 +1327,12 @@ bool kmac_ip::handle_write_ENTROPY_SEED(uint32_t value, uint32_t write_mask) {
     // Activate PRNG (functionally abstracted - no actual Bivium implementation)
     entropy_sw_mode_ready = true;
 
-    CSML_INFO(1, logger)
+    REG_INFO(1, logger)
         << "FUNC-KMAC-014: Software mode entropy seeding COMPLETE";
-    CSML_INFO(1, logger) << "  - 6 seed chunks loaded (192 bits total)";
-    CSML_INFO(1, logger) << "  - PRNG activated: entropy_sw_mode_ready = true";
-    CSML_INFO(1, logger) << "  - KMAC operations can now proceed";
-    CSML_INFO(2, logger) << "  - Seed buffer: [" << std::hex << "0x"
+    REG_INFO(1, logger) << "  - 6 seed chunks loaded (192 bits total)";
+    REG_INFO(1, logger) << "  - PRNG activated: entropy_sw_mode_ready = true";
+    REG_INFO(1, logger) << "  - KMAC operations can now proceed";
+    REG_INFO(2, logger) << "  - Seed buffer: [" << std::hex << "0x"
                          << sw_seed_buffer[0] << ", "
                          << "0x" << sw_seed_buffer[1] << ", "
                          << "0x" << sw_seed_buffer[2] << ", "
@@ -1355,10 +1341,10 @@ bool kmac_ip::handle_write_ENTROPY_SEED(uint32_t value, uint32_t write_mask) {
                          << "0x" << sw_seed_buffer[5] << std::dec << "]";
 
     // Architecture Map: FSM transition SW_SEED_WAIT → READY
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "Entropy FSM: SW_SEED_WAIT → READY (functional abstraction)";
   } else {
-    CSML_INFO(2, logger) << "ENTROPY_SEED chunk " << sw_seed_write_count
+    REG_INFO(2, logger) << "ENTROPY_SEED chunk " << sw_seed_write_count
                          << "/6 received, " << (6 - sw_seed_write_count)
                          << " more required";
   }
@@ -1379,11 +1365,11 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // Escalation requires hardware reset (rst_ni) for recovery - no software
   // recovery allowed
   if (fsm_state == KmacState::ESCALATION_LOCKED) {
-    CSML_ERROR(1, logger) << "CMD write rejected: FSM in ESCALATION_LOCKED "
+    REG_ERROR(1, logger) << "CMD write rejected: FSM in ESCALATION_LOCKED "
                              "state (lc_escalate_en_i active)";
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "  - All operations blocked until hardware reset (rst_ni assertion)";
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "  - err_processed cannot recover from ESCALATION_LOCKED";
     return false;
   }
@@ -1396,7 +1382,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   bool hash_cnt_clr = (value & (1 << 9)) != 0;
   bool err_processed = (value & (1 << 10)) != 0;
 
-  CSML_INFO(2, logger) << "CMD write: value=0x" << std::hex << value << std::dec
+  REG_INFO(2, logger) << "CMD write: value=0x" << std::hex << value << std::dec
                        << " cmd_field=0x" << std::hex << cmd_field << std::dec
                        << " entropy_req=" << entropy_req
                        << " hash_cnt_clr=" << hash_cnt_clr
@@ -1409,7 +1395,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // FUNC-KMAC-021: err_processed cannot recover from ESCALATION_LOCKED
     // (already checked above)
     if (fsm_state == KmacState::ERROR) {
-      CSML_INFO(2, logger) << "FUNC-KMAC-019: Processing err_processed - "
+      REG_INFO(2, logger) << "FUNC-KMAC-019: Processing err_processed - "
                               "recovering from ERROR state to IDLE";
 
       // Reset FSM to IDLE
@@ -1422,7 +1408,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       // Per specification: err_processed clears ERR_CODE and allows FSM to
       // return to IDLE
       ERR_CODE = 0;
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "FUNC-KMAC-019: ERR_CODE cleared after error recovery";
 
       // FUNC-KMAC-019: Clear kmac_err interrupt bit (error recovery complete)
@@ -1430,10 +1416,10 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       // before err_processed but we ensure clean state here
       INTR_STATE.kmac_err = 0;
 
-      CSML_INFO(2, logger) << "FUNC-KMAC-019: Error recovery complete - FSM "
+      REG_INFO(2, logger) << "FUNC-KMAC-019: Error recovery complete - FSM "
                               "returned to IDLE, CFG_REGWEN.en=1, ERR_CODE=0";
     } else {
-      CSML_INFO(2, logger) << "FUNC-KMAC-019: err_processed ignored - FSM not "
+      REG_INFO(2, logger) << "FUNC-KMAC-019: err_processed ignored - FSM not "
                               "in ERROR state (current state="
                            << static_cast<int>(fsm_state) << ")";
     }
@@ -1443,7 +1429,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // Process hash_cnt_clr bit
   // =========================================================================
   if (hash_cnt_clr) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "Processing hash_cnt_clr: clearing ENTROPY_REFRESH_HASH_CNT to 0";
     ENTROPY_REFRESH_HASH_CNT = 0;
   }
@@ -1453,7 +1439,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // =========================================================================
   if (entropy_req) {
     if (fsm_state == KmacState::IDLE) {
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "Processing entropy_req: triggering manual PRNG reseed";
 
       // Clear entropy refresh hash counter
@@ -1466,7 +1452,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       uint32_t wait_timer = (entropy_period_reg >> 16) & 0xFFFF;
       uint32_t prescaler = entropy_period_reg & 0x3FF;
 
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "FUNC-KMAC-019: Entropy timeout config - wait_timer=" << wait_timer
           << ", prescaler=" << prescaler;
 
@@ -1477,33 +1463,12 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       // small or entropy delivery would fail
 
       // EDN interface removed - entropy is always assumed available internally
-      bool entropy_available = true;
-      CSML_INFO(2, logger) << "FUNC-KMAC-019: Entropy delivery simulated "
+      REG_INFO(2, logger) << "FUNC-KMAC-019: Entropy delivery simulated "
                               "internally (no external EDN interface)";
-
-      // FUNC-KMAC-019: If wait_timer=0, wait indefinitely (not recommended per
-      // spec) If wait_timer>0 and entropy not available, trigger
-      // WaitTimerExpired error
-      if (wait_timer > 0 && !entropy_available) {
-        CSML_ERROR(1, logger)
-            << "FUNC-KMAC-019: WaitTimerExpired error (0x04) - "
-            << "EDN did not respond within timeout (wait_timer=" << wait_timer
-            << " timer pulses)";
-
-        // Set ERR_CODE: 0x04 (WaitTimerExpired)
-        // Debug bits [23:0] reserved (set to 0)
-        ERR_CODE = 0x04000000;
-        INTR_STATE.kmac_err = 1;
-        update_fsm_state(KmacState::ERROR);
-
-        CSML_INFO(2, logger) << "FUNC-KMAC-019: Entropy FSM moved to Wait "
-                                "state, uses pre-generated entropy";
-        return false;
-      }
 
       // In real hardware, would send request to EDN interface
       // TLM abstraction: entropy port interaction would go here
-      CSML_INFO(2, logger) << "Manual entropy reseed requested (EDN "
+      REG_INFO(2, logger) << "Manual entropy reseed requested (EDN "
                               "interaction abstracted in TLM)";
 
       // FUNC-KMAC-024: Apply temporal decoupling for entropy request latency
@@ -1522,12 +1487,12 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         m_qk.sync();
       }
 
-      CSML_INFO(2, logger) << "FUNC-KMAC-024: Entropy request delay="
+      REG_INFO(2, logger) << "FUNC-KMAC-024: Entropy request delay="
                            << entropy_delay << " (wait_timer=" << wait_timer
                            << ", prescaler=" << prescaler
                            << ", local_time=" << m_qk.get_local_time() << ")";
     } else {
-      CSML_INFO(2, logger) << "entropy_req ignored: only valid in IDLE state";
+      REG_INFO(2, logger) << "entropy_req ignored: only valid in IDLE state";
     }
   }
 
@@ -1571,7 +1536,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   }
 
   if (!valid_cmd) {
-    CSML_ERROR(1, logger) << "Invalid command encoding: 0x" << std::hex
+    REG_ERROR(1, logger) << "Invalid command encoding: 0x" << std::hex
                           << cmd_field << std::dec << " - rejecting command";
 
     // FUNC-KMAC-019: Set SwCmdSequence error (0x08)
@@ -1585,13 +1550,13 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // SwCmdSequence Internal SHA3 FSM control error indicating command issued
     // in wrong SHA3 state Software can ignore 0x80 if SwCmdSequence (0x08) also
     // present - focus on correcting command sequence
-    CSML_INFO(2, logger) << "FUNC-KMAC-019: Invalid command may also trigger "
+    REG_INFO(2, logger) << "FUNC-KMAC-019: Invalid command may also trigger "
                             "Sha3Control error (0x80) internally";
 
     return false; // Reject invalid command
   }
 
-  CSML_INFO(2, logger) << "Processing " << cmd_name << " command (0x"
+  REG_INFO(2, logger) << "Processing " << cmd_name << " command (0x"
                        << std::hex << cmd_field << std::dec << ")";
 
   // =====================================================================
@@ -1599,7 +1564,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // operation
   // =====================================================================
   if (app_interface_active && cmd_field != 0x0) {
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "Software CMD rejected: application interface active";
 
     // FUNC-KMAC-019: Set SwIssuedCmdInAppActive error (0x03)
@@ -1616,7 +1581,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // =====================================================================
   if (cmd_field == 0x1D) {
     if (fsm_state != KmacState::IDLE) {
-      CSML_ERROR(1, logger) << "START command rejected: not in IDLE state";
+      REG_ERROR(1, logger) << "START command rejected: not in IDLE state";
 
       // FUNC-KMAC-019: Set SwCmdSequence error (0x08)
       ERR_CODE =
@@ -1638,7 +1603,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     uint32_t entropy_ready = CFG_SHADOWED.entropy_ready;
     uint32_t entropy_mode = CFG_SHADOWED.entropy_mode;
 
-    CSML_INFO(2, logger) << "Configuration: mode=0x" << std::hex << mode
+    REG_INFO(2, logger) << "Configuration: mode=0x" << std::hex << mode
                          << " kstrength=0x" << kstrength
                          << " kmac_en=" << kmac_en
                          << " entropy_ready=" << entropy_ready
@@ -1656,7 +1621,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // committed a key. This is checked before the PREFIX comparison because
     // kmac.sv priority-encodes app_err above errchecker_err.
     if (kmac_en && CFG_SHADOWED.sideload == 1 && !m_keymgr_key_valid) {
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger)
           << "FUNC-KMAC-019: KeyNotValid error (0x01) - SW-initiated KMAC with "
              "CFG_SHADOWED.sideload=1 but KeyMgr has not committed a valid key";
 
@@ -1673,7 +1638,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // 0x1/edn, 0x2/sw)
     if (entropy_ready == 1 &&
         (entropy_mode != 0x0 && entropy_mode != 0x1 && entropy_mode != 0x2)) {
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger)
           << "FUNC-KMAC-019: IncorrectEntropyMode error (0x05) - "
              "entropy_ready=1 but entropy_mode=0x"
           << std::hex << entropy_mode << std::dec << " is invalid";
@@ -1695,7 +1660,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     uint32_t msg_mask = CFG_SHADOWED.msg_mask;
 
     if (kmac_en && (EnMasking || msg_mask == 1) && entropy_ready == 0) {
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger)
           << "FUNC-KMAC-019: SwHashingWithoutEntropyReady error (0x09) - "
           << "KMAC mode with masking enabled (EnMasking=" << EnMasking
           << ", msg_mask=" << msg_mask << ") but entropy_ready=0";
@@ -1712,7 +1677,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // FUNC-KMAC-019: Check entropy seeding completion for SW mode
     // If entropy_mode=0x2 (sw_mode), verify 6 ENTROPY_SEED writes completed
     if (entropy_mode == 0x2 && entropy_ready == 1 && !entropy_sw_mode_ready) {
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger)
           << "FUNC-KMAC-019: SwHashingWithoutEntropyReady error (0x09) - "
           << "SW entropy mode but PRNG not fully seeded (only "
           << sw_seed_write_count << "/6 writes completed)";
@@ -1735,27 +1700,27 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       switch (kstrength) {
       case 0x1: // L224 (SHA3-224)
         md = EVP_sha3_224();
-        CSML_INFO(2, logger) << "Selected SHA3-224 algorithm (EVP_sha3_224)";
+        REG_INFO(2, logger) << "Selected SHA3-224 algorithm (EVP_sha3_224)";
         break;
 
       case 0x2: // L256 (SHA3-256)
         md = EVP_sha3_256();
-        CSML_INFO(2, logger) << "Selected SHA3-256 algorithm (EVP_sha3_256)";
+        REG_INFO(2, logger) << "Selected SHA3-256 algorithm (EVP_sha3_256)";
         break;
 
       case 0x3: // L384 (SHA3-384)
         md = EVP_sha3_384();
-        CSML_INFO(2, logger) << "Selected SHA3-384 algorithm (EVP_sha3_384)";
+        REG_INFO(2, logger) << "Selected SHA3-384 algorithm (EVP_sha3_384)";
         break;
 
       case 0x4: // L512 (SHA3-512)
         md = EVP_sha3_512();
-        CSML_INFO(2, logger) << "Selected SHA3-512 algorithm (EVP_sha3_512)";
+        REG_INFO(2, logger) << "Selected SHA3-512 algorithm (EVP_sha3_512)";
         break;
 
       default:
         // Invalid kstrength for SHA3 mode (including 0x0=L128)
-        CSML_ERROR(1, logger) << "UnexpectedModeStrength error: SHA3 mode with "
+        REG_ERROR(1, logger) << "UnexpectedModeStrength error: SHA3 mode with "
                                  "invalid kstrength=0x"
                               << std::hex << kstrength << std::dec;
 
@@ -1770,7 +1735,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         INTR_STATE.kmac_err = 1;
         update_fsm_state(KmacState::ERROR);
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "ERR_CODE set to 0x" << std::hex << err_code_value << std::dec;
 
         // Note: Per specification, operation proceeds with undefined behavior
@@ -1787,14 +1752,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
         // Initialize digest operation
         if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) {
-          CSML_ERROR(1, logger) << "OpenSSL EVP_DigestInit_ex failed for SHA3";
+          REG_ERROR(1, logger) << "OpenSSL EVP_DigestInit_ex failed for SHA3";
           return false;
         }
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "OpenSSL EVP context initialized for SHA3 operation";
       } else {
-        CSML_ERROR(1, logger)
+        REG_ERROR(1, logger)
             << "Cannot initialize OpenSSL: EVP context not allocated";
         return false;
       }
@@ -1808,17 +1773,17 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       switch (kstrength) {
       case 0x0: // L128 (SHAKE128)
         md = EVP_shake128();
-        CSML_INFO(2, logger) << "Selected SHAKE128 algorithm (EVP_shake128)";
+        REG_INFO(2, logger) << "Selected SHAKE128 algorithm (EVP_shake128)";
         break;
 
       case 0x2: // L256 (SHAKE256)
         md = EVP_shake256();
-        CSML_INFO(2, logger) << "Selected SHAKE256 algorithm (EVP_shake256)";
+        REG_INFO(2, logger) << "Selected SHAKE256 algorithm (EVP_shake256)";
         break;
 
       default:
         // Invalid kstrength for SHAKE mode
-        CSML_ERROR(1, logger) << "UnexpectedModeStrength error: SHAKE mode "
+        REG_ERROR(1, logger) << "UnexpectedModeStrength error: SHAKE mode "
                                  "with invalid kstrength=0x"
                               << std::hex << kstrength << std::dec;
 
@@ -1829,7 +1794,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         INTR_STATE.kmac_err = 1;
         update_fsm_state(KmacState::ERROR);
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "ERR_CODE set to 0x" << std::hex << err_code_value << std::dec;
         return false;
       }
@@ -1843,14 +1808,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
         // Initialize digest operation
         if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) {
-          CSML_ERROR(1, logger) << "OpenSSL EVP_DigestInit_ex failed for SHAKE";
+          REG_ERROR(1, logger) << "OpenSSL EVP_DigestInit_ex failed for SHAKE";
           return false;
         }
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "OpenSSL EVP context initialized for SHAKE operation";
       } else {
-        CSML_ERROR(1, logger)
+        REG_ERROR(1, logger)
             << "Cannot initialize OpenSSL: EVP context not allocated";
         return false;
       }
@@ -1862,7 +1827,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       // Valid: 0x0 (cSHAKE128/KMAC128), 0x2 (cSHAKE256/KMAC256)
       if (kstrength != 0x0 && kstrength != 0x2) {
         // Invalid kstrength for cSHAKE/KMAC mode
-        CSML_ERROR(1, logger)
+        REG_ERROR(1, logger)
             << "UnexpectedModeStrength error: " << (kmac_en ? "KMAC" : "cSHAKE")
             << " mode with invalid kstrength=0x" << std::hex << kstrength
             << std::dec;
@@ -1874,7 +1839,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         INTR_STATE.kmac_err = 1;
         update_fsm_state(KmacState::ERROR);
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "ERR_CODE set to 0x" << std::hex << err_code_value << std::dec;
         return false;
       }
@@ -1892,7 +1857,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         // "KMAC", S) This matches the hardware specification and reference
         // implementation
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "Initializing KMAC mode using manual construction with SHAKE";
 
         // Step 1: Read and validate PREFIX for IncorrectFunctionName error
@@ -1919,13 +1884,13 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         }
 
         if (!prefix_valid) {
-          CSML_ERROR(1, logger) << "IncorrectFunctionName error: PREFIX does "
+          REG_ERROR(1, logger) << "IncorrectFunctionName error: PREFIX does "
                                    "not start with encode_string(\"KMAC\")";
           // Set ERR_CODE: 0x07 (IncorrectFunctionName)
           ERR_CODE = 0x07000000;
           INTR_STATE.kmac_err = 1;
         } else {
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "PREFIX validation passed: encode_string(\"KMAC\") detected";
         }
 
@@ -1961,7 +1926,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           copy_customization(9, static_cast<size_t>((s_bits + 7) / 8));
         }
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "Extracted customization string: " << customization_len
             << " bytes";
 
@@ -1974,7 +1939,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
             if (i < customization_len - 1)
               ss_cust << " ";
           }
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "MODEL Customization string (hex): " << ss_cust.str();
         }
 
@@ -1991,7 +1956,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           // =================================================================
           // FUNC-KMAC-006: KeyMgr Sideloaded Key Path
           // =================================================================
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "KMAC using KeyMgr sideloaded key (CFG_SHADOWED.sideload=1)";
 
           // Read key from KeyMgr push sideload buffers
@@ -2005,7 +1970,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           //   SelKeySize = 2 -> Key256 always.
           key_bytes = 32;
 
-          CSML_INFO(2, logger) << "Sideloaded key length: 256 bits (32 bytes, fixed Key256)";
+          REG_INFO(2, logger) << "Sideloaded key length: 256 bits (32 bytes, fixed Key256)";
 
           // Handle two-share key format from KeyMgr
           // Always XOR shares (KeyMgr provides masked format)
@@ -2021,10 +1986,10 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           }
 
           if (EnMasking) {
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "Sideloaded key used in masked form (EnMasking=1)";
           } else {
-            CSML_INFO(2, logger) << "Sideloaded key automatically unmasked "
+            REG_INFO(2, logger) << "Sideloaded key automatically unmasked "
                                     "(EnMasking=0, XOR applied)";
           }
 
@@ -2035,34 +2000,17 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           // =================================================================
           // FUNC-KMAC-005: Software KEY_SHARE Register Path
           // =================================================================
-          CSML_INFO(2, logger) << "KMAC using software KEY_SHARE registers "
+          REG_INFO(2, logger) << "KMAC using software KEY_SHARE registers "
                                   "(CFG_SHADOWED.sideload=0)";
 
-          // Read KEY_LEN register for key length
-          uint32_t key_len_val = KEY_LEN.len;
-          switch (key_len_val) {
-          case 0x0:
-            key_bytes = 16;
-            break; // 128-bit
-          case 0x1:
-            key_bytes = 24;
-            break; // 192-bit
-          case 0x2:
-            key_bytes = 32;
-            break; // 256-bit
-          case 0x3:
-            key_bytes = 48;
-            break; // 384-bit
-          case 0x4:
-            key_bytes = 64;
-            break; // 512-bit
-          default:
-            CSML_ERROR(1, logger) << "Invalid KEY_LEN value: 0x" << std::hex
-                                  << key_len_val << std::dec;
-            return false;
-          }
+          // KEY_LEN.len is 3 bits; handle_write_KEY_LEN already rejects 0x5..0x7
+          // so only the five legal encodings can reach START. The extra slots
+          // keep a reserved value from indexing off the end of the table.
+          static const uint32_t key_bytes_table[] = {16, 24, 32, 48, 64,
+                                                     16, 16, 16};
+          key_bytes = key_bytes_table[KEY_LEN.len & 0x7u];
 
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "KMAC key length from KEY_LEN: " << (key_bytes * 8)
               << " bits (" << key_bytes << " bytes)";
 
@@ -2078,7 +2026,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
               uint8_t share1_byte = (share1_word >> (byte_idx * 8)) & 0xFF;
               key_material[i] = share0_byte ^ share1_byte;
             }
-            CSML_INFO(2, logger) << "KMAC key extracted from KEY_SHARE0 XOR "
+            REG_INFO(2, logger) << "KMAC key extracted from KEY_SHARE0 XOR "
                                     "KEY_SHARE1 (EnMasking=1)";
           } else {
             // Unmasked mode: Use only KEY_SHARE0
@@ -2089,7 +2037,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
               uint8_t share0_byte = (share0_word >> (byte_idx * 8)) & 0xFF;
               key_material[i] = share0_byte;
             }
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "KMAC key extracted from KEY_SHARE0 (EnMasking=0)";
           }
         }
@@ -2102,7 +2050,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           if (i < key_bytes - 1)
             ss_key << " ";
         }
-        CSML_INFO(2, logger) << "MODEL Key material (" << (key_bytes * 8)
+        REG_INFO(2, logger) << "MODEL Key material (" << (key_bytes * 8)
                              << " bits): " << ss_key.str();
 
         // Step 4: Initialize SHAKE context (SHAKE128 for KMAC128, SHAKE256 for
@@ -2112,19 +2060,19 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         if (kstrength == 0x0) {
           md = EVP_shake128();
           rate = 168; // SHAKE128 rate
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "Using SHAKE128 for KMAC128 construction (rate=168)";
         } else {
           md = EVP_shake256();
           rate = 136; // SHAKE256 rate
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "Using SHAKE256 for KMAC256 construction (rate=136)";
         }
 
         // Reset existing EVP_MD context (don't create new one to avoid memory
         // leak)
         if (evp_md_ctx == nullptr) {
-          CSML_ERROR(1, logger) << "EVP_MD_CTX not allocated";
+          REG_ERROR(1, logger) << "EVP_MD_CTX not allocated";
           return false;
         }
 
@@ -2132,7 +2080,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         EVP_MD_CTX_reset(ctx); // Reset context to clear any previous state
 
         if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) {
-          CSML_ERROR(1, logger)
+          REG_ERROR(1, logger)
               << "Failed to initialize SHAKE context for KMAC";
           return false;
         }
@@ -2187,7 +2135,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
         // Absorb PREFIX block
         if (EVP_DigestUpdate(ctx, bytepadded_prefix, rate) != 1) {
-          CSML_ERROR(1, logger) << "Failed to absorb PREFIX block for KMAC";
+          REG_ERROR(1, logger) << "Failed to absorb PREFIX block for KMAC";
           return false;
         }
 
@@ -2199,10 +2147,10 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           if (i < 39)
             ss_prefix << " ";
         }
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "MODEL PREFIX block (first 40 bytes): " << ss_prefix.str();
 
-        CSML_INFO(2, logger) << "Absorbed PREFIX block (" << rate << " bytes)";
+        REG_INFO(2, logger) << "Absorbed PREFIX block (" << rate << " bytes)";
 
         // Step 6: Construct and absorb KEY block: bytepad(encode_string(K),
         // rate)
@@ -2240,7 +2188,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
         // Absorb KEY block
         if (EVP_DigestUpdate(ctx, key_block, rate) != 1) {
-          CSML_ERROR(1, logger) << "Failed to absorb KEY block for KMAC";
+          REG_ERROR(1, logger) << "Failed to absorb KEY block for KMAC";
           return false;
         }
 
@@ -2252,12 +2200,12 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
           if (i < 39)
             ss_keyblock << " ";
         }
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "MODEL KEY block (first 40 bytes): " << ss_keyblock.str();
 
-        CSML_INFO(2, logger) << "Absorbed KEY block (" << rate << " bytes)";
+        REG_INFO(2, logger) << "Absorbed KEY block (" << rate << " bytes)";
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "KMAC initialization complete - ready to absorb message data";
       }
       // =====================================================================
@@ -2268,11 +2216,11 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         const EVP_MD *md = nullptr;
         if (kstrength == 0x0) {
           md = EVP_shake128();
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "Selected cSHAKE128 algorithm (EVP_shake128 base)";
         } else { // kstrength == 0x2
           md = EVP_shake256();
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "Selected cSHAKE256 algorithm (EVP_shake256 base)";
         }
 
@@ -2285,12 +2233,12 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
           // Initialize digest operation
           if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) {
-            CSML_ERROR(1, logger)
+            REG_ERROR(1, logger)
                 << "OpenSSL EVP_DigestInit_ex failed for cSHAKE";
             return false;
           }
 
-          CSML_INFO(2, logger)
+          REG_INFO(2, logger)
               << "OpenSSL EVP context initialized for cSHAKE operation";
 
           // cSHAKE mode (kmac_en=0): Absorb PREFIX registers before message
@@ -2346,21 +2294,21 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
             // Absorb bytepadded PREFIX into Keccak state
             if (EVP_DigestUpdate(ctx, bytepadded, rate) != 1) {
-              CSML_ERROR(1, logger) << "OpenSSL EVP_DigestUpdate failed for "
+              REG_ERROR(1, logger) << "OpenSSL EVP_DigestUpdate failed for "
                                        "cSHAKE bytepad absorption";
               return false;
             }
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "cSHAKE bytepad absorbed: " << rate << " bytes (left_encode("
                 << rate << ") || PREFIX || zero_padding)";
           } else {
             // Empty PREFIX: cSHAKE with N="" and S="" is functionally
             // equivalent to SHAKE
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "cSHAKE PREFIX empty: functionally equivalent to SHAKE";
           }
         } else {
-          CSML_ERROR(1, logger)
+          REG_ERROR(1, logger)
               << "Cannot initialize OpenSSL: EVP context not allocated";
           return false;
         }
@@ -2368,13 +2316,13 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     } // End of mode == 0x3 (cSHAKE/KMAC mode)
     else {
       // Unknown mode - should not reach here
-      CSML_ERROR(1, logger)
+      REG_ERROR(1, logger)
           << "Unknown mode value: 0x" << std::hex << mode << std::dec;
       return false;
     }
 
     // Configuration validation passed - transition to ABSORB state
-    CSML_INFO(2, logger) << "START command: transitioning IDLE → ABSORB";
+    REG_INFO(2, logger) << "START command: transitioning IDLE → ABSORB";
 
     // A new message restarts the fifo_empty preconditions: nothing has filled
     // yet and Process has not been issued for this message.
@@ -2387,7 +2335,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     // Auto-clear CFG_REGWEN.en (lock configuration)
     CFG_REGWEN.en = 0;
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "CFG_REGWEN.en auto-cleared to 0 (configuration locked)";
 
     // FUNC-KMAC-024: Apply temporal decoupling for START command processing
@@ -2406,7 +2354,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       m_qk.sync();
     }
 
-    CSML_INFO(2, logger) << "FUNC-KMAC-024: START command delay=" << start_delay
+    REG_INFO(2, logger) << "FUNC-KMAC-024: START command delay=" << start_delay
                          << " (local_time=" << m_qk.get_local_time() << ")";
 
     return true;
@@ -2417,7 +2365,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // =====================================================================
   else if (cmd_field == 0x2E) {
     if (fsm_state != KmacState::ABSORB) {
-      CSML_ERROR(1, logger) << "PROCESS command rejected: not in ABSORB state";
+      REG_ERROR(1, logger) << "PROCESS command rejected: not in ABSORB state";
 
       // FUNC-KMAC-019: Set SwCmdSequence error (0x08)
       ERR_CODE =
@@ -2428,7 +2376,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       return false;
     }
 
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "PROCESS command: finalizing digest with OpenSSL EVP_DigestFinal_ex";
 
     // Software has no more data to supply, so the fifo_empty interrupt is
@@ -2477,7 +2425,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       } else {
         kmac_output_bytes = 136;  // KMAC256: SHAKE256 rate
       }
-      CSML_INFO(2, logger) << "KMAC mode: using output length "
+      REG_INFO(2, logger) << "KMAC mode: using output length "
                            << kmac_output_bytes * 8 << " bits ("
                            << kmac_output_bytes << " bytes) based on kstrength="
                            << kstrength;
@@ -2485,7 +2433,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     // Flush partial packer entry (only actual bytes, no zero-padding)
     if (packer_position > 0) {
-      CSML_INFO(2, logger) << "Flushing partial packer entry: "
+      REG_INFO(2, logger) << "Flushing partial packer entry: "
                            << packer_position << " bytes";
 
       // Debug: Log partial packer buffer in hex
@@ -2496,7 +2444,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         if (i < packer_position - 1)
           ss_partial << " ";
       }
-      CSML_INFO(2, logger) << "MODEL Partial packer data (hex): "
+      REG_INFO(2, logger) << "MODEL Partial packer data (hex): "
                            << ss_partial.str();
 
       // Update OpenSSL with only the actual bytes in packer buffer
@@ -2504,7 +2452,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       // internally All modes (SHA3/SHAKE/cSHAKE/KMAC) use EVP_DigestUpdate
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
       if (EVP_DigestUpdate(ctx, packer_buffer, packer_position) != 1) {
-        CSML_ERROR(1, logger)
+        REG_ERROR(1, logger)
             << "OpenSSL EVP_DigestUpdate failed for final packer flush";
         return false;
       }
@@ -2525,7 +2473,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
 
       if (kmac_output_bytes == 0) {
-        CSML_ERROR(1, logger) << "KMAC output length not set";
+        REG_ERROR(1, logger) << "KMAC output length not set";
         return false;
       }
 
@@ -2535,14 +2483,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       // For KMAC: Always extract FULL output in one call for correct XOF
       // semantics Buffer it and slice for STATE window access
       if (kmac_output_bytes > sizeof(xof_full_output)) {
-        CSML_ERROR(1, logger)
+        REG_ERROR(1, logger)
             << "KMAC output length " << kmac_output_bytes
             << " exceeds buffer size " << sizeof(xof_full_output);
         return false;
       }
 
       if (EVP_DigestFinalXOF(ctx, xof_full_output, kmac_output_bytes) != 1) {
-        CSML_ERROR(1, logger) << "OpenSSL EVP_DigestFinalXOF failed for KMAC";
+        REG_ERROR(1, logger) << "OpenSSL EVP_DigestFinalXOF failed for KMAC";
         return false;
       }
 
@@ -2559,7 +2507,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       xof_output_offset = 0; // Start at beginning of generated output
       xof_total_length = kmac_output_bytes;
 
-      CSML_INFO(2, logger) << "KMAC output: extracted " << kmac_output_bytes
+      REG_INFO(2, logger) << "KMAC output: extracted " << kmac_output_bytes
                            << " bytes total, STATE window shows first "
                            << initial_chunk_size << " bytes";
     }
@@ -2569,12 +2517,12 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       // SHA3 mode: Fixed-length output
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
       if (EVP_DigestFinal_ex(ctx, digest_buffer, &md_len) != 1) {
-        CSML_ERROR(1, logger) << "OpenSSL EVP_DigestFinal_ex failed for SHA3";
+        REG_ERROR(1, logger) << "OpenSSL EVP_DigestFinal_ex failed for SHA3";
         return false;
       }
 
       digest_size = md_len;
-      CSML_INFO(2, logger) << "SHA3 digest finalized: " << digest_size
+      REG_INFO(2, logger) << "SHA3 digest finalized: " << digest_size
                            << " bytes";
     } else {
       // SHAKE/cSHAKE mode: Extendable output (XOF)
@@ -2593,7 +2541,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
       default:
         // Invalid kstrength (should have been caught in START)
-        CSML_ERROR(1, logger) << "PROCESS: invalid kstrength for XOF mode";
+        REG_ERROR(1, logger) << "PROCESS: invalid kstrength for XOF mode";
         return false;
       }
 
@@ -2606,7 +2554,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
       if (EVP_DigestFinalXOF(ctx, xof_full_output, sizeof(xof_full_output)) !=
           1) {
-        CSML_ERROR(1, logger)
+        REG_ERROR(1, logger)
             << "OpenSSL EVP_DigestFinalXOF failed for SHAKE/cSHAKE";
         return false;
       }
@@ -2616,7 +2564,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
       std::memcpy(digest_buffer, xof_full_output, rate_bytes);
       digest_size = rate_bytes;
-      CSML_INFO(2, logger) << "SHAKE/cSHAKE initial output finalized: "
+      REG_INFO(2, logger) << "SHAKE/cSHAKE initial output finalized: "
                            << digest_size << " bytes (rate), "
                            << xof_total_length << " bytes buffered for RUN";
     }
@@ -2624,7 +2572,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // If EnMasking=1, generate two random shares such that share0 XOR share1 =
     // digest
     if (EnMasking) {
-      CSML_INFO(2, logger) << "EnMasking=1: Generating masked shares";
+      REG_INFO(2, logger) << "EnMasking=1: Generating masked shares";
 
       // Generate random share0
       for (unsigned int i = 0; i < digest_size; i++) {
@@ -2636,14 +2584,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         digest_share1[i] = digest_buffer[i] ^ digest_share0[i];
       }
 
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "Masked shares generated (share0 XOR share1 = digest)";
     } else {
       // EnMasking=0: Copy digest to share0, zero share1
       std::memcpy(digest_share0, digest_buffer, digest_size);
       std::memset(digest_share1, 0, digest_size);
 
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "EnMasking=0: Digest stored in share0, share1 zeroed";
     }
 
@@ -2653,7 +2601,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     }
     fifo_depth = 0;
     fifo_drain_event.cancel();
-    CSML_INFO(2, logger) << "MSG_FIFO cleared (fifo_depth reset to 0)";
+    REG_INFO(2, logger) << "MSG_FIFO cleared (fifo_depth reset to 0)";
 
     // Transition to SQUEEZE state
     update_fsm_state(KmacState::SQUEEZE);
@@ -2664,7 +2612,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     // Generate kmac_done interrupt
     INTR_STATE.kmac_done = 1;
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "kmac_done interrupt generated (INTR_STATE.kmac_done=1)";
     evaluate_interrupt();  // Update intr_o output
 
@@ -2685,7 +2633,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       m_qk.sync();
     }
 
-    CSML_INFO(2, logger) << "FUNC-KMAC-024: PROCESS command delay="
+    REG_INFO(2, logger) << "FUNC-KMAC-024: PROCESS command delay="
                          << process_delay
                          << " (local_time=" << m_qk.get_local_time() << ")";
 
@@ -2697,7 +2645,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // =====================================================================
   else if (cmd_field == 0x31) {
     if (fsm_state != KmacState::SQUEEZE) {
-      CSML_ERROR(1, logger) << "RUN command rejected: not in SQUEEZE state";
+      REG_ERROR(1, logger) << "RUN command rejected: not in SQUEEZE state";
 
       // FUNC-KMAC-019: Set SwCmdSequence error (0x08)
       ERR_CODE = 0x08000000 | 0x31; // SwCmdSequence with RUN cmd in debug bits
@@ -2707,7 +2655,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       return false;
     }
 
-    CSML_INFO(2, logger) << "RUN command: executing additional Keccak rounds "
+    REG_INFO(2, logger) << "RUN command: executing additional Keccak rounds "
                             "for extended output";
 
     // =====================================================================
@@ -2724,7 +2672,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     if (mode == 0x0) {
       // SHA3 mode: RUN command not applicable (fixed-length output)
-      CSML_ERROR(1, logger) << "RUN command rejected: SHA3 mode produces "
+      REG_ERROR(1, logger) << "RUN command rejected: SHA3 mode produces "
                                "fixed-length output only";
 
       // FUNC-KMAC-019: Set SwCmdSequence error (0x08)
@@ -2743,19 +2691,19 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     switch (kstrength) {
     case 0x0:           // L128 (SHAKE128/cSHAKE128/KMAC128)
       rate_bytes = 168; // 1344 bits / 8
-      CSML_INFO(2, logger) << "SHAKE/cSHAKE/KMAC128: rate = " << rate_bytes
+      REG_INFO(2, logger) << "SHAKE/cSHAKE/KMAC128: rate = " << rate_bytes
                            << " bytes";
       break;
 
     case 0x2:           // L256 (SHAKE256/cSHAKE256/KMAC256)
       rate_bytes = 136; // 1088 bits / 8
-      CSML_INFO(2, logger) << "SHAKE/cSHAKE/KMAC256: rate = " << rate_bytes
+      REG_INFO(2, logger) << "SHAKE/cSHAKE/KMAC256: rate = " << rate_bytes
                            << " bytes";
       break;
 
     default:
       // Invalid kstrength for XOF modes (should have been caught in START)
-      CSML_ERROR(1, logger) << "RUN command: invalid kstrength=0x" << std::hex
+      REG_ERROR(1, logger) << "RUN command: invalid kstrength=0x" << std::hex
                             << kstrength << std::dec;
 
       ERR_CODE = 0x06000000 | ((mode & 0xFF) << 8) | (kstrength & 0xFF);
@@ -2781,7 +2729,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         xof_output_offset = (xof_total_length > run_advance_size)
                                 ? (xof_total_length - run_advance_size)
                                 : 0;
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "RUN command: no more output beyond offset " << xof_output_offset
             << " (total=" << xof_total_length << ")";
         // Keep STATE window at last position
@@ -2802,7 +2750,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       }
       digest_size = bytes_to_copy;
 
-      CSML_INFO(2, logger) << "RUN: advanced STATE window to offset "
+      REG_INFO(2, logger) << "RUN: advanced STATE window to offset "
                            << xof_output_offset << ", showing " << bytes_to_copy
                            << " bytes (total=" << xof_total_length << ")";
     } else {
@@ -2814,7 +2762,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       xof_output_offset += rate_bytes;
 
       if (xof_output_offset >= xof_total_length) {
-        CSML_ERROR(1, logger)
+        REG_ERROR(1, logger)
             << "RUN command: extended output exhausted at offset "
             << xof_output_offset << " (buffered " << xof_total_length
             << " bytes)";
@@ -2830,14 +2778,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       std::memcpy(digest_buffer, xof_full_output + xof_output_offset,
                   bytes_to_copy);
       digest_size = static_cast<unsigned int>(bytes_to_copy);
-      CSML_INFO(2, logger) << "RUN: advanced SHAKE/cSHAKE STATE window to offset "
+      REG_INFO(2, logger) << "RUN: advanced SHAKE/cSHAKE STATE window to offset "
                            << xof_output_offset << ", showing " << bytes_to_copy
                            << " bytes (buffered " << xof_total_length << ")";
     }
 
     // If EnMasking=1, regenerate two random shares for the new output block
     if (EnMasking) {
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "EnMasking=1: Generating masked shares for extended output";
 
       // Generate random share0
@@ -2850,14 +2798,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
         digest_share1[i] = digest_buffer[i] ^ digest_share0[i];
       }
 
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "Masked shares generated (share0 XOR share1 = digest)";
     } else {
       // EnMasking=0: Copy digest to share0, zero share1
       std::memcpy(digest_share0, digest_buffer, digest_size);
       std::memset(digest_share1, 0, digest_size);
 
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "EnMasking=0: Digest stored in share0, share1 zeroed";
     }
 
@@ -2866,7 +2814,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // execution For functional TLM model, we keep it asserted (STATE window
     // immediately readable)
 
-    CSML_INFO(2, logger) << "RUN command complete: FSM remains in SQUEEZE, "
+    REG_INFO(2, logger) << "RUN command complete: FSM remains in SQUEEZE, "
                             "STATE window updated with new output block";
 
     return true;
@@ -2876,7 +2824,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
   // DONE Command (0x16): Any state → IDLE
   // =====================================================================
   else if (cmd_field == 0x16) {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "DONE command: returning to IDLE state with cleanup";
 
     // =====================================================================
@@ -2886,20 +2834,8 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // Reset OpenSSL context (zeroize internal state)
     if (evp_md_ctx != nullptr) {
       EVP_MD_CTX_reset(static_cast<EVP_MD_CTX *>(evp_md_ctx));
-      CSML_INFO(2, logger)
+      REG_INFO(2, logger)
           << "OpenSSL EVP context reset (internal state zeroized)";
-    }
-
-    // Clean up KMAC EVP_MAC contexts if allocated
-    if (evp_mac_ctx != nullptr) {
-      EVP_MAC_CTX_free(static_cast<EVP_MAC_CTX *>(evp_mac_ctx));
-      evp_mac_ctx = nullptr;
-      CSML_INFO(2, logger) << "OpenSSL EVP_MAC context freed";
-    }
-    if (evp_mac != nullptr) {
-      EVP_MAC_free(static_cast<EVP_MAC *>(evp_mac));
-      evp_mac = nullptr;
-      CSML_INFO(2, logger) << "OpenSSL EVP_MAC algorithm freed";
     }
 
     // Clear packer state
@@ -2921,7 +2857,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     std::memset(digest_share0, 0, sizeof(digest_share0));
     std::memset(digest_share1, 0, sizeof(digest_share1));
 
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "All internal state cleared (packer, FIFO, digest buffers)";
 
     // Transition to IDLE (allowed from any state)
@@ -2930,7 +2866,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // FUNC-KMAC-013: Increment ENTROPY_REFRESH_HASH_CNT after successful operation
     // This counter tracks the number of hash operations since last PRNG reseed
     ENTROPY_REFRESH_HASH_CNT = (ENTROPY_REFRESH_HASH_CNT + 1) & 0x3FF; // 10-bit counter
-    CSML_INFO(2, logger) << "FUNC-KMAC-013: ENTROPY_REFRESH_HASH_CNT incremented to "
+    REG_INFO(2, logger) << "FUNC-KMAC-013: ENTROPY_REFRESH_HASH_CNT incremented to "
                          << ENTROPY_REFRESH_HASH_CNT;
 
     // FUNC-KMAC-013: Automatic reseed once the count reaches the threshold
@@ -2938,14 +2874,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     // Auto-set CFG_REGWEN.en (unlock configuration)
     CFG_REGWEN.en = 1;
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "CFG_REGWEN.en auto-set to 1 (configuration unlocked)";
 
     // FUNC-KMAC-019: Clear ERR_CODE on successful DONE command
     // Per specification: ERR_CODE cleared only by Done command (on success) or
     // reset ERR_CODE persists across INTR_STATE interrupt clear
     if (static_cast<uint32_t>(ERR_CODE) != 0) {
-      CSML_INFO(2, logger) << "FUNC-KMAC-019: Clearing ERR_CODE after "
+      REG_INFO(2, logger) << "FUNC-KMAC-019: Clearing ERR_CODE after "
                               "successful DONE (ERR_CODE was 0x"
                            << std::hex << static_cast<uint32_t>(ERR_CODE)
                            << std::dec << ")";
@@ -2966,7 +2902,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       m_qk.sync();
     }
 
-    CSML_INFO(2, logger) << "FUNC-KMAC-024: DONE command delay=" << done_delay
+    REG_INFO(2, logger) << "FUNC-KMAC-024: DONE command delay=" << done_delay
                          << " (local_time=" << m_qk.get_local_time() << ")";
 
     return true;
@@ -3027,7 +2963,7 @@ bool kmac_ip::handle_read_STATUS(uint32_t &value, uint32_t read_mask) {
     value |= (1 << 17);
   }
 
-  CSML_INFO(2, logger) << "STATUS read: value=0x" << std::hex << value
+  REG_INFO(2, logger) << "STATUS read: value=0x" << std::hex << value
                        << std::dec << " (idle=" << ((value & 0x1) != 0)
                        << ", absorb=" << ((value & 0x2) != 0)
                        << ", squeeze=" << ((value & 0x4) != 0)
@@ -3050,13 +2986,13 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
 
   // Validate index bounds (0-511)
   if (index >= 512) {
-    CSML_ERROR(1, logger) << "MSG_FIFO write rejected: invalid index " << index;
+    REG_ERROR(1, logger) << "MSG_FIFO write rejected: invalid index " << index;
     return false;
   }
 
   // FUNC-KMAC-021: Block MSG_FIFO writes when in ESCALATION_LOCKED state
   if (fsm_state == KmacState::ESCALATION_LOCKED) {
-    CSML_ERROR(1, logger) << "MSG_FIFO[" << index
+    REG_ERROR(1, logger) << "MSG_FIFO[" << index
                           << "] write rejected: FSM in ESCALATION_LOCKED state "
                              "(lc_escalate_en_i active)";
     return false;
@@ -3064,7 +3000,7 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
 
   // Check FSM state: Only accept writes in ABSORB state
   if (fsm_state != KmacState::ABSORB) {
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "MSG_FIFO write rejected: not in ABSORB state (current state="
         << static_cast<int>(fsm_state) << ")";
 
@@ -3082,7 +3018,7 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
   // FUNC-KMAC-007: Block software MSG_FIFO writes during application interface
   // operation
   if (app_interface_active) {
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "MSG_FIFO write rejected: application interface active";
 
     // FUNC-KMAC-019: Set SwPushedMsgFifo error (0x02)
@@ -3134,7 +3070,7 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
     }
   }
 
-  CSML_DEBUG(3, logger) << "MSG_FIFO[" << index << "] write: " << data_length
+  REG_DEBUG(3, logger) << "MSG_FIFO[" << index << "] write: " << data_length
                         << " bytes, byte_enable=0x" << std::hex
                         << (int)byte_enable << std::dec
                         << ", byte_offset=" << byte_offset;
@@ -3148,7 +3084,7 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
   for (unsigned int i = 0; i < data_length; i++) {
     // Always use sequential packing for MSG_FIFO
     unsigned int byte_pos = packer_position % 8;
-    CSML_DEBUG(4, logger)
+    REG_DEBUG(4, logger)
         << "Sequential pack: byte at byte_pos=" << byte_pos
         << " (packer_position=" << packer_position << ")";
 
@@ -3167,7 +3103,7 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
       msg_fifo.push(fifo_entry);
       fifo_depth++;
 
-      CSML_INFO(2, logger) << "Pushed 64-bit entry to FIFO: 0x" << std::hex
+      REG_INFO(2, logger) << "Pushed 64-bit entry to FIFO: 0x" << std::hex
                            << fifo_entry << std::dec
                            << " (fifo_depth=" << fifo_depth << ")";
 
@@ -3179,13 +3115,13 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
         if (j < 7)
           ss_packer << " ";
       }
-      CSML_INFO(2, logger) << "MSG absorbed (8 bytes): " << ss_packer.str();
+      REG_INFO(2, logger) << "MSG absorbed (8 bytes): " << ss_packer.str();
 
       // Update OpenSSL digest with this 64-bit entry
       // All modes (SHA3/SHAKE/cSHAKE/KMAC) use EVP_DigestUpdate
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
       if (EVP_DigestUpdate(ctx, packer_buffer, 8) != 1) {
-        CSML_ERROR(1, logger) << "OpenSSL EVP_DigestUpdate failed";
+        REG_ERROR(1, logger) << "OpenSSL EVP_DigestUpdate failed";
         return false;
       }
 
@@ -3196,7 +3132,7 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
       // FUNC-KMAC-024: Check for FIFO full (implement backpressure with
       // temporal decoupling)
       if (fifo_depth >= max_fifo_depth) {
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "FIFO full (" << fifo_depth << "/" << max_fifo_depth
             << ") - applying backpressure with temporal decoupling";
 
@@ -3226,7 +3162,7 @@ bool kmac_ip::handle_write_MSG_FIFO(unsigned int index, uint32_t value,
         // after the sync above, which can itself advance simulation time.
         fifo_drain_event.notify(backpressure_delay);
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "FUNC-KMAC-024: Backpressure delay=" << backpressure_delay
             << " (local_time=" << m_qk.get_local_time() << ")";
       }
@@ -3249,7 +3185,7 @@ bool kmac_ip::handle_read_STATE(unsigned int index, uint32_t &value) {
 
   // Validate index bounds (0-127)
   if (index >= 128) {
-    CSML_ERROR(1, logger) << "STATE read rejected: invalid index " << index;
+    REG_ERROR(1, logger) << "STATE read rejected: invalid index " << index;
     value = 0;
     return false;
   }
@@ -3258,7 +3194,7 @@ bool kmac_ip::handle_read_STATE(unsigned int index, uint32_t &value) {
   // (key protection)
   if (app_interface_active) {
     value = 0;
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "STATE[" << index
         << "] read: returning 0 (application interface active, key protection)";
     return true;
@@ -3267,7 +3203,7 @@ bool kmac_ip::handle_read_STATE(unsigned int index, uint32_t &value) {
   // Key protection: Return 0 if not in SQUEEZE state
   if (fsm_state != KmacState::SQUEEZE) {
     value = 0;
-    CSML_INFO(2, logger) << "STATE[" << index
+    REG_INFO(2, logger) << "STATE[" << index
                          << "] read: returning 0 (key protection, fsm_state="
                          << static_cast<int>(fsm_state) << ")";
     return true;
@@ -3328,7 +3264,7 @@ bool kmac_ip::handle_read_STATE(unsigned int index, uint32_t &value) {
             ((value & 0x00FF0000) >> 8) | ((value & 0xFF000000) >> 24);
   }
 
-  CSML_INFO(2, logger) << "STATE[" << index << "] read:"
+  REG_INFO(2, logger) << "STATE[" << index << "] read:"
                        << " byte_offset=" << byte_offset << " value=0x"
                        << std::hex << value << std::dec
                        << " (digest_size=" << digest_size << ")";
@@ -3342,7 +3278,7 @@ bool kmac_ip::handle_read_STATE(unsigned int index, uint32_t &value) {
 
 void kmac_ip::handle_app_request(unsigned int app_index, uint64_t data,
                                  uint8_t strobe, bool last) {
-  CSML_INFO(2, logger) << "Application interface [" << app_index
+  REG_INFO(2, logger) << "Application interface [" << app_index
                        << "] request: data=0x" << std::hex << data << std::dec
                        << " strobe=0x" << std::hex << (int)strobe << std::dec
                        << " last=" << last;
@@ -3350,7 +3286,7 @@ void kmac_ip::handle_app_request(unsigned int app_index, uint64_t data,
   // FUNC-KMAC-021: Block application interface requests when in
   // ESCALATION_LOCKED state
   if (fsm_state == KmacState::ESCALATION_LOCKED) {
-    CSML_ERROR(1, logger) << "Application interface [" << app_index
+    REG_ERROR(1, logger) << "Application interface [" << app_index
                           << "] request rejected: FSM in ESCALATION_LOCKED "
                              "state (lc_escalate_en_i active)";
     app_operation_error = true;
@@ -3365,10 +3301,10 @@ void kmac_ip::handle_app_request(unsigned int app_index, uint64_t data,
     // Clear shared FIFO for new app operation
     msg_fifo = {};
     fifo_depth = 0;
-    CSML_INFO(2, logger) << "Application interface [" << app_index
+    REG_INFO(2, logger) << "Application interface [" << app_index
                          << "] granted access - software MMIO now blocked";
   } else if (active_app_index != app_index) {
-    CSML_INFO(2, logger) << "Application interface [" << app_index
+    REG_INFO(2, logger) << "Application interface [" << app_index
                          << "] blocked: app [" << active_app_index
                          << "] active";
     return;
@@ -3378,21 +3314,21 @@ void kmac_ip::handle_app_request(unsigned int app_index, uint64_t data,
   if (strobe != 0x00) {
     msg_fifo.push(data);
     fifo_depth++;
-    CSML_INFO(2, logger) << "Application data accumulated in msg_fifo: fifo_depth="
+    REG_INFO(2, logger) << "Application data accumulated in msg_fifo: fifo_depth="
                          << fifo_depth;
   } else {
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "Application data beat ignored: strobe=0x00 (no valid bytes)";
   }
 
   if (last) {
-    CSML_INFO(2, logger) << "Application last beat - executing operation";
+    REG_INFO(2, logger) << "Application last beat - executing operation";
     execute_app_operation(app_index);
   }
 }
 
 void kmac_ip::execute_app_operation(unsigned int app_index) {
-  CSML_INFO(2, logger) << "Executing application operation [" << app_index
+  REG_INFO(2, logger) << "Executing application operation [" << app_index
                        << "] message_entries=" << fifo_depth;
 
   // FUNC-KMAC-019: Check KeyNotValid error (0x01) for KeyMgr application
@@ -3402,7 +3338,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
       app_algorithm[0] == 0) { // KeyMgr interface using KMAC mode
     // Check KeyMgr push sideload key validity
     if (!m_keymgr_key_valid) {
-        CSML_ERROR(1, logger) << "FUNC-KMAC-019: KeyNotValid error (0x01) - "
+        REG_ERROR(1, logger) << "FUNC-KMAC-019: KeyNotValid error (0x01) - "
                               << "KeyMgr application interface requested KMAC "
                                  "operation but sideloaded key not valid";
 
@@ -3421,7 +3357,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
         app_operation_error = true;
         app_operation_done = true;
 
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "FUNC-KMAC-019: KeyNotValid is FATAL - requires system reset, "
                "no err_processed recovery";
         return;
@@ -3430,7 +3366,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
 
   // Validate non-empty message
   if (msg_fifo.empty()) {
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "Application operation failed: Empty message not supported";
     app_operation_error = true;
     app_operation_done = true;
@@ -3439,7 +3375,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
 
   EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
   if (!ctx) {
-    CSML_ERROR(1, logger)
+    REG_ERROR(1, logger)
         << "Application operation failed: EVP_MD_CTX not allocated";
     app_operation_error = true;
     return;
@@ -3450,7 +3386,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
       (app_algorithm[app_index] == 1) ? EVP_shake128() : EVP_shake256();
 
   if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) {
-    CSML_ERROR(1, logger) << "Application operation failed: EVP_DigestInit_ex";
+    REG_ERROR(1, logger) << "Application operation failed: EVP_DigestInit_ex";
     app_operation_error = true;
     return;
   }
@@ -3461,7 +3397,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
     EVP_DigestUpdate(ctx, key_block, 32);
     uint8_t kmac_prefix[] = {0x01, 0x20, 'K', 'M', 'A', 'C'};
     EVP_DigestUpdate(ctx, kmac_prefix, sizeof(kmac_prefix));
-    CSML_INFO(2, logger) << "KMAC key and prefix absorbed";
+    REG_INFO(2, logger) << "KMAC key and prefix absorbed";
   } else {
     // cSHAKE: bytepad(encode_string(N) || encode_string(S), rate) per NIST SP
     // 800-185
@@ -3497,7 +3433,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
       bytepadded[offset++] = 0x00;
 
     EVP_DigestUpdate(ctx, bytepadded, rate);
-    CSML_INFO(2, logger) << "cSHAKE bytepad absorbed: " << customization
+    REG_INFO(2, logger) << "cSHAKE bytepad absorbed: " << customization
                          << " (rate=" << rate << ")";
   }
 
@@ -3512,13 +3448,13 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
       bytes[j] = (word >> (j * 8)) & 0xFF;
     EVP_DigestUpdate(ctx, bytes, 8);
   }
-  CSML_INFO(2, logger) << "Application message absorbed";
+  REG_INFO(2, logger) << "Application message absorbed";
 
   // For KMAC: append output length
   if (app_algorithm[app_index] == 0) {
     uint8_t len_enc[] = {0x02, 0x01, 0x00};
     EVP_DigestUpdate(ctx, len_enc, 3);
-    CSML_INFO(2, logger) << "KMAC output length encoded";
+    REG_INFO(2, logger) << "KMAC output length encoded";
   }
 
   // Finalize
@@ -3540,7 +3476,7 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
   }
 
   app_operation_done = true;
-  CSML_INFO(2, logger) << "Application operation completed";
+  REG_INFO(2, logger) << "Application operation completed";
 
   // FUNC-KMAC-024: Apply temporal decoupling for application interface response
   // timing Architecture map timing constraint: application interface operations
@@ -3558,13 +3494,13 @@ void kmac_ip::execute_app_operation(unsigned int app_index) {
     m_qk.sync();
   }
 
-  CSML_INFO(2, logger) << "FUNC-KMAC-024: Application interface [" << app_index
+  REG_INFO(2, logger) << "FUNC-KMAC-024: Application interface [" << app_index
                        << "] response delay=" << app_delay
                        << " (local_time=" << m_qk.get_local_time() << ")";
 }
 
 void kmac_ip::clear_app_state() {
-  CSML_INFO(2, logger) << "Clearing application interface state";
+  REG_INFO(2, logger) << "Clearing application interface state";
   app_interface_active = false;
   active_app_index = 0;
   app_operation_done = false;

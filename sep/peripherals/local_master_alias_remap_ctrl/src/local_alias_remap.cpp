@@ -66,8 +66,8 @@ local_alias_remap_ip::Region local_alias_remap_ip::get_region(uint32_t idx) cons
         return Region{};  // return default-constructed (all zeros)
 
     Region r;
-    // Extract fields from csml register field accessors
-    // Note: CSML fields store [55:12] bits, need to shift left by 12 to get full address
+    // Extract fields from regmodel register field accessors
+    // Note: regmodel fields store [55:12] bits, need to shift left by 12 to get full address
     r.start_addr = static_cast<uint64_t>(REGION_START[idx].start_addr) << 12;
     r.end_addr   = static_cast<uint64_t>(REGION_END[idx].end_addr) << 12;
     r.offset     = static_cast<uint64_t>(REGION_ATTRS[idx].offset) << 12;
@@ -94,8 +94,8 @@ int local_alias_remap_ip::match_region(uint64_t addr) const
     // Find first valid region where addr falls in [start, end). This implements
     // the LZC (leading-zero-count / priority encoder) behavior from RTL.
     for (uint32_t r = 0; r < NUM_REGIONS; ++r) {
-        // Extract fields directly from csml field accessors
-        // Note: CSML fields store [55:12] bits, need to shift left by 12 to get full address
+        // Extract fields directly from regmodel field accessors
+        // Note: regmodel fields store [55:12] bits, need to shift left by 12 to get full address
         const uint64_t start_addr = static_cast<uint64_t>(REGION_START[r].start_addr) << 12;
         const uint64_t end_addr   = static_cast<uint64_t>(REGION_END[r].end_addr) << 12;
         const bool     valid      = static_cast<bool>(REGION_ATTRS[r].valid);

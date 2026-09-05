@@ -23,9 +23,9 @@ using namespace spi_controller_regs;
  */
 void testbench::test_coverage_big_endian_byte_order()
 {
-    CSML_INFO(0, test->logger) << "\n========================================" << std::endl;
-    CSML_INFO(0, test->logger) << "[COVERAGE TEST 1] Big-Endian Byte Ordering" << std::endl;
-    CSML_INFO(0, test->logger) << "========================================\n" << std::endl;
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[COVERAGE TEST 1] Big-Endian Byte Ordering" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
 
     bool test_passed = true;
 
@@ -41,9 +41,9 @@ void testbench::test_coverage_big_endian_byte_order()
 
     // Verify ByteOrder is now false
     if (!dut->get_byte_order()) {
-        CSML_INFO(0, test->logger) << "[PASS] ByteOrder successfully changed to Big-Endian" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] ByteOrder successfully changed to Big-Endian" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Failed to change ByteOrder to Big-Endian" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Failed to change ByteOrder to Big-Endian" << std::endl;
         report_test_result("Big-Endian Byte Order", false);
         return;
     }
@@ -59,7 +59,7 @@ void testbench::test_coverage_big_endian_byte_order()
     // Wait for transaction to complete
     bool completed = wait_for_transaction_complete();
     if (!completed) {
-        CSML_ERROR(0, test->logger) << "[FAIL] Big-Endian transaction timed out" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Big-Endian transaction timed out" << std::endl;
         report_test_result("Big-Endian Byte Order", false);
         return;
     }
@@ -70,9 +70,9 @@ void testbench::test_coverage_big_endian_byte_order()
     bool ready = (status >> 31) & 0x1;
     bool active = (status >> 30) & 0x1;
     if (ready && !active) {
-        CSML_INFO(0, test->logger) << "[PASS] Big-Endian transaction completed: READY=1, ACTIVE=0" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] Big-Endian transaction completed: READY=1, ACTIVE=0" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Unexpected status after Big-Endian transaction: READY=" << ready << ", ACTIVE=" << active << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Unexpected status after Big-Endian transaction: READY=" << ready << ", ACTIVE=" << active << std::endl;
         test_passed = false;
     }
 
@@ -80,7 +80,7 @@ void testbench::test_coverage_big_endian_byte_order()
     uint32_t rx_data;
     test->read_register_32(RXDATA_OFFSET, rx_data);
     wait(10, SC_NS);
-    CSML_INFO(0, test->logger) << "[INFO] Big-Endian read RXDATA = 0x" << std::hex << rx_data << std::dec << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Big-Endian read RXDATA = 0x" << std::hex << rx_data << std::dec << std::endl;
 
     // Restore ByteOrder to Little-Endian (true)
     dut->ByteOrder.Set_param(dut->ByteOrder.get_Name(), true);
@@ -101,9 +101,9 @@ void testbench::test_coverage_big_endian_byte_order()
  */
 void testbench::test_coverage_intr_test_edge_cases()
 {
-    CSML_INFO(0, test->logger) << "\n========================================" << std::endl;
-    CSML_INFO(0, test->logger) << "[COVERAGE TEST 2] INTR_TEST Edge Cases" << std::endl;
-    CSML_INFO(0, test->logger) << "========================================\n" << std::endl;
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[COVERAGE TEST 2] INTR_TEST Edge Cases" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
 
     software_reset();
     wait(100, SC_NS);
@@ -113,7 +113,7 @@ void testbench::test_coverage_intr_test_edge_cases()
     wait(10, SC_NS);
 
     // Sub-test 1: Force error interrupt, create real error, then release
-    CSML_INFO(0, test->logger) << "[Sub-Test 1] Error interrupt: force + real error + release" << std::endl;
+    REG_INFO(0, test->logger) << "[Sub-Test 1] Error interrupt: force + real error + release" << std::endl;
 
     // Force error interrupt via INTR_TEST (bit 0 -> 0x1)
     test->write_register_32(INTR_TEST_OFFSET, 0x1);
@@ -136,9 +136,9 @@ void testbench::test_coverage_intr_test_edge_cases()
     uint32_t intr_status;
     test->read_register_32(INTR_STATUS_OFFSET, intr_status);
     if (intr_status & 0x1) {
-        CSML_INFO(0, test->logger) << "[PASS] Error interrupt remained active after test release (real error present)" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] Error interrupt remained active after test release (real error present)" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Error interrupt cleared despite real error" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Error interrupt cleared despite real error" << std::endl;
         test_passed = false;
     }
 
@@ -148,7 +148,7 @@ void testbench::test_coverage_intr_test_edge_cases()
     wait(10, SC_NS);
 
     // Sub-test 2: Force spi_event interrupt, create real event, then release
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 2] SPI_EVENT interrupt: force + real event + release" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 2] SPI_EVENT interrupt: force + real event + release" << std::endl;
 
     // Enable SPI controller to allow events
     test->write_register_32(CTRL_OFFSET, 0x80000001);  // SPIEN=1, OUTPUT_EN=1
@@ -169,13 +169,13 @@ void testbench::test_coverage_intr_test_edge_cases()
     // Check that spi_event interrupt remains active due to real event (lines 928, 936, 953-954)
     test->read_register_32(INTR_STATUS_OFFSET, intr_status);
     if (intr_status & 0x10) {
-        CSML_INFO(0, test->logger) << "[PASS] SPI_EVENT interrupt remained active after test release (real event present)" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] SPI_EVENT interrupt remained active after test release (real event present)" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] SPI_EVENT interrupt cleared despite real event. intr_status = 0x" << std::hex << intr_status << std::dec << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] SPI_EVENT interrupt cleared despite real event. intr_status = 0x" << std::hex << intr_status << std::dec << std::endl;
         test_passed = false;
     }
 
-    CSML_INFO(0, test->logger) << "" << std::endl;
+    REG_INFO(0, test->logger) << "" << std::endl;
     report_test_result("INTR_TEST Edge Cases", test_passed);
 }
 
@@ -189,9 +189,9 @@ void testbench::test_coverage_intr_test_edge_cases()
  */
 void testbench::test_coverage_event_enable_immediate_trigger()
 {
-    CSML_INFO(0, test->logger) << "\n========================================" << std::endl;
-    CSML_INFO(0, test->logger) << "[COVERAGE TEST 3] EVENT_ENABLE Immediate Trigger" << std::endl;
-    CSML_INFO(0, test->logger) << "========================================\n" << std::endl;
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[COVERAGE TEST 3] EVENT_ENABLE Immediate Trigger" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
 
     software_reset();
     wait(100, SC_NS);
@@ -202,7 +202,7 @@ void testbench::test_coverage_event_enable_immediate_trigger()
     wait(10, SC_NS);
 
     // Sub-test 1: TXEMPTY - Enable event when TX FIFO already empty
-    CSML_INFO(0, test->logger) << "[Sub-Test 1] TXEMPTY event - condition already met" << std::endl;
+    REG_INFO(0, test->logger) << "[Sub-Test 1] TXEMPTY event - condition already met" << std::endl;
 
     // Clear previous events
     test->write_register_32(INTR_STATUS_OFFSET, 0x10);
@@ -216,14 +216,14 @@ void testbench::test_coverage_event_enable_immediate_trigger()
     uint32_t intr_status;
     test->read_register_32(INTR_STATUS_OFFSET, intr_status);
     if (intr_status & 0x10) {
-        CSML_INFO(0, test->logger) << "[PASS] TXEMPTY event triggered immediately" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] TXEMPTY event triggered immediately" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] TXEMPTY event did not trigger" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] TXEMPTY event did not trigger" << std::endl;
         test_passed = false;
     }
 
     // Sub-test 2: RXFULL - Enable event when RX FIFO already full
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 2] RXFULL event - condition already met" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 2] RXFULL event - condition already met" << std::endl;
 
     software_reset();
     wait(100, SC_NS);
@@ -238,14 +238,14 @@ void testbench::test_coverage_event_enable_immediate_trigger()
     // RX FIFO is empty, so RXFULL should NOT trigger
     test->read_register_32(INTR_STATUS_OFFSET, intr_status);
     if (!(intr_status & 0x10)) {
-        CSML_INFO(0, test->logger) << "[PASS] RXFULL event correctly not triggered (RX FIFO empty)" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] RXFULL event correctly not triggered (RX FIFO empty)" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] RXFULL event triggered unexpectedly" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] RXFULL event triggered unexpectedly" << std::endl;
         test_passed = false;
     }
 
     // Sub-test 3: TXWM - Enable event when TX depth below watermark
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 3] TXWM event - condition already met" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 3] TXWM event - condition already met" << std::endl;
 
     software_reset();
     wait(100, SC_NS);
@@ -267,14 +267,14 @@ void testbench::test_coverage_event_enable_immediate_trigger()
 
     test->read_register_32(INTR_STATUS_OFFSET, intr_status);
     if (intr_status & 0x10) {
-        CSML_INFO(0, test->logger) << "[PASS] TXWM event triggered immediately" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] TXWM event triggered immediately" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] TXWM event did not trigger" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] TXWM event did not trigger" << std::endl;
         test_passed = false;
     }
 
     // Sub-test 4: RXWM - Enable event when RX depth exceeds watermark
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 4] RXWM event - condition already met" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 4] RXWM event - condition already met" << std::endl;
 
     // Set RX watermark to 0 (any data in RX FIFO will exceed watermark)
     test->write_register_32(CTRL_OFFSET, 0x80000001);  // RX_WATERMARK=0
@@ -288,7 +288,7 @@ void testbench::test_coverage_event_enable_immediate_trigger()
     test->write_register_32(EVENT_ENABLE_OFFSET, (1 << 8));
     wait(10, SC_NS);
 
-    CSML_INFO(0, test->logger) << "[INFO] RXWM event enable code path tested\n" << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] RXWM event enable code path tested\n" << std::endl;
 
     report_test_result("EVENT_ENABLE Immediate Trigger", test_passed);
 }
@@ -302,9 +302,9 @@ void testbench::test_coverage_event_enable_immediate_trigger()
  */
 void testbench::test_coverage_spien_reenable_queued_commands()
 {
-    CSML_INFO(0, test->logger) << "\n========================================" << std::endl;
-    CSML_INFO(0, test->logger) << "[COVERAGE TEST 4] SPIEN Re-enable with Queued Commands" << std::endl;
-    CSML_INFO(0, test->logger) << "========================================\n" << std::endl;
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[COVERAGE TEST 4] SPIEN Re-enable with Queued Commands" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
 
     software_reset();
     wait(100, SC_NS);
@@ -322,13 +322,13 @@ void testbench::test_coverage_spien_reenable_queued_commands()
     test->write_register_32(CTRL_OFFSET, 0x20000001);
     wait(10, SC_NS);
 
-    CSML_INFO(0, test->logger) << "[INFO] SPIEN disabled" << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] SPIEN disabled" << std::endl;
 
     // Queue a command while SPIEN is disabled
     test->write_register_32(CMD_OFFSET, BUILD_CMD(7, 2, 0, 0));  // 8-byte TX
     wait(10, SC_NS);
 
-    CSML_INFO(0, test->logger) << "[INFO] Command queued while SPIEN disabled" << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Command queued while SPIEN disabled" << std::endl;
 
     // Verify STATUS.ACTIVE is 0 while SPIEN is disabled
     uint32_t status;
@@ -346,9 +346,9 @@ void testbench::test_coverage_spien_reenable_queued_commands()
     uint32_t txqd = status & 0xFF;
 
     if (ready && !active_after && txqd == 0) {
-        CSML_INFO(0, test->logger) << "[PASS] Transaction completed after SPIEN re-enable: READY=1, ACTIVE=0, TXQD=0" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] Transaction completed after SPIEN re-enable: READY=1, ACTIVE=0, TXQD=0" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Transaction did not complete: READY=" << ready << ", ACTIVE=" << active_after << ", TXQD=" << txqd << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Transaction did not complete: READY=" << ready << ", ACTIVE=" << active_after << ", TXQD=" << txqd << std::endl;
         test_passed = false;
     }
 
@@ -367,9 +367,9 @@ void testbench::test_coverage_spien_reenable_queued_commands()
  */
 void testbench::test_coverage_reset_with_queued_commands()
 {
-    CSML_INFO(0, test->logger) << "\n========================================" << std::endl;
-    CSML_INFO(0, test->logger) << "[COVERAGE TEST 5] Reset with Queued Commands" << std::endl;
-    CSML_INFO(0, test->logger) << "========================================\n" << std::endl;
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[COVERAGE TEST 5] Reset with Queued Commands" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
 
     software_reset();
     wait(100, SC_NS);
@@ -387,13 +387,13 @@ void testbench::test_coverage_reset_with_queued_commands()
     test->write_register_32(CMD_OFFSET, BUILD_CMD(3, 2, 0, 0));
     wait(10, SC_NS);
 
-    CSML_INFO(0, test->logger) << "[INFO] Multiple commands queued" << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Multiple commands queued" << std::endl;
 
     // Check STATUS.CMDQD before reset
     uint32_t status;
     test->read_register_32(STATUS_OFFSET, status);
     uint32_t cmdqd_before = (status >> 16) & 0xF;
-    CSML_INFO(0, test->logger) << "[INFO] Command queue depth before reset: " << cmdqd_before << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Command queue depth before reset: " << cmdqd_before << std::endl;
 
     // Trigger hardware reset (line 296 clears queue)
     apply_reset();
@@ -405,13 +405,13 @@ void testbench::test_coverage_reset_with_queued_commands()
 
     bool test_passed = true;
     if (cmdqd_before != 3) {
-        CSML_ERROR(0, test->logger) << "[FAIL] Command queue was not populated before reset (expected 3, got " << cmdqd_before << ")" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Command queue was not populated before reset (expected 3, got " << cmdqd_before << ")" << std::endl;
         test_passed = false;
     }
     if (cmdqd_after == 0) {
-        CSML_INFO(0, test->logger) << "[PASS] Command queue cleared after reset (CMDQD=" << cmdqd_after << ")\n" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] Command queue cleared after reset (CMDQD=" << cmdqd_after << ")\n" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Command queue not cleared (CMDQD=" << cmdqd_after << ")\n" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Command queue not cleared (CMDQD=" << cmdqd_after << ")\n" << std::endl;
         test_passed = false;
     }
 
@@ -427,9 +427,9 @@ void testbench::test_coverage_reset_with_queued_commands()
  */
 void testbench::test_coverage_signal_update_during_reset()
 {
-    CSML_INFO(0, test->logger) << "\n========================================" << std::endl;
-    CSML_INFO(0, test->logger) << "[COVERAGE TEST 6] Signal Update During Reset" << std::endl;
-    CSML_INFO(0, test->logger) << "========================================\n" << std::endl;
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[COVERAGE TEST 6] Signal Update During Reset" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
 
     bool test_passed = true;
 
@@ -445,24 +445,24 @@ void testbench::test_coverage_signal_update_during_reset()
     // Verify interrupt is active
     uint32_t intr_status;
     test->read_register_32(INTR_STATUS_OFFSET, intr_status);
-    CSML_INFO(0, test->logger) << "[INFO] Interrupt status before reset: 0x" << std::hex << intr_status << std::dec << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Interrupt status before reset: 0x" << std::hex << intr_status << std::dec << std::endl;
 
     // Trigger reset while interrupts are active (lines 702-703)
     // The update_output_signals_method() will be called but should skip during reset
-    CSML_INFO(0, test->logger) << "[INFO] Asserting reset..." << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Asserting reset..." << std::endl;
     apply_reset();
     wait(50, SC_NS);
 
     // Check that interrupts are properly reset
     test->read_register_32(INTR_STATUS_OFFSET, intr_status);
     if (intr_status == 0) {
-        CSML_INFO(0, test->logger) << "[PASS] Interrupts cleared after reset (0x" << std::hex << intr_status << std::dec << ")" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] Interrupts cleared after reset (0x" << std::hex << intr_status << std::dec << ")" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Interrupts not cleared after reset (0x" << std::hex << intr_status << std::dec << ")" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Interrupts not cleared after reset (0x" << std::hex << intr_status << std::dec << ")" << std::endl;
         test_passed = false;
     }
 
-    CSML_INFO(0, test->logger) << "[PASS] Signal update during reset handled gracefully\n" << std::endl;
+    REG_INFO(0, test->logger) << "[PASS] Signal update during reset handled gracefully\n" << std::endl;
 
     report_test_result("Signal Update During Reset", test_passed);
 }
@@ -479,9 +479,9 @@ void testbench::test_coverage_signal_update_during_reset()
  */
 void testbench::test_coverage_fifo_overflow_underflow()
 {
-    CSML_INFO(0, test->logger) << "\n========================================" << std::endl;
-    CSML_INFO(0, test->logger) << "[COVERAGE TEST 7] FIFO Overflow, Underflow & Stalls" << std::endl;
-    CSML_INFO(0, test->logger) << "========================================\n" << std::endl;
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[COVERAGE TEST 7] FIFO Overflow, Underflow & Stalls" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
 
     bool test_passed = true;
 
@@ -490,7 +490,7 @@ void testbench::test_coverage_fifo_overflow_underflow()
 
     // 1. TX FIFO Overflow Test
     // Pushing more than capacity (TxDepth + 1 = 73 words, incl. the byte_select stage)
-    CSML_INFO(0, test->logger) << "[Sub-Test 1] TX FIFO Overflow" << std::endl;
+    REG_INFO(0, test->logger) << "[Sub-Test 1] TX FIFO Overflow" << std::endl;
     for (int i = 0; i < 74; i++) {
         test->write_register_32(TXDATA_OFFSET, 0x11223340 + i);
     }
@@ -500,9 +500,9 @@ void testbench::test_coverage_fifo_overflow_underflow()
     uint32_t err_status;
     test->read_register_32(ERROR_STATUS_OFFSET, err_status);
     if (err_status & 0x10) { // overflow bit is usually bit 4 (value 16)
-        CSML_INFO(0, test->logger) << "[PASS] TX FIFO Overflow detected: ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] TX FIFO Overflow detected: ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] TX FIFO Overflow bit not set in ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] TX FIFO Overflow bit not set in ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
         test_passed = false;
     }
     // W1C error status
@@ -510,19 +510,19 @@ void testbench::test_coverage_fifo_overflow_underflow()
     wait(10, SC_NS);
 
     // 2. RX FIFO Pop Empty Test
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 2] RX FIFO Empty Read" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 2] RX FIFO Empty Read" << std::endl;
     uint32_t rx_val;
     test->read_register_32(RXDATA_OFFSET, rx_val);
     wait(10, SC_NS);
     if (rx_val == 0) {
-        CSML_INFO(0, test->logger) << "[PASS] Pop from empty RX FIFO returned 0" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] Pop from empty RX FIFO returned 0" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Pop from empty RX FIFO returned 0x" << std::hex << rx_val << std::dec << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Pop from empty RX FIFO returned 0x" << std::hex << rx_val << std::dec << std::endl;
         test_passed = false;
     }
 
     // 3. TX FIFO Underflow Test
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 3] TX FIFO Underflow" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 3] TX FIFO Underflow" << std::endl;
     software_reset();
     wait(100, SC_NS);
 
@@ -549,9 +549,9 @@ void testbench::test_coverage_fifo_overflow_underflow()
     // Verify underflow error is set in ERROR_STATUS (underflow is bit 8)
     test->read_register_32(ERROR_STATUS_OFFSET, err_status);
     if (err_status & 0x100) {
-        CSML_INFO(0, test->logger) << "[PASS] TX FIFO Underflow detected: ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] TX FIFO Underflow detected: ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] TX FIFO Underflow bit not set in ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] TX FIFO Underflow bit not set in ERROR_STATUS = 0x" << std::hex << err_status << std::dec << std::endl;
         test_passed = false;
     }
 
@@ -560,7 +560,7 @@ void testbench::test_coverage_fifo_overflow_underflow()
     // and CMDBUSY stays clear. A latched error disables the core through
     // en = en_sw & ~enb_error, which stalls execution but does not refuse the
     // write; the segment waits in the queue until software clears ERROR_STATUS.
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 4] CMD Write during Error (queued, no CMDBUSY)" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 4] CMD Write during Error (queued, no CMDBUSY)" << std::endl;
 
     uint32_t status_before = 0;
     test->read_register_32(STATUS_OFFSET, status_before);
@@ -571,11 +571,11 @@ void testbench::test_coverage_fifo_overflow_underflow()
 
     test->read_register_32(ERROR_STATUS_OFFSET, err_status);
     if (err_status & 0x1) {
-        CSML_ERROR(0, test->logger) << "[FAIL] CMDBUSY set on a CMD write with room in the queue: ERROR_STATUS = 0x"
+        REG_ERROR(0, test->logger) << "[FAIL] CMDBUSY set on a CMD write with room in the queue: ERROR_STATUS = 0x"
                                     << std::hex << err_status << std::dec << std::endl;
         test_passed = false;
     } else {
-        CSML_INFO(0, test->logger) << "[PASS] CMDBUSY stayed clear: ERROR_STATUS = 0x"
+        REG_INFO(0, test->logger) << "[PASS] CMDBUSY stayed clear: ERROR_STATUS = 0x"
                                    << std::hex << err_status << std::dec << std::endl;
     }
 
@@ -583,19 +583,19 @@ void testbench::test_coverage_fifo_overflow_underflow()
     test->read_register_32(STATUS_OFFSET, status_after);
     uint32_t cmdqd_after = (status_after >> 16) & 0xF;
     if (cmdqd_after > cmdqd_before) {
-        CSML_INFO(0, test->logger) << "[PASS] Command queued while the core is held off: CMDQD "
+        REG_INFO(0, test->logger) << "[PASS] Command queued while the core is held off: CMDQD "
                                    << cmdqd_before << " -> " << cmdqd_after << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Command was not queued: CMDQD "
+        REG_ERROR(0, test->logger) << "[FAIL] Command was not queued: CMDQD "
                                     << cmdqd_before << " -> " << cmdqd_after << std::endl;
         test_passed = false;
     }
 
     if (!(status_after & (1u << 31))) {
-        CSML_ERROR(0, test->logger) << "[FAIL] STATUS.READY dropped because of a latched error" << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] STATUS.READY dropped because of a latched error" << std::endl;
         test_passed = false;
     } else {
-        CSML_INFO(0, test->logger) << "[PASS] STATUS.READY unaffected by the latched error" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] STATUS.READY unaffected by the latched error" << std::endl;
     }
 
     // Clear error status
@@ -603,7 +603,7 @@ void testbench::test_coverage_fifo_overflow_underflow()
     wait(10, SC_NS);
 
     // 5. RX FIFO Full Stall & Resume
-    CSML_INFO(0, test->logger) << "\n[Sub-Test 5] RX FIFO Full Stall & Resume" << std::endl;
+    REG_INFO(0, test->logger) << "\n[Sub-Test 5] RX FIFO Full Stall & Resume" << std::endl;
     software_reset();
     wait(100, SC_NS);
 
@@ -637,12 +637,12 @@ void testbench::test_coverage_fifo_overflow_underflow()
     test->read_register_32(STATUS_OFFSET, status);
     uint32_t rxqd = (status >> 8) & 0xFF;
     bool active = (status >> 30) & 0x1;
-    CSML_INFO(0, test->logger) << "[INFO] Stalled status: RXQD = " << rxqd << ", ACTIVE = " << active << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Stalled status: RXQD = " << rxqd << ", ACTIVE = " << active << std::endl;
 
     if (rxqd == 64 && active) {
-        CSML_INFO(0, test->logger) << "[PASS] RX FIFO stalled at capacity (64 words)" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] RX FIFO stalled at capacity (64 words)" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Expected RX FIFO depth 64, got " << rxqd << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Expected RX FIFO depth 64, got " << rxqd << std::endl;
         test_passed = false;
     }
 
@@ -658,12 +658,12 @@ void testbench::test_coverage_fifo_overflow_underflow()
     test->read_register_32(STATUS_OFFSET, status);
     rxqd = (status >> 8) & 0xFF;
 
-    CSML_INFO(0, test->logger) << "[INFO] Resumed status: RXQD = " << rxqd << ", ACTIVE = " << active << std::endl;
+    REG_INFO(0, test->logger) << "[INFO] Resumed status: RXQD = " << rxqd << ", ACTIVE = " << active << std::endl;
 
     if (!active && rxqd == 64) {
-        CSML_INFO(0, test->logger) << "[PASS] RX FIFO stall successfully resumed and completed" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] RX FIFO stall successfully resumed and completed" << std::endl;
     } else {
-        CSML_ERROR(0, test->logger) << "[FAIL] Transaction did not complete as expected: active = " << active << ", rxqd = " << rxqd << std::endl;
+        REG_ERROR(0, test->logger) << "[FAIL] Transaction did not complete as expected: active = " << active << ", rxqd = " << rxqd << std::endl;
         test_passed = false;
     }
 

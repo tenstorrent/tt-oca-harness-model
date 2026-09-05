@@ -12,7 +12,8 @@
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 // gcov coverage data flushing (GCC 11+)
 // Required when using std::quick_exit() to ensure .gcda files are written
@@ -47,7 +48,7 @@ testbench::testbench(sc_module_name name)
     // Sync testbench logger verbosity with DUT (CCI ini may override build default)
     logger.setMaxVerbosity(dut->verbosity.get_param_value());
 
-    CSML_INFO(2, logger) << "Constructing KMAC testbench";
+    REG_INFO(2, logger) << "Constructing KMAC testbench";
 
     // Instantiate test harness
     test = new kmac_test("kmac_test", 3);
@@ -67,7 +68,7 @@ testbench::testbench(sc_module_name name)
     // where wait() is allowed. Do not use wait() in constructor!
     SC_THREAD(run_tests);
 
-    CSML_INFO(2, logger) << "KMAC testbench construction complete";
+    REG_INFO(2, logger) << "KMAC testbench construction complete";
 }
 
 /******************************************************************************
@@ -92,14 +93,14 @@ testbench::~testbench()
  ******************************************************************************/
 void testbench::bind_ports()
 {
-    CSML_INFO(2, logger) << "Binding ports...";
+    REG_INFO(2, logger) << "Binding ports...";
 
     // =========================================================================
     // 1. TLM Target Socket Binding (MMIO Register Access)
     // =========================================================================
     // Test's initiator socket → Model's target socket
     test->initiator_socket.bind(dut->target_socket);
-    CSML_INFO(2, logger) << "  [BOUND] TLM initiator_socket → target_socket";
+    REG_INFO(2, logger) << "  [BOUND] TLM initiator_socket → target_socket";
 
     // =========================================================================
     // 2. KeyMgr Sideload Interface Binding
@@ -107,7 +108,7 @@ void testbench::bind_ports()
     // Model exports keymgr_keymgr_if, test provides via keymgr_key_port
     // Model's export ← Test's port (test port binds to test's channel)
     test->keymgr_socket.bind(dut->keymgr_tl_socket);
-    CSML_INFO(2, logger) << "  [BOUND] keymgr_key_export → keymgr_channel";
+    REG_INFO(2, logger) << "  [BOUND] keymgr_key_export → keymgr_channel";
 
     // =========================================================================
     // 3. Application Interface Binding (Array)
@@ -116,7 +117,7 @@ void testbench::bind_ports()
     // Model exports app_if[0..2], test ports connect to model exports
     for (unsigned int i = 0; i < 3; i++) {
         test->app_port[i].bind(dut->app_export[i]);
-        CSML_INFO(2, logger) << "  [BOUND] app_port[" << i << "] → app_export[" << i << "]";
+        REG_INFO(2, logger) << "  [BOUND] app_port[" << i << "] → app_export[" << i << "]";
     }
 
     // =========================================================================
@@ -126,39 +127,39 @@ void testbench::bind_ports()
     // Idle status: Model output → Signal → Test input
     dut->idle_o(idle_sig);
     test->idle_i(idle_sig);
-    CSML_INFO(2, logger) << "  [BOUND] idle_o ↔ idle_i via signal";
+    REG_INFO(2, logger) << "  [BOUND] idle_o ↔ idle_i via signal";
 
     // Interrupt outputs: three independent lines, matching the three PIC slots
     // sep.sv gives KMAC rather than a single OR-reduction
     dut->intr_kmac_done(intr_done_sig);
     dut->intr_fifo_empty(intr_fifo_empty_sig);
     dut->intr_kmac_err(intr_err_sig);
-    CSML_INFO(2, logger) << "  [BOUND] intr_kmac_done / intr_fifo_empty / "
+    REG_INFO(2, logger) << "  [BOUND] intr_kmac_done / intr_fifo_empty / "
                             "intr_kmac_err → signals";
 
     // Alert outputs: monitored so shadow-update and fatal faults are
     // observable at the port, not only in STATUS
     dut->alert_recov_operation_err(alert_recov_sig);
     dut->alert_fatal_fault(alert_fatal_sig);
-    CSML_INFO(2, logger) << "  [BOUND] alert_recov_operation_err / "
+    REG_INFO(2, logger) << "  [BOUND] alert_recov_operation_err / "
                             "alert_fatal_fault → signals";
 
     // Life cycle escalation: Test output → Signal → Model input
     test->lc_escalate_en_o(lc_escalate_en_sig);
     dut->lc_escalate_en_i(lc_escalate_en_sig);
-    CSML_INFO(2, logger) << "  [BOUND] lc_escalate_en_o ↔ lc_escalate_en_i via signal";
+    REG_INFO(2, logger) << "  [BOUND] lc_escalate_en_o ↔ lc_escalate_en_i via signal";
 
     // Reset: Test output → Signal → Model input
     test->rst_no(rst_ni_sig);
     dut->rst_ni(rst_ni_sig);
-    CSML_INFO(2, logger) << "  [BOUND] rst_no ↔ rst_ni via signal";
+    REG_INFO(2, logger) << "  [BOUND] rst_no ↔ rst_ni via signal";
 
     // Primary clock: Test output → Signal → Model input
     test->clk_o(clk_sig);
     dut->clk_i(clk_sig);
-    CSML_INFO(2, logger) << "  [BOUND] clk_o ↔ clk_i via signal";
+    REG_INFO(2, logger) << "  [BOUND] clk_o ↔ clk_i via signal";
 
-    CSML_INFO(2, logger) << "Port binding complete";
+    REG_INFO(2, logger) << "Port binding complete";
 }
 
 /******************************************************************************
@@ -169,7 +170,7 @@ void testbench::bind_ports()
  ******************************************************************************/
 void testbench::initialize()
 {
-    CSML_INFO(2, logger) << "Initializing testbench environment";
+    REG_INFO(2, logger) << "Initializing testbench environment";
 
     // Initialize test harness channels
     test->clear_keymgr_key();
@@ -180,7 +181,7 @@ void testbench::initialize()
     // Note: Entropy register configuration moved to run_tests() (SC_THREAD context)
     // Cannot use wait() here as initialize() is called from constructor
 
-    CSML_INFO(2, logger) << "Testbench initialization complete";
+    REG_INFO(2, logger) << "Testbench initialization complete";
 }
 
 /******************************************************************************
@@ -190,9 +191,9 @@ void testbench::initialize()
  ******************************************************************************/
 void testbench::run_tests()
 {
-    CSML_INFO(2, logger) << "====================================================";
-    CSML_INFO(2, logger) << "  Starting KMAC Test Execution";
-    CSML_INFO(2, logger) << "====================================================";
+    REG_INFO(2, logger) << "====================================================";
+    REG_INFO(2, logger) << "  Starting KMAC Test Execution";
+    REG_INFO(2, logger) << "====================================================";
 
     // Apply reset to DUT
     apply_reset();
@@ -211,14 +212,14 @@ void testbench::run_tests()
     // Spec reference: kmac-detailed-design.md sections 1.5.1 (EDN Mode) and
     // 4.1.2 (SwHashingWithoutEntropyReady error 0x09)
 
-    CSML_INFO(2, logger) << "Configuring global entropy subsystem...";
+    REG_INFO(2, logger) << "Configuring global entropy subsystem...";
 
     // Configure ENTROPY_PERIOD: wait_timer=5000, prescaler=0
     // Per spec line 523: "typical wait_timer value of 5000 with prescaler 0"
     uint32_t entropy_period = (5000 << 0) | (0 << 10);
     test->register_write_32(test->ENTROPY_PERIOD_OFFSET, entropy_period);
     wait(5, SC_NS);
-    CSML_INFO(2, logger) << "Configured ENTROPY_PERIOD: wait_timer=5000, prescaler=0";
+    REG_INFO(2, logger) << "Configured ENTROPY_PERIOD: wait_timer=5000, prescaler=0";
 
     // Configure CFG_SHADOWED with entropy_mode=0x1 (edn_mode) and entropy_ready=1
     // Shadow register requires duplicate write sequence (spec line 754)
@@ -228,14 +229,14 @@ void testbench::run_tests()
     wait(5, SC_NS);
     test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_entropy);  // Shadow duplicate write
     wait(5, SC_NS);
-    CSML_INFO(2, logger) << "Configured CFG_SHADOWED: entropy_mode=edn (0x1), entropy_ready=1";
-    CSML_INFO(2, logger) << "Global entropy configuration complete\n";
+    REG_INFO(2, logger) << "Configured CFG_SHADOWED: entropy_mode=edn (0x1), entropy_ready=1";
+    REG_INFO(2, logger) << "Global entropy configuration complete\n";
 
     // ==========================================================================
     // FUNC-KMAC-001: SHA3 Hash Operation Tests (Phase 1)
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-001: SHA3 Hash Operation (Phase 1) ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-001: SHA3 Hash Operation (Phase 1) ***";
 
     // SHA3 Algorithm Selection Tests (TC-016 to TC-019)
     test_sha3_224_algorithm_selection();
@@ -253,13 +254,13 @@ void testbench::run_tests()
 
     // Reset between test groups to prevent cascading failures
     apply_reset();
-    CSML_INFO(2, logger) << "Applied reset after FUNC-KMAC-001";
+    REG_INFO(2, logger) << "Applied reset after FUNC-KMAC-001";
 
     // ==========================================================================
     // FUNC-KMAC-002: SHAKE Extendable Output Function Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-002: SHAKE Extendable Output Function ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-002: SHAKE Extendable Output Function ***";
 
     // Fixed Output Tests (TC-029, TC-030)
     test_shake128_fixed_output();
@@ -285,7 +286,7 @@ void testbench::run_tests()
     // FUNC-KMAC-003: cSHAKE Customizable Hash Function Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-003: cSHAKE Customizable Hash Function ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-003: cSHAKE Customizable Hash Function ***";
 
     // Empty Customization Tests (TC-038, TC-039)
     test_cshake128_with_empty_customization();
@@ -306,7 +307,7 @@ void testbench::run_tests()
     // FUNC-KMAC-004: KMAC Message Authentication Code Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-004: KMAC Message Authentication Code ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-004: KMAC Message Authentication Code ***";
 
     // Key Length Tests (TC-045, TC-046, TC-047 to TC-051)
     test_kmac_128bit_key_256bit_output();
@@ -334,7 +335,7 @@ void testbench::run_tests()
     // FUNC-KMAC-005: Software Key Management Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-005: Software Key Management ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-005: Software Key Management ***";
 
     // Single-Share Key Configuration Tests (TC-056, TC-057)
     test_key_single_share_128bit();
@@ -358,7 +359,7 @@ void testbench::run_tests()
     // FUNC-KMAC-006: KeyMgr Sideloaded Key Interface Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-006: KeyMgr Sideloaded Key Interface ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-006: KeyMgr Sideloaded Key Interface ***";
 
     // Sideload Enable and Key Length Tests (TC-068, TC-069, TC-070)
     test_key_sideload_enable_128bit();
@@ -373,13 +374,13 @@ void testbench::run_tests()
 
     // Reset before application interface tests (prevent cascading failures)
     apply_reset();
-    CSML_INFO(2, logger) << "Applied reset before FUNC-KMAC-007 (App Interface tests)";
+    REG_INFO(2, logger) << "Applied reset before FUNC-KMAC-007 (App Interface tests)";
 
     // ==========================================================================
     // FUNC-KMAC-007: Application Interface - KeyMgr Hash Operations
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-007: Application Interface - KeyMgr Hash Operations ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-007: Application Interface - KeyMgr Hash Operations ***";
 
     // KeyMgr Application Interface Tests (TC-093 to TC-103, TC-145)
     test_app_keymgr_kmac_operation();
@@ -397,7 +398,7 @@ void testbench::run_tests()
     // FUNC-KMAC-008: Application Interface - LC_CTRL Hash Operations
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-008: Application Interface - LC_CTRL Hash Operations ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-008: Application Interface - LC_CTRL Hash Operations ***";
 
     // LC_CTRL Application Interface Tests (TC-094, TC-096-099, TC-101)
     test_func_kmac_008_lc_ctrl_operations();
@@ -406,12 +407,12 @@ void testbench::run_tests()
     // FUNC-KMAC-009: Application Interface - ROM_CTRL Hash Operations
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-009: Application Interface - ROM_CTRL Hash Operations ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-009: Application Interface - ROM_CTRL Hash Operations ***";
 
     // Reset before ROM_CTRL tests to ensure clean FSM state after LC_CTRL tests
     apply_reset();
     wait(50, SC_NS);
-    CSML_INFO(2, logger) << "Applied reset before FUNC-KMAC-009 tests";
+    REG_INFO(2, logger) << "Applied reset before FUNC-KMAC-009 tests";
 
     // ROM_CTRL Application Interface Tests (TC-095 to TC-101)
     test_app_rom_ctrl_cshake256_operation();
@@ -427,13 +428,13 @@ void testbench::run_tests()
 
     // Reset after application interface tests (prevent cascading failures)
     apply_reset();
-    CSML_INFO(2, logger) << "Applied reset after FUNC-KMAC-009 (App Interface tests complete)";
+    REG_INFO(2, logger) << "Applied reset after FUNC-KMAC-009 (App Interface tests complete)";
 
     // ==========================================================================
     // FUNC-KMAC-010: Message FIFO and Packer
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-010: Message FIFO and Packer ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-010: Message FIFO and Packer ***";
 
     // Reset before FIFO tests to ensure clean state
     apply_reset();
@@ -474,7 +475,7 @@ void testbench::run_tests()
     // FUNC-KMAC-011: State Machine and Command Processing Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-011: State Machine and Command Processing ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-011: State Machine and Command Processing ***";
 
     // Reset before FSM tests to ensure clean state
     apply_reset();
@@ -529,13 +530,13 @@ void testbench::run_tests()
 
     // Reset after FSM tests (prevent cascading failures)
     apply_reset();
-    CSML_INFO(2, logger) << "Applied reset after FUNC-KMAC-011 (FSM tests complete)";
+    REG_INFO(2, logger) << "Applied reset after FUNC-KMAC-011 (FSM tests complete)";
 
     // ==========================================================================
     // FUNC-KMAC-012: Endianness Configuration Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-012: Endianness Configuration ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-012: Endianness Configuration ***";
 
     // Reset before endianness tests to ensure clean state
     apply_reset();
@@ -553,7 +554,7 @@ void testbench::run_tests()
     // FUNC-KMAC-013: EDN Mode Entropy Management Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-013: EDN Mode Entropy Management ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-013: EDN Mode Entropy Management ***";
 
     // Reset before entropy tests to ensure clean state
     apply_reset();
@@ -576,7 +577,7 @@ void testbench::run_tests()
     // FUNC-KMAC-014: Software Mode Entropy Management Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-014: Software Mode Entropy Management ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-014: Software Mode Entropy Management ***";
 
     // Software Entropy Tests (TC-106 and extensions)
     test_entropy_mode_sw_seed();
@@ -588,7 +589,7 @@ void testbench::run_tests()
     // FUNC-KMAC-015: Idle Mode Entropy Management Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-015: Idle Mode Entropy Management ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-015: Idle Mode Entropy Management ***";
 
     // Idle Entropy Mode Tests (TC-104, TC-116 to TC-119)
     test_entropy_mode_idle();
@@ -599,13 +600,13 @@ void testbench::run_tests()
 
     // Reset after entropy tests (prevent cascading failures)
     apply_reset();
-    CSML_INFO(2, logger) << "Applied reset after FUNC-KMAC-015 (Entropy tests complete)";
+    REG_INFO(2, logger) << "Applied reset after FUNC-KMAC-015 (Entropy tests complete)";
 
     // ==========================================================================
     // FUNC-KMAC-017: Dynamic Register Write Protection Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-017: Dynamic Register Write Protection ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-017: Dynamic Register Write Protection ***";
 
     // Reset before reg protection tests to ensure clean state
     apply_reset();
@@ -624,7 +625,7 @@ void testbench::run_tests()
     // FUNC-KMAC-018: STATE Window Access Control Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-018: STATE Window Access Control ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-018: STATE Window Access Control ***";
 
     // STATE Window Access Tests (TC-135 to TC-141, TC-101, TC-170)
     test_state_read_in_squeeze_state();
@@ -641,7 +642,7 @@ void testbench::run_tests()
     // FUNC-KMAC-020: Reset and Initialization Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-020: Reset and Initialization ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-020: Reset and Initialization ***";
  
     // Register Reset Value Tests (TC-001)
     test_reset_all_registers_default_values();
@@ -663,7 +664,7 @@ void testbench::run_tests()
     // FUNC-KMAC-021: Life Cycle Escalation Response Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-021: Life Cycle Escalation Response ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-021: Life Cycle Escalation Response ***";
 
     // Immediate Zeroization Tests (TC-190, TC-192)
     test_escalation_immediate_key_zeroization();
@@ -682,7 +683,7 @@ void testbench::run_tests()
     // FUNC-KMAC-022: Idle Status Signaling Tests
     // ==========================================================================
 
-    CSML_INFO(2, logger) << "\n*** FUNC-KMAC-022: Idle Status Signaling ***";
+    REG_INFO(2, logger) << "\n*** FUNC-KMAC-022: Idle Status Signaling ***";
 
     // idle_o Signal Tests (TC-071, TC-072, TC-074)
     test_idle_o_high_after_reset();
@@ -738,15 +739,15 @@ void testbench::run_tests()
  ******************************************************************************/
 void testbench::apply_reset()
 {
-    CSML_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
+    REG_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
     rst_ni_sig.write(false);
     wait(10, SC_NS);
 
-    CSML_INFO(2, logger) << "Deasserting reset (rst_ni = 1)";
+    REG_INFO(2, logger) << "Deasserting reset (rst_ni = 1)";
     rst_ni_sig.write(true);
     wait(30, SC_NS);  // Wait for reset to complete including internal initialization
 
-    CSML_INFO(2, logger) << "Reset complete - DUT ready";
+    REG_INFO(2, logger) << "Reset complete - DUT ready";
 }
 
 
@@ -775,7 +776,7 @@ bool testbench::ensure_fsm_idle()
 
     // If in SQUEEZE state, issue DONE command to return to IDLE
     if (sha3_squeeze) {
-        CSML_INFO(2, logger) << "ensure_fsm_idle: FSM in SQUEEZE, issuing DONE command (0x16)";
+        REG_INFO(2, logger) << "ensure_fsm_idle: FSM in SQUEEZE, issuing DONE command (0x16)";
         test->register_write_32(test->CMD_OFFSET, 0x16);  // DONE command
         wait(50, SC_NS);  // Wait for FSM transition
 
@@ -789,7 +790,7 @@ bool testbench::ensure_fsm_idle()
 
     // If in ABSORB state or DONE failed, try applying reset
     if (sha3_absorb || !sha3_idle) {
-        CSML_INFO(2, logger) << "ensure_fsm_idle: FSM not in IDLE (absorb=" << sha3_absorb
+        REG_INFO(2, logger) << "ensure_fsm_idle: FSM not in IDLE (absorb=" << sha3_absorb
                              << "), applying reset";
         apply_reset();
         wait(50, SC_NS);
@@ -844,14 +845,14 @@ void testbench::configure_cfg_shadowed_with_entropy(
  ******************************************************************************/
 bool testbench::run_test(const std::string& test_name)
 {
-    CSML_INFO(2, logger) << "Running test: " << test_name;
+    REG_INFO(2, logger) << "Running test: " << test_name;
 
     // Reset before each test
     initialize();
 
     // Test execution will be implemented in test case files
     // For now, return success
-    CSML_INFO(2, logger) << "Test " << test_name << " execution placeholder";
+    REG_INFO(2, logger) << "Test " << test_name << " execution placeholder";
 
     return true;
 }
@@ -867,7 +868,7 @@ void testbench::report_test_start(const std::string& test_name)
     apply_reset();
     wait(50, SC_NS);
 
-    CSML_INFO(1, logger) << "========================================\n"
+    REG_INFO(1, logger) << "========================================\n"
                          << test_name << "\n"
                          << "========================================" << std::endl;
 }
@@ -881,7 +882,7 @@ void testbench::report_test_pass(const std::string& test_name)
 {
     m_tests_passed++;
     m_tests_run++;
-    CSML_INFO(1, logger) << test_name << ": PASS" << std::endl;
+    REG_INFO(1, logger) << test_name << ": PASS" << std::endl;
 }
 
 /******************************************************************************
@@ -896,9 +897,9 @@ void testbench::report_test_fail(const std::string& test_name,
     m_tests_run++;
     m_failed_tests.push_back(test_name);
     if (reason.empty()) {
-        CSML_WARN(1, logger) << test_name << ": FAIL" << std::endl;
+        REG_WARN(1, logger) << test_name << ": FAIL" << std::endl;
     } else {
-        CSML_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
+        REG_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
     }
 }
 
@@ -913,13 +914,13 @@ void testbench::report_test_result(const char* test_name, bool passed)
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "\n========================================\n"
+        REG_INFO(1, logger) << "\n========================================\n"
                              << "[*** TEST PASSED ***] " << test_name << "\n"
                              << "========================================\n" << std::endl;
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(0, logger) << "\n========================================\n"
+        REG_ERROR(0, logger) << "\n========================================\n"
                               << "[XXX TEST FAILED XXX] " << test_name << "\n"
                               << "========================================\n" << std::endl;
     }
@@ -934,48 +935,48 @@ void testbench::report_test_summary()
 {
     std::stringstream ss;
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl;
-    CSML_INFO(1, logger) << "  KMAC Test Summary" << std::endl;
-    CSML_INFO(1, logger) << "========================================" << std::endl;
+    REG_INFO(1, logger) << "\n========================================" << std::endl;
+    REG_INFO(1, logger) << "  KMAC Test Summary" << std::endl;
+    REG_INFO(1, logger) << "========================================" << std::endl;
 
     ss << "Total Tests:  " << m_tests_run;
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
 
     ss.str("");
     ss << "Passed:       " << m_tests_passed << " (PASS)";
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
 
     ss.str("");
     ss << "Failed:       " << m_tests_failed << " (FAIL)";
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
 
     if (m_tests_run > 0) {
         double success_rate = (100.0 * m_tests_passed) / m_tests_run;
         ss.str("");
         ss << "Success Rate: " << std::fixed << std::setprecision(1) << success_rate << "%";
-        CSML_INFO(1, logger) << ss.str() << std::endl;
+        REG_INFO(1, logger) << ss.str() << std::endl;
     }
 
-    CSML_INFO(1, logger) << "========================================" << std::endl;
+    REG_INFO(1, logger) << "========================================" << std::endl;
 
     // Show list of failed tests if any
     if (m_tests_failed > 0) {
-        CSML_ERROR(0, logger) << "\nFailed Tests:" << std::endl;
+        REG_ERROR(0, logger) << "\nFailed Tests:" << std::endl;
         for (const auto& test : m_failed_tests) {
             ss.str("");
             ss << "  - " << test;
-            CSML_ERROR(0, logger) << ss.str() << std::endl;
+            REG_ERROR(0, logger) << ss.str() << std::endl;
         }
         ss.str("");
         ss << "\n[OVERALL RESULT: FAILED - " << m_tests_failed << " test(s) failed]";
-        CSML_ERROR(0, logger) << ss.str() << std::endl;
+        REG_ERROR(0, logger) << ss.str() << std::endl;
     } else if (m_tests_passed > 0) {
-        CSML_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
+        REG_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
     } else {
-        CSML_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
+        REG_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
     }
 
-    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+    REG_INFO(1, logger) << "========================================\n" << std::endl;
 }
 
 /******************************************************************************
@@ -1102,6 +1103,16 @@ void testbench::test_func_kmac_026_rejection_paths()
                      test_state_share1_masking_disabled);
     run_checked_case("TC-229: test_state_read_straddles_digest_end",
                      test_state_read_straddles_digest_end);
+    run_checked_case("TC-230: test_keymgr_read_rejected",
+                     test_keymgr_read_rejected);
+    run_checked_case("TC-231: test_invalid_key_len_on_kmac_start",
+                     test_invalid_key_len_on_kmac_start);
+    run_checked_case("TC-232: test_escalate_with_msg_fifo_data",
+                     test_escalate_with_msg_fifo_data);
+    run_checked_case("TC-233: test_empty_app_message",
+                     test_empty_app_message);
+    run_checked_case("TC-234: test_long_customization_string",
+                     test_long_customization_string);
 }
 
 /******************************************************************************
@@ -1118,9 +1129,9 @@ void testbench::test_func_kmac_026_rejection_paths()
  ******************************************************************************/
 void testbench::test_func_kmac_008_lc_ctrl_operations()
 {
-    CSML_INFO(2, logger) << "Invoking FUNC-KMAC-008 test orchestrator";
+    REG_INFO(2, logger) << "Invoking FUNC-KMAC-008 test orchestrator";
     kmac_func008_test_main(test);
-    CSML_INFO(2, logger) << "FUNC-KMAC-008 test orchestrator complete";
+    REG_INFO(2, logger) << "FUNC-KMAC-008 test orchestrator complete";
 }
 
 /******************************************************************************
@@ -1131,28 +1142,28 @@ void testbench::test_func_kmac_008_lc_ctrl_operations()
 int sc_main(int argc, char* argv[])
 {
     // Create local logger for sc_main
-    CsmlLogger logger;
-    logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    RegLogger logger;
+    logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
     // Initialize CCI broker and optionally load INI config file.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
-    CSML_INFO(2, logger) << "====================================================" << std::endl;
-    CSML_INFO(2, logger) << "  KMAC SystemC TLM Testbench" << std::endl;
-    CSML_INFO(2, logger) << "====================================================" << std::endl;
+    REG_INFO(2, logger) << "====================================================" << std::endl;
+    REG_INFO(2, logger) << "  KMAC SystemC TLM Testbench" << std::endl;
+    REG_INFO(2, logger) << "====================================================" << std::endl;
 
     // Heap-allocated so the teardown path can be run explicitly below.
     testbench* tb = new testbench("kmac_testbench");
 
-    CSML_INFO(2, logger) << "Starting simulation..." << std::endl;
+    REG_INFO(2, logger) << "Starting simulation..." << std::endl;
 
     sc_start();
 
-    CSML_INFO(2, logger) << "====================================================" << std::endl;
-    CSML_INFO(2, logger) << "  Simulation Complete" << std::endl;
-    CSML_INFO(2, logger) << "====================================================" << std::endl;
+    REG_INFO(2, logger) << "====================================================" << std::endl;
+    REG_INFO(2, logger) << "  Simulation Complete" << std::endl;
+    REG_INFO(2, logger) << "====================================================" << std::endl;
 
     const unsigned int failed = tb->m_tests_failed;
 

@@ -1096,8 +1096,8 @@ class test_edn_func_013 : public edn_test
 
     // Command types for HW_CMD_STS.CMD_TYPE
     static constexpr uint32_t CMD_TYPE_INSTANTIATE = 0x1;
-    static constexpr uint32_t CMD_TYPE_RESEED = 0x3;
-    static constexpr uint32_t CMD_TYPE_GENERATE = 0x4;
+    static constexpr uint32_t CMD_TYPE_GENERATE = 0x3;
+    static constexpr uint32_t CMD_TYPE_RESEED = 0x4;
     static constexpr uint32_t CMD_TYPE_UNINSTANTIATE = 0x6;
 
     // CTRL register multi-bit encoded values

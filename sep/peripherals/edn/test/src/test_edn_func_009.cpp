@@ -8,7 +8,7 @@
  * (Interrupt Generation and Management) functionality verification.
  *
  * Implementation Details:
- * - Uses CSML logging macros with correct argument counts: CSML_INFO(1, logger)
+ * - Uses REG logging macros with correct argument counts: REG_INFO(1, logger)
  * - Leverages register_read_32/register_write_32 for register access
  * - Tests W1C (Write-1-to-Clear) semantics for INTR_STATE
  * - Validates interrupt signal logic: signal = INTR_STATE AND INTR_ENABLE
@@ -71,16 +71,16 @@ test_edn_func_009::test_edn_func_009(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "====================================================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_009 Test Suite Initialized";
-    CSML_INFO(1, logger) << "Functionality: Interrupt Generation and Management";
-    CSML_INFO(1, logger) << "Test Coverage: 9 comprehensive test cases";
-    CSML_INFO(1, logger) << "====================================================================";
+    REG_INFO(1, logger) << "====================================================================";
+    REG_INFO(1, logger) << "EDN_FUNC_009 Test Suite Initialized";
+    REG_INFO(1, logger) << "Functionality: Interrupt Generation and Management";
+    REG_INFO(1, logger) << "Test Coverage: 9 comprehensive test cases";
+    REG_INFO(1, logger) << "====================================================================";
 }
 
 test_edn_func_009::~test_edn_func_009()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_009 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_009 test suite terminated";
 }
 
 // =============================================================================
@@ -89,11 +89,11 @@ test_edn_func_009::~test_edn_func_009()
 
 unsigned int test_edn_func_009::run_all_tests()
 {
-    CSML_INFO(1, logger) << "";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_009 Test Execution Start";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_009 Test Execution Start";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
 
     bool result;
 
@@ -152,42 +152,42 @@ unsigned int test_edn_func_009::run_all_tests()
     report_test_result("TC9: Interrupt Reset Behavior", result);
 
     // Print Summary
-    CSML_INFO(1, logger) << "";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_009 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_009 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed << " ("
         << std::fixed << std::setprecision(1)
         << (100.0 * m_tests_passed / m_tests_run) << "%)";
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << oss.str();
+        REG_ERROR(1, logger) << oss.str();
     } else {
-        CSML_INFO(1, logger) << oss.str();
+        REG_INFO(1, logger) << oss.str();
     }
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "";
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     } else {
-        CSML_INFO(1, logger) << "";
-        CSML_INFO(1, logger) << "ALL TESTS PASSED!";
+        REG_INFO(1, logger) << "";
+        REG_INFO(1, logger) << "ALL TESTS PASSED!";
     }
 
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
 
     return m_tests_failed;
 }
@@ -198,11 +198,11 @@ unsigned int test_edn_func_009::run_all_tests()
 
 bool test_edn_func_009::test_intr_cmd_req_done_generation()
 {
-    CSML_INFO(1, logger) << "TC1: Testing command completion interrupt generation...";
+    REG_INFO(1, logger) << "TC1: Testing command completion interrupt generation...";
 
     // Enable EDN in software port mode
     if (!issue_sw_instantiate_command()) {
-        CSML_ERROR(1, logger) << "  FAIL: Could not enable EDN or issue command";
+        REG_ERROR(1, logger) << "  FAIL: Could not enable EDN or issue command";
         return false;
     }
 
@@ -221,15 +221,15 @@ bool test_edn_func_009::test_intr_cmd_req_done_generation()
 
     // Verify INTR_STATE[0] is set (command completion)
     if ((intr_state & INTR_CMD_REQ_DONE_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_cmd_req_done not set after command completion";
-        CSML_ERROR(1, logger) << "    Expected bit 0 = 1, Got INTR_STATE = 0x"
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_cmd_req_done not set after command completion";
+        REG_ERROR(1, logger) << "    Expected bit 0 = 1, Got INTR_STATE = 0x"
                               << std::hex << intr_state << std::dec;
         return false;
     }
 
     // Verify interrupt signal is asserted
     if (!verify_interrupt_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done signal not asserted";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done signal not asserted";
         return false;
     }
 
@@ -240,17 +240,17 @@ bool test_edn_func_009::test_intr_cmd_req_done_generation()
     // Verify interrupt cleared
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_CMD_REQ_DONE_MASK) != 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_cmd_req_done not cleared via W1C";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_cmd_req_done not cleared via W1C";
         return false;
     }
 
     // Verify interrupt signal deasserted
     if (!verify_interrupt_signal(0, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done signal not deasserted after clear";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done signal not deasserted after clear";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Command completion interrupt generated and cleared correctly";
+    REG_INFO(1, logger) << "  PASS: Command completion interrupt generated and cleared correctly";
     return true;
 }
 
@@ -260,7 +260,7 @@ bool test_edn_func_009::test_intr_cmd_req_done_generation()
 
 bool test_edn_func_009::test_intr_fatal_err_generation()
 {
-    CSML_INFO(1, logger) << "TC2: Testing fatal error interrupt on FIFO overflow...";
+    REG_INFO(1, logger) << "TC2: Testing fatal error interrupt on FIFO overflow...";
 
     // Enable fatal error interrupt
     register_write_32(INTR_ENABLE_OFFSET, INTR_FATAL_ERR_MASK);
@@ -270,13 +270,13 @@ bool test_edn_func_009::test_intr_fatal_err_generation()
     uint32_t intr_state;
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_FATAL_ERR_MASK) != 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err already set initially";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err already set initially";
         return false;
     }
 
     // Trigger FIFO overflow (write 14 words to RESEED_CMD FIFO)
     if (!trigger_fifo_overflow(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
+        REG_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
         return false;
     }
 
@@ -286,8 +286,8 @@ bool test_edn_func_009::test_intr_fatal_err_generation()
     // Verify INTR_STATE[1] is set (fatal error)
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_FATAL_ERR_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err not set after FIFO overflow";
-        CSML_ERROR(1, logger) << "    Expected bit 1 = 1, Got INTR_STATE = 0x"
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err not set after FIFO overflow";
+        REG_ERROR(1, logger) << "    Expected bit 1 = 1, Got INTR_STATE = 0x"
                               << std::hex << intr_state << std::dec;
         return false;
     }
@@ -296,13 +296,13 @@ bool test_edn_func_009::test_intr_fatal_err_generation()
     uint32_t err_code;
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & (1U << ERR_CODE_SFIFO_RESCMD_ERR_BIT)) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR not set";
         return false;
     }
 
     // Verify interrupt signal is asserted
     if (!verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err signal not asserted";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err signal not asserted";
         return false;
     }
 
@@ -313,23 +313,23 @@ bool test_edn_func_009::test_intr_fatal_err_generation()
     // Verify interrupt cleared but ERR_CODE remains sticky
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_FATAL_ERR_MASK) != 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err not cleared via W1C";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err not cleared via W1C";
         return false;
     }
 
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & (1U << ERR_CODE_SFIFO_RESCMD_ERR_BIT)) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR should remain sticky";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR should remain sticky";
         return false;
     }
 
     // Verify interrupt signal deasserted
     if (!verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err signal not deasserted after clear";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err signal not deasserted after clear";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Fatal error interrupt generated correctly on FIFO overflow";
+    REG_INFO(1, logger) << "  PASS: Fatal error interrupt generated correctly on FIFO overflow";
     return true;
 }
 
@@ -339,7 +339,7 @@ bool test_edn_func_009::test_intr_fatal_err_generation()
 
 bool test_edn_func_009::test_intr_enable_masking()
 {
-    CSML_INFO(1, logger) << "TC3: Testing INTR_ENABLE masking control...";
+    REG_INFO(1, logger) << "TC3: Testing INTR_ENABLE masking control...";
 
     // Force both interrupts via INTR_TEST with INTR_ENABLE = 0
     register_write_32(INTR_ENABLE_OFFSET, 0x0);
@@ -350,13 +350,13 @@ bool test_edn_func_009::test_intr_enable_masking()
     uint32_t intr_state;
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_BOTH_MASK) != INTR_BOTH_MASK) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_TEST did not set INTR_STATE bits";
+        REG_ERROR(1, logger) << "  FAIL: INTR_TEST did not set INTR_STATE bits";
         return false;
     }
 
     // Verify interrupt signals are NOT asserted (masked by INTR_ENABLE=0)
     if (!verify_interrupt_signal(0, false) || !verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Interrupt signals asserted despite INTR_ENABLE=0";
+        REG_ERROR(1, logger) << "  FAIL: Interrupt signals asserted despite INTR_ENABLE=0";
         return false;
     }
 
@@ -366,11 +366,11 @@ bool test_edn_func_009::test_intr_enable_masking()
 
     // Verify only intr_edn_cmd_req_done asserts
     if (!verify_interrupt_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done not asserted after enable";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done not asserted after enable";
         return false;
     }
     if (!verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err should remain masked";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err should remain masked";
         return false;
     }
 
@@ -380,7 +380,7 @@ bool test_edn_func_009::test_intr_enable_masking()
 
     // Verify both interrupt signals are asserted
     if (!verify_interrupt_signal(0, true) || !verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Both interrupts should be asserted";
+        REG_ERROR(1, logger) << "  FAIL: Both interrupts should be asserted";
         return false;
     }
 
@@ -390,18 +390,18 @@ bool test_edn_func_009::test_intr_enable_masking()
 
     // Verify both interrupt signals are deasserted (but status bits remain)
     if (!verify_interrupt_signal(0, false) || !verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Interrupts should be masked after disable";
+        REG_ERROR(1, logger) << "  FAIL: Interrupts should be masked after disable";
         return false;
     }
 
     // Verify INTR_STATE bits remain set
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_BOTH_MASK) != INTR_BOTH_MASK) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE bits should remain set after masking";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE bits should remain set after masking";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: INTR_ENABLE masking control works correctly";
+    REG_INFO(1, logger) << "  PASS: INTR_ENABLE masking control works correctly";
     return true;
 }
 
@@ -411,7 +411,7 @@ bool test_edn_func_009::test_intr_enable_masking()
 
 bool test_edn_func_009::test_intr_state_w1c_clearing()
 {
-    CSML_INFO(1, logger) << "TC4: Testing INTR_STATE W1C clearing mechanism...";
+    REG_INFO(1, logger) << "TC4: Testing INTR_STATE W1C clearing mechanism...";
 
     // Enable both interrupts
     register_write_32(INTR_ENABLE_OFFSET, INTR_BOTH_MASK);
@@ -430,7 +430,7 @@ bool test_edn_func_009::test_intr_state_w1c_clearing()
 
     // Verify both interrupt signals are asserted
     if (!verify_interrupt_signal(0, true) || !verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Both interrupt signals should be asserted";
+        REG_ERROR(1, logger) << "  FAIL: Both interrupt signals should be asserted";
         return false;
     }
 
@@ -440,7 +440,7 @@ bool test_edn_func_009::test_intr_state_w1c_clearing()
 
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_CMD_REQ_DONE_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: Writing 0 should not clear W1C bit";
+        REG_ERROR(1, logger) << "  FAIL: Writing 0 should not clear W1C bit";
         return false;
     }
 
@@ -450,17 +450,17 @@ bool test_edn_func_009::test_intr_state_w1c_clearing()
 
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_CMD_REQ_DONE_MASK) != 0) {
-        CSML_ERROR(1, logger) << "  FAIL: Writing 1 should clear W1C bit";
+        REG_ERROR(1, logger) << "  FAIL: Writing 1 should clear W1C bit";
         return false;
     }
 
     // Verify intr_edn_cmd_req_done deasserted, edn_fatal_err still asserted
     if (!verify_interrupt_signal(0, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done should be deasserted";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done should be deasserted";
         return false;
     }
     if (!verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err should remain asserted";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err should remain asserted";
         return false;
     }
 
@@ -475,7 +475,7 @@ bool test_edn_func_009::test_intr_state_w1c_clearing()
 
     // Verify both interrupts deasserted
     if (!verify_interrupt_signal(0, false) || !verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Both interrupts should be deasserted";
+        REG_ERROR(1, logger) << "  FAIL: Both interrupts should be deasserted";
         return false;
     }
 
@@ -497,11 +497,11 @@ bool test_edn_func_009::test_intr_state_w1c_clearing()
 
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if (!verify_register_value("INTR_STATE", 0x0, intr_state)) {
-        CSML_ERROR(1, logger) << "  FAIL: Writing 1 to cleared W1C bits should have no effect";
+        REG_ERROR(1, logger) << "  FAIL: Writing 1 to cleared W1C bits should have no effect";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: W1C clearing mechanism works correctly";
+    REG_INFO(1, logger) << "  PASS: W1C clearing mechanism works correctly";
     return true;
 }
 
@@ -511,7 +511,7 @@ bool test_edn_func_009::test_intr_state_w1c_clearing()
 
 bool test_edn_func_009::test_intr_test_forced_assertion()
 {
-    CSML_INFO(1, logger) << "TC5: Testing INTR_TEST forced interrupt assertion...";
+    REG_INFO(1, logger) << "TC5: Testing INTR_TEST forced interrupt assertion...";
 
     // Enable both interrupts
     register_write_32(INTR_ENABLE_OFFSET, INTR_BOTH_MASK);
@@ -535,13 +535,13 @@ bool test_edn_func_009::test_intr_test_forced_assertion()
     // Verify INTR_STATE[0] is set
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_CMD_REQ_DONE_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_TEST did not set INTR_STATE[0]";
+        REG_ERROR(1, logger) << "  FAIL: INTR_TEST did not set INTR_STATE[0]";
         return false;
     }
 
     // Verify interrupt signal asserted
     if (!verify_interrupt_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done not asserted after INTR_TEST";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done not asserted after INTR_TEST";
         return false;
     }
 
@@ -554,12 +554,12 @@ bool test_edn_func_009::test_intr_test_forced_assertion()
 
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_FATAL_ERR_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_TEST did not set INTR_STATE[1]";
+        REG_ERROR(1, logger) << "  FAIL: INTR_TEST did not set INTR_STATE[1]";
         return false;
     }
 
     if (!verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err not asserted after INTR_TEST";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err not asserted after INTR_TEST";
         return false;
     }
 
@@ -572,12 +572,12 @@ bool test_edn_func_009::test_intr_test_forced_assertion()
 
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if (!verify_register_value("INTR_STATE", INTR_BOTH_MASK, intr_state)) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_TEST did not set both bits";
+        REG_ERROR(1, logger) << "  FAIL: INTR_TEST did not set both bits";
         return false;
     }
 
     if (!verify_interrupt_signal(0, true) || !verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Both interrupts should be asserted";
+        REG_ERROR(1, logger) << "  FAIL: Both interrupts should be asserted";
         return false;
     }
 
@@ -585,12 +585,12 @@ bool test_edn_func_009::test_intr_test_forced_assertion()
     uint32_t intr_test;
     register_read_32(INTR_TEST_OFFSET, intr_test);
     if (intr_test != 0x0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_TEST should be write-only (read returns 0)";
-        CSML_ERROR(1, logger) << "    Got INTR_TEST = 0x" << std::hex << intr_test << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: INTR_TEST should be write-only (read returns 0)";
+        REG_ERROR(1, logger) << "    Got INTR_TEST = 0x" << std::hex << intr_test << std::dec;
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: INTR_TEST forced assertion works correctly";
+    REG_INFO(1, logger) << "  PASS: INTR_TEST forced assertion works correctly";
     return true;
 }
 
@@ -600,7 +600,7 @@ bool test_edn_func_009::test_intr_test_forced_assertion()
 
 bool test_edn_func_009::test_interrupt_signal_logic()
 {
-    CSML_INFO(1, logger) << "TC6: Testing interrupt signal logic (INTR_STATE AND INTR_ENABLE)...";
+    REG_INFO(1, logger) << "TC6: Testing interrupt signal logic (INTR_STATE AND INTR_ENABLE)...";
 
     // Test all 4 combinations for edn_cmd_req_done (bit 0)
 
@@ -610,7 +610,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(0, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 1 (STATE=0, EN=0) → signal should be 0";
+        REG_ERROR(1, logger) << "  FAIL: Case 1 (STATE=0, EN=0) → signal should be 0";
         return false;
     }
 
@@ -619,7 +619,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(0, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 2 (STATE=0, EN=1) → signal should be 0";
+        REG_ERROR(1, logger) << "  FAIL: Case 2 (STATE=0, EN=1) → signal should be 0";
         return false;
     }
 
@@ -629,7 +629,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(0, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 3 (STATE=1, EN=0) → signal should be 0";
+        REG_ERROR(1, logger) << "  FAIL: Case 3 (STATE=1, EN=0) → signal should be 0";
         return false;
     }
 
@@ -638,7 +638,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 4 (STATE=1, EN=1) → signal should be 1";
+        REG_ERROR(1, logger) << "  FAIL: Case 4 (STATE=1, EN=1) → signal should be 1";
         return false;
     }
 
@@ -654,7 +654,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 1 (STATE=0, EN=0) → signal should be 0";
+        REG_ERROR(1, logger) << "  FAIL: Case 1 (STATE=0, EN=0) → signal should be 0";
         return false;
     }
 
@@ -663,7 +663,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 2 (STATE=0, EN=1) → signal should be 0";
+        REG_ERROR(1, logger) << "  FAIL: Case 2 (STATE=0, EN=1) → signal should be 0";
         return false;
     }
 
@@ -673,7 +673,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 3 (STATE=1, EN=0) → signal should be 0";
+        REG_ERROR(1, logger) << "  FAIL: Case 3 (STATE=1, EN=0) → signal should be 0";
         return false;
     }
 
@@ -682,7 +682,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Case 4 (STATE=1, EN=1) → signal should be 1";
+        REG_ERROR(1, logger) << "  FAIL: Case 4 (STATE=1, EN=1) → signal should be 1";
         return false;
     }
 
@@ -694,7 +694,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(0, true) || !verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Mixed case 1 failed";
+        REG_ERROR(1, logger) << "  FAIL: Mixed case 1 failed";
         return false;
     }
 
@@ -703,7 +703,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(0, false) || !verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Mixed case 2 failed";
+        REG_ERROR(1, logger) << "  FAIL: Mixed case 2 failed";
         return false;
     }
 
@@ -712,11 +712,11 @@ bool test_edn_func_009::test_interrupt_signal_logic()
     wait(SC_ZERO_TIME);
 
     if (!verify_interrupt_signal(0, true) || !verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Mixed case 3 failed";
+        REG_ERROR(1, logger) << "  FAIL: Mixed case 3 failed";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Interrupt signal logic follows AND gate correctly";
+    REG_INFO(1, logger) << "  PASS: Interrupt signal logic follows AND gate correctly";
     return true;
 }
 
@@ -726,7 +726,7 @@ bool test_edn_func_009::test_interrupt_signal_logic()
 
 bool test_edn_func_009::test_status_bit_independent_of_enable()
 {
-    CSML_INFO(1, logger) << "TC7: Testing status bit setting independent of enable mask...";
+    REG_INFO(1, logger) << "TC7: Testing status bit setting independent of enable mask...";
 
     // Disable both interrupts
     register_write_32(INTR_ENABLE_OFFSET, 0x0);
@@ -744,13 +744,13 @@ bool test_edn_func_009::test_status_bit_independent_of_enable()
     uint32_t intr_state;
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_CMD_REQ_DONE_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE[0] should be set despite INTR_ENABLE[0]=0";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE[0] should be set despite INTR_ENABLE[0]=0";
         return false;
     }
 
     // Verify signal is NOT asserted (masked by INTR_ENABLE)
     if (!verify_interrupt_signal(0, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Signal should be masked by INTR_ENABLE=0";
+        REG_ERROR(1, logger) << "  FAIL: Signal should be masked by INTR_ENABLE=0";
         return false;
     }
 
@@ -760,7 +760,7 @@ bool test_edn_func_009::test_status_bit_independent_of_enable()
 
     // Verify signal NOW asserts (status bit was already set)
     if (!verify_interrupt_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Signal should assert when enable is set with existing status";
+        REG_ERROR(1, logger) << "  FAIL: Signal should assert when enable is set with existing status";
         return false;
     }
 
@@ -771,7 +771,7 @@ bool test_edn_func_009::test_status_bit_independent_of_enable()
 
     // Trigger FIFO overflow with INTR_ENABLE[1]=0
     if (!trigger_fifo_overflow(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
+        REG_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
         return false;
     }
 
@@ -780,13 +780,13 @@ bool test_edn_func_009::test_status_bit_independent_of_enable()
     // Verify INTR_STATE[1] is set despite INTR_ENABLE[1]=0
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & INTR_FATAL_ERR_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE[1] should be set despite INTR_ENABLE[1]=0";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE[1] should be set despite INTR_ENABLE[1]=0";
         return false;
     }
 
     // Verify signal is NOT asserted
     if (!verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Signal should be masked by INTR_ENABLE=0";
+        REG_ERROR(1, logger) << "  FAIL: Signal should be masked by INTR_ENABLE=0";
         return false;
     }
 
@@ -796,11 +796,11 @@ bool test_edn_func_009::test_status_bit_independent_of_enable()
 
     // Verify signal asserts
     if (!verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Signal should assert after enabling";
+        REG_ERROR(1, logger) << "  FAIL: Signal should assert after enabling";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Status bits set independently of enable mask (bug fix validated)";
+    REG_INFO(1, logger) << "  PASS: Status bits set independently of enable mask (bug fix validated)";
     return true;
 }
 
@@ -810,7 +810,7 @@ bool test_edn_func_009::test_status_bit_independent_of_enable()
 
 bool test_edn_func_009::test_multiple_interrupts_simultaneous()
 {
-    CSML_INFO(1, logger) << "TC8: Testing multiple interrupts simultaneously...";
+    REG_INFO(1, logger) << "TC8: Testing multiple interrupts simultaneously...";
 
     // Enable both interrupts
     register_write_32(INTR_ENABLE_OFFSET, INTR_BOTH_MASK);
@@ -829,7 +829,7 @@ bool test_edn_func_009::test_multiple_interrupts_simultaneous()
 
     // Verify both interrupt signals are asserted
     if (!verify_interrupt_signal(0, true) || !verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Both interrupt signals should be asserted";
+        REG_ERROR(1, logger) << "  FAIL: Both interrupt signals should be asserted";
         return false;
     }
 
@@ -845,11 +845,11 @@ bool test_edn_func_009::test_multiple_interrupts_simultaneous()
 
     // Verify intr_edn_cmd_req_done=0, intr_edn_fatal_err=1
     if (!verify_interrupt_signal(0, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done should be deasserted";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_cmd_req_done should be deasserted";
         return false;
     }
     if (!verify_interrupt_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err should remain asserted";
+        REG_ERROR(1, logger) << "  FAIL: intr_edn_fatal_err should remain asserted";
         return false;
     }
 
@@ -864,11 +864,11 @@ bool test_edn_func_009::test_multiple_interrupts_simultaneous()
     }
 
     if (!verify_interrupt_signal(0, false) || !verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Both interrupts should be deasserted";
+        REG_ERROR(1, logger) << "  FAIL: Both interrupts should be deasserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Multiple interrupts work simultaneously without interference";
+    REG_INFO(1, logger) << "  PASS: Multiple interrupts work simultaneously without interference";
     return true;
 }
 
@@ -878,7 +878,7 @@ bool test_edn_func_009::test_multiple_interrupts_simultaneous()
 
 bool test_edn_func_009::test_interrupt_reset_behavior()
 {
-    CSML_INFO(1, logger) << "TC9: Testing interrupt reset behavior...";
+    REG_INFO(1, logger) << "TC9: Testing interrupt reset behavior...";
 
     // Set up interrupts before reset
     register_write_32(INTR_ENABLE_OFFSET, INTR_BOTH_MASK);
@@ -891,7 +891,7 @@ bool test_edn_func_009::test_interrupt_reset_behavior()
     register_read_32(INTR_ENABLE_OFFSET, intr_enable);
 
     if (intr_state != INTR_BOTH_MASK || intr_enable != INTR_BOTH_MASK) {
-        CSML_ERROR(1, logger) << "  FAIL: Pre-reset setup failed";
+        REG_ERROR(1, logger) << "  FAIL: Pre-reset setup failed";
         return false;
     }
 
@@ -902,14 +902,14 @@ bool test_edn_func_009::test_interrupt_reset_behavior()
     // Verify INTR_STATE reset to 0x0
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if (!verify_register_value("INTR_STATE", 0x0, intr_state)) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE not reset to 0x0";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE not reset to 0x0";
         return false;
     }
 
     // Verify INTR_ENABLE reset to 0x0
     register_read_32(INTR_ENABLE_OFFSET, intr_enable);
     if (!verify_register_value("INTR_ENABLE", 0x0, intr_enable)) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_ENABLE not reset to 0x0";
+        REG_ERROR(1, logger) << "  FAIL: INTR_ENABLE not reset to 0x0";
         return false;
     }
 
@@ -917,13 +917,13 @@ bool test_edn_func_009::test_interrupt_reset_behavior()
     uint32_t intr_test;
     register_read_32(INTR_TEST_OFFSET, intr_test);
     if (!verify_register_value("INTR_TEST", 0x0, intr_test)) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_TEST should read as 0x0";
+        REG_ERROR(1, logger) << "  FAIL: INTR_TEST should read as 0x0";
         return false;
     }
 
     // Verify both interrupt signals deasserted
     if (!verify_interrupt_signal(0, false) || !verify_interrupt_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Interrupt signals not deasserted after reset";
+        REG_ERROR(1, logger) << "  FAIL: Interrupt signals not deasserted after reset";
         return false;
     }
 
@@ -936,16 +936,16 @@ bool test_edn_func_009::test_interrupt_reset_behavior()
     register_read_32(INTR_ENABLE_OFFSET, intr_enable);
 
     if ((intr_state & INTR_CMD_REQ_DONE_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE not functional after reset";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE not functional after reset";
         return false;
     }
 
     if (intr_enable != INTR_CMD_REQ_DONE_MASK) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_ENABLE not functional after reset";
+        REG_ERROR(1, logger) << "  FAIL: INTR_ENABLE not functional after reset";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Reset correctly clears all interrupt state";
+    REG_INFO(1, logger) << "  PASS: Reset correctly clears all interrupt state";
     return true;
 }
 
@@ -1000,15 +1000,15 @@ bool test_edn_func_009::verify_interrupt_signal(uint32_t interrupt_id, bool expe
     } else if (interrupt_id == 1) {
         actual = intr_edn_fatal_err.read();
     } else {
-        CSML_ERROR(1, logger) << "    Invalid interrupt_id: " << interrupt_id;
+        REG_ERROR(1, logger) << "    Invalid interrupt_id: " << interrupt_id;
         return false;
     }
 
     if (actual != expected) {
         const char* interrupt_name = (interrupt_id == 0) ? "intr_edn_cmd_req_done" : "intr_edn_fatal_err";
-        CSML_ERROR(1, logger) << "    Interrupt signal mismatch: " << interrupt_name;
-        CSML_ERROR(1, logger) << "      Expected: " << (expected ? "asserted" : "deasserted");
-        CSML_ERROR(1, logger) << "      Actual:   " << (actual ? "asserted" : "deasserted");
+        REG_ERROR(1, logger) << "    Interrupt signal mismatch: " << interrupt_name;
+        REG_ERROR(1, logger) << "      Expected: " << (expected ? "asserted" : "deasserted");
+        REG_ERROR(1, logger) << "      Actual:   " << (actual ? "asserted" : "deasserted");
         return false;
     }
 
@@ -1018,9 +1018,9 @@ bool test_edn_func_009::verify_interrupt_signal(uint32_t interrupt_id, bool expe
 bool test_edn_func_009::verify_register_value(const std::string& reg_name, uint32_t expected, uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << "    Register mismatch: " << reg_name;
-        CSML_ERROR(1, logger) << "      Expected: 0x" << std::hex << expected << std::dec;
-        CSML_ERROR(1, logger) << "      Actual:   0x" << std::hex << actual << std::dec;
+        REG_ERROR(1, logger) << "    Register mismatch: " << reg_name;
+        REG_ERROR(1, logger) << "      Expected: 0x" << std::hex << expected << std::dec;
+        REG_ERROR(1, logger) << "      Actual:   0x" << std::hex << actual << std::dec;
         return false;
     }
     return true;
@@ -1032,18 +1032,18 @@ void test_edn_func_009::report_test_result(const std::string& test_name, bool pa
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
         if (!message.empty()) {
-            CSML_INFO(1, logger) << "  " << message;
+            REG_INFO(1, logger) << "  " << message;
         }
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "  " << message;
+            REG_ERROR(1, logger) << "  " << message;
         }
     }
 
-    CSML_INFO(1, logger) << ""; // Blank line between tests
+    REG_INFO(1, logger) << ""; // Blank line between tests
 }

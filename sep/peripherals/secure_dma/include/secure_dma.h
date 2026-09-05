@@ -10,8 +10,9 @@
 
 #pragma once
 #include "secure_dma_base.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
+#include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/tlm_quantumkeeper.h>
 
 /**
@@ -31,6 +32,8 @@
  */
 class secure_dma_model : public secure_dma_base
 {
+  friend class testbench;
+
 public:
   SC_HAS_PROCESS(secure_dma_model);
 
@@ -99,10 +102,10 @@ public:
   * sets up the register infrastructure for TLM transactions,
   * initializes all ports, and registers SystemC processes.
   */
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-  csml_param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+  regmodel::Param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
   secure_dma_model(sc_module_name n);
 
   /**
@@ -114,8 +117,8 @@ private:
   /// Quantum keeper for temporal decoupling
   tlm_utils::tlm_quantumkeeper m_qk;
 
-  /// CSML logger instance for model diagnostics
-  CsmlLogger logger;
+  /// RegLogger instance for model diagnostics
+  RegLogger logger;
 
   // =========================================================================
   // Internal State Variables for Register Management
@@ -643,7 +646,7 @@ private:
   bool is_range_locked() const;
 
   /**
-  * @brief Register all callbacks with CSML memory (consolidated)
+  * @brief Register all callbacks with regmodel memory (consolidated)
   *
   * Registers write and read callbacks for all registers across
   * all functionalities. Called from constructor.
@@ -804,7 +807,7 @@ private:
   uint32_t replicate_subword_for_write(uint32_t write_data, uint64_t addr, uint32_t width_bytes);
 
   /**
-  * @brief Register callbacks with CSML memory (if needed)
+  * @brief Register callbacks with regmodel memory (if needed)
   *
   * primarily provides validation and data manipulation helper
   * methods. No additional register callbacks beyond previous functionality are required.
@@ -950,7 +953,7 @@ private:
   bool validate_wrap_boundaries(uint64_t base_addr, uint32_t chunk_size);
 
   /**
-  * @brief Register callbacks with CSML memory (if needed)
+  * @brief Register callbacks with regmodel memory (if needed)
   *
   * provides addressing mode management and address advancement logic.
   * No additional register callbacks beyond previous functionality are required (SRC_CONFIG
@@ -1089,7 +1092,7 @@ private:
   const char* get_bus_name(BusInterface bus_interface);
 
   /**
-  * @brief Register callbacks with CSML memory (if needed)
+  * @brief Register callbacks with regmodel memory (if needed)
   *
   * provides bus routing and transaction preparation logic.
   * No additional register callbacks beyond previous functionality are required
@@ -1216,7 +1219,7 @@ private:
   bool handle_bus_error(tlm::tlm_response_status response_status);
 
   /**
-  * @brief Register callbacks with CSML memory (if needed)
+  * @brief Register callbacks with regmodel memory (if needed)
   *
   * provides error detection and reporting logic. No additional
   * register callbacks beyond , , , and 
@@ -1317,7 +1320,7 @@ private:
                   uint32_t src_asid, uint32_t dst_asid);
 
   /**
-  * @brief Register callbacks with CSML memory (if needed)
+  * @brief Register callbacks with regmodel memory (if needed)
   *
   * provides security isolation and access control logic.
   * No additional register callbacks beyond previous functionality are required
@@ -1335,7 +1338,7 @@ private:
   // =========================================================================
 
   /**
-  * @brief Register callbacks with CSML memory (if needed)
+  * @brief Register callbacks with regmodel memory (if needed)
   *
   * implements Transfer Control and Abort functionality through
   * enhanced behavior in existing CONTROL and STATUS register callbacks.

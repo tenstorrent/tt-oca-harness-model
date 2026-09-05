@@ -647,7 +647,7 @@ void testbench::test_register_clearing_on_fatal_alert()
         // Note: It's statistically possible (but unlikely) for pseudo-random data to be zero
         // This check is informational rather than strict
         if (all_zero) {
-            CSML_INFO(1, logger) << "Warning: IV registers cleared to zero (expected pseudo-random data)" << std::endl;
+            REG_INFO(1, logger) << "Warning: IV registers cleared to zero (expected pseudo-random data)" << std::endl;
         }
 
         report_test_pass("test_register_clearing_on_fatal_alert");

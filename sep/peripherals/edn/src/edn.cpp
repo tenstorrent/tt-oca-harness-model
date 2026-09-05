@@ -24,7 +24,7 @@ edn_ip::edn_ip(sc_module_name n)
     , alert_fatal_alert("alert_fatal_alert")
     , clk_i("clk_i")
     , rst_ni("rst_ni")
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
     , m_forced_csrng_ack_status(0)
     , m_regwen_locked(false)
     , m_main_sm_state(EdnMainSmState::Idle)
@@ -33,6 +33,8 @@ edn_ip::edn_ip(sc_module_name n)
     , m_sw_cmd_sts_initialized(false)
     , m_entropy_fips(false)
     , m_prev_genbits_valid(false)
+    , m_auto_gen_counter(0)
+    , m_auto_mode_epoch(0)
 {
 
     // Initialize previous genbits for consistency checking (EDN_FUNC_008)
@@ -245,6 +247,7 @@ void edn_ip::reset_process()
 
         // Reset auto mode generate counter (EDN_FUNC_013)
         m_auto_gen_counter = 0;
+        ++m_auto_mode_epoch;
     }
 }
 
@@ -364,8 +367,13 @@ bool edn_ip::ctrl_write_callback(uint32_t value)
 
     // Error state is sticky - only reset can exit (architectural requirement)
     if (m_main_sm_state == EdnMainSmState::Error) {
-        // Accept register write but prevent state transitions
-        CSML_DEBUG(1, logger) << "CTRL write in Error state - transitions blocked";
+        // Accept the register write (regmodel callbacks own the store) but
+        // prevent state-machine transitions.
+        REG_DEBUG(1, logger) << "CTRL write in Error state - transitions blocked";
+        CTRL.EDN_ENABLE = edn_enable_field;
+        CTRL.BOOT_REQ_MODE = boot_req_mode_field;
+        CTRL.AUTO_REQ_MODE = auto_req_mode_field;
+        CTRL.CMD_FIFO_RST = cmd_fifo_rst_field;
         return true;
     }
 
@@ -686,7 +694,7 @@ void edn_ip::process_sw_command_async()
  */
 bool edn_ip::handle_read_SW_CMD_STS(uint32_t& value)
 {
-    CSML_INFO(1, logger) << "MODEL: handle_read_SW_CMD_STS called, m_sw_cmd_processing=" << m_sw_cmd_processing
+    REG_INFO(1, logger) << "MODEL: handle_read_SW_CMD_STS called, m_sw_cmd_processing=" << m_sw_cmd_processing
                           << ", m_sw_cmd_sts_initialized=" << m_sw_cmd_sts_initialized;
 
     // Check if module has been enabled since reset
@@ -731,7 +739,7 @@ bool edn_ip::handle_read_SW_CMD_STS(uint32_t& value)
 
     value = static_cast<uint32_t>(SW_CMD_STS);
 
-    CSML_INFO(1, logger) << "MODEL: Returning SW_CMD_STS=0x" << std::hex << value;
+    REG_INFO(1, logger) << "MODEL: Returning SW_CMD_STS=0x" << std::hex << value;
 
     return true;  // Allow read to proceed
 }
@@ -755,7 +763,7 @@ bool edn_ip::handle_read_SW_CMD_STS(uint32_t& value)
  */
 bool edn_ip::handle_read_HW_CMD_STS(uint32_t& value)
 {
-    CSML_INFO(1, logger) << "MODEL: handle_read_HW_CMD_STS called";
+    REG_INFO(1, logger) << "MODEL: handle_read_HW_CMD_STS called";
 
     // Derive BOOT_MODE and AUTO_MODE from CTRL register
     uint32_t boot_req_mode = static_cast<uint32_t>(CTRL.BOOT_REQ_MODE);
@@ -769,7 +777,7 @@ bool edn_ip::handle_read_HW_CMD_STS(uint32_t& value)
     // Update output value with complete register contents
     value = static_cast<uint32_t>(HW_CMD_STS);
 
-    CSML_INFO(1, logger) << "MODEL: Returning HW_CMD_STS=0x" << std::hex << value;
+    REG_INFO(1, logger) << "MODEL: Returning HW_CMD_STS=0x" << std::hex << value;
 
     return true;  // Allow read to proceed
 }
@@ -791,13 +799,13 @@ bool edn_ip::handle_read_HW_CMD_STS(uint32_t& value)
  */
 void edn_ip::handle_csrng_error(uint32_t ack_status)
 {
-    CSML_INFO(1, logger) << "MODEL: handle_csrng_error() called with status=0x" << std::hex << ack_status;
+    REG_INFO(1, logger) << "MODEL: handle_csrng_error() called with status=0x" << std::hex << ack_status;
 
     // Set recoverable alert for CSRNG error (bit 13)
     RECOV_ALERT_STS.CSRNG_ACK_ERR = 1;
     m_alert_update_event.notify(SC_ZERO_TIME);
 
-    CSML_INFO(1, logger) << "MODEL: RECOV_ALERT_STS.CSRNG_ACK_ERR set, notified alert_update_event";
+    REG_INFO(1, logger) << "MODEL: RECOV_ALERT_STS.CSRNG_ACK_ERR set, notified alert_update_event";
 
     // Note: CSRNG errors are recoverable, not fatal. Module remains operational.
     // No ERR_CODE, no fatal interrupt, no Error state transition per hardware spec.
@@ -1154,7 +1162,7 @@ bool edn_ip::handle_write_RESEED_CMD(uint32_t value)
     // Push command word to FIFO
     m_reseed_cmd_fifo.push(value);
 
-    // Write accepted - register update handled by CSML framework
+    // Write accepted - register update handled by regmodel framework
     return true;
 }
 
@@ -1183,7 +1191,7 @@ bool edn_ip::handle_write_GENERATE_CMD(uint32_t value)
     // Push command word to FIFO
     m_generate_cmd_fifo.push(value);
 
-    // Write accepted - register update handled by CSML framework
+    // Write accepted - register update handled by regmodel framework
     return true;
 }
 
@@ -1230,7 +1238,7 @@ void edn_ip::trigger_fifo_overflow_error(const char* fifo_type)
     m_alert_update_event.notify(SC_ZERO_TIME);
 
     // Log fatal error for diagnostic visibility
-    CSML_ERROR(0, logger) << "[EDN] FATAL ERROR: " << fifo_type
+    REG_ERROR(0, logger) << "[EDN] FATAL ERROR: " << fifo_type
                          << " FIFO overflow (depth exceeded 13 words). "
                          << "ERR_CODE=0x" << std::hex << static_cast<uint32_t>(ERR_CODE)
                          << ", State machine transitioned to Error state."
@@ -1312,7 +1320,7 @@ void edn_ip::check_entropy_bus_consistency(const uint32_t current_genbits[4])
             m_alert_update_event.notify(SC_ZERO_TIME);
 
             // Log consistency error for diagnostic visibility
-            CSML_WARN(1, logger) << "[EDN] Entropy bus consistency check failure: "
+            REG_WARN(1, logger) << "[EDN] Entropy bus consistency check failure: "
                                  << "consecutive genbits values match "
                                  << "(0x" << std::hex
                                  << current_genbits[0] << "_"
@@ -1377,7 +1385,7 @@ bool edn_ip::handle_write_ALERT_TEST(uint32_t value)
     bool force_recov = (value & 0x1) != 0;  // Bit 0: recov_alert
     bool force_fatal = (value & 0x2) != 0;  // Bit 1: fatal_alert
 
-    // LCOV_EXCL_START - CSML framework WO register callback execution artifact
+    // LCOV_EXCL_START - regmodel framework WO register callback execution artifact
     if (force_recov || force_fatal)
     {
         // Direct write to alert outputs for test pulse
@@ -1470,7 +1478,7 @@ bool edn_ip::handle_write_ERR_CODE_TEST(uint32_t value)
     // Validate bit position (0-30 valid, 31 is reserved)
     if (bit_position > 30)
     {
-        CSML_WARN(1, logger) << "[EDN] ERR_CODE_TEST: Invalid bit position "
+        REG_WARN(1, logger) << "[EDN] ERR_CODE_TEST: Invalid bit position "
                              << bit_position << " (valid range 0-30). Write ignored."
                              << std::endl;
         return true;  // Accept write but ignore invalid position
@@ -1498,7 +1506,7 @@ bool edn_ip::handle_write_ERR_CODE_TEST(uint32_t value)
     m_alert_update_event.notify(SC_ZERO_TIME);
 
     // Log error injection for diagnostic visibility
-    CSML_INFO(1, logger) << "[EDN] ERR_CODE_TEST: Forced error bit " << bit_position
+    REG_INFO(1, logger) << "[EDN] ERR_CODE_TEST: Forced error bit " << bit_position
                          << ", ERR_CODE=0x" << std::hex << static_cast<uint32_t>(ERR_CODE)
                          << std::dec << ", fatal interrupt and alert asserted."
                          << std::endl;
@@ -1611,7 +1619,7 @@ bool edn_ip::handle_read_ERR_CODE(uint32_t& value)
  */
 void edn_ip::boot_mode_instantiate()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_012: Boot mode - Sending Instantiate command using BOOT_INS_CMD";
+    REG_INFO(1, logger) << "EDN_FUNC_012: Boot mode - Sending Instantiate command using BOOT_INS_CMD";
 
     // Read BOOT_INS_CMD register for command configuration
     uint32_t boot_ins_cmd = static_cast<uint32_t>(BOOT_INS_CMD);
@@ -1620,7 +1628,7 @@ void edn_ip::boot_mode_instantiate()
     uint32_t clen = (boot_ins_cmd >> 8) & 0xF;
     if (clen != 0)
     {
-        CSML_WARN(1, logger) << "BOOT_INS_CMD has non-zero clen=" << clen
+        REG_WARN(1, logger) << "BOOT_INS_CMD has non-zero clen=" << clen
                              << " (hardware constraint violation, should be 0)";
         // Hardware spec says EDN will hang if clen != 0
         // For functional model, we'll proceed but log warning
@@ -1643,7 +1651,7 @@ void edn_ip::boot_mode_instantiate()
     if (ack_status == 0)
     {
         // Success: Transition to BootGenAckWait and issue Generate command
-        CSML_INFO(1, logger) << "EDN_FUNC_012: Boot Instantiate succeeded, transitioning to BootGenAckWait";
+        REG_INFO(1, logger) << "EDN_FUNC_012: Boot Instantiate succeeded, transitioning to BootGenAckWait";
 
         m_main_sm_state = EdnMainSmState::BootGenAckWait;
         MAIN_SM_STATE.MAIN_SM_STATE = static_cast<uint32_t>(m_main_sm_state);
@@ -1655,7 +1663,7 @@ void edn_ip::boot_mode_instantiate()
     {
         // Error: CSRNG returned non-zero status
         // In normal test operation m_forced_csrng_ack_status is always 0 here.
-        CSML_ERROR(1, logger) << "EDN_FUNC_012: Boot Instantiate failed with status="
+        REG_ERROR(1, logger) << "EDN_FUNC_012: Boot Instantiate failed with status="
                               << std::hex << ack_status;
 
         // Handle CSRNG error with dual alert mechanism
@@ -1710,7 +1718,7 @@ void edn_ip::boot_mode_instantiate()
  */
 void edn_ip::boot_mode_generate()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_012: Boot mode - Sending Generate command using BOOT_GEN_CMD";
+    REG_INFO(1, logger) << "EDN_FUNC_012: Boot mode - Sending Generate command using BOOT_GEN_CMD";
 
     // Read BOOT_GEN_CMD register for command configuration
     uint32_t boot_gen_cmd = static_cast<uint32_t>(BOOT_GEN_CMD);
@@ -1719,12 +1727,12 @@ void edn_ip::boot_mode_generate()
     uint32_t glen = (boot_gen_cmd >> 12) & 0x7FFFF;  // glen is 19 bits at [30:12]
     uint32_t clen = (boot_gen_cmd >> 8) & 0xF;
 
-    CSML_INFO(1, logger) << "EDN_FUNC_012: Boot Generate glen=0x" << std::hex << glen
+    REG_INFO(1, logger) << "EDN_FUNC_012: Boot Generate glen=0x" << std::hex << glen
                          << " (blocks), clen=" << std::dec << clen;
 
     if (clen != 0)
     {
-        CSML_WARN(1, logger) << "BOOT_GEN_CMD has non-zero clen=" << clen
+        REG_WARN(1, logger) << "BOOT_GEN_CMD has non-zero clen=" << clen
                              << " (hardware constraint violation, should be 0)";
     }
 
@@ -1752,7 +1760,7 @@ void edn_ip::boot_mode_generate()
         // Success: Generate command accepted
         // Entropy will be delivered via csrng_genbits_export interface
         // and distributed to endpoints by endpoint_request_monitor()
-        CSML_INFO(1, logger) << "EDN_FUNC_012: Boot Generate command accepted by CSRNG";
+        REG_INFO(1, logger) << "EDN_FUNC_012: Boot Generate command accepted by CSRNG";
 
         // Stay in BootGenAckWait state
         // Firmware will exit by clearing BOOT_REQ_MODE in CTRL register
@@ -1762,7 +1770,7 @@ void edn_ip::boot_mode_generate()
     {
         // Error: CSRNG returned non-zero status
         // Requires m_forced_csrng_ack_status != 0, not exercised in unit tests.
-        CSML_ERROR(1, logger) << "EDN_FUNC_012: Boot Generate failed with status="
+        REG_ERROR(1, logger) << "EDN_FUNC_012: Boot Generate failed with status="
                               << std::hex << ack_status;
 
         // Handle CSRNG error with dual alert mechanism
@@ -1816,7 +1824,7 @@ void edn_ip::boot_mode_generate()
  */
 void edn_ip::boot_mode_uninstantiate()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_012: Boot mode exit - Sending Uninstantiate command";
+    REG_INFO(1, logger) << "EDN_FUNC_012: Boot mode exit - Sending Uninstantiate command";
 
 
     HW_CMD_STS.CMD_TYPE = 0x5;  // Uninstantiate command type
@@ -1835,7 +1843,7 @@ void edn_ip::boot_mode_uninstantiate()
     if (ack_status == 0)
     {
         // Success: CSRNG instance destroyed, clean exit from boot mode
-        CSML_INFO(1, logger) << "EDN_FUNC_012: Boot mode Uninstantiate succeeded, now in SWPortMode";
+        REG_INFO(1, logger) << "EDN_FUNC_012: Boot mode Uninstantiate succeeded, now in SWPortMode";
 
         // State machine already transitioned to SWPortMode in CTRL callback
         // HW_CMD_STS.BOOT_MODE already cleared in CTRL callback
@@ -1844,7 +1852,7 @@ void edn_ip::boot_mode_uninstantiate()
     else
     {
         // Error: Uninstantiate failed (rare, requires forced non-zero ack status).
-        CSML_ERROR(1, logger) << "EDN_FUNC_012: Boot Uninstantiate failed with status="
+        REG_ERROR(1, logger) << "EDN_FUNC_012: Boot Uninstantiate failed with status="
                               << std::hex << ack_status;
 
         // Handle CSRNG error with dual alert mechanism
@@ -1888,7 +1896,10 @@ void edn_ip::boot_mode_uninstantiate()
  */
 void edn_ip::auto_mode_init()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Auto mode initialization started, waiting for manual Instantiate";
+    ++m_auto_mode_epoch;
+    const uint32_t epoch = m_auto_mode_epoch;
+
+    REG_INFO(1, logger) << "EDN_FUNC_013: Auto mode initialization started, waiting for manual Instantiate";
 
     // Transition to AutoFirstAckWait state
     m_main_sm_state = EdnMainSmState::AutoFirstAckWait;
@@ -1904,6 +1915,13 @@ void edn_ip::auto_mode_init()
     {
         wait(5, SC_US);  // Poll interval (5 microseconds)
 
+        if (!rst_ni.read() || epoch != m_auto_mode_epoch ||
+            m_main_sm_state == EdnMainSmState::Idle)
+        {
+            REG_INFO(1, logger) << "EDN_FUNC_013: Auto mode init aborted (reset or Idle)";
+            return;
+        }
+
         // Check if instantiate completed successfully
         uint32_t cmd_ack = static_cast<uint32_t>(SW_CMD_STS.CMD_ACK);
         uint32_t cmd_sts = static_cast<uint32_t>(SW_CMD_STS.CMD_STS);
@@ -1912,13 +1930,13 @@ void edn_ip::auto_mode_init()
         {
             // Instantiate succeeded
             instantiate_complete = true;
-            CSML_INFO(1, logger) << "EDN_FUNC_013: Manual Instantiate completed successfully";
+            REG_INFO(1, logger) << "EDN_FUNC_013: Manual Instantiate completed successfully";
         }
         else if (cmd_ack == 1 && cmd_sts != 0)
         {
             // Instantiate failed - recoverable error handling
             // Requires m_forced_csrng_ack_status != 0, not triggered in unit tests.
-            CSML_ERROR(1, logger) << "EDN_FUNC_013: Manual Instantiate failed with status="
+            REG_ERROR(1, logger) << "EDN_FUNC_013: Manual Instantiate failed with status="
                                   << std::hex << cmd_sts;
 
             // Handle CSRNG error (recoverable - module remains operational)
@@ -1933,7 +1951,7 @@ void edn_ip::auto_mode_init()
     if (poll_count >= max_polls && !instantiate_complete)
     {
         // Timeout guard: max_polls=1000 at 5us = 5ms; tests issue instantiate within 100ns.
-        CSML_WARN(1, logger) << "EDN_FUNC_013: Timeout waiting for manual Instantiate";
+        REG_WARN(1, logger) << "EDN_FUNC_013: Timeout waiting for manual Instantiate";
         return;
     }
 
@@ -1944,7 +1962,12 @@ void edn_ip::auto_mode_init()
     // Set HW_CMD_STS.AUTO_MODE indicator
     HW_CMD_STS.AUTO_MODE = 1;
 
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Entered AutoDispatch - autonomous operation active";
+    REG_INFO(1, logger) << "EDN_FUNC_013: Entered AutoDispatch - autonomous operation active";
+
+    if (epoch != m_auto_mode_epoch)
+    {
+        return;
+    }
 
     // Spawn the auto mode dispatcher thread for continuous operation
     sc_spawn(sc_bind(&edn_ip::auto_mode_dispatch, this));
@@ -1990,7 +2013,9 @@ void edn_ip::auto_mode_init()
  */
 void edn_ip::auto_mode_dispatch()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Auto mode dispatcher started";
+    const uint32_t epoch = m_auto_mode_epoch;
+
+    REG_INFO(1, logger) << "EDN_FUNC_013: Auto mode dispatcher started";
 
     // Continuous operation loop - exits when AUTO_REQ_MODE cleared
     while (m_main_sm_state == EdnMainSmState::AutoDispatch ||
@@ -1999,6 +2024,12 @@ void edn_ip::auto_mode_dispatch()
     {
         // Wait a fixed period between auto requests
         wait(100, SC_US);
+
+        if (!rst_ni.read() || epoch != m_auto_mode_epoch ||
+            m_main_sm_state == EdnMainSmState::Idle)
+        {
+            break;
+        }
 
         // Check if still in auto dispatch mode (might have been disabled)
         if (m_main_sm_state != EdnMainSmState::AutoDispatch)
@@ -2010,7 +2041,7 @@ void edn_ip::auto_mode_dispatch()
         uint32_t max_reqs = static_cast<uint32_t>(MAX_NUM_REQS_BETWEEN_RESEEDS.MAX_NUM_REQS_BETWEEN_RESEEDS);
         if (max_reqs == 0)
         {
-            CSML_WARN(1, logger) << "EDN_FUNC_013: MAX_NUM_REQS_BETWEEN_RESEEDS=0, no generates issued";
+            REG_WARN(1, logger) << "EDN_FUNC_013: MAX_NUM_REQS_BETWEEN_RESEEDS=0, no generates issued";
             // No generates will be issued - endpoints will hang
             wait(100, SC_US);
             continue;
@@ -2019,7 +2050,7 @@ void edn_ip::auto_mode_dispatch()
         // Check if reseed is needed (counter reached threshold)
         if (m_auto_gen_counter == 0)
         {
-            CSML_INFO(1, logger) << "EDN_FUNC_013: Reseed threshold reached, issuing Reseed command";
+            REG_INFO(1, logger) << "EDN_FUNC_013: Reseed threshold reached, issuing Reseed command";
 
             // Transition to AutoReseedAckWait state
             m_main_sm_state = EdnMainSmState::AutoReseedAckWait;
@@ -2028,6 +2059,12 @@ void edn_ip::auto_mode_dispatch()
             // Issue reseed command from RESEED_CMD FIFO
             uint32_t ack_status = auto_mode_issue_reseed();
 
+            if (!rst_ni.read() || epoch != m_auto_mode_epoch ||
+            m_main_sm_state == EdnMainSmState::Idle)
+            {
+                break;
+            }
+
             if (ack_status == 0)
             {
                 // Reseed succeeded - reset counter and return to AutoDispatch
@@ -2035,13 +2072,13 @@ void edn_ip::auto_mode_dispatch()
                 m_main_sm_state = EdnMainSmState::AutoDispatch;
                 MAIN_SM_STATE.MAIN_SM_STATE = static_cast<uint32_t>(m_main_sm_state);
 
-                CSML_INFO(1, logger) << "EDN_FUNC_013: Reseed completed, counter reset to "
+                REG_INFO(1, logger) << "EDN_FUNC_013: Reseed completed, counter reset to "
                                      << std::dec << m_auto_gen_counter;
             }
             else
             {
                 // Reseed failed - requires m_forced_csrng_ack_status != 0.
-                CSML_ERROR(1, logger) << "EDN_FUNC_013: Reseed failed with status="
+                REG_ERROR(1, logger) << "EDN_FUNC_013: Reseed failed with status="
                                       << std::hex << ack_status;
 
                 // Handle CSRNG error (recoverable - module remains operational)
@@ -2051,7 +2088,7 @@ void edn_ip::auto_mode_dispatch()
         }
 
         // Issue generate command from GENERATE_CMD FIFO
-        CSML_INFO(1, logger) << "EDN_FUNC_013: Issuing Generate command (counter="
+        REG_INFO(1, logger) << "EDN_FUNC_013: Issuing Generate command (counter="
                              << std::dec << m_auto_gen_counter << ")";
 
         // Transition to AutoGenAckWait state
@@ -2061,6 +2098,12 @@ void edn_ip::auto_mode_dispatch()
         // Issue generate command
         uint32_t ack_status = auto_mode_issue_generate();
 
+        if (!rst_ni.read() || epoch != m_auto_mode_epoch ||
+            m_main_sm_state == EdnMainSmState::Idle)
+        {
+            break;
+        }
+
         if (ack_status == 0)
         {
             // Generate succeeded - decrement counter and return to AutoDispatch
@@ -2068,13 +2111,13 @@ void edn_ip::auto_mode_dispatch()
             m_main_sm_state = EdnMainSmState::AutoDispatch;
             MAIN_SM_STATE.MAIN_SM_STATE = static_cast<uint32_t>(m_main_sm_state);
 
-            CSML_INFO(1, logger) << "EDN_FUNC_013: Generate completed (counter="
+            REG_INFO(1, logger) << "EDN_FUNC_013: Generate completed (counter="
                                  << std::dec << m_auto_gen_counter << ")";
         }
         else
         {
             // Generate failed - requires m_forced_csrng_ack_status != 0.
-            CSML_ERROR(1, logger) << "EDN_FUNC_013: Generate failed with status="
+            REG_ERROR(1, logger) << "EDN_FUNC_013: Generate failed with status="
                                   << std::hex << ack_status;
 
             // Handle CSRNG error (recoverable - module remains operational)
@@ -2086,7 +2129,7 @@ void edn_ip::auto_mode_dispatch()
         wait(10, SC_US);
     }
 
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Auto mode dispatcher exiting";
+    REG_INFO(1, logger) << "EDN_FUNC_013: Auto mode dispatcher exiting";
 }
 
 /**
@@ -2131,7 +2174,7 @@ uint32_t edn_ip::auto_mode_issue_generate()
     // Validate GENERATE_CMD FIFO is not empty
     if (m_generate_cmd_fifo.empty())
     {
-        CSML_ERROR(1, logger) << "EDN_FUNC_013: GENERATE_CMD FIFO is empty (configuration error)";
+        REG_ERROR(1, logger) << "EDN_FUNC_013: GENERATE_CMD FIFO is empty (configuration error)";
 
         // Set FIFO read error
         ERR_CODE.FIFO_READ_ERR = 1;
@@ -2153,7 +2196,7 @@ uint32_t edn_ip::auto_mode_issue_generate()
     uint32_t clen = (header >> 8) & 0xF;
     uint32_t glen = (header >> 12) & 0x7FFFF;
 
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Generate command - clen=" << std::dec << clen
+    REG_INFO(1, logger) << "EDN_FUNC_013: Generate command - clen=" << std::dec << clen
                          << ", glen=" << glen;
 
     // Build complete command array (header + clen data words)
@@ -2170,7 +2213,7 @@ uint32_t edn_ip::auto_mode_issue_generate()
         else
         {
             // FIFO underflow: would require clen > words in FIFO, structurally prevented.
-            CSML_ERROR(1, logger) << "EDN_FUNC_013: GENERATE_CMD FIFO underflow (clen mismatch)";
+            REG_ERROR(1, logger) << "EDN_FUNC_013: GENERATE_CMD FIFO underflow (clen mismatch)";
             return 0xFFFF;
         }
     }
@@ -2197,7 +2240,7 @@ uint32_t edn_ip::auto_mode_issue_generate()
     HW_CMD_STS.CMD_ACK = 1;
     HW_CMD_STS.CMD_STS = ack_status & 0x7;
 
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Generate command completed with status="
+    REG_INFO(1, logger) << "EDN_FUNC_013: Generate command completed with status="
                          << std::hex << ack_status;
 
     return ack_status;
@@ -2250,7 +2293,7 @@ uint32_t edn_ip::auto_mode_issue_reseed()
     // Validate RESEED_CMD FIFO is not empty
     if (m_reseed_cmd_fifo.empty())
     {
-        CSML_ERROR(1, logger) << "EDN_FUNC_013: RESEED_CMD FIFO is empty (configuration error)";
+        REG_ERROR(1, logger) << "EDN_FUNC_013: RESEED_CMD FIFO is empty (configuration error)";
 
         // Set FIFO read error
         ERR_CODE.FIFO_READ_ERR = 1;
@@ -2271,7 +2314,7 @@ uint32_t edn_ip::auto_mode_issue_reseed()
     // Parse command header
     uint32_t clen = (header >> 8) & 0xF;
 
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Reseed command - clen=" << std::dec << clen;
+    REG_INFO(1, logger) << "EDN_FUNC_013: Reseed command - clen=" << std::dec << clen;
 
     // Build complete command array (header + clen data words)
     uint32_t cmd_array[13];  // Max 13 words
@@ -2287,7 +2330,7 @@ uint32_t edn_ip::auto_mode_issue_reseed()
         else
         {
             // FIFO underflow: would require clen > words in FIFO, structurally prevented.
-            CSML_ERROR(1, logger) << "EDN_FUNC_013: RESEED_CMD FIFO underflow (clen mismatch)";
+            REG_ERROR(1, logger) << "EDN_FUNC_013: RESEED_CMD FIFO underflow (clen mismatch)";
             return 0xFFFF;
         }
     }
@@ -2311,7 +2354,7 @@ uint32_t edn_ip::auto_mode_issue_reseed()
     HW_CMD_STS.CMD_ACK = 1;
     HW_CMD_STS.CMD_STS = ack_status & 0x7;
 
-    CSML_INFO(1, logger) << "EDN_FUNC_013: Reseed command completed with status="
+    REG_INFO(1, logger) << "EDN_FUNC_013: Reseed command completed with status="
                          << std::hex << ack_status;
 
     return ack_status;

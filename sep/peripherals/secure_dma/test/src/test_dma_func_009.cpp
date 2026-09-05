@@ -143,7 +143,7 @@ private:
  * - Non-divisible chunk sizes (partial final chunk)
  */
 void testbench::run_func009_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-009: DMA Transfer Engine Operation Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -194,7 +194,7 @@ void testbench::run_func009_tests() {
   test_sub_word_extract_1byte_lane3();
   test_sub_word_extract_2byte_lane0();
   test_sub_word_extract_2byte_lane2();
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-009 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -229,7 +229,7 @@ void testbench::run_func009_tests() {
 void testbench::test_mem_to_mem_single_chunk_4byte() {
   std::string test_name =
       "Memory-to-Memory Single Chunk 4-byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -427,7 +427,7 @@ void testbench::test_mem_to_mem_single_chunk_4byte() {
 void testbench::test_mem_to_mem_single_chunk_2byte() {
   std::string test_name =
       "Memory-to-Memory Single Chunk 2-byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -558,7 +558,7 @@ void testbench::test_mem_to_mem_single_chunk_2byte() {
 void testbench::test_mem_to_mem_single_chunk_1byte() {
    std::string test_name =
       "Memory-to-Memory Single Chunk 1-byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -698,7 +698,7 @@ void testbench::test_mem_to_mem_single_chunk_1byte() {
 void testbench::test_mem_to_mem_multi_chunk() {
   std::string test_name =
       "Memory-to-Memory Multi-Chunk Transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -889,7 +889,7 @@ void testbench::test_mem_to_mem_multi_chunk() {
  */
 void testbench::test_mem_to_mem_ctn_32bit() {
   std::string test_name = "Memory-to-Memory CTN Interface 32-bit";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1040,7 +1040,7 @@ void testbench::test_mem_to_mem_ctn_32bit() {
 void testbench::test_func009_mem_to_mem_ctn_64bit() {
   std::string test_name =
       "FUNC-009 TC006: Memory-to-Memory CTN Interface 64-bit";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1114,7 +1114,7 @@ void testbench::test_func009_mem_to_mem_ctn_64bit() {
  */
 void testbench::test_func009_mem_to_mem_sys_64bit() {
   std::string test_name = "Memory-to-Memory System Bus 64-bit";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1245,7 +1245,7 @@ void testbench::test_func009_mem_to_mem_sys_64bit() {
  */
 void testbench::test_transfer_size_16bytes() {
   std::string test_name = "Transfer Size 16 Bytes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1378,7 +1378,7 @@ void testbench::test_transfer_size_16bytes() {
  */
 void testbench::test_transfer_size_1024bytes() {
   std::string test_name = "Transfer Size 1024 Bytes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1513,7 +1513,7 @@ void testbench::test_transfer_size_1024bytes() {
  */
 void testbench::test_transfer_size_4096bytes() {
   std::string test_name = "Transfer Size 4096 Bytes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1651,7 +1651,7 @@ void testbench::test_transfer_size_4096bytes() {
 void testbench::test_src_increment_dst_increment() {
   std::string test_name =
       "Source Increment, Destination Increment";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1816,7 +1816,7 @@ void testbench::test_src_increment_dst_increment() {
 void testbench::test_src_fixed_dst_increment() {
   std::string test_name =
       "FUNC-009 TC012: Source Fixed, Destination Increment (Peripheral RX)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1995,7 +1995,7 @@ void testbench::test_src_fixed_dst_increment() {
 void testbench::test_src_increment_dst_fixed() {
   std::string test_name =
       ": Source Increment, Destination Fixed (Memory TX)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2148,7 +2148,7 @@ void testbench::test_src_increment_dst_fixed() {
  */
 void testbench::test_src_fixed_dst_fixed() {
   std::string test_name = "Source Fixed, Destination Fixed";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2297,7 +2297,7 @@ void testbench::test_src_fixed_dst_fixed() {
  */
 void testbench::test_dma_done_interrupt_assert() {
   std::string test_name = "FUNC-009 TC015: DMA Done Interrupt Assert";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2418,7 +2418,7 @@ void testbench::test_dma_done_interrupt_assert() {
  */
 void testbench::test_dma_chunk_done_interrupt_assert() {
   std::string test_name = "DMA Chunk Done Interrupt Assert";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2610,7 +2610,7 @@ void testbench::test_dma_chunk_done_interrupt_assert() {
 void testbench::test_chunk_size_not_divisor_of_total() {
   std::string test_name =
       "Chunk Size Not Divisor of Total (Final Chunk Smaller)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2738,7 +2738,7 @@ void testbench::test_chunk_size_not_divisor_of_total() {
  */
 void testbench::test_minimum_transfer_size_1byte() {
   std::string test_name = "Minimum Transfer Size 1 Byte";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2856,7 +2856,7 @@ void testbench::test_minimum_transfer_size_1byte() {
 void testbench::test_func009_minimum_transfer_size_4bytes() {
   std::string test_name =
       "FUNC-009 TC019: Minimum Transfer Size 4 Bytes (Single Word)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2929,7 +2929,7 @@ void testbench::test_func009_minimum_transfer_size_4bytes() {
  */
 void testbench::test_maximum_transfer_size_4gb() {
   std::string test_name = "Maximum Transfer Size 4GB Boundary";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3012,7 +3012,7 @@ void testbench::test_maximum_transfer_size_4gb() {
  */
 void testbench::test_abort_during_multi_chunk() {
   std::string test_name = "Abort During Multi-Chunk Transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3153,7 +3153,7 @@ void testbench::test_abort_during_multi_chunk() {
  */
 void testbench::test_src_wrap_mode() {
   std::string test_name = "Source Wrap Mode (test_src_wrap_mode)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3294,7 +3294,7 @@ void testbench::test_src_wrap_mode() {
  */
 void testbench::test_dst_wrap_mode() {
   std::string test_name = "Destination Wrap Mode (test_dst_wrap_mode)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3439,7 +3439,7 @@ void testbench::test_dst_wrap_mode() {
 void testbench::test_both_wrap_mode() {
   std::string test_name =
       "FUNC-009: Both Source and Destination Wrap Mode (test_both_wrap_mode)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3560,7 +3560,7 @@ void testbench::test_both_wrap_mode() {
 
 void testbench::test_address_alignment_byte_boundary() {
   std::string test_name = "Address Alignment Byte Boundary";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3642,7 +3642,7 @@ void testbench::test_address_alignment_byte_boundary() {
 
 void testbench::test_address_alignment_halfword_boundary() {
   std::string test_name = "Address Alignment Halfword Boundary";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3736,7 +3736,7 @@ void testbench::test_address_alignment_halfword_boundary() {
 
 void testbench::test_address_alignment_word_boundary() {
   std::string test_name = "Address Alignment Word Boundary";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3822,7 +3822,7 @@ void testbench::test_address_alignment_word_boundary() {
 
 void testbench::test_wrap_mode_chunk_boundary() {
   std::string test_name = "Wrap Mode Chunk Boundary";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3910,7 +3910,7 @@ void testbench::test_wrap_mode_chunk_boundary() {
 
 void testbench::test_64bit_address_full_range() {
   std::string test_name = "64-bit Address Full Range";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -4004,7 +4004,7 @@ void testbench::test_64bit_address_full_range() {
 
 void testbench::test_32bit_address_max_value() {
   std::string test_name = "32-bit OT Address Max Value";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -4088,7 +4088,7 @@ void testbench::test_32bit_address_max_value() {
 
 void testbench::test_sub_word_extract_1byte_lane0() {
   std::string test_name = "Sub-word Extract 1-byte Lane0";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -4167,7 +4167,7 @@ void testbench::test_sub_word_extract_1byte_lane0() {
 
 void testbench::test_sub_word_extract_1byte_lane3() {
   std::string test_name = "Sub-word Extract 1-byte Lane3";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -4231,7 +4231,7 @@ void testbench::test_sub_word_extract_1byte_lane3() {
 
 void testbench::test_sub_word_extract_2byte_lane0() {
   std::string test_name = "Sub-word Extract 2-byte Lane0";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -4308,7 +4308,7 @@ void testbench::test_sub_word_extract_2byte_lane0() {
 
 void testbench::test_sub_word_extract_2byte_lane2() {
   std::string test_name = "Sub-word Extract 2-byte Lane2";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

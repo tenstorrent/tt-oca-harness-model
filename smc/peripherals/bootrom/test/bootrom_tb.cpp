@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // bootrom_tb.cpp -- self-checking test bench for the SEP Boot ROM
 // (CCI-compliant).
@@ -33,6 +34,7 @@
 #include <string>
 
 #include "bootrom.h"
+#include "sim_log.h"
 
 using sc_core::sc_module_name;
 using sc_core::sc_time;
@@ -180,10 +182,6 @@ struct tb : sc_core::sc_module {
         sc_core::wait(20, SC_NS);
     }
 
-    static void settle() {
-        for (int i = 0; i < 2; ++i) sc_core::wait(SC_ZERO_TIME);
-    }
-
     void run() {
         std::cout << "==== SEP Boot ROM TB (CCI-compliant) ====\n";
         std::cout << "  size_bytes  = 0x" << std::hex << dut.size_bytes()
@@ -218,6 +216,11 @@ struct tb : sc_core::sc_module {
                 EXPECT_EQ(expected[i], drv.read<uint64_t>(i * 8));
                 EXPECT_EQ(expected[i], dut.dbg_read64(i * 8));
             }
+            // dbg_read64 rejects misaligned / OOB offsets (returns 0).
+            EXPECT_EQ(uint64_t(0), dut.dbg_read64(1));
+            EXPECT_EQ(uint64_t(0), dut.dbg_read64(4));
+            EXPECT_EQ(uint64_t(0), dut.dbg_read64(dut.size_bytes()));
+            EXPECT_EQ(uint64_t(0), dut.dbg_read64(dut.size_bytes() - 4));
             std::cout << "  [PASS] hex preload — first 4 words match fixture\n";
         }
 
@@ -335,6 +338,8 @@ struct tb : sc_core::sc_module {
                       drv.read<uint64_t>(off));
             // OOB load → zero bytes written, no crash.
             EXPECT_EQ(0u, dut.dbg_load_bytes(dut.size_bytes(), pattern, 8));
+            // Null source pointer is rejected even at a valid offset.
+            EXPECT_EQ(0u, dut.dbg_load_bytes(0, nullptr, 8));
             std::cout << "  [PASS] dbg_load_bytes round-trips through b_transport\n";
         }
 
@@ -368,6 +373,13 @@ struct tb : sc_core::sc_module {
             EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
                       drv.raw_xfer(tlm::TLM_READ_COMMAND, 0, 4, &scratch,
                                    /*sw=*/1));
+            // Near-end 8-byte access at size-4 is misaligned (ROM size is
+            // always a multiple of 8), so alignment fires before the window
+            // check.  A true in-window overflow cannot occur for legal widths.
+            uint64_t scratch64b = 0;
+            EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                      drv.raw_xfer(tlm::TLM_READ_COMMAND,
+                                   dut.size_bytes() - 4, 8, &scratch64b));
             std::cout << "  [PASS] negative tests: window, alignment, width, sw\n";
         }
 
@@ -380,6 +392,10 @@ struct tb : sc_core::sc_module {
             EXPECT_EQ(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
                       drv.raw_xfer_be(tlm::TLM_READ_COMMAND, 0,
                                       4, &scratch, &be, 1));
+            // Pointer present but length 0 is not a byte-enable (TLM-2.0).
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      drv.raw_xfer_be(tlm::TLM_READ_COMMAND, 0,
+                                      4, &scratch, &be, 0));
             EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
                       drv.raw_xfer(tlm::TLM_IGNORE_COMMAND, 0, 4, &scratch));
             std::cout << "  [PASS] byte-enable and unknown-command error paths\n";
@@ -406,7 +422,24 @@ struct tb : sc_core::sc_module {
             gp.set_address(dut.size_bytes() + 0x100); gp.set_data_length(4);
             EXPECT_EQ(0u, drv.sock->transport_dbg(gp));
 
+            // Partial window overflow (addr in range, addr+len is not).
+            uint64_t scratch64 = 0;
+            gp.set_data_ptr(reinterpret_cast<uint8_t*>(&scratch64));
+            gp.set_address(dut.size_bytes() - 4); gp.set_data_length(8);
+            EXPECT_EQ(0u, drv.sock->transport_dbg(gp));
+
             std::cout << "  [PASS] transport_dbg invalid-args paths return 0\n";
+        }
+
+        // ------------------------------------------------------------------
+        // 10b. TRACE-level logging so SIM_LOG_TRACE in b_transport is live.
+        // ------------------------------------------------------------------
+        {
+            simlog::set_level(simlog::level::trace);
+            (void)drv.read<uint32_t>(0);
+            drv.write<uint32_t>(0, 0xFFFFFFFFu);
+            simlog::set_level(simlog::level::info);
+            std::cout << "  [PASS] TRACE-level b_transport read/write logging\n";
         }
 
         // ------------------------------------------------------------------

@@ -15,7 +15,7 @@ sep_efuse/
 │   ├── inc/
 │   │   ├── sep_efuse.h            # Derived model: callbacks, fuse loading
 │   │   ├── sep_efuse_base.h       # Base: register instantiation, memory map
-│   │   ├── sep_efuse_register.h   # Register type definitions (csml_reg<N>)
+│   │   ├── sep_efuse_register.h   # Register type definitions (regmodel::Reg<N>)
 │   │   └── sep_efuse_config.h     # Config struct for factory-burned fuse state
 │   └── src/
 │       ├── sep_efuse.cpp          # WOSET callbacks, load_fuses(), register_callbacks()
@@ -81,10 +81,10 @@ These registers cache factory-burned eFuse contents and are loaded from `sep_efu
 | 0x088–0x0A7 | BL1_VERSION[8] | 256b | WOSET | Bootloader 1 version array |
 | 0x0A8–0x0C7 | BL2_VERSION[8] | 256b | WOSET | Bootloader 2 version array |
 | 0x0C8–0x0E7 | CHIPLET_UID[8] | 256b | RO | Chiplet unique ID |
-| 0x0E8–0x107 | SIP_UID[8] | 256b | RO | SIP unique ID |
-| 0x108–0x127 | SYS_UID[8] | 256b | RO | System unique ID |
-| 0x128–0x147 | SIP_PUBK[8] | 256b | RO | SIP public key hash |
-| 0x148–0x167 | SYS_PUBK[8] | 256b | RO | System public key hash |
+| 0x0E8–0x107 | SIP_PUBK_HASH0[8] | 256b | RO | SIP public key digest (PeakRDL SIP_PUBK_DIGEST) |
+| 0x108–0x127 | SIP_UID[8] | 256b | RO | SIP unique ID |
+| 0x128–0x147 | SYS_PUBK_HASH[8] | 256b | RO | System public key digest (PeakRDL SYS_PUBK_DIGEST) |
+| 0x148–0x167 | SYS_UID[8] | 256b | RO | System unique ID |
 | 0x168 | STATUS_RPT | 32 | RO | [1:0] report field |
 | 0x16C | SEP_ROM_CTRL | 32 | RO | [0] rom_endianness_ctrl, [5:1] rom_swap_ctrl |
 | 0x170–0x193 | SEP_SPI_CTRL, SPI_PHY_* | 32 | RO | SPI configuration fields |
@@ -183,20 +183,20 @@ struct sep_efuse_config_t {
 At `end_of_elaboration()`, `load_fuses()` assigns config values directly to register objects, bypassing `write_mask` restrictions. This models the hardware behavior of shadow registers being pre-populated from the physical eFuse array before firmware boots.
 
 ### Array Register Vectors
-Multi-word fields (256-bit keys, UIDs) use `csml_reg_vector<type, N>`:
+Multi-word fields (256-bit keys, UIDs) use `regmodel::RegVector<type, N>`:
 ```cpp
-csml_reg_vector<sep_efuse::BL1_VERSION_type<32>, 8> BL1_VERSION;
+regmodel::RegVector<sep_efuse::BL1_VERSION_type<32>, 8> BL1_VERSION;
 ```
 Each element has an independent WOSET callback registered in a loop.
 
 ### TLM 2.0 Target Socket
-The model exports `tlm_utils::simple_target_socket<csml_memory<32>, 32>` for connection to APB/AXI bridges in the VP. Byte addresses map to 32-bit word offsets; only aligned 32-bit accesses are supported.
+The model exports `tlm_utils::simple_target_socket<regmodel::Memory<32>, 32>` for connection to APB/AXI bridges in the VP. Byte addresses map to 32-bit word offsets; only aligned 32-bit accesses are supported.
 
-### CSML Framework
-- `csml_reg<N>` — register base with read_mask, write_mask, reset_value, write callbacks
-- `csml_memory<N>` — flat 32-bit word array with TLM socket binding
-- `csml_logger` — structured logging with verbosity level parameter
-- `csml_param<T>` — CCI-compatible SystemC parameter wrapper
+### regmodel library
+- `regmodel::Reg<N>` — register base with read_mask, write_mask, reset_value, write callbacks
+- `regmodel::Memory<N>` — flat 32-bit word array with TLM socket binding
+- `RegLogger` — structured logging with verbosity level parameter
+- `regmodel::Param<T>` — CCI-compatible SystemC parameter wrapper
 
 ---
 
@@ -206,14 +206,14 @@ Defined in `CMakeLists.txt`:
 
 | Target | Type | Description |
 |--------|------|-------------|
-| `sep_efuse_model` | STATIC library | Model sources only; links `csml_logger`, `SystemC`, `Threads`, optional CCI |
+| `sep_efuse_model` | STATIC library | Model sources only; links `SystemC`, `Threads`, optional CCI |
 | `sep_efuse_test` | Executable | Model + testbench; built when `BUILD_TESTS=ON` |
 | `coverage` | Custom | Runs tests under gcov, generates HTML report |
 | `sep_efuse_cppcheck` | Custom | Runs cppcheck static analysis on model sources |
 
 **Build configurations:**
-- `Release` — `-O3 -DNDEBUG`, `CSML_DEFAULT_VERBOSITY=1`
-- `Debug` — `-O0 -g`, `CSML_DEFAULT_VERBOSITY=3`
+- `Release` — `-O3 -DNDEBUG`, `REG_DEFAULT_VERBOSITY=1`
+- `Debug` — `-O0 -g`, `REG_DEFAULT_VERBOSITY=3`
 - `ASAN` — Address + UBSan sanitizers, `-O0`
 - `Coverage` — gcov instrumentation
 
@@ -266,4 +266,4 @@ cfg.bl1_version[i]      = 0xC0000000 + i;
 | Register definitions (~LOC) | ~765 |
 | Test source (~LOC) | ~450 |
 | C++ standard | C++17 |
-| Simulation framework | SystemC 2.3.x + CSML |
+| Simulation framework | SystemC 2.3.x + regmodel |

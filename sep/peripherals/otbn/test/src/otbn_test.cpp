@@ -100,10 +100,10 @@ bool otbn_test::assert_register_value(unsigned int offset, uint32_t expected_val
     register_read_32(offset, read_value);
 
     if (read_value == expected_value) {
-        CSML_INFO(1, logger) << "  PASS: " << reg_name << " = 0x" << std::hex << read_value;
+        REG_INFO(1, logger) << "  PASS: " << reg_name << " = 0x" << std::hex << read_value;
         return true;
     } else {
-        CSML_ERROR(0, logger) << "  FAIL: " << reg_name << " = 0x" << std::hex << read_value
+        REG_ERROR(0, logger) << "  FAIL: " << reg_name << " = 0x" << std::hex << read_value
                   << ", expected 0x" << expected_value;
         return false;
     }

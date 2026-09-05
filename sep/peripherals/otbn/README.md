@@ -22,7 +22,7 @@ writes DMEM, and raises done.
 
 ```
 include/otbn.h             otbn_ip + otbn_algorithm
-include/otbn_base.h        CSML register declaration
+include/otbn_base.h        regmodel register declaration
 include/otbn_register.h    RO/WO/RW types
 include/otbn_interfaces.h  OTP / LC interfaces
 algo/                      algorithm implementations

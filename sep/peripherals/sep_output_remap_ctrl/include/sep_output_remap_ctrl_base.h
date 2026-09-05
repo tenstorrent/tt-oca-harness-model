@@ -7,7 +7,7 @@
 class sep_output_remap_ctrl_base : public sc_module
 {
 public:
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
 
     sep_output_remap_ctrl_base(sc_module_name name, std::string type, unsigned int memory_size)
         : sc_module(name)
@@ -20,10 +20,10 @@ public:
     }
 
     std::string type;
-    csml_memory<64> memory;
-    tlm_utils::simple_target_socket<csml_memory<64>, 32> target_socket;
+    regmodel::Memory<64> memory;
+    tlm_utils::simple_target_socket<regmodel::Memory<64>, 32> target_socket;
 
-    csml_reg_vector<sep_output_remap_ctrl::REGION_ATTRS_type<64>, 16> REGION_ATTRS;
+    regmodel::RegVector<sep_output_remap_ctrl::REGION_ATTRS_type<64>, 16> REGION_ATTRS;
 
     void reset_all_registers();
 };

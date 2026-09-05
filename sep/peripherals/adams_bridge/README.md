@@ -19,7 +19,7 @@ This tree has the model, its test plan, and how to run the tests.
 
 ```
 include/adams_bridge.h     abr_ip
-include/abr_base.h         CSML register declaration
+include/abr_base.h         regmodel register declaration
 include/abr_register.h     RO/WO/RW types
 include/abr_crypto.h       pluggable backend
 src/                       LT implementation + PQClean wrappers

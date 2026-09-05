@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // vp/platform/smc/main.cpp
 //
@@ -80,8 +81,8 @@ public:
 // Sections: [bool] [int] [uint] [string].  Lines: `key : value`.
 // `#` comments, blank lines skipped.  `@include other.ini` recurses relative
 // to the ini's directory.  Keys are full hierarchical CCI names (e.g.
-// "dut.cluster.reset_pc").  CSML-free (SMC platform stays off the CSML
-// framework, per the workspace register-access rule).
+// "dut.cluster.reset_pc").  Uses in-house CCI INI parsing (SMC never used
+// the former CSML config loader).
 // ---------------------------------------------------------------------------
 void parse_ini(const std::string& path);
 

@@ -44,8 +44,8 @@ endif()
 # SC_ALLOW_DEPRECATED_IEEE_API suppresses SystemC 3.x compatibility warnings
 add_compile_definitions(SC_ALLOW_DEPRECATED_IEEE_API)
 
-# The SPI flash is not memory-mapped to the CPU bus — it has no CSML registers
-# and no CCI configuration parameters.
+# The SPI flash is not memory-mapped to the CPU bus — it has no register file.
+# Capacity is a constructor argument; verbosity is a CCI parameter.
 
 # -----------------------------------------------------------------------------
 # Build type & output dirs
@@ -76,20 +76,20 @@ set(WFLAG "-Wall -Wextra")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
-  add_compile_definitions(DEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(DEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "SPI Flash: Debug build")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(NDEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "SPI Flash: Release build - optimized")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g -O0 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=2)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=2)
   message(STATUS "SPI Flash: ASAN build - AddressSanitizer enabled")
 endif()
 
@@ -97,7 +97,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "SPI Flash: Coverage build enabled")
 endif()
 
@@ -109,11 +109,11 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
   # spi_controller_interface.h needed by the SystemC wrapper (spi_flash.h)
   ${CMAKE_CURRENT_SOURCE_DIR}/../spi_controller/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
 
 # -----------------------------------------------------------------------------
-# External Dependencies (SystemC, CCI, CSML)
+# External Dependencies (SystemC, CCI)
 # -----------------------------------------------------------------------------
 include(FindCCI)
 include(FindSystemC)
@@ -154,7 +154,6 @@ set(TEST_SRCS
 # -----------------------------------------------------------------------------
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     option(BUILD_TESTS "Build SPI Flash test executables" ON)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
 else()
     option(BUILD_TESTS "Build SPI Flash test executables" OFF)
 endif()
@@ -163,7 +162,7 @@ endif()
 # Model libraries (always built)
 # Two-target design:
 #   spi_flash_core  — pure C++ flash behaviour, no SystemC dependency
-#   spi_flash_model — SystemC TLM wrapper; links spi_flash_core + SystemC/csml
+#   spi_flash_model — SystemC TLM wrapper; links spi_flash_core + SystemC
 # spi_flash_test  links spi_flash_core only (no sc_main required)
 # spi_flash_sc_test links spi_flash_model (sc_main provided)
 # -----------------------------------------------------------------------------
@@ -176,10 +175,11 @@ peripheral_add_model_library(spi_flash_model ${MODEL_SC_SRCS})
 target_include_directories(spi_flash_model PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../spi_controller/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
 target_link_libraries(spi_flash_model
   PUBLIC  spi_flash_core
-  PRIVATE csml_logger SystemC::systemc Threads::Threads ${CCI_LIBRARIES})
+  PRIVATE SystemC::systemc Threads::Threads ${CCI_LIBRARIES})
 
 # -----------------------------------------------------------------------------
 # Test executable (only if BUILD_TESTS=ON and runner source exists)
@@ -221,11 +221,12 @@ if(BUILD_TESTS)
     target_include_directories(spi_flash_sc_test PRIVATE
       ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
       ${CMAKE_CURRENT_SOURCE_DIR}/../spi_controller/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
     )
-    # spi_flash_model propagates spi_flash_core (PUBLIC) but keeps csml/SystemC PRIVATE.
-    # Explicitly link csml_logger and SystemC for the static lib symbol resolution + sc_main.
+    # spi_flash_model propagates spi_flash_core (PUBLIC) but keeps SystemC PRIVATE.
+    # Explicitly link SystemC for the static lib symbol resolution + sc_main.
     peripheral_link_test_to_model(spi_flash_sc_test spi_flash_model)
-    target_link_libraries(spi_flash_sc_test PRIVATE csml_logger SystemC::systemc Threads::Threads)
+    target_link_libraries(spi_flash_sc_test PRIVATE SystemC::systemc Threads::Threads ${CCI_LIBRARIES})
 
     enable_testing()
     add_test(NAME spi_flash_sc_test COMMAND spi_flash_sc_test)
@@ -272,6 +273,7 @@ if(CPPCHECK_EXECUTABLE)
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/include
       -I ${CMAKE_CURRENT_SOURCE_DIR}/../spi_controller/include
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
       2> ${CMAKE_BINARY_DIR}/cppcheck_report.txt

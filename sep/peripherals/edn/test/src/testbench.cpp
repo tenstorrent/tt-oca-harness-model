@@ -55,13 +55,13 @@ testbench::testbench(sc_module_name name, int suite_id)
     dut = new edn_ip("edn_dut");
 
     // Sync testbench logger verbosity with DUT (CCI ini may override build default).
-    // Release build default: CSML_DEFAULT_VERBOSITY=0 → errors only.
+    // Release build default: REG_DEFAULT_VERBOSITY=0 → errors only.
     // Pass accellera_config.ini (verbosity: 2) to enable info logging.
     logger.setMaxVerbosity(dut->verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    CSML_INFO(2, logger) << "Constructing EDN testbench";
+    REG_INFO(2, logger) << "Constructing EDN testbench";
 
     // Instantiate test harness based on suite_id
     switch (suite_id) {
@@ -95,7 +95,7 @@ testbench::testbench(sc_module_name name, int suite_id)
     // Register test execution thread
     SC_THREAD(run_tests);
 
-    CSML_INFO(2, logger) << "EDN testbench construction complete";
+    REG_INFO(2, logger) << "EDN testbench construction complete";
 }
 
 /**
@@ -114,14 +114,14 @@ testbench::~testbench()
  */
 void testbench::bind_ports()
 {
-    CSML_INFO(2, logger) << "Binding ports...";
+    REG_INFO(2, logger) << "Binding ports...";
 
     // =========================================================================
     // 1. TLM Target Socket Binding (MMIO Register Access)
     // =========================================================================
     // Test's initiator socket → Model's target socket
     test->initiator_socket.bind(dut->target_socket);
-    CSML_INFO(2, logger) << "  [BOUND] TLM initiator_socket → target_socket";
+    REG_INFO(2, logger) << "  [BOUND] TLM initiator_socket → target_socket";
 
     // =========================================================================
     // 4. Interrupt Signal Binding
@@ -129,11 +129,11 @@ void testbench::bind_ports()
     // Model output → Signal → Test input
     dut->intr_edn_cmd_req_done(intr_cmd_req_done_sig);
     test->intr_edn_cmd_req_done(intr_cmd_req_done_sig);
-    CSML_INFO(2, logger) << "  [BOUND] intr_edn_cmd_req_done";
+    REG_INFO(2, logger) << "  [BOUND] intr_edn_cmd_req_done";
 
     dut->intr_edn_fatal_err(intr_fatal_err_sig);
     test->intr_edn_fatal_err(intr_fatal_err_sig);
-    CSML_INFO(2, logger) << "  [BOUND] intr_edn_fatal_err";
+    REG_INFO(2, logger) << "  [BOUND] intr_edn_fatal_err";
 
     // =========================================================================
     // 5. Alert Signal Binding
@@ -141,11 +141,11 @@ void testbench::bind_ports()
     // Model output → Signal → Test input
     dut->alert_recov_alert(alert_recov_sig);
     test->alert_recov_alert(alert_recov_sig);
-    CSML_INFO(2, logger) << "  [BOUND] alert_recov_alert";
+    REG_INFO(2, logger) << "  [BOUND] alert_recov_alert";
 
     dut->alert_fatal_alert(alert_fatal_sig);
     test->alert_fatal_alert(alert_fatal_sig);
-    CSML_INFO(2, logger) << "  [BOUND] alert_fatal_alert";
+    REG_INFO(2, logger) << "  [BOUND] alert_fatal_alert";
 
     // =========================================================================
     // 6. Clock and Reset Binding
@@ -153,13 +153,13 @@ void testbench::bind_ports()
     // Test output → Signal → Model input
     test->clk_o(clk_sig);
     dut->clk_i(clk_sig);
-    CSML_INFO(2, logger) << "  [BOUND] clk_o ↔ clk_i";
+    REG_INFO(2, logger) << "  [BOUND] clk_o ↔ clk_i";
 
     test->rst_no(rst_ni_sig);
     dut->rst_ni(rst_ni_sig);
-    CSML_INFO(2, logger) << "  [BOUND] rst_no ↔ rst_ni";
+    REG_INFO(2, logger) << "  [BOUND] rst_no ↔ rst_ni";
 
-    CSML_INFO(2, logger) << "Port binding complete";
+    REG_INFO(2, logger) << "Port binding complete";
 }
 
 /**
@@ -169,7 +169,7 @@ void testbench::bind_ports()
  */
 void testbench::initialize()
 {
-    CSML_INFO(2, logger) << "Initializing testbench...";
+    REG_INFO(2, logger) << "Initializing testbench...";
 
     // Set default clock frequency (100 MHz)
     clk_sig.write(100.0e6);
@@ -179,7 +179,7 @@ void testbench::initialize()
 
 
 
-    CSML_INFO(2, logger) << "Testbench initialization complete";
+    REG_INFO(2, logger) << "Testbench initialization complete";
 }
 
 /**
@@ -234,8 +234,8 @@ void testbench::run_tests()
  */
 void testbench::test_register_reset_values()
 {
-    CSML_INFO(1, logger) << "\n[TEST] Register Reset Values";
-    CSML_INFO(1, logger) << "-------------------------------------------";
+    REG_INFO(1, logger) << "\n[TEST] Register Reset Values";
+    REG_INFO(1, logger) << "-------------------------------------------";
 
     struct RegResetTest {
         const char* name;
@@ -270,12 +270,12 @@ void testbench::test_register_reset_values()
 
         m_tests_run++;
         if (value == t.expected) {
-            CSML_INFO(1, logger) << "  [PASS] " << std::setw(20) << std::left << t.name
+            REG_INFO(1, logger) << "  [PASS] " << std::setw(20) << std::left << t.name
                                   << " reset = 0x" << std::hex << std::setw(8) << std::setfill('0')
                                   << value;
             m_tests_passed++;
         } else {
-            CSML_ERROR(1, logger) << "  [FAIL] " << std::setw(20) << std::left << t.name
+            REG_ERROR(1, logger) << "  [FAIL] " << std::setw(20) << std::left << t.name
                                    << " reset = 0x" << std::hex << value
                                    << " (expected 0x" << t.expected << ")";
             m_tests_failed++;
@@ -290,8 +290,8 @@ void testbench::test_register_reset_values()
  */
 void testbench::test_register_access()
 {
-    CSML_INFO(1, logger) << "\n[TEST] Register Read/Write Access";
-    CSML_INFO(1, logger) << "-------------------------------------------";
+    REG_INFO(1, logger) << "\n[TEST] Register Read/Write Access";
+    REG_INFO(1, logger) << "-------------------------------------------";
 
     // Test RW register (INTR_ENABLE)
     {
@@ -303,10 +303,10 @@ void testbench::test_register_access()
         test->register_read_32(0x04, read_val);
 
         if (read_val == write_val) {
-            CSML_INFO(1, logger) << "  [PASS] INTR_ENABLE read/write access";
+            REG_INFO(1, logger) << "  [PASS] INTR_ENABLE read/write access";
             m_tests_passed++;
         } else {
-            CSML_ERROR(1, logger) << "  [FAIL] INTR_ENABLE write failed";
+            REG_ERROR(1, logger) << "  [FAIL] INTR_ENABLE write failed";
             m_tests_failed++;
         }
     }
@@ -322,10 +322,10 @@ void testbench::test_register_access()
         test->register_read_32(0x24, read_val);
 
         if (read_val == initial_val) {
-            CSML_INFO(1, logger) << "  [PASS] SW_CMD_STS read-only protection";
+            REG_INFO(1, logger) << "  [PASS] SW_CMD_STS read-only protection";
             m_tests_passed++;
         } else {
-            CSML_ERROR(1, logger) << "  [FAIL] SW_CMD_STS should be read-only";
+            REG_ERROR(1, logger) << "  [FAIL] SW_CMD_STS should be read-only";
             m_tests_failed++;
         }
     }
@@ -335,7 +335,7 @@ void testbench::test_register_access()
     // Marking as SKIPPED in stub code phase
     {
         m_tests_skipped++;
-        CSML_INFO(1, logger) << "  [SKIP] REGWEN protection (requires write callback implementation)";
+        REG_INFO(1, logger) << "  [SKIP] REGWEN protection (requires write callback implementation)";
     }
 }
 
@@ -346,24 +346,24 @@ void testbench::test_register_access()
  */
 void testbench::test_port_binding()
 {
-    CSML_INFO(1, logger) << "\n[TEST] Port Binding Connectivity";
-    CSML_INFO(1, logger) << "-------------------------------------------";
+    REG_INFO(1, logger) << "\n[TEST] Port Binding Connectivity";
+    REG_INFO(1, logger) << "-------------------------------------------";
 
     // Test TLM socket binding (already tested via register access)
     m_tests_run++;
-    CSML_INFO(1, logger) << "  [PASS] TLM register socket binding verified";
+    REG_INFO(1, logger) << "  [PASS] TLM register socket binding verified";
     m_tests_passed++;
 
 
 
     // Test interrupt signal connectivity
     m_tests_run++;
-    CSML_INFO(1, logger) << "  [PASS] Interrupt signal binding verified";
+    REG_INFO(1, logger) << "  [PASS] Interrupt signal binding verified";
     m_tests_passed++;
 
     // Test alert signal connectivity
     m_tests_run++;
-    CSML_INFO(1, logger) << "  [PASS] Alert signal binding verified";
+    REG_INFO(1, logger) << "  [PASS] Alert signal binding verified";
     m_tests_passed++;
 }
 
@@ -372,7 +372,7 @@ void testbench::test_port_binding()
  */
 void testbench::report_test_start(const std::string& test_name)
 {
-    CSML_INFO(1, logger) << "========================================\n"
+    REG_INFO(1, logger) << "========================================\n"
                          << test_name << "\n"
                          << "========================================" << std::endl;
 }
@@ -384,7 +384,7 @@ void testbench::report_test_pass(const std::string& test_name)
 {
     m_tests_passed++;
     m_tests_run++;
-    CSML_INFO(1, logger) << test_name << ": PASS" << std::endl;
+    REG_INFO(1, logger) << test_name << ": PASS" << std::endl;
 }
 
 /**
@@ -395,7 +395,7 @@ void testbench::report_test_fail(const std::string& test_name, const std::string
     m_tests_failed++;
     m_tests_run++;
     m_failed_tests.push_back(test_name);
-    CSML_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
+    REG_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
 }
 
 /**
@@ -411,17 +411,17 @@ void testbench::report_test_summary()
                           "Failed: " + std::to_string(m_tests_failed) + "\n" +
                           "Skipped: " + std::to_string(m_tests_skipped) + "\n" +
                           "========================================";
-    CSML_INFO(1, logger) << summary << std::endl;
+    REG_INFO(1, logger) << summary << std::endl;
 
     if (!m_failed_tests.empty()) {
-        CSML_ERROR(1, logger) << "Failed tests:" << std::endl;
+        REG_ERROR(1, logger) << "Failed tests:" << std::endl;
         for (const auto& test : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test << std::endl;
+            REG_ERROR(1, logger) << "  - " << test << std::endl;
         }
     }
 
     if (m_tests_skipped > 0) {
-        CSML_INFO(1, logger) << "Note: Skipped tests require functionality implementation (callbacks)" << std::endl;
+        REG_INFO(1, logger) << "Note: Skipped tests require functionality implementation (callbacks)" << std::endl;
     }
 }
 
@@ -432,35 +432,35 @@ void testbench::report_test_summary()
  */
 void testbench::report_results()
 {
-    CSML_INFO(1, logger) << "\n===========================================";
-    CSML_INFO(1, logger) << "EDN Validation Test Results";
-    CSML_INFO(1, logger) << "===========================================";
+    REG_INFO(1, logger) << "\n===========================================";
+    REG_INFO(1, logger) << "EDN Validation Test Results";
+    REG_INFO(1, logger) << "===========================================";
     // m_tests_run / m_tests_passed count only this class's own legacy checks.
     // A FUNC suite keeps its own per-test counters and prints them itself
     // ("Total Tests / Passed / Failed"), so these are 0 for a suite run. Print
     // them only when they mean something rather than showing a bare "0" that
     // reads as "nothing ran" next to a passing suite.
     if (m_tests_run > 0) {
-        CSML_INFO(1, logger) << "Tests Run:    " << m_tests_run;
-        CSML_INFO(1, logger) << "Tests Passed: " << m_tests_passed;
+        REG_INFO(1, logger) << "Tests Run:    " << m_tests_run;
+        REG_INFO(1, logger) << "Tests Passed: " << m_tests_passed;
     } else {
-        CSML_INFO(1, logger) << "Per-test counts: see the suite's own summary above";
+        REG_INFO(1, logger) << "Per-test counts: see the suite's own summary above";
     }
-    CSML_INFO(1, logger) << "Tests Failed: " << m_tests_failed;
-    CSML_INFO(1, logger) << "Tests Skipped: " << m_tests_skipped;
-    CSML_INFO(1, logger) << "===========================================";
+    REG_INFO(1, logger) << "Tests Failed: " << m_tests_failed;
+    REG_INFO(1, logger) << "Tests Skipped: " << m_tests_skipped;
+    REG_INFO(1, logger) << "===========================================";
 
     if (m_tests_failed == 0) {
-        CSML_INFO(1, logger) << "ALL TESTS PASSED";
+        REG_INFO(1, logger) << "ALL TESTS PASSED";
     } else {
-        CSML_ERROR(1, logger) << "SOME TESTS FAILED";
+        REG_ERROR(1, logger) << "SOME TESTS FAILED";
         for (const auto& test : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test;
+            REG_ERROR(1, logger) << "  - " << test;
         }
     }
 
     if (m_tests_skipped > 0) {
-        CSML_INFO(1, logger) << "Note: " << m_tests_skipped << " test(s) skipped (require functionality implementation)";
+        REG_INFO(1, logger) << "Note: " << m_tests_skipped << " test(s) skipped (require functionality implementation)";
     }
 
     sc_stop();
@@ -474,7 +474,7 @@ void testbench::report_results()
 int sc_main(int argc, char* argv[])
 {
     // Initialize CCI broker and optionally load INI config file.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     int suite_id = 4;
     if (argc > 2) {

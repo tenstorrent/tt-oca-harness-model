@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "efuse_basetest.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -44,7 +44,7 @@ testbench::testbench(sc_module_name name)
 
 void testbench::report_test_start(const std::string &name)
 {
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\n" << name
                          << "\n========================================" << std::endl;
 }
@@ -53,7 +53,7 @@ void testbench::report_test_pass(const std::string &name)
 {
     m_tests_run++;
     m_tests_passed++;
-    CSML_INFO(1, logger) << "[PASS] " << name << std::endl;
+    REG_INFO(1, logger) << "[PASS] " << name << std::endl;
 }
 
 void testbench::report_test_fail(const std::string &name, const std::string &reason)
@@ -61,12 +61,12 @@ void testbench::report_test_fail(const std::string &name, const std::string &rea
     m_tests_run++;
     m_tests_failed++;
     m_failed_tests.push_back(name);
-    CSML_ERROR(0, logger) << "[FAIL] " << name << " — " << reason << std::endl;
+    REG_ERROR(0, logger) << "[FAIL] " << name << " — " << reason << std::endl;
 }
 
 void testbench::report_test_summary()
 {
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nsep_efuse Test Summary"
                          << "\n========================================"
                          << "\nTotal : " << m_tests_run
@@ -74,7 +74,7 @@ void testbench::report_test_summary()
                          << "\nFailed: " << m_tests_failed << std::endl;
 
     for (const auto &t : m_failed_tests)
-        CSML_ERROR(0, logger) << "  FAILED: " << t << std::endl;
+        REG_ERROR(0, logger) << "  FAILED: " << t << std::endl;
 }
 
 // =============================================================================
@@ -450,7 +450,7 @@ void testbench::run_tests()
     tlm::tlm_global_quantum::instance().set(sc_time(100, SC_NS));
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nSEP_EFUSE IP TESTBENCH"
                          << "\n========================================" << std::endl;
 
@@ -487,7 +487,7 @@ void testbench::run_tests()
 
 int sc_main(int argc, char *argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     testbench tb("testbench");
 

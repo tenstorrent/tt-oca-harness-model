@@ -76,7 +76,7 @@ och_sep_ss::~och_sep_ss() {
             delete p;
         delete bus;
     }
-    delete argsCSML;
+    delete argsReg;
 }
 
 // -----------------------------------------------------------------------------
@@ -112,7 +112,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     outbound_filter_to_smn.register_b_transport(this, &och_sep_ss::smn_outbound_b_transport);
     outbound_filter_to_smn.register_transport_dbg(this, &och_sep_ss::smn_outbound_transport_dbg);
 
-    argsCSML = new ArgsCSML(opt);
+    argsReg = new ArgsReg(opt);
     Args& args = opt;
 
     if (not parseArgs(args))
@@ -904,7 +904,7 @@ void och_sep_ss::module_bind() {
     reset_ctrl->hmac_rst_ni(hmac_sw_rst_n_signal);
     reset_ctrl->kmac_rst_ni(kmac_sw_rst_n_signal);
 
-    // New CSML peripherals — reset
+    // Remaining peripherals — reset
     scratch_warm->rst_ni(reset_signal);
     local_alias_remap->rst_ni(reset_signal);
     ap_output_remap->rst_ni(reset_signal);

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
 // bootrom_bin_tb.cpp -- separate test binary that exercises the **binary**
 // preload path (init_file_format = "auto" with a `.img` filename → "bin").
@@ -139,6 +140,27 @@ struct tb : sc_core::sc_module {
         // ------------------------------------------------------------------
         EXPECT_EQ(uint64_t(0), drv.read64(dut.size_bytes() - 8));
         std::cout << "  [PASS] ROM tail past end-of-image is zero-padded\n";
+
+        // ------------------------------------------------------------------
+        // 4. Writes are ignored on a binary-preloaded ROM (C4).
+        // ------------------------------------------------------------------
+        {
+            const uint64_t before = dut.dbg_read64(0);
+            tlm::tlm_generic_payload gp;
+            uint64_t poison = 0xDEAD'BEEF'CAFE'BABEULL;
+            sc_time t = SC_ZERO_TIME;
+            gp.set_command(tlm::TLM_WRITE_COMMAND);
+            gp.set_address(0);
+            gp.set_data_ptr(reinterpret_cast<uint8_t*>(&poison));
+            gp.set_data_length(8);
+            gp.set_streaming_width(8);
+            gp.set_byte_enable_ptr(nullptr);
+            drv.sock->b_transport(gp, t);
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
+            EXPECT_EQ(before, dut.dbg_read64(0));
+            EXPECT_EQ(uint64_t(0), dut.dbg_read64(1)); // misaligned back-door
+            std::cout << "  [PASS] binary ROM writes ignored; dbg_read64 OOB/misalign\n";
+        }
 
         if (g_failures == 0) {
             std::cout << "\nALL TESTS PASSED\n";

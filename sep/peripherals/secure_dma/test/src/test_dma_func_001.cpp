@@ -14,7 +14,7 @@
 // =============================================================================
 
 void testbench::run_func001_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-001: Register Access and Configuration Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -45,7 +45,7 @@ void testbench::run_func001_tests() {
   test_register_rw1c();
   test_reset_deasserts_interrupts();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-001 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -60,7 +60,7 @@ void testbench::run_func001_tests() {
 // =============================================================================
 
 void testbench::test_reset_values() {
-  CSML_INFO(1, logger) << "\n>>> Test: Reset Value Verification <<<\n"
+  REG_INFO(1, logger) << "\n>>> Test: Reset Value Verification <<<\n"
   << std::endl;
 
 bool test_passed = true;
@@ -109,7 +109,7 @@ for (const auto &check : reset_checks) {
 m_test->register_read_32(check.offset, read_val);
 
 if (read_val != check.expected) {
-CSML_ERROR(0, logger)
+REG_ERROR(0, logger)
 << check.name << " reset value mismatch: expected 0x" << std::hex
 << check.expected << " got 0x" << read_val << std::dec << std::endl;
 test_passed = false;
@@ -122,7 +122,7 @@ for (unsigned int i = 0; i < 16; i++) {
 unsigned int offset = secure_dma_basetest::SHA2_DIGEST_OFFSET + i * 4;
 m_test->register_read_32(offset, read_val);
 if (read_val != secure_dma_basetest::SHA2_DIGEST_RESET) {
-CSML_ERROR(0, logger)
+REG_ERROR(0, logger)
 << "SHA2_DIGEST[" << i << "] reset value mismatch: expected 0x"
 << std::hex << secure_dma_basetest::SHA2_DIGEST_RESET << " got 0x" << read_val
 << std::dec << std::endl;
@@ -137,7 +137,7 @@ for (unsigned int i = 0; i < 11; i++) {
 unsigned int offset = secure_dma_basetest::INTR_SRC_ADDR_OFFSET + i * 4;
 m_test->register_read_32(offset, read_val);
 if (read_val != secure_dma_basetest::INTR_SRC_ADDR_RESET) {
-CSML_ERROR(0, logger)
+REG_ERROR(0, logger)
 << "INTR_SRC_ADDR[" << i << "] reset value mismatch: expected 0x"
 << std::hex << secure_dma_basetest::INTR_SRC_ADDR_RESET << " got 0x"
 << read_val << std::dec << std::endl;
@@ -152,7 +152,7 @@ for (unsigned int i = 0; i < 11; i++) {
 unsigned int offset = secure_dma_basetest::INTR_SRC_WR_VAL_OFFSET + i * 4;
 m_test->register_read_32(offset, read_val);
 if (read_val != secure_dma_basetest::INTR_SRC_WR_VAL_RESET) {
-CSML_ERROR(0, logger)
+REG_ERROR(0, logger)
 << "INTR_SRC_WR_VAL[" << i << "] reset value mismatch: expected 0x"
 << std::hex << secure_dma_basetest::INTR_SRC_WR_VAL_RESET << " got 0x"
 << read_val << std::dec << std::endl;
@@ -169,7 +169,7 @@ report_test_result("Reset Value Verification (all registers)", test_passed);
 
 void testbench::test_func001_intr_state_read_only() {
   std::string test_name = "FUNC-001 TC002: INTR_STATE Read-Only";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -200,7 +200,7 @@ void testbench::test_func001_intr_state_read_only() {
 
 void testbench::test_func001_intr_enable_read_write() {
   std::string test_name = "FUNC-001 TC003: INTR_ENABLE Read-Write";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -238,7 +238,7 @@ void testbench::test_func001_intr_enable_read_write() {
 
 void testbench::test_func001_intr_test_write_only() {
   std::string test_name = "FUNC-001 TC004: INTR_TEST Write-Only";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -277,7 +277,7 @@ void testbench::test_func001_intr_test_write_only() {
 
 void testbench::test_func001_alert_test_write_only() {
   std::string test_name = "FUNC-001 TC005: ALERT_TEST Write-Only";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -301,7 +301,7 @@ void testbench::test_func001_alert_test_write_only() {
 
 void testbench::test_func001_control_abort_write_only() {
   std::string test_name = "FUNC-001 TC006: CONTROL.abort Write-Only";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -329,7 +329,7 @@ void testbench::test_func001_control_abort_write_only() {
 
 void testbench::test_func001_status_rw1c_clear() {
   std::string test_name = "FUNC-001 TC007: STATUS RW1C Clear";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -348,7 +348,7 @@ void testbench::test_func001_status_rw1c_clear() {
 
 void testbench::test_func001_cfg_regwen_read_only() {
   std::string test_name = "FUNC-001 TC008: CFG_REGWEN Read-Only";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -383,7 +383,7 @@ void testbench::test_func001_cfg_regwen_read_only() {
 
 void testbench::test_range_regwen_write_lock() {
   std::string test_name = "RANGE_REGWEN Write-Lock";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -478,7 +478,7 @@ static const size_t kReservedFieldRegsCount =
 
 void testbench::test_reserved_bits_read_zero() {
   std::string test_name = "Reserved Bits Read Zero \n";
-  CSML_INFO(1, logger) << "\n Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "\n Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -510,7 +510,7 @@ void testbench::test_reserved_bits_read_zero() {
 
 void testbench::test_reserved_bits_write_ignored() {
   std::string test_name = "Reserved Bits Write Ignored";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -575,7 +575,7 @@ void testbench::test_reserved_bits_write_ignored() {
 
 void testbench::test_cfg_regwen_locked_registers() {
   std::string test_name = "CFG_REGWEN Locks Configuration Registers";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -786,7 +786,7 @@ void testbench::test_cfg_regwen_locked_registers() {
 
 void testbench::test_control_status_always_accessible() {
   std::string test_name = "CONTROL/STATUS Always Accessible During Busy";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -851,7 +851,7 @@ void testbench::test_control_status_always_accessible() {
 
 void testbench::test_reset_during_idle() {
   std::string test_name = "FUNC-001 TC014: Reset During Idle (test_reset_during_idle)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -960,7 +960,7 @@ void testbench::test_reset_during_idle() {
 void testbench::test_reset_during_active_transfer() {
   std::string test_name =
       " Reset During Active Transfer (test_reset_during_active_transfer)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1087,7 +1087,7 @@ void testbench::test_reset_during_active_transfer() {
 
 void testbench::test_reset_unlocks_range_regwen() {
   std::string test_name = "Reset Unlocks RANGE_REGWEN";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1124,7 +1124,7 @@ void testbench::test_reset_unlocks_range_regwen() {
 }
 
 void testbench::test_register_wo() {
-  CSML_INFO(1, logger) << "\n>>> Test: Write-Only Register Behavior <<<\n"
+  REG_INFO(1, logger) << "\n>>> Test: Write-Only Register Behavior <<<\n"
                        << std::endl;
 
   bool test_passed = true;
@@ -1133,7 +1133,7 @@ void testbench::test_register_wo() {
   // 1) INTR_TEST (WO): should always read as 0, write causes side effect
   m_test->register_read_32(secure_dma_basetest::INTR_TEST_OFFSET, before);
   if (before != 0x0) {
-    CSML_ERROR(0, logger) << "INTR_TEST read not zero before write" << std::endl;
+    REG_ERROR(0, logger) << "INTR_TEST read not zero before write" << std::endl;
     test_passed = false;
   }
 
@@ -1142,21 +1142,21 @@ void testbench::test_register_wo() {
 
   m_test->register_read_32(secure_dma_basetest::INTR_TEST_OFFSET, after);
   if (after != 0x0) {
-    CSML_ERROR(0, logger) << "INTR_TEST latched written value (should be WO/transient)" << std::endl;
+    REG_ERROR(0, logger) << "INTR_TEST latched written value (should be WO/transient)" << std::endl;
     test_passed = false;
   }
 
   uint32_t intr_state = 0;
   m_test->register_read_32(secure_dma_basetest::INTR_STATE_OFFSET, intr_state);
   if ((intr_state & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "INTR_TEST write did not set INTR_STATE.dma_done" << std::endl;
+    REG_ERROR(0, logger) << "INTR_TEST write did not set INTR_STATE.dma_done" << std::endl;
     test_passed = false;
   }
 
   // 2) ALERT_TEST (WO): should read as 0 even after write
   m_test->register_read_32(secure_dma_basetest::ALERT_TEST_OFFSET, before);
   if (before != 0x0) {
-    CSML_ERROR(0, logger) << "ALERT_TEST read not zero before write" << std::endl;
+    REG_ERROR(0, logger) << "ALERT_TEST read not zero before write" << std::endl;
     test_passed = false;
   }
 
@@ -1165,7 +1165,7 @@ void testbench::test_register_wo() {
 
   m_test->register_read_32(secure_dma_basetest::ALERT_TEST_OFFSET, after);
   if (after != 0x0) {
-    CSML_ERROR(0, logger) << "ALERT_TEST latched written value (should be WO/transient)" << std::endl;
+    REG_ERROR(0, logger) << "ALERT_TEST latched written value (should be WO/transient)" << std::endl;
     test_passed = false;
   }
 
@@ -1176,7 +1176,7 @@ void testbench::test_register_wo() {
   uint32_t control_val = 0;
   m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
   if ((control_val & 0x08000000) != 0) {
-    CSML_ERROR(0, logger) << "CONTROL.abort bit read back as 1 (should be WO)" << std::endl;
+    REG_ERROR(0, logger) << "CONTROL.abort bit read back as 1 (should be WO)" << std::endl;
     test_passed = false;
   }
 
@@ -1184,7 +1184,7 @@ void testbench::test_register_wo() {
 }
 
 void testbench::test_register_rw0c() {
-  CSML_INFO(1, logger) << "\n>>> Test: RW0C Register Behavior (RANGE_REGWEN) <<<\n"
+  REG_INFO(1, logger) << "\n>>> Test: RW0C Register Behavior (RANGE_REGWEN) <<<\n"
                        << std::endl;
 
   bool test_passed = true;
@@ -1197,7 +1197,7 @@ void testbench::test_register_rw0c() {
   // 1) Reset state should be unlocked (0x6)
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, before);
   if ((before & 0xF) != 0x6) {
-    CSML_ERROR(0, logger) << "RANGE_REGWEN reset value mismatch (expected 0x6, got 0x"
+    REG_ERROR(0, logger) << "RANGE_REGWEN reset value mismatch (expected 0x6, got 0x"
                           << std::hex << (before & 0xF) << std::dec << ")" << std::endl;
     test_passed = false;
   }
@@ -1208,7 +1208,7 @@ void testbench::test_register_rw0c() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, after);
   if ((after & 0xF) != 0x9) {
-    CSML_ERROR(0, logger) << "RANGE_REGWEN lock failed (expected 0x9, got 0x"
+    REG_ERROR(0, logger) << "RANGE_REGWEN lock failed (expected 0x9, got 0x"
                           << std::hex << (after & 0xF) << std::dec << ")" << std::endl;
     test_passed = false;
   }
@@ -1218,7 +1218,7 @@ void testbench::test_register_rw0c() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, after);
   if ((after & 0xF) != 0x9) {
-    CSML_ERROR(0, logger) << "RANGE_REGWEN unexpectedly unlocked after write 0x6" << std::endl;
+    REG_ERROR(0, logger) << "RANGE_REGWEN unexpectedly unlocked after write 0x6" << std::endl;
     test_passed = false;
   }
 
@@ -1227,7 +1227,7 @@ void testbench::test_register_rw0c() {
   wait(sc_time(20, SC_NS));
   m_test->register_read_32(secure_dma_basetest::RANGE_REGWEN_OFFSET, after);
   if ((after & 0xF) != 0x6) {
-    CSML_ERROR(0, logger) << "RANGE_REGWEN not restored to 0x6 after reset" << std::endl;
+    REG_ERROR(0, logger) << "RANGE_REGWEN not restored to 0x6 after reset" << std::endl;
     test_passed = false;
   }
 
@@ -1236,7 +1236,7 @@ void testbench::test_register_rw0c() {
 
 
 void testbench::test_register_rw1c() {
-  CSML_INFO(1, logger) << "\n>>> Test: RW1C Register Behavior (STATUS bits) <<<\n"
+  REG_INFO(1, logger) << "\n>>> Test: RW1C Register Behavior (STATUS bits) <<<\n"
                        << std::endl;
 
   bool test_passed = true;
@@ -1267,7 +1267,7 @@ void testbench::test_register_rw1c() {
 
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
   if ((status & (1u << 1)) == 0) {
-    CSML_ERROR(0, logger) << "STATUS.done not set before RW1C clear" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.done not set before RW1C clear" << std::endl;
     test_passed = false;
   }
 
@@ -1275,7 +1275,7 @@ void testbench::test_register_rw1c() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
   if (status & (1u << 1)) {
-    CSML_ERROR(0, logger) << "STATUS.done not cleared by RW1C write" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.done not cleared by RW1C write" << std::endl;
     test_passed = false;
   }
 
@@ -1291,7 +1291,7 @@ void testbench::test_register_rw1c() {
 
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
   if ((status & (1u << 3)) == 0) {
-    CSML_ERROR(0, logger) << "STATUS.error not set before RW1C clear" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.error not set before RW1C clear" << std::endl;
     test_passed = false;
   }
 
@@ -1299,7 +1299,7 @@ void testbench::test_register_rw1c() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
   if (status & (1u << 3)) {
-    CSML_ERROR(0, logger) << "STATUS.error not cleared by RW1C write" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.error not cleared by RW1C write" << std::endl;
     test_passed = false;
   }
 
@@ -1325,7 +1325,7 @@ void testbench::test_register_rw1c() {
 
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
   if ((status & (1u << 2)) == 0) {
-    CSML_ERROR(0, logger) << "STATUS.aborted not set before RW1C clear" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.aborted not set before RW1C clear" << std::endl;
     test_passed = false;
   }
 
@@ -1333,7 +1333,7 @@ void testbench::test_register_rw1c() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
   if (status & (1u << 2)) {
-    CSML_ERROR(0, logger) << "STATUS.aborted not cleared by RW1C write" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.aborted not cleared by RW1C write" << std::endl;
     test_passed = false;
   }
 
@@ -1365,14 +1365,14 @@ void testbench::test_register_rw1c() {
   }
 
   if (!chunk_seen) {
-    CSML_ERROR(0, logger) << "STATUS.chunk_done not observed before RW1C clear" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.chunk_done not observed before RW1C clear" << std::endl;
     test_passed = false;
   } else {
     m_test->register_write_32(secure_dma_basetest::STATUS_OFFSET, (1u << 5)); // clear chunk_done
     wait(sc_time(10, SC_NS));
     m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
     if (status & (1u << 5)) {
-      CSML_ERROR(0, logger) << "STATUS.chunk_done not cleared by RW1C write" << std::endl;
+      REG_ERROR(0, logger) << "STATUS.chunk_done not cleared by RW1C write" << std::endl;
       test_passed = false;
     }
   }
@@ -1394,7 +1394,7 @@ void testbench::test_register_rw1c() {
 void testbench::test_reset_deasserts_interrupts() {
   std::string test_name =
       "Reset De-asserts Interrupts (test_reset_deasserts_interrupts)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

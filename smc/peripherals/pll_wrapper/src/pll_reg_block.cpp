@@ -176,11 +176,8 @@ void reg_block::b_transport(tlm::tlm_generic_payload& gp,
         (len == 4) ? 0xFFFFFFFFu
                    : ((((uint32_t{1} << (len * 8u)) - 1u)) << lane_bits);
 
-    // A single access must not straddle two registers.
-    if (lane + len > 4u) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
+    // Naturally-aligned 1/2/4-byte accesses cannot straddle a 32-bit word
+    // (the size/alignment check above already rejects every straddling case).
 
     if (cmd == tlm::TLM_READ_COMMAND) {
         uint32_t word = 0;

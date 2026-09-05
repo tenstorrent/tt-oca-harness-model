@@ -170,6 +170,10 @@ run_ctest() {
   return $?
 }
 
+# ── Coverage gate (≥ 95% line coverage, overridable via COVERAGE_MIN_LINE_PCT)
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../../scripts/coverage_gate.sh"
+
 # ── Helper: extract coverage % from coverage log ─────────────────────────────
 extract_coverage() {
   local log="$1"
@@ -258,8 +262,8 @@ LCOV_WRAP
          ${linker_extra_flags:+"${linker_extra_flags}"} \
          "${CMAKE_EXTRA_ARGS[@]}" 2>&1 \
        && cmake --build "${build_dir}" --parallel "${JOBS}" 2>&1; then
-      # Run the coverage target (generates lcov report) — non-fatal.
-      cmake --build "${build_dir}" --target coverage 2>&1 || true
+      # Coverage target now includes the ≥95% line-coverage gate.
+      cmake --build "${build_dir}" --target coverage 2>&1 || status=$?
     else
       status=1
     fi
@@ -347,10 +351,17 @@ for name in "${PERIPHERALS[@]}"; do
   [ -z "$cov_pct" ] && cov_pct="n/a"
   if [ $cov_status -eq 3 ]; then
     skip; printf " (lcov not installed)\n"; cov_label="SKIP"
-  elif [ $cov_status -eq 0 ]; then
+  elif [ $cov_status -eq 0 ] && coverage_pct_meets_min "${cov_pct}"; then
     pass; printf " (${cov_pct}%%)\n"; cov_label="PASS"
   else
-    fail; echo; cov_label="FAIL"; OVERALL_PASS=false
+    fail
+    if [ $cov_status -eq 0 ]; then
+      printf " (${cov_pct}%% < %s%%)\n" "${COVERAGE_MIN_LINE_PCT}"
+    else
+      echo
+    fi
+    cov_label="FAIL"
+    OVERALL_PASS=false
   fi
 
   # 4. CTest (uses the Release build that was built in step 1)

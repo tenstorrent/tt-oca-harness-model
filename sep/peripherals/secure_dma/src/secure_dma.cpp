@@ -35,7 +35,7 @@ secure_dma_model::secure_dma_model(sc_module_name n)
       dma_done_intr("dma_done_intr"),
       dma_chunk_done_intr("dma_chunk_done_intr"),
       dma_error_intr("dma_error_intr"), alert_fatal_fault("alert_fatal_fault"),
-      clk_i("clk_i"), rst_ni("rst_ni"), verbosity("verbosity", CSML_DEFAULT_VERBOSITY),
+      clk_i("clk_i"), rst_ni("rst_ni"), verbosity("verbosity", REG_DEFAULT_VERBOSITY),
       logger(), m_dma_busy(false),
       m_dma_busy_next(false), m_intr_state(0x0), m_intr_state_next(0x0),
       m_error_code(0x0), m_error_code_next(0x0), m_current_src_addr(0x0),
@@ -45,13 +45,13 @@ secure_dma_model::secure_dma_model(sc_module_name n)
       m_hash_algorithm(0), m_hashing_active(false),
       m_last_asserted_trigger_index(-1) {
 
-  // Initialize CSML logger
+  // Initialize RegLogger
   logger.setMaxVerbosity(verbosity.get_param_value());
   logger.setLogFormat(
       "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
   logger.setFunctionTrace(false);
 
-  CSML_INFO(1, logger) << "DMA Controller model instantiated" << std::endl;
+  REG_INFO(1, logger) << "DMA Controller model instantiated" << std::endl;
 
   // Initialize quantum keeper for temporal decoupling
   m_qk.reset();
@@ -67,7 +67,7 @@ secure_dma_model::secure_dma_model(sc_module_name n)
     m_prev_trigger_state[i] = false;
   }
 
-  // Register all callbacks with CSML memory (consolidated from all
+  // Register all callbacks with regmodel memory (consolidated from all
   // functionalities)
   register_all_callbacks();
 
@@ -99,7 +99,7 @@ secure_dma_model::~secure_dma_model() {
     EVP_MD_CTX_free(static_cast<EVP_MD_CTX *>(m_hash_ctx));
     m_hash_ctx = nullptr;
   }
-  CSML_INFO(1, logger) << "DMA Controller model destroyed" << std::endl;
+  REG_INFO(1, logger) << "DMA Controller model destroyed" << std::endl;
 }
 
 // ============================================================================
@@ -112,7 +112,7 @@ void secure_dma_model::reset_thread() {
 
     // Check for reset assertion (active-low)
     if (rst_ni.read() == false) {
-      CSML_INFO(1, logger) << "Reset asserted - resetting all registers and state" << std::endl;
+      REG_INFO(1, logger) << "Reset asserted - resetting all registers and state" << std::endl;
 
       // Reset all registers to default values
       reset_all_registers();
@@ -165,7 +165,7 @@ void secure_dma_model::reset_thread() {
       // Reset quantum keeper
       m_qk.reset();
 
-      CSML_INFO(1, logger) << "Reset complete" << std::endl;
+      REG_INFO(1, logger) << "Reset complete" << std::endl;
     }
   }
 }
@@ -252,7 +252,7 @@ void secure_dma_model::handshake_monitor_thread() {
 
       // Check if this trigger is enabled and has rising edge
       if (rising_edge && (enable_mask & (1 << i))) {
-        CSML_INFO(1, logger) << "Hardware handshake trigger " << i << " rising edge detected (enabled)" << std::endl;
+        REG_INFO(1, logger) << "Hardware handshake trigger " << i << " rising edge detected (enabled)" << std::endl;
 
         // Store trigger index for debugging/logging
         m_last_asserted_trigger_index = i;
@@ -266,7 +266,7 @@ void secure_dma_model::handshake_monitor_thread() {
         // chunk. Leaving the peripheral's interrupt asserted would also
         // re-trigger the handshake immediately.
         if (!perform_interrupt_clearing_write(i)) {
-          CSML_INFO(1, logger) << "Interrupt clearing write failed for trigger " << i << " - halting transfer" << std::endl;
+          REG_INFO(1, logger) << "Interrupt clearing write failed for trigger " << i << " - halting transfer" << std::endl;
           halt_transfer_on_bus_error();
           break;
         }
@@ -282,7 +282,7 @@ void secure_dma_model::handshake_monitor_thread() {
         m_transfer_start_event.notify(
             SC_ZERO_TIME); // Also notify main transfer event
 
-        CSML_INFO(2, logger) << "Chunk transfer initiated for trigger " << i << " via m_handshake_trigger_event" << std::endl;
+        REG_INFO(2, logger) << "Chunk transfer initiated for trigger " << i << " via m_handshake_trigger_event" << std::endl;
 
         // Note: Only process ONE trigger per wake-up cycle
         // If multiple triggers assert simultaneously, they will be processed
@@ -303,7 +303,7 @@ void secure_dma_model::update_interrupts() {
   uint32_t intr_state = m_intr_state;
   uint32_t intr_enable = static_cast<uint32_t>(INTR_ENABLE);
 
-  CSML_INFO(3, logger) << "Interrupts updated - STATE: 0x" << std::hex << intr_state << " ENABLE: 0x" << intr_enable << std::dec << std::endl;
+  REG_INFO(3, logger) << "Interrupts updated - STATE: 0x" << std::hex << intr_state << " ENABLE: 0x" << intr_enable << std::dec << std::endl;
 
   // Trigger interrupt driver method (single-writer pattern)
   m_interrupt_update_event.notify(SC_ZERO_TIME);
@@ -330,7 +330,7 @@ void secure_dma_model::interrupt_driver_method() {
 // ============================================================================
 
 bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "CONTROL write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "CONTROL write: 0x" << std::hex << value << std::dec << std::endl;
 //FIX: now ctrl reserved bits are not writable 
   auto store_control = [this, write_mask](uint32_t raw_value) {
     CONTROL = (raw_value & write_mask);
@@ -344,7 +344,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
 
   // Side-effect: go bit triggers DMA operation
   if (go_bit && !m_dma_busy) {
-    CSML_INFO(1, logger) << "CONTROL.go=1: Initiating DMA transfer control sequence" << std::endl;
+    REG_INFO(1, logger) << "CONTROL.go=1: Initiating DMA transfer control sequence" << std::endl;
 
     // Automatic clearing of STATUS.done when new transfer starts
     uint32_t current_status = static_cast<uint32_t>(STATUS);
@@ -352,13 +352,13 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
       current_status &= ~(1U << 1);   // Clear STATUS.done
       STATUS = current_status;
       clear_interrupt_state(true, false, false); // Clear INTR_STATE.dma_done
-    CSML_INFO(2, logger) << "Auto-cleared STATUS.done on new transfer start" << std::endl;
+    REG_INFO(2, logger) << "Auto-cleared STATUS.done on new transfer start" << std::endl;
     }
 
     // Configuration validation triggering
     // Call comprehensive validation (includes security checks)
     if (!validate_transfer_configuration(value)) {
-      CSML_INFO(1, logger) << "Configuration validation FAILED - transfer cannot start" << std::endl;
+      REG_INFO(1, logger) << "Configuration validation FAILED - transfer cannot start" << std::endl;
       // Validation failure sets STATUS.error and ERROR_CODE automatically in
       // Remain in IDLE state (m_dma_busy stays false)
       // Validation already triggered error interrupt via
@@ -370,7 +370,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     }
 
     // Validation passed - transition to BUSY state
-    CSML_INFO(1, logger) << "Configuration validation PASSED - entering BUSY state" << std::endl;
+    REG_INFO(1, logger) << "Configuration validation PASSED - entering BUSY state" << std::endl;
 
     // Set busy state (locks CFG_REGWEN to MuBi4False)
     m_dma_busy_next = true;
@@ -381,7 +381,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     current_status |= 0x1; // Set STATUS.busy
     STATUS = current_status;
 
-    CSML_INFO(2, logger) << "DMA entered BUSY state - CFG_REGWEN now locked (0x9)" << std::endl;
+    REG_INFO(2, logger) << "DMA entered BUSY state - CFG_REGWEN now locked (0x9)" << std::endl;
 
     // Initialize SHA-2 hash engine if hashing enabled and initial_transfer=1
     uint32_t opcode = value & 0xF;                    // Bits 3:0
@@ -391,7 +391,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     if (is_hash_opcode && initial_transfer) {
       // Initialize hash engine for new hash computation
       if (!hash_init(opcode)) {
-        CSML_INFO(1, logger) << "Hash engine initialization FAILED" << std::endl;
+        REG_INFO(1, logger) << "Hash engine initialization FAILED" << std::endl;
         // Hash init failure - transition back to IDLE, set error
         m_dma_busy = false;
         m_dma_busy_next = false;
@@ -406,14 +406,14 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
         store_control(value);
         return false;
       }
-    CSML_INFO(2, logger) << "Hash engine initialized (initial_transfer=1)" << std::endl;
+    REG_INFO(2, logger) << "Hash engine initialized (initial_transfer=1)" << std::endl;
     } else if (is_hash_opcode && !initial_transfer) {
       // Continue existing hash computation (multi-chunk accumulation)
       if (!m_hashing_active) {
-        CSML_INFO(1, logger) << "WARNING - Hash opcode with initial_transfer=0 but no active hash context" << std::endl;
+        REG_INFO(1, logger) << "WARNING - Hash opcode with initial_transfer=0 but no active hash context" << std::endl;
         // Initialize hash anyway to prevent errors
         if (!hash_init(opcode)) {
-          CSML_INFO(1, logger) << "Hash engine initialization FAILED" << std::endl;
+          REG_INFO(1, logger) << "Hash engine initialization FAILED" << std::endl;
           m_dma_busy = false;
           m_dma_busy_next = false;
           current_status = static_cast<uint32_t>(STATUS);
@@ -428,7 +428,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
           return false;
         }
       }
-    CSML_INFO(2, logger) << "Continuing multi-chunk hash accumulation (initial_transfer=0)" << std::endl;
+    REG_INFO(2, logger) << "Continuing multi-chunk hash accumulation (initial_transfer=0)" << std::endl;
     }
 
     // Start the transfer engine. In hardware-handshake mode the first chunk
@@ -441,7 +441,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     const bool hardware_handshake_enable = (value & (1U << 4)) != 0; // Bit 4
     if (!hardware_handshake_enable) {
       m_transfer_start_event.notify(SC_ZERO_TIME);
-      CSML_INFO(2, logger) << "Transfer engine triggered via m_transfer_start_event" << std::endl;
+      REG_INFO(2, logger) << "Transfer engine triggered via m_transfer_start_event" << std::endl;
     } else {
       // Triggers are level-sensitive: if an enabled trigger is already asserted at arm time,
       // start immediately (otherwise wait for handshake_monitor_thread's rising edge).
@@ -455,16 +455,16 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
       }
       if (already_high) {
         m_transfer_start_event.notify(SC_ZERO_TIME);
-        CSML_INFO(2, logger) << "Handshake mode: trigger already HIGH on arm; starting first chunk immediately" << std::endl;
+        REG_INFO(2, logger) << "Handshake mode: trigger already HIGH on arm; starting first chunk immediately" << std::endl;
       } else {
-        CSML_INFO(2, logger) << "Handshake mode: deferring first chunk until first watermark trigger" << std::endl;
+        REG_INFO(2, logger) << "Handshake mode: deferring first chunk until first watermark trigger" << std::endl;
       }
     }
   }
 
   // Side-effect: abort bit initiates transfer abort
   if (abort_bit && m_dma_busy) {
-    CSML_INFO(1, logger) << "CONTROL.abort=1: Initiating transfer abort" << std::endl;
+    REG_INFO(1, logger) << "CONTROL.abort=1: Initiating transfer abort" << std::endl;
 
     // Immediately halt transfer engine
     // Per detailed design: "The abort operation takes effect immediately after
@@ -485,7 +485,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     // Clear go bit (transfer aborted)
     value &= ~(1U << 31);
 
-    CSML_INFO(1, logger) << "Transfer aborted - STATUS.aborted set, " << "returned to IDLE state, CFG_REGWEN unlocked (0x6)" << std::endl;
+    REG_INFO(1, logger) << "Transfer aborted - STATUS.aborted set, " << "returned to IDLE state, CFG_REGWEN unlocked (0x6)" << std::endl;
 
     // Clear hash state and sha2_digest_valid on abort
     if (m_hashing_active) {
@@ -497,12 +497,12 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
       // Clear STATUS.sha2_digest_valid (bit 4)
       current_status &= ~(1U << 4);
       STATUS = current_status;
-    CSML_INFO(2, logger) << "Hash state cleared on abort - sha2_digest_valid=0" << std::endl;
+    REG_INFO(2, logger) << "Hash state cleared on abort - sha2_digest_valid=0" << std::endl;
     }
 
     // Signal transfer engine thread to abort
     m_transfer_abort_event.notify(SC_ZERO_TIME);
-    CSML_INFO(2, logger) << "Transfer engine notified of abort via m_transfer_abort_event" << std::endl;
+    REG_INFO(2, logger) << "Transfer engine notified of abort via m_transfer_abort_event" << std::endl;
 
     // Note: Per detailed design: "Any transactions already issued to
     // OpenTitan-internal buses are guaranteed to complete before the abort
@@ -520,7 +520,7 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
 }
 
 bool secure_dma_model::handle_write_STATUS(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "STATUS write (RW1C): 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "STATUS write (RW1C): 0x" << std::hex << value << std::dec << std::endl;
 
   // Read current STATUS register value
   uint32_t current_status = static_cast<uint32_t>(STATUS);
@@ -530,13 +530,13 @@ bool secure_dma_model::handle_write_STATUS(uint32_t value, uint32_t write_mask) 
   if (value & (1U << 1)) {
     current_status &= ~(1U << 1);
     m_intr_state &= ~(1U << 0); // Clear INTR_STATE.dma_done
-  CSML_INFO(2, logger) << "STATUS.done cleared via RW1C" << std::endl;
+  REG_INFO(2, logger) << "STATUS.done cleared via RW1C" << std::endl;
   }
 
   // Bit 2: aborted
   if (value & (1U << 2)) {
     current_status &= ~(1U << 2);
-  CSML_INFO(2, logger) << "STATUS.aborted cleared via RW1C" << std::endl;
+  REG_INFO(2, logger) << "STATUS.aborted cleared via RW1C" << std::endl;
   }
 
   // Bit 3: error (also clears ERROR_CODE)
@@ -545,14 +545,14 @@ bool secure_dma_model::handle_write_STATUS(uint32_t value, uint32_t write_mask) 
     m_intr_state &= ~(1U << 2); // Clear INTR_STATE.dma_error
     m_error_code = 0x0;         // Clear ERROR_CODE register
     m_error_code_next = 0x0;
-  CSML_INFO(2, logger) << "STATUS.error cleared via RW1C (ERROR_CODE also cleared)" << std::endl;
+  REG_INFO(2, logger) << "STATUS.error cleared via RW1C (ERROR_CODE also cleared)" << std::endl;
   }
 
   // Bit 5: chunk_done
   if (value & (1U << 5)) {
     current_status &= ~(1U << 5);
     m_intr_state &= ~(1U << 1); // Clear INTR_STATE.dma_chunk_done
-  CSML_INFO(2, logger) << "STATUS.chunk_done cleared via RW1C" << std::endl;
+  REG_INFO(2, logger) << "STATUS.chunk_done cleared via RW1C" << std::endl;
   }
 
   // Update STATUS register with cleared bits
@@ -569,17 +569,17 @@ bool secure_dma_model::handle_write_STATUS(uint32_t value, uint32_t write_mask) 
 /**
  * @brief Write callback for INTR_ENABLE register
  *
- * Handles updates to the interrupt enable register. CSML framework
+ * Handles updates to the interrupt enable register. regmodel
  * automatically masks reserved bits via register definition (only bits [2:0]
  * writable). This callback updates interrupt outputs after the enable mask
  * changes.
  *
  * @param value Value written to the register
  * @param write_mask Write mask from register definition
- * @return true to allow CSML to store the value
+ * @return true to allow regmodel to store the value
  */
 bool secure_dma_model::handle_write_INTR_ENABLE(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "INTR_ENABLE write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "INTR_ENABLE write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Manually write register value before updating interrupts
   // This ensures update_interrupts() reads the NEW value, not the old value
@@ -590,32 +590,32 @@ bool secure_dma_model::handle_write_INTR_ENABLE(uint32_t value, uint32_t write_m
   // INTR_ENABLE
   update_interrupts();
 
-  CSML_INFO(2, logger) << "Interrupt outputs updated based on new INTR_ENABLE mask" << std::endl;
+  REG_INFO(2, logger) << "Interrupt outputs updated based on new INTR_ENABLE mask" << std::endl;
 
   // Return false because we already wrote the register manually
   return false;
 }
 
 bool secure_dma_model::handle_write_INTR_TEST(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "INTR_TEST write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "INTR_TEST write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Force interrupt state bits for testing
   // Bit 0: dma_done
   if (value & 0x1) {
     m_intr_state |= 0x1;
-  CSML_INFO(2, logger) << "INTR_TEST: Forcing INTR_STATE.dma_done" << std::endl;
+  REG_INFO(2, logger) << "INTR_TEST: Forcing INTR_STATE.dma_done" << std::endl;
   }
 
   // Bit 1: dma_chunk_done
   if (value & 0x2) {
     m_intr_state |= 0x2;
-  CSML_INFO(2, logger) << "INTR_TEST: Forcing INTR_STATE.dma_chunk_done" << std::endl;
+  REG_INFO(2, logger) << "INTR_TEST: Forcing INTR_STATE.dma_chunk_done" << std::endl;
   }
 
   // Bit 2: dma_error
   if (value & 0x4) {
     m_intr_state |= 0x4;
-  CSML_INFO(2, logger) << "INTR_TEST: Forcing INTR_STATE.dma_error" << std::endl;
+  REG_INFO(2, logger) << "INTR_TEST: Forcing INTR_STATE.dma_error" << std::endl;
   }
 
   // Update interrupt outputs
@@ -626,11 +626,11 @@ bool secure_dma_model::handle_write_INTR_TEST(uint32_t value, uint32_t write_mas
 }
 
 bool secure_dma_model::handle_write_ALERT_TEST(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "ALERT_TEST write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "ALERT_TEST write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Bit 0: Trigger fatal_fault alert
   if (value & 0x1) {
-    CSML_INFO(1, logger) << "ALERT_TEST: Triggering fatal_fault alert" << std::endl;
+    REG_INFO(1, logger) << "ALERT_TEST: Triggering fatal_fault alert" << std::endl;
     alert_fatal_fault.write(true);
 
     // Alert is a pulse - de-assert after one delta cycle
@@ -643,7 +643,7 @@ bool secure_dma_model::handle_write_ALERT_TEST(uint32_t value, uint32_t write_ma
 }
 
 bool secure_dma_model::handle_write_RANGE_REGWEN(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "RANGE_REGWEN write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "RANGE_REGWEN write: 0x" << std::hex << value << std::dec << std::endl;
 
   uint32_t current_regwen = static_cast<uint32_t>(RANGE_REGWEN) & 0xF;
 
@@ -659,7 +659,7 @@ bool secure_dma_model::handle_write_RANGE_REGWEN(uint32_t value, uint32_t write_
   RANGE_REGWEN = stays_unlocked ? MUBI4_TRUE : MUBI4_FALSE;
 
   if (!stays_unlocked && current_regwen == MUBI4_TRUE) {
-    CSML_INFO(1, logger) << "RANGE_REGWEN: Locking memory range registers (0x6 -> 0x9)" << std::endl;
+    REG_INFO(1, logger) << "RANGE_REGWEN: Locking memory range registers (0x6 -> 0x9)" << std::endl;
   }
 
   return false; // Register already updated above
@@ -667,11 +667,11 @@ bool secure_dma_model::handle_write_RANGE_REGWEN(uint32_t value, uint32_t write_
 
 bool secure_dma_model::handle_write_ENABLED_MEMORY_RANGE_BASE(uint32_t value,
                                                        uint32_t write_mask) {
-  CSML_INFO(2, logger) << "ENABLED_MEMORY_RANGE_BASE write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "ENABLED_MEMORY_RANGE_BASE write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if memory range registers are locked by RANGE_REGWEN
   if (is_range_locked()) {
-    CSML_INFO(2, logger) << "ENABLED_MEMORY_RANGE_BASE: Write blocked - RANGE_REGWEN locked" << std::endl;
+    REG_INFO(2, logger) << "ENABLED_MEMORY_RANGE_BASE: Write blocked - RANGE_REGWEN locked" << std::endl;
     return false; // Block write
   }
 
@@ -682,11 +682,11 @@ bool secure_dma_model::handle_write_ENABLED_MEMORY_RANGE_BASE(uint32_t value,
 
 bool secure_dma_model::handle_write_ENABLED_MEMORY_RANGE_LIMIT(uint32_t value,
                                                         uint32_t write_mask) {
-  CSML_INFO(2, logger) << "ENABLED_MEMORY_RANGE_LIMIT write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "ENABLED_MEMORY_RANGE_LIMIT write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if memory range registers are locked by RANGE_REGWEN
   if (is_range_locked()) {
-    CSML_INFO(2, logger) << "ENABLED_MEMORY_RANGE_LIMIT: Write blocked - RANGE_REGWEN locked" << std::endl;
+    REG_INFO(2, logger) << "ENABLED_MEMORY_RANGE_LIMIT: Write blocked - RANGE_REGWEN locked" << std::endl;
     return false; // Block write
   }
 
@@ -696,11 +696,11 @@ bool secure_dma_model::handle_write_ENABLED_MEMORY_RANGE_LIMIT(uint32_t value,
 }
 
 bool secure_dma_model::handle_write_RANGE_VALID(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "RANGE_VALID write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "RANGE_VALID write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if memory range registers are locked by RANGE_REGWEN
   if (is_range_locked()) {
-    CSML_INFO(2, logger) << "RANGE_VALID: Write blocked - RANGE_REGWEN locked" << std::endl;
+    REG_INFO(2, logger) << "RANGE_VALID: Write blocked - RANGE_REGWEN locked" << std::endl;
     return false; // Block write
   }
 
@@ -710,11 +710,11 @@ bool secure_dma_model::handle_write_RANGE_VALID(uint32_t value, uint32_t write_m
 }
 
 bool secure_dma_model::handle_write_SRC_ADDR_LO(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "SRC_ADDR_LO write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "SRC_ADDR_LO write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "SRC_ADDR_LO: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "SRC_ADDR_LO: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -724,11 +724,11 @@ bool secure_dma_model::handle_write_SRC_ADDR_LO(uint32_t value, uint32_t write_m
 }
 
 bool secure_dma_model::handle_write_SRC_ADDR_HI(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "SRC_ADDR_HI write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "SRC_ADDR_HI write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "SRC_ADDR_HI: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "SRC_ADDR_HI: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -738,11 +738,11 @@ bool secure_dma_model::handle_write_SRC_ADDR_HI(uint32_t value, uint32_t write_m
 }
 
 bool secure_dma_model::handle_write_DST_ADDR_LO(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "DST_ADDR_LO write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "DST_ADDR_LO write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "DST_ADDR_LO: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "DST_ADDR_LO: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -752,11 +752,11 @@ bool secure_dma_model::handle_write_DST_ADDR_LO(uint32_t value, uint32_t write_m
 }
 
 bool secure_dma_model::handle_write_DST_ADDR_HI(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "DST_ADDR_HI write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "DST_ADDR_HI write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "DST_ADDR_HI: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "DST_ADDR_HI: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -767,11 +767,11 @@ bool secure_dma_model::handle_write_DST_ADDR_HI(uint32_t value, uint32_t write_m
 
 bool secure_dma_model::handle_write_ADDR_SPACE_ID(uint32_t value,
                                            uint32_t write_mask) {
-  CSML_INFO(2, logger) << "ADDR_SPACE_ID write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "ADDR_SPACE_ID write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "ADDR_SPACE_ID: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "ADDR_SPACE_ID: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -782,11 +782,11 @@ bool secure_dma_model::handle_write_ADDR_SPACE_ID(uint32_t value,
 
 bool secure_dma_model::handle_write_TOTAL_DATA_SIZE(uint32_t value,
                                              uint32_t write_mask) {
-  CSML_INFO(2, logger) << "TOTAL_DATA_SIZE write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "TOTAL_DATA_SIZE write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "TOTAL_DATA_SIZE: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "TOTAL_DATA_SIZE: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -797,11 +797,11 @@ bool secure_dma_model::handle_write_TOTAL_DATA_SIZE(uint32_t value,
 
 bool secure_dma_model::handle_write_CHUNK_DATA_SIZE(uint32_t value,
                                              uint32_t write_mask) {
-  CSML_INFO(2, logger) << "CHUNK_DATA_SIZE write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "CHUNK_DATA_SIZE write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "CHUNK_DATA_SIZE: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "CHUNK_DATA_SIZE: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -812,11 +812,11 @@ bool secure_dma_model::handle_write_CHUNK_DATA_SIZE(uint32_t value,
 
 bool secure_dma_model::handle_write_TRANSFER_WIDTH(uint32_t value,
                                             uint32_t write_mask) {
-  CSML_INFO(2, logger) << "TRANSFER_WIDTH write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "TRANSFER_WIDTH write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "TRANSFER_WIDTH: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "TRANSFER_WIDTH: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -826,11 +826,11 @@ bool secure_dma_model::handle_write_TRANSFER_WIDTH(uint32_t value,
 }
 
 bool secure_dma_model::handle_write_SRC_CONFIG(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "SRC_CONFIG write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "SRC_CONFIG write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "SRC_CONFIG: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "SRC_CONFIG: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -840,11 +840,11 @@ bool secure_dma_model::handle_write_SRC_CONFIG(uint32_t value, uint32_t write_ma
 }
 
 bool secure_dma_model::handle_write_DST_CONFIG(uint32_t value, uint32_t write_mask) {
-  CSML_INFO(2, logger) << "DST_CONFIG write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "DST_CONFIG write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "DST_CONFIG: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "DST_CONFIG: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -855,11 +855,11 @@ bool secure_dma_model::handle_write_DST_CONFIG(uint32_t value, uint32_t write_ma
 
 bool secure_dma_model::handle_write_HANDSHAKE_INTR_ENABLE(uint32_t value,
                                                    uint32_t write_mask) {
-  CSML_INFO(2, logger) << "HANDSHAKE_INTR_ENABLE write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "HANDSHAKE_INTR_ENABLE write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "HANDSHAKE_INTR_ENABLE: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "HANDSHAKE_INTR_ENABLE: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -870,11 +870,11 @@ bool secure_dma_model::handle_write_HANDSHAKE_INTR_ENABLE(uint32_t value,
 
 bool secure_dma_model::handle_write_CLEAR_INTR_SRC(uint32_t value,
                                             uint32_t write_mask) {
-  CSML_INFO(2, logger) << "CLEAR_INTR_SRC write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "CLEAR_INTR_SRC write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "CLEAR_INTR_SRC: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "CLEAR_INTR_SRC: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -885,11 +885,11 @@ bool secure_dma_model::handle_write_CLEAR_INTR_SRC(uint32_t value,
 
 bool secure_dma_model::handle_write_CLEAR_INTR_BUS(uint32_t value,
                                             uint32_t write_mask) {
-  CSML_INFO(2, logger) << "CLEAR_INTR_BUS write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "CLEAR_INTR_BUS write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "CLEAR_INTR_BUS: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "CLEAR_INTR_BUS: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -900,11 +900,11 @@ bool secure_dma_model::handle_write_CLEAR_INTR_BUS(uint32_t value,
 
 bool secure_dma_model::handle_write_INTR_SRC_ADDR(unsigned int index, uint32_t value,
                                            uint32_t write_mask) {
-  CSML_INFO(2, logger) << "INTR_SRC_ADDR[" << index << "] write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "INTR_SRC_ADDR[" << index << "] write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "INTR_SRC_ADDR[" << index << "]: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "INTR_SRC_ADDR[" << index << "]: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -915,11 +915,11 @@ bool secure_dma_model::handle_write_INTR_SRC_ADDR(unsigned int index, uint32_t v
 
 bool secure_dma_model::handle_write_INTR_SRC_WR_VAL(unsigned int index, uint32_t value,
                                              uint32_t write_mask) {
-  CSML_INFO(2, logger) << "INTR_SRC_WR_VAL[" << index << "] write: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(2, logger) << "INTR_SRC_WR_VAL[" << index << "] write: 0x" << std::hex << value << std::dec << std::endl;
 
   // Check if configuration registers are locked by CFG_REGWEN
   if (is_cfg_locked()) {
-    CSML_INFO(2, logger) << "INTR_SRC_WR_VAL[" << index << "]: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
+    REG_INFO(2, logger) << "INTR_SRC_WR_VAL[" << index << "]: Write blocked - CFG_REGWEN locked (DMA busy)" << std::endl;
     return false; // Block write
   }
 
@@ -937,7 +937,7 @@ bool secure_dma_model::handle_read_CFG_REGWEN(uint32_t &value, uint32_t read_mas
   //   hw2reg.cfg_regwen.d = mubi4_bool_to_mubi(~status.busy.q)
   value = m_dma_busy ? MUBI4_FALSE : MUBI4_TRUE;
 
-  CSML_INFO(3, logger) << "CFG_REGWEN read: 0x" << std::hex << value << " (DMA " << (m_dma_busy ? "BUSY" : "IDLE") << ")" << std::dec << std::endl;
+  REG_INFO(3, logger) << "CFG_REGWEN read: 0x" << std::hex << value << " (DMA " << (m_dma_busy ? "BUSY" : "IDLE") << ")" << std::dec << std::endl;
 
   return true;
 }
@@ -953,7 +953,7 @@ bool secure_dma_model::handle_read_STATUS(uint32_t &value, uint32_t read_mask) {
     value &= ~0x1;
   }
 
-  CSML_INFO(3, logger) << "STATUS read: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(3, logger) << "STATUS read: 0x" << std::hex << value << std::dec << std::endl;
 
   return true;
 }
@@ -962,7 +962,7 @@ bool secure_dma_model::handle_read_ERROR_CODE(uint32_t &value, uint32_t read_mas
   // Return internal error code storage
   value = m_error_code;
 
-  CSML_INFO(3, logger) << "ERROR_CODE read: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(3, logger) << "ERROR_CODE read: 0x" << std::hex << value << std::dec << std::endl;
 
   return true;
 }
@@ -971,7 +971,7 @@ bool secure_dma_model::handle_read_INTR_STATE(uint32_t &value, uint32_t read_mas
   // Return internal interrupt state storage
   value = m_intr_state;
 
-  CSML_INFO(3, logger) << "INTR_STATE read: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(3, logger) << "INTR_STATE read: 0x" << std::hex << value << std::dec << std::endl;
 
   return true;
 }
@@ -981,7 +981,7 @@ bool secure_dma_model::handle_read_SHA2_DIGEST(unsigned int index, uint32_t &val
   // Read from SHA2_DIGEST array register
   value = static_cast<uint32_t>(SHA2_DIGEST[index]);
 
-  CSML_INFO(3, logger) << "SHA2_DIGEST[" << index << "] read: 0x" << std::hex << value << std::dec << std::endl;
+  REG_INFO(3, logger) << "SHA2_DIGEST[" << index << "] read: 0x" << std::hex << value << std::dec << std::endl;
 
   // TODO: will implement actual SHA-2 hash engine
   // For now, just return stored value
@@ -1211,7 +1211,7 @@ void secure_dma_model::register_all_callbacks() {
   };
   memory.register_write_callback(intr_enable_write, INTR_ENABLE.offset);
 
-  CSML_INFO(1, logger) << "All DMA callbacks registered (32 write, 5 read)" << std::endl;
+  REG_INFO(1, logger) << "All DMA callbacks registered (32 write, 5 read)" << std::endl;
 }
 
 // ============================================================================
@@ -1232,7 +1232,7 @@ void secure_dma_model::set_interrupt_state(bool done, bool chunk_done, bool erro
     uint32_t current_status = static_cast<uint32_t>(STATUS);
     current_status |= (1U << 1);
     STATUS = current_status;
-  CSML_INFO(2, logger) << "Set INTR_STATE.dma_done and STATUS.done" << std::endl;
+  REG_INFO(2, logger) << "Set INTR_STATE.dma_done and STATUS.done" << std::endl;
   }
 
   if (chunk_done) {
@@ -1241,7 +1241,7 @@ void secure_dma_model::set_interrupt_state(bool done, bool chunk_done, bool erro
     uint32_t current_status = static_cast<uint32_t>(STATUS);
     current_status |= (1U << 5);
     STATUS = current_status;
-  CSML_INFO(2, logger) << "Set INTR_STATE.dma_chunk_done and STATUS.chunk_done" << std::endl;
+  REG_INFO(2, logger) << "Set INTR_STATE.dma_chunk_done and STATUS.chunk_done" << std::endl;
   }
 
   if (error) {
@@ -1250,7 +1250,7 @@ void secure_dma_model::set_interrupt_state(bool done, bool chunk_done, bool erro
     uint32_t current_status = static_cast<uint32_t>(STATUS);
     current_status |= (1U << 3);
     STATUS = current_status;
-  CSML_INFO(2, logger) << "Set INTR_STATE.dma_error and STATUS.error" << std::endl;
+  REG_INFO(2, logger) << "Set INTR_STATE.dma_error and STATUS.error" << std::endl;
   }
 
   // Update interrupt output ports (gated by INTR_ENABLE)
@@ -1261,17 +1261,17 @@ void secure_dma_model::clear_interrupt_state(bool done, bool chunk_done, bool er
   // Clear internal interrupt state bits
   if (done) {
     m_intr_state &= ~(1U << 0); // Clear dma_done bit
-  CSML_INFO(3, logger) << "Cleared INTR_STATE.dma_done" << std::endl;
+  REG_INFO(3, logger) << "Cleared INTR_STATE.dma_done" << std::endl;
   }
 
   if (chunk_done) {
     m_intr_state &= ~(1U << 1); // Clear dma_chunk_done bit
-  CSML_INFO(3, logger) << "Cleared INTR_STATE.dma_chunk_done" << std::endl;
+  REG_INFO(3, logger) << "Cleared INTR_STATE.dma_chunk_done" << std::endl;
   }
 
   if (error) {
     m_intr_state &= ~(1U << 2); // Clear dma_error bit
-  CSML_INFO(3, logger) << "Cleared INTR_STATE.dma_error" << std::endl;
+  REG_INFO(3, logger) << "Cleared INTR_STATE.dma_error" << std::endl;
   }
 
   // Update interrupt output ports (gated by INTR_ENABLE)
@@ -1360,10 +1360,10 @@ bool secure_dma_model::validate_address_alignment(uint64_t addr, bool is_source,
     // Set appropriate error code
     if (is_source) {
       m_error_code |= (1U << 0); // Set ERROR_CODE.src_addr_error (bit 0)
-    CSML_INFO(1, logger) << "Source address misalignment detected - addr: 0x" << std::hex << addr << ", width: " << std::dec << width_bytes << " bytes (ERROR_CODE.src_addr_error set)" << std::endl;
+    REG_INFO(1, logger) << "Source address misalignment detected - addr: 0x" << std::hex << addr << ", width: " << std::dec << width_bytes << " bytes (ERROR_CODE.src_addr_error set)" << std::endl;
     } else {
       m_error_code |= (1U << 1); // Set ERROR_CODE.dst_addr_error (bit 1)
-    CSML_INFO(1, logger) << "Destination address misalignment detected - addr: 0x" << std::hex << addr << ", width: " << std::dec << width_bytes << " bytes (ERROR_CODE.dst_addr_error set)" << std::endl;
+    REG_INFO(1, logger) << "Destination address misalignment detected - addr: 0x" << std::hex << addr << ", width: " << std::dec << width_bytes << " bytes (ERROR_CODE.dst_addr_error set)" << std::endl;
     }
 
     // Propagate error code to ERROR_CODE register storage
@@ -1393,7 +1393,7 @@ bool secure_dma_model::validate_transfer_width(uint32_t pending_control_value) {
   if (width_encoding == 0x3) {
     m_error_code |= (1U << 3); // Set ERROR_CODE.size_error (bit 3)
     ERROR_CODE = m_error_code;
-    CSML_INFO(1, logger) << "Invalid TRANSFER_WIDTH encoding (0x3) detected " << "(ERROR_CODE.size_error set)" << std::endl;
+    REG_INFO(1, logger) << "Invalid TRANSFER_WIDTH encoding (0x3) detected " << "(ERROR_CODE.size_error set)" << std::endl;
     return false;
   }
 
@@ -1407,12 +1407,12 @@ bool secure_dma_model::validate_transfer_width(uint32_t pending_control_value) {
   if (is_hashing_opcode && width_encoding != 0x2) {
     m_error_code |= (1U << 3); // Set ERROR_CODE.size_error (bit 3)
     ERROR_CODE = m_error_code;
-    CSML_INFO(1, logger) << "SHA-2 inline hashing requires FOUR_BYTE width - " << "current width encoding: 0x" << std::hex << width_encoding << ", opcode: 0x" << opcode << std::dec << " (ERROR_CODE.size_error set)" << std::endl;
+    REG_INFO(1, logger) << "SHA-2 inline hashing requires FOUR_BYTE width - " << "current width encoding: 0x" << std::hex << width_encoding << ", opcode: 0x" << opcode << std::dec << " (ERROR_CODE.size_error set)" << std::endl;
     return false;
   }
 
   // All validation checks passed
-  CSML_INFO(3, logger) << "Transfer width validation passed - width encoding: 0x" << std::hex << width_encoding << ", opcode: 0x" << opcode << std::dec << std::endl;
+  REG_INFO(3, logger) << "Transfer width validation passed - width encoding: 0x" << std::hex << width_encoding << ", opcode: 0x" << opcode << std::dec << std::endl;
   return true;
 }
 
@@ -1439,7 +1439,7 @@ uint8_t secure_dma_model::generate_byte_enable_mask(uint64_t addr,
     // 1-byte transfer: Enable single byte lane based on address[1:0]
     uint32_t byte_lane = addr & 0x3; // Extract bits [1:0]
     byte_enable = (1U << byte_lane);
-    CSML_INFO(3, logger) << "1-byte byte_enable = 0x" << std::hex << static_cast<uint32_t>(byte_enable) << " (lane " << std::dec << byte_lane << ")" << std::endl;
+    REG_INFO(3, logger) << "1-byte byte_enable = 0x" << std::hex << static_cast<uint32_t>(byte_enable) << " (lane " << std::dec << byte_lane << ")" << std::endl;
     break;
   }
 
@@ -1451,20 +1451,20 @@ uint8_t secure_dma_model::generate_byte_enable_mask(uint64_t addr,
     } else {
       byte_enable = 0xC; // Lanes 2-3 (bits [31:16])
     }
-    CSML_INFO(3, logger) << "2-byte byte_enable = 0x" << std::hex << static_cast<uint32_t>(byte_enable) << " (halfword " << std::dec << halfword_lane << ")" << std::endl;
+    REG_INFO(3, logger) << "2-byte byte_enable = 0x" << std::hex << static_cast<uint32_t>(byte_enable) << " (halfword " << std::dec << halfword_lane << ")" << std::endl;
     break;
   }
 
   case 4:
     // 4-byte transfer: Enable all 4 byte lanes
     byte_enable = 0xF;
-    CSML_INFO(3, logger) << "4-byte byte_enable = 0x" << std::hex << static_cast<uint32_t>(byte_enable) << std::dec << std::endl;
+    REG_INFO(3, logger) << "4-byte byte_enable = 0x" << std::hex << static_cast<uint32_t>(byte_enable) << std::dec << std::endl;
     break;
 
   default:
     // Invalid width - return 0 (no lanes enabled)
     byte_enable = 0x0;
-    CSML_INFO(1, logger) << "Invalid width_bytes (" << width_bytes << ") - byte_enable = 0x0" << std::endl;
+    REG_INFO(1, logger) << "Invalid width_bytes (" << width_bytes << ") - byte_enable = 0x0" << std::endl;
     break;
   }
 
@@ -1509,7 +1509,7 @@ void secure_dma_model::get_source_addressing_mode(bool &increment, bool &wrap) {
   increment = (src_config_value & 0x1) != 0; // Bit 0: increment
   wrap = (src_config_value & 0x2) != 0;      // Bit 1: wrap
 
-  CSML_INFO(3, logger) << "Source addressing mode - increment=" << increment << ", wrap=" << wrap << std::endl;
+  REG_INFO(3, logger) << "Source addressing mode - increment=" << increment << ", wrap=" << wrap << std::endl;
 }
 
 /**
@@ -1531,7 +1531,7 @@ void secure_dma_model::get_destination_addressing_mode(bool &increment, bool &wr
   increment = (dst_config_value & 0x1) != 0; // Bit 0: increment
   wrap = (dst_config_value & 0x2) != 0;      // Bit 1: wrap
 
-  CSML_INFO(3, logger) << "Destination addressing mode - increment=" << increment << ", wrap=" << wrap << std::endl;
+  REG_INFO(3, logger) << "Destination addressing mode - increment=" << increment << ", wrap=" << wrap << std::endl;
 }
 
 /**
@@ -1568,7 +1568,7 @@ void secure_dma_model::advance_source_address(uint64_t &current_addr,
 
   if (!increment) {
     // Fixed mode: Address unchanged (FIFO access pattern)
-    CSML_INFO(3, logger) << "Source address FIXED mode - addr unchanged: 0x" << std::hex << current_addr << std::dec << std::endl;
+    REG_INFO(3, logger) << "Source address FIXED mode - addr unchanged: 0x" << std::hex << current_addr << std::dec << std::endl;
     return;
   }
 
@@ -1583,13 +1583,13 @@ void secure_dma_model::advance_source_address(uint64_t &current_addr,
       // Wrap back to chunk start address
       current_addr = chunk_start_addr + (offset_from_start % chunk_size);
 
-    CSML_INFO(2, logger) << "Source address WRAPPED - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (chunk_start=0x" << std::hex << chunk_start_addr << ", chunk_size=" << std::dec << chunk_size << " bytes)" << std::endl;
+    REG_INFO(2, logger) << "Source address WRAPPED - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (chunk_start=0x" << std::hex << chunk_start_addr << ", chunk_size=" << std::dec << chunk_size << " bytes)" << std::endl;
     } else {
-  CSML_INFO(3, logger) << "Source address INCREMENTED (wrap mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
+  REG_INFO(3, logger) << "Source address INCREMENTED (wrap mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
     }
   } else {
     // Linear increment mode: No wrapping, continuous linear progression
-    CSML_INFO(3, logger) << "Source address INCREMENTED (linear mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
+    REG_INFO(3, logger) << "Source address INCREMENTED (linear mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
   }
 }
 
@@ -1621,7 +1621,7 @@ void secure_dma_model::advance_destination_address(uint64_t &current_addr,
 
   if (!increment) {
     // Fixed mode: Address unchanged (FIFO access pattern)
-    CSML_INFO(3, logger) << "Destination address FIXED mode - addr unchanged: 0x" << std::hex << current_addr << std::dec << std::endl;
+    REG_INFO(3, logger) << "Destination address FIXED mode - addr unchanged: 0x" << std::hex << current_addr << std::dec << std::endl;
     return;
   }
 
@@ -1636,13 +1636,13 @@ void secure_dma_model::advance_destination_address(uint64_t &current_addr,
       // Wrap back to chunk start address
       current_addr = chunk_start_addr + (offset_from_start % chunk_size);
 
-    CSML_INFO(2, logger) << "Destination address WRAPPED - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (chunk_start=0x" << std::hex << chunk_start_addr << ", chunk_size=" << std::dec << chunk_size << " bytes)" << std::endl;
+    REG_INFO(2, logger) << "Destination address WRAPPED - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (chunk_start=0x" << std::hex << chunk_start_addr << ", chunk_size=" << std::dec << chunk_size << " bytes)" << std::endl;
     } else {
-  CSML_INFO(3, logger) << "Destination address INCREMENTED (wrap mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
+  REG_INFO(3, logger) << "Destination address INCREMENTED (wrap mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
     }
   } else {
     // Linear increment mode: No wrapping, continuous linear progression
-    CSML_INFO(3, logger) << "Destination address INCREMENTED (linear mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
+    REG_INFO(3, logger) << "Destination address INCREMENTED (linear mode) - 0x" << std::hex << original_addr << " -> 0x" << current_addr << std::dec << " (+0x" << std::hex << width_bytes << ")" << std::endl;
   }
 }
 
@@ -1668,7 +1668,7 @@ void secure_dma_model::update_src_addr_registers(uint64_t current_addr) {
   SRC_ADDR_LO = addr_lo;
   SRC_ADDR_HI = addr_hi;
 
-  CSML_INFO(3, logger) << "Updated SRC_ADDR registers - HI:LO = 0x" << std::hex << addr_hi << ":0x" << addr_lo << std::dec << std::endl;
+  REG_INFO(3, logger) << "Updated SRC_ADDR registers - HI:LO = 0x" << std::hex << addr_hi << ":0x" << addr_lo << std::dec << std::endl;
 }
 
 /**
@@ -1694,7 +1694,7 @@ void secure_dma_model::update_dst_addr_registers(uint64_t current_addr) {
   DST_ADDR_LO = addr_lo;
   DST_ADDR_HI = addr_hi;
 
-  CSML_INFO(3, logger) << "Updated DST_ADDR registers - HI:LO = 0x" << std::hex << addr_hi << ":0x" << addr_lo << std::dec << std::endl;
+  REG_INFO(3, logger) << "Updated DST_ADDR registers - HI:LO = 0x" << std::hex << addr_hi << ":0x" << addr_lo << std::dec << std::endl;
 }
 
 /**
@@ -1776,19 +1776,19 @@ secure_dma_model::BusInterface secure_dma_model::decode_asid(uint32_t asid_value
 
   switch (asid_value) {
   case 0x7:
-    CSML_INFO(3, logger) << "ASID 0x7 decoded as OT_INTERNAL" << std::endl;
+    REG_INFO(3, logger) << "ASID 0x7 decoded as OT_INTERNAL" << std::endl;
     return BusInterface::OT_INTERNAL;
 
   case 0x9:
-    CSML_INFO(3, logger) << "ASID 0x9 decoded as SYSTEM_BUS" << std::endl;
+    REG_INFO(3, logger) << "ASID 0x9 decoded as SYSTEM_BUS" << std::endl;
     return BusInterface::SYSTEM_BUS;
 
   case 0xA:
-    CSML_INFO(3, logger) << "ASID 0xA decoded as CTN_BUS" << std::endl;
+    REG_INFO(3, logger) << "ASID 0xA decoded as CTN_BUS" << std::endl;
     return BusInterface::CTN_BUS;
 
   default:
-    CSML_INFO(1, logger) << "Invalid ASID 0x" << std::hex << asid_value << std::dec << " (not 0x7, 0x9, or 0xA)" << std::endl;
+    REG_INFO(1, logger) << "Invalid ASID 0x" << std::hex << asid_value << std::dec << " (not 0x7, 0x9, or 0xA)" << std::endl;
     return BusInterface::INVALID;
   }
 }
@@ -1809,7 +1809,7 @@ bool secure_dma_model::validate_asid(uint32_t asid_value, bool is_source) {
 
   // Check for valid ASID values
   if (asid_value == 0x7 || asid_value == 0x9 || asid_value == 0xA) {
-    CSML_INFO(3, logger) << "" << (is_source ? "Source" : "Destination") << " ASID 0x" << std::hex << asid_value << std::dec << " is valid" << std::endl;
+    REG_INFO(3, logger) << "" << (is_source ? "Source" : "Destination") << " ASID 0x" << std::hex << asid_value << std::dec << " is valid" << std::endl;
     return true;
   }
 
@@ -1817,7 +1817,7 @@ bool secure_dma_model::validate_asid(uint32_t asid_value, bool is_source) {
   m_error_code |= (1U << 7);
   ERROR_CODE = m_error_code;
 
-  CSML_INFO(1, logger) << "Invalid " << (is_source ? "source" : "destination") << " ASID 0x" << std::hex << asid_value << std::dec << " detected (ERROR_CODE.asid_error set)" << std::endl;
+  REG_INFO(1, logger) << "Invalid " << (is_source ? "source" : "destination") << " ASID 0x" << std::hex << asid_value << std::dec << " detected (ERROR_CODE.asid_error set)" << std::endl;
 
   return false;
 }
@@ -1844,11 +1844,11 @@ secure_dma_model::BusInterface secure_dma_model::select_bus_for_transaction(bool
   if (is_source) {
     // Source ASID: bits [3:0]
     asid_value = addr_space_id & 0xF;
-  CSML_INFO(2, logger) << "Selecting bus for SOURCE transaction (src_asid=0x" << std::hex << asid_value << std::dec << ")" << std::endl;
+  REG_INFO(2, logger) << "Selecting bus for SOURCE transaction (src_asid=0x" << std::hex << asid_value << std::dec << ")" << std::endl;
   } else {
     // Destination ASID: bits [7:4]
     asid_value = (addr_space_id >> 4) & 0xF;
-  CSML_INFO(2, logger) << "Selecting bus for DESTINATION transaction (dst_asid=0x" << std::hex << asid_value << std::dec << ")" << std::endl;
+  REG_INFO(2, logger) << "Selecting bus for DESTINATION transaction (dst_asid=0x" << std::hex << asid_value << std::dec << ")" << std::endl;
   }
 
   // Validate ASID
@@ -1860,7 +1860,7 @@ secure_dma_model::BusInterface secure_dma_model::select_bus_for_transaction(bool
   BusInterface bus = decode_asid(asid_value);
 
   if (bus != BusInterface::INVALID) {
-  CSML_INFO(2, logger) << "Selected bus: " << get_bus_name(bus) << std::endl;
+  REG_INFO(2, logger) << "Selected bus: " << get_bus_name(bus) << std::endl;
   }
 
   return bus;
@@ -1898,21 +1898,21 @@ bool secure_dma_model::validate_address_width_for_bus(uint64_t addr,
       }
       ERROR_CODE = m_error_code;
 
-      CSML_INFO(1, logger) << "Address width violation for OT_INTERNAL bus - " << (is_source ? "source" : "destination") << " address upper 32 bits non-zero (0x" << std::hex << upper_32 << std::dec << ") (ERROR_CODE." << (is_source ? "src_addr_error" : "dst_addr_error") << " set)" << std::endl;
+      REG_INFO(1, logger) << "Address width violation for OT_INTERNAL bus - " << (is_source ? "source" : "destination") << " address upper 32 bits non-zero (0x" << std::hex << upper_32 << std::dec << ") (ERROR_CODE." << (is_source ? "src_addr_error" : "dst_addr_error") << " set)" << std::endl;
       return false;
     }
-    CSML_INFO(3, logger) << "Address width validation passed for OT_INTERNAL (32-bit)" << std::endl;
+    REG_INFO(3, logger) << "Address width validation passed for OT_INTERNAL (32-bit)" << std::endl;
     return true;
 
   case BusInterface::CTN_BUS:
     // CTN bus: Configurable 32-bit or 64-bit
     // Allowing full 64-bit addressing to support high-memory CTN targets
-    CSML_INFO(3, logger) << "Address width validation passed for CTN_BUS (64-bit mode)" << std::endl;
+    REG_INFO(3, logger) << "Address width validation passed for CTN_BUS (64-bit mode)" << std::endl;
     return true;
 
   case BusInterface::SYSTEM_BUS:
     // System bus: Full 64-bit address space supported
-    CSML_INFO(3, logger) << "Address width validation passed for SYSTEM_BUS (64-bit) - " << "addr=0x" << std::hex << addr << std::dec << std::endl;
+    REG_INFO(3, logger) << "Address width validation passed for SYSTEM_BUS (64-bit) - " << "addr=0x" << std::hex << addr << std::dec << std::endl;
     return true;
 
   case BusInterface::INVALID:
@@ -1920,7 +1920,7 @@ bool secure_dma_model::validate_address_width_for_bus(uint64_t addr,
     return false;
 
   default:
-    CSML_INFO(1, logger) << "Unknown bus interface in address width validation" << std::endl;
+    REG_INFO(1, logger) << "Unknown bus interface in address width validation" << std::endl;
     return false;
   }
 }
@@ -1996,7 +1996,7 @@ void secure_dma_model::create_tlm_transaction(tlm::tlm_generic_payload &trans,
   }
   axi_ext->source_id = sep::OTHERS_SOURCE_ID;
 
-  CSML_INFO(3, logger) << "TLM transaction created - " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "WRITE") << " addr=0x" << std::hex << addr << " length=" << std::dec << length << " byte_enable=0x" << std::hex << static_cast<uint32_t>(byte_enable_mask) << std::dec << std::endl;
+  REG_INFO(3, logger) << "TLM transaction created - " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "WRITE") << " addr=0x" << std::hex << addr << " length=" << std::dec << length << " byte_enable=0x" << std::hex << static_cast<uint32_t>(byte_enable_mask) << std::dec << std::endl;
 }
 
 /**
@@ -2021,7 +2021,7 @@ const char *secure_dma_model::get_bus_name(BusInterface bus_interface) {
 }
 
 /**
- * @brief Register callbacks with CSML memory
+ * @brief Register callbacks with regmodel memory
  *
  * provides multi-bus interface transaction routing and TLM
  * payload preparation logic. No additional register callbacks are required
@@ -2063,7 +2063,7 @@ bool secure_dma_model::validate_opcode(uint32_t pending_control_value) {
 
   // Valid opcodes: 0x0 (COPY), 0x1 (SHA256), 0x2 (SHA384), 0x3 (SHA512)
   if (opcode <= 0x3) {
-    CSML_INFO(3, logger) << "Opcode validation passed - opcode: 0x" << std::hex << opcode << std::dec << std::endl;
+    REG_INFO(3, logger) << "Opcode validation passed - opcode: 0x" << std::hex << opcode << std::dec << std::endl;
     return true;
   }
 
@@ -2071,7 +2071,7 @@ bool secure_dma_model::validate_opcode(uint32_t pending_control_value) {
   m_error_code |= (1U << 2); // Set ERROR_CODE.opcode_error (bit 2)
   ERROR_CODE = m_error_code;
 
-  CSML_INFO(1, logger) << "Invalid opcode detected - opcode: 0x" << std::hex << opcode << std::dec << " (valid range: 0x0-0x3)" << " (ERROR_CODE.opcode_error set)" << std::endl;
+  REG_INFO(1, logger) << "Invalid opcode detected - opcode: 0x" << std::hex << opcode << std::dec << " (valid range: 0x0-0x3)" << " (ERROR_CODE.opcode_error set)" << std::endl;
   return false;
 }
 
@@ -2101,7 +2101,7 @@ bool secure_dma_model::validate_transfer_size() {
     m_error_code |= (1U << 3); // Set ERROR_CODE.size_error (bit 3)
     ERROR_CODE = m_error_code;
 
-    CSML_INFO(1, logger) << "Transfer size validation failed - " << "TOTAL_DATA_SIZE is zero" << " (ERROR_CODE.size_error set)" << std::endl;
+    REG_INFO(1, logger) << "Transfer size validation failed - " << "TOTAL_DATA_SIZE is zero" << " (ERROR_CODE.size_error set)" << std::endl;
     return false;
   }
 
@@ -2110,19 +2110,19 @@ bool secure_dma_model::validate_transfer_size() {
     m_error_code |= (1U << 3); // Set ERROR_CODE.size_error (bit 3)
     ERROR_CODE = m_error_code;
 
-    CSML_INFO(1, logger) << "Transfer size validation failed - " << "CHUNK_DATA_SIZE is zero" << " (ERROR_CODE.size_error set)" << std::endl;
+    REG_INFO(1, logger) << "Transfer size validation failed - " << "CHUNK_DATA_SIZE is zero" << " (ERROR_CODE.size_error set)" << std::endl;
     return false;
   }
 
   // Check 3: CHUNK_DATA_SIZE should not exceed TOTAL_DATA_SIZE
   // Note: This is a logical check - chunk size should be <= total size
   if (chunk_size > total_size) {
-    CSML_INFO(2, logger) << "Warning - CHUNK_DATA_SIZE (" << chunk_size << ") exceeds TOTAL_DATA_SIZE (" << total_size << ") - will transfer only total_size bytes" << std::endl;
+    REG_INFO(2, logger) << "Warning - CHUNK_DATA_SIZE (" << chunk_size << ") exceeds TOTAL_DATA_SIZE (" << total_size << ") - will transfer only total_size bytes" << std::endl;
     // This is not an error condition per spec, just a warning
     // The hardware will transfer min(chunk_size, total_size)
   }
 
-  CSML_INFO(3, logger) << "Transfer size validation passed - " << "total: " << total_size << " bytes, " << "chunk: " << chunk_size << " bytes" << std::endl;
+  REG_INFO(3, logger) << "Transfer size validation passed - " << "total: " << total_size << " bytes, " << "chunk: " << chunk_size << " bytes" << std::endl;
   return true;
 }
 
@@ -2159,7 +2159,7 @@ bool secure_dma_model::validate_transfer_configuration(
     uint32_t pending_control_value) {
   bool all_valid = true;
 
-  CSML_INFO(2, logger) << "Starting comprehensive pre-transfer validation" << std::endl;
+  REG_INFO(2, logger) << "Starting comprehensive pre-transfer validation" << std::endl;
 
   // Clear previous error code (new transfer validation)
   m_error_code = 0;
@@ -2168,19 +2168,19 @@ bool secure_dma_model::validate_transfer_configuration(
   // Validation 1: Opcode validity
   if (!validate_opcode(pending_control_value)) {
     all_valid = false;
-  CSML_INFO(1, logger) << "Opcode validation failed" << std::endl;
+  REG_INFO(1, logger) << "Opcode validation failed" << std::endl;
   }
 
   // Validation 2: Transfer width
   if (!validate_transfer_width(pending_control_value)) {
     all_valid = false;
-  CSML_INFO(1, logger) << "Transfer width validation failed" << std::endl;
+  REG_INFO(1, logger) << "Transfer width validation failed" << std::endl;
   }
 
   // Validation 3: Transfer size constraints
   if (!validate_transfer_size()) {
     all_valid = false;
-  CSML_INFO(1, logger) << "Transfer size validation failed" << std::endl;
+  REG_INFO(1, logger) << "Transfer size validation failed" << std::endl;
   }
 
   // Get transfer width for alignment checks
@@ -2188,14 +2188,14 @@ bool secure_dma_model::validate_transfer_configuration(
   if (width_bytes == 0) {
     // Transfer width validation already failed, skip alignment checks
     all_valid = false;
-  CSML_INFO(1, logger) << "Skipping alignment checks due to invalid transfer width" << std::endl;
+  REG_INFO(1, logger) << "Skipping alignment checks due to invalid transfer width" << std::endl;
   } else {
     // Validation 4: Source address alignment
     uint64_t src_addr = (static_cast<uint64_t>(SRC_ADDR_HI) << 32) |
                         static_cast<uint32_t>(SRC_ADDR_LO);
     if (!validate_address_alignment(src_addr, true, width_bytes)) {
       all_valid = false;
-    CSML_INFO(1, logger) << "Source address alignment validation failed" << std::endl;
+    REG_INFO(1, logger) << "Source address alignment validation failed" << std::endl;
     }
 
     // Validation 5: Destination address alignment
@@ -2203,7 +2203,7 @@ bool secure_dma_model::validate_transfer_configuration(
                         static_cast<uint32_t>(DST_ADDR_LO);
     if (!validate_address_alignment(dst_addr, false, width_bytes)) {
       all_valid = false;
-  CSML_INFO(1, logger) << "Destination address alignment validation failed" << std::endl;
+  REG_INFO(1, logger) << "Destination address alignment validation failed" << std::endl;
     }
   }
 
@@ -2214,12 +2214,12 @@ bool secure_dma_model::validate_transfer_configuration(
 
   if (!validate_asid(src_asid, true)) {
     all_valid = false;
-  CSML_INFO(1, logger) << "Source ASID validation failed" << std::endl;
+  REG_INFO(1, logger) << "Source ASID validation failed" << std::endl;
   }
 
   if (!validate_asid(dst_asid, false)) {
     all_valid = false;
-  CSML_INFO(1, logger) << "Destination ASID validation failed" << std::endl;
+  REG_INFO(1, logger) << "Destination ASID validation failed" << std::endl;
   }
 
   // Validation 8 & 9: Address width for bus interface
@@ -2231,7 +2231,7 @@ bool secure_dma_model::validate_transfer_configuration(
 
     if (!validate_address_width_for_bus(src_addr, src_bus, true)) {
       all_valid = false;
-  CSML_INFO(1, logger) << "Source address width validation failed" << std::endl;
+  REG_INFO(1, logger) << "Source address width validation failed" << std::endl;
     }
   }
 
@@ -2242,7 +2242,7 @@ bool secure_dma_model::validate_transfer_configuration(
 
     if (!validate_address_width_for_bus(dst_addr, dst_bus, false)) {
       all_valid = false;
-  CSML_INFO(1, logger) << "Destination address width validation failed" << std::endl;
+  REG_INFO(1, logger) << "Destination address width validation failed" << std::endl;
     }
   }
 
@@ -2254,7 +2254,7 @@ bool secure_dma_model::validate_transfer_configuration(
     all_valid = false;
     m_error_code |= (1U << 6); // ERROR_CODE.range_valid_error
     ERROR_CODE = m_error_code;
-    CSML_INFO(1, logger) << "RANGE_VALID is not set - transfer rejected " << "(ERROR_CODE.range_valid_error set)" << std::endl;
+    REG_INFO(1, logger) << "RANGE_VALID is not set - transfer rejected " << "(ERROR_CODE.range_valid_error set)" << std::endl;
   }
 
   // Validation 11: Security policy enforcement
@@ -2267,15 +2267,15 @@ bool secure_dma_model::validate_transfer_configuration(
 
     if (!validate_security_policy(src_addr, dst_addr, src_asid, dst_asid)) {
       all_valid = false;
-  CSML_INFO(1, logger) << "Security policy validation failed" << std::endl;
+  REG_INFO(1, logger) << "Security policy validation failed" << std::endl;
     }
   }
 
   // Summary logging
   if (all_valid) {
-  CSML_INFO(2, logger) << "All pre-transfer validations passed - " << "transfer can proceed" << std::endl;
+  REG_INFO(2, logger) << "All pre-transfer validations passed - " << "transfer can proceed" << std::endl;
   } else {
-    CSML_INFO(1, logger) << "Pre-transfer validation FAILED - " << "ERROR_CODE: 0x" << std::hex << m_error_code << std::dec << " - transfer cannot start" << std::endl;
+    REG_INFO(1, logger) << "Pre-transfer validation FAILED - " << "ERROR_CODE: 0x" << std::hex << m_error_code << std::dec << " - transfer cannot start" << std::endl;
 
     // Set STATUS.error bit when validation fails
     uint32_t status_reg = static_cast<uint32_t>(STATUS);
@@ -2318,11 +2318,11 @@ bool secure_dma_model::validate_range_configuration() {
     m_error_code |= (1U << 5); // Set ERROR_CODE.base_limit_error (bit 5)
     ERROR_CODE = m_error_code;
 
-    CSML_INFO(1, logger) << "Range configuration validation failed - " << "BASE (0x" << std::hex << range_base << ") > LIMIT (0x" << range_limit << ")" << std::dec << " (ERROR_CODE.base_limit_error set)" << std::endl;
+    REG_INFO(1, logger) << "Range configuration validation failed - " << "BASE (0x" << std::hex << range_base << ") > LIMIT (0x" << range_limit << ")" << std::dec << " (ERROR_CODE.base_limit_error set)" << std::endl;
     return false;
   }
 
-  CSML_INFO(3, logger) << "Range configuration validation passed - " << "BASE=0x" << std::hex << range_base << ", LIMIT=0x" << range_limit << std::dec << std::endl;
+  REG_INFO(3, logger) << "Range configuration validation passed - " << "BASE=0x" << std::hex << range_base << ", LIMIT=0x" << range_limit << std::dec << std::endl;
   return true;
 }
 
@@ -2346,7 +2346,7 @@ bool secure_dma_model::check_address_in_dma_range(uint32_t addr) {
   // Check if address is within [BASE, LIMIT] inclusive
   bool in_range = (addr >= range_base) && (addr <= range_limit);
 
-  CSML_INFO(3, logger) << "Address 0x" << std::hex << addr << (in_range ? " IS" : " IS NOT") << " within DMA range [0x" << range_base << ", 0x" << range_limit << "]" << std::dec << std::endl;
+  REG_INFO(3, logger) << "Address 0x" << std::hex << addr << (in_range ? " IS" : " IS NOT") << " within DMA range [0x" << range_base << ", 0x" << range_limit << "]" << std::dec << std::endl;
 
   return in_range;
 }
@@ -2432,7 +2432,7 @@ bool secure_dma_model::validate_security_policy(uint64_t src_addr, uint64_t dst_
     dst_region = "UNKNOWN";
   }
 
-  CSML_INFO(2, logger) << "Security policy check - " << src_region << " → " << dst_region << std::endl;
+  REG_INFO(2, logger) << "Security policy check - " << src_region << " → " << dst_region << std::endl;
 
   // Check if transfer crosses security boundary (OT ↔ SoC)
   bool crosses_boundary =
@@ -2457,7 +2457,7 @@ bool secure_dma_model::validate_security_policy(uint64_t src_addr, uint64_t dst_
     m_error_code |= (1U << 0); // Set ERROR_CODE.src_addr_error (bit 0)
     ERROR_CODE = m_error_code;
 
-    CSML_INFO(1, logger) << "Security policy violation - " << "OT_PRIVATE → SOC_MEMORY transfer PROHIBITED " << "(prevents data leakage to untrusted memory) " << "(ERROR_CODE.src_addr_error set)" << std::endl;
+    REG_INFO(1, logger) << "Security policy violation - " << "OT_PRIVATE → SOC_MEMORY transfer PROHIBITED " << "(prevents data leakage to untrusted memory) " << "(ERROR_CODE.src_addr_error set)" << std::endl;
     return false;
   }
 
@@ -2466,42 +2466,42 @@ bool secure_dma_model::validate_security_policy(uint64_t src_addr, uint64_t dst_
     m_error_code |= (1U << 1); // Set ERROR_CODE.dst_addr_error (bit 1)
     ERROR_CODE = m_error_code;
 
-    CSML_INFO(1, logger) << "Security policy violation - " << "SOC_MEMORY → OT_PRIVATE transfer PROHIBITED " << "(prevents unauthorized access to secure memory) " << "(ERROR_CODE.dst_addr_error set)" << std::endl;
+    REG_INFO(1, logger) << "Security policy violation - " << "SOC_MEMORY → OT_PRIVATE transfer PROHIBITED " << "(prevents unauthorized access to secure memory) " << "(ERROR_CODE.dst_addr_error set)" << std::endl;
     return false;
   }
 
   // Case 3: SoC → OT DMA (Allowed, but validate destination is in range)
   if (src_is_soc && dst_is_ot && dst_in_dma_range) {
-    CSML_INFO(2, logger) << "Security policy check passed - " << "SOC_MEMORY → OT_DMA_ENABLED transfer ALLOWED " << "(secure ingress through staging area)" << std::endl;
+    REG_INFO(2, logger) << "Security policy check passed - " << "SOC_MEMORY → OT_DMA_ENABLED transfer ALLOWED " << "(secure ingress through staging area)" << std::endl;
     return true;
   }
 
   // Case 4: OT DMA → SoC (Allowed, but validate source is in range)
   if (src_is_ot && src_in_dma_range && dst_is_soc) {
-    CSML_INFO(2, logger) << "Security policy check passed - " << "OT_DMA_ENABLED → SOC_MEMORY transfer ALLOWED " << "(secure egress through staging area)" << std::endl;
+    REG_INFO(2, logger) << "Security policy check passed - " << "OT_DMA_ENABLED → SOC_MEMORY transfer ALLOWED " << "(secure egress through staging area)" << std::endl;
     return true;
   }
 
   // Case 5: OT ↔ OT (Always allowed, internal transfers)
   if (src_is_ot && dst_is_ot) {
-    CSML_INFO(2, logger) << "Security policy check passed - " << "OT internal transfer ALLOWED " << "(" << src_region << " → " << dst_region << ")" << std::endl;
+    REG_INFO(2, logger) << "Security policy check passed - " << "OT internal transfer ALLOWED " << "(" << src_region << " → " << dst_region << ")" << std::endl;
     return true;
   }
 
   // Case 6: SoC ↔ SoC (Always allowed, external transfers)
   if (src_is_soc && dst_is_soc) {
-    CSML_INFO(2, logger) << "Security policy check passed - " << "SOC_MEMORY → SOC_MEMORY transfer ALLOWED " << "(external memory only, no security boundary)" << std::endl;
+    REG_INFO(2, logger) << "Security policy check passed - " << "SOC_MEMORY → SOC_MEMORY transfer ALLOWED " << "(external memory only, no security boundary)" << std::endl;
     return true;
   }
 
   // If we reach here, transfer is allowed (default allow for valid
   // configurations)
-  CSML_INFO(2, logger) << "Security policy check passed - " << src_region << " → " << dst_region << " transfer ALLOWED" << std::endl;
+  REG_INFO(2, logger) << "Security policy check passed - " << src_region << " → " << dst_region << " transfer ALLOWED" << std::endl;
   return true;
 }
 
 /**
- * @brief Register callbacks with CSML memory
+ * @brief Register callbacks with regmodel memory
  *
  * provides security isolation and access control enforcement.
  * No additional register callbacks are required beyond
@@ -2521,7 +2521,7 @@ bool secure_dma_model::validate_security_policy(uint64_t src_addr, uint64_t dst_
 // ============================================================================
 
 /**
- * @brief Register callbacks with CSML memory
+ * @brief Register callbacks with regmodel memory
  *
  * implements Transfer Control and Abort functionality through
  * enhanced behavior in existing CONTROL and STATUS register callbacks.
@@ -2597,15 +2597,15 @@ void secure_dma_model::transfer_engine_thread() {
     // Wait for transfer start event (triggered by CONTROL.go write)
     wait(m_transfer_start_event);
 
-    CSML_INFO(1, logger) << "Transfer engine activated - starting transfer execution" << std::endl;
+    REG_INFO(1, logger) << "Transfer engine activated - starting transfer execution" << std::endl;
 
     // Execute complete transfer (returns false if aborted, true if completed)
     bool completed = execute_transfer();
 
     if (completed) {
-    CSML_INFO(1, logger) << "Transfer completed successfully" << std::endl;
+    REG_INFO(1, logger) << "Transfer completed successfully" << std::endl;
     } else {
-    CSML_INFO(1, logger) << "Transfer aborted by software" << std::endl;
+    REG_INFO(1, logger) << "Transfer aborted by software" << std::endl;
     }
 
     // Transfer complete or aborted - thread returns to waiting state
@@ -2658,7 +2658,7 @@ bool secure_dma_model::execute_transfer() {
   uint32_t control_reg = static_cast<uint32_t>(CONTROL);
   bool hardware_handshake_enable = (control_reg & (1U << 4)) != 0;
 
-  CSML_INFO(2, logger) << "Transfer setup complete - " << "SRC=0x" << std::hex << m_current_src_addr << " DST=0x" << m_current_dst_addr << " TOTAL=" << std::dec << total_size << " CHUNK=" << chunk_size << " WIDTH=" << width_bytes << " bytes" << std::endl;
+  REG_INFO(2, logger) << "Transfer setup complete - " << "SRC=0x" << std::hex << m_current_src_addr << " DST=0x" << m_current_dst_addr << " TOTAL=" << std::dec << total_size << " CHUNK=" << chunk_size << " WIDTH=" << width_bytes << " bytes" << std::endl;
 
   // -------------------------------------------------------------------------
   // TRANSACTION LOOP: Execute sequential read-write pairs
@@ -2676,13 +2676,13 @@ bool secure_dma_model::execute_transfer() {
 
     // Check for reset assertion (active-low)
     if (rst_ni.read() == false) {
-      CSML_INFO(1, logger) << "Reset detected during transfer - terminating" << std::endl;
+      REG_INFO(1, logger) << "Reset detected during transfer - terminating" << std::endl;
       return false; // Transfer aborted by reset
     }
 
     // Check for abort request
     if (m_transfer_abort_event.triggered()) {
-      CSML_INFO(1, logger) << "Abort detected - terminating transfer loop" << std::endl;
+      REG_INFO(1, logger) << "Abort detected - terminating transfer loop" << std::endl;
       // Abort already handled in CONTROL callback (STATUS.aborted set, busy
       // cleared)
       return false; // Transfer aborted
@@ -2693,7 +2693,7 @@ bool secure_dma_model::execute_transfer() {
 
     if (!transaction_success) {
       // Bus error occurred - ERROR_CODE and STATUS.error already set
-      CSML_INFO(1, logger) << "Bus error - aborting transfer" << std::endl;
+      REG_INFO(1, logger) << "Bus error - aborting transfer" << std::endl;
 
       // Transition to IDLE state
       m_dma_busy = false;
@@ -2721,7 +2721,7 @@ bool secure_dma_model::execute_transfer() {
       clear_interrupt_state(false, true, false); // clear INTR_STATE.dma_chunk_done
       clear_chunk_done_on_next_chunk_start = false;
     
-    CSML_INFO(2, logger) << "Auto-cleared STATUS.chunk_done/INTR_STATE.dma_chunk_done at next chunk start" << std::endl;
+    REG_INFO(2, logger) << "Auto-cleared STATUS.chunk_done/INTR_STATE.dma_chunk_done at next chunk start" << std::endl;
     }
 
 
@@ -2746,7 +2746,7 @@ bool secure_dma_model::execute_transfer() {
     m_bytes_remaining -= width_bytes;
     m_current_chunk_bytes_remaining -= width_bytes;
 
-    CSML_INFO(3, logger) << "Transaction complete - bytes_remaining=" << m_bytes_remaining << ", chunk_bytes_remaining=" << m_current_chunk_bytes_remaining << std::endl;
+    REG_INFO(3, logger) << "Transaction complete - bytes_remaining=" << m_bytes_remaining << ", chunk_bytes_remaining=" << m_current_chunk_bytes_remaining << std::endl;
 
     // -----------------------------------------------------------------------
     // CHUNK BOUNDARY CHECK: Handle chunk completion
@@ -2754,7 +2754,7 @@ bool secure_dma_model::execute_transfer() {
 
     if (m_current_chunk_bytes_remaining == 0 && m_bytes_remaining > 0) {
       // Chunk completed, more data remains
-      CSML_INFO(2, logger) << "Chunk completed (" << chunk_size << " bytes transferred)" << std::endl;
+      REG_INFO(2, logger) << "Chunk completed (" << chunk_size << " bytes transferred)" << std::endl;
 
       // Apply wrap mode if enabled
       bool src_increment = false, src_wrap = false;
@@ -2764,7 +2764,7 @@ bool secure_dma_model::execute_transfer() {
 
       if (src_wrap && src_increment) {
         m_current_src_addr = m_chunk_start_src_addr;
-      CSML_INFO(3, logger) << "Source address wrapped to chunk start: 0x" << std::hex << m_current_src_addr << std::dec << std::endl;
+      REG_INFO(3, logger) << "Source address wrapped to chunk start: 0x" << std::hex << m_current_src_addr << std::dec << std::endl;
       } else {
         // Update chunk start for next chunk (non-wrap mode)
         m_chunk_start_src_addr = m_current_src_addr;
@@ -2772,7 +2772,7 @@ bool secure_dma_model::execute_transfer() {
 
       if (dst_wrap && dst_increment) {
         m_current_dst_addr = m_chunk_start_dst_addr;
-      CSML_INFO(3, logger) << "Destination address wrapped to chunk start: 0x" << std::hex << m_current_dst_addr << std::dec << std::endl;
+      REG_INFO(3, logger) << "Destination address wrapped to chunk start: 0x" << std::hex << m_current_dst_addr << std::dec << std::endl;
       } else {
         // Update chunk start for next chunk (non-wrap mode)
         m_chunk_start_dst_addr = m_current_dst_addr;
@@ -2785,7 +2785,7 @@ bool secure_dma_model::execute_transfer() {
         STATUS = status_reg;
 
         set_interrupt_state(false, true, false); // Set chunk_done interrupt
-      CSML_INFO(2, logger) << "Chunk done interrupt generated (STATUS.chunk_done=1)" << std::endl;
+      REG_INFO(2, logger) << "Chunk done interrupt generated (STATUS.chunk_done=1)" << std::endl;
       }
 
       clear_chunk_done_on_next_chunk_start = true;
@@ -2818,15 +2818,15 @@ bool secure_dma_model::execute_transfer() {
           }
         }
         if (already_high) {
-        CSML_INFO(2, logger) << "Chunk complete - lsio_trigger already HIGH, proceeding immediately" << std::endl;
+        REG_INFO(2, logger) << "Chunk complete - lsio_trigger already HIGH, proceeding immediately" << std::endl;
         } else {
-          CSML_INFO(2, logger) << "Chunk complete in handshake mode - waiting for next trigger" << std::endl;
+          REG_INFO(2, logger) << "Chunk complete in handshake mode - waiting for next trigger" << std::endl;
           // Wait for next handshake trigger event (from handshake_monitor_thread)
           wait(m_handshake_trigger_event);
-      CSML_INFO(2, logger) << "Next trigger received - continuing transfer" << std::endl;
+      REG_INFO(2, logger) << "Next trigger received - continuing transfer" << std::endl;
         }
       } else {
-  CSML_INFO(2, logger) << "Next chunk started - chunk_bytes=" << m_current_chunk_bytes_remaining << std::endl;
+  REG_INFO(2, logger) << "Next chunk started - chunk_bytes=" << m_current_chunk_bytes_remaining << std::endl;
       }
     }
   }
@@ -2835,7 +2835,7 @@ bool secure_dma_model::execute_transfer() {
   // TRANSFER COMPLETION: All bytes transferred successfully
   // -------------------------------------------------------------------------
 
-  CSML_INFO(1, logger) << "All data transferred successfully - " << total_size << " bytes completed" << std::endl;
+  REG_INFO(1, logger) << "All data transferred successfully - " << total_size << " bytes completed" << std::endl;
 
   // The final return to idle is also an address-register update point in
   // hardware, including when the transfer ends through SHA finalisation.
@@ -2848,7 +2848,7 @@ bool secure_dma_model::execute_transfer() {
   if (m_hashing_active) {
     // Finalize hash computation and store digest
     if (!hash_finalize()) {
-      CSML_INFO(1, logger) << "Hash finalization failed" << std::endl;
+      REG_INFO(1, logger) << "Hash finalization failed" << std::endl;
       // Hash finalization failed - set error but transfer data is still valid
       m_error_code |= (1U << 2); // Set opcode_error (hash operation failed)
       ERROR_CODE = m_error_code;
@@ -2861,7 +2861,7 @@ bool secure_dma_model::execute_transfer() {
       // Continue to set done status (data transfer succeeded even if hash
       // failed)
     } else {
-  CSML_INFO(2, logger) << "Hash computation finalized - digest valid" << std::endl;
+  REG_INFO(2, logger) << "Hash computation finalized - digest valid" << std::endl;
     }
   }
 
@@ -2872,7 +2872,7 @@ bool secure_dma_model::execute_transfer() {
 
   // Generate done interrupt via
   set_interrupt_state(true, false, false);
-  CSML_INFO(2, logger) << "Transfer done interrupt generated (STATUS.done=1)" << std::endl;
+  REG_INFO(2, logger) << "Transfer done interrupt generated (STATUS.done=1)" << std::endl;
 
   // Transition to IDLE state (unlock CFG_REGWEN)
   m_dma_busy = false;
@@ -2888,10 +2888,10 @@ bool secure_dma_model::execute_transfer() {
     control_reg = static_cast<uint32_t>(CONTROL);
     control_reg &= ~(1U << 31);
     CONTROL = control_reg;
-  CSML_INFO(2, logger) << "CONTROL.go auto-cleared (non-handshake mode)" << std::endl;
+  REG_INFO(2, logger) << "CONTROL.go auto-cleared (non-handshake mode)" << std::endl;
   }
 
-  CSML_INFO(1, logger) << "Transfer engine returned to IDLE - CFG_REGWEN unlocked (0x6)" << std::endl;
+  REG_INFO(1, logger) << "Transfer engine returned to IDLE - CFG_REGWEN unlocked (0x6)" << std::endl;
 
   return true; // Transfer completed successfully
 }
@@ -2948,7 +2948,7 @@ bool secure_dma_model::execute_single_transaction() {
 
   case BusInterface::INVALID:
   default:
-    CSML_INFO(1, logger) << "Invalid source bus interface" << std::endl;
+    REG_INFO(1, logger) << "Invalid source bus interface" << std::endl;
     m_error_code |= (1U << 7); // Set asid_error
     ERROR_CODE = m_error_code;
     set_interrupt_state(false, false, true); // Trigger error interrupt
@@ -2957,7 +2957,7 @@ bool secure_dma_model::execute_single_transaction() {
 
   // Check source read response
   if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-    CSML_INFO(1, logger) << "Source read bus error at address 0x" << std::hex << m_current_src_addr << std::dec << std::endl;
+    REG_INFO(1, logger) << "Source read bus error at address 0x" << std::hex << m_current_src_addr << std::dec << std::endl;
     m_error_code |= (1U << 4); // Set bus_error (bit 4)
     ERROR_CODE = m_error_code;
 
@@ -2971,11 +2971,11 @@ bool secure_dma_model::execute_single_transaction() {
 
   wait(delay); // Apply annotated timing
 
-  CSML_INFO(3, logger) << "Source read successful - SRC=0x" << std::hex << m_current_src_addr << " DATA=0x";
+  REG_INFO(3, logger) << "Source read successful - SRC=0x" << std::hex << m_current_src_addr << " DATA=0x";
   for (unsigned int i = 0; i < width_bytes; i++) {
-  CSML_INFO(3, logger) << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(m_transfer_data_buffer[i]);
+  REG_INFO(3, logger) << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(m_transfer_data_buffer[i]);
   }
-  CSML_INFO(3, logger) << std::dec << std::endl;
+  REG_INFO(3, logger) << std::dec << std::endl;
 
   // -------------------------------------------------------------------------
   // HASH UPDATE (if hashing active)
@@ -2984,7 +2984,7 @@ bool secure_dma_model::execute_single_transaction() {
   if (m_hashing_active) {
     // Feed transferred data to hash engine
     if (!hash_update_data(m_transfer_data_buffer, width_bytes)) {
-      CSML_INFO(1, logger) << "Hash update failed during transfer" << std::endl;
+      REG_INFO(1, logger) << "Hash update failed during transfer" << std::endl;
       m_error_code |= (1U << 2); // Set opcode_error (hash operation failed)
       ERROR_CODE = m_error_code;
 
@@ -2995,7 +2995,7 @@ bool secure_dma_model::execute_single_transaction() {
       set_interrupt_state(false, false, true); // Trigger error interrupt
       return false;
     }
-  CSML_INFO(3, logger) << "Hash updated with " << width_bytes << " bytes" << std::endl;
+  REG_INFO(3, logger) << "Hash updated with " << width_bytes << " bytes" << std::endl;
   }
 
   // -------------------------------------------------------------------------
@@ -3031,7 +3031,7 @@ bool secure_dma_model::execute_single_transaction() {
 
   case BusInterface::INVALID:
   default:
-    CSML_INFO(1, logger) << "Invalid destination bus interface" << std::endl;
+    REG_INFO(1, logger) << "Invalid destination bus interface" << std::endl;
     m_error_code |= (1U << 7); // Set asid_error
     ERROR_CODE = m_error_code;
     set_interrupt_state(false, false, true); // Trigger error interrupt
@@ -3040,7 +3040,7 @@ bool secure_dma_model::execute_single_transaction() {
 
   // Check destination write response
   if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-    CSML_INFO(1, logger) << "Destination write bus error at address 0x" << std::hex << m_current_dst_addr << std::dec << std::endl;
+    REG_INFO(1, logger) << "Destination write bus error at address 0x" << std::hex << m_current_dst_addr << std::dec << std::endl;
     m_error_code |= (1U << 4); // Set bus_error (bit 4)
     ERROR_CODE = m_error_code;
 
@@ -3054,7 +3054,7 @@ bool secure_dma_model::execute_single_transaction() {
 
   wait(delay); // Apply annotated timing
 
-  CSML_INFO(3, logger) << "Destination write successful - DST=0x" << std::hex << m_current_dst_addr << std::dec << std::endl;
+  REG_INFO(3, logger) << "Destination write successful - DST=0x" << std::hex << m_current_dst_addr << std::dec << std::endl;
 
   return true; // Transaction pair completed successfully
 }
@@ -3104,7 +3104,7 @@ bool secure_dma_model::hash_init(uint32_t opcode) {
   // Create new hash context
   EVP_MD_CTX *ctx = EVP_MD_CTX_new();
   if (ctx == nullptr) {
-    CSML_INFO(1, logger) << "Failed to create EVP_MD_CTX for hash engine" << std::endl;
+    REG_INFO(1, logger) << "Failed to create EVP_MD_CTX for hash engine" << std::endl;
     return false;
   }
 
@@ -3114,30 +3114,30 @@ bool secure_dma_model::hash_init(uint32_t opcode) {
   case 0x1: // SHA-256
     md = EVP_sha256();
     m_hash_algorithm = 0x1;
-    CSML_INFO(2, logger) << "Initializing SHA-256 hash engine" << std::endl;
+    REG_INFO(2, logger) << "Initializing SHA-256 hash engine" << std::endl;
     break;
 
   case 0x2: // SHA-384
     md = EVP_sha384();
     m_hash_algorithm = 0x2;
-    CSML_INFO(2, logger) << "Initializing SHA-384 hash engine" << std::endl;
+    REG_INFO(2, logger) << "Initializing SHA-384 hash engine" << std::endl;
     break;
 
   case 0x3: // SHA-512
     md = EVP_sha512();
     m_hash_algorithm = 0x3;
-    CSML_INFO(2, logger) << "Initializing SHA-512 hash engine" << std::endl;
+    REG_INFO(2, logger) << "Initializing SHA-512 hash engine" << std::endl;
     break;
 
   default:
-    CSML_INFO(1, logger) << "Invalid hash opcode 0x" << std::hex << opcode << std::dec << std::endl;
+    REG_INFO(1, logger) << "Invalid hash opcode 0x" << std::hex << opcode << std::dec << std::endl;
     EVP_MD_CTX_free(ctx);
     return false;
   }
 
   // Initialize hash context with selected algorithm
   if (EVP_DigestInit_ex(ctx, md, nullptr) != 1) {
-    CSML_INFO(1, logger) << "Failed to initialize hash algorithm" << std::endl;
+    REG_INFO(1, logger) << "Failed to initialize hash algorithm" << std::endl;
     EVP_MD_CTX_free(ctx);
     return false;
   }
@@ -3154,7 +3154,7 @@ bool secure_dma_model::hash_init(uint32_t opcode) {
   // Clear digest buffer
   std::memset(m_hash_digest, 0, sizeof(m_hash_digest));
 
-  CSML_INFO(2, logger) << "Hash engine initialized successfully" << std::endl;
+  REG_INFO(2, logger) << "Hash engine initialized successfully" << std::endl;
 
   return true;
 }
@@ -3179,7 +3179,7 @@ bool secure_dma_model::hash_init(uint32_t opcode) {
  */
 bool secure_dma_model::hash_update_data(const unsigned char *data, uint32_t length) {
   if (!m_hashing_active || m_hash_ctx == nullptr) {
-    CSML_INFO(1, logger) << "hash_update_data called but hashing not active" << std::endl;
+    REG_INFO(1, logger) << "hash_update_data called but hashing not active" << std::endl;
     return false;
   }
 
@@ -3187,15 +3187,15 @@ bool secure_dma_model::hash_update_data(const unsigned char *data, uint32_t leng
 
   // Update hash context with data
   if (EVP_DigestUpdate(ctx, data, length) != 1) {
-    CSML_INFO(1, logger) << "Failed to update hash with data" << std::endl;
+    REG_INFO(1, logger) << "Failed to update hash with data" << std::endl;
     return false;
   }
 
-  CSML_INFO(3, logger) << "Hash updated with " << length << " bytes: 0x";
+  REG_INFO(3, logger) << "Hash updated with " << length << " bytes: 0x";
   for (unsigned int i = 0; i < length; i++) {
-  CSML_INFO(3, logger) << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+  REG_INFO(3, logger) << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
   }
-  CSML_INFO(3, logger) << std::dec << std::endl;
+  REG_INFO(3, logger) << std::dec << std::endl;
 
   return true;
 }
@@ -3220,7 +3220,7 @@ bool secure_dma_model::hash_update_data(const unsigned char *data, uint32_t leng
  */
 bool secure_dma_model::hash_finalize() {
   if (!m_hashing_active || m_hash_ctx == nullptr) {
-    CSML_INFO(1, logger) << "hash_finalize called but hashing not active" << std::endl;
+    REG_INFO(1, logger) << "hash_finalize called but hashing not active" << std::endl;
     return false;
   }
 
@@ -3229,14 +3229,14 @@ bool secure_dma_model::hash_finalize() {
   // Finalize hash computation and retrieve digest
   unsigned int digest_length = 0;
   if (EVP_DigestFinal_ex(ctx, m_hash_digest, &digest_length) != 1) {
-    CSML_INFO(1, logger) << "Failed to finalize hash computation" << std::endl;
+    REG_INFO(1, logger) << "Failed to finalize hash computation" << std::endl;
     EVP_MD_CTX_free(ctx);
     m_hash_ctx = nullptr;
     m_hashing_active = false;
     return false;
   }
 
-  CSML_INFO(2, logger) << "Hash computation finalized - digest length=" << digest_length << " bytes" << std::endl;
+  REG_INFO(2, logger) << "Hash computation finalized - digest length=" << digest_length << " bytes" << std::endl;
 
   // Free hash context
   EVP_MD_CTX_free(ctx);
@@ -3260,7 +3260,7 @@ bool secure_dma_model::hash_finalize() {
     num_digest_regs = 16;
     break;
   default:
-    CSML_INFO(1, logger) << "Invalid hash algorithm value" << std::endl;
+    REG_INFO(1, logger) << "Invalid hash algorithm value" << std::endl;
     return false;
   }
 
@@ -3286,7 +3286,7 @@ bool secure_dma_model::hash_finalize() {
     // Store into SHA2_DIGEST register
     SHA2_DIGEST[i] = digest_word;
 
-  CSML_INFO(3, logger) << "SHA2_DIGEST[" << i << "] = 0x" << std::hex << digest_word << std::dec << (digest_swap ? " (byte-swapped)" : " (native)") << std::endl;
+  REG_INFO(3, logger) << "SHA2_DIGEST[" << i << "] = 0x" << std::hex << digest_word << std::dec << (digest_swap ? " (byte-swapped)" : " (native)") << std::endl;
   }
 
   // Set STATUS.sha2_digest_valid (bit 4)
@@ -3294,7 +3294,7 @@ bool secure_dma_model::hash_finalize() {
   status_reg |= (1U << 4);
   STATUS = status_reg;
 
-  CSML_INFO(2, logger) << "Digest stored in SHA2_DIGEST registers" << " - STATUS.sha2_digest_valid=1" << std::endl;
+  REG_INFO(2, logger) << "Digest stored in SHA2_DIGEST registers" << " - STATUS.sha2_digest_valid=1" << std::endl;
 
   return true;
 }
@@ -3399,7 +3399,7 @@ void secure_dma_model::halt_transfer_on_bus_error() {
   control_reg &= ~(1U << 31); // CONTROL.go
   CONTROL = control_reg;
 
-  CSML_INFO(1, logger) << "Transfer halted on bus error (ERROR_CODE.bus_error set)" << std::endl;
+  REG_INFO(1, logger) << "Transfer halted on bus error (ERROR_CODE.bus_error set)" << std::endl;
 }
 
 bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
@@ -3409,11 +3409,11 @@ bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
       static_cast<uint32_t>(CLEAR_INTR_SRC) & 0x7FF; // 11 bits
   if (!(clear_intr_src & (1 << trigger_index))) {
     // Automatic clearing not enabled for this trigger - return success (no-op)
-    CSML_INFO(3, logger) << "Automatic clearing not enabled for trigger " << trigger_index << " (CLEAR_INTR_SRC[" << trigger_index << "]=0)" << std::endl;
+    REG_INFO(3, logger) << "Automatic clearing not enabled for trigger " << trigger_index << " (CLEAR_INTR_SRC[" << trigger_index << "]=0)" << std::endl;
     return true;
   }
 
-  CSML_INFO(2, logger) << "Performing automatic interrupt clearing write for trigger " << trigger_index << std::endl;
+  REG_INFO(2, logger) << "Performing automatic interrupt clearing write for trigger " << trigger_index << std::endl;
 
   // Read bus selection for this trigger (CLEAR_INTR_BUS[trigger_index])
   uint32_t clear_intr_bus =
@@ -3428,7 +3428,7 @@ bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
   uint32_t clearing_data =
       static_cast<uint32_t>(INTR_SRC_WR_VAL[trigger_index]);
 
-  CSML_INFO(2, logger) << "Clearing write - addr=0x" << std::hex << clearing_addr << ", data=0x" << clearing_data << std::dec << ", bus=" << (use_ot_bus ? "OT-internal" : "CTN/System") << std::endl;
+  REG_INFO(2, logger) << "Clearing write - addr=0x" << std::hex << clearing_addr << ", data=0x" << clearing_data << std::dec << ", bus=" << (use_ot_bus ? "OT-internal" : "CTN/System") << std::endl;
 
   // Create TLM generic payload for clearing write transaction
   tlm::tlm_generic_payload trans;
@@ -3462,23 +3462,23 @@ bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
   // Select bus interface based on CLEAR_INTR_BUS[trigger_index]
   if (use_ot_bus) {
     // Use OT-internal bus (32-bit)
-    CSML_INFO(3, logger) << "Routing clearing write via OT-internal bus" << std::endl;
+    REG_INFO(3, logger) << "Routing clearing write via OT-internal bus" << std::endl;
     ot_initiator_socket->b_transport(trans, delay);
   } else {
     // Use CTN or System bus based on ADDR_SPACE_ID configuration
     // For simplicity, assume CTN bus (32-bit) for clearing writes
     // (Peripheral interrupt registers typically in CTN address space)
-    CSML_INFO(3, logger) << "Routing clearing write via CTN bus" << std::endl;
+    REG_INFO(3, logger) << "Routing clearing write via CTN bus" << std::endl;
     ctn_initiator_socket->b_transport(trans, delay);
   }
 
   // Check transaction response status
   if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-    CSML_INFO(1, logger) << "Interrupt clearing write failed - bus error for trigger " << trigger_index << " (address 0x" << std::hex << clearing_addr << std::dec << ")" << std::endl;
+    REG_INFO(1, logger) << "Interrupt clearing write failed - bus error for trigger " << trigger_index << " (address 0x" << std::hex << clearing_addr << std::dec << ")" << std::endl;
     return false;
   }
 
-  CSML_INFO(2, logger) << "Interrupt clearing write successful for trigger " << trigger_index << std::endl;
+  REG_INFO(2, logger) << "Interrupt clearing write successful for trigger " << trigger_index << std::endl;
 
   // Add delay to quantum keeper for timing annotation
   m_qk.inc(delay);

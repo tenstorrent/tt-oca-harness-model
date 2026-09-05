@@ -5,7 +5,7 @@
 ===== SystemC/TLM-2.0 Implementation
 
 `spi_flash` is a loosely-timed BFM. Commands complete in zero time.
-There is no TLM bus target and no CSML register file: the CPU never
+There is no TLM bus target and no register file: the CPU never
 maps this module. All traffic arrives on `spi_if` from
 `spi_controller_ip`.
 
@@ -61,7 +61,7 @@ argument (default 32 MiB).
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level on the wrapper
+|`verbosity` |2 (Release: 1) |regmodel log level on the wrapper
 |===
 
 ====== Modeling gaps versus a real NOR part

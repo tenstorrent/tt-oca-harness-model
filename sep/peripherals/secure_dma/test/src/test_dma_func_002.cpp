@@ -29,7 +29,7 @@
  * - Edge cases and level-sensitive behavior
  */
 void testbench::run_func002_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-002: Interrupt Generation and Management Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -67,7 +67,7 @@ void testbench::run_func002_tests() {
   test_dma_error_interrupt_clear();
   test_dma_chunk_done_interrupt_clear();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-002 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -90,7 +90,7 @@ void testbench::run_func002_tests() {
  */
 void testbench::test_func002_reset_interrupt_state() {
   std::string test_name = "FUNC-002 TC001: Reset Interrupt State";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -144,7 +144,7 @@ void testbench::test_func002_reset_interrupt_state() {
  */
 void testbench::test_func002_intr_state_read_only() {
   std::string test_name = "FUNC-002 TC002: INTR_STATE Read-Only";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -193,7 +193,7 @@ void testbench::test_func002_intr_state_read_only() {
  */
 void testbench::test_intr_enable_masking() {
   std::string test_name = "INTR_ENABLE Masking";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -277,7 +277,7 @@ void testbench::test_intr_enable_masking() {
  */
 void testbench::test_func002_intr_test_forcing() {
   std::string test_name = "FUNC-002 TC004: INTR_TEST Forcing";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -367,7 +367,7 @@ void testbench::test_func002_intr_test_forcing() {
  */
 void testbench::test_func002_status_rwc_clearing() {
   std::string test_name = "FUNC-002 TC005: STATUS RW1C Clearing";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -468,7 +468,7 @@ void testbench::test_func002_status_rwc_clearing() {
  */
 void testbench::test_func002_interrupt_independence() {
   std::string test_name = "FUNC-002 TC006: Interrupt Independence";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -564,7 +564,7 @@ void testbench::test_func002_interrupt_independence() {
  */
 void testbench::test_func002_dma_done_interrupt() {
   std::string test_name = "FUNC-002 TC007: DMA Done Interrupt";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -628,7 +628,7 @@ void testbench::test_func002_dma_done_interrupt() {
  */
 void testbench::test_func002_dma_chunk_done_interrupt() {
   std::string test_name = "FUNC-002 TC008: DMA Chunk Done Interrupt";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -689,7 +689,7 @@ void testbench::test_func002_dma_chunk_done_interrupt() {
  */
 void testbench::test_func002_multiple_chunk_interrupts() {
   std::string test_name = "FUNC-002 TC009: Multiple Chunk Interrupts";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -766,7 +766,7 @@ void testbench::test_func002_multiple_chunk_interrupts() {
  */
 void testbench::test_func002_done_and_chunk_simultaneous() {
   std::string test_name = "FUNC-002 TC010: Done and Chunk Simultaneous";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -834,7 +834,7 @@ void testbench::test_func002_done_and_chunk_simultaneous() {
  */
 void testbench::test_func002_error_interrupt_alignment() {
   std::string test_name = "FUNC-002 TC011: Error Interrupt - Alignment";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -898,7 +898,7 @@ void testbench::test_func002_error_interrupt_alignment() {
  */
 void testbench::test_func002_error_interrupt_invalid_opcode() {
   std::string test_name = "FUNC-002 TC012: Error Interrupt - Invalid Opcode";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -954,7 +954,7 @@ void testbench::test_func002_error_interrupt_invalid_opcode() {
  */
 void testbench::test_func002_error_interrupt_bus_error() {
   std::string test_name = "FUNC-002 TC013: Error Interrupt - Bus Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1009,7 +1009,7 @@ void testbench::test_func002_error_interrupt_bus_error() {
  */
 void testbench::test_func002_interrupt_during_transfer() {
   std::string test_name = "FUNC-002 TC014: Interrupt During Transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1093,7 +1093,7 @@ void testbench::test_func002_interrupt_during_transfer() {
  */
 void testbench::test_func002_multiple_enable_disable() {
   std::string test_name = "FUNC-002 TC015: Multiple Enable/Disable";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1168,7 +1168,7 @@ void testbench::test_func002_multiple_enable_disable() {
  */
 void testbench::test_func002_level_sensitive_behavior() {
   std::string test_name = "FUNC-002 TC016: Level-Sensitive Behavior";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1248,7 +1248,7 @@ void testbench::test_func002_level_sensitive_behavior() {
 
 void testbench::test_dma_done_interrupt_clear_rw1c() {
   std::string test_name = "DMA Done Interrupt Clear RW1C";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1330,7 +1330,7 @@ void testbench::test_dma_done_interrupt_clear_rw1c() {
 
 void testbench::test_dma_done_auto_clear_on_new_transfer() {
   std::string test_name = "DMA Done Auto-Clear on New Transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1414,7 +1414,7 @@ void testbench::test_dma_done_auto_clear_on_new_transfer() {
 
 void testbench::test_dma_chunk_done_auto_clear() {
   std::string test_name = "DMA Chunk Done Auto-Clear on Next Chunk";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1523,7 +1523,7 @@ void testbench::test_dma_chunk_done_auto_clear() {
 
 void testbench::test_dma_error_interrupt_assert() {
   std::string test_name = "TC072: dma_error interrupt assert on error condition";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1609,7 +1609,7 @@ void testbench::test_dma_error_interrupt_assert() {
 
 void testbench::test_dma_error_interrupt_clear() {
   std::string test_name = "TC073: dma_error interrupt clear on STATUS.error RW1C";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1680,7 +1680,7 @@ void testbench::test_dma_error_interrupt_clear() {
 
 void testbench::test_dma_chunk_done_interrupt_clear() {
   std::string test_name = "TC070: dma_chunk_done interrupt clear via STATUS.chunk_done RW1C";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

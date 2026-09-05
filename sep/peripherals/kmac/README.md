@@ -18,7 +18,7 @@ This tree has the model, its test plan, and how to run the tests.
 
 ```
 include/kmac.h             kmac_ip
-include/kmac_base.h        CSML register declaration
+include/kmac_base.h        regmodel register declaration
 include/kmac_register.h    RO/WO/RW types
 include/kmac_interface.h   kmac_app_if
 src/                       LT implementation

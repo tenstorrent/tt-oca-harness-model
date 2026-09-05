@@ -137,9 +137,9 @@ find_vp_binary() {
     local candidates=()
     [ -n "${VP:-}" ] && candidates+=("${VP}")
     candidates+=(
-        "${REPO_ROOT}/vp/build/bin/sep-vp"
-        "${REPO_ROOT}/vp/build_sep/bin/sep-vp"
         "${VP_BUILD_DIR}/bin/sep-vp"
+        "${REPO_ROOT}/vp/build_sep/bin/sep-vp"
+        "${REPO_ROOT}/vp/build/bin/sep-vp"
     )
     for c in "${candidates[@]}"; do
         if [ -x "${c}" ]; then

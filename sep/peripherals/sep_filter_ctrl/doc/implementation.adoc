@@ -16,7 +16,7 @@ class sep_filter_ctrl_ip : public sep_filter_ctrl_base
 
 ----
 sep_filter_ctrl_ip     match, skip, auto-correct start/end   (sep_filter_ctrl.*)
-  └─ sep_filter_ctrl_base   csml_memory + FILTER_CONFIG / START / END
+  └─ sep_filter_ctrl_base   regmodel::Memory + FILTER_CONFIG / START / END
        └─ sep_filter_ctrl_register.h
 ----
 
@@ -60,7 +60,7 @@ CCI.
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

@@ -16,7 +16,7 @@ class aon_timer_ip : public aon_timer_base
 
 ----
 aon_timer_ip        engines, ports, quantum keeper   (aon_timer.*)
-  └─ aon_timer_base csml_memory + target_socket      (aon_timer_base.*)
+  └─ aon_timer_base regmodel::Memory + target_socket      (aon_timer_base.*)
 ----
 
 ====== Threads and sockets
@@ -64,12 +64,12 @@ are driven but are not PIC sources on this platform.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used.
+Knobs are `regmodel::Param` and are re-read when used.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 Tick rate comes from `clk_aon_freq`. CDC annotation is two AON

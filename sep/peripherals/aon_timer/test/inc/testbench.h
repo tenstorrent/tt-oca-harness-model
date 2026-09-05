@@ -125,7 +125,7 @@
 #include <systemc.h>
 #include "../../include/aon_timer.h"
 #include "aon_timer_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <string>
 #include <vector>
 
@@ -134,8 +134,8 @@
  * @brief Top-level AON Timer testbench module.
  *
  * Instantiates and connects the AON Timer DUT and test harness. Manages test
- * execution via an SC_THREAD process (run_tests). Uses CSML logging throughout;
- * no std::cout is used. Test results are reported via CSML_INFO and CSML_ERROR.
+ * execution via an SC_THREAD process (run_tests). Uses regmodel logging throughout;
+ * no std::cout is used. Test results are reported via REG_INFO and REG_ERROR.
  *
  * The bind_ports() method performs all port connections during elaboration.
  * The run_tests() method performs reset initialization and executes all test cases.
@@ -206,8 +206,8 @@ public:
    // Logger
    // =========================================================================
 
-   /// @brief CSML logger instance for structured logging (INFO, ERROR, DEBUG).
-   mutable CsmlLogger logger;
+   /// @brief regmodel logger instance for structured logging (INFO, ERROR, DEBUG).
+   mutable RegLogger logger;
 
    // =========================================================================
    // Internal Helper Methods
@@ -223,7 +223,7 @@ public:
     *   - sc_in<double> clock ports bound to sc_signal<double> in test
     *   - sc_in<uint32_t> racl_policies bound to sc_signal<uint32_t> in test
     *
-    * Uses direct port.bind(signal) syntax. Reports binding completion via CSML_INFO.
+    * Uses direct port.bind(signal) syntax. Reports binding completion via REG_INFO.
     */
    void bind_ports();
 
@@ -238,19 +238,19 @@ public:
    void apply_reset();
 
    /**
-    * @brief Report test start to CSML log.
+    * @brief Report test start to regmodel log.
     * @param test_name Human-readable test case name.
     */
    void report_test_start(const std::string& test_name);
 
    /**
-    * @brief Record a test pass and report to CSML log.
+    * @brief Record a test pass and report to regmodel log.
     * @param test_name Human-readable test case name.
     */
    void report_test_pass(const std::string& test_name);
 
    /**
-    * @brief Record a test failure and report to CSML log.
+    * @brief Record a test failure and report to regmodel log.
     * @param test_name Human-readable test case name.
     * @param reason    Description of why the test failed.
     */
@@ -260,7 +260,7 @@ public:
     * @brief Print final test summary with pass/fail counts.
     *
     * Reports total tests run, passed, failed, and lists all failed test names.
-    * Uses CSML_INFO for pass summaries and CSML_ERROR for failure reporting.
+    * Uses REG_INFO for pass summaries and REG_ERROR for failure reporting.
     */
    void report_test_summary();
 

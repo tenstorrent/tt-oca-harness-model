@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build and test every SMC IP — peripherals plus smc_fabric — across four
 # quality gates (Release, ASAN, Coverage, CTest) and produce a structured
 # summary table that mirrors sep/peripherals/run_all_peripherals.sh.
@@ -241,6 +243,10 @@ echo ""
 
 mkdir -p "${LOG_ROOT}"
 
+# ── Coverage gate (≥ 95% line coverage, overridable via COVERAGE_MIN_LINE_PCT)
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../scripts/coverage_gate.sh"
+
 # ── Helper: extract line-coverage % from a coverage run log ──────────────────
 #
 # Handles two formats produced by smc run_tests.sh --coverage:
@@ -340,8 +346,18 @@ for entry in "${IPS[@]}"; do
     run_stage "${src_dir}" "${plog}/coverage_run.log" --coverage "${CLEAN_FLAG[@]+"${CLEAN_FLAG[@]}"}"
     rc=$?
     cov_pct=$(extract_coverage "${plog}/coverage_run.log")
-    if [[ $rc -eq 0 ]]; then pass; printf " (%s%%)\n" "${cov_pct}"; cov_label="PASS"
-    else                      fail; echo;                              cov_label="FAIL"; OVERALL_PASS=false; fi
+    if [[ $rc -eq 0 ]] && coverage_pct_meets_min "${cov_pct}"; then
+        pass; printf " (%s%%)\n" "${cov_pct}"; cov_label="PASS"
+    else
+        fail
+        if [[ $rc -eq 0 ]]; then
+            printf " (%s%% < %s%%)\n" "${cov_pct}" "${COVERAGE_MIN_LINE_PCT}"
+        else
+            echo
+        fi
+        cov_label="FAIL"
+        OVERALL_PASS=false
+    fi
 
     # 4. CTest  (uses the Release build directory created in step 1)
     printf "  CTest         ... "

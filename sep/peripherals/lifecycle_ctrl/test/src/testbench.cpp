@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "lifecycle_ctrl_basetest.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 #include <cstdio>
 
 #ifdef __GNUC__
@@ -39,7 +39,7 @@ testbench::testbench(sc_module_name name)
 
 void testbench::report_test_start(const std::string &name)
 {
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\n" << name
                          << "\n========================================" << std::endl;
 }
@@ -48,7 +48,7 @@ void testbench::report_test_pass(const std::string &name)
 {
     m_tests_run++;
     m_tests_passed++;
-    CSML_INFO(1, logger) << "[PASS] " << name << std::endl;
+    REG_INFO(1, logger) << "[PASS] " << name << std::endl;
 }
 
 void testbench::report_test_fail(const std::string &name, const std::string &reason)
@@ -56,12 +56,12 @@ void testbench::report_test_fail(const std::string &name, const std::string &rea
     m_tests_run++;
     m_tests_failed++;
     m_failed_tests.push_back(name);
-    CSML_ERROR(0, logger) << "[FAIL] " << name << " — " << reason << std::endl;
+    REG_ERROR(0, logger) << "[FAIL] " << name << " — " << reason << std::endl;
 }
 
 void testbench::report_test_summary()
 {
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nlc_ctrl Test Summary"
                          << "\n========================================"
                          << "\nTotal : " << m_tests_run
@@ -69,7 +69,7 @@ void testbench::report_test_summary()
                          << "\nFailed: " << m_tests_failed << std::endl;
 
     for (const auto &t : m_failed_tests)
-        CSML_ERROR(0, logger) << "  FAILED: " << t << std::endl;
+        REG_ERROR(0, logger) << "  FAILED: " << t << std::endl;
 }
 
 // =============================================================================
@@ -314,7 +314,7 @@ void testbench::test_demote_2_lock()
 
     uint32_t before = val;
 
-    // Write after lock — must be silently ignored and a CSML WARNING logged
+    // Write after lock — must be silently ignored and a REG WARNING logged
     m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x00000000);
     wait(1, SC_NS);
     m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, val);
@@ -811,7 +811,7 @@ void testbench::run_tests()
     tlm::tlm_global_quantum::instance().set(sc_time(100, SC_NS));
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nLC_CTRL IP TESTBENCH"
                          << "\n========================================" << std::endl;
 
@@ -851,7 +851,7 @@ void testbench::run_tests()
 
 int sc_main(int argc, char *argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     testbench tb("testbench");
     sc_start();
 #ifdef __GNUC__

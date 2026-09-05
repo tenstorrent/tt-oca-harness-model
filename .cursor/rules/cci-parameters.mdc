@@ -1,5 +1,5 @@
 ---
-description: Expose SystemC model configuration via CCI (cci_param / csml_param) instead of ad-hoc structs or globals
+description: Expose SystemC model configuration via CCI (cci_param / regmodel::Param) instead of ad-hoc structs or globals
 alwaysApply: true
 ---
 
@@ -13,10 +13,10 @@ broker-mediated, introspectable, preset-overridable parameter surface.
 ## Scope
 
 - **Hand-written models** (any subsystem — SMC, SEP, VP, fabric, CPU cluster,
-  and future models): declare parameters as `cci::cci_param<T>` members.
-- **CSML-based SEP models**: use `csml_param<T>` from `csml_parameter.h` (a
-  thin CCI wrapper used by the CSML framework). Do not add parallel raw
-  `cci_param` members for the same knob.
+  and future models): declare parameters as `cci::cci_param<T>` members, or
+  as `regmodel::Param<T>` from `common/include/reg_param.h` (SEP's CCI
+  wrapper with INI / vector-as-JSON helpers). Do not add parallel knobs
+  for the same setting.
 - A legacy `*_cfg` struct may remain for constructor defaults, but new
   tunables must also be exposed as CCI parameters (Phase-1 migration pattern
   in `smc/cpu_cluster/doc/04_CCI_Integration_Guide.md`).

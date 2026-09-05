@@ -24,7 +24,7 @@
  *   - Interrupt polarity: active-high (m_irq_act_high static constexpr)
  *
  * After construction, registers all functional callbacks on b0.memory
- * and b1.memory. CSML auto-registers default R/W handlers during csml_reg
+ * and b1.memory. regmodel auto-registers default R/W handlers during regmodel::Reg
  * construction; register_*_callback() replaces them (erase-then-insert).
  */
 mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
@@ -43,14 +43,14 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
     m_access_error[1] = false;
 
     // =====================================================================
-    // CSML Logger Configuration
+    // RegLogger Configuration
     // =====================================================================
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat(
         "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    CSML_INFO(2, logger) << "Mailbox IP instantiated with:"
+    REG_INFO(2, logger) << "Mailbox IP instantiated with:"
                          << " MailboxDepth=" << m_mailbox_depth
                          << " IrqActHigh=" << (m_irq_act_high ? "true" : "false")
                          << " MemorySize=0x50";
@@ -114,7 +114,7 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
         b0.WIRQT.offset);
 
     // WIRQT read callback (FUNC_002): required so reads return the saturated shadow-state
-    // threshold, not the CSML backing-store default.  Detailed design specifies:
+    // threshold, not the regmodel backing-store default.  Detailed design specifies:
     // "Subsequent reads return the saturated value, not the originally written value."
     b0.memory.register_read_callback(
         [this](DT& value) { return this->handle_read_WIRQT(0, value, b0.WIRQT.read_bit_mask); },
@@ -125,7 +125,7 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
         b0.RIRQT.offset);
 
     // RIRQT read callback (FUNC_002): required so reads return the saturated shadow-state
-    // threshold, not the CSML backing-store default.
+    // threshold, not the regmodel backing-store default.
     b0.memory.register_read_callback(
         [this](DT& value) { return this->handle_read_RIRQT(0, value, b0.RIRQT.read_bit_mask); },
         b0.RIRQT.offset);
@@ -143,7 +143,7 @@ mailbox_ip::mailbox_ip(sc_module_name n, int log_verbosity)
         b0.IRQEN.offset);
 
     // IRQEN read callback: required because write callback updates shadow state only
-    // (not CSML backing store). Without this, reads return stale reset value 0x0.
+    // (not regmodel backing store). Without this, reads return stale reset value 0x0.
     b0.memory.register_read_callback(
         [this](DT& value) { return this->handle_read_IRQEN(0, value, b0.IRQEN.read_bit_mask); },
         b0.IRQEN.offset);
@@ -274,7 +274,7 @@ void mailbox_ip::store_response_data(tlm::tlm_generic_payload& trans, uint64_t v
 /**
  * @brief Apply the AXI-Lite decode and permission rules, then run the access
  *
- * csml_memory always answers TLM_OK_RESPONSE and silently ignores an illegal
+ * regmodel::Memory always answers TLM_OK_RESPONSE and silently ignores an illegal
  * access, whereas the RTL slave answers SLVERR for an out-of-range offset, a
  * write to a read-only register, a read of the write-only CTRL register, and
  * for FIFO overflow/underflow. Those rules are enforced here so that firmware
@@ -294,7 +294,7 @@ void mailbox_ip::bus_access(unsigned int port, tlm::tlm_generic_payload& trans,
     // exists, so a generic error rather than an address error, which the SEP
     // bus treats as a missing target and turns into a fatal.
     if (reg > 0x48ULL) {
-        CSML_WARN(1, logger) << "[MBX] Port " << port << " access to unmapped offset 0x"
+        REG_WARN(1, logger) << "[MBX] Port " << port << " access to unmapped offset 0x"
                              << std::hex << addr << std::dec;
         store_response_data(trans, 0);
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
@@ -314,14 +314,14 @@ void mailbox_ip::bus_access(unsigned int port, tlm::tlm_generic_payload& trans,
     const bool write_only = (reg == 0x48ULL);
 
     if (is_write && read_only) {
-        CSML_WARN(1, logger) << "[MBX] Port " << port << " write to read-only offset 0x"
+        REG_WARN(1, logger) << "[MBX] Port " << port << " write to read-only offset 0x"
                              << std::hex << reg << std::dec;
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
         return;
     }
 
     if (!is_write && write_only) {
-        CSML_WARN(1, logger) << "[MBX] Port " << port << " read of write-only offset 0x"
+        REG_WARN(1, logger) << "[MBX] Port " << port << " read of write-only offset 0x"
                              << std::hex << reg << std::dec;
         store_response_data(trans, 0);
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
@@ -353,7 +353,7 @@ void mailbox_ip::bus_access(unsigned int port, tlm::tlm_generic_payload& trans,
 void mailbox_ip::handle_reset()
 {
     if (!rst_ni.read()) {
-        CSML_INFO(1, logger) << "Mailbox IP reset sequence initiated (rst_ni = 0)";
+        REG_INFO(1, logger) << "Mailbox IP reset sequence initiated (rst_ni = 0)";
 
         // =====================================================================
         // 1. Register Initialization (10 registers per port to RDL reset values)
@@ -421,7 +421,7 @@ bool mailbox_ip::handle_write_WRITE_DATA(unsigned int port, DT value, DT write_m
     auto& wfifo = write_fifo_for(port);
     if (fifo_level(wfifo) >= m_mailbox_depth) {
         // FIFO is full — overflow error condition
-        CSML_WARN(1, logger) << "[MBX] Port " << port << " WRITE_DATA: FIFO write-to-full error";
+        REG_WARN(1, logger) << "[MBX] Port " << port << " WRITE_DATA: FIFO write-to-full error";
         m_error_flag_write_error[port] = true;
         m_irqs_eirq[port] = true;
         m_access_error[port] = true;
@@ -433,7 +433,7 @@ bool mailbox_ip::handle_write_WRITE_DATA(unsigned int port, DT value, DT write_m
     // 2. Enqueue Data to Outbound FIFO
     // =========================================================================
     wfifo.push_back(static_cast<uint64_t>(value));
-    CSML_INFO(2, logger) << "[MBX] Port " << port << " WRITE_DATA: enqueued 0x" 
+    REG_INFO(2, logger) << "[MBX] Port " << port << " WRITE_DATA: enqueued 0x" 
                          << std::hex << value << std::dec;
 
     // =========================================================================
@@ -478,7 +478,7 @@ bool mailbox_ip::handle_read_READ_DATA(unsigned int port, DT& value, DT read_mas
     auto& rfifo = read_fifo_for(port);
     if (rfifo.empty()) {
         // FIFO is empty — underflow error condition
-        CSML_WARN(1, logger) << "[MBX] Port " << port << " READ_DATA: FIFO read-from-empty error";
+        REG_WARN(1, logger) << "[MBX] Port " << port << " READ_DATA: FIFO read-from-empty error";
         m_error_flag_read_error[port] = true;
         m_irqs_eirq[port] = true;
         m_access_error[port] = true;
@@ -493,7 +493,7 @@ bool mailbox_ip::handle_read_READ_DATA(unsigned int port, DT& value, DT read_mas
     const uint64_t data = rfifo.front();
     rfifo.pop_front();
     value = static_cast<DT>(data);
-    CSML_INFO(2, logger) << "[MBX] Port " << port << " READ_DATA: dequeued 0x" 
+    REG_INFO(2, logger) << "[MBX] Port " << port << " READ_DATA: dequeued 0x" 
                          << std::hex << value << std::dec;
 
     // =========================================================================
@@ -596,7 +596,7 @@ bool mailbox_ip::handle_write_WIRQT(unsigned int port, DT value, DT write_mask)
     // 2. Store Saturated Threshold to Per-Port Shadow State
     // =========================================================================
     m_wirqt_threshold[port] = static_cast<uint8_t>(threshold);
-    CSML_INFO(2, logger) << "[MBX] Port " << port << " WIRQT: write threshold set to " 
+    REG_INFO(2, logger) << "[MBX] Port " << port << " WIRQT: write threshold set to " 
                          << static_cast<unsigned int>(threshold);
 
     // =========================================================================
@@ -634,7 +634,7 @@ bool mailbox_ip::handle_write_RIRQT(unsigned int port, DT value, DT write_mask)
     // 2. Store Saturated Threshold to Per-Port Shadow State
     // =========================================================================
     m_rirqt_threshold[port] = static_cast<uint8_t>(threshold);
-    CSML_INFO(2, logger) << "[MBX] Port " << port << " RIRQT: read threshold set to " 
+    REG_INFO(2, logger) << "[MBX] Port " << port << " RIRQT: read threshold set to " 
                          << static_cast<unsigned int>(threshold);
 
     // =========================================================================
@@ -656,7 +656,7 @@ bool mailbox_ip::handle_write_RIRQT(unsigned int port, DT value, DT write_mask)
  * @brief WIRQT register read callback — return saturated threshold from shadow state
  *
  * The write callback (handle_write_WIRQT) applies saturation and stores the
- * result to m_wirqt_threshold[port] without updating the CSML memory backing
+ * result to m_wirqt_threshold[port] without updating the regmodel::Memory backing
  * store.  This read callback retrieves the correct post-saturation value so
  * that software reads reflect actual hardware behaviour as required by the
  * detailed design specification:
@@ -689,7 +689,7 @@ bool mailbox_ip::handle_read_WIRQT(unsigned int port, DT& value, DT read_mask)
  * @brief RIRQT register read callback — return saturated threshold from shadow state
  *
  * The write callback (handle_write_RIRQT) applies saturation and stores the
- * result to m_rirqt_threshold[port] without updating the CSML memory backing
+ * result to m_rirqt_threshold[port] without updating the regmodel::Memory backing
  * store.  This read callback retrieves the correct post-saturation value so
  * that software reads reflect actual hardware behaviour as required by the
  * detailed design specification:
@@ -779,7 +779,7 @@ bool mailbox_ip::handle_write_IRQEN(unsigned int port, DT value, DT write_mask)
  * @brief IRQEN register read callback — return shadow hardware enable state
  *
  * Required because handle_write_IRQEN updates shadow variables only (not
- * the CSML memory backing store). Reads return live shadow state.
+ * the regmodel::Memory backing store). Reads return live shadow state.
  */
 bool mailbox_ip::handle_read_IRQEN(unsigned int port, DT& value, DT read_mask)
 {
@@ -887,7 +887,7 @@ bool mailbox_ip::handle_write_CTRL(unsigned int port, DT value, DT write_mask)
     // Execute Write FIFO Flush (if wflush=1)
     // =========================================================================
     if (wflush) {
-        CSML_INFO(1, logger) << "[MBX] Port " << port << " CTRL: flushing write FIFO";
+        REG_INFO(1, logger) << "[MBX] Port " << port << " CTRL: flushing write FIFO";
         write_fifo_for(port).clear();
     }
 
@@ -895,7 +895,7 @@ bool mailbox_ip::handle_write_CTRL(unsigned int port, DT value, DT write_mask)
     // Execute Read FIFO Flush (if rflush=1)
     // =========================================================================
     if (rflush) {
-        CSML_INFO(1, logger) << "[MBX] Port " << port << " CTRL: flushing read FIFO";
+        REG_INFO(1, logger) << "[MBX] Port " << port << " CTRL: flushing read FIFO";
         read_fifo_for(port).clear();
     }
 

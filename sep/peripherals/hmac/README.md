@@ -25,9 +25,9 @@ takes it back, so software can interleave independent hashes on one engine.
 ## Files
 
 ```
-include/hmac_base.h        Register map and TLM socket base
+include/hmac_base.h        Register map and TLM socket base (regmodel::Memory)
 include/hmac_interface.h   hmac_if interface
-include/hmac_register.h    Register and bitfield definitions
+include/hmac_register.h    Register and bitfield definitions (regmodel::Reg)
 include/hmac.h             hmac_ip class declaration
 include/sha2_engine.h      SHA-2 core with externally visible chaining state
 src/hmac_base.cpp          Base construction and register binding

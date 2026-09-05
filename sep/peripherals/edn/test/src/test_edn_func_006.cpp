@@ -38,13 +38,13 @@ test_edn_func_006::test_edn_func_006(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_006 test suite initialized";
-    CSML_INFO(1, logger) << "Test Coverage: Multi-bit Encoding Validation (13 test cases)";
+    REG_INFO(1, logger) << "EDN_FUNC_006 test suite initialized";
+    REG_INFO(1, logger) << "Test Coverage: Multi-bit Encoding Validation (13 test cases)";
 }
 
 test_edn_func_006::~test_edn_func_006()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_006 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_006 test suite terminated";
 }
 
 // =============================================================================
@@ -53,12 +53,12 @@ test_edn_func_006::~test_edn_func_006()
 
 unsigned int test_edn_func_006::run_all_tests()
 {
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_006 Test Suite Execution Start";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_006 Test Suite Execution Start";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before starting tests
-    CSML_INFO(1, logger) << "Applying system reset...";
+    REG_INFO(1, logger) << "Applying system reset...";
     apply_reset(100.0); // 100ns reset pulse
     wait(10, SC_NS);    // Wait for reset propagation
 
@@ -154,30 +154,30 @@ unsigned int test_edn_func_006::run_all_tests()
     report_test_result("T13: Comprehensive Invalid Value Coverage", result);
 
     // Print summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_006 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_006 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     }
 
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
 
     return m_tests_failed;
 }
@@ -188,7 +188,7 @@ unsigned int test_edn_func_006::run_all_tests()
 
 bool test_edn_func_006::test_edn_enable_valid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_edn_enable_valid_values...";
+    REG_INFO(1, logger) << "Starting test_edn_enable_valid_values...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -208,13 +208,13 @@ bool test_edn_func_006::test_edn_enable_valid_values()
     // Check RECOV_ALERT_STS bit [0] should be 0
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.EDN_ENABLE_FIELD_ALERT", EDN_ENABLE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
     // Verify alert_recov_alert signal not asserted
     if (!verify_alert_signal(false)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert unexpectedly asserted for EDN_ENABLE=0x6";
+        REG_ERROR(1, logger) << "alert_recov_alert unexpectedly asserted for EDN_ENABLE=0x6";
         all_passed = false;
     }
 
@@ -230,18 +230,18 @@ bool test_edn_func_006::test_edn_enable_valid_values()
     // Check RECOV_ALERT_STS bit [0] should still be 0
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.EDN_ENABLE_FIELD_ALERT", EDN_ENABLE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x9";
+        REG_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x9";
         all_passed = false;
     }
 
     // Verify alert signal remains deasserted
     if (!verify_alert_signal(false)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert unexpectedly asserted for EDN_ENABLE=0x9";
+        REG_ERROR(1, logger) << "alert_recov_alert unexpectedly asserted for EDN_ENABLE=0x9";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_edn_enable_valid_values: PASSED - Valid values accepted without alerts";
+        REG_INFO(1, logger) << "test_edn_enable_valid_values: PASSED - Valid values accepted without alerts";
     }
 
     return all_passed;
@@ -253,7 +253,7 @@ bool test_edn_func_006::test_edn_enable_valid_values()
 
 bool test_edn_func_006::test_edn_enable_invalid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_edn_enable_invalid_values...";
+    REG_INFO(1, logger) << "Starting test_edn_enable_invalid_values...";
 
     bool all_passed = true;
 
@@ -269,7 +269,7 @@ bool test_edn_func_006::test_edn_enable_invalid_values()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_edn_enable_invalid_values: PASSED - All 14 invalid values trigger alerts correctly";
+        REG_INFO(1, logger) << "test_edn_enable_invalid_values: PASSED - All 14 invalid values trigger alerts correctly";
     }
 
     return all_passed;
@@ -281,7 +281,7 @@ bool test_edn_func_006::test_edn_enable_invalid_values()
 
 bool test_edn_func_006::test_boot_req_mode_valid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_boot_req_mode_valid_values...";
+    REG_INFO(1, logger) << "Starting test_boot_req_mode_valid_values...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -299,7 +299,7 @@ bool test_edn_func_006::test_boot_req_mode_valid_values()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.BOOT_REQ_MODE_FIELD_ALERT", BOOT_REQ_MODE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
@@ -314,17 +314,17 @@ bool test_edn_func_006::test_boot_req_mode_valid_values()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.BOOT_REQ_MODE_FIELD_ALERT", BOOT_REQ_MODE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT for valid value 0x9";
+        REG_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT for valid value 0x9";
         all_passed = false;
     }
 
     if (!verify_alert_signal(false)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert unexpectedly asserted for valid BOOT_REQ_MODE values";
+        REG_ERROR(1, logger) << "alert_recov_alert unexpectedly asserted for valid BOOT_REQ_MODE values";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_boot_req_mode_valid_values: PASSED";
+        REG_INFO(1, logger) << "test_boot_req_mode_valid_values: PASSED";
     }
 
     return all_passed;
@@ -336,7 +336,7 @@ bool test_edn_func_006::test_boot_req_mode_valid_values()
 
 bool test_edn_func_006::test_boot_req_mode_invalid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_boot_req_mode_invalid_values...";
+    REG_INFO(1, logger) << "Starting test_boot_req_mode_invalid_values...";
 
     bool all_passed = true;
     uint32_t invalid_values[] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x7, 0x8, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF};
@@ -348,7 +348,7 @@ bool test_edn_func_006::test_boot_req_mode_invalid_values()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_boot_req_mode_invalid_values: PASSED";
+        REG_INFO(1, logger) << "test_boot_req_mode_invalid_values: PASSED";
     }
 
     return all_passed;
@@ -360,7 +360,7 @@ bool test_edn_func_006::test_boot_req_mode_invalid_values()
 
 bool test_edn_func_006::test_auto_req_mode_valid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_auto_req_mode_valid_values...";
+    REG_INFO(1, logger) << "Starting test_auto_req_mode_valid_values...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -378,7 +378,7 @@ bool test_edn_func_006::test_auto_req_mode_valid_values()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.AUTO_REQ_MODE_FIELD_ALERT", AUTO_REQ_MODE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected AUTO_REQ_MODE_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected AUTO_REQ_MODE_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
@@ -393,12 +393,12 @@ bool test_edn_func_006::test_auto_req_mode_valid_values()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.AUTO_REQ_MODE_FIELD_ALERT", AUTO_REQ_MODE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected AUTO_REQ_MODE_FIELD_ALERT for valid value 0x9";
+        REG_ERROR(1, logger) << "Unexpected AUTO_REQ_MODE_FIELD_ALERT for valid value 0x9";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_auto_req_mode_valid_values: PASSED";
+        REG_INFO(1, logger) << "test_auto_req_mode_valid_values: PASSED";
     }
 
     return all_passed;
@@ -410,7 +410,7 @@ bool test_edn_func_006::test_auto_req_mode_valid_values()
 
 bool test_edn_func_006::test_auto_req_mode_invalid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_auto_req_mode_invalid_values...";
+    REG_INFO(1, logger) << "Starting test_auto_req_mode_invalid_values...";
 
     bool all_passed = true;
     uint32_t invalid_values[] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x7, 0x8, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF};
@@ -422,7 +422,7 @@ bool test_edn_func_006::test_auto_req_mode_invalid_values()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_auto_req_mode_invalid_values: PASSED";
+        REG_INFO(1, logger) << "test_auto_req_mode_invalid_values: PASSED";
     }
 
     return all_passed;
@@ -434,7 +434,7 @@ bool test_edn_func_006::test_auto_req_mode_invalid_values()
 
 bool test_edn_func_006::test_cmd_fifo_rst_valid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_cmd_fifo_rst_valid_values...";
+    REG_INFO(1, logger) << "Starting test_cmd_fifo_rst_valid_values...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -452,7 +452,7 @@ bool test_edn_func_006::test_cmd_fifo_rst_valid_values()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.CMD_FIFO_RST_FIELD_ALERT", CMD_FIFO_RST_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
@@ -467,12 +467,12 @@ bool test_edn_func_006::test_cmd_fifo_rst_valid_values()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS.CMD_FIFO_RST_FIELD_ALERT", CMD_FIFO_RST_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x9";
+        REG_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x9";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_cmd_fifo_rst_valid_values: PASSED";
+        REG_INFO(1, logger) << "test_cmd_fifo_rst_valid_values: PASSED";
     }
 
     return all_passed;
@@ -484,7 +484,7 @@ bool test_edn_func_006::test_cmd_fifo_rst_valid_values()
 
 bool test_edn_func_006::test_cmd_fifo_rst_invalid_values()
 {
-    CSML_INFO(1, logger) << "Starting test_cmd_fifo_rst_invalid_values...";
+    REG_INFO(1, logger) << "Starting test_cmd_fifo_rst_invalid_values...";
 
     bool all_passed = true;
     uint32_t invalid_values[] = {0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x7, 0x8, 0xA, 0xB, 0xC, 0xD, 0xE, 0xF};
@@ -496,7 +496,7 @@ bool test_edn_func_006::test_cmd_fifo_rst_invalid_values()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_cmd_fifo_rst_invalid_values: PASSED";
+        REG_INFO(1, logger) << "test_cmd_fifo_rst_invalid_values: PASSED";
     }
 
     return all_passed;
@@ -508,7 +508,7 @@ bool test_edn_func_006::test_cmd_fifo_rst_invalid_values()
 
 bool test_edn_func_006::test_multiple_invalid_fields()
 {
-    CSML_INFO(1, logger) << "Starting test_multiple_invalid_fields...";
+    REG_INFO(1, logger) << "Starting test_multiple_invalid_fields...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -528,18 +528,18 @@ bool test_edn_func_006::test_multiple_invalid_fields()
 
     // Verify bits [0] and [1] are both set
     if (!verify_bit_value("RECOV_ALERT_STS.EDN_ENABLE_FIELD_ALERT", EDN_ENABLE_FIELD_ALERT_BIT, 1, read_value)) {
-        CSML_ERROR(1, logger) << "EDN_ENABLE_FIELD_ALERT not set for multiple violations";
+        REG_ERROR(1, logger) << "EDN_ENABLE_FIELD_ALERT not set for multiple violations";
         all_passed = false;
     }
 
     if (!verify_bit_value("RECOV_ALERT_STS.BOOT_REQ_MODE_FIELD_ALERT", BOOT_REQ_MODE_FIELD_ALERT_BIT, 1, read_value)) {
-        CSML_ERROR(1, logger) << "BOOT_REQ_MODE_FIELD_ALERT not set for multiple violations";
+        REG_ERROR(1, logger) << "BOOT_REQ_MODE_FIELD_ALERT not set for multiple violations";
         all_passed = false;
     }
 
     // Verify alert signal asserted
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert not asserted for multiple violations";
+        REG_ERROR(1, logger) << "alert_recov_alert not asserted for multiple violations";
         all_passed = false;
     }
 
@@ -558,21 +558,21 @@ bool test_edn_func_006::test_multiple_invalid_fields()
 
     // Verify all 4 alert bits are set (bits [0:3])
     if ((read_value & 0xF) != 0xF) {
-        CSML_ERROR(1, logger) << "Not all 4 alert bits set for 4 invalid fields. RECOV_ALERT_STS = 0x"
+        REG_ERROR(1, logger) << "Not all 4 alert bits set for 4 invalid fields. RECOV_ALERT_STS = 0x"
                               << std::hex << read_value;
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "All 4 alert bits correctly set for 4 invalid fields";
+        REG_INFO(1, logger) << "All 4 alert bits correctly set for 4 invalid fields";
     }
 
     // Verify alert signal asserted
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert not asserted for 4 invalid fields";
+        REG_ERROR(1, logger) << "alert_recov_alert not asserted for 4 invalid fields";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_multiple_invalid_fields: PASSED - Multiple alerts trigger independently";
+        REG_INFO(1, logger) << "test_multiple_invalid_fields: PASSED - Multiple alerts trigger independently";
     }
 
     return all_passed;
@@ -584,7 +584,7 @@ bool test_edn_func_006::test_multiple_invalid_fields()
 
 bool test_edn_func_006::test_w0c_clearing_mechanism()
 {
-    CSML_INFO(1, logger) << "Starting test_w0c_clearing_mechanism...";
+    REG_INFO(1, logger) << "Starting test_w0c_clearing_mechanism...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -612,7 +612,7 @@ bool test_edn_func_006::test_w0c_clearing_mechanism()
     };
 
     for (size_t i = 0; i < 4; ++i) {
-        CSML_INFO(1, logger) << "Testing W0C for " << field_names[i] << " alert bit [" << alert_bits[i] << "]";
+        REG_INFO(1, logger) << "Testing W0C for " << field_names[i] << " alert bit [" << alert_bits[i] << "]";
 
         clear_recoverable_alerts();
 
@@ -627,7 +627,7 @@ bool test_edn_func_006::test_w0c_clearing_mechanism()
         // Verify alert bit is set
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if (!verify_bit_value("RECOV_ALERT_STS", alert_bits[i], 1, read_value)) {
-            CSML_ERROR(1, logger) << "Alert bit " << alert_bits[i] << " not set initially";
+            REG_ERROR(1, logger) << "Alert bit " << alert_bits[i] << " not set initially";
             all_passed = false;
             continue;
         }
@@ -638,10 +638,10 @@ bool test_edn_func_006::test_w0c_clearing_mechanism()
 
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if (!verify_bit_value("RECOV_ALERT_STS after write 1's", alert_bits[i], 1, read_value)) {
-            CSML_ERROR(1, logger) << "Alert bit " << alert_bits[i] << " incorrectly cleared by writing 1";
+            REG_ERROR(1, logger) << "Alert bit " << alert_bits[i] << " incorrectly cleared by writing 1";
             all_passed = false;
         } else {
-            CSML_INFO(1, logger) << "W0C verified: Writing 1 has no effect on bit " << alert_bits[i];
+            REG_INFO(1, logger) << "W0C verified: Writing 1 has no effect on bit " << alert_bits[i];
         }
 
         // Test 2: Write 0 to specific bit (should clear it)
@@ -651,15 +651,15 @@ bool test_edn_func_006::test_w0c_clearing_mechanism()
 
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if (!verify_bit_value("RECOV_ALERT_STS after write 0", alert_bits[i], 0, read_value)) {
-            CSML_ERROR(1, logger) << "Alert bit " << alert_bits[i] << " not cleared by writing 0";
+            REG_ERROR(1, logger) << "Alert bit " << alert_bits[i] << " not cleared by writing 0";
             all_passed = false;
         } else {
-            CSML_INFO(1, logger) << "W0C verified: Writing 0 clears bit " << alert_bits[i];
+            REG_INFO(1, logger) << "W0C verified: Writing 0 clears bit " << alert_bits[i];
         }
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_w0c_clearing_mechanism: PASSED - W0C semantics correct for all alert bits";
+        REG_INFO(1, logger) << "test_w0c_clearing_mechanism: PASSED - W0C semantics correct for all alert bits";
     }
 
     return all_passed;
@@ -671,7 +671,7 @@ bool test_edn_func_006::test_w0c_clearing_mechanism()
 
 bool test_edn_func_006::test_alert_signal_deassertion()
 {
-    CSML_INFO(1, logger) << "Starting test_alert_signal_deassertion...";
+    REG_INFO(1, logger) << "Starting test_alert_signal_deassertion...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -690,13 +690,13 @@ bool test_edn_func_006::test_alert_signal_deassertion()
     // Verify all 3 bits set
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value & 0x7) != 0x7) {
-        CSML_ERROR(1, logger) << "Expected bits [0:2] set, got 0x" << std::hex << read_value;
+        REG_ERROR(1, logger) << "Expected bits [0:2] set, got 0x" << std::hex << read_value;
         all_passed = false;
     }
 
     // Verify alert signal asserted
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert not asserted with multiple bits set";
+        REG_ERROR(1, logger) << "alert_recov_alert not asserted with multiple bits set";
         all_passed = false;
     }
 
@@ -706,16 +706,16 @@ bool test_edn_func_006::test_alert_signal_deassertion()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS after clearing bit 0", EDN_ENABLE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Bit 0 not cleared";
+        REG_ERROR(1, logger) << "Bit 0 not cleared";
         all_passed = false;
     }
 
     // Alert should still be asserted (bits 1, 2 still set)
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert incorrectly deasserted with bits 1,2 still set";
+        REG_ERROR(1, logger) << "alert_recov_alert incorrectly deasserted with bits 1,2 still set";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Alert correctly remains asserted after clearing one bit";
+        REG_INFO(1, logger) << "Alert correctly remains asserted after clearing one bit";
     }
 
     // Clear bit [1] - alert should still be asserted
@@ -723,10 +723,10 @@ bool test_edn_func_006::test_alert_signal_deassertion()
     wait(1, SC_NS);
 
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert incorrectly deasserted with bit 2 still set";
+        REG_ERROR(1, logger) << "alert_recov_alert incorrectly deasserted with bit 2 still set";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Alert correctly remains asserted after clearing two bits";
+        REG_INFO(1, logger) << "Alert correctly remains asserted after clearing two bits";
     }
 
     // Clear bit [2] - now alert should deassert
@@ -735,20 +735,20 @@ bool test_edn_func_006::test_alert_signal_deassertion()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value & 0xF) != 0x0) {
-        CSML_ERROR(1, logger) << "Not all alert bits cleared. RECOV_ALERT_STS = 0x" << std::hex << read_value;
+        REG_ERROR(1, logger) << "Not all alert bits cleared. RECOV_ALERT_STS = 0x" << std::hex << read_value;
         all_passed = false;
     }
 
     // Alert should now be deasserted
     if (!verify_alert_signal(false)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert not deasserted after clearing all bits";
+        REG_ERROR(1, logger) << "alert_recov_alert not deasserted after clearing all bits";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Alert correctly deasserted after clearing all bits";
+        REG_INFO(1, logger) << "Alert correctly deasserted after clearing all bits";
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_alert_signal_deassertion: PASSED - Alert deasserts only when all bits cleared";
+        REG_INFO(1, logger) << "test_alert_signal_deassertion: PASSED - Alert deasserts only when all bits cleared";
     }
 
     return all_passed;
@@ -760,7 +760,7 @@ bool test_edn_func_006::test_alert_signal_deassertion()
 
 bool test_edn_func_006::test_valid_value_after_invalid()
 {
-    CSML_INFO(1, logger) << "Starting test_valid_value_after_invalid...";
+    REG_INFO(1, logger) << "Starting test_valid_value_after_invalid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -779,13 +779,13 @@ bool test_edn_func_006::test_valid_value_after_invalid()
     // Verify alert bit set
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS after invalid", EDN_ENABLE_FIELD_ALERT_BIT, 1, read_value)) {
-        CSML_ERROR(1, logger) << "Alert bit not set for invalid value";
+        REG_ERROR(1, logger) << "Alert bit not set for invalid value";
         all_passed = false;
     }
 
     // Verify alert signal asserted
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert not asserted for invalid value";
+        REG_ERROR(1, logger) << "alert_recov_alert not asserted for invalid value";
         all_passed = false;
     }
 
@@ -801,18 +801,18 @@ bool test_edn_func_006::test_valid_value_after_invalid()
     // Verify alert bit STILL set (sticky)
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS after valid write", EDN_ENABLE_FIELD_ALERT_BIT, 1, read_value)) {
-        CSML_ERROR(1, logger) << "Alert bit incorrectly cleared by valid value write";
+        REG_ERROR(1, logger) << "Alert bit incorrectly cleared by valid value write";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Alert bit correctly sticky after valid value write";
+        REG_INFO(1, logger) << "Alert bit correctly sticky after valid value write";
     }
 
     // Verify alert signal STILL asserted
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert incorrectly deasserted after valid value write";
+        REG_ERROR(1, logger) << "alert_recov_alert incorrectly deasserted after valid value write";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Alert signal correctly remains asserted after valid value write";
+        REG_INFO(1, logger) << "Alert signal correctly remains asserted after valid value write";
     }
 
     // Firmware must explicitly clear alert
@@ -821,20 +821,20 @@ bool test_edn_func_006::test_valid_value_after_invalid()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS after clear", EDN_ENABLE_FIELD_ALERT_BIT, 0, read_value)) {
-        CSML_ERROR(1, logger) << "Alert bit not cleared by firmware write";
+        REG_ERROR(1, logger) << "Alert bit not cleared by firmware write";
         all_passed = false;
     }
 
     // Alert should now be deasserted
     if (!verify_alert_signal(false)) {
-        CSML_ERROR(1, logger) << "alert_recov_alert not deasserted after firmware clear";
+        REG_ERROR(1, logger) << "alert_recov_alert not deasserted after firmware clear";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Alert correctly deasserted after firmware clears bit";
+        REG_INFO(1, logger) << "Alert correctly deasserted after firmware clears bit";
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_valid_value_after_invalid: PASSED - Alert sticky until firmware clears";
+        REG_INFO(1, logger) << "test_valid_value_after_invalid: PASSED - Alert sticky until firmware clears";
     }
 
     return all_passed;
@@ -846,8 +846,8 @@ bool test_edn_func_006::test_valid_value_after_invalid()
 
 bool test_edn_func_006::test_comprehensive_invalid_coverage()
 {
-    CSML_INFO(1, logger) << "Starting test_comprehensive_invalid_coverage...";
-    CSML_INFO(1, logger) << "Testing all 4 fields x 14 invalid values = 56 tests";
+    REG_INFO(1, logger) << "Starting test_comprehensive_invalid_coverage...";
+    REG_INFO(1, logger) << "Testing all 4 fields x 14 invalid values = 56 tests";
 
     bool all_passed = true;
     unsigned int total_tests = 0;
@@ -872,7 +872,7 @@ bool test_edn_func_006::test_comprehensive_invalid_coverage()
 
     // Test each field with each invalid value
     for (size_t field_idx = 0; field_idx < 4; ++field_idx) {
-        CSML_INFO(1, logger) << "Testing field: " << fields[field_idx].name;
+        REG_INFO(1, logger) << "Testing field: " << fields[field_idx].name;
 
         for (size_t val_idx = 0; val_idx < 14; ++val_idx) {
             total_tests++;
@@ -888,12 +888,12 @@ bool test_edn_func_006::test_comprehensive_invalid_coverage()
         }
     }
 
-    CSML_INFO(1, logger) << "Comprehensive coverage results: " << passed_tests << "/" << total_tests << " tests passed";
+    REG_INFO(1, logger) << "Comprehensive coverage results: " << passed_tests << "/" << total_tests << " tests passed";
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_comprehensive_invalid_coverage: PASSED - 100% invalid value coverage";
+        REG_INFO(1, logger) << "test_comprehensive_invalid_coverage: PASSED - 100% invalid value coverage";
     } else {
-        CSML_ERROR(1, logger) << "test_comprehensive_invalid_coverage: FAILED - Some invalid values not detected";
+        REG_ERROR(1, logger) << "test_comprehensive_invalid_coverage: FAILED - Some invalid values not detected";
     }
 
     return all_passed;
@@ -908,7 +908,7 @@ bool test_edn_func_006::verify_register_value(const std::string& reg_name,
                                                uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << reg_name << " mismatch: expected 0x"
+        REG_ERROR(1, logger) << reg_name << " mismatch: expected 0x"
                               << std::hex << std::setfill('0') << std::setw(8) << expected
                               << ", got 0x" << std::setw(8) << actual;
         return false;
@@ -923,7 +923,7 @@ bool test_edn_func_006::verify_bit_value(const std::string& reg_name,
 {
     uint32_t actual_bit = (actual_reg >> bit_position) & 0x1;
     if (actual_bit != expected_value) {
-        CSML_ERROR(1, logger) << reg_name << " bit[" << bit_position
+        REG_ERROR(1, logger) << reg_name << " bit[" << bit_position
                               << "] mismatch: expected " << expected_value
                               << ", got " << actual_bit;
         return false;
@@ -942,7 +942,7 @@ bool test_edn_func_006::verify_alert_signal(bool expected_state)
 {
     bool actual_state = alert_recov_alert.read();
     if (actual_state != expected_state) {
-        CSML_ERROR(1, logger) << "alert_recov_alert mismatch: expected "
+        REG_ERROR(1, logger) << "alert_recov_alert mismatch: expected "
                               << (expected_state ? "asserted" : "deasserted")
                               << ", got " << (actual_state ? "asserted" : "deasserted");
         return false;
@@ -971,14 +971,14 @@ bool test_edn_func_006::test_single_invalid_value(const std::string& field_name,
     // Verify alert bit is set
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS", alert_bit, 1, read_value)) {
-        CSML_ERROR(1, logger) << field_name << ": Alert bit not set for invalid value 0x"
+        REG_ERROR(1, logger) << field_name << ": Alert bit not set for invalid value 0x"
                               << std::hex << invalid_value;
         return false;
     }
 
     // Verify alert signal asserted
     if (!verify_alert_signal(true)) {
-        CSML_ERROR(1, logger) << field_name << ": Alert signal not asserted for invalid value 0x"
+        REG_ERROR(1, logger) << field_name << ": Alert signal not asserted for invalid value 0x"
                               << std::hex << invalid_value;
         return false;
     }
@@ -991,7 +991,7 @@ bool test_edn_func_006::test_single_invalid_value(const std::string& field_name,
     // Verify alert bit cleared
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (!verify_bit_value("RECOV_ALERT_STS after clear", alert_bit, 0, read_value)) {
-        CSML_ERROR(1, logger) << field_name << ": Alert bit not cleared for invalid value 0x"
+        REG_ERROR(1, logger) << field_name << ": Alert bit not cleared for invalid value 0x"
                               << std::hex << invalid_value;
         return false;
     }
@@ -1007,18 +1007,18 @@ void test_edn_func_006::report_test_result(const std::string& test_name,
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
         if (!message.empty()) {
-            CSML_INFO(1, logger) << "       " << message;
+            REG_INFO(1, logger) << "       " << message;
         }
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "       " << message;
+            REG_ERROR(1, logger) << "       " << message;
         }
     }
 
-    CSML_INFO(1, logger) << "----------------------------------------";
+    REG_INFO(1, logger) << "----------------------------------------";
 }

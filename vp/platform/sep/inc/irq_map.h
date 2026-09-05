@@ -70,7 +70,7 @@ const unsigned int DMA_ERROR_IRQ       = 11;  //   [10] intr_dma_error
 const unsigned int DMA_ALERT_IRQ       = 12;  //   [11] dma_alert
 // Only an ALERT_TEST write can raise this. The IP's sole hardware alert source is
 // intg_err_o from the register top, a TLUL command integrity error, and the VP is
-// reached over AXI-Lite through CSML with no integrity-protected bus to fail.
+// reached over AXI-Lite through the register model with no integrity-protected bus to fail.
 const unsigned int WDT_ALERT_IRQ       = 13;  //   [12] wdt_alert
 const unsigned int SPI_EVENT_IRQ       = 14;  //   [13] spi_irq_i
 const unsigned int KEYMGR_IRQ          = 15;  //   [14] km_mbox_irq

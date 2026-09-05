@@ -5,7 +5,7 @@
  * @brief Base class for HMAC IP module with register definitions
  * 
  * This class provides the base SystemC module for the HMAC IP, including
- * all register definitions and memory-mapped interface. It uses the CSML
+ * all register definitions and memory-mapped interface. It uses the regmodel
  * register framework for register management.
  */
 
@@ -27,7 +27,7 @@ class hmac_base : public sc_module
 {
   public:
     // Data type for register values
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
     
     hmac_base(sc_module_name name, unsigned int memory_size) : sc_module(name), memory(std::string(name) + ".Memory", memory_size/sizeof(unsigned int)),
        INTR_STATE(std::string(name) + ".INTR_STATE", memory, (0x0 + 0x00)/sizeof(unsigned int)),
@@ -50,9 +50,9 @@ class hmac_base : public sc_module
        }
 
       // Memory object for register storage
-      csml_memory<32> memory;
+      regmodel::Memory<32> memory;
       // TLM target socket for memory-mapped access
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
       // Interrupt State Register
       hmac::INTR_STATE_type<32> INTR_STATE;
@@ -82,10 +82,10 @@ class hmac_base : public sc_module
       hmac::WIPE_SECRET_type<32> WIPE_SECRET;
 
       // Key Registers (32 registers for up to 1024-bit keys)
-      csml_reg_vector<hmac::KEY_type<32>, 32> KEY;
+      regmodel::RegVector<hmac::KEY_type<32>, 32> KEY;
 
       // Digest Registers (16 registers for up to 512-bit digests)
-      csml_reg_vector<hmac::DIGEST_type<32>, 16> DIGEST;
+      regmodel::RegVector<hmac::DIGEST_type<32>, 16> DIGEST;
 
       // Message Length Lower Register
       hmac::MSG_LENGTH_LOWER_type<32> MSG_LENGTH_LOWER;
@@ -94,7 +94,7 @@ class hmac_base : public sc_module
       hmac::MSG_LENGTH_UPPER_type<32> MSG_LENGTH_UPPER;
 
       // Message FIFO Registers (1024 registers mapping to logical FIFO)
-      csml_reg_vector<hmac::MSG_FIFO_type<32>, 1024> MSG_FIFO;
+      regmodel::RegVector<hmac::MSG_FIFO_type<32>, 1024> MSG_FIFO;
       
       // Reset all registers to their default values
       void reset_all_registers();

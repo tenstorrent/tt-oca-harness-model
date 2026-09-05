@@ -33,12 +33,13 @@ edn_test::edn_test(sc_module_name name)
     logger.setFunctionTrace(false);
 
     SC_METHOD(mock_endpoint_process);
+    sensitive << rst_no;
     for (int i = 0; i < 8; ++i) {
         sensitive << edn_req[i];
     }
-    dont_initialize();
+    sensitive << m_mock_wakeup;
 
-    CSML_INFO(2, logger) << "EDN test harness constructed";
+    REG_INFO(2, logger) << "EDN test harness constructed";
 }
 
 /**
@@ -46,7 +47,7 @@ edn_test::edn_test(sc_module_name name)
  */
 edn_test::~edn_test()
 {
-    CSML_INFO(2, logger) << "EDN test harness destroyed";
+    REG_INFO(2, logger) << "EDN test harness destroyed";
 }
 
 /**
@@ -71,7 +72,7 @@ void edn_test::register_read_8(unsigned int offset, uint8_t &read_value)
     initiator_socket->b_transport(trans, delay);
 
     if (trans.is_response_error()) {
-        CSML_ERROR(1, logger) << "Register read failed at offset 0x" << std::hex << offset;
+        REG_ERROR(1, logger) << "Register read failed at offset 0x" << std::hex << offset;
     }
 }
 
@@ -97,7 +98,7 @@ void edn_test::register_write_8(unsigned int offset, uint8_t write_value)
     initiator_socket->b_transport(trans, delay);
 
     if (trans.is_response_error()) {
-        CSML_ERROR(1, logger) << "Register write failed at offset 0x" << std::hex << offset;
+        REG_ERROR(1, logger) << "Register write failed at offset 0x" << std::hex << offset;
     }
 }
 
@@ -123,9 +124,9 @@ void edn_test::register_read_32(unsigned int offset, uint32_t &read_value)
     initiator_socket->b_transport(trans, delay);
 
     if (trans.is_response_error()) {
-        CSML_ERROR(1, logger) << "Register read failed at offset 0x" << std::hex << offset;
+        REG_ERROR(1, logger) << "Register read failed at offset 0x" << std::hex << offset;
     } else {
-        CSML_INFO(2, logger) << "Read 0x" << std::hex << std::setw(8) << std::setfill('0')
+        REG_INFO(2, logger) << "Read 0x" << std::hex << std::setw(8) << std::setfill('0')
                               << read_value << " from offset 0x" << offset;
     }
 }
@@ -152,9 +153,9 @@ void edn_test::register_write_32(unsigned int offset, uint32_t write_value)
     initiator_socket->b_transport(trans, delay);
 
     if (trans.is_response_error()) {
-        CSML_ERROR(1, logger) << "Register write failed at offset 0x" << std::hex << offset;
+        REG_ERROR(1, logger) << "Register write failed at offset 0x" << std::hex << offset;
     } else {
-        CSML_INFO(2, logger) << "Wrote 0x" << std::hex << std::setw(8) << std::setfill('0')
+        REG_INFO(2, logger) << "Wrote 0x" << std::hex << std::setw(8) << std::setfill('0')
                               << write_value << " to offset 0x" << offset;
     }
 }
@@ -165,14 +166,80 @@ void edn_test::register_write_32(unsigned int offset, uint32_t write_value)
  */
 void edn_test::apply_reset(double duration_ns)
 {
-    CSML_INFO(1, logger) << "Applying reset for " << duration_ns << " ns";
+    REG_INFO(1, logger) << "Applying reset for " << duration_ns << " ns";
 
     rst_no.write(false);  // Assert reset (active-low)
     wait(duration_ns, SC_NS);
     rst_no.write(true);   // De-assert reset
     wait(10, SC_NS);      // Allow reset propagation
 
-    CSML_INFO(1, logger) << "Reset sequence complete";
+    // Drain leftover mock genbits. Signal writes stay in mock_endpoint_process
+    // (single writer) so reset does not create a second sc_signal driver.
+    while (!m_mock_buffer.empty()) {
+        m_mock_buffer.pop();
+    }
+    m_mock_fips = false;
+    m_mock_rr_index = 0;
+
+    REG_INFO(1, logger) << "Reset sequence complete";
+}
+
+void edn_test::mock_endpoint_process()
+{
+    if (!rst_no.read()) {
+        while (!m_mock_buffer.empty()) {
+            m_mock_buffer.pop();
+        }
+        m_mock_fips = false;
+        m_mock_rr_index = 0;
+        for (int i = 0; i < 8; ++i) {
+            edn_ack[i].write(false);
+            edn_bus[i].write(0);
+            edn_fips[i].write(false);
+        }
+        return;
+    }
+
+    bool edn_enabled = true;
+    if (m_dut != nullptr) {
+        edn_enabled = (static_cast<uint32_t>(m_dut->CTRL.EDN_ENABLE) == 0x6u);
+    }
+    if (!edn_enabled) {
+        for (int i = 0; i < 8; ++i) {
+            edn_ack[i].write(false);
+        }
+        return;
+    }
+
+    for (int i = 0; i < 8; ++i) {
+        if (!edn_req[i].read()) {
+            edn_ack[i].write(false);
+        }
+    }
+
+    // One endpoint per evaluation, round-robin from the last serviced index.
+    for (unsigned int n = 0; n < 8; ++n) {
+        const unsigned int i = (m_mock_rr_index + n) % 8;
+        if (edn_req[i].read() && !edn_ack[i].read() && !m_mock_buffer.empty()) {
+            edn_bus[i].write(m_mock_buffer.front());
+            m_mock_buffer.pop();
+            edn_fips[i].write(m_mock_fips);
+            edn_ack[i].write(true);
+            m_mock_rr_index = (i + 1) % 8;
+            break;
+        }
+    }
+
+    bool more_pending = false;
+    for (int i = 0; i < 8; ++i) {
+        if (edn_req[i].read() && !edn_ack[i].read() && !m_mock_buffer.empty()) {
+            more_pending = true;
+            break;
+        }
+    }
+    if (more_pending) {
+        next_trigger(1, SC_NS);
+    }
 }
 
 /**
@@ -181,7 +248,7 @@ void edn_test::apply_reset(double duration_ns)
  */
 void edn_test::set_clock_frequency(double freq_hz)
 {
-    CSML_INFO(2, logger) << "Setting clock frequency to " << freq_hz << " Hz";
+    REG_INFO(2, logger) << "Setting clock frequency to " << freq_hz << " Hz";
     clk_o.write(freq_hz);
 }
 
@@ -201,6 +268,7 @@ void edn_test::provide_csrng_entropy(const uint32_t genbits[4], bool fips_compli
     for (int i = 0; i < 4; i++) {
         m_mock_buffer.push(genbits[i]);
     }
+    m_mock_wakeup.notify(SC_ZERO_TIME);
 }
 
 

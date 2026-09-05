@@ -4,25 +4,27 @@
  * @file cpu_ctrl.h
  * @brief SystemC/TLM-2.0 Loosely-Timed (LT) model of the SMC CPU Control block.
  *
- * The CPU Control register block lives in the SMC fabric-control region
- * (`BASE + 0x001_0000`, 8 KiB).  Its **SCRATCH[16]** array at offset `+0x100`
+ * The CPU Control register block lives at `smc_top` front-port
+ * `0xC003_9000` (4 KiB).  Its **SCRATCH[16]** array at offset `+0x080`
  * is the authoritative SMC↔SEP inter-stage handoff mailbox used by the
  * production ROM (`smc_rom.adoc` § Scratch Registers).
  *
  * Authoritative register map: `hw/smc/smc_misc/data/registers/rdl/cpu_ctrl.rdl`
+ * (`GLOBAL_BASE` / `LOCAL_BASE` / `REGION_SIZE` / `CLOCK_GATE_CONTROL` live
+ * in `smc_base_config` at `0xC001_0000`, not here.)
  *
  * ## Inter-stage handoff scratch indices (firmware contract)
  *
  * | Index | Offset | Symbol (smc_rom_defs.h)        | Role |
  * |-------|--------|--------------------------------|------|
- * | 8     | +0x140 | SMC_SCRATCH_MANIFEST_ADDR      | Manifest SRAM offset |
- * | 9     | +0x148 | SMC_SCRATCH_SMC_STATUS_TO_SEP  | Coordination status bits |
- * | 11    | +0x158 | SMC_SCRATCH_STATUS_BUFFER_ADDR | Status ring-buffer offset |
- * | 13    | +0x168 | SMC_SCRATCH_SEP_SAFE_SRAM_START| SEP safe SRAM start offset |
- * | 14    | +0x170 | SMC_SCRATCH_SEP_SAFE_SRAM_SIZE | SEP safe SRAM size |
- * | 15    | +0x178 | SMC_SCRATCH_MEM_REPAIR_STATUS  | Memory-repair magic status |
+ * | 8     | +0x0C0 | SMC_SCRATCH_MANIFEST_ADDR      | Manifest SRAM offset |
+ * | 9     | +0x0C8 | SMC_SCRATCH_SMC_STATUS_TO_SEP  | Coordination status bits |
+ * | 11    | +0x0D8 | SMC_SCRATCH_STATUS_BUFFER_ADDR | Status ring-buffer offset |
+ * | 13    | +0x0E8 | SMC_SCRATCH_SEP_SAFE_SRAM_START| SEP safe SRAM start offset |
+ * | 14    | +0x0F0 | SMC_SCRATCH_SEP_SAFE_SRAM_SIZE | SEP safe SRAM size |
+ * | 15    | +0x0F8 | SMC_SCRATCH_MEM_REPAIR_STATUS  | Memory-repair magic status |
  *
- * Full system addresses use `SMC_SCRATCH_BASE_ADDR` (`0xC001_0100`) as the
+ * Full system addresses use `SMC_SCRATCH_BASE_ADDR` (`0xC003_9080`) as the
  * base of index 0 when `LOCAL_BASE = 0xC000_0000`.
  */
 
@@ -71,36 +73,31 @@ constexpr uint32_t CPU_CTRL_MEM_REPAIR_STATUS_BYPASSED = 0x12340001u;
 // ---------------------------------------------------------------------------
 
 struct cpu_ctrl_cfg {
-    static constexpr uint64_t DEFAULT_BASE_ADDR = 0xC001'0000ULL;
-    static constexpr uint64_t WINDOW_SIZE       = 0x2000ULL;
+    static constexpr uint64_t DEFAULT_BASE_ADDR = 0xC003'9000ULL;
+    static constexpr uint64_t WINDOW_SIZE       = 0x1000ULL;
 
+    // Offsets from PeakRDL cpu_ctrl.rdl / smc_top_regs.h.
     static constexpr uint64_t OFF_RESET_VECTOR           = 0x000u;
     static constexpr uint64_t OFF_RESET_CTRL             = 0x020u;
     static constexpr uint64_t OFF_CORE_RESET_PULSE_COUNT = 0x028u;
-    static constexpr uint64_t OFF_CLOCK_GATE_CONTROL     = 0x030u;
-    static constexpr uint64_t OFF_GLOBAL_BASE            = 0x040u;
-    static constexpr uint64_t OFF_LOCAL_BASE             = 0x048u;
-    // REGION_SIZE kept for fabric-legacy benches; RDL moved WDT to 0x50/0x58.
-    static constexpr uint64_t OFF_REGION_SIZE            = 0x068u;
-    static constexpr uint64_t OFF_REFERENCE_COUNTER      = 0x060u;
+    static constexpr uint64_t OFF_RESET_TIMEOUT          = 0x030u;
+    static constexpr uint64_t OFF_REFERENCE_COUNTER      = 0x040u;
     static constexpr uint64_t OFF_WDT_TIMEOUT            = 0x050u;
     static constexpr uint64_t OFF_WDT_TIMEOUT_RESET      = 0x058u;
-    static constexpr uint64_t OFF_SCRATCH                = 0x100u;
-    static constexpr uint64_t OFF_TEST_CTRL              = 0x200u;
-    static constexpr uint64_t OFF_DEBUG_CTRL             = 0x208u;
-    static constexpr uint64_t OFF_DEBUG_BUS_MUX          = 0x210u;
-    static constexpr uint64_t OFF_WB_PC_CORE0            = 0x300u;
-    static constexpr uint64_t OFF_WB_PC_CORE1            = 0x340u;
-    static constexpr uint64_t OFF_WB_PC_CORE2            = 0x380u;
-    static constexpr uint64_t OFF_WB_PC_CORE3            = 0x3C0u;
-    static constexpr uint64_t OFF_SMC_ATTRIBUTES         = 0x1000u;
-    static constexpr uint64_t OFF_MUTEX                  = 0x1040u;
-    static constexpr uint64_t OFF_SEMA                   = 0x1060u;
-    static constexpr uint64_t OFF_DUMMY_ROM_0            = 0x1180u;
-    static constexpr uint64_t OFF_DUMMY_ROM_1            = 0x1188u;
-    static constexpr uint64_t OFF_DUMMY_ROM_2            = 0x1190u;
-    static constexpr uint64_t OFF_DUMMY_ROM_3            = 0x1198u;
-    static constexpr uint64_t OFF_DUMMY_ROM_NULL         = 0x11A0u;
+    static constexpr uint64_t OFF_TEST_CTRL              = 0x060u;
+    static constexpr uint64_t OFF_SCRATCH                = 0x080u;
+    static constexpr uint64_t OFF_WB_PC_CORE0            = 0x100u;
+    static constexpr uint64_t OFF_WB_PC_CORE1            = 0x140u;
+    static constexpr uint64_t OFF_WB_PC_CORE2            = 0x180u;
+    static constexpr uint64_t OFF_WB_PC_CORE3            = 0x1C0u;
+    static constexpr uint64_t OFF_SMC_ATTRIBUTES         = 0x200u;
+    static constexpr uint64_t OFF_MUTEX                  = 0x240u;
+    static constexpr uint64_t OFF_SEMA                   = 0x260u;
+    static constexpr uint64_t OFF_DUMMY_ROM_0            = 0x280u;
+    static constexpr uint64_t OFF_DUMMY_ROM_1            = 0x288u;
+    static constexpr uint64_t OFF_DUMMY_ROM_2            = 0x290u;
+    static constexpr uint64_t OFF_DUMMY_ROM_3            = 0x298u;
+    static constexpr uint64_t OFF_DUMMY_ROM_NULL         = 0x2A0u;
 
     static constexpr unsigned NUM_CORES       = 4;
     static constexpr unsigned WB_PC_PER_CORE  = 8;
@@ -162,10 +159,7 @@ private:
     std::array<uint64_t, cpu_ctrl_cfg::NUM_CORES> reset_vector_{};
     uint64_t reset_ctrl_{};
     uint64_t core_reset_pulse_count_{};
-    uint64_t clock_gate_control_{};
-    uint64_t global_base_{};
-    uint64_t local_base_{};
-    uint64_t region_size_{};
+    uint64_t reset_timeout_{};
     uint64_t reference_counter_{};
     uint64_t wdt_timeout_{};
     uint64_t wdt_timeout_reset_{};
@@ -174,8 +168,6 @@ private:
     // constructor; reset_regs() only resets the stored value.
     std::array<regmodel::Register32, CPU_CTRL_SCRATCH_COUNT> scratch_{};
     uint64_t test_ctrl_{};
-    uint64_t debug_ctrl_{};
-    uint64_t debug_bus_mux_{};
     // WB_PC: SW read-only (write_mask=0); HW writes go through set_wb_pc()'s
     // set_raw() backdoor.
     std::array<std::array<regmodel::Register64, cpu_ctrl_cfg::WB_PC_PER_CORE>,

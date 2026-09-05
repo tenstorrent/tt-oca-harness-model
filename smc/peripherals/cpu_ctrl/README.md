@@ -1,5 +1,12 @@
 # SMC CPU Control — SystemC / TLM-2.0 Loosely-Timed Model
 
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 SystemC/TLM-2.0 LT model of the SMC **CPU Control** register block, including
 the **`SCRATCH[16]`** array used for **SMC ROM ↔ SEP ROM inter-stage handoff**.
 
@@ -23,6 +30,7 @@ cpu_ctrl/
 ├── test/
 │   └── cpu_ctrl_tb.cpp
 └── doc/
+    ├── index.adoc / implementation.adoc / test_plan.adoc
     ├── 01_CPU_CTRL_Specification.md
     ├── 02_CPU_CTRL_LowLevel_Design.md
     └── 03_CPU_CTRL_Test_Plan.md
@@ -43,8 +51,8 @@ smc::cpu_ctrl cpu("cpu_ctrl");
 fabric.to_cpu_ctrl.bind(cpu.reg_socket);
 ```
 
-Preset `base_addr` to `0xC0010000` (default) so absolute addresses from the
-fabric decode correctly.
+Preset `base_addr` to `0xC0039000` (default, PeakRDL `smc_cpu_ctrl`) so
+absolute addresses from the fabric decode correctly.
 
 ## Handoff scratch (index → role)
 

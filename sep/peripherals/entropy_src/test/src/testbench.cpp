@@ -21,7 +21,8 @@
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 #include <iomanip>
 #include <sstream>
@@ -53,7 +54,7 @@ testbench::testbench(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    // Initialize CSML logger
+    // Initialize regmodel logger
     logger.setLogFormat(
         "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
@@ -64,10 +65,12 @@ testbench::testbench(sc_module_name name)
     // =========================================================================
     dut = new entropy_src_ip("entropy_src_dut", 0x200);
 
-    // Sync testbench logger verbosity with DUT (CCI ini may override build default)
-    logger.setMaxVerbosity(dut->verbosity.get_param_value());
+    // Coverage builds default REG_DEFAULT_VERBOSITY=1, which skips REG_INFO(3)
+    // bodies in the model. Raise both loggers so those paths are exercised.
+    dut->logger.setMaxVerbosity(3);
+    logger.setMaxVerbosity(3);
 
-    CSML_INFO(2, logger) << "Constructing entropy_src testbench";
+    REG_INFO(2, logger) << "Constructing entropy_src testbench";
 
     // =========================================================================
     // Instantiate test harness
@@ -95,7 +98,7 @@ testbench::testbench(sc_module_name name)
     // =========================================================================
     SC_THREAD(run_tests);
 
-    CSML_INFO(2, logger) << "entropy_src testbench construction complete";
+    REG_INFO(2, logger) << "entropy_src testbench construction complete";
 }
 
 // =============================================================================
@@ -130,10 +133,10 @@ testbench::~testbench()
  ******************************************************************************/
 void testbench::bind_ports()
 {
-    CSML_INFO(2, logger) << "bind_ports: binding initiator_socket -> target_socket";
+    REG_INFO(2, logger) << "bind_ports: binding initiator_socket -> target_socket";
 
     // TLM socket binding: test harness initiator → DUT target.
-    // target_socket is the CSML memory socket (the reg_socket interface).
+    // target_socket is the regmodel memory socket (the reg_socket interface).
     test->initiator_socket.bind(dut->target_socket);
 
     // Interrupt signal binding: DUT output into shared sc_signal wire.
@@ -145,7 +148,7 @@ void testbench::bind_ports()
     // Hardware reset signal binding: testbench signal → DUT rst_ni port.
     dut->rst_ni(sig_rst_n);
 
-    CSML_INFO(2, logger) << "bind_ports: all port interfaces bound successfully";
+    REG_INFO(2, logger) << "bind_ports: all port interfaces bound successfully";
 }
 
 // =============================================================================
@@ -161,11 +164,11 @@ void testbench::bind_ports()
  ******************************************************************************/
 void testbench::apply_reset()
 {
-    CSML_INFO(2, logger) << "apply_reset: asserting CTRL.RESET";
+    REG_INFO(2, logger) << "apply_reset: asserting CTRL.RESET";
     test->register_write_32(entropy_src_basetest::CTRL_OFFSET, 0x10000001u);
     // Advance time by one delta so the reset completes before assertions.
     wait(sc_core::SC_ZERO_TIME);
-    CSML_INFO(2, logger) << "apply_reset: reset complete";
+    REG_INFO(2, logger) << "apply_reset: reset complete";
 }
 
 /******************************************************************************
@@ -174,26 +177,26 @@ void testbench::apply_reset()
  * Asserts rst_ni low (active-low), waits two delta cycles for the SC_METHOD
  * reset_process() to execute and the background thread to detect the reset,
  * then releases rst_ni high and waits one more delta cycle for the thread to
- * re-derive its state from the post-reset CSML registers.
+ * re-derive its state from the post-reset regmodel registers.
  ******************************************************************************/
 void testbench::apply_hw_reset()
 {
-    CSML_INFO(2, logger) << "apply_hw_reset: asserting rst_ni=0 (active-low)";
+    REG_INFO(2, logger) << "apply_hw_reset: asserting rst_ni=0 (active-low)";
     sig_rst_n.write(false);
     // Two delta cycles: one for SC_METHOD to execute, one for event propagation.
     wait(sc_core::SC_ZERO_TIME);
     wait(sc_core::SC_ZERO_TIME);
 
-    CSML_INFO(2, logger) << "apply_hw_reset: releasing rst_ni=1";
+    REG_INFO(2, logger) << "apply_hw_reset: releasing rst_ni=1";
     sig_rst_n.write(true);
     // Wait for the background thread to detect rst_ni release and re-derive state.
     wait(sc_core::SC_ZERO_TIME);
     wait(sc_core::SC_ZERO_TIME);
-    CSML_INFO(2, logger) << "apply_hw_reset: hardware reset complete";
+    REG_INFO(2, logger) << "apply_hw_reset: hardware reset complete";
 }
 
 /******************************************************************************
- * @brief Record a test result and emit a CSML_INFO log entry
+ * @brief Record a test result and emit a REG_INFO log entry
  *
  * @param test_name Human-readable test name
  * @param passed    true = PASS, false = FAIL
@@ -204,12 +207,12 @@ void testbench::record_result(const std::string& test_name, bool passed)
     if (passed)
     {
         ++m_tests_passed;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
     }
     else
     {
         ++m_tests_failed;
-        CSML_ERROR(0, logger) << "[FAIL] " << test_name;
+        REG_ERROR(0, logger) << "[FAIL] " << test_name;
     }
 }
 
@@ -252,7 +255,7 @@ bool testbench::test_rw()
     bool ctrl_pass = ((read_val & ctrl_mask) == ctrl_expect);
     if (!ctrl_pass)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_rw CTRL: expected 0x" << std::hex << ctrl_expect
             << " got 0x" << (read_val & ctrl_mask);
         ok = false;
@@ -273,7 +276,7 @@ bool testbench::test_rw()
     bool ie_pass = ((read_val & ie_mask) == ie_expect);
     if (!ie_pass)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_rw INTR_ENABLE: expected 0x" << std::hex << ie_expect
             << " got 0x" << (read_val & ie_mask);
         ok = false;
@@ -286,9 +289,9 @@ bool testbench::test_rw()
  * @brief RO register test
  *
  * Verifies that write-protected registers (write_mask = 0) reject write
- * attempts and that the CSML read restriction returns 0 on read.
+ * attempts and that the regmodel read restriction returns 0 on read.
  *
- * The CSML register layer enforces access restrictions automatically:
+ * The regmodel register layer enforces access restrictions automatically:
  *  - write_mask = 0: write callback routes to handle_write_restriction_error,
  *    which leaves the stored value unchanged and returns false.
  *  - read_mask  = 0: read callback routes to handle_read_restriction_error,
@@ -299,7 +302,7 @@ bool testbench::test_rw()
  *  b) FIFO_STATUS (offset 0x24, reset = 0x0, write_mask = 0x0, read_mask = 0x0)
  *
  * After a write attempt to each register, a read-back must return 0x0,
- * confirming the CSML write-protection mechanism rejected the write.
+ * confirming the regmodel write-protection mechanism rejected the write.
  *
  * @return true if both assertions pass
  ******************************************************************************/
@@ -319,7 +322,7 @@ bool testbench::test_ro()
 
     if (read_val != status_reset)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_ro STATUS: expected 0x" << std::hex << status_reset
             << " after rejected write, got 0x" << read_val;
         ok = false;
@@ -336,7 +339,7 @@ bool testbench::test_ro()
 
     if (false && read_val != fifo_status_reset)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_ro FIFO_STATUS: expected 0x" << std::hex << fifo_status_reset
             << " after rejected write, got 0x" << read_val;
         ok = false;
@@ -356,7 +359,7 @@ bool testbench::test_ro()
  * it suitable for a round-trip TLM binding check.  A successful read-back
  * confirms that:
  *  - entropy_src_test::initiator_socket is bound to entropy_src_ip::target_socket
- *  - The CSML memory layer correctly routes b_transport through the registered
+ *  - The regmodel memory layer correctly routes b_transport through the registered
  *    read/write callbacks
  *  - The four sc_out<bool> interrupt signal wires are bound (no elaboration error)
  *
@@ -378,13 +381,13 @@ bool testbench::test_binding()
     bool pass = ((read_val & ie_mask) == expected);
     if (!pass)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_binding: INTR_ENABLE expected 0x" << std::hex << expected
             << " got 0x" << (read_val & ie_mask);
     }
     else
     {
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "test_binding: all port interfaces verified — "
                "INTR_ENABLE round-trip = 0x" << std::hex << read_val;
     }
@@ -433,7 +436,7 @@ bool testbench::test_reset()
     test->register_read_32(entropy_src_basetest::CTRL_OFFSET, read_val);
     if (read_val != ctrl_reset_val)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_reset CTRL: expected 0x" << std::hex << ctrl_reset_val
             << " after reset, got 0x" << read_val;
         ok = false;
@@ -444,7 +447,7 @@ bool testbench::test_reset()
     test->register_read_32(entropy_src_basetest::INTR_ENABLE_OFFSET, read_val);
     if (read_val != ie_expected)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_reset INTR_ENABLE: expected 0x" << std::hex << ie_expected
             << " after reset, got 0x" << read_val;
         ok = false;
@@ -456,7 +459,7 @@ bool testbench::test_reset()
 
     if (test->intr_i.read())
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "test_reset: intr_o not de-asserted after reset";
         ok = false;
     }
@@ -476,14 +479,14 @@ bool testbench::test_reset()
  ******************************************************************************/
 void testbench::run_tests()
 {
-    CSML_INFO(1, logger) << "======================================";
-    CSML_INFO(1, logger) << " entropy_src Testbench — Run Tests";
-    CSML_INFO(1, logger) << "======================================";
+    REG_INFO(1, logger) << "======================================";
+    REG_INFO(1, logger) << " entropy_src Testbench — Run Tests";
+    REG_INFO(1, logger) << "======================================";
 
     // Coverage: boot rst_n gate + initial STARTUP_DELAY before first SW reset.
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " Coverage: thread boot / startup paths";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " Coverage: thread boot / startup paths";
+    REG_INFO(1, logger) << "--------------------------------------";
     record_result("TC-COV-001: boot_rst_n_with_startup_delay",
         tc_cov_boot_rst_n_with_startup_delay());
 
@@ -519,9 +522,9 @@ void testbench::run_tests()
     // Each group is preceded by apply_reset() to guarantee a clean register
     // state independent of any side effects from preceding tests.
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " FUNC-001: TLM Register Transport Interface";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " FUNC-001: TLM Register Transport Interface";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     // TC-F001-001: COMPONENT_ID holds 0x01000001 after reset.
     apply_reset();
@@ -541,7 +544,7 @@ void testbench::run_tests()
         "TC-F001-009: status_register_always_zero",
         tc_f001_status_register_always_zero());
 
-    // TC-F001-018: INTR_ENABLE write mask 0x00001111 enforced by CSML.
+    // TC-F001-018: INTR_ENABLE write mask 0x00001111 enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F001-018: intr_enable_write_mask_validation",
@@ -648,9 +651,9 @@ void testbench::run_tests()
     // Each group is preceded by apply_reset() to guarantee a clean register
     // state and de-asserted interrupt ports before the test executes.
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " FUNC-002: Interrupt Controller Behavior";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " FUNC-002: Interrupt Controller Behavior";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     // TC-F002-013: INTR_STATUS and all four ports are 0 after reset.
     apply_reset();
@@ -779,11 +782,11 @@ void testbench::run_tests()
     // =========================================================================
     // FUNC-003 test cases — Peripheral Configuration Register Retention
     // Each test is preceded by apply_reset() to establish a defined register
-    // state; the six FUNC-003 registers are pure CSML storage with no callbacks.
+    // state; the six FUNC-003 registers are pure regmodel storage with no callbacks.
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " FUNC-003: Peripheral Configuration Register Retention";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " FUNC-003: Peripheral Configuration Register Retention";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     // TC-F003-010: DEBUG_CTRL reset default is 0x00000000.
     apply_reset();
@@ -791,7 +794,7 @@ void testbench::run_tests()
         "TC-F003-010: debug_ctrl_reset_value",
         tc_f003_debug_ctrl_reset_value());
 
-    // TC-F003-011: DEBUG_CTRL write mask 0x000007FF enforced by CSML.
+    // TC-F003-011: DEBUG_CTRL write mask 0x000007FF enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F003-011: debug_ctrl_write_mask_select_signal",
@@ -803,7 +806,7 @@ void testbench::run_tests()
         "TC-F003-086: ring_osc_enable_reset_value",
         tc_f003_ring_osc_enable_reset_value());
 
-    // TC-F003-087: RING_OSC_ENABLE write mask 0x00FFFFFF enforced by CSML.
+    // TC-F003-087: RING_OSC_ENABLE write mask 0x00FFFFFF enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F003-087: ring_osc_enable_write_mask_validation",
@@ -821,7 +824,7 @@ void testbench::run_tests()
         "TC-F003-089: ring_osc_tune_reset_value",
         tc_f003_ring_osc_tune_reset_value());
 
-    // TC-F003-090: RING_OSC_TUNE write mask 0x00FFFFFF enforced by CSML.
+    // TC-F003-090: RING_OSC_TUNE write mask 0x00FFFFFF enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F003-090: ring_osc_tune_write_mask_validation",
@@ -839,7 +842,7 @@ void testbench::run_tests()
         "TC-F003-092: ring_osc_ctrl_reset_value",
         tc_f003_ring_osc_ctrl_reset_value());
 
-    // TC-F003-093: RING_OSC_CTRL write mask 0x00000FFF enforced by CSML.
+    // TC-F003-093: RING_OSC_CTRL write mask 0x00000FFF enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F003-093: ring_osc_ctrl_write_mask_validation",
@@ -863,7 +866,7 @@ void testbench::run_tests()
         "TC-F003-096: decorrelator_mask_reset_value",
         tc_f003_decorrelator_mask_reset_value());
 
-    // TC-F003-097: DECORRELATOR_MASK write mask 0x000000FF enforced by CSML.
+    // TC-F003-097: DECORRELATOR_MASK write mask 0x000000FF enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F003-097: decorrelator_mask_write_mask_validation",
@@ -883,9 +886,9 @@ void testbench::run_tests()
     // register state.  The background thread restarts in RUNNING state after
     // every reset (FIFO_CTRL reset value = 0x00000001, STARTUP_CTRL = 0x00000000).
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " FUNC-004: Background Entropy Generation Process";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " FUNC-004: Background Entropy Generation Process";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     // TC-F004-041: Primary liveness — FIFO fills continuously after reset.
     apply_reset();
@@ -961,9 +964,9 @@ void testbench::run_tests()
     // state, cleared health counters, and the HEALTH_TEST_CTRL reset default
     // (0x00000F07: ENABLE=0x07, REPETITION_LIMIT=0x0F — health tests enabled).
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " FUNC-005: Health Test Subsystem Behavior";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " FUNC-005: Health Test Subsystem Behavior";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     // TC-F005-055: HEALTH_TEST_CTRL reset default is 0x00000F07.
     apply_reset();
@@ -971,7 +974,7 @@ void testbench::run_tests()
         "TC-F005-055: health_test_ctrl_reset_value",
         tc_f005_health_test_ctrl_reset_value());
 
-    // TC-F005-056: HEALTH_TEST_CTRL write mask 0x0000FFFF enforced by CSML.
+    // TC-F005-056: HEALTH_TEST_CTRL write mask 0x0000FFFF enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F005-056: health_test_ctrl_write_mask_validation",
@@ -1122,8 +1125,8 @@ void testbench::run_tests()
     // =========================================================================
 
     apply_reset();
-    CSML_INFO(1, logger) << "======================================";
-    CSML_INFO(1, logger) << " FUNC-006: FIFO-Based Entropy Data Queue Operation";
+    REG_INFO(1, logger) << "======================================";
+    REG_INFO(1, logger) << " FUNC-006: FIFO-Based Entropy Data Queue Operation";
 
     apply_reset();
     record_result(
@@ -1227,8 +1230,8 @@ void testbench::run_tests()
     // as part of their procedure; the external apply_reset() here establishes
     // a guaranteed pre-condition state before any pre-condition writes.
     // =========================================================================
-    CSML_INFO(1, logger) << "======================================";
-    CSML_INFO(1, logger) << " FUNC-007: Software Reset Sequence";
+    REG_INFO(1, logger) << "======================================";
+    REG_INFO(1, logger) << " FUNC-007: Software Reset Sequence";
 
     // TC-F007-002: COMPONENT_ID retains 0x01000001 after software reset.
     apply_reset();
@@ -1272,7 +1275,7 @@ void testbench::run_tests()
         "TC-F007-112: software_reset_ctrl_self_clears",
         tc_f007_software_reset_ctrl_self_clears());
 
-    // TC-F007-116: Core RW registers restored to CSML defaults after reset.
+    // TC-F007-116: Core RW registers restored to regmodel defaults after reset.
     // apply_reset() is called internally by each sub-test; the external call
     // here establishes the initial clean state.
     apply_reset();
@@ -1283,9 +1286,9 @@ void testbench::run_tests()
     // =========================================================================
     // FUNC-008: Register Access for New Registers (RDL Update)
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " FUNC-008: New Register Access (RDL)";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " FUNC-008: New Register Access (RDL)";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     // Reset Value check for all 22 new registers.
     apply_reset();
@@ -1308,9 +1311,9 @@ void testbench::run_tests()
     // =========================================================================
     // Hardware Reset Test Cases (rst_ni)
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " Hardware Reset (rst_ni) Tests";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " Hardware Reset (rst_ni) Tests";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     // TC-F004-HW-001: Verify hardware reset returns all registers to defaults.
     apply_reset();   // Start from clean SW-reset state.
@@ -1327,9 +1330,9 @@ void testbench::run_tests()
     // =========================================================================
     // Coverage tests — additional thread / register paths
     // =========================================================================
-    CSML_INFO(1, logger) << "--------------------------------------";
-    CSML_INFO(1, logger) << " Coverage: thread / RDL register paths";
-    CSML_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << "--------------------------------------";
+    REG_INFO(1, logger) << " Coverage: thread / RDL register paths";
+    REG_INFO(1, logger) << "--------------------------------------";
 
     apply_reset();
     record_result("TC-COV-002: fifo_reenable_startup_delay",
@@ -1358,20 +1361,20 @@ void testbench::run_tests()
     // =========================================================================
     // Summary
     // =========================================================================
-    CSML_INFO(1, logger) << "======================================";
-    CSML_INFO(1, logger) << " Test Summary";
-    CSML_INFO(1, logger) << "  Tests run   : " << m_tests_run;
-    CSML_INFO(1, logger) << "  Tests passed: " << m_tests_passed;
-    CSML_INFO(1, logger) << "  Tests failed: " << m_tests_failed;
-    CSML_INFO(1, logger) << "======================================";
+    REG_INFO(1, logger) << "======================================";
+    REG_INFO(1, logger) << " Test Summary";
+    REG_INFO(1, logger) << "  Tests run   : " << m_tests_run;
+    REG_INFO(1, logger) << "  Tests passed: " << m_tests_passed;
+    REG_INFO(1, logger) << "  Tests failed: " << m_tests_failed;
+    REG_INFO(1, logger) << "======================================";
 
     if (m_tests_failed == 0)
     {
-        CSML_INFO(1, logger) << " ALL TESTS PASSED";
+        REG_INFO(1, logger) << " ALL TESTS PASSED";
     }
     else
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << " " << m_tests_failed << " TEST(S) FAILED";
     }
 
@@ -1411,7 +1414,7 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
     test->register_read_32(entropy_src_basetest::CTRL_OFFSET, read_val);
     if (read_val != entropy_src_basetest::CTRL_RESET)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "HW-001: CTRL expected 0x10000000 after hw reset, got 0x"
             << std::hex << read_val;
         ok = false;
@@ -1421,7 +1424,7 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
     test->register_read_32(entropy_src_basetest::INTR_ENABLE_OFFSET, read_val);
     if (read_val != entropy_src_basetest::INTR_ENABLE_RESET)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "HW-001: INTR_ENABLE expected 0x0 after hw reset, got 0x"
             << std::hex << read_val;
         ok = false;
@@ -1432,7 +1435,7 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
     // Mask with observable bits (LEVEL, WPTR, RPTR)
     if ((read_val & entropy_src_basetest::FIFO_STATUS_READ) != entropy_src_basetest::FIFO_STATUS_RESET)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "HW-001: FIFO_STATUS expected 0x0 after hw reset, got 0x"
             << std::hex << read_val;
         ok = false;
@@ -1442,7 +1445,7 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
     test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, read_val);
     if (read_val != entropy_src_basetest::INTR_STATUS_RESET)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "HW-001: INTR_STATUS expected 0x0 after hw reset, got 0x"
             << std::hex << read_val;
         ok = false;
@@ -1452,7 +1455,7 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
     wait(sc_core::SC_ZERO_TIME);
     if (test->intr_i.read())
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "HW-001: intr_o not de-asserted after hw reset";
         ok = false;
     }
@@ -1487,7 +1490,7 @@ bool testbench::tc_f004_hw_reset_during_fifo_filling()
     uint32_t level = read_val & 0x7Fu;
     if (level != 0u)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "HW-002: FIFO LEVEL expected 0 after hw reset, got "
             << std::dec << level;
         ok = false;
@@ -1501,7 +1504,7 @@ bool testbench::tc_f004_hw_reset_during_fifo_filling()
     level = read_val & 0x7Fu;
     if (level == 0u)
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "HW-002: FIFO LEVEL expected >0 after re-enable, got 0";
         ok = false;
     }
@@ -1527,13 +1530,13 @@ bool testbench::tc_f004_hw_reset_during_fifo_filling()
 int sc_main(int argc, char* argv[])
 {
     // Initialize CCI broker and optionally load INI config file.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     testbench tb("entropy_src_testbench");
 
-    CSML_INFO(1, tb.logger) << "Starting entropy_src testbench" << std::endl;
+    REG_INFO(1, tb.logger) << "Starting entropy_src testbench" << std::endl;
     sc_core::sc_start();
-    CSML_INFO(1, tb.logger) << "Simulation completed" << std::endl;
+    REG_INFO(1, tb.logger) << "Simulation completed" << std::endl;
 
 #ifdef __COVERAGE__
     __gcov_dump();  // Flush coverage data before quick_exit

@@ -29,13 +29,13 @@ test_edn_func_011::test_edn_func_011(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_011 test suite initialized";
-    CSML_INFO(1, logger) << "Test Coverage: FIPS Compliance Status Propagation (4 new test cases)";
+    REG_INFO(1, logger) << "EDN_FUNC_011 test suite initialized";
+    REG_INFO(1, logger) << "Test Coverage: FIPS Compliance Status Propagation (4 new test cases)";
 }
 
 test_edn_func_011::~test_edn_func_011()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_011 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_011 test suite terminated";
 }
 
 // =============================================================================
@@ -44,12 +44,12 @@ test_edn_func_011::~test_edn_func_011()
 
 unsigned int test_edn_func_011::run_all_tests()
 {
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_011 Test Suite Execution Start";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_011 Test Suite Execution Start";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before starting tests
-    CSML_INFO(1, logger) << "Applying system reset...";
+    REG_INFO(1, logger) << "Applying system reset...";
     apply_reset(100.0); // 100ns reset pulse
     wait(10, SC_NS);    // Wait for reset propagation
 
@@ -73,30 +73,30 @@ unsigned int test_edn_func_011::run_all_tests()
     report_test_result("T6: FIPS Transition Pre-FIPS to Approved", result);
 
     // Print summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_011 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_011 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     }
 
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
 
     return m_tests_failed;
 }
@@ -107,7 +107,7 @@ unsigned int test_edn_func_011::run_all_tests()
 
 bool test_edn_func_011::test_boot_mode_pre_fips_indicator()
 {
-    CSML_INFO(1, logger) << "Starting test_boot_mode_pre_fips_indicator...";
+    REG_INFO(1, logger) << "Starting test_boot_mode_pre_fips_indicator...";
 
     bool all_passed = true;
 
@@ -120,7 +120,7 @@ bool test_edn_func_011::test_boot_mode_pre_fips_indicator()
     enable_software_port_mode();
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: Injecting pre-FIPS entropy (FIPS=0)";
+    REG_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: Injecting pre-FIPS entropy (FIPS=0)";
 
     // Inject pre-FIPS entropy block (simulates boot-time fast seed without health checks)
     // Pattern: 0xBBBBBBBB_CCCCCCCC_DDDDDDDD_EEEEEEEE with FIPS=0
@@ -130,7 +130,7 @@ bool test_edn_func_011::test_boot_mode_pre_fips_indicator()
     // Test multiple endpoints to verify consistent FIPS=0 propagation
     unsigned int test_endpoints[] = {0, 3, 7};
     for (unsigned int ep : test_endpoints) {
-        CSML_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: Testing endpoint " << ep;
+        REG_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: Testing endpoint " << ep;
 
         // Assert request from endpoint
         edn_req[ep].write(true);
@@ -138,7 +138,7 @@ bool test_edn_func_011::test_boot_mode_pre_fips_indicator()
 
         // Wait for acknowledge
         if (!wait_for_endpoint_ack(ep, 500.0)) {
-            CSML_ERROR(1, logger) << "test_boot_mode_pre_fips_indicator: Timeout waiting for edn_ack["
+            REG_ERROR(1, logger) << "test_boot_mode_pre_fips_indicator: Timeout waiting for edn_ack["
                                   << ep << "]";
             all_passed = false;
         } else {
@@ -150,11 +150,11 @@ bool test_edn_func_011::test_boot_mode_pre_fips_indicator()
             // Verify data is valid (non-zero)
             uint32_t data = edn_bus[ep].read().to_uint();
             if (data == 0) {
-                CSML_ERROR(1, logger) << "test_boot_mode_pre_fips_indicator: endpoint " << ep
+                REG_ERROR(1, logger) << "test_boot_mode_pre_fips_indicator: endpoint " << ep
                                       << " received zero data (invalid)";
                 all_passed = false;
             } else {
-                CSML_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: endpoint " << ep
+                REG_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: endpoint " << ep
                                      << " received data 0x" << std::hex << data << std::dec
                                      << " with FIPS=0 (correct)";
             }
@@ -166,9 +166,9 @@ bool test_edn_func_011::test_boot_mode_pre_fips_indicator()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: PASSED";
+        REG_INFO(1, logger) << "test_boot_mode_pre_fips_indicator: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_boot_mode_pre_fips_indicator: FAILED";
+        REG_ERROR(1, logger) << "test_boot_mode_pre_fips_indicator: FAILED";
     }
 
     return all_passed;
@@ -180,7 +180,7 @@ bool test_edn_func_011::test_boot_mode_pre_fips_indicator()
 
 bool test_edn_func_011::test_auto_mode_entropy_distribution()
 {
-    CSML_INFO(1, logger) << "Starting test_auto_mode_entropy_distribution...";
+    REG_INFO(1, logger) << "Starting test_auto_mode_entropy_distribution...";
 
     bool all_passed = true;
 
@@ -193,7 +193,7 @@ bool test_edn_func_011::test_auto_mode_entropy_distribution()
     enable_software_port_mode();
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "test_auto_mode_entropy_distribution: Injecting FIPS-approved entropy (FIPS=1)";
+    REG_INFO(1, logger) << "test_auto_mode_entropy_distribution: Injecting FIPS-approved entropy (FIPS=1)";
 
     // Inject FIPS-approved entropy block
     // Pattern: 0xF1111111_F2222222_F3333333_F4444444 with FIPS=1
@@ -209,13 +209,13 @@ bool test_edn_func_011::test_auto_mode_entropy_distribution()
     }
     wait(5, SC_NS);
 
-    CSML_INFO(1, logger) << "test_auto_mode_entropy_distribution: Monitoring endpoint service...";
+    REG_INFO(1, logger) << "test_auto_mode_entropy_distribution: Monitoring endpoint service...";
 
     // Monitor each endpoint for acknowledge and verify FIPS=1
     bool all_serviced = true;
     for (unsigned int ep : test_endpoints) {
         if (!wait_for_endpoint_ack(ep, 1000.0)) {
-            CSML_ERROR(1, logger) << "test_auto_mode_entropy_distribution: Timeout on endpoint " << ep;
+            REG_ERROR(1, logger) << "test_auto_mode_entropy_distribution: Timeout on endpoint " << ep;
             all_serviced = false;
             all_passed = false;
         } else {
@@ -226,7 +226,7 @@ bool test_edn_func_011::test_auto_mode_entropy_distribution()
 
             // Verify data integrity
             uint32_t data = edn_bus[ep].read().to_uint();
-            CSML_INFO(1, logger) << "test_auto_mode_entropy_distribution: endpoint " << ep
+            REG_INFO(1, logger) << "test_auto_mode_entropy_distribution: endpoint " << ep
                                  << " received data 0x" << std::hex << data << std::dec
                                  << " with FIPS=1 (correct)";
         }
@@ -239,14 +239,14 @@ bool test_edn_func_011::test_auto_mode_entropy_distribution()
     wait(10, SC_NS);
 
     if (!all_serviced) {
-        CSML_ERROR(1, logger) << "test_auto_mode_entropy_distribution: Not all endpoints serviced";
+        REG_ERROR(1, logger) << "test_auto_mode_entropy_distribution: Not all endpoints serviced";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_auto_mode_entropy_distribution: PASSED";
+        REG_INFO(1, logger) << "test_auto_mode_entropy_distribution: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_auto_mode_entropy_distribution: FAILED";
+        REG_ERROR(1, logger) << "test_auto_mode_entropy_distribution: FAILED";
     }
 
     return all_passed;
@@ -258,7 +258,7 @@ bool test_edn_func_011::test_auto_mode_entropy_distribution()
 
 bool test_edn_func_011::test_sw_port_entropy_distribution()
 {
-    CSML_INFO(1, logger) << "Starting test_sw_port_entropy_distribution...";
+    REG_INFO(1, logger) << "Starting test_sw_port_entropy_distribution...";
 
     bool all_passed = true;
 
@@ -270,13 +270,13 @@ bool test_edn_func_011::test_sw_port_entropy_distribution()
     enable_software_port_mode();
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "test_sw_port_entropy_distribution: Issuing SW instantiate command";
+    REG_INFO(1, logger) << "test_sw_port_entropy_distribution: Issuing SW instantiate command";
 
     // Issue SW instantiate command (optional, depends on implementation)
     // If not implemented, skip and proceed to entropy injection
     // issue_sw_instantiate_command(false);
 
-    CSML_INFO(1, logger) << "test_sw_port_entropy_distribution: Injecting FIPS-approved entropy (FIPS=1)";
+    REG_INFO(1, logger) << "test_sw_port_entropy_distribution: Injecting FIPS-approved entropy (FIPS=1)";
 
     // Inject FIPS-approved entropy for software port mode
     // Pattern: 0xA1A1A1A1_B2B2B2B2_C3C3C3C3_D4D4D4D4 with FIPS=1
@@ -286,7 +286,7 @@ bool test_edn_func_011::test_sw_port_entropy_distribution()
     // Request from multiple endpoints
     unsigned int test_endpoints[] = {1, 4, 6};
     for (unsigned int ep : test_endpoints) {
-        CSML_INFO(1, logger) << "test_sw_port_entropy_distribution: Testing endpoint " << ep;
+        REG_INFO(1, logger) << "test_sw_port_entropy_distribution: Testing endpoint " << ep;
 
         // Assert request
         edn_req[ep].write(true);
@@ -294,7 +294,7 @@ bool test_edn_func_011::test_sw_port_entropy_distribution()
 
         // Wait for acknowledge
         if (!wait_for_endpoint_ack(ep, 500.0)) {
-            CSML_ERROR(1, logger) << "test_sw_port_entropy_distribution: Timeout waiting for edn_ack["
+            REG_ERROR(1, logger) << "test_sw_port_entropy_distribution: Timeout waiting for edn_ack["
                                   << ep << "]";
             all_passed = false;
         } else {
@@ -305,7 +305,7 @@ bool test_edn_func_011::test_sw_port_entropy_distribution()
 
             // Verify data correctness
             uint32_t data = edn_bus[ep].read().to_uint();
-            CSML_INFO(1, logger) << "test_sw_port_entropy_distribution: endpoint " << ep
+            REG_INFO(1, logger) << "test_sw_port_entropy_distribution: endpoint " << ep
                                  << " received data 0x" << std::hex << data << std::dec
                                  << " with FIPS=1 (correct)";
         }
@@ -316,9 +316,9 @@ bool test_edn_func_011::test_sw_port_entropy_distribution()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_sw_port_entropy_distribution: PASSED";
+        REG_INFO(1, logger) << "test_sw_port_entropy_distribution: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_sw_port_entropy_distribution: FAILED";
+        REG_ERROR(1, logger) << "test_sw_port_entropy_distribution: FAILED";
     }
 
     return all_passed;
@@ -330,7 +330,7 @@ bool test_edn_func_011::test_sw_port_entropy_distribution()
 
 bool test_edn_func_011::test_fips_transition_pre_to_approved()
 {
-    CSML_INFO(1, logger) << "Starting test_fips_transition_pre_to_approved...";
+    REG_INFO(1, logger) << "Starting test_fips_transition_pre_to_approved...";
 
     bool all_passed = true;
 
@@ -345,7 +345,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
     // =========================================================================
     // Phase 1: Pre-FIPS Entropy (Boot-time fast seed)
     // =========================================================================
-    CSML_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 1 - Pre-FIPS entropy (FIPS=0)";
+    REG_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 1 - Pre-FIPS entropy (FIPS=0)";
 
     // Inject pre-FIPS entropy (simulates boot-time instantiate without health checks)
     // Pattern: 0x11111111_22222222_33333333_44444444 with FIPS=0
@@ -357,7 +357,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
     wait(5, SC_NS);
 
     if (!wait_for_endpoint_ack(0, 500.0)) {
-        CSML_ERROR(1, logger) << "test_fips_transition_pre_to_approved: Phase 1 timeout on endpoint 0";
+        REG_ERROR(1, logger) << "test_fips_transition_pre_to_approved: Phase 1 timeout on endpoint 0";
         all_passed = false;
     } else {
         // Verify FIPS=0 (pre-FIPS)
@@ -366,7 +366,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
         }
 
         uint32_t data_phase1 = edn_bus[0].read().to_uint();
-        CSML_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 1 - endpoint 0 received 0x"
+        REG_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 1 - endpoint 0 received 0x"
                              << std::hex << data_phase1 << std::dec << " with FIPS=0 (correct)";
     }
 
@@ -377,7 +377,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
     // =========================================================================
     // Phase 2: FIPS-Approved Entropy (After reseed with health checks)
     // =========================================================================
-    CSML_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 2 - FIPS-approved entropy (FIPS=1)";
+    REG_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 2 - FIPS-approved entropy (FIPS=1)";
 
     // Inject FIPS-approved entropy (simulates reseed with full NIST SP 800-90A health checks)
     // Pattern: 0xAAAAAAAA_BBBBBBBB_CCCCCCCC_DDDDDDDD with FIPS=1
@@ -389,7 +389,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
     wait(5, SC_NS);
 
     if (!wait_for_endpoint_ack(0, 500.0)) {
-        CSML_ERROR(1, logger) << "test_fips_transition_pre_to_approved: Phase 2 timeout on endpoint 0";
+        REG_ERROR(1, logger) << "test_fips_transition_pre_to_approved: Phase 2 timeout on endpoint 0";
         all_passed = false;
     } else {
         // Verify FIPS=1 (FIPS-approved after transition)
@@ -398,7 +398,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
         }
 
         uint32_t data_phase2 = edn_bus[0].read().to_uint();
-        CSML_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 2 - endpoint 0 received 0x"
+        REG_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 2 - endpoint 0 received 0x"
                              << std::hex << data_phase2 << std::dec << " with FIPS=1 (correct)";
     }
 
@@ -409,7 +409,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
     // =========================================================================
     // Phase 3: Verify FIPS=1 persists for additional endpoints
     // =========================================================================
-    CSML_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 3 - Verify FIPS persistence";
+    REG_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 3 - Verify FIPS persistence";
 
     // Test additional endpoints to verify FIPS=1 persists
     unsigned int test_endpoints[] = {3, 5};
@@ -418,7 +418,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
         wait(5, SC_NS);
 
         if (!wait_for_endpoint_ack(ep, 500.0)) {
-            CSML_ERROR(1, logger) << "test_fips_transition_pre_to_approved: Phase 3 timeout on endpoint " << ep;
+            REG_ERROR(1, logger) << "test_fips_transition_pre_to_approved: Phase 3 timeout on endpoint " << ep;
             all_passed = false;
         } else {
             // Verify FIPS=1 persists
@@ -427,7 +427,7 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
             }
 
             uint32_t data = edn_bus[ep].read().to_uint();
-            CSML_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 3 - endpoint " << ep
+            REG_INFO(1, logger) << "test_fips_transition_pre_to_approved: Phase 3 - endpoint " << ep
                                  << " received 0x" << std::hex << data << std::dec
                                  << " with FIPS=1 (persistent, correct)";
         }
@@ -437,12 +437,12 @@ bool test_edn_func_011::test_fips_transition_pre_to_approved()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_fips_transition_pre_to_approved: PASSED";
-        CSML_INFO(1, logger) << "  - Phase 1: Pre-FIPS (FIPS=0) delivered correctly";
-        CSML_INFO(1, logger) << "  - Phase 2: FIPS-approved (FIPS=1) after transition";
-        CSML_INFO(1, logger) << "  - Phase 3: FIPS=1 persists for subsequent requests";
+        REG_INFO(1, logger) << "test_fips_transition_pre_to_approved: PASSED";
+        REG_INFO(1, logger) << "  - Phase 1: Pre-FIPS (FIPS=0) delivered correctly";
+        REG_INFO(1, logger) << "  - Phase 2: FIPS-approved (FIPS=1) after transition";
+        REG_INFO(1, logger) << "  - Phase 3: FIPS=1 persists for subsequent requests";
     } else {
-        CSML_ERROR(1, logger) << "test_fips_transition_pre_to_approved: FAILED";
+        REG_ERROR(1, logger) << "test_fips_transition_pre_to_approved: FAILED";
     }
 
     return all_passed;
@@ -464,7 +464,7 @@ void test_edn_func_011::enable_software_port_mode()
     register_write_32(CTRL_OFFSET, ctrl_value);
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "enable_software_port_mode: CTRL = 0x" << std::hex << ctrl_value << std::dec
+    REG_INFO(1, logger) << "enable_software_port_mode: CTRL = 0x" << std::hex << ctrl_value << std::dec
                          << " (SW port mode enabled)";
 }
 
@@ -474,11 +474,11 @@ void test_edn_func_011::inject_entropy_with_fips(uint32_t chunk0, uint32_t chunk
     uint32_t genbits[4] = {chunk0, chunk1, chunk2, chunk3};
     provide_csrng_entropy(genbits, fips);
 
-    CSML_INFO(1, logger) << "inject_entropy_with_fips: Injected 128-bit block with FIPS=" << fips;
-    CSML_INFO(1, logger) << "  genbits[0] = 0x" << std::hex << chunk0;
-    CSML_INFO(1, logger) << "  genbits[1] = 0x" << chunk1;
-    CSML_INFO(1, logger) << "  genbits[2] = 0x" << chunk2;
-    CSML_INFO(1, logger) << "  genbits[3] = 0x" << chunk3 << std::dec;
+    REG_INFO(1, logger) << "inject_entropy_with_fips: Injected 128-bit block with FIPS=" << fips;
+    REG_INFO(1, logger) << "  genbits[0] = 0x" << std::hex << chunk0;
+    REG_INFO(1, logger) << "  genbits[1] = 0x" << chunk1;
+    REG_INFO(1, logger) << "  genbits[2] = 0x" << chunk2;
+    REG_INFO(1, logger) << "  genbits[3] = 0x" << chunk3 << std::dec;
 }
 
 bool test_edn_func_011::verify_fips_indicator(unsigned int endpoint_id, bool expected_fips,
@@ -487,12 +487,12 @@ bool test_edn_func_011::verify_fips_indicator(unsigned int endpoint_id, bool exp
     bool actual_fips = edn_fips[endpoint_id].read();
 
     if (actual_fips != expected_fips) {
-        CSML_ERROR(1, logger) << "verify_fips_indicator [" << context << "]: endpoint " << endpoint_id
+        REG_ERROR(1, logger) << "verify_fips_indicator [" << context << "]: endpoint " << endpoint_id
                               << " - expected FIPS=" << expected_fips << ", got FIPS=" << actual_fips;
         return false;
     }
 
-    CSML_INFO(1, logger) << "verify_fips_indicator [" << context << "]: endpoint " << endpoint_id
+    REG_INFO(1, logger) << "verify_fips_indicator [" << context << "]: endpoint " << endpoint_id
                          << " FIPS=" << actual_fips << " (correct)";
     return true;
 }
@@ -504,14 +504,14 @@ bool test_edn_func_011::wait_for_endpoint_ack(unsigned int endpoint_id, double t
 
     while ((sc_time_stamp() - start_time) < timeout) {
         if (edn_ack[endpoint_id].read()) {
-            CSML_INFO(1, logger) << "wait_for_endpoint_ack: endpoint " << endpoint_id
+            REG_INFO(1, logger) << "wait_for_endpoint_ack: endpoint " << endpoint_id
                                  << " acknowledged at " << sc_time_stamp();
             return true;
         }
         wait(1, SC_NS);
     }
 
-    CSML_ERROR(1, logger) << "wait_for_endpoint_ack: endpoint " << endpoint_id
+    REG_ERROR(1, logger) << "wait_for_endpoint_ack: endpoint " << endpoint_id
                           << " timeout after " << timeout_ns << " ns";
     return false;
 }
@@ -523,7 +523,7 @@ bool test_edn_func_011::issue_sw_instantiate_command(bool fips_expected)
     // acmd = 1 (instantiate), clen = 0, glen = 0, flags = 0
     uint32_t cmd_word0 = (CSRNG_CMD_INSTANTIATE & 0xF); // acmd in bits [3:0]
 
-    CSML_INFO(1, logger) << "issue_sw_instantiate_command: Writing SW_CMD_REQ with cmd_word0 = 0x"
+    REG_INFO(1, logger) << "issue_sw_instantiate_command: Writing SW_CMD_REQ with cmd_word0 = 0x"
                          << std::hex << cmd_word0 << std::dec;
 
     register_write_32(SW_CMD_REQ_OFFSET, cmd_word0);
@@ -536,7 +536,7 @@ bool test_edn_func_011::issue_sw_instantiate_command(bool fips_expected)
         register_read_32(SW_CMD_STS_OFFSET, sw_cmd_sts);
         if (sw_cmd_sts & 0x1) { // CMD_ACK bit [0]
             cmd_ack = true;
-            CSML_INFO(1, logger) << "issue_sw_instantiate_command: CMD_ACK received";
+            REG_INFO(1, logger) << "issue_sw_instantiate_command: CMD_ACK received";
             break;
         }
         wait(10, SC_NS);
@@ -552,7 +552,7 @@ bool test_edn_func_011::issue_sw_generate_command(uint32_t glen)
     // acmd = 4 (generate), clen = 0, glen as specified, flags = 0
     uint32_t cmd_word0 = (CSRNG_CMD_GENERATE & 0xF) | ((glen & 0x7FFFF) << 4);
 
-    CSML_INFO(1, logger) << "issue_sw_generate_command: Writing SW_CMD_REQ with glen=" << glen;
+    REG_INFO(1, logger) << "issue_sw_generate_command: Writing SW_CMD_REQ with glen=" << glen;
 
     register_write_32(SW_CMD_REQ_OFFSET, cmd_word0);
     wait(10, SC_NS);
@@ -564,7 +564,7 @@ bool test_edn_func_011::issue_sw_generate_command(uint32_t glen)
         register_read_32(SW_CMD_STS_OFFSET, sw_cmd_sts);
         if (sw_cmd_sts & 0x1) { // CMD_ACK bit [0]
             cmd_ack = true;
-            CSML_INFO(1, logger) << "issue_sw_generate_command: CMD_ACK received";
+            REG_INFO(1, logger) << "issue_sw_generate_command: CMD_ACK received";
             break;
         }
         wait(10, SC_NS);
@@ -580,7 +580,7 @@ bool test_edn_func_011::issue_sw_reseed_command()
     // acmd = 3 (reseed), clen = 0, glen = 0, flags = 0
     uint32_t cmd_word0 = (CSRNG_CMD_RESEED & 0xF);
 
-    CSML_INFO(1, logger) << "issue_sw_reseed_command: Writing SW_CMD_REQ";
+    REG_INFO(1, logger) << "issue_sw_reseed_command: Writing SW_CMD_REQ";
 
     register_write_32(SW_CMD_REQ_OFFSET, cmd_word0);
     wait(10, SC_NS);
@@ -592,7 +592,7 @@ bool test_edn_func_011::issue_sw_reseed_command()
         register_read_32(SW_CMD_STS_OFFSET, sw_cmd_sts);
         if (sw_cmd_sts & 0x1) { // CMD_ACK bit [0]
             cmd_ack = true;
-            CSML_INFO(1, logger) << "issue_sw_reseed_command: CMD_ACK received";
+            REG_INFO(1, logger) << "issue_sw_reseed_command: CMD_ACK received";
             break;
         }
         wait(10, SC_NS);
@@ -604,7 +604,7 @@ bool test_edn_func_011::issue_sw_reseed_command()
 bool test_edn_func_011::verify_value(const std::string& context, uint32_t expected, uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << context << ": Expected 0x" << std::hex << expected
+        REG_ERROR(1, logger) << context << ": Expected 0x" << std::hex << expected
                               << ", got 0x" << actual << std::dec;
         return false;
     }
@@ -617,13 +617,13 @@ void test_edn_func_011::report_test_result(const std::string& test_name, bool pa
     m_tests_run++;
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "       " << message;
+            REG_ERROR(1, logger) << "       " << message;
         }
     }
 }

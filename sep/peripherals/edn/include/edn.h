@@ -29,8 +29,8 @@
 #include "edn_base.h"
 #include "edn_csrng_interface.h"
 #include <tlm_utils/tlm_quantumkeeper.h>
-#include <csml_logger.h>
-#include <csml_parameter.h>
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <vector>
 #include <queue>
 #include <cstring>
@@ -116,13 +116,13 @@ class edn_ip : public edn_base
    /// Active-low asynchronous reset
    sc_in<bool> rst_ni;
 
-   /// @name CSML Logger
+   /// @name RegLogger
    /// @{
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-   CsmlLogger logger;  ///< Logger instance for diagnostic output
-   csml_param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+   RegLogger logger;  ///< Logger instance for diagnostic output
+   regmodel::Param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
    /// @}
 
    uint32_t m_forced_csrng_ack_status;
@@ -778,6 +778,9 @@ class edn_ip : public edn_base
 
    /// Auto mode generate counter (tracks generates since last reseed)
    uint32_t m_auto_gen_counter;
+
+   /// Bumped on reset / new auto-mode entry so leftover sc_spawn threads exit
+   uint32_t m_auto_mode_epoch;
 
    /**
     * @brief Auto mode initialization after manual Instantiate

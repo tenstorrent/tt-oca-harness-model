@@ -19,7 +19,7 @@
 // (dv/sep/tb/tb_uvm/cocotb_tests/common/sep_virt_console.py) so VP and RTL runs
 // report the same messages.
 //
-// Kept free of SystemC/CSML so the decode logic is unit-testable in isolation.
+// Kept free of SystemC/regmodel so the decode logic is unit-testable in isolation.
 
 #include <cstdint>
 #include <cstdio>

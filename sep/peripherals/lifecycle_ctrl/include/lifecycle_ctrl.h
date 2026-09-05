@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 #include "lifecycle_ctrl_base.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <functional>
 #include <utility>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 class lifecycle_ctrl_model : public lifecycle_ctrl_base
@@ -27,7 +27,7 @@ public:
     // Any value not matching the above encodings is INVALID (FEAT_CTRL=0)
 
     lifecycle_ctrl_model(sc_module_name n,
-                  int log_verbosity = CSML_DEFAULT_VERBOSITY);
+                  int log_verbosity = REG_DEFAULT_VERBOSITY);
 
     void end_of_elaboration() override;
 
@@ -148,21 +148,21 @@ public:
      * lc_state is the raw 4-bit value here, not the differential code, so configs stay
      * readable; it is encoded when it seeds the bundle.
      */
-    CsmlLogger           logger;
-    csml_param<int>      verbosity;
-    csml_param<uint32_t> lc_state;         ///< Raw 4-bit LC state (default: 0x0 = TEST_DEV)
-    csml_param<uint32_t> sip_dis_lo;       ///< SIP feature disable mask [31:0]
-    csml_param<uint32_t> sip_dis_hi;       ///< SIP feature disable mask [63:32]
-    csml_param<uint32_t> sys_dis_lo;       ///< SYS feature disable mask [31:0]
-    csml_param<uint32_t> sys_dis_hi;       ///< SYS feature disable mask [63:32]
-    csml_param<bool>     security_disable; ///< When true, forces FEAT_CTRL=all-ones
+    RegLogger            logger;
+    regmodel::Param<int>      verbosity;
+    regmodel::Param<uint32_t> lc_state;         ///< Raw 4-bit LC state (default: 0x0 = TEST_DEV)
+    regmodel::Param<uint32_t> sip_dis_lo;       ///< SIP feature disable mask [31:0]
+    regmodel::Param<uint32_t> sip_dis_hi;       ///< SIP feature disable mask [63:32]
+    regmodel::Param<uint32_t> sys_dis_lo;       ///< SYS feature disable mask [31:0]
+    regmodel::Param<uint32_t> sys_dis_hi;       ///< SYS feature disable mask [63:32]
+    regmodel::Param<bool>     security_disable; ///< When true, forces FEAT_CTRL=all-ones
     /**
      * The test_en strap, which gates the test section of FEAT_CTRL: false clears bits
      * [47:32]. Unlike the others this is not an eFuse value -- sep_efuse_wrapper.sv
      * latches it from `sep_straps_i.test_straps.test_en` when fuse sense completes -- so
      * it stays a parameter on a platform too, and defaults to the strap being deasserted.
      */
-    csml_param<bool>     secure_tm;
+    regmodel::Param<bool>     secure_tm;
 
 private:
     void compute_feat_ctrl();

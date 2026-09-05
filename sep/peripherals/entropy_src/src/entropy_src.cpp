@@ -11,14 +11,14 @@
  * ## TLM Transport Architecture
  *
  * The TLM-2.0 `b_transport` handler for the register address space
- * is owned entirely by the CSML framework layer.  The
- * `csml_memory<32>` instance in `entropy_src_base` registers its own
+ * is owned entirely by the regmodel framework layer.  The
+ * `regmodel::Memory<32>` instance in `entropy_src_base` registers its own
  * `b_transport` with `target_socket` during elaboration via
  * `memory.bind_to_socket(target_socket)` (entropy_src_base.h).  This
  * fully satisfies the TLM-2.0 blocking-transport requirement without any
  * additional `b_transport` override in `entropy_src_ip`.
  *
- * The CSML `b_transport` implementation:
+ * The regmodel `b_transport` implementation:
  *  1. Extracts address, command (read/write), data pointer, and length from
  *     the `tlm_generic_payload`.
  *  2. Routes each word-aligned access to the registered read or write callback
@@ -29,9 +29,9 @@
  *     reserved-bit masking for all 42 registers.
  *
  * The eight behavioural callbacks registered in the `entropy_src_ip`
- * constructor override the default CSML storage callbacks for the seven
+ * constructor override the default regmodel storage callbacks for the seven
  * write-side-effect registers and one read-side-effect register.  All 34
- * remaining registers are served by CSML default callbacks with no
+ * remaining registers are served by regmodel default callbacks with no
  * additional code required here.
  *
  * ## Interrupt Bit Layout
@@ -48,8 +48,8 @@
  *
  * ## Design Notes
  *
- *  - All INTR_STATUS manipulation uses the direct csml_reg assignment operators
- *    so that the CSML register layer keeps its internal storage consistent.
+ *  - All INTR_STATUS manipulation uses the direct regmodel::Reg assignment operators
+ *    so that the regmodel register layer keeps its internal storage consistent.
  *  - The FIFO queue (m_fifo) is a std::queue<uint32_t> bounded to FIFO_DEPTH
  *    (32 entries).  All accesses happen either in the SC_THREAD or in
  *    b_transport callbacks; since both execute in the same SystemC thread
@@ -59,8 +59,8 @@
  *    drives the sc_out<bool> port.
  *  - No `nb_transport` or DMI paths are registered.  Blocking transport only.
  *
- * @see entropy_src_base.h for the CSML socket binding
- * @see csml_register.h for the csml_memory<32>::b_transport implementation
+ * @see entropy_src_base.h for the regmodel socket binding
+ * @see reg_file.h for the regmodel::Memory<32>::b_transport implementation
  *
  * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
  ******************************************************************************/
@@ -99,7 +99,7 @@ void entropy_src_ip::update_interrupt_outputs()
     // Single combined interrupt output: OR of all enabled sources
     irq_o.write(active != 0u);
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "update_interrupt_outputs: status=0x" << std::hex << status
         << " enable=0x" << enable << " active=0x" << active
         << " irq_o=" << (active != 0u);
@@ -119,7 +119,7 @@ void entropy_src_ip::interrupt_output_method()
 /******************************************************************************
  * @brief Update FIFO_STATUS register from current queue occupancy and pointers
  *
- * Performs a single atomic 32-bit CSML write that encodes all three
+ * Performs a single atomic 32-bit regmodel write that encodes all three
  * FIFO_STATUS fields simultaneously, preventing software from observing an
  * intermediate state where LEVEL is inconsistent with WPTR or RPTR.
  *
@@ -128,11 +128,11 @@ void entropy_src_ip::interrupt_output_method()
  *  - bits [20:16] RPTR  : m_rptr & 0x1F (5-bit read pointer, mod-32, shifted left by 16)
  *  - bits [31:21] reserved : always zero
  *
- * The single-assignment (FIFO_STATUS = ...) uses the csml_reg assignment
+ * The single-assignment (FIFO_STATUS = ...) uses the regmodel::Reg assignment
  * operator, which writes directly to the backing memory word without
  * triggering any registered callback (RO register — no write callback exists
  * for FIFO_STATUS).  This is the correct internal-write path that bypasses
- * CSML mask enforcement, consistent with how all RO registers are updated by
+ * regmodel mask enforcement, consistent with how all RO registers are updated by
  * the model.
  *
  * Called:
@@ -172,7 +172,7 @@ void entropy_src_ip::update_fifo_status()
 
     FIFO_STATUS = fifo_status_val;
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "update_fifo_status: LEVEL=" << std::dec << level
         << " WPTR=" << static_cast<unsigned>(m_wptr & 0x7Fu)
         << " RPTR=" << static_cast<unsigned>(m_rptr & 0x7Fu)
@@ -187,12 +187,12 @@ void entropy_src_ip::update_fifo_status()
  * @brief Write callback for CTRL register (offset 0x04) — Software
  *        Reset Sequence
  *
- * Invoked by CSML after every write to CTRL (0x04).  When CTRL.RESET (bit 0)
+ * Invoked by regmodel after every write to CTRL (0x04).  When CTRL.RESET (bit 0)
  * is set in the written value, this callback executes the full eight-action
  * software reset sequence.
  *
  * Writes that do NOT set CTRL[0] (e.g. writes to DOWNSAMPLE_RATE, AUTOTUNE_ENABLE,
- * BYPASS_COMPRESSOR only) are stored by CSML before the callback fires; this
+ * BYPASS_COMPRESSOR only) are stored by regmodel before the callback fires; this
  * callback applies the write mask and returns without further action.
  *
  * ## Eight-Action Software Reset Sequence
@@ -213,14 +213,14 @@ void entropy_src_ip::update_fifo_status()
  *   LEVEL[6:0], WPTR[12:8], RPTR[20:16] — all reset to 0.
  *
  * **Action 3 — Clear FIFO_STATUS register:**
- *   Write 0x00000000 directly to the FIFO_STATUS CSML register object via the
+ *   Write 0x00000000 directly to the FIFO_STATUS regmodel register object via the
  *   assignment operator (bypasses b_transport and callback dispatch — correct
  *   for an RO register that has no write callback).  Encodes LEVEL=0, WPTR=0,
  *   RPTR=0 atomically in a single 32-bit write.
  *   Architecture map: registers.FIFO_STATUS (0x24), reset_value 0x00000000.
  *
  * **Action 4 — Clear all 21 health test counter and status registers:**
- *   Write 0x00000000 to each of the following RO registers via CSML direct
+ *   Write 0x00000000 to each of the following RO registers via regmodel direct
  *   assignment (no callback for RO registers):
  *     HEALTH_TEST_STATUS        (0x40)
  *     REPETITION_TEST_COUNT     (0x44)
@@ -235,7 +235,7 @@ void entropy_src_ip::update_fifo_status()
  *   Registers have reset_value 0x00000000.
  *
  * **Action 5 — Clear INTR_STATUS register:**
- *   Write 0x00000000 directly to INTR_STATUS via CSML assignment.  All four
+ *   Write 0x00000000 directly to INTR_STATUS via regmodel assignment.  All four
  *   interrupt status bits (bits 0, 4, 8, 12) are cleared simultaneously,
  *   bypassing the W1C callback (which is only invoked on TLM write transactions,
  *   not on internal model writes via the assignment operator).
@@ -261,7 +261,7 @@ void entropy_src_ip::update_fifo_status()
  *   Timing constraint: "minimum 20 APB clock cycles".
  *
  * **Action 8 — Self-clear CTRL register:**
- *   Write 0x10000000 to CTRL via CSML assignment.  Clears the RESET bit and
+ *   Write 0x10000000 to CTRL via regmodel assignment.  Clears the RESET bit and
  *   all other CTRL fields (DOWNSAMPLE_RATE, BYPASS_COMPRESSOR, AUTOTUNE_ENABLE)
  *   to their hardware reset defaults simultaneously.  Software polling CTRL[0]
  *   after the stabilization period will read 0x10000000, confirming completion.
@@ -271,7 +271,7 @@ void entropy_src_ip::update_fifo_status()
  * `m_reset_in_progress` is set in Action 1 and cleared by the background
  * SC_THREAD inside its RESET_PENDING state, AFTER the thread has woken from
  * the `m_reset_event` notification.  The background thread re-derives
- * `m_fifo_enabled` and `m_health_test_enabled` from the CSML register values
+ * `m_fifo_enabled` and `m_health_test_enabled` from the regmodel register values
  * that were restored by Actions 3–8.  No second synchronisation event is
  * required because all state updates happen before the SC_ZERO_TIME
  * `m_reset_event` notification is delivered (SystemC delta-cycle semantics
@@ -289,14 +289,14 @@ void entropy_src_ip::update_fifo_status()
  * @param value  32-bit value written to CTRL.  The write mask (0x03FF0111) is
  *               applied by this callback before storage; reserved bits are
  *               silently discarded.
- * @return true always (callback return value is not used by CSML for error
+ * @return true always (callback return value is not used by regmodel for error
  *                      propagation in this model).
  ******************************************************************************/
 bool entropy_src_ip::handle_write_CTRL(uint32_t value)
 {
     // Apply the CTRL write mask (0x03FF0111) to silently discard writes to
     // reserved bits [31:26], [15:9], [7:5], [3:1].  The resulting value is
-    // stored in the CSML register object via the csml_reg assignment operator.
+    // stored in the regmodel register object via the regmodel::Reg assignment operator.
     //
     // Architecturally valid writable fields within 0x03FF0111:
     //   bit [0]      RESET
@@ -313,8 +313,8 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     {
         // No reset: CTRL fields (DOWNSAMPLE_RATE, BYPASS_COMPRESSOR,
         // AUTOTUNE_ENABLE) have been stored above; no behavioural side-effects
-        // are required for these fields beyond CSML storage.
-        CSML_INFO(3, logger)
+        // are required for these fields beyond regmodel storage.
+        REG_INFO(3, logger)
             << "CTRL write (no reset): stored 0x"
             << std::hex << static_cast<uint32_t>(CTRL);
         return true;
@@ -327,7 +327,7 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     //   detailed-design.md Section 11.2
     // =========================================================================
 
-    CSML_INFO(2, logger) << "handle_write_CTRL: CTRL.RESET=1 — software reset sequence begins";
+    REG_INFO(2, logger) << "handle_write_CTRL: CTRL.RESET=1 — software reset sequence begins";
 
     // -------------------------------------------------------------------------
     // Action 1: Interrupt background SC_THREAD
@@ -367,7 +367,7 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     m_rptr = 0u;
 
     // -------------------------------------------------------------------------
-    // Actions 3–5: Restore all register defaults via CSML and preserve
+    // Actions 3–5: Restore all register defaults via regmodel and preserve
     //              INTR_ENABLE
     //
     // requires that "all registers return to reset values" after a
@@ -379,7 +379,7 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     //     DEBUG_CTRL, CTRL, INTR_ENABLE) → their hardware reset defaults
     //
     // The mechanism is reset_all_registers() which calls .reset() on every
-    // register object, restoring the CSML-stored default value defined in each
+    // register object, restoring the regmodel-stored default value defined in each
     // register type constructor.  COMPONENT_ID.reset() is also called but its
     // reset value is 0x01000001 (the synthesis-time constant), so it is
     // effectively immune — calling .reset() on an RO register with a non-zero
@@ -389,7 +389,7 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
      // is saved before the call and written back immediately after.
      //
      // SIDE EFFECTS:
-     //   - "All RW register fields restored to reset values by CSML"
+     //   - "All RW register fields restored to reset values by regmodel"
      //   - "all registers return to reset values"
      // -------------------------------------------------------------------------
 
@@ -402,11 +402,11 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     // 3. Clear all registers to reset values.
     // ------------------------------------------------------------------------------------------------------------------------------------------------
 
-    // Restore all 42 registers to their CSML-defined hardware reset defaults.
+    // Restore all 42 registers to their regmodel-defined hardware reset defaults.
     // This single call covers Actions 3, 4, and 5 as described above.
     reset_all_registers();
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "handle_write_CTRL: registers reset to hardware defaults.";
 
     // INTR_STATUS is now 0x00000000 (restored to its reset default of
@@ -431,7 +431,7 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     // -------------------------------------------------------------------------
     m_interrupt_update_event.notify(sc_core::SC_ZERO_TIME);
 
-    CSML_INFO(3, logger) << "handle_write_CTRL: INTR_STATUS cleared; interrupt ports de-assertion scheduled";
+    REG_INFO(3, logger) << "handle_write_CTRL: INTR_STATUS cleared; interrupt ports de-assertion scheduled";
 
     // -------------------------------------------------------------------------
     // Action 7: Stabilization delay (minimum 20 APB clock cycles = 100 ns)
@@ -452,14 +452,14 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
         m_qk.sync();
     }
 
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "handle_write_CTRL: stabilization delay complete ("
         << RESET_STABILIZATION_DELAY_NS << " ns)";
 
     // -------------------------------------------------------------------------
-    // Action 8: Self-clear CTRL register (CSML internal write)
+    // Action 8: Self-clear CTRL register (regmodel internal write)
     //
-    // Write 0x10000000u to CTRL via direct CSML assignment.  This clears:
+    // Write 0x10000000u to CTRL via direct regmodel assignment.  This clears:
     //   bit [0]      RESET            → 0 (self-clear)
     //   bit [4]      AUTOTUNE_ENABLE  → 0 (reset default)
     //   bit [8]      BYPASS_COMPRESSOR→ 0 (reset default)
@@ -470,9 +470,9 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     //
     // The internal state mirrors (m_fifo_enabled, m_health_test_enabled,
     // m_startup_delay_ns) are NOT updated here.  Per they are
-    // re-derived by the background SC_THREAD from the post-reset CSML register
+    // re-derived by the background SC_THREAD from the post-reset regmodel register
     // values when it processes the RESET_PENDING state.  This separation of
-    // concerns ensures that the thread always reads the authoritative CSML state
+    // concerns ensures that the thread always reads the authoritative regmodel state
     // rather than a redundant in-memory mirror that could become stale.
     //
     // SIDE EFFECTS:
@@ -484,7 +484,7 @@ bool entropy_src_ip::handle_write_CTRL(uint32_t value)
     // Notify background thread that the full reset sequence is complete.
     m_reset_complete_event.notify(sc_core::SC_ZERO_TIME);
 
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "handle_write_CTRL: software reset sequence complete — CTRL=0x"
         << std::hex << static_cast<uint32_t>(CTRL);
 
@@ -517,7 +517,7 @@ bool entropy_src_ip::handle_write_INTR_STATUS(uint32_t value)
     uint32_t updated    = current & ~clear_mask;
     INTR_STATUS = updated;
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "INTR_STATUS W1C: before=0x" << std::hex << current
         << " write=0x" << value
         << " clear_mask=0x" << clear_mask
@@ -540,7 +540,7 @@ bool entropy_src_ip::handle_write_INTR_ENABLE(uint32_t value)
 {
     INTR_ENABLE = value & static_cast<uint32_t>(INTR_ENABLE.write_bit_mask);
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "INTR_ENABLE updated to 0x" << std::hex
         << static_cast<uint32_t>(INTR_ENABLE);
 
@@ -575,7 +575,7 @@ bool entropy_src_ip::handle_write_INTR_TEST(uint32_t value)
     uint32_t current_status = static_cast<uint32_t>(INTR_STATUS);
     INTR_STATUS = current_status | inject_mask;
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "INTR_TEST inject: raw_write=0x" << std::hex << value
         << " inject_mask=0x" << inject_mask
         << " INTR_STATUS now 0x" << static_cast<uint32_t>(INTR_STATUS);
@@ -612,14 +612,14 @@ bool entropy_src_ip::handle_write_FIFO_CTRL(uint32_t value)
     //     m_wptr      = 0u;
     //     m_rptr      = 0u;
     //     FIFO_STATUS = 0u;
-    //     CSML_INFO(2, logger) << "FIFO_CTRL: FIFO disabled — FIFO drained, wptr/rptr reset";
+    //     REG_INFO(2, logger) << "FIFO_CTRL: FIFO disabled — FIFO drained, wptr/rptr reset";
     // }
     // else 
     if (!prev_enable && new_enable)
     {
         // FIFO re-enabled: wake the entropy generation thread.
         m_fifo_fill_event.notify(sc_core::SC_ZERO_TIME);
-        CSML_INFO(2, logger) << "FIFO_CTRL: FIFO enabled — entropy thread notified";
+        REG_INFO(2, logger) << "FIFO_CTRL: FIFO enabled — entropy thread notified";
     }
 
     return true;
@@ -642,7 +642,7 @@ bool entropy_src_ip::handle_write_FIFO_CTRL(uint32_t value)
  * ENABLE = 0x00 disables all counters.
  *
  * REPETITION_LIMIT field (bits [15:8]) is pure configuration storage; it is
- * retained in CSML and readable by software but is not compared against any
+ * retained in regmodel and readable by software but is not compared against any
  * counter value in the TLM abstraction.
  *
  * Architecture map reference:
@@ -657,7 +657,7 @@ bool entropy_src_ip::handle_write_FIFO_CTRL(uint32_t value)
  *
  * @param value  32-bit value written to HEALTH_TEST_CTRL.  Write mask
  *               0x0000FFFF is applied by the callback before storage.
- * @return true always (callback return value is not used by CSML for error
+ * @return true always (callback return value is not used by regmodel for error
  *                      propagation in this model)
  ******************************************************************************/
 bool entropy_src_ip::handle_write_HEALTH_TEST_CTRL(uint32_t value)
@@ -666,7 +666,7 @@ bool entropy_src_ip::handle_write_HEALTH_TEST_CTRL(uint32_t value)
     // This is consistent with the HEALTH_TEST_CTRL_type constructor which
     // specifies write_bit_mask = 0x0000FFFF.
     //
-    // Note: some CSML versions auto-apply the write mask before calling the
+    // Note: some regmodel versions auto-apply the write mask before calling the
     // callback; writing the masked value here is therefore idempotent and safe.
     HEALTH_TEST_CTRL = value & static_cast<uint32_t>(HEALTH_TEST_CTRL.write_bit_mask);
 
@@ -683,7 +683,7 @@ bool entropy_src_ip::handle_write_HEALTH_TEST_CTRL(uint32_t value)
     uint32_t enable_field = static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE);
     m_health_test_enabled = (enable_field != 0u);
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "HEALTH_TEST_CTRL write: raw=0x" << std::hex << value
         << " stored=0x" << static_cast<uint32_t>(HEALTH_TEST_CTRL)
         << " ENABLE_field=0x" << enable_field
@@ -706,7 +706,7 @@ bool entropy_src_ip::handle_write_STARTUP_CTRL(uint32_t value)
     m_startup_delay_ns = value & 0xFFFFu;
     STARTUP_CTRL = value & static_cast<uint32_t>(STARTUP_CTRL.write_bit_mask);
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "STARTUP_CTRL: startup_delay=" << m_startup_delay_ns << " ns";
 
     return true;
@@ -751,7 +751,7 @@ bool entropy_src_ip::handle_write_RING_OSC_ENABLE(uint32_t value)
         if (static_cast<uint32_t>(MAIN_SM_STATUS.BOOT_PHASE_DONE) == 0u) {
             MAIN_SM_STATUS.BOOT_PHASE_DONE = 1;
             MAIN_SM_STATUS.IDLE = 0;
-            CSML_INFO(3, logger)
+            REG_INFO(3, logger)
                 << "RING_OSC_ENABLE: generators enabled -- "
                 << "MAIN_SM_STATUS.BOOT_PHASE_DONE asserted";
         }
@@ -784,7 +784,7 @@ bool entropy_src_ip::handle_read_FIFO_RDATA(uint32_t& value)
         INTR_STATUS = status | INTR_BIT_FIFO_UNDERFLOW;
         m_interrupt_update_event.notify(sc_core::SC_ZERO_TIME);
 
-        CSML_WARN(1, logger) << "FIFO_RDATA read: FIFO empty — underflow";
+        REG_WARN(1, logger) << "FIFO_RDATA read: FIFO empty — underflow";
         return true;
     }
 
@@ -803,7 +803,7 @@ bool entropy_src_ip::handle_read_FIFO_RDATA(uint32_t& value)
 
     update_fifo_status();
 
-    CSML_INFO(3, logger)
+    REG_INFO(3, logger)
         << "FIFO_RDATA pop: value=0x" << std::hex << value
         << " fifo_depth=" << std::dec << m_fifo.size()
         << " rptr=" << static_cast<unsigned>(m_rptr);
@@ -820,7 +820,7 @@ bool entropy_src_ip::handle_read_FIFO_RDATA(uint32_t& value)
  *
  * Sensitive to any transition on rst_ni. When rst_ni reads low:
  *  1. Drains the FIFO queue and resets write/read pointers.
- *  2. Calls reset_all_registers() to restore all CSML registers to defaults.
+ *  2. Calls reset_all_registers() to restore all regmodel registers to defaults.
  *  3. Clears internal state mirrors.
  *  4. Sets m_hw_reset_in_progress to signal the background thread.
  *  5. Notifies m_reset_event and m_interrupt_update_event.
@@ -834,7 +834,7 @@ void entropy_src_ip::reset_process()
 {
     if (!rst_ni.read())
     {
-        CSML_INFO(2, logger) << "reset_process: rst_ni asserted (active-low) "
+        REG_INFO(2, logger) << "reset_process: rst_ni asserted (active-low) "
                                 "— executing hardware reset";
 
         // Drain the FIFO and reset pointers
@@ -845,7 +845,7 @@ void entropy_src_ip::reset_process()
         m_wptr = 0u;
         m_rptr = 0u;
 
-        // Reset all CSML registers to their defaults
+        // Reset all regmodel registers to their defaults
         reset_all_registers();
 
         // Update FIFO_STATUS to reflect the empty FIFO
@@ -867,7 +867,7 @@ void entropy_src_ip::reset_process()
         // INTR_STATUS is cleared by reset_all_registers)
         m_interrupt_update_event.notify(sc_core::SC_ZERO_TIME);
 
-        CSML_INFO(2, logger) << "reset_process: hardware reset complete";
+        REG_INFO(2, logger) << "reset_process: hardware reset complete";
     }
 }
 
@@ -930,7 +930,7 @@ void entropy_src_ip::entropy_generation_thread()
 {
     m_qk.reset();
 
-    CSML_INFO(2, logger) << "entropy_generation_thread: starting";
+    REG_INFO(2, logger) << "entropy_generation_thread: starting";
 
     // =========================================================================
     // Level-sensitive rst_ni gate — wait for reset to be released at boot.
@@ -939,12 +939,12 @@ void entropy_src_ip::entropy_generation_thread()
     // =========================================================================
     while (!rst_ni.read())
     {
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "entropy_generation_thread: waiting for rst_ni de-assertion";
         wait(rst_ni.value_changed_event());
     }
 
-    CSML_INFO(2, logger) << "entropy_generation_thread: starting";
+    REG_INFO(2, logger) << "entropy_generation_thread: starting";
 
     // =========================================================================
     // Initial startup delay — use quantum keeper (no blocking wait)
@@ -959,7 +959,7 @@ void entropy_src_ip::entropy_generation_thread()
         }
     }
 
-    CSML_INFO(2, logger) << "entropy_generation_thread: entering main loop";
+    REG_INFO(2, logger) << "entropy_generation_thread: entering main loop";
 
     // =========================================================================
     // Main loop — simplified event-driven design with quantum keeper pacing
@@ -971,7 +971,7 @@ void entropy_src_ip::entropy_generation_thread()
         // ---------------------------------------------------------------------
         if (!rst_ni.read() || m_hw_reset_in_progress)
         {
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "entropy_generation_thread: hardware reset detected "
                    "— waiting for rst_ni release";
             m_hw_reset_in_progress = false;
@@ -982,11 +982,11 @@ void entropy_src_ip::entropy_generation_thread()
                 wait(rst_ni.value_changed_event());
             }
 
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "entropy_generation_thread: rst_ni released "
-                   "— re-deriving state from CSML registers";
+                   "— re-deriving state from regmodel registers";
 
-            // Re-derive internal state from post-reset CSML register values
+            // Re-derive internal state from post-reset regmodel register values
             m_fifo_enabled = (static_cast<uint32_t>(FIFO_CTRL.ENABLE) != 0u);
             m_health_test_enabled =
                 (static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE) != 0u);
@@ -1013,7 +1013,7 @@ void entropy_src_ip::entropy_generation_thread()
         // ---------------------------------------------------------------------
         if (!m_fifo_enabled)
         {
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "entropy_generation_thread: WAITING_FOR_ENABLE — "
                    "blocking on fifo_fill_event | reset_event";
 
@@ -1036,7 +1036,7 @@ void entropy_src_ip::entropy_generation_thread()
             // FIFO re-enabled — apply startup delay via quantum keeper
             if (m_startup_delay_ns > 0u)
             {
-                CSML_INFO(2, logger)
+                REG_INFO(2, logger)
                     << "entropy_generation_thread: STARTUP_DELAY after FIFO re-enable ("
                     << m_startup_delay_ns << " ns)";
                 m_qk.inc(sc_core::sc_time(
@@ -1052,7 +1052,7 @@ void entropy_src_ip::entropy_generation_thread()
                 }
             }
 
-            CSML_INFO(2, logger)
+            REG_INFO(2, logger)
                 << "entropy_generation_thread: FIFO re-enabled — entering RUNNING";
         }
 
@@ -1068,7 +1068,7 @@ void entropy_src_ip::entropy_generation_thread()
                 // Push one high-quality entropy word from OpenSSL into the FIFO
                 uint32_t entropy_word = 0u;
                 if (RAND_bytes(reinterpret_cast<unsigned char*>(&entropy_word), sizeof(entropy_word)) != 1) {
-                    CSML_ERROR(0, logger) << "RAND_bytes() failed - entropy generation stalled";
+                    REG_ERROR(0, logger) << "RAND_bytes() failed - entropy generation stalled";
                     break; 
                 }
                 m_fifo.push(entropy_word);
@@ -1076,7 +1076,7 @@ void entropy_src_ip::entropy_generation_thread()
                 m_wptr = static_cast<uint8_t>((m_wptr + 1u) % 32);
                 update_fifo_status();
 
-                // CSML_DEBUG(1, logger)
+                // REG_DEBUG(1, logger)
                 //     << "entropy_generation_thread: RUNNING — pushed 0x"
                 //     << std::hex << entropy_word
                 //     << " fifo_depth=" << std::dec << m_fifo.size()
@@ -1090,7 +1090,7 @@ void entropy_src_ip::entropy_generation_thread()
                 {
                     INTR_STATUS = status | INTR_BIT_FIFO_OVERFLOW;
                     m_interrupt_update_event.notify(sc_core::SC_ZERO_TIME);
-                    // CSML_WARN(1, logger)
+                    // REG_WARN(1, logger)
                     //     << "entropy_generation_thread: FIFO full — FIFO_OVERFLOW asserted";
                 }
                 // Back-pressure pacing when FIFO is full
@@ -1136,11 +1136,11 @@ void entropy_src_ip::entropy_generation_thread()
  *
  * Waits for the m_reset_complete_event (posted by handle_write_CTRL after
  * Actions 1–8 complete), then re-derives all internal mirrors from the
- * post-reset CSML register state and resets the quantum keeper.
+ * post-reset regmodel register state and resets the quantum keeper.
  *
  * Functional references:
  *   - BackgroundEntropyProcess IDLE→RUNNING transition after reset
- *   - re-derived flags from post-reset CSML defaults; 
+ *   - re-derived flags from post-reset regmodel defaults; 
  *     explicit FIFO drain to ensure clean architectural state.
  ******************************************************************************/
 void entropy_src_ip::handle_reset_recovery()
@@ -1160,7 +1160,7 @@ void entropy_src_ip::handle_reset_recovery()
     m_rptr = 0u;
     update_fifo_status();
 
-    // Re-derive state from post-reset CSML register values
+    // Re-derive state from post-reset regmodel register values
     m_fifo_enabled = (static_cast<uint32_t>(FIFO_CTRL.ENABLE) != 0u);
     m_health_test_enabled =
         (static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE) != 0u);
@@ -1169,7 +1169,7 @@ void entropy_src_ip::handle_reset_recovery()
     // Reset quantum keeper for clean post-reset timing
     m_qk.reset();
 
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "handle_reset_recovery: resolved — "
         << "fifo_enabled=" << std::boolalpha << m_fifo_enabled
         << " health_test_enabled=" << m_health_test_enabled
@@ -1178,7 +1178,7 @@ void entropy_src_ip::handle_reset_recovery()
     // Post-reset startup delay via quantum keeper
     if (m_startup_delay_ns > 0u)
     {
-        CSML_INFO(2, logger)
+        REG_INFO(2, logger)
             << "handle_reset_recovery: post-reset STARTUP_DELAY ("
             << m_startup_delay_ns << " ns)";
         m_qk.inc(sc_core::sc_time(

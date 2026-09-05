@@ -11,18 +11,18 @@
  * ## TLM Transport (FUNC-001)
  *
  * The `b_transport` handler on `target_socket` (the `reg_socket` per the port
- * interface specification) is registered by `csml_memory<32>` during
+ * interface specification) is registered by `regmodel::Memory<32>` during
  * `entropy_src_base` construction via `memory.bind_to_socket(target_socket)`.
  * No separate `b_transport` override is required in `entropy_src_ip`.
  *
- * CSML handles:
+ * regmodel handles:
  *  - Storage and default values for all 42 memory-mapped registers (0x00–0xEC)
  *  - Write-mask enforcement (RW, WO, W1C, RO per register type definition)
  *  - Reserved-bit masking
  *  - Routing of write/read transactions to the registered callbacks
  *  - `TLM_OK_RESPONSE` set on each payload before return
  *
- * Eight behavioural callbacks registered in the constructor augment CSML:
+ * Eight behavioural callbacks registered in the constructor augment regmodel:
  *  - 7 write callbacks: CTRL, INTR_STATUS, INTR_ENABLE, INTR_TEST,
  *    FIFO_CTRL, HEALTH_TEST_CTRL, STARTUP_CTRL
  *  - 1 read callback:  FIFO_RDATA (destructive pop)
@@ -55,8 +55,8 @@
 
 #include "entropy_src_base.h"
 #include "entropy_src_interface.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 #include <systemc.h>
 #include <tlm.h>
@@ -69,7 +69,7 @@
  * @class entropy_src_ip
  * @brief Concrete entropy_src TLM model
  *
- * Inherits the register bank and CSML memory layer from entropy_src_base
+ * Inherits the register bank and regmodel memory layer from entropy_src_base
  * and the callback interface contract from entropy_src_if.  Adds:
  *   - A single sc_out<bool> interrupt output port (irq_o) that is the OR
  *     of INTR_STATUS & INTR_ENABLE.  Software reads INTR_STATUS to determine
@@ -82,11 +82,12 @@
  *
  * The TLM register access socket (reg_socket per the port interface spec) is
  * provided by entropy_src_base::target_socket, which is already bound to the
- * CSML memory object by the base constructor.  The testbench binds the test
+ * regmodel memory object by the base constructor.  The testbench binds the test
  * harness initiator_socket to target_socket directly.
  ******************************************************************************/
 class entropy_src_ip : public entropy_src_base, public entropy_src_if
 {
+    friend class testbench;
 public:
     SC_HAS_PROCESS(entropy_src_ip);
 
@@ -119,7 +120,7 @@ public:
     /**
      * @brief Logging verbosity (runtime-overridable via ini file)
      */
-    csml_param<int> verbosity;
+    regmodel::Param<int> verbosity;
 
     // =========================================================================
     // Constructor
@@ -129,7 +130,7 @@ public:
      * @brief Constructor
      *
      * Initialises all port names, registers the eight register callbacks with
-     * the CSML memory layer, initialises the PRNG, and declares the background
+     * the regmodel memory layer, initialises the PRNG, and declares the background
      * entropy generation SC_THREAD.
      *
      * @param n           SystemC module name
@@ -142,7 +143,7 @@ public:
         , entropy_src_if()
         , rst_ni("rst_ni")
         , irq_o("irq_o")
-        , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+        , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
         , m_wptr(0u)
         , m_rptr(0u)
         , m_fifo_enabled(true)
@@ -163,9 +164,9 @@ public:
             "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
         logger.setFunctionTrace(false);
 
-        // Register the eight behavioural callbacks with the CSML memory layer.
+        // Register the eight behavioural callbacks with the regmodel memory layer.
         // Offsets are divided by sizeof(DT) (= 4) to obtain the word index
-        // used internally by csml_memory.
+        // used internally by regmodel::Memory.
         memory.register_write_callback(
             [this](DT v) { return this->handle_write_CTRL(v); },
             CTRL.offset);
@@ -214,7 +215,7 @@ public:
         sensitive << m_interrupt_update_event;
         dont_initialize();
 
-        CSML_INFO(2, logger) << "entropy_src model constructed";
+        REG_INFO(2, logger) << "entropy_src model constructed";
     }
 
     /// @brief Destructor
@@ -351,7 +352,7 @@ private:
      * @brief Update FIFO_STATUS register from the current FIFO queue state.
      *
      * Atomically encodes all three FIFO_STATUS fields into a single 32-bit
-     * CSML write, preventing any intermediate state where LEVEL, WPTR, and
+     * regmodel write, preventing any intermediate state where LEVEL, WPTR, and
      * RPTR are inconsistent from software's perspective:
      *
      *  - LEVEL  (bits [6:0])  : current m_fifo.size(), capped at FIFO_DEPTH (32)
@@ -418,7 +419,7 @@ private:
      *
      * Waits for m_reset_complete_event from handle_write_CTRL, then re-derives
      * m_fifo_enabled, m_health_test_enabled, and m_startup_delay_ns from
-     * post-reset CSML register values. Resets the quantum keeper.
+     * post-reset regmodel register values. Resets the quantum keeper.
      */
     void handle_reset_recovery();
 
@@ -437,7 +438,7 @@ private:
      *
      * Sensitive to any transition on rst_ni. When rst_ni reads low:
      *  1. Drains the FIFO and resets pointers.
-     *  2. Calls reset_all_registers() to restore all CSML registers to defaults.
+     *  2. Calls reset_all_registers() to restore all regmodel registers to defaults.
      *  3. Clears internal state mirrors (m_fifo_enabled, m_health_test_enabled, etc.).
      *  4. Sets m_hw_reset_in_progress to interrupt the background thread.
      *  5. Notifies m_reset_event and m_interrupt_update_event.
@@ -457,7 +458,7 @@ private:
     ///
     /// Incremented by the background entropy generation thread on every
     /// successful push into m_fifo.  Encoded in FIFO_STATUS bits [12:8]
-    /// (WPTR field) and kept in sync with the CSML register storage via the
+    /// (WPTR field) and kept in sync with the regmodel register storage via the
     /// atomic FIFO_STATUS update in update_fifo_status_full().
     ///
     /// Initialized to 0 at construction and reset to 0 on every software
@@ -472,7 +473,7 @@ private:
     ///
     /// Incremented by handle_read_FIFO_RDATA on every successful pop from
     /// m_fifo.  Encoded in FIFO_STATUS bits [20:16] (RPTR field) and kept in
-    /// sync with the CSML register storage via the atomic FIFO_STATUS update.
+    /// sync with the regmodel register storage via the atomic FIFO_STATUS update.
     ///
     /// Initialized to 0 at construction and reset to 0 on every software
     /// reset (handle_write_CTRL) and on handle_reset_recovery().
@@ -542,8 +543,8 @@ private:
     /// TLM-2.0 quantum keeper for temporal decoupling
     tlm_utils::tlm_quantumkeeper m_qk;
 
-    /// CSML logger for model diagnostics
-    CsmlLogger logger;
+    /// regmodel logger for model diagnostics
+    RegLogger logger;
 
     // =========================================================================
     // Constants

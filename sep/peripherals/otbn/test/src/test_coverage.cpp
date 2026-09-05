@@ -2,6 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "otbn_basetest.h"
+#include "otbn_algorithm_rsa_2048.h"
+#include "otbn_algorithm_rsa_2048_key_enabled.h"
+#include "otbn_algorithm_rsa_3072.h"
+#include "otbn_algorithm_summation.h"
+#include "otbn_algorithm_rnd_test.h"
+#include <vector>
 
 // ============================================================================
 // Coverage tests — exercise otbn.cpp and algorithm error paths not hit by the
@@ -10,7 +16,7 @@
 
 void testbench::test_cov_keymgr_tlm_read_error()
 {
-    CSML_INFO(1, logger) << "\nCoverage: KeyMgr TLM READ command rejection" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: KeyMgr TLM READ command rejection" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -18,14 +24,14 @@ void testbench::test_cov_keymgr_tlm_read_error()
 
     tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
     if (!test_model->keymgr_tl_stub_inst->send_read(0x00, status)) {
-        CSML_INFO(1, logger) << "  FAIL: send_read transport failed" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: send_read transport failed" << std::endl;
         passed = false;
     } else if (status != tlm::TLM_COMMAND_ERROR_RESPONSE) {
-        CSML_INFO(1, logger) << "  FAIL: expected TLM_COMMAND_ERROR_RESPONSE, got "
+        REG_INFO(1, logger) << "  FAIL: expected TLM_COMMAND_ERROR_RESPONSE, got "
                              << static_cast<int>(status) << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: READ rejected with COMMAND_ERROR" << std::endl;
+        REG_INFO(1, logger) << "  PASS: READ rejected with COMMAND_ERROR" << std::endl;
     }
 
     report_test_result("Coverage: KeyMgr TLM READ error", passed);
@@ -33,7 +39,7 @@ void testbench::test_cov_keymgr_tlm_read_error()
 
 void testbench::test_cov_keymgr_tlm_bad_address()
 {
-    CSML_INFO(1, logger) << "\nCoverage: KeyMgr TLM invalid address" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: KeyMgr TLM invalid address" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -41,14 +47,14 @@ void testbench::test_cov_keymgr_tlm_bad_address()
 
     tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
     if (!test_model->keymgr_tl_stub_inst->send_write(0x70, 0xDEADBEEFu, status)) {
-        CSML_INFO(1, logger) << "  FAIL: send_write transport failed" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: send_write transport failed" << std::endl;
         passed = false;
     } else if (status != tlm::TLM_ADDRESS_ERROR_RESPONSE) {
-        CSML_INFO(1, logger) << "  FAIL: expected TLM_ADDRESS_ERROR_RESPONSE, got "
+        REG_INFO(1, logger) << "  FAIL: expected TLM_ADDRESS_ERROR_RESPONSE, got "
                              << static_cast<int>(status) << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: write to 0x70 rejected with ADDRESS_ERROR" << std::endl;
+        REG_INFO(1, logger) << "  PASS: write to 0x70 rejected with ADDRESS_ERROR" << std::endl;
     }
 
     report_test_result("Coverage: KeyMgr TLM bad address", passed);
@@ -56,7 +62,7 @@ void testbench::test_cov_keymgr_tlm_bad_address()
 
 void testbench::test_cov_keymgr_key_invalidate()
 {
-    CSML_INFO(1, logger) << "\nCoverage: KeyMgr KEY_CTRL invalidate (write 0)" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: KeyMgr KEY_CTRL invalidate (write 0)" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -73,10 +79,10 @@ void testbench::test_cov_keymgr_key_invalidate()
     tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
     if (!test_model->keymgr_tl_stub_inst->send_write(0x60, 0u, status) ||
         status != tlm::TLM_OK_RESPONSE) {
-        CSML_INFO(1, logger) << "  FAIL: KEY_CTRL=0 write failed" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: KEY_CTRL=0 write failed" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: KEY_CTRL=0 accepted (key invalidated)" << std::endl;
+        REG_INFO(1, logger) << "  PASS: KEY_CTRL=0 accepted (key invalidated)" << std::endl;
     }
 
     report_test_result("Coverage: KeyMgr key invalidate", passed);
@@ -84,7 +90,7 @@ void testbench::test_cov_keymgr_key_invalidate()
 
 void testbench::test_cov_keymgr_wdr_s1_h_write()
 {
-    CSML_INFO(1, logger) << "\nCoverage: KeyMgr WDR KEY_S1_H region (0x50)" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: KeyMgr WDR KEY_S1_H region (0x50)" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -105,10 +111,10 @@ void testbench::test_cov_keymgr_wdr_s1_h_write()
     test_model->keymgr_tl_stub_inst->initiator_socket->b_transport(trans, delay);
 
     if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-        CSML_INFO(1, logger) << "  FAIL: KEY_S1_H write rejected" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: KEY_S1_H write rejected" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: KEY_S1_H region written via keymgr TLM" << std::endl;
+        REG_INFO(1, logger) << "  PASS: KEY_S1_H region written via keymgr TLM" << std::endl;
     }
 
     report_test_result("Coverage: KeyMgr WDR S1_H write", passed);
@@ -116,7 +122,7 @@ void testbench::test_cov_keymgr_wdr_s1_h_write()
 
 void testbench::test_cov_dmem_protected_read()
 {
-    CSML_INFO(1, logger) << "\nCoverage: DMEM protected region read returns 0" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: DMEM protected region read returns 0" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -124,11 +130,11 @@ void testbench::test_cov_dmem_protected_read()
 
     uint32_t val = read_dmem_word(768);
     if (val != 0) {
-        CSML_INFO(1, logger) << "  FAIL: protected DMEM[768] expected 0, got 0x"
+        REG_INFO(1, logger) << "  FAIL: protected DMEM[768] expected 0, got 0x"
                              << std::hex << val << std::dec << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: protected DMEM read returns 0" << std::endl;
+        REG_INFO(1, logger) << "  PASS: protected DMEM read returns 0" << std::endl;
     }
 
     report_test_result("Coverage: DMEM protected read", passed);
@@ -136,7 +142,7 @@ void testbench::test_cov_dmem_protected_read()
 
 void testbench::test_cov_lc_rma_intr_enable()
 {
-    CSML_INFO(1, logger) << "\nCoverage: LC RMA with INTR_ENABLE.done" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: LC RMA with INTR_ENABLE.done" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -154,22 +160,22 @@ void testbench::test_cov_lc_rma_intr_enable()
     wait(100, SC_NS);
 
     if (test_model->otp_key_req_stub_inst->get_request_count() < 1) {
-        CSML_INFO(1, logger) << "  FAIL: OTP scramble key not requested during RMA" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: OTP scramble key not requested during RMA" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: OTP scramble key requested during RMA" << std::endl;
+        REG_INFO(1, logger) << "  PASS: OTP scramble key requested during RMA" << std::endl;
     }
 
     uint32_t intr_state = 0;
     test_model->register_read_32(otbn_basetest::INTR_STATE_OFFSET, intr_state);
     if ((intr_state & 0x1) == 0) {
-        CSML_INFO(1, logger) << "  FAIL: INTR_STATE.done not set after RMA" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: INTR_STATE.done not set after RMA" << std::endl;
         passed = false;
     } else if (!intr_done_sig.read()) {
-        CSML_INFO(1, logger) << "  FAIL: intr_done not asserted after RMA with INTR_ENABLE" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: intr_done not asserted after RMA with INTR_ENABLE" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: done interrupt asserted after RMA" << std::endl;
+        REG_INFO(1, logger) << "  PASS: done interrupt asserted after RMA" << std::endl;
     }
 
     test_model->set_lc_rma(false);
@@ -180,7 +186,7 @@ void testbench::test_cov_lc_rma_intr_enable()
 
 void testbench::test_cov_lc_escalation_intr_enable()
 {
-    CSML_INFO(1, logger) << "\nCoverage: LC escalation with INTR_ENABLE.done" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: LC escalation with INTR_ENABLE.done" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -195,24 +201,24 @@ void testbench::test_cov_lc_escalation_intr_enable()
 
     uint32_t status = read_status();
     if (status != 0xFF) {
-        CSML_INFO(1, logger) << "  FAIL: STATUS not LOCKED after escalation" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: STATUS not LOCKED after escalation" << std::endl;
         passed = false;
     }
 
     uint32_t intr_state = 0;
     test_model->register_read_32(otbn_basetest::INTR_STATE_OFFSET, intr_state);
     if ((intr_state & 0x1) == 0) {
-        CSML_INFO(1, logger) << "  FAIL: INTR_STATE.done not set after LC escalation" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: INTR_STATE.done not set after LC escalation" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: INTR_STATE.done set during LC escalation" << std::endl;
+        REG_INFO(1, logger) << "  PASS: INTR_STATE.done set during LC escalation" << std::endl;
     }
 
     if (!intr_done_sig.read()) {
-        CSML_INFO(1, logger) << "  FAIL: intr_done not asserted with INTR_ENABLE=1" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: intr_done not asserted with INTR_ENABLE=1" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: intr_done asserted with INTR_ENABLE=1" << std::endl;
+        REG_INFO(1, logger) << "  PASS: intr_done asserted with INTR_ENABLE=1" << std::endl;
     }
 
     test_model->set_lc_escalate(false);
@@ -222,7 +228,7 @@ void testbench::test_cov_lc_escalation_intr_enable()
 
 void testbench::test_cov_rsa2048_key_invalid()
 {
-    CSML_INFO(1, logger) << "\nCoverage: RSA-2048 key-enabled without registered key" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: RSA-2048 key-enabled without registered key" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -235,11 +241,11 @@ void testbench::test_cov_rsa2048_key_invalid()
 
     uint32_t err_bits = read_err_bits();
     if ((err_bits & 0x20) == 0) {
-        CSML_INFO(1, logger) << "  FAIL: KEY_INVALID (bit 5) not set, ERR_BITS=0x"
+        REG_INFO(1, logger) << "  FAIL: KEY_INVALID (bit 5) not set, ERR_BITS=0x"
                              << std::hex << err_bits << std::dec << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: KEY_INVALID set when key not registered" << std::endl;
+        REG_INFO(1, logger) << "  PASS: KEY_INVALID set when key not registered" << std::endl;
     }
 
     clear_all_errors();
@@ -248,7 +254,7 @@ void testbench::test_cov_rsa2048_key_invalid()
 
 void testbench::test_cov_summation_n_zero()
 {
-    CSML_INFO(1, logger) << "\nCoverage: Summation N=0 error path" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: Summation N=0 error path" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -265,10 +271,10 @@ void testbench::test_cov_summation_n_zero()
 
     uint32_t status = read_status();
     if (status != otbn_constants::STATE_IDLE) {
-        CSML_INFO(1, logger) << "  FAIL: STATUS not IDLE after N=0 error" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: STATUS not IDLE after N=0 error" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: Algorithm returned ERROR for N=0" << std::endl;
+        REG_INFO(1, logger) << "  PASS: Algorithm returned ERROR for N=0" << std::endl;
     }
 
     clear_all_errors();
@@ -277,7 +283,7 @@ void testbench::test_cov_summation_n_zero()
 
 void testbench::test_cov_p256_invalid_signature()
 {
-    CSML_INFO(1, logger) << "\nCoverage: P256 ECDSA invalid signature" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: P256 ECDSA invalid signature" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -295,11 +301,11 @@ void testbench::test_cov_p256_invalid_signature()
     const uint32_t OK_WORD = 0x504 / 4;
     uint32_t ok_val = read_dmem_word(OK_WORD);
     if (ok_val != 0x00001d4e) {  // HARDENED_BOOL_FALSE
-        CSML_INFO(1, logger) << "  FAIL: expected HARDENED_BOOL_FALSE (0x1d4e), got 0x"
+        REG_INFO(1, logger) << "  FAIL: expected HARDENED_BOOL_FALSE (0x1d4e), got 0x"
                              << std::hex << ok_val << std::dec << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: Invalid signature → HARDENED_BOOL_FALSE" << std::endl;
+        REG_INFO(1, logger) << "  PASS: Invalid signature → HARDENED_BOOL_FALSE" << std::endl;
     }
 
     report_test_result("Coverage: P256 invalid signature", passed);
@@ -307,7 +313,7 @@ void testbench::test_cov_p256_invalid_signature()
 
 void testbench::test_cov_p256_invalid_pubkey()
 {
-    CSML_INFO(1, logger) << "\nCoverage: P256 ECDSA invalid public key point" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: P256 ECDSA invalid public key point" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -325,14 +331,14 @@ void testbench::test_cov_p256_invalid_pubkey()
     wait_for_algorithm_completion(2000);
     wait_for_idle("p256 bad pubkey execute");
 
-    CSML_INFO(1, logger) << "  PASS: Invalid pubkey error path exercised" << std::endl;
+    REG_INFO(1, logger) << "  PASS: Invalid pubkey error path exercised" << std::endl;
     clear_all_errors();
     report_test_result("Coverage: P256 invalid pubkey", passed);
 }
 
 void testbench::test_cov_rsa3072_happy_path()
 {
-    CSML_INFO(1, logger) << "\nCoverage: RSA-3072 happy path (sig^65537 mod n)" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: RSA-3072 happy path (sig^65537 mod n)" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -351,10 +357,10 @@ void testbench::test_cov_rsa3072_happy_path()
 
     uint32_t err_bits = read_err_bits();
     if (err_bits != 0) {
-        CSML_INFO(1, logger) << "  FAIL: ERR_BITS=0x" << std::hex << err_bits << std::dec << std::endl;
+        REG_INFO(1, logger) << "  FAIL: ERR_BITS=0x" << std::hex << err_bits << std::dec << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: RSA-3072 execution completed without errors" << std::endl;
+        REG_INFO(1, logger) << "  PASS: RSA-3072 execution completed without errors" << std::endl;
     }
 
     report_test_result("Coverage: RSA-3072 happy path", passed);
@@ -362,7 +368,7 @@ void testbench::test_cov_rsa3072_happy_path()
 
 void testbench::test_cov_rsa3072_zero_modulus()
 {
-    CSML_INFO(1, logger) << "\nCoverage: RSA-3072 zero modulus error" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: RSA-3072 zero modulus error" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -377,14 +383,14 @@ void testbench::test_cov_rsa3072_zero_modulus()
     test_model->register_write_32(otbn_regs::CMD_OFFSET, otbn_constants::CMD_EXECUTE);
     wait_for_idle("rsa3072 zero mod execute");
 
-    CSML_INFO(1, logger) << "  PASS: Zero modulus path exercised" << std::endl;
+    REG_INFO(1, logger) << "  PASS: Zero modulus path exercised" << std::endl;
     clear_all_errors();
     report_test_result("Coverage: RSA-3072 zero modulus", passed);
 }
 
 void testbench::test_cov_csr_wdr_callback_execute()
 {
-    CSML_INFO(1, logger) << "\nCoverage: CSR/WDR callbacks via callback_cov algorithm" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: CSR/WDR callbacks via callback_cov algorithm" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -395,11 +401,11 @@ void testbench::test_cov_csr_wdr_callback_execute()
 
     uint32_t marker = read_dmem_word(0);
     if (marker != 0xC0DEC0DEu) {
-        CSML_INFO(1, logger) << "  FAIL: expected DMEM[0]=0xC0DEC0DE, got 0x"
+        REG_INFO(1, logger) << "  FAIL: expected DMEM[0]=0xC0DEC0DE, got 0x"
                              << std::hex << marker << std::dec << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: callback_cov algorithm completed" << std::endl;
+        REG_INFO(1, logger) << "  PASS: callback_cov algorithm completed" << std::endl;
     }
 
     clear_all_errors();
@@ -408,7 +414,7 @@ void testbench::test_cov_csr_wdr_callback_execute()
 
 void testbench::test_cov_wdr_key_read_with_key()
 {
-    CSML_INFO(1, logger) << "\nCoverage: WDR key region read with sideload key" << std::endl;
+    REG_INFO(1, logger) << "\nCoverage: WDR key region read with sideload key" << std::endl;
 
     bool passed = true;
     apply_reset();
@@ -426,27 +432,105 @@ void testbench::test_cov_wdr_key_read_with_key()
     wait_for_idle("wdr key read execute");
 
     if (read_dmem_word(0) != 0xC0DEC0DEu) {
-        CSML_INFO(1, logger) << "  FAIL: callback_cov did not complete after key program" << std::endl;
+        REG_INFO(1, logger) << "  FAIL: callback_cov did not complete after key program" << std::endl;
         passed = false;
     } else {
-        CSML_INFO(1, logger) << "  PASS: key WDR read path exercised" << std::endl;
+        REG_INFO(1, logger) << "  PASS: key WDR read path exercised" << std::endl;
     }
 
     clear_all_errors();
     report_test_result("Coverage: WDR key read with sideload key", passed);
 }
 
+void testbench::test_cov_otp_key_rsp_channel()
+{
+    REG_INFO(1, logger) << "\nCoverage: OTP key response channel mock" << std::endl;
+
+    bool passed = true;
+    if (!dut->otp_key_rsp->key_available()) {
+        REG_INFO(1, logger) << "  FAIL: key_available() returned false" << std::endl;
+        passed = false;
+    }
+
+    uint32_t key[4] = {0, 0, 0, 0};
+    uint32_t nonce = 0;
+    uint32_t seed = 0;
+    dut->otp_key_rsp->get_scramble_key(key, nonce, seed);
+    if (key[0] == 0 && key[1] == 0 && key[2] == 0 && key[3] == 0) {
+        REG_INFO(1, logger) << "  FAIL: scramble key was all zeros" << std::endl;
+        passed = false;
+    } else {
+        REG_INFO(1, logger) << "  PASS: OTP mock returned a scramble key" << std::endl;
+    }
+
+    report_test_result("Coverage: OTP key response channel", passed);
+}
+
+void testbench::test_cov_algorithm_error_guards()
+{
+    REG_INFO(1, logger) << "\nCoverage: Algorithm DMEM-size and RND error guards" << std::endl;
+
+    bool passed = true;
+    std::vector<char> buf(256, 0);
+
+    otbn_algorithm_rsa_2048 rsa2048(512);
+    if (rsa2048.execute(buf.data()) != otbn_algorithm::ERROR) {
+        REG_INFO(1, logger) << "  FAIL: rsa_2048 should reject small DMEM" << std::endl;
+        passed = false;
+    }
+
+    otbn_algorithm_rsa_2048_key_enabled rsa2048_key(512);
+    rsa2048_key.register_key_status_cb([]() { return true; });
+    if (rsa2048_key.execute(buf.data()) != otbn_algorithm::ERROR) {
+        REG_INFO(1, logger) << "  FAIL: rsa_2048_key_enabled should reject small DMEM" << std::endl;
+        passed = false;
+    }
+
+    otbn_algorithm_rsa_3072 rsa3072(512);
+    if (rsa3072.execute(buf.data()) != otbn_algorithm::ERROR) {
+        REG_INFO(1, logger) << "  FAIL: rsa_3072 should reject small DMEM" << std::endl;
+        passed = false;
+    }
+
+    buf[0] = 20;  // N=20, N+2=22 > constructed DMEM size of 10
+    otbn_algorithm_summation sum(10);
+    if (sum.execute(buf.data()) != otbn_algorithm::ERROR) {
+        REG_INFO(1, logger) << "  FAIL: summation should reject N exceeding DMEM" << std::endl;
+        passed = false;
+    }
+
+    otbn_algorithm_rnd_test rnd_nocb(256);
+    if (rnd_nocb.execute(buf.data()) != otbn_algorithm::ERROR) {
+        REG_INFO(1, logger) << "  FAIL: rnd_test should error without callback" << std::endl;
+        passed = false;
+    }
+
+    otbn_algorithm_rnd_test rnd_fail(256);
+    rnd_fail.register_rnd_read_cb([](uint32_t*) { return otbn_algorithm::ERROR; });
+    if (rnd_fail.execute(buf.data()) != otbn_algorithm::ERROR) {
+        REG_INFO(1, logger) << "  FAIL: rnd_test should error when callback fails" << std::endl;
+        passed = false;
+    }
+
+    if (passed) {
+        REG_INFO(1, logger) << "  PASS: Algorithm error guards returned ERROR" << std::endl;
+    }
+    report_test_result("Coverage: Algorithm error guards", passed);
+}
+
 void testbench::run_coverage_tests()
 {
-    CSML_INFO(1, logger) << "\n========================================" << std::endl;
-    CSML_INFO(1, logger) << "   OTBN Coverage Tests" << std::endl;
-    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+    REG_INFO(1, logger) << "\n========================================" << std::endl;
+    REG_INFO(1, logger) << "   OTBN Coverage Tests" << std::endl;
+    REG_INFO(1, logger) << "========================================\n" << std::endl;
 
     test_cov_keymgr_tlm_read_error();
     test_cov_keymgr_tlm_bad_address();
     test_cov_keymgr_key_invalidate();
     test_cov_keymgr_wdr_s1_h_write();
     test_cov_dmem_protected_read();
+    test_cov_otp_key_rsp_channel();
+    test_cov_algorithm_error_guards();
     test_cov_lc_escalation_intr_enable();
     test_cov_lc_rma_intr_enable();
 

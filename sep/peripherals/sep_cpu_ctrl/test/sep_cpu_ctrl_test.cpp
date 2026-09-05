@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // =============================================================================
-// sep_cpu_ctrl_test.cpp  —  smoke test for sep_cpu_ctrl_ip (CSML style)
+// sep_cpu_ctrl_test.cpp  —  smoke test for sep_cpu_ctrl_ip (regmodel style)
 // Addresses are register offsets — SimpleBus strips the base address.
 // =============================================================================
 
 #include "sep_cpu_ctrl.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 #include <tlm_utils/simple_initiator_socket.h>
 #include <iostream>
 #include <cassert>
@@ -342,7 +342,7 @@ SC_MODULE(Tb) {
 };
 
 int sc_main(int argc, char** argv) {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     Tb tb("tb");
     sc_core::sc_start();
 

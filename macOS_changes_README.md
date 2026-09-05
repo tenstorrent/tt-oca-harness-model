@@ -264,7 +264,7 @@ sc_core::sc_time(static_cast<double>(globalQuantumNs.get_param_value()),
 
 **Why:** `CSML_REPORT(…, regname, " message")` failed with “call to 'form_report_string' is ambiguous” on Apple Clang.
 
-**Linux impact:** Safe on GCC. **Commit inside the `csml` submodule** and bump the submodule pointer in tt-oca-harness-model.
+**Linux impact:** Safe on GCC. Historical note: this lived in the CSML submodule at the time of the port. CSML is no longer a live dependency — do not commit into `sep/utils/csml`.
 
 ---
 
@@ -435,7 +435,7 @@ Improvements that also help Linux:
 
 3. **Boost.Log removed from top-level find** — OK if Linux install also lacks `boost_log` or the component is unused. If some Linux image relied on Boost.Log, rebuild Boost or restore the component in cmake only where needed.
 
-4. **`csml` submodule** — Ensure `csml_report.h` change is committed in submodule and referenced from parent repo.
+4. **`csml` (historical)** — No longer a live dependency. Do not commit into `sep/utils/csml`; SEP uses in-house `regmodel` under `common/include`.
 
 ### Recommended Linux re-validation
 
@@ -470,7 +470,7 @@ Items below are **follow-ups**, not requirements for the macOS port. Builds and 
 | Item | Priority | Suggestion |
 |------|----------|------------|
 | `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` untracked | **Medium** | Add to git if macOS is a supported platform; document one-time `make` under that directory. |
-| `csml` submodule | **Medium** | Commit `csml_report.h` in the submodule and bump the parent repo pointer (see **csml_report.h** subsection above). |
+| `csml` (historical) | — | Not a live dependency. The `sep/utils/csml` submodule has been removed. |
 
 ### Optional polish (low priority)
 

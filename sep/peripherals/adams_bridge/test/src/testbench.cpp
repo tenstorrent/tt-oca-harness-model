@@ -7,8 +7,8 @@
 
 #include "abr_testbench.h"
 
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 #include <tlm_utils/tlm_quantumkeeper.h>
 
@@ -88,7 +88,7 @@ void abr_testbench::transact(tlm_utils::simple_initiator_socket<abr_testbench, 3
 
 uint32_t abr_testbench::rd(uint32_t offset)
 {
-    // Write-only offsets leave the buffer untouched (CSML reports the access
+    // Write-only offsets leave the buffer untouched (regmodel reports the access
     // and returns no data), so pre-zero it: that is what software observes.
     uint32_t value = 0u;
     transact(isock, tlm::TLM_READ_COMMAND, offset,
@@ -351,13 +351,13 @@ extern "C" void __gcov_dump(void);
 
 int sc_main(int argc, char *argv[])
 {
-    CsmlLogger logger;
-    logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    RegLogger logger;
+    logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    // Registers the CCI broker; csml_param construction depends on it.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    // Registers the CCI broker; regmodel::Param construction depends on it.
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     // Temporal decoupling: a 1 us quantum is short relative to the modeled
     // operation latencies, so the engine threads resynchronize several times

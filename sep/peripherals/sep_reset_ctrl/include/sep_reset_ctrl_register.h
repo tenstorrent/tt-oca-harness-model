@@ -9,18 +9,18 @@
 #pragma once
 #include<iostream>
 #include<systemc.h>
-#include "csml_register.h"
+#include "reg_file.h"
 
 namespace sep_reset_ctrl {
 
 template<unsigned int N>
-class SW_RESET_N_type : public csml_reg<N>
+class SW_RESET_N_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     SW_RESET_N_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x1f, 0x1f, 0x1e),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x1f, 0x1f, 0x1e),
       km_sw_rst_n(reg_name + ".km_sw_rst_n", *this, 0, 1), 
       otbn_sw_rst_n(reg_name + ".otbn_sw_rst_n", *this, 1, 1), 
       aes_sw_rst_n(reg_name + ".aes_sw_rst_n", *this, 2, 1), 
@@ -31,23 +31,23 @@ class SW_RESET_N_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> km_sw_rst_n;
-    csml_bitfield<N> otbn_sw_rst_n;
-    csml_bitfield<N> aes_sw_rst_n;
-    csml_bitfield<N> hmac_sw_rst_n;
-    csml_bitfield<N> kmac_sw_rst_n;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> km_sw_rst_n;
+    regmodel::Bitfield<N> otbn_sw_rst_n;
+    regmodel::Bitfield<N> aes_sw_rst_n;
+    regmodel::Bitfield<N> hmac_sw_rst_n;
+    regmodel::Bitfield<N> kmac_sw_rst_n;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 

@@ -21,7 +21,7 @@
 //            renders "SEP_MSG_UNKNOWN" (the code is never dropped)
 //
 // The names map is loaded from the firmware's canonical meta/status/status_values.tsv
-// at run time — there is NO compiled name table. Kept free of SystemC/CSML so the
+// at run time — there is NO compiled name table. Kept free of SystemC/regmodel so the
 // decode and TSV-parse logic are unit-testable in isolation.
 
 #include <cstdint>

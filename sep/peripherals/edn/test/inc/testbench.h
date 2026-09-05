@@ -12,7 +12,7 @@
 #include <systemc.h>
 #include "../../include/edn.h"
 #include "edn_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 /**
  * @class testbench
@@ -31,7 +31,7 @@ class testbench : public sc_module
 {
   public:
     /// Logger instance for test reporting
-    CsmlLogger logger;
+    RegLogger logger;
 
     SC_HAS_PROCESS(testbench);
 

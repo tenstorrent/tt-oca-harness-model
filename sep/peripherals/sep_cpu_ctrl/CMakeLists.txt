@@ -49,7 +49,7 @@ endif()
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
-add_compile_definitions(USE_CSML_REG_LIB SC_ALLOW_DEPRECATED_IEEE_API)
+add_compile_definitions(SC_ALLOW_DEPRECATED_IEEE_API)
 
 # -----------------------------------------------------------------------------
 # Build type & output dirs
@@ -77,20 +77,20 @@ endif()
 set(WFLAG "-Wall -Wextra")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
-  add_compile_definitions(DEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(DEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "sep_cpu_ctrl: Debug build - full logging enabled")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(NDEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "sep_cpu_ctrl: Release build - errors only, optimized")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g -O0 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=2)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=2)
   message(STATUS "sep_cpu_ctrl: ASAN build - AddressSanitizer enabled")
 endif()
 
@@ -98,7 +98,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "sep_cpu_ctrl: Coverage build enabled")
 endif()
 
@@ -118,13 +118,8 @@ endif()
 # -----------------------------------------------------------------------------
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
-
-# Add shared CSML logger library (only if not already built)
-if(NOT TARGET csml_logger)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
-endif()
 
 # -----------------------------------------------------------------------------
 # Sources
@@ -140,8 +135,9 @@ set(MODEL_SRCS
 peripheral_add_model_library(sep_cpu_ctrl_model ${MODEL_SRCS})
 target_include_directories(sep_cpu_ctrl_model PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
-target_link_libraries(sep_cpu_ctrl_model PUBLIC csml_logger SystemC::systemc Threads::Threads)
+target_link_libraries(sep_cpu_ctrl_model PUBLIC SystemC::systemc Threads::Threads)
 if(CCI_FOUND)
   target_link_libraries(sep_cpu_ctrl_model PUBLIC ${CCI_LIBRARIES})
 endif()
@@ -151,10 +147,13 @@ if(BUILD_TESTS)
     test/sep_cpu_ctrl_test.cpp
   )
   peripheral_link_test_to_model(sep_cpu_ctrl_testbench sep_cpu_ctrl_model)
-  target_link_libraries(sep_cpu_ctrl_testbench PRIVATE csml_logger SystemC::systemc Threads::Threads)
+  target_link_libraries(sep_cpu_ctrl_testbench PRIVATE SystemC::systemc)
+  if(CCI_FOUND)
+    target_link_libraries(sep_cpu_ctrl_testbench PRIVATE ${CCI_LIBRARIES})
+  endif()
   target_include_directories(sep_cpu_ctrl_testbench PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
   )
 
   # The suite checks with assert(), which the Release NDEBUG above would compile
@@ -222,7 +221,7 @@ if(CPPCHECK_EXECUTABLE)
       --template=gcc
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/include
-      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
       2> ${CMAKE_BINARY_DIR}/cppcheck_report.txt

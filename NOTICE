@@ -50,8 +50,10 @@ OpenTitan
   License: Apache License 2.0
   Copyright lowRISC contributors (OpenTitan project)
 
-CSML (Core SystemC Model Library)
-  Location: sep/utils/csml/ (git submodule)
+CSML (Core SystemC Model Library) — historical
+  The Vayavya CSML git submodule (formerly sep/utils/csml) has been
+  removed. SEP register models use in-house regmodel under
+  common/include (reg_file.h, reg_param.h, reg_logger.h).
   Copyright Vayavya Labs Pvt. Ltd.
   Source: https://github.com/Vayavya-Labs/CSML
 

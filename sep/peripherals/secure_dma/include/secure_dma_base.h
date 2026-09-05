@@ -32,7 +32,7 @@
 class secure_dma_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
 
     /**
      * @brief Constructor for DMA base register infrastructure
@@ -76,10 +76,10 @@ class secure_dma_base : public sc_module
        }
 
       /// Register memory storage (32-bit word width)
-      csml_memory<32> memory;
+      regmodel::Memory<32> memory;
 
       /// TLM target socket for register access (32-bit data width)
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
 
       /// Interrupt State Register (offset 0x00, RO) - Reflects current interrupt status
@@ -149,7 +149,7 @@ class secure_dma_base : public sc_module
       dma::ERROR_CODE_type<32> ERROR_CODE;
 
       /// SHA-2 Digest Array (offset 0x58-0x94, RO) - 16x32-bit words for SHA-256/384/512 output
-      csml_reg_vector<dma::SHA2_DIGEST_type<32>, 16> SHA2_DIGEST;
+      regmodel::RegVector<dma::SHA2_DIGEST_type<32>, 16> SHA2_DIGEST;
 
       /// Handshake Interrupt Enable Register (offset 0x98, RW) - Enable mask for 11 lsio_trigger inputs (reset 0x7FF)
       dma::HANDSHAKE_INTR_ENABLE_type<32> HANDSHAKE_INTR_ENABLE;
@@ -161,10 +161,10 @@ class secure_dma_base : public sc_module
       dma::CLEAR_INTR_BUS_type<32> CLEAR_INTR_BUS;
 
       /// Interrupt Source Address Array (offset 0xA4-0xCC, RW) - 11 addresses for interrupt clearing writes
-      csml_reg_vector<dma::INTR_SRC_ADDR_type<32>, 11> INTR_SRC_ADDR;
+      regmodel::RegVector<dma::INTR_SRC_ADDR_type<32>, 11> INTR_SRC_ADDR;
 
       /// Interrupt Source Write Value Array (offset 0x124-0x14C, RW) - 11 write values for interrupt clearing
-      csml_reg_vector<dma::INTR_SRC_WR_VAL_type<32>, 11> INTR_SRC_WR_VAL;
+      regmodel::RegVector<dma::INTR_SRC_WR_VAL_type<32>, 11> INTR_SRC_WR_VAL;
 
       /**
        * @brief Resets all DMA registers to their default values

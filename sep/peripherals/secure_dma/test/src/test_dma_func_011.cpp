@@ -77,7 +77,7 @@
  * - Trigger enable/disable configuration
  */
 void testbench::run_func011_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-011: Hardware Handshaking Mechanism Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -110,7 +110,7 @@ void testbench::run_func011_tests() {
   test_hw_handshake_no_drain_before_trigger();
   test_hw_handshake_multichunk_reference_74();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-011 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -160,7 +160,7 @@ void testbench::run_func011_tests() {
 void testbench::test_hw_handshake_trigger0() {
   std::string test_name =
       " Hardware Handshake with Trigger 0 (I2C RX FIFO)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -335,7 +335,7 @@ void testbench::test_hw_handshake_trigger0() {
 void testbench::test_hw_handshake_trigger1() {
   std::string test_name =
       "Hardware Handshake with Trigger 1 (I2C TX FIFO)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(1, 0x10000000, 0x40002000, 128, 64);
@@ -355,7 +355,7 @@ void testbench::test_hw_handshake_trigger1() {
 void testbench::test_hw_handshake_trigger2() {
   std::string test_name =
       "Hardware Handshake with Trigger 2 (UART RX FIFO)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(2, 0x40003000, 0x20001000, 96, 32);
@@ -374,7 +374,7 @@ void testbench::test_hw_handshake_trigger2() {
 void testbench::test_hw_handshake_trigger3() {
   std::string test_name =
       "Hardware Handshake with Trigger 3 (UART TX FIFO)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(3, 0x10002000, 0x40004000, 80, 40);
@@ -393,7 +393,7 @@ void testbench::test_hw_handshake_trigger3() {
 void testbench::test_hw_handshake_trigger4() {
   std::string test_name =
       "Hardware Handshake with Trigger 4 (SPI Device RX)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(4, 0x40005000, 0x20002000, 160, 64);
@@ -412,7 +412,7 @@ void testbench::test_hw_handshake_trigger4() {
 void testbench::test_hw_handshake_trigger5() {
   std::string test_name =
       "Hardware Handshake with Trigger 5 (SPI Device TX)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(5, 0x10003000, 0x40006000, 128, 64);
@@ -431,7 +431,7 @@ void testbench::test_hw_handshake_trigger5() {
 void testbench::test_hw_handshake_trigger6() {
   std::string test_name =
       "Hardware Handshake with Trigger 6 (SPI Host RX)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(6, 0x40007000, 0x20003000, 192, 48);
@@ -450,7 +450,7 @@ void testbench::test_hw_handshake_trigger6() {
 void testbench::test_hw_handshake_trigger7() {
   std::string test_name =
       "Hardware Handshake with Trigger 7 (SPI Host TX)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(7, 0x10004000, 0x40008000, 144, 48);
@@ -469,7 +469,7 @@ void testbench::test_hw_handshake_trigger7() {
 void testbench::test_hw_handshake_trigger8() {
   std::string test_name =
       "FUNC-011 TC009: Hardware Handshake with Trigger 8 (Peripheral FIFO)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(8, 0x40009000, 0x20004000, 256, 64);
@@ -488,7 +488,7 @@ void testbench::test_hw_handshake_trigger8() {
 void testbench::test_hw_handshake_trigger9() {
   std::string test_name =
       "Hardware Handshake with Trigger 9 (Peripheral FIFO)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(9, 0x4000A000, 0x20005000, 112, 56);
@@ -507,7 +507,7 @@ void testbench::test_hw_handshake_trigger9() {
 void testbench::test_hw_handshake_trigger10() {
   std::string test_name =
       "Hardware Handshake with Trigger 10 (Peripheral FIFO)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed =
       run_generic_hw_handshake_test(10, 0x4000B000, 0x20006000, 176, 44);
@@ -560,7 +560,7 @@ void testbench::test_hw_handshake_trigger10() {
 void testbench::test_hw_handshake_auto_clear_ot_bus() {
   std::string test_name =
       "Automatic Interrupt Clearing on OT-Internal Bus";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -722,7 +722,7 @@ void testbench::test_hw_handshake_auto_clear_ot_bus() {
 void testbench::test_hw_handshake_auto_clear_ctn_bus() {
   std::string test_name =
       "Automatic Interrupt Clearing on CTN/System Bus";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -861,7 +861,7 @@ void testbench::test_hw_handshake_auto_clear_ctn_bus() {
  */
 void testbench::test_hw_handshake_go_bit_remains_set() {
   std::string test_name = "Go Bit Remains Set After Completion";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1007,7 +1007,7 @@ void testbench::test_hw_handshake_go_bit_remains_set() {
 void testbench::test_hw_handshake_no_chunk_done_intr() {
   std::string test_name =
       "No Chunk Done Interrupt in Hardware Handshake Mode";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1163,7 +1163,7 @@ void testbench::test_hw_handshake_no_chunk_done_intr() {
 void testbench::test_hw_handshake_total_size_reached() {
   std::string test_name =
       "Total Size Reached - No Response to Further Triggers";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1429,7 +1429,7 @@ bool testbench::run_generic_hw_handshake_test(uint32_t trigger_index,
 void testbench::test_hw_handshake_no_drain_before_trigger() {
   std::string test_name =
       "Handshake: no drain before first trigger (arm-before-data)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1551,7 +1551,7 @@ void testbench::test_hw_handshake_no_drain_before_trigger() {
 void testbench::test_hw_handshake_multichunk_reference_74() {
   std::string test_name =
       "Handshake: 74-chunk (1184B) multi-chunk drain, data verified";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

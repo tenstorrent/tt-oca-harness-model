@@ -322,7 +322,7 @@ void efuse_model::apply_transient_rma()
 
     m_lc_state_val = lc_state_encode(next);
     LC_STATE       = m_lc_state_val;
-    CSML_INFO(1, logger) << "transient RMA: LC_STATE advanced to 0x" << std::hex << next
+    REG_INFO(1, logger) << "transient RMA: LC_STATE advanced to 0x" << std::hex << next
                          << std::dec << " on token match" << std::endl;
 }
 
@@ -341,45 +341,53 @@ void efuse_model::apply_transient_rma()
 // fields and are themselves always readable, sticky rather than lockable.
 // =============================================================================
 
+namespace {
+constexpr unsigned int k_word(unsigned int byte_off) { return byte_off / 4u; }
+// Inclusive last word of an N-word (32-bit) array starting at byte_off.
+constexpr unsigned int k_last(unsigned int byte_off, unsigned int n_words)
+{
+    return (byte_off + (n_words - 1u) * 4u) / 4u;
+}
+}  // namespace
+
 const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     // first        last          hi     write-lock bit
-    { 0x00C / 4, 0x00C / 4, false,  0 },  // LC_STATE
-    { 0x010 / 4, 0x010 / 4, false,  2 },  // SBOOT_DIS
-    { 0x014 / 4, 0x014 / 4, false,  4 },  // TRANSIENT_RMA_EN
-    { 0x018 / 4, 0x01C / 4, false,  6 },  // SIP_DIS_{LO,HI}
-    { 0x020 / 4, 0x024 / 4, false,  8 },  // SYS_DIS_{LO,HI}
-    { 0x028 / 4, 0x044 / 4, false, 10 },  // RMA_SIP_TOKEN[8]
-    { 0x048 / 4, 0x064 / 4, false, 12 },  // RMA_CHIPLET_TOKEN[8]
-    { 0x068 / 4, 0x084 / 4, false, 14 },  // CLASS_KEY[8]
-    { 0x088 / 4, 0x088 / 4, false, 16 },  // CHIPLET_PUBK_REVOKE
-    { 0x08C / 4, 0x0A8 / 4, false, 18 },  // BL1_VERSION[8]
-    { 0x0AC / 4, 0x0C8 / 4, false, 20 },  // BL2_VERSION[8]
-    { 0x0CC / 4, 0x0E8 / 4, false, 22 },  // CHIPLET_UID[8]
-    { 0x0EC / 4, 0x108 / 4, false, 24 },  // SIP_PUBK_HASH0[8]
-    { 0x10C / 4, 0x128 / 4, false, 26 },  // SIP_UID[8]
-    { 0x12C / 4, 0x148 / 4, false, 28 },  // SYS_PUBK_HASH[8]
-    { 0x14C / 4, 0x168 / 4, false, 30 },  // SYS_UID[8]
-    { 0x16C / 4, 0x16C / 4, true,   0 },  // STATUS_RPT
-    { 0x170 / 4, 0x170 / 4, true,   2 },  // SEP_ROM_CTRL
+    { k_word(sep_efuse::LC_STATE_OFFSET),            k_word(sep_efuse::LC_STATE_OFFSET),            false,  0 },
+    { k_word(sep_efuse::SBOOT_DIS_OFFSET),           k_word(sep_efuse::SBOOT_DIS_OFFSET),           false,  2 },
+    { k_word(sep_efuse::TRANSIENT_RMA_EN_OFFSET),    k_word(sep_efuse::TRANSIENT_RMA_EN_OFFSET),    false,  4 },
+    { k_word(sep_efuse::SIP_DIS_LO_OFFSET),          k_word(sep_efuse::SIP_DIS_HI_OFFSET),          false,  6 },
+    { k_word(sep_efuse::SYS_DIS_LO_OFFSET),          k_word(sep_efuse::SYS_DIS_HI_OFFSET),          false,  8 },
+    { k_word(sep_efuse::RMA_SIP_TOKEN_OFFSET),       k_last(sep_efuse::RMA_SIP_TOKEN_OFFSET, 8),    false, 10 },
+    { k_word(sep_efuse::RMA_CHIPLET_TOKEN_OFFSET),   k_last(sep_efuse::RMA_CHIPLET_TOKEN_OFFSET, 8),false, 12 },
+    { k_word(sep_efuse::CLASS_KEY_OFFSET),           k_last(sep_efuse::CLASS_KEY_OFFSET, 8),        false, 14 },
+    { k_word(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET), k_word(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET), false, 16 },
+    { k_word(sep_efuse::BL1_VERSION_OFFSET),         k_last(sep_efuse::BL1_VERSION_OFFSET, 8),      false, 18 },
+    { k_word(sep_efuse::BL2_VERSION_OFFSET),         k_last(sep_efuse::BL2_VERSION_OFFSET, 8),      false, 20 },
+    { k_word(sep_efuse::CHIPLET_UID_OFFSET),         k_last(sep_efuse::CHIPLET_UID_OFFSET, 8),      false, 22 },
+    { k_word(sep_efuse::SIP_PUBK_HASH0_OFFSET),      k_last(sep_efuse::SIP_PUBK_HASH0_OFFSET, 8),   false, 24 },
+    { k_word(sep_efuse::SIP_UID_OFFSET),             k_last(sep_efuse::SIP_UID_OFFSET, 8),          false, 26 },
+    { k_word(sep_efuse::SYS_PUBK_HASH_OFFSET),       k_last(sep_efuse::SYS_PUBK_HASH_OFFSET, 8),    false, 28 },
+    { k_word(sep_efuse::SYS_UID_OFFSET),             k_last(sep_efuse::SYS_UID_OFFSET, 8),          false, 30 },
+    { k_word(sep_efuse::STATUS_RPT_OFFSET),          k_word(sep_efuse::STATUS_RPT_OFFSET),          true,   0 },
+    { k_word(sep_efuse::SEP_ROM_CTRL_OFFSET),        k_word(sep_efuse::SEP_ROM_CTRL_OFFSET),        true,   2 },
     // One pair covers the whole SPI control group: the field-enable register plus
     // the discovery and PHY timing registers that follow it.
-    { 0x174 / 4, 0x194 / 4, true,   4 },  // SEP_SPI_CTRL_FIELD_EN .. SPI_RB_VALID_TIME
-    { 0x198 / 4, 0x1B4 / 4, true ,   6 },  // CHIPLET_PUBK_HASH0[8]
-    { 0x1B8 / 4, 0x1D4 / 4, true ,   8 },  // CHIPLET_PUBK_HASH1[8]
-    { 0x1D8 / 4, 0x1D8 / 4, true ,  10 },  // REQUIRED_SIGNERS
-    { 0x1DC / 4, 0x1DC / 4, true ,  12 },  // REQUIRED_ALGS
-    { 0x1E0 / 4, 0x1FC / 4, true ,  14 },  // CHIPLET_PUBK_PQC_HASH0[8]
-    { 0x200 / 4, 0x21C / 4, true ,  16 },  // CHIPLET_PUBK_PQC_HASH1[8]
-    { 0x220 / 4, 0x23C / 4, true ,  18 },  // SIP_PUBK_PQC_HASH0[8]
-    { 0x240 / 4, 0x25C / 4, true ,  20 },  // SYS_PUBK_PQC_HASH[8]
-    { 0x260 / 4, 0x27C / 4, true ,  22 },  // SIP_PUBK_HASH1[8]
-    { 0x280 / 4, 0x29C / 4, true ,  24 },  // SIP_PUBK_PQC_HASH1[8]
-    { 0x2A0 / 4, 0x2BC / 4, true ,  26 },  // SEP_CHIPLET_ID[8]
-    { 0x2C0 / 4, 0x2DC / 4, true ,  28 },  // SEP_SIP_ID[8]
-    { 0x2E0 / 4, 0x2FC / 4, true ,  30 },  // SEP_SYS_ID[8]
-    // SPARE0..7 (0x300..0x3E0) are locked by LOCKS_SPARE, not LOCKS. The model
-    // has no LOCKS_SPARE plumbing, so they are deliberately absent here rather
-    // than aimed at whatever LOCKS bit happened to be free.
+    { k_word(sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET), k_word(sep_efuse::SPI_RB_VALID_TIME_OFFSET), true,  4 },
+    { k_word(sep_efuse::CHIPLET_PUBK_HASH0_OFFSET),  k_last(sep_efuse::CHIPLET_PUBK_HASH0_OFFSET, 8), true,  6 },
+    { k_word(sep_efuse::CHIPLET_PUBK_HASH1_OFFSET),  k_last(sep_efuse::CHIPLET_PUBK_HASH1_OFFSET, 8), true,  8 },
+    { k_word(sep_efuse::REQUIRED_SIGNERS_OFFSET),    k_word(sep_efuse::REQUIRED_SIGNERS_OFFSET),    true,  10 },
+    { k_word(sep_efuse::REQUIRED_ALGS_OFFSET),       k_word(sep_efuse::REQUIRED_ALGS_OFFSET),       true,  12 },
+    { k_word(sep_efuse::CHIPLET_PUBK_PQC_HASH0_OFFSET), k_last(sep_efuse::CHIPLET_PUBK_PQC_HASH0_OFFSET, 8), true, 14 },
+    { k_word(sep_efuse::CHIPLET_PUBK_PQC_HASH1_OFFSET), k_last(sep_efuse::CHIPLET_PUBK_PQC_HASH1_OFFSET, 8), true, 16 },
+    { k_word(sep_efuse::SIP_PUBK_PQC_HASH0_OFFSET),  k_last(sep_efuse::SIP_PUBK_PQC_HASH0_OFFSET, 8), true, 18 },
+    { k_word(sep_efuse::SYS_PUBK_PQC_HASH_OFFSET),   k_last(sep_efuse::SYS_PUBK_PQC_HASH_OFFSET, 8),  true, 20 },
+    { k_word(sep_efuse::SIP_PUBK_HASH1_OFFSET),      k_last(sep_efuse::SIP_PUBK_HASH1_OFFSET, 8),    true, 22 },
+    { k_word(sep_efuse::SIP_PUBK_PQC_HASH1_OFFSET),  k_last(sep_efuse::SIP_PUBK_PQC_HASH1_OFFSET, 8), true, 24 },
+    { k_word(sep_efuse::SEP_CHIPLET_ID_OFFSET),      k_last(sep_efuse::SEP_CHIPLET_ID_OFFSET, 8),    true, 26 },
+    { k_word(sep_efuse::SEP_SIP_ID_OFFSET),          k_last(sep_efuse::SEP_SIP_ID_OFFSET, 8),        true, 28 },
+    { k_word(sep_efuse::SEP_SYS_ID_OFFSET),          k_last(sep_efuse::SEP_SYS_ID_OFFSET, 8),        true, 30 },
+    // SPARE0..7 sit in PeakRDL RESERVED_* after PUBLIC_KEY_1. They have no dedicated
+    // LOCKS pair in the 64-bit LOCKS register, so they are left unlocked here.
 };
 
 const unsigned int efuse_model::k_lock_region_count =
@@ -490,7 +498,7 @@ bool efuse_model::load_preload_file(const std::string &path)
 
     std::ifstream in(resolved);
     if (!in) {
-        CSML_ERROR(0, logger) << "fuse_preload_file: cannot open '" << resolved
+        REG_ERROR(0, logger) << "fuse_preload_file: cannot open '" << resolved
                               << "'; leaving the array erased" << std::endl;
         return false;
     }
@@ -543,7 +551,7 @@ bool efuse_model::load_preload_file(const std::string &path)
             }
             if (t.size() > 8 || t.find_first_not_of("0123456789abcdefABCDEF")
                                     != std::string::npos) {
-                CSML_ERROR(0, logger) << "fuse_preload_file: '" << resolved
+                REG_ERROR(0, logger) << "fuse_preload_file: '" << resolved
                                       << "' has '" << t
                                       << "' where a 32-bit hex word was expected"
                                       << std::endl;
@@ -563,7 +571,7 @@ bool efuse_model::load_preload_file(const std::string &path)
             if (t == "1")
                 image[bit / 32] |= (1u << (bit % 32));
             else if (t != "0") {
-                CSML_ERROR(0, logger) << "fuse_preload_file: '" << resolved
+                REG_ERROR(0, logger) << "fuse_preload_file: '" << resolved
                                       << "' bit " << bit << " is '" << t
                                       << "', expected 0 or 1" << std::endl;
                 return false;
@@ -574,7 +582,7 @@ bool efuse_model::load_preload_file(const std::string &path)
     }
 
     m_fuse = image;
-    CSML_INFO(1, logger) << "fuse_preload_file: loaded " << loaded_bits << " bits from '"
+    REG_INFO(1, logger) << "fuse_preload_file: loaded " << loaded_bits << " bits from '"
                          << resolved << "' (" << (hex_words ? "hex-word" : "bit-per-line")
                          << " format)" << std::endl;
     return true;
@@ -646,7 +654,7 @@ void efuse_model::load_fuses()
     const bool have_image = !preload.empty() && load_preload_file(preload);
 
     if (have_image) {
-        CSML_INFO(1, logger) << "fuse_preload_file supplied: the image defines the fuse "
+        REG_INFO(1, logger) << "fuse_preload_file supplied: the image defines the fuse "
                                 "array; per-field parameters are not applied"
                              << std::endl;
         sense_fuses_into_shadows();
@@ -654,9 +662,9 @@ void efuse_model::load_fuses()
         return;
     }
 
-    // csml_reg::offset is a word index into the backing store, which is also the
+    // regmodel::Reg::offset is a word index into the backing store, which is also the
     // array word index — the shadow map and the array are the same 8192 bits.
-    auto set = [this](const csml_reg<32> &reg, uint32_t value) {
+    auto set = [this](const regmodel::Reg<32> &reg, uint32_t value) {
         fuse_or_word(reg.offset, value);
     };
 
@@ -765,7 +773,7 @@ void efuse_model::end_of_elaboration()
     // difference the hardware cannot have.
     m_secure_tm_active = secure_tm.get_param_value();
     if (m_secure_tm_active)
-        CSML_WARN(0, logger) << "secure_tm asserted — fuse commands are blocked and "
+        REG_WARN(0, logger) << "secure_tm asserted — fuse commands are blocked and "
                                 "hardware secrets read as zero" << std::endl;
 
     load_fuses();
@@ -835,9 +843,9 @@ bool efuse_model::handle_write_LC_STATE(uint32_t value)
 
     if (frozen) {
         if (value & 0xFu)
-            CSML_REPORT(WARNING, "EFUSE", "LC_STATE transition ignored — state is terminal");
+            REG_REPORT(WARNING, "EFUSE", "LC_STATE transition ignored — state is terminal");
     } else if (!lc_state_raw_valid(cur | (value & 0xFu))) {
-        CSML_REPORT(WARNING, "EFUSE", "LC_STATE write ignored — destination is not a valid state");
+        REG_REPORT(WARNING, "EFUSE", "LC_STATE write ignored — destination is not a valid state");
     } else {
         const uint32_t w         = value & 0xFu;
         const bool     sip_match = static_cast<uint32_t>(RMA_SIP_TOKEN_MATCH) == TOKEN_MATCH;
@@ -853,7 +861,7 @@ bool efuse_model::handle_write_LC_STATE(uint32_t value)
         if (lc_state_raw_valid(cand))
             next = cand;
         else
-            CSML_REPORT(WARNING, "EFUSE", "LC_STATE write ignored — gating left an invalid state");
+            REG_REPORT(WARNING, "EFUSE", "LC_STATE write ignored — gating left an invalid state");
     }
 
     m_lc_state_val = lc_state_encode(next);
@@ -961,7 +969,7 @@ bool efuse_model::secure_tm_blocks_command(const char *what)
 {
     if (!m_secure_tm_active)
         return false;
-    CSML_WARN(1, logger) << what << " command dropped — secure_tm blocks the fuse "
+    REG_WARN(1, logger) << what << " command dropped — secure_tm blocks the fuse "
                                     "interface" << std::endl;
     return true;
 }

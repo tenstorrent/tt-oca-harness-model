@@ -20,7 +20,7 @@ class el2_pic_model : public el2_pic_base   // namespace el2_pic
 
 ----
 el2_pic_model     gateways, arbitration, hart hand-off   (el2_pic.*)
-  └─ el2_pic_base   csml_memory + MEIPL/MEIE/MEIP/MEIGW*  (el2_pic_base.*)
+  └─ el2_pic_base   regmodel::Memory + MEIPL/MEIE/MEIP/MEIGW*  (el2_pic_base.*)
        └─ el2_pic_register.h
 ----
 
@@ -62,7 +62,7 @@ writes to `meipt` / `meicurpl` notify the PIC through
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

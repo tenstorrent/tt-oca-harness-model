@@ -5,7 +5,7 @@
  * @brief Base class for SPI Controller providing register interface
  *
  * This header defines the spi_controller_base class which provides:
- * - Register memory storage using csml_memory
+ * - Register memory storage using regmodel::Memory
  * - TLM target socket for register access
  * - All hardware register instances
  * - Register reset functionality
@@ -22,7 +22,7 @@
 class spi_controller_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;  ///< Data type for 32-bit registers
+    typedef typename regmodel::Reg<32>::DT DT;  ///< Data type for 32-bit registers
 
     /**
      * @brief Constructor for spi_controller_base
@@ -49,8 +49,8 @@ class spi_controller_base : public sc_module
        }
 
       std::string type;  ///< Module type identifier
-      csml_memory<32> memory;  ///< Register memory storage
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;  ///< TLM target socket for register access
+      regmodel::Memory<32> memory;  ///< Register memory storage
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;  ///< TLM target socket for register access
 
       spi_controller::INTR_STATUS_type<32> INTR_STATUS;  ///< Interrupt status register (W1C)
       spi_controller::INTR_ENABLE_type<32> INTR_ENABLE;  ///< Interrupt enable register

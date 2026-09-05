@@ -369,6 +369,23 @@ elif (( USE_COVERAGE )); then
         echo ">> HTML coverage report: ${HTML_DIR}/index.html"
     fi
 
+    _REPO="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
+    # shellcheck disable=SC1091
+    source "${_REPO}/scripts/coverage_gate.sh"
+    if [[ "${COVERAGE_TOOL:-}" == "llvm" && -n "${COV_CMD:-}" && -n "${PROFDATA:-}" && -f "${PROFDATA}" ]]; then
+        ${COV_CMD} report "${TB_BIN}" \
+            ${_OBJECT_ARGS[@]+"${_OBJECT_ARGS[@]}"} \
+            -instr-profile="${PROFDATA}" \
+            "${SOURCES[@]}" \
+            > "${BUILD_DIR}/coverage_summary.txt"
+        coverage_gate_from_log "${BUILD_DIR}/coverage_summary.txt" || exit 1
+    elif [[ -f "${BUILD_DIR}/coverage.info" ]]; then
+        coverage_gate_from_lcov_info "${BUILD_DIR}/coverage.info" || exit 1
+    else
+        echo ">> Coverage gate FAIL (no coverage summary to parse)" >&2
+        exit 1
+    fi
+
 elif (( USE_CTEST )); then
     echo ">> Running via ctest"
     ctest --test-dir "${BUILD_DIR}" --output-on-failure

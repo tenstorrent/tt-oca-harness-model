@@ -4,7 +4,7 @@
  * @file local_alias_remap.h
  * @brief Functional SystemC TLM model for the local_master_alias_remap_ctrl peripheral.
  *
- * Extends local_alias_remap_base (csml register layer) with:
+ * Extends local_alias_remap_base (regmodel register layer) with:
  *  - data_socket     : AXI data-path slave — incoming transactions to remap
  *  - remapped_socket : AXI data-path master — forwarded to fabric after remap
  *
@@ -14,10 +14,10 @@
  * Architecture:
  *
  *   local_alias_remap_base
- *       csml_memory<64>        memory
+ *       regmodel::Memory<64>        memory
  *       target_socket     ─► CPU programs region table (inherited from base)
  *       REGION_START[16]  ─┐
- *       REGION_END[16]    ─┤─ backing store (csml register arrays)
+ *       REGION_END[16]    ─┤─ backing store (regmodel register arrays)
  *       REGION_ATTRS[16]  ─┘
  *
  *   local_alias_remap_ip  (this class)
@@ -53,7 +53,7 @@ class local_alias_remap_ip : public local_alias_remap_base
 public:
     SC_HAS_PROCESS(local_alias_remap_ip);
 
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
 
     // =========================================================================
     // Hardware constants (SEP-specific, hardcoded)
@@ -90,7 +90,7 @@ public:
     void reset();
 
     // =========================================================================
-    // Testbench backdoor — read a decoded Region struct from csml registers
+    // Testbench backdoor — read a decoded Region struct from regmodel registers
     // =========================================================================
     struct Region {
         uint64_t start_addr = 0;

@@ -67,20 +67,20 @@ endif()
 set(WFLAG "-Wall -Wextra")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
-  add_compile_definitions(DEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(DEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "kmac: Debug build - full logging enabled")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(NDEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "kmac: Release build - errors only, optimized")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g -O0 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=2)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=2)
   message(STATUS "kmac: ASAN build - AddressSanitizer enabled")
 endif()
 
@@ -88,12 +88,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  # Verbosity 3, not 1. CSML_LOG expands to "if (level > max) {} else csmlLog(...)",
+  # Verbosity 3, not 1. REG_LOG expands to "if (level > max) {} else regLog(...)",
   # so a suppressed multi-line log statement leaves every continuation line of its
   # << chain recorded as unexecuted. At verbosity 1 that reported 192 phantom
   # uncovered lines in kmac.cpp and understated line coverage by roughly ten points,
   # measuring log formatting rather than logic.
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=3 __COVERAGE__)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=3 __COVERAGE__)
   message(STATUS "kmac: Coverage build enabled")
 endif()
 
@@ -119,10 +119,12 @@ endif()
 # Paths & Includes
 # -----------------------------------------------------------------------------
 include_directories(
-  include
-  test/inc
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
+# NOTE: test/inc is deliberately NOT added here — it's added per-target below,
+# only for kmac_testbench. Adding it globally would leak test-only
+# headers into kmac_model's (production) include path.
 
 
 
@@ -156,7 +158,7 @@ endif()
 peripheral_add_model_library(kmac_model ${MODEL_SRCS})
 target_include_directories(kmac_model PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
 target_link_libraries(kmac_model PUBLIC SystemC::systemc Threads::Threads OpenSSL::Crypto)
 if(CCI_FOUND)
@@ -165,12 +167,17 @@ endif()
 
 # Testbench executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
-    # For standalone builds, we need to build csml_logger ourselves
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
-
     add_executable(kmac_testbench ${TEST_SRCS})
     peripheral_link_test_to_model(kmac_testbench kmac_model)
-    target_link_libraries(kmac_testbench PRIVATE SystemC::systemc OpenSSL::Crypto csml_logger)
+    target_include_directories(kmac_testbench PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
+      ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
+    )
+    target_link_libraries(kmac_testbench PRIVATE SystemC::systemc OpenSSL::Crypto)
+    if(CCI_FOUND)
+      target_link_libraries(kmac_testbench PRIVATE ${CCI_LIBRARIES})
+    endif()
 
   # Set RPATH so the testbench binary finds SystemC and CCI at runtime.
   set(_rpath_dirs "$<TARGET_FILE_DIR:SystemC::systemc>")
@@ -224,7 +231,7 @@ if(CPPCHECK_EXECUTABLE)
       --template=gcc
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/include
-      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
       2> ${CMAKE_BINARY_DIR}/cppcheck_report.txt

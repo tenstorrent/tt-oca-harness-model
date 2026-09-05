@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 #include "sep_cpu_ctrl_base.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <systemc.h>
 
 // -----------------------------------------------------------------------------
@@ -41,12 +41,12 @@ struct SepCpuCtrlHwifIn {
 };
 
 // -----------------------------------------------------------------------------
-// sep_cpu_ctrl_ip  — CSML-compliant _ip layer
+// sep_cpu_ctrl_ip  — regmodel _ip layer
 // -----------------------------------------------------------------------------
 class sep_cpu_ctrl_ip : public sep_cpu_ctrl_base {
 public:
     SC_HAS_PROCESS(sep_cpu_ctrl_ip);
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
 
     sc_core::sc_in<bool>      rst_ni{"rst_ni"};
     sc_core::sc_out<uint32_t> nmi_vec_o{"nmi_vec_o"};
@@ -76,16 +76,16 @@ public:
     // -------------------------------------------------------------------------
     // CCI parameters — static straps/fuse flags; set via .ini, no recompile
     // -------------------------------------------------------------------------
-    csml_param<uint32_t> smc_fuse_sense_done;
-    csml_param<uint32_t> sep_fuse_sense_done;
-    csml_param<uint32_t> sep_standalone;
-    csml_param<uint32_t> fast_spi_en;
-    csml_param<uint32_t> fast_iccm_en;
-    csml_param<uint32_t> fast_dccm_en;
-    csml_param<uint32_t> fast_sram_en;
-    csml_param<uint32_t> fast_pka_en;
-    csml_param<uint32_t> test_en;
-    csml_param<uint32_t> bypass_mem_repair;
+    regmodel::Param<uint32_t> smc_fuse_sense_done;
+    regmodel::Param<uint32_t> sep_fuse_sense_done;
+    regmodel::Param<uint32_t> sep_standalone;
+    regmodel::Param<uint32_t> fast_spi_en;
+    regmodel::Param<uint32_t> fast_iccm_en;
+    regmodel::Param<uint32_t> fast_dccm_en;
+    regmodel::Param<uint32_t> fast_sram_en;
+    regmodel::Param<uint32_t> fast_pka_en;
+    regmodel::Param<uint32_t> test_en;
+    regmodel::Param<uint32_t> bypass_mem_repair;
 
     explicit sep_cpu_ctrl_ip(sc_core::sc_module_name n);
     void end_of_elaboration() override;
@@ -105,7 +105,7 @@ private:
     sc_core::sc_event window_changed_;
 
     // -------------------------------------------------------------------------
-    // Write callback handlers  (DT = csml_memory<64> word type = unsigned long long)
+    // Write callback handlers  (DT = regmodel::Memory<64> word type = unsigned long long)
     // -------------------------------------------------------------------------
     bool handle_write_SEP_NMI_VEC(DT value, DT write_bit_mask);
     bool handle_write_SEP_NMI_VEC_LOCK(DT value, DT write_bit_mask);
@@ -115,7 +115,7 @@ private:
     bool handle_write_REFERENCE_COUNTER(DT value, DT write_bit_mask);
 
     // Post-write hook, not a write callback: registering a write callback for an
-    // offset *replaces* csml_reg's own handle_write, which is what performs the
+    // offset *replaces* regmodel::Reg's own handle_write, which is what performs the
     // masked store, so a plain-storage register would stop storing. The
     // post-write hook runs after that store instead of in place of it.
     bool post_write_inbound_window();

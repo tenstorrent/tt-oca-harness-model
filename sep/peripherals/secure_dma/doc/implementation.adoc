@@ -16,7 +16,7 @@ class secure_dma_model : public secure_dma_base
 
 ----
 secure_dma_model     engine, SHA-2, handshake, IRQ   (secure_dma.*)
-  └─ secure_dma_base csml_memory + target_socket     (secure_dma_base.*)
+  └─ secure_dma_base regmodel::Memory + target_socket     (secure_dma_base.*)
 ----
 
 ====== Threads and sockets
@@ -70,13 +70,13 @@ enabled DMA range.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used. Transfer rate
+Knobs are `regmodel::Param` and are re-read when used. Transfer rate
 comes from `clk_i`, not a cycle-count parameter.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

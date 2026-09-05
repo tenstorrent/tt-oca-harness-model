@@ -7,7 +7,7 @@
 class csrng_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
     csrng_base(sc_module_name name, unsigned int memory_size) : sc_module(name), memory(std::string(name) + ".Memory", memory_size/sizeof(unsigned int)),
        INTR_STATE(std::string(name) + ".INTR_STATE", memory, (0x0 + 0x00)/sizeof(unsigned int)), 
        INTR_ENABLE(std::string(name) + ".INTR_ENABLE", memory, (0x4 + 0x00)/sizeof(unsigned int)), 
@@ -37,8 +37,8 @@ class csrng_base : public sc_module
          memory.bind_to_socket(target_socket);
        }
 
-      csml_memory<32> memory;
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      regmodel::Memory<32> memory;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
       
       crng::INTR_STATE_type<32> INTR_STATE;

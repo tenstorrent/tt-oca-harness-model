@@ -57,6 +57,15 @@ peripheral_cache_stale() {
   return 1
 }
 
+# Fail if filtered model line coverage is below COVERAGE_MIN_LINE_PCT (default 95).
+peripheral_enforce_coverage_gate() {
+  local build_dir="$1"
+  local info="${2:-${build_dir}/coverage/coverage_filtered.info}"
+  # shellcheck disable=SC1091
+  source "${_PERIPH_SETUP_DIR}/../../scripts/coverage_gate.sh"
+  coverage_gate_from_lcov_info "${info}"
+}
+
 peripheral_parallel_jobs() {
   if [[ -n "${MAX_JOBS:-}" ]]; then
     echo "${MAX_JOBS}"

@@ -4,9 +4,9 @@
  * @file aon_timer_base.h
  * @brief AON Timer base model class providing the register infrastructure.
  *
- * This header defines aon_timer_base, the generated CSML base class that
+ * This header defines aon_timer_base, the generated regmodel base class that
  * instantiates all 14 AON Timer memory-mapped registers and binds them to a
- * shared csml_memory backing store connected to a TLM-2.0 32-bit target socket.
+ * shared regmodel::Memory backing store connected to a TLM-2.0 32-bit target socket.
  * The derived class aon_timer (in aon_timer.h) inherits from this base and
  * implements functional callbacks.
  */
@@ -20,7 +20,7 @@
  * @brief Generated base class for the AON Timer TLM-2.0 register model.
  *
  * Provides the complete set of 14 AON Timer registers (ALERT_TEST through
- * WKUP_CAUSE) backed by a single csml_memory<32> instance and exposed via a
+ * WKUP_CAUSE) backed by a single regmodel::Memory<32> instance and exposed via a
  * 32-bit TLM simple_target_socket. This class is intended to be subclassed
  * by aon_timer, which adds functional behavior through register callbacks.
  *
@@ -43,14 +43,14 @@
 class aon_timer_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT; ///< 32-bit data type alias for register access.
+    typedef typename regmodel::Reg<32>::DT DT; ///< 32-bit data type alias for register access.
 
     /**
      * @brief Construct the aon_timer_base, instantiate all registers, and bind the TLM socket.
      * @param name        SystemC hierarchical module name.
      * @param memory_size Size in bytes of the memory region covering all registers.
      *
-     * Initializes the csml_memory backing store and all 14 register instances at their
+     * Initializes the regmodel::Memory backing store and all 14 register instances at their
      * respective byte offsets. Binds the memory to the TLM target socket so that
      * incoming TLM transactions are dispatched to the correct register.
      */
@@ -73,8 +73,8 @@ class aon_timer_base : public sc_module
          memory.bind_to_socket(target_socket);
        }
 
-      csml_memory<32> memory;                                               ///< Shared 32-bit memory backing store for all registers.
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;  ///< TLM-2.0 32-bit target socket; receives all TL-UL register transactions.
+      regmodel::Memory<32> memory;                                               ///< Shared 32-bit memory backing store for all registers.
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;  ///< TLM-2.0 32-bit target socket; receives all TL-UL register transactions.
 
       aon_timer::ALERT_TEST_type<32>      ALERT_TEST;      ///< Alert test register (0x00, WO, reset=0x0).
       aon_timer::WKUP_CTRL_type<32>       WKUP_CTRL;       ///< Wakeup timer control register (0x04, RW, reset=0x0).

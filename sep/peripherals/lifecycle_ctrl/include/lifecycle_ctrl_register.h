@@ -9,72 +9,72 @@
 #pragma once
 #include<iostream>
 #include<systemc.h>
-#include "csml.h"
+#include "reg_file.h"
 
 namespace lc_ctrl {
 
 template<unsigned int N>
-class FEAT_CTRL_LO_type : public csml_reg<N>
+class FEAT_CTRL_LO_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     FEAT_CTRL_LO_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000, 0x00000000),
       feature_control_lo(reg_name + ".feature_control_lo", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> feature_control_lo;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> feature_control_lo;
 };
 
 template<unsigned int N>
-class FEAT_CTRL_HI_type : public csml_reg<N>
+class FEAT_CTRL_HI_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     FEAT_CTRL_HI_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000, 0x00000000),
       feature_control_hi(reg_name + ".feature_control_hi", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> feature_control_hi;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> feature_control_hi;
 };
 
 template<unsigned int N>
-class DEMOTE_type : public csml_reg<N>
+class DEMOTE_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     DEMOTE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000, 0x00000000),
       demote(reg_name + ".demote", *this, 0, 1),
       lock(reg_name + ".lock", *this, 1, 1), 
       reserved0(reg_name + ".reserved0", *this, 2, 30)
@@ -82,20 +82,20 @@ class DEMOTE_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> demote;
-    csml_bitfield<N> lock;
-    csml_bitfield<N> reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> demote;
+    regmodel::Bitfield<N> lock;
+    regmodel::Bitfield<N> reserved0;
 };
 
 /**
@@ -107,32 +107,32 @@ class DEMOTE_type : public csml_reg<N>
  * carries no swwe, meaning the lock bit does not write-protect it.
  */
 template<unsigned int N>
-class DEMOTE_HI_type : public csml_reg<N>
+class DEMOTE_HI_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     // Write mask 0, as the low word has: the woset accumulation happens in the write
     // callback, which assigns the register directly.
     DEMOTE_HI_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0x00000000, 0x00000000),
       reserved1(reg_name + ".reserved1", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> reserved1;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> reserved1;
 };
 
 

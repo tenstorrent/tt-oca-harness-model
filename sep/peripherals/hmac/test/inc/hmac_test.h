@@ -3,7 +3,7 @@
 
 #pragma once
 #include "hmac_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 class hmac_test : public hmac_basetest
 {
@@ -42,7 +42,7 @@ public:
                                      keymgr_initiator_socket("keymgr_initiator_socket")
    {
       // Initialize logger
-      logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+      logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
       logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
       logger.setFunctionTrace(false);
       // Port initialization deferred to after elaboration (in testbench)
@@ -56,6 +56,8 @@ public:
 
    // Write one 32-bit word to the key manager sideload private bus
    void keymgr_write_word(uint64_t offset, uint32_t value);
+   // Read is rejected by the model (write-only sideload bus).
+   void keymgr_read_word(uint64_t offset, uint32_t &value);
    
    // Assert functions for validation
    void assert_equal(uint32_t expected, uint32_t actual, const char* message);
@@ -67,7 +69,7 @@ public:
    uint32_t m_assert_failures = 0;
 
    // Logger instance for structured logging
-   CsmlLogger logger;
+   RegLogger logger;
 
    ~hmac_test() {}
 };

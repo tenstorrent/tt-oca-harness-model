@@ -128,11 +128,11 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
    logger.setMaxVerbosity(verbosity.get_param_value());
    logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
    logger.setFunctionTrace(false);
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
 
    // Initialize URND PRNG with configurable seed (per otbn_plan.md specification)
    std::srand(urnd_prng_seed);
-   CSML_INFO(1, logger) << "[OTBN] URND PRNG initialized with seed: 0x" << std::hex << urnd_prng_seed << std::dec;
+   REG_INFO(1, logger) << "[OTBN] URND PRNG initialized with seed: 0x" << std::hex << urnd_prng_seed << std::dec;
 
    // Initialize WDR (Wide Data Registers) to zero
    // Per otbn_plan.md line 11: "The model implements 256-bit WDR"
@@ -197,14 +197,14 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
                 this->err_bits_accumulator |= err_bits;
             }
         );
-       CSML_INFO(1, logger) << "[OTBN] Registered CSR/WDR callbacks for algorithm";
+       REG_INFO(1, logger) << "[OTBN] Registered CSR/WDR callbacks for algorithm";
    }
 
    // ============================================================================
    // Register Callbacks
    // ============================================================================
    // NOTE: Only register callbacks for registers that need side-effects beyond
-   // simple read/write. CSML automatically handles storage for all registers.
+   // simple read/write. regmodel automatically handles storage for all registers.
 
    // CMD register - Write-only, execute commands
    memory.register_write_callback(
@@ -339,7 +339,7 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
    // DMEM base offset is 0x8000 bytes = 8192 words
    // Register callbacks for all 1024 words (full 4 KiB) so the protected region
    // (indices 768-1023) is handled by dmem_write_callback / dmem_read_callback
-   // rather than falling back to the default csml_reg raw-access callbacks.
+   // rather than falling back to the default regmodel::Reg raw-access callbacks.
    const unsigned int DMEM_BASE_WORD_OFFSET = (0x8000 + 0x00) / sizeof(unsigned int);
    for (int i = 0; i < 1024; i++) {
        unsigned int word_offset = DMEM_BASE_WORD_OFFSET + i;
@@ -394,7 +394,7 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
  * - Deletes all interface channel implementations
  */
 otbn_ip::~otbn_ip() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    if (current_algorithm) {
        delete current_algorithm;
    }
@@ -421,13 +421,13 @@ otbn_ip::~otbn_ip() {
  * or LOCKED states are silently ignored (no error).
  */
 bool otbn_ip::cmd_write_callback(uint32_t value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    
    // CMD can only be written when IDLE 
    // LOCKED state is terminal - commands must be SILENTLY IGNORED (no error)
    // Writes during non-IDLE states must be SILENTLY IGNORED (no error)
    if (current_state == OTBN_STATE_LOCKED) {
-    CSML_INFO(1, logger) << "[OTBN] CMD write ignored in LOCKED state";
+    REG_INFO(1, logger) << "[OTBN] CMD write ignored in LOCKED state";
        return true;  // Silent ignore in LOCKED (terminal state), no state change
    }
    if (current_state != OTBN_STATE_IDLE) {
@@ -437,17 +437,17 @@ bool otbn_ip::cmd_write_callback(uint32_t value) {
    switch (value & 0xFF) {
        case 0xd8: // EXECUTE
            current_state = OTBN_STATE_BUSY_EXECUTE;
-           CSML_DEBUG(2, logger) << "Current State: BUSY_EXECUTE";
+           REG_DEBUG(2, logger) << "Current State: BUSY_EXECUTE";
            sc_spawn(sc_bind(&otbn_ip::execute_algorithm, this));
            break;
        case 0xc3: // SEC_WIPE_DMEM
            current_state = OTBN_STATE_BUSY_SEC_WIPE_DMEM;
-           CSML_DEBUG(2, logger) << "Current State: BUSY_SEC_WIPE_DMEM";
+           REG_DEBUG(2, logger) << "Current State: BUSY_SEC_WIPE_DMEM";
            sc_spawn(sc_bind(&otbn_ip::secure_wipe_dmem, this));
            break;
        case 0x1e: // SEC_WIPE_IMEM
            current_state = OTBN_STATE_BUSY_SEC_WIPE_IMEM;
-           CSML_DEBUG(2, logger) << "Current State: BUSY_SEC_WIPE_IMEM";
+           REG_DEBUG(2, logger) << "Current State: BUSY_SEC_WIPE_IMEM";
            sc_spawn(sc_bind(&otbn_ip::secure_wipe_imem, this));
            break;
        default:
@@ -470,7 +470,7 @@ bool otbn_ip::cmd_write_callback(uint32_t value) {
  * Updates interrupt output ports after clearing.
  */
 bool otbn_ip::intr_state_write_callback(uint32_t value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // W1C: Write-1-to-clear
    uint32_t current_val = INTR_STATE;
    current_val &= ~value;
@@ -493,7 +493,7 @@ bool otbn_ip::intr_state_write_callback(uint32_t value) {
  * Updates interrupt output ports after setting.
  */
 bool otbn_ip::intr_test_write_callback(uint32_t value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Writing 1 sets INTR_STATE bit
    uint32_t current_val = INTR_STATE;
    current_val |= (value & 0x1);
@@ -516,7 +516,7 @@ bool otbn_ip::intr_test_write_callback(uint32_t value) {
  * - Bit 1: recov - Asserts recoverable alert (auto-clears after brief pulse)
  */
 bool otbn_ip::alert_test_write_callback(uint32_t value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Assert alerts based on bits written (deferred)
    if (value & 0x1) {
        pending_alert_fatal = true;
@@ -546,7 +546,7 @@ bool otbn_ip::alert_test_write_callback(uint32_t value) {
  * LOCKED state allows clearing to diagnose error before reset.
  */
 bool otbn_ip::err_bits_write_callback(uint32_t value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // W1C: Can clear in IDLE or LOCKED state 
    // LOCKED state allows clearing to diagnose error before reset
    if (current_state == OTBN_STATE_IDLE || current_state == OTBN_STATE_LOCKED) {
@@ -575,7 +575,7 @@ bool otbn_ip::err_bits_write_callback(uint32_t value) {
  * - 0xFF: LOCKED
  */
 bool otbn_ip::status_read_callback(uint32_t& value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    value = static_cast<uint32_t>(current_state);
    return true;
 }
@@ -589,7 +589,7 @@ bool otbn_ip::status_read_callback(uint32_t& value) {
  * Updated after algorithm completes. Can be cleared when IDLE or LOCKED.
  */
 bool otbn_ip::insn_cnt_read_callback(uint32_t& value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    value = insn_count_value;
    return true;
 }
@@ -603,7 +603,7 @@ bool otbn_ip::insn_cnt_read_callback(uint32_t& value) {
  * can only be cleared when STATUS is IDLE or LOCKED.
  */
 bool otbn_ip::err_bits_read_callback(uint32_t& value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    value = err_bits_accumulator;
    return true;
 }
@@ -617,7 +617,7 @@ bool otbn_ip::err_bits_read_callback(uint32_t& value) {
  * and LOCKED state. Value persists until reset.
  */
 bool otbn_ip::fatal_alert_cause_read_callback(uint32_t& value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Return persisted fatal error cause value
    // (per spec Section 6.2: fatal error cause persists until reset)
    value = FATAL_ALERT_CAUSE;
@@ -634,7 +634,7 @@ bool otbn_ip::fatal_alert_cause_read_callback(uint32_t& value) {
  * for compatibility with standard CRC tools.
  */
 bool otbn_ip::load_checksum_read_callback(uint32_t& value) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // CRC-32-IEEE checksum of memory writes
    // Model handles inversion internally - register stores inverted CRC, but we return internal CRC directly
    // Apply final XOR with 0xFFFFFFFF to match Python's binascii.crc32 (which applies final XOR internally)
@@ -659,17 +659,17 @@ bool otbn_ip::load_checksum_read_callback(uint32_t& value) {
  * Writes update the LOAD_CHECKSUM CRC-32-IEEE accumulator.
  */
 bool otbn_ip::imem_write_callback(uint32_t value, uint32_t index) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // IMEM can ONLY be written in IDLE or BUSY_SEC_WIPE_INT (boot-time)
    // (per spec Section 4.5, 5.2)
    if (current_state != OTBN_STATE_IDLE &&
        current_state != OTBN_STATE_BUSY_SEC_WIPE_INT) {
        err_bits_accumulator |= otbn_err_bits::ILLEGAL_BUS_ACCESS;
-        CSML_ERROR(0, logger) << "ILLEGAL_BUS_ACCESS during BUSY_EXECUTE is FATAL";
+        REG_ERROR(0, logger) << "ILLEGAL_BUS_ACCESS during BUSY_EXECUTE is FATAL";
        // ILLEGAL_BUS_ACCESS during BUSY_EXECUTE is FATAL
        if (current_state == OTBN_STATE_BUSY_EXECUTE) {
            current_state = OTBN_STATE_LOCKED;
-           CSML_ERROR(0, logger) << "Setting current state to LOCKED";
+           REG_ERROR(0, logger) << "Setting current state to LOCKED";
            internal_secure_wipe();
            secure_wipe_dmem();
            secure_wipe_imem();
@@ -685,13 +685,8 @@ bool otbn_ip::imem_write_callback(uint32_t value, uint32_t index) {
    // Allow write and store in register
    // Access underlying memory directly to avoid recursive operator[] with ASAN
    // IMEM base offset is 0x4000 bytes = 4096 words, index is 0-2047
-   if (index < 2048) {
-       unsigned int word_offset = (0x4000 / sizeof(unsigned int)) + index;
-       memory.memory_block[word_offset] = value;
-   } else {
-       CSML_ERROR(0, logger) << "IMEM index out of bounds: " << index;
-       return false;
-   }
+   unsigned int word_offset = (0x4000 / sizeof(unsigned int)) + index;
+   memory.memory_block[word_offset] = value;
 
    // Update LOAD_CHECKSUM (CRC-32-IEEE) on IMEM writes
    // Update internal CRC variable, then update register to reflect the change
@@ -715,7 +710,7 @@ bool otbn_ip::imem_write_callback(uint32_t value, uint32_t index) {
  * LOCKED state returns 0 for security (no error).
  */
 bool otbn_ip::imem_read_callback(uint32_t& value, uint32_t index) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Per spec Section 4.5: "reads return zero" when not IDLE
    // LOCKED state: Return 0 for security (no error, silent read)
    if (current_state == OTBN_STATE_LOCKED) {
@@ -742,20 +737,15 @@ bool otbn_ip::imem_read_callback(uint32_t& value, uint32_t index) {
            pending_alert_fatal = true;
            request_alert_update();
        }
-       // Otherwise silent block (returns 0). Return true so CSML uses the
+       // Otherwise silent block (returns 0). Return true so regmodel uses the
        // callback value (0) instead of falling back to underlying memory.
        return true;
    }
    // Read stored value (allowed in IDLE and SEC_WIPE_INT)
    // Access underlying memory directly to avoid recursive operator[] with ASAN
    // IMEM base offset is 0x4000 bytes = 4096 words, index is 0-2047
-   if (index < 2048) {
-       unsigned int word_offset = (0x4000 / sizeof(unsigned int)) + index;
-       value = memory.memory_block[word_offset];
-   } else {
-       CSML_ERROR(0, logger) << "IMEM index out of bounds: " << index;
-       value = 0;
-   }
+   unsigned int word_offset = (0x4000 / sizeof(unsigned int)) + index;
+   value = memory.memory_block[word_offset];
    return true;
 }
 
@@ -772,7 +762,7 @@ bool otbn_ip::imem_read_callback(uint32_t& value, uint32_t index) {
  * Writes update the LOAD_CHECKSUM CRC-32-IEEE accumulator.
  */
 bool otbn_ip::dmem_write_callback(uint32_t value, uint32_t index) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // DMEM can ONLY be written in IDLE or BUSY_SEC_WIPE_INT (boot-time)
    // (per spec Section 4.5, 5.2)
    if (current_state != OTBN_STATE_IDLE &&
@@ -799,7 +789,7 @@ bool otbn_ip::dmem_write_callback(uint32_t value, uint32_t index) {
    // Protected DMEM region check (per spec Section 3.2.1)
    // Host can only access first 3 KiB (768 words) through register interface
    // Last 1 KiB reserved for algorithm-only sensitive data.
-   // Return false so CSML does not store the value in its backing memory.
+   // Return false so regmodel does not store the value in its backing memory.
    if (index >= 768) {
        return false;  // Silently block write to protected region, no error
    }
@@ -836,7 +826,7 @@ bool otbn_ip::dmem_write_callback(uint32_t value, uint32_t index) {
  * LOCKED state returns 0 for security (no error).
  */
 bool otbn_ip::dmem_read_callback(uint32_t& value, uint32_t index) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Per spec Section 4.5: "reads return zero" when not IDLE
    // LOCKED state: Return 0 for security (no error, silent read)
    if (current_state == OTBN_STATE_LOCKED) {
@@ -863,8 +853,8 @@ bool otbn_ip::dmem_read_callback(uint32_t& value, uint32_t index) {
            pending_alert_fatal = true;
            request_alert_update();
        }
-       // Return true to ensure callback's value (0) is used by CSML framework
-       // Returning false would cause CSML to read from actual memory instead
+       // Return true to ensure callback's value (0) is used by regmodel framework
+       // Returning false would cause regmodel to read from actual memory instead
        return true;
    }
 
@@ -879,12 +869,8 @@ bool otbn_ip::dmem_read_callback(uint32_t& value, uint32_t index) {
    // Read stored value
    // Access underlying memory directly to avoid recursive operator[] with ASAN
    // DMEM base offset is 0x8000 bytes = 8192 words, index is 0-767
-   if (index < 768) {
-       unsigned int word_offset = (0x8000 / sizeof(unsigned int)) + index;
-       value = memory.memory_block[word_offset];
-   } else {
-       value = 0;  // Protected region returns 0
-   }
+   unsigned int word_offset = (0x8000 / sizeof(unsigned int)) + index;
+   value = memory.memory_block[word_offset];
    return true;
 }
 
@@ -906,7 +892,7 @@ bool otbn_ip::dmem_read_callback(uint32_t& value, uint32_t index) {
  * Defaults to RSA-2048 if algorithm name is unknown.
  */
 void otbn_ip::select_algorithm(const std::string& algo_name) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // DMEM size is 4 KiB (1024 words * 4 bytes = 4096 bytes)
    const size_t dmem_size = 4096;
 
@@ -972,7 +958,7 @@ void otbn_ip::select_algorithm(const std::string& algo_name) {
  * model EDN and uses rand() instead.
  */
 otbn_algorithm::status_t otbn_ip::rnd_read_handler(uint32_t* data) {
-    CSML_FUNC_TRACE(logger);
+    REG_FUNC_TRACE(logger);
     // Generate 256 bits (8 words) of random data using C rand().
     // Entropy is provided by OpenSSL/platform rather than the EDN subsystem,
     // which is not modelled in the VP.
@@ -998,10 +984,10 @@ otbn_algorithm::status_t otbn_ip::rnd_read_handler(uint32_t* data) {
  * - Sets completion interrupt if successful
  */
 void otbn_ip::execute_algorithm() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // TLM: Add wait to allow tests to observe BUSY_EXECUTE state before completion
    uint64_t cycle_count = current_algorithm->get_cycle_count();
-   CSML_DEBUG(2, logger) << "[OTBN] execute_algorithm: waiting for cycle count: " << cycle_count << " ns";
+   REG_DEBUG(2, logger) << "[OTBN] execute_algorithm: waiting for cycle count: " << cycle_count << " ns";
    wait(cycle_count, SC_NS);
 
 
@@ -1127,9 +1113,9 @@ void otbn_ip::execute_algorithm() {
  * but this model simply wipes the data by clearing it to zero.
  */
 void otbn_ip::secure_wipe_dmem() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Secure Wipe DMEM with Key Rotation (per spec Section 5.4, 3.2.4)
-      CSML_DEBUG(2, logger) << "[OTBN] inside secure_wipe_dmem " << std::dec<< std::endl;
+      REG_DEBUG(2, logger) << "[OTBN] inside secure_wipe_dmem " << std::dec<< std::endl;
    
    // 4. Apply new scrambling parameters (key rotation makes old data unreadable)
    // In TLM model, we simulate this effect by overwriting DMEM with zeros
@@ -1148,13 +1134,13 @@ void otbn_ip::secure_wipe_dmem() {
        uint32_t intr_state_val = INTR_STATE;
        intr_state_val |= 0x1;
        INTR_STATE = intr_state_val;
-      CSML_DEBUG(2, logger) << "[OTBN]  intr_state_val " << std::dec << intr_state_val<< std::endl;
+      REG_DEBUG(2, logger) << "[OTBN]  intr_state_val " << std::dec << intr_state_val<< std::endl;
        // Assert interrupt if enabled - deferred
        uint32_t enable_val = INTR_ENABLE;
        if (enable_val & 0x1) {
            pending_intr_done = true;
            request_interrupt_update();
-           CSML_DEBUG(2, logger) << "[OTBN]  pending_intr_done set to true" << std::endl;
+           REG_DEBUG(2, logger) << "[OTBN]  pending_intr_done set to true" << std::endl;
        }
    }
 }
@@ -1174,11 +1160,11 @@ void otbn_ip::secure_wipe_dmem() {
  * 
  */
 void otbn_ip::secure_wipe_imem() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Secure Wipe IMEM with Key Rotation (per spec Section 5.4, 3.2.4)
    // Same process as DMEM wipe but for instruction memory
 
-      CSML_DEBUG(2, logger) << "[OTBN] inside secure_wipe_imem " << std::dec<< std::endl;
+      REG_DEBUG(2, logger) << "[OTBN] inside secure_wipe_imem " << std::dec<< std::endl;
 
    // 4. Apply new scrambling parameters (key rotation makes old data unreadable)
    // In TLM model, we simulate this effect by overwriting IMEM with zeros
@@ -1202,13 +1188,13 @@ void otbn_ip::secure_wipe_imem() {
        intr_state_val |= 0x1;
        INTR_STATE = intr_state_val;
 
-       CSML_DEBUG(2, logger) << "[OTBN]  intr_state_val " << std::dec << intr_state_val<< std::endl;
+       REG_DEBUG(2, logger) << "[OTBN]  intr_state_val " << std::dec << intr_state_val<< std::endl;
        // Assert interrupt if enabled - deferred
        uint32_t enable_val = INTR_ENABLE;
        if (enable_val & 0x1) {
            pending_intr_done = true;
            request_interrupt_update();
-              CSML_DEBUG(2, logger) << "[OTBN]  pending_intr_done set to true" << std::endl;
+              REG_DEBUG(2, logger) << "[OTBN]  pending_intr_done set to true" << std::endl;
        }
    }
 }
@@ -1227,7 +1213,7 @@ void otbn_ip::secure_wipe_imem() {
  * data leakage. In TLM model, operation completes atomically.
  */
 void otbn_ip::internal_secure_wipe() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Two-pass randomisation of WDRs using rand() (per spec Section 4.3.5, 3.2.2).
    // The RTL uses URND seeded from EDN; the VP substitutes C rand() since EDN
    // is not modelled — the effect (unpredictable wipe) is identical for VP purposes.
@@ -1263,7 +1249,7 @@ void otbn_ip::internal_secure_wipe() {
  * Uses polynomial 0x04C11DB7 (IEEE 802.3 standard).
  */
 uint32_t otbn_ip::crc32_ieee_update(uint32_t crc, uint32_t data, bool is_imem, uint16_t word_index) {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // CRC-32-IEEE polynomial: 0x04C11DB7
    // Input format: {imem_flag[1], word_index[15], data[32]} = 48 bits
    // Matches Python binascii.crc32() algorithm which processes bytes
@@ -1316,7 +1302,7 @@ uint32_t otbn_ip::crc32_ieee_update(uint32_t crc, uint32_t data, bool is_imem, u
  * lc_escalate_event when the signal is asserted.
  */
 void otbn_ip::lc_escalate_monitor_method() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    if (lc_escalate_req.read() || lc_rma_req.read()) {
        // Trigger lc_escalate_event when lc_escalate_req is asserted
        lc_escalate_event.notify(SC_ZERO_TIME);
@@ -1335,7 +1321,7 @@ void otbn_ip::lc_escalate_monitor_method() {
  * and trigger security responses.
  */
 void otbn_ip::lc_monitor_thread() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Monitor Life Cycle Controller signals (per spec Section 8.3, 4.3.6)
    while (true) {
        // Wait for either lc_escalate_event or lc_rma_req
@@ -1434,7 +1420,7 @@ void otbn_ip::lc_monitor_thread() {
  * - Schedules transition to IDLE after wipe completes
  */
 void otbn_ip::reset_handler() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    // Check if reset is asserted (active-low)
    if (!rst_n.read()) {
       // Reset asserted - initialize all state immediately
@@ -1497,7 +1483,7 @@ void otbn_ip::reset_handler() {
  * Used to avoid multiple driver conflicts when updating interrupt outputs.
  */
 void otbn_ip::request_interrupt_update() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    interrupt_update_event.notify(SC_ZERO_TIME);
 }
 
@@ -1508,7 +1494,7 @@ void otbn_ip::request_interrupt_update() {
  * Called when interrupt_update_event is triggered.
  */
 void otbn_ip::interrupt_update_method() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    intr_done.write(pending_intr_done);
 }
 
@@ -1519,7 +1505,7 @@ void otbn_ip::interrupt_update_method() {
  * Used to avoid multiple driver conflicts when updating alert outputs.
  */
 void otbn_ip::request_alert_update() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    alert_update_event.notify(SC_ZERO_TIME);
 }
 
@@ -1530,7 +1516,7 @@ void otbn_ip::request_alert_update() {
  * Called when alert_update_event is triggered.
  */
 void otbn_ip::alert_update_method() {
-   CSML_FUNC_TRACE(logger);
+   REG_FUNC_TRACE(logger);
    alert_fatal.write(pending_alert_fatal);
    alert_recov.write(pending_alert_recov);
 }
@@ -1552,13 +1538,13 @@ void otbn_ip::alert_update_method() {
  * Currently not implemented in TLM model - returns error.
  */
 otbn_algorithm::status_t otbn_ip::csr_read_handler(uint32_t address, uint32_t* data) {
-    CSML_FUNC_TRACE(logger);
+    REG_FUNC_TRACE(logger);
     // CSR (Control/Status Register) read handler
     // Address is byte offset into CSR space
     // For now, return error - algorithms don't typically need CSR access in TLM
     // Can be enhanced if specific algorithms need status register reads
 
-    CSML_ERROR(0, logger) << "[OTBN] CSR read from algorithm at address 0x" << std::hex << address << " - not implemented in TLM" << std::dec;
+    REG_ERROR(0, logger) << "[OTBN] CSR read from algorithm at address 0x" << std::hex << address << " - not implemented in TLM" << std::dec;
     (void)data;  // Suppress unused parameter warning
     return otbn_algorithm::ERROR;
 }
@@ -1573,11 +1559,11 @@ otbn_algorithm::status_t otbn_ip::csr_read_handler(uint32_t address, uint32_t* d
  * Currently not implemented in TLM model - returns error.
  */
 otbn_algorithm::status_t otbn_ip::csr_write_handler(uint32_t address, uint32_t data) {
-    CSML_FUNC_TRACE(logger);
+    REG_FUNC_TRACE(logger);
     // CSR (Control/Status Register) write handler
     // Address is byte offset into CSR space
 
-    CSML_ERROR(0, logger) << "[OTBN] CSR write from algorithm at address 0x" << std::hex << address << " data 0x" << data << " - not implemented in TLM" << std::dec;
+    REG_ERROR(0, logger) << "[OTBN] CSR write from algorithm at address 0x" << std::hex << address << " data 0x" << data << " - not implemented in TLM" << std::dec;
     return otbn_algorithm::ERROR;
 }
 
@@ -1592,13 +1578,13 @@ otbn_algorithm::status_t otbn_ip::csr_write_handler(uint32_t address, uint32_t d
  * Sets KEY_INVALID error bit if key is not registered.
  */
 otbn_algorithm::status_t otbn_ip::wdr_read_handler(uint32_t address, uint64_t* data) {
-    CSML_FUNC_TRACE(logger);
+    REG_FUNC_TRACE(logger);
     // WDR (Wide Data Register) read handler
     // Address is register index (0-31 for w0-w31)
 
     // Validate address range
     if (address >= NUM_WDR_REGISTERS) {
-        CSML_ERROR(0, logger) << "[OTBN] WDR read: Invalid register index " << address << " (max " << (NUM_WDR_REGISTERS-1) << ")";
+        REG_ERROR(0, logger) << "[OTBN] WDR read: Invalid register index " << address << " (max " << (NUM_WDR_REGISTERS-1) << ")";
         return otbn_algorithm::ERROR;
     }
 
@@ -1609,7 +1595,7 @@ otbn_algorithm::status_t otbn_ip::wdr_read_handler(uint32_t address, uint64_t* d
         address <= static_cast<uint32_t>(WDR_KEY_S1_H) &&
         !key_registered) {
         err_bits_accumulator |= otbn_err_bits::KEY_INVALID;
-        CSML_ERROR(0, logger) << "[OTBN] WDR read blocked: No valid key registered (KEY_INVALID set)";
+        REG_ERROR(0, logger) << "[OTBN] WDR read blocked: No valid key registered (KEY_INVALID set)";
         return otbn_algorithm::ERROR;
     }
 
@@ -1619,7 +1605,7 @@ otbn_algorithm::status_t otbn_ip::wdr_read_handler(uint32_t address, uint64_t* d
     data[2] = wdr_registers[address][2];
     data[3] = wdr_registers[address][3];
 
-    CSML_DEBUG(2, logger) << "[OTBN] WDR read: w" << address << " = 0x" << std::hex << data[3] << data[2] << data[1] << data[0] << std::dec;
+    REG_DEBUG(2, logger) << "[OTBN] WDR read: w" << address << " = 0x" << std::hex << data[3] << data[2] << data[1] << data[0] << std::dec;
 
     return otbn_algorithm::SUCCESS;
 }
@@ -1634,12 +1620,12 @@ otbn_algorithm::status_t otbn_ip::wdr_read_handler(uint32_t address, uint64_t* d
  * Validates address range before allowing write.
  */
 otbn_algorithm::status_t otbn_ip::wdr_write_handler(uint32_t address, uint64_t* data) {
-    CSML_FUNC_TRACE(logger);
+    REG_FUNC_TRACE(logger);
     // WDR (Wide Data Register) write handler
     // Address is register index (0-31 for w0-w31)
 
     if (address >= NUM_WDR_REGISTERS) {
-        CSML_ERROR(0, logger) << "[OTBN] WDR write: Invalid register index " << address << " (max " << (NUM_WDR_REGISTERS-1) << ")";
+        REG_ERROR(0, logger) << "[OTBN] WDR write: Invalid register index " << address << " (max " << (NUM_WDR_REGISTERS-1) << ")";
         return otbn_algorithm::ERROR;
     }
 
@@ -1649,7 +1635,7 @@ otbn_algorithm::status_t otbn_ip::wdr_write_handler(uint32_t address, uint64_t* 
     wdr_registers[address][2] = data[2];
     wdr_registers[address][3] = data[3];
 
-    CSML_DEBUG(2, logger) << "[OTBN] WDR write: w" << address << " = 0x" << std::hex << data[3] << data[2] << data[1] << data[0] << std::dec;
+    REG_DEBUG(2, logger) << "[OTBN] WDR write: w" << address << " = 0x" << std::hex << data[3] << data[2] << data[1] << data[0] << std::dec;
 
     return otbn_algorithm::SUCCESS;
 }
@@ -1674,7 +1660,7 @@ otbn_algorithm::status_t otbn_ip::wdr_write_handler(uint32_t address, uint64_t* 
  * @param delay TLM timing annotation
  */
 void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay) {
-    CSML_FUNC_TRACE(logger);
+    REG_FUNC_TRACE(logger);
     tlm::tlm_command cmd = trans.get_command();
     sc_dt::uint64 addr = trans.get_address();
     unsigned char* ptr = trans.get_data_ptr();
@@ -1682,7 +1668,7 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
 
     // Only support writes (Key Manager programs keys)
     if (cmd != tlm::TLM_WRITE_COMMAND) {
-        CSML_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Only WRITE commands supported, got " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "UNKNOWN");
+        REG_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Only WRITE commands supported, got " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "UNKNOWN");
         trans.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
@@ -1697,7 +1683,7 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
         // Bug #4 fix: honour the KEY_VALID bit value — writing 0 must invalidate the key
         uint32_t ctrl_val = *reinterpret_cast<uint32_t*>(ptr);
         key_registered = (ctrl_val & 0x1u) != 0;
-        CSML_INFO(1, logger) << "[OTBN KeyMgr TLM] KEY_CTRL written — key_registered = " << key_registered;
+        REG_INFO(1, logger) << "[OTBN KeyMgr TLM] KEY_CTRL written — key_registered = " << key_registered;
         delay += sc_time(10, SC_NS);
         trans.set_response_status(tlm::TLM_OK_RESPONSE);
         return;
@@ -1719,7 +1705,7 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
         wdr_index   = WDR_KEY_S1_H;
         byte_offset = static_cast<unsigned int>(addr - 0x050);
     } else {
-        CSML_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Invalid address 0x" << std::hex << addr << " (valid: 0x000-0x02F share0, 0x030-0x05F share1, 0x060 KEY_CTRL)" << std::dec;
+        REG_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Invalid address 0x" << std::hex << addr << " (valid: 0x000-0x02F share0, 0x030-0x05F share1, 0x060 KEY_CTRL)" << std::dec;
         trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
@@ -1743,7 +1729,7 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
         wdr_registers[wdr_index][3] = 0;
     }
 
-    CSML_INFO(1, logger) << "[OTBN KeyMgr TLM] Wrote " << len << " bytes to address 0x" << std::hex << addr << " (WDR" << std::dec << wdr_index << ")";
+    REG_INFO(1, logger) << "[OTBN KeyMgr TLM] Wrote " << len << " bytes to address 0x" << std::hex << addr << " (WDR" << std::dec << wdr_index << ")";
 
     // Accept transaction with timing delay
     delay += sc_time(10, SC_NS);  // Abstract TLM timing

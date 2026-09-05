@@ -11,7 +11,7 @@ void testbench::test_func008_control_flow()
     int sub_tests_passed = 0;
     int sub_tests_failed = 0;
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "[TEST FUNC-008] Control Flow Testing" << std::endl
                          << "========================================" << std::endl
                          << "Tests: SPIEN suspend/resume, SW_RST, OUTPUT_EN" << std::endl
@@ -22,18 +22,18 @@ void testbench::test_func008_control_flow()
     // =======================================================================
     // Test 9.1: SPIEN Suspend During Active Transaction
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 8.1] SPIEN Suspend During Active Transaction" << std::endl
+    REG_INFO(1, logger) << "\n[Test 8.1] SPIEN Suspend During Active Transaction" << std::endl
                          << "------------------------------------------------------" << std::endl;
 
     // Step 1: Initial Configuration
-    CSML_INFO(2, logger) << "[8.1.1] Initial Configuration..." << std::endl;
+    REG_INFO(2, logger) << "[8.1.1] Initial Configuration..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
     test->write_register_32(CFG_OFFSET, 0x0000000A);  /// CLKDIV=10
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // Step 2: Load TX FIFO with data
-    CSML_INFO(2, logger) << "[8.1.2] Loading TX FIFO with 32 bytes..." << std::endl;
+    REG_INFO(2, logger) << "[8.1.2] Loading TX FIFO with 32 bytes..." << std::endl;
     for (int i = 0; i < 8; i++) {
         test->write_register_32(TXDATA_OFFSET, 0x11223300 + i);
     }
@@ -43,16 +43,16 @@ void testbench::test_func008_control_flow()
     test->read_register_32(STATUS_OFFSET, status_val);
     uint32_t txqd = status_val & 0xFF;
     if (txqd == 8) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=8" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=8" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO not loaded: TXQD=" << txqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO not loaded: TXQD=" << txqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 3: Start long transaction (32 bytes TX)
-    CSML_INFO(2, logger) << "[8.1.3] Starting 32-byte TX transaction..." << std::endl;
+    REG_INFO(2, logger) << "[8.1.3] Starting 32-byte TX transaction..." << std::endl;
     uint32_t cmd = BUILD_CMD(31, 2, 0, 0);  /// LEN=31 (32 bytes), TX-only, Standard, CSAAT=0
     test->write_register_32(CMD_OFFSET, cmd);
     wait(50, SC_US);  /// Wait for transaction to start
@@ -61,26 +61,26 @@ void testbench::test_func008_control_flow()
     test->read_register_32(STATUS_OFFSET, status_val);
     bool active = (status_val >> 30) & 0x1;
     if (active) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction active: STATUS.ACTIVE=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction active: STATUS.ACTIVE=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Transaction not active" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Transaction not active" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 4: Suspend by clearing SPIEN (CTRL.SPIEN=0)
-    CSML_INFO(2, logger) << "[8.1.4] Suspending transaction (SPIEN=0)..." << std::endl;
+    REG_INFO(2, logger) << "[8.1.4] Suspending transaction (SPIEN=0)..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0x60000000);  /// SPIEN=0, OUTPUT_EN=1, SW_RST=0
     wait(10, SC_US);
 
     // Verify transaction is still suspended (FSM should hold state)
     test->read_register_32(STATUS_OFFSET, status_val);
     uint32_t txqd_suspended = status_val & 0xFF;
-    CSML_INFO(2, logger) << "  [INFO] During suspension: TXQD=" << txqd_suspended << std::endl;
+    REG_INFO(2, logger) << "  [INFO] During suspension: TXQD=" << txqd_suspended << std::endl;
 
     // Step 5: Resume by setting SPIEN=1
-    CSML_INFO(2, logger) << "[8.1.5] Resuming transaction (SPIEN=1)..." << std::endl;
+    REG_INFO(2, logger) << "[8.1.5] Resuming transaction (SPIEN=1)..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
     wait(200, SC_US);  /// Wait for transaction to complete
 
@@ -91,10 +91,10 @@ void testbench::test_func008_control_flow()
     bool txempty = (status_val >> 28) & 0x1;
 
     if (!active && ready && txempty) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction resumed and completed: ACTIVE=0, READY=1, TXEMPTY=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction resumed and completed: ACTIVE=0, READY=1, TXEMPTY=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Transaction did not complete: ACTIVE=" << active
+        REG_ERROR(2, logger) << "  [FAIL] Transaction did not complete: ACTIVE=" << active
                   << ", READY=" << ready << ", TXEMPTY=" << txempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -103,10 +103,10 @@ void testbench::test_func008_control_flow()
     // Verify no errors
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] No errors after suspend/resume" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] No errors after suspend/resume" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -117,18 +117,18 @@ void testbench::test_func008_control_flow()
     // =======================================================================
     // Test 9.2: Software Reset (SW_RST) During Active Transaction
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 8.2] Software Reset During Active Transaction" << std::endl
+    REG_INFO(1, logger) << "\n[Test 8.2] Software Reset During Active Transaction" << std::endl
                          << "------------------------------------------------------" << std::endl;
 
     // Step 1: Re-enable and reconfigure
-    CSML_INFO(2, logger) << "[8.2.1] Reconfiguring IP..." << std::endl;
+    REG_INFO(2, logger) << "[8.2.1] Reconfiguring IP..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0xE0000000);
     test->write_register_32(CFG_OFFSET, 0x0000000A);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // Step 2: Load TX FIFO
-    CSML_INFO(2, logger) << "[8.2.2] Loading TX FIFO with 16 bytes..." << std::endl;
+    REG_INFO(2, logger) << "[8.2.2] Loading TX FIFO with 16 bytes..." << std::endl;
     for (int i = 0; i < 4; i++) {
         test->write_register_32(TXDATA_OFFSET, 0xAABBCC00 + i);
     }
@@ -138,16 +138,16 @@ void testbench::test_func008_control_flow()
     test->read_register_32(STATUS_OFFSET, status_val);
     txqd = status_val & 0xFF;
     if (txqd == 4) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=4" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO loaded: TXQD=4" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 3: Start transaction
-    CSML_INFO(2, logger) << "[8.2.3] Starting 16-byte TX transaction..." << std::endl;
+    REG_INFO(2, logger) << "[8.2.3] Starting 16-byte TX transaction..." << std::endl;
     cmd = BUILD_CMD(15, 2, 0, 0);  /// LEN=15 (16 bytes), TX-only
     test->write_register_32(CMD_OFFSET, cmd);
     wait(30, SC_US);
@@ -156,19 +156,19 @@ void testbench::test_func008_control_flow()
     test->read_register_32(STATUS_OFFSET, status_val);
     active = (status_val >> 30) & 0x1;
     if (active) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction active before SW_RST" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction active before SW_RST" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_INFO(2, logger) << "  [INFO] Transaction may have completed quickly" << std::endl;
+        REG_INFO(2, logger) << "  [INFO] Transaction may have completed quickly" << std::endl;
     }
 
     // Step 4: Trigger SW_RST
-    CSML_INFO(2, logger) << "[8.2.4] Triggering SW_RST..." << std::endl;
+    REG_INFO(2, logger) << "[8.2.4] Triggering SW_RST..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST=1, SPIEN=0, OUTPUT_EN=0
     wait(50, SC_US);
 
     // Step 5: Verify FIFOs are flushed
-    CSML_INFO(2, logger) << "[8.2.5] Verifying FIFOs flushed..." << std::endl;
+    REG_INFO(2, logger) << "[8.2.5] Verifying FIFOs flushed..." << std::endl;
     test->read_register_32(STATUS_OFFSET, status_val);
     txqd = status_val & 0xFF;
     uint32_t rxqd = (status_val >> 8) & 0xFF;
@@ -176,10 +176,10 @@ void testbench::test_func008_control_flow()
     bool rxempty = (status_val >> 24) & 0x1;
 
     if (txqd == 0 && rxqd == 0 && txempty && rxempty) {
-        CSML_INFO(2, logger) << "  [PASS] FIFOs flushed: TXQD=0, RXQD=0, TXEMPTY=1, RXEMPTY=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FIFOs flushed: TXQD=0, RXQD=0, TXEMPTY=1, RXEMPTY=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FIFOs not flushed: TXQD=" << txqd << ", RXQD=" << rxqd
+        REG_ERROR(2, logger) << "  [FAIL] FIFOs not flushed: TXQD=" << txqd << ", RXQD=" << rxqd
                   << ", TXEMPTY=" << txempty << ", RXEMPTY=" << rxempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -190,10 +190,10 @@ void testbench::test_func008_control_flow()
     ready = (status_val >> 31) & 0x1;
 
     if (ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FSM not in IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FSM not in IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -201,26 +201,26 @@ void testbench::test_func008_control_flow()
     // Step 7: Verify ERROR_STATUS cleared
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] ERROR_STATUS cleared by SW_RST" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] ERROR_STATUS cleared by SW_RST" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS not cleared: 0x" << std::hex << status_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS not cleared: 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 8: Release SW_RST and verify IP can be reconfigured
-    CSML_INFO(2, logger) << "[8.2.6] Releasing SW_RST and reconfiguring..." << std::endl;
+    REG_INFO(2, logger) << "[8.2.6] Releasing SW_RST and reconfiguring..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1, SW_RST=0
     wait(10, SC_NS);
 
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (ready) {
-        CSML_INFO(2, logger) << "  [PASS] IP operational after SW_RST: STATUS.READY=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] IP operational after SW_RST: STATUS.READY=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] IP not operational after SW_RST" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] IP not operational after SW_RST" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -231,43 +231,43 @@ void testbench::test_func008_control_flow()
     // =======================================================================
     // Test 9.3: OUTPUT_EN Control
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 8.3] OUTPUT_EN Control" << std::endl
+    REG_INFO(1, logger) << "\n[Test 8.3] OUTPUT_EN Control" << std::endl
                          << "------------------------------------------------------" << std::endl;
 
     // Step 1: Configure with OUTPUT_EN=0
-    CSML_INFO(2, logger) << "[8.3.1] Configuring with OUTPUT_EN=0..." << std::endl;
+    REG_INFO(2, logger) << "[8.3.1] Configuring with OUTPUT_EN=0..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0x80000000);  /// SPIEN=1, OUTPUT_EN=0
     wait(10, SC_NS);
 
     test->read_register_32(CTRL_OFFSET, status_val);
     bool output_en = (status_val >> 29) & 0x1;
     if (!output_en) {
-        CSML_INFO(2, logger) << "  [PASS] OUTPUT_EN=0 configured" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] OUTPUT_EN=0 configured" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] OUTPUT_EN not cleared" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] OUTPUT_EN not cleared" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 2: Enable OUTPUT_EN
-    CSML_INFO(2, logger) << "[8.3.2] Enabling OUTPUT_EN..." << std::endl;
+    REG_INFO(2, logger) << "[8.3.2] Enabling OUTPUT_EN..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
     wait(10, SC_NS);
 
     test->read_register_32(CTRL_OFFSET, status_val);
     output_en = (status_val >> 29) & 0x1;
     if (output_en) {
-        CSML_INFO(2, logger) << "  [PASS] OUTPUT_EN=1 configured" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] OUTPUT_EN=1 configured" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] OUTPUT_EN not set" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] OUTPUT_EN not set" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 3: Verify normal transaction works with OUTPUT_EN=1
-    CSML_INFO(2, logger) << "[8.3.3] Testing transaction with OUTPUT_EN=1..." << std::endl;
+    REG_INFO(2, logger) << "[8.3.3] Testing transaction with OUTPUT_EN=1..." << std::endl;
     test->write_register_32(TXDATA_OFFSET, 0xDEADBEEF);
     wait(10, SC_NS);
 
@@ -280,10 +280,10 @@ void testbench::test_func008_control_flow()
     txempty = (status_val >> 28) & 0x1;
 
     if (!active && txempty) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction completed with OUTPUT_EN=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction completed with OUTPUT_EN=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Transaction did not complete: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Transaction did not complete: ACTIVE=" << active << ", TXEMPTY=" << txempty << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -294,12 +294,12 @@ void testbench::test_func008_control_flow()
     // =======================================================================
     // Test 9.4: SW_RST with Full FIFOs
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 8.4] SW_RST with Full FIFOs" << std::endl
+    REG_INFO(1, logger) << "\n[Test 8.4] SW_RST with Full FIFOs" << std::endl
                          << "------------------------------------------------------" << std::endl;
 
     // Step 1: Fill TX FIFO to capacity
     // Capacity is TxDepth + 1: the byte_select stage holds one extra word.
-    CSML_INFO(2, logger) << "[8.4.1] Filling TX FIFO (73 words = 292 bytes)..." << std::endl;
+    REG_INFO(2, logger) << "[8.4.1] Filling TX FIFO (73 words = 292 bytes)..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0x80000000);  /// SPIEN=1, OUTPUT_EN=0 (prevent draining)
     wait(10, SC_NS);
 
@@ -314,16 +314,16 @@ void testbench::test_func008_control_flow()
     txqd = status_val & 0xFF;
 
     if (txfull && txqd == 73) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO full: TXFULL=1, TXQD=73" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO full: TXFULL=1, TXQD=73" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO not full: TXFULL=" << txfull << ", TXQD=" << txqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO not full: TXFULL=" << txfull << ", TXQD=" << txqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 2: Trigger SW_RST
-    CSML_INFO(2, logger) << "[8.4.2] Triggering SW_RST with full FIFO..." << std::endl;
+    REG_INFO(2, logger) << "[8.4.2] Triggering SW_RST with full FIFO..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST=1
     wait(100, SC_US);
 
@@ -334,27 +334,27 @@ void testbench::test_func008_control_flow()
     txfull = (status_val >> 29) & 0x1;
 
     if (txqd == 0 && txempty && !txfull) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO flushed: TXQD=0, TXEMPTY=1, TXFULL=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO flushed: TXQD=0, TXEMPTY=1, TXFULL=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO not flushed: TXQD=" << txqd
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO not flushed: TXQD=" << txqd
                   << ", TXEMPTY=" << txempty << ", TXFULL=" << txfull << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Step 4: Release SW_RST and verify IP operational
-    CSML_INFO(2, logger) << "[8.4.3] Releasing SW_RST..." << std::endl;
+    REG_INFO(2, logger) << "[8.4.3] Releasing SW_RST..." << std::endl;
     test->write_register_32(CTRL_OFFSET, 0xE0000000);
     wait(10, SC_NS);
 
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     if (ready) {
-        CSML_INFO(2, logger) << "  [PASS] IP operational after full FIFO reset" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] IP operational after full FIFO reset" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] IP not operational" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] IP not operational" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -362,7 +362,7 @@ void testbench::test_func008_control_flow()
     // =======================================================================
     // Test Summary
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "FUNC-008 Test Summary" << std::endl
                          << "========================================" << std::endl
                          << "Sub-tests Passed: " << sub_tests_passed << std::endl
