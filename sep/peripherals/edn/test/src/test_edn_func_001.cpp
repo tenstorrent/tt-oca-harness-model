@@ -1175,8 +1175,9 @@ bool test_edn_func_001::test_main_sm_state_visibility()
     bool all_passed = true;
     uint32_t read_value;
 
-    // Prior cases (ERR_CODE_TEST injection) leave MAIN_SM in Error; this
-    // case checks the reset-value / RO contract, so start from a clean reset.
+    // T18 injects ERR_CODE_TEST, which transitions MAIN_SM_STATE to Error (0x47).
+    // Reset first so this case observes the documented Idle reset value in both
+    // Release (-O3) and Coverage (-O0 / __COVERAGE__) builds.
     apply_reset(100.0);
     wait(10, SC_NS);
 
@@ -1325,6 +1326,9 @@ bool test_edn_func_001::test_corner_ctrl_write_when_regwen_locked()
     bool all_passed = true;
     uint32_t read_value;
 
+    // Isolate from T18: ERR_CODE_TEST leaves the main SM in Error, where a
+    // subsequent CTRL write may not land 0x6666. Reset so REGWEN is unlocked
+    // and CTRL is writable in both Release and Coverage builds.
     apply_reset(100.0);
     wait(10, SC_NS);
 

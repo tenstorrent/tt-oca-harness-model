@@ -174,7 +174,8 @@ if(BUILD_TESTS)
     set(_edn_cov_cmds)
     foreach(_cfg RANGE 1 14)
       list(APPEND _edn_cov_cmds
-        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini ${_cfg})
+        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/edn_testbench
+                ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini ${_cfg})
     endforeach()
     peripheral_add_coverage_target(
       PRIMARY_TARGET edn_testbench

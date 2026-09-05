@@ -48,6 +48,7 @@ extern "C" void __gcov_dump(void);
 #define TEST_HMAC_ERR_INTERRUPT
 #define TEST_KEYMGR_SIDELOAD
 #define TEST_FIFO_EMPTY_INTERRUPT_GATING
+#define TEST_COVERAGE_GAP_PATHS
 
 void testbench::run_tests()
 {
@@ -227,6 +228,10 @@ void testbench::run_tests()
     #endif
 
     test_coverage_reject_paths();
+
+    #ifdef TEST_COVERAGE_GAP_PATHS
+    test_coverage_gap_paths();
+    #endif
 
     REG_INFO(1, logger) << "\n========================================" << std::endl;
     REG_INFO(1, logger) << "  All Tests Completed!" << std::endl;

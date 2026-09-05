@@ -8,6 +8,7 @@
 #include <tlm_utils/simple_target_socket.h>
 #include "sep_platform.hpp"
 #include "reg_logger.h"
+#include "tlm_quantum_policy.h"
 
 namespace {
 
@@ -91,6 +92,17 @@ int sc_main(int argc, char **argv)
 
     std::cout << "RegLogger global log file: och_sep_ss.log\n";
     RegLogger::setGlobalLogFile("och_sep_ss.log");
+
+    {
+        cci::cci_originator orig("sc_main");
+        auto broker = cci::cci_get_global_broker(orig);
+        uint64_t qns = simtlm::DEFAULT_GLOBAL_QUANTUM_NS;
+        const cci::cci_value v = broker.get_preset_cci_value("och_sep_ss1.globalQuantumNs");
+        if (v.is_uint64())
+            qns = v.get_uint64();
+        simtlm::set_global_quantum_ns(qns);
+    }
+
     och_sep_ss och_sep_ss1("och_sep_ss1");
 
     // Standalone sep-vp has no SMU platform: bind the chiplet boundary ports

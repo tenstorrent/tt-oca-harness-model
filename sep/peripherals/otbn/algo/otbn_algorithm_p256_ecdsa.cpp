@@ -66,10 +66,12 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
 
     // Create EC_KEY and set public key
     EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+    // LCOV_EXCL_START — OpenSSL curve/key init failure cannot be injected from the TB
     if (!key) {
         REG_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to create EC_KEY";
             return otbn_algorithm::ERROR;
     }
+    // LCOV_EXCL_STOP
 
     // Create public key point from x, y coordinates
     const EC_GROUP* group = EC_KEY_get0_group(key);
@@ -86,6 +88,7 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
             return otbn_algorithm::ERROR;
     }
 
+    // LCOV_EXCL_START — EC_KEY_set_public_key fails only if OpenSSL is broken
     if (!EC_KEY_set_public_key(key, pub_point)) {
         REG_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to set public key";
         BN_free(bn_x);
@@ -94,6 +97,7 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
         EC_KEY_free(key);
             return otbn_algorithm::ERROR;
     }
+    // LCOV_EXCL_STOP
 
     // Create ECDSA signature from r, s
     ECDSA_SIG* sig = ECDSA_SIG_new();

@@ -188,6 +188,9 @@ void testbench::run_tests() {
                        << "========================================\n"
                        << std::endl;
 
+  m_model->logger.setMaxVerbosity(3);
+  logger.setMaxVerbosity(3);
+
   // Apply initial reset
   REG_INFO(1, logger) << "Applying initial reset" << std::endl;
   m_test->apply_reset(sc_time(100, SC_NS));

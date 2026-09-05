@@ -386,8 +386,9 @@ const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     { k_word(sep_efuse::SEP_CHIPLET_ID_OFFSET),      k_last(sep_efuse::SEP_CHIPLET_ID_OFFSET, 8),    true, 26 },
     { k_word(sep_efuse::SEP_SIP_ID_OFFSET),          k_last(sep_efuse::SEP_SIP_ID_OFFSET, 8),        true, 28 },
     { k_word(sep_efuse::SEP_SYS_ID_OFFSET),          k_last(sep_efuse::SEP_SYS_ID_OFFSET, 8),        true, 30 },
-    // SPARE0..7 sit in PeakRDL RESERVED_* after PUBLIC_KEY_1. They have no dedicated
-    // LOCKS pair in the 64-bit LOCKS register, so they are left unlocked here.
+    // SPARE0..7 sit in PeakRDL RESERVED_* after PUBLIC_KEY_1. There is no
+    // LOCKS_SPARE; they have no dedicated pair in the 64-bit LOCKS register
+    // and are left unlocked here.
 };
 
 const unsigned int efuse_model::k_lock_region_count =

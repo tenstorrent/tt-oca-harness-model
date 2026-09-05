@@ -124,6 +124,7 @@ set(TEST_SRCS
   test/src/hmac_test.cpp
   test/src/hmac_basetest.cpp
   test/src/basic_tests.cpp
+  test/src/coverage_tests.cpp
   test/src/testbench.cpp
 )
 

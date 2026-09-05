@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # Build and test every SMC IP — peripherals plus smc_fabric — across four
-# quality gates (Release, ASAN, Coverage, CTest) and produce a structured
+# quality gates (Release, ASAN, Coverage ≥ 95% line, CTest) and produce a structured
 # summary table that mirrors sep/peripherals/run_all_peripherals.sh.
 #
 # Usage:
@@ -34,6 +34,9 @@
 #                  Used by cpu_cluster; also accepted as BOOST_ROOT for
 #                  compatibility with the CI/VP configure scripts.
 #   JOBS           Parallel build jobs (default: all available cores).
+#   COVERAGE_MIN_LINE_PCT
+#                  Minimum accepted line coverage for the Coverage stage
+#                  (default: 95).  A lower figure fails the stage.
 
 set -uo pipefail
 
@@ -243,10 +246,6 @@ echo ""
 
 mkdir -p "${LOG_ROOT}"
 
-# ── Coverage gate (≥ 95% line coverage, overridable via COVERAGE_MIN_LINE_PCT)
-# shellcheck disable=SC1091
-source "${SCRIPT_DIR}/../scripts/coverage_gate.sh"
-
 # ── Helper: extract line-coverage % from a coverage run log ──────────────────
 #
 # Handles two formats produced by smc run_tests.sh --coverage:
@@ -280,6 +279,14 @@ extract_coverage() {
     fi
 
     echo "${pct:-n/a}"
+}
+
+# True if $1 is a number >= $2 (default 95).  "n/a" / empty fails the gate.
+COVERAGE_MIN_LINE_PCT="${COVERAGE_MIN_LINE_PCT:-95}"
+coverage_meets_min() {
+    local pct="$1" min="${2:-${COVERAGE_MIN_LINE_PCT}}"
+    [[ -z "${pct}" || "${pct}" == "n/a" ]] && return 1
+    awk -v p="${pct}" -v m="${min}" 'BEGIN { exit (p+0 < m+0) }'
 }
 
 # ── Helper: run one test stage and capture output ────────────────────────────
@@ -337,6 +344,10 @@ for entry in "${IPS[@]}"; do
       printf "  ASAN build    ... "
       run_stage "${src_dir}" "${plog}/asan_run.log" --asan "${CLEAN_FLAG[@]+"${CLEAN_FLAG[@]}"}"
       rc=$?
+      if [[ $rc -eq 0 ]] && ! "${SCRIPT_DIR}/scripts/enforce_asan_clean.sh" \
+            "${src_dir}/build_asan" "${plog}/asan_run.log"; then
+        rc=1
+      fi
       if [[ $rc -eq 0 ]]; then pass; echo; asan_label="PASS"
       else                      fail; echo; asan_label="FAIL"; OVERALL_PASS=false; fi
     fi
@@ -346,17 +357,13 @@ for entry in "${IPS[@]}"; do
     run_stage "${src_dir}" "${plog}/coverage_run.log" --coverage "${CLEAN_FLAG[@]+"${CLEAN_FLAG[@]}"}"
     rc=$?
     cov_pct=$(extract_coverage "${plog}/coverage_run.log")
-    if [[ $rc -eq 0 ]] && coverage_pct_meets_min "${cov_pct}"; then
-        pass; printf " (%s%%)\n" "${cov_pct}"; cov_label="PASS"
+    if [[ $rc -ne 0 ]]; then
+        fail; echo; cov_label="FAIL"; OVERALL_PASS=false
+    elif ! coverage_meets_min "${cov_pct}"; then
+        fail; printf " (%s%% < %s%%)\n" "${cov_pct}" "${COVERAGE_MIN_LINE_PCT}"
+        cov_label="FAIL"; OVERALL_PASS=false
     else
-        fail
-        if [[ $rc -eq 0 ]]; then
-            printf " (%s%% < %s%%)\n" "${cov_pct}" "${COVERAGE_MIN_LINE_PCT}"
-        else
-            echo
-        fi
-        cov_label="FAIL"
-        OVERALL_PASS=false
+        pass; printf " (%s%%)\n" "${cov_pct}"; cov_label="PASS"
     fi
 
     # 4. CTest  (uses the Release build directory created in step 1)

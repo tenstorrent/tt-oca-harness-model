@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[adams-bridge-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`abr_testbench` (`test/inc/abr_testbench.h`) is a TLM initiator into
+the register aperture, a second initiator into `keymgr_tl_socket`, KM
+share initiators into `keymgr_*_socket`, plus `clk_i` / `rst_ni` and
+`run_mldsa` / `run_mlkem` / `zeroize_*` helpers.
+
+The default backend is `abr_fips_backend`. Tests that only need the
+FSM may install `abr_shake_backend` through `set_crypto_backend()`.
+
+Success: every `tb.check` / `tb.check_eq` in the four suites passes;
+`--asan` produces no `asan.log.*`; line coverage on the touched model
+sources meets the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/adams_bridge`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean adams_bridge
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/register_tests.cpp`, `mldsa_tests.cpp`,
+`mlkem_tests.cpp`, `interrupt_kv_tests.cpp`, `nist_kat_tests.cpp`,
+`coverage_tests.cpp`.
+Names are the `tb.section()` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Register: identity and reset state |NAME / VERSION / READY reset |Positive
+|2 |Register: access-type enforcement |RO ignore writes; WO read as 0 |Positive
+|3 |Register: field masking |CTX_CONFIG and MSG_STROBE are WO |Positive
+|4 |Register: data windows round-trip |Key/signature windows survive write/read |Positive
+|5 |Register: window boundaries |Last dword decoded; zeroize clears windows |Positive
+|6–21 |ML-DSA command / modifier / error / reset |Engine thread, park-on-VALID, zeroize |Mixed
+|22–30 |ML-KEM command / implicit reject / independence |Second engine thread |Mixed
+|31–36 |Interrupt mask / W1C / counters / trig |`interrupt_update_thread` |Mixed
+|37–41a |Key Vault + KM dual-share |Sockets, reconstruct, shred |Mixed
+|42 |Crypto backend seam |`set_crypto_backend`; nullptr ignored |Positive
+|43 |NIST ACVP KATs |Default PQClean backend vs `abr_nist_vectors.h` |Positive
+|44 |Coverage: clock / zero-cycle |`clk_i=0` fallback; `cycles_to_time(0)` |Positive
+|45 |Coverage: command under reset |Engine threads drop work while `m_in_reset` |Positive
+|46 |Coverage: KV/KM transport rejects |Null pointer, IGNORE command |Negative
+|47 |Coverage: KV fused / MSG lanes |KEYGEN+SIGN, KEYGEN+DECAPS, KV ENCAPS |Positive
+|48 |Coverage: STREAM_MSG edges |Empty stream, strobe 0, cap, verify+ctx |Positive
+|49 |Coverage: short backend + XOF |`bytes_to_regs` pad; `shake256(0)`; empty mu |Positive
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make sep-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh sep_abr_csr_test
+./run_test.sh sep_abr_keygen_test
+./run_test.sh sep_abr_keygen_sign_test
+./run_test.sh sep_abr_kat_test
+./run_test.sh sep_abr_nist_kat_test
+./run_test.sh sep_abr_km_seed_test
+./run_all_tests.sh            # full firmware suite, includes the above
+----
+
+`sep_abr_nist_kat_test` needs the FIPS backend (the `sep-vp` default).
+`sep_abr_km_seed_test` uses the KM ML-DSA seed socket bound from
+`key_manager_model`.

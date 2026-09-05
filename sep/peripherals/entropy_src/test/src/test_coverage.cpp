@@ -280,3 +280,169 @@ bool testbench::tc_cov_boot_phase_done_gate()
 
     return ok;
 }
+
+// Coverage: irq_o assertion, FIFO overflow once-full, and FIFO underflow.
+bool testbench::tc_cov_irq_overflow_underflow()
+{
+    bool ok = true;
+    uint32_t rd_val = 0u;
+
+    const uint32_t INTR_OVERFLOW  = (1u << 8);
+    const uint32_t INTR_UNDERFLOW = (1u << 12);
+    const uint32_t INTR_ALL       = 0x00001111u;
+
+    test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, INTR_ALL);
+    test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET, INTR_UNDERFLOW);
+    wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::SC_ZERO_TIME);
+
+    COV_CHECK(sig_intr.read(),
+        "TC-COV-008: irq_o stayed low after INTR_TEST + INTR_ENABLE");
+
+    test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, rd_val);
+    COV_CHECK((rd_val & INTR_UNDERFLOW) != 0u,
+        "TC-COV-008: INTR_TEST did not set FIFO_UNDERFLOW");
+
+    test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET, INTR_ALL);
+    wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::SC_ZERO_TIME);
+    test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0u,
+        "TC-COV-008: INTR_STATUS W1C did not clear injected bits");
+
+    // Let the background thread fill to FIFO_DEPTH so overflow is asserted.
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000001u);
+    bool overflowed = false;
+    for (int i = 0; i < 512; ++i) {
+        wait(sc_core::sc_time(100.0, sc_core::SC_NS));
+        rd_val = 0u;
+        test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, rd_val);
+        if ((rd_val & INTR_OVERFLOW) != 0u) {
+            overflowed = true;
+            break;
+        }
+    }
+    COV_CHECK(overflowed, "TC-COV-008: FIFO never overflowed");
+
+    test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, rd_val);
+    COV_CHECK((rd_val & 0x7Fu) == 32u,
+        "TC-COV-008: FIFO_STATUS.LEVEL not 32 after overflow");
+
+    // Drain every word, then one extra read for underflow.
+    for (unsigned i = 0; i < 32u; ++i) {
+        rd_val = 0u;
+        test->register_read_32(entropy_src_basetest::FIFO_RDATA_OFFSET, rd_val);
+    }
+    rd_val = 0xFFFFFFFFu;
+    test->register_read_32(entropy_src_basetest::FIFO_RDATA_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0u, "TC-COV-008: underflow pop did not return 0");
+    test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, rd_val);
+    COV_CHECK((rd_val & INTR_UNDERFLOW) != 0u,
+        "TC-COV-008: FIFO_UNDERFLOW not asserted after empty pop");
+
+    return ok;
+}
+
+// Coverage: hw/sw reset while the generation thread is in WAITING_FOR_ENABLE.
+bool testbench::tc_cov_reset_while_fifo_disabled()
+{
+    bool ok = true;
+    uint32_t rd_val = 0u;
+
+    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 800u);
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
+    for (int i = 0; i < 16; ++i)
+        wait(sc_core::SC_ZERO_TIME);
+
+    apply_hw_reset();
+
+    test->register_read_32(entropy_src_basetest::FIFO_CTRL_OFFSET, rd_val);
+    COV_CHECK((rd_val & 0x1u) != 0u,
+        "TC-COV-009: FIFO_CTRL.ENABLE not restored after hw reset");
+
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
+    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 600u);
+    for (int i = 0; i < 16; ++i)
+        wait(sc_core::SC_ZERO_TIME);
+
+    apply_reset();
+
+    test->register_read_32(entropy_src_basetest::CTRL_OFFSET, rd_val);
+    COV_CHECK((rd_val & 0x1u) == 0u,
+        "TC-COV-009: CTRL.RESET did not self-clear after sw reset from IDLE");
+
+    return ok;
+}
+
+// Coverage: re-hit CSML_INFO callback bodies and handle_reset_recovery drain
+// + post-reset STARTUP_DELAY (the SW-reset callback empties the FIFO first,
+// so recovery's drain/delay arms need a direct poke).
+bool testbench::tc_cov_verbose_callbacks_and_recovery()
+{
+    bool ok = true;
+    uint32_t rd_val = 0u;
+
+    dut->logger.setMaxVerbosity(3);
+
+    // CTRL no-reset path (downsample / bypass only).
+    test->register_write_32(entropy_src_basetest::CTRL_OFFSET, 0x00010100u);
+    test->register_read_32(entropy_src_basetest::CTRL_OFFSET, rd_val);
+    COV_CHECK((rd_val & 0x1u) == 0u,
+        "TC-COV-010: CTRL no-reset write set RESET");
+
+    test->register_write_32(entropy_src_basetest::HEALTH_TEST_CTRL_OFFSET, 0x00000001u);
+    test->register_write_32(entropy_src_basetest::HEALTH_TEST_CTRL_OFFSET, 0x00000000u);
+    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 250u);
+    test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0x00001111u);
+    test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET, 0x00000001u);
+    wait(sc_core::SC_ZERO_TIME);
+    test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET, 0x00000001u);
+
+    test->register_write_32(entropy_src_basetest::RING_OSC_ENABLE_OFFSET, 0x00000000u);
+    wait(sc_core::SC_ZERO_TIME);
+    test->register_write_32(entropy_src_basetest::RING_OSC_ENABLE_OFFSET, 0x00000003u);
+    wait(sc_core::SC_ZERO_TIME);
+    // Second enable write: BOOT_PHASE_DONE already set, skip the assert arm.
+    test->register_write_32(entropy_src_basetest::RING_OSC_ENABLE_OFFSET, 0x00000003u);
+    wait(sc_core::SC_ZERO_TIME);
+
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
+    wait(sc_core::SC_ZERO_TIME);
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000001u);
+    wait(sc_core::SC_ZERO_TIME);
+
+    // Wait for at least one entropy word so FIFO_RDATA pop logs fire.
+    bool got_word = false;
+    for (int i = 0; i < 128; ++i) {
+        wait(sc_core::sc_time(100.0, sc_core::SC_NS));
+        rd_val = 0u;
+        test->register_read_32(entropy_src_basetest::FIFO_RDATA_OFFSET, rd_val);
+        if (rd_val != 0u) {
+            got_word = true;
+            break;
+        }
+    }
+    COV_CHECK(got_word, "TC-COV-010: FIFO never produced a word");
+
+    // Park the generation thread so it cannot refill during recovery.
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
+    for (int i = 0; i < 8; ++i)
+        wait(sc_core::SC_ZERO_TIME);
+
+    // Direct recovery helper: leftover FIFO words + non-zero startup delay.
+    dut->m_fifo.push(0xA5A5A5A5u);
+    dut->m_fifo.push(0x5A5A5A5Au);
+    dut->m_startup_delay_ns = 2000u;
+    dut->m_reset_in_progress = true;
+    sc_core::sc_spawn([&]() {
+        wait(sc_core::SC_ZERO_TIME);
+        dut->m_reset_complete_event.notify(sc_core::SC_ZERO_TIME);
+    });
+    dut->handle_reset_recovery();
+    COV_CHECK(dut->m_fifo.empty(),
+        "TC-COV-010: handle_reset_recovery left leftover FIFO words");
+    COV_CHECK(!dut->m_reset_in_progress,
+        "TC-COV-010: handle_reset_recovery left m_reset_in_progress set");
+
+    return ok;
+}

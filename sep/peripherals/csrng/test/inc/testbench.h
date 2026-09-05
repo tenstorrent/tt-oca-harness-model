@@ -395,6 +395,12 @@ public:
     void test_coverage_fsm_states_and_genbits_repeat();
     void test_coverage_int_state_and_regwen_denies();
 
+    // Edge paths not exercised by the FUNC suites (coverage gate).
+    void test_coverage_invalid_instance_and_seed_life();
+    void test_coverage_update_requires_additional_data();
+    void test_coverage_int_state_num_out_of_range();
+    void test_coverage_reseed_interval_locked_and_fsm_states();
+
 private:
     // DUT and test module instances
     std::unique_ptr<csrng_model> m_crng;

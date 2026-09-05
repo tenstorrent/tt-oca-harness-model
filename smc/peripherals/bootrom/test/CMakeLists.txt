@@ -39,7 +39,9 @@ set_tests_properties(bootrom_bin_tb PROPERTIES
 
 # ---------------------------------------------------------------------------
 # bootrom_neg_tb — constructor fatals, hex-parser edges, and TLM error
-# paths that the primary benches cannot hit without aborting.
+# paths that the primary benches cannot hit without aborting.  Required
+# for the src/ coverage gate: without this target CI reports ~85% on
+# bootrom.cpp.
 # ---------------------------------------------------------------------------
 add_executable(bootrom_neg_tb bootrom_neg_tb.cpp)
 target_link_libraries(bootrom_neg_tb PRIVATE smc_bootrom SystemC::cci)

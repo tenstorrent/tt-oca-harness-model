@@ -429,6 +429,8 @@ public:
     void test_run_kmac_exhaust_output();
     void test_sideload_key_len_clamp();
     void test_defensive_error_paths();
+    void test_coverage_unmasked_and_keylen();
+    void test_coverage_app_and_cleanup();
 
     // =========================================================================
     // FUNC-KMAC-016 / FUNC-KMAC-019 groups

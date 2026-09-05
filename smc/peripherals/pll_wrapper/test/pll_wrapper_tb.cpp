@@ -472,7 +472,7 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] CGM_1 lock + REG_UPDATE bit0-clear is a no-op\n";
 
-        // -- 17. TLM protocol errors forwarded into the sub-block ----------
+        // -- 17. TLM protocol errors at the wrapper decode -----------------
         {
             uint32_t scratch = 0;
             uint8_t  be      = 0xFF;
@@ -491,7 +491,61 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] TLM protocol errors (null/len/be/sw/cmd)\n";
 
-        // -- 18. Sub-block window overrun + callback install (probe) -------
+        // -- 18. TLM error paths forwarded into the sub-block -------------
+        {
+            tlm::tlm_generic_payload gp;
+            sc_time delay = SC_ZERO_TIME;
+            uint32_t data = 0;
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_address(W::OFF_PLL_CNTL);
+            gp.set_data_ptr(nullptr);
+            gp.set_data_length(4);
+            gp.set_streaming_width(4);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, gp.get_response_status());
+
+            gp.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
+            gp.set_data_length(0);
+            gp.set_streaming_width(0);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, gp.get_response_status());
+
+            uint8_t be[4] = {0xFF, 0xFF, 0xFF, 0xFF};
+            gp.set_data_length(4);
+            gp.set_streaming_width(4);
+            gp.set_byte_enable_ptr(be);
+            gp.set_byte_enable_length(4);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
+                      gp.get_response_status());
+
+            gp.set_byte_enable_ptr(nullptr);
+            gp.set_streaming_width(1);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE, gp.get_response_status());
+
+            gp.set_streaming_width(4);
+            gp.set_command(tlm::TLM_IGNORE_COMMAND);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE, gp.get_response_status());
+
+            // 2-byte access that straddles a 32-bit register boundary.
+            EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                      drv.try_access(tlm::TLM_READ_COMMAND,
+                                     W::OFF_PLL_CNTL + 3, 2));
+            // 8-bit access (supported) and unmapped-in-window RAZ/WI.
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      drv.try_access(tlm::TLM_READ_COMMAND,
+                                     W::OFF_PLL_CNTL + 1, 1));
+        }
+        std::cout << "  [PASS] TLM error paths on forwarded sub-block access\n";
+
+        // -- 19. Sub-block window overrun + callback install (probe) -------
         {
             uint32_t scratch = 0;
             EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
@@ -516,11 +570,41 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] window overrun + set_read/write_callback\n";
 
-        // -- 19. peek/poke miss + dump_state smoke -------------------------
+        // -- 20. Back-door peek/poke misses + dump_state + callbacks -------
         {
-            uint32_t tmp = 0xDEADu;
+            uint32_t tmp = 0xA5A5A5A5u;
             EXPECT_TRUE(!dut.cntl().peek(0x1000, tmp));
             EXPECT_TRUE(!dut.cntl().poke(0x1000, 0x1u));
+            EXPECT_EQ(0, dut.awm_0().peek(0xFFF0, tmp) ? 1 : 0);
+            EXPECT_EQ(0, dut.awm_0().poke(0xFFF0, 0x1u) ? 1 : 0);
+            EXPECT_EQ(1, dut.awm_0().peek(AW::GLOBAL_REG_UPDATE, tmp) ? 1 : 0);
+            EXPECT_EQ(0, dut.awm_0().set_write_callback(
+                             0xFFF0, [](uint32_t cur, uint32_t) { return cur; })
+                             ? 1
+                             : 0);
+            EXPECT_EQ(0, dut.awm_0().set_read_callback(
+                             0xFFF0, [](uint32_t stored) { return stored; })
+                             ? 1
+                             : 0);
+            EXPECT_EQ(1, dut.awm_0().set_write_callback(
+                             AW::GLOBAL_REG_UPDATE,
+                             [](uint32_t, uint32_t in) { return in; })
+                             ? 1
+                             : 0);
+            EXPECT_EQ(1, dut.awm_0().set_read_callback(
+                             AW::GLOBAL_REG_UPDATE,
+                             [](uint32_t stored) { return stored; })
+                             ? 1
+                             : 0);
+            // Unmapped-in-window RAZ/WI + 8-bit access.
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      drv.try_access(tlm::TLM_WRITE_COMMAND,
+                                     W::OFF_PLL_CNTL + 0x08, 4));
+            EXPECT_EQ(0u, drv.read32(W::OFF_PLL_CNTL + 0x08));
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      drv.try_access(tlm::TLM_WRITE_COMMAND,
+                                     W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT,
+                                     1));
             std::ostringstream oss;
             dut.dump_state(oss);
             const std::string s = oss.str();
@@ -528,7 +612,7 @@ struct tb : sc_core::sc_module {
             EXPECT_TRUE(s.find("reg_block state") != std::string::npos);
             EXPECT_TRUE(s.find("CGM_0_STATUS") != std::string::npos);
         }
-        std::cout << "  [PASS] peek/poke miss + dump_state\n";
+        std::cout << "  [PASS] peek/poke misses, dump_state, and callbacks\n";
 
         if (g_failures == 0)
             std::cout << "\nALL TESTS PASSED\n";
@@ -543,7 +627,8 @@ struct tb : sc_core::sc_module {
 
 int sc_main(int, char**)
 {
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
 
     tb top("tb");
     sc_core::sc_start();

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # =============================================================================
 # vp/platform/smu/run_tests.sh
 #
@@ -96,8 +98,8 @@ echo ">> Using SYSTEMC_HOME=${SYSTEMC_HOME:-<cmake config>}"
 
 if [[ -z "${CCI_HOME:-}" ]]; then
     for _candidate in \
-        /Users/pdroy/local/cci-cxx20 \
-        /Users/pdroy/cci \
+        "${HOME}/local/cci-cxx20" \
+        "${HOME}/cci" \
         /usr/local/cci \
         /opt/homebrew/opt/systemc-cci
     do
@@ -196,6 +198,20 @@ if (( USE_ASAN )); then
     else
         echo ">> ASan: NO memory errors detected."
     fi
+    _asan_gate=""
+    _d="${SCRIPT_DIR}"
+    while [[ -n "${_d}" && "${_d}" != "/" ]]; do
+        if [[ -f "${_d}/smc/scripts/enforce_asan_clean.sh" ]]; then
+            _asan_gate="${_d}/smc/scripts/enforce_asan_clean.sh"
+            break
+        fi
+        _d="$(dirname "${_d}")"
+    done
+    if [[ -z "${_asan_gate}" ]]; then
+        echo "ERROR: enforce_asan_clean.sh not found" >&2
+        exit 1
+    fi
+    "${_asan_gate}" "${BUILD_DIR}" || exit 1
     exit "${TB_EXIT}"
 
 elif (( USE_COVERAGE )); then

@@ -135,9 +135,11 @@ class edn_test : public edn_basetest
 
    std::queue<uint32_t> m_mock_buffer;
    bool m_mock_fips = false;
-   unsigned int m_mock_rr_index = 0;
-   sc_core::sc_event m_mock_wakeup;
+   unsigned int m_rr_index = 0;
+   bool m_clear_mock_outputs = false;
 
-   void notify_mock() { m_mock_wakeup.notify(SC_ZERO_TIME); }
+   void notify_mock() {}
+   bool edn_is_enabled() const;
+   void clear_mock_endpoint_state();
    void mock_endpoint_process();
 };

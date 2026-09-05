@@ -61,9 +61,28 @@ peripheral_cache_stale() {
 peripheral_enforce_coverage_gate() {
   local build_dir="$1"
   local info="${2:-${build_dir}/coverage/coverage_filtered.info}"
-  # shellcheck disable=SC1091
-  source "${_PERIPH_SETUP_DIR}/../../scripts/coverage_gate.sh"
-  coverage_gate_from_lcov_info "${info}"
+  local min="${COVERAGE_MIN_LINE_PCT:-95}"
+  local pct
+  if [[ ! -f "${info}" ]]; then
+    echo ">> Coverage gate FAIL (missing lcov info: ${info})" >&2
+    return 1
+  fi
+  if ! command -v lcov >/dev/null 2>&1; then
+    echo ">> Coverage gate FAIL (lcov not found)" >&2
+    return 1
+  fi
+  pct="$(lcov --list "${info}" 2>/dev/null | sed -n 's/.*lines\.*:[[:space:]]*\([0-9][0-9]*\.[0-9][0-9]*\)%.*/\1/p' | tail -1)"
+  if [[ -z "${pct}" ]]; then
+    echo ">> Coverage gate FAIL (could not parse ${info})" >&2
+    return 1
+  fi
+  echo ">> Line coverage: ${pct}%  (gate: ≥ ${min}%)"
+  if awk -v p="${pct}" -v m="${min}" 'BEGIN { exit (p+0 < m+0) }'; then
+    echo ">> Coverage gate PASS"
+    return 0
+  fi
+  echo "ERROR: line coverage ${pct}% is below the ${min}% gate." >&2
+  return 1
 }
 
 peripheral_parallel_jobs() {

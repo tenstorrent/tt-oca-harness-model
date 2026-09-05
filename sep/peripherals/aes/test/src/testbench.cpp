@@ -449,6 +449,12 @@ void testbench::run_tests()
     test_coverage_sideload_and_gcm_init_guards();
     test_coverage_gcm_aes192_aes256_init();
     test_coverage_auto_start_gcm_and_output_valid();
+    test_coverage_keymgr_rejects_non_write();
+    test_coverage_escalation_aborts_in_flight_cipher();
+    test_coverage_sideload_missing_key_and_manual_start();
+    test_coverage_error_state_and_busy_gcm_writes();
+    test_coverage_gcm_shadow_mismatch_and_init_gates();
+    test_coverage_trigger_readback_and_gcm_manual_init();
     
     // Run FUNC-AES-006 REGWEN locking tests LAST (these lock CTRL_AUX_REGWEN permanently)
     REG_INFO(1, logger) << "\n========================================" 

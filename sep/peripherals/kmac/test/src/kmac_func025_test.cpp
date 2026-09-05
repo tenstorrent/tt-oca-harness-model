@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <openssl/evp.h>
 
 // Coverage gap tests for kmac.cpp
 
@@ -513,4 +514,134 @@ void testbench::test_defensive_error_paths() {
     dut->execute_app_operation(5);
 
     report_test_pass("TC-218: test_defensive_error_paths");
+}
+
+// Invalid KEY_LEN in a KMAC START, plus EnMasking=0 PROCESS / RUN / STATE.
+void testbench::test_coverage_unmasked_and_keylen()
+{
+    report_test_start("TC-232: test_coverage_unmasked_and_keylen");
+
+    bool* p_masking = const_cast<bool*>(&(dut->EnMasking));
+    bool orig_masking = *p_masking;
+
+    // Invalid KEY_LEN is only consulted on the software-key KMAC START path.
+    configure_cfg_shadowed_with_entropy(0x3, 0x2, 1, 0);
+    test->register_write_32(0xB4, 0x4D4B2001);
+    test->register_write_32(0xB8, 0x00004341);
+    for (int i = 2; i < 11; i++)
+        test->register_write_32(0xB4 + i * 4, 0);
+    dut->KEY_LEN.len = 5;
+    test->register_write_32(test->CMD_OFFSET, 0x1D);
+    wait(50, SC_NS);
+    uint32_t err = 0;
+    test->register_read_32(test->ERR_CODE_OFFSET, err);
+    test->register_write_32(test->CMD_OFFSET, 0x16);
+    wait(20, SC_NS);
+    apply_reset();
+    wait(50, SC_NS);
+
+    // EnMasking=0: PROCESS stores the digest in share0 and zeros share1.
+    *p_masking = false;
+    configure_cfg_shadowed_with_entropy(0x0, 0x2, 0, 0); // SHA3-256
+    test->register_write_32(test->CMD_OFFSET, 0x1D);
+    wait(20, SC_NS);
+    test->register_write_32(0x800, 0x61626364);
+    wait(10, SC_NS);
+    test->register_write_32(test->CMD_OFFSET, 0x2E);
+    wait(50, SC_NS);
+    uint32_t share0 = 0, share1 = 0;
+    test->register_read_32(0x400, share0);
+    test->register_read_32(0x500, share1);
+    bool unmasked_ok = (share0 != 0 && share1 == 0);
+
+    // Partial STATE fill: a 30-byte digest makes the word at offset 28 straddle.
+    dut->digest_size = 30;
+    uint32_t partial = 0xFFFFFFFFu;
+    dut->handle_read_STATE(7, partial);
+    unmasked_ok = unmasked_ok && (partial != 0xFFFFFFFFu);
+
+    test->register_write_32(test->CMD_OFFSET, 0x16);
+    wait(20, SC_NS);
+
+    // EnMasking=0 RUN copies the next XOF window into share0.
+    configure_cfg_shadowed_with_entropy(0x2, 0x2, 0, 0); // SHAKE256
+    test->register_write_32(test->CMD_OFFSET, 0x1D);
+    wait(20, SC_NS);
+    test->register_write_32(0x800, 0x61626364);
+    wait(10, SC_NS);
+    test->register_write_32(test->CMD_OFFSET, 0x2E);
+    wait(50, SC_NS);
+    test->register_write_32(test->CMD_OFFSET, 0x31); // RUN
+    wait(50, SC_NS);
+    test->register_write_32(test->CMD_OFFSET, 0x16);
+    wait(20, SC_NS);
+
+    *p_masking = orig_masking;
+    apply_reset();
+    wait(50, SC_NS);
+
+    if (unmasked_ok)
+        report_test_pass("TC-232: test_coverage_unmasked_and_keylen");
+    else
+        report_test_fail("TC-232: test_coverage_unmasked_and_keylen",
+                         "EnMasking=0 STATE share1 was not zero or digest missing");
+}
+
+// Escalation with a live FIFO, empty FIFO drain, EVP_MAC cleanup on DONE,
+// and an unmasked application-interface digest.
+void testbench::test_coverage_app_and_cleanup()
+{
+    report_test_start("TC-233: test_coverage_app_and_cleanup");
+
+    bool* p_masking = const_cast<bool*>(&(dut->EnMasking));
+    bool orig_masking = *p_masking;
+
+    // Escalation must pop leftover FIFO words, not just reset the depth.
+    configure_cfg_shadowed_with_entropy(0x0, 0x2, 0, 0);
+    test->register_write_32(test->CMD_OFFSET, 0x1D);
+    wait(20, SC_NS);
+    dut->msg_fifo.push(0x1122334455667788ULL);
+    dut->fifo_depth = 1;
+    lc_escalate_en_sig.write(true);
+    wait(50, SC_NS);
+    bool fifo_cleared = dut->msg_fifo.empty();
+    lc_escalate_en_sig.write(false);
+    apply_reset();
+    wait(50, SC_NS);
+
+    // fifo_drain_process is a no-op when occupancy is already zero.
+    dut->fifo_depth = 0;
+    dut->fifo_drain_event.notify();
+    wait(10, SC_NS);
+
+    // DONE frees an EVP_MAC context if a prior path left one allocated.
+    EVP_MAC* mac = EVP_MAC_fetch(nullptr, "HMAC", nullptr);
+    if (mac != nullptr) {
+        dut->evp_mac = mac;
+        dut->evp_mac_ctx = EVP_MAC_CTX_new(mac);
+    }
+    test->register_write_32(test->CMD_OFFSET, 0x16);
+    wait(20, SC_NS);
+    bool mac_freed = (dut->evp_mac == nullptr && dut->evp_mac_ctx == nullptr);
+
+    // LC_CTRL app path with EnMasking=0 stores the digest in share0 only.
+    *p_masking = false;
+    test->app_port[1]->app_request(0xA5A5A5A5A5A5A5A5ULL, 0xFF, true);
+    wait(50, SC_NS);
+    bool app_done = test->app_port[1]->is_done();
+    uint32_t s0[8] = {}, s1[8] = {};
+    if (app_done) {
+        test->app_port[1]->get_digest(s0, s1);
+    }
+    bool app_unmasked = app_done && (s1[0] == 0);
+
+    *p_masking = orig_masking;
+    apply_reset();
+    wait(50, SC_NS);
+
+    if (fifo_cleared && mac_freed && app_unmasked)
+        report_test_pass("TC-233: test_coverage_app_and_cleanup");
+    else
+        report_test_fail("TC-233: test_coverage_app_and_cleanup",
+                         "escalation FIFO, EVP_MAC cleanup, or unmasked app digest failed");
 }

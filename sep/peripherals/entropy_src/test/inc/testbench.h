@@ -2260,5 +2260,8 @@ public:
     bool tc_cov_new_rdl_register_access();
     bool tc_cov_fips_lock_w1s();
     bool tc_cov_boot_phase_done_gate();
+    bool tc_cov_irq_overflow_underflow();
+    bool tc_cov_reset_while_fifo_disabled();
+    bool tc_cov_verbose_callbacks_and_recovery();
 
 };

@@ -14,6 +14,8 @@
  *   FUNC-SCRATCH-007  VP ack: SCRATCH[6]=0xA1E50006 -> SCRATCH[7]=0x00100001
  *   FUNC-SCRATCH-008  No spurious acks — non-magic writes leave adjacent registers unchanged
  *   FUNC-SCRATCH-009  CCI parameter defaults — verbosity, sim_out_enable, sep_status_enable
+ *   FUNC-SCRATCH-012  Virtual console HEX16 opcode through SCRATCH[2]
+ *   FUNC-SCRATCH-013  Decoder isolation — on_bytes, flush, disable, TSV parse edges
  */
 
 #include "sep_scratch_cold.h"
@@ -461,6 +463,179 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     }
 
     // =========================================================================
+    // FUNC-SCRATCH-012: HEX16 opcode through the model callback
+    //
+    // Complements FUNC-SCRATCH-010 (ASCII / DEC24 / unknown) by driving
+    // VirtConsoleDecoder::decode_hex16 via the SCRATCH[2] post-write hook.
+    // Word: bits[3:1]=1 → (1<<1)=2; 16-bit value 0xABCD at [23:8].
+    // =========================================================================
+    void test_virt_console_hex16()
+    {
+        const std::string TEST = "FUNC-SCRATCH-012: Virtual console HEX16 opcode";
+        report_test_start(TEST);
+        dut.reset_all_registers();
+
+        // 0x00ABCD02: opcode=(0x02>>1)&7=1 (HEX16); val=(0xABCD02>>8)=0xABCD
+        scratch_write(2u, 0x00ABCD02u);
+        // Flush the buffered "abcd" with an ASCII newline
+        scratch_write(2u, 0x00000A00u);
+
+        uint32_t v = scratch_read(2u);
+        if (v != 0x00000A00u) {
+            std::ostringstream oss;
+            oss << "SCRATCH[2] = 0x" << std::hex << v << " expected 0x00000A00";
+            report_test_fail(TEST, oss.str());
+        } else {
+            report_test_pass(TEST);
+        }
+    }
+
+    // =========================================================================
+    // FUNC-SCRATCH-013: Decoder isolation — uncovered header paths
+    //
+    // The decoders are header-only and designed to be unit-tested without
+    // SystemC. Exercise on_bytes, flush, disabled early-outs, TSV parse
+    // edge cases, and null emit callbacks that the TLM path never hits.
+    // =========================================================================
+    void test_decoder_isolation()
+    {
+        const std::string TEST = "FUNC-SCRATCH-013: Decoder isolation paths";
+        report_test_start(TEST);
+        bool ok = true;
+
+        std::vector<std::string> lines;
+        auto capture = [&](const std::string& s) { lines.push_back(s); };
+
+        // --- VirtConsoleDecoder ---
+        {
+            sep_virt_console::VirtConsoleDecoder vc(capture);
+
+            // Disabled: on_word and on_bytes must be no-ops
+            vc.set_enabled(false);
+            if (vc.enabled()) {
+                report_test_fail(TEST, "VirtConsoleDecoder::enabled() true after set_enabled(false)");
+                ok = false;
+            }
+            if (ok) {
+                vc.on_word(0x000A4100u);
+                uint8_t payload[4] = {0x00, 0x41, 0x0A, 0x00};
+                vc.on_bytes(payload, 4);
+                if (!lines.empty()) {
+                    report_test_fail(TEST, "disabled VirtConsoleDecoder emitted a line");
+                    ok = false;
+                }
+            }
+
+            if (ok) {
+                vc.set_enabled(true);
+                // on_bytes: null pointer and short write ignored
+                vc.on_bytes(nullptr, 4);
+                uint8_t short_wr[2] = {0x41, 0x0A};
+                vc.on_bytes(short_wr, 2);
+
+                // Valid HEX16 via on_bytes: word 0x00AB0C02 (opcode=1, val=0xAB0C)
+                uint8_t hex_word[4] = {0x02, 0x0C, 0xAB, 0x00};
+                vc.on_bytes(hex_word, 4);
+                vc.flush();  // emit unterminated "ab0c"
+                if (lines.empty() || lines.back() != "ab0c") {
+                    report_test_fail(TEST, "HEX16 on_bytes+flush did not emit \"ab0c\"");
+                    ok = false;
+                }
+            }
+
+            if (ok) {
+                // flush() on an empty buffer is a no-op
+                const size_t before = lines.size();
+                vc.flush();
+                if (lines.size() != before) {
+                    report_test_fail(TEST, "empty flush emitted a line");
+                    ok = false;
+                }
+            }
+
+            if (ok) {
+                // Null emit: decode + flush must not crash
+                sep_virt_console::VirtConsoleDecoder silent;
+                silent.on_word(0x00004100u);  // 'A', no newline
+                silent.flush();
+            }
+        }
+
+        // --- StatusDecoder ---
+        if (ok) {
+            lines.clear();
+            sep_status_report::StatusDecoder st(capture);
+
+            st.set_enabled(false);
+            if (st.enabled()) {
+                report_test_fail(TEST, "StatusDecoder::enabled() true after set_enabled(false)");
+                ok = false;
+            }
+            if (ok) {
+                st.on_word(0x01010001u);
+                if (!lines.empty()) {
+                    report_test_fail(TEST, "disabled StatusDecoder emitted a line");
+                    ok = false;
+                }
+            }
+
+            if (ok) {
+                st.set_enabled(true);
+                st.on_bytes(nullptr, 4);
+                uint8_t short_wr[2] = {0x01, 0x00};
+                st.on_bytes(short_wr, 2);
+
+                // TSV + C-header + comments + malformed rows
+                const std::string tsv =
+                    "\n"
+                    "// line comment\n"
+                    "/* one-line block */\n"
+                    "/*\n"
+                    " * multi-line block\n"
+                    " */\n"
+                    "* stray star\n"
+                    "ONLYONE\n"
+                    "#define INCOMPLETE\n"
+                    "TSV_NAME 0x0044\n"
+                    "#define HDR_NAME 0x0055\n"
+                    "BADHEX 0xZZ\n"
+                    "TRAIL 0x12zz\n"
+                    "\n";
+                auto names = sep_status_report::StatusDecoder::parse_tsv_string(tsv);
+                if (names.size() != 2 || names[0x0044] != "TSV_NAME" || names[0x0055] != "HDR_NAME") {
+                    std::ostringstream oss;
+                    oss << "parse_tsv_string expected 2 names, got " << names.size();
+                    report_test_fail(TEST, oss.str());
+                    ok = false;
+                } else {
+                    st.set_names(std::move(names));
+                    if (st.name_count() != 2) {
+                        report_test_fail(TEST, "name_count() mismatch after set_names");
+                        ok = false;
+                    }
+                }
+            }
+
+            if (ok) {
+                // Little-endian INFO/BL0/0x0044 via on_bytes
+                uint8_t word[4] = {0x44, 0x00, 0x01, 0x01};
+                st.on_bytes(word, 4);
+                if (lines.empty() || lines.back().find("TSV_NAME") == std::string::npos) {
+                    report_test_fail(TEST, "StatusDecoder on_bytes missed TSV name lookup");
+                    ok = false;
+                }
+            }
+
+            if (ok) {
+                sep_status_report::StatusDecoder silent;
+                silent.on_word(0x01010001u);  // null emit must not crash
+            }
+        }
+
+        if (ok) report_test_pass(TEST);
+    }
+
+    // =========================================================================
     // FUNC-SCRATCH-009: CCI parameter defaults are accessible and correct
     // =========================================================================
     void test_cci_param_defaults()
@@ -672,7 +847,9 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         test_vp_ack_scratch6();
         test_no_spurious_ack();
         test_virt_console_decode();
+        test_virt_console_hex16();
         test_status_decoder_types();
+        test_decoder_isolation();
         test_cci_param_defaults();
         test_status_decoder_unit();
         test_virt_console_unit();

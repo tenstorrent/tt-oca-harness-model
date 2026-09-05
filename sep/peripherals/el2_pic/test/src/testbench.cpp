@@ -257,6 +257,12 @@ void testbench::run_tests()
     report_test_start("FUNC-EL2PIC-012: Unbound Sources Tied Low");
     test_unbound_sources_tied_low();
 
+    // FUNC-EL2PIC-015: Threshold CSRs, reserved source 0, null-hart arbiter
+    report_test_start("FUNC-EL2PIC-015: Threshold / Reserved Source / Null Hart");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_threshold_and_reserved_source();
+
     // ------------------------------------------------------------------
     // Final summary
     // ------------------------------------------------------------------
@@ -1302,6 +1308,85 @@ void testbench::test_source0_and_null_hart()
         report_test_pass("FUNC-EL2PIC-017: test_source0_and_null_hart");
     else
         report_test_fail("FUNC-EL2PIC-017: test_source0_and_null_hart", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-015: meipt/meicurpl threshold, reserved source 0, null hart
+// ===========================================================================
+void testbench::test_threshold_and_reserved_source()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src = 4;
+
+    // Source 0 is reserved. Toggling it must hit gateway_changed's early
+    // return and leave the hart idle.
+    m_test->drive_irq(0, true);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false;
+        reason += "source 0 asserted EIP; ";
+    }
+    m_test->drive_irq(0, false);
+    wait(SC_ZERO_TIME);
+
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), 0x0u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), 5u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(src), 0x1u);
+    wait(SC_ZERO_TIME);
+
+    // meipt effective 7 >= prio 5 → winner is suppressed.
+    mock_hart.meipt = 7u;
+    m_test->drive_irq(src, true);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false;
+        reason += "EIP asserted while meipt blocked prio 5; ";
+    }
+
+    // Drop the threshold and re-evaluate without another gateway edge.
+    mock_hart.meipt = 0u;
+    m_dut->notify_threshold_changed();
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != src) {
+        pass = false;
+        reason += "notify_threshold_changed did not assert EIP; ";
+    }
+
+    // Same winner re-evaluated: MEIPL write must keep EIP/claim_id stable.
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), 6u);
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != src) {
+        pass = false;
+        reason += "same-winner MEIPL write dropped EIP; ";
+    }
+
+    // Raise meicurpl above the winner so the already-asserted IRQ is cleared.
+    mock_hart.meicurpl_csr = 0xFu;
+    m_dut->notify_threshold_changed();
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false;
+        reason += "meicurpl did not clear EIP; ";
+    }
+
+    m_test->drive_irq(src, false);
+    mock_hart.reset();
+
+    // Companion instance has no hart. A pending+enabled write must take the
+    // hart_ == nullptr early return rather than touching the bound mock.
+    unbound_write_32(el2_pic_basetest::meipl_offset(1), 5u);
+    unbound_write_32(el2_pic_basetest::meie_offset(1), 0x1u);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false;
+        reason += "null-hart instance drove the bound mock hart; ";
+    }
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-015: test_threshold_and_reserved_source");
+    else
+        report_test_fail("FUNC-EL2PIC-015: test_threshold_and_reserved_source", reason);
 }
 
 // ===========================================================================

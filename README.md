@@ -1078,7 +1078,7 @@ building the VP binaries on the machine that will run firmware.
 | Method | How |
 |--------|-----|
 | Local developer machine | [Installation](#installation) + [Usage](#usage). Binaries land in `vp/build/bin/` (or `vp/build_smc/bin/`). |
-| GitHub Actions CI | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds SystemC/CCI, then `sep-vp`, SEP/SMC/SMU unit tests, `smc-vp` firmware, Zephyr, and `smu-vp`. RHEL 8 is covered by `.github/workflows/ci-rhel8.yml` (ASan skipped — the gcc-toolset ASan runtime is not packaged). |
+| GitHub Actions CI | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds SystemC/CCI, then SEP/SMC/SMU unit tests, `sep-vp` firmware, `smc-vp` firmware, Zephyr, and `smu-vp`. RHEL 8 is covered by `.github/workflows/ci-rhel8.yml` (ASan via `gcc-toolset-12-libasan-devel` + `gcc-toolset-12-libubsan-devel`). |
 | Isolated CMake trees | Use `vp/build` for SEP and `vp/build_smc` for SMC/SMU so caches do not poison each other. ASan and coverage always use `build_asan/` and `build_cov/` under the IP directory. |
 
 CI caches SystemC 3.0.2 and CCI 1.0.2 keyed by OS + compiler + C++

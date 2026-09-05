@@ -173,6 +173,7 @@ if(BUILD_TESTS)
     test/src/test_dma_func_011.cpp
     test/src/test_dma_func_012.cpp
     test/src/test_dma_coverage.cpp
+    test/src/coverage_tests.cpp
     ${TEST_BASE_SRCS}
   )
   peripheral_link_test_to_model(secure_dma_testbench secure_dma_model)

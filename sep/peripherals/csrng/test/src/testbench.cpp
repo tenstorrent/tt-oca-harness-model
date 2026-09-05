@@ -2024,6 +2024,14 @@ void testbench::run_tests()
     wait(20, SC_NS);
     test_coverage_int_state_and_regwen_denies();
     wait(20, SC_NS);
+    test_coverage_invalid_instance_and_seed_life();
+    wait(20, SC_NS);
+    test_coverage_update_requires_additional_data();
+    wait(20, SC_NS);
+    test_coverage_int_state_num_out_of_range();
+    wait(20, SC_NS);
+    test_coverage_reseed_interval_locked_and_fsm_states();
+    wait(20, SC_NS);
 
     // Print final test summary
     REG_INFO(1, logger) << "\n========================================"

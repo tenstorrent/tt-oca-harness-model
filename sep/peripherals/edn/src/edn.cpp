@@ -35,6 +35,8 @@ edn_ip::edn_ip(sc_module_name n)
     , m_prev_genbits_valid(false)
     , m_auto_gen_counter(0)
     , m_auto_mode_epoch(0)
+    , m_auto_dispatch_active(false)
+    , m_auto_dispatch_epoch(0)
 {
 
     // Initialize previous genbits for consistency checking (EDN_FUNC_008)
@@ -248,6 +250,8 @@ void edn_ip::reset_process()
         // Reset auto mode generate counter (EDN_FUNC_013)
         m_auto_gen_counter = 0;
         ++m_auto_mode_epoch;
+        m_auto_dispatch_active = false;
+        m_auto_dispatch_epoch++;
     }
 }
 
@@ -435,6 +439,8 @@ bool edn_ip::ctrl_write_callback(uint32_t value)
         // Return to Idle state
         m_main_sm_state = EdnMainSmState::Idle;
         MAIN_SM_STATE.MAIN_SM_STATE = static_cast<uint32_t>(m_main_sm_state);
+        m_auto_dispatch_active = false;
+        m_auto_dispatch_epoch++;
     }
     else if (edn_enable_field == 0x6 && current_edn_enable == 0x6)
     {
@@ -474,6 +480,8 @@ bool edn_ip::ctrl_write_callback(uint32_t value)
 
             // Reset auto mode counter
             m_auto_gen_counter = 0;
+            m_auto_dispatch_active = false;
+            m_auto_dispatch_epoch++;
         }
     }
 
@@ -1970,6 +1978,8 @@ void edn_ip::auto_mode_init()
     }
 
     // Spawn the auto mode dispatcher thread for continuous operation
+    m_auto_dispatch_epoch++;
+    m_auto_dispatch_active = true;
     sc_spawn(sc_bind(&edn_ip::auto_mode_dispatch, this));
 }
 
@@ -2013,7 +2023,8 @@ void edn_ip::auto_mode_init()
  */
 void edn_ip::auto_mode_dispatch()
 {
-    const uint32_t epoch = m_auto_mode_epoch;
+    const uint32_t mode_epoch = m_auto_mode_epoch;
+    const uint32_t epoch = m_auto_dispatch_epoch;
 
     REG_INFO(1, logger) << "EDN_FUNC_013: Auto mode dispatcher started";
 
@@ -2025,14 +2036,15 @@ void edn_ip::auto_mode_dispatch()
         // Wait a fixed period between auto requests
         wait(100, SC_US);
 
-        if (!rst_ni.read() || epoch != m_auto_mode_epoch ||
+        if (!rst_ni.read() || mode_epoch != m_auto_mode_epoch ||
             m_main_sm_state == EdnMainSmState::Idle)
         {
             break;
         }
 
         // Check if still in auto dispatch mode (might have been disabled)
-        if (m_main_sm_state != EdnMainSmState::AutoDispatch)
+        if (epoch != m_auto_dispatch_epoch || !m_auto_dispatch_active ||
+            m_main_sm_state != EdnMainSmState::AutoDispatch)
         {
             break;
         }
@@ -2059,7 +2071,7 @@ void edn_ip::auto_mode_dispatch()
             // Issue reseed command from RESEED_CMD FIFO
             uint32_t ack_status = auto_mode_issue_reseed();
 
-            if (!rst_ni.read() || epoch != m_auto_mode_epoch ||
+            if (!rst_ni.read() || mode_epoch != m_auto_mode_epoch ||
             m_main_sm_state == EdnMainSmState::Idle)
             {
                 break;
@@ -2067,6 +2079,9 @@ void edn_ip::auto_mode_dispatch()
 
             if (ack_status == 0)
             {
+                if (epoch != m_auto_dispatch_epoch || !m_auto_dispatch_active) {
+                    return;
+                }
                 // Reseed succeeded - reset counter and return to AutoDispatch
                 m_auto_gen_counter = max_reqs;
                 m_main_sm_state = EdnMainSmState::AutoDispatch;
@@ -2098,7 +2113,7 @@ void edn_ip::auto_mode_dispatch()
         // Issue generate command
         uint32_t ack_status = auto_mode_issue_generate();
 
-        if (!rst_ni.read() || epoch != m_auto_mode_epoch ||
+        if (!rst_ni.read() || mode_epoch != m_auto_mode_epoch ||
             m_main_sm_state == EdnMainSmState::Idle)
         {
             break;
@@ -2106,6 +2121,9 @@ void edn_ip::auto_mode_dispatch()
 
         if (ack_status == 0)
         {
+            if (epoch != m_auto_dispatch_epoch || !m_auto_dispatch_active) {
+                return;
+            }
             // Generate succeeded - decrement counter and return to AutoDispatch
             m_auto_gen_counter--;
             m_main_sm_state = EdnMainSmState::AutoDispatch;

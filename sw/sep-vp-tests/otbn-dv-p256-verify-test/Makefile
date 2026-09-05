@@ -10,8 +10,10 @@ LDFLAGS += -T ../common/link.ld
 # Include common build infrastructure
 include ../Makefile.common
 
-# Platform default is otbn_loop (needed by otbn-dv-test). This test loads a
-# real P-256 program and OpenTitan vectors, so it must select p256_ecdsa.
+# The shared sep-vp config selects otbn_loop so the insn-count firmware test
+# passes. This test needs the OpenSSL P256 verify algorithm instead — the VP
+# does not interpret IMEM, it dispatches on algorithm_type.
 # Sibling ini lives next to accellera_config.ini so SEP_VP_INI_DIR / relative
 # paths (spiPreload, configFile, targets) keep resolving.
-VP_FLAGS := $(dir $(BASE_INI))accellera_config_p256_ecdsa.ini
+TEST_INI := $(dir $(BASE_INI))accellera_config_p256_ecdsa.ini
+VP_FLAGS := $(TEST_INI)

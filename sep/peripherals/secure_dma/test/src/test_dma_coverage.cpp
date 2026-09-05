@@ -8,11 +8,15 @@ void testbench::run_coverage_tests() {
                        << "Coverage: uncovered model helper paths\n"
                        << "========================================\n"
                        << std::endl;
+  m_model->logger.setMaxVerbosity(3);
   wait(20, SC_NS);
   test_cov_helper_error_guards();
   test_cov_hash_reset_and_inactive();
   test_cov_handshake_trigger_already_high();
   test_cov_invalid_asid_transaction();
+  test_cov_bus_name_and_hash_helpers();
+  test_cov_handshake_already_high_on_arm();
+  test_cov_hash_reset_frees_context();
 }
 
 void testbench::test_cov_helper_error_guards() {

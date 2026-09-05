@@ -769,4 +769,7 @@ public:
   void test_cov_hash_reset_and_inactive();
   void test_cov_handshake_trigger_already_high();
   void test_cov_invalid_asid_transaction();
+  void test_cov_bus_name_and_hash_helpers();
+  void test_cov_handshake_already_high_on_arm();
+  void test_cov_hash_reset_frees_context();
 };

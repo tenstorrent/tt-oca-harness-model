@@ -43,22 +43,26 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
     reverse_bytes(db + DMEM_INOUT_OFFSET, be_sig, RSA3072_BYTES);
 
     BN_CTX* ctx = BN_CTX_new();
+    // LCOV_EXCL_START — OpenSSL OOM / init failure cannot be injected from the TB
     if (!ctx) {
         REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Failed to allocate BN_CTX";
         return ERROR;
     }
+    // LCOV_EXCL_STOP
 
     BIGNUM* n   = BN_bin2bn(be_n,   RSA3072_BYTES, nullptr);
     BIGNUM* sig = BN_bin2bn(be_sig, RSA3072_BYTES, nullptr);
     BIGNUM* e   = BN_new();
     BIGNUM* res = BN_new();
 
+    // LCOV_EXCL_START — OpenSSL OOM
     if (!n || !sig || !e || !res) {
         REG_ERROR(0, logger) << "[OTBN RSA-3072] ERROR: Failed to allocate BIGNUMs";
         BN_free(n); BN_free(sig); BN_free(e); BN_free(res);
         BN_CTX_free(ctx);
         return ERROR;
     }
+    // LCOV_EXCL_STOP
 
     BN_set_word(e, 65537);   /* F4 exponent hardcoded in rsa_3072_app */
 
@@ -69,6 +73,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
         return ERROR;
     }
 
+    // LCOV_EXCL_START — BN_mod_exp / oversized result require a mocked OpenSSL
     if (BN_mod_exp(res, sig, e, n, ctx) != 1) {
         unsigned long err = ERR_get_error();
         char err_buf[256];
@@ -87,6 +92,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_3072::execute(char* dmem) {
         BN_CTX_free(ctx);
         return ERROR;
     }
+    // LCOV_EXCL_STOP
 
     uint8_t be_res[RSA3072_BYTES] = {};
     BN_bn2bin(res, be_res + (RSA3072_BYTES - static_cast<size_t>(res_len)));

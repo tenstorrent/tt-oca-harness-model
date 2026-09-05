@@ -782,6 +782,14 @@ class edn_ip : public edn_base
    /// Bumped on reset / new auto-mode entry so leftover sc_spawn threads exit
    uint32_t m_auto_mode_epoch;
 
+   /// False after reset or auto-mode exit so a stale dispatcher thread cannot
+   /// write AutoDispatch back over Idle / SWPortMode.
+   bool m_auto_dispatch_active;
+
+   /// Bumped on spawn / reset / auto-mode exit so leftover dispatcher threads
+   /// stop even if a new dispatcher is started afterwards.
+   uint32_t m_auto_dispatch_epoch;
+
    /**
     * @brief Auto mode initialization after manual Instantiate
     *

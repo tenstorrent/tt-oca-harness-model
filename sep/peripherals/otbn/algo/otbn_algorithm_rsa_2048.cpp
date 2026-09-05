@@ -16,6 +16,9 @@ otbn_algorithm_rsa_2048::otbn_algorithm_rsa_2048(size_t dmem_size)
 otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     REG_INFO(1, logger) << "[OTBN RSA-2048] Starting execution";
 
+    // This algorithm is constructed with is_key_required=false; sideload
+    // checks live in otbn_algorithm_rsa_2048_key_enabled.
+
     // Verify DMEM size is sufficient for RSA-2048 operations
     if (m_dmem_size < 1024) {
         REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Insufficient DMEM size (" << m_dmem_size << " bytes, need >= 1024)";
@@ -27,22 +30,26 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
 
     // Create OpenSSL BIGNUM context
     BN_CTX* ctx = BN_CTX_new();
+    // LCOV_EXCL_START — OpenSSL OOM / init failure cannot be injected from the TB
     if (!ctx) {
         REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Failed to create BN_CTX";
         return ERROR;
     }
+    // LCOV_EXCL_STOP
 
     BIGNUM* base = BN_new();
     BIGNUM* exponent = BN_new();
     BIGNUM* modulus = BN_new();
     BIGNUM* result = BN_new();
 
+    // LCOV_EXCL_START — OpenSSL OOM
     if (!base || !exponent || !modulus || !result) {
         REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: Failed to allocate BIGNUMs";
         BN_free(base); BN_free(exponent); BN_free(modulus); BN_free(result);
         BN_CTX_free(ctx);
         return ERROR;
     }
+    // LCOV_EXCL_STOP
 
     // Read inputs from DMEM (big-endian format per OTBN spec)
     // base: DMEM[0x000-0x0FF]
@@ -70,6 +77,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
     // Perform RSA modular exponentiation: result = base^exponent mod modulus
     int bn_result = BN_mod_exp(result, base, exponent, modulus, ctx);
 
+    // LCOV_EXCL_START — BN_mod_exp / oversized result require a mocked OpenSSL
     if (bn_result != 1) {
         REG_ERROR(0, logger) << "[OTBN RSA-2048] ERROR: BN_mod_exp failed";
         unsigned long err = ERR_get_error();
@@ -91,6 +99,7 @@ otbn_algorithm::status_t otbn_algorithm_rsa_2048::execute(char* dmem) {
         BN_CTX_free(ctx);
         return ERROR;
     }
+    // LCOV_EXCL_STOP
 
     // Zero out result area first
     memset(&dmem_bytes[0x300], 0, 256);

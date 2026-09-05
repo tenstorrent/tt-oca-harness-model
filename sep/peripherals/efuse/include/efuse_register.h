@@ -29,8 +29,12 @@ namespace sep_efuse {
 // LOCKS is a 64-bit register at 0x0; LC_STATE is the next word at 0x8.
 static constexpr unsigned int LOCKS_LO_OFFSET               = 0x000;
 static constexpr unsigned int LOCKS_HI_OFFSET               = 0x004;
+// LOCKS is 64 bits at 0x000. There is no LOCKS_SPARE. LC_STATE follows at
+// 0x008 (och_sep_top_reg.h / sep_efuse_map.rdl). A spare word must not occupy
+// that address — firmware and default_efuse.preload both use 0x008.
 static constexpr unsigned int LC_STATE_OFFSET               = 0x008;
 static constexpr unsigned int SBOOT_DIS_OFFSET              = 0x00C;
+// Remaining map matches och_sep_top_reg.h (TRANSIENT_RMA_EN at 0x010, not 0x014).
 static constexpr unsigned int TRANSIENT_RMA_EN_OFFSET       = 0x010;
 static constexpr unsigned int SIP_DIS_LO_OFFSET             = 0x014;
 static constexpr unsigned int SIP_DIS_HI_OFFSET             = 0x018;

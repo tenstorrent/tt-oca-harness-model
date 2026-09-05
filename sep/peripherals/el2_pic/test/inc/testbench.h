@@ -147,4 +147,9 @@ public:
     // FUNC-EL2PIC-017: Reserved source 0 and null-hart arbitration
     // -------------------------------------------------------------------------
     void test_source0_and_null_hart();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-015: Threshold CSRs, reserved source 0, null-hart arbiter
+    // -------------------------------------------------------------------------
+    void test_threshold_and_reserved_source();
 };

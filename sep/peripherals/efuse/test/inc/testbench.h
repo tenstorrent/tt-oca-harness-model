@@ -78,6 +78,7 @@ public:
     void test_lc_state_transitions();
     void test_locked_field_interrupt();
     void test_transient_rma();
+    void test_consumer_accessors();
 
     /// The whole of the secure_tm run — see the comment on its definition.
     void test_secure_tm_mode();
