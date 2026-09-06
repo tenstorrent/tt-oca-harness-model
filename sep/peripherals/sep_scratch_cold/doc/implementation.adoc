@@ -18,7 +18,7 @@ class sep_scratch_cold_ip : public sep_scratch_cold_base
 ----
 sep_scratch_cold_ip     post-write decoders + VP acks   (sep_scratch_cold.*)
   └─ sep_scratch_cold_base   regmodel::Memory + SCRATCH[8]
-       └─ virt_console_decoder.h / sep_status_decoder.h
+       └─ virt_console_decoder.h (common/include) / sep_status_decoder.h
 ----
 
 ====== Threads and sockets

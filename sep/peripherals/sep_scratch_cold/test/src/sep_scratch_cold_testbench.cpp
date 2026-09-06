@@ -508,7 +508,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
 
         // --- VirtConsoleDecoder ---
         {
-            sep_virt_console::VirtConsoleDecoder vc(capture);
+            virt_console::VirtConsoleDecoder vc(capture);
 
             // Disabled: on_word and on_bytes must be no-ops
             vc.set_enabled(false);
@@ -555,7 +555,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
 
             if (ok) {
                 // Null emit: decode + flush must not crash
-                sep_virt_console::VirtConsoleDecoder silent;
+                virt_console::VirtConsoleDecoder silent;
                 silent.on_word(0x00004100u);  // 'A', no newline
                 silent.flush();
             }
@@ -773,7 +773,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         std::string reason;
         std::vector<std::string> lines;
 
-        sep_virt_console::VirtConsoleDecoder dec([&](const std::string& s) {
+        virt_console::VirtConsoleDecoder dec([&](const std::string& s) {
             lines.push_back(s);
         });
 

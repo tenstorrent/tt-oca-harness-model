@@ -24,8 +24,16 @@
 #include "DecodedInst.hpp"
 
 #include <cstring>
+#include <iostream>
 
 namespace smc {
+
+namespace {
+// ctrl SCRATCH index the SMC production ROM's simputs()/simputshex*() write
+// their packed console words to
+// (tt-oca-harness: hw/sys/smc/bootrom/prod/lib/src/virt_console.c).
+constexpr unsigned kVConsoleScratchIdx = 2;
+}  // namespace
 
 // ===========================================================================
 // Constructors
@@ -71,8 +79,19 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
                             "LOCAL_BASE reset value reported via the ctrl socket (§3.8).")
     , wdt_stage2_tick_ns_p_("wdt_stage2_tick_ns", cfg.wdt_stage2_tick_ns,
                             "Stage-2 WDT countdown tick period in nanoseconds; 0 disables auto-tick.")
+    , vconsole_enable_p_("vconsole_enable", cfg.vconsole_enable,
+                         "Decode the SMC production ROM's virtual-console words written "
+                         "to ctrl SCRATCH[2] and print them as [SMC_VCONSOLE] lines.")
     , qk_(num_harts_p_.get_value())
 {
+    // Virtual console on ctrl SCRATCH[2]. Line-buffered: the ROM emits at most
+    // three characters per write, so only whole lines are printed. The CCI
+    // enable flag is re-read on each write (mutable); this is the initial
+    // value only.
+    vconsole_decoder_.set_enabled(vconsole_enable_p_.get_value());
+    vconsole_decoder_.set_emit([](const std::string& line) {
+        std::cout << "[SMC_VCONSOLE] " << line << std::endl;
+    });
     const unsigned nh = num_harts_p_.get_value();
 
     // ----- 1. Allocate the fast-memory window -------------------------------
@@ -196,7 +215,16 @@ smc_cpu_cluster::smc_cpu_cluster(sc_core::sc_module_name name,
     }
 }
 
-smc_cpu_cluster::~smc_cpu_cluster() = default;
+// Not `= default`: the virtual console is line-buffered, and a trailing line
+// with no newline has to be emitted somewhere. end_of_simulation() alone is
+// not enough -- SystemC only invokes it from sc_stop(), and the usual
+// `smc-vp <ini> <elf> <ms>` path just lets sc_start()'s time limit expire, so
+// that callback never runs. Destruction happens either way. flush() clears its
+// buffer, so being called from both paths prints nothing twice.
+smc_cpu_cluster::~smc_cpu_cluster()
+{
+    vconsole_decoder_.flush();
+}
 
 // ===========================================================================
 // ELF loading (testbench calls before sc_start)
@@ -480,6 +508,11 @@ bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
 // Writes to RESET_VECTOR[i] update
 // the iss_hart's reset_pc immediately (effective on next reset).
 // ===========================================================================
+void smc_cpu_cluster::end_of_simulation()
+{
+    vconsole_decoder_.flush();
+}
+
 void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
                                        sc_core::sc_time& /*delay*/)
 {
@@ -591,7 +624,17 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
     }
 
     if (off >= 0x080 && off < 0x100) {
-        handle_u32(regs_.scratch[(off - 0x080) / 8], /*ro*/ false);
+        const unsigned idx = unsigned((off - 0x080) / 8);
+        handle_u32(regs_.scratch[idx], /*ro*/ false);
+        // SCRATCH[2] doubles as the production ROM's virtual console. Decode
+        // after the store so the word seen matches what software reads back,
+        // and only on writes -- a read must not re-emit the last line.
+        // Re-read the mutable CCI enable each time (do not cache at construction).
+        if (idx == kVConsoleScratchIdx &&
+            trans.get_command() == tlm::TLM_WRITE_COMMAND) {
+            vconsole_decoder_.set_enabled(vconsole_enable_p_.get_value());
+            vconsole_decoder_.on_word(regs_.scratch[idx]);
+        }
         return;
     }
 

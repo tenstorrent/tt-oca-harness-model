@@ -7,7 +7,9 @@
  * The CPU Control register block lives at `smc_top` front-port
  * `0xC003_9000` (4 KiB).  Its **SCRATCH[16]** array at offset `+0x080`
  * is the authoritative SMC↔SEP inter-stage handoff mailbox used by the
- * production ROM (`smc_rom.adoc` § Scratch Registers).
+ * production ROM (`smc_rom.adoc` § Scratch Registers), and SCRATCH[2]
+ * additionally carries the ROM's virtual console.  smc-vp/smu-vp decode
+ * that window on `cluster.ctrl`, not this standalone model.
  *
  * Authoritative register map: `hw/smc/smc_misc/data/registers/rdl/cpu_ctrl.rdl`
  * (`GLOBAL_BASE` / `LOCAL_BASE` / `REGION_SIZE` / `CLOCK_GATE_CONTROL` live
@@ -17,6 +19,7 @@
  *
  * | Index | Offset | Symbol (smc_rom_defs.h)        | Role |
  * |-------|--------|--------------------------------|------|
+ * | 2     | +0x090 | (virtual console)              | Packed console/status words |
  * | 8     | +0x0C0 | SMC_SCRATCH_MANIFEST_ADDR      | Manifest SRAM offset |
  * | 9     | +0x0C8 | SMC_SCRATCH_SMC_STATUS_TO_SEP  | Coordination status bits |
  * | 11    | +0x0D8 | SMC_SCRATCH_STATUS_BUFFER_ADDR | Status ring-buffer offset |

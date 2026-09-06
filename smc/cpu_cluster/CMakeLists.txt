@@ -296,6 +296,8 @@ target_include_directories(smc_cpu_cluster
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/../common/include
+        # virt_console_decoder.h -- shared with sep_scratch_cold so the
+        # two decoders of the same ROM protocol cannot drift.
         ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
 )
 
