@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[uart-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`uart_tb` (`test/uart_tb.cpp`) is a TLM initiator into the register
+window plus `rst_n_i`, modem pins, and `inject_rx_char` / `dbg_tx_pop`
+/ `dbg_reg` helpers. No serial line is required.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`.
+
+How to run (from `smc/peripherals/uart`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh uart
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`. A local `deps.env`
+overrides those paths.
+
+====== Standalone cases
+
+Source: `test/uart_tb.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Register reset / fields |LSR/IIR reset; RW/RO/WO |Positive
+|2 |DLAB muxing |0x00/0x04 decode DLL/DLM vs RBR/THR/IER |Positive
+|3 |Basic transmit |THR → `dbg_tx_pop`; THRE/TEMT |Positive
+|4 |Basic receive |`inject_rx_char` → RBR; DR tracks occupancy |Positive
+|5 |FIFO overflow |OE set; excess dropped |Positive
+|6 |Non-FIFO mode |Single-byte RBR/THR |Positive
+|7 |RX trigger level |FCR+ECR watermark → data-ready IRQ |Positive
+|8 |Interrupt priority / IIR |Highest pending ID; INT_PEND active-low |Positive
+|9 |Line-status errors |PE/FE/BI + `err_o` |Positive
+|10 |Modem status / deltas |Levels, DCTS/DDSR/TERI/DDCD |Positive
+|11 |Loopback |System and line; line wins |Positive
+|12 |DMA handshake |Mode 0/1 `rxrdy_o` / `txrdy_o` |Positive
+|13 |ITR force |Forced IIR IDs |Positive
+|14 |RX timeout |IIR timeout ID after coarse delay |Positive
+|15 |Reset during operation |FIFOs/regs/outputs restore |Positive
+|16 |Bus errors |Width / align / OOW |Negative
+|17 |Debug transport |Peek does not pop or clear sticky |Positive
+|===
+
+====== Platform firmware tests
+
+There is no `smc-uart-test` in `sw/smc-vp-tests/`. UART0 is the firmware
+`printf` path for the tests that are present; register coverage is the
+standalone `./run_tests.sh` suite in this directory.

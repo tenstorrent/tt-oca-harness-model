@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[i2c-controller-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`i2c_controller_tb` and `i2c_controller_neg_tb` (`test/`) drive
+`reg_socket`, `rst_n_i`, a bus-model callback, and the target back
+doors. The primary bench uses a live kernel; the negative bench probes
+constructor fatals without `sc_start`.
+
+Success: both benches print `ALL TESTS PASSED`; CTest reports 2/2;
+`--asan` produces no `asan.log.*`. Line coverage of
+`src/i2c_controller.cpp` is ~99% in the existing plan.
+
+How to run (from `smc/peripherals/i2c_controller`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run both benches
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh i2c_controller
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`.
+
+====== Standalone cases
+
+Sources: `test/i2c_controller_tb.cpp`, `i2c_controller_neg_tb.cpp`.
+Names follow the cases in `test/i2c_controller_tb.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|TB-1 |Reset values |STATUS idle/empty; `irq` low |Positive
+|TB-2 |Register R/W + masking |Field masks; VAL/SMBUS_STATUS RO |Positive
+|TB-3 |Controller write |FMT → one write segment |Positive
+|TB-4 |Controller read |Bus model → RX FIFO / RDATA |Positive
+|TB-4b |RX overflow |Occupancy clamp + `RX_OVERFLOW` |Positive
+|TB-4c |Trailing open segment |Write without STOP still executes |Positive
+|TB-5 |CMD_COMPLETE |STOP raises IRQ; W1C clears |Positive
+|TB-6 |NACK halt + resume |EVENTS.NACK / HALT; W1C resumes |Positive
+|TB-7 |NAKOK |NACK does not halt |Positive
+|TB-8–9 |FMT/RX thresholds |Level IRQs; RXRST |Positive
+|TB-10 |FMT reset / kick / Sr |FMTRST; enable-after-queue; two segments |Positive
+|TB-10d |Resume with pending FMT |Clear events drains queued segment |Positive
+|TB-11–14 |Target ACQ/TX / NACK / thlds |Back doors + threshold IRQs |Positive
+|TB-15–18 |INTR_TEST / ACK_CTRL / dbg / CCI |Force, peek, presets |Positive
+|NEG-1 |Zero FIFO depth |`SC_REPORT_FATAL` |Negative
+|NEG-2 |TLM errors |Width / align / OOW / miss / bad cmd |Negative
+|NEG-3 |RO write-ignore / WO read-0 |Access types |Negative
+|NEG-4–6 |FMT/TX/ACQ overflow |FIFO error bits |Negative
+|NEG-7–10 |Disabled target / W1C / dbg / CCI |NACK; immutability |Negative
+|===
+
+====== Platform firmware tests
+
+These run on `smc-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-i2c-loopback-test
+----
+
+`smc-i2c-loopback-test` uses the I2C0→I2C1 bus-model bind on `smc-vp`.
+There is no separate `smc-i2c-test` directory.

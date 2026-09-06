@@ -1,14 +1,21 @@
 # SMC Telemetry Receiver — SystemC / TLM-2.0 Loosely-Timed Model
 
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 A **telemetry receiver** modeled in Accellera SystemC 2.3.x / 3.0.x + TLM-2.0
 (Loosely-Timed). It implements one instance of the SMC telemetry receiver — the
 sink of the SoC telemetry path, which re-assembles counter samples arriving over
 an **ATB** (AMBA Trace Bus) byte stream and exposes them to software one message
 at a time — as described in:
 
-- `doc/01_TELEMETRY_RECEIVER_Specification.md` — externally-observable behaviour
-- `doc/02_TELEMETRY_RECEIVER_LowLevel_Design.md` — TLM interface, register map, internals
-- `doc/03_TELEMETRY_RECEIVER_Test_Plan.md` — unit verification strategy and test list
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — TLM interface, register map, internals
+- `doc/test_plan.adoc` — unit verification and `smc-telemetry-test`
 - `hw/comp/telemetry_receiver/data/registers/rdl/telemetry_receiver.rdl` — authoritative register map
 - `hw/comp/telemetry_receiver/rtl/telemetry_receiver.sv` — behaviour reference
 - `hw/comp/telemetry_receiver/rtl/telemetry_receiver_pkg.sv` — ATB packet / block widths
@@ -55,9 +62,9 @@ telemetry_receiver/
 ├── run_tests.sh                     Build + run convenience script
 ├── deps.env.example                 Template for local dependency paths
 ├── doc/
-│   ├── 01_TELEMETRY_RECEIVER_Specification.md
-│   ├── 02_TELEMETRY_RECEIVER_LowLevel_Design.md
-│   └── 03_TELEMETRY_RECEIVER_Test_Plan.md
+│   ├── index.adoc
+│   ├── implementation.adoc
+│   └── test_plan.adoc
 ├── include/
 │   └── telemetry_receiver.h         SC_MODULE(telemetry_receiver) declaration,
 │                                    ATB packet accessors + reference encoder
@@ -100,7 +107,7 @@ config guards and a gcov artefact — see the test plan §7).
 > (`cannot find -lasan`), and a SystemC built with the default QuickThreads
 > coroutines is not ASan-compatible at all. For a local ASan run use
 > `clang++` together with a SystemC configured `-DENABLE_PTHREADS=ON`. See
-> `doc/03_TELEMETRY_RECEIVER_Test_Plan.md` §8.
+> `doc/test_plan.adoc`.
 
 ---
 
@@ -198,7 +205,7 @@ Eight byte beats form a 64-bit packet; packets form a message:
 - A message spans `ceil((1 + 4 * max_counters_per_message) / 7)` packets.
 
 Full description, including a worked byte-level example, is in
-`doc/01_TELEMETRY_RECEIVER_Specification.md` §4.
+`doc/implementation.adoc`.
 
 ---
 
@@ -217,4 +224,4 @@ back door instead of a port (mirroring how `beu` abstracts its error sources and
 - `dbg_reg(off)` — side-effect-free register peek
 - `dump_state(os)` — human-readable state dump
 
-See `doc/02_TELEMETRY_RECEIVER_LowLevel_Design.md` for details.
+See `doc/implementation.adoc` for details.

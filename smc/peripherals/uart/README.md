@@ -58,9 +58,10 @@ cp deps.env.example deps.env
 | `--asan` | Build with AddressSanitizer (Linux: + LeakSanitizer) |
 | `--coverage` | Build with coverage; print a line report |
 
-The test bench prints `ALL TESTS PASSED` on success. Platform firmware:
-`cd sw/smc-vp-tests && ./run_smc_vp_tests.sh smc-uart-test`. Full
-commands are in `doc/test_plan.adoc`.
+The test bench prints `ALL TESTS PASSED` on success. There is no
+`smc-uart-test` firmware directory; UART0 is the `printf` path for the
+tests that are in `sw/smc-vp-tests/`. Full commands are in
+`doc/test_plan.adoc`.
 
 ---
 

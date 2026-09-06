@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[bootrom-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`bootrom_tb` (hex fixture), `bootrom_bin_tb` (`.img` fixture), and
+`bootrom_neg_tb` (`test/`). The negative bench probes constructor
+fatals without `sc_start`. There is no committed `03_BOOTROM_Test_Plan.md`
+in this tree; cases below come from the benches and the README.
+
+Success: benches print `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`.
+
+How to run (from `smc/peripherals/bootrom`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run benches
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh bootrom
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`.
+
+====== Standalone cases
+
+Sources: `test/bootrom_tb.cpp`, `bootrom_bin_tb.cpp`,
+`bootrom_neg_tb.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Hex preload |First words match fixture (`b_transport` + `dbg_read64`) |Positive
+|2 |Reset survival |Reads unchanged across `rst_n_i` |Positive
+|3 |Sub-word reads |1/2/4/8 B coherent with the 64-bit word |Positive
+|4 |Write ignore (C4) |Write OK; contents unchanged |Positive
+|5 |Zero tail |Unpopulated high address reads 0 |Positive
+|6 |transport_dbg |Read works; write ignored |Positive
+|7 |dbg_load_bytes |Loaded bytes visible on the bus |Positive
+|8 |Negative TLM |Window / align / width / streaming |Negative
+|9 |BE / bad command |Byte-enable and unknown cmd errors |Negative
+|10 |dbg invalid args |Malformed `transport_dbg` returns 0 |Negative
+|11 |CCI |Discovery, mutation, size immutability |Positive
+|12 |dump_state |Expected fields |Positive
+|13 |Annotated delay |Non-zero `b_transport` delay (C2) |Positive
+|14 |Binary preload |`.img` words match; `auto` → bin |Positive
+|15 |Image pad |Tail past EOF is zero |Positive
+|N1–N10 |Constructor / preload fatals |size, delay, missing/bad hex/bin |Negative
+|N11–N13 |Hex prefix / zero overflow / garbage format |Parser tolerances |Positive
+|N14 |dbg_read32 |Happy / misaligned / OOB |Positive
+|===
+
+====== Platform firmware tests
+
+There is no `smc-bootrom-test` in `sw/smc-vp-tests/`. Boot ROM coverage
+is the standalone `./run_tests.sh` suite in this directory. `smc-vp`
+preloads the ROM image; firmware that fetches from it is exercised
+indirectly by the tests that are present.

@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[smc-cpu-cluster-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/cluster_tb.cpp` is a self-checking binary. It constructs the
+cluster, binds stub memories and IRQ wires, and links the PLIC model
+for the CPU→PLIC→CPU case. CLINT is wire-stubbed.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on `src/` meets the repository ≥ 95% gate.
+
+How to run (from `smc/cpu_cluster`):
+
+[source,bash]
+----
+cp deps.env.example deps.env   # first time; set SYSTEMC_HOME / CCI_HOME / Whisper
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh cpu_cluster
+----
+
+====== Standalone cases
+
+Source: `test/cluster_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |default ctor, const hart, and config straps |Construction + CCI straps |Positive
+|2 |4-hart construction and binding |Vector ports bind |Positive
+|3 |reset-state matrix (4 harts) |Reset PC / idle |Positive
+|4 |memory routing (fast-mem + MMIO) |Socket carve-out |Positive
+|5 |smc_axi_extension on MMIO transactions |Sideband on `mmio` |Positive
+|6 |step() and WFI flag |ISS step / WFI park |Positive
+|7 |IRQ aggregator and WFI wake |MSIP/MTIP/MEIP → MIP |Positive
+|8 |CPU configures PLIC, handles MEIP |CPU→PLIC→CPU |Positive
+|9 |scratchpad SRAM INIT_MEM_DONE handshake |Peer hook |Positive
+|10 |CPU-Control register file |`ctrl` CSRs |Positive
+|11 |CPU-Control negative paths and CSR edge cases |Bad access |Negative
+|12 |batch step and data-path TLM error handling |Error on `data` |Negative
+|13 |RESET_CTRL park and NMI wake |Park / `inject_nmi` |Positive
+|14 |ctrl access widths, fast-mem edge, and batch step branches |Widths / edges |Mixed
+|===
+
+====== Platform firmware tests
+
+Firmware on `smc-vp` runs on this cluster. Build `smc-vp` first.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-dma-test
+./run_smc_vp_tests.sh smc-wdt-test
+----

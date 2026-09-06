@@ -19,6 +19,13 @@ The model tracks the on-chip scratchpad instantiated by the SMC CPU cluster:
 - `tt-oca-hw/hw/smc/data/registers/rdl/smc_top.rdl` — SMC top-level address
   map (`spm_memory @ BASE_ADDR + 0x06_0000`).
 
+Architecture, CSRs, and programming are in the hardware TRM. Model and
+test docs:
+
+- `doc/index.adoc` — entry (includes the two pages below)
+- `doc/implementation.adoc` — SystemC/TLM model and `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 The model is a drop-in `SC_MODULE` that the rest of the SMC SystemC IP
 library wires up exactly as for the Boot ROM, PLIC, and CLINT.
 
@@ -43,11 +50,9 @@ scratchpad_ram/
 │   └── fixtures/
 │       └── scratchpad_sanity.rv64.hex  Hex preload fixture
 └── doc/
-    ├── 01_SCRATCHPAD_RAM_Specification.md     External contract (RTL-traceable)
-    ├── 02_SCRATCHPAD_RAM_LowLevel_Design.md   Internal SystemC + CCI design
-    ├── 03_SCRATCHPAD_RAM_Test_Plan.md         Verification plan
-    ├── build_docs.sh                          Markdown → PDF helper
-    └── print.css                              PDF stylesheet (shared with the other IPs)
+    ├── index.adoc
+    ├── implementation.adoc
+    └── test_plan.adoc
 ```
 
 ---
@@ -82,7 +87,7 @@ broker.set_preset_cci_value("smc.scratchpad_ram.access_delay_ns",
                             cci::cci_value(2.0));
 ```
 
-See `02_SCRATCHPAD_RAM_LowLevel_Design.md §4` for the full CCI catalogue.
+See `doc/implementation.adoc` for the CCI catalogue and `smc-vp` bind.
 
 ---
 
@@ -126,7 +131,10 @@ See `02_SCRATCHPAD_RAM_LowLevel_Design.md §4` for the full CCI catalogue.
 
 `SYSTEMC_HOME` and `CCI_HOME` are auto-probed for the common macOS
 (Homebrew) and Linux (system + `/usr/local`) install locations; set them
-manually for any non-standard prefix.
+manually for any non-standard prefix. Platform firmware:
+`cd sw/smc-vp-tests && ./run_smc_vp_tests.sh smc-dma-test` (scratchpad
+is the DMA/memory-zeroer target). Full commands are in
+`doc/test_plan.adoc`.
 
 ---
 

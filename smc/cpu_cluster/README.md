@@ -132,7 +132,7 @@ void                          set_init_mem_done(bool);
 void                          set_mem_repair_status(uint32_t);
 ```
 
-These satisfy `03_SMC_Test_Plan.pdf` §A.3 inspection requirements.
+These satisfy the debug-API inspection items in `doc/test_plan.adoc`.
 
 ---
 
@@ -402,10 +402,10 @@ ALL TESTS PASSED
 ## Wiring the cluster into `smc_top`
 
 Excerpt from how the architectural top-level instantiates and binds the
-cluster (see `02_SMC_IP_LowLevel_Design.pdf` "Top-level Integration"):
+cluster (see `doc/implementation.adoc` and `vp/platform/smc/`):
 
 ```cpp
-// In smc_top constructor (4-core variant)
+// In smc_platform / smc-vp constructor (4-core variant)
 smc::smc_cpu_cluster::config cfg{};
 cfg.num_harts   = 4;
 cfg.reset_pc    = 0x80000000;
@@ -428,7 +428,7 @@ for (unsigned h = 0; h < cluster.num_harts(); ++h) {
 }
 ```
 
-Per `02_SMC_IP_LowLevel_Design.pdf` §3.10, every outgoing transaction
+Per `doc/implementation.adoc`, every outgoing transaction
 from the cluster carries an `smc_axi_extension` whose `source_id`
 identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 
@@ -473,7 +473,7 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 
 | Spec requirement                                                       | Status |
 |------------------------------------------------------------------------|--------|
-| `SC_MODULE(smc_cpu_cluster)` shape from `02_…_LowLevel_Design.pdf` §3 | ✅      |
+| `SC_MODULE(smc_cpu_cluster)` shape from `doc/implementation.adoc` | ✅      |
 | 1..4 harts, `rv64imafdc`, reset-PC configurable                        | ✅      |
 | Three initiator sockets (data / mmio / ifetch) §3.3 / §3.6             | ✅      |
 | `ctrl` target socket with CPU-Control register file §3.8               | ✅      |

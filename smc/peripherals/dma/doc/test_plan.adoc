@@ -32,8 +32,7 @@ overrides those paths.
 
 ====== Standalone cases
 
-Sources: `test/dma_tb.cpp`, `dma_neg_tb.cpp`. There is no legacy
-`03_*_Test_Plan.md` for this IP.
+Sources: `test/dma_tb.cpp`, `dma_neg_tb.cpp`.
 
 [cols="8%,36%,40%,16%",options="header"]
 |===

@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[scratchpad-ram-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`scratchpad_ram_tb` and `scratchpad_ram_neg_tb` (`test/`). The primary
+bench covers read/write, byte-enables, reset retention, and ECC
+injection. The negative bench probes constructor/preload fatals.
+
+Success: both benches print `ALL TESTS PASSED`; CTest reports 2/2;
+`--asan` produces no `asan.log.*`. Existing coverage of
+`src/scratchpad_ram.cpp` is ~98% line.
+
+How to run (from `smc/peripherals/scratchpad_ram`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run both benches
+./run_tests.sh --ctest
+./run_tests.sh --asan
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh scratchpad_ram
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`.
+
+====== Standalone cases
+
+Sources: `test/scratchpad_ram_tb.cpp`, `scratchpad_ram_neg_tb.cpp`.
+Names follow the cases in `test/scratchpad_ram_tb.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Hex preload |First words match fixture |Positive
+|2 |Read-after-write |1/2/4/8 B visible on next read |Positive
+|3 |Sub-word reads |Coherent with the 64-bit word |Positive
+|4 |Byte-enabled write |Only enabled bytes change |Positive
+|5 |Reset retention |Array survives `rst_n_i` |Positive
+|6 |Zero-init region |Unwritten high address reads 0 |Positive
+|7 |transport_dbg |Back-door write/read (ECC bypass) |Positive
+|8 |dbg_load_bytes |Loaded bytes on the bus; OOB → 0 |Positive
+|9 |SECDED ECC |Correctable scrub; uncorrectable error; write clears |Positive
+|10 |Negative TLM |Window / align / width / streaming / cmd |Negative
+|11 |CCI |Discovery; mutable delay; size immutable |Positive
+|12 |dump_state |Expected fields |Positive
+|13 |Annotated delay |Non-zero `b_transport` delay |Positive
+|N1–N10 |Constructor / preload fatals |size, delay, missing/bad images |Negative
+|N11–N13 |Hex prefix / zero overflow / garbage format |Parser tolerances |Positive
+|N14 |dbg_read32 |Happy / misaligned / OOB |Positive
+|N15 |ecc_enabled=false |Injection is a no-op |Positive
+|N16 |dbg_clear_ecc_errors |Recovers uncorrectable read |Positive
+|===
+
+====== Platform firmware tests
+
+There is no `smc-scratch-test` in `sw/smc-vp-tests/`. Scratchpad traffic
+on `smc-vp` is covered by `smc-dma-test` and `smc-memory-zeroer-test`.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-dma-test
+./run_smc_vp_tests.sh smc-memory-zeroer-test
+----
