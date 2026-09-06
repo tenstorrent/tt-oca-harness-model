@@ -52,6 +52,7 @@
 
 #include "iss_hart.h"
 #include "tlm_quantum_policy.h"
+#include "virt_console_decoder.h"
 
 // Forward declarations.
 namespace WdRiscv { template <typename URV> class System; }
@@ -100,6 +101,12 @@ public:
         // here; offsets are taken modulo 0x1000 so the socket can sit
         // anywhere in the system address map.
         uint64_t    ctrl_size_bytes = 0x1000;          // 4 KiB
+        // Decode the SMC production ROM's "virtual console" words written to
+        // ctrl SCRATCH[2] and print them as [SMC_VCONSOLE] lines. The ROM has
+        // no UART path: simputs()/simputshex*() pack ASCII/hex into a 32-bit
+        // word and leave decoding to the testbench, so without this a ROM run
+        // on smc-vp/smu-vp produces no output at all.
+        bool        vconsole_enable = true;
 
         // Construction strap retained for SMC_ATTRIBUTES/debug APIs; LOCAL_BASE
         // is now exposed by smc_base_config, not cpu_ctrl.
@@ -191,6 +198,7 @@ private:
     cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> ctrl_size_bytes_p_;
     cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> local_base_default_p_;
     cci::cci_param<double, cci::CCI_IMMUTABLE_PARAM>   wdt_stage2_tick_ns_p_;
+    cci::cci_param<bool>                               vconsole_enable_p_;
 
     // -- Processes -----------------------------------------------------------
     void hart_thread(unsigned i);       // SC_THREAD: step loop
@@ -214,6 +222,15 @@ private:
 
     // ctrl socket b_transport handler.
     void ctrl_b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time&);
+
+    // Flush a trailing console line the ROM left unterminated. SystemC calls
+    // this from sc_stop() only, which the time-limited `smc-vp ... <ms>` path
+    // never reaches -- the destructor flushes too. Both are safe: flush()
+    // empties its buffer.
+    void end_of_simulation() override;
+
+    // Observes ctrl SCRATCH[2] writes; never alters the register or timing.
+    virt_console::VirtConsoleDecoder vconsole_decoder_;
 
     // RESET_CTRL write helper. Lower bits are active-high run enables in LT
     // because the RDL fields are active-low reset_n controls.

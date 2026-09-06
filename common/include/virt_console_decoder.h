@@ -2,10 +2,21 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 
-// Pure (SystemC-free) decoder for the SEP bootcode "virtual console" protocol.
+// Pure (SystemC-free) decoder for the "virtual console" protocol that BOTH
+// subsystems' ROMs use to report status through a scratch register.
 //
-// The bootcode `simput*` helpers (fw/sep/bootcode/include/rom_virt_console.h) emit
-// status by writing a packed 32-bit word to SEP_SCRATCH_COLD_SCRATCH_2 (0x10802010):
+// Producers (identical wire format, different scratch register):
+//   SEP  bootcode `simput*`  -- fw/sep/bootcode/include/rom_virt_console.h,
+//                              writes SEP_SCRATCH_COLD_SCRATCH_2 (0x10802010)
+//   SMC  production ROM      -- hw/sys/smc/bootrom/prod/lib/src/virt_console.c,
+//                              writes cluster.ctrl SCRATCH[2] (base + 0x90)
+//
+// Consumers: sep_scratch_cold (SEP) and smc_cpu_cluster (SMC). The decoder
+// lives in common/include rather than either tree so the two cannot drift.
+// The SMC hook is on the cluster, not the standalone cpu_ctrl peripheral:
+// smc-vp/smu-vp route 0xC0039000 to cluster.ctrl and leave cpu_ctrl idle.
+//
+// Packed 32-bit word:
 //
 //   [31:8] payload   [7:4] reserved   [3:1] opcode   [0] toggle
 //
@@ -27,7 +38,7 @@
 #include <string>
 #include <utility>
 
-namespace sep_virt_console {
+namespace virt_console {
 
 // Opcode field = bits[3:1] of the packed word.
 enum VConsoleOpcode : uint32_t {
@@ -131,4 +142,4 @@ class VirtConsoleDecoder {
     bool enabled_ = true;
 };
 
-}  // namespace sep_virt_console
+}  // namespace virt_console

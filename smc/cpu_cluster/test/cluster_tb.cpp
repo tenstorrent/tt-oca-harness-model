@@ -21,6 +21,7 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 
@@ -1308,6 +1309,65 @@ struct cluster_tb_top : sc_core::sc_module
             wait(sc_core::sc_time(10, sc_core::SC_NS));
 
             pass("stage-2 WDT, BEU NMI, and remaining ctrl offsets");
+        }
+
+        // --- virt console on ctrl SCRATCH[2] --------------------------------
+        {
+            constexpr uint64_t kScratch2 = 0x090;
+            auto pack_ascii = [](char a, char b = '\0', char c = '\0') -> uint32_t {
+                return (uint32_t(uint8_t(c)) << 24) | (uint32_t(uint8_t(b)) << 16) |
+                       (uint32_t(uint8_t(a)) << 8);
+            };
+            auto pack_hex16 = [](uint16_t v) -> uint32_t { return (uint32_t(v) << 8) | 0x2u; };
+            auto pack_dec24 = [](uint32_t v) -> uint32_t { return ((v & 0xFFFFFFu) << 8) | 0x4u; };
+
+            auto broker = cci::cci_get_broker();
+            auto vcon = broker.get_param_handle("tb.cluster.vconsole_enable");
+            EXPECT_TRUE(vcon.is_valid());
+
+            {
+                std::ostringstream cap;
+                auto* old = std::cout.rdbuf(cap.rdbuf());
+                ctrl.write32(kScratch2, pack_ascii('H', 'i', '\n'));
+                EXPECT_EQ(ctrl.read32(kScratch2), pack_ascii('H', 'i', '\n'));
+                std::cout.rdbuf(old);
+                EXPECT_TRUE(cap.str().find("[SMC_VCONSOLE] Hi") != std::string::npos);
+            }
+
+            {
+                std::ostringstream cap;
+                auto* old = std::cout.rdbuf(cap.rdbuf());
+                (void)ctrl.read32(kScratch2);
+                std::cout.rdbuf(old);
+                EXPECT_TRUE(cap.str().find("[SMC_VCONSOLE]") == std::string::npos);
+            }
+
+            {
+                std::ostringstream cap;
+                auto* old = std::cout.rdbuf(cap.rdbuf());
+                ctrl.write32(kScratch2, pack_hex16(0xABCD));
+                ctrl.write32(kScratch2, pack_ascii('\n'));
+                ctrl.write32(kScratch2, pack_dec24(123));
+                ctrl.write32(kScratch2, pack_ascii('\n'));
+                std::cout.rdbuf(old);
+                EXPECT_TRUE(cap.str().find("[SMC_VCONSOLE] abcd") != std::string::npos);
+                EXPECT_TRUE(cap.str().find("[SMC_VCONSOLE] 123") != std::string::npos);
+            }
+
+            {
+                vcon.set_cci_value(cci::cci_value(false));
+                std::ostringstream cap;
+                auto* old = std::cout.rdbuf(cap.rdbuf());
+                ctrl.write32(kScratch2, pack_ascii('X', 'Y', '\n'));
+                std::cout.rdbuf(old);
+                vcon.set_cci_value(cci::cci_value(true));
+                EXPECT_TRUE(cap.str().find("[SMC_VCONSOLE]") == std::string::npos);
+            }
+
+            // Unterminated line so end_of_simulation()/dtor flush() is covered.
+            ctrl.write32(kScratch2, pack_ascii('Z'));
+
+            pass("virt console on ctrl SCRATCH[2]");
         }
 
         wd.cancel();

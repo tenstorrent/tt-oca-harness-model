@@ -118,6 +118,8 @@ endif()
 # -----------------------------------------------------------------------------
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  # virt_console_decoder.h — shared with smc_cpu_cluster so the two
+  # decoders of the same ROM protocol cannot drift.
   ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
 # NOTE: test/inc is deliberately NOT added here — it's added per-target below,

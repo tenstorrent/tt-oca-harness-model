@@ -26,6 +26,6 @@ public:
     RegLogger             logger;
 
 private:
-    sep_virt_console::VirtConsoleDecoder vconsole_decoder_;
+    virt_console::VirtConsoleDecoder vconsole_decoder_;
     sep_status_report::StatusDecoder     status_decoder_;
 };

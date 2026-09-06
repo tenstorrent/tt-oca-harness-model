@@ -122,6 +122,9 @@ target_include_directories(smc_cluster_smu
     PUBLIC
         ${_smc_root}/cpu_cluster/include
         ${_smc_root}/common/include
+        # This DSO compiles the cluster sources directly rather than linking
+        # smc_cpu_cluster, so it does not inherit that target's include dirs:
+        # repeat the top-level common/ tree (virt_console_decoder.h).
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
     PRIVATE
         ${_w_incs})
