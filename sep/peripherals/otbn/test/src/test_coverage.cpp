@@ -164,8 +164,7 @@ void testbench::test_cov_lc_rma_intr_enable()
     wait(5, SC_NS);
 
     test_model->otp_key_req_stub_inst->reset_request_count();
-    // lc_escalate_monitor_method is sensitive only to lc_escalate_req; pulse it
-    // while lc_rma is asserted so lc_monitor_thread runs the RMA handler.
+    // lc_escalate_monitor_method is sensitive to lc_rma_req and lc_escalate_req.
     test_model->set_lc_rma(true);
     test_model->set_lc_escalate(true);
     wait(100, SC_NS);

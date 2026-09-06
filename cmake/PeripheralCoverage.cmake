@@ -91,7 +91,7 @@ function(peripheral_add_coverage_target)
   list(APPEND _cov_cmds
     COMMAND ${GENHTML_EXECUTABLE} ${GENHTML_IGNORE_FLAGS} coverage/coverage_filtered.info --output-directory coverage/html
     COMMAND ${CMAKE_COMMAND} -E echo "Coverage report at coverage/html/index.html"
-    COMMAND /bin/bash ${PERIPHERAL_COVERAGE_MODULE_DIR}/../scripts/coverage_gate.sh
+    COMMAND /bin/bash ${PERIPHERAL_COVERAGE_MODULE_DIR}/coverage_gate.sh
             --lcov-info ${CMAKE_BINARY_DIR}/coverage/coverage_filtered.info
   )
 

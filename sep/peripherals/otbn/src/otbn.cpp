@@ -366,9 +366,10 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
    sensitive << rst_n;
    dont_initialize();
 
-   // Register SC_METHOD to monitor lc_escalate_req and trigger event
+   // Register SC_METHOD to monitor lc_escalate_req / lc_rma_req and trigger event
    SC_METHOD(lc_escalate_monitor_method);
    sensitive << lc_escalate_req;
+   sensitive << lc_rma_req;
    dont_initialize();
 
    // Register SC_THREAD for Life Cycle Controller monitoring
@@ -660,6 +661,9 @@ bool otbn_ip::load_checksum_read_callback(uint32_t& value) {
  */
 bool otbn_ip::imem_write_callback(uint32_t value, uint32_t index) {
    REG_FUNC_TRACE(logger);
+   if (index >= 2048u) {
+       return false;
+   }
    // IMEM can ONLY be written in IDLE or BUSY_SEC_WIPE_INT (boot-time)
    // (per spec Section 4.5, 5.2)
    if (current_state != OTBN_STATE_IDLE &&
@@ -711,6 +715,10 @@ bool otbn_ip::imem_write_callback(uint32_t value, uint32_t index) {
  */
 bool otbn_ip::imem_read_callback(uint32_t& value, uint32_t index) {
    REG_FUNC_TRACE(logger);
+   if (index >= 2048u) {
+       value = 0;
+       return true;
+   }
    // Per spec Section 4.5: "reads return zero" when not IDLE
    // LOCKED state: Return 0 for security (no error, silent read)
    if (current_state == OTBN_STATE_LOCKED) {
@@ -1116,7 +1124,9 @@ void otbn_ip::secure_wipe_dmem() {
    REG_FUNC_TRACE(logger);
    // Secure Wipe DMEM with Key Rotation (per spec Section 5.4, 3.2.4)
       REG_DEBUG(2, logger) << "[OTBN] inside secure_wipe_dmem " << std::dec<< std::endl;
-   
+
+   otp_key_req->request_scramble_key();
+
    // 4. Apply new scrambling parameters (key rotation makes old data unreadable)
    // In TLM model, we simulate this effect by overwriting DMEM with zeros
    // Access underlying memory directly to avoid recursive operator[] with ASAN
@@ -1165,6 +1175,8 @@ void otbn_ip::secure_wipe_imem() {
    // Same process as DMEM wipe but for instruction memory
 
       REG_DEBUG(2, logger) << "[OTBN] inside secure_wipe_imem " << std::dec<< std::endl;
+
+   otp_key_req->request_scramble_key();
 
    // 4. Apply new scrambling parameters (key rotation makes old data unreadable)
    // In TLM model, we simulate this effect by overwriting IMEM with zeros

@@ -2837,6 +2837,14 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       REG_INFO(2, logger)
           << "OpenSSL EVP context reset (internal state zeroized)";
     }
+    if (evp_mac_ctx != nullptr) {
+      EVP_MAC_CTX_free(static_cast<EVP_MAC_CTX *>(evp_mac_ctx));
+      evp_mac_ctx = nullptr;
+    }
+    if (evp_mac != nullptr) {
+      EVP_MAC_free(static_cast<EVP_MAC *>(evp_mac));
+      evp_mac = nullptr;
+    }
 
     // Clear packer state
     packer_position = 0;

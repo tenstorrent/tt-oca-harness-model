@@ -67,11 +67,14 @@ peripheral_enforce_coverage_gate() {
     echo ">> Coverage gate FAIL (missing lcov info: ${info})" >&2
     return 1
   fi
-  if ! command -v lcov >/dev/null 2>&1; then
-    echo ">> Coverage gate FAIL (lcov not found)" >&2
-    return 1
-  fi
-  pct="$(lcov --list "${info}" 2>/dev/null | sed -n 's/.*lines\.*:[[:space:]]*\([0-9][0-9]*\.[0-9][0-9]*\)%.*/\1/p' | tail -1)"
+  pct="$(awk -F: '
+    /^LF:/ { found += $2 }
+    /^LH:/ { hit += $2 }
+    END {
+      if (found <= 0) exit 1
+      printf "%.1f\n", 100.0 * hit / found
+    }
+  ' "${info}")"
   if [[ -z "${pct}" ]]; then
     echo ">> Coverage gate FAIL (could not parse ${info})" >&2
     return 1
