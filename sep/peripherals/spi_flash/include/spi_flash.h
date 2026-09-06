@@ -16,7 +16,7 @@
  *
  * The flash is NOT memory-mapped to the CPU bus — the CPU communicates with
  * it exclusively through the SPI Controller.  Consequently this module has
- * no TLM target socket and no CSML registers.
+ * no TLM target socket and no register file.
  *
  * Multi-segment transaction protocol
  * ------------------------------------
@@ -43,15 +43,15 @@
 
 #include "spi_flash_model.h"
 #include "spi_controller_interface.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 #include <systemc.h>
 #include <vector>
 #include <cstdint>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 /**
@@ -87,7 +87,7 @@ public:
      */
     explicit spi_flash(sc_module_name name,
                        uint32_t size_bytes = spi_flash_model::DEFAULT_FLASH_SIZE,
-                       int log_verbosity = CSML_DEFAULT_VERBOSITY);
+                       int log_verbosity = REG_DEFAULT_VERBOSITY);
 
     ~spi_flash() = default;
 
@@ -121,8 +121,8 @@ public:
     spi_flash_model*       get_model()       { return &m_model; }
     const spi_flash_model* get_model() const { return &m_model; }
 
-    CsmlLogger          logger;             ///< CSML logger for diagnostics
-    csml_param<int>     verbosity;  ///< Logging verbosity (runtime-overridable via ini)
+    RegLogger               logger;     ///< Logger for diagnostics
+    regmodel::Param<int>    verbosity;  ///< Logging verbosity (runtime-overridable via ini)
 
 private:
     // ----------------------------------------------------------------

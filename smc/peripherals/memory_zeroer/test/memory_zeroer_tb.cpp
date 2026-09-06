@@ -62,6 +62,20 @@ unsigned g_failures = 0;
         }                                                                      \
     } while (0)
 
+// Run `body`; return true iff it raised any exception (SC_REPORT_FATAL throws).
+template <typename F>
+bool expect_fatal(F&& body)
+{
+    try {
+        body();
+    } catch (const sc_core::sc_report&) {
+        return true;
+    } catch (...) {
+        return true;
+    }
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // Tiny TLM memory target — serves as the zeroer's DMA destination.
 // ---------------------------------------------------------------------------
@@ -148,6 +162,27 @@ struct driver : sc_core::sc_module {
         gp.set_data_ptr(buf.data());
         gp.set_data_length(len);
         gp.set_streaming_width(len);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, delay);
+        return gp.get_response_status();
+    }
+
+    // Fully-general probe for malformed TLM (null ptr, BE, streaming width, ...).
+    tlm::tlm_response_status raw(tlm::tlm_command cmd, uint64_t addr,
+                                 unsigned len, unsigned char* ptr,
+                                 unsigned streaming_width,
+                                 unsigned char* be = nullptr,
+                                 unsigned be_len = 0)
+    {
+        tlm::tlm_generic_payload gp;
+        sc_time delay = SC_ZERO_TIME;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(ptr);
+        gp.set_data_length(len);
+        gp.set_streaming_width(streaming_width);
+        gp.set_byte_enable_ptr(be);
+        gp.set_byte_enable_length(be_len);
         gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
         sock->b_transport(gp, delay);
         return gp.get_response_status();
@@ -350,6 +385,31 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] bus error responses (size / window / align / TLM)\n";
 
+        // Malformed TLM: null ptr, zero length, byte-enable, streaming width,
+        // unknown command. One EXPECT site so fail-paths are not duplicated.
+        {
+            uint64_t scratch = 0;
+            uint8_t  be      = 0xFF;
+            unsigned char* p = reinterpret_cast<unsigned char*>(&scratch);
+            const tlm::tlm_response_status got[] = {
+                drv.raw(tlm::TLM_READ_COMMAND, 0, 8, nullptr, 8),
+                drv.raw(tlm::TLM_WRITE_COMMAND, 0, 0, p, 0),
+                drv.raw(tlm::TLM_READ_COMMAND, 0, 8, p, 8, &be, 1),
+                drv.raw(tlm::TLM_READ_COMMAND, 0, 8, p, /*sw=*/4),
+                drv.raw(tlm::TLM_IGNORE_COMMAND, 0, 8, p, 8),
+            };
+            const tlm::tlm_response_status exp[] = {
+                tlm::TLM_GENERIC_ERROR_RESPONSE,
+                tlm::TLM_GENERIC_ERROR_RESPONSE,
+                tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
+                tlm::TLM_BURST_ERROR_RESPONSE,
+                tlm::TLM_COMMAND_ERROR_RESPONSE,
+            };
+            for (unsigned i = 0; i < 5; ++i)
+                EXPECT_EQ(exp[i], got[i]);
+            std::cout << "  [PASS] malformed TLM (null/len/BE/width/cmd)\n";
+        }
+
         // DMA out-of-range fails without irq -------------------------------
         pulse_reset();
         drv.write64(cfg::OFF_DEST_ADDR, 0x7F00); // past 8 KiB mem
@@ -400,10 +460,27 @@ int sc_main(int, char**)
     // CCI immutable-write attempts raise SC_ERROR; demote so TB can probe.
     sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR,
                                             sc_core::SC_DISPLAY);
+    // Constructor guard rails use SC_REPORT_FATAL; throw so we can catch them
+    // before elaborating the real DUT (same pattern as the sister-IP neg TBs).
+    sc_core::sc_report_handler::set_actions(
+        sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
 
     static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
 
     cci::cci_register_broker(cci_global_broker);
+
+    {
+        smc::memory_zeroer_cfg bad;
+        bad.chunk_size = 0;
+        EXPECT_TRUE(expect_fatal([&] {
+            smc::memory_zeroer boom("bad_chunk_size", bad);
+        }));
+        bad.chunk_size = (1u << 20) + 1u;
+        EXPECT_TRUE(expect_fatal([&] {
+            smc::memory_zeroer boom("bad_chunk_size_hi", bad);
+        }));
+        std::cout << "  [PASS] chunk_size constructor guard rail\n";
+    }
 
     cci::cci_originator platform_cfg("platform_cfg");
     auto global_broker = cci::cci_get_global_broker(platform_cfg);

@@ -27,7 +27,7 @@
  * - All hardware register instances per OTBN specification
  * - IMEM (Instruction Memory) register vector - 8KB (2048 words)
  * - DMEM (Data Memory) register vector - 3KB host-accessible (768 words)
- * - CSML memory backing store for memory-mapped access
+ * - regmodel memory backing store for memory-mapped access
  * - TLM target socket for register/memory transactions
  * 
  * This class is inherited by otbn_ip which adds functional behavior,
@@ -37,10 +37,10 @@ class otbn_base : public sc_module
 {
   public:
     //Data type for register access (32-bit)
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
     
     /* Initializes all OTBN registers at their specified offsets and binds
-     * the CSML memory to the TLM target socket for memory-mapped access.
+     * the regmodel memory to the TLM target socket for memory-mapped access.
      */
     otbn_base(sc_module_name name, unsigned int memory_size) : sc_module(name), memory(std::string(name) + ".Memory", memory_size/sizeof(unsigned int)),
        INTR_STATE(std::string(name) + ".INTR_STATE", memory, (0x0 + 0x00)/sizeof(unsigned int)), 
@@ -60,11 +60,11 @@ class otbn_base : public sc_module
          memory.bind_to_socket(target_socket);
        }
 
-      //CSML memory backing store for all registers and memory regions
-      csml_memory<32> memory;
+      //regmodel memory backing store for all registers and memory regions
+      regmodel::Memory<32> memory;
       
       //TLM target socket for memory-mapped register/memory access
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
       //Interrupt State Register - W1C for clearing interrupts
       otbn::INTR_STATE_type<32> INTR_STATE;
@@ -100,10 +100,10 @@ class otbn_base : public sc_module
       otbn::LOAD_CHECKSUM_type<32> LOAD_CHECKSUM;
       
       //Instruction Memory - 8KB (2048 x 32-bit words) at offset 0x4000
-      csml_reg_vector<otbn::IMEM_type<32>, 4096> IMEM;
+      regmodel::RegVector<otbn::IMEM_type<32>, 4096> IMEM;
       
       //Data Memory - 3KB host-accessible (768 x 32-bit words) at offset 0x8000
-      csml_reg_vector<otbn::DMEM_type<32>, 4096> DMEM;
+      regmodel::RegVector<otbn::DMEM_type<32>, 4096> DMEM;
       
       void reset_all_registers();
 };

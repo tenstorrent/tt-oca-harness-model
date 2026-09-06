@@ -404,9 +404,7 @@ smc_cpu_cluster::pick_socket(uint64_t addr)
 bool smc_cpu_cluster::tlm_access(tlm::tlm_command cmd, uint64_t addr,
                                  unsigned size, uint64_t& data)
 {
-    if (size == 0 || size > 8) {
-        return false;
-    }
+    // Callers (mem_read_cb / mem_write_cb) already reject size 0 and size > 8.
     uint8_t buf[8] = {};
     if (cmd == tlm::TLM_WRITE_COMMAND) {
         for (unsigned i = 0; i < size; ++i) {
@@ -524,13 +522,9 @@ void smc_cpu_cluster::ctrl_b_transport(tlm::tlm_generic_payload& trans,
         }
     };
 
-    // RESET_VECTOR[i] occupies 8 bytes each starting at 0x000.
+    // RESET_VECTOR[i] occupies 8 bytes each starting at 0x000 (idx 0..3).
     if (off < 0x020) {
         const unsigned idx = unsigned(off / 8);
-        if (idx >= 4) {
-            trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-            return;
-        }
         if (trans.get_command() == tlm::TLM_READ_COMMAND) {
             store_u64(regs_.reset_vector[idx]);
         } else {

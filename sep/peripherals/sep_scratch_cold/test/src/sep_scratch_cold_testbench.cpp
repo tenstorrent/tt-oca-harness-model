@@ -19,10 +19,10 @@
  */
 
 #include "sep_scratch_cold.h"
-#include "virt_console_decoder.h"
 #include "sep_status_decoder.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "virt_console_decoder.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 
 #include <systemc.h>
 #include <tlm.h>
@@ -50,7 +50,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
 
     sep_scratch_cold_ip dut;
     tlm_utils::simple_initiator_socket<sep_scratch_cold_testbench, 32> initiator_socket;
-    CsmlLogger logger;
+    RegLogger logger;
 
     int m_tests_run    = 0;
     int m_tests_passed = 0;
@@ -663,6 +663,173 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     }
 
     // =========================================================================
+    // FUNC-SCRATCH-012: StatusDecoder unit paths not reached via SCRATCH[1]
+    //
+    // Construction of the DUT only parse_tsv()'s the vendored C header, so
+    // TSV rows, comments, malformed lines, on_bytes, disable, and a null
+    // emitter never run. Drive those here against a standalone decoder.
+    // =========================================================================
+    void test_status_decoder_unit()
+    {
+        const std::string TEST = "FUNC-SCRATCH-012: StatusDecoder unit paths";
+        report_test_start(TEST);
+        bool ok = true;
+        std::string reason;
+        std::vector<std::string> lines;
+
+        sep_status_report::StatusDecoder dec([&](const std::string& s) {
+            lines.push_back(s);
+        });
+
+        // Known name + unknown name (SEP_MSG_UNKNOWN).
+        dec.set_names({{0x0044, "SEP_MSG_BOOTROM_START"}});
+        if (dec.name_count() != 1) {
+            ok = false; reason += "name_count != 1; ";
+        }
+        dec.on_word((0x01u << 24) | (0x01u << 16) | 0x0044u);
+        dec.on_word((0x01u << 24) | (0x01u << 16) | 0xFFFFu);
+        if (lines.size() != 2 ||
+            lines[0].find("SEP_MSG_BOOTROM_START") == std::string::npos ||
+            lines[1].find("SEP_MSG_UNKNOWN") == std::string::npos) {
+            ok = false; reason += "name lookup failed; ";
+        }
+
+        // Disabled: on_word / on_bytes must be silent.
+        lines.clear();
+        dec.set_enabled(false);
+        if (dec.enabled()) {
+            ok = false; reason += "enabled() true after set_enabled(false); ";
+        }
+        dec.on_word(0x01010001u);
+        const uint8_t word_bytes[4] = {0x01, 0x00, 0x01, 0x01};
+        dec.on_bytes(word_bytes, 4);
+        if (!lines.empty()) {
+            ok = false; reason += "emit while disabled; ";
+        }
+
+        // Re-enable and exercise on_bytes: valid 4-byte LE, short write, null ptr.
+        dec.set_enabled(true);
+        lines.clear();
+        dec.on_bytes(word_bytes, 4);
+        dec.on_bytes(word_bytes, 3);
+        dec.on_bytes(nullptr, 4);
+        if (lines.size() != 1) {
+            ok = false; reason += "on_bytes accepted short/null or missed valid; ";
+        }
+
+        // Null emitter: decode still runs, just no callback.
+        dec.set_emit(nullptr);
+        dec.on_word(0x01010001u);
+
+        // parse_tsv: TSV rows, #define rows, comments, blanks, malformed, hex.
+        const char* tsv =
+            "\n"
+            "  \t  \n"
+            "/* block comment start\n"
+            " still in block\n"
+            " end of block */\n"
+            "/* one-line block */\n"
+            "// line comment\n"
+            "* stray star\n"
+            "onlyone\n"
+            "SEP_MSG_FOO 0x10\n"
+            "SEP_MSG_BAR 0x11 extra\n"
+            "#define SEP_MSG_BAZ 0x12\n"
+            "#define INCOMPLETE\n"
+            "SEP_MSG_BAD nothex\n"
+            "SEP_MSG_PARTIAL 0x13xyz\n"
+            "SEP_MSG_DUP 0x10\n";
+        auto map = sep_status_report::StatusDecoder::parse_tsv_string(tsv);
+        if (map.find(0x10) == map.end() || map[0x10] != "SEP_MSG_DUP") {
+            ok = false; reason += "TSV last-value-wins failed; ";
+        }
+        if (map.find(0x11) == map.end() || map[0x11] != "SEP_MSG_BAR") {
+            ok = false; reason += "TSV row missed; ";
+        }
+        if (map.find(0x12) == map.end() || map[0x12] != "SEP_MSG_BAZ") {
+            ok = false; reason += "#define row missed; ";
+        }
+        if (map.find(0x13) != map.end()) {
+            ok = false; reason += "partial hex token accepted; ";
+        }
+
+        if (ok)
+            report_test_pass(TEST);
+        else
+            report_test_fail(TEST, reason);
+    }
+
+    // =========================================================================
+    // FUNC-SCRATCH-013: VirtConsoleDecoder unit paths
+    //
+    // The TLM path only hits OP_ASCII and OP_DEC24. HEX16, on_bytes, flush,
+    // disable, and a null emitter are covered here.
+    // =========================================================================
+    void test_virt_console_unit()
+    {
+        const std::string TEST = "FUNC-SCRATCH-013: VirtConsoleDecoder unit paths";
+        report_test_start(TEST);
+        bool ok = true;
+        std::string reason;
+        std::vector<std::string> lines;
+
+        sep_virt_console::VirtConsoleDecoder dec([&](const std::string& s) {
+            lines.push_back(s);
+        });
+
+        // OP_HEX16: bits[3:1]=1 → word bit 1 set; value 0xABCD at [23:8].
+        // 0x00ABCD02 → append "abcd"; then ASCII '\n' flushes.
+        dec.on_word(0x00ABCD02u);
+        dec.on_word(0x00000A00u);
+        if (lines.size() != 1 || lines[0] != "abcd") {
+            ok = false; reason += "HEX16 expected \"abcd\" got \"" +
+                (lines.empty() ? std::string() : lines[0]) + "\"; ";
+        }
+
+        // flush() of an unterminated buffer.
+        lines.clear();
+        dec.on_word(0x00004100u);  // ASCII 'A', no newline
+        dec.flush();
+        if (lines.size() != 1 || lines[0] != "A") {
+            ok = false; reason += "flush missed buffered ASCII; ";
+        }
+        dec.flush();  // empty buffer: no-op
+
+        // Disabled + on_bytes guards.
+        lines.clear();
+        dec.set_enabled(false);
+        if (dec.enabled()) {
+            ok = false; reason += "enabled() true after disable; ";
+        }
+        dec.on_word(0x00000A00u);
+        const uint8_t hex_bytes[4] = {0x02, 0xCD, 0xAB, 0x00};  // same HEX16 word
+        dec.on_bytes(hex_bytes, 4);
+        if (!lines.empty()) {
+            ok = false; reason += "emit while disabled; ";
+        }
+
+        dec.set_enabled(true);
+        lines.clear();
+        dec.on_bytes(hex_bytes, 4);
+        dec.on_bytes(hex_bytes, 2);
+        dec.on_bytes(nullptr, 4);
+        dec.on_word(0x00000A00u);  // flush "abcd"
+        if (lines.size() != 1 || lines[0] != "abcd") {
+            ok = false; reason += "on_bytes HEX16 failed; ";
+        }
+
+        // Null emitter: decode still runs.
+        dec.set_emit(nullptr);
+        dec.on_word(0x00000A00u);
+        dec.flush();
+
+        if (ok)
+            report_test_pass(TEST);
+        else
+            report_test_fail(TEST, reason);
+    }
+
+    // =========================================================================
     // SC_THREAD entry point
     // =========================================================================
     void run_tests()
@@ -684,6 +851,8 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         test_status_decoder_types();
         test_decoder_isolation();
         test_cci_param_defaults();
+        test_status_decoder_unit();
+        test_virt_console_unit();
 
         std::cout << "\n=== Summary: " << m_tests_passed << "/" << m_tests_run
                   << " passed";
@@ -700,7 +869,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
 // =============================================================================
 int sc_main(int argc, char* argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     sep_scratch_cold_testbench testbench("testbench");
     sc_core::sc_start();
 #ifdef __COVERAGE__

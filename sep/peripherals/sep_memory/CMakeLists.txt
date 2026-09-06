@@ -51,13 +51,9 @@ set(SRAM_SRCS
 set(SRAM_ROM_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}/model/inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/paged-memory  # PagedMemory header
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../vp/platform/infra
 )
-
-if(NOT TARGET csml_logger)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
-endif()
 
 add_compile_definitions(SC_ALLOW_DEPRECATED_IEEE_API)
 
@@ -65,7 +61,7 @@ add_library(sep_memory_model STATIC ${SRAM_SRCS})
 
 target_include_directories(sep_memory_model PUBLIC ${SRAM_ROM_INCLUDES})
 
-target_link_libraries(sep_memory_model PUBLIC csml_logger SystemC::systemc Boost::iostreams)
+target_link_libraries(sep_memory_model PUBLIC SystemC::systemc Boost::iostreams)
 if(CCI_FOUND)
   target_link_libraries(sep_memory_model PUBLIC ${CCI_LIBRARIES})
 endif()
@@ -87,7 +83,7 @@ if(CPPCHECK_EXECUTABLE)
       --template=gcc
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/model/inc
-      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/model/src/*.cpp
       2> ${CMAKE_BINARY_DIR}/cppcheck_report.txt

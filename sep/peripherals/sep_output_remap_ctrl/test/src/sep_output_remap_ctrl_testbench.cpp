@@ -35,7 +35,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cstring>
-#include "csml_parameter.h"
+#include "reg_param.h"
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -400,8 +400,8 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
         }
 
         // ------------------------------------------------------------------
-        // T8: csml_memory 56-bit mask via byte-enable write
-        //   (csml_memory ignores byte enables — full write + 56-bit mask)
+        // T8: regmodel::Memory 56-bit mask via byte-enable write
+        //   (full-width store + 56-bit field mask)
         // ------------------------------------------------------------------
         {
             uint64_t zero = 0;
@@ -427,7 +427,7 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
 
             uint64_t v = 0;
             harness_ap.register_read_64(5 * CSR_STRIDE, v);
-            report("T8: 56-bit field mask enforced (byte enables not honoured by csml)",
+            report("T8: 56-bit field mask enforced (byte enables not honoured by regmodel)",
                    v == 0x00FFFFFFFFFFFFFFULL);
         }
 
@@ -581,7 +581,7 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
 // =============================================================================
 int sc_main(int argc, char* argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     sep_output_remap_ctrl_testbench tb("tb");
     sc_core::sc_start();
 #ifdef __COVERAGE__

@@ -62,7 +62,7 @@ abr_ip::abr_ip(sc_core::sc_module_name n, unsigned int memory_size)
       keymgr_mlkem_d_socket("keymgr_mlkem_d_socket"),
       keymgr_mlkem_z_socket("keymgr_mlkem_z_socket"),
       keymgr_mlkem_msg_socket("keymgr_mlkem_msg_socket"),
-      verbosity("verbosity", CSML_DEFAULT_VERBOSITY),
+      verbosity("verbosity", REG_DEFAULT_VERBOSITY),
       default_clk_freq_hz("default_clk_freq_hz", 100000000.0),
       // Cycle counts are order-of-magnitude figures for ML-DSA-87 / ML-KEM-1024
       // on the Adams Bridge datapath. They set relative cost, not cycle accuracy.
@@ -133,7 +133,7 @@ abr_ip::abr_ip(sc_core::sc_module_name n, unsigned int memory_size)
     SC_THREAD(mlkem_engine_thread);
     SC_THREAD(interrupt_update_thread);
 
-    CSML_INFO(1, logger) << "[ABR] Adams Bridge instantiated: aperture=" << memory_size
+    REG_INFO(1, logger) << "[ABR] Adams Bridge instantiated: aperture=" << memory_size
                          << " B, crypto backend=" << m_crypto->name()
                          << (m_crypto->is_standards_conformant()
                                  ? " (standards-conformant)"
@@ -146,11 +146,11 @@ abr_ip::~abr_ip() = default;
 void abr_ip::set_crypto_backend(std::unique_ptr<abr::abr_crypto_backend> backend)
 {
     if (backend == nullptr) {
-        CSML_ERROR(0, logger) << "[ABR] set_crypto_backend(nullptr) ignored" << std::endl;
+        REG_ERROR(0, logger) << "[ABR] set_crypto_backend(nullptr) ignored" << std::endl;
         return;
     }
     m_crypto = std::move(backend);
-    CSML_INFO(1, logger) << "[ABR] crypto backend replaced with " << m_crypto->name()
+    REG_INFO(1, logger) << "[ABR] crypto backend replaced with " << m_crypto->name()
                          << std::endl;
 }
 
@@ -311,7 +311,7 @@ void abr_ip::reset_handler()
 
     m_qk.reset();
 
-    CSML_INFO(2, logger) << "[ABR] reset complete" << std::endl;
+    REG_INFO(2, logger) << "[ABR] reset complete" << std::endl;
 }
 
 // =============================================================================
@@ -526,7 +526,7 @@ bool abr_ip::mldsa_ctrl_write(DT value)
     }
 
     if (cmd > static_cast<unsigned int>(abr::MldsaCmd::KEYGEN_SIGN)) {
-        CSML_DEBUG(3, logger) << "[ABR] MLDSA_CTRL invalid command " << cmd << std::endl;
+        REG_DEBUG(3, logger) << "[ABR] MLDSA_CTRL invalid command " << cmd << std::endl;
         set_mldsa_busy();
         m_mldsa_cmd = abr::MldsaCmd::NONE;
         // Do not call finish_mldsa(): it may m_qk.sync()/wait(), and this
@@ -562,7 +562,7 @@ bool abr_ip::mlkem_ctrl_write(DT value)
     }
 
     if (cmd > static_cast<unsigned int>(abr::MlkemCmd::KEYGEN_DECAPS)) {
-        CSML_DEBUG(3, logger) << "[ABR] MLKEM_CTRL invalid command " << cmd << std::endl;
+        REG_DEBUG(3, logger) << "[ABR] MLKEM_CTRL invalid command " << cmd << std::endl;
         set_mlkem_busy();
         m_mlkem_cmd = abr::MlkemCmd::NONE;
         // Same as MLDSA_CTRL: this is a b_transport callback, so no wait().
@@ -598,7 +598,7 @@ bool abr_ip::mldsa_msg_write(unsigned int index, DT value)
             }
         }
     } else {
-        CSML_WARN(1, logger) << "[ABR] message stream exceeded "
+        REG_WARN(1, logger) << "[ABR] message stream exceeded "
                              << MAX_MSG_STREAM_BYTES << " B; write dropped"
                              << std::endl;
     }
@@ -613,7 +613,7 @@ bool abr_ip::mldsa_msg_write(unsigned int index, DT value)
 void abr_ip::load_kv_entry(unsigned int entry, const abr::bytes &material)
 {
     if (entry >= abr::KV_NUM_ENTRIES) {
-        CSML_WARN(1, logger) << "[ABR] load_kv_entry: entry " << entry
+        REG_WARN(1, logger) << "[ABR] load_kv_entry: entry " << entry
                              << " out of range" << std::endl;
         return;
     }
@@ -644,7 +644,7 @@ void abr_ip::keymgr_b_transport(tlm::tlm_generic_payload &trans, sc_time &delay)
             const std::size_t flat = static_cast<std::size_t>(addr) + i;
             m_kv_entries[flat / abr::KV_ENTRY_BYTES][flat % abr::KV_ENTRY_BYTES] = ptr[i];
         }
-        CSML_DEBUG(3, logger) << "[ABR] KV sideload write " << len << " B at 0x" << std::hex
+        REG_DEBUG(3, logger) << "[ABR] KV sideload write " << len << " B at 0x" << std::hex
                            << addr << std::dec << std::endl;
     } else if (trans.get_command() == tlm::TLM_READ_COMMAND) {
         for (unsigned int i = 0; i < len; ++i) {
@@ -716,7 +716,7 @@ void abr_ip::km_share_b_transport(unsigned int lane, tlm::tlm_generic_payload &t
             s = km_share_lane{};
         }
         load_kv_entry(lane, material);
-        CSML_DEBUG(3, logger) << "[ABR] KM share lane " << lane
+        REG_DEBUG(3, logger) << "[ABR] KM share lane " << lane
                               << (valid ? " committed" : " shredded") << std::endl;
     } else {
         trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
@@ -792,7 +792,7 @@ bool abr_ip::kv_mldsa_seed_rd_ctrl_write(DT value)
     // read_en is hardware-cleared once the copy completes.
     kv_mldsa_seed_rd_ctrl.read_en = 0u;
 
-    CSML_DEBUG(3, logger) << "[ABR] KV ML-DSA seed read entry " << entry << ": "
+    REG_DEBUG(3, logger) << "[ABR] KV ML-DSA seed read entry " << entry << ": "
                        << (ok ? "ok" : "fail") << std::endl;
     return true;
 }
@@ -905,7 +905,7 @@ void abr_ip::zeroize()
     m_external_mu = false;
     m_stream_msg = false;
 
-    CSML_DEBUG(3, logger) << "[ABR] zeroize complete" << std::endl;
+    REG_DEBUG(3, logger) << "[ABR] zeroize complete" << std::endl;
 }
 
 // =============================================================================
@@ -976,7 +976,7 @@ void abr_ip::do_mldsa_keygen()
     bytes_to_regs(pubkey, MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY);
     bytes_to_regs(privkey, MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY);
 
-    CSML_INFO(2, logger) << "[ABR] ML-DSA keygen complete" << std::endl;
+    REG_INFO(2, logger) << "[ABR] ML-DSA keygen complete" << std::endl;
     finish_mldsa(true, false);
 }
 
@@ -1032,7 +1032,7 @@ void abr_ip::do_mldsa_sign(bool keygen_first)
     bytes_to_regs(signature, MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE);
     m_msg_stream.clear();
 
-    CSML_INFO(2, logger) << "[ABR] ML-DSA sign complete (keygen_first=" << keygen_first
+    REG_INFO(2, logger) << "[ABR] ML-DSA sign complete (keygen_first=" << keygen_first
                          << ", external_mu=" << m_external_mu << ")" << std::endl;
     finish_mldsa(true, false);
 }
@@ -1074,7 +1074,7 @@ void abr_ip::do_mldsa_verify()
     bytes_to_regs(ctilde, MLDSA_VERIFY_RES, abr::N_VERIFY_RES);
     m_msg_stream.clear();
 
-    CSML_INFO(2, logger) << "[ABR] ML-DSA verify complete" << std::endl;
+    REG_INFO(2, logger) << "[ABR] ML-DSA verify complete" << std::endl;
     finish_mldsa(true, false);
 }
 
@@ -1147,7 +1147,7 @@ void abr_ip::do_mlkem_keygen()
     bytes_to_regs(ek, MLKEM_ENCAPS_KEY, abr::N_MLKEM_ENCAPS_KEY);
     bytes_to_regs(dk, MLKEM_DECAPS_KEY, abr::N_MLKEM_DECAPS_KEY);
 
-    CSML_INFO(2, logger) << "[ABR] ML-KEM keygen complete" << std::endl;
+    REG_INFO(2, logger) << "[ABR] ML-KEM keygen complete" << std::endl;
     finish_mlkem(true, false);
 }
 
@@ -1173,7 +1173,7 @@ void abr_ip::do_mlkem_encaps()
     bytes_to_regs(ss, MLKEM_SHARED_KEY, abr::N_MLKEM_SHARED_KEY);
     m_last_shared_key = ss;
 
-    CSML_INFO(2, logger) << "[ABR] ML-KEM encaps complete" << std::endl;
+    REG_INFO(2, logger) << "[ABR] ML-KEM encaps complete" << std::endl;
     finish_mlkem(true, false);
 }
 
@@ -1213,7 +1213,7 @@ void abr_ip::do_mlkem_decaps(bool keygen_first)
     bytes_to_regs(ss, MLKEM_SHARED_KEY, abr::N_MLKEM_SHARED_KEY);
     m_last_shared_key = ss;
 
-    CSML_INFO(2, logger) << "[ABR] ML-KEM decaps complete (keygen_first=" << keygen_first
+    REG_INFO(2, logger) << "[ABR] ML-KEM decaps complete (keygen_first=" << keygen_first
                          << ")" << std::endl;
     finish_mlkem(true, false);
 }

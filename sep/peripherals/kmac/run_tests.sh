@@ -68,6 +68,7 @@ elif ${RUN_CPPCHECK}; then
   cmake --build "${BUILD_DIR}" --target kmac_cppcheck
 elif [ "${BUILD_TYPE}" = "Coverage" ]; then
   cmake --build "${BUILD_DIR}" --target coverage
+  peripheral_enforce_coverage_gate "${BUILD_DIR}"
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else

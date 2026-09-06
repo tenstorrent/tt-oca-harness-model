@@ -37,11 +37,11 @@
  * 2. Sets up SystemC processes (reset, command FSM, interrupt handlers)
  * 3. Initializes OpenSSL DRBG contexts for each instance
  * 4. Allocates and binds hardware client interface ports
- * 5. Registers memory callbacks with the CSML base layer
+ * 5. Registers memory callbacks with the regmodel base layer
  */
 csrng_model::csrng_model(sc_module_name n)
     : csrng_base(n, 0x60)  // Memory size for register map
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
     , clk_i("clk_i")
     , rst_ni("rst_ni")
     , otp_en_csrng_sw_app_read("otp_en_csrng_sw_app_read")
@@ -57,7 +57,7 @@ csrng_model::csrng_model(sc_module_name n)
     // Initialize temporal decoupling quantum keeper
     m_qk.reset();
 
-    // Initialize CSML logger
+    // Initialize regmodel logger
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
@@ -75,7 +75,7 @@ csrng_model::csrng_model(sc_module_name n)
         // Initialize OpenSSL DRBG context for each instance
         m_drbg_instances[i].drbg_ctx = EVP_CIPHER_CTX_new();
         if (!m_drbg_instances[i].drbg_ctx) {
-            CSML_ERROR(0, logger) << "[CRNG] Failed to create DRBG context for instance " << i << std::endl;
+            REG_ERROR(0, logger) << "[CRNG] Failed to create DRBG context for instance " << i << std::endl;
             sc_stop();
         }
     }
@@ -165,7 +165,7 @@ void csrng_model::reset_process()
 {
     if (!rst_ni.read())
     {
-        CSML_INFO(1, logger) << "[CRNG] Reset asserted" << std::endl;
+        REG_INFO(1, logger) << "[CRNG] Reset asserted" << std::endl;
 
         // Reset command FSM - module starts disabled
         m_cmd_fsm_state = CommandFSMState::IDLE;
@@ -221,7 +221,7 @@ void csrng_model::reset_process()
         // Reset quantum keeper
         m_qk.reset();
 
-        CSML_INFO(1, logger) << "[CRNG] Reset complete" << std::endl;
+        REG_INFO(1, logger) << "[CRNG] Reset complete" << std::endl;
     }
 }
 
@@ -276,7 +276,7 @@ void csrng_model::update_alert_outputs()
         recov_alert_o.write(false);
         fatal_alert_o.write(false);
 
-        CSML_INFO(2, logger) << "[CRNG] Alert outputs de-asserted (pulse complete)" << std::endl;
+        REG_INFO(2, logger) << "[CRNG] Alert outputs de-asserted (pulse complete)" << std::endl;
     }
 }
 
@@ -288,7 +288,7 @@ void csrng_model::update_alert_outputs()
  */
 void csrng_model::trigger_recov_alert()
 {
-    CSML_INFO(2, logger) << "[CRNG] Triggering recoverable alert (RECOV_ALERT_STS condition)" << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Triggering recoverable alert (RECOV_ALERT_STS condition)" << std::endl;
     m_alert_recov = true;
     alert_update_event.notify(SC_ZERO_TIME);
 }
@@ -362,7 +362,7 @@ void csrng_model::command_fsm_process()
 bool csrng_model::generate_random_blocks(int instance_num, uint32_t num_blocks)
 {
     if (instance_num < 0 || instance_num > 2) {
-        CSML_ERROR(0, logger) << "[CRNG] Invalid instance number: " << instance_num << std::endl;
+        REG_ERROR(0, logger) << "[CRNG] Invalid instance number: " << instance_num << std::endl;
         m_cmd_fsm_state = CommandFSMState::ERROR;
 
         return false;
@@ -372,7 +372,7 @@ bool csrng_model::generate_random_blocks(int instance_num, uint32_t num_blocks)
 
     // Check instance is instantiated
     if (inst.status == 0) {
-        CSML_WARN(1, logger) << "[CRNG] Instance " << instance_num << " not instantiated" << std::endl;
+        REG_WARN(1, logger) << "[CRNG] Instance " << instance_num << " not instantiated" << std::endl;
         m_cmd_status = CMD_INVALID_CMD_SEQ;
         RECOV_ALERT_STS.CMD_STAGE_INVALID_CMD_SEQ_ALERT = 1;
         trigger_recov_alert();
@@ -384,7 +384,7 @@ bool csrng_model::generate_random_blocks(int instance_num, uint32_t num_blocks)
     // Check reseed counter (FUNC_003) - Read actual RESEED_INTERVAL register
     uint32_t reseed_interval = static_cast<uint32_t>(RESEED_INTERVAL);
     if (inst.reseed_counter >= reseed_interval) {
-        CSML_WARN(1, logger) << "[CRNG] Reseed counter exceeded for instance " << instance_num
+        REG_WARN(1, logger) << "[CRNG] Reseed counter exceeded for instance " << instance_num
                              << " (counter=" << inst.reseed_counter << ", interval=" << reseed_interval << ")" << std::endl;
         m_cmd_status = CMD_RESEED_CNT_EXCEEDED;
         // Set recoverable alert
@@ -400,7 +400,7 @@ bool csrng_model::generate_random_blocks(int instance_num, uint32_t num_blocks)
         unsigned char random_block[16];
 
         if (RAND_bytes(random_block, 16) != 1) {
-            CSML_ERROR(0, logger) << "[CRNG] OpenSSL RAND_bytes failed" << std::endl;
+            REG_ERROR(0, logger) << "[CRNG] OpenSSL RAND_bytes failed" << std::endl;
             m_cmd_status = CMD_INVALID_CMD_SEQ;
             m_cmd_fsm_state = CommandFSMState::ERROR;
             return false;
@@ -437,7 +437,7 @@ bool csrng_model::generate_random_blocks(int instance_num, uint32_t num_blocks)
     // Update reseed counter (FUNC_003)
     inst.reseed_counter += num_blocks;
 
-    CSML_INFO(2, logger) << "[CRNG] Generated " << num_blocks << " blocks for instance " << instance_num << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Generated " << num_blocks << " blocks for instance " << instance_num << std::endl;
 
     return true;
 }
@@ -458,7 +458,7 @@ bool csrng_model::generate_random_blocks(int instance_num, uint32_t num_blocks)
  */
 bool csrng_model::request_entropy(unsigned char* seed_buffer, bool& fips_compliant)
 { 
-    CSML_INFO(2, logger) << "[CRNG] Requesting entropy from source" << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Requesting entropy from source" << std::endl;
     m_cmd_fsm_state = CommandFSMState::ENTROPY_REQUEST;
     m_intr_entropy_req = true;
 	intr_update_event.notify(SC_ZERO_TIME);
@@ -472,7 +472,7 @@ bool csrng_model::request_entropy(unsigned char* seed_buffer, bool& fips_complia
 
     // Generate 384-bit seed material
     if (RAND_bytes(seed_buffer, 48) != 1) {
-        CSML_ERROR(0, logger) << "[CRNG] Failed to generate entropy seed" << std::endl;
+        REG_ERROR(0, logger) << "[CRNG] Failed to generate entropy seed" << std::endl;
         m_cmd_fsm_state = CommandFSMState::ERROR;
 
         return false;
@@ -481,7 +481,7 @@ bool csrng_model::request_entropy(unsigned char* seed_buffer, bool& fips_complia
     // In TLM, assume entropy is FIPS-compliant (can be overridden by FIPS_FORCE)
     fips_compliant = true;
 
-    CSML_INFO(2, logger) << "[CRNG] Entropy request complete (FIPS=" << fips_compliant << ")" << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Entropy request complete (FIPS=" << fips_compliant << ")" << std::endl;
 
     return true;
 }
@@ -517,7 +517,7 @@ void csrng_model::reset_reseed_counter(int instance_num)
 {
     if (instance_num >= 0 && instance_num <= 2) {
         m_drbg_instances[instance_num].reseed_counter = 0;
-        CSML_INFO(2, logger) << "[CRNG] Reseed counter reset for instance " << instance_num << std::endl;
+        REG_INFO(2, logger) << "[CRNG] Reseed counter reset for instance " << instance_num << std::endl;
     }
 }
 
@@ -554,7 +554,7 @@ bool csrng_model::derive_v_and_key(DRBGInstance& inst, int instance_num,
 
     // Generate V (128 bits = 16 bytes = 4 words)
     if (RAND_bytes(derived_bytes, 16) != 1) {
-        CSML_ERROR(0, logger) << "[CRNG] Failed to generate V for instance " << instance_num << std::endl;
+        REG_ERROR(0, logger) << "[CRNG] Failed to generate V for instance " << instance_num << std::endl;
         m_cmd_status = CMD_INVALID_CMD_SEQ;
         m_cmd_fsm_state = CommandFSMState::ERROR;
 
@@ -572,7 +572,7 @@ bool csrng_model::derive_v_and_key(DRBGInstance& inst, int instance_num,
 
     // Generate Key (256 bits = 32 bytes = 8 words)
     if (RAND_bytes(derived_bytes, 32) != 1) {
-        CSML_ERROR(0, logger) << "[CRNG] Failed to generate Key for instance " << instance_num << std::endl;
+        REG_ERROR(0, logger) << "[CRNG] Failed to generate Key for instance " << instance_num << std::endl;
         m_cmd_status = CMD_INVALID_CMD_SEQ;
         m_cmd_fsm_state = CommandFSMState::ERROR;
 
@@ -588,7 +588,7 @@ bool csrng_model::derive_v_and_key(DRBGInstance& inst, int instance_num,
             (derived_bytes[i*4 + 3] << 24);
     }
 
-    CSML_INFO(2, logger) << "[CRNG] Derived V and Key for instance " << instance_num << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Derived V and Key for instance " << instance_num << std::endl;
     return true;
 }
 
@@ -599,7 +599,7 @@ bool csrng_model::derive_v_and_key(DRBGInstance& inst, int instance_num,
 bool csrng_model::validate_instance_number(int instance_num)
 {
     if (instance_num < 0 || instance_num > 2) {
-        CSML_ERROR(0, logger) << "[CRNG] Invalid instance number" << std::endl;
+        REG_ERROR(0, logger) << "[CRNG] Invalid instance number" << std::endl;
         m_cmd_status = CMD_INVALID_ACMD;
         m_cmd_fsm_state = CommandFSMState::ERROR;
 
@@ -614,7 +614,7 @@ bool csrng_model::check_instance_instantiated(int instance_num)
     DRBGInstance& inst = m_drbg_instances[instance_num];
 
     if (inst.status == 0) {
-        CSML_WARN(1, logger) << "[CRNG] Instance not instantiated" << std::endl;
+        REG_WARN(1, logger) << "[CRNG] Instance not instantiated" << std::endl;
         m_cmd_status = CMD_INVALID_CMD_SEQ;
         RECOV_ALERT_STS.CMD_STAGE_INVALID_CMD_SEQ_ALERT = 1;
         trigger_recov_alert();
@@ -629,7 +629,7 @@ bool csrng_model::check_instance_instantiated(int instance_num)
 void csrng_model::validate_flag0(uint8_t& flag0)
 {
     if (flag0 != 0x6 && flag0 != 0x9) {
-        CSML_WARN(1, logger) << "[CRNG] Invalid flag0 encoding" << std::endl;
+        REG_WARN(1, logger) << "[CRNG] Invalid flag0 encoding" << std::endl;
         RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT = 1;
         trigger_recov_alert();
         flag0 = 0x9;  // Treat as disable-true (deterministic)
@@ -641,7 +641,7 @@ bool csrng_model::prepare_seed_buffer(uint8_t flag0, unsigned char* seed_buffer,
 {
     if (flag0 == 0x6) {
         if (!request_entropy(seed_buffer, fips_compliant)) {
-            CSML_ERROR(0, logger) << "[CRNG] Entropy request failed" << std::endl;
+            REG_ERROR(0, logger) << "[CRNG] Entropy request failed" << std::endl;
             m_cmd_status = CMD_INVALID_CMD_SEQ;
             m_cmd_fsm_state = CommandFSMState::ERROR;
 
@@ -664,7 +664,7 @@ void csrng_model::apply_fips_force_override(int instance_num, bool& fips_complia
 
     if (fips_force_enable && (fips_force & (1 << instance_num))) {
         fips_compliant = true;
-        CSML_INFO(2, logger) << "[CRNG] FIPS compliance forced for instance "<< instance_num << std::endl;
+        REG_INFO(2, logger) << "[CRNG] FIPS compliance forced for instance "<< instance_num << std::endl;
     }
 }
 
@@ -730,7 +730,7 @@ void csrng_model::seed_prng(uint8_t flag0, uint8_t clen,
 bool csrng_model::cmd_instantiate(int instance_num, uint8_t flag0, uint8_t clen,
                            const std::array<uint32_t, 12>& additional_data)
 {
-    CSML_INFO(1, logger) << "[CRNG] INSTANTIATE command for instance " << instance_num
+    REG_INFO(1, logger) << "[CRNG] INSTANTIATE command for instance " << instance_num
                          << " (flag0=" << (int)flag0 << ", clen=" << (int)clen << ")" << std::endl;
 
     if (!validate_instance_number(instance_num)) {
@@ -741,7 +741,7 @@ bool csrng_model::cmd_instantiate(int instance_num, uint8_t flag0, uint8_t clen,
 
     // Check instance is not already instantiated
     if (inst.status == 1) {
-        CSML_WARN(1, logger) << "[CRNG] Instance already instantiated" << std::endl;
+        REG_WARN(1, logger) << "[CRNG] Instance already instantiated" << std::endl;
         m_cmd_status = CMD_INVALID_CMD_SEQ;
         RECOV_ALERT_STS.CMD_STAGE_INVALID_CMD_SEQ_ALERT = 1;
         trigger_recov_alert();
@@ -783,8 +783,8 @@ bool csrng_model::cmd_instantiate(int instance_num, uint8_t flag0, uint8_t clen,
     m_qk.inc(delay);
 
     m_cmd_status = CMD_SUCCESS;
-    CSML_INFO(1, logger) << "[CRNG] Instance " << instance_num << " instantiated (FIPS=" << fips_compliant << ")" << std::endl;
-    CSML_INFO(2, logger) << "[CRNG] Instance " << instance_num << " V[0]=0x" << std::hex << inst.V[0] << ", Key[0]=0x" << inst.Key[0] << std::dec << std::endl;
+    REG_INFO(1, logger) << "[CRNG] Instance " << instance_num << " instantiated (FIPS=" << fips_compliant << ")" << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Instance " << instance_num << " V[0]=0x" << std::hex << inst.V[0] << ", Key[0]=0x" << inst.Key[0] << std::dec << std::endl;
 
     return true;
 }
@@ -806,7 +806,7 @@ bool csrng_model::cmd_instantiate(int instance_num, uint8_t flag0, uint8_t clen,
  */
 bool csrng_model::cmd_generate(int instance_num, uint16_t glen)
 {
-    CSML_INFO(1, logger) << "[CRNG] GENERATE command for instance " << instance_num
+    REG_INFO(1, logger) << "[CRNG] GENERATE command for instance " << instance_num
                          << " (glen=" << glen << ")" << std::endl;
 
     if (!validate_instance_number(instance_num)) {
@@ -815,7 +815,7 @@ bool csrng_model::cmd_generate(int instance_num, uint16_t glen)
 
     // Validate glen parameter
     if (glen == 0 || glen > 4095) {
-        CSML_WARN(1, logger) << "[CRNG] Invalid glen parameter: " << glen << std::endl;
+        REG_WARN(1, logger) << "[CRNG] Invalid glen parameter: " << glen << std::endl;
         m_cmd_status = CMD_INVALID_GEN_CMD;
         m_cmd_fsm_state = CommandFSMState::ERROR;
 
@@ -832,7 +832,7 @@ bool csrng_model::cmd_generate(int instance_num, uint16_t glen)
     }
 
     m_cmd_status = CMD_SUCCESS;
-    CSML_INFO(1, logger) << "[CRNG] Generated " << glen << " blocks for instance " << instance_num << std::endl;
+    REG_INFO(1, logger) << "[CRNG] Generated " << glen << " blocks for instance " << instance_num << std::endl;
     return true;
 }
 
@@ -854,7 +854,7 @@ bool csrng_model::cmd_generate(int instance_num, uint16_t glen)
 bool csrng_model::cmd_reseed(int instance_num, uint8_t flag0, uint8_t clen,
                      const std::array<uint32_t, 12>& additional_data)
 {
-    CSML_INFO(1, logger) << "[CRNG] RESEED command for instance " << instance_num
+    REG_INFO(1, logger) << "[CRNG] RESEED command for instance " << instance_num
                          << " (flag0=" << (int)flag0 << ", clen=" << (int)clen << ")" << std::endl;
 
     if (!validate_instance_number(instance_num)) {
@@ -899,7 +899,7 @@ bool csrng_model::cmd_reseed(int instance_num, uint8_t flag0, uint8_t clen,
     m_qk.inc(delay);
 
     m_cmd_status = CMD_SUCCESS;
-    CSML_INFO(1, logger) << "[CRNG] Instance " << instance_num << " reseeded" << std::endl;
+    REG_INFO(1, logger) << "[CRNG] Instance " << instance_num << " reseeded" << std::endl;
 
     return true;
 }
@@ -921,7 +921,7 @@ bool csrng_model::cmd_reseed(int instance_num, uint8_t flag0, uint8_t clen,
 bool csrng_model::cmd_update(int instance_num, uint8_t clen,
                      const std::array<uint32_t, 12>& additional_data)
 {
-    CSML_INFO(1, logger) << "[CRNG] UPDATE command for instance " << instance_num
+    REG_INFO(1, logger) << "[CRNG] UPDATE command for instance " << instance_num
                          << " (clen=" << (int)clen << ")" << std::endl;
 
     if (!validate_instance_number(instance_num)) {
@@ -934,7 +934,7 @@ bool csrng_model::cmd_update(int instance_num, uint8_t clen,
 
     // Additional input is mandatory for UPDATE
     if (clen == 0) {
-        CSML_WARN(1, logger) << "[CRNG] UPDATE requires additional input (clen > 0)" << std::endl;
+        REG_WARN(1, logger) << "[CRNG] UPDATE requires additional input (clen > 0)" << std::endl;
         m_cmd_status = CMD_INVALID_CMD_SEQ;
         m_cmd_fsm_state = CommandFSMState::ERROR;
 
@@ -954,7 +954,7 @@ bool csrng_model::cmd_update(int instance_num, uint8_t clen,
     m_qk.inc(delay);
 
     m_cmd_status = CMD_SUCCESS;
-    CSML_INFO(1, logger) << "[CRNG] Instance " << instance_num << " updated" << std::endl;
+    REG_INFO(1, logger) << "[CRNG] Instance " << instance_num << " updated" << std::endl;
 
     return true;
 }
@@ -973,17 +973,17 @@ bool csrng_model::cmd_update(int instance_num, uint8_t clen,
  */
 bool csrng_model::cmd_uninstantiate(int instance_num)
 {
-    CSML_INFO(1, logger) << "[CRNG] UNINSTANTIATE command for instance " << instance_num << std::endl;
+    REG_INFO(1, logger) << "[CRNG] UNINSTANTIATE command for instance " << instance_num << std::endl;
 
     if (instance_num < 0 || instance_num > 2) {
-        CSML_ERROR(0, logger) << "[CRNG] Invalid instance number" << std::endl;
+        REG_ERROR(0, logger) << "[CRNG] Invalid instance number" << std::endl;
         return true;  // UNINSTANTIATE always succeeds
     }
 
     uninstantiate_instance(instance_num);
 
     m_cmd_status = CMD_SUCCESS;
-    CSML_INFO(1, logger) << "[CRNG] Instance " << instance_num << " uninstantiated" << std::endl;
+    REG_INFO(1, logger) << "[CRNG] Instance " << instance_num << " uninstantiated" << std::endl;
 
     return true;
 }
@@ -1008,7 +1008,7 @@ void csrng_model::uninstantiate_instance(int instance_num)
     inst.V.fill(0);
     inst.Key.fill(0);
 
-    CSML_INFO(2, logger) << "[CRNG] Instance " << instance_num << " state zeroized" << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Instance " << instance_num << " state zeroized" << std::endl;
 }
 
 // =============================================================================
@@ -1030,11 +1030,11 @@ void csrng_model::process_command()
     uint8_t flag0 = (m_current_command >> 8) & 0xF;
     uint16_t glen = (m_current_command >> 12) & 0xFFF;
 
-    CSML_INFO(2, logger) << "[CRNG] Processing command: acmd=" << (int)acmd << ", clen=" << (int)clen  << ", flag0=" << (int)flag0 << ", glen=" << glen << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Processing command: acmd=" << (int)acmd << ", clen=" << (int)clen  << ", flag0=" << (int)flag0 << ", glen=" << glen << std::endl;
 
     // Validate clen range (0-12)
     if (clen > 12) {
-        CSML_ERROR(0, logger) << "[CRNG] Invalid clen: " << (int)clen << " (max 12)" << std::endl;
+        REG_ERROR(0, logger) << "[CRNG] Invalid clen: " << (int)clen << " (max 12)" << std::endl;
         m_cmd_status = CMD_INVALID_ACMD;
         RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT = 1;
         trigger_recov_alert();
@@ -1068,7 +1068,7 @@ void csrng_model::process_command()
             break;
 
         default:
-            CSML_WARN(1, logger) << "[CRNG] Invalid command: " << (int)acmd << std::endl;
+            REG_WARN(1, logger) << "[CRNG] Invalid command: " << (int)acmd << std::endl;
             m_cmd_status = CMD_INVALID_ACMD;
             RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT = 1;
             trigger_recov_alert();
@@ -1087,7 +1087,7 @@ void csrng_model::process_command()
     m_cmd_ready = true;
     m_cmd_fsm_state = CommandFSMState::IDLE;
 
-    CSML_INFO(2, logger) << "[CRNG] Command complete (status=" << m_cmd_status << ")" << std::endl;
+    REG_INFO(2, logger) << "[CRNG] Command complete (status=" << m_cmd_status << ")" << std::endl;
 }
 
 // =============================================================================
@@ -1154,11 +1154,11 @@ bool csrng_model::validate_multi_bit_encoding(uint8_t value, bool& is_enable)
 bool csrng_model::handle_write_CMD_REQ(DT value, DT write_mask)
 {
 
-    CSML_INFO(2, logger) << "[CRNG] CMD_REQ write: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] CMD_REQ write: 0x" << std::hex << value << std::dec << std::endl;
 
     // Check if command interface is ready
     if (!m_cmd_ready) {
-        CSML_WARN(1, logger) << "[CRNG] Command interface busy, ignoring write" << std::endl;
+        REG_WARN(1, logger) << "[CRNG] Command interface busy, ignoring write" << std::endl;
         return true;
     }
 
@@ -1176,7 +1176,7 @@ bool csrng_model::handle_write_CMD_REQ(DT value, DT write_mask)
             // Expecting additional value writes
             m_command_in_progress = true;
             m_expected_additional_data = (clen > 12) ? 12 : clen;
-            CSML_INFO(2, logger) << "[CRNG] Expecting " << (int)m_expected_additional_data << " additional value words" << std::endl;
+            REG_INFO(2, logger) << "[CRNG] Expecting " << (int)m_expected_additional_data << " additional value words" << std::endl;
         } else {
             // No additional value, execute command immediately
             m_cmd_ready = false;
@@ -1188,7 +1188,7 @@ bool csrng_model::handle_write_CMD_REQ(DT value, DT write_mask)
         // Subsequent writes are additional value
         if (m_additional_data_count < m_expected_additional_data) {
             m_additional_data[m_additional_data_count++] = value;
-            CSML_INFO(2, logger) << "[CRNG] Additional value[" << m_additional_data_count-1 << "] = 0x" << std::hex << value << std::dec << std::endl;
+            REG_INFO(2, logger) << "[CRNG] Additional value[" << m_additional_data_count-1 << "] = 0x" << std::hex << value << std::dec << std::endl;
         }
 
         // Check if all additional value collected
@@ -1207,7 +1207,7 @@ bool csrng_model::handle_write_CMD_REQ(DT value, DT write_mask)
 // FUNC_011: Status and Data Output Registers (read callbacks)
 // =============================================================================
 
-// INTR_ENABLE read callback removed - CSML handles RW registers automatically
+// INTR_ENABLE read callback removed - regmodel handles RW registers automatically
 
 /**
  * @brief Read callback for INTR_TEST register (Write-Only)
@@ -1267,7 +1267,7 @@ bool csrng_model::handle_read_SW_CMD_STS(DT& value, DT read_mask)
     // RW0C behavior for CMD_ACK: Clear on read
     if (m_cmd_ack) {
         m_cmd_ack = false;
-        CSML_INFO(2, logger) << "[CRNG] CMD_ACK cleared on SW_CMD_STS read" << std::endl;
+        REG_INFO(2, logger) << "[CRNG] CMD_ACK cleared on SW_CMD_STS read" << std::endl;
     }
 
     return true;
@@ -1284,7 +1284,7 @@ bool csrng_model::handle_read_GENBITS_VLD(DT& value, DT read_mask)
     value |= (m_genbits_valid ? (1 << 0) : 0);  // GENBITS_VLD bit 0
     value |= (m_genbits_fips ? (1 << 1) : 0);   // GENBITS_FIPS bit 1
 
-    CSML_INFO(3, logger) << "[CRNG] GENBITS_VLD read: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(3, logger) << "[CRNG] GENBITS_VLD read: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1306,21 +1306,21 @@ bool csrng_model::handle_read_GENBITS(DT& value, DT read_mask)
     validate_multi_bit_encoding(sw_app_enable_val, sw_app_enable);
 
     if (!sw_app_enable) {
-        CSML_WARN(2, logger) << "[CRNG] GENBITS read denied: SW_APP_ENABLE not enabled" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] GENBITS read denied: SW_APP_ENABLE not enabled" << std::endl;
         value = 0;
         return true;
     }
 
     //Fix: check otp signal - 0x6 for enable, 0x9 for disable
     if (otp_en_csrng_sw_app_read.read() != 0x6) {
-        CSML_WARN(2, logger) << "[CRNG] GENBITS read denied: OTP signal disabled (expected 0x6, got 0x"
+        REG_WARN(2, logger) << "[CRNG] GENBITS read denied: OTP signal disabled (expected 0x6, got 0x"
                              << std::hex << static_cast<uint32_t>(otp_en_csrng_sw_app_read.read()) << std::dec << ")" << std::endl;
         value = 0;
         return true;
     }
      
     if (!m_genbits_valid) {
-        CSML_WARN(2, logger) << "[CRNG] GENBITS read when no value valid" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] GENBITS read when no value valid" << std::endl;
         value = 0;
         return true;
     }
@@ -1337,7 +1337,7 @@ bool csrng_model::handle_read_GENBITS(DT& value, DT read_mask)
                               (uint64_t)value;
 
         if (current_64 == m_previous_genbits_64 && m_previous_genbits_64 != 0) {
-            CSML_WARN(1, logger) << "[CRNG] 64-bit repetition detected in GENBITS output!" << std::endl;
+            REG_WARN(1, logger) << "[CRNG] 64-bit repetition detected in GENBITS output!" << std::endl;
             RECOV_ALERT_STS.CS_BUS_CMP_ALERT = 1;
             trigger_recov_alert();
         }
@@ -1348,7 +1348,7 @@ bool csrng_model::handle_read_GENBITS(DT& value, DT read_mask)
     // Increment read pointer (mod 4)
     m_genbits_read_index = (m_genbits_read_index + 1) % 4;
     //Fix: Use stored read index for logging
-    CSML_INFO(3, logger) << "[CRNG] GENBITS[" << current_read_index << "] read: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(3, logger) << "[CRNG] GENBITS[" << current_read_index << "] read: 0x" << std::hex << value << std::dec << std::endl;
 
     // If we've read all 4 words, check for more blocks in queue
     if (m_genbits_read_index == 0) {
@@ -1356,12 +1356,12 @@ bool csrng_model::handle_read_GENBITS(DT& value, DT read_mask)
             // Pop next block from queue
             m_genbits_buffer = m_genbits_block_queue.front();
             m_genbits_block_queue.pop();
-            CSML_INFO(2, logger) << "[CRNG] GENBITS block fully read, loading next block from queue (remaining: " << m_genbits_block_queue.size() << ")" << std::endl;
+            REG_INFO(2, logger) << "[CRNG] GENBITS block fully read, loading next block from queue (remaining: " << m_genbits_block_queue.size() << ")" << std::endl;
             // m_genbits_valid remains true, m_genbits_fips remains same for this GENERATE batch
         } else {
             // No more blocks, clear valid flag
             m_genbits_valid = false;
-            CSML_INFO(2, logger) << "[CRNG] GENBITS block fully read, no more blocks in queue" << std::endl;
+            REG_INFO(2, logger) << "[CRNG] GENBITS block fully read, no more blocks in queue" << std::endl;
         }
     }
 
@@ -1428,7 +1428,7 @@ bool csrng_model::handle_read_INT_STATE_VAL(DT& value, DT read_mask)
     }
 
     if (!access_granted) {
-        CSML_WARN(2, logger) << "[CRNG] INT_STATE_VAL read denied (access control)" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] INT_STATE_VAL read denied (access control)" << std::endl;
         value = 0;
         return true;
     }
@@ -1446,17 +1446,15 @@ bool csrng_model::handle_read_INT_STATE_VAL(DT& value, DT read_mask)
     if (m_int_state_read_index == 0) {
         // Word 0: Reseed Counter
         value = inst.reseed_counter;
-    } else if (m_int_state_read_index >= 1 && m_int_state_read_index < 5) {
+    } else if (m_int_state_read_index < 5) {
         // Words 1-4: V (counter)
         value = inst.V[m_int_state_read_index - 1];
-    } else if (m_int_state_read_index >= 5 && m_int_state_read_index < 13) {
+    } else if (m_int_state_read_index < 13) {
         // Words 5-12: Key
         value = inst.Key[m_int_state_read_index - 5];
-    } else if (m_int_state_read_index == 13) {
-        // Word 13: Status
-        value = inst.status | (inst.compliance_flag << 1);
     } else {
-        value = 0;
+        // Word 13: Status (index is always 0..13 because it wraps with % 14)
+        value = inst.status | (inst.compliance_flag << 1);
     }
 
     // Store current read index for logging before incrementing
@@ -1465,7 +1463,7 @@ bool csrng_model::handle_read_INT_STATE_VAL(DT& value, DT read_mask)
     // Increment read pointer (mod 14)
     m_int_state_read_index = (m_int_state_read_index + 1) % 14;
 
-    CSML_INFO(3, logger) << "[CRNG] INT_STATE_VAL[" << current_read_index << "] read: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(3, logger) << "[CRNG] INT_STATE_VAL[" << current_read_index << "] read: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1483,7 +1481,7 @@ bool csrng_model::handle_write_INT_STATE_NUM(DT value, DT write_mask)
     //Fix: Update register storage so reads return the correct value
     INT_STATE_NUM = value & 0xF;  // Store bits [3:0] in register
 
-    CSML_INFO(2, logger) << "[CRNG] INT_STATE_NUM set to " << m_int_state_num << std::endl;
+    REG_INFO(2, logger) << "[CRNG] INT_STATE_NUM set to " << m_int_state_num << std::endl;
     return true;
 }
 
@@ -1499,7 +1497,7 @@ bool csrng_model::handle_read_ERR_CODE(DT& value, DT read_mask)
     // In this TLM implementation, we don't model individual FIFO errors
     value = static_cast<DT>(ERR_CODE);
 
-    CSML_INFO(3, logger) << "[CRNG] ERR_CODE read: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(3, logger) << "[CRNG] ERR_CODE read: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1514,7 +1512,7 @@ bool csrng_model::handle_write_ERR_CODE_TEST(DT value, DT write_mask)
 {   //Fix: Write callback for ERR_CODE_TEST register added
     // Check REGWEN lock (FUNC_026)
     if (static_cast<DT>(REGWEN) == 0) {
-        CSML_WARN(2, logger) << "[CRNG] ERR_CODE_TEST write denied: REGWEN locked" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] ERR_CODE_TEST write denied: REGWEN locked" << std::endl;
         return true;
     }
 
@@ -1526,13 +1524,13 @@ bool csrng_model::handle_write_ERR_CODE_TEST(DT value, DT write_mask)
     if (error_bit_num == 0) {
         // Store the value but don't inject error
         ERR_CODE_TEST = value & 0x1F;
-        CSML_INFO(2, logger) << "[CRNG] ERR_CODE_TEST: Write of 0 ignored (no error injection)" << std::endl;
+        REG_INFO(2, logger) << "[CRNG] ERR_CODE_TEST: Write of 0 ignored (no error injection)" << std::endl;
         return true;
     }
     
     // Validate error bit number (1-30)
     if (error_bit_num > 30) {
-        CSML_WARN(1, logger) << "[CRNG] ERR_CODE_TEST invalid error bit number: " << (int)error_bit_num << " (max 30)" << std::endl;
+        REG_WARN(1, logger) << "[CRNG] ERR_CODE_TEST invalid error bit number: " << (int)error_bit_num << " (max 30)" << std::endl;
         // Still process it, but clamp to valid range
         error_bit_num = 30;
     }
@@ -1548,7 +1546,7 @@ bool csrng_model::handle_write_ERR_CODE_TEST(DT value, DT write_mask)
     //update_interrupt_outputs();
 	intr_update_event.notify(SC_ZERO_TIME);
 									   
-    CSML_INFO(1, logger) << "[CRNG] ERR_CODE_TEST: Injected error bit " << (int)error_bit_num
+    REG_INFO(1, logger) << "[CRNG] ERR_CODE_TEST: Injected error bit " << (int)error_bit_num
                          << ", ERR_CODE=0x" << std::hex << new_err_code << std::dec
                          << ", cs_fatal_err interrupt fired" << std::endl;
                          
@@ -1567,7 +1565,7 @@ bool csrng_model::handle_read_ERR_CODE_TEST(DT& value, DT read_mask)
 {   //Fix: read callback for ERR_CODE_TEST register added
     value = static_cast<DT>(ERR_CODE_TEST);
 
-    CSML_INFO(3, logger) << "[CRNG] ERR_CODE_TEST read: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(3, logger) << "[CRNG] ERR_CODE_TEST read: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1582,7 +1580,7 @@ bool csrng_model::handle_read_MAIN_SM_STATE(DT& value, DT read_mask)
 {
     value = static_cast<DT>(MAIN_SM_STATE);
 
-    CSML_INFO(3, logger) << "[CRNG] MAIN_SM_STATE read: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(3, logger) << "[CRNG] MAIN_SM_STATE read: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1601,7 +1599,7 @@ bool csrng_model::handle_write_CTRL(DT value, DT write_mask)
 {
     // Check REGWEN lock (FUNC_026)
     if (static_cast<DT>(REGWEN) == 0) {
-        CSML_WARN(2, logger) << "[CRNG] CTRL write denied: REGWEN locked" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] CTRL write denied: REGWEN locked" << std::endl;
         return true;
     }
 
@@ -1649,17 +1647,17 @@ bool csrng_model::handle_write_CTRL(DT value, DT write_mask)
         // ENABLE=0x6 → Transition to SW_CMD_RDY state
         m_cmd_ready = true;
         m_cmd_fsm_state = CommandFSMState::IDLE;
-        CSML_INFO(1, logger) << "[CRNG] Module enabled: FSM ready for commands (CMD_RDY=1)" << std::endl;
+        REG_INFO(1, logger) << "[CRNG] Module enabled: FSM ready for commands (CMD_RDY=1)" << std::endl;
         std::cout << "[DEBUG] handle_write_CTRL: ENABLE=true, m_cmd_ready=" << m_cmd_ready << std::endl;
     } else {
         // ENABLE=0x9 → Transition to IDLE, disable command processing
         m_cmd_ready = false;
         m_cmd_fsm_state = CommandFSMState::IDLE;
-        CSML_INFO(1, logger) << "[CRNG] Module disabled: FSM idle (CMD_RDY=0)" << std::endl;
+        REG_INFO(1, logger) << "[CRNG] Module disabled: FSM idle (CMD_RDY=0)" << std::endl;
         std::cout << "[DEBUG] handle_write_CTRL: ENABLE=false, m_cmd_ready=" << m_cmd_ready << std::endl;
     }
 
-    CSML_INFO(2, logger) << "[CRNG] CTRL written: 0x" << std::hex << value << std::dec << " (valid=" << valid << ", enable=" << enable << ")" << std::endl;
+    REG_INFO(2, logger) << "[CRNG] CTRL written: 0x" << std::hex << value << std::dec << " (valid=" << valid << ", enable=" << enable << ")" << std::endl;
     return true;
 }
 
@@ -1677,7 +1675,7 @@ bool csrng_model::handle_write_REGWEN(DT value, DT write_mask)
     // RW0C: Writing 0 locks permanently, writing 1 has no effect
     if (value == 0 && current == 1) {
         REGWEN = 0;
-        CSML_INFO(1, logger) << "[CRNG] REGWEN locked (control registers now read-only)" << std::endl;
+        REG_INFO(1, logger) << "[CRNG] REGWEN locked (control registers now read-only)" << std::endl;
     }
     return true;
 }
@@ -1691,12 +1689,12 @@ bool csrng_model::handle_write_RESEED_INTERVAL(DT value, DT write_mask)
 {
     // Check REGWEN lock
     if (static_cast<DT>(REGWEN) == 0) {
-        CSML_WARN(2, logger) << "[CRNG] RESEED_INTERVAL write denied: REGWEN locked" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] RESEED_INTERVAL write denied: REGWEN locked" << std::endl;
         return true;
     }
 
     RESEED_INTERVAL = value;
-    CSML_INFO(2, logger) << "[CRNG] RESEED_INTERVAL written: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] RESEED_INTERVAL written: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1709,7 +1707,7 @@ bool csrng_model::handle_write_FIPS_FORCE(DT value, DT write_mask)
 {
     // Check REGWEN lock
     if (static_cast<DT>(REGWEN) == 0) {
-        CSML_WARN(2, logger) << "[CRNG] FIPS_FORCE write denied: REGWEN locked" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] FIPS_FORCE write denied: REGWEN locked" << std::endl;
         return true;
     }
 
@@ -1719,14 +1717,14 @@ bool csrng_model::handle_write_FIPS_FORCE(DT value, DT write_mask)
     validate_multi_bit_encoding(fips_force_enable_val, fips_force_enable);
 
     if (!fips_force_enable) {
-        CSML_WARN(2, logger) << "[CRNG] FIPS_FORCE write denied: FIPS_FORCE_ENABLE not set" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] FIPS_FORCE write denied: FIPS_FORCE_ENABLE not set" << std::endl;
         return true;
     }
 
     // Only bits [2:0] are meaningful (one per instance)
     FIPS_FORCE = value & 0x7;
 
-    CSML_INFO(2, logger) << "[CRNG] FIPS_FORCE written: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] FIPS_FORCE written: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1738,13 +1736,13 @@ bool csrng_model::handle_write_INT_STATE_READ_ENABLE(DT value, DT write_mask)
 
     // Check REGWEN lock
     if (static_cast<DT>(INT_STATE_READ_ENABLE_REGWEN) == 0) {
-        CSML_WARN(2, logger) << "[CRNG] INT_STATE_READ_ENABLE write denied: REGWEN locked" << std::endl;
+        REG_WARN(2, logger) << "[CRNG] INT_STATE_READ_ENABLE write denied: REGWEN locked" << std::endl;
         return true;
     }
 
     INT_STATE_READ_ENABLE = value;
 
-    CSML_INFO(2, logger) << "[CRNG] INT_STATE_READ_ENABLE written: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] INT_STATE_READ_ENABLE written: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1761,7 +1759,7 @@ bool csrng_model::handle_write_INT_STATE_READ_ENABLE_REGWEN(DT value, DT write_m
     // RW0C: Writing 0 locks permanently
     if (value == 0 && current == 1) {
         INT_STATE_READ_ENABLE_REGWEN = 0;
-        CSML_INFO(1, logger) << "[CRNG] INT_STATE_READ_ENABLE_REGWEN locked" << std::endl;
+        REG_INFO(1, logger) << "[CRNG] INT_STATE_READ_ENABLE_REGWEN locked" << std::endl;
     }
     return true;
 }
@@ -1802,7 +1800,7 @@ bool csrng_model::handle_write_INTR_STATE(DT value, DT write_mask)
    
     intr_update_event.notify(SC_ZERO_TIME);
 
-    CSML_INFO(2, logger) << "[CRNG] INTR_STATE cleared: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] INTR_STATE cleared: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1813,13 +1811,13 @@ bool csrng_model::handle_write_INTR_STATE(DT value, DT write_mask)
  */
 bool csrng_model::handle_write_INTR_ENABLE(DT value, DT write_mask)
 {
-    CSML_INFO(3, logger) << "[DEBUG] handle_write_INTR_ENABLE: value=0x" << std::hex << value << ", write_mask=0x" << write_mask << std::dec;
+    REG_INFO(3, logger) << "[DEBUG] handle_write_INTR_ENABLE: value=0x" << std::hex << value << ", write_mask=0x" << write_mask << std::dec;
     INTR_ENABLE = value;
     //update_interrupt_outputs();
 	
 	intr_update_event.notify(SC_ZERO_TIME);
 
-    CSML_INFO(2, logger) << "[CRNG] INTR_ENABLE written: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] INTR_ENABLE written: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1852,7 +1850,7 @@ bool csrng_model::handle_write_INTR_TEST(DT value, DT write_mask)
     intr_update_event.notify(SC_ZERO_TIME);
 
 
-    CSML_INFO(2, logger) << "[CRNG] INTR_TEST triggered: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] INTR_TEST triggered: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1873,13 +1871,13 @@ bool csrng_model::handle_write_ALERT_TEST(DT value, DT write_mask)
     // Check bit 0: recov_alert
     if (masked_value & 0x1) {
         m_alert_recov = true;
-        CSML_INFO(2, logger) << "[CRNG] ALERT_TEST: Triggering recoverable alert" << std::endl;
+        REG_INFO(2, logger) << "[CRNG] ALERT_TEST: Triggering recoverable alert" << std::endl;
     }
 
     // Check bit 1: fatal_alert
     if (masked_value & 0x2) {
         m_alert_fatal = true;
-        CSML_INFO(2, logger) << "[CRNG] ALERT_TEST: Triggering fatal alert" << std::endl;
+        REG_INFO(2, logger) << "[CRNG] ALERT_TEST: Triggering fatal alert" << std::endl;
     }
 
     // Notify alert update process if any alert was triggered
@@ -1912,7 +1910,7 @@ bool csrng_model::handle_write_HW_EXC_STS(DT value, DT write_mask)
 		intr_update_event.notify(SC_ZERO_TIME);
     }
 
-    CSML_INFO(2, logger) << "[CRNG] HW_EXC_STS cleared: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] HW_EXC_STS cleared: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1931,7 +1929,7 @@ bool csrng_model::handle_write_RECOV_ALERT_STS(DT value, DT write_mask)
 
     RECOV_ALERT_STS = new_value;
 
-    CSML_INFO(2, logger) << "[CRNG] RECOV_ALERT_STS cleared: 0x" << std::hex << value << std::dec << std::endl;
+    REG_INFO(2, logger) << "[CRNG] RECOV_ALERT_STS cleared: 0x" << std::hex << value << std::dec << std::endl;
     return true;
 }
 
@@ -1940,7 +1938,7 @@ bool csrng_model::handle_write_RECOV_ALERT_STS(DT value, DT write_mask)
 // =============================================================================
 
 /**
- * @brief Registers all register callbacks with the CSML framework
+ * @brief Registers all register callbacks with the regmodel framework
  *
  * This function binds all read/write callbacks to their respective registers
  * to implement register side-effects and access control.
@@ -1948,7 +1946,7 @@ bool csrng_model::handle_write_RECOV_ALERT_STS(DT value, DT write_mask)
  */
 void csrng_model::register_all_callbacks()
 {
-    CSML_INFO(1, logger) << "[CRNG] Registering all register callbacks" << std::endl;
+    REG_INFO(1, logger) << "[CRNG] Registering all register callbacks" << std::endl;
 
     // CMD_REQ - Write callback
     {
@@ -2070,7 +2068,7 @@ void csrng_model::register_all_callbacks()
         memory.register_write_callback(write_cb, ERR_CODE_TEST.offset);
     }
 
-    // INTR_ENABLE - No read callback needed (CSML handles RW registers automatically)
+    // INTR_ENABLE - No read callback needed (regmodel handles RW registers automatically)
 
     // INTR_TEST - Read callback (Write-Only, returns 0)
     {
@@ -2176,6 +2174,6 @@ void csrng_model::register_all_callbacks()
         memory.register_read_callback(read_cb, MAIN_SM_STATE.offset);
     }
 
-    CSML_INFO(1, logger) << "[CRNG] All register callbacks registered successfully" << std::endl;
+    REG_INFO(1, logger) << "[CRNG] All register callbacks registered successfully" << std::endl;
 }
 

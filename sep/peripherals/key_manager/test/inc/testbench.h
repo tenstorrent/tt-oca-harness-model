@@ -7,7 +7,7 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include "key_manager.h"
 #include "key_manager_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 /**
  * @brief Top-level testbench — instantiates DUT and test harness,
@@ -21,7 +21,7 @@ class testbench : public sc_module
 public:
     SC_HAS_PROCESS(testbench);
 
-    CsmlLogger logger;
+    RegLogger logger;
     uint32_t m_tests_failed = 0;
 
     // DUT and test harness

@@ -9,37 +9,37 @@
 #pragma once
 #include<iostream>
 #include<systemc.h>
-#include "csml.h"
+#include "reg_file.h"
 
 namespace sep_scratch_warm {
 
 template<unsigned int N>
-class SCRATCH_type : public csml_reg<N>
+class SCRATCH_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     SCRATCH_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       data(reg_name + ".data", *this, 0, 32), 
       Reserved0(reg_name + ".Reserved0", *this, 32, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> data;
-    csml_bitfield<N> Reserved0;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> data;
+    regmodel::Bitfield<N> Reserved0;
 };
 
 

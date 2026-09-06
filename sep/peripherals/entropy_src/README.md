@@ -23,7 +23,7 @@ register interface is exercised by this testbench.
 
 ```
 include/entropy_src.h            entropy_src_ip
-include/entropy_src_base.h       CSML register declaration
+include/entropy_src_base.h       regmodel register declaration
 include/entropy_src_register.h   RO/WO/RW types
 include/entropy_src_interface.h  callback contract
 src/                             LT implementation

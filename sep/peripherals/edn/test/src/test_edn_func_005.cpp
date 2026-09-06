@@ -45,13 +45,13 @@ test_edn_func_005::test_edn_func_005(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_005 test suite initialized";
-    CSML_INFO(1, logger) << "Test Coverage: Endpoint Entropy Distribution (20 test cases)";
+    REG_INFO(1, logger) << "EDN_FUNC_005 test suite initialized";
+    REG_INFO(1, logger) << "Test Coverage: Endpoint Entropy Distribution (20 test cases)";
 }
 
 test_edn_func_005::~test_edn_func_005()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_005 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_005 test suite terminated";
 }
 
 // =============================================================================
@@ -60,12 +60,12 @@ test_edn_func_005::~test_edn_func_005()
 
 unsigned int test_edn_func_005::run_all_tests()
 {
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_005 Test Suite Execution Start";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_005 Test Suite Execution Start";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before starting tests
-    CSML_INFO(1, logger) << "Applying system reset...";
+    REG_INFO(1, logger) << "Applying system reset...";
     apply_reset(100.0); // 100ns reset pulse
     wait(10, SC_NS);    // Wait for reset propagation
 
@@ -153,30 +153,30 @@ unsigned int test_edn_func_005::run_all_tests()
     report_test_result("T20: Buffer Refill During Active Distribution", result);
 
     // Print summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_005 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_005 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     }
 
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
 
     return m_tests_failed;
 }
@@ -187,7 +187,7 @@ unsigned int test_edn_func_005::run_all_tests()
 
 bool test_edn_func_005::test_endpoint_single_request_ep0()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_single_request_ep0...";
+    REG_INFO(1, logger) << "Starting test_endpoint_single_request_ep0...";
 
     bool all_passed = true;
 
@@ -206,7 +206,7 @@ bool test_edn_func_005::test_endpoint_single_request_ep0()
 
     // Wait for acknowledge with timeout
     if (!wait_for_acknowledge(0, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_single_request_ep0: Timeout waiting for edn_ack[0]";
+        REG_ERROR(1, logger) << "test_endpoint_single_request_ep0: Timeout waiting for edn_ack[0]";
         all_passed = false;
     } else {
         // Verify data on edn_bus[0] (should be first chunk: 0xDEADBEEF)
@@ -218,13 +218,13 @@ bool test_edn_func_005::test_endpoint_single_request_ep0()
         // Verify FIPS indicator (should be true)
         bool fips = read_endpoint_fips(0);
         if (fips != true) {
-            CSML_ERROR(1, logger) << "test_endpoint_single_request_ep0: edn_fips[0] expected 1, got " << fips;
+            REG_ERROR(1, logger) << "test_endpoint_single_request_ep0: edn_fips[0] expected 1, got " << fips;
             all_passed = false;
         }
 
         // Verify acknowledge is asserted
         if (!edn_ack[0].read()) {
-            CSML_ERROR(1, logger) << "test_endpoint_single_request_ep0: edn_ack[0] not asserted";
+            REG_ERROR(1, logger) << "test_endpoint_single_request_ep0: edn_ack[0] not asserted";
             all_passed = false;
         }
     }
@@ -235,14 +235,14 @@ bool test_edn_func_005::test_endpoint_single_request_ep0()
 
     // Verify acknowledge deasserts
     if (edn_ack[0].read()) {
-        CSML_ERROR(1, logger) << "test_endpoint_single_request_ep0: edn_ack[0] did not deassert";
+        REG_ERROR(1, logger) << "test_endpoint_single_request_ep0: edn_ack[0] did not deassert";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_single_request_ep0: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_single_request_ep0: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_single_request_ep0: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_single_request_ep0: FAILED";
     }
 
     return all_passed;
@@ -254,7 +254,7 @@ bool test_edn_func_005::test_endpoint_single_request_ep0()
 
 bool test_edn_func_005::test_endpoint_single_request_ep7()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_single_request_ep7...";
+    REG_INFO(1, logger) << "Starting test_endpoint_single_request_ep7...";
 
     bool all_passed = true;
 
@@ -274,7 +274,7 @@ bool test_edn_func_005::test_endpoint_single_request_ep7()
 
     // Wait for acknowledge
     if (!wait_for_acknowledge(7, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_single_request_ep7: Timeout waiting for edn_ack[7]";
+        REG_ERROR(1, logger) << "test_endpoint_single_request_ep7: Timeout waiting for edn_ack[7]";
         all_passed = false;
     } else {
         // Verify data (first chunk: 0x11111111)
@@ -286,7 +286,7 @@ bool test_edn_func_005::test_endpoint_single_request_ep7()
         // Verify FIPS=0
         bool fips = read_endpoint_fips(7);
         if (fips != false) {
-            CSML_ERROR(1, logger) << "test_endpoint_single_request_ep7: edn_fips[7] expected 0, got " << fips;
+            REG_ERROR(1, logger) << "test_endpoint_single_request_ep7: edn_fips[7] expected 0, got " << fips;
             all_passed = false;
         }
     }
@@ -296,9 +296,9 @@ bool test_edn_func_005::test_endpoint_single_request_ep7()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_single_request_ep7: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_single_request_ep7: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_single_request_ep7: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_single_request_ep7: FAILED";
     }
 
     return all_passed;
@@ -310,7 +310,7 @@ bool test_edn_func_005::test_endpoint_single_request_ep7()
 
 bool test_edn_func_005::test_endpoint_handshake_timing()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_handshake_timing...";
+    REG_INFO(1, logger) << "Starting test_endpoint_handshake_timing...";
 
     bool all_passed = true;
 
@@ -326,7 +326,7 @@ bool test_edn_func_005::test_endpoint_handshake_timing()
 
     // Verify ack is low before request
     if (edn_ack[2].read()) {
-        CSML_ERROR(1, logger) << "test_endpoint_handshake_timing: edn_ack[2] asserted before request";
+        REG_ERROR(1, logger) << "test_endpoint_handshake_timing: edn_ack[2] asserted before request";
         all_passed = false;
     }
 
@@ -345,7 +345,7 @@ bool test_edn_func_005::test_endpoint_handshake_timing()
     }
 
     if (!ack_asserted) {
-        CSML_ERROR(1, logger) << "test_endpoint_handshake_timing: edn_ack[2] never asserted";
+        REG_ERROR(1, logger) << "test_endpoint_handshake_timing: edn_ack[2] never asserted";
         all_passed = false;
     }
 
@@ -353,7 +353,7 @@ bool test_edn_func_005::test_endpoint_handshake_timing()
     if (ack_asserted) {
         uint32_t data = read_endpoint_data(2);
         if (data != 0xAAAAAAAA) {
-            CSML_ERROR(1, logger) << "test_endpoint_handshake_timing: Invalid data when ack asserted";
+            REG_ERROR(1, logger) << "test_endpoint_handshake_timing: Invalid data when ack asserted";
             all_passed = false;
         }
     }
@@ -364,14 +364,14 @@ bool test_edn_func_005::test_endpoint_handshake_timing()
 
     // Verify ack deasserts
     if (edn_ack[2].read()) {
-        CSML_ERROR(1, logger) << "test_endpoint_handshake_timing: edn_ack[2] did not deassert after req low";
+        REG_ERROR(1, logger) << "test_endpoint_handshake_timing: edn_ack[2] did not deassert after req low";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_handshake_timing: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_handshake_timing: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_handshake_timing: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_handshake_timing: FAILED";
     }
 
     return all_passed;
@@ -383,7 +383,7 @@ bool test_edn_func_005::test_endpoint_handshake_timing()
 
 bool test_edn_func_005::test_endpoint_data_bus_validity()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_data_bus_validity...";
+    REG_INFO(1, logger) << "Starting test_endpoint_data_bus_validity...";
 
     bool all_passed = true;
 
@@ -403,14 +403,14 @@ bool test_edn_func_005::test_endpoint_data_bus_validity()
 
     // Wait for ack
     if (!wait_for_acknowledge(3, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_data_bus_validity: Timeout waiting for ack";
+        REG_ERROR(1, logger) << "test_endpoint_data_bus_validity: Timeout waiting for ack";
         all_passed = false;
     } else {
         // Sample bus multiple times while ack is high
         for (int i = 0; i < 5; i++) {
             uint32_t data = read_endpoint_data(3);
             if (data != 0x11223344) {
-                CSML_ERROR(1, logger) << "test_endpoint_data_bus_validity: Bus unstable during ack (sample " << i << ")";
+                REG_ERROR(1, logger) << "test_endpoint_data_bus_validity: Bus unstable during ack (sample " << i << ")";
                 all_passed = false;
             }
             wait(2, SC_NS);
@@ -424,14 +424,14 @@ bool test_edn_func_005::test_endpoint_data_bus_validity()
     // Verify data persists on bus after ack deasserts
     uint32_t data_after = read_endpoint_data(3);
     if (data_after != 0x11223344) {
-        CSML_ERROR(1, logger) << "test_endpoint_data_bus_validity: Data did not persist after ack deassert";
+        REG_ERROR(1, logger) << "test_endpoint_data_bus_validity: Data did not persist after ack deassert";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_data_bus_validity: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_data_bus_validity: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_data_bus_validity: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_data_bus_validity: FAILED";
     }
 
     return all_passed;
@@ -443,7 +443,7 @@ bool test_edn_func_005::test_endpoint_data_bus_validity()
 
 bool test_edn_func_005::test_endpoint_fips_propagation_true()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_fips_propagation_true...";
+    REG_INFO(1, logger) << "Starting test_endpoint_fips_propagation_true...";
 
     bool all_passed = true;
 
@@ -466,11 +466,11 @@ bool test_edn_func_005::test_endpoint_fips_propagation_true()
         if (wait_for_acknowledge(ep, 500.0)) {
             bool fips = read_endpoint_fips(ep);
             if (!fips) {
-                CSML_ERROR(1, logger) << "test_endpoint_fips_propagation_true: endpoint " << ep << " FIPS=0, expected 1";
+                REG_ERROR(1, logger) << "test_endpoint_fips_propagation_true: endpoint " << ep << " FIPS=0, expected 1";
                 all_passed = false;
             }
         } else {
-            CSML_ERROR(1, logger) << "test_endpoint_fips_propagation_true: Timeout on endpoint " << ep;
+            REG_ERROR(1, logger) << "test_endpoint_fips_propagation_true: Timeout on endpoint " << ep;
             all_passed = false;
         }
 
@@ -479,9 +479,9 @@ bool test_edn_func_005::test_endpoint_fips_propagation_true()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_fips_propagation_true: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_fips_propagation_true: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_fips_propagation_true: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_fips_propagation_true: FAILED";
     }
 
     return all_passed;
@@ -493,7 +493,7 @@ bool test_edn_func_005::test_endpoint_fips_propagation_true()
 
 bool test_edn_func_005::test_endpoint_fips_propagation_false()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_fips_propagation_false...";
+    REG_INFO(1, logger) << "Starting test_endpoint_fips_propagation_false...";
 
     bool all_passed = true;
 
@@ -516,11 +516,11 @@ bool test_edn_func_005::test_endpoint_fips_propagation_false()
         if (wait_for_acknowledge(ep, 500.0)) {
             bool fips = read_endpoint_fips(ep);
             if (fips) {
-                CSML_ERROR(1, logger) << "test_endpoint_fips_propagation_false: endpoint " << ep << " FIPS=1, expected 0";
+                REG_ERROR(1, logger) << "test_endpoint_fips_propagation_false: endpoint " << ep << " FIPS=1, expected 0";
                 all_passed = false;
             }
         } else {
-            CSML_ERROR(1, logger) << "test_endpoint_fips_propagation_false: Timeout on endpoint " << ep;
+            REG_ERROR(1, logger) << "test_endpoint_fips_propagation_false: Timeout on endpoint " << ep;
             all_passed = false;
         }
 
@@ -529,9 +529,9 @@ bool test_edn_func_005::test_endpoint_fips_propagation_false()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_fips_propagation_false: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_fips_propagation_false: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_fips_propagation_false: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_fips_propagation_false: FAILED";
     }
 
     return all_passed;
@@ -543,7 +543,7 @@ bool test_edn_func_005::test_endpoint_fips_propagation_false()
 
 bool test_edn_func_005::test_endpoint_concurrent_two_requests()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_concurrent_two_requests...";
+    REG_INFO(1, logger) << "Starting test_endpoint_concurrent_two_requests...";
 
     bool all_passed = true;
 
@@ -572,13 +572,13 @@ bool test_edn_func_005::test_endpoint_concurrent_two_requests()
         if (edn_ack[0].read() && !ack0_received) {
             ack0_received = true;
             data0 = read_endpoint_data(0);
-            CSML_INFO(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 0 serviced with data 0x"
+            REG_INFO(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 0 serviced with data 0x"
                                  << std::hex << data0;
         }
         if (edn_ack[1].read() && !ack1_received) {
             ack1_received = true;
             data1 = read_endpoint_data(1);
-            CSML_INFO(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 1 serviced with data 0x"
+            REG_INFO(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 1 serviced with data 0x"
                                  << std::hex << data1;
         }
         if (ack0_received && ack1_received) {
@@ -588,18 +588,18 @@ bool test_edn_func_005::test_endpoint_concurrent_two_requests()
     }
 
     if (!ack0_received) {
-        CSML_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 0 not serviced";
+        REG_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 0 not serviced";
         all_passed = false;
     }
 
     if (!ack1_received) {
-        CSML_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 1 not serviced";
+        REG_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: endpoint 1 not serviced";
         all_passed = false;
     }
 
     // Verify both received unique data
     if (ack0_received && ack1_received && (data0 == data1)) {
-        CSML_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: Both endpoints received same data (duplication)";
+        REG_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: Both endpoints received same data (duplication)";
         all_passed = false;
     }
 
@@ -609,9 +609,9 @@ bool test_edn_func_005::test_endpoint_concurrent_two_requests()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_concurrent_two_requests: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_concurrent_two_requests: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_concurrent_two_requests: FAILED";
     }
 
     return all_passed;
@@ -623,7 +623,7 @@ bool test_edn_func_005::test_endpoint_concurrent_two_requests()
 
 bool test_edn_func_005::test_endpoint_concurrent_all_eight()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_concurrent_all_eight...";
+    REG_INFO(1, logger) << "Starting test_endpoint_concurrent_all_eight...";
 
     bool all_passed = true;
 
@@ -655,7 +655,7 @@ bool test_edn_func_005::test_endpoint_concurrent_all_eight()
                 ack_received[ep] = true;
                 data_received[ep] = read_endpoint_data(ep);
                 acks_count++;
-                CSML_INFO(1, logger) << "test_endpoint_concurrent_all_eight: endpoint " << ep
+                REG_INFO(1, logger) << "test_endpoint_concurrent_all_eight: endpoint " << ep
                                      << " serviced with data 0x" << std::hex << data_received[ep];
             }
         }
@@ -668,7 +668,7 @@ bool test_edn_func_005::test_endpoint_concurrent_all_eight()
     // Verify all endpoints were serviced
     for (int i = 0; i < 8; i++) {
         if (!ack_received[i]) {
-            CSML_ERROR(1, logger) << "test_endpoint_concurrent_all_eight: endpoint " << i << " not serviced (starvation)";
+            REG_ERROR(1, logger) << "test_endpoint_concurrent_all_eight: endpoint " << i << " not serviced (starvation)";
             all_passed = false;
         }
     }
@@ -677,7 +677,7 @@ bool test_edn_func_005::test_endpoint_concurrent_all_eight()
     for (int i = 0; i < 8; i++) {
         for (int j = i + 1; j < 8; j++) {
             if (ack_received[i] && ack_received[j] && (data_received[i] == data_received[j])) {
-                CSML_ERROR(1, logger) << "test_endpoint_concurrent_all_eight: endpoints " << i << " and " << j
+                REG_ERROR(1, logger) << "test_endpoint_concurrent_all_eight: endpoints " << i << " and " << j
                                       << " received duplicate data";
                 all_passed = false;
             }
@@ -691,9 +691,9 @@ bool test_edn_func_005::test_endpoint_concurrent_all_eight()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_concurrent_all_eight: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_concurrent_all_eight: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_concurrent_all_eight: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_concurrent_all_eight: FAILED";
     }
 
     return all_passed;
@@ -705,7 +705,7 @@ bool test_edn_func_005::test_endpoint_concurrent_all_eight()
 
 bool test_edn_func_005::test_endpoint_round_robin_order()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_round_robin_order...";
+    REG_INFO(1, logger) << "Starting test_endpoint_round_robin_order...";
 
     bool all_passed = true;
 
@@ -724,7 +724,7 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
     assert_endpoint_request(3);
     wait(5, SC_NS);
     if (!wait_for_acknowledge(3, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_round_robin_order: Failed to service endpoint 3 for setup";
+        REG_ERROR(1, logger) << "test_endpoint_round_robin_order: Failed to service endpoint 3 for setup";
         all_passed = false;
     }
     deassert_endpoint_request(3);
@@ -736,7 +736,9 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
     assert_endpoint_request(5);
     assert_endpoint_request(7);
 
-    // Monitor service order (should be 5 → 7 → 0 → 2 starting from arb index 4).
+    // Monitor immediately so only the first newly-acked endpoint is visible
+    // before the mock's next round-robin tick.
+    // Expected order: 5 → 7 → 0 → 2 starting from arb index 4.
     // Deassert each endpoint as soon as it is acknowledged so the next RR
     // grant is visible — waiting first lets all four acks pile up and the
     // poll order {0,2,5,7} would be recorded instead of the grant order.
@@ -755,7 +757,7 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
                 }
                 if (!already_serviced) {
                     service_order[service_count++] = ep;
-                    CSML_INFO(1, logger) << "test_endpoint_round_robin_order: Service order[" << (service_count-1)
+                    REG_INFO(1, logger) << "test_endpoint_round_robin_order: Service order[" << (service_count-1)
                                          << "] = endpoint " << ep;
                     deassert_endpoint_request(ep);
                     wait(5, SC_NS);
@@ -772,7 +774,7 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
     int expected_order[] = {5, 7, 0, 2};
     for (int i = 0; i < 4; i++) {
         if (service_order[i] != expected_order[i]) {
-            CSML_ERROR(1, logger) << "test_endpoint_round_robin_order: Expected service_order[" << i << "]="
+            REG_ERROR(1, logger) << "test_endpoint_round_robin_order: Expected service_order[" << i << "]="
                                   << expected_order[i] << ", got " << service_order[i];
             all_passed = false;
         }
@@ -785,9 +787,9 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_round_robin_order: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_round_robin_order: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_round_robin_order: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_round_robin_order: FAILED";
     }
 
     return all_passed;
@@ -799,7 +801,7 @@ bool test_edn_func_005::test_endpoint_round_robin_order()
 
 bool test_edn_func_005::test_endpoint_arbitration_fairness()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_arbitration_fairness...";
+    REG_INFO(1, logger) << "Starting test_endpoint_arbitration_fairness...";
 
     bool all_passed = true;
 
@@ -841,7 +843,7 @@ bool test_edn_func_005::test_endpoint_arbitration_fairness()
                 service_count[ep]++;
                 total_services++;
                 endpoint_acked[ep] = true;
-                CSML_INFO(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << ep
+                REG_INFO(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << ep
                                      << " serviced (count=" << service_count[ep] << ")";
 
                 // Deassert request (complete handshake)
@@ -863,20 +865,20 @@ bool test_edn_func_005::test_endpoint_arbitration_fairness()
         wait(1, SC_NS);
     }
 
-    CSML_INFO(1, logger) << "test_endpoint_arbitration_fairness: Total services = " << total_services;
+    REG_INFO(1, logger) << "test_endpoint_arbitration_fairness: Total services = " << total_services;
 
     // Verify each endpoint serviced exactly twice (fair distribution)
     for (int i = 0; i < 8; i++) {
-        CSML_INFO(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << i
+        REG_INFO(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << i
                              << " service count = " << service_count[i];
         if (service_count[i] < 1) {
-            CSML_ERROR(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << i
+            REG_ERROR(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << i
                                   << " starved (count=" << service_count[i] << ")";
             all_passed = false;
         }
         // Allow ±1 variance for fairness (ideal is 2, acceptable is 1-3)
         if (service_count[i] < 1 || service_count[i] > 3) {
-            CSML_ERROR(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << i
+            REG_ERROR(1, logger) << "test_endpoint_arbitration_fairness: endpoint " << i
                                   << " unfair distribution (count=" << service_count[i] << ", expected ~2)";
             all_passed = false;
         }
@@ -889,9 +891,9 @@ bool test_edn_func_005::test_endpoint_arbitration_fairness()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_arbitration_fairness: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_arbitration_fairness: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_arbitration_fairness: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_arbitration_fairness: FAILED";
     }
 
     return all_passed;
@@ -903,7 +905,7 @@ bool test_edn_func_005::test_endpoint_arbitration_fairness()
 
 bool test_edn_func_005::test_endpoint_width_conversion()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_width_conversion...";
+    REG_INFO(1, logger) << "Starting test_endpoint_width_conversion...";
 
     bool all_passed = true;
 
@@ -930,13 +932,13 @@ bool test_edn_func_005::test_endpoint_width_conversion()
         wait(5, SC_NS);
 
         if (!wait_for_acknowledge(2, 500.0)) {
-            CSML_ERROR(1, logger) << "test_endpoint_width_conversion: Timeout on chunk " << chunk;
+            REG_ERROR(1, logger) << "test_endpoint_width_conversion: Timeout on chunk " << chunk;
             all_passed = false;
             break;
         }
 
         received_chunks[chunk] = read_endpoint_data(2);
-        CSML_INFO(1, logger) << "test_endpoint_width_conversion: chunk[" << chunk << "] = 0x"
+        REG_INFO(1, logger) << "test_endpoint_width_conversion: chunk[" << chunk << "] = 0x"
                              << std::hex << received_chunks[chunk];
 
         deassert_endpoint_request(2);
@@ -951,9 +953,9 @@ bool test_edn_func_005::test_endpoint_width_conversion()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_width_conversion: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_width_conversion: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_width_conversion: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_width_conversion: FAILED";
     }
 
     return all_passed;
@@ -965,7 +967,7 @@ bool test_edn_func_005::test_endpoint_width_conversion()
 
 bool test_edn_func_005::test_endpoint_sequential_chunks()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_sequential_chunks...";
+    REG_INFO(1, logger) << "Starting test_endpoint_sequential_chunks...";
 
     bool all_passed = true;
 
@@ -985,7 +987,7 @@ bool test_edn_func_005::test_endpoint_sequential_chunks()
         wait(5, SC_NS);
 
         if (!wait_for_acknowledge(4, 500.0)) {
-            CSML_ERROR(1, logger) << "test_endpoint_sequential_chunks: Timeout on request " << i;
+            REG_ERROR(1, logger) << "test_endpoint_sequential_chunks: Timeout on request " << i;
             all_passed = false;
         }
 
@@ -1007,7 +1009,7 @@ bool test_edn_func_005::test_endpoint_sequential_chunks()
     }
 
     if (ack_on_5th) {
-        CSML_ERROR(1, logger) << "test_endpoint_sequential_chunks: 5th request acknowledged (buffer should be empty)";
+        REG_ERROR(1, logger) << "test_endpoint_sequential_chunks: 5th request acknowledged (buffer should be empty)";
         all_passed = false;
     }
 
@@ -1015,9 +1017,9 @@ bool test_edn_func_005::test_endpoint_sequential_chunks()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_sequential_chunks: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_sequential_chunks: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_sequential_chunks: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_sequential_chunks: FAILED";
     }
 
     return all_passed;
@@ -1029,7 +1031,7 @@ bool test_edn_func_005::test_endpoint_sequential_chunks()
 
 bool test_edn_func_005::test_endpoint_data_persistence()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_data_persistence...";
+    REG_INFO(1, logger) << "Starting test_endpoint_data_persistence...";
 
     bool all_passed = true;
 
@@ -1048,7 +1050,7 @@ bool test_edn_func_005::test_endpoint_data_persistence()
     wait(5, SC_NS);
 
     if (!wait_for_acknowledge(1, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_data_persistence: Timeout waiting for ack";
+        REG_ERROR(1, logger) << "test_endpoint_data_persistence: Timeout waiting for ack";
         all_passed = false;
         return false;
     }
@@ -1066,13 +1068,13 @@ bool test_edn_func_005::test_endpoint_data_persistence()
     bool fips_after_ack = read_endpoint_fips(1);
 
     if (data_during_ack != data_after_ack) {
-        CSML_ERROR(1, logger) << "test_endpoint_data_persistence: Data did not persist (during=0x" << std::hex
+        REG_ERROR(1, logger) << "test_endpoint_data_persistence: Data did not persist (during=0x" << std::hex
                               << data_during_ack << ", after=0x" << data_after_ack << ")";
         all_passed = false;
     }
 
     if (fips_during_ack != fips_after_ack) {
-        CSML_ERROR(1, logger) << "test_endpoint_data_persistence: FIPS did not persist";
+        REG_ERROR(1, logger) << "test_endpoint_data_persistence: FIPS did not persist";
         all_passed = false;
     }
 
@@ -1086,14 +1088,14 @@ bool test_edn_func_005::test_endpoint_data_persistence()
     // Verify endpoint 1 data still persists (not affected by endpoint 5 transaction)
     uint32_t data_after_other_ep = read_endpoint_data(1);
     if (data_during_ack != data_after_other_ep) {
-        CSML_ERROR(1, logger) << "test_endpoint_data_persistence: Data corrupted by other endpoint transaction";
+        REG_ERROR(1, logger) << "test_endpoint_data_persistence: Data corrupted by other endpoint transaction";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_data_persistence: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_data_persistence: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_data_persistence: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_data_persistence: FAILED";
     }
 
     return all_passed;
@@ -1105,7 +1107,7 @@ bool test_edn_func_005::test_endpoint_data_persistence()
 
 bool test_edn_func_005::test_endpoint_buffer_empty()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_buffer_empty...";
+    REG_INFO(1, logger) << "Starting test_endpoint_buffer_empty...";
 
     bool all_passed = true;
 
@@ -1131,7 +1133,7 @@ bool test_edn_func_005::test_endpoint_buffer_empty()
     }
 
     if (ack_received) {
-        CSML_ERROR(1, logger) << "test_endpoint_buffer_empty: Acknowledge received with empty buffer (incorrect)";
+        REG_ERROR(1, logger) << "test_endpoint_buffer_empty: Acknowledge received with empty buffer (incorrect)";
         all_passed = false;
     }
 
@@ -1141,7 +1143,7 @@ bool test_edn_func_005::test_endpoint_buffer_empty()
 
     // Verify acknowledge now asserts
     if (!wait_for_acknowledge(5, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_buffer_empty: No acknowledge after entropy injection";
+        REG_ERROR(1, logger) << "test_endpoint_buffer_empty: No acknowledge after entropy injection";
         all_passed = false;
     }
 
@@ -1149,9 +1151,9 @@ bool test_edn_func_005::test_endpoint_buffer_empty()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_buffer_empty: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_buffer_empty: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_buffer_empty: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_buffer_empty: FAILED";
     }
 
     return all_passed;
@@ -1163,7 +1165,7 @@ bool test_edn_func_005::test_endpoint_buffer_empty()
 
 bool test_edn_func_005::test_endpoint_request_while_disabled()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_request_while_disabled...";
+    REG_INFO(1, logger) << "Starting test_endpoint_request_while_disabled...";
 
     bool all_passed = true;
 
@@ -1190,7 +1192,7 @@ bool test_edn_func_005::test_endpoint_request_while_disabled()
     }
 
     if (ack_while_disabled) {
-        CSML_ERROR(1, logger) << "test_endpoint_request_while_disabled: Acknowledge while EDN disabled (incorrect)";
+        REG_ERROR(1, logger) << "test_endpoint_request_while_disabled: Acknowledge while EDN disabled (incorrect)";
         all_passed = false;
     }
 
@@ -1200,7 +1202,7 @@ bool test_edn_func_005::test_endpoint_request_while_disabled()
 
     // Verify request is now serviced
     if (!wait_for_acknowledge(6, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_request_while_disabled: No acknowledge after EDN enable";
+        REG_ERROR(1, logger) << "test_endpoint_request_while_disabled: No acknowledge after EDN enable";
         all_passed = false;
     }
 
@@ -1208,9 +1210,9 @@ bool test_edn_func_005::test_endpoint_request_while_disabled()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_request_while_disabled: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_request_while_disabled: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_request_while_disabled: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_request_while_disabled: FAILED";
     }
 
     return all_passed;
@@ -1222,7 +1224,7 @@ bool test_edn_func_005::test_endpoint_request_while_disabled()
 
 bool test_edn_func_005::test_endpoint_empty_buffer_request()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_empty_buffer_request...";
+    REG_INFO(1, logger) << "Starting test_endpoint_empty_buffer_request...";
 
     bool all_passed = true;
 
@@ -1238,7 +1240,7 @@ bool test_edn_func_005::test_endpoint_empty_buffer_request()
 
     // Verify no acknowledge initially
     if (edn_ack[0].read()) {
-        CSML_ERROR(1, logger) << "test_endpoint_empty_buffer_request: Spurious ack with empty buffer";
+        REG_ERROR(1, logger) << "test_endpoint_empty_buffer_request: Spurious ack with empty buffer";
         all_passed = false;
     }
 
@@ -1250,13 +1252,13 @@ bool test_edn_func_005::test_endpoint_empty_buffer_request()
 
     // Verify immediate acknowledge
     if (!wait_for_acknowledge(0, 100.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_empty_buffer_request: No immediate ack after entropy injection";
+        REG_ERROR(1, logger) << "test_endpoint_empty_buffer_request: No immediate ack after entropy injection";
         all_passed = false;
     }
 
     uint32_t data = read_endpoint_data(0);
     if (data != 0x12341234) {
-        CSML_ERROR(1, logger) << "test_endpoint_empty_buffer_request: Incorrect data delivered";
+        REG_ERROR(1, logger) << "test_endpoint_empty_buffer_request: Incorrect data delivered";
         all_passed = false;
     }
 
@@ -1264,9 +1266,9 @@ bool test_edn_func_005::test_endpoint_empty_buffer_request()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_empty_buffer_request: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_empty_buffer_request: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_empty_buffer_request: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_empty_buffer_request: FAILED";
     }
 
     return all_passed;
@@ -1278,7 +1280,7 @@ bool test_edn_func_005::test_endpoint_empty_buffer_request()
 
 bool test_edn_func_005::test_endpoint_simultaneous_req_ack()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_simultaneous_req_ack...";
+    REG_INFO(1, logger) << "Starting test_endpoint_simultaneous_req_ack...";
 
     bool all_passed = true;
 
@@ -1311,7 +1313,7 @@ bool test_edn_func_005::test_endpoint_simultaneous_req_ack()
         }
 
         if (!ack_received) {
-            CSML_ERROR(1, logger) << "test_endpoint_simultaneous_req_ack: No ack on cycle " << cycle;
+            REG_ERROR(1, logger) << "test_endpoint_simultaneous_req_ack: No ack on cycle " << cycle;
             all_passed = false;
             break;
         }
@@ -1320,9 +1322,9 @@ bool test_edn_func_005::test_endpoint_simultaneous_req_ack()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_simultaneous_req_ack: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_simultaneous_req_ack: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_simultaneous_req_ack: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_simultaneous_req_ack: FAILED";
     }
 
     return all_passed;
@@ -1334,7 +1336,7 @@ bool test_edn_func_005::test_endpoint_simultaneous_req_ack()
 
 bool test_edn_func_005::test_endpoint_repeated_requests()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_repeated_requests...";
+    REG_INFO(1, logger) << "Starting test_endpoint_repeated_requests...";
 
     bool all_passed = true;
 
@@ -1363,13 +1365,13 @@ bool test_edn_func_005::test_endpoint_repeated_requests()
         wait(5, SC_NS);
 
         if (!wait_for_acknowledge(7, 500.0)) {
-            CSML_ERROR(1, logger) << "test_endpoint_repeated_requests: Timeout on request " << req;
+            REG_ERROR(1, logger) << "test_endpoint_repeated_requests: Timeout on request " << req;
             all_passed = false;
             break;
         }
 
         received_data[req] = read_endpoint_data(7);
-        CSML_INFO(1, logger) << "test_endpoint_repeated_requests: request " << req
+        REG_INFO(1, logger) << "test_endpoint_repeated_requests: request " << req
                              << " data = 0x" << std::hex << received_data[req];
 
         deassert_endpoint_request(7);
@@ -1380,7 +1382,7 @@ bool test_edn_func_005::test_endpoint_repeated_requests()
     for (int i = 0; i < 10; i++) {
         for (int j = i + 1; j < 10; j++) {
             if (received_data[i] == received_data[j]) {
-                CSML_ERROR(1, logger) << "test_endpoint_repeated_requests: Duplicate data at requests "
+                REG_ERROR(1, logger) << "test_endpoint_repeated_requests: Duplicate data at requests "
                                       << i << " and " << j;
                 all_passed = false;
             }
@@ -1388,9 +1390,9 @@ bool test_edn_func_005::test_endpoint_repeated_requests()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_repeated_requests: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_repeated_requests: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_repeated_requests: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_repeated_requests: FAILED";
     }
 
     return all_passed;
@@ -1402,7 +1404,7 @@ bool test_edn_func_005::test_endpoint_repeated_requests()
 
 bool test_edn_func_005::test_endpoint_interface_after_reset()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_interface_after_reset...";
+    REG_INFO(1, logger) << "Starting test_endpoint_interface_after_reset...";
 
     bool all_passed = true;
 
@@ -1427,15 +1429,15 @@ bool test_edn_func_005::test_endpoint_interface_after_reset()
     // Verify all endpoint outputs cleared
     for (int i = 0; i < 8; i++) {
         if (edn_ack[i].read()) {
-            CSML_ERROR(1, logger) << "test_endpoint_interface_after_reset: edn_ack[" << i << "] not cleared by reset";
+            REG_ERROR(1, logger) << "test_endpoint_interface_after_reset: edn_ack[" << i << "] not cleared by reset";
             all_passed = false;
         }
         if (edn_bus[i].read() != 0) {
-            CSML_ERROR(1, logger) << "test_endpoint_interface_after_reset: edn_bus[" << i << "] not cleared by reset";
+            REG_ERROR(1, logger) << "test_endpoint_interface_after_reset: edn_bus[" << i << "] not cleared by reset";
             all_passed = false;
         }
         if (edn_fips[i].read()) {
-            CSML_ERROR(1, logger) << "test_endpoint_interface_after_reset: edn_fips[" << i << "] not cleared by reset";
+            REG_ERROR(1, logger) << "test_endpoint_interface_after_reset: edn_fips[" << i << "] not cleared by reset";
             all_passed = false;
         }
     }
@@ -1450,7 +1452,7 @@ bool test_edn_func_005::test_endpoint_interface_after_reset()
     wait(5, SC_NS);
 
     if (!wait_for_acknowledge(4, 500.0)) {
-        CSML_ERROR(1, logger) << "test_endpoint_interface_after_reset: Endpoints not functional after reset";
+        REG_ERROR(1, logger) << "test_endpoint_interface_after_reset: Endpoints not functional after reset";
         all_passed = false;
     }
 
@@ -1458,9 +1460,9 @@ bool test_edn_func_005::test_endpoint_interface_after_reset()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_interface_after_reset: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_interface_after_reset: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_interface_after_reset: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_interface_after_reset: FAILED";
     }
 
     return all_passed;
@@ -1472,7 +1474,7 @@ bool test_edn_func_005::test_endpoint_interface_after_reset()
 
 bool test_edn_func_005::test_endpoint_buffer_refill_during_distribution()
 {
-    CSML_INFO(1, logger) << "Starting test_endpoint_buffer_refill_during_distribution...";
+    REG_INFO(1, logger) << "Starting test_endpoint_buffer_refill_during_distribution...";
 
     bool all_passed = true;
 
@@ -1498,7 +1500,7 @@ bool test_edn_func_005::test_endpoint_buffer_refill_during_distribution()
         for (int ep = 0; ep < 6; ep++) {
             if (edn_ack[ep].read()) {
                 serviced_count++;
-                CSML_INFO(1, logger) << "test_endpoint_buffer_refill_during_distribution: endpoint "
+                REG_INFO(1, logger) << "test_endpoint_buffer_refill_during_distribution: endpoint "
                                      << ep << " serviced (count=" << serviced_count << ")";
                 wait(5, SC_NS);
             }
@@ -1521,7 +1523,7 @@ bool test_edn_func_005::test_endpoint_buffer_refill_during_distribution()
             if (edn_ack[ep].read() && !all_serviced[ep]) {
                 all_serviced[ep] = true;
                 serviced_count++;
-                CSML_INFO(1, logger) << "test_endpoint_buffer_refill_during_distribution: endpoint "
+                REG_INFO(1, logger) << "test_endpoint_buffer_refill_during_distribution: endpoint "
                                      << ep << " final service (total=" << serviced_count << ")";
             }
         }
@@ -1534,7 +1536,7 @@ bool test_edn_func_005::test_endpoint_buffer_refill_during_distribution()
     // Verify all 6 endpoints were serviced
     for (int i = 0; i < 6; i++) {
         if (!all_serviced[i]) {
-            CSML_ERROR(1, logger) << "test_endpoint_buffer_refill_during_distribution: endpoint "
+            REG_ERROR(1, logger) << "test_endpoint_buffer_refill_during_distribution: endpoint "
                                   << i << " not serviced";
             all_passed = false;
         }
@@ -1547,9 +1549,9 @@ bool test_edn_func_005::test_endpoint_buffer_refill_during_distribution()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_endpoint_buffer_refill_during_distribution: PASSED";
+        REG_INFO(1, logger) << "test_endpoint_buffer_refill_during_distribution: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "test_endpoint_buffer_refill_during_distribution: FAILED";
+        REG_ERROR(1, logger) << "test_endpoint_buffer_refill_during_distribution: FAILED";
     }
 
     return all_passed;
@@ -1606,6 +1608,7 @@ void test_edn_func_005::enable_edn_for_endpoints()
     // Use software port mode (BOOT_REQ_MODE=0x9, AUTO_REQ_MODE=0x9)
     uint32_t ctrl_value = 0x9996; // EDN_ENABLE=0x6, all other modes disabled
     register_write_32(CTRL_OFFSET, ctrl_value);
+    notify_mock();
     wait(10, SC_NS);
 }
 
@@ -1620,7 +1623,7 @@ void test_edn_func_005::disable_edn()
 bool test_edn_func_005::verify_value(const std::string& context, uint32_t expected, uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << context << ": Expected 0x" << std::hex << expected
+        REG_ERROR(1, logger) << context << ": Expected 0x" << std::hex << expected
                               << ", got 0x" << actual;
         return false;
     }
@@ -1632,13 +1635,13 @@ void test_edn_func_005::report_test_result(const std::string& test_name, bool pa
     m_tests_run++;
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "       " << message;
+            REG_ERROR(1, logger) << "       " << message;
         }
     }
 }

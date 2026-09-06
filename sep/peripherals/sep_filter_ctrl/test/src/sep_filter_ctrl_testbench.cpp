@@ -31,7 +31,7 @@
 
 #include "../../include/sep_filter_ctrl.h"
 #include "sep_filter_ctrl_test.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -473,7 +473,7 @@ private:
 // =============================================================================
 int sc_main(int argc, char* argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     SepFilterCtrlTestbench testbench("testbench");
     int result = 0;
     try {

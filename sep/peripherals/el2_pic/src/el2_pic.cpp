@@ -11,7 +11,7 @@ namespace el2_pic {
 
 el2_pic_model::el2_pic_model(sc_module_name n)
     : el2_pic_base(n)
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
     , clk_i("clk_i")
     , rst_ni("rst_ni")
     , irq_in("irq_in", NUM_INTERRUPTS)
@@ -30,7 +30,7 @@ el2_pic_model::el2_pic_model(sc_module_name n)
 
     register_all_callbacks();
 
-    CSML_INFO(1, logger) << "el2_pic instantiated, NUM_INTERRUPTS=" << NUM_INTERRUPTS << std::endl;
+    REG_INFO(1, logger) << "el2_pic instantiated, NUM_INTERRUPTS=" << NUM_INTERRUPTS << std::endl;
 }
 
 // Deferred to before_end_of_elaboration so that the parent has finished
@@ -76,7 +76,7 @@ void el2_pic_model::reset_process()
     eip_asserted_ = false;
     current_claim_id_ = 0;
 
-    CSML_INFO(2, logger) << "reset asserted — PIC state cleared" << std::endl;
+    REG_INFO(2, logger) << "reset asserted — PIC state cleared" << std::endl;
 }
 
 // =============================================================================
@@ -119,8 +119,8 @@ void el2_pic_model::recompute_pending_for_source(unsigned source_id)
 
 // source_pending_ is the only pending state; the meip registers are computed
 // from it on demand by read_MEIP. Deliberately no mirror into MEIP storage:
-// csml's read_registers() consults the read callback on the debug path too
-// (csml_register.h:359, reached from transport_dbg), so stored values are never
+// regmodel's read_registers() consults the read callback on the debug path too
+// (reg_file.h, reached from transport_dbg), so stored values are never
 // observable, and a mirror would be state that can drift with nothing to catch
 // it. This also matches the RTL, where intpend is combinational off the
 // gateways rather than a register (el2_pic_ctrl.sv:488).
@@ -199,7 +199,7 @@ void el2_pic_model::reevaluate_arbitration()
             hart_->trigger_external_interrupt(MachineMode);
             current_claim_id_ = best_id;
             eip_asserted_ = true;
-            CSML_INFO(2, logger) << "arbiter: claim_id=" << best_id
+            REG_INFO(2, logger) << "arbiter: claim_id=" << best_id
                                   << " eff_prio=" << best_eff_prio
                                   << " priord=" << priord
                                   << " external IRQ asserted" << std::endl;
@@ -210,7 +210,7 @@ void el2_pic_model::reevaluate_arbitration()
             hart_->clear_external_interrupt(MachineMode);
             eip_asserted_ = false;
             current_claim_id_ = 0;
-            CSML_INFO(2, logger) << "arbiter: no pending source, external IRQ cleared" << std::endl;
+            REG_INFO(2, logger) << "arbiter: no pending source, external IRQ cleared" << std::endl;
         }
     }
 }
@@ -221,14 +221,14 @@ void el2_pic_model::reevaluate_arbitration()
 
 bool el2_pic_model::post_write_MEIPL(unsigned source_id)
 {
-    CSML_DEBUG(3, logger) << "MEIPL[" << source_id << "] = " << MEIPL[source_id].intpriority.get() << std::endl;
+    REG_DEBUG(3, logger) << "MEIPL[" << source_id << "] = " << MEIPL[source_id].intpriority.get() << std::endl;
     reevaluate_arbitration();
     return true;
 }
 
 bool el2_pic_model::post_write_MEIE(unsigned source_id)
 {
-    CSML_DEBUG(3, logger) << "MEIE[" << source_id << "] = " << MEIE[source_id].inten.get() << std::endl;
+    REG_DEBUG(3, logger) << "MEIE[" << source_id << "] = " << MEIE[source_id].inten.get() << std::endl;
     reevaluate_arbitration();
     return true;
 }
@@ -237,7 +237,7 @@ bool el2_pic_model::post_write_MEIGWCTRL(unsigned source_id)
 {
     // Gateway sensitivity changed (level↔edge or polarity). Re-evaluate this
     // source's pending bit so the new rules apply to the current input level.
-    CSML_DEBUG(3, logger) << "MEIGWCTRL[" << source_id << "] type="
+    REG_DEBUG(3, logger) << "MEIGWCTRL[" << source_id << "] type="
                           << MEIGWCTRL[source_id].irq_type.get()
                           << " polarity=" << MEIGWCTRL[source_id].polarity.get() << std::endl;
     recompute_pending_for_source(source_id);
@@ -249,7 +249,7 @@ bool el2_pic_model::write_MEIGWCLR(unsigned source_id, uint32_t value)
 {
     // Write-only: any write clears the latched edge-pending state.
     (void)value;
-    CSML_DEBUG(3, logger) << "MEIGWCLR[" << source_id << "] cleared" << std::endl;
+    REG_DEBUG(3, logger) << "MEIGWCLR[" << source_id << "] cleared" << std::endl;
     source_pending_[source_id] = false;
     // Re-evaluate against the live input in both modes. RTL only clears while
     // the input is inactive: gw_int_pending_in ORs in effective unconditionally,
@@ -278,7 +278,7 @@ bool el2_pic_model::read_MEIP(unsigned word_idx, uint32_t &value)
 void el2_pic_model::register_all_callbacks()
 {
     // Per-source post-write callbacks for MEIPL, MEIE, MEIGWCTRL. We use
-    // post_write_callback so the default csml_reg::handle_write still updates
+    // post_write_callback so the default regmodel::Reg::handle_write still updates
     // the underlying storage. Skip index 0 (reserved per spec).
     for (unsigned i = 1; i < NUM_INTERRUPTS; ++i) {
         memory.register_post_write_callback(
@@ -327,7 +327,7 @@ void el2_pic_model::register_all_callbacks()
     }
 
     // MPICCFG is plain R/W storage; no callback required. The default
-    // csml_reg handle_write registered by the base ctor handles it.
+    // regmodel::Reg handle_write registered by the base ctor handles it.
 }
 
 } // namespace el2_pic

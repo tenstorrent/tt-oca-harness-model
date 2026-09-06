@@ -136,7 +136,9 @@ match the bar.
 ### Exclusions
 
 Do not pad coverage by excluding files. The only acceptable exclusions are:
-- Generated code (chipyard RTL wrappers, CSML-generated regfiles).
+- Generated code (chipyard RTL wrappers). Hand-written SEP `*_register.h`
+  files are unit-under-test, not generated (a former CSML generator is not
+  used in this repo).
 - `sc_main` / testbench harness files (no unit under test).
 - Explicit `// GCOV_EXCL_LINE` / `// GCOV_EXCL_START` ... `// GCOV_EXCL_STOP`
   for lines that cannot be reached without forcing a UB the sanitizer would

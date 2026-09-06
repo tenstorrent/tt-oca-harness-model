@@ -7,9 +7,9 @@
 #include <sstream>
 
 // Fuse-array word indices for the registers the .preload images below populate.
-// Derived from the register offsets rather than written as literals so a map
-// change (LC_STATE is word 2 / byte 0x008, matching och_sep_top_reg.h) cannot
-// silently point the images at the wrong word.
+// Derived from PeakRDL register offsets (LOCKS at 0x0, LC_STATE at 0x8 = word 2)
+// rather than literals so a map change cannot silently point images at the
+// wrong word. Matches och_sep_top_reg.h / sep_efuse_map.rdl.
 namespace {
 constexpr unsigned int word_of(unsigned int byte_offset) { return byte_offset / 4u; }
 

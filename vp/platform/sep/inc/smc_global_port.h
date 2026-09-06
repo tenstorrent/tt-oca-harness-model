@@ -37,24 +37,24 @@
 #include <functional>
 
 #include "paged_mem.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 
 class sep_smc_global_port : public sc_module
 {
 public:
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-    CsmlLogger logger;
-    csml_param<int> verbosity;
+    RegLogger logger;
+    regmodel::Param<int> verbosity;
 
     /// Runtime mode select: false = internal RW fallback (standalone sep-vp),
     /// true = forward to the SMU platform via init64.
-    csml_param<bool> forward_en;
+    regmodel::Param<bool> forward_en;
     /// Global base of the SMC window on the SEP CPU bus (re-added on forward;
     /// the internal SimpleBus strips it before delivery).
-    csml_param<uint64_t> window_base;
+    regmodel::Param<uint64_t> window_base;
 
     /// Bus side (32-bit SimpleBus initiator socket binds here; addresses are
     /// window-local offsets).
@@ -70,7 +70,7 @@ public:
 
     explicit sep_smc_global_port(sc_module_name name)
         : sc_module(name)
-        , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+        , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
         , forward_en("forward_en", false)
         , window_base("window_base", 0x40000000ULL)
     {
@@ -82,7 +82,7 @@ public:
         tgt32.register_transport_dbg(this, &sep_smc_global_port::transport_dbg);
     }
 
-    // csml_param::get_param_value() is non-const, so this is too.
+    // regmodel::Param::get_param_value() is non-const, so this is too.
     bool forwarding() { return forward_en.get_param_value(); }
 
     // -- Fallback backdoor interface (used by the boot-handshake seed block;
@@ -105,7 +105,7 @@ private:
         if (forwarding()) {
             const uint64_t local = trans.get_address();
             trans.set_address(window_base.get_param_value() + local);
-            CSML_DEBUG(3, logger) << name() << " FWD "
+            REG_DEBUG(3, logger) << name() << " FWD "
                 << (trans.is_write() ? "WRITE" : "READ")
                 << " local=0x" << std::hex << local
                 << " global=0x" << trans.get_address() << std::dec << std::endl;

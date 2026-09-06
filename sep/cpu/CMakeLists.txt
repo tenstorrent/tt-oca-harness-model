@@ -11,7 +11,7 @@ include(PeripheralCommon)
 
 # Standalone `./run_tests.sh` builds this directory as the CMake source root.
 # When we are a subdirectory of sep/ or vp/, those parents already add
-# softfloat / csml / el2_pic.
+# softfloat / el2_pic.
 set(VEERISS_STANDALONE OFF)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   set(VEERISS_STANDALONE ON)
@@ -27,10 +27,6 @@ if(VEERISS_STANDALONE)
   # el2_pic must not inherit BUILD_TESTS=ON — its test model stubs VeeR-ISSTlm.hpp.
   set(_veeriss_build_tests "${BUILD_TESTS}")
   set(BUILD_TESTS OFF)
-  if(NOT TARGET csml_logger)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../utils/csml
-                     ${CMAKE_CURRENT_BINARY_DIR}/csml)
-  endif()
   if(NOT TARGET softfloat)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/VeeR-ISS/softfloat
                      ${CMAKE_CURRENT_BINARY_DIR}/softfloat)
@@ -158,7 +154,7 @@ add_library(veeriss_model STATIC ${VEERISS_MODEL_SRCS})
 target_include_directories(veeriss_model
   PUBLIC
 	VeeR-ISSTlm/model/inc
-	${CMAKE_CURRENT_SOURCE_DIR}/../utils/csml/inc
+	${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
 	${CMAKE_CURRENT_SOURCE_DIR}/../utils/tlm_extensions
 	${CMAKE_CURRENT_SOURCE_DIR}/../../../vp/platform/infra
 	${CMAKE_CURRENT_SOURCE_DIR}/../peripherals/el2_pic/include
@@ -207,6 +203,9 @@ target_compile_definitions(veeriss_model PUBLIC
 )
 
 target_link_libraries(veeriss_model PRIVATE softfloat Boost::headers Boost::program_options PUBLIC SystemC::systemc Threads::Threads z el2_pic_model)
+if(CCI_FOUND)
+  target_link_libraries(veeriss_model PUBLIC ${CCI_LIBRARIES})
+endif()
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_libraries(veeriss_model PRIVATE stdc++fs)
 endif()
@@ -217,7 +216,6 @@ if(BUILD_TESTS)
   add_executable(veeriss_tb test/veeriss_tb.cpp)
   peripheral_link_test_to_model(veeriss_tb veeriss_model)
   target_link_libraries(veeriss_tb PRIVATE
-    csml_logger
     SystemC::systemc
     Threads::Threads
     Boost::headers
@@ -229,7 +227,7 @@ if(BUILD_TESTS)
   endif()
   target_include_directories(veeriss_tb PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/VeeR-ISSTlm/model/inc
-    ${CMAKE_CURRENT_SOURCE_DIR}/../utils/csml/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../common/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../utils/tlm_extensions
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../vp/platform/infra
     ${CMAKE_CURRENT_SOURCE_DIR}/../peripherals/el2_pic/include

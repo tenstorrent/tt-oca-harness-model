@@ -5,10 +5,10 @@
 #include "km_kpv.h"
 #include "km_mailbox.h"
 #include "km_firmware_handler.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#include "reg_logger.h"
+#include "reg_param.h"
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 #include "tlm_utils/simple_initiator_socket.h"
 #include "tlm_utils/simple_target_socket.h"
@@ -21,10 +21,10 @@
  * Extends key_manager_base with:
  *   - Active-low reset input (rst_ni)
  *   - IRQ output to SEP CPU
- *   - CsmlLogger for diagnostics
+ *   - RegLogger for diagnostics
  *   - km_kpv  : internal Key and Policy Vault storage
  *   - km_mailbox : internal mailbox FIFO model
- *   - register_all_callbacks() : wires side-effect handlers onto csml_memory
+ *   - register_all_callbacks() : wires side-effect handlers onto regmodel::Memory
  */
 class key_manager_model : public key_manager_base
 {
@@ -32,7 +32,7 @@ public:
     SC_HAS_PROCESS(key_manager_model);
 
     key_manager_model(sc_module_name name,
-                    int log_verbosity = CSML_DEFAULT_VERBOSITY);
+                    int log_verbosity = REG_DEFAULT_VERBOSITY);
 
     // -----------------------------------------------------------------------
     // Ports
@@ -54,8 +54,8 @@ public:
     tlm_utils::simple_initiator_socket<key_manager_model, 32> abr_mlkem_z_socket;
     tlm_utils::simple_initiator_socket<key_manager_model, 32> abr_mlkem_msg_socket;
 
-    CsmlLogger logger;
-    csml_param<int> verbosity; ///< Logging verbosity (runtime-overridable via ini file)
+    RegLogger logger;
+    regmodel::Param<int> verbosity; ///< Logging verbosity (runtime-overridable via ini file)
 
     /// Receive OTP data from sep_efuse (call after end_of_elaboration).
     void set_otp_data(const keymgr_tt::km_firmware_handler::km_otp_data_t& d) {

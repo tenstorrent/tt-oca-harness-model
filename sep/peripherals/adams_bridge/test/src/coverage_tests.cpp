@@ -157,7 +157,7 @@ tlm::tlm_response_status raw_xact(tlm_utils::simple_initiator_socket<abr_testben
     return trans.get_response_status();
 }
 
-void set_int_param(csml_param<int> &p, int value)
+void set_int_param(regmodel::Param<int> &p, int value)
 {
     auto broker = cci::cci_get_broker();
     cci::cci_param_handle h = broker.get_param_handle(p.get_Name());

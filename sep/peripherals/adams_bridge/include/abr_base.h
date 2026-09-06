@@ -1,14 +1,16 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file abr_base.h
  * @brief Register block for the Adams Bridge (ABR) PQC engine.
  *
  * Declares every software-visible word in the 64 KiB ABR aperture and binds
- * the backing csml_memory to the TLM target socket. Behaviour lives in
+ * the backing regmodel::Memory to the TLM target socket. Behaviour lives in
  * adams_bridge.h (abr_ip); this layer is pure register declaration, matching
  * the hmac_base / kmac_base convention used by the other SEP crypto IPs.
  *
  * Byte offsets come from tt-oca-hw/vendor/adams_bridge/src/abr_top/rtl/abr_reg.rdl.
- * csml_reg takes a WORD index, hence the /sizeof(unsigned int) throughout.
+ * regmodel::Reg takes a WORD index, hence the /sizeof(unsigned int) throughout.
  */
 
 #pragma once
@@ -110,7 +112,7 @@ static constexpr unsigned int N_MLKEM_CIPHERTEXT = 392u;  ///< 1568 B
 /// Full aperture size (sep_crypto_pkg: 0x1094_0000..0x1095_0000).
 static constexpr unsigned int ABR_APERTURE_SIZE = 0x10000u;
 
-/// Convert a byte offset to the word index csml_reg expects.
+/// Convert a byte offset to the word index regmodel::Reg expects.
 static constexpr unsigned int w(unsigned int byte_offset)
 {
     return byte_offset / static_cast<unsigned int>(sizeof(unsigned int));
@@ -121,15 +123,15 @@ static constexpr unsigned int w(unsigned int byte_offset)
 /**
  * @brief Register-declaration base for the Adams Bridge model.
  *
- * Every accessible word must own a csml callback: csml_memory reports
+ * Every accessible word must own a regmodel callback: regmodel::Memory reports
  * "RESERVED LOCATION" for any offset with no registered register, so the large
- * key / signature windows are declared as csml_reg_vector rather than left as
+ * key / signature windows are declared as regmodel::RegVector rather than left as
  * raw backing store.
  */
 class abr_base : public sc_core::sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
 
     abr_base(sc_core::sc_module_name name, unsigned int memory_size)
         : sc_core::sc_module(name),
@@ -255,27 +257,27 @@ class abr_base : public sc_core::sc_module
     /// Restore every register to its RDL reset value.
     void reset_all_registers();
 
-    csml_memory<32> memory;
-    tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+    regmodel::Memory<32> memory;
+    tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
     // --- ML-DSA -------------------------------------------------------------
-    csml_reg_vector<abr::RO_DATA_type<32>, abr::N_NAME>            MLDSA_NAME;
-    csml_reg_vector<abr::RO_DATA_type<32>, abr::N_VERSION>         MLDSA_VERSION;
+    regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_NAME>            MLDSA_NAME;
+    regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_VERSION>         MLDSA_VERSION;
     abr::MLDSA_CTRL_type<32>                                       MLDSA_CTRL;
     abr::MLDSA_STATUS_type<32>                                     MLDSA_STATUS;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_ENTROPY>         ABR_ENTROPY;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_MLDSA_SEED>      MLDSA_SEED;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_SIGN_RND>        MLDSA_SIGN_RND;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_MLDSA_MSG>       MLDSA_MSG;
-    csml_reg_vector<abr::RO_DATA_type<32>, abr::N_VERIFY_RES>      MLDSA_VERIFY_RES;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_EXTERNAL_MU>     MLDSA_EXTERNAL_MU;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_ENTROPY>         ABR_ENTROPY;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_MLDSA_SEED>      MLDSA_SEED;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_SIGN_RND>        MLDSA_SIGN_RND;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_MLDSA_MSG>       MLDSA_MSG;
+    regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_VERIFY_RES>      MLDSA_VERIFY_RES;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_EXTERNAL_MU>     MLDSA_EXTERNAL_MU;
     abr::MLDSA_MSG_STROBE_type<32>                                 MLDSA_MSG_STROBE;
     abr::MLDSA_CTX_CONFIG_type<32>                                 MLDSA_CTX_CONFIG;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_MLDSA_CTX>       MLDSA_CTX;
-    csml_reg_vector<abr::RW_DATA_type<32>, abr::N_MLDSA_PUBKEY>    MLDSA_PUBKEY;
-    csml_reg_vector<abr::RW_DATA_type<32>, abr::N_MLDSA_SIGNATURE> MLDSA_SIGNATURE;
-    csml_reg_vector<abr::RO_DATA_type<32>, abr::N_MLDSA_PRIVKEY>   MLDSA_PRIVKEY_OUT;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_MLDSA_PRIVKEY>   MLDSA_PRIVKEY_IN;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_MLDSA_CTX>       MLDSA_CTX;
+    regmodel::RegVector<abr::RW_DATA_type<32>, abr::N_MLDSA_PUBKEY>    MLDSA_PUBKEY;
+    regmodel::RegVector<abr::RW_DATA_type<32>, abr::N_MLDSA_SIGNATURE> MLDSA_SIGNATURE;
+    regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_MLDSA_PRIVKEY>   MLDSA_PRIVKEY_OUT;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_MLDSA_PRIVKEY>   MLDSA_PRIVKEY_IN;
 
     // --- ML-DSA Key Vault ----------------------------------------------------
     abr::KV_RD_CTRL_type<32>   kv_mldsa_seed_rd_ctrl;
@@ -297,17 +299,17 @@ class abr_base : public sc_core::sc_module
     abr::INTR_COUNT_INCR_type<32>   notif_cmd_done_intr_count_incr_r;
 
     // --- ML-KEM ----------------------------------------------------------------
-    csml_reg_vector<abr::RO_DATA_type<32>, abr::N_NAME>              MLKEM_NAME;
-    csml_reg_vector<abr::RO_DATA_type<32>, abr::N_VERSION>           MLKEM_VERSION;
+    regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_NAME>              MLKEM_NAME;
+    regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_VERSION>           MLKEM_VERSION;
     abr::MLKEM_CTRL_type<32>                                         MLKEM_CTRL;
     abr::MLKEM_STATUS_type<32>                                       MLKEM_STATUS;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_MLKEM_SEED>        MLKEM_SEED_D;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_MLKEM_SEED>        MLKEM_SEED_Z;
-    csml_reg_vector<abr::RO_DATA_type<32>, abr::N_MLKEM_SHARED_KEY>  MLKEM_SHARED_KEY;
-    csml_reg_vector<abr::WO_DATA_type<32>, abr::N_MLKEM_MSG>         MLKEM_MSG;
-    csml_reg_vector<abr::RW_DATA_type<32>, abr::N_MLKEM_DECAPS_KEY>  MLKEM_DECAPS_KEY;
-    csml_reg_vector<abr::RW_DATA_type<32>, abr::N_MLKEM_ENCAPS_KEY>  MLKEM_ENCAPS_KEY;
-    csml_reg_vector<abr::RW_DATA_type<32>, abr::N_MLKEM_CIPHERTEXT>  MLKEM_CIPHERTEXT;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_MLKEM_SEED>        MLKEM_SEED_D;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_MLKEM_SEED>        MLKEM_SEED_Z;
+    regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_MLKEM_SHARED_KEY>  MLKEM_SHARED_KEY;
+    regmodel::RegVector<abr::WO_DATA_type<32>, abr::N_MLKEM_MSG>         MLKEM_MSG;
+    regmodel::RegVector<abr::RW_DATA_type<32>, abr::N_MLKEM_DECAPS_KEY>  MLKEM_DECAPS_KEY;
+    regmodel::RegVector<abr::RW_DATA_type<32>, abr::N_MLKEM_ENCAPS_KEY>  MLKEM_ENCAPS_KEY;
+    regmodel::RegVector<abr::RW_DATA_type<32>, abr::N_MLKEM_CIPHERTEXT>  MLKEM_CIPHERTEXT;
 
     // --- ML-KEM Key Vault --------------------------------------------------------
     abr::KV_RD_CTRL_type<32>   kv_mlkem_seed_rd_ctrl;

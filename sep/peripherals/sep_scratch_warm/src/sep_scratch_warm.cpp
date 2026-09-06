@@ -6,7 +6,7 @@
 
 namespace {
 
-// CSML 64-bit words receive narrow TLM stores as a value with only those bytes
+// 64-bit register words receive narrow TLM stores as a value with only those bytes
 // set (the rest 0). The legacy write callback then applies the 32-bit data
 // mask against that zero-padded word and wipes SCRATCH.data. Merge with the
 // current word using the beat's byte-enable before handle_write().

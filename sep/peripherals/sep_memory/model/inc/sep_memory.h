@@ -12,19 +12,19 @@
 
 #include "paged_mem.h"
 #include "load_if.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 
 class SEPMemory : public sc_module, public load_if
 {
   public:
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-    // CSML Logger
-    CsmlLogger logger;
-    csml_param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+    // Logger
+    RegLogger logger;
+    regmodel::Param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
 
     typedef tlm::tlm_generic_payload TRANS;
 

@@ -16,7 +16,7 @@
 #include <systemc.h>
 #include "../../include/mailbox.h"
 #include "mailbox_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -40,10 +40,10 @@ public:
      * @param name Module name
      * @param log_verbosity Logging verbosity level (0=error, 1=warn, 2=info, 3=debug)
      */
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-    testbench(sc_module_name name, int log_verbosity = CSML_DEFAULT_VERBOSITY);
+    testbench(sc_module_name name, int log_verbosity = REG_DEFAULT_VERBOSITY);
 
     /// @brief Destructor
     ~testbench();
@@ -446,5 +446,5 @@ private:
     void apply_reset();
 
     /// @brief Logger instance for structured logging
-    mutable CsmlLogger logger;
+    mutable RegLogger logger;
 };

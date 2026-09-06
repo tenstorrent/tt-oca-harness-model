@@ -20,7 +20,7 @@
 #include "otbn_test.h"
 #include "otbn.h"
 #include "otbn_interfaces.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 // ============================================================================
 // OTBN Register Offset Definitions (Common for all tests)
@@ -101,8 +101,8 @@ private:
     otbn_test *test_model;  ///< Test model for TLM transactions
     otbn_ip *dut;           ///< Device under test (OTBN IP)
 
-    /// CSML Logger instance
-    CsmlLogger logger;  ///< Logger for debug and tracing
+    /// RegLogger instance
+    RegLogger logger;  ///< Logger for debug and tracing
 
     // =========================================================================
     // Test Statistics and Reporting
@@ -284,6 +284,8 @@ public:
     void test_cov_rsa3072_zero_modulus();
     void test_cov_csr_wdr_callback_execute();
     void test_cov_wdr_key_read_with_key();
+    void test_cov_otp_key_rsp_channel();
+    void test_cov_algorithm_error_guards();
     void test_cov_otp_scramble_key_channel();
     void test_cov_imem_oob_and_busy_block();
     void test_cov_keymgr_ignore_and_invalid_cmd();

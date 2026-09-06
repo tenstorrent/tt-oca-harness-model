@@ -102,7 +102,7 @@ void testbench::wait_for_idle(int timeout_ns)
         wait(10, SC_NS);
         elapsed += 10;
     }
-    CSML_WARN(1, logger) << "Timeout waiting for AES IDLE" << std::endl;
+    REG_WARN(1, logger) << "Timeout waiting for AES IDLE" << std::endl;
 }
 
 void testbench::wait_for_output_valid(int timeout_ns)
@@ -116,7 +116,7 @@ void testbench::wait_for_output_valid(int timeout_ns)
         wait(10, SC_NS);
         elapsed += 10;
     }
-    CSML_WARN(1, logger) << "Timeout waiting for OUTPUT_VALID" << std::endl;
+    REG_WARN(1, logger) << "Timeout waiting for OUTPUT_VALID" << std::endl;
 }
 
 void testbench::trigger_manual_start()

@@ -61,16 +61,16 @@ test_edn_func_008::test_edn_func_008(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "====================================================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_008 Test Suite Initialized";
-    CSML_INFO(1, logger) << "Functionality: Entropy Bus Consistency Checking";
-    CSML_INFO(1, logger) << "Test Coverage: 12 comprehensive test cases";
-    CSML_INFO(1, logger) << "====================================================================";
+    REG_INFO(1, logger) << "====================================================================";
+    REG_INFO(1, logger) << "EDN_FUNC_008 Test Suite Initialized";
+    REG_INFO(1, logger) << "Functionality: Entropy Bus Consistency Checking";
+    REG_INFO(1, logger) << "Test Coverage: 12 comprehensive test cases";
+    REG_INFO(1, logger) << "====================================================================";
 }
 
 test_edn_func_008::~test_edn_func_008()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_008 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_008 test suite terminated";
 }
 
 // =============================================================================
@@ -79,11 +79,11 @@ test_edn_func_008::~test_edn_func_008()
 
 unsigned int test_edn_func_008::run_all_tests()
 {
-    CSML_INFO(1, logger) << "";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_008 Test Execution Start";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_008 Test Execution Start";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
 
     bool result;
 
@@ -160,42 +160,42 @@ unsigned int test_edn_func_008::run_all_tests()
     report_test_result("TC12: All-Ones Values Consecutive Match", result);
 
     // Print Summary
-    CSML_INFO(1, logger) << "";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_008 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_008 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed << " ("
         << std::fixed << std::setprecision(1)
         << (100.0 * m_tests_passed / m_tests_run) << "%)";
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << oss.str();
+        REG_ERROR(1, logger) << oss.str();
     } else {
-        CSML_INFO(1, logger) << oss.str();
+        REG_INFO(1, logger) << oss.str();
     }
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "";
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     } else {
-        CSML_INFO(1, logger) << "";
-        CSML_INFO(1, logger) << "ALL TESTS PASSED!";
+        REG_INFO(1, logger) << "";
+        REG_INFO(1, logger) << "ALL TESTS PASSED!";
     }
 
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
 
     return m_tests_failed;
 }
@@ -206,7 +206,7 @@ unsigned int test_edn_func_008::run_all_tests()
 
 bool test_edn_func_008::test_consecutive_different_values()
 {
-    CSML_INFO(1, logger) << "TC1: Testing consecutive different values...";
+    REG_INFO(1, logger) << "TC1: Testing consecutive different values...";
 
     enable_edn_software_mode();
 
@@ -217,7 +217,7 @@ bool test_edn_func_008::test_consecutive_different_values()
 
     // Verify no alert after first genbits (no previous value)
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered after first genbits";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered after first genbits";
         return false;
     }
 
@@ -228,16 +228,16 @@ bool test_edn_func_008::test_consecutive_different_values()
 
     // Verify no alert when consecutive values differ
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for different consecutive values";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for different consecutive values";
         return false;
     }
 
     if (!verify_alert_recov_signal(false)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert asserted incorrectly";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert asserted incorrectly";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: No alert triggered for different consecutive values";
+    REG_INFO(1, logger) << "  PASS: No alert triggered for different consecutive values";
     return true;
 }
 
@@ -247,7 +247,7 @@ bool test_edn_func_008::test_consecutive_different_values()
 
 bool test_edn_func_008::test_first_genbits_after_reset()
 {
-    CSML_INFO(1, logger) << "TC2: Testing first genbits after reset...";
+    REG_INFO(1, logger) << "TC2: Testing first genbits after reset...";
 
     enable_edn_software_mode();
 
@@ -258,7 +258,7 @@ bool test_edn_func_008::test_first_genbits_after_reset()
 
     // Verify no alert after first genbits (m_prev_genbits_valid = false)
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for first genbits after reset";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for first genbits after reset";
         return false;
     }
 
@@ -269,16 +269,16 @@ bool test_edn_func_008::test_first_genbits_after_reset()
 
     // Verify alert IS triggered now (have previous value to compare)
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert NOT triggered for second matching genbits";
+        REG_ERROR(1, logger) << "  FAIL: Alert NOT triggered for second matching genbits";
         return false;
     }
 
     if (!verify_alert_recov_signal(true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: First genbits after reset correctly handled";
+    REG_INFO(1, logger) << "  PASS: First genbits after reset correctly handled";
     return true;
 }
 
@@ -288,7 +288,7 @@ bool test_edn_func_008::test_first_genbits_after_reset()
 
 bool test_edn_func_008::test_alert_on_consecutive_match()
 {
-    CSML_INFO(1, logger) << "TC3: Testing alert on consecutive identical genbits...";
+    REG_INFO(1, logger) << "TC3: Testing alert on consecutive identical genbits...";
 
     enable_edn_software_mode();
 
@@ -299,7 +299,7 @@ bool test_edn_func_008::test_alert_on_consecutive_match()
 
     // Verify no alert yet
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered prematurely";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered prematurely";
         return false;
     }
 
@@ -310,19 +310,19 @@ bool test_edn_func_008::test_alert_on_consecutive_match()
     // Verify EDN_BUS_CMP_ALERT bit is set (bit 12)
     uint32_t recov_alert_sts = read_recov_alert_sts();
     if ((recov_alert_sts & EDN_BUS_CMP_ALERT_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: EDN_BUS_CMP_ALERT not set in RECOV_ALERT_STS";
-        CSML_ERROR(1, logger) << "    Expected bit 12 = 1, Got RECOV_ALERT_STS = 0x"
+        REG_ERROR(1, logger) << "  FAIL: EDN_BUS_CMP_ALERT not set in RECOV_ALERT_STS";
+        REG_ERROR(1, logger) << "    Expected bit 12 = 1, Got RECOV_ALERT_STS = 0x"
                               << std::hex << recov_alert_sts << std::dec;
         return false;
     }
 
     // Verify alert_recov_alert signal is asserted
     if (!verify_alert_recov_signal(true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert signal not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert signal not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Alert correctly triggered on consecutive match";
+    REG_INFO(1, logger) << "  PASS: Alert correctly triggered on consecutive match";
     return true;
 }
 
@@ -332,7 +332,7 @@ bool test_edn_func_008::test_alert_on_consecutive_match()
 
 bool test_edn_func_008::test_w0c_clearing_mechanism()
 {
-    CSML_INFO(1, logger) << "TC4: Testing W0C clearing mechanism...";
+    REG_INFO(1, logger) << "TC4: Testing W0C clearing mechanism...";
 
     enable_edn_software_mode();
 
@@ -345,7 +345,7 @@ bool test_edn_func_008::test_w0c_clearing_mechanism()
 
     // Verify alert is set
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
+        REG_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
         return false;
     }
 
@@ -355,13 +355,13 @@ bool test_edn_func_008::test_w0c_clearing_mechanism()
 
     // Verify alert is cleared
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: W0C did not clear EDN_BUS_CMP_ALERT";
+        REG_ERROR(1, logger) << "  FAIL: W0C did not clear EDN_BUS_CMP_ALERT";
         return false;
     }
 
     // Verify alert_recov_alert signal deasserted
     if (!verify_alert_recov_signal(false)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not deasserted after W0C";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not deasserted after W0C";
         return false;
     }
 
@@ -371,11 +371,11 @@ bool test_edn_func_008::test_w0c_clearing_mechanism()
 
     uint32_t recov_sts = read_recov_alert_sts();
     if ((recov_sts & EDN_BUS_CMP_ALERT_MASK) != 0) {
-        CSML_ERROR(1, logger) << "  FAIL: Writing 1 to W0C bit set the bit (should be no effect)";
+        REG_ERROR(1, logger) << "  FAIL: Writing 1 to W0C bit set the bit (should be no effect)";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: W0C clearing mechanism works correctly";
+    REG_INFO(1, logger) << "  PASS: W0C clearing mechanism works correctly";
     return true;
 }
 
@@ -385,7 +385,7 @@ bool test_edn_func_008::test_w0c_clearing_mechanism()
 
 bool test_edn_func_008::test_alert_signal_persistence()
 {
-    CSML_INFO(1, logger) << "TC5: Testing alert signal persistence...";
+    REG_INFO(1, logger) << "TC5: Testing alert signal persistence...";
 
     enable_edn_software_mode();
 
@@ -395,7 +395,7 @@ bool test_edn_func_008::test_alert_signal_persistence()
     wait(1, SC_NS);
 
     if (!verify_alert_recov_signal(false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Initial alert state incorrect";
+        REG_ERROR(1, logger) << "  FAIL: Initial alert state incorrect";
         return false;
     }
 
@@ -404,7 +404,7 @@ bool test_edn_func_008::test_alert_signal_persistence()
     wait(SC_ZERO_TIME);
 
     if (!verify_alert_recov_signal(true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not asserted after match";
+        REG_ERROR(1, logger) << "  FAIL: Alert not asserted after match";
         return false;
     }
 
@@ -412,7 +412,7 @@ bool test_edn_func_008::test_alert_signal_persistence()
     wait(100, SC_NS);
 
     if (!verify_alert_recov_signal(true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not persistent (deasserted prematurely)";
+        REG_ERROR(1, logger) << "  FAIL: Alert not persistent (deasserted prematurely)";
         return false;
     }
 
@@ -422,18 +422,18 @@ bool test_edn_func_008::test_alert_signal_persistence()
 
     // Verify alert deasserted immediately
     if (!verify_alert_recov_signal(false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not deasserted after W0C clear";
+        REG_ERROR(1, logger) << "  FAIL: Alert not deasserted after W0C clear";
         return false;
     }
 
     // Verify alert remains deasserted
     wait(50, SC_NS);
     if (!verify_alert_recov_signal(false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert reasserted incorrectly";
+        REG_ERROR(1, logger) << "  FAIL: Alert reasserted incorrectly";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Alert signal persistence verified";
+    REG_INFO(1, logger) << "  PASS: Alert signal persistence verified";
     return true;
 }
 
@@ -443,7 +443,7 @@ bool test_edn_func_008::test_alert_signal_persistence()
 
 bool test_edn_func_008::test_multiple_consecutive_matches()
 {
-    CSML_INFO(1, logger) << "TC6: Testing multiple consecutive matches...";
+    REG_INFO(1, logger) << "TC6: Testing multiple consecutive matches...";
 
     enable_edn_software_mode();
 
@@ -456,7 +456,7 @@ bool test_edn_func_008::test_multiple_consecutive_matches()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: First match did not trigger alert";
+        REG_ERROR(1, logger) << "  FAIL: First match did not trigger alert";
         return false;
     }
 
@@ -469,7 +469,7 @@ bool test_edn_func_008::test_multiple_consecutive_matches()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Third consecutive match did not trigger alert";
+        REG_ERROR(1, logger) << "  FAIL: Third consecutive match did not trigger alert";
         return false;
     }
 
@@ -483,7 +483,7 @@ bool test_edn_func_008::test_multiple_consecutive_matches()
     wait(1, SC_NS);
 
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for different value";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for different value";
         return false;
     }
 
@@ -492,11 +492,11 @@ bool test_edn_func_008::test_multiple_consecutive_matches()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Second sequence match did not trigger alert";
+        REG_ERROR(1, logger) << "  FAIL: Second sequence match did not trigger alert";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Multiple consecutive matches handled correctly";
+    REG_INFO(1, logger) << "  PASS: Multiple consecutive matches handled correctly";
     return true;
 }
 
@@ -506,7 +506,7 @@ bool test_edn_func_008::test_multiple_consecutive_matches()
 
 bool test_edn_func_008::test_partial_match_no_alert()
 {
-    CSML_INFO(1, logger) << "TC7: Testing partial match (only 3 of 4 words match)...";
+    REG_INFO(1, logger) << "TC7: Testing partial match (only 3 of 4 words match)...";
 
     enable_edn_software_mode();
 
@@ -520,7 +520,7 @@ bool test_edn_func_008::test_partial_match_no_alert()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for partial match (4th word differs)";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for partial match (4th word differs)";
         return false;
     }
 
@@ -537,7 +537,7 @@ bool test_edn_func_008::test_partial_match_no_alert()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for partial match (3rd word differs)";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for partial match (3rd word differs)";
         return false;
     }
 
@@ -554,11 +554,11 @@ bool test_edn_func_008::test_partial_match_no_alert()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for partial match (1st word differs)";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for partial match (1st word differs)";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Partial matches correctly do not trigger alert";
+    REG_INFO(1, logger) << "  PASS: Partial matches correctly do not trigger alert";
     return true;
 }
 
@@ -568,7 +568,7 @@ bool test_edn_func_008::test_partial_match_no_alert()
 
 bool test_edn_func_008::test_reset_clears_state()
 {
-    CSML_INFO(1, logger) << "TC8: Testing reset clears consistency check state...";
+    REG_INFO(1, logger) << "TC8: Testing reset clears consistency check state...";
 
     enable_edn_software_mode();
 
@@ -580,7 +580,7 @@ bool test_edn_func_008::test_reset_clears_state()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
+        REG_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
         return false;
     }
 
@@ -590,13 +590,13 @@ bool test_edn_func_008::test_reset_clears_state()
 
     // Verify RECOV_ALERT_STS cleared by reset
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Reset did not clear RECOV_ALERT_STS.EDN_BUS_CMP_ALERT";
+        REG_ERROR(1, logger) << "  FAIL: Reset did not clear RECOV_ALERT_STS.EDN_BUS_CMP_ALERT";
         return false;
     }
 
     // Verify alert_recov_alert signal deasserted
     if (!verify_alert_recov_signal(false)) {
-        CSML_ERROR(1, logger) << "  FAIL: Reset did not deassert alert_recov_alert";
+        REG_ERROR(1, logger) << "  FAIL: Reset did not deassert alert_recov_alert";
         return false;
     }
 
@@ -608,7 +608,7 @@ bool test_edn_func_008::test_reset_clears_state()
     wait(1, SC_NS);
 
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for first genbits after reset";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for first genbits after reset";
         return false;
     }
 
@@ -617,11 +617,11 @@ bool test_edn_func_008::test_reset_clears_state()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not triggered for second genbits after reset";
+        REG_ERROR(1, logger) << "  FAIL: Alert not triggered for second genbits after reset";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Reset correctly clears consistency check state";
+    REG_INFO(1, logger) << "  PASS: Reset correctly clears consistency check state";
     return true;
 }
 
@@ -631,7 +631,7 @@ bool test_edn_func_008::test_reset_clears_state()
 
 bool test_edn_func_008::test_entropy_distribution_continues()
 {
-    CSML_INFO(1, logger) << "TC9: Testing entropy distribution continues during alert...";
+    REG_INFO(1, logger) << "TC9: Testing entropy distribution continues during alert...";
 
     enable_edn_software_mode();
 
@@ -652,7 +652,7 @@ bool test_edn_func_008::test_entropy_distribution_continues()
 
     // Verify alert is active
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
+        REG_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
         return false;
     }
 
@@ -663,7 +663,7 @@ bool test_edn_func_008::test_entropy_distribution_continues()
 
     // Verify alert still active BUT entropy was buffered
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert cleared unexpectedly";
+        REG_ERROR(1, logger) << "  FAIL: Alert cleared unexpectedly";
         return false;
     }
 
@@ -672,11 +672,11 @@ bool test_edn_func_008::test_entropy_distribution_continues()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert could not be cleared";
+        REG_ERROR(1, logger) << "  FAIL: Alert could not be cleared";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Entropy distribution continues during alert (recoverable)";
+    REG_INFO(1, logger) << "  PASS: Entropy distribution continues during alert (recoverable)";
     return true;
 }
 
@@ -686,7 +686,7 @@ bool test_edn_func_008::test_entropy_distribution_continues()
 
 bool test_edn_func_008::test_alert_clear_preserves_prev_state()
 {
-    CSML_INFO(1, logger) << "TC10: Testing alert clear preserves m_prev_genbits...";
+    REG_INFO(1, logger) << "TC10: Testing alert clear preserves m_prev_genbits...";
 
     enable_edn_software_mode();
 
@@ -700,7 +700,7 @@ bool test_edn_func_008::test_alert_clear_preserves_prev_state()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
+        REG_ERROR(1, logger) << "  FAIL: Alert not triggered (precondition failed)";
         return false;
     }
 
@@ -709,7 +709,7 @@ bool test_edn_func_008::test_alert_clear_preserves_prev_state()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not cleared";
+        REG_ERROR(1, logger) << "  FAIL: Alert not cleared";
         return false;
     }
 
@@ -719,11 +719,11 @@ bool test_edn_func_008::test_alert_clear_preserves_prev_state()
     wait(SC_ZERO_TIME);
 
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert did not retrigger (m_prev_genbits was cleared)";
+        REG_ERROR(1, logger) << "  FAIL: Alert did not retrigger (m_prev_genbits was cleared)";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Alert clear preserves m_prev_genbits state";
+    REG_INFO(1, logger) << "  PASS: Alert clear preserves m_prev_genbits state";
     return true;
 }
 
@@ -733,7 +733,7 @@ bool test_edn_func_008::test_alert_clear_preserves_prev_state()
 
 bool test_edn_func_008::test_zero_values_match()
 {
-    CSML_INFO(1, logger) << "TC11: Testing zero values consecutive match...";
+    REG_INFO(1, logger) << "TC11: Testing zero values consecutive match...";
 
     enable_edn_software_mode();
 
@@ -744,7 +744,7 @@ bool test_edn_func_008::test_zero_values_match()
 
     // Verify no alert (first genbits)
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for first zero genbits";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for first zero genbits";
         return false;
     }
 
@@ -754,16 +754,16 @@ bool test_edn_func_008::test_zero_values_match()
 
     // Verify alert triggered
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not triggered for consecutive zero values";
+        REG_ERROR(1, logger) << "  FAIL: Alert not triggered for consecutive zero values";
         return false;
     }
 
     if (!verify_alert_recov_signal(true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Zero values consecutive match correctly detected";
+    REG_INFO(1, logger) << "  PASS: Zero values consecutive match correctly detected";
     return true;
 }
 
@@ -773,7 +773,7 @@ bool test_edn_func_008::test_zero_values_match()
 
 bool test_edn_func_008::test_all_ones_match()
 {
-    CSML_INFO(1, logger) << "TC12: Testing all-ones values consecutive match...";
+    REG_INFO(1, logger) << "TC12: Testing all-ones values consecutive match...";
 
     enable_edn_software_mode();
 
@@ -784,7 +784,7 @@ bool test_edn_func_008::test_all_ones_match()
 
     // Verify no alert (first genbits)
     if (!verify_edn_bus_cmp_alert(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert triggered for first all-ones genbits";
+        REG_ERROR(1, logger) << "  FAIL: Alert triggered for first all-ones genbits";
         return false;
     }
 
@@ -794,16 +794,16 @@ bool test_edn_func_008::test_all_ones_match()
 
     // Verify alert triggered
     if (!verify_edn_bus_cmp_alert(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Alert not triggered for consecutive all-ones values";
+        REG_ERROR(1, logger) << "  FAIL: Alert not triggered for consecutive all-ones values";
         return false;
     }
 
     if (!verify_alert_recov_signal(true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: All-ones values consecutive match correctly detected";
+    REG_INFO(1, logger) << "  PASS: All-ones values consecutive match correctly detected";
     return true;
 }
 
@@ -848,7 +848,7 @@ bool test_edn_func_008::verify_edn_bus_cmp_alert(uint32_t expected_state)
     uint32_t actual_state = (recov_sts & EDN_BUS_CMP_ALERT_MASK) ? 1 : 0;
 
     if (actual_state != expected_state) {
-        CSML_ERROR(1, logger) << "    EDN_BUS_CMP_ALERT mismatch: expected=" << expected_state
+        REG_ERROR(1, logger) << "    EDN_BUS_CMP_ALERT mismatch: expected=" << expected_state
                               << ", actual=" << actual_state
                               << " (RECOV_ALERT_STS=0x" << std::hex << recov_sts << std::dec << ")";
         return false;
@@ -888,12 +888,12 @@ void test_edn_func_008::report_test_result(const std::string& test_name, bool pa
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
     }
 
-    CSML_INFO(1, logger) << ""; // Blank line between tests
+    REG_INFO(1, logger) << ""; // Blank line between tests
 }

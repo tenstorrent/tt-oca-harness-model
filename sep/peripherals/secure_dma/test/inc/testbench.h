@@ -13,7 +13,7 @@
 
 #include "secure_dma.h"
 #include "secure_dma_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -85,8 +85,8 @@ public:
   void print_test_summary();
 
 private:
-  /// CSML logger instance for testbench diagnostics
-  CsmlLogger logger;
+  /// RegLogger instance for testbench diagnostics
+  RegLogger logger;
 
   /// DMA model instance (Device Under Test)
   std::unique_ptr<secure_dma_model> m_model;
@@ -763,7 +763,12 @@ public:
   void test_chunk_size_exceeds_total_size_warning();
   void test_hash_init_frees_previous_context_after_failed_transfer();
 
+  // Coverage tests for helper/error paths not hit by FUNC-* suites
   void run_coverage_tests();
+  void test_cov_helper_error_guards();
+  void test_cov_hash_reset_and_inactive();
+  void test_cov_handshake_trigger_already_high();
+  void test_cov_invalid_asid_transaction();
   void test_cov_bus_name_and_hash_helpers();
   void test_cov_handshake_already_high_on_arm();
   void test_cov_hash_reset_frees_context();

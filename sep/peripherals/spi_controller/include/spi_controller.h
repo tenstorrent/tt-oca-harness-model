@@ -14,8 +14,8 @@
 
 #include "spi_controller_base.h"
 #include "spi_controller_interface.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <tlm_utils/tlm_quantumkeeper.h>
 #include <queue>
 #include <deque>
@@ -46,25 +46,25 @@ public:
    /// Clock input (standard SystemC clock signal)
    sc_in<bool> clk_i;  ///< Functional clock input for SCK generation
 
-   /// CSML Logger instance
-   CsmlLogger logger;  ///< Logger for debug and tracing
+   /// RegLogger instance
+   RegLogger logger;  ///< Logger for debug and tracing
 
    /// ==========================================================================
-   /// Configuration Parameters (csml_param — portable across CCI)
+   /// Configuration Parameters (regmodel::Param — portable across CCI)
    /// ==========================================================================
-   csml_param<uint32_t> NumCS;              ///< Number of chip select lines
-   csml_param<uint32_t> TxDepth;            ///< TX FIFO depth in 32-bit words
-   csml_param<uint32_t> RxDepth;            ///< RX FIFO depth in 32-bit words
-   csml_param<bool>     ByteOrder;          ///< true=Little-Endian, false=Big-Endian
-   csml_param<uint32_t> CmdDepth;           ///< Command FIFO depth
-   csml_param<double>   ClkPeriodNs;        ///< Clock period in nanoseconds (default: 10ns = 100MHz)
-   csml_param<double>   TimeKeeperQuantumNs; ///< Time keeper quantum in ns (0 = disabled)
-   csml_param<int>      verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+   regmodel::Param<uint32_t> NumCS;              ///< Number of chip select lines
+   regmodel::Param<uint32_t> TxDepth;            ///< TX FIFO depth in 32-bit words
+   regmodel::Param<uint32_t> RxDepth;            ///< RX FIFO depth in 32-bit words
+   regmodel::Param<bool>     ByteOrder;          ///< true=Little-Endian, false=Big-Endian
+   regmodel::Param<uint32_t> CmdDepth;           ///< Command FIFO depth
+   regmodel::Param<double>   ClkPeriodNs;        ///< Clock period in nanoseconds (default: 10ns = 100MHz)
+   regmodel::Param<double>   TimeKeeperQuantumNs; ///< Time keeper quantum in ns (0 = disabled)
+   regmodel::Param<int>      verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-   spi_controller_ip(sc_module_name n, int log_verbosity = CSML_DEFAULT_VERBOSITY);
+   spi_controller_ip(sc_module_name n, int log_verbosity = REG_DEFAULT_VERBOSITY);
 
    /**
     * @brief SystemC end_of_elaboration callback for initialization

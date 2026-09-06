@@ -90,13 +90,13 @@
 
 #pragma once
 #include "aon_timer_base.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <tlm_utils/tlm_quantumkeeper.h>
 #include <functional>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 /**
@@ -393,7 +393,7 @@ public:
     * quantum keeper is initialized for temporal decoupling.
     *
     * FUNC001: After base-class construction, registers functional write and read
-    * callbacks for all 14 registers. These callbacks override the default CSML
+    * callbacks for all 14 registers. These callbacks override the default regmodel
     * register-level callbacks and implement the full hardware access semantics
     * including W1C, RW0C, WO, WDOG_REGWEN lock gating, reserved bit masking,
     * and CDC quantum-keeper annotation.
@@ -426,7 +426,7 @@ public:
         racl_policies("racl_policies"),
         racl_error("racl_error"),
         EnableRacl(enable_racl),
-        verbosity("verbosity", CSML_DEFAULT_VERBOSITY),
+        verbosity("verbosity", REG_DEFAULT_VERBOSITY),
         /* Internal state variables - all reset to hardware power-on defaults */
         m_wkup_counter(0ULL),
         m_wkup_threshold(0ULL),
@@ -510,17 +510,17 @@ public:
       /* -----------------------------------------------------------------------
        * FUNC001: Register all functional callbacks for the 14 AON Timer
        * registers. These are registered after base-class construction so they
-       * override the default CSML register-level read/write callbacks.
+       * override the default regmodel register-level read/write callbacks.
        * Offsets are word-addressed (byte_offset / sizeof(uint32_t)).
        * --------------------------------------------------------------------- */
       register_all_callbacks();
 
-      CSML_INFO(1, logger) << name() << ": aon_timer_ip constructed"
+      REG_INFO(1, logger) << name() << ": aon_timer_ip constructed"
                            << " (EnableRacl=" << enable_racl << ")";
    }
 
    /// @brief CCI-backed verbosity parameter (runtime-overridable via ini file).
-   csml_param<int> verbosity;
+   regmodel::Param<int> verbosity;
 
 private:
    // =========================================================================
@@ -783,8 +783,8 @@ private:
    // Logger
    // =========================================================================
 
-   /// @brief CSML logger instance for structured logging (INFO, ERROR, DEBUG).
-   mutable CsmlLogger logger;
+   /// @brief regmodel logger instance for structured logging (INFO, ERROR, DEBUG).
+   mutable RegLogger logger;
 
    // =========================================================================
    // FUNC001: Callback Registration
@@ -795,7 +795,7 @@ private:
     *        registers. Called once from the constructor after base-class initialization.
     *
     * Offsets passed to memory.register_write_callback / register_read_callback are
-    * word-addressed (byte_offset / 4) as required by the csml_memory API.
+    * word-addressed (byte_offset / 4) as required by the regmodel::Memory API.
     *
     * Write callbacks registered: ALERT_TEST, WKUP_CTRL, WKUP_THOLD_HI,
     *   WKUP_THOLD_LO, WKUP_COUNT_HI, WKUP_COUNT_LO, WDOG_REGWEN, WDOG_CTRL,
@@ -827,7 +827,7 @@ private:
     *   - CDC annotation: m_qk advanced by 2 AON clock cycles.
     *
     * ALERT_TEST has no storage; reads always return 0x0 via the WO restriction
-    * callback already registered by the CSML register framework.
+    * callback already registered by the regmodel register framework.
     */
    bool handle_write_ALERT_TEST(uint32_t value, uint32_t write_mask);
 
@@ -1520,7 +1520,7 @@ private:
              * This is the only mechanism that clears WDOG_REGWEN lock.
              * Architecture Map: reset_behavior.reset_types[system-reset]
              * ------------------------------------------------------------- */
-            CSML_INFO(1, logger) << name()
+            REG_INFO(1, logger) << name()
                << ": rst_n asserted - executing full system reset (SYS + AON domains)";
 
             /* Cancel any pending counter tick events for FUNC003/FUNC004.
@@ -1575,7 +1575,7 @@ private:
              * Single-writer rule: reset_process must NOT write ports directly. */
             m_ev_output_update.notify(SC_ZERO_TIME);
 
-            CSML_INFO(1, logger) << name()
+            REG_INFO(1, logger) << name()
                << ": Full system reset complete: all registers and outputs at power-on defaults";
          }
          else if (aon_reset_asserted)
@@ -1587,7 +1587,7 @@ private:
              * prescaler, register shadows other than WKUP_CAUSE) is preserved.
              * Architecture Map: Dual reset domain architecture.
              * ------------------------------------------------------------- */
-            CSML_INFO(1, logger) << name()
+            REG_INFO(1, logger) << name()
                << ": rst_aon_n asserted (rst_n high) - executing AON-domain partial reset";
 
             /* Clear AON-domain wakeup cause flag and threshold latch. */
@@ -1603,7 +1603,7 @@ private:
              * current (unchanged) internal state values. */
             m_ev_output_update.notify(SC_ZERO_TIME);
 
-            CSML_INFO(1, logger) << name()
+            REG_INFO(1, logger) << name()
                << ": AON-domain partial reset complete: wkup_req and aon_timer_rst_req de-asserted";
          }
 

@@ -37,7 +37,7 @@
  * - Verify no transfer occurs when trigger is asserted
  */
 void testbench::run_func012_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-012: Hardware Trigger Control Disabled Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -54,7 +54,7 @@ void testbench::run_func012_tests() {
   test_chunk_size_exceeds_total_size_warning(); 
   test_hash_init_frees_previous_context_after_failed_transfer();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-012 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -88,7 +88,7 @@ void testbench::run_func012_tests() {
 void testbench::test_hw_trigger_ctrl_off() {
   std::string test_name =
       "LISO FIFO trigger with hardware handshake disabled - no transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -203,7 +203,7 @@ void testbench::test_hw_trigger_ctrl_off() {
 void testbench::test_abort_terminates_transfer_loop() {
   std::string test_name =
       "Abort terminates transfer loop (transfer engine abort path)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -279,7 +279,7 @@ void testbench::test_abort_terminates_transfer_loop() {
 void testbench::test_hw_handshake_trigger_ignored_when_go_not_set() {
   std::string test_name =
       "Hardware handshake trigger ignored when go=0 (DMA not busy)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -367,7 +367,7 @@ void testbench::test_hw_handshake_trigger_ignored_when_go_not_set() {
 void testbench::test_hash_initial_transfer_zero_no_context() {
   std::string test_name =
       "Hash initial_transfer=0 with no active hash context";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -474,7 +474,7 @@ void testbench::test_hash_initial_transfer_zero_no_context() {
 void testbench::test_hw_handshake_auto_clear_bus_error_halts() {
   std::string test_name =
       "Hardware handshake: interrupt clear bus error -> halt transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -580,9 +580,9 @@ void testbench::test_hw_handshake_auto_clear_bus_error_halts() {
   }
 
   if (passed) {
-    CSML_INFO(1, logger) << "PASSED: " << test_name << std::endl;
+    REG_INFO(1, logger) << "PASSED: " << test_name << std::endl;
   } else {
-    CSML_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
+    REG_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
                          << std::endl;
   }
   report_test_result(test_name, passed, msg.str());}
@@ -596,7 +596,7 @@ void testbench::test_hw_handshake_auto_clear_bus_error_halts() {
 void testbench::test_sha2_requires_four_byte_width_size_error() {
   std::string test_name =
       "test_sha2_requires_four_byte_width_size_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -655,9 +655,9 @@ void testbench::test_sha2_requires_four_byte_width_size_error() {
   }
 
   if (passed) {
-    CSML_INFO(1, logger) << "PASSED: " << test_name << std::endl;
+    REG_INFO(1, logger) << "PASSED: " << test_name << std::endl;
   } else {
-    CSML_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
+    REG_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
                           << std::endl;
   }
   report_test_result(test_name, passed, msg.str());
@@ -671,7 +671,7 @@ void testbench::test_sha2_requires_four_byte_width_size_error() {
 void testbench::test_chunk_size_exceeds_total_size_warning() {
   std::string test_name =
       "CHUNK_DATA_SIZE exceeds TOTAL_DATA_SIZE - warning only, transfer completes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -735,9 +735,9 @@ void testbench::test_chunk_size_exceeds_total_size_warning() {
   }
 
   if (passed) {
-    CSML_INFO(1, logger) << "PASSED: " << test_name << std::endl;
+    REG_INFO(1, logger) << "PASSED: " << test_name << std::endl;
   } else {
-    CSML_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
+    REG_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
                           << std::endl;
   }
   report_test_result(test_name, passed, msg.str());
@@ -751,7 +751,7 @@ void testbench::test_chunk_size_exceeds_total_size_warning() {
 void testbench::test_hash_init_frees_previous_context_after_failed_transfer() {
   std::string test_name =
       "hash_init frees previous context when starting after failed hashing transfer";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -824,9 +824,9 @@ void testbench::test_hash_init_frees_previous_context_after_failed_transfer() {
   }
 
   if (passed) {
-    CSML_INFO(1, logger) << "PASSED: " << test_name << std::endl;
+    REG_INFO(1, logger) << "PASSED: " << test_name << std::endl;
   } else {
-    CSML_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
+    REG_ERROR(0, logger) << "FAILED: " << test_name << " " << msg.str()
                           << std::endl;
   }
   report_test_result(test_name, passed, msg.str());

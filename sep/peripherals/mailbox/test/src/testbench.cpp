@@ -12,7 +12,8 @@
  */
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 // gcov coverage data flushing (GCC 11+)
 // Required when using std::quick_exit() to ensure .gcda files are written
@@ -44,7 +45,7 @@ testbench::testbench(sc_module_name name, int log_verbosity)
       "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
   logger.setFunctionTrace(false);
 
-  CSML_INFO(2, logger) << "Constructing mailbox testbench";
+  REG_INFO(2, logger) << "Constructing mailbox testbench";
 
   // Instantiate test harnesses for both ports
   test_port0 = new mailbox_test("mailbox_test_port0");
@@ -63,7 +64,7 @@ testbench::testbench(sc_module_name name, int log_verbosity)
   // Register test execution thread
   SC_THREAD(run_tests);
 
-  CSML_INFO(2, logger) << "Mailbox testbench construction complete";
+  REG_INFO(2, logger) << "Mailbox testbench construction complete";
 }
 
 /**
@@ -85,51 +86,51 @@ testbench::~testbench() {
  * - sc_out/sc_in signal connections for interrupts, clock, reset
  */
 void testbench::bind_ports() {
-  CSML_INFO(2, logger) << "Binding ports...";
+  REG_INFO(2, logger) << "Binding ports...";
 
   // =========================================================================
   // 1. TLM Target Socket Binding (Dual AXI4-Lite Slave Ports)
   // =========================================================================
   // Test's initiator socket → Model's target socket for port 0
   test_port0->initiator_socket.bind(dut->socket0);
-  CSML_INFO(2, logger) << "  [BOUND] test_port0 initiator_socket → socket0";
+  REG_INFO(2, logger) << "  [BOUND] test_port0 initiator_socket → socket0";
 
   // Test's initiator socket → Model's target socket for port 1
   test_port1->initiator_socket.bind(dut->socket1);
-  CSML_INFO(2, logger) << "  [BOUND] test_port1 initiator_socket → socket1";
+  REG_INFO(2, logger) << "  [BOUND] test_port1 initiator_socket → socket1";
 
   // =========================================================================
   // 2. Interrupt Signal Binding
   // =========================================================================
   // Model interrupt outputs → Testbench signals (for monitoring)
   dut->irq_o[0].bind(irq_port0_sig);
-  CSML_INFO(2, logger) << "  [BOUND] mailbox_dut irq_o[0] → irq_port0_sig";
+  REG_INFO(2, logger) << "  [BOUND] mailbox_dut irq_o[0] → irq_port0_sig";
 
   dut->irq_o[1].bind(irq_port1_sig);
-  CSML_INFO(2, logger) << "  [BOUND] mailbox_dut irq_o[1] → irq_port1_sig";
+  REG_INFO(2, logger) << "  [BOUND] mailbox_dut irq_o[1] → irq_port1_sig";
 
   // =========================================================================
   // 3. Clock and Reset Signal Binding
   // =========================================================================
   // Testbench signals → Model inputs (abstract frequency and async reset)
   dut->clk_i.bind(clk_sig);
-  CSML_INFO(2, logger) << "  [BOUND] clk_sig → mailbox_dut clk_i (100 MHz)";
+  REG_INFO(2, logger) << "  [BOUND] clk_sig → mailbox_dut clk_i (100 MHz)";
 
   dut->rst_ni.bind(rst_ni_sig);
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger)
       << "  [BOUND] rst_ni_sig → mailbox_dut rst_ni (active-low)";
 
   // =========================================================================
   // Port Binding Complete
   // =========================================================================
-  CSML_INFO(2, logger) << "- Port binding complete";
+  REG_INFO(2, logger) << "- Port binding complete";
 }
 
 /**
  * @brief Initialize testbench environment
  */
 void testbench::initialize() {
-  CSML_INFO(2, logger) << "Initializing testbench environment";
+  REG_INFO(2, logger) << "Initializing testbench environment";
   m_tests_run = 0;
   m_tests_passed = 0;
   m_tests_failed = 0;
@@ -143,7 +144,7 @@ void testbench::initialize() {
  * then deasserts (rst_ni=1).
  */
 void testbench::apply_reset() {
-  CSML_INFO(2, logger) << "Applying reset to DUT";
+  REG_INFO(2, logger) << "Applying reset to DUT";
 
   // Assert reset (active-low)
   rst_ni_sig.write(false);
@@ -153,7 +154,7 @@ void testbench::apply_reset() {
   rst_ni_sig.write(true);
   wait(5, SC_NS);
 
-  CSML_INFO(2, logger) << "Reset complete";
+  REG_INFO(2, logger) << "Reset complete";
 }
 
 /**
@@ -240,13 +241,13 @@ tlm::tlm_response_status testbench::mailbox_write(unsigned int port,
  * Executes all register access validation tests.
  */
 void testbench::run_tests() {
-  CSML_INFO(2, logger) << "\n"
+  REG_INFO(2, logger) << "\n"
                        << "========================================\n"
                        << "   MAILBOX IP TEST SUITE START\n"
                        << "========================================\n";
 
   // Apply initial reset
-  CSML_INFO(2, logger) << "Applying initial reset";
+  REG_INFO(2, logger) << "Applying initial reset";
   apply_reset();
   wait(50, SC_NS);
 
@@ -281,7 +282,7 @@ void testbench::run_tests() {
   // Print final summary
   report_test_summary();
 
-  CSML_INFO(2, logger) << "\n"
+  REG_INFO(2, logger) << "\n"
                        << "========================================\n"
                        << "    MAILBOX IP TEST SUITE END\n"
                        << "========================================\n";
@@ -299,48 +300,48 @@ void testbench::report_test_result(const char *test_name, bool passed) {
 
   if (passed) {
     m_tests_passed++;
-    CSML_INFO(1, logger) << "\n========================================\n"
+    REG_INFO(1, logger) << "\n========================================\n"
                          << "[TEST PASSED] " << test_name << "\n"
                          << "========================================\n";
   } else {
     m_tests_failed++;
     m_failed_tests.push_back(test_name);
-    CSML_ERROR(0, logger) << "\n========================================\n"
+    REG_ERROR(0, logger) << "\n========================================\n"
                           << "[TEST FAILED] " << test_name << "\n"
                           << "========================================\n";
   }
 }
 
 void testbench::report_test_summary() {
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger)
       << "==========================================================";
-  CSML_INFO(2, logger) << "Test Execution Summary";
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger) << "Test Execution Summary";
+  REG_INFO(2, logger)
       << "==========================================================";
-  CSML_INFO(2, logger) << "Total tests run: " << m_tests_run;
-  CSML_INFO(2, logger) << "Tests passed:    " << m_tests_passed;
-  CSML_INFO(2, logger) << "Tests failed:    " << m_tests_failed;
+  REG_INFO(2, logger) << "Total tests run: " << m_tests_run;
+  REG_INFO(2, logger) << "Tests passed:    " << m_tests_passed;
+  REG_INFO(2, logger) << "Tests failed:    " << m_tests_failed;
 
   if (m_tests_failed > 0) {
-    CSML_ERROR(0, logger) << "Failed tests:";
+    REG_ERROR(0, logger) << "Failed tests:";
     for (const auto &test : m_failed_tests) {
-      CSML_ERROR(0, logger) << "  - " << test;
+      REG_ERROR(0, logger) << "  - " << test;
     }
   }
 
   double pass_rate =
       (m_tests_run > 0) ? (100.0 * m_tests_passed / m_tests_run) : 0.0;
-  CSML_INFO(2, logger) << "Pass rate: " << std::fixed << std::setprecision(1)
+  REG_INFO(2, logger) << "Pass rate: " << std::fixed << std::setprecision(1)
                        << pass_rate << "%";
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger)
       << "==========================================================";
 
   if (m_tests_failed == 0) {
-    CSML_INFO(2, logger) << "ALL TESTS PASSED";
+    REG_INFO(2, logger) << "ALL TESTS PASSED";
   } else {
-    CSML_ERROR(0, logger) << "SOME TESTS FAILED";
+    REG_ERROR(0, logger) << "SOME TESTS FAILED";
   }
-  CSML_INFO(2, logger)
+  REG_INFO(2, logger)
       << "==========================================================";
 }
 
@@ -352,7 +353,7 @@ void testbench::report_test_summary() {
  * @brief Test register reset values for all 10 registers
  */
 void testbench::test_register_reset_values() {
-  CSML_INFO(1, logger) << "\n>>> Test: Register Reset Values <<<";
+  REG_INFO(1, logger) << "\n>>> Test: Register Reset Values <<<";
 
   uint64_t read_val;
   bool all_pass = true;
@@ -380,18 +381,18 @@ void testbench::test_register_reset_values() {
     // Skip write-only registers (cannot read)
     if (reg.offset == mailbox_basetest::WRITE_DATA_OFFSET ||
         reg.offset == mailbox_basetest::READ_DATA_OFFSET) {
-      CSML_INFO(2, logger) << "  " << reg.name << ": SKIPPED (write-only)";
+      REG_INFO(2, logger) << "  " << reg.name << ": SKIPPED (write-only)";
       continue;
     }
 
     test_port0->register_read_64(reg.offset, read_val);
 
     if (read_val == reg.expected_reset) {
-      CSML_INFO(2, logger) << "  " << reg.name << ": 0x" << std::hex << read_val
+      REG_INFO(2, logger) << "  " << reg.name << ": 0x" << std::hex << read_val
                            << " (expected 0x" << reg.expected_reset
                            << ") - PASS" << std::dec;
     } else {
-      CSML_ERROR(0, logger)
+      REG_ERROR(0, logger)
           << "  " << reg.name << ": 0x" << std::hex << read_val
           << " (expected 0x" << reg.expected_reset << ") - FAIL" << std::dec;
       all_pass = false;
@@ -405,7 +406,7 @@ void testbench::test_register_reset_values() {
  * @brief Test read-only register write protection
  */
 void testbench::test_read_only_register_protection() {
-  CSML_INFO(1, logger) << "\n>>> Test: Read-Only Register Protection <<<";
+  REG_INFO(1, logger) << "\n>>> Test: Read-Only Register Protection <<<";
 
   uint64_t read_before, read_after;
   bool all_pass = true;
@@ -430,10 +431,10 @@ void testbench::test_read_only_register_protection() {
     test_port0->register_read_64(ro_registers[i], read_after);
 
     if (read_before == read_after) {
-      CSML_INFO(2, logger) << "  " << ro_names[i]
+      REG_INFO(2, logger) << "  " << ro_names[i]
                            << ": Write rejected (value unchanged) - PASS";
     } else {
-      CSML_ERROR(0, logger)
+      REG_ERROR(0, logger)
           << "  " << ro_names[i] << ": Write accepted (value changed) - FAIL\n read_before: " << read_before << " read_after: " << read_after;
       all_pass = false;
     }
@@ -447,14 +448,14 @@ void testbench::test_read_only_register_protection() {
  *
  * Verification strategy:
  * - Read protection: pre-load the read variable with a sentinel value, attempt
- *   a read, and confirm the sentinel is unchanged. Because the CSML
- *   handle_read_restriction_error callback returns false, csml_memory skips
+ *   a read, and confirm the sentinel is unchanged. Because the regmodel
+ *   handle_read_restriction_error callback returns false, regmodel::Memory skips
  *   the buffer-copy step, leaving the caller's variable untouched.
  * - Write acceptance: confirm that writes ARE processed via observable
  *   side-effects (STATUS register reflects FIFO/flush state changes).
  */
 void testbench::test_write_only_register_protection() {
-  CSML_INFO(1, logger) << "\n>>> Test: Write-Only Register Protection <<<";
+  REG_INFO(1, logger) << "\n>>> Test: Write-Only Register Protection <<<";
 
   const uint64_t sentinel = 0xDEADBEEFCAFEBABE;
   uint64_t read_val;
@@ -472,9 +473,9 @@ void testbench::test_write_only_register_protection() {
     tlm::tlm_response_status st =
         mailbox_read(0, mailbox_basetest::WRITE_DATA_OFFSET, read_val);
     if (st == tlm::TLM_OK_RESPONSE && read_val == 0xFEEDC0DEULL) {
-      CSML_INFO(2, logger) << "  WRITE_DATA: Read returns 0xFEEDC0DE with OKAY - PASS";
+      REG_INFO(2, logger) << "  WRITE_DATA: Read returns 0xFEEDC0DE with OKAY - PASS";
     } else {
-      CSML_ERROR(0, logger) << "  WRITE_DATA: expected 0xFEEDC0DE/OK, got 0x"
+      REG_ERROR(0, logger) << "  WRITE_DATA: expected 0xFEEDC0DE/OK, got 0x"
                             << std::hex << read_val << std::dec
                             << " status=" << st << " - FAIL";
       all_pass = false;
@@ -494,9 +495,9 @@ void testbench::test_write_only_register_protection() {
   bool peer_sees_data = (status_val & 0x1) == 0;  // empty flag cleared on peer
 
   if (was_empty && peer_sees_data) {
-    CSML_INFO(2, logger) << "  WRITE_DATA: Write accepted (peer STATUS empty→not-empty) - PASS";
+    REG_INFO(2, logger) << "  WRITE_DATA: Write accepted (peer STATUS empty→not-empty) - PASS";
   } else {
-    CSML_ERROR(0, logger) << "  WRITE_DATA: Write not reflected in peer STATUS - FAIL" << was_empty << " " << peer_sees_data;
+    REG_ERROR(0, logger) << "  WRITE_DATA: Write not reflected in peer STATUS - FAIL" << was_empty << " " << peer_sees_data;
     all_pass = false;
   }
 
@@ -510,9 +511,9 @@ void testbench::test_write_only_register_protection() {
     tlm::tlm_response_status st =
         mailbox_read(0, mailbox_basetest::CTRL_OFFSET, read_val);
     if (st != tlm::TLM_OK_RESPONSE && read_val == 0) {
-      CSML_INFO(2, logger) << "  CTRL: Read rejected with error response - PASS";
+      REG_INFO(2, logger) << "  CTRL: Read rejected with error response - PASS";
     } else {
-      CSML_ERROR(0, logger) << "  CTRL: expected 0x0 with error, got 0x"
+      REG_ERROR(0, logger) << "  CTRL: expected 0x0 with error, got 0x"
                             << std::hex << read_val << std::dec
                             << " status=" << st << " - FAIL";
       all_pass = false;
@@ -529,9 +530,9 @@ void testbench::test_write_only_register_protection() {
   bool peer_empty_after_flush = (status_val & 0x1) != 0;  // empty flag set again
 
   if (peer_empty_after_flush) {
-    CSML_INFO(2, logger) << "  CTRL: Write accepted (wflush drained FIFO, peer STATUS not-empty→empty) - PASS";
+    REG_INFO(2, logger) << "  CTRL: Write accepted (wflush drained FIFO, peer STATUS not-empty→empty) - PASS";
   } else {
-    CSML_ERROR(0, logger) << "  CTRL: Write not reflected in STATUS after flush - FAIL";
+    REG_ERROR(0, logger) << "  CTRL: Write not reflected in STATUS after flush - FAIL";
     all_pass = false;
   }
 
@@ -542,7 +543,7 @@ void testbench::test_write_only_register_protection() {
  * @brief Test read-write register access
  */
 void testbench::test_read_write_register_access() {
-  CSML_INFO(1, logger) << "\n>>> Test: Read-Write Register Access <<<";
+  REG_INFO(1, logger) << "\n>>> Test: Read-Write Register Access <<<";
 
   uint64_t read_val;
   bool all_pass = true;
@@ -557,10 +558,10 @@ void testbench::test_read_write_register_access() {
     test_port0->register_write_64(mailbox_basetest::WIRQT_OFFSET, wirqt_val);
     test_port0->register_read_64(mailbox_basetest::WIRQT_OFFSET, read_val);
     if (read_val == wirqt_val) {
-      CSML_INFO(2, logger) << "  WIRQT: Write/Read successful (0x"
+      REG_INFO(2, logger) << "  WIRQT: Write/Read successful (0x"
                            << std::hex << read_val << std::dec << ") - PASS";
     } else {
-      CSML_ERROR(0, logger) << "  WIRQT: Write/Read mismatch - FAIL"
+      REG_ERROR(0, logger) << "  WIRQT: Write/Read mismatch - FAIL"
                             << " written=0x" << std::hex << wirqt_val
                             << " readback=0x" << read_val << std::dec;
       all_pass = false;
@@ -575,10 +576,10 @@ void testbench::test_read_write_register_access() {
     test_port0->register_write_64(mailbox_basetest::RIRQT_OFFSET, rirqt_val);
     test_port0->register_read_64(mailbox_basetest::RIRQT_OFFSET, read_val);
     if (read_val == rirqt_val) {
-      CSML_INFO(2, logger) << "  RIRQT: Write/Read successful (0x"
+      REG_INFO(2, logger) << "  RIRQT: Write/Read successful (0x"
                            << std::hex << read_val << std::dec << ") - PASS";
     } else {
-      CSML_ERROR(0, logger) << "  RIRQT: Write/Read mismatch - FAIL"
+      REG_ERROR(0, logger) << "  RIRQT: Write/Read mismatch - FAIL"
                             << " written=0x" << std::hex << rirqt_val
                             << " readback=0x" << read_val << std::dec;
       all_pass = false;
@@ -602,10 +603,10 @@ void testbench::test_read_write_register_access() {
     test_port0->register_read_64(mailbox_basetest::IRQS_OFFSET, read_val);
     bool wtirq_set = (read_val & 0x1) != 0;
     if (wtirq_set) {
-      CSML_INFO(2, logger) << "  IRQS: WTIRQ set after WRITE_DATA (0x"
+      REG_INFO(2, logger) << "  IRQS: WTIRQ set after WRITE_DATA (0x"
                            << std::hex << read_val << std::dec << ") - OK";
     } else {
-      CSML_ERROR(0, logger) << "  IRQS: WTIRQ not set after WRITE_DATA - FAIL";
+      REG_ERROR(0, logger) << "  IRQS: WTIRQ not set after WRITE_DATA - FAIL";
       all_pass = false;
     }
 
@@ -613,9 +614,9 @@ void testbench::test_read_write_register_access() {
     test_port0->register_write_64(mailbox_basetest::IRQS_OFFSET, 0x7);
     test_port0->register_read_64(mailbox_basetest::IRQS_OFFSET, read_val);
     if (read_val == 0x0) {
-      CSML_INFO(2, logger) << "  IRQS: W1C clear successful - PASS";
+      REG_INFO(2, logger) << "  IRQS: W1C clear successful - PASS";
     } else {
-      CSML_ERROR(0, logger) << "  IRQS: W1C clear failed (readback=0x"
+      REG_ERROR(0, logger) << "  IRQS: W1C clear failed (readback=0x"
                             << std::hex << read_val << std::dec << ") - FAIL";
       all_pass = false;
     }
@@ -637,10 +638,10 @@ void testbench::test_read_write_register_access() {
     test_port0->register_write_64(mailbox_basetest::IRQEN_OFFSET, irqen_val);
     test_port0->register_read_64(mailbox_basetest::IRQEN_OFFSET, read_val);
     if (read_val == irqen_val) {
-      CSML_INFO(2, logger) << "  IRQEN: Write/Read successful (0x"
+      REG_INFO(2, logger) << "  IRQEN: Write/Read successful (0x"
                            << std::hex << read_val << std::dec << ") - PASS";
     } else {
-      CSML_ERROR(0, logger) << "  IRQEN: Write/Read mismatch - FAIL"
+      REG_ERROR(0, logger) << "  IRQEN: Write/Read mismatch - FAIL"
                             << " written=0x" << std::hex << irqen_val
                             << " readback=0x" << read_val << std::dec;
       all_pass = false;
@@ -655,14 +656,14 @@ void testbench::test_read_write_register_access() {
  * @brief Test asynchronous reset behavior
  */
 void testbench::test_asynchronous_reset_behavior() {
-  CSML_INFO(1, logger) << "\n>>> Test: Asynchronous Reset Behavior <<<";
+  REG_INFO(1, logger) << "\n>>> Test: Asynchronous Reset Behavior <<<";
 
   // Write non-zero values to RW registers
   test_port0->register_write_64(mailbox_basetest::WIRQT_OFFSET, 0xFF);
   test_port0->register_write_64(mailbox_basetest::RIRQT_OFFSET, 0xAA);
   test_port0->register_write_64(mailbox_basetest::IRQEN_OFFSET, 0x7);
 
-  CSML_INFO(2, logger) << "  Written non-zero values to registers";
+  REG_INFO(2, logger) << "  Written non-zero values to registers";
 
   // Apply reset
   apply_reset();
@@ -681,9 +682,9 @@ void testbench::test_asynchronous_reset_behavior() {
   bool irqen_reset = (read_val == 0x0);
 
   if (wirqt_reset && rirqt_reset && irqen_reset) {
-    CSML_INFO(2, logger) << "  All registers returned to reset values - PASS";
+    REG_INFO(2, logger) << "  All registers returned to reset values - PASS";
   } else {
-    CSML_ERROR(0, logger) << "  Some registers did not reset properly - FAIL";
+    REG_ERROR(0, logger) << "  Some registers did not reset properly - FAIL";
     all_pass = false;
   }
 
@@ -691,7 +692,7 @@ void testbench::test_asynchronous_reset_behavior() {
 }
 
 void testbench::run_func001_tests() {
-  CSML_INFO(2, logger) << "\n========================================\n"
+  REG_INFO(2, logger) << "\n========================================\n"
                        << "FUNC-001: System Reset and Initialization Behavior\n"
                        << "========================================\n";
 
@@ -704,7 +705,7 @@ void testbench::run_func001_tests() {
   // Execute FUNC_001 specific test cases (Test IDs 1, 61, 62)
   test_reset_fifo_interrupt_state();    // TC006
 
-  CSML_INFO(2, logger) << "\n========================================\n"
+  REG_INFO(2, logger) << "\n========================================\n"
                        << "FUNC-001 Test Suite Complete\n"
                        << "========================================\n";
 }
@@ -717,7 +718,7 @@ int sc_main(int argc, char *argv[]) {
   sc_report_handler::set_actions("/IEEE_Std_1666/deprecated", SC_DO_NOTHING);
 
   // Initialize CCI broker and optionally load INI config file.
-  load_config_file(argc > 1 ? argv[1] : nullptr);
+  regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
   testbench tb("mailbox_testbench");
   sc_start();

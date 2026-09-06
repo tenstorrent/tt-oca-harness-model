@@ -24,7 +24,7 @@ testbench::testbench(sc_module_name name)
     : sc_module(name), logger(), m_test(nullptr), m_tests_run(0),
       m_tests_passed(0), m_tests_failed(0) {
 
-  // Initialize CSML logger
+  // Initialize RegLogger
   logger.setLogFormat(
       "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
   logger.setFunctionTrace(false);
@@ -32,10 +32,12 @@ testbench::testbench(sc_module_name name)
   // Instantiate DUT and test harness
   m_model = std::make_unique<secure_dma_model>("dma_dut");
 
-  // Sync testbench logger verbosity with DUT (CCI ini may override build default)
-  logger.setMaxVerbosity(m_model->verbosity.get_param_value());
+  // Coverage builds compile with REG_DEFAULT_VERBOSITY=1, which skips
+  // REG_INFO(2/3) stream bodies (and helpers only invoked from those streams).
+  m_model->logger.setMaxVerbosity(3);
+  logger.setMaxVerbosity(3);
 
-  CSML_INFO(1, logger) << "Instantiating DMA model and test harness"
+  REG_INFO(1, logger) << "Instantiating DMA model and test harness"
                        << std::endl;
   m_test = std::make_unique<secure_dma_test>("secure_dma_test");
 
@@ -43,10 +45,10 @@ testbench::testbench(sc_module_name name)
   // Bind TLM Sockets
   // =========================================================================
 
-  CSML_INFO(1, logger) << "Binding TLM Register Bus Interface" << std::endl;
+  REG_INFO(1, logger) << "Binding TLM Register Bus Interface" << std::endl;
   m_test->initiator_socket.bind(m_model->target_socket);
 
-  CSML_INFO(1, logger) << "Binding TLM Memory Bus Interfaces" << std::endl;
+  REG_INFO(1, logger) << "Binding TLM Memory Bus Interfaces" << std::endl;
   // DMA initiator sockets to test target sockets
   m_model->ot_initiator_socket.bind(m_test->ot_target_socket);
   m_model->ctn_initiator_socket.bind(m_test->ctn_target_socket);
@@ -56,7 +58,7 @@ testbench::testbench(sc_module_name name)
   // Bind Clock and Reset
   // =========================================================================
 
-  CSML_INFO(1, logger) << "Binding Clock and Reset Interfaces" << std::endl;
+  REG_INFO(1, logger) << "Binding Clock and Reset Interfaces" << std::endl;
   m_test->clk_o.bind(clk_signal);
   m_model->clk_i.bind(clk_signal);
 
@@ -67,7 +69,7 @@ testbench::testbench(sc_module_name name)
   // Bind Interrupt Outputs (model drives, test monitors)
   // =========================================================================
 
-  CSML_INFO(1, logger) << "Binding Interrupt Outputs" << std::endl;
+  REG_INFO(1, logger) << "Binding Interrupt Outputs" << std::endl;
   m_model->dma_done_intr.bind(dma_done_intr_signal);
   m_test->dma_done_intr_i.bind(dma_done_intr_signal);
 
@@ -81,7 +83,7 @@ testbench::testbench(sc_module_name name)
   // Bind Alert Output
   // =========================================================================
 
-  CSML_INFO(1, logger) << "Binding Alert Output" << std::endl;
+  REG_INFO(1, logger) << "Binding Alert Output" << std::endl;
   m_model->alert_fatal_fault.bind(alert_fatal_fault_signal);
   m_test->alert_fatal_fault_i.bind(alert_fatal_fault_signal);
 
@@ -89,7 +91,7 @@ testbench::testbench(sc_module_name name)
   // Bind Hardware Handshake Triggers (test drives, model monitors)
   // =========================================================================
 
-  CSML_INFO(1, logger) << "Binding Hardware Handshake Triggers" << std::endl;
+  REG_INFO(1, logger) << "Binding Hardware Handshake Triggers" << std::endl;
   for (int i = 0; i < 11; i++) {
     m_test->lsio_trigger_o[i].bind(lsio_trigger_signal[i]);
     m_model->lsio_trigger[i].bind(lsio_trigger_signal[i]);
@@ -98,7 +100,7 @@ testbench::testbench(sc_module_name name)
     lsio_trigger_signal[i].write(false);
   }
 
-  CSML_INFO(1, logger) << "Port binding complete" << std::endl;
+  REG_INFO(1, logger) << "Port binding complete" << std::endl;
 
   // Set clock period
   clk_signal.write(sc_time(10, SC_NS)); // 100 MHz clock
@@ -120,14 +122,14 @@ void testbench::report_test_result(const char *test_name, bool passed) {
 
   if (passed) {
     m_tests_passed++;
-    CSML_INFO(1, logger) << "\n========================================\n"
+    REG_INFO(1, logger) << "\n========================================\n"
                          << "[TEST PASSED] " << test_name << "\n"
                          << "========================================\n"
                          << std::endl;
   } else {
     m_tests_failed++;
     m_failed_tests.push_back(test_name);
-    CSML_ERROR(0, logger) << "\n========================================\n"
+    REG_ERROR(0, logger) << "\n========================================\n"
                           << "[TEST FAILED] " << test_name << "\n"
                           << "========================================\n"
                           << std::endl;
@@ -140,7 +142,7 @@ void testbench::report_test_result(const std::string &test_name, bool passed,
 
   if (passed) {
     m_tests_passed++;
-    CSML_INFO(1, logger) << "\n========================================\n"
+    REG_INFO(1, logger) << "\n========================================\n"
                          << "[TEST PASSED] " << test_name << "\n"
                          << "Message: " << message << "\n"
                          << "========================================\n"
@@ -148,7 +150,7 @@ void testbench::report_test_result(const std::string &test_name, bool passed,
   } else {
     m_tests_failed++;
     m_failed_tests.push_back(test_name);
-    CSML_ERROR(0, logger) << "\n========================================\n"
+    REG_ERROR(0, logger) << "\n========================================\n"
                           << "[TEST FAILED] " << test_name << "\n"
                           << "Message: " << message << "\n"
                           << "========================================\n"
@@ -157,7 +159,7 @@ void testbench::report_test_result(const std::string &test_name, bool passed,
 }
 
 void testbench::print_test_summary() {
-  CSML_INFO(0, logger) << "\n"
+  REG_INFO(0, logger) << "\n"
                        << "========================================\n"
                        << "          TEST SUMMARY\n"
                        << "========================================\n"
@@ -168,9 +170,9 @@ void testbench::print_test_summary() {
                        << std::endl;
 
   if (m_tests_failed > 0) {
-    CSML_ERROR(0, logger) << "Failed Tests:" << std::endl;
+    REG_ERROR(0, logger) << "Failed Tests:" << std::endl;
     for (const auto &test_name : m_failed_tests) {
-      CSML_ERROR(0, logger) << "  - " << test_name << std::endl;
+      REG_ERROR(0, logger) << "  - " << test_name << std::endl;
     }
   }
 }
@@ -180,7 +182,7 @@ void testbench::print_test_summary() {
 // ============================================================================
 
 void testbench::run_tests() {
-  CSML_INFO(1, logger) << "\n"
+  REG_INFO(1, logger) << "\n"
                        << "========================================\n"
                        << "   DMA CONTROLLER TEST SUITE START\n"
                        << "========================================\n"
@@ -190,7 +192,7 @@ void testbench::run_tests() {
   logger.setMaxVerbosity(3);
 
   // Apply initial reset
-  CSML_INFO(1, logger) << "Applying initial reset" << std::endl;
+  REG_INFO(1, logger) << "Applying initial reset" << std::endl;
   m_test->apply_reset(sc_time(100, SC_NS));
   wait(sc_time(50, SC_NS));
 
@@ -243,7 +245,7 @@ void testbench::run_tests() {
   // Print final summary
   print_test_summary();
 
-  CSML_INFO(1, logger) << "\n"
+  REG_INFO(1, logger) << "\n"
                        << "========================================\n"
                        << "    DMA CONTROLLER TEST SUITE END\n"
                        << "========================================\n"
@@ -258,7 +260,7 @@ void testbench::run_tests() {
 // ============================================================================
 
 void testbench::test_register_rw() {
-  CSML_INFO(1, logger) << "\n>>> Test: Register Read/Write Access (Plain RW Only) <<<\n"
+  REG_INFO(1, logger) << "\n>>> Test: Register Read/Write Access (Plain RW Only) <<<\n"
                        << std::endl;
 
   bool test_passed = true;
@@ -270,12 +272,12 @@ void testbench::test_register_rw() {
     m_test->register_read_32(off, rd);
 
     if ((rd & mask) != (val & mask)) {
-      CSML_ERROR(0, logger) << name << " R/W mismatch: wrote 0x" << std::hex
+      REG_ERROR(0, logger) << name << " R/W mismatch: wrote 0x" << std::hex
                             << (val & mask) << " read 0x" << (rd & mask)
                             << std::dec << std::endl;
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << name << " R/W verified" << std::endl;
+      REG_INFO(2, logger) << name << " R/W verified" << std::endl;
     }
   };
 
@@ -337,12 +339,12 @@ void testbench::test_register_rw() {
     m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, rd);
 
     if ((rd & mask) != (wr & mask)) {
-      CSML_ERROR(0, logger) << "CONTROL(config fields) R/W mismatch: wrote 0x"
+      REG_ERROR(0, logger) << "CONTROL(config fields) R/W mismatch: wrote 0x"
                             << std::hex << (wr & mask) << " read 0x" << (rd & mask)
                             << std::dec << std::endl;
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "CONTROL(config fields) R/W verified" << std::endl;
+      REG_INFO(2, logger) << "CONTROL(config fields) R/W verified" << std::endl;
     }
   }
 
@@ -354,7 +356,7 @@ void testbench::test_register_rw() {
 // ============================================================================
 
 void testbench::test_register_ro() {
-  CSML_INFO(1, logger) << "\n>>> Test: Read-Only Register Behavior <<<\n"
+  REG_INFO(1, logger) << "\n>>> Test: Read-Only Register Behavior <<<\n"
                        << std::endl;
 
   bool test_passed = true;
@@ -366,10 +368,10 @@ void testbench::test_register_ro() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::INTR_STATE_OFFSET, after);
   if (after != before){
-    CSML_ERROR(0, logger) << "INTR_STATE changed after write attempt" << std::endl;
+    REG_ERROR(0, logger) << "INTR_STATE changed after write attempt" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "INTR_STATE Register verified" << std::endl;
+    REG_INFO(2, logger) << "INTR_STATE Register verified" << std::endl;
   }  
 
   // 2) CFG_REGWEN (RO, should be 0x6 in IDLE)
@@ -378,10 +380,10 @@ void testbench::test_register_ro() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::CFG_REGWEN_OFFSET, after);
   if (after != before){
-    CSML_ERROR(0, logger) << "CFG_REGWEN changed after write attempt" << std::endl;
+    REG_ERROR(0, logger) << "CFG_REGWEN changed after write attempt" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "CFG_REGWEN Register verified" << std::endl;
+    REG_INFO(2, logger) << "CFG_REGWEN Register verified" << std::endl;
   }  
 
   // 3) ERROR_CODE (RO)
@@ -390,10 +392,10 @@ void testbench::test_register_ro() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::ERROR_CODE_OFFSET, after);
   if (after != before){
-    CSML_ERROR(0, logger) << "ERROR_CODE changed after write attempt" << std::endl;
+    REG_ERROR(0, logger) << "ERROR_CODE changed after write attempt" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "ERROR_CODE Register verified" << std::endl;
+    REG_INFO(2, logger) << "ERROR_CODE Register verified" << std::endl;
   } 
 
   // 4) STATUS.busy(bit0) and STATUS.sha2_digest_valid(bit4) are RO to SW
@@ -402,10 +404,10 @@ void testbench::test_register_ro() {
   wait(sc_time(10, SC_NS));
   m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, after);
   if (after & 0x00000011){
-    CSML_ERROR(0, logger) << "STATUS.busy or STATUS.sha2_digest_valid became 1 from SW write" << std::endl;
+    REG_ERROR(0, logger) << "STATUS.busy or STATUS.sha2_digest_valid became 1 from SW write" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "STATUS.busy(bit0) and STATUS.sha2_digest_valid(bit4) are verified" << std::endl;
+    REG_INFO(2, logger) << "STATUS.busy(bit0) and STATUS.sha2_digest_valid(bit4) are verified" << std::endl;
   } 
 
   // 5) SHA2_DIGEST[0..15] (RO) - write attempts must be ignored
@@ -419,10 +421,10 @@ void testbench::test_register_ro() {
     m_test->register_read_32(digest_offset, after);
 
     if (after != before) {
-      CSML_ERROR(0, logger) << "SHA2_DIGEST[" << i << "] changed after write attempt" << std::endl;
+      REG_ERROR(0, logger) << "SHA2_DIGEST[" << i << "] changed after write attempt" << std::endl;
       test_passed = false;
     }else {
-    CSML_INFO(2, logger) << "SHA2_DIGEST[" << i << "] Register verified" << std::endl;
+    REG_INFO(2, logger) << "SHA2_DIGEST[" << i << "] Register verified" << std::endl;
     } 
   }  
   report_test_result("Test: Read-Only Register Behavior", test_passed);
@@ -434,26 +436,26 @@ void testbench::test_register_ro() {
 // ============================================================================
 
 void testbench::test_port_binding() {
-  CSML_INFO(1, logger) << "\n>>> Test: Port Connectivity <<<\n" << std::endl;
+  REG_INFO(1, logger) << "\n>>> Test: Port Connectivity <<<\n" << std::endl;
 
   bool test_passed = true;
 
   // Test clock signal connectivity
   sc_time clk_period = clk_signal.read();
   if (clk_period != sc_time(10, SC_NS)) {
-    CSML_ERROR(0, logger) << "Clock signal not correctly bound" << std::endl;
+    REG_ERROR(0, logger) << "Clock signal not correctly bound" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Clock signal binding verified" << std::endl;
+    REG_INFO(2, logger) << "Clock signal binding verified" << std::endl;
   }
 
   // Test reset signal connectivity
   bool rst_state = rst_signal.read();
   if (rst_state != true) { // Should be de-asserted after initial reset
-    CSML_ERROR(0, logger) << "Reset signal not correctly bound" << std::endl;
+    REG_ERROR(0, logger) << "Reset signal not correctly bound" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Reset signal binding verified" << std::endl;
+    REG_INFO(2, logger) << "Reset signal binding verified" << std::endl;
   }
 
   // Test interrupt signal connectivity (should be low initially)
@@ -462,35 +464,35 @@ void testbench::test_port_binding() {
   bool intr_error = dma_error_intr_signal.read();
 
   if (intr_done || intr_chunk || intr_error) {
-    CSML_ERROR(0, logger) << "Interrupt signals not correctly initialized"
+    REG_ERROR(0, logger) << "Interrupt signals not correctly initialized"
                           << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Interrupt signal binding verified" << std::endl;
+    REG_INFO(2, logger) << "Interrupt signal binding verified" << std::endl;
   }
 
   // Test alert signal connectivity
   bool alert = alert_fatal_fault_signal.read();
   if (alert) {
-    CSML_ERROR(0, logger) << "Alert signal not correctly initialized"
+    REG_ERROR(0, logger) << "Alert signal not correctly initialized"
                           << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Alert signal binding verified" << std::endl;
+    REG_INFO(2, logger) << "Alert signal binding verified" << std::endl;
   }
 
   // Test hardware handshake trigger connectivity
   bool handshake_ok = true;
   for (int i = 0; i < 11; i++) {
     if (lsio_trigger_signal[i].read() != false) {
-      CSML_ERROR(0, logger)
+      REG_ERROR(0, logger)
           << "Trigger " << i << " not correctly initialized" << std::endl;
       handshake_ok = false;
       test_passed = false;
     }
   }
   if (handshake_ok) {
-    CSML_INFO(2, logger) << "Hardware handshake trigger binding verified"
+    REG_INFO(2, logger) << "Hardware handshake trigger binding verified"
                          << std::endl;
   }
 
@@ -502,7 +504,7 @@ void testbench::test_port_binding() {
 // ============================================================================
 
 void testbench::test_interrupts() {
-  CSML_INFO(1, logger) << "\n>>> Test: Interrupt Generation <<<\n" << std::endl;
+  REG_INFO(1, logger) << "\n>>> Test: Interrupt Generation <<<\n" << std::endl;
 
   bool test_passed = true;
 
@@ -519,17 +521,17 @@ void testbench::test_interrupts() {
   // Check if dma_done interrupt is asserted
   bool intr_done = dma_done_intr_signal.read();
   if (!intr_done) {
-    CSML_ERROR(0, logger) << "dma_done interrupt not asserted" << std::endl;
+    REG_ERROR(0, logger) << "dma_done interrupt not asserted" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "dma_done interrupt correctly asserted"
+    REG_INFO(2, logger) << "dma_done interrupt correctly asserted"
                          << std::endl;
   }
 
   // Clear interrupt by reading (implementation-dependent)
   uint32_t intr_state;
   m_test->register_read_32(secure_dma_basetest::INTR_STATE_OFFSET, intr_state);
-  CSML_INFO(2, logger) << "INTR_STATE: 0x" << std::hex << intr_state << std::dec
+  REG_INFO(2, logger) << "INTR_STATE: 0x" << std::hex << intr_state << std::dec
                        << std::endl;
 
   // Disable interrupts and verify outputs go low
@@ -547,7 +549,7 @@ void testbench::test_interrupts() {
 // ============================================================================
 
 void testbench::test_hardware_handshake() {
-  CSML_INFO(1, logger) << "\n>>> Test: Hardware Handshake Triggers <<<\n"
+  REG_INFO(1, logger) << "\n>>> Test: Hardware Handshake Triggers <<<\n"
                        << std::endl;
 
   bool test_passed = true;
@@ -565,10 +567,10 @@ void testbench::test_hardware_handshake() {
   // Verify trigger can be read back as asserted
   bool trigger_state = lsio_trigger_signal[0].read();
   if (!trigger_state) {
-    CSML_ERROR(0, logger) << "Trigger 0 not asserted" << std::endl;
+    REG_ERROR(0, logger) << "Trigger 0 not asserted" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Trigger 0 correctly asserted" << std::endl;
+    REG_INFO(2, logger) << "Trigger 0 correctly asserted" << std::endl;
   }
 
   // De-assert trigger 0
@@ -577,10 +579,10 @@ void testbench::test_hardware_handshake() {
 
   trigger_state = lsio_trigger_signal[0].read();
   if (trigger_state) {
-    CSML_ERROR(0, logger) << "Trigger 0 not de-asserted" << std::endl;
+    REG_ERROR(0, logger) << "Trigger 0 not de-asserted" << std::endl;
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Trigger 0 correctly de-asserted" << std::endl;
+    REG_INFO(2, logger) << "Trigger 0 correctly de-asserted" << std::endl;
   }
 
   // Test all 11 triggers can be individually controlled
@@ -590,7 +592,7 @@ void testbench::test_hardware_handshake() {
     wait(sc_time(5, SC_NS));
 
     if (!lsio_trigger_signal[i].read()) {
-      CSML_ERROR(0, logger)
+      REG_ERROR(0, logger)
           << "Trigger " << i << " control failed" << std::endl;
       all_triggers_ok = false;
       test_passed = false;
@@ -601,7 +603,7 @@ void testbench::test_hardware_handshake() {
   }
 
   if (all_triggers_ok) {
-    CSML_INFO(2, logger) << "All 11 triggers individually controllable"
+    REG_INFO(2, logger) << "All 11 triggers individually controllable"
                          << std::endl;
   }
 
@@ -613,7 +615,7 @@ void testbench::test_hardware_handshake() {
 // ============================================================================
 
 int sc_main(int argc, char *argv[]) {
-  load_config_file(argc > 1 ? argv[1] : nullptr);
+  regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
   testbench tb("secure_dma_testbench");
   sc_start();

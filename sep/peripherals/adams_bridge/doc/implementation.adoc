@@ -1,0 +1,116 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[adams-bridge-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`abr_ip` is a loosely-timed TLM-2.0 model. Timing is quantum-keeper
+cycle counts, not a cycle-accurate datapath. The register file follows
+the HMAC / KMAC pattern: `abr_base` is the regmodel declaration so a map
+change lands in one header.
+
+[source,cpp]
+----
+class abr_ip : public abr_base
+----
+
+----
+abr_ip          engines, interrupts, KV, quantum keeper   (adams_bridge.*)
+  └─ abr_base   regmodel::Memory + software-visible words      (abr_base.*)
+       └─ abr_register.h   RO/WO/RW types
+abr_crypto_backend   math only (abr_crypto.*)
+----
+
+====== Threads and sockets
+
+ML-DSA and ML-KEM each have an `SC_THREAD` woken by their own start
+event. A command on one engine does not wait for the other. Interrupt
+pins are driven from a dedicated thread so reset is not a second
+SystemC writer.
+
+`sep-vp` binds the TLM register target at the TRM ABR aperture and the
+four key-manager destination sockets. `keymgr_tl_socket` stays unbound
+on the platform; unit tests use it for a flat KV push.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`abr_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, ABR window
+|`keymgr_tl_socket` |optional TLM 32-bit target |Unbound on `sep-vp`
+|`keymgr_mldsa_seed_socket` |TLM 32-bit target |KM DEST ML-DSA seed
+|`keymgr_mlkem_d_socket` |TLM 32-bit target |KM DEST ML-KEM D
+|`keymgr_mlkem_z_socket` |TLM 32-bit target |KM DEST ML-KEM Z
+|`keymgr_mlkem_msg_socket` |TLM 32-bit target |KM DEST ML-KEM MSG
+|`clk_i` |`sc_in<double>` |Frequency in Hz (latency only)
+|`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
+|`intr_abr_error` |`sc_out<bool>` |SEP PIC error source
+|`intr_abr_notif` |`sc_out<bool>` |SEP PIC notification source
+|===
+
+`clk_i` may be unbound in register-only benches; `clk_freq()` then uses
+`default_clk_freq_hz`.
+
+CTRL writes latch a command and notify the matching engine thread.
+`MLDSA_MSG` writes also append strobed bytes to a stream accumulator
+because firmware streams the message before setting `STREAM_MSG`. KV
+`rd_ctrl` / `wr_ctrl` copies a slot and hardware-clears the enable.
+W1C / W1S interrupt registers recompute the pins.
+
+----
+  TLM MMIO ──► abr_base::memory ──► mldsa_engine_thread
+                                 └► mlkem_engine_thread
+                                           │
+                                           ▼
+                                  abr_crypto_backend
+                                           │
+  keymgr_*_socket ──► XOR reconstruct ──► KV[0..3]
+  keymgr_tl_socket ──► m_kv_entries[32]
+                                           │
+                      interrupt_update_thread ──► intr_abr_*
+----
+
+====== Crypto backend
+
+Math is not inlined. `set_crypto_backend()` replaces the provider.
+`nullptr` is ignored so the model always has a backend.
+
+* Default `abr_fips_backend`: PQClean ML-DSA-87 + ML-KEM-1024.
+  `is_standards_conformant()` is true. Used by NIST KAT tests.
+* `abr_shake_backend`: deterministic stand-in for FSM / interrupt
+  tests that do not need ACVP vectors.
+
+====== CCI parameters
+
+Knobs are `regmodel::Param` and are re-read when used. Each operation
+charges its cycle count through `clk_i` into
+`tlm_quantumkeeper::inc()`.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`verbosity` |2 (Release: 1) |regmodel log level
+|`default_clk_freq_hz` |`1e8` |Fallback when `clk_i` is 0 or unbound
+|`mldsa_keygen_cycles` |26000 |LT keygen cost
+|`mldsa_sign_cycles` |78000 |LT sign cost
+|`mldsa_verify_cycles` |30000 |LT verify cost
+|`mlkem_keygen_cycles` |12000 |LT ML-KEM keygen cost
+|`mlkem_encaps_cycles` |15000 |LT encaps cost
+|`mlkem_decaps_cycles` |18000 |LT decaps cost
+|`zeroize_cycles` |64 |LT wipe cost
+|`kv_access_cycles` |32 |Added to sideload `b_transport` delay
+|===
+
+====== Modeling gaps versus RTL
+
+* No cycle-accurate NTT, sampling, or Keccak rounds.
+* `ABR_ENTROPY` is WO storage; the FIPS backend ignores it.
+* `PCR_SIGN` hashes `set_pcr_digest()` when that buffer is non-empty,
+  otherwise MSG. There is no PCR bank.
+* KV emptiness is "any non-zero byte". There is no per-entry valid bit.
+* Zeroize of one engine currently wipes shared ABR buffers.
+* KM dual-share reconstruct collapses `abr_wrapper_key_reg` +
+  `sep_abr_kv_shim` into the four destination sockets.
+* ML-KEM KV seed read supplies D only. KEYGEN still takes Z from the
+  WO seed register unless firmware also issues a seed read of the Z
+  entry.
+* No EDN / `entropy_src` ports on this model.

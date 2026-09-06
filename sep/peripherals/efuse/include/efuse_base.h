@@ -7,7 +7,7 @@
 /**
  * Combined SEP eFuse base module.
  *
- * Two csml_memory instances, each with its own target socket, because the block
+ * Two regmodel::Memory instances, each with its own target socket, because the block
  * occupies two disjoint windows in the register map rather than one contiguous
  * range.  `memory` holds the sep_efuse window:
  *   0x000–0x3FC  Shadow registers      (SEP_EFUSE_MAP)
@@ -27,7 +27,7 @@
 class efuse_base : public sc_module
 {
 public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
 
     efuse_base(sc_module_name name, unsigned int memory_size, unsigned int shim_memory_size)
         : sc_module(name),
@@ -113,10 +113,10 @@ public:
         shim_memory.bind_to_socket(shim_target_socket);
     }
 
-    csml_memory<32> memory;
-    csml_memory<32> shim_memory;
-    tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
-    tlm_utils::simple_target_socket<csml_memory<32>, 32> shim_target_socket;
+    regmodel::Memory<32> memory;
+    regmodel::Memory<32> shim_memory;
+    tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
+    tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> shim_target_socket;
 
     // Shadow registers
     sep_efuse::LOCKS_LO_type<32>          LOCKS_LO;
@@ -128,17 +128,17 @@ public:
     sep_efuse::SIP_DIS_HI_type<32>        SIP_DIS_HI;
     sep_efuse::SYS_DIS_LO_type<32>        SYS_DIS_LO;
     sep_efuse::SYS_DIS_HI_type<32>        SYS_DIS_HI;
-    csml_reg_vector<sep_efuse::RMA_SIP_TOKEN_type<32>,    8> RMA_SIP_TOKEN;
-    csml_reg_vector<sep_efuse::RMA_CHIPLET_TOKEN_type<32>,8> RMA_CHIPLET_TOKEN;
-    csml_reg_vector<sep_efuse::CLASS_KEY_type<32>,        8> CLASS_KEY;
+    regmodel::RegVector<sep_efuse::RMA_SIP_TOKEN_type<32>,    8> RMA_SIP_TOKEN;
+    regmodel::RegVector<sep_efuse::RMA_CHIPLET_TOKEN_type<32>,8> RMA_CHIPLET_TOKEN;
+    regmodel::RegVector<sep_efuse::CLASS_KEY_type<32>,        8> CLASS_KEY;
     sep_efuse::CHIPLET_PUBK_REVOKE_type<32>               CHIPLET_PUBK_REVOKE;
-    csml_reg_vector<sep_efuse::BL1_VERSION_type<32>,      8> BL1_VERSION;
-    csml_reg_vector<sep_efuse::BL2_VERSION_type<32>,      8> BL2_VERSION;
-    csml_reg_vector<sep_efuse::CHIPLET_UID_type<32>,      8> CHIPLET_UID;
-    csml_reg_vector<sep_efuse::SIP_PUBK_type<32>,         8> SIP_PUBK_HASH0;
-    csml_reg_vector<sep_efuse::SIP_UID_type<32>,          8> SIP_UID;
-    csml_reg_vector<sep_efuse::SYS_PUBK_type<32>,         8> SYS_PUBK_HASH;
-    csml_reg_vector<sep_efuse::SYS_UID_type<32>,          8> SYS_UID;
+    regmodel::RegVector<sep_efuse::BL1_VERSION_type<32>,      8> BL1_VERSION;
+    regmodel::RegVector<sep_efuse::BL2_VERSION_type<32>,      8> BL2_VERSION;
+    regmodel::RegVector<sep_efuse::CHIPLET_UID_type<32>,      8> CHIPLET_UID;
+    regmodel::RegVector<sep_efuse::SIP_PUBK_type<32>,         8> SIP_PUBK_HASH0;
+    regmodel::RegVector<sep_efuse::SIP_UID_type<32>,          8> SIP_UID;
+    regmodel::RegVector<sep_efuse::SYS_PUBK_type<32>,         8> SYS_PUBK_HASH;
+    regmodel::RegVector<sep_efuse::SYS_UID_type<32>,          8> SYS_UID;
     sep_efuse::STATUS_RPT_type<32>            STATUS_RPT;
     sep_efuse::SEP_ROM_CTRL_type<32>          SEP_ROM_CTRL;
     sep_efuse::SEP_SPI_CTRL_FIELD_EN_type<32> SEP_SPI_CTRL_FIELD_EN;
@@ -150,25 +150,25 @@ public:
     sep_efuse::ro_stub_type<32>               SPI_PHY_DLL_MASTER;
     sep_efuse::ro_stub_type<32>               SPI_PHY_MISC;
     sep_efuse::ro_stub_type<32>               SPI_RB_VALID_TIME;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH0;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH1;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH0;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH1;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_PQC_HASH0;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SYS_PUBK_PQC_HASH;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_HASH1;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_PQC_HASH1;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SEP_CHIPLET_ID;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SEP_SIP_ID;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SEP_SYS_ID;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE0;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE1;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE2;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE3;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE4;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE5;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE6;
-    csml_reg_vector<sep_efuse::ro_stub_type<32>, 8>  SPARE7;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH0;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH1;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH0;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH1;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_PQC_HASH0;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SYS_PUBK_PQC_HASH;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_HASH1;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SIP_PUBK_PQC_HASH1;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SEP_CHIPLET_ID;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SEP_SIP_ID;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SEP_SYS_ID;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE0;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE1;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE2;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE3;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE4;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE5;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE6;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE7;
     sep_efuse::ro_stub_type<32>                     REQUIRED_SIGNERS;
     sep_efuse::ro_stub_type<32>                     REQUIRED_ALGS;
 
@@ -182,9 +182,9 @@ public:
     sep_efuse::EFUSE_PROGRAM_REQ_TIMEOUT_type<32>    EFUSE_PROGRAM_REQ_TIMEOUT;
 
     // EFUSE_MMR registers
-    csml_reg_vector<sep_efuse::MMR_TOKEN_I_type<32>, 8> RMA_SIP_TOKEN_I;
-    csml_reg_vector<sep_efuse::MMR_TOKEN_I_type<32>, 8> RMA_CHIPLET_TOKEN_I;
-    csml_reg_vector<sep_efuse::MMR_TOKEN_I_type<32>, 8> SEC_DISABLE_TOKEN_I;
+    regmodel::RegVector<sep_efuse::MMR_TOKEN_I_type<32>, 8> RMA_SIP_TOKEN_I;
+    regmodel::RegVector<sep_efuse::MMR_TOKEN_I_type<32>, 8> RMA_CHIPLET_TOKEN_I;
+    regmodel::RegVector<sep_efuse::MMR_TOKEN_I_type<32>, 8> SEC_DISABLE_TOKEN_I;
     sep_efuse::TOKEN_EOP_type<32>               TOKEN_EOP;
     sep_efuse::TOKEN_MATCH_type<32>             RMA_SIP_TOKEN_MATCH;
     sep_efuse::TOKEN_MATCH_type<32>             RMA_CHIPLET_TOKEN_MATCH;

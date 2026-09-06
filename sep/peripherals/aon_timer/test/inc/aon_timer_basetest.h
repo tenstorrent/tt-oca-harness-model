@@ -4,7 +4,7 @@
  * @file aon_timer_basetest.h
  * @brief AON Timer base test class providing register map constants and TLM infrastructure.
  *
- * This header defines aon_timer_basetest, the generated CSML test base class.
+ * This header defines aon_timer_basetest, the generated regmodel test base class.
  * It provides:
  *   - A 32-bit TLM simple_initiator_socket for driving register transactions to the DUT.
  *   - Register_offset enum: byte offsets for all 14 AON Timer registers.

@@ -38,14 +38,17 @@ set_tests_properties(bootrom_bin_tb PROPERTIES
     FAIL_REGULAR_EXPRESSION "(^FAIL [^_]|FAILURE\\(S\\))")
 
 # ---------------------------------------------------------------------------
-# bootrom_neg_tb — constructor fatals and preload error paths that the
-# primary benches cannot reach without aborting.  Required for the src/
-# coverage gate: without this target CI reports ~85% on bootrom.cpp.
+# bootrom_neg_tb — constructor fatals, hex-parser edges, and TLM error
+# paths that the primary benches cannot hit without aborting.  Required
+# for the src/ coverage gate: without this target CI reports ~85% on
+# bootrom.cpp.
 # ---------------------------------------------------------------------------
 add_executable(bootrom_neg_tb bootrom_neg_tb.cpp)
 target_link_libraries(bootrom_neg_tb PRIVATE smc_bootrom SystemC::cci)
 target_compile_options(bootrom_neg_tb PRIVATE -Wall -Wextra -Wpedantic
                                               -Wno-deprecated-declarations)
+target_compile_definitions(bootrom_neg_tb PRIVATE
+    BOOTROM_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
 add_test(NAME bootrom_neg_tb COMMAND bootrom_neg_tb)
 set_tests_properties(bootrom_neg_tb PROPERTIES
     PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"

@@ -40,13 +40,13 @@ secure_dma_test::secure_dma_test(sc_module_name name)
       m_inject_ot_read_bus_error_once(false),
       m_inject_ot_write_bus_error_once(false) {
 
-  // Initialize CSML logger
-  logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+  // Initialize RegLogger
+  logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
   logger.setLogFormat(
       "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
   logger.setFunctionTrace(false);
 
-  CSML_INFO(1, logger) << "DMA test harness instantiated" << std::endl;
+  REG_INFO(1, logger) << "DMA test harness instantiated" << std::endl;
 
   // Register TLM callbacks for memory target sockets
   ot_target_socket.register_b_transport(this, &secure_dma_test::ot_b_transport);
@@ -61,7 +61,7 @@ secure_dma_test::secure_dma_test(sc_module_name name)
   m_sys_memory_r.resize(4 * 1024 * 1024, 0); // 4MB SYS source/read memory
   m_sys_memory_w.resize(4 * 1024 * 1024, 0); // 4MB SYS destination/write memory
 
-  CSML_INFO(1, logger)
+  REG_INFO(1, logger)
       << "Memory regions allocated (OT_R: 1MB, OT_W: 1MB, CTN_R: 1MB, "
          "CTN_W: 1MB, SYS_R: 4MB, SYS_W: 4MB)"
                        << std::endl;
@@ -72,7 +72,7 @@ secure_dma_test::secure_dma_test(sc_module_name name)
 // ============================================================================
 
 secure_dma_test::~secure_dma_test() {
-  CSML_INFO(1, logger) << "DMA test harness destroyed" << std::endl;
+  REG_INFO(1, logger) << "DMA test harness destroyed" << std::endl;
 }
 
 // ============================================================================
@@ -95,7 +95,7 @@ void secure_dma_test::register_read_32(unsigned int offset, uint32_t &read_value
   initiator_socket->b_transport(trans, delay);
 
   if (trans.is_response_error()) {
-    CSML_ERROR(0, logger) << "Register read failed at offset 0x" << std::hex
+    REG_ERROR(0, logger) << "Register read failed at offset 0x" << std::hex
                           << offset << std::dec << std::endl;
   }
 
@@ -118,7 +118,7 @@ void secure_dma_test::register_write_32(unsigned int offset, uint32_t write_valu
   initiator_socket->b_transport(trans, delay);
 
   if (trans.is_response_error()) {
-    CSML_ERROR(0, logger) << "Register write failed at offset 0x" << std::hex
+    REG_ERROR(0, logger) << "Register write failed at offset 0x" << std::hex
                           << offset << std::dec << std::endl;
   }
 
@@ -141,7 +141,7 @@ void secure_dma_test::register_read_16(unsigned int offset, uint16_t &read_value
   initiator_socket->b_transport(trans, delay);
 
   if (trans.is_response_error()) {
-    CSML_ERROR(0, logger) << "Register read failed at offset 0x" << std::hex
+    REG_ERROR(0, logger) << "Register read failed at offset 0x" << std::hex
                           << offset << std::dec << std::endl;
   }
 
@@ -164,7 +164,7 @@ void secure_dma_test::register_write_16(unsigned int offset, uint16_t write_valu
   initiator_socket->b_transport(trans, delay);
 
   if (trans.is_response_error()) {
-    CSML_ERROR(0, logger) << "Register write failed at offset 0x" << std::hex
+    REG_ERROR(0, logger) << "Register write failed at offset 0x" << std::hex
                           << offset << std::dec << std::endl;
   }
 
@@ -187,7 +187,7 @@ void secure_dma_test::register_read_8(unsigned int offset, uint8_t &read_value) 
   initiator_socket->b_transport(trans, delay);
 
   if (trans.is_response_error()) {
-    CSML_ERROR(0, logger) << "Register read failed at offset 0x" << std::hex
+    REG_ERROR(0, logger) << "Register read failed at offset 0x" << std::hex
                           << offset << std::dec << std::endl;
   }
 
@@ -210,7 +210,7 @@ void secure_dma_test::register_write_8(unsigned int offset, uint8_t write_value)
   initiator_socket->b_transport(trans, delay);
 
   if (trans.is_response_error()) {
-    CSML_ERROR(0, logger) << "Register write failed at offset 0x" << std::hex
+    REG_ERROR(0, logger) << "Register write failed at offset 0x" << std::hex
                           << offset << std::dec << std::endl;
   }
 
@@ -222,7 +222,7 @@ void secure_dma_test::register_write_8(unsigned int offset, uint8_t write_value)
 // ============================================================================
 
 void secure_dma_test::apply_reset(sc_time duration) {
-  CSML_INFO(1, logger) << "Applying reset for " << duration << std::endl;
+  REG_INFO(1, logger) << "Applying reset for " << duration << std::endl;
 
   // Assert reset (active-low)
   rst_no.write(false);
@@ -232,7 +232,7 @@ void secure_dma_test::apply_reset(sc_time duration) {
   rst_no.write(true);
   wait(sc_time(10, SC_NS)); // Stabilization time
 
-  CSML_INFO(1, logger) << "Reset sequence complete" << std::endl;
+  REG_INFO(1, logger) << "Reset sequence complete" << std::endl;
 }
 
 // ============================================================================
@@ -242,10 +242,10 @@ void secure_dma_test::apply_reset(sc_time duration) {
 void secure_dma_test::set_lsio_trigger(unsigned int trigger_index, bool assert_value) {
   if (trigger_index < 11) {
     lsio_trigger_o[trigger_index].write(assert_value);
-    CSML_INFO(2, logger) << "LSIO trigger " << trigger_index << " set to "
+    REG_INFO(2, logger) << "LSIO trigger " << trigger_index << " set to "
                          << (assert_value ? "HIGH" : "LOW") << std::endl;
   } else {
-    CSML_ERROR(0, logger) << "Invalid trigger index " << trigger_index
+    REG_ERROR(0, logger) << "Invalid trigger index " << trigger_index
                           << " (valid range: 0-10)" << std::endl;
   }
 }
@@ -280,7 +280,7 @@ void secure_dma_test::ot_b_transport(tlm::tlm_generic_payload &trans, sc_time &d
 
   // Check if access wraps around the memory boundary
   if (offset + len > m_ot_memory_r.size()) {
-    CSML_ERROR(0, logger) << "OT memory access crosses boundary: addr=0x" << std::hex
+    REG_ERROR(0, logger) << "OT memory access crosses boundary: addr=0x" << std::hex
                           << addr << " offset=0x" << offset
                           << " len=" << std::dec << len << std::endl;
     trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
@@ -290,12 +290,12 @@ void secure_dma_test::ot_b_transport(tlm::tlm_generic_payload &trans, sc_time &d
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated OT read memory.
     std::memcpy(ptr, &m_ot_memory_r[offset], len);
-    CSML_INFO(3, logger) << "OT memory read: addr=0x" << std::hex << addr
+    REG_INFO(3, logger) << "OT memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated OT write memory.
     std::memcpy(&m_ot_memory_w[offset], ptr, len);
-    CSML_INFO(3, logger) << "OT memory write: addr=0x" << std::hex << addr
+    REG_INFO(3, logger) << "OT memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
 
@@ -315,7 +315,7 @@ void secure_dma_test::ctn_b_transport(tlm::tlm_generic_payload &trans, sc_time &
 
   // Check if access wraps around the memory boundary
   if (offset + len > m_ctn_memory_r.size()) {
-    CSML_ERROR(0, logger) << "CTN memory access crosses boundary: addr=0x" << std::hex
+    REG_ERROR(0, logger) << "CTN memory access crosses boundary: addr=0x" << std::hex
                           << addr << " offset=0x" << offset
                           << " len=" << std::dec << len << std::endl;
     trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
@@ -325,12 +325,12 @@ void secure_dma_test::ctn_b_transport(tlm::tlm_generic_payload &trans, sc_time &
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated CTN read memory.
     std::memcpy(ptr, &m_ctn_memory_r[offset], len);
-    CSML_INFO(3, logger) << "CTN memory read: addr=0x" << std::hex << addr
+    REG_INFO(3, logger) << "CTN memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated CTN write memory.
     std::memcpy(&m_ctn_memory_w[offset], ptr, len);
-    CSML_INFO(3, logger) << "CTN memory write: addr=0x" << std::hex << addr
+    REG_INFO(3, logger) << "CTN memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
 
@@ -350,7 +350,7 @@ void secure_dma_test::sys_b_transport(tlm::tlm_generic_payload &trans, sc_time &
 
   // Check if access wraps around the memory boundary
   if (offset + len > m_sys_memory_r.size()) {
-    CSML_ERROR(0, logger) << "System memory access crosses boundary: addr=0x" << std::hex
+    REG_ERROR(0, logger) << "System memory access crosses boundary: addr=0x" << std::hex
                           << addr << " offset=0x" << offset
                           << " len=" << std::dec << len << std::endl;
     trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
@@ -360,12 +360,12 @@ void secure_dma_test::sys_b_transport(tlm::tlm_generic_payload &trans, sc_time &
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated SYS read memory.
     std::memcpy(ptr, &m_sys_memory_r[offset], len);
-    CSML_INFO(3, logger) << "SYS memory read: addr=0x" << std::hex << addr
+    REG_INFO(3, logger) << "SYS memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated SYS write memory.
     std::memcpy(&m_sys_memory_w[offset], ptr, len);
-    CSML_INFO(3, logger) << "SYS memory write: addr=0x" << std::hex << addr
+    REG_INFO(3, logger) << "SYS memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
 
@@ -383,7 +383,7 @@ void secure_dma_test::write_ot_memory_r_byte(uint64_t addr, uint8_t data) {
 
   m_ot_memory_r[offset] = data;
 
-  CSML_INFO(3, logger) << "OT_R memory write (test init): addr=0x" << std::hex << addr
+  REG_INFO(3, logger) << "OT_R memory write (test init): addr=0x" << std::hex << addr
                        << " offset=0x" << offset
                        << " data=0x" << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -395,7 +395,7 @@ void secure_dma_test::write_ot_memory_w_byte(uint64_t addr, uint8_t data) {
 
   m_ot_memory_w[offset] = data;
 
-  CSML_INFO(3, logger) << "OT_W memory write (test init): addr=0x" << std::hex << addr
+  REG_INFO(3, logger) << "OT_W memory write (test init): addr=0x" << std::hex << addr
                        << " offset=0x" << offset
                        << " data=0x" << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -407,14 +407,14 @@ void secure_dma_test::write_ot_memory_byte(uint64_t addr, uint8_t data) {
 }
 
 void secure_dma_test::write_ot_memory_block(uint64_t addr, const unsigned char* data, size_t length) {
-  CSML_INFO(2, logger) << "OT memory block write (test init): addr=0x" << std::hex << addr
+  REG_INFO(2, logger) << "OT memory block write (test init): addr=0x" << std::hex << addr
                        << " length=" << std::dec << length << " bytes" << std::endl;
 
   for (size_t i = 0; i < length; i++) {
     write_ot_memory_byte(addr + i, data[i]);
   }
 
-  CSML_INFO(2, logger) << "OT memory block write complete" << std::endl;
+  REG_INFO(2, logger) << "OT memory block write complete" << std::endl;
 }
 
 uint8_t secure_dma_test::read_ot_memory_r_byte(uint64_t addr) {
@@ -423,7 +423,7 @@ uint8_t secure_dma_test::read_ot_memory_r_byte(uint64_t addr) {
 
   uint8_t data = m_ot_memory_r[offset];
 
-  CSML_INFO(3, logger) << "OT_R memory read (test verify): addr=0x" << std::hex << addr
+  REG_INFO(3, logger) << "OT_R memory read (test verify): addr=0x" << std::hex << addr
                        << " offset=0x" << offset
                        << " data=0x" << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -437,7 +437,7 @@ uint8_t secure_dma_test::read_ot_memory_w_byte(uint64_t addr) {
 
   uint8_t data = m_ot_memory_w[offset];
 
-  CSML_INFO(3, logger) << "OT_W memory read (test verify): addr=0x" << std::hex << addr
+  REG_INFO(3, logger) << "OT_W memory read (test verify): addr=0x" << std::hex << addr
                        << " offset=0x" << offset
                        << " data=0x" << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -451,7 +451,7 @@ void secure_dma_test::write_ctn_memory_r_byte(uint64_t addr, uint8_t data) {
 
   m_ctn_memory_r[offset] = data;
 
-  CSML_INFO(3, logger) << "CTN_R memory write (test init): addr=0x" << std::hex
+  REG_INFO(3, logger) << "CTN_R memory write (test init): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -463,7 +463,7 @@ void secure_dma_test::write_ctn_memory_w_byte(uint64_t addr, uint8_t data) {
 
   m_ctn_memory_w[offset] = data;
 
-  CSML_INFO(3, logger) << "CTN_W memory write (test init): addr=0x" << std::hex
+  REG_INFO(3, logger) << "CTN_W memory write (test init): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -475,7 +475,7 @@ uint8_t secure_dma_test::read_ctn_memory_r_byte(uint64_t addr) {
 
   uint8_t data = m_ctn_memory_r[offset];
 
-  CSML_INFO(3, logger) << "CTN_R memory read (test verify): addr=0x" << std::hex
+  REG_INFO(3, logger) << "CTN_R memory read (test verify): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -489,7 +489,7 @@ uint8_t secure_dma_test::read_ctn_memory_w_byte(uint64_t addr) {
 
   uint8_t data = m_ctn_memory_w[offset];
 
-  CSML_INFO(3, logger) << "CTN_W memory read (test verify): addr=0x" << std::hex
+  REG_INFO(3, logger) << "CTN_W memory read (test verify): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -503,7 +503,7 @@ void secure_dma_test::write_sys_memory_r_byte(uint64_t addr, uint8_t data) {
 
   m_sys_memory_r[offset] = data;
 
-  CSML_INFO(3, logger) << "SYS_R memory write (test init): addr=0x" << std::hex
+  REG_INFO(3, logger) << "SYS_R memory write (test init): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -515,7 +515,7 @@ void secure_dma_test::write_sys_memory_w_byte(uint64_t addr, uint8_t data) {
 
   m_sys_memory_w[offset] = data;
 
-  CSML_INFO(3, logger) << "SYS_W memory write (test init): addr=0x" << std::hex
+  REG_INFO(3, logger) << "SYS_W memory write (test init): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -527,7 +527,7 @@ uint8_t secure_dma_test::read_sys_memory_r_byte(uint64_t addr) {
 
   uint8_t data = m_sys_memory_r[offset];
 
-  CSML_INFO(3, logger) << "SYS_R memory read (test verify): addr=0x" << std::hex
+  REG_INFO(3, logger) << "SYS_R memory read (test verify): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;
@@ -541,7 +541,7 @@ uint8_t secure_dma_test::read_sys_memory_w_byte(uint64_t addr) {
 
   uint8_t data = m_sys_memory_w[offset];
 
-  CSML_INFO(3, logger) << "SYS_W memory read (test verify): addr=0x" << std::hex
+  REG_INFO(3, logger) << "SYS_W memory read (test verify): addr=0x" << std::hex
                        << addr << " offset=0x" << offset << " data=0x"
                        << std::setw(2) << std::setfill('0') << (int)data
                        << std::dec << std::endl;

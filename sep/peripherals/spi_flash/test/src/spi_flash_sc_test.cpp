@@ -49,7 +49,7 @@
 
 #include "spi_flash.h"
 #include "spi_flash_sfdp_utils.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 
 #include <systemc.h>
 #include <iostream>
@@ -649,7 +649,7 @@ private:
 
 int sc_main(int argc, char* argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     // Shared reset signal — stub drives it, flash reads it
     sc_signal<bool> rst_ni("rst_ni");

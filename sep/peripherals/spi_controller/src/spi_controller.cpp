@@ -88,10 +88,10 @@ void spi_controller_ip::end_of_elaboration()
    dma_trigger.initialize(false);
 
     if (!clk_i.get_interface()) {
-        CSML_ERROR(0, logger) << name() << "clk_i port must be bound" << std::endl;
+        REG_ERROR(0, logger) << name() << "clk_i port must be bound" << std::endl;
     }
     if (!spi_master.get_interface()) {
-        CSML_ERROR(0, logger) << name() << "spi_master port must be bound" << std::endl;
+        REG_ERROR(0, logger) << name() << "spi_master port must be bound" << std::endl;
     }
 }
 
@@ -328,7 +328,7 @@ double spi_controller_ip::calculate_segment_delay(const spi_segment_t& segment, 
     sc_time clk_period = get_clk_period();
 
     if (clk_period == SC_ZERO_TIME) {
-        CSML_WARN(0, logger) << "[SPI_HOST/TIMING] Invalid clock period, using default 10ns (100 MHz)" << std::endl;
+        REG_WARN(0, logger) << "[SPI_HOST/TIMING] Invalid clock period, using default 10ns (100 MHz)" << std::endl;
         clk_period = sc_time(10, SC_NS);
     }
 
@@ -390,7 +390,7 @@ void spi_controller_ip::set_fsm_state(fsm_state_e new_state)
 bool spi_controller_ip::validate_csid(uint32_t csid, const char* context)
 {
     if (csid >= get_num_cs()) {
-        CSML_ERROR(0, logger) << "[SPI_HOST/" << context << " ERROR] CSID (" << csid
+        REG_ERROR(0, logger) << "[SPI_HOST/" << context << " ERROR] CSID (" << csid
                   << ") >= NumCS (" << get_num_cs() << ")" << std::endl;
         ERROR_STATUS.CSIDINVAL = 1;
         update_error_interrupt_state();
@@ -409,7 +409,7 @@ void spi_controller_ip::spi_transaction_thread()
         wait(m_transaction_event);
 
         if (!clk_i.read()) {
-            CSML_ERROR(0, logger) << "[SPI_HOST/TRANSACTION] clk_i port not bound or has invalid value (≤0 Hz). Cannot process SPI transactions without valid clock input" << std::endl;
+            REG_ERROR(0, logger) << "[SPI_HOST/TRANSACTION] clk_i port not bound or has invalid value (≤0 Hz). Cannot process SPI transactions without valid clock input" << std::endl;
             ERROR_STATUS.ACCESSINVAL = 1;
             update_error_interrupt_state();
             continue;
@@ -456,7 +456,7 @@ void spi_controller_ip::spi_transaction_thread()
                 //      wait(m_transaction_event) would strand them.
                 // 'continue' handles both: the guard exits on a real error and
                 // keeps draining on a clean SW_RST abort.
-                CSML_INFO(1, logger) << "[SPI_HOST] Transaction did not complete (error or SW_RST abort); "
+                REG_INFO(1, logger) << "[SPI_HOST] Transaction did not complete (error or SW_RST abort); "
                                      << "re-evaluating command queue" << std::endl;
                 continue;
             }
@@ -504,7 +504,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
         uint32_t bytes_needed = segment.len;
         uint32_t byte_idx = 0;
 
-       CSML_INFO(1, logger) << "[SPI_HOST] Pulling " << bytes_needed << " bytes from TX FIFO" << std::endl;
+       REG_INFO(1, logger) << "[SPI_HOST] Pulling " << bytes_needed << " bytes from TX FIFO" << std::endl;
 
         while (byte_idx < bytes_needed) {
             uint32_t word;
@@ -536,7 +536,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                 }
 
                 if (!tx_fifo_pop(word)) {
-                    CSML_ERROR(0, logger) << "[SPI_HOST] TX FIFO underflow: "
+                    REG_ERROR(0, logger) << "[SPI_HOST] TX FIFO underflow: "
                         << "no data after watermark event (watermark not reached). Segment requires "
                         << bytes_needed << " bytes, only " << byte_idx << " available." << std::endl;
                     ERROR_STATUS.underflow = 1;
@@ -569,7 +569,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
     // Initiate SPI transaction via spi_master port
     bool success = spi_master->spi_transaction(segment, config, tx_buffer, rx_buffer);
 
-    CSML_INFO(1, logger) << "[SPI_HOST] SPI transaction completed after "
+    REG_INFO(1, logger) << "[SPI_HOST] SPI transaction completed after "
             << (segment_delay * 1e9) << " ns, success=" << success << std::endl;
 
     // For RX_ONLY and BIDIR, push received data into RX FIFO BEFORE the timing delay.
@@ -590,7 +590,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
         uint32_t bytes_received = segment.len;
         uint32_t byte_idx = 0;
 
-        CSML_INFO(1, logger) << "[SPI_HOST] Pushing " << bytes_received
+        REG_INFO(1, logger) << "[SPI_HOST] Pushing " << bytes_received
                              << " bytes into RX FIFO" << std::endl;
 
         while (byte_idx < bytes_received) {
@@ -638,7 +638,7 @@ void spi_controller_ip::update_output_signals_method()
 {
     // Check if we're in reset - don't write to ports during reset
     if (!rst_ni.read()) {
-        CSML_DEBUG(2, logger) << "[SPI_HOST] update_output_signals_method: Skipping during reset" << std::endl;
+        REG_DEBUG(2, logger) << "[SPI_HOST] update_output_signals_method: Skipping during reset" << std::endl;
         return;
     }
 
@@ -900,7 +900,7 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
     CTRL = new_value;
 
     // Extract control fields
-    CSML_INFO(2, logger) << "  SPIEN: " << (uint32_t)CTRL.SPIEN << std::endl
+    REG_INFO(2, logger) << "  SPIEN: " << (uint32_t)CTRL.SPIEN << std::endl
                          << "  SW_RST: " << (uint32_t)CTRL.SW_RST << std::endl
                          << "  OUTPUT_EN: " << (uint32_t)CTRL.OUTPUT_EN << std::endl
                          << "  TX_WATERMARK: " << (int)CTRL.TX_WATERMARK << std::endl
@@ -912,7 +912,7 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
 
     // Handle SW_RST first (highest priority)
     if (CTRL.SW_RST) {
-        CSML_INFO(2, logger) << "  [RESET] Software reset triggered!" << std::endl;
+        REG_INFO(2, logger) << "  [RESET] Software reset triggered!" << std::endl;
 
         // Capture whether a transaction is in flight BEFORE we overwrite the FSM
         // state below. The transaction thread holds fsm_state ACTIVE for the whole
@@ -971,18 +971,18 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
          // Auto-clear SW_RST
         CTRL.SW_RST = 0;
 
-        CSML_INFO(2, logger) << "  [RESET] Software reset complete" << std::endl;
+        REG_INFO(2, logger) << "  [RESET] Software reset complete" << std::endl;
     }
 
     // Handle SPIEN (enable/disable FSM operation)
     if (new_spien) {
-        CSML_INFO(2, logger) << "  [CTRL] SPI Host enabled" << std::endl;
+        REG_INFO(2, logger) << "  [CTRL] SPI Host enabled" << std::endl;
         // If SPIEN changed from 0 to 1, and there are commands queued, wake up transaction thread
         if (!prev_spien && !m_command_queue.empty()) {
             m_transaction_event.notify();
         }
         else {
-            CSML_INFO(2, logger) << "  [CTRL] SPI Host disabled" << std::endl;
+            REG_INFO(2, logger) << "  [CTRL] SPI Host disabled" << std::endl;
         }
         // FSM should not process new transactions
         // Ongoing transactions may continue or be aborted depending on implementation
@@ -1059,8 +1059,8 @@ bool spi_controller_ip::handle_read_STATUS(uint32_t& value, uint32_t mask)
  */
 bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
 {
-   CSML_INFO(1, logger) << "[SPI_HOST] CMD register pre-write callback triggered" << std::endl;
-   CSML_DEBUG(2, logger) << "  Value to write: 0x" << std::hex << value << std::dec << std::endl;
+   REG_INFO(1, logger) << "[SPI_HOST] CMD register pre-write callback triggered" << std::endl;
+   REG_DEBUG(2, logger) << "  Value to write: 0x" << std::hex << value << std::dec << std::endl;
 
     // Apply write bitmask to get the actual value being written
     uint32_t masked_value = value & mask;
@@ -1072,10 +1072,10 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     uint8_t  cmd_speed = (masked_value >> 10) & 0x3;
     uint8_t  cmd_direction = (masked_value >> 12) & 0x3;
 
-    CSML_DEBUG(2, logger) << "  LEN: " << cmd_len << " (actual bytes: " << (cmd_len + 1) << ")" << std::endl;
-    CSML_DEBUG(2, logger) << "  CSAAT: " << cmd_csaat << std::endl;
-    CSML_DEBUG(2, logger) << "  SPEED: " << (int)cmd_speed << " (0=Std, 1=Dual, 2=Quad)" << std::endl;
-    CSML_DEBUG(2, logger) << "  DIRECTION: " << (int)cmd_direction << " (0=Dummy, 1=Rx, 2=Tx, 3=Bidir)" << std::endl;
+    REG_DEBUG(2, logger) << "  LEN: " << cmd_len << " (actual bytes: " << (cmd_len + 1) << ")" << std::endl;
+    REG_DEBUG(2, logger) << "  CSAAT: " << cmd_csaat << std::endl;
+    REG_DEBUG(2, logger) << "  SPEED: " << (int)cmd_speed << " (0=Std, 1=Dual, 2=Quad)" << std::endl;
+    REG_DEBUG(2, logger) << "  DIRECTION: " << (int)cmd_direction << " (0=Dummy, 1=Rx, 2=Tx, 3=Bidir)" << std::endl;
 
     // ========================================================================
     // Validation 0: the command queue must have room.
@@ -1089,7 +1089,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // handle_write_ERROR_STATUS restarts the engine when the last error clears.
     // ========================================================================
     if (is_cmd_queue_full()) {
-        CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Command FIFO full (depth=" << get_cmd_queue_depth()
+        REG_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Command FIFO full (depth=" << get_cmd_queue_depth()
                   << "/" << get_cmd_depth() << "). Cannot accept new command segment. Setting ERROR_STATUS.CMDBUSY" << std::endl;
 
         ERROR_STATUS.CMDBUSY = 1;
@@ -1107,7 +1107,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
 
     // Validation 3: Check valid SPEED (0-2 valid, 3 is reserved)
     if (cmd_speed > 2) {
-        CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Invalid SPEED value: " << (int)cmd_speed
+        REG_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Invalid SPEED value: " << (int)cmd_speed
                   << " (valid: 0-2). Setting ERROR_STATUS.CMDINVAL" << std::endl;
 
         // Set ERROR_STATUS.CMDINVAL
@@ -1123,7 +1123,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // DIRECTION=3 (Bidirectional) only valid with SPEED=0 (Standard)
     // Per datasheet: "Bidirectional data transfers are not applicable for Dual- or Quad-mode segments"
     if (cmd_direction == 3 && cmd_speed != 0) {
-        CSML_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Bidirectional mode only supported with Standard SPI. "
+        REG_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Bidirectional mode only supported with Standard SPI. "
                   << "DIRECTION=3 (Bidir) with SPEED=" << (int)cmd_speed
                   << " (not Standard). Setting ERROR_STATUS.CMDINVAL" << std::endl;
 
@@ -1144,7 +1144,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // m_rx_space_available_event rather than setting OVERFLOW.
     if (cmd_direction == 1 || cmd_direction == 3) {  // RX_ONLY or BIDIR
         uint32_t bytes_to_receive = cmd_len + 1;  // LEN is 0-based, so add 1
-        CSML_INFO(2, logger) << "[SPI_HOST/CMD] RX segment accepted: " << bytes_to_receive
+        REG_INFO(2, logger) << "[SPI_HOST/CMD] RX segment accepted: " << bytes_to_receive
             << " bytes (streams under back-pressure if it exceeds free FIFO space)" << std::endl;
     }
 
@@ -1188,7 +1188,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // Trigger the transaction thread
     m_transaction_event.notify();
 
-    CSML_INFO(2, logger) << "  [SUCCESS] SPI transaction queued and thread notified" << std::endl;
+    REG_INFO(2, logger) << "  [SUCCESS] SPI transaction queued and thread notified" << std::endl;
 
     return true;
 }
@@ -1208,7 +1208,7 @@ bool spi_controller_ip::handle_write_TXDATA(uint32_t value, uint8_t byte_enable,
                           (byte_enable == 0x3) || (byte_enable == 0x6) ||
                           (byte_enable == 0xC) || (byte_enable == 0xF);
     if (!be_valid) {
-        CSML_ERROR(0, logger) << "[SPI_HOST/TXDATA ERROR] Invalid byte-enable pattern: 0x"
+        REG_ERROR(0, logger) << "[SPI_HOST/TXDATA ERROR] Invalid byte-enable pattern: 0x"
                               << std::hex << (int)byte_enable << std::dec
                               << ". Valid patterns: 0x1/0x2/0x4/0x8 (single byte), "
                               << "0x3/0x6/0xC (aligned half-word), 0xF (full word). "
@@ -1230,7 +1230,7 @@ bool spi_controller_ip::handle_write_TXDATA(uint32_t value, uint8_t byte_enable,
 
     // Check if TX FIFO is full
     if (is_tx_fifo_full()) {
-        CSML_ERROR(0, logger) << "[SPI_HOST/TXDATA ERROR] TX FIFO overflow - FIFO is full. Setting ERROR_STATUS.OVERFLOW" << std::endl;
+        REG_ERROR(0, logger) << "[SPI_HOST/TXDATA ERROR] TX FIFO overflow - FIFO is full. Setting ERROR_STATUS.OVERFLOW" << std::endl;
         ERROR_STATUS.overflow = 1;
         update_error_interrupt_state();
         return false;
@@ -1257,7 +1257,7 @@ bool spi_controller_ip::handle_read_RXDATA(uint32_t& value, uint32_t mask)
 {
     // Check if RX FIFO is empty
     if (is_rx_fifo_empty()) {
-        CSML_WARN(1, logger) << "  [WARNING] RX FIFO underflow - FIFO is empty, returning 0" << std::endl;
+        REG_WARN(1, logger) << "  [WARNING] RX FIFO underflow - FIFO is empty, returning 0" << std::endl;
         value = 0;
         ERROR_STATUS.underflow = 1;
         update_error_interrupt_state();
@@ -1283,7 +1283,7 @@ bool spi_controller_ip::handle_read_RXDATA(uint32_t& value, uint32_t mask)
         update_spi_event_intr_status();
     } else {
         value = 0;
-        CSML_WARN(1, logger) << "  Failed to pop from RX FIFO, returning 0" << std::endl;
+        REG_WARN(1, logger) << "  Failed to pop from RX FIFO, returning 0" << std::endl;
     }
 
     return true;
@@ -1303,7 +1303,7 @@ bool spi_controller_ip::handle_write_CFG(uint32_t value, uint32_t mask)
     // Check CSID range (without setting error - CFG access doesn't trigger CSIDINVAL)
     // Per datasheet: CSIDINVAL only set on CMD write, not CFG access
     if (csid >= get_num_cs()) {
-        CSML_WARN(1, logger) << "[SPI_HOST/CFG_WRITE] Invalid CSID (" << csid
+        REG_WARN(1, logger) << "[SPI_HOST/CFG_WRITE] Invalid CSID (" << csid
                   << ") >= NumCS (" << get_num_cs() << "). Ignoring write." << std::endl;
         return false;  // Silently reject, don't set error
     }
@@ -1328,7 +1328,7 @@ bool spi_controller_ip::handle_read_CFG(uint32_t& value, uint32_t mask)
     // Check CSID range (without setting error - CFG access doesn't trigger CSIDINVAL)
     // Per datasheet: CSIDINVAL only set on CMD write, not CFG access
     if (csid >= get_num_cs()) {
-        CSML_WARN(1, logger) << "[SPI_HOST/CFG_READ] Invalid CSID (" << csid
+        REG_WARN(1, logger) << "[SPI_HOST/CFG_READ] Invalid CSID (" << csid
                   << ") >= NumCS (" << get_num_cs() << "). Returning 0." << std::endl;
         value = 0;
         return true;  // Return 0, don't set error

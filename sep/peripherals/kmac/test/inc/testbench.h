@@ -16,7 +16,7 @@
 #include "../../include/kmac.h"
 #include "kmac_test.h"
 #include "kmac_func013_024_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -516,5 +516,5 @@ public:
         uint32_t msg_mask = 0);
 
     /// @brief Logger instance for structured logging
-    mutable CsmlLogger logger;
+    mutable RegLogger logger;
 };

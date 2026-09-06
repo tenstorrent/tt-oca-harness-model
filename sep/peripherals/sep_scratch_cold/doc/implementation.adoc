@@ -5,7 +5,7 @@
 ===== SystemC/TLM-2.0 Implementation
 
 `sep_scratch_cold_ip` is a loosely-timed TLM-2.0 model of the
-cold-retention scratch bank. The eight words are plain CSML storage.
+cold-retention scratch bank. The eight words are plain regmodel storage.
 Post-write callbacks on three of them implement the VP console, the
 status printer, and CocoTB-style handshake acks. There is no
 `rst_ni`: a platform reset does not wipe this bank.
@@ -17,7 +17,7 @@ class sep_scratch_cold_ip : public sep_scratch_cold_base
 
 ----
 sep_scratch_cold_ip     post-write decoders + VP acks   (sep_scratch_cold.*)
-  └─ sep_scratch_cold_base   csml_memory + SCRATCH[8]
+  └─ sep_scratch_cold_base   regmodel::Memory + SCRATCH[8]
        └─ virt_console_decoder.h / sep_status_decoder.h
 ----
 
@@ -53,7 +53,7 @@ does not hang on a standalone VP.
 |Parameter |Default |Use
 |`sim_out.enable` |true |Virtual console
 |`sep_status.enable` |true |Status printer
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

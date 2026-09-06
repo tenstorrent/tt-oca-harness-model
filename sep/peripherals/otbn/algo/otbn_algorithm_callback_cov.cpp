@@ -11,7 +11,7 @@ otbn_algorithm_callback_cov::otbn_algorithm_callback_cov(size_t dmem_size)
     : otbn_algorithm(dmem_size, false), instruction_count(8) {}
 
 otbn_algorithm::status_t otbn_algorithm_callback_cov::execute(char* dmem) {
-    CSML_INFO(1, logger) << "[OTBN callback_cov] Exercising CSR/WDR callbacks";
+    REG_INFO(1, logger) << "[OTBN callback_cov] Exercising CSR/WDR callbacks";
 
     uint32_t csr_val = 0;
     if (m_csr_read_cb) {

@@ -21,7 +21,7 @@ This tree has the model, its test plan, and how to run the tests.
 
 ```
 include/aes.h              aes_model
-include/aes_base.h         CSML register declaration
+include/aes_base.h         regmodel register declaration
 include/aes_register.h     RO/WO/RW types
 src/                       LT implementation
 test/                      standalone bench

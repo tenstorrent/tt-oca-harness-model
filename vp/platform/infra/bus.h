@@ -15,8 +15,8 @@
 #include <systemc>
 
 #include "initator_ext.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 /**************************************************************************/
 /*** Problem statement ***/
@@ -124,22 +124,25 @@ struct PortMapping {
 	}
 };
 
+#ifndef RISCV_ISA_BUS_WRITE_OBSERVER_H
+#define RISCV_ISA_BUS_WRITE_OBSERVER_H
 struct BusWriteObserver
 {
     virtual void notifyWrite(uint64_t addr,
                              unsigned size,
                              int initiator_id) = 0;
 };
+#endif
 
 template <unsigned int NR_OF_INITIATORS, unsigned int NR_OF_TARGETS>
 struct SimpleBus : sc_core::sc_module {
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
-	CsmlLogger logger;
-	csml_param<int> verbosity;
+	RegLogger logger;
+	regmodel::Param<int> verbosity;
 	// Tagged so the decode knows which initiator a transaction arrived on: a
 	// real crossbar has a per-initiator connectivity matrix, and enforcing it
 	// needs the initiator's identity, which the untagged socket discards.
@@ -158,13 +161,13 @@ struct SimpleBus : sc_core::sc_module {
 
 	SimpleBus(sc_core::sc_module_name name, bool trans_break)
 	    : sc_module(name)
-	    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+	    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
         , break_on_transaction(trans_break) {
 		// Initialize logger
 		logger.setMaxVerbosity(verbosity.get_param_value());
 		logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
 		logger.setFunctionTrace(false);
-   	        CSML_INFO(2, logger) << "SimpleBus module constructor - NR_OF_INITIATORS=" << NR_OF_INITIATORS  << " NR_OF_TARGETS=" << NR_OF_TARGETS << std::endl;
+   	        REG_INFO(2, logger) << "SimpleBus module constructor - NR_OF_INITIATORS=" << NR_OF_INITIATORS  << " NR_OF_TARGETS=" << NR_OF_TARGETS << std::endl;
 		for (unsigned i = 0; i < NR_OF_INITIATORS; ++i) {
 			tsocks[i].register_b_transport(this, &SimpleBus::transport, i);
 			tsocks[i].register_transport_dbg(this, &SimpleBus::transport_dbg, i);
@@ -206,7 +209,7 @@ struct SimpleBus : sc_core::sc_module {
 		}
 
 		if (!permitted(unsigned(initiator_id), addr)) {
-			CSML_INFO(3, logger) << "connectivity block: initiator " << initiator_id
+			REG_INFO(3, logger) << "connectivity block: initiator " << initiator_id
 			                     << " has no route to addr=0x" << std::hex << addr
 			                     << " (" << ports[id]->to_string() << ")" << std::dec << std::endl;
 			trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
@@ -222,7 +225,7 @@ struct SimpleBus : sc_core::sc_module {
 			for (auto* obs : observers_) {
 				// Pass the tagged initiator, not decode(addr) (target port).
 				obs->notifyWrite(addr, size, initiator_id);
-				CSML_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << initiator_id << std::dec << std::endl;
+				REG_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << initiator_id << std::dec << std::endl;
 			}
 		}
 
@@ -234,7 +237,7 @@ struct SimpleBus : sc_core::sc_module {
 		}
 
 		trans.set_address(ports[id]->global_to_local(addr));
-		CSML_INFO(5, logger) << "addr=0x" << std::hex << addr << " portID:" << id << " Converted address=0x" <<  trans.get_address() << " isWrite=" << isWrite << std::dec << std::endl;
+		REG_INFO(5, logger) << "addr=0x" << std::hex << addr << " portID:" << id << " Converted address=0x" <<  trans.get_address() << " isWrite=" << isWrite << std::dec << std::endl;
 		isocks[id]->b_transport(trans, delay);
 	}
 
@@ -261,7 +264,7 @@ struct SimpleBus : sc_core::sc_module {
 			for (auto* obs : observers_) {
 				// Pass the tagged initiator, not decode(addr) (target port).
 				obs->notifyWrite(addr, size, initiator_id);
-				CSML_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << initiator_id << std::dec << std::endl;
+				REG_DEBUG(5, logger) <<  "notifyWrite(to invalidate reservations) called from bus for addr=" << std::hex << addr << " initiator_id=" << initiator_id << std::dec << std::endl;
 			}
 		}
 
@@ -272,7 +275,7 @@ struct SimpleBus : sc_core::sc_module {
 			}
 		}
 		trans.set_address(ports[id]->global_to_local(addr));
-		CSML_INFO(5, logger) << "addr=0x" << std::hex << addr << " portID:" << id << " Converted address=0x" <<  trans.get_address() << " isWrite=" <<  trans.is_write() << std::dec << std::endl;
+		REG_INFO(5, logger) << "addr=0x" << std::hex << addr << " portID:" << id << " Converted address=0x" <<  trans.get_address() << " isWrite=" <<  trans.is_write() << std::dec << std::endl;
 		isocks[id]->transport_dbg(trans);
 		return trans.get_data_length();
 	}

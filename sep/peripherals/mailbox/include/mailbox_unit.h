@@ -71,10 +71,10 @@ public:
    /// @brief Abstract clock frequency input, fanned out to every channel
    sc_in<double> clk_i;
 
-   /// @brief CSML Logger for diagnostic output
-   CsmlLogger logger;
+   /// @brief RegLogger for diagnostic output
+   RegLogger logger;
 
-   mailbox_unit_t(sc_module_name n, int log_verbosity = CSML_DEFAULT_VERBOSITY)
+   mailbox_unit_t(sc_module_name n, int log_verbosity = REG_DEFAULT_VERBOSITY)
        : sc_module(n)
        , target_socket("target_socket")
        , logger()
@@ -104,7 +104,7 @@ public:
          m_block_socket[2 * m + 1]->bind(m_channel[m]->socket1);
       }
 
-      CSML_INFO(2, logger) << "Mailbox unit instantiated with " << NUM_MAILBOXES
+      REG_INFO(2, logger) << "Mailbox unit instantiated with " << NUM_MAILBOXES
                            << " channels, aperture 0x" << std::hex << APERTURE_SIZE
                            << std::dec;
    }
@@ -130,7 +130,7 @@ private:
       const unsigned int block = static_cast<unsigned int>(addr / MAILBOX_SIZE);
 
       if (block >= NUM_BLOCKS) {
-         CSML_WARN(1, logger) << "Access outside mailbox unit aperture at 0x"
+         REG_WARN(1, logger) << "Access outside mailbox unit aperture at 0x"
                               << std::hex << addr << std::dec;
          trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
          return;

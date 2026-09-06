@@ -11,7 +11,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     int sub_tests_passed = 0;
     int sub_tests_failed = 0;
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "[TEST FUNC-004] Interrupt-Driven TX/RX" << std::endl
                          << "========================================" << std::endl;
 
@@ -25,7 +25,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Initial Configuration
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host and Interrupts" << std::endl;
+    REG_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host and Interrupts" << std::endl;
 
     // CRITICAL: Perform software reset first to ensure clean initial state
     software_reset();
@@ -60,17 +60,17 @@ void testbench::test_func004_interrupt_driven_txrx()
     bool ready = (status_val >> 31) & 0x1;
 
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY=0, cannot proceed" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] STATUS.READY=0, cannot proceed" << std::endl;
         report_test_result("FUNC-004: Interrupt-Driven TX/RX", false);
         return;
     }
-    CSML_INFO(2, logger) << "  [PASS] SPI Host configured with interrupts enabled\n" << std::endl;
+    REG_INFO(2, logger) << "  [PASS] SPI Host configured with interrupts enabled\n" << std::endl;
     sub_tests_passed++;
 
     // =======================================================================
     // Test 1: TX Watermark Interrupt (TXWM)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 1] TX Watermark Interrupt (TXWM)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 1] TX Watermark Interrupt (TXWM)" << std::endl;
 
     // Clear any pending interrupts
     clear_interrupts();
@@ -99,10 +99,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     uint32_t txqd = status_val & 0xFF;
 
     if (txqd == 3) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO below watermark: TXQD=3 < TX_WATERMARK=4" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO below watermark: TXQD=3 < TX_WATERMARK=4" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 3" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXQD=" << txqd << ", expected 3" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -113,11 +113,11 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (spi_event_bit || spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] TXWM interrupt asserted (INTR_STATUS.spi_event=" << spi_event_bit
+        REG_INFO(2, logger) << "  [PASS] TXWM interrupt asserted (INTR_STATUS.spi_event=" << spi_event_bit
                   << ", spi_event_irq=" << spi_event_irq << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TXWM interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TXWM interrupt not asserted" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -136,10 +136,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     bool txempty = (status_val >> 28) & 0x1;
 
     if (txempty) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO drained after transaction: TXEMPTY=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO drained after transaction: TXEMPTY=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO not empty after transaction" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO not empty after transaction" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -150,7 +150,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 2: RX Watermark Interrupt (RXWM)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 2] RX Watermark Interrupt (RXWM)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 2] RX Watermark Interrupt (RXWM)" << std::endl;
 
     // Clear interrupts
     clear_interrupts();
@@ -173,10 +173,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     bool active = (status_val >> 30) & 0x1;
 
     if (rxqd >= 8 && !active) {
-        CSML_INFO(2, logger) << "  [PASS] RX FIFO crossed watermark: RXQD=" << rxqd << " >= 8" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX FIFO crossed watermark: RXQD=" << rxqd << " >= 8" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", ACTIVE=" << active << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RX FIFO: RXQD=" << rxqd << ", ACTIVE=" << active << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -187,10 +187,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (spi_event_bit || spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] RXWM interrupt asserted" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RXWM interrupt asserted" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RXWM interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RXWM interrupt not asserted" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -224,10 +224,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     }
 
     if (rx_data_match) {
-        CSML_INFO(2, logger) << "  [PASS] RX data integrity verified (32 bytes)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX data integrity verified (32 bytes)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RX data mismatch" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RX data mismatch" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -250,7 +250,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 3: IDLE Event Interrupt
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 3] IDLE Event Interrupt" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 3] IDLE Event Interrupt" << std::endl;
 
     // Clear interrupts
     clear_interrupts();
@@ -266,7 +266,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     ready = (status_val >> 31) & 0x1;
 
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-004: Interrupt-Driven TX/RX", test_passed);
@@ -283,10 +283,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     active = (status_val >> 30) & 0x1;
 
     if (!active) {
-        CSML_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Transaction completed: ACTIVE=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Transaction still active" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Transaction still active" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -297,10 +297,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (spi_event_bit || spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] IDLE event interrupt asserted" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] IDLE event interrupt asserted" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] IDLE event interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] IDLE event interrupt not asserted" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -315,7 +315,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 4: Error Interrupt (CMDINVAL)
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 4] Error Interrupt (CMDINVAL)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 4] Error Interrupt (CMDINVAL)" << std::endl;
 
     // Clear interrupts
     clear_interrupts();
@@ -333,11 +333,11 @@ void testbench::test_func004_interrupt_driven_txrx()
     bool cmdinval = (status_val >> 12) & 0x1;
 
     if (cmdinval) {
-        CSML_INFO(2, logger) << "  [PASS] CMDINVAL error detected (ERROR_STATUS=0x"
+        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected (ERROR_STATUS=0x"
                   << std::hex << status_val << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CMDINVAL not set" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CMDINVAL not set" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -348,11 +348,11 @@ void testbench::test_func004_interrupt_driven_txrx()
     error_irq = sig_error_irq.read();
 
     if (error_bit || error_irq) {
-        CSML_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATUS.error="
+        REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATUS.error="
                   << error_bit << ", error_irq=" << error_irq << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Error interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Error interrupt not asserted" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -370,10 +370,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
 
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] Error cleared successfully" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Error cleared successfully" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Error not cleared: ERROR_STATUS=0x"
+        REG_ERROR(2, logger) << "  [FAIL] Error not cleared: ERROR_STATUS=0x"
                   << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -385,7 +385,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 5: TXEMPTY Event Interrupt
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 5] TXEMPTY Event Interrupt" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 5] TXEMPTY Event Interrupt" << std::endl;
 
     // Clear interrupts
     clear_interrupts();
@@ -418,7 +418,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     ready = (status_val >> 31) & 0x1;
 
     if (!ready) {
-        CSML_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Not READY before command" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-004: Interrupt-Driven TX/RX", test_passed);
@@ -436,10 +436,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     txqd = status_val & 0xFF;
 
     if (txempty && txqd == 0) {
-        CSML_INFO(2, logger) << "  [PASS] TX FIFO emptied: TXEMPTY=1, TXQD=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TX FIFO emptied: TXEMPTY=1, TXQD=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TX FIFO: TXEMPTY=" << txempty << ", TXQD=" << txqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TX FIFO: TXEMPTY=" << txempty << ", TXQD=" << txqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -450,10 +450,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (spi_event_bit || spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] TXEMPTY event interrupt asserted" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] TXEMPTY event interrupt asserted" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] TXEMPTY event interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TXEMPTY event interrupt not asserted" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -468,7 +468,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 6: RXFULL Event Interrupt
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 6] RXFULL Event Interrupt" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 6] RXFULL Event Interrupt" << std::endl;
 
     // Clear interrupts
     clear_interrupts();
@@ -491,10 +491,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     rxqd = (status_val >> 8) & 0xFF;
 
     if (rxfull && rxqd >= m_rx_depth.get_param_value() - 2) {
-        CSML_INFO(2, logger) << "  [PASS] RX FIFO full: RXFULL=1, RXQD=" << rxqd << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RX FIFO full: RXFULL=1, RXQD=" << rxqd << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RX FIFO: RXFULL=" << rxfull << ", RXQD=" << rxqd << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RX FIFO: RXFULL=" << rxfull << ", RXQD=" << rxqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -505,10 +505,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (spi_event_bit || spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] RXFULL event interrupt asserted" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] RXFULL event interrupt asserted" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] RXFULL event interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RXFULL event interrupt not asserted" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -529,7 +529,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 7: INTR_TEST Register - Force Interrupt via Test Mechanism
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 7] INTR_TEST Register - Force Interrupts" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 7] INTR_TEST Register - Force Interrupts" << std::endl;
 
     // Establish a quiet baseline. INTR_STATUS follows its causes, so masking
     // every event is what makes SPI_EVENT drop: level conditions such as IDLE
@@ -544,10 +544,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     bool spi_event_irq_clear = sig_spi_event_irq.read();
 
     if ((status_val == 0) && !error_irq_clear && !spi_event_irq_clear) {
-        CSML_INFO(2, logger) << "  [PASS] Interrupts cleared before INTR_TEST" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Interrupts cleared before INTR_TEST" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Interrupts not clear: INTR_STATUS=0x"
+        REG_ERROR(2, logger) << "  [FAIL] Interrupts not clear: INTR_STATUS=0x"
                   << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -563,11 +563,11 @@ void testbench::test_func004_interrupt_driven_txrx()
     error_irq = sig_error_irq.read();
 
     if (error_bit || error_irq) {
-        CSML_INFO(2, logger) << "  [PASS] INTR_TEST forced ERROR interrupt (INTR_STATUS.error="
+        REG_INFO(2, logger) << "  [PASS] INTR_TEST forced ERROR interrupt (INTR_STATUS.error="
                   << error_bit << ", error_irq=" << error_irq << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] INTR_TEST did not force ERROR interrupt" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] INTR_TEST did not force ERROR interrupt" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -586,11 +586,11 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (spi_event_bit || spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] INTR_TEST forced SPI_EVENT interrupt (INTR_STATUS.spi_event="
+        REG_INFO(2, logger) << "  [PASS] INTR_TEST forced SPI_EVENT interrupt (INTR_STATUS.spi_event="
                   << spi_event_bit << ", spi_event_irq=" << spi_event_irq << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] INTR_TEST did not force SPI_EVENT interrupt" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] INTR_TEST did not force SPI_EVENT interrupt" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -602,7 +602,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 8: INTR_STATUS is read-only — software writes are ignored
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 8] INTR_STATUS Read-Only Semantics" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 8] INTR_STATUS Read-Only Semantics" << std::endl;
 
     // Force both interrupts simultaneously using INTR_TEST
     test->write_register_32(INTR_TEST_OFFSET, 0x11);  // Bits 0 and 4
@@ -614,10 +614,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 4) & 0x1;
 
     if (error_bit && spi_event_bit) {
-        CSML_INFO(2, logger) << "  [PASS] Both interrupts set: ERROR=1, SPI_EVENT=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Both interrupts set: ERROR=1, SPI_EVENT=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Interrupts not both set: ERROR="
+        REG_ERROR(2, logger) << "  [FAIL] Interrupts not both set: ERROR="
                   << error_bit << ", SPI_EVENT=" << spi_event_bit << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -633,10 +633,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 4) & 0x1;
 
     if (error_bit && spi_event_bit) {
-        CSML_INFO(2, logger) << "  [PASS] Write to INTR_STATUS ignored: ERROR=1, SPI_EVENT=1" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Write to INTR_STATUS ignored: ERROR=1, SPI_EVENT=1" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Write to INTR_STATUS took effect: ERROR="
+        REG_ERROR(2, logger) << "  [FAIL] Write to INTR_STATUS took effect: ERROR="
                   << error_bit << ", SPI_EVENT=" << spi_event_bit << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -649,10 +649,10 @@ void testbench::test_func004_interrupt_driven_txrx()
 
     test->read_register_32(INTR_STATUS_OFFSET, status_val);
     if (status_val == 0) {
-        CSML_INFO(2, logger) << "  [PASS] Interrupts cleared once INTR_TEST was released" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Interrupts cleared once INTR_TEST was released" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Interrupts not cleared: INTR_STATUS=0x"
+        REG_ERROR(2, logger) << "  [FAIL] Interrupts not cleared: INTR_STATUS=0x"
                   << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -661,7 +661,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test 9: EVENT_ENABLE Masking - Individual Event Control
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Test 9] EVENT_ENABLE Register - Event Masking" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 9] EVENT_ENABLE Register - Event Masking" << std::endl;
 
     // Clear all interrupts
     clear_interrupts();
@@ -688,10 +688,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (!spi_event_bit && !spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] EVENT_ENABLE=0 masked all events (no interrupt)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] EVENT_ENABLE=0 masked all events (no interrupt)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Event interrupt triggered despite mask: spi_event_bit="
+        REG_ERROR(2, logger) << "  [FAIL] Event interrupt triggered despite mask: spi_event_bit="
                   << spi_event_bit << ", spi_event_irq=" << spi_event_irq << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -722,10 +722,10 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_irq = sig_spi_event_irq.read();
 
     if (spi_event_bit || spi_event_irq) {
-        CSML_INFO(2, logger) << "  [PASS] EVENT_ENABLE unmasked TXEMPTY event (interrupt triggered)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] EVENT_ENABLE unmasked TXEMPTY event (interrupt triggered)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Event interrupt not triggered despite unmask" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Event interrupt not triggered despite unmask" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -744,17 +744,17 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Final Check
     // =======================================================================
-    CSML_INFO(1, logger) << "\n[Final Check] Verify FSM in IDLE" << std::endl;
+    REG_INFO(1, logger) << "\n[Final Check] Verify FSM in IDLE" << std::endl;
 
     test->read_register_32(STATUS_OFFSET, status_val);
     ready = (status_val >> 31) & 0x1;
     active = (status_val >> 30) & 0x1;
 
     if (ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FSM not in IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FSM not in IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -762,7 +762,7 @@ void testbench::test_func004_interrupt_driven_txrx()
     // =======================================================================
     // Test Summary
     // =======================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Sub-tests Passed: " << sub_tests_passed << std::endl
                          << "Sub-tests Failed: " << sub_tests_failed << std::endl
                          << "========================================" << std::endl

@@ -51,13 +51,13 @@
 
 #pragma once
 #include "sep_filter_ctrl_base.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 #include <tlm_utils/simple_initiator_socket.h>
 #include <cstdint>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 class sep_filter_ctrl_ip : public sep_filter_ctrl_base
@@ -65,7 +65,7 @@ class sep_filter_ctrl_ip : public sep_filter_ctrl_base
 public:
     SC_HAS_PROCESS(sep_filter_ctrl_ip);
 
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
 
     // =========================================================================
     // Instance selector — VP passes this instead of a raw entry count
@@ -95,8 +95,8 @@ public:
     /// reads as 0 while unbound, which is what RTL ties the outbound instance to.
     sc_core::sc_in<bool> filter_skip_i;
 
-    csml_param<int> verbosity;
-    CsmlLogger      logger;
+    regmodel::Param<int> verbosity;
+    RegLogger            logger;
 
     // =========================================================================
     // Constructors

@@ -55,7 +55,7 @@ pages.
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level; dumps at ≥ 5
+|`verbosity` |2 (Release: 1) |regmodel log level; dumps at ≥ 5
 |===
 
 ====== Modeling gaps versus RTL

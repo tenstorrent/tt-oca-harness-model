@@ -7,20 +7,6 @@
 
 #include "testbench.h"
 
-void testbench::run_coverage_tests()
-{
-  CSML_INFO(1, logger) << "\n========================================\n"
-                       << "Coverage: extra secure_dma edge paths\n"
-                       << "========================================\n"
-                       << std::endl;
-
-  m_model->logger.setMaxVerbosity(3);
-
-  test_cov_bus_name_and_hash_helpers();
-  test_cov_handshake_already_high_on_arm();
-  test_cov_hash_reset_frees_context();
-}
-
 void testbench::test_cov_bus_name_and_hash_helpers()
 {
   std::string test_name = "Coverage: bus-name + hash helper error paths";

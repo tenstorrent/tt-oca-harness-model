@@ -14,13 +14,13 @@ extern "C" void __gcov_dump(void);
 int sc_main(int argc, char* argv[])
 {
     // Initialize CCI broker and optionally load INI config file.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     testbench tb("testbench");
 
-    CSML_INFO(1, tb.logger) << "Starting CRNG Testbench";
+    REG_INFO(1, tb.logger) << "Starting CRNG Testbench";
     sc_start();
-    CSML_INFO(1, tb.logger) << "Simulation completed";
+    REG_INFO(1, tb.logger) << "Simulation completed";
 
 #ifdef __COVERAGE__
     __gcov_dump();  // Flush coverage data before quick_exit

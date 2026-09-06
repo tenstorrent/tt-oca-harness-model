@@ -5,7 +5,7 @@
  * @brief Single-port register infrastructure for mailbox IP
  *
  * Each mailbox_base instance holds the register state for one mailbox port: one
- * csml_memory and one set of 10 registers.
+ * regmodel::Memory and one set of 10 registers.
  *
  * Two instances (b0, b1) are composed in mailbox_ip to form the complete dual-port mailbox.
  * mailbox_ip owns the TLM target sockets and drives these memories directly, so that it
@@ -22,7 +22,7 @@
  * @brief Pure register container for one mailbox port
  *
  * Provides:
- * - One independent csml_memory<64> instance
+ * - One independent regmodel::Memory<64> instance
  * - One set of 10 registers (WRITE_DATA through CTRL) at fixed word offsets
  *
  * Has no socket of its own; mailbox_ip calls memory.b_transport() directly.
@@ -30,7 +30,7 @@
 class mailbox_base : public sc_module
 {
   public:
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
 
     /**
      * @brief Constructor for single-port mailbox register infrastructure
@@ -52,8 +52,8 @@ class mailbox_base : public sc_module
        {
        }
 
-      /// @brief CSML memory backing store for registers
-      csml_memory<64> memory;
+      /// @brief regmodel::Memory backing store for registers
+      regmodel::Memory<64> memory;
 
       // Registers (addresses 0x00-0x48)
       mailbox::WRITE_DATA_type<64> WRITE_DATA; ///< Write data register (0x00, WO)

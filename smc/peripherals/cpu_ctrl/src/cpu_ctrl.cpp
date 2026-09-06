@@ -61,7 +61,7 @@ cpu_ctrl::cpu_ctrl(sc_core::sc_module_name name, cpu_ctrl_cfg cfg)
     cfg_.wdt_stage2_tick_ns = wdt_stage2_tick_ns_p_.get_value();
 
     base_addr_p_.add_metadata("rdl_block", cci::cci_value(std::string("cpu_ctrl")));
-    base_addr_p_.add_metadata("default",   cci::cci_value(std::string("0xC0010000")));
+    base_addr_p_.add_metadata("default",   cci::cci_value(std::string("0xC0039000")));
     access_delay_ns_p_.add_metadata("unit", cci::cci_value(std::string("nanoseconds")));
 
     wdt_timeout_cluster_i.init(cpu_ctrl_cfg::NUM_CORES);
@@ -141,10 +141,7 @@ void cpu_ctrl::reset_regs()
     reset_ctrl_ = (1u << 0) | (1u << 1) | (1u << 2) | (1u << 3) | (1u << 8);
 
     core_reset_pulse_count_ = (0x10ULL << 16) | 0x8ULL | (0xFULL << 32);
-    clock_gate_control_     = (0x1Fu << 24);
-    global_base_            = 0x4000'0000ULL;
-    local_base_             = 0xC000'0000ULL;
-    region_size_            = 0x0100'0000ULL;
+    reset_timeout_          = 0;
     reference_counter_      = 0;
     wdt_timeout_            = 0x4000;
     wdt_timeout_reset_      = 0;
@@ -154,8 +151,6 @@ void cpu_ctrl::reset_regs()
     wdt_second_timeout_ = false;
     for (auto& r : scratch_) r.reset(0);
     test_ctrl_              = 0;
-    debug_ctrl_             = 0;
-    debug_bus_mux_          = 0;
     for (auto& core : wb_pc_)
         for (auto& r : core) r.reset(0);
     smc_attributes_         = 0;
@@ -189,16 +184,11 @@ uint64_t cpu_ctrl::read_qword(uint64_t off) const
     switch (off) {
     case cpu_ctrl_cfg::OFF_RESET_CTRL:             return reset_ctrl_;
     case cpu_ctrl_cfg::OFF_CORE_RESET_PULSE_COUNT: return core_reset_pulse_count_;
-    case cpu_ctrl_cfg::OFF_CLOCK_GATE_CONTROL:     return clock_gate_control_;
-    case cpu_ctrl_cfg::OFF_GLOBAL_BASE:            return global_base_;
-    case cpu_ctrl_cfg::OFF_LOCAL_BASE:             return local_base_;
-    case cpu_ctrl_cfg::OFF_REGION_SIZE:            return region_size_;
+    case cpu_ctrl_cfg::OFF_RESET_TIMEOUT:          return reset_timeout_;
     case cpu_ctrl_cfg::OFF_REFERENCE_COUNTER:      return reference_counter_;
     case cpu_ctrl_cfg::OFF_WDT_TIMEOUT:            return wdt_timeout_;
     case cpu_ctrl_cfg::OFF_WDT_TIMEOUT_RESET:      return 0;  // singlepulse reads as 0
     case cpu_ctrl_cfg::OFF_TEST_CTRL:              return test_ctrl_;
-    case cpu_ctrl_cfg::OFF_DEBUG_CTRL:             return debug_ctrl_;
-    case cpu_ctrl_cfg::OFF_DEBUG_BUS_MUX:          return debug_bus_mux_;
     case cpu_ctrl_cfg::OFF_SMC_ATTRIBUTES:         return smc_attributes_;
     case cpu_ctrl_cfg::OFF_DUMMY_ROM_0:            return dummy_rom_0_.read();
     case cpu_ctrl_cfg::OFF_DUMMY_ROM_1:            return dummy_rom_1_.read();
@@ -275,19 +265,14 @@ bool cpu_ctrl::write_qword(uint64_t off, uint64_t val, unsigned byte_off,
         core_reset_pulse_count_ |= (0xFULL << 32);  // core_resets_done RO
         return true;
     }
-    case cpu_ctrl_cfg::OFF_CLOCK_GATE_CONTROL:
-        merge(clock_gate_control_, insert);
+    case cpu_ctrl_cfg::OFF_RESET_TIMEOUT: {
+        // timeout_value[15:0] + timeout_mode[16] are RW; status bits [32]/[36] RO.
+        constexpr uint64_t k_rw = 0x1FFFFULL;
+        constexpr uint64_t k_ro = (1ULL << 32) | (1ULL << 36);
+        const uint64_t merged = (reset_timeout_ & ~mask64) | (insert & mask64);
+        reset_timeout_ = (reset_timeout_ & k_ro) | (merged & k_rw);
         return true;
-    case cpu_ctrl_cfg::OFF_GLOBAL_BASE:
-        merge(global_base_, insert);
-        global_base_ &= 0x00FF'FFFF'FFFF'FFFFULL;
-        return true;
-    case cpu_ctrl_cfg::OFF_LOCAL_BASE:
-        return true;  // SW read-only
-    case cpu_ctrl_cfg::OFF_REGION_SIZE:
-        merge(region_size_, insert);
-        region_size_ &= 0xFFFF'FFFFULL;
-        return true;
+    }
     case cpu_ctrl_cfg::OFF_REFERENCE_COUNTER:
         merge(reference_counter_, insert);
         return true;
@@ -301,13 +286,6 @@ bool cpu_ctrl::write_qword(uint64_t off, uint64_t val, unsigned byte_off,
         return true;
     case cpu_ctrl_cfg::OFF_TEST_CTRL:
         return true;  // SW read-only
-    case cpu_ctrl_cfg::OFF_DEBUG_CTRL:
-        merge(debug_ctrl_, insert);
-        debug_ctrl_ &= 0xFFFF'FFFFULL;
-        return true;
-    case cpu_ctrl_cfg::OFF_DEBUG_BUS_MUX:
-        merge(debug_bus_mux_, insert);
-        return true;
     case cpu_ctrl_cfg::OFF_SMC_ATTRIBUTES:
         return true;  // SW read-only
     case cpu_ctrl_cfg::OFF_DUMMY_ROM_0:
@@ -439,7 +417,7 @@ void cpu_ctrl::dump_state(std::ostream& os) const
 {
     os << "cpu_ctrl @ " << sc_core::sc_time_stamp() << "\n"
        << std::hex << std::setfill('0')
-       << "  LOCAL_BASE  = 0x" << std::setw(16) << local_base_ << "\n"
+       << "  RESET_VECTOR[0] = 0x" << std::setw(16) << reset_vector_[0] << "\n"
        << "  SCRATCH[8]  = 0x" << std::setw(8) << scratch(8) << " (manifest)\n"
        << "  SCRATCH[9]  = 0x" << std::setw(8) << scratch(9) << " (status)\n"
        << "  SCRATCH[11] = 0x" << std::setw(8) << scratch(11) << " (status buf)\n"

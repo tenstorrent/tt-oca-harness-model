@@ -21,12 +21,14 @@
 #include <cstring>
 #include <iostream>
 #include <map>
+#include <stdexcept>
 #include <string>
 
 #include "System.hpp"
 #include "Hart.hpp"
 #include "smc_test_utils.h"
 #include "smc_cpu_cluster.h"
+#include "iss_backend_whisper.h"
 #include "smc_axi_extension.h"
 #include "tlm_quantum_policy.h"
 

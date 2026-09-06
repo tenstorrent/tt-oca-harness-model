@@ -16,7 +16,7 @@ class aes_model : public aes_base
 
 ----
 aes_model          cipher FSM, alerts, KM sideload, quantum keeper   (aes.*)
-  └─ aes_base      csml_memory + software-visible words              (aes_base.*)
+  └─ aes_base      regmodel::Memory + software-visible words              (aes_base.*)
        └─ aes_register.h   RO/WO/RW types
 ----
 
@@ -67,14 +67,14 @@ keeps no length counters, matching the hardware.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used. Block latency is
+Knobs are `regmodel::Param` and are re-read when used. Block latency is
 charged through `tlm_quantumkeeper::inc()` using `m_clk_freq_hz`
 (hardcoded default `1e8`; not a CCI parameter despite the HLD).
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

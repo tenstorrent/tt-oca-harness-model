@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
-#include "csml_parameter.h"
+#include "reg_param.h"
 #include "VeeR-ISSTlm.hpp"
 
 class BasicOptions : public Args {
@@ -164,106 +164,106 @@ class BasicOptions : public Args {
         OptionValue<uint64_t> entry_point;
 };
 
-// Note: All parameters of theVeer/EL2 are decalred as csml property for the sake of completness
+// Note: All parameters of theVeer/EL2 are declared as regmodel::Param for the sake of completness
 // Not all pramaters can be used, as they might not be relevant in the OCH SEP platform
 // Refer to the ini file  for the required parameters setting
 
-class  ArgsCSML
+class  ArgsReg
 {
     public:
     // Strings
-    csml_param<std::string> traceFile;
-    csml_param<std::string> commandLogFile;
-    csml_param<std::string> consoleOutFile;
-    csml_param<std::string> serverFile;
-    csml_param<std::string> instFreqFile;
-    csml_param<std::string> configFile;
-    csml_param<std::string> bblockFile;
-    csml_param<std::string> isa;
-    csml_param<std::string> snapshotDir;
-    csml_param<std::string> loadFrom;
-    csml_param<std::string> stdoutFile;
-    csml_param<std::string> stderrFile;
-    csml_param<std::string> targetSep;
+    regmodel::Param<std::string> traceFile;
+    regmodel::Param<std::string> commandLogFile;
+    regmodel::Param<std::string> consoleOutFile;
+    regmodel::Param<std::string> serverFile;
+    regmodel::Param<std::string> instFreqFile;
+    regmodel::Param<std::string> configFile;
+    regmodel::Param<std::string> bblockFile;
+    regmodel::Param<std::string> isa;
+    regmodel::Param<std::string> snapshotDir;
+    regmodel::Param<std::string> loadFrom;
+    regmodel::Param<std::string> stdoutFile;
+    regmodel::Param<std::string> stderrFile;
+    regmodel::Param<std::string> targetSep;
 
-    csml_param<std::string> toHostSym;
-    csml_param<bool>        has_toHostSym;
+    regmodel::Param<std::string> toHostSym;
+    regmodel::Param<bool>        has_toHostSym;
 
-    csml_param<std::string> consoleIoSym;
-    csml_param<bool>        has_consoleIoSym;
+    regmodel::Param<std::string> consoleIoSym;
+    regmodel::Param<bool>        has_consoleIoSym;
 
     // Vectors
-    csml_param<std::vector<std::string>> hexFiles;
-    csml_param<std::vector<std::string>> zisa;
-    csml_param<std::vector<std::string>> regInits;
-    csml_param<std::vector<std::string>> targets;
-    csml_param<std::vector<unsigned>> gdbTcpPort;
+    regmodel::Param<std::vector<std::string>> hexFiles;
+    regmodel::Param<std::vector<std::string>> zisa;
+    regmodel::Param<std::vector<std::string>> regInits;
+    regmodel::Param<std::vector<std::string>> targets;
+    regmodel::Param<std::vector<unsigned>> gdbTcpPort;
 
     // Optional → represent via default + "has_*"
-    csml_param<uint64_t> startPc;
-    csml_param<bool>     has_startPc;
+    regmodel::Param<uint64_t> startPc;
+    regmodel::Param<bool>     has_startPc;
 
-    csml_param<uint64_t> endPc;
-    csml_param<bool>     has_endPc;
+    regmodel::Param<uint64_t> endPc;
+    regmodel::Param<bool>     has_endPc;
 
-    csml_param<uint64_t> toHost;
-    csml_param<bool>     has_toHost;
+    regmodel::Param<uint64_t> toHost;
+    regmodel::Param<bool>     has_toHost;
 
-    csml_param<uint64_t> consoleIo;
-    csml_param<bool>     has_consoleIo;
+    regmodel::Param<uint64_t> consoleIo;
+    regmodel::Param<bool>     has_consoleIo;
 
-    csml_param<uint64_t> instCountLim;
-    csml_param<bool>     has_instCountLim;
+    regmodel::Param<uint64_t> instCountLim;
+    regmodel::Param<bool>     has_instCountLim;
 
-    csml_param<uint64_t> memorySize;
-    csml_param<bool>     has_memorySize;
+    regmodel::Param<uint64_t> memorySize;
+    regmodel::Param<bool>     has_memorySize;
 
-    csml_param<uint64_t> snapshotPeriod;
-    csml_param<bool>     has_snapshotPeriod;
+    regmodel::Param<uint64_t> snapshotPeriod;
+    regmodel::Param<bool>     has_snapshotPeriod;
 
-    csml_param<uint64_t> alarmInterval;
-    csml_param<bool>     has_alarmInterval;
+    regmodel::Param<uint64_t> alarmInterval;
+    regmodel::Param<bool>     has_alarmInterval;
 
-    csml_param<uint64_t> swInterrupt;
-    csml_param<bool>     has_swInterrupt;
+    regmodel::Param<uint64_t> swInterrupt;
+    regmodel::Param<bool>     has_swInterrupt;
 
-    csml_param<uint64_t> clint;
-    csml_param<bool>     has_clint;
+    regmodel::Param<uint64_t> clint;
+    regmodel::Param<bool>     has_clint;
 
-    csml_param<uint64_t> syscallSlam;
-    csml_param<bool>     has_syscallSlam;
+    regmodel::Param<uint64_t> syscallSlam;
+    regmodel::Param<bool>     has_syscallSlam;
 
     // Scalars
-    csml_param<unsigned> regWidth;
-    csml_param<unsigned> harts;
-    csml_param<unsigned> cores;
-    csml_param<unsigned> pageSize;
-    csml_param<uint64_t> bblockInsts;
+    regmodel::Param<unsigned> regWidth;
+    regmodel::Param<unsigned> harts;
+    regmodel::Param<unsigned> cores;
+    regmodel::Param<unsigned> pageSize;
+    regmodel::Param<uint64_t> bblockInsts;
 
     // Booleans
-    csml_param<bool> help;
-    csml_param<bool> trace;
-    csml_param<bool> interactive;
-    csml_param<bool> verbose;
-    csml_param<bool> version;
-    csml_param<bool> traceLdSt;
-    csml_param<bool> csv;
-    csml_param<bool> triggers;
-    csml_param<bool> counters;
-    csml_param<bool> gdb;
-    csml_param<bool> abiNames;
-    csml_param<bool> newlib;
-    csml_param<bool> is_linux;
-    csml_param<bool> raw;
-    csml_param<bool> elfisa;
-    csml_param<bool> fastExt;
-    csml_param<bool> unmappedElfOk;
-    csml_param<bool> iccmRw;
-    csml_param<bool> quitOnAnyHart;
-    csml_param<bool> noConInput;
-    csml_param<bool> relativeInstCount;
+    regmodel::Param<bool> help;
+    regmodel::Param<bool> trace;
+    regmodel::Param<bool> interactive;
+    regmodel::Param<bool> verbose;
+    regmodel::Param<bool> version;
+    regmodel::Param<bool> traceLdSt;
+    regmodel::Param<bool> csv;
+    regmodel::Param<bool> triggers;
+    regmodel::Param<bool> counters;
+    regmodel::Param<bool> gdb;
+    regmodel::Param<bool> abiNames;
+    regmodel::Param<bool> newlib;
+    regmodel::Param<bool> is_linux;
+    regmodel::Param<bool> raw;
+    regmodel::Param<bool> elfisa;
+    regmodel::Param<bool> fastExt;
+    regmodel::Param<bool> unmappedElfOk;
+    regmodel::Param<bool> iccmRw;
+    regmodel::Param<bool> quitOnAnyHart;
+    regmodel::Param<bool> noConInput;
+    regmodel::Param<bool> relativeInstCount;
 
-    ArgsCSML(BasicOptions &a) 
+    ArgsReg(BasicOptions &a) 
     : traceFile("traceFile", a.traceFile)
     , commandLogFile("commandLogFile", a.commandLogFile)
     , consoleOutFile("consoleOutFile", a.consoleOutFile)

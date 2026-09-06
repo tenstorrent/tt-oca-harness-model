@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[cpu-ctrl-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::cpu_ctrl` is a loosely-timed TLM-2.0 model of the SMC
+fabric-control register block, including the scratch mailbox used
+for SMC↔SEP handoff. `b_transport` never `wait()`s.
+
+[source,cpp]
+----
+class cpu_ctrl : public sc_core::sc_module
+----
+
+----
+cpu_ctrl        CSRs, scratch, mutex/sema, WDT stage-2   (cpu_ctrl.*)
+----
+
+====== Threads and sockets
+
+Register access is `b_transport` / `transport_dbg`. MUTEX
+test-and-set is a bus-side-effect on a live read; `transport_dbg`
+peeks without acquiring. WDT stage-2 uses three methods: sticky
+inputs (`wdt_stage2_input_method`), an optional tick
+(`wdt_stage2_tick_method`), and `wdt_stage2_output_method` as the
+only writer of the timeout pins.
+
+On `smc-vp` this instance is **not** on the firmware path. Live
+accesses at the front-port CPU-control window go to `cluster.ctrl`.
+`fabric.to_cpu_ctrl` binds a stub. An idle initiator keeps
+`cpu_ctrl_.reg_socket` elaborated. Front-port WDT sticky feeds the
+cluster's embedded stage-2 path, not these ports.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM 32-bit target |Idle initiator only on `smc-vp` (not firmware)
+|`wdt_timeout_cluster_i[n]` |`sc_in<bool>` |Tied low on the idle instance
+|`rst_primary_n_i` |`sc_in<bool>` |`rst_n_sig`
+|`wdt_first_timeout_o` |`sc_out<bool>` |Sink (`cpu_ctrl_wdt_first`)
+|`wdt_second_timeout_o` |`sc_out<bool>` |Sink (`cpu_ctrl_wdt_second`)
+|===
+
+`normalize_addr()` accepts both absolute fabric addresses (when
+`base_addr` is set) and window-relative offsets (standalone bench).
+HW-only words (`SMC_ATTRIBUTES`, `TEST_CTRL`, `WB_PC`) are written
+through `set_*` back-doors.
+
+----
+  TLM MMIO ──► cpu_ctrl::b_transport ──► scratch / mutex / sema / CSRs
+  wdt_timeout_cluster_i ──► stage-2 countdown
+                         │
+                         ▼
+               wdt_stage2_output_method ──► wdt_*_timeout_o
+----
+
+====== CCI parameters
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`base_addr` |`0xC0039000` |Absolute-address decode
+|`access_delay_ns` |2.0 |Annotated `b_transport` delay
+|`wdt_stage2_tick_ns` |0.0 |Stage-2 tick; 0 disables auto-tick (immutable)
+|===
+
+====== Modeling gaps versus RTL
+
+* No `sc_out` core-reset nets. Pulse bits self-clear in storage.
+* `SMC_ATTRIBUTES` is a back-door until a platform drives straps.
+* On `smc-vp`, firmware does not reach this `reg_socket`; the
+  cluster owns the front-port window.

@@ -11,7 +11,7 @@
  * Port binding overview:
  *  - entropy_src_test::initiator_socket  →  entropy_src_ip::target_socket
  *    (CPU register access via TLM-2.0 b_transport; target_socket is the
- *     CSML memory socket that serves as the reg_socket interface)
+ *     regmodel memory socket that serves as the reg_socket interface)
  *  - entropy_src::intr_i  ↔  sig_intr
  *  - entropy_src::intr_i          ↔  sig_intr
  *  - entropy_src::intr_i       ↔  sig_intr
@@ -42,7 +42,7 @@
 
 #include "entropy_src.h"
 #include "entropy_src_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -58,13 +58,13 @@
  *
  * Test pass/fail tracking uses three integer counters:
  *   m_tests_run, m_tests_passed, m_tests_failed.
- * A test summary is printed via CSML_INFO at the end of run_tests() before
+ * A test summary is printed via REG_INFO at the end of run_tests() before
  * sc_stop() is called.
  ******************************************************************************/
 class testbench : public sc_module
 {
 public:
-    CsmlLogger logger;
+    RegLogger logger;
 
     SC_HAS_PROCESS(testbench);
 
@@ -95,7 +95,7 @@ public:
      *  3. Run RO register test (test_ro).
      *  4. Run port binding verification test (test_binding).
      *  5. Run reset functionality test (test_reset).
-     *  6. Print test summary via CSML_INFO.
+     *  6. Print test summary via REG_INFO.
      *  7. Call sc_stop().
      */
     void run_tests();
@@ -191,7 +191,7 @@ private:
      *  - Verify the returned value equals the expected reset value 0x01000001.
      *
      * Pass criterion: returned value equals 0x01000001 (confirms socket binding
-     * and correct data path through the CSML memory layer).
+     * and correct data path through the regmodel memory layer).
      *
      * @return true if the binding assertion passes
      */
@@ -277,7 +277,7 @@ private:
     /**
      * @brief TC-F001-018: INTR_ENABLE write mask validation
      *
-     * Objective: validate that CSML enforces the 0x00001111 write mask on
+     * Objective: validate that regmodel enforces the 0x00001111 write mask on
      * INTR_ENABLE (0x14), discarding bits outside that mask on every write.
      *
      * Procedure:
@@ -297,7 +297,7 @@ private:
     /**
      * @brief TC-F001-020: INTR_TEST is write-only — reads return zero
      *
-     * Objective: confirm WO access semantics on INTR_TEST (0x18); CSML must
+     * Objective: confirm WO access semantics on INTR_TEST (0x18); regmodel must
      * return 0x00000000 on every read regardless of any prior write.
      *
      * Procedure:
@@ -460,7 +460,7 @@ private:
      *  - Write 0x00000000 to HEALTH_TEST_CTRL; assert readback == 0x00000000.
      *
      * Note: HEALTH_TEST_CTRL has a write callback; the read-back value is the
-     * stored register value after CSML masking, not a direct mirror.
+     * stored register value after regmodel masking, not a direct mirror.
      *
      * Pass criterion: (read_value & ~mask) == 0 for all patterns.
      *
@@ -826,8 +826,8 @@ private:
      * handle_read_FIFO_RDATA and causes the interrupt port to assert.
      *
      * Architectural note: handle_read_FIFO_RDATA returns false on empty FIFO.
-     * CSML only copies read_value to the TLM payload when the callback returns
-     * true (see csml_register.h).  The TLM data buffer is therefore undefined
+     * regmodel only copies read_value to the TLM payload when the callback returns
+     * true (see reg_file.h).  The TLM data buffer is therefore undefined
      * on underflow; only the interrupt port assertion is tested here.
      *
      * Pass criterion:
@@ -933,7 +933,7 @@ private:
     /**
      * @brief TC-F003-011: DEBUG_CTRL write mask 0x000007FF — SELECT_SIGNAL field
      *
-     * Objective: validate that CSML enforces the 0x000007FF write mask on
+     * Objective: validate that regmodel enforces the 0x000007FF write mask on
      * DEBUG_CTRL, discarding bits [31:11] on every write.
      *
      * Procedure:
@@ -965,7 +965,7 @@ private:
     /**
      * @brief TC-F003-087: RING_OSC_ENABLE write mask 0x00FFFFFF
      *
-     * Objective: validate that CSML enforces the 0x00FFFFFF write mask on
+     * Objective: validate that regmodel enforces the 0x00FFFFFF write mask on
      * RING_OSC_ENABLE, discarding bits [31:24] on every write.
      *
      * Procedure:
@@ -1014,7 +1014,7 @@ private:
     /**
      * @brief TC-F003-090: RING_OSC_TUNE write mask 0x00FFFFFF
      *
-     * Objective: validate that CSML enforces the 0x00FFFFFF write mask on
+     * Objective: validate that regmodel enforces the 0x00FFFFFF write mask on
      * RING_OSC_TUNE, discarding bits [31:24] on every write.
      *
      * Procedure:
@@ -1064,7 +1064,7 @@ private:
     /**
      * @brief TC-F003-093: RING_OSC_CTRL write mask 0x00000FFF
      *
-     * Objective: validate that CSML enforces the 0x00000FFF write mask on
+     * Objective: validate that regmodel enforces the 0x00000FFF write mask on
      * RING_OSC_CTRL, discarding bits [31:12] on every write.
      *
      * Procedure:
@@ -1128,7 +1128,7 @@ private:
     /**
      * @brief TC-F003-097: DECORRELATOR_MASK write mask 0x000000FF
      *
-     * Objective: validate that CSML enforces the 0x000000FF write mask on
+     * Objective: validate that regmodel enforces the 0x000000FF write mask on
      * DECORRELATOR_MASK, discarding bits [31:8] on every write.
      *
      * Procedure:
@@ -1382,7 +1382,7 @@ private:
     /**
      * @brief TC-F005-056: HEALTH_TEST_CTRL write mask 0x0000FFFF
      *
-     * Objective: validate that CSML enforces the 0x0000FFFF write mask on
+     * Objective: validate that regmodel enforces the 0x0000FFFF write mask on
      * HEALTH_TEST_CTRL; reserved bits [31:16] always read as zero.
      *
      * Pass criterion: (read_value & ~0x0000FFFF) == 0 for all write patterns.
@@ -1442,7 +1442,7 @@ private:
      * @brief TC-F005-061: MARKOV_TEST_PROB_THRESHOLDS full write/readback
      *
      * Objective: confirm 32-bit write mask (0xFFFFFFFF) allows all patterns to
-     * be retained exactly (pure CSML storage, no callbacks).
+     * be retained exactly (pure regmodel storage, no callbacks).
      *
      * Pass criterion: read_value == write_value for all four test patterns.
      *
@@ -1634,7 +1634,7 @@ private:
     /**
      * @brief TC-F005-079: APT_PROPORTION_1BIT write mask 0x000003FF
      *
-     * Objective: validate that CSML enforces the 0x000003FF write mask on
+     * Objective: validate that regmodel enforces the 0x000003FF write mask on
      * APT_PROPORTION_1BIT; reserved bits [31:10] always read as zero.
      *
      * Pass criterion: (read_value & ~0x000003FF) == 0 for all write patterns.
@@ -1789,7 +1789,7 @@ private:
      *
      * Pass criterion:
      *  - At least one non-zero FIFO_RDATA pop within poll limit.
-     *  - FIFO_STATUS TLM read returns 0x00000000 (CSML read_mask=0x0).
+     *  - FIFO_STATUS TLM read returns 0x00000000 (regmodel read_mask=0x0).
      *
      * Test plan reference: fifo_status_level_increments_with_background_fill
      *
@@ -2030,9 +2030,9 @@ private:
      * guarantee for the build-time constant register.
      *
      * Pass criterion:
-     *  - pre_reset  == 0x00000000 (CSML read_mask=0: buffer unchanged).
-     *  - post_reset == 0x00000000 (CSML read_mask=0: buffer unchanged).
-     *  - No CSML write-restriction error emitted (reset did not touch COMPONENT_ID).
+     *  - pre_reset  == 0x00000000 (regmodel read_mask=0: buffer unchanged).
+     *  - post_reset == 0x00000000 (regmodel read_mask=0: buffer unchanged).
+     *  - No regmodel write-restriction error emitted (reset did not touch COMPONENT_ID).
      *
      * Test plan reference: component_id_immune_to_software_reset
      *
@@ -2044,7 +2044,7 @@ private:
      * @brief TC-F007-004: CTRL (0x04) reads 0x00000000 after software reset
      *        (CTRL reset value)
      *
-     * Objective: verify reset action (8) — handle_write_CTRL performs a CSML
+     * Objective: verify reset action (8) — handle_write_CTRL performs a regmodel
      * internal write of 0x00000000 to CTRL after the stabilization hold-off,
      * self-clearing the RESET bit and all other CTRL fields.
      *
@@ -2131,7 +2131,7 @@ private:
      * @brief TC-F007-112: CTRL self-clears to 0x00000000 after stabilization
      *        hold-off completes (reset action 8)
      *
-     * Objective: confirm that action (8) writes 0x00000000 to CTRL via CSML
+     * Objective: confirm that action (8) writes 0x00000000 to CTRL via regmodel
      * internal write after the stabilization delay, clearing RESET[0] and all
      * other CTRL fields simultaneously.
      *
@@ -2146,7 +2146,7 @@ private:
     bool tc_f007_software_reset_ctrl_self_clears();
 
     /**
-     * @brief TC-F007-116: Core RW registers return to CSML reset defaults after
+     * @brief TC-F007-116: Core RW registers return to regmodel reset defaults after
      *        software reset
      *
      * Objective: verify that CTRL, DEBUG_CTRL, HEALTH_TEST_CTRL,
@@ -2169,10 +2169,10 @@ private:
     // =========================================================================
 
     /**
-     * @brief Record a test result and log it via CSML_INFO
+     * @brief Record a test result and log it via REG_INFO
      *
      * Increments m_tests_run and either m_tests_passed or m_tests_failed
-     * depending on @p passed.  Emits a one-line CSML_INFO log entry.
+     * depending on @p passed.  Emits a one-line REG_INFO log entry.
      *
      * @param test_name Human-readable test identifier
      * @param passed    true if the test passed, false if it failed

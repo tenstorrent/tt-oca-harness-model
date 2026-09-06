@@ -7,7 +7,7 @@
 class sep_cpu_ctrl_base : public sc_module
 {
   public:
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
     sep_cpu_ctrl_base(sc_module_name name, std::string type, unsigned int memory_size) : sc_module(name), type(type), memory(std::string(name) + ".Memory", memory_size/sizeof(unsigned long long)),
        CLOCK_GATE_CTRL(std::string(name) + ".CLOCK_GATE_CTRL", memory, (0x8 + 0x00)/sizeof(unsigned long long)), 
        REFERENCE_COUNTER(std::string(name) + ".REFERENCE_COUNTER", memory, (0x10 + 0x00)/sizeof(unsigned long long)), 
@@ -46,8 +46,8 @@ class sep_cpu_ctrl_base : public sc_module
        }
 
       std::string type;
-      csml_memory<64> memory;
-      tlm_utils::simple_target_socket<csml_memory<64>, 32> target_socket;
+      regmodel::Memory<64> memory;
+      tlm_utils::simple_target_socket<regmodel::Memory<64>, 32> target_socket;
 
       
       sep_cpu_ctrl::CLOCK_GATE_CTRL_type<64> CLOCK_GATE_CTRL;

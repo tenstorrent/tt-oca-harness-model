@@ -13,8 +13,8 @@
  * @note Requires linking with -lssl -lcrypto for OpenSSL support
  */
 
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include "hmac_base.h"
 #include <memory>
 #include "sha2_engine.h"
@@ -74,10 +74,10 @@ public:
   // default: 2) memory_size: Size of memory-mapped space in bytes (default:
   // 0x2000) Initializes the HMAC IP model, registers all SystemC processes,
   // sets up register callbacks, and initializes all state variables.
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-  csml_param<int>
+  regmodel::Param<int>
       verbosity; ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
   hmac_ip(sc_module_name n, unsigned int memory_size = 0x2000);
 
@@ -429,5 +429,5 @@ private:
 
   // Logger instance for structured logging
   // mutable allows logging in const member functions
-  mutable CsmlLogger logger;
+  mutable RegLogger logger;
 };

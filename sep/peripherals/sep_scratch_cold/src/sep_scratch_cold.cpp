@@ -12,7 +12,7 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     : sep_scratch_cold_base(n, "sep_scratch_cold", 8 * sizeof(unsigned long long))
     , sim_out_enable("sim_out.enable", true)
     , sep_status_enable("sep_status.enable", true)
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
@@ -20,8 +20,8 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
 
     reset_all_registers();
 
-    // All SCRATCH[0..7] registers act as plain read/write storage via the CSML
-    // memory block. The callbacks below add behaviour on top of that storage —
+    // All SCRATCH[0..7] registers act as plain read/write storage via the
+    // regmodel memory block. The callbacks below add behaviour on top of that storage —
     // they fire post-write (value is already stored before the callback runs).
 
     // ---- Virtual console: SCRATCH[2] (offset 0x10) → SIM_OUT ----
@@ -57,11 +57,11 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
         std::ifstream names_file(SEP_SCRATCH_COLD_STATUS_VALUES_PATH);
         if (names_file.is_open()) {
             status_decoder_.set_names(sep_status_report::StatusDecoder::parse_tsv(names_file));
-            CSML_INFO(1, logger) << "Loaded " << status_decoder_.name_count()
+            REG_INFO(1, logger) << "Loaded " << status_decoder_.name_count()
                                   << " status names from "
                                   << SEP_SCRATCH_COLD_STATUS_VALUES_PATH << std::endl;
         } else {
-            CSML_WARN(0, logger) << "Could not open status names header: " << SEP_SCRATCH_COLD_STATUS_VALUES_PATH << std::endl;
+            REG_WARN(0, logger) << "Could not open status names header: " << SEP_SCRATCH_COLD_STATUS_VALUES_PATH << std::endl;
         }
     }
     memory.register_post_write_callback(

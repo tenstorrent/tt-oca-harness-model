@@ -7,7 +7,7 @@
 /**
  * @brief Base class for the Key Manager TT TLM model.
  *
- * Owns one csml_memory instance and one TLM target socket, matching the single
+ * Owns one regmodel::Memory instance and one TLM target socket, matching the single
  * KM slave port the SEP host can reach:
  *   mailbox_socket : Mailbox SEP-side registers
  *
@@ -18,7 +18,7 @@
 class key_manager_base : public sc_module
 {
 public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
 
     key_manager_base(sc_module_name name)
       : sc_module(name),
@@ -38,8 +38,8 @@ public:
     // -----------------------------------------------------------------------
     // TLM interface — one socket for the single SEP-visible slave port
     // -----------------------------------------------------------------------
-    csml_memory<32> mb_memory;
-    tlm_utils::simple_target_socket<csml_memory<32>, 32> mailbox_socket;
+    regmodel::Memory<32> mb_memory;
+    tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> mailbox_socket;
 
     // -----------------------------------------------------------------------
     // Mailbox SEP-side registers

@@ -37,13 +37,13 @@ test_edn_func_002::test_edn_func_002(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_002 test suite initialized";
-    CSML_INFO(1, logger) << "Test Coverage: Module Initialization and Configuration (12 test cases)";
+    REG_INFO(1, logger) << "EDN_FUNC_002 test suite initialized";
+    REG_INFO(1, logger) << "Test Coverage: Module Initialization and Configuration (12 test cases)";
 }
 
 test_edn_func_002::~test_edn_func_002()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_002 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_002 test suite terminated";
 }
 
 // =============================================================================
@@ -52,12 +52,12 @@ test_edn_func_002::~test_edn_func_002()
 
 unsigned int test_edn_func_002::run_all_tests()
 {
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_002 Test Suite Execution Start";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_002 Test Suite Execution Start";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before starting tests
-    CSML_INFO(1, logger) << "Applying system reset...";
+    REG_INFO(1, logger) << "Applying system reset...";
     apply_reset(100.0); // 100ns reset pulse
     wait(10, SC_NS);    // Wait for reset propagation
 
@@ -147,30 +147,30 @@ unsigned int test_edn_func_002::run_all_tests()
     report_test_result("T12: Recommended Initialization Sequence", result);
 
     // Print summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_002 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_002 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     }
 
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
 
     return m_tests_failed;
 }
@@ -181,7 +181,7 @@ unsigned int test_edn_func_002::run_all_tests()
 
 bool test_edn_func_002::test_ctrl_edn_enable_valid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_edn_enable_valid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_edn_enable_valid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -202,7 +202,7 @@ bool test_edn_func_002::test_ctrl_edn_enable_valid()
     // Verify EDN_ENABLE field is 0x9 (disabled)
     uint32_t edn_enable = (read_value >> EDN_ENABLE_SHIFT) & 0xF;
     if (edn_enable != MULTIBIT_DISABLE) {
-        CSML_ERROR(1, logger) << "CTRL.EDN_ENABLE reset value incorrect: expected 0x9, got 0x"
+        REG_ERROR(1, logger) << "CTRL.EDN_ENABLE reset value incorrect: expected 0x9, got 0x"
                               << std::hex << edn_enable;
         all_passed = false;
     }
@@ -223,7 +223,7 @@ bool test_edn_func_002::test_ctrl_edn_enable_valid()
     register_read_32(CTRL_OFFSET, read_value);
     edn_enable = (read_value >> EDN_ENABLE_SHIFT) & 0xF;
     if (edn_enable != MULTIBIT_ENABLE) {
-        CSML_ERROR(1, logger) << "Failed to set CTRL.EDN_ENABLE to 0x6: got 0x"
+        REG_ERROR(1, logger) << "Failed to set CTRL.EDN_ENABLE to 0x6: got 0x"
                               << std::hex << edn_enable;
         all_passed = false;
     }
@@ -231,17 +231,17 @@ bool test_edn_func_002::test_ctrl_edn_enable_valid()
     // Step 6: Check RECOV_ALERT_STS - no EDN_ENABLE_FIELD_ALERT should be set
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> EDN_ENABLE_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
     // Step 7: Verify MAIN_SM_STATE has transitioned from Idle
     register_read_32(MAIN_SM_STATE_OFFSET, read_value);
     if (read_value == STATE_IDLE) {
-        CSML_WARN(1, logger) << "MAIN_SM_STATE still in Idle after enabling EDN";
+        REG_WARN(1, logger) << "MAIN_SM_STATE still in Idle after enabling EDN";
         // This may be expected if EDN requires additional configuration
     } else {
-        CSML_INFO(1, logger) << "MAIN_SM_STATE transitioned to: 0x"
+        REG_INFO(1, logger) << "MAIN_SM_STATE transitioned to: 0x"
                             << std::hex << read_value;
     }
 
@@ -258,7 +258,7 @@ bool test_edn_func_002::test_ctrl_edn_enable_valid()
     register_read_32(CTRL_OFFSET, read_value);
     edn_enable = (read_value >> EDN_ENABLE_SHIFT) & 0xF;
     if (edn_enable != MULTIBIT_DISABLE) {
-        CSML_ERROR(1, logger) << "Failed to set CTRL.EDN_ENABLE to 0x9: got 0x"
+        REG_ERROR(1, logger) << "Failed to set CTRL.EDN_ENABLE to 0x9: got 0x"
                               << std::hex << edn_enable;
         all_passed = false;
     }
@@ -266,18 +266,18 @@ bool test_edn_func_002::test_ctrl_edn_enable_valid()
     // Step 10: Verify no alerts generated
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> EDN_ENABLE_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x9";
+        REG_ERROR(1, logger) << "Unexpected EDN_ENABLE_FIELD_ALERT for valid value 0x9";
         all_passed = false;
     }
 
     // Step 11: Verify MAIN_SM_STATE returns to Idle
     register_read_32(MAIN_SM_STATE_OFFSET, read_value);
     if (read_value == STATE_IDLE) {
-        CSML_INFO(1, logger) << "MAIN_SM_STATE correctly returned to Idle state";
+        REG_INFO(1, logger) << "MAIN_SM_STATE correctly returned to Idle state";
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_edn_enable_valid: PASSED - Valid values accepted without alerts";
+        REG_INFO(1, logger) << "test_ctrl_edn_enable_valid: PASSED - Valid values accepted without alerts";
     }
 
     return all_passed;
@@ -289,7 +289,7 @@ bool test_edn_func_002::test_ctrl_edn_enable_valid()
 
 bool test_edn_func_002::test_ctrl_edn_enable_invalid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_edn_enable_invalid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_edn_enable_invalid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -300,7 +300,7 @@ bool test_edn_func_002::test_ctrl_edn_enable_invalid()
     for (size_t i = 0; i < sizeof(invalid_values) / sizeof(invalid_values[0]); ++i) {
         uint32_t invalid_value = invalid_values[i];
 
-        CSML_INFO(1, logger) << "Testing invalid EDN_ENABLE value: 0x"
+        REG_INFO(1, logger) << "Testing invalid EDN_ENABLE value: 0x"
                             << std::hex << invalid_value;
 
         // Clear any existing alerts
@@ -318,11 +318,11 @@ bool test_edn_func_002::test_ctrl_edn_enable_invalid()
         // Read RECOV_ALERT_STS and verify EDN_ENABLE_FIELD_ALERT is set
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if (!((read_value >> EDN_ENABLE_FIELD_ALERT_BIT) & 0x1)) {
-            CSML_ERROR(1, logger) << "EDN_ENABLE_FIELD_ALERT not set for invalid value 0x"
+            REG_ERROR(1, logger) << "EDN_ENABLE_FIELD_ALERT not set for invalid value 0x"
                                   << std::hex << invalid_value;
             all_passed = false;
         } else {
-            CSML_INFO(1, logger) << "EDN_ENABLE_FIELD_ALERT correctly set for invalid value 0x"
+            REG_INFO(1, logger) << "EDN_ENABLE_FIELD_ALERT correctly set for invalid value 0x"
                                 << std::hex << invalid_value;
         }
 
@@ -333,7 +333,7 @@ bool test_edn_func_002::test_ctrl_edn_enable_invalid()
         // Verify alert is cleared
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if ((read_value >> EDN_ENABLE_FIELD_ALERT_BIT) & 0x1) {
-            CSML_ERROR(1, logger) << "Failed to clear EDN_ENABLE_FIELD_ALERT";
+            REG_ERROR(1, logger) << "Failed to clear EDN_ENABLE_FIELD_ALERT";
             all_passed = false;
         }
     }
@@ -351,12 +351,12 @@ bool test_edn_func_002::test_ctrl_edn_enable_invalid()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> EDN_ENABLE_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected alert for valid EDN_ENABLE value 0x6";
+        REG_ERROR(1, logger) << "Unexpected alert for valid EDN_ENABLE value 0x6";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_edn_enable_invalid: PASSED - Invalid values trigger alerts correctly";
+        REG_INFO(1, logger) << "test_ctrl_edn_enable_invalid: PASSED - Invalid values trigger alerts correctly";
     }
 
     return all_passed;
@@ -368,7 +368,7 @@ bool test_edn_func_002::test_ctrl_edn_enable_invalid()
 
 bool test_edn_func_002::test_ctrl_boot_req_mode_valid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_boot_req_mode_valid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_boot_req_mode_valid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -377,7 +377,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_valid()
     register_read_32(CTRL_OFFSET, read_value);
     uint32_t boot_req_mode = (read_value >> BOOT_REQ_MODE_SHIFT) & 0xF;
     if (boot_req_mode != MULTIBIT_DISABLE) {
-        CSML_ERROR(1, logger) << "CTRL.BOOT_REQ_MODE reset value incorrect: expected 0x9, got 0x"
+        REG_ERROR(1, logger) << "CTRL.BOOT_REQ_MODE reset value incorrect: expected 0x9, got 0x"
                               << std::hex << boot_req_mode;
         all_passed = false;
     }
@@ -398,7 +398,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_valid()
     register_read_32(CTRL_OFFSET, read_value);
     boot_req_mode = (read_value >> BOOT_REQ_MODE_SHIFT) & 0xF;
     if (boot_req_mode != MULTIBIT_ENABLE) {
-        CSML_ERROR(1, logger) << "Failed to set CTRL.BOOT_REQ_MODE to 0x6: got 0x"
+        REG_ERROR(1, logger) << "Failed to set CTRL.BOOT_REQ_MODE to 0x6: got 0x"
                               << std::hex << boot_req_mode;
         all_passed = false;
     }
@@ -406,13 +406,13 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_valid()
     // Step 5: Check no BOOT_REQ_MODE_FIELD_ALERT
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> BOOT_REQ_MODE_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
     // Step 6: Verify MAIN_SM_STATE transitions to BootInsAckWait or boot-related state
     register_read_32(MAIN_SM_STATE_OFFSET, read_value);
-    CSML_INFO(1, logger) << "MAIN_SM_STATE after enabling boot mode: 0x"
+    REG_INFO(1, logger) << "MAIN_SM_STATE after enabling boot mode: 0x"
                         << std::hex << read_value;
 
     // Expected state is BootInsAckWait (0x36) or subsequent boot state
@@ -431,7 +431,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_valid()
     bool state_reached = wait_for_state(STATE_SW_PORT_MODE, 1000); // 1us timeout
     if (!state_reached) {
         register_read_32(MAIN_SM_STATE_OFFSET, read_value);
-        CSML_WARN(1, logger) << "MAIN_SM_STATE did not reach SWPortMode within timeout. Current state: 0x"
+        REG_WARN(1, logger) << "MAIN_SM_STATE did not reach SWPortMode within timeout. Current state: 0x"
                             << std::hex << read_value;
         // Not necessarily a failure - may need CSRNG interaction
     }
@@ -439,12 +439,12 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_valid()
     // Step 9: Verify no alerts generated
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> BOOT_REQ_MODE_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT after clearing to 0x9";
+        REG_ERROR(1, logger) << "Unexpected BOOT_REQ_MODE_FIELD_ALERT after clearing to 0x9";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_boot_req_mode_valid: PASSED - Valid values accepted";
+        REG_INFO(1, logger) << "test_ctrl_boot_req_mode_valid: PASSED - Valid values accepted";
     }
 
     return all_passed;
@@ -456,7 +456,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_valid()
 
 bool test_edn_func_002::test_ctrl_boot_req_mode_invalid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_boot_req_mode_invalid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_boot_req_mode_invalid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -467,7 +467,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_invalid()
     for (size_t i = 0; i < sizeof(invalid_values) / sizeof(invalid_values[0]); ++i) {
         uint32_t invalid_value = invalid_values[i];
 
-        CSML_INFO(1, logger) << "Testing invalid BOOT_REQ_MODE value: 0x"
+        REG_INFO(1, logger) << "Testing invalid BOOT_REQ_MODE value: 0x"
                             << std::hex << invalid_value;
 
         // Clear any existing alerts
@@ -485,7 +485,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_invalid()
         // Read RECOV_ALERT_STS and verify BOOT_REQ_MODE_FIELD_ALERT is set
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if (!((read_value >> BOOT_REQ_MODE_FIELD_ALERT_BIT) & 0x1)) {
-            CSML_ERROR(1, logger) << "BOOT_REQ_MODE_FIELD_ALERT not set for invalid value 0x"
+            REG_ERROR(1, logger) << "BOOT_REQ_MODE_FIELD_ALERT not set for invalid value 0x"
                                   << std::hex << invalid_value;
             all_passed = false;
         }
@@ -496,7 +496,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_invalid()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_boot_req_mode_invalid: PASSED - Invalid values trigger alerts";
+        REG_INFO(1, logger) << "test_ctrl_boot_req_mode_invalid: PASSED - Invalid values trigger alerts";
     }
 
     return all_passed;
@@ -508,7 +508,7 @@ bool test_edn_func_002::test_ctrl_boot_req_mode_invalid()
 
 bool test_edn_func_002::test_ctrl_auto_req_mode_valid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_auto_req_mode_valid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_auto_req_mode_valid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -517,7 +517,7 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_valid()
     register_read_32(CTRL_OFFSET, read_value);
     uint32_t auto_req_mode = (read_value >> AUTO_REQ_MODE_SHIFT) & 0xF;
     if (auto_req_mode != MULTIBIT_DISABLE) {
-        CSML_ERROR(1, logger) << "CTRL.AUTO_REQ_MODE reset value incorrect";
+        REG_ERROR(1, logger) << "CTRL.AUTO_REQ_MODE reset value incorrect";
         all_passed = false;
     }
 
@@ -554,7 +554,7 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_valid()
     register_read_32(CTRL_OFFSET, read_value);
     auto_req_mode = (read_value >> AUTO_REQ_MODE_SHIFT) & 0xF;
     if (auto_req_mode != MULTIBIT_ENABLE) {
-        CSML_ERROR(1, logger) << "Failed to set CTRL.AUTO_REQ_MODE to 0x6: got 0x"
+        REG_ERROR(1, logger) << "Failed to set CTRL.AUTO_REQ_MODE to 0x6: got 0x"
                               << std::hex << auto_req_mode;
         all_passed = false;
     }
@@ -562,13 +562,13 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_valid()
     // Step 6: Check no AUTO_REQ_MODE_FIELD_ALERT
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> AUTO_REQ_MODE_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected AUTO_REQ_MODE_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected AUTO_REQ_MODE_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
     // Step 7: Verify MAIN_SM_STATE transitions to AutoLoadIns or auto-related state
     register_read_32(MAIN_SM_STATE_OFFSET, read_value);
-    CSML_INFO(1, logger) << "MAIN_SM_STATE after enabling auto mode: 0x"
+    REG_INFO(1, logger) << "MAIN_SM_STATE after enabling auto mode: 0x"
                         << std::hex << read_value;
 
     // Step 8: Clear AUTO_REQ_MODE (set to 0x9)
@@ -584,12 +584,12 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_valid()
     bool state_reached = wait_for_state(STATE_SW_PORT_MODE, 1000);
     if (!state_reached) {
         register_read_32(MAIN_SM_STATE_OFFSET, read_value);
-        CSML_WARN(1, logger) << "MAIN_SM_STATE did not reach SWPortMode within timeout. Current: 0x"
+        REG_WARN(1, logger) << "MAIN_SM_STATE did not reach SWPortMode within timeout. Current: 0x"
                             << std::hex << read_value;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_auto_req_mode_valid: PASSED - Valid values accepted";
+        REG_INFO(1, logger) << "test_ctrl_auto_req_mode_valid: PASSED - Valid values accepted";
     }
 
     return all_passed;
@@ -601,7 +601,7 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_valid()
 
 bool test_edn_func_002::test_ctrl_auto_req_mode_invalid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_auto_req_mode_invalid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_auto_req_mode_invalid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -612,7 +612,7 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_invalid()
     for (size_t i = 0; i < sizeof(invalid_values) / sizeof(invalid_values[0]); ++i) {
         uint32_t invalid_value = invalid_values[i];
 
-        CSML_INFO(1, logger) << "Testing invalid AUTO_REQ_MODE value: 0x"
+        REG_INFO(1, logger) << "Testing invalid AUTO_REQ_MODE value: 0x"
                             << std::hex << invalid_value;
 
         clear_recoverable_alerts();
@@ -627,7 +627,7 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_invalid()
 
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if (!((read_value >> AUTO_REQ_MODE_FIELD_ALERT_BIT) & 0x1)) {
-            CSML_ERROR(1, logger) << "AUTO_REQ_MODE_FIELD_ALERT not set for invalid value 0x"
+            REG_ERROR(1, logger) << "AUTO_REQ_MODE_FIELD_ALERT not set for invalid value 0x"
                                   << std::hex << invalid_value;
             all_passed = false;
         }
@@ -637,7 +637,7 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_invalid()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_auto_req_mode_invalid: PASSED - Invalid values trigger alerts";
+        REG_INFO(1, logger) << "test_ctrl_auto_req_mode_invalid: PASSED - Invalid values trigger alerts";
     }
 
     return all_passed;
@@ -649,7 +649,7 @@ bool test_edn_func_002::test_ctrl_auto_req_mode_invalid()
 
 bool test_edn_func_002::test_ctrl_cmd_fifo_rst_valid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_cmd_fifo_rst_valid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_cmd_fifo_rst_valid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -679,12 +679,12 @@ bool test_edn_func_002::test_ctrl_cmd_fifo_rst_valid()
     // Step 5: Read back CTRL and verify CMD_FIFO_RST field
     register_read_32(CTRL_OFFSET, read_value);
     uint32_t cmd_fifo_rst = (read_value >> CMD_FIFO_RST_SHIFT) & 0xF;
-    CSML_INFO(1, logger) << "CMD_FIFO_RST read back as: 0x" << std::hex << cmd_fifo_rst;
+    REG_INFO(1, logger) << "CMD_FIFO_RST read back as: 0x" << std::hex << cmd_fifo_rst;
 
     // Step 6: Check no CMD_FIFO_RST_FIELD_ALERT
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> CMD_FIFO_RST_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x6";
+        REG_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x6";
         all_passed = false;
     }
 
@@ -700,12 +700,12 @@ bool test_edn_func_002::test_ctrl_cmd_fifo_rst_valid()
     // Step 8: Verify no alert for idle value
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if ((read_value >> CMD_FIFO_RST_FIELD_ALERT_BIT) & 0x1) {
-        CSML_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x9";
+        REG_ERROR(1, logger) << "Unexpected CMD_FIFO_RST_FIELD_ALERT for valid value 0x9";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_cmd_fifo_rst_valid: PASSED - Valid values accepted";
+        REG_INFO(1, logger) << "test_ctrl_cmd_fifo_rst_valid: PASSED - Valid values accepted";
     }
 
     return all_passed;
@@ -717,7 +717,7 @@ bool test_edn_func_002::test_ctrl_cmd_fifo_rst_valid()
 
 bool test_edn_func_002::test_ctrl_cmd_fifo_rst_invalid()
 {
-    CSML_INFO(1, logger) << "Starting test_ctrl_cmd_fifo_rst_invalid...";
+    REG_INFO(1, logger) << "Starting test_ctrl_cmd_fifo_rst_invalid...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -728,7 +728,7 @@ bool test_edn_func_002::test_ctrl_cmd_fifo_rst_invalid()
     for (size_t i = 0; i < sizeof(invalid_values) / sizeof(invalid_values[0]); ++i) {
         uint32_t invalid_value = invalid_values[i];
 
-        CSML_INFO(1, logger) << "Testing invalid CMD_FIFO_RST value: 0x"
+        REG_INFO(1, logger) << "Testing invalid CMD_FIFO_RST value: 0x"
                             << std::hex << invalid_value;
 
         clear_recoverable_alerts();
@@ -743,7 +743,7 @@ bool test_edn_func_002::test_ctrl_cmd_fifo_rst_invalid()
 
         register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
         if (!((read_value >> CMD_FIFO_RST_FIELD_ALERT_BIT) & 0x1)) {
-            CSML_ERROR(1, logger) << "CMD_FIFO_RST_FIELD_ALERT not set for invalid value 0x"
+            REG_ERROR(1, logger) << "CMD_FIFO_RST_FIELD_ALERT not set for invalid value 0x"
                                   << std::hex << invalid_value;
             all_passed = false;
         }
@@ -753,7 +753,7 @@ bool test_edn_func_002::test_ctrl_cmd_fifo_rst_invalid()
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_ctrl_cmd_fifo_rst_invalid: PASSED - Invalid values trigger alerts";
+        REG_INFO(1, logger) << "test_ctrl_cmd_fifo_rst_invalid: PASSED - Invalid values trigger alerts";
     }
 
     return all_passed;
@@ -765,7 +765,7 @@ bool test_edn_func_002::test_ctrl_cmd_fifo_rst_invalid()
 
 bool test_edn_func_002::test_regwen_write_protection()
 {
-    CSML_INFO(1, logger) << "Starting test_regwen_write_protection...";
+    REG_INFO(1, logger) << "Starting test_regwen_write_protection...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -794,7 +794,7 @@ bool test_edn_func_002::test_regwen_write_protection()
     // Step 5: Read REGWEN - should be 0x0
     register_read_32(REGWEN_OFFSET, read_value);
     if (!verify_register_value("REGWEN (locked)", 0x0, read_value)) {
-        CSML_ERROR(1, logger) << "Failed to lock REGWEN";
+        REG_ERROR(1, logger) << "Failed to lock REGWEN";
         all_passed = false;
     }
 
@@ -806,11 +806,11 @@ bool test_edn_func_002::test_regwen_write_protection()
     // Step 7: Read CTRL and verify value unchanged (still initial_ctrl)
     register_read_32(CTRL_OFFSET, read_value);
     if (read_value != initial_ctrl) {
-        CSML_ERROR(1, logger) << "CTRL write not blocked when REGWEN=0. Expected 0x"
+        REG_ERROR(1, logger) << "CTRL write not blocked when REGWEN=0. Expected 0x"
                               << std::hex << initial_ctrl << ", got 0x" << read_value;
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "CTRL write correctly blocked when REGWEN=0";
+        REG_INFO(1, logger) << "CTRL write correctly blocked when REGWEN=0";
     }
 
     // Step 8: Attempt to write 0x1 to REGWEN (should have no effect)
@@ -820,10 +820,10 @@ bool test_edn_func_002::test_regwen_write_protection()
     // Step 9: Read REGWEN - should still be 0x0
     register_read_32(REGWEN_OFFSET, read_value);
     if (read_value != 0x0) {
-        CSML_ERROR(1, logger) << "REGWEN incorrectly changed from 0 to 1";
+        REG_ERROR(1, logger) << "REGWEN incorrectly changed from 0 to 1";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "REGWEN correctly remains locked at 0";
+        REG_INFO(1, logger) << "REGWEN correctly remains locked at 0";
     }
 
     // Step 10: Attempt multiple CTRL writes with various values
@@ -834,14 +834,14 @@ bool test_edn_func_002::test_regwen_write_protection()
 
         register_read_32(CTRL_OFFSET, read_value);
         if (read_value != initial_ctrl) {
-            CSML_ERROR(1, logger) << "CTRL modified despite REGWEN lock. Value: 0x"
+            REG_ERROR(1, logger) << "CTRL modified despite REGWEN lock. Value: 0x"
                                   << std::hex << read_value;
             all_passed = false;
         }
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_regwen_write_protection: PASSED - W0C mechanism correctly locks CTRL";
+        REG_INFO(1, logger) << "test_regwen_write_protection: PASSED - W0C mechanism correctly locks CTRL";
     }
 
     return all_passed;
@@ -853,7 +853,7 @@ bool test_edn_func_002::test_regwen_write_protection()
 
 bool test_edn_func_002::test_regwen_lock_enforcement()
 {
-    CSML_INFO(1, logger) << "Starting test_regwen_lock_enforcement...";
+    REG_INFO(1, logger) << "Starting test_regwen_lock_enforcement...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -874,7 +874,7 @@ bool test_edn_func_002::test_regwen_lock_enforcement()
     // Verify REGWEN is locked
     register_read_32(REGWEN_OFFSET, read_value);
     if (read_value != 0x0) {
-        CSML_ERROR(1, logger) << "Failed to lock REGWEN";
+        REG_ERROR(1, logger) << "Failed to lock REGWEN";
         all_passed = false;
         return all_passed;
     }
@@ -892,7 +892,7 @@ bool test_edn_func_002::test_regwen_lock_enforcement()
     register_read_32(CTRL_OFFSET, read_value);
     uint32_t edn_enable = (read_value >> EDN_ENABLE_SHIFT) & 0xF;
     if (edn_enable != MULTIBIT_ENABLE) {
-        CSML_ERROR(1, logger) << "EDN_ENABLE changed despite REGWEN lock";
+        REG_ERROR(1, logger) << "EDN_ENABLE changed despite REGWEN lock";
         all_passed = false;
     }
 
@@ -909,7 +909,7 @@ bool test_edn_func_002::test_regwen_lock_enforcement()
     register_read_32(CTRL_OFFSET, read_value);
     uint32_t boot_req_mode = (read_value >> BOOT_REQ_MODE_SHIFT) & 0xF;
     if (boot_req_mode != MULTIBIT_DISABLE) {
-        CSML_ERROR(1, logger) << "BOOT_REQ_MODE changed despite REGWEN lock";
+        REG_ERROR(1, logger) << "BOOT_REQ_MODE changed despite REGWEN lock";
         all_passed = false;
     }
 
@@ -926,7 +926,7 @@ bool test_edn_func_002::test_regwen_lock_enforcement()
     register_read_32(CTRL_OFFSET, read_value);
     uint32_t auto_req_mode = (read_value >> AUTO_REQ_MODE_SHIFT) & 0xF;
     if (auto_req_mode != MULTIBIT_DISABLE) {
-        CSML_ERROR(1, logger) << "AUTO_REQ_MODE changed despite REGWEN lock";
+        REG_ERROR(1, logger) << "AUTO_REQ_MODE changed despite REGWEN lock";
         all_passed = false;
     }
 
@@ -943,7 +943,7 @@ bool test_edn_func_002::test_regwen_lock_enforcement()
     register_read_32(CTRL_OFFSET, read_value);
     uint32_t cmd_fifo_rst = (read_value >> CMD_FIFO_RST_SHIFT) & 0xF;
     if (cmd_fifo_rst != MULTIBIT_DISABLE) {
-        CSML_ERROR(1, logger) << "CMD_FIFO_RST changed despite REGWEN lock";
+        REG_ERROR(1, logger) << "CMD_FIFO_RST changed despite REGWEN lock";
         all_passed = false;
     }
 
@@ -955,15 +955,15 @@ bool test_edn_func_002::test_regwen_lock_enforcement()
     // Step 12: Verify entire CTRL register unchanged
     register_read_32(CTRL_OFFSET, read_value);
     if (read_value != ctrl_value) {
-        CSML_ERROR(1, logger) << "CTRL changed despite REGWEN lock. Expected 0x"
+        REG_ERROR(1, logger) << "CTRL changed despite REGWEN lock. Expected 0x"
                               << std::hex << ctrl_value << ", got 0x" << read_value;
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "CTRL correctly protected by REGWEN lock";
+        REG_INFO(1, logger) << "CTRL correctly protected by REGWEN lock";
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_regwen_lock_enforcement: PASSED - All CTRL fields protected";
+        REG_INFO(1, logger) << "test_regwen_lock_enforcement: PASSED - All CTRL fields protected";
     }
 
     return all_passed;
@@ -975,7 +975,7 @@ bool test_edn_func_002::test_regwen_lock_enforcement()
 
 bool test_edn_func_002::test_reset_restores_regwen()
 {
-    CSML_INFO(1, logger) << "Starting test_reset_restores_regwen...";
+    REG_INFO(1, logger) << "Starting test_reset_restores_regwen...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -995,31 +995,31 @@ bool test_edn_func_002::test_reset_restores_regwen()
 
     register_read_32(CTRL_OFFSET, read_value);
     if (read_value != initial_ctrl) {
-        CSML_ERROR(1, logger) << "CTRL not properly locked before reset test";
+        REG_ERROR(1, logger) << "CTRL not properly locked before reset test";
         all_passed = false;
     }
 
     // Step 4: Apply system reset
-    CSML_INFO(1, logger) << "Applying system reset to restore REGWEN...";
+    REG_INFO(1, logger) << "Applying system reset to restore REGWEN...";
     apply_reset(100.0);
     wait(10, SC_NS);
 
     // Step 5: Read REGWEN - should be 0x1 (unlocked)
     register_read_32(REGWEN_OFFSET, read_value);
     if (!verify_register_value("REGWEN (after reset)", 0x1, read_value)) {
-        CSML_ERROR(1, logger) << "Reset failed to restore REGWEN to 0x1";
+        REG_ERROR(1, logger) << "Reset failed to restore REGWEN to 0x1";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Reset correctly restored REGWEN to 0x1 (unlocked)";
+        REG_INFO(1, logger) << "Reset correctly restored REGWEN to 0x1 (unlocked)";
     }
 
     // Step 6: Read CTRL - should be reset value 0x9999
     register_read_32(CTRL_OFFSET, read_value);
     if (!verify_register_value("CTRL (after reset)", CTRL_RESET, read_value)) {
-        CSML_ERROR(1, logger) << "Reset failed to restore CTRL to reset value";
+        REG_ERROR(1, logger) << "Reset failed to restore CTRL to reset value";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "Reset correctly restored CTRL to 0x9999";
+        REG_INFO(1, logger) << "Reset correctly restored CTRL to 0x9999";
     }
 
     // Step 7: Attempt to write new value to CTRL
@@ -1030,14 +1030,14 @@ bool test_edn_func_002::test_reset_restores_regwen()
     // Step 8: Read back CTRL and verify write succeeded
     register_read_32(CTRL_OFFSET, read_value);
     if (!verify_register_value("CTRL (after unlock)", new_ctrl, read_value)) {
-        CSML_ERROR(1, logger) << "CTRL write failed after reset - REGWEN not functional";
+        REG_ERROR(1, logger) << "CTRL write failed after reset - REGWEN not functional";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "CTRL write succeeded after reset - full functionality restored";
+        REG_INFO(1, logger) << "CTRL write succeeded after reset - full functionality restored";
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_reset_restores_regwen: PASSED - Reset restores configuration capability";
+        REG_INFO(1, logger) << "test_reset_restores_regwen: PASSED - Reset restores configuration capability";
     }
 
     return all_passed;
@@ -1049,7 +1049,7 @@ bool test_edn_func_002::test_reset_restores_regwen()
 
 bool test_edn_func_002::test_initialization_sequence()
 {
-    CSML_INFO(1, logger) << "Starting test_initialization_sequence...";
+    REG_INFO(1, logger) << "Starting test_initialization_sequence...";
 
     bool all_passed = true;
     uint32_t read_value;
@@ -1057,16 +1057,16 @@ bool test_edn_func_002::test_initialization_sequence()
     // Step 1: Verify EDN starts in Idle state after reset
     register_read_32(MAIN_SM_STATE_OFFSET, read_value);
     if (!verify_register_value("MAIN_SM_STATE (Idle)", STATE_IDLE, read_value)) {
-        CSML_WARN(1, logger) << "MAIN_SM_STATE not in Idle (0xC1) after reset. Got: 0x"
+        REG_WARN(1, logger) << "MAIN_SM_STATE not in Idle (0xC1) after reset. Got: 0x"
                             << std::hex << read_value;
         // Not necessarily a failure - continue test
     } else {
-        CSML_INFO(1, logger) << "EDN correctly initialized in Idle state";
+        REG_INFO(1, logger) << "EDN correctly initialized in Idle state";
     }
 
     // Step 2: Read initial CTRL value
     register_read_32(CTRL_OFFSET, read_value);
-    CSML_INFO(1, logger) << "CTRL reset value: 0x" << std::hex << read_value;
+    REG_INFO(1, logger) << "CTRL reset value: 0x" << std::hex << read_value;
 
     // Step 3: Enable EDN via CTRL.EDN_ENABLE=0x6 (software port mode)
     uint32_t ctrl_value = (MULTIBIT_ENABLE << EDN_ENABLE_SHIFT) |
@@ -1080,10 +1080,10 @@ bool test_edn_func_002::test_initialization_sequence()
     // Step 4: Verify state machine transitions from Idle
     register_read_32(MAIN_SM_STATE_OFFSET, read_value);
     if (read_value == STATE_IDLE) {
-        CSML_WARN(1, logger) << "MAIN_SM_STATE still in Idle after enabling EDN";
+        REG_WARN(1, logger) << "MAIN_SM_STATE still in Idle after enabling EDN";
         // May require additional configuration or CSRNG interaction
     } else {
-        CSML_INFO(1, logger) << "MAIN_SM_STATE transitioned from Idle to: 0x"
+        REG_INFO(1, logger) << "MAIN_SM_STATE transitioned from Idle to: 0x"
                             << std::hex << read_value;
     }
 
@@ -1098,34 +1098,34 @@ bool test_edn_func_002::test_initialization_sequence()
                                  (read_value != STATE_IDLE);
 
     if (!in_operational_state) {
-        CSML_ERROR(1, logger) << "EDN failed to enter operational state after initialization";
+        REG_ERROR(1, logger) << "EDN failed to enter operational state after initialization";
         all_passed = false;
     }
 
     // Step 7: Check SW_CMD_STS for readiness (if in SW port mode)
     register_read_32(SW_CMD_STS_OFFSET, read_value);
-    CSML_INFO(1, logger) << "SW_CMD_STS after initialization: 0x" << std::hex << read_value;
+    REG_INFO(1, logger) << "SW_CMD_STS after initialization: 0x" << std::hex << read_value;
 
     // CMD_RDY bit [1] indicates readiness for new commands
     bool cmd_ready = (read_value >> 1) & 0x1;
-    CSML_INFO(1, logger) << "SW_CMD_STS.CMD_RDY: " << (cmd_ready ? "ready" : "not ready");
+    REG_INFO(1, logger) << "SW_CMD_STS.CMD_RDY: " << (cmd_ready ? "ready" : "not ready");
 
     // Step 8: Verify no errors or alerts generated during initialization
     register_read_32(RECOV_ALERT_STS_OFFSET, read_value);
     if (read_value != 0x0) {
-        CSML_WARN(1, logger) << "Recoverable alerts detected during initialization: 0x"
+        REG_WARN(1, logger) << "Recoverable alerts detected during initialization: 0x"
                             << std::hex << read_value;
     }
 
     register_read_32(ERR_CODE_OFFSET, read_value);
     if (read_value != 0x0) {
-        CSML_ERROR(1, logger) << "Fatal errors detected during initialization: 0x"
+        REG_ERROR(1, logger) << "Fatal errors detected during initialization: 0x"
                               << std::hex << read_value;
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "test_initialization_sequence: PASSED - Initialization successful";
+        REG_INFO(1, logger) << "test_initialization_sequence: PASSED - Initialization successful";
     }
 
     return all_passed;
@@ -1140,7 +1140,7 @@ bool test_edn_func_002::verify_register_value(const std::string& reg_name,
                                                uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << reg_name << " mismatch: expected 0x"
+        REG_ERROR(1, logger) << reg_name << " mismatch: expected 0x"
                               << std::hex << std::setfill('0') << std::setw(8) << expected
                               << ", got 0x" << std::setw(8) << actual;
         return false;
@@ -1155,7 +1155,7 @@ bool test_edn_func_002::verify_bit_value(const std::string& reg_name,
 {
     uint32_t actual_bit = (actual_reg >> bit_position) & 0x1;
     if (actual_bit != expected_value) {
-        CSML_ERROR(1, logger) << reg_name << " bit[" << bit_position
+        REG_ERROR(1, logger) << reg_name << " bit[" << bit_position
                               << "] mismatch: expected " << expected_value
                               << ", got " << actual_bit;
         return false;
@@ -1195,18 +1195,18 @@ void test_edn_func_002::report_test_result(const std::string& test_name,
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
         if (!message.empty()) {
-            CSML_INFO(1, logger) << "       " << message;
+            REG_INFO(1, logger) << "       " << message;
         }
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "       " << message;
+            REG_ERROR(1, logger) << "       " << message;
         }
     }
 
-    CSML_INFO(1, logger) << "----------------------------------------";
+    REG_INFO(1, logger) << "----------------------------------------";
 }

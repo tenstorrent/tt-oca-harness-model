@@ -19,7 +19,7 @@ void testbench::test_func000_comprehensive_reset()
     int sub_tests_passed = 0;
     int sub_tests_failed = 0;
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "[TEST RESET] Comprehensive Reset Test" << std::endl
                          << "========================================" << std::endl;
 
@@ -28,7 +28,7 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     // Sub-Test 1: Hardware Reset Verification
     // =========================================================================
-    CSML_INFO(1, logger) << "\n[Sub-Test 1] Hardware Reset - Register Defaults" << std::endl;
+    REG_INFO(1, logger) << "\n[Sub-Test 1] Hardware Reset - Register Defaults" << std::endl;
 
     // Write non-default values
     test->write_register_32(CTRL_OFFSET, 0x80000000);
@@ -45,10 +45,10 @@ void testbench::test_func000_comprehensive_reset()
     // Verify key registers reset to defaults
     test->read_register_32(CTRL_OFFSET, read_val);
     if (read_val == 0x7F) {
-        CSML_INFO(2, logger) << "  [PASS] CTRL reset to 0x7F" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CTRL reset to 0x7F" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CTRL=0x" << std::hex << read_val << ", expected 0x7F" << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CTRL=0x" << std::hex << read_val << ", expected 0x7F" << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -61,10 +61,10 @@ void testbench::test_func000_comprehensive_reset()
     bool rxempty = (read_val >> 24) & 0x1;
 
     if (ready && !active && txempty && rxempty) {
-        CSML_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0, FIFOs empty" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FSM in IDLE: READY=1, ACTIVE=0, FIFOs empty" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FSM not IDLE after reset" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FSM not IDLE after reset" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -72,7 +72,7 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     // Sub-Test 2: Software Reset with FIFO Flush
     // =========================================================================
-    CSML_INFO(1, logger) << "\n[Sub-Test 2] Software Reset - FIFO Flush" << std::endl;
+    REG_INFO(1, logger) << "\n[Sub-Test 2] Software Reset - FIFO Flush" << std::endl;
 
     // Enable IP and fill TX FIFO
     test->write_register_32(CTRL_OFFSET, 0xE0000000);
@@ -95,10 +95,10 @@ void testbench::test_func000_comprehensive_reset()
     rxempty = (read_val >> 24) & 0x1;
 
     if (txqd_after == 0 && txempty && rxempty) {
-        CSML_INFO(2, logger) << "  [PASS] FIFOs flushed: TXQD " << txqd_before << "→0, both empty" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FIFOs flushed: TXQD " << txqd_before << "→0, both empty" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FIFOs not flushed: TXQD=" << txqd_after << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FIFOs not flushed: TXQD=" << txqd_after << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -108,10 +108,10 @@ void testbench::test_func000_comprehensive_reset()
     active = (read_val >> 30) & 0x1;
 
     if (ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] FSM returned to IDLE" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] FSM returned to IDLE" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] FSM not IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FSM not IDLE: READY=" << ready << ", ACTIVE=" << active << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -119,7 +119,7 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     // Sub-Test 3: Post-Reset Reconfiguration
     // =========================================================================
-    CSML_INFO(1, logger) << "\n[Sub-Test 3] Post-Reset Reconfiguration" << std::endl;
+    REG_INFO(1, logger) << "\n[Sub-Test 3] Post-Reset Reconfiguration" << std::endl;
 
     // Configure CTRL with watermarks
     // Note: Bit 28 is reserved and not writable, so use 0xA0001020 instead of 0xE0001020
@@ -128,10 +128,10 @@ void testbench::test_func000_comprehensive_reset()
     test->read_register_32(CTRL_OFFSET, read_val);
 
     if (read_val == 0xA0001020) {
-        CSML_INFO(2, logger) << "  [PASS] CTRL reconfigured successfully" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CTRL reconfigured successfully" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CTRL=0x" << std::hex << read_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CTRL=0x" << std::hex << read_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -142,10 +142,10 @@ void testbench::test_func000_comprehensive_reset()
     test->read_register_32(CFG_OFFSET, read_val);
 
     if (read_val == 0x0221000A) {
-        CSML_INFO(2, logger) << "  [PASS] CFG configured (CLKDIV=10)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CFG configured (CLKDIV=10)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CFG=0x" << std::hex << read_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CFG=0x" << std::hex << read_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -153,7 +153,7 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     // Sub-Test 4: Error Clearing via Software Reset
     // =========================================================================
-    CSML_INFO(1, logger) << "\n[Sub-Test 4] Error Clearing via SW_RST" << std::endl;
+    REG_INFO(1, logger) << "\n[Sub-Test 4] Error Clearing via SW_RST" << std::endl;
 
     // Trigger CMDBUSY error (write CMD when not ready)
     test->write_register_32(CTRL_OFFSET, 0x00000000);  /// SPIEN=0
@@ -166,10 +166,10 @@ void testbench::test_func000_comprehensive_reset()
     bool error_set = (read_val != 0);
 
     if (error_set) {
-        CSML_INFO(2, logger) << "  [PASS] Error triggered: ERROR_STATUS=0x" << std::hex << read_val << std::dec << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Error triggered: ERROR_STATUS=0x" << std::hex << read_val << std::dec << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_INFO(2, logger) << "  [INFO] No error triggered (acceptable)" << std::endl;
+        REG_INFO(2, logger) << "  [INFO] No error triggered (acceptable)" << std::endl;
         sub_tests_passed++;  // Count as pass - error triggering is optional
     }
 
@@ -180,20 +180,20 @@ void testbench::test_func000_comprehensive_reset()
     // Verify ERROR_STATUS cleared
     test->read_register_32(ERROR_STATUS_OFFSET, read_val);
     if (read_val == 0x0) {
-        CSML_INFO(2, logger) << "  [PASS] ERROR_STATUS cleared after SW_RST" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] ERROR_STATUS cleared after SW_RST" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << read_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << read_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     // Verify interrupts deasserted
     if (!sig_error_irq.read() && !sig_spi_event_irq.read()) {
-        CSML_INFO(2, logger) << "  [PASS] Interrupts deasserted" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Interrupts deasserted" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Interrupts still asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Interrupts still asserted" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -201,7 +201,7 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     // Test Summary
     // =========================================================================
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Sub-tests Passed: " << sub_tests_passed << std::endl
                          << "Sub-tests Failed: " << sub_tests_failed << std::endl
                          << "========================================" << std::endl

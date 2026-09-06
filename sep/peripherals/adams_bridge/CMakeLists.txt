@@ -77,18 +77,18 @@ set(WFLAG "-Wall -Wextra")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
-  add_compile_definitions(DEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(DEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "Adams Bridge: Debug build - full logging enabled")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=1)
+  add_compile_definitions(NDEBUG REG_DEFAULT_VERBOSITY=1)
   message(STATUS "Adams Bridge: Release build - errors only, optimized")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=1)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=1)
   message(STATUS "Adams Bridge: ASAN build - AddressSanitizer enabled")
 endif()
 
@@ -97,7 +97,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "Adams Bridge: Coverage build enabled")
 endif()
 
@@ -107,12 +107,13 @@ endif()
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
 
 # -----------------------------------------------------------------------------
 # External Dependencies (SystemC and CCI)
 # -----------------------------------------------------------------------------
+find_package(Threads REQUIRED)
 include(FindCCI)
 include(FindSystemC)
 
@@ -232,22 +233,17 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(NOT DEFINED BUILD_TESTS)
       option(BUILD_TESTS "Build Adams Bridge test executables" ON)
     endif()
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
 endif()
 
 peripheral_add_model_library(adams_bridge_model ${MODEL_SRCS})
-target_include_directories(adams_bridge_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_sources(adams_bridge_model PRIVATE
-  $<TARGET_OBJECTS:abr_pqclean_common>
-  $<TARGET_OBJECTS:abr_pqclean_mldsa>
-  $<TARGET_OBJECTS:abr_pqclean_mlkem>
+target_include_directories(adams_bridge_model PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
-add_dependencies(adams_bridge_model
-  abr_pqclean_common abr_pqclean_mldsa abr_pqclean_mlkem
-)
-
 target_link_libraries(adams_bridge_model PUBLIC
-  csml_logger
+  abr_pqclean_common
+  abr_pqclean_mldsa
+  abr_pqclean_mlkem
   SystemC::systemc
   Threads::Threads
   OpenSSL::SSL
@@ -259,6 +255,9 @@ if(BUILD_TESTS)
   add_executable(adams_bridge_test ${TEST_SRCS})
   peripheral_link_test_to_model(adams_bridge_test adams_bridge_model)
   target_include_directories(adams_bridge_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/common
   )
   # macOS Coverage builds the model as OBJECT; TARGET_OBJECTS on that library
@@ -293,7 +292,7 @@ if(CPPCHECK_EXECUTABLE)
       --template=gcc
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/include
-      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
       2> ${CMAKE_BINARY_DIR}/cppcheck_report.txt

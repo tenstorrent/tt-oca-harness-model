@@ -11,7 +11,7 @@
 
 #include "../../include/sep_reset_ctrl.h"
 #include "sep_reset_ctrl_test.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -201,7 +201,7 @@ private:
 
 int sc_main(int argc, char* argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     sep_reset_ctrl_testbench testbench("testbench");
     sc_core::sc_start();
     std::cout << "\nSEP Reset Controller testbench completed successfully!" << std::endl;

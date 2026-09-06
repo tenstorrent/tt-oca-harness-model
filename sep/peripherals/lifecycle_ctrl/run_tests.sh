@@ -451,6 +451,7 @@ INIEOF
   echo "  Merged info: ${MERGED_INFO}"
   echo "  HTML report: ${HTML_DIR}/index.html"
   echo "============================================================"
+  peripheral_enforce_coverage_gate "${BUILD_DIR}" "${MERGED_INFO}"
 
 else
   # Default: just run the test binary with the default config

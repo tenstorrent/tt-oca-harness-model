@@ -45,9 +45,19 @@ typedef int socklen_t;
 #include "Server.hpp"
 #include "Interactive.hpp"
 #include "../../../../vp/platform/infra/irq_if.h"
-#include "../../../../vp/platform/infra/bus.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
+
+// BusWriteObserver lives in vp/platform/infra/bus.h. Declared here so this
+// header does not pull SimpleBus (and its logger/param includes) into the
+// ISS wrapper or el2_pic compile. Same include guard as bus.h.
+#ifndef RISCV_ISA_BUS_WRITE_OBSERVER_H
+#define RISCV_ISA_BUS_WRITE_OBSERVER_H
+struct BusWriteObserver
+{
+    virtual void notifyWrite(uint64_t addr, unsigned size, int initiator_id) = 0;
+};
+#endif
 #include "sep_axi_extension.h"
 #include "../../../sep/peripherals/el2_pic/include/el2_pic.h"
 using namespace WdRiscv;
@@ -1894,13 +1904,13 @@ determineRegisterWidth(const Args& args, const HartConfig& config)
 class VeeRISSTlm : public external_interrupt_target, public BusWriteObserver, public sc_module
 {
 	public:
-        // CSML logger instance for debug/trace output
-        CsmlLogger logger;
+        // Register-model logger instance for debug/trace output
+        RegLogger logger;
 
-        csml_param<int> verbosity;
-		csml_param<unsigned> instrBatchSize;  // Max instructions executed per batch when no interrupt is pending.
-		csml_param<bool> resetMemoryMappedRegister;
-		csml_param<bool> enableNmi;
+        regmodel::Param<int> verbosity;
+		regmodel::Param<unsigned> instrBatchSize;  // Max instructions executed per batch when no interrupt is pending.
+		regmodel::Param<bool> resetMemoryMappedRegister;
+		regmodel::Param<bool> enableNmi;
 
 		// Using 32-bit RISC-V (RV32)
 		using URV = uint32_t;

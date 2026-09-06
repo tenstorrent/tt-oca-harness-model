@@ -7,8 +7,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 #include "sep_platform.hpp"
+#include "reg_logger.h"
 #include "tlm_quantum_policy.h"
-#include "csml_logger.h"
 
 namespace {
 
@@ -67,7 +67,7 @@ int sc_main(int argc, char **argv)
     std::filesystem::path cfgPath = std::filesystem::absolute(std::filesystem::path(argv[1]));
     (void) ::setenv("SEP_VP_INI_DIR", cfgPath.parent_path().string().c_str(), 1);
     std::filesystem::current_path(cfgPath.parent_path());
-    load_config_file(cfgPath.string().c_str());
+    regmodel::load_config_file(cfgPath.string().c_str());
 
     if (argc == 3) {
         std::string targets_override(argv[2]);
@@ -84,14 +84,14 @@ int sc_main(int argc, char **argv)
         std::cout << "CCI targets override from command line: " << targets_override << "\n";
         cci::cci_originator orig("sc_main");
         cci::cci_broker_handle broker(cci::cci_get_global_broker(orig));
-        // csml_param<vector<string>> is backed by a CCI string param (JSON-encoded).
+        // regmodel::Param<vector<string>> is backed by a CCI string param (JSON-encoded).
         // The ini parser sets a single path as a plain JSON-quoted string; match that format.
         std::string targets_json = "\"" + targets_override + "\"";
         broker.set_preset_cci_value("och_sep_ss1.targets", cci::cci_value::from_json(targets_json));
     }
 
-    std::cout << "CSML global log file: och_sep_ss.log\n";
-    CsmlLogger::setGlobalLogFile("och_sep_ss.log");
+    std::cout << "RegLogger global log file: och_sep_ss.log\n";
+    RegLogger::setGlobalLogFile("och_sep_ss.log");
 
     {
         cci::cci_originator orig("sc_main");

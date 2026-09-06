@@ -36,13 +36,13 @@ test_edn_func_007::test_edn_func_007(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_007 test suite initialized";
-    CSML_INFO(1, logger) << "Test Coverage: FIFO Overflow Detection and Handling (10 test cases)";
+    REG_INFO(1, logger) << "EDN_FUNC_007 test suite initialized";
+    REG_INFO(1, logger) << "Test Coverage: FIFO Overflow Detection and Handling (10 test cases)";
 }
 
 test_edn_func_007::~test_edn_func_007()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_007 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_007 test suite terminated";
 }
 
 // =============================================================================
@@ -51,12 +51,12 @@ test_edn_func_007::~test_edn_func_007()
 
 unsigned int test_edn_func_007::run_all_tests()
 {
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_007 Test Suite Execution Start";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_007 Test Suite Execution Start";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before starting tests
-    CSML_INFO(1, logger) << "Applying system reset...";
+    REG_INFO(1, logger) << "Applying system reset...";
     apply_reset(100.0); // 100ns reset pulse
     wait(10, SC_NS);    // Wait for reset propagation
 
@@ -131,17 +131,17 @@ unsigned int test_edn_func_007::run_all_tests()
     report_test_result("T10: FIFO Clearing on Reset", result);
 
     // Print final summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_007 Test Suite Execution Complete";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "Total Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << "Tests Passed:       " << m_tests_passed;
-    CSML_INFO(1, logger) << "Tests Failed:       " << m_tests_failed;
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_007 Test Suite Execution Complete";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "Total Tests Run:    " << m_tests_run;
+    REG_INFO(1, logger) << "Tests Passed:       " << m_tests_passed;
+    REG_INFO(1, logger) << "Tests Failed:       " << m_tests_failed;
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     }
 
@@ -154,7 +154,7 @@ unsigned int test_edn_func_007::run_all_tests()
 
 bool test_edn_func_007::test_reseed_fifo_13word_boundary()
 {
-    CSML_INFO(1, logger) << "Starting T1: RESEED_CMD FIFO 13-Word Boundary Test";
+    REG_INFO(1, logger) << "Starting T1: RESEED_CMD FIFO 13-Word Boundary Test";
 
     bool test_passed = true;
     uint32_t err_code_val, main_sm_state_val;
@@ -171,7 +171,7 @@ bool test_edn_func_007::test_reseed_fifo_13word_boundary()
     }
 
     // Step 2: Write exactly 13 words to RESEED_CMD FIFO
-    CSML_INFO(1, logger) << "Writing 13 words to RESEED_CMD FIFO...";
+    REG_INFO(1, logger) << "Writing 13 words to RESEED_CMD FIFO...";
     write_fifo_words(RESEED_CMD_OFFSET, FIFO_DEPTH, 0x00000001, "RESEED_CMD");
 
     // Step 3: Wait for error detection logic
@@ -180,45 +180,45 @@ bool test_edn_func_007::test_reseed_fifo_13word_boundary()
     // Step 4: Verify no error occurred
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_register_value("ERR_CODE", 0x00000000, err_code_val)) {
-        CSML_ERROR(1, logger) << "T1 FAIL: ERR_CODE should be 0x0 after 13 words, got 0x"
+        REG_ERROR(1, logger) << "T1 FAIL: ERR_CODE should be 0x0 after 13 words, got 0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
 
     // Step 5: Verify specific error bits remain clear
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 0)) {
-        CSML_ERROR(1, logger) << "T1 FAIL: SFIFO_RESCMD_ERR bit [0] should be 0";
+        REG_ERROR(1, logger) << "T1 FAIL: SFIFO_RESCMD_ERR bit [0] should be 0";
         test_passed = false;
     }
 
     if (!verify_err_code_bit(FIFO_WRITE_ERR_BIT, 0)) {
-        CSML_ERROR(1, logger) << "T1 FAIL: FIFO_WRITE_ERR bit [28] should be 0";
+        REG_ERROR(1, logger) << "T1 FAIL: FIFO_WRITE_ERR bit [28] should be 0";
         test_passed = false;
     }
 
     // Step 6: Verify state machine not in Error state
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (main_sm_state_val == STATE_ERROR) {
-        CSML_ERROR(1, logger) << "T1 FAIL: MAIN_SM_STATE should not be in Error state (0x47)";
+        REG_ERROR(1, logger) << "T1 FAIL: MAIN_SM_STATE should not be in Error state (0x47)";
         test_passed = false;
     }
 
     // Step 7: Verify alert not asserted
     bool fatal_alert = alert_fatal_alert.read();
     if (fatal_alert) {
-        CSML_ERROR(1, logger) << "T1 FAIL: alert_fatal_alert should not be asserted";
+        REG_ERROR(1, logger) << "T1 FAIL: alert_fatal_alert should not be asserted";
         test_passed = false;
     }
 
     // Step 8: Verify interrupt not asserted
     bool fatal_intr = intr_edn_fatal_err.read();
     if (fatal_intr) {
-        CSML_ERROR(1, logger) << "T1 FAIL: intr_edn_fatal_err should not be asserted";
+        REG_ERROR(1, logger) << "T1 FAIL: intr_edn_fatal_err should not be asserted";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T1 PASS: RESEED_CMD FIFO accepts 13 words without overflow";
+        REG_INFO(1, logger) << "T1 PASS: RESEED_CMD FIFO accepts 13 words without overflow";
     }
 
     return test_passed;
@@ -230,7 +230,7 @@ bool test_edn_func_007::test_reseed_fifo_13word_boundary()
 
 bool test_edn_func_007::test_reseed_fifo_14word_overflow()
 {
-    CSML_INFO(1, logger) << "Starting T2: RESEED_CMD FIFO 14-Word Overflow Test";
+    REG_INFO(1, logger) << "Starting T2: RESEED_CMD FIFO 14-Word Overflow Test";
 
     bool test_passed = true;
     uint32_t err_code_val, intr_state_val, main_sm_state_val;
@@ -240,20 +240,20 @@ bool test_edn_func_007::test_reseed_fifo_14word_overflow()
     wait(1, SC_NS);
 
     // Step 2: Write 13 words (should succeed)
-    CSML_INFO(1, logger) << "Writing 13 words to RESEED_CMD FIFO...";
+    REG_INFO(1, logger) << "Writing 13 words to RESEED_CMD FIFO...";
     write_fifo_words(RESEED_CMD_OFFSET, FIFO_DEPTH, 0x00000001, "RESEED_CMD");
     wait(10, SC_NS);
 
     // Verify no error yet
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (err_code_val != 0x00000000) {
-        CSML_ERROR(1, logger) << "T2 FAIL: ERR_CODE should be 0x0 after 13 words, got 0x"
+        REG_ERROR(1, logger) << "T2 FAIL: ERR_CODE should be 0x0 after 13 words, got 0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
 
     // Step 3: Write 14th word (trigger overflow)
-    CSML_INFO(1, logger) << "Writing 14th word to RESEED_CMD FIFO (trigger overflow)...";
+    REG_INFO(1, logger) << "Writing 14th word to RESEED_CMD FIFO (trigger overflow)...";
     register_write_32(RESEED_CMD_OFFSET, 0x0000000E); // 14th word
 
     // Step 4: Wait for error detection and propagation
@@ -263,13 +263,13 @@ bool test_edn_func_007::test_reseed_fifo_14word_overflow()
     register_read_32(ERR_CODE_OFFSET, err_code_val);
 
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T2 FAIL: SFIFO_RESCMD_ERR bit [0] should be 1, ERR_CODE=0x"
+        REG_ERROR(1, logger) << "T2 FAIL: SFIFO_RESCMD_ERR bit [0] should be 1, ERR_CODE=0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
 
     if (!verify_err_code_bit(FIFO_WRITE_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T2 FAIL: FIFO_WRITE_ERR bit [28] should be 1, ERR_CODE=0x"
+        REG_ERROR(1, logger) << "T2 FAIL: FIFO_WRITE_ERR bit [28] should be 1, ERR_CODE=0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
@@ -283,14 +283,14 @@ bool test_edn_func_007::test_reseed_fifo_14word_overflow()
     // Step 7: Verify alert_fatal_alert asserted
     bool fatal_alert = alert_fatal_alert.read();
     if (!fatal_alert) {
-        CSML_ERROR(1, logger) << "T2 FAIL: alert_fatal_alert should be asserted";
+        REG_ERROR(1, logger) << "T2 FAIL: alert_fatal_alert should be asserted";
         test_passed = false;
     }
 
     // Step 8: Verify intr_edn_fatal_err asserted
     bool fatal_intr = intr_edn_fatal_err.read();
     if (!fatal_intr) {
-        CSML_ERROR(1, logger) << "T2 FAIL: intr_edn_fatal_err should be asserted";
+        REG_ERROR(1, logger) << "T2 FAIL: intr_edn_fatal_err should be asserted";
         test_passed = false;
     }
 
@@ -301,42 +301,42 @@ bool test_edn_func_007::test_reseed_fifo_14word_overflow()
     }
 
     // Step 10: Attempt to clear ERR_CODE (verify sticky behavior)
-    CSML_INFO(1, logger) << "Testing ERR_CODE sticky behavior (write 0x0)...";
+    REG_INFO(1, logger) << "Testing ERR_CODE sticky behavior (write 0x0)...";
     register_write_32(ERR_CODE_OFFSET, 0x00000000);
     wait(1, SC_NS);
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T2 FAIL: ERR_CODE should remain set after write attempt";
+        REG_ERROR(1, logger) << "T2 FAIL: ERR_CODE should remain set after write attempt";
         test_passed = false;
     }
 
     // Step 11: Clear INTR_STATE (W1C) - interrupt clears but ERR_CODE remains
-    CSML_INFO(1, logger) << "Clearing INTR_STATE[1] via W1C...";
+    REG_INFO(1, logger) << "Clearing INTR_STATE[1] via W1C...";
     register_write_32(INTR_STATE_OFFSET, 0x00000002); // Write 1 to bit [1] to clear
     wait(1, SC_NS);
 
     register_read_32(INTR_STATE_OFFSET, intr_state_val);
     if (!verify_bit_value("INTR_STATE", EDN_FATAL_ERR_BIT, 0, intr_state_val)) {
-        CSML_ERROR(1, logger) << "T2 FAIL: INTR_STATE[1] should be cleared via W1C";
+        REG_ERROR(1, logger) << "T2 FAIL: INTR_STATE[1] should be cleared via W1C";
         test_passed = false;
     }
 
     // Step 12: Verify alert remains asserted (sticky)
     fatal_alert = alert_fatal_alert.read();
     if (!fatal_alert) {
-        CSML_ERROR(1, logger) << "T2 FAIL: alert_fatal_alert should remain asserted despite interrupt clear";
+        REG_ERROR(1, logger) << "T2 FAIL: alert_fatal_alert should remain asserted despite interrupt clear";
         test_passed = false;
     }
 
     // Verify ERR_CODE still set
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T2 FAIL: ERR_CODE should remain set after INTR_STATE clear";
+        REG_ERROR(1, logger) << "T2 FAIL: ERR_CODE should remain set after INTR_STATE clear";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T2 PASS: RESEED_CMD FIFO 14th word triggers overflow with correct error propagation";
+        REG_INFO(1, logger) << "T2 PASS: RESEED_CMD FIFO 14th word triggers overflow with correct error propagation";
     }
 
     return test_passed;
@@ -348,7 +348,7 @@ bool test_edn_func_007::test_reseed_fifo_14word_overflow()
 
 bool test_edn_func_007::test_generate_fifo_13word_boundary()
 {
-    CSML_INFO(1, logger) << "Starting T3: GENERATE_CMD FIFO 13-Word Boundary Test";
+    REG_INFO(1, logger) << "Starting T3: GENERATE_CMD FIFO 13-Word Boundary Test";
 
     bool test_passed = true;
     uint32_t err_code_val, main_sm_state_val;
@@ -365,7 +365,7 @@ bool test_edn_func_007::test_generate_fifo_13word_boundary()
     }
 
     // Step 2: Write exactly 13 words to GENERATE_CMD FIFO
-    CSML_INFO(1, logger) << "Writing 13 words to GENERATE_CMD FIFO...";
+    REG_INFO(1, logger) << "Writing 13 words to GENERATE_CMD FIFO...";
     write_fifo_words(GENERATE_CMD_OFFSET, FIFO_DEPTH, 0x10000001, "GENERATE_CMD");
 
     // Step 3: Wait for error detection
@@ -374,45 +374,45 @@ bool test_edn_func_007::test_generate_fifo_13word_boundary()
     // Step 4: Verify no error occurred
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_register_value("ERR_CODE", 0x00000000, err_code_val)) {
-        CSML_ERROR(1, logger) << "T3 FAIL: ERR_CODE should be 0x0 after 13 words, got 0x"
+        REG_ERROR(1, logger) << "T3 FAIL: ERR_CODE should be 0x0 after 13 words, got 0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
 
     // Step 5: Verify specific error bits remain clear
     if (!verify_err_code_bit(SFIFO_GENCMD_ERR_BIT, 0)) {
-        CSML_ERROR(1, logger) << "T3 FAIL: SFIFO_GENCMD_ERR bit [1] should be 0";
+        REG_ERROR(1, logger) << "T3 FAIL: SFIFO_GENCMD_ERR bit [1] should be 0";
         test_passed = false;
     }
 
     if (!verify_err_code_bit(FIFO_WRITE_ERR_BIT, 0)) {
-        CSML_ERROR(1, logger) << "T3 FAIL: FIFO_WRITE_ERR bit [28] should be 0";
+        REG_ERROR(1, logger) << "T3 FAIL: FIFO_WRITE_ERR bit [28] should be 0";
         test_passed = false;
     }
 
     // Step 6: Verify state machine not in Error state
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (main_sm_state_val == STATE_ERROR) {
-        CSML_ERROR(1, logger) << "T3 FAIL: MAIN_SM_STATE should not be in Error state (0x47)";
+        REG_ERROR(1, logger) << "T3 FAIL: MAIN_SM_STATE should not be in Error state (0x47)";
         test_passed = false;
     }
 
     // Step 7: Verify alert not asserted
     bool fatal_alert = alert_fatal_alert.read();
     if (fatal_alert) {
-        CSML_ERROR(1, logger) << "T3 FAIL: alert_fatal_alert should not be asserted";
+        REG_ERROR(1, logger) << "T3 FAIL: alert_fatal_alert should not be asserted";
         test_passed = false;
     }
 
     // Step 8: Verify interrupt not asserted
     bool fatal_intr = intr_edn_fatal_err.read();
     if (fatal_intr) {
-        CSML_ERROR(1, logger) << "T3 FAIL: intr_edn_fatal_err should not be asserted";
+        REG_ERROR(1, logger) << "T3 FAIL: intr_edn_fatal_err should not be asserted";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T3 PASS: GENERATE_CMD FIFO accepts 13 words without overflow";
+        REG_INFO(1, logger) << "T3 PASS: GENERATE_CMD FIFO accepts 13 words without overflow";
     }
 
     return test_passed;
@@ -424,7 +424,7 @@ bool test_edn_func_007::test_generate_fifo_13word_boundary()
 
 bool test_edn_func_007::test_generate_fifo_14word_overflow()
 {
-    CSML_INFO(1, logger) << "Starting T4: GENERATE_CMD FIFO 14-Word Overflow Test";
+    REG_INFO(1, logger) << "Starting T4: GENERATE_CMD FIFO 14-Word Overflow Test";
 
     bool test_passed = true;
     uint32_t err_code_val, intr_state_val, main_sm_state_val;
@@ -434,19 +434,19 @@ bool test_edn_func_007::test_generate_fifo_14word_overflow()
     wait(1, SC_NS);
 
     // Step 2: Write 13 words (should succeed)
-    CSML_INFO(1, logger) << "Writing 13 words to GENERATE_CMD FIFO...";
+    REG_INFO(1, logger) << "Writing 13 words to GENERATE_CMD FIFO...";
     write_fifo_words(GENERATE_CMD_OFFSET, FIFO_DEPTH, 0x10000001, "GENERATE_CMD");
     wait(10, SC_NS);
 
     // Verify no error yet
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (err_code_val != 0x00000000) {
-        CSML_ERROR(1, logger) << "T4 FAIL: ERR_CODE should be 0x0 after 13 words";
+        REG_ERROR(1, logger) << "T4 FAIL: ERR_CODE should be 0x0 after 13 words";
         test_passed = false;
     }
 
     // Step 3: Write 14th word (trigger overflow)
-    CSML_INFO(1, logger) << "Writing 14th word to GENERATE_CMD FIFO (trigger overflow)...";
+    REG_INFO(1, logger) << "Writing 14th word to GENERATE_CMD FIFO (trigger overflow)...";
     register_write_32(GENERATE_CMD_OFFSET, 0x1000000E);
 
     // Step 4: Wait for error propagation
@@ -456,13 +456,13 @@ bool test_edn_func_007::test_generate_fifo_14word_overflow()
     register_read_32(ERR_CODE_OFFSET, err_code_val);
 
     if (!verify_err_code_bit(SFIFO_GENCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T4 FAIL: SFIFO_GENCMD_ERR bit [1] should be 1, ERR_CODE=0x"
+        REG_ERROR(1, logger) << "T4 FAIL: SFIFO_GENCMD_ERR bit [1] should be 1, ERR_CODE=0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
 
     if (!verify_err_code_bit(FIFO_WRITE_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T4 FAIL: FIFO_WRITE_ERR bit [28] should be 1, ERR_CODE=0x"
+        REG_ERROR(1, logger) << "T4 FAIL: FIFO_WRITE_ERR bit [28] should be 1, ERR_CODE=0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
@@ -477,12 +477,12 @@ bool test_edn_func_007::test_generate_fifo_14word_overflow()
     wait(1, SC_NS);
 
     if (!verify_err_code_bit(SFIFO_GENCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T4 FAIL: ERR_CODE should remain set (sticky)";
+        REG_ERROR(1, logger) << "T4 FAIL: ERR_CODE should remain set (sticky)";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T4 PASS: GENERATE_CMD FIFO 14th word triggers overflow with correct error propagation";
+        REG_INFO(1, logger) << "T4 PASS: GENERATE_CMD FIFO 14th word triggers overflow with correct error propagation";
     }
 
     return test_passed;
@@ -494,13 +494,13 @@ bool test_edn_func_007::test_generate_fifo_14word_overflow()
 
 bool test_edn_func_007::test_fifo_write_err_generic()
 {
-    CSML_INFO(1, logger) << "Starting T5: FIFO_WRITE_ERR Generic Indicator Test";
+    REG_INFO(1, logger) << "Starting T5: FIFO_WRITE_ERR Generic Indicator Test";
 
     bool test_passed = true;
     uint32_t err_code_val;
 
     // Part A: RESEED_CMD overflow sets FIFO_WRITE_ERR
-    CSML_INFO(1, logger) << "Part A: Testing RESEED_CMD overflow sets FIFO_WRITE_ERR...";
+    REG_INFO(1, logger) << "Part A: Testing RESEED_CMD overflow sets FIFO_WRITE_ERR...";
 
     write_fifo_words(RESEED_CMD_OFFSET, FIFO_DEPTH + 1, 0x00000001, "RESEED_CMD");
     wait(10, SC_NS);
@@ -508,12 +508,12 @@ bool test_edn_func_007::test_fifo_write_err_generic()
     register_read_32(ERR_CODE_OFFSET, err_code_val);
 
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T5 FAIL (Part A): SFIFO_RESCMD_ERR bit [0] should be 1";
+        REG_ERROR(1, logger) << "T5 FAIL (Part A): SFIFO_RESCMD_ERR bit [0] should be 1";
         test_passed = false;
     }
 
     if (!verify_err_code_bit(FIFO_WRITE_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T5 FAIL (Part A): FIFO_WRITE_ERR bit [28] should be 1";
+        REG_ERROR(1, logger) << "T5 FAIL (Part A): FIFO_WRITE_ERR bit [28] should be 1";
         test_passed = false;
     }
 
@@ -522,7 +522,7 @@ bool test_edn_func_007::test_fifo_write_err_generic()
     wait(10, SC_NS);
 
     // Part B: GENERATE_CMD overflow sets FIFO_WRITE_ERR
-    CSML_INFO(1, logger) << "Part B: Testing GENERATE_CMD overflow sets FIFO_WRITE_ERR...";
+    REG_INFO(1, logger) << "Part B: Testing GENERATE_CMD overflow sets FIFO_WRITE_ERR...";
 
     write_fifo_words(GENERATE_CMD_OFFSET, FIFO_DEPTH + 1, 0x10000001, "GENERATE_CMD");
     wait(10, SC_NS);
@@ -530,17 +530,17 @@ bool test_edn_func_007::test_fifo_write_err_generic()
     register_read_32(ERR_CODE_OFFSET, err_code_val);
 
     if (!verify_err_code_bit(SFIFO_GENCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T5 FAIL (Part B): SFIFO_GENCMD_ERR bit [1] should be 1";
+        REG_ERROR(1, logger) << "T5 FAIL (Part B): SFIFO_GENCMD_ERR bit [1] should be 1";
         test_passed = false;
     }
 
     if (!verify_err_code_bit(FIFO_WRITE_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T5 FAIL (Part B): FIFO_WRITE_ERR bit [28] should be 1";
+        REG_ERROR(1, logger) << "T5 FAIL (Part B): FIFO_WRITE_ERR bit [28] should be 1";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T5 PASS: FIFO_WRITE_ERR bit [28] set for both FIFO overflows";
+        REG_INFO(1, logger) << "T5 PASS: FIFO_WRITE_ERR bit [28] set for both FIFO overflows";
     }
 
     return test_passed;
@@ -552,17 +552,17 @@ bool test_edn_func_007::test_fifo_write_err_generic()
 
 bool test_edn_func_007::test_fatal_alert_assertion()
 {
-    CSML_INFO(1, logger) << "Starting T6: Fatal Alert Assertion Test";
+    REG_INFO(1, logger) << "Starting T6: Fatal Alert Assertion Test";
 
     bool test_passed = true;
     bool fatal_alert;
 
     // Part A: RESEED_CMD overflow triggers alert
-    CSML_INFO(1, logger) << "Part A: Testing alert assertion on RESEED_CMD overflow...";
+    REG_INFO(1, logger) << "Part A: Testing alert assertion on RESEED_CMD overflow...";
 
     fatal_alert = alert_fatal_alert.read();
     if (fatal_alert) {
-        CSML_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be 0 initially";
+        REG_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be 0 initially";
         test_passed = false;
     }
 
@@ -571,7 +571,7 @@ bool test_edn_func_007::test_fatal_alert_assertion()
 
     fatal_alert = alert_fatal_alert.read();
     if (!fatal_alert) {
-        CSML_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be asserted after overflow";
+        REG_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be asserted after overflow";
         test_passed = false;
     }
 
@@ -581,7 +581,7 @@ bool test_edn_func_007::test_fatal_alert_assertion()
 
     fatal_alert = alert_fatal_alert.read();
     if (!fatal_alert) {
-        CSML_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should remain asserted (sticky)";
+        REG_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should remain asserted (sticky)";
         test_passed = false;
     }
 
@@ -591,24 +591,24 @@ bool test_edn_func_007::test_fatal_alert_assertion()
 
     fatal_alert = alert_fatal_alert.read();
     if (fatal_alert) {
-        CSML_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be deasserted after reset";
+        REG_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be deasserted after reset";
         test_passed = false;
     }
 
     // Part B: GENERATE_CMD overflow triggers alert
-    CSML_INFO(1, logger) << "Part B: Testing alert assertion on GENERATE_CMD overflow...";
+    REG_INFO(1, logger) << "Part B: Testing alert assertion on GENERATE_CMD overflow...";
 
     write_fifo_words(GENERATE_CMD_OFFSET, FIFO_DEPTH + 1, 0x10000001, "GENERATE_CMD");
     wait(10, SC_NS);
 
     fatal_alert = alert_fatal_alert.read();
     if (!fatal_alert) {
-        CSML_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be asserted for GENERATE_CMD overflow";
+        REG_ERROR(1, logger) << "T6 FAIL: alert_fatal_alert should be asserted for GENERATE_CMD overflow";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T6 PASS: Fatal alert assertion and sticky behavior verified";
+        REG_INFO(1, logger) << "T6 PASS: Fatal alert assertion and sticky behavior verified";
     }
 
     return test_passed;
@@ -620,21 +620,21 @@ bool test_edn_func_007::test_fatal_alert_assertion()
 
 bool test_edn_func_007::test_fatal_interrupt_generation()
 {
-    CSML_INFO(1, logger) << "Starting T7: Fatal Error Interrupt Generation Test";
+    REG_INFO(1, logger) << "Starting T7: Fatal Error Interrupt Generation Test";
 
     bool test_passed = true;
     bool fatal_intr;
     uint32_t intr_state_val, err_code_val;
 
     // Part A: Interrupt generation when enabled
-    CSML_INFO(1, logger) << "Part A: Testing interrupt generation with INTR_ENABLE[1]=1...";
+    REG_INFO(1, logger) << "Part A: Testing interrupt generation with INTR_ENABLE[1]=1...";
 
     register_write_32(INTR_ENABLE_OFFSET, 0x00000002); // Enable edn_fatal_err interrupt
     wait(1, SC_NS);
 
     fatal_intr = intr_edn_fatal_err.read();
     if (fatal_intr) {
-        CSML_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be 0 initially";
+        REG_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be 0 initially";
         test_passed = false;
     }
 
@@ -643,7 +643,7 @@ bool test_edn_func_007::test_fatal_interrupt_generation()
 
     fatal_intr = intr_edn_fatal_err.read();
     if (!fatal_intr) {
-        CSML_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be asserted";
+        REG_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be asserted";
         test_passed = false;
     }
 
@@ -653,33 +653,33 @@ bool test_edn_func_007::test_fatal_interrupt_generation()
     }
 
     // Clear interrupt via W1C
-    CSML_INFO(1, logger) << "Clearing interrupt via W1C...";
+    REG_INFO(1, logger) << "Clearing interrupt via W1C...";
     register_write_32(INTR_STATE_OFFSET, 0x00000002);
     wait(1, SC_NS);
 
     fatal_intr = intr_edn_fatal_err.read();
     if (fatal_intr) {
-        CSML_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be deasserted after W1C";
+        REG_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be deasserted after W1C";
         test_passed = false;
     }
 
     register_read_32(INTR_STATE_OFFSET, intr_state_val);
     if (!verify_bit_value("INTR_STATE", EDN_FATAL_ERR_BIT, 0, intr_state_val)) {
-        CSML_ERROR(1, logger) << "T7 FAIL: INTR_STATE[1] should be cleared";
+        REG_ERROR(1, logger) << "T7 FAIL: INTR_STATE[1] should be cleared";
         test_passed = false;
     }
 
     // Verify ERR_CODE remains set (sticky)
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T7 FAIL: ERR_CODE should remain set after interrupt clear";
+        REG_ERROR(1, logger) << "T7 FAIL: ERR_CODE should remain set after interrupt clear";
         test_passed = false;
     }
 
     // Verify alert remains asserted (sticky)
     bool fatal_alert = alert_fatal_alert.read();
     if (!fatal_alert) {
-        CSML_ERROR(1, logger) << "T7 FAIL: alert_fatal_alert should remain asserted";
+        REG_ERROR(1, logger) << "T7 FAIL: alert_fatal_alert should remain asserted";
         test_passed = false;
     }
 
@@ -687,7 +687,7 @@ bool test_edn_func_007::test_fatal_interrupt_generation()
     apply_reset(100.0);
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "Part B: Testing interrupt masking with INTR_ENABLE[1]=0...";
+    REG_INFO(1, logger) << "Part B: Testing interrupt masking with INTR_ENABLE[1]=0...";
 
     register_write_32(INTR_ENABLE_OFFSET, 0x00000000); // Disable interrupts
     wait(1, SC_NS);
@@ -697,19 +697,19 @@ bool test_edn_func_007::test_fatal_interrupt_generation()
 
     fatal_intr = intr_edn_fatal_err.read();
     if (fatal_intr) {
-        CSML_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be masked when INTR_ENABLE[1]=0";
+        REG_ERROR(1, logger) << "T7 FAIL: intr_edn_fatal_err should be masked when INTR_ENABLE[1]=0";
         test_passed = false;
     }
 
     // INTR_STATE should still be set (status bit)
     register_read_32(INTR_STATE_OFFSET, intr_state_val);
     if (!verify_bit_value("INTR_STATE", EDN_FATAL_ERR_BIT, 1, intr_state_val)) {
-        CSML_ERROR(1, logger) << "T7 FAIL: INTR_STATE[1] should be set even when masked";
+        REG_ERROR(1, logger) << "T7 FAIL: INTR_STATE[1] should be set even when masked";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T7 PASS: Fatal error interrupt generation and masking verified";
+        REG_INFO(1, logger) << "T7 PASS: Fatal error interrupt generation and masking verified";
     }
 
     return test_passed;
@@ -721,13 +721,13 @@ bool test_edn_func_007::test_fatal_interrupt_generation()
 
 bool test_edn_func_007::test_error_state_transition()
 {
-    CSML_INFO(1, logger) << "Starting T8: Error State Transition Test";
+    REG_INFO(1, logger) << "Starting T8: Error State Transition Test";
 
     bool test_passed = true;
     uint32_t main_sm_state_val;
 
     // Part A: RESEED_CMD overflow causes Error state
-    CSML_INFO(1, logger) << "Part A: Testing state transition on RESEED_CMD overflow...";
+    REG_INFO(1, logger) << "Part A: Testing state transition on RESEED_CMD overflow...";
 
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (!verify_register_value("MAIN_SM_STATE", STATE_IDLE, main_sm_state_val)) {
@@ -739,47 +739,47 @@ bool test_edn_func_007::test_error_state_transition()
 
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (!verify_register_value("MAIN_SM_STATE", STATE_ERROR, main_sm_state_val)) {
-        CSML_ERROR(1, logger) << "T8 FAIL: MAIN_SM_STATE should transition to Error (0x47), got 0x"
+        REG_ERROR(1, logger) << "T8 FAIL: MAIN_SM_STATE should transition to Error (0x47), got 0x"
                           << std::hex << main_sm_state_val;
         test_passed = false;
     }
 
     // Attempt to change state via CTRL register (should be ignored)
-    CSML_INFO(1, logger) << "Attempting to change state via CTRL (should be ignored)...";
+    REG_INFO(1, logger) << "Attempting to change state via CTRL (should be ignored)...";
     register_write_32(CTRL_OFFSET, 0x00009996); // Try to enable EDN
     wait(1, SC_NS);
 
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (!verify_register_value("MAIN_SM_STATE", STATE_ERROR, main_sm_state_val)) {
-        CSML_ERROR(1, logger) << "T8 FAIL: MAIN_SM_STATE should remain in Error state";
+        REG_ERROR(1, logger) << "T8 FAIL: MAIN_SM_STATE should remain in Error state";
         test_passed = false;
     }
 
     // Verify only reset exits Error state
-    CSML_INFO(1, logger) << "Applying reset to exit Error state...";
+    REG_INFO(1, logger) << "Applying reset to exit Error state...";
     apply_reset(100.0);
     wait(10, SC_NS);
 
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (!verify_register_value("MAIN_SM_STATE", STATE_IDLE, main_sm_state_val)) {
-        CSML_ERROR(1, logger) << "T8 FAIL: MAIN_SM_STATE should return to Idle after reset";
+        REG_ERROR(1, logger) << "T8 FAIL: MAIN_SM_STATE should return to Idle after reset";
         test_passed = false;
     }
 
     // Part B: GENERATE_CMD overflow causes Error state
-    CSML_INFO(1, logger) << "Part B: Testing state transition on GENERATE_CMD overflow...";
+    REG_INFO(1, logger) << "Part B: Testing state transition on GENERATE_CMD overflow...";
 
     write_fifo_words(GENERATE_CMD_OFFSET, FIFO_DEPTH + 1, 0x10000001, "GENERATE_CMD");
     wait(10, SC_NS);
 
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (!verify_register_value("MAIN_SM_STATE", STATE_ERROR, main_sm_state_val)) {
-        CSML_ERROR(1, logger) << "T8 FAIL: GENERATE_CMD overflow should cause Error state";
+        REG_ERROR(1, logger) << "T8 FAIL: GENERATE_CMD overflow should cause Error state";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T8 PASS: State machine transitions to Error state on overflow";
+        REG_INFO(1, logger) << "T8 PASS: State machine transitions to Error state on overflow";
     }
 
     return test_passed;
@@ -791,7 +791,7 @@ bool test_edn_func_007::test_error_state_transition()
 
 bool test_edn_func_007::test_err_code_sticky_behavior()
 {
-    CSML_INFO(1, logger) << "Starting T9: ERR_CODE Sticky Behavior Test";
+    REG_INFO(1, logger) << "Starting T9: ERR_CODE Sticky Behavior Test";
 
     bool test_passed = true;
     uint32_t err_code_val;
@@ -808,55 +808,55 @@ bool test_edn_func_007::test_err_code_sticky_behavior()
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: SFIFO_RESCMD_ERR should be set";
+        REG_ERROR(1, logger) << "T9 FAIL: SFIFO_RESCMD_ERR should be set";
         test_passed = false;
     }
     if (!verify_err_code_bit(FIFO_WRITE_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: FIFO_WRITE_ERR should be set";
+        REG_ERROR(1, logger) << "T9 FAIL: FIFO_WRITE_ERR should be set";
         test_passed = false;
     }
 
     // Step 3: Attempt to clear by writing 0x0
-    CSML_INFO(1, logger) << "Testing write 0x0 to ERR_CODE (should be ignored)...";
+    REG_INFO(1, logger) << "Testing write 0x0 to ERR_CODE (should be ignored)...";
     register_write_32(ERR_CODE_OFFSET, 0x00000000);
     wait(1, SC_NS);
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: ERR_CODE should remain set after write 0x0";
+        REG_ERROR(1, logger) << "T9 FAIL: ERR_CODE should remain set after write 0x0";
         test_passed = false;
     }
 
     // Step 4: Attempt to clear by writing 0xFFFFFFFF
-    CSML_INFO(1, logger) << "Testing write 0xFFFFFFFF to ERR_CODE (should be ignored)...";
+    REG_INFO(1, logger) << "Testing write 0xFFFFFFFF to ERR_CODE (should be ignored)...";
     register_write_32(ERR_CODE_OFFSET, 0xFFFFFFFF);
     wait(1, SC_NS);
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: ERR_CODE should remain set after write 0xFFFFFFFF";
+        REG_ERROR(1, logger) << "T9 FAIL: ERR_CODE should remain set after write 0xFFFFFFFF";
         test_passed = false;
     }
 
     // Step 5: Clear INTR_STATE and verify ERR_CODE unaffected
-    CSML_INFO(1, logger) << "Clearing INTR_STATE, ERR_CODE should remain...";
+    REG_INFO(1, logger) << "Clearing INTR_STATE, ERR_CODE should remain...";
     register_write_32(INTR_STATE_OFFSET, 0x00000002);
     wait(1, SC_NS);
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: ERR_CODE unaffected by INTR_STATE clear";
+        REG_ERROR(1, logger) << "T9 FAIL: ERR_CODE unaffected by INTR_STATE clear";
         test_passed = false;
     }
 
     // Step 6: Apply reset and verify ERR_CODE cleared
-    CSML_INFO(1, logger) << "Applying reset to clear ERR_CODE...";
+    REG_INFO(1, logger) << "Applying reset to clear ERR_CODE...";
     apply_reset(100.0);
     wait(10, SC_NS);
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_register_value("ERR_CODE", 0x00000000, err_code_val)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: ERR_CODE should be cleared by reset";
+        REG_ERROR(1, logger) << "T9 FAIL: ERR_CODE should be cleared by reset";
         test_passed = false;
     }
 
@@ -866,7 +866,7 @@ bool test_edn_func_007::test_err_code_sticky_behavior()
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_GENCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: SFIFO_GENCMD_ERR should be set";
+        REG_ERROR(1, logger) << "T9 FAIL: SFIFO_GENCMD_ERR should be set";
         test_passed = false;
     }
 
@@ -875,12 +875,12 @@ bool test_edn_func_007::test_err_code_sticky_behavior()
     wait(1, SC_NS);
 
     if (!verify_err_code_bit(SFIFO_GENCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T9 FAIL: SFIFO_GENCMD_ERR should remain sticky";
+        REG_ERROR(1, logger) << "T9 FAIL: SFIFO_GENCMD_ERR should remain sticky";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T9 PASS: ERR_CODE sticky behavior verified (read-only, reset clears)";
+        REG_INFO(1, logger) << "T9 PASS: ERR_CODE sticky behavior verified (read-only, reset clears)";
     }
 
     return test_passed;
@@ -892,25 +892,25 @@ bool test_edn_func_007::test_err_code_sticky_behavior()
 
 bool test_edn_func_007::test_fifo_reset_clearing()
 {
-    CSML_INFO(1, logger) << "Starting T10: FIFO Clearing on Reset Test";
+    REG_INFO(1, logger) << "Starting T10: FIFO Clearing on Reset Test";
 
     bool test_passed = true;
     uint32_t err_code_val, intr_state_val, main_sm_state_val;
     bool fatal_alert, fatal_intr;
 
     // Step 1: Trigger RESEED_CMD overflow
-    CSML_INFO(1, logger) << "Triggering RESEED_CMD overflow...";
+    REG_INFO(1, logger) << "Triggering RESEED_CMD overflow...";
     write_fifo_words(RESEED_CMD_OFFSET, FIFO_DEPTH + 1, 0x00000001, "RESEED_CMD");
     wait(10, SC_NS);
 
     // Verify error state
     if (!verify_error_state(1, 0, 1, true, false, STATE_ERROR)) {
-        CSML_ERROR(1, logger) << "T10 FAIL: Initial RESEED_CMD overflow state incorrect";
+        REG_ERROR(1, logger) << "T10 FAIL: Initial RESEED_CMD overflow state incorrect";
         test_passed = false;
     }
 
     // Step 2: Trigger GENERATE_CMD overflow (compound error)
-    CSML_INFO(1, logger) << "Triggering GENERATE_CMD overflow (compound error)...";
+    REG_INFO(1, logger) << "Triggering GENERATE_CMD overflow (compound error)...";
     write_fifo_words(GENERATE_CMD_OFFSET, FIFO_DEPTH + 1, 0x10000001, "GENERATE_CMD");
     wait(10, SC_NS);
 
@@ -918,58 +918,58 @@ bool test_edn_func_007::test_fifo_reset_clearing()
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1) ||
         !verify_err_code_bit(SFIFO_GENCMD_ERR_BIT, 1) ||
         !verify_err_code_bit(FIFO_WRITE_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T10 FAIL: Compound error state incorrect, ERR_CODE=0x"
+        REG_ERROR(1, logger) << "T10 FAIL: Compound error state incorrect, ERR_CODE=0x"
                           << std::hex << err_code_val;
         test_passed = false;
     }
 
     // Step 3: Apply system reset
-    CSML_INFO(1, logger) << "Applying system reset (100ns)...";
+    REG_INFO(1, logger) << "Applying system reset (100ns)...";
     apply_reset(100.0);
     wait(10, SC_NS);
 
     // Step 4: Verify all error state cleared
-    CSML_INFO(1, logger) << "Verifying complete error state clearing...";
+    REG_INFO(1, logger) << "Verifying complete error state clearing...";
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_register_value("ERR_CODE", 0x00000000, err_code_val)) {
-        CSML_ERROR(1, logger) << "T10 FAIL: ERR_CODE not cleared by reset";
+        REG_ERROR(1, logger) << "T10 FAIL: ERR_CODE not cleared by reset";
         test_passed = false;
     }
 
     register_read_32(INTR_STATE_OFFSET, intr_state_val);
     if (!verify_register_value("INTR_STATE", 0x00000000, intr_state_val)) {
-        CSML_ERROR(1, logger) << "T10 FAIL: INTR_STATE not cleared by reset";
+        REG_ERROR(1, logger) << "T10 FAIL: INTR_STATE not cleared by reset";
         test_passed = false;
     }
 
     fatal_alert = alert_fatal_alert.read();
     if (fatal_alert) {
-        CSML_ERROR(1, logger) << "T10 FAIL: alert_fatal_alert not deasserted by reset";
+        REG_ERROR(1, logger) << "T10 FAIL: alert_fatal_alert not deasserted by reset";
         test_passed = false;
     }
 
     fatal_intr = intr_edn_fatal_err.read();
     if (fatal_intr) {
-        CSML_ERROR(1, logger) << "T10 FAIL: intr_edn_fatal_err not deasserted by reset";
+        REG_ERROR(1, logger) << "T10 FAIL: intr_edn_fatal_err not deasserted by reset";
         test_passed = false;
     }
 
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (!verify_register_value("MAIN_SM_STATE", STATE_IDLE, main_sm_state_val)) {
-        CSML_ERROR(1, logger) << "T10 FAIL: MAIN_SM_STATE not restored to Idle";
+        REG_ERROR(1, logger) << "T10 FAIL: MAIN_SM_STATE not restored to Idle";
         test_passed = false;
     }
 
     // Step 5: Verify FIFO functionality restored
-    CSML_INFO(1, logger) << "Verifying FIFO functionality restored (13 words should succeed)...";
+    REG_INFO(1, logger) << "Verifying FIFO functionality restored (13 words should succeed)...";
 
     write_fifo_words(RESEED_CMD_OFFSET, FIFO_DEPTH, 0x00000001, "RESEED_CMD");
     wait(10, SC_NS);
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (err_code_val != 0x00000000) {
-        CSML_ERROR(1, logger) << "T10 FAIL: RESEED_CMD FIFO not restored (error after 13 words)";
+        REG_ERROR(1, logger) << "T10 FAIL: RESEED_CMD FIFO not restored (error after 13 words)";
         test_passed = false;
     }
 
@@ -978,24 +978,24 @@ bool test_edn_func_007::test_fifo_reset_clearing()
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (err_code_val != 0x00000000) {
-        CSML_ERROR(1, logger) << "T10 FAIL: GENERATE_CMD FIFO not restored (error after 13 words)";
+        REG_ERROR(1, logger) << "T10 FAIL: GENERATE_CMD FIFO not restored (error after 13 words)";
         test_passed = false;
     }
 
     // Step 6: Verify overflow detection still works
-    CSML_INFO(1, logger) << "Verifying overflow detection still functional (14th word should fail)...";
+    REG_INFO(1, logger) << "Verifying overflow detection still functional (14th word should fail)...";
 
     register_write_32(RESEED_CMD_OFFSET, 0x0000000E); // 14th word
     wait(10, SC_NS);
 
     register_read_32(ERR_CODE_OFFSET, err_code_val);
     if (!verify_err_code_bit(SFIFO_RESCMD_ERR_BIT, 1)) {
-        CSML_ERROR(1, logger) << "T10 FAIL: Overflow detection not functional after reset";
+        REG_ERROR(1, logger) << "T10 FAIL: Overflow detection not functional after reset";
         test_passed = false;
     }
 
     if (test_passed) {
-        CSML_INFO(1, logger) << "T10 PASS: Reset clears error state and restores FIFO functionality";
+        REG_INFO(1, logger) << "T10 PASS: Reset clears error state and restores FIFO functionality";
     }
 
     return test_passed;
@@ -1016,12 +1016,12 @@ void test_edn_func_007::write_fifo_words(uint32_t fifo_offset,
         wait(1, SC_NS); // Small delay between writes
 
         if ((i + 1) % 5 == 0) {
-            CSML_DEBUG(1, logger) << fifo_name << ": Wrote word " << (i + 1)
+            REG_DEBUG(1, logger) << fifo_name << ": Wrote word " << (i + 1)
                               << " of " << num_words << " (value=0x"
                               << std::hex << word_value << ")";
         }
     }
-    CSML_INFO(1, logger) << fifo_name << ": Wrote " << num_words << " words total";
+    REG_INFO(1, logger) << fifo_name << ": Wrote " << num_words << " words total";
 }
 
 bool test_edn_func_007::verify_err_code_bit(unsigned int bit_position, unsigned int expected_value)
@@ -1058,7 +1058,7 @@ bool test_edn_func_007::verify_error_state(unsigned int expected_rescmd_err,
     // Check alert signal
     fatal_alert = alert_fatal_alert.read();
     if (fatal_alert != expected_fatal_alert) {
-        CSML_ERROR(1, logger) << "alert_fatal_alert mismatch: expected=" << expected_fatal_alert
+        REG_ERROR(1, logger) << "alert_fatal_alert mismatch: expected=" << expected_fatal_alert
                           << ", actual=" << fatal_alert;
         all_match = false;
     }
@@ -1067,7 +1067,7 @@ bool test_edn_func_007::verify_error_state(unsigned int expected_rescmd_err,
     if (expected_fatal_intr) {
         fatal_intr = intr_edn_fatal_err.read();
         if (fatal_intr != expected_fatal_intr) {
-            CSML_ERROR(1, logger) << "intr_edn_fatal_err mismatch: expected=" << expected_fatal_intr
+            REG_ERROR(1, logger) << "intr_edn_fatal_err mismatch: expected=" << expected_fatal_intr
                               << ", actual=" << fatal_intr;
             all_match = false;
         }
@@ -1076,7 +1076,7 @@ bool test_edn_func_007::verify_error_state(unsigned int expected_rescmd_err,
     // Check state machine
     register_read_32(MAIN_SM_STATE_OFFSET, main_sm_state_val);
     if (main_sm_state_val != expected_state) {
-        CSML_ERROR(1, logger) << "MAIN_SM_STATE mismatch: expected=0x" << std::hex << expected_state
+        REG_ERROR(1, logger) << "MAIN_SM_STATE mismatch: expected=0x" << std::hex << expected_state
                           << ", actual=0x" << main_sm_state_val;
         all_match = false;
     }
@@ -1089,7 +1089,7 @@ bool test_edn_func_007::verify_register_value(const std::string& reg_name,
                                               uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << reg_name << " mismatch: expected=0x" << std::hex << expected
+        REG_ERROR(1, logger) << reg_name << " mismatch: expected=0x" << std::hex << expected
                           << ", actual=0x" << actual;
         return false;
     }
@@ -1104,7 +1104,7 @@ bool test_edn_func_007::verify_bit_value(const std::string& reg_name,
     uint32_t bit_value = (actual_reg >> bit_position) & 0x1;
 
     if (bit_value != expected_value) {
-        CSML_ERROR(1, logger) << reg_name << "[" << bit_position << "] mismatch: expected="
+        REG_ERROR(1, logger) << reg_name << "[" << bit_position << "] mismatch: expected="
                           << expected_value << ", actual=" << bit_value
                           << " (register=0x" << std::hex << actual_reg << ")";
         return false;
@@ -1120,16 +1120,16 @@ void test_edn_func_007::report_test_result(const std::string& test_name,
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
         if (!message.empty()) {
-            CSML_INFO(1, logger) << "       " << message;
+            REG_INFO(1, logger) << "       " << message;
         }
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "       " << message;
+            REG_ERROR(1, logger) << "       " << message;
         }
     }
 }

@@ -57,6 +57,37 @@ peripheral_cache_stale() {
   return 1
 }
 
+# Fail if filtered model line coverage is below COVERAGE_MIN_LINE_PCT (default 95).
+peripheral_enforce_coverage_gate() {
+  local build_dir="$1"
+  local info="${2:-${build_dir}/coverage/coverage_filtered.info}"
+  local min="${COVERAGE_MIN_LINE_PCT:-95}"
+  local pct
+  if [[ ! -f "${info}" ]]; then
+    echo ">> Coverage gate FAIL (missing lcov info: ${info})" >&2
+    return 1
+  fi
+  pct="$(awk -F: '
+    /^LF:/ { found += $2 }
+    /^LH:/ { hit += $2 }
+    END {
+      if (found <= 0) exit 1
+      printf "%.1f\n", 100.0 * hit / found
+    }
+  ' "${info}")"
+  if [[ -z "${pct}" ]]; then
+    echo ">> Coverage gate FAIL (could not parse ${info})" >&2
+    return 1
+  fi
+  echo ">> Line coverage: ${pct}%  (gate: ≥ ${min}%)"
+  if awk -v p="${pct}" -v m="${min}" 'BEGIN { exit (p+0 < m+0) }'; then
+    echo ">> Coverage gate PASS"
+    return 0
+  fi
+  echo "ERROR: line coverage ${pct}% is below the ${min}% gate." >&2
+  return 1
+}
+
 peripheral_parallel_jobs() {
   if [[ -n "${MAX_JOBS:-}" ]]; then
     echo "${MAX_JOBS}"

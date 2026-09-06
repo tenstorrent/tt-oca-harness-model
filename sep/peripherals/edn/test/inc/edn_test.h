@@ -14,7 +14,7 @@
 
 #pragma once
 #include "edn_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <queue>
 
 class edn_ip;
@@ -119,8 +119,8 @@ class edn_test : public edn_basetest
     */
    void set_clock_frequency(double freq_hz);
 
-   /// CSML logger instance
-   CsmlLogger logger;
+   /// regmodel logger instance
+   RegLogger logger;
 
    // Dummy methods to satisfy legacy test calls after decoupling
    void request_entropy(unsigned int endpoint_id) { (void)endpoint_id; }
@@ -138,6 +138,7 @@ class edn_test : public edn_basetest
    unsigned int m_rr_index = 0;
    bool m_clear_mock_outputs = false;
 
+   void notify_mock() {}
    bool edn_is_enabled() const;
    void clear_mock_endpoint_state();
    void mock_endpoint_process();

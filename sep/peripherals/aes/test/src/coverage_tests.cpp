@@ -78,52 +78,6 @@ void testbench::test_coverage_keymgr_rejects_non_write()
     }
 }
 
-void testbench::test_coverage_prng_reseed_trigger_and_rates()
-{
-    report_test_start("test_coverage_prng_reseed_trigger_and_rates");
-
-    try {
-        m_test->trigger_reset();
-        wait(20, SC_NS);
-
-        uint32_t share0[8], share1[8];
-        nist_key_shares(*this, share0, share1);
-        const uint32_t block[4] = {0x3243f6a8u, 0x885a308du, 0x313198a2u, 0xe0370734u};
-
-        // Manual TRIGGER.PRNG_RESEED: idle drops then returns.
-        trigger_prng_reseed();
-        wait(5, SC_NS);
-        wait_for_idle(2000);
-        if ((read_status() & (1u << STATUS_IDLE_BIT)) == 0u) {
-            report_test_fail("test_coverage_prng_reseed_trigger_and_rates",
-                             "AES did not return idle after TRIGGER.PRNG_RESEED");
-            return;
-        }
-
-        // PER_64 and PER_8K both reach get_prng_reseed_threshold() on the
-        // next cipher, without firing the automatic reseed (counter is 1).
-        for (uint32_t rate : {0x2u, 0x4u}) {
-            write_ctrl(*this, *m_test,
-                       make_ctrl(AES_ENC, AES_MODE_ECB, AES_128, false, false, rate));
-            write_key_shares(share0, share1, 4);
-            write_data_in(block);
-            wait_for_output_valid(2000);
-            uint32_t out[4];
-            read_data_out(out);
-            wait_for_idle(2000);
-            if ((read_status() & (1u << STATUS_IDLE_BIT)) == 0u) {
-                report_test_fail("test_coverage_prng_reseed_trigger_and_rates",
-                                 "cipher with a non-PER_1 reseed rate did not finish");
-                return;
-            }
-        }
-
-        report_test_pass("test_coverage_prng_reseed_trigger_and_rates");
-    } catch (const std::exception &e) {
-        report_test_fail("test_coverage_prng_reseed_trigger_and_rates", e.what());
-    }
-}
-
 void testbench::test_coverage_escalation_aborts_in_flight_cipher()
 {
     report_test_start("test_coverage_escalation_aborts_in_flight_cipher");

@@ -65,9 +65,9 @@ sideband to make a functional decision — same underlying limitation as 1.2.
 
 ### 1.5 `sep_output_remap_ctrl` / general CSR layer — byte-enable not honored
 The RDL declares `accesswidth=64` and real hardware's generated regblock additionally merges
-partial (sub-64-bit) writes using `wstrb`-derived bit-enables. `csml_memory`'s write path always
+partial (sub-64-bit) writes using `wstrb`-derived bit-enables. `regmodel::Memory`'s write path always
 applies a full 64-bit overwrite regardless of the TLM byte-enable mask. Shared limitation of the
-`csml` register library, not specific to one peripheral. No firmware access pattern found today
+`regmodel` register library, not specific to one peripheral. No firmware access pattern found today
 uses anything but full 64-bit reads/writes to these registers, so no observed practical impact.
 
 ### 1.6 `local_master_alias_remap_ctrl` — `cacheable` override carried but not consumed
@@ -228,8 +228,8 @@ the VP's single flat `SimpleBus`, consistent with the already-documented §2.1 s
 
 ### 3.7 `sep_cpu_ctrl`'s timeout infrastructure has no counting/expiry logic
 `TIMEOUT_COUNT_TROOT/DMA/SPACC/SYS_IN/MAILBOX_INBOUND/MAILBOX_OUTBOUND/ENTROPY_WRITE/ENTROPY_READ/
-FILTER_OUT/ALIAS_REMAP` (8 distinct 48-bit counters) and `TIMEOUT_ENABLE` are plain writable CSML
-storage — nothing in the VP increments them, compares them against a threshold, or ever sets the
+FILTER_OUT/ALIAS_REMAP` (8 distinct 48-bit counters) and `TIMEOUT_ENABLE` are plain writable
+`regmodel::Memory` storage — nothing in the VP increments them, compares them against a threshold, or ever sets the
 corresponding `hwif_in.*_timeout_int` flag as a consequence of elapsed time or a stalled
 transaction. Only `TIMEOUT_CLEAR`'s clear-side callback is real (and correct — see the write-mask
 fix noted in `sep_cpu_ctrl`'s design doc), but it has nothing to clear in practice.

@@ -82,7 +82,7 @@ set(WFLAG "-Wall -Wextra")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
-  add_compile_definitions(DEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(DEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "OTBN: Debug build - full logging enabled")
 endif()
 
@@ -93,14 +93,14 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
   # coexist with the untyped virtuals from cci_param_untyped) - upstream
   # CCI API design, not an application bug.
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG} -Werror -Wno-unused-function -Wno-overloaded-virtual")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(NDEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "OTBN: Release build - errors only, optimized")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g -O0 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=2)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=2)
   message(STATUS "OTBN: ASAN build - AddressSanitizer enabled")
 endif()
 
@@ -108,7 +108,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "OTBN: Coverage build enabled")
 endif()
 
@@ -119,12 +119,13 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/algo
   ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
 )
 
 # -----------------------------------------------------------------------------
 # External Dependencies (SystemC and CCI)
 # -----------------------------------------------------------------------------
+find_package(Threads REQUIRED)
 include(FindCCI)
 include(FindSystemC)
 
@@ -180,28 +181,40 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     if(NOT DEFINED BUILD_TESTS)
       option(BUILD_TESTS "Build OTBN test executables" ON)
     endif()
-    # For standalone builds, we need to build csml_logger ourselves
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
 endif()
 
 # OTBN model library (always built)
 # Use STATIC library to match HMAC configuration
 peripheral_add_model_library(otbn_model ${MODEL_SRCS})
-target_include_directories(otbn_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(otbn_model PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
+)
 
 target_link_libraries(otbn_model PUBLIC
-  csml_logger
   SystemC::systemc
   Threads::Threads
   OpenSSL::SSL
   OpenSSL::Crypto
-  ${CCI_LIBRARIES}
 )
+if(CCI_FOUND)
+  target_link_libraries(otbn_model PUBLIC ${CCI_LIBRARIES})
+endif()
 
 # OTBN test executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
   add_executable(otbn_test ${TEST_SRCS})
   peripheral_link_test_to_model(otbn_test otbn_model)
+  target_include_directories(otbn_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/algo
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
+  )
+  target_link_libraries(otbn_test PRIVATE SystemC::systemc)
+  if(CCI_FOUND)
+    target_link_libraries(otbn_test PRIVATE ${CCI_LIBRARIES})
+  endif()
   # -----------------------------------------------------------------------------
   # Coverage target
   # -----------------------------------------------------------------------------
@@ -241,7 +254,7 @@ if(CPPCHECK_EXECUTABLE)
       --template=gcc
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/include
-      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
       2> ${CMAKE_BINARY_DIR}/cppcheck_report.txt

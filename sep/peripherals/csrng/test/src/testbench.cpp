@@ -10,7 +10,7 @@ testbench::testbench(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    // Initialize CSML logger
+    // Initialize regmodel logger
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
@@ -68,15 +68,15 @@ testbench::testbench(sc_module_name name)
  */
 void testbench::apply_reset()
 {
-    CSML_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
+    REG_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
     rst_signal.write(false);  // Assert active-low reset
     wait(10, SC_NS);
 
-    CSML_INFO(2, logger) << "Deasserting reset (rst_ni = 1)";
+    REG_INFO(2, logger) << "Deasserting reset (rst_ni = 1)";
     rst_signal.write(true);   // Deassert reset
     wait(30, SC_NS);          // Wait for reset completion + internal initialization
 
-    CSML_INFO(2, logger) << "Reset complete - DUT ready";
+    REG_INFO(2, logger) << "Reset complete - DUT ready";
 }
 
 // =============================================================================
@@ -88,13 +88,13 @@ void testbench::report_test_result(const char* test_name, bool passed)
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "\n========================================\n"
+        REG_INFO(1, logger) << "\n========================================\n"
                              << "[*** TEST PASSED ***] " << test_name << "\n"
                              << "========================================\n";
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(0, logger) << "\n========================================\n"
+        REG_ERROR(0, logger) << "\n========================================\n"
                               << "[XXX TEST FAILED XXX] " << test_name << "\n"
                               << "========================================\n";
     }
@@ -102,7 +102,7 @@ void testbench::report_test_result(const char* test_name, bool passed)
 
 void testbench::report_test_start(const std::string& test_name)
 {
-    CSML_INFO(1, logger) << "========================================\n"
+    REG_INFO(1, logger) << "========================================\n"
                          << test_name << "\n"
                          << "========================================";
 }
@@ -111,7 +111,7 @@ void testbench::report_test_pass(const std::string& test_name)
 {
     m_tests_passed++;
     m_tests_run++;
-    CSML_INFO(1, logger) << test_name << ": PASS";
+    REG_INFO(1, logger) << test_name << ": PASS";
 }
 
 void testbench::report_test_fail(const std::string& test_name,
@@ -120,7 +120,7 @@ void testbench::report_test_fail(const std::string& test_name,
     m_tests_failed++;
     m_tests_run++;
     m_failed_tests.push_back(test_name);
-    CSML_ERROR(0, logger) << test_name << ": FAIL - " << reason;
+    REG_ERROR(0, logger) << test_name << ": FAIL - " << reason;
 }
 
 void testbench::report_test_summary()
@@ -132,7 +132,7 @@ void testbench::report_test_summary()
                           "Passed: " + std::to_string(m_tests_passed) + "\n" +
                           "Failed: " + std::to_string(m_tests_failed) + "\n" +
                           "========================================";
-    CSML_INFO(1, logger) << summary;
+    REG_INFO(1, logger) << summary;
 }
 
 // =============================================================================
@@ -155,336 +155,336 @@ void testbench::test_register_reset_values()
     m_test->register_read_32(csrng_basetest::INTR_STATE_OFFSET, read_val);
     if (read_val != csrng_basetest::INTR_STATE_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: INTR_STATE reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INTR_STATE reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::INTR_STATE_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INTR_STATE reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INTR_STATE reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x04: INTR_ENABLE
     m_test->register_read_32(csrng_basetest::INTR_ENABLE_OFFSET, read_val);
     if (read_val != csrng_basetest::INTR_ENABLE_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: INTR_ENABLE reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INTR_ENABLE reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::INTR_ENABLE_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INTR_ENABLE reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INTR_ENABLE reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x08: INTR_TEST
     m_test->register_read_32(csrng_basetest::INTR_TEST_OFFSET, read_val);
     if (read_val != csrng_basetest::INTR_TEST_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: INTR_TEST reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INTR_TEST reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::INTR_TEST_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INTR_TEST reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INTR_TEST reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x0c: ALERT_TEST
     m_test->register_read_32(csrng_basetest::ALERT_TEST_OFFSET, read_val);
     if (read_val != csrng_basetest::ALERT_TEST_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: ALERT_TEST reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: ALERT_TEST reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::ALERT_TEST_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "ALERT_TEST reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "ALERT_TEST reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x10: REGWEN
     m_test->register_read_32(csrng_basetest::REGWEN_OFFSET, read_val);
     if (read_val != csrng_basetest::REGWEN_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: REGWEN reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: REGWEN reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::REGWEN_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "REGWEN reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "REGWEN reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x14: CTRL
     m_test->register_read_32(csrng_basetest::CTRL_OFFSET, read_val);
     if (read_val != csrng_basetest::CTRL_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: CTRL reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: CTRL reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::CTRL_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "CTRL reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "CTRL reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x18: CMD_REQ
     m_test->register_read_32(csrng_basetest::CMD_REQ_OFFSET, read_val);
     if (read_val != csrng_basetest::CMD_REQ_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: CMD_REQ reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: CMD_REQ reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::CMD_REQ_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "CMD_REQ reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "CMD_REQ reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x1c: RESEED_INTERVAL
     m_test->register_read_32(csrng_basetest::RESEED_INTERVAL_OFFSET, read_val);
     if (read_val != csrng_basetest::RESEED_INTERVAL_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: RESEED_INTERVAL reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: RESEED_INTERVAL reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::RESEED_INTERVAL_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_INTERVAL reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "RESEED_INTERVAL reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x20: RESEED_COUNTER_0
     m_test->register_read_32(csrng_basetest::RESEED_COUNTER_0_OFFSET, read_val);
     if (read_val != csrng_basetest::RESEED_COUNTER_0_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: RESEED_COUNTER_0 reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: RESEED_COUNTER_0 reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::RESEED_COUNTER_0_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x24: RESEED_COUNTER_1
     m_test->register_read_32(csrng_basetest::RESEED_COUNTER_1_OFFSET, read_val);
     if (read_val != csrng_basetest::RESEED_COUNTER_1_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: RESEED_COUNTER_1 reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: RESEED_COUNTER_1 reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::RESEED_COUNTER_1_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_COUNTER_1 reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "RESEED_COUNTER_1 reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x28: RESEED_COUNTER_2
     m_test->register_read_32(csrng_basetest::RESEED_COUNTER_2_OFFSET, read_val);
     if (read_val != csrng_basetest::RESEED_COUNTER_2_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: RESEED_COUNTER_2 reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: RESEED_COUNTER_2 reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::RESEED_COUNTER_2_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_COUNTER_2 reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "RESEED_COUNTER_2 reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x2c: SW_CMD_STS
     m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, read_val);
     if (read_val != csrng_basetest::SW_CMD_STS_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: SW_CMD_STS reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: SW_CMD_STS reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::SW_CMD_STS_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "SW_CMD_STS reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "SW_CMD_STS reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x30: GENBITS_VLD
     m_test->register_read_32(csrng_basetest::GENBITS_VLD_OFFSET, read_val);
     if (read_val != csrng_basetest::GENBITS_VLD_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: GENBITS_VLD reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: GENBITS_VLD reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::GENBITS_VLD_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "GENBITS_VLD reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "GENBITS_VLD reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x34: GENBITS
     m_test->register_read_32(csrng_basetest::GENBITS_OFFSET, read_val);
     if (read_val != csrng_basetest::GENBITS_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: GENBITS reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: GENBITS reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::GENBITS_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "GENBITS reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "GENBITS reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x38: INT_STATE_READ_ENABLE
     m_test->register_read_32(csrng_basetest::INT_STATE_READ_ENABLE_OFFSET, read_val);
     if (read_val != csrng_basetest::INT_STATE_READ_ENABLE_RESET)
     {
-        CSML_ERROR(0, logger) << "INT_STATE_READ_ENABLE reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "INT_STATE_READ_ENABLE reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::INT_STATE_READ_ENABLE_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x3c: INT_STATE_READ_ENABLE_REGWEN
     m_test->register_read_32(csrng_basetest::INT_STATE_READ_ENABLE_REGWEN_OFFSET, read_val);
     if (read_val != csrng_basetest::INT_STATE_READ_ENABLE_REGWEN_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE_REGWEN reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE_REGWEN reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::INT_STATE_READ_ENABLE_REGWEN_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE_REGWEN reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE_REGWEN reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x40: INT_STATE_NUM
     m_test->register_read_32(csrng_basetest::INT_STATE_NUM_OFFSET, read_val);
     if (read_val != csrng_basetest::INT_STATE_NUM_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: INT_STATE_NUM reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INT_STATE_NUM reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::INT_STATE_NUM_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INT_STATE_NUM reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INT_STATE_NUM reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x44: INT_STATE_VAL
     m_test->register_read_32(csrng_basetest::INT_STATE_VAL_OFFSET, read_val);
     if (read_val != csrng_basetest::INT_STATE_VAL_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: INT_STATE_VAL reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INT_STATE_VAL reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::INT_STATE_VAL_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INT_STATE_VAL reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INT_STATE_VAL reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x48: FIPS_FORCE
     m_test->register_read_32(csrng_basetest::FIPS_FORCE_OFFSET, read_val);
     if (read_val != csrng_basetest::FIPS_FORCE_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: FIPS_FORCE reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: FIPS_FORCE reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::FIPS_FORCE_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "FIPS_FORCE reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "FIPS_FORCE reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x4c: HW_EXC_STS
     m_test->register_read_32(csrng_basetest::HW_EXC_STS_OFFSET, read_val);
     if (read_val != csrng_basetest::HW_EXC_STS_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: HW_EXC_STS reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: HW_EXC_STS reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::HW_EXC_STS_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "HW_EXC_STS reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "HW_EXC_STS reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x50: RECOV_ALERT_STS
     m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, read_val);
     if (read_val != csrng_basetest::RECOV_ALERT_STS_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: RECOV_ALERT_STS reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: RECOV_ALERT_STS reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::RECOV_ALERT_STS_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x54: ERR_CODE
     m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, read_val);
     if (read_val != csrng_basetest::ERR_CODE_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: ERR_CODE reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: ERR_CODE reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::ERR_CODE_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "ERR_CODE reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "ERR_CODE reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x58: ERR_CODE_TEST
     m_test->register_read_32(csrng_basetest::ERR_CODE_TEST_OFFSET, read_val);
     if (read_val != csrng_basetest::ERR_CODE_TEST_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: ERR_CODE_TEST reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: ERR_CODE_TEST reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::ERR_CODE_TEST_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "ERR_CODE_TEST reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "ERR_CODE_TEST reset value correct: 0x" << std::hex << read_val;
     }
 
     // 0x5c: MAIN_SM_STATE
     m_test->register_read_32(csrng_basetest::MAIN_SM_STATE_OFFSET, read_val);
     if (read_val != csrng_basetest::MAIN_SM_STATE_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: MAIN_SM_STATE reset value mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: MAIN_SM_STATE reset value mismatch: expected 0x"
                              << std::hex << csrng_basetest::MAIN_SM_STATE_RESET
                              << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "MAIN_SM_STATE reset value correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "MAIN_SM_STATE reset value correct: 0x" << std::hex << read_val;
     }
 
     report_test_result("Register Reset Values", all_passed);
@@ -515,13 +515,13 @@ void testbench::test_register_read_write()
     expected = (original_val & ~csrng_basetest::INTR_ENABLE_WRITE) | (write_val & csrng_basetest::INTR_ENABLE_WRITE);
     if (read_val != expected)
     {
-        CSML_ERROR(0, logger) << "ERROR: INTR_ENABLE read/write mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INTR_ENABLE read/write mismatch: expected 0x"
                              << std::hex << expected << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INTR_ENABLE read/write correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INTR_ENABLE read/write correct: 0x" << std::hex << read_val;
     }
 
 
@@ -533,14 +533,14 @@ void testbench::test_register_read_write()
     // For read/write test, we'll just verify we can read it (should be 1 after reset)
     if (original_val != csrng_basetest::REGWEN_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: REGWEN read failed: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: REGWEN read failed: expected 0x"
                              << std::hex << csrng_basetest::REGWEN_RESET << ", got 0x" << original_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "REGWEN read correct: 0x" << std::hex << original_val;
-        CSML_INFO(2, logger) << "REGWEN is RW0C (write-0-to-clear), write test skipped to preserve unlock state";
+        REG_INFO(2, logger) << "REGWEN read correct: 0x" << std::hex << original_val;
+        REG_INFO(2, logger) << "REGWEN is RW0C (write-0-to-clear), write test skipped to preserve unlock state";
     }
 
     // 0x14: CTRL - RW, protected by REGWEN, full 32-bit but multi-bit encoded fields
@@ -548,7 +548,7 @@ void testbench::test_register_read_write()
     m_test->register_read_32(csrng_basetest::REGWEN_OFFSET, read_val);
     if ((read_val & 0x1) == 0)
     {
-        CSML_ERROR(0, logger) << "REGWEN is locked, cannot test CTRL write";
+        REG_ERROR(0, logger) << "REGWEN is locked, cannot test CTRL write";
         all_passed = false;
     }
     else
@@ -562,13 +562,13 @@ void testbench::test_register_read_write()
         wait(10, SC_NS);
         if (read_val != write_val)
         {
-            CSML_ERROR(0, logger) << "ERROR: CTRL read/write mismatch: expected 0x"
+            REG_ERROR(0, logger) << "ERROR: CTRL read/write mismatch: expected 0x"
                                  << std::hex << write_val << ", got 0x" << read_val;
             all_passed = false;
         }
         else
         {
-            CSML_INFO(2, logger) << "CTRL read/write correct: 0x" << std::hex << read_val;
+            REG_INFO(2, logger) << "CTRL read/write correct: 0x" << std::hex << read_val;
         }
         // Restore original value
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, original_val);
@@ -580,7 +580,7 @@ void testbench::test_register_read_write()
     write_val = 0x00000901; // INSTANTIATE command with deterministic flag
     m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, write_val);
     wait(10, SC_NS);
-    CSML_INFO(2, logger) << "CMD_REQ write completed (WO register, command processing may occur)";
+    REG_INFO(2, logger) << "CMD_REQ write completed (WO register, command processing may occur)";
 
     // 0x1c: RESEED_INTERVAL - RW, full 32-bit
     m_test->register_read_32(csrng_basetest::RESEED_INTERVAL_OFFSET, original_val);
@@ -591,13 +591,13 @@ void testbench::test_register_read_write()
     wait(10, SC_NS);
     if (read_val != write_val)
     {
-        CSML_ERROR(0, logger) << "ERROR: RESEED_INTERVAL read/write mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: RESEED_INTERVAL read/write mismatch: expected 0x"
                              << std::hex << write_val << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_INTERVAL read/write correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "RESEED_INTERVAL read/write correct: 0x" << std::hex << read_val;
     }
     // Restore original value
     m_test->register_write_32(csrng_basetest::RESEED_INTERVAL_OFFSET, original_val);
@@ -608,7 +608,7 @@ void testbench::test_register_read_write()
     m_test->register_read_32(csrng_basetest::INT_STATE_READ_ENABLE_REGWEN_OFFSET, read_val);
     if ((read_val & 0x1) == 0)
     {
-        CSML_ERROR(0, logger) << "INT_STATE_READ_ENABLE_REGWEN is locked, cannot test INT_STATE_READ_ENABLE write";
+        REG_ERROR(0, logger) << "INT_STATE_READ_ENABLE_REGWEN is locked, cannot test INT_STATE_READ_ENABLE write";
         all_passed = false;
     }
     else
@@ -622,13 +622,13 @@ void testbench::test_register_read_write()
         expected = (original_val & ~csrng_basetest::INT_STATE_READ_ENABLE_WRITE) | (write_val & csrng_basetest::INT_STATE_READ_ENABLE_WRITE);
         if (read_val != expected)
         {
-            CSML_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE read/write mismatch: expected 0x"
+            REG_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE read/write mismatch: expected 0x"
                                  << std::hex << expected << ", got 0x" << read_val;
             all_passed = false;
         }
         else
         {
-            CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE read/write correct: 0x" << std::hex << read_val;
+            REG_INFO(2, logger) << "INT_STATE_READ_ENABLE read/write correct: 0x" << std::hex << read_val;
         }
         // Restore original value
         m_test->register_write_32(csrng_basetest::INT_STATE_READ_ENABLE_OFFSET, original_val);
@@ -640,14 +640,14 @@ void testbench::test_register_read_write()
     m_test->register_read_32(csrng_basetest::INT_STATE_READ_ENABLE_REGWEN_OFFSET, original_val);
     if (original_val != csrng_basetest::INT_STATE_READ_ENABLE_REGWEN_RESET)
     {
-        CSML_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE_REGWEN read failed: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE_REGWEN read failed: expected 0x"
                              << std::hex << csrng_basetest::INT_STATE_READ_ENABLE_REGWEN_RESET << ", got 0x" << original_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE_REGWEN read correct: 0x" << std::hex << original_val;
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE_REGWEN is RW0C, write test skipped to preserve unlock state";
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE_REGWEN read correct: 0x" << std::hex << original_val;
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE_REGWEN is RW0C, write test skipped to preserve unlock state";
     }
 
     // 0x40: INT_STATE_NUM - RW, bits [3:0]
@@ -660,13 +660,13 @@ void testbench::test_register_read_write()
     expected = (original_val & ~0xF) | (write_val & 0xF);
     if (read_val != expected)
     {
-        CSML_ERROR(0, logger) << "ERROR: INT_STATE_NUM read/write mismatch: expected 0x"
+        REG_ERROR(0, logger) << "ERROR: INT_STATE_NUM read/write mismatch: expected 0x"
                              << std::hex << expected << ", got 0x" << read_val;
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INT_STATE_NUM read/write correct: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "INT_STATE_NUM read/write correct: 0x" << std::hex << read_val;
     }
     // Restore original value
     m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, original_val);
@@ -677,7 +677,7 @@ void testbench::test_register_read_write()
     m_test->register_read_32(csrng_basetest::REGWEN_OFFSET, read_val);
     if ((read_val & 0x1) == 0)
     {
-        CSML_ERROR(0, logger) << "REGWEN is locked, cannot test FIPS_FORCE write";
+        REG_ERROR(0, logger) << "REGWEN is locked, cannot test FIPS_FORCE write";
         all_passed = false;
     }
     else
@@ -698,13 +698,13 @@ void testbench::test_register_read_write()
         expected = (original_val & ~csrng_basetest::FIPS_FORCE_WRITE) | (write_val & csrng_basetest::FIPS_FORCE_WRITE);
         if (read_val != expected)
         {
-            CSML_ERROR(0, logger) << "ERROR: FIPS_FORCE read/write mismatch: expected 0x"
+            REG_ERROR(0, logger) << "ERROR: FIPS_FORCE read/write mismatch: expected 0x"
                                  << std::hex << expected << ", got 0x" << read_val;
             all_passed = false;
         }
         else
         {
-            CSML_INFO(2, logger) << "FIPS_FORCE read/write correct: 0x" << std::hex << read_val;
+            REG_INFO(2, logger) << "FIPS_FORCE read/write correct: 0x" << std::hex << read_val;
         }
         // Restore original values
         m_test->register_write_32(csrng_basetest::FIPS_FORCE_OFFSET, original_val);
@@ -720,7 +720,7 @@ void testbench::test_register_read_write()
     m_test->register_read_32(csrng_basetest::REGWEN_OFFSET, read_val);
     if ((read_val & 0x1) == 0)
     {
-        CSML_ERROR(0, logger) << "REGWEN is locked, cannot test ERR_CODE_TEST write";
+        REG_ERROR(0, logger) << "REGWEN is locked, cannot test ERR_CODE_TEST write";
         all_passed = false;
     }
     else
@@ -734,13 +734,13 @@ void testbench::test_register_read_write()
         expected = (original_val & ~0x1F) | (write_val & 0x1F);
         if (read_val != expected)
         {
-            CSML_ERROR(0, logger) << "ERROR: ERR_CODE_TEST read/write mismatch: expected 0x"
+            REG_ERROR(0, logger) << "ERROR: ERR_CODE_TEST read/write mismatch: expected 0x"
                                  << std::hex << expected << ", got 0x" << read_val;
             all_passed = false;
         }
         else
         {
-            CSML_INFO(2, logger) << "ERR_CODE_TEST read/write correct: 0x" << std::hex << read_val;
+            REG_INFO(2, logger) << "ERR_CODE_TEST read/write correct: 0x" << std::hex << read_val;
         }
         // Restore original value
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, original_val);
@@ -773,13 +773,13 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: RESEED_COUNTER_0 changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: RESEED_COUNTER_0 changed after write! Register is not read-only.";
         all_passed = false;
        
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 register protection verified (no change after write)";
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 register protection verified (no change after write)";
     }
 
     // Test that RESEED_COUNTER_1 is read-only
@@ -796,12 +796,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: RESEED_COUNTER_1 changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: RESEED_COUNTER_1 changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_COUNTER_1 register protection verified (no change after write)";
+        REG_INFO(2, logger) << "RESEED_COUNTER_1 register protection verified (no change after write)";
     }
 
     // Test that RESEED_COUNTER_2 is read-only
@@ -818,12 +818,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: RESEED_COUNTER_2 changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: RESEED_COUNTER_2 changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "RESEED_COUNTER_2 register protection verified (no change after write)";
+        REG_INFO(2, logger) << "RESEED_COUNTER_2 register protection verified (no change after write)";
     }
 
 
@@ -841,12 +841,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: SW_CMD_STS changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: SW_CMD_STS changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "SW_CMD_STS register protection verified (no change after write)";
+        REG_INFO(2, logger) << "SW_CMD_STS register protection verified (no change after write)";
     }
 
     // Test that GENBITS_VLD is read-only
@@ -863,12 +863,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: GENBITS_VLD changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: GENBITS_VLD changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "GENBITS_VLD register protection verified (no change after write)";
+        REG_INFO(2, logger) << "GENBITS_VLD register protection verified (no change after write)";
     }
 
     // Test that GENBITS is read-only
@@ -885,12 +885,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: GENBITS changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: GENBITS changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "GENBITS register protection verified (no change after write)";
+        REG_INFO(2, logger) << "GENBITS register protection verified (no change after write)";
     }
 
     // Test that INT_STATE_VAL is read-only
@@ -907,12 +907,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: INT_STATE_VAL changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: INT_STATE_VAL changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "INT_STATE_VAL register protection verified (no change after write)";
+        REG_INFO(2, logger) << "INT_STATE_VAL register protection verified (no change after write)";
     }
 
     // Test that ERR_CODE is read-only
@@ -929,12 +929,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: ERR_CODE changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: ERR_CODE changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "ERR_CODE register protection verified (no change after write)";
+        REG_INFO(2, logger) << "ERR_CODE register protection verified (no change after write)";
     }
 
     // Test that MAIN_SM_STATE is read-only
@@ -951,12 +951,12 @@ void testbench::test_read_only_registers()
     // Check write mask - only bits with write_mask=1 should change
     if (read_val_after != read_val_before)
     {
-        CSML_ERROR(0, logger) <<  "ERROR: MAIN_SM_STATE changed after write! Register is not read-only.";
+        REG_ERROR(0, logger) <<  "ERROR: MAIN_SM_STATE changed after write! Register is not read-only.";
         all_passed = false;
     }
     else
     {
-        CSML_INFO(2, logger) << "MAIN_SM_STATE register protection verified (no change after write)";
+        REG_INFO(2, logger) << "MAIN_SM_STATE register protection verified (no change after write)";
     }
 
     report_test_result("Read-Only Register Protection", all_passed);
@@ -984,11 +984,11 @@ void testbench::test_write_only_registers()
     // registers should NOT return the written value
     if (read_val != write_val)
     {
-        CSML_INFO(2, logger) << "INTR_TEST register protection verified (write-only, read blocked)";
+        REG_INFO(2, logger) << "INTR_TEST register protection verified (write-only, read blocked)";
     }
     else
     {
-         CSML_ERROR(0, logger) << "ERROR: INTR_TEST register read returned written value, protection failed";
+         REG_ERROR(0, logger) << "ERROR: INTR_TEST register read returned written value, protection failed";
          all_passed=false;
     }
 
@@ -1003,11 +1003,11 @@ void testbench::test_write_only_registers()
     // registers should NOT return the written value
     if (read_val != write_val)
     {
-        CSML_INFO(2, logger) << "ALERT_TEST register protection verified (write-only, read blocked)";
+        REG_INFO(2, logger) << "ALERT_TEST register protection verified (write-only, read blocked)";
     }
     else
     {
-        CSML_ERROR(0, logger) << "ERROR: ALERT_TEST register read returned written value, protection failed";
+        REG_ERROR(0, logger) << "ERROR: ALERT_TEST register read returned written value, protection failed";
         all_passed=false;
     }
 
@@ -1022,10 +1022,10 @@ void testbench::test_write_only_registers()
     // registers should NOT return the written value
     if (read_val != write_val)
     {
-        CSML_INFO(2, logger) << "CMD_REQ register protection verified (write-only, read blocked)";
+        REG_INFO(2, logger) << "CMD_REQ register protection verified (write-only, read blocked)";
     }
     else{
-        CSML_ERROR(0, logger) << "ERROR: CMD_REQ register read returned written value, protection failed";
+        REG_ERROR(0, logger) << "ERROR: CMD_REQ register read returned written value, protection failed";
         all_passed=false;
     }
 
@@ -1055,7 +1055,7 @@ void testbench::test_reserved_bits_write_ignore()
     wait(10, SC_NS);
     expected = read_val & 0xFFFFFFF0;  // Reserved bits [31:4]
     if (expected != 0) {
-        CSML_ERROR(0, logger) << "ERROR: INTR_STATE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+        REG_ERROR(0, logger) << "ERROR: INTR_STATE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
         all_passed = false;
     }
 
@@ -1068,7 +1068,7 @@ void testbench::test_reserved_bits_write_ignore()
     wait(10, SC_NS);
     expected = read_val & 0xFFFFFFF0;  // Reserved bits [31:4]
     if (expected != 0) {
-        CSML_ERROR(0, logger) << "ERROR: INTR_ENABLE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+        REG_ERROR(0, logger) << "ERROR: INTR_ENABLE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
         all_passed = false;
     }
 
@@ -1093,7 +1093,7 @@ void testbench::test_reserved_bits_write_ignore()
     wait(10, SC_NS);
     expected = read_val & 0xFFFFFFFE;  // Reserved bits [31:1]
     if (expected != 0) {
-        CSML_ERROR(0, logger) << "ERROR: REGWEN reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+        REG_ERROR(0, logger) << "ERROR: REGWEN reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
         all_passed = false;
     }
 
@@ -1108,7 +1108,7 @@ void testbench::test_reserved_bits_write_ignore()
         wait(10, SC_NS);
         expected = read_val & 0xFFFF0000;  // Reserved bits [31:16]
         if (expected != 0) {
-            CSML_ERROR(0, logger) << "ERROR: CTRL reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+            REG_ERROR(0, logger) << "ERROR: CTRL reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
             all_passed = false;
         }
     }
@@ -1130,7 +1130,7 @@ void testbench::test_reserved_bits_write_ignore()
         wait(10, SC_NS);
         expected = read_val & 0xFFFFFFF8;  // Reserved bits [31:3]
         if (expected != 0) {
-            CSML_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+            REG_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
             all_passed = false;
         }
     }
@@ -1144,7 +1144,7 @@ void testbench::test_reserved_bits_write_ignore()
     wait(10, SC_NS);
     expected = read_val & 0xFFFFFFFE;  // Reserved bits [31:1]
     if (expected != 0) {
-        CSML_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE_REGWEN reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+        REG_ERROR(0, logger) << "ERROR: INT_STATE_READ_ENABLE_REGWEN reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
         all_passed = false;
     }
 
@@ -1157,7 +1157,7 @@ void testbench::test_reserved_bits_write_ignore()
     wait(10, SC_NS);
     expected = read_val & 0xFFFFFFF0;  // Reserved bits [31:4]
     if (expected != 0) {
-        CSML_ERROR(0, logger) << "ERROR: INT_STATE_NUM reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+        REG_ERROR(0, logger) << "ERROR: INT_STATE_NUM reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
         all_passed = false;
     }
 
@@ -1172,7 +1172,7 @@ void testbench::test_reserved_bits_write_ignore()
         wait(10, SC_NS);
         expected = read_val & 0xFFFFFFF8;  // Reserved bits [31:3]
         if (expected != 0) {
-            CSML_ERROR(0, logger) << "ERROR: FIPS_FORCE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+            REG_ERROR(0, logger) << "ERROR: FIPS_FORCE reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
             all_passed = false;
         }
     }
@@ -1186,7 +1186,7 @@ void testbench::test_reserved_bits_write_ignore()
     wait(10, SC_NS);
     expected = read_val & 0xFFFF0000;  // Reserved bits [31:16]
     if (expected != 0) {
-        CSML_ERROR(0, logger) << "ERROR: HW_EXC_STS reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+        REG_ERROR(0, logger) << "ERROR: HW_EXC_STS reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
         all_passed = false;
     }
 
@@ -1199,7 +1199,7 @@ void testbench::test_reserved_bits_write_ignore()
     wait(10, SC_NS);
     expected = read_val & 0xFFFF0FE0;  // Reserved bits [31:16, 11:5]
     if (expected != 0) {
-        CSML_ERROR(0, logger) << "ERROR: RECOV_ALERT_STS reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+        REG_ERROR(0, logger) << "ERROR: RECOV_ALERT_STS reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
         all_passed = false;
     }
 
@@ -1214,7 +1214,7 @@ void testbench::test_reserved_bits_write_ignore()
         wait(10, SC_NS);
         expected = read_val & 0xFFFFFFE0;  // Reserved bits [31:5]
         if (expected != 0) {
-            CSML_ERROR(0, logger) << "ERROR: ERR_CODE_TEST reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
+            REG_ERROR(0, logger) << "ERROR: ERR_CODE_TEST reserved bits not ignored: expected 0x0, got 0x" << std::hex << expected;
             all_passed = false;
         }
     }
@@ -1229,8 +1229,8 @@ void testbench::test_reset_functionality()
 
     bool all_passed = true;
 
-    CSML_INFO(2, logger) << "NOTE: Reset functionality not available in csrng_base";
-    CSML_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
+    REG_INFO(2, logger) << "NOTE: Reset functionality not available in csrng_base";
+    REG_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
 
     report_test_result("Reset Functionality (Stub)", all_passed);
 }
@@ -1241,8 +1241,8 @@ void testbench::test_interrupt_connections()
 
     bool all_passed = true;
 
-    CSML_INFO(2, logger) << "NOTE: Interrupt ports not available in csrng_base";
-    CSML_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
+    REG_INFO(2, logger) << "NOTE: Interrupt ports not available in csrng_base";
+    REG_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
 
     report_test_result("Interrupt Connections (Stub)", all_passed);
 }
@@ -1253,8 +1253,8 @@ void testbench::test_entropy_interface()
 
     bool all_passed = true;
 
-    CSML_INFO(2, logger) << "NOTE: Entropy interface not available in csrng_base";
-    CSML_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
+    REG_INFO(2, logger) << "NOTE: Entropy interface not available in csrng_base";
+    REG_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
 
     report_test_result("Entropy Interface (Stub)", all_passed);
 }
@@ -1265,8 +1265,8 @@ void testbench::test_control_inputs()
 
     bool all_passed = true;
 
-    CSML_INFO(2, logger) << "NOTE: Control input ports not available in csrng_base";
-    CSML_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
+    REG_INFO(2, logger) << "NOTE: Control input ports not available in csrng_base";
+    REG_INFO(2, logger) << "This test will be implemented when CRNG class is complete";
 
     report_test_result("Control Inputs (Stub)", all_passed);
 }
@@ -1286,32 +1286,32 @@ void testbench::test_alert_test_recov_alert_trigger()
 
     // Verify initial alert state is de-asserted
     if (recov_alert_signal.read() != false) {
-        CSML_ERROR(0, logger) << "ERROR: recov_alert_o not de-asserted after reset";
+        REG_ERROR(0, logger) << "ERROR: recov_alert_o not de-asserted after reset";
         all_passed = false;
     } else {
-        CSML_INFO(2, logger) << "Initial recov_alert_o state is de-asserted (correct)";
+        REG_INFO(2, logger) << "Initial recov_alert_o state is de-asserted (correct)";
     }
 
     // Write to ALERT_TEST bit 0 to trigger recoverable alert
-    CSML_INFO(2, logger) << "Writing 0x1 to ALERT_TEST register (bit 0 = recov_alert)";
+    REG_INFO(2, logger) << "Writing 0x1 to ALERT_TEST register (bit 0 = recov_alert)";
     m_test->register_write_32(csrng_basetest::ALERT_TEST_OFFSET, 0x1);
     wait(1, SC_NS);
 
     // At this point, due to pulse behavior, alert should have de-asserted
     if (recov_alert_signal.read() == false) {
-        CSML_INFO(2, logger) << "recov_alert_o pulse completed (de-asserted as expected)";
+        REG_INFO(2, logger) << "recov_alert_o pulse completed (de-asserted as expected)";
     }
     else {
-        CSML_ERROR(0, logger) << "ERROR: recov_alert_o did not de-assert after pulse duration";
+        REG_ERROR(0, logger) << "ERROR: recov_alert_o did not de-assert after pulse duration";
         all_passed = false;
     }
 
     // Verify fatal_alert was not triggered
     if (fatal_alert_signal.read() != false) {
-        CSML_ERROR(0, logger) << "ERROR: fatal_alert_o was unexpectedly asserted";
+        REG_ERROR(0, logger) << "ERROR: fatal_alert_o was unexpectedly asserted";
         all_passed = false;
     } else {
-        CSML_INFO(2, logger) << "fatal_alert_o remained de-asserted (correct)";
+        REG_INFO(2, logger) << "fatal_alert_o remained de-asserted (correct)";
     }
 
     report_test_result("ALERT_TEST Recoverable Alert Trigger", all_passed);
@@ -1328,32 +1328,32 @@ void testbench::test_alert_test_fatal_alert_trigger()
 
     // Verify initial alert state is de-asserted
     if (fatal_alert_signal.read() != false) {
-        CSML_ERROR(0, logger) << "ERROR: fatal_alert_o not de-asserted after reset";
+        REG_ERROR(0, logger) << "ERROR: fatal_alert_o not de-asserted after reset";
         all_passed = false;
     } else {
-        CSML_INFO(2, logger) << "Initial fatal_alert_o state is de-asserted (correct)";
+        REG_INFO(2, logger) << "Initial fatal_alert_o state is de-asserted (correct)";
     }
 
     // Write to ALERT_TEST bit 1 to trigger fatal alert
-    CSML_INFO(2, logger) << "Writing 0x2 to ALERT_TEST register (bit 1 = fatal_alert)";
+    REG_INFO(2, logger) << "Writing 0x2 to ALERT_TEST register (bit 1 = fatal_alert)";
     m_test->register_write_32(csrng_basetest::ALERT_TEST_OFFSET, 0x2);
     wait(1, SC_NS);
 
     // At this point, due to pulse behavior, alert should have de-asserted
     if (fatal_alert_signal.read() == false) {
-        CSML_INFO(2, logger) << "fatal_alert_o pulse completed (de-asserted as expected)";
+        REG_INFO(2, logger) << "fatal_alert_o pulse completed (de-asserted as expected)";
     }
     else {
-        CSML_ERROR(0, logger) << "ERROR: fatal_alert_o did not de-assert after pulse duration";
+        REG_ERROR(0, logger) << "ERROR: fatal_alert_o did not de-assert after pulse duration";
         all_passed = false;
     }
 
     // Verify recov_alert was not triggered
     if (recov_alert_signal.read() != false) {
-        CSML_ERROR(0, logger) << "ERROR: recov_alert_o was unexpectedly asserted";
+        REG_ERROR(0, logger) << "ERROR: recov_alert_o was unexpectedly asserted";
         all_passed = false;
     } else {
-        CSML_INFO(2, logger) << "recov_alert_o remained de-asserted (correct)";
+        REG_INFO(2, logger) << "recov_alert_o remained de-asserted (correct)";
     }
 
     report_test_result("ALERT_TEST Fatal Alert Trigger", all_passed);
@@ -1370,14 +1370,14 @@ void testbench::run_tests()
 
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nCRNG IP TESTBENCH (Full Model)"
                          << "\n========================================";
 
-    CSML_INFO(1, logger) << "Testing csrng_model with full FSM, callbacks, and command processing";
+    REG_INFO(1, logger) << "Testing csrng_model with full FSM, callbacks, and command processing";
 
     // Test 1: Basic Register Tests
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nTest 1: Register Access Tests"
                          << "\n========================================";
 
@@ -1570,7 +1570,7 @@ void testbench::run_tests()
 
 
     // // Test 2: Port Interface Stubs
-    // CSML_INFO(1, logger) << "\n========================================"
+    // REG_INFO(1, logger) << "\n========================================"
     //                      << "\nTest 2: Port Interface Tests (Stubs)"
     //                      << "\n========================================";
 
@@ -1589,7 +1589,7 @@ void testbench::run_tests()
     // =========================================================================
     // Test Suite 3: CRNG_FUNC_008 - Register Callbacks (Priority 1)
     // =========================================================================
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nTest Suite 3: CRNG_FUNC_008 - Register Callbacks"
                          << "\n========================================";
     apply_reset();
@@ -1687,7 +1687,7 @@ void testbench::run_tests()
     // =========================================================================
     // Test Suite 4: CRNG_FUNC_001 - DRBG Lifecycle Management (Priority 1)
     // =========================================================================
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nTest Suite 4: CRNG_FUNC_001 - DRBG Lifecycle"
                          << "\n========================================";
 
@@ -1723,7 +1723,7 @@ void testbench::run_tests()
     // =========================================================================
     // Test Suite 7: CRNG_FUNC_002 - Pseudorandom Bit Generation (Priority 1)
     // =========================================================================
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nTest Suite 7: CRNG_FUNC_002 - Pseudorandom Bit Generation"
                          << "\n========================================";
 
@@ -1777,7 +1777,7 @@ void testbench::run_tests()
     // =========================================================================
     // Test Suite 5: CRNG_FUNC_009 - Control and Configuration (Priority 1)
     // =========================================================================
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nTest Suite 5: CRNG_FUNC_009 - Control and Configuration"
                          << "\n========================================";
 
@@ -1818,7 +1818,7 @@ void testbench::run_tests()
     // =========================================================================
     // Test Suite 6: CRNG_FUNC_005 - Command Interface and FSM (Priority 1)
     // =========================================================================
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nTest Suite 6: CRNG_FUNC_005 - Command Interface and FSM"
                          << "\n========================================";
 
@@ -1907,7 +1907,7 @@ void testbench::run_tests()
     // =========================================================================
     // Test Suite 8: CRNG_FUNC_003 - Seed Life Management (Priority 2)
     // =========================================================================
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\nTest Suite 8: CRNG_FUNC_003 - Seed Life Management"
                          << "\n========================================";
 
@@ -2014,10 +2014,16 @@ void testbench::run_tests()
     test_int_state_val_reseed_status_fips();
     wait(20, SC_NS);
 
-    CSML_INFO(1, logger) << "\n========================================"
-                         << "\nCoverage: extra edge paths"
+    REG_INFO(1, logger) << "\n========================================"
+                         << "\nCoverage: uncovered model paths"
                          << "\n========================================";
     apply_reset();
+    test_coverage_invalid_instance_and_helpers();
+    wait(20, SC_NS);
+    test_coverage_fsm_states_and_genbits_repeat();
+    wait(20, SC_NS);
+    test_coverage_int_state_and_regwen_denies();
+    wait(20, SC_NS);
     test_coverage_invalid_instance_and_seed_life();
     wait(20, SC_NS);
     test_coverage_update_requires_additional_data();
@@ -2028,49 +2034,49 @@ void testbench::run_tests()
     wait(20, SC_NS);
 
     // Print final test summary
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "\n       TEST SUITE SUMMARY"
                          << "\n========================================";
 
     std::stringstream ss;
     ss << "Total Tests:  " << m_tests_run;
-    CSML_INFO(1, logger) << ss.str();
+    REG_INFO(1, logger) << ss.str();
 
     ss.str("");
     ss << "Passed:       " << m_tests_passed << " (PASS)";
-    CSML_INFO(1, logger) << ss.str();
+    REG_INFO(1, logger) << ss.str();
 
     ss.str("");
     ss << "Failed:       " << m_tests_failed << " (FAIL)";
-    CSML_INFO(1, logger) << ss.str();
+    REG_INFO(1, logger) << ss.str();
 
     if (m_tests_run > 0) {
         double success_rate = (100.0 * m_tests_passed) / m_tests_run;
         ss.str("");
         ss << "Success Rate: " << std::fixed << std::setprecision(1) << success_rate << "%";
-        CSML_INFO(1, logger) << ss.str();
+        REG_INFO(1, logger) << ss.str();
     }
 
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
 
     // Show list of failed tests if any
     if (m_tests_failed > 0) {
-        CSML_ERROR(0, logger) << "\nFailed Tests:";
+        REG_ERROR(0, logger) << "\nFailed Tests:";
         for (const auto& test : m_failed_tests) {
             ss.str("");
             ss << "  - " << test;
-            CSML_ERROR(0, logger) << ss.str();
+            REG_ERROR(0, logger) << ss.str();
         }
         ss.str("");
         ss << "\n[OVERALL RESULT: FAILED - " << m_tests_failed << " test(s) failed]";
-        CSML_ERROR(0, logger) << ss.str();
+        REG_ERROR(0, logger) << ss.str();
     } else if (m_tests_passed > 0) {
-        CSML_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]";
+        REG_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]";
     } else {
-        CSML_ERROR(0, logger) << "[OVERALL RESULT: NO TESTS RUN]";
+        REG_ERROR(0, logger) << "[OVERALL RESULT: NO TESTS RUN]";
     }
 
-    CSML_INFO(1, logger) << "========================================\n";
+    REG_INFO(1, logger) << "========================================\n";
 
     wait(100, SC_NS);
     sc_stop();

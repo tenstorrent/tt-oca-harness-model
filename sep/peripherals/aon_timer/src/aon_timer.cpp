@@ -11,8 +11,8 @@
  * engine. This file provides the complete register access, output driver, and counter
  * increment layer for the TLM-2.0 loosely-timed model:
  *
- *   - register_all_callbacks(): registers functional callbacks in csml_memory after
- *     base-class construction so they override the default CSML register handlers.
+ *   - register_all_callbacks(): registers functional callbacks in regmodel::Memory after
+ *     base-class construction so they override the default regmodel register handlers.
  *
  *   - Write callbacks (14): ALERT_TEST, WKUP_CTRL, WKUP_THOLD_HI, WKUP_THOLD_LO,
  *     WKUP_COUNT_HI, WKUP_COUNT_LO, WDOG_REGWEN, WDOG_CTRL, WDOG_BARK_THOLD,
@@ -22,7 +22,7 @@
  *     WKUP_COUNT_LO, WDOG_REGWEN, WDOG_CTRL, WDOG_BARK_THOLD, WDOG_BITE_THOLD,
  *     WDOG_COUNT, INTR_STATE, WKUP_CAUSE.
  *     (ALERT_TEST and INTR_TEST are write-only; their read-restriction callbacks are
- *     already registered by the CSML register framework and are NOT overridden.)
+ *     already registered by the regmodel register framework and are NOT overridden.)
  *
  *   - Helper methods: compute_cdc_delay(), evaluate_wkup_threshold(),
  *     evaluate_bark_threshold(), evaluate_bite_threshold(), update_wkup_req_output().
@@ -49,7 +49,7 @@
  *   - RW1C : INTR_STATE; writing 1 to a bit clears it; writing 0 has no effect.
  *   - RW0C : WKUP_CAUSE, WDOG_REGWEN; writing 0 clears/locks; writing 1 has no effect.
  *   - WO   : ALERT_TEST, INTR_TEST; write has side effects; reads return 0x0 (enforced
- *            by CSML read-restriction callback already registered by the framework).
+ *            by regmodel read-restriction callback already registered by the framework).
  *
  * FUNC002 - System Reset and Initialization (additions to this file):
  *   evaluate_bite_threshold() is updated to maintain the dedicated m_wdog_bite_active
@@ -104,9 +104,9 @@
  * @brief Register all functional write and read callbacks for the 14 AON Timer registers.
  *
  * All offsets are word-addressed (byte_offset / sizeof(uint32_t) = byte_offset / 4)
- * as required by the csml_memory::register_write_callback and
- * csml_memory::register_read_callback APIs. The callbacks are registered after
- * base-class construction so they replace the default CSML register-level handlers.
+ * as required by the regmodel::Memory::register_write_callback and
+ * regmodel::Memory::register_read_callback APIs. The callbacks are registered after
+ * base-class construction so they replace the default regmodel register-level handlers.
  *
  * Write callback registration sequence (14 total):
  *   ALERT_TEST (0x00/4=0), WKUP_CTRL (0x04/4=1), WKUP_THOLD_HI (0x08/4=2),
@@ -120,7 +120,7 @@
  *   WKUP_COUNT_LO (5), WDOG_REGWEN (6), WDOG_CTRL (7), WDOG_BARK_THOLD (8),
  *   WDOG_BITE_THOLD (9), WDOG_COUNT (10), INTR_STATE (11), WKUP_CAUSE (13).
  *
- * ALERT_TEST and INTR_TEST read-as-zero behavior is enforced by the CSML register
+ * ALERT_TEST and INTR_TEST read-as-zero behavior is enforced by the regmodel register
  * framework's read_restriction_error callback (registered because read_bit_mask == 0x0
  * in ALERT_TEST_type and INTR_TEST_type constructors). These are NOT overridden here.
  */
@@ -316,7 +316,7 @@ void aon_timer_ip::register_all_callbacks()
       };
    memory.register_read_callback(cb_read_wkup_cause, WKUP_CAUSE.offset);
 
-   CSML_INFO(1, logger) << name()
+   REG_INFO(1, logger) << name()
       << ": register_all_callbacks: 14 write + 12 read callbacks registered (FUNC001)";
 }
 
@@ -504,7 +504,7 @@ void aon_timer_ip::evaluate_bite_threshold()
     * irrevocable. Only reset_process() may clear m_wdog_bite_active. */
    if (bite_condition && !m_wdog_bite_active) {
       m_wdog_bite_active = true;
-      CSML_INFO(1, logger) << name()
+      REG_INFO(1, logger) << name()
          << ": WDOG bite latched (counter=" << m_wdog_counter
          << " threshold=" << m_wdog_bite_threshold << ")";
    }
@@ -559,7 +559,7 @@ bool aon_timer_ip::handle_write_ALERT_TEST(uint32_t value, uint32_t write_mask)
       m_ev_output_update.notify(SC_ZERO_TIME);
    }
    /* ALERT_TEST has no storage; register shadow remains cleared (0x0).
-    * The CSML framework has read_bit_mask=0x0 so reads already return 0x0. */
+    * The regmodel framework has read_bit_mask=0x0 so reads already return 0x0. */
 
    /* CDC annotation: advance quantum keeper by SYS->AON synchronizer delay. */
    m_qk.inc(compute_cdc_delay());
@@ -614,11 +614,11 @@ bool aon_timer_ip::handle_write_WKUP_CTRL(uint32_t value, uint32_t write_mask)
     * was unconditionally reset, altering the next tick delay calculation. */
    if (!was_enabled && m_wkup_enabled) {
       /* 0->1 transition: counter increment events scheduled by wkup_timer_tick_thread. */
-      CSML_INFO(2, logger) << name()
+      REG_INFO(2, logger) << name()
          << ": WKUP_CTRL write: wakeup timer enabled (prescaler=" << new_prescaler << ")";
    } else if (was_enabled && !m_wkup_enabled) {
       /* 1->0 transition: wkup_timer_tick_thread will enter disabled wait on wakeup. */
-      CSML_INFO(2, logger) << name()
+      REG_INFO(2, logger) << name()
          << ": WKUP_CTRL write: wakeup timer disabled";
    }
    /* Notify unconditionally: prescaler accumulator reset changes next tick timing. */
@@ -797,7 +797,7 @@ bool aon_timer_ip::handle_write_WDOG_REGWEN(uint32_t value, uint32_t write_mask)
          /* Update shadow to reflect locked state (regwen = 0). */
          WDOG_REGWEN.regwen   = 0U;
          WDOG_REGWEN.reserved0 = 0U;
-         CSML_INFO(1, logger) << name()
+         REG_INFO(1, logger) << name()
             << ": WDOG_REGWEN: watchdog configuration locked (permanent until reset)";
       }
       /* If already locked: no effect. */
@@ -851,9 +851,9 @@ bool aon_timer_ip::handle_write_WDOG_CTRL(uint32_t value, uint32_t write_mask)
 
    /* Enable transition handling: log the state change. */
    if (!was_enabled && m_wdog_enabled) {
-      CSML_INFO(2, logger) << name() << ": WDOG_CTRL write: watchdog timer enabled";
+      REG_INFO(2, logger) << name() << ": WDOG_CTRL write: watchdog timer enabled";
    } else if (was_enabled && !m_wdog_enabled) {
-      CSML_INFO(2, logger) << name() << ": WDOG_CTRL write: watchdog timer disabled";
+      REG_INFO(2, logger) << name() << ": WDOG_CTRL write: watchdog timer disabled";
    }
 
    /* Immediate threshold comparisons. */
@@ -1086,7 +1086,7 @@ bool aon_timer_ip::handle_write_INTR_STATE(uint32_t value, uint32_t write_mask)
  * Bit[0]=1: force-sets wkup_timer_expired interrupt (asserts output, updates shadow).
  * Bit[1]=1: force-sets wdog_timer_bark interrupt (asserts bark and NMI outputs, updates shadow).
  * Counter and threshold values are NOT modified. INTR_TEST has no storage;
- * reads return 0x0 (enforced by CSML read-restriction callback).
+ * reads return 0x0 (enforced by regmodel read-restriction callback).
  *
  * @param value     32-bit value (bit=1 force-asserts that interrupt).
  * @param write_mask Write mask from the register descriptor.
@@ -1567,7 +1567,7 @@ void aon_timer_ip::wkup_timer_tick_thread()
        * Architecture Map: side_effects[WKUP_COUNT_HI/LO].hardware-auto-increment. */
       m_wkup_counter += 1ULL;   /* uint64_t overflow wraps: 0xFFFF...FFFF -> 0 */
 
-      CSML_INFO(3, logger) << name()
+      REG_INFO(3, logger) << name()
          << ": wakeup counter incremented to 0x" << std::hex << m_wkup_counter << std::dec;
 
       /* Evaluate threshold: may assert intr_wkup_timer_expired and wkup_req.
@@ -1601,7 +1601,7 @@ void aon_timer_ip::lc_escalate_handler()
    /* Update escalation active flag from the input port. */
    m_lc_escalate_active = lc_escalate_en.read();
 
-   CSML_INFO(2, logger) << name()
+   REG_INFO(2, logger) << name()
       << ": lc_escalate_en changed to " << m_lc_escalate_active
       << " - " << (m_lc_escalate_active ? "halting" : "resuming") << " both timers";
 
@@ -1750,7 +1750,7 @@ void aon_timer_ip::wdog_timer_tick_thread()
        * volatile live value; shadow must reflect the current hardware state. */
       WDOG_COUNT.count = m_wdog_counter;
 
-      CSML_INFO(3, logger) << name()
+      REG_INFO(3, logger) << name()
          << ": watchdog counter incremented to 0x" << std::hex << m_wdog_counter << std::dec;
 
       /* Evaluate bark threshold: may assert intr_wdog_timer_bark, nmi_wdog_timer_bark,
@@ -1805,7 +1805,7 @@ void aon_timer_ip::wdog_sleep_mode_handler()
     * Architecture Map: state_machines[WDOG_TIMER].transitions[COUNTING->PAUSED]. */
    m_sleep_mode_active = sleep_mode.read();
 
-   CSML_INFO(2, logger) << name()
+   REG_INFO(2, logger) << name()
       << ": sleep_mode changed to " << m_sleep_mode_active
       << " - watchdog "
       << ((m_sleep_mode_active && m_wdog_pause_in_sleep) ? "pausing" : "continuing");
@@ -1869,7 +1869,7 @@ void aon_timer_ip::drive_outputs()
     * allow independent AON-domain reset de-assertion via rst_aon_n. */
    aon_timer_rst_req.write(m_wdog_bite_active);
    if (m_wdog_bite_active) {
-      CSML_INFO(1, logger) << name() << ": driving aon_timer_rst_req=1";
+      REG_INFO(1, logger) << name() << ": driving aon_timer_rst_req=1";
    }
 
    /* Drive fatal_fault as a transient pulse when pending; clear flag after drive.

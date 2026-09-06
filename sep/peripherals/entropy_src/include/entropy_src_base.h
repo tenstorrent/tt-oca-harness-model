@@ -7,7 +7,7 @@
 class entropy_src_base : public sc_module
 {
   public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
     entropy_src_base(sc_module_name name, unsigned int memory_size) : sc_module(name), memory(std::string(name) + ".Memory", memory_size/sizeof(unsigned int)),
        COMPONENT_ID(std::string(name) + ".COMPONENT_ID", memory, (0x00 + 0x00)/sizeof(unsigned int)), 
        CTRL(std::string(name) + ".CTRL", memory, (0x04 + 0x00)/sizeof(unsigned int)), 
@@ -81,8 +81,8 @@ class entropy_src_base : public sc_module
          memory.bind_to_socket(target_socket);
        }
 
-      csml_memory<32> memory;
-      tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+      regmodel::Memory<32> memory;
+      tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
       
       entropy_src::COMPONENT_ID_type<32> COMPONENT_ID;

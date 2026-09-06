@@ -5,7 +5,7 @@
  * @brief Register infrastructure base class for the VeeR EL2 PIC model.
  *
  * Provides:
- *   - The CSML memory block backing the 0xC008_0000..0xC008_53FF MMIO range
+ *   - The regmodel memory block backing the 0xC008_0000..0xC008_53FF MMIO range
  *   - Storage for mpiccfg, meipl[0..255], meip[0..7], meie[0..255],
  *     meigwctrl[0..255], meigwclr[0..255]  (index 0 is reserved per spec)
  *   - target_socket: bound directly to VeeRISSTlm's dedicated pic_isock_
@@ -54,7 +54,7 @@ static constexpr unsigned OFFS_MEIGWCLR_BASE    = 0x5000;  // meigwclr[0]  (rese
 
 class el2_pic_base : public sc_module {
 public:
-    typedef typename csml_reg<32>::DT DT;
+    typedef typename regmodel::Reg<32>::DT DT;
 
     el2_pic_base(sc_module_name name)
         : sc_module(name),
@@ -74,25 +74,25 @@ public:
         memory.bind_to_socket(target_socket);
     }
 
-    csml_memory<32> memory;
-    tlm_utils::simple_target_socket<csml_memory<32>, 32> target_socket;
+    regmodel::Memory<32> memory;
+    tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
 
     MPICCFG_type<32> MPICCFG;
 
     /// meipl[0] is reserved; meipl[1..255] hold the per-source priority.
-    csml_reg_vector<MEIPL_type<32>, NUM_INTERRUPTS> MEIPL;
+    regmodel::RegVector<MEIPL_type<32>, NUM_INTERRUPTS> MEIPL;
 
     /// Pending bitmaps; bit Y of meip[X] is source X*32+Y.
-    csml_reg_vector<MEIP_type<32>, NUM_PEND_WORDS> MEIP;
+    regmodel::RegVector<MEIP_type<32>, NUM_PEND_WORDS> MEIP;
 
     /// meie[0] reserved; meie[1..255] hold the per-source enable.
-    csml_reg_vector<MEIE_type<32>, NUM_INTERRUPTS> MEIE;
+    regmodel::RegVector<MEIE_type<32>, NUM_INTERRUPTS> MEIE;
 
     /// meigwctrl[0] reserved; meigwctrl[1..255] hold gateway type/polarity.
-    csml_reg_vector<MEIGWCTRL_type<32>, NUM_INTERRUPTS> MEIGWCTRL;
+    regmodel::RegVector<MEIGWCTRL_type<32>, NUM_INTERRUPTS> MEIGWCTRL;
 
     /// meigwclr[0] reserved; writes to meigwclr[1..255] clear edge pending state.
-    csml_reg_vector<MEIGWCLR_type<32>, NUM_INTERRUPTS> MEIGWCLR;
+    regmodel::RegVector<MEIGWCLR_type<32>, NUM_INTERRUPTS> MEIGWCLR;
 
     /// Reset all storage to power-on defaults (zeros).
     void reset_all_registers();

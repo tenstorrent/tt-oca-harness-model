@@ -12,13 +12,13 @@
 #include <string>
 #include <openssl/aes.h>
 #include <openssl/evp.h>
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 // Testbench module
 class testbench : public sc_module
 {
 public:
-    CsmlLogger logger;
+    RegLogger logger;
     // Module instances
     std::unique_ptr<aes_model> m_aes;          // Device Under Test
     std::unique_ptr<aes_test> m_test;          // Test model
@@ -284,9 +284,21 @@ public:
     void test_func009_aes256_block_latency();
     void test_func009_timing_across_modes();
 
-    // Edge paths not exercised by the FUNC suites (coverage gate).
-    void test_coverage_keymgr_rejects_non_write();
+    // =============================================================================
+    // Coverage: uncovered model paths (PRNG, sideload, GCM, error-state)
+    // =============================================================================
+
     void test_coverage_prng_reseed_trigger_and_rates();
+    void test_coverage_keymgr_read_rejected();
+    void test_coverage_escalation_aborts_cipher();
+    void test_coverage_error_state_writes_rejected();
+    void test_coverage_gcm_shadow_and_busy();
+    void test_coverage_sideload_and_gcm_init_guards();
+    void test_coverage_gcm_aes192_aes256_init();
+    void test_coverage_auto_start_gcm_and_output_valid();
+
+    // Edge paths from origin/main's coverage gate (unique names).
+    void test_coverage_keymgr_rejects_non_write();
     void test_coverage_escalation_aborts_in_flight_cipher();
     void test_coverage_sideload_missing_key_and_manual_start();
     void test_coverage_error_state_and_busy_gcm_writes();

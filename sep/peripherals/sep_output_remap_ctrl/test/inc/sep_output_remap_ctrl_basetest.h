@@ -9,7 +9,7 @@
 class sep_output_remap_ctrl_basetest : public sc_module
 {
 public:
-    // CSR initiator: 32-bit bus width matches target_socket<csml_memory<64>, 32>
+    // CSR initiator: 32-bit bus width matches target_socket<regmodel::Memory<64>, 32>
     tlm_utils::simple_initiator_socket<sep_output_remap_ctrl_basetest, 32> initiator_socket;
 
     enum Register_offset

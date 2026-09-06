@@ -37,9 +37,9 @@ void keymgr_read_word(hmac_test* test, uint64_t offset, uint32_t& value,
 // suite never entered.
 void testbench::test_coverage_gap_paths()
 {
-    CSML_INFO(1, logger) << "\n========================================" << std::endl;
-    CSML_INFO(1, logger) << "  Coverage: command rejects and context paths" << std::endl;
-    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+    REG_INFO(1, logger) << "\n========================================" << std::endl;
+    REG_INFO(1, logger) << "  Coverage: command rejects and context paths" << std::endl;
+    REG_INFO(1, logger) << "========================================\n" << std::endl;
 
     uint32_t write_val = 0;
     uint32_t read_val = 0;
@@ -49,7 +49,7 @@ void testbench::test_coverage_gap_paths()
 
     // hash_process is only legal in PROCESSING. Issuing it from IDLE must be
     // dropped without leaving the engine or raising a stored error.
-    CSML_INFO(1, logger) << "--- hash_process while IDLE ---" << std::endl;
+    REG_INFO(1, logger) << "--- hash_process while IDLE ---" << std::endl;
     test->write_register_32(hmac_basetest::CMD_OFFSET, 0x2);
     wait(10, SC_NS);
     test->read_register_32(hmac_basetest::STATUS_OFFSET, read_val);
@@ -58,7 +58,7 @@ void testbench::test_coverage_gap_paths()
 
     // hash_continue uses the same priority as hash_start: SwInvalidConfig,
     // then SwHashStartWhenShaDisabled, then SwHashStartWhenActive.
-    CSML_INFO(1, logger) << "--- hash_continue rejected: invalid digest_size ---" << std::endl;
+    REG_INFO(1, logger) << "--- hash_continue rejected: invalid digest_size ---" << std::endl;
     write_val = (1u << 1) | (0x8u << 5); // sha_en=1, SHA2_None
     test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
     wait(5, SC_NS);
@@ -70,7 +70,7 @@ void testbench::test_coverage_gap_paths()
     test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x4);
     wait(5, SC_NS);
 
-    CSML_INFO(1, logger) << "--- hash_continue rejected: sha_en=0 ---" << std::endl;
+    REG_INFO(1, logger) << "--- hash_continue rejected: sha_en=0 ---" << std::endl;
     write_val = (0x1u << 5); // sha_en=0, SHA2_256
     test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
     wait(5, SC_NS);
@@ -82,7 +82,7 @@ void testbench::test_coverage_gap_paths()
     test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x4);
     wait(5, SC_NS);
 
-    CSML_INFO(1, logger) << "--- hash_continue rejected: engine active ---" << std::endl;
+    REG_INFO(1, logger) << "--- hash_continue rejected: engine active ---" << std::endl;
     write_val = (1u << 1) | (0x1u << 5);
     test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
     wait(5, SC_NS);
@@ -97,7 +97,7 @@ void testbench::test_coverage_gap_paths()
     wait(5, SC_NS);
 
     // MSG_LENGTH is the context-restore port; hardware ignores it once hashing.
-    CSML_INFO(1, logger) << "--- MSG_LENGTH write rejected while PROCESSING ---" << std::endl;
+    REG_INFO(1, logger) << "--- MSG_LENGTH write rejected while PROCESSING ---" << std::endl;
     test->write_register_32(hmac_basetest::MSG_LENGTH_LOWER_OFFSET, 0xA5A5A5A5u);
     test->write_register_32(hmac_basetest::MSG_LENGTH_UPPER_OFFSET, 0x5A5A5A5Au);
     wait(5, SC_NS);
@@ -110,7 +110,7 @@ void testbench::test_coverage_gap_paths()
 
     // Leave leftover FIFO words via an off-boundary hash_stop, then hash_start
     // must drain them so the next operation does not absorb stale data.
-    CSML_INFO(1, logger) << "--- hash_start clears leftover FIFO ---" << std::endl;
+    REG_INFO(1, logger) << "--- hash_start clears leftover FIFO ---" << std::endl;
     test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, 0x11111111u);
     test->write_register_32(hmac_basetest::MSG_FIFO_OFFSET, 0x22222222u);
     wait(10, SC_NS);
@@ -133,7 +133,7 @@ void testbench::test_coverage_gap_paths()
 
     // Burst-write past the FIFO depth without yielding so the model has to
     // drain a block before accepting the write, matching hardware back-pressure.
-    CSML_INFO(1, logger) << "--- FIFO-full write drains a block ---" << std::endl;
+    REG_INFO(1, logger) << "--- FIFO-full write drains a block ---" << std::endl;
     reset_dut(test);
     wait_for_hmac_idle();
     write_val = (1u << 1) | (0x1u << 5);
@@ -155,7 +155,7 @@ void testbench::test_coverage_gap_paths()
 
     // SHA-384 hash_stop on a 1024-bit block publishes the 64-bit chaining
     // words as high/low DIGEST pairs; hash_continue must reload that layout.
-    CSML_INFO(1, logger) << "--- SHA-384 hash_stop / hash_continue ---" << std::endl;
+    REG_INFO(1, logger) << "--- SHA-384 hash_stop / hash_continue ---" << std::endl;
     reset_dut(test);
     wait_for_hmac_idle();
     write_val = (1u << 1) | (0x2u << 5); // sha_en=1, SHA2_384
@@ -186,7 +186,7 @@ void testbench::test_coverage_gap_paths()
     test->assert_equal(1024u, saved_len, "SHA-384 MSG_LENGTH is one 128-byte block");
     if (saved[0] == 0 && saved[1] == 0) {
         m_tests_failed++;
-        CSML_ERROR(0, logger) << "FAIL: SHA-384 hash_stop left DIGEST empty" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: SHA-384 hash_stop left DIGEST empty" << std::endl;
     }
 
     test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x1);
@@ -209,19 +209,19 @@ void testbench::test_coverage_gap_paths()
     wait_for_hmac_done();
 
     // Sideload is write-only; a read must be refused, not return key material.
-    CSML_INFO(1, logger) << "--- keymgr sideload read is rejected ---" << std::endl;
+    REG_INFO(1, logger) << "--- keymgr sideload read is rejected ---" << std::endl;
     uint32_t keymgr_val = 0xFFFFFFFFu;
     tlm::tlm_response_status keymgr_status = tlm::TLM_OK_RESPONSE;
     keymgr_read_word(test, 0x00, keymgr_val, keymgr_status);
     wait(5, SC_NS);
     if (keymgr_status != tlm::TLM_COMMAND_ERROR_RESPONSE) {
         m_tests_failed++;
-        CSML_ERROR(0, logger) << "FAIL: keymgr read returned "
+        REG_ERROR(0, logger) << "FAIL: keymgr read returned "
                               << keymgr_status << " (expected COMMAND_ERROR)"
                               << std::endl;
     } else {
-        CSML_INFO(1, logger) << "PASS: keymgr read rejected with COMMAND_ERROR" << std::endl;
+        REG_INFO(1, logger) << "PASS: keymgr read rejected with COMMAND_ERROR" << std::endl;
     }
 
-    CSML_INFO(1, logger) << "\n--- Test Complete: coverage gap paths ---" << std::endl;
+    REG_INFO(1, logger) << "\n--- Test Complete: coverage gap paths ---" << std::endl;
 }

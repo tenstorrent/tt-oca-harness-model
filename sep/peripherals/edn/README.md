@@ -23,7 +23,7 @@ exercised by this testbench and by `sep-edn-test`.
 
 ```
 include/edn.h                  edn_ip
-include/edn_base.h             CSML register declaration
+include/edn_base.h             regmodel register declaration
 include/edn_register.h         RO/WO/RW types
 include/edn_csrng_interface.h  test-harness CSRNG mocks
 src/                           LT implementation

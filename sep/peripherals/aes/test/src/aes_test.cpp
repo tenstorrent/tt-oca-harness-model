@@ -14,8 +14,8 @@ aes_test::aes_test(sc_module_name name)
     , lc_escalate_en_o("lc_escalate_en_o")
     , m_keymgr_key_valid(false)
 {
-    // Initialize CSML logger
-    logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    // Initialize regmodel logger
+    logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
@@ -129,7 +129,7 @@ void aes_test::wait_for_idle()
 
     if (timeout == 0)
     {
-        CSML_WARN(1, logger) << "Timeout waiting for AES to become idle" << std::endl;
+        REG_WARN(1, logger) << "Timeout waiting for AES to become idle" << std::endl;
     }
 }
 
@@ -156,12 +156,12 @@ void aes_test::check_alerts()
     // Check if any alerts are asserted
     if (alert_recov_ctrl_update_err_i.read())
     {
-        CSML_INFO(1, logger) << "Recoverable alert detected: CTRL_UPDATE_ERR" << std::endl;
+        REG_INFO(1, logger) << "Recoverable alert detected: CTRL_UPDATE_ERR" << std::endl;
     }
 
     if (alert_fatal_fault_i.read())
     {
-        CSML_ERROR(0, logger) << "Fatal alert detected: FATAL_FAULT" << std::endl;
+        REG_ERROR(0, logger) << "Fatal alert detected: FATAL_FAULT" << std::endl;
     }
 }
 
@@ -207,4 +207,21 @@ bool aes_test::get_keymgr_key(aes_if::keymgr_sideload_key_t& key)
 {
     key = m_keymgr_key;
     return m_keymgr_key_valid;
+}
+
+bool aes_test::keymgr_read_rejected(uint64_t offset)
+{
+    tlm::tlm_generic_payload trans;
+    uint32_t data = 0;
+    sc_time delay = SC_ZERO_TIME;
+    trans.set_command(tlm::TLM_READ_COMMAND);
+    trans.set_address(offset);
+    trans.set_data_ptr(reinterpret_cast<uint8_t*>(&data));
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_byte_enable_ptr(0);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    keymgr_socket->b_transport(trans, delay);
+    return trans.get_response_status() == tlm::TLM_COMMAND_ERROR_RESPONSE;
 }

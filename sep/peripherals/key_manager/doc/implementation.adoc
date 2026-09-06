@@ -16,7 +16,7 @@ class key_manager_model : public key_manager_base
 
 ----
 key_manager_model     ports, sockets, fw_thread, IRQ     (key_manager.*)
-  ├─ key_manager_base mailbox csml_memory + mailbox_socket
+  ├─ key_manager_base mailbox regmodel::Memory + mailbox_socket
   ├─ km_kpv           32-slot vault (C++ state)
   ├─ km_mailbox       inbound / outbound FIFOs
   └─ km_firmware_handler  command dispatch, handles, boot
@@ -78,12 +78,12 @@ Short keys are padded with DRBG words to the engine width.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used.
+Knobs are `regmodel::Param` and are re-read when used.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

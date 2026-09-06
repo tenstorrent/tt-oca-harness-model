@@ -8,7 +8,7 @@
  * (Alert Generation and Error Reporting) functionality verification.
  *
  * Implementation Details:
- * - Uses CSML logging macros with correct argument counts: CSML_INFO(1, logger)
+ * - Uses REG logging macros with correct argument counts: REG_INFO(1, logger)
  * - Leverages register_read_32/register_write_32 for register access
  * - Tests W0C (Write-0-to-Clear) semantics for RECOV_ALERT_STS
  * - Validates ERR_CODE sticky read-only behavior (persists until reset)
@@ -155,16 +155,16 @@ test_edn_func_010::test_edn_func_010(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "====================================================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_010 Test Suite Initialized";
-    CSML_INFO(1, logger) << "Functionality: Alert Generation and Error Reporting";
-    CSML_INFO(1, logger) << "Test Coverage: 22 comprehensive test cases";
-    CSML_INFO(1, logger) << "====================================================================";
+    REG_INFO(1, logger) << "====================================================================";
+    REG_INFO(1, logger) << "EDN_FUNC_010 Test Suite Initialized";
+    REG_INFO(1, logger) << "Functionality: Alert Generation and Error Reporting";
+    REG_INFO(1, logger) << "Test Coverage: 22 comprehensive test cases";
+    REG_INFO(1, logger) << "====================================================================";
 }
 
 test_edn_func_010::~test_edn_func_010()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_010 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_010 test suite terminated";
 }
 
 // =============================================================================
@@ -173,11 +173,11 @@ test_edn_func_010::~test_edn_func_010()
 
 unsigned int test_edn_func_010::run_all_tests()
 {
-    CSML_INFO(1, logger) << "";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_010 Test Execution Start";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_010 Test Execution Start";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
 
     bool result;
 
@@ -314,42 +314,42 @@ unsigned int test_edn_func_010::run_all_tests()
     report_test_result("TC22: Multiple Errors Simultaneously", result);
 
     // Print Summary
-    CSML_INFO(1, logger) << "";
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_010 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_010 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed << " ("
         << std::fixed << std::setprecision(1)
         << (100.0 * m_tests_passed / m_tests_run) << "%)";
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << oss.str();
+        REG_ERROR(1, logger) << oss.str();
     } else {
-        CSML_INFO(1, logger) << oss.str();
+        REG_INFO(1, logger) << oss.str();
     }
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "";
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     } else {
-        CSML_INFO(1, logger) << "";
-        CSML_INFO(1, logger) << "ALL TESTS PASSED!";
+        REG_INFO(1, logger) << "";
+        REG_INFO(1, logger) << "ALL TESTS PASSED!";
     }
 
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "";
 
     return m_tests_failed;
 }
@@ -360,7 +360,7 @@ unsigned int test_edn_func_010::run_all_tests()
 
 bool test_edn_func_010::test_alert_test_wo()
 {
-    CSML_INFO(1, logger) << "TC1: Testing ALERT_TEST write-only register...";
+    REG_INFO(1, logger) << "TC1: Testing ALERT_TEST write-only register...";
 
     // Read initial status registers
     uint32_t recov_sts_initial, err_code_initial;
@@ -375,9 +375,9 @@ bool test_edn_func_010::test_alert_test_wo()
     uint32_t recov_sts;
     register_read_32(RECOV_ALERT_STS_OFFSET, recov_sts);
     if (recov_sts != recov_sts_initial) {
-        CSML_ERROR(1, logger) << "  FAIL: RECOV_ALERT_STS modified by ALERT_TEST";
-        CSML_ERROR(1, logger) << "    Initial: 0x" << std::hex << recov_sts_initial << std::dec;
-        CSML_ERROR(1, logger) << "    After:   0x" << std::hex << recov_sts << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: RECOV_ALERT_STS modified by ALERT_TEST";
+        REG_ERROR(1, logger) << "    Initial: 0x" << std::hex << recov_sts_initial << std::dec;
+        REG_ERROR(1, logger) << "    After:   0x" << std::hex << recov_sts << std::dec;
         return false;
     }
 
@@ -389,9 +389,9 @@ bool test_edn_func_010::test_alert_test_wo()
     uint32_t err_code;
     register_read_32(ERR_CODE_OFFSET, err_code);
     if (err_code != err_code_initial) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE modified by ALERT_TEST";
-        CSML_ERROR(1, logger) << "    Initial: 0x" << std::hex << err_code_initial << std::dec;
-        CSML_ERROR(1, logger) << "    After:   0x" << std::hex << err_code << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE modified by ALERT_TEST";
+        REG_ERROR(1, logger) << "    Initial: 0x" << std::hex << err_code_initial << std::dec;
+        REG_ERROR(1, logger) << "    After:   0x" << std::hex << err_code << std::dec;
         return false;
     }
 
@@ -403,12 +403,12 @@ bool test_edn_func_010::test_alert_test_wo()
     uint32_t alert_test_val;
     register_read_32(ALERT_TEST_OFFSET, alert_test_val);
     if (alert_test_val != 0x0) {
-        CSML_ERROR(1, logger) << "  FAIL: ALERT_TEST should be write-only (read returns 0)";
-        CSML_ERROR(1, logger) << "    Read value: 0x" << std::hex << alert_test_val << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: ALERT_TEST should be write-only (read returns 0)";
+        REG_ERROR(1, logger) << "    Read value: 0x" << std::hex << alert_test_val << std::dec;
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: ALERT_TEST is write-only and pulses alerts without status change";
+    REG_INFO(1, logger) << "  PASS: ALERT_TEST is write-only and pulses alerts without status change";
     return true;
 }
 
@@ -418,7 +418,7 @@ bool test_edn_func_010::test_alert_test_wo()
 
 bool test_edn_func_010::test_err_code_test_injection()
 {
-    CSML_INFO(1, logger) << "TC2: Testing ERR_CODE_TEST error injection...";
+    REG_INFO(1, logger) << "TC2: Testing ERR_CODE_TEST error injection...";
 
     // Enable fatal error interrupt
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
@@ -431,13 +431,13 @@ bool test_edn_func_010::test_err_code_test_injection()
 
     // Verify ERR_CODE bit is set
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_SFIFO_RESCMD_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR not set via ERR_CODE_TEST";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR not set via ERR_CODE_TEST";
         return false;
     }
 
     // Verify fatal alert asserted
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted after error injection";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted after error injection";
         return false;
     }
 
@@ -445,7 +445,7 @@ bool test_edn_func_010::test_err_code_test_injection()
     uint32_t err_code_test_val;
     register_read_32(ERR_CODE_TEST_OFFSET, err_code_test_val);
     if (err_code_test_val != 0x0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE_TEST should be write-only";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE_TEST should be write-only";
         return false;
     }
 
@@ -454,11 +454,11 @@ bool test_edn_func_010::test_err_code_test_injection()
     wait(SC_ZERO_TIME);
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_SFIFO_RESCMD_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE should be read-only (write has no effect)";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE should be read-only (write has no effect)";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: ERR_CODE_TEST forces error bits correctly";
+    REG_INFO(1, logger) << "  PASS: ERR_CODE_TEST forces error bits correctly";
     return true;
 }
 
@@ -468,11 +468,11 @@ bool test_edn_func_010::test_err_code_test_injection()
 
 bool test_edn_func_010::test_err_code_sticky_ro()
 {
-    CSML_INFO(1, logger) << "TC3: Testing ERR_CODE sticky read-only behavior...";
+    REG_INFO(1, logger) << "TC3: Testing ERR_CODE sticky read-only behavior...";
 
     // Trigger FIFO overflow to set ERR_CODE bit
     if (!trigger_fifo_overflow(0)) {  // RESEED_CMD overflow
-        CSML_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
+        REG_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
         return false;
     }
 
@@ -482,7 +482,7 @@ bool test_edn_func_010::test_err_code_sticky_ro()
     uint32_t err_code;
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & ERR_CODE_SFIFO_RESCMD_ERR_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE not set after FIFO overflow";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE not set after FIFO overflow";
         return false;
     }
 
@@ -492,7 +492,7 @@ bool test_edn_func_010::test_err_code_sticky_ro()
 
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & ERR_CODE_SFIFO_RESCMD_ERR_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE cleared by write (should be read-only)";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE cleared by write (should be read-only)";
         return false;
     }
 
@@ -504,9 +504,9 @@ bool test_edn_func_010::test_err_code_sticky_ro()
     // Should still have the overflow bits set (SFIFO_RESCMD_ERR + FIFO_WRITE_ERR), no spurious bits
     uint32_t expected_err_code = ERR_CODE_SFIFO_RESCMD_ERR_MASK | ERR_CODE_FIFO_WRITE_ERR_MASK;
     if (err_code != expected_err_code) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE has spurious bits or cleared bits";
-        CSML_ERROR(1, logger) << "    Expected: 0x" << std::hex << expected_err_code << std::dec;
-        CSML_ERROR(1, logger) << "    Got:      0x" << std::hex << err_code << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE has spurious bits or cleared bits";
+        REG_ERROR(1, logger) << "    Expected: 0x" << std::hex << expected_err_code << std::dec;
+        REG_ERROR(1, logger) << "    Got:      0x" << std::hex << err_code << std::dec;
         return false;
     }
 
@@ -516,7 +516,7 @@ bool test_edn_func_010::test_err_code_sticky_ro()
 
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & ERR_CODE_SFIFO_RESCMD_ERR_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE cleared when interrupt cleared";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE cleared when interrupt cleared";
         return false;
     }
 
@@ -526,12 +526,12 @@ bool test_edn_func_010::test_err_code_sticky_ro()
 
     register_read_32(ERR_CODE_OFFSET, err_code);
     if (err_code != 0x0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE not cleared by reset";
-        CSML_ERROR(1, logger) << "    Got: 0x" << std::hex << err_code << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE not cleared by reset";
+        REG_ERROR(1, logger) << "    Got: 0x" << std::hex << err_code << std::dec;
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: ERR_CODE is sticky read-only, clears only on reset";
+    REG_INFO(1, logger) << "  PASS: ERR_CODE is sticky read-only, clears only on reset";
     return true;
 }
 
@@ -541,7 +541,7 @@ bool test_edn_func_010::test_err_code_sticky_ro()
 
 bool test_edn_func_010::test_alert_recov_edn_enable_field()
 {
-    CSML_INFO(1, logger) << "TC4: Testing recoverable alert on invalid EDN_ENABLE...";
+    REG_INFO(1, logger) << "TC4: Testing recoverable alert on invalid EDN_ENABLE...";
 
     // Write invalid value to EDN_ENABLE field (bits [3:0])
     if (!write_invalid_ctrl_field(CTRL_EDN_ENABLE_OFFSET)) {
@@ -552,13 +552,13 @@ bool test_edn_func_010::test_alert_recov_edn_enable_field()
 
     // Verify RECOV_ALERT_STS.EDN_ENABLE_FIELD_ALERT is set
     if (!verify_register_bit(RECOV_ALERT_STS_OFFSET, RECOV_ALERT_EDN_ENABLE_FIELD_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: EDN_ENABLE_FIELD_ALERT not set";
+        REG_ERROR(1, logger) << "  FAIL: EDN_ENABLE_FIELD_ALERT not set";
         return false;
     }
 
     // Verify recoverable alert asserted
     if (!verify_alert_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
@@ -577,17 +577,17 @@ bool test_edn_func_010::test_alert_recov_edn_enable_field()
 
     // Verify alert cleared
     if (!verify_register_bit(RECOV_ALERT_STS_OFFSET, RECOV_ALERT_EDN_ENABLE_FIELD_BIT, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: EDN_ENABLE_FIELD_ALERT not cleared via W0C";
+        REG_ERROR(1, logger) << "  FAIL: EDN_ENABLE_FIELD_ALERT not cleared via W0C";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Invalid EDN_ENABLE triggers recoverable alert";
+    REG_INFO(1, logger) << "  PASS: Invalid EDN_ENABLE triggers recoverable alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_recov_boot_req_mode_field()
 {
-    CSML_INFO(1, logger) << "TC5: Testing recoverable alert on invalid BOOT_REQ_MODE...";
+    REG_INFO(1, logger) << "TC5: Testing recoverable alert on invalid BOOT_REQ_MODE...";
 
     if (!write_invalid_ctrl_field(CTRL_BOOT_REQ_MODE_OFFSET)) {
         return false;
@@ -596,12 +596,12 @@ bool test_edn_func_010::test_alert_recov_boot_req_mode_field()
     wait(1, SC_NS);
 
     if (!verify_register_bit(RECOV_ALERT_STS_OFFSET, RECOV_ALERT_BOOT_REQ_MODE_FIELD_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: BOOT_REQ_MODE_FIELD_ALERT not set";
+        REG_ERROR(1, logger) << "  FAIL: BOOT_REQ_MODE_FIELD_ALERT not set";
         return false;
     }
 
     if (!verify_alert_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
@@ -609,13 +609,13 @@ bool test_edn_func_010::test_alert_recov_boot_req_mode_field()
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Invalid BOOT_REQ_MODE triggers recoverable alert";
+    REG_INFO(1, logger) << "  PASS: Invalid BOOT_REQ_MODE triggers recoverable alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_recov_auto_req_mode_field()
 {
-    CSML_INFO(1, logger) << "TC6: Testing recoverable alert on invalid AUTO_REQ_MODE...";
+    REG_INFO(1, logger) << "TC6: Testing recoverable alert on invalid AUTO_REQ_MODE...";
 
     if (!write_invalid_ctrl_field(CTRL_AUTO_REQ_MODE_OFFSET)) {
         return false;
@@ -624,12 +624,12 @@ bool test_edn_func_010::test_alert_recov_auto_req_mode_field()
     wait(1, SC_NS);
 
     if (!verify_register_bit(RECOV_ALERT_STS_OFFSET, RECOV_ALERT_AUTO_REQ_MODE_FIELD_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: AUTO_REQ_MODE_FIELD_ALERT not set";
+        REG_ERROR(1, logger) << "  FAIL: AUTO_REQ_MODE_FIELD_ALERT not set";
         return false;
     }
 
     if (!verify_alert_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
@@ -637,13 +637,13 @@ bool test_edn_func_010::test_alert_recov_auto_req_mode_field()
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Invalid AUTO_REQ_MODE triggers recoverable alert";
+    REG_INFO(1, logger) << "  PASS: Invalid AUTO_REQ_MODE triggers recoverable alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_recov_cmd_fifo_rst_field()
 {
-    CSML_INFO(1, logger) << "TC7: Testing recoverable alert on invalid CMD_FIFO_RST...";
+    REG_INFO(1, logger) << "TC7: Testing recoverable alert on invalid CMD_FIFO_RST...";
 
     if (!write_invalid_ctrl_field(CTRL_CMD_FIFO_RST_OFFSET)) {
         return false;
@@ -652,12 +652,12 @@ bool test_edn_func_010::test_alert_recov_cmd_fifo_rst_field()
     wait(1, SC_NS);
 
     if (!verify_register_bit(RECOV_ALERT_STS_OFFSET, RECOV_ALERT_CMD_FIFO_RST_FIELD_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: CMD_FIFO_RST_FIELD_ALERT not set";
+        REG_ERROR(1, logger) << "  FAIL: CMD_FIFO_RST_FIELD_ALERT not set";
         return false;
     }
 
     if (!verify_alert_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
@@ -665,7 +665,7 @@ bool test_edn_func_010::test_alert_recov_cmd_fifo_rst_field()
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Invalid CMD_FIFO_RST triggers recoverable alert";
+    REG_INFO(1, logger) << "  PASS: Invalid CMD_FIFO_RST triggers recoverable alert";
     return true;
 }
 
@@ -675,15 +675,15 @@ bool test_edn_func_010::test_alert_recov_cmd_fifo_rst_field()
 
 bool test_edn_func_010::test_alert_recov_entropy_bus_cmp()
 {
-    CSML_INFO(1, logger) << "TC8: Testing recoverable alert on entropy bus consistency error...";
+    REG_INFO(1, logger) << "TC8: Testing recoverable alert on entropy bus consistency error...";
 
     // Note: This test requires CSRNG mock to return duplicate genbits values
     // For now, we'll verify the mechanism works by checking if the alert can be cleared
 
     // Manually set the alert bit to simulate the condition
     // (In full implementation, CSRNG mock would trigger this)
-    CSML_INFO(1, logger) << "  Note: Entropy bus consistency requires CSRNG mock implementation";
-    CSML_INFO(1, logger) << "  Testing alert clearing mechanism instead";
+    REG_INFO(1, logger) << "  Note: Entropy bus consistency requires CSRNG mock implementation";
+    REG_INFO(1, logger) << "  Testing alert clearing mechanism instead";
 
     // Force the alert bit (simulating detection)
     // This would normally be set by hardware when consecutive genbits match
@@ -691,10 +691,10 @@ bool test_edn_func_010::test_alert_recov_entropy_bus_cmp()
 
     if (!clear_recoverable_alert(RECOV_ALERT_ENTROPY_BUS_CMP_BIT)) {
         // If alert isn't set, that's expected without CSRNG mock
-        CSML_INFO(1, logger) << "  Note: Alert not set (expected without CSRNG mock)";
+        REG_INFO(1, logger) << "  Note: Alert not set (expected without CSRNG mock)";
     }
 
-    CSML_INFO(1, logger) << "  PASS: Entropy bus consistency alert mechanism verified";
+    REG_INFO(1, logger) << "  PASS: Entropy bus consistency alert mechanism verified";
     return true;
 }
 
@@ -704,18 +704,18 @@ bool test_edn_func_010::test_alert_recov_entropy_bus_cmp()
 
 bool test_edn_func_010::test_alert_recov_csrng_cmd_sts()
 {
-    CSML_INFO(1, logger) << "TC9: Testing recoverable alert on CSRNG command status error...";
+    REG_INFO(1, logger) << "TC9: Testing recoverable alert on CSRNG command status error...";
 
     // Note: Similar to TC8, this requires CSRNG mock to return non-zero CMD_STS
-    CSML_INFO(1, logger) << "  Note: CSRNG error status requires CSRNG mock implementation";
-    CSML_INFO(1, logger) << "  Testing alert mechanism framework";
+    REG_INFO(1, logger) << "  Note: CSRNG error status requires CSRNG mock implementation";
+    REG_INFO(1, logger) << "  Testing alert mechanism framework";
 
     // Verify the alert bit can be set and cleared
     if (!clear_recoverable_alert(RECOV_ALERT_CSRNG_CMD_STS_BIT)) {
-        CSML_INFO(1, logger) << "  Note: Alert not set (expected without CSRNG mock)";
+        REG_INFO(1, logger) << "  Note: Alert not set (expected without CSRNG mock)";
     }
 
-    CSML_INFO(1, logger) << "  PASS: CSRNG command status alert mechanism verified";
+    REG_INFO(1, logger) << "  PASS: CSRNG command status alert mechanism verified";
     return true;
 }
 
@@ -725,7 +725,7 @@ bool test_edn_func_010::test_alert_recov_csrng_cmd_sts()
 
 bool test_edn_func_010::test_alert_recov_clearing_w0c()
 {
-    CSML_INFO(1, logger) << "TC10: Testing recoverable alert W0C clearing mechanism...";
+    REG_INFO(1, logger) << "TC10: Testing recoverable alert W0C clearing mechanism...";
 
     // Trigger multiple recoverable alerts by writing invalid CTRL fields
     uint32_t ctrl_invalid = (MULTIBIT_INVALID << CTRL_EDN_ENABLE_OFFSET) |
@@ -744,9 +744,9 @@ bool test_edn_func_010::test_alert_recov_clearing_w0c()
                                RECOV_ALERT_CMD_FIFO_RST_FIELD_MASK;
 
     if ((recov_sts & expected_alerts) != expected_alerts) {
-        CSML_ERROR(1, logger) << "  FAIL: Not all expected alert bits set";
-        CSML_ERROR(1, logger) << "    Expected: 0x" << std::hex << expected_alerts << std::dec;
-        CSML_ERROR(1, logger) << "    Got:      0x" << std::hex << recov_sts << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: Not all expected alert bits set";
+        REG_ERROR(1, logger) << "    Expected: 0x" << std::hex << expected_alerts << std::dec;
+        REG_ERROR(1, logger) << "    Got:      0x" << std::hex << recov_sts << std::dec;
         return false;
     }
 
@@ -756,7 +756,7 @@ bool test_edn_func_010::test_alert_recov_clearing_w0c()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, recov_sts);
     if ((recov_sts & expected_alerts) != expected_alerts) {
-        CSML_ERROR(1, logger) << "  FAIL: Writing 1 cleared bits (should be W0C, not W1C)";
+        REG_ERROR(1, logger) << "  FAIL: Writing 1 cleared bits (should be W0C, not W1C)";
         return false;
     }
 
@@ -768,7 +768,7 @@ bool test_edn_func_010::test_alert_recov_clearing_w0c()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, recov_sts);
     if ((recov_sts & RECOV_ALERT_EDN_ENABLE_FIELD_MASK) != 0) {
-        CSML_ERROR(1, logger) << "  FAIL: Writing 0 did not clear specific bit";
+        REG_ERROR(1, logger) << "  FAIL: Writing 0 did not clear specific bit";
         return false;
     }
 
@@ -778,12 +778,12 @@ bool test_edn_func_010::test_alert_recov_clearing_w0c()
 
     register_read_32(RECOV_ALERT_STS_OFFSET, recov_sts);
     if (recov_sts != 0x0) {
-        CSML_ERROR(1, logger) << "  FAIL: Not all alert bits cleared by writing 0";
-        CSML_ERROR(1, logger) << "    Remaining: 0x" << std::hex << recov_sts << std::dec;
+        REG_ERROR(1, logger) << "  FAIL: Not all alert bits cleared by writing 0";
+        REG_ERROR(1, logger) << "    Remaining: 0x" << std::hex << recov_sts << std::dec;
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: W0C clearing mechanism works correctly";
+    REG_INFO(1, logger) << "  PASS: W0C clearing mechanism works correctly";
     return true;
 }
 
@@ -793,7 +793,7 @@ bool test_edn_func_010::test_alert_recov_clearing_w0c()
 
 bool test_edn_func_010::test_alert_fatal_main_sm_illegal_state()
 {
-    CSML_INFO(1, logger) << "TC11: Testing fatal alert on main SM illegal state...";
+    REG_INFO(1, logger) << "TC11: Testing fatal alert on main SM illegal state...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
@@ -803,22 +803,22 @@ bool test_edn_func_010::test_alert_fatal_main_sm_illegal_state()
     }
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_EDN_MAIN_SM_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.EDN_MAIN_SM_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.EDN_MAIN_SM_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Main SM illegal state triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: Main SM illegal state triggers fatal alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_fatal_ack_sm_illegal_state()
 {
-    CSML_INFO(1, logger) << "TC12: Testing fatal alert on ACK SM illegal state...";
+    REG_INFO(1, logger) << "TC12: Testing fatal alert on ACK SM illegal state...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
@@ -828,78 +828,78 @@ bool test_edn_func_010::test_alert_fatal_ack_sm_illegal_state()
     }
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_EDN_ACK_SM_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.EDN_ACK_SM_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.EDN_ACK_SM_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: ACK SM illegal state triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: ACK SM illegal state triggers fatal alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_fatal_reseed_fifo_overflow()
 {
-    CSML_INFO(1, logger) << "TC13: Testing fatal alert on RESEED_CMD FIFO overflow...";
+    REG_INFO(1, logger) << "TC13: Testing fatal alert on RESEED_CMD FIFO overflow...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
 
     if (!trigger_fifo_overflow(0)) {
-        CSML_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
+        REG_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
         return false;
     }
 
     wait(1, SC_NS);
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_SFIFO_RESCMD_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_RESCMD_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: RESEED_CMD FIFO overflow triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: RESEED_CMD FIFO overflow triggers fatal alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_fatal_generate_fifo_overflow()
 {
-    CSML_INFO(1, logger) << "TC14: Testing fatal alert on GENERATE_CMD FIFO overflow...";
+    REG_INFO(1, logger) << "TC14: Testing fatal alert on GENERATE_CMD FIFO overflow...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
 
     if (!trigger_fifo_overflow(1)) {
-        CSML_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
+        REG_ERROR(1, logger) << "  FAIL: Could not trigger FIFO overflow";
         return false;
     }
 
     wait(1, SC_NS);
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_SFIFO_GENCMD_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_GENCMD_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.SFIFO_GENCMD_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: GENERATE_CMD FIFO overflow triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: GENERATE_CMD FIFO overflow triggers fatal alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_fatal_fifo_write_error()
 {
-    CSML_INFO(1, logger) << "TC15: Testing fatal alert on internal FIFO write error...";
+    REG_INFO(1, logger) << "TC15: Testing fatal alert on internal FIFO write error...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
@@ -909,22 +909,22 @@ bool test_edn_func_010::test_alert_fatal_fifo_write_error()
     }
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_FIFO_WRITE_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.FIFO_WRITE_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.FIFO_WRITE_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: FIFO write error triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: FIFO write error triggers fatal alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_fatal_fifo_read_error()
 {
-    CSML_INFO(1, logger) << "TC16: Testing fatal alert on internal FIFO read error...";
+    REG_INFO(1, logger) << "TC16: Testing fatal alert on internal FIFO read error...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
@@ -934,22 +934,22 @@ bool test_edn_func_010::test_alert_fatal_fifo_read_error()
     }
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_FIFO_READ_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.FIFO_READ_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.FIFO_READ_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: FIFO read error triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: FIFO read error triggers fatal alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_fatal_fifo_state_error()
 {
-    CSML_INFO(1, logger) << "TC17: Testing fatal alert on internal FIFO state error...";
+    REG_INFO(1, logger) << "TC17: Testing fatal alert on internal FIFO state error...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
@@ -959,22 +959,22 @@ bool test_edn_func_010::test_alert_fatal_fifo_state_error()
     }
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_FIFO_STATE_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.FIFO_STATE_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.FIFO_STATE_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: FIFO state error triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: FIFO state error triggers fatal alert";
     return true;
 }
 
 bool test_edn_func_010::test_alert_fatal_counter_error()
 {
-    CSML_INFO(1, logger) << "TC18: Testing fatal alert on hardened counter error...";
+    REG_INFO(1, logger) << "TC18: Testing fatal alert on hardened counter error...";
 
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
     wait(SC_ZERO_TIME);
@@ -984,16 +984,16 @@ bool test_edn_func_010::test_alert_fatal_counter_error()
     }
 
     if (!verify_register_bit(ERR_CODE_OFFSET, ERR_CODE_EDN_CNTR_ERR_BIT, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE.EDN_CNTR_ERR not set";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE.EDN_CNTR_ERR not set";
         return false;
     }
 
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Counter error triggers fatal alert";
+    REG_INFO(1, logger) << "  PASS: Counter error triggers fatal alert";
     return true;
 }
 
@@ -1003,7 +1003,7 @@ bool test_edn_func_010::test_alert_fatal_counter_error()
 
 bool test_edn_func_010::test_alert_fatal_sticky_until_reset()
 {
-    CSML_INFO(1, logger) << "TC19: Testing fatal alert persistence until reset...";
+    REG_INFO(1, logger) << "TC19: Testing fatal alert persistence until reset...";
 
     // Trigger multiple fatal errors
     force_fatal_error(ERR_CODE_SFIFO_RESCMD_ERR_BIT);
@@ -1016,13 +1016,13 @@ bool test_edn_func_010::test_alert_fatal_sticky_until_reset()
     uint32_t expected_errors = ERR_CODE_SFIFO_RESCMD_ERR_MASK | ERR_CODE_EDN_MAIN_SM_ERR_MASK;
 
     if ((err_code & expected_errors) != expected_errors) {
-        CSML_ERROR(1, logger) << "  FAIL: Not all expected error bits set";
+        REG_ERROR(1, logger) << "  FAIL: Not all expected error bits set";
         return false;
     }
 
     // Verify fatal alert asserted
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
@@ -1032,7 +1032,7 @@ bool test_edn_func_010::test_alert_fatal_sticky_until_reset()
 
     // Verify fatal alert still asserted (ERR_CODE still set)
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert should persist after interrupt clear";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert should persist after interrupt clear";
         return false;
     }
 
@@ -1042,7 +1042,7 @@ bool test_edn_func_010::test_alert_fatal_sticky_until_reset()
 
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & expected_errors) != expected_errors) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE cleared by write (should be read-only)";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE cleared by write (should be read-only)";
         return false;
     }
 
@@ -1053,17 +1053,17 @@ bool test_edn_func_010::test_alert_fatal_sticky_until_reset()
     // Verify ERR_CODE cleared
     register_read_32(ERR_CODE_OFFSET, err_code);
     if (err_code != 0x0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE not cleared by reset";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE not cleared by reset";
         return false;
     }
 
     // Verify fatal alert de-asserted
     if (!verify_alert_signal(1, false)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not de-asserted after reset";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not de-asserted after reset";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Fatal alert persists until reset";
+    REG_INFO(1, logger) << "  PASS: Fatal alert persists until reset";
     return true;
 }
 
@@ -1073,7 +1073,7 @@ bool test_edn_func_010::test_alert_fatal_sticky_until_reset()
 
 bool test_edn_func_010::test_alert_test_no_status_change()
 {
-    CSML_INFO(1, logger) << "TC20: Testing ALERT_TEST doesn't modify status registers...";
+    REG_INFO(1, logger) << "TC20: Testing ALERT_TEST doesn't modify status registers...";
 
     // Trigger a real recoverable alert first
     write_invalid_ctrl_field(CTRL_EDN_ENABLE_OFFSET);
@@ -1093,12 +1093,12 @@ bool test_edn_func_010::test_alert_test_no_status_change()
     register_read_32(ERR_CODE_OFFSET, err_code_after);
 
     if (recov_sts_after != recov_sts_before) {
-        CSML_ERROR(1, logger) << "  FAIL: RECOV_ALERT_STS modified by ALERT_TEST";
+        REG_ERROR(1, logger) << "  FAIL: RECOV_ALERT_STS modified by ALERT_TEST";
         return false;
     }
 
     if (err_code_after != err_code_before) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE modified by ALERT_TEST";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE modified by ALERT_TEST";
         return false;
     }
 
@@ -1106,11 +1106,11 @@ bool test_edn_func_010::test_alert_test_no_status_change()
     uint32_t intr_state;
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & (1U << INTR_STATE_FATAL_ERR_BIT)) != 0) {
-        CSML_ERROR(1, logger) << "  FAIL: Interrupt triggered by ALERT_TEST (shouldn't happen)";
+        REG_ERROR(1, logger) << "  FAIL: Interrupt triggered by ALERT_TEST (shouldn't happen)";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: ALERT_TEST pulses alerts without status modification";
+    REG_INFO(1, logger) << "  PASS: ALERT_TEST pulses alerts without status modification";
     return true;
 }
 
@@ -1120,7 +1120,7 @@ bool test_edn_func_010::test_alert_test_no_status_change()
 
 bool test_edn_func_010::test_alert_fatal_triggers_interrupt()
 {
-    CSML_INFO(1, logger) << "TC21: Testing fatal alerts trigger interrupt...";
+    REG_INFO(1, logger) << "TC21: Testing fatal alerts trigger interrupt...";
 
     // Enable fatal error interrupt
     register_write_32(INTR_ENABLE_OFFSET, (1U << INTR_STATE_FATAL_ERR_BIT));
@@ -1134,7 +1134,7 @@ bool test_edn_func_010::test_alert_fatal_triggers_interrupt()
     uint32_t intr_state;
     register_read_32(INTR_STATE_OFFSET, intr_state);
     if ((intr_state & (1U << INTR_STATE_FATAL_ERR_BIT)) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err not set";
+        REG_ERROR(1, logger) << "  FAIL: INTR_STATE.edn_fatal_err not set";
         return false;
     }
 
@@ -1146,7 +1146,7 @@ bool test_edn_func_010::test_alert_fatal_triggers_interrupt()
     uint32_t err_code;
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & ERR_CODE_SFIFO_RESCMD_ERR_MASK) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: ERR_CODE should remain sticky after interrupt clear";
+        REG_ERROR(1, logger) << "  FAIL: ERR_CODE should remain sticky after interrupt clear";
         return false;
     }
 
@@ -1160,11 +1160,11 @@ bool test_edn_func_010::test_alert_fatal_triggers_interrupt()
 
     // Verify fatal alert still asserts (independent of interrupt enable)
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Fatal alert should assert regardless of interrupt enable";
+        REG_ERROR(1, logger) << "  FAIL: Fatal alert should assert regardless of interrupt enable";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Fatal alerts trigger interrupt correctly";
+    REG_INFO(1, logger) << "  PASS: Fatal alerts trigger interrupt correctly";
     return true;
 }
 
@@ -1174,7 +1174,7 @@ bool test_edn_func_010::test_alert_fatal_triggers_interrupt()
 
 bool test_edn_func_010::test_multiple_errors_simultaneous()
 {
-    CSML_INFO(1, logger) << "TC22: Testing multiple errors simultaneously...";
+    REG_INFO(1, logger) << "TC22: Testing multiple errors simultaneously...";
 
     // Trigger multiple recoverable alerts
     uint32_t ctrl_invalid = (MULTIBIT_INVALID << CTRL_EDN_ENABLE_OFFSET) |
@@ -1186,13 +1186,13 @@ bool test_edn_func_010::test_multiple_errors_simultaneous()
     uint32_t recov_sts;
     register_read_32(RECOV_ALERT_STS_OFFSET, recov_sts);
     if ((recov_sts & (RECOV_ALERT_EDN_ENABLE_FIELD_MASK | RECOV_ALERT_BOOT_REQ_MODE_FIELD_MASK)) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: Recoverable alerts not set";
+        REG_ERROR(1, logger) << "  FAIL: Recoverable alerts not set";
         return false;
     }
 
     // Verify recoverable alert asserted
     if (!verify_alert_signal(0, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_recov_alert not asserted";
         return false;
     }
 
@@ -1205,19 +1205,19 @@ bool test_edn_func_010::test_multiple_errors_simultaneous()
     uint32_t err_code;
     register_read_32(ERR_CODE_OFFSET, err_code);
     if ((err_code & (ERR_CODE_SFIFO_RESCMD_ERR_MASK | ERR_CODE_EDN_MAIN_SM_ERR_MASK)) == 0) {
-        CSML_ERROR(1, logger) << "  FAIL: Fatal errors not set";
+        REG_ERROR(1, logger) << "  FAIL: Fatal errors not set";
         return false;
     }
 
     // Verify fatal alert asserted
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
+        REG_ERROR(1, logger) << "  FAIL: alert_fatal_alert not asserted";
         return false;
     }
 
     // Verify both alerts asserted simultaneously
     if (!verify_alert_signal(0, true) || !verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Both alerts should be asserted";
+        REG_ERROR(1, logger) << "  FAIL: Both alerts should be asserted";
         return false;
     }
 
@@ -1227,7 +1227,7 @@ bool test_edn_func_010::test_multiple_errors_simultaneous()
 
     // Verify fatal alerts persist
     if (!verify_alert_signal(1, true)) {
-        CSML_ERROR(1, logger) << "  FAIL: Fatal alerts should persist";
+        REG_ERROR(1, logger) << "  FAIL: Fatal alerts should persist";
         return false;
     }
 
@@ -1240,11 +1240,11 @@ bool test_edn_func_010::test_multiple_errors_simultaneous()
     register_read_32(ERR_CODE_OFFSET, err_code);
 
     if (recov_sts != 0x0 || err_code != 0x0) {
-        CSML_ERROR(1, logger) << "  FAIL: Not all errors cleared by reset";
+        REG_ERROR(1, logger) << "  FAIL: Not all errors cleared by reset";
         return false;
     }
 
-    CSML_INFO(1, logger) << "  PASS: Multiple errors handled simultaneously";
+    REG_INFO(1, logger) << "  PASS: Multiple errors handled simultaneously";
     return true;
 }
 
@@ -1261,15 +1261,15 @@ bool test_edn_func_010::verify_alert_signal(uint32_t alert_type, bool expected)
     } else if (alert_type == 1) {
         actual = alert_fatal_alert.read();
     } else {
-        CSML_ERROR(1, logger) << "    Invalid alert_type: " << alert_type;
+        REG_ERROR(1, logger) << "    Invalid alert_type: " << alert_type;
         return false;
     }
 
     if (actual != expected) {
         const char* alert_name = (alert_type == 0) ? "alert_recov_alert" : "alert_fatal_alert";
-        CSML_ERROR(1, logger) << "    Alert signal mismatch: " << alert_name;
-        CSML_ERROR(1, logger) << "      Expected: " << (expected ? "asserted" : "de-asserted");
-        CSML_ERROR(1, logger) << "      Actual:   " << (actual ? "asserted" : "de-asserted");
+        REG_ERROR(1, logger) << "    Alert signal mismatch: " << alert_name;
+        REG_ERROR(1, logger) << "      Expected: " << (expected ? "asserted" : "de-asserted");
+        REG_ERROR(1, logger) << "      Actual:   " << (actual ? "asserted" : "de-asserted");
         return false;
     }
 
@@ -1325,9 +1325,9 @@ bool test_edn_func_010::verify_register_bit(uint32_t offset, uint32_t bit_positi
     bool actual = ((reg_value & (1U << bit_position)) != 0);
 
     if (actual != expected) {
-        CSML_ERROR(1, logger) << "    Register bit mismatch at offset 0x" << std::hex << offset << std::dec;
-        CSML_ERROR(1, logger) << "      Bit " << bit_position << " expected: " << expected << ", got: " << actual;
-        CSML_ERROR(1, logger) << "      Register value: 0x" << std::hex << reg_value << std::dec;
+        REG_ERROR(1, logger) << "    Register bit mismatch at offset 0x" << std::hex << offset << std::dec;
+        REG_ERROR(1, logger) << "      Bit " << bit_position << " expected: " << expected << ", got: " << actual;
+        REG_ERROR(1, logger) << "      Register value: 0x" << std::hex << reg_value << std::dec;
         return false;
     }
 
@@ -1348,9 +1348,9 @@ bool test_edn_func_010::clear_recoverable_alert(uint32_t bit_position)
 bool test_edn_func_010::verify_register_value(const std::string& reg_name, uint32_t expected, uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << "    Register mismatch: " << reg_name;
-        CSML_ERROR(1, logger) << "      Expected: 0x" << std::hex << expected << std::dec;
-        CSML_ERROR(1, logger) << "      Actual:   0x" << std::hex << actual << std::dec;
+        REG_ERROR(1, logger) << "    Register mismatch: " << reg_name;
+        REG_ERROR(1, logger) << "      Expected: 0x" << std::hex << expected << std::dec;
+        REG_ERROR(1, logger) << "      Actual:   0x" << std::hex << actual << std::dec;
         return false;
     }
     return true;
@@ -1362,18 +1362,18 @@ void test_edn_func_010::report_test_result(const std::string& test_name, bool pa
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASS] " << test_name;
+        REG_INFO(1, logger) << "[PASS] " << test_name;
         if (!message.empty()) {
-            CSML_INFO(1, logger) << "  " << message;
+            REG_INFO(1, logger) << "  " << message;
         }
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAIL] " << test_name;
+        REG_ERROR(1, logger) << "[FAIL] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "  " << message;
+            REG_ERROR(1, logger) << "  " << message;
         }
     }
 
-    CSML_INFO(1, logger) << ""; // Blank line between tests
+    REG_INFO(1, logger) << ""; // Blank line between tests
 }

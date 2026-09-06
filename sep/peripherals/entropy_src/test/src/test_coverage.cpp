@@ -10,7 +10,7 @@
 #define COV_CHECK(cond, msg_stream)           \
     do {                                      \
         if (!(cond)) {                        \
-            CSML_ERROR(0, logger) << msg_stream; \
+            REG_ERROR(0, logger) << msg_stream; \
             ok = false;                       \
         }                                     \
     } while (false)

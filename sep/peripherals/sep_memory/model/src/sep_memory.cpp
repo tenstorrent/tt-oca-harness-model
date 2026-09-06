@@ -9,11 +9,10 @@
 
 SEPMemory::SEPMemory(sc_module_name name, bool read_only)
 : sc_module(name) 
-, verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+, verbosity("verbosity", REG_DEFAULT_VERBOSITY)
 , tsock("tsock")
 , m_read_only(read_only) {
 
-    // Initialize CSML logger
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
@@ -42,7 +41,7 @@ void SEPMemory::load_binary_file(const std::string &filename, uint64_t addr) {
       std::ifstream file;
       file.open(filename, std::ifstream::in | std::ifstream::binary | std::ios::ate);
       if (file.fail() || file.tellg() == 0) {
-        CSML_ERROR(0, logger) << "Open failed: \"" << filename << "\"" << std::endl;
+        REG_ERROR(0, logger) << "Open failed: \"" << filename << "\"" << std::endl;
         assert(0);
       }
       file.close();
@@ -60,7 +59,7 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
 
 	// Guard the hex-dump string building behind the verbosity threshold. Without this,
 	// the ostringstream construction and format loop run on EVERY transaction
-	// (every fetch/load/store) even though CSML_DEBUG(5) suppresses the actual emission at
+	// (every fetch/load/store) even though REG_DEBUG(5) suppresses the actual emission at
 	// the configured verbosity. These unnecessary loop passes make the whole sim crawl.
 	if (logger.getMaxVerbosity() >= 5) {
 		std::ostringstream oss;
@@ -69,7 +68,7 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
 			if (i) oss << " ";
 			oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(ptr[i]);
 		}
-		CSML_DEBUG(5, logger) << name() << " "
+		REG_DEBUG(5, logger) << name() << " "
 			<< (cmd == tlm::TLM_WRITE_COMMAND ? "WRITE" : (cmd == tlm::TLM_READ_COMMAND ? "READ" : "OTHER"))
 			<< " addr=0x" << std::hex << addr << " len=" << std::dec << len
 			<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
@@ -95,7 +94,7 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
 				if (i) oss << " ";
 				oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(ptr[i]);
 			}
-			CSML_DEBUG(5, logger) << name() << " READ-RSP"
+			REG_DEBUG(5, logger) << name() << " READ-RSP"
 				<< " addr=0x" << std::hex << addr << " len=" << std::dec << len
 				<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
 		}
@@ -147,7 +146,7 @@ unsigned SEPMemory::transport_dbg(TRANS& trans) {
 			if (i) oss << " ";
 			oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(ptr[i]);
 		}
-		CSML_DEBUG(5, logger) << name() << " DBG "
+		REG_DEBUG(5, logger) << name() << " DBG "
 			<< (cmd == tlm::TLM_WRITE_COMMAND ? "WRITE" : (cmd == tlm::TLM_READ_COMMAND ? "READ" : "OTHER"))
 			<< " addr=0x" << std::hex << addr << " len=" << std::dec << len
 			<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
@@ -164,7 +163,7 @@ unsigned SEPMemory::transport_dbg(TRANS& trans) {
 				if (i) oss << " ";
 				oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(ptr[i]);
 			}
-			CSML_DEBUG(5, logger) << name() << " DBG READ-RSP"
+			REG_DEBUG(5, logger) << name() << " DBG READ-RSP"
 				<< " addr=0x" << std::hex << addr << " len=" << std::dec << len
 				<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
 		}

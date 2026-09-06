@@ -11,8 +11,9 @@
 // ===========================================================================
 
 #include "smu_platform.hpp"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include "tlm_quantum_policy.h"
-#include "csml_logger.h"
 
 #include <systemc.h>
 #include <cci_configuration>
@@ -169,7 +170,7 @@ int sc_main(int argc, char** argv)
         std::filesystem::path cfgPath(sep_ini);
         (void) ::setenv("SEP_VP_INI_DIR", cfgPath.parent_path().string().c_str(), 1);
         std::filesystem::current_path(cfgPath.parent_path());
-        load_config_file(cfgPath.string().c_str());
+        regmodel::load_config_file(cfgPath.string().c_str());
     }
 
     const std::string smc_top = "dut";
@@ -209,7 +210,7 @@ int sc_main(int argc, char** argv)
                                     cci::cci_value::from_json(targets_json));
     }
 
-    CsmlLogger::setGlobalLogFile("och_sep_ss.log");
+    RegLogger::setGlobalLogFile("och_sep_ss.log");
 
     // One process-wide quantum before either ISS is constructed. All
     // platform defaults are simtlm::DEFAULT_GLOBAL_QUANTUM_NS (1 µs).

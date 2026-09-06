@@ -19,8 +19,8 @@
 #include <openssl/rand.h>
 #include <array>
 #include <queue>
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 
 /**
  * @class csrng_model
@@ -35,13 +35,14 @@
  */
 class csrng_model : public csrng_base
 {
+   friend class testbench;
 public:
    SC_HAS_PROCESS(csrng_model);
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-   csml_param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+   regmodel::Param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
    /**
     * @brief Constructor for the CRNG model
     * @param n SystemC module name
@@ -77,9 +78,9 @@ public:
    sc_out<bool> recov_alert_o;       ///< Recoverable alert output
    sc_out<bool> fatal_alert_o;       ///< Fatal alert output
    /// @}
-   /// @name CSML Logger
+   /// @name RegLogger
    /// @{
-   CsmlLogger logger;  ///< Logger instance for diagnostic output
+   RegLogger logger;  ///< Logger instance for diagnostic output
    /// @}
 
    friend class testbench;
@@ -476,7 +477,7 @@ protected:
    bool handle_write_CMD_REQ(DT value, DT write_mask);
 
    /// @name Status and Data Output Registers
-   // INTR_ENABLE read callback removed - CSML handles RW registers automatically
+   // INTR_ENABLE read callback removed - regmodel handles RW registers automatically
    bool handle_read_INTR_TEST(DT& value, DT read_mask);
    bool handle_read_ALERT_TEST(DT& value, DT read_mask);
    bool handle_read_CMD_REQ(DT& value, DT read_mask);
@@ -512,7 +513,7 @@ protected:
    bool handle_write_RECOV_ALERT_STS(DT value, DT write_mask);
 
    /**
-    * @brief Registers all callbacks with CSML framework
+    * @brief Registers all callbacks with regmodel framework
     */
    void register_all_callbacks();
 };

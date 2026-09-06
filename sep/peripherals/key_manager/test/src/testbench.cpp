@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -73,9 +73,9 @@ void testbench::run_tests()
     key_manager_test*  test = m_test.get();
     key_manager_model* dut  = m_dut.get();
 
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "  KeyMgr TT Testbench";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "  KeyMgr TT Testbench";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before first test; each subsequent FUNC test resets itself.
     test->trigger_reset();
@@ -96,9 +96,9 @@ void testbench::run_tests()
     (key_manager_func014_test(test, dut, this) == 0) ? pass++ : fail++;
 
     // Summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "  RESULTS: " << pass << " PASSED  " << fail << " FAILED";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "  RESULTS: " << pass << " PASSED  " << fail << " FAILED";
+    REG_INFO(1, logger) << "========================================";
 
     m_tests_failed = fail;
     sc_stop();
@@ -106,7 +106,7 @@ void testbench::run_tests()
 
 int sc_main(int argc, char* argv[])
 {
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     testbench tb("testbench");
     sc_start();
 #ifdef __COVERAGE__

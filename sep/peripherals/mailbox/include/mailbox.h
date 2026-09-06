@@ -11,12 +11,12 @@
  */
 
 #include "mailbox_base.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <deque>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 /**
@@ -28,7 +28,7 @@
  * - b1: Port 1 pure register container (10 registers, 1 memory, no socket)
  * - socket0/socket1: TLM target sockets. mailbox_ip owns the b_transport entry
  *   point so it can apply the AXI-Lite access rules (SLVERR on illegal access,
- *   sentinel read data) that csml_memory cannot express, before delegating the
+ *   sentinel read data) that regmodel::Memory cannot express, before delegating the
  *   register access itself to b0.memory / b1.memory.
  * - m_fifo[0]: b0 writes → b1 reads  (Port 0 outbound / Port 1 inbound)
  * - m_fifo[1]: b1 writes → b0 reads  (Port 1 outbound / Port 0 inbound)
@@ -48,16 +48,16 @@ class mailbox_ip : public sc_module
 public:
    SC_HAS_PROCESS(mailbox_ip);
 
-   typedef typename csml_reg<64>::DT DT;
+   typedef typename regmodel::Reg<64>::DT DT;
 
    // =========================================================================
    // Composition: Dual single-port register sets
    // =========================================================================
 
-   /// @brief Port 0 pure register container (10 registers + independent csml_memory, no socket)
+   /// @brief Port 0 pure register container (10 registers + independent regmodel::Memory, no socket)
    mailbox_base b0;
 
-   /// @brief Port 1 pure register container (10 registers + independent csml_memory, no socket)
+   /// @brief Port 1 pure register container (10 registers + independent regmodel::Memory, no socket)
    mailbox_base b1;
 
    /// @brief TLM target socket for Port 0
@@ -99,10 +99,10 @@ public:
    /// @brief Abstract clock frequency input in Hz
    sc_in<double> clk_i;
 
-   /// @brief CSML Logger for diagnostic output
-   CsmlLogger logger;
+   /// @brief RegLogger for diagnostic output
+   RegLogger logger;
 
-   csml_param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+   regmodel::Param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
 
    /**
     * @brief Constructor for mailbox IP model
@@ -114,7 +114,7 @@ public:
     *   - FIFO depth: 8 entries
     *   - Interrupt polarity: active-high
     */
-   mailbox_ip(sc_module_name n, int log_verbosity = CSML_DEFAULT_VERBOSITY);
+   mailbox_ip(sc_module_name n, int log_verbosity = REG_DEFAULT_VERBOSITY);
 
 private:
    // =========================================================================
@@ -482,8 +482,8 @@ private:
     *
     * Returns the hardware-validated (saturated) write threshold from shadow state.
     * Required because handle_write_WIRQT stores the saturated value to
-    * m_wirqt_threshold[port] only; the CSML backing store retains the raw
-    * unmodified value.  Without this callback reads would return the CSML default
+    * m_wirqt_threshold[port] only; the regmodel backing store retains the raw
+    * unmodified value.  Without this callback reads would return the regmodel default
     * (0x0 after reset), not the saturated value mandated by the detailed design:
     * "Subsequent reads return the saturated value, not the originally written value."
     *
@@ -506,8 +506,8 @@ private:
     *
     * Returns the hardware-validated (saturated) read threshold from shadow state.
     * Required because handle_write_RIRQT stores the saturated value to
-    * m_rirqt_threshold[port] only; the CSML backing store retains the raw
-    * unmodified value.  Without this callback reads would return the CSML default
+    * m_rirqt_threshold[port] only; the regmodel backing store retains the raw
+    * unmodified value.  Without this callback reads would return the regmodel default
     * (0x0 after reset), not the saturated value mandated by the detailed design:
     * "Subsequent reads return the saturated value."
     *
@@ -574,7 +574,7 @@ private:
     *
     * Returns current interrupt enable state from shadow hardware variables.
     * Required because handle_write_IRQEN updates only shadow state
-    * (m_irqen_*[port]) and not the CSML memory backing store.
+    * (m_irqen_*[port]) and not the regmodel::Memory backing store.
     *
     * IRQEN Shadow State Mapping (per port):
     * - Bit [0]: m_irqen_wtirq[port]

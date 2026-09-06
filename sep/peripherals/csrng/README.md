@@ -22,7 +22,7 @@ exercised by this testbench and by `sep-crng-test`.
 
 ```
 include/csrng.h            csrng_model
-include/csrng_base.h       CSML register declaration
+include/csrng_base.h       regmodel register declaration
 include/csrng_register.h   RO/WO/RW types
 src/                       LT implementation
 test/                      standalone bench

@@ -20,6 +20,8 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <sstream>
+#include <utility>
 
 #include "pll_wrapper.h"
 
@@ -150,6 +152,57 @@ struct driver : sc_core::sc_module {
         sock->b_transport(gp, delay);
         return gp.get_response_status();
     }
+
+    // Raw TLM (nullptr data, len=0, IGNORE, custom streaming_width).
+    tlm::tlm_response_status raw_xfer(tlm::tlm_command cmd, uint64_t addr,
+                                      unsigned len, void* data,
+                                      unsigned streaming_width = 0)
+    {
+        tlm::tlm_generic_payload gp;
+        sc_time delay = SC_ZERO_TIME;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<unsigned char*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(streaming_width == 0 ? len : streaming_width);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, delay);
+        return gp.get_response_status();
+    }
+
+    tlm::tlm_response_status raw_xfer_be(tlm::tlm_command cmd, uint64_t addr,
+                                         unsigned len, void* data,
+                                         uint8_t* be_ptr, unsigned be_len)
+    {
+        tlm::tlm_generic_payload gp;
+        sc_time delay = SC_ZERO_TIME;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<unsigned char*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(len);
+        gp.set_byte_enable_ptr(be_ptr);
+        gp.set_byte_enable_length(be_len);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, delay);
+        return gp.get_response_status();
+    }
+};
+
+// Standalone pll_cntl that exposes the protected per-register callback hooks
+// so the bench can install bespoke read/write behaviour (and drive the
+// sub-block socket directly for window-overrun faults).
+struct probe_cntl : smc::pll::pll_cntl {
+    explicit probe_cntl(sc_module_name n) : pll_cntl(n) {}
+
+    bool install_write(uint64_t off, regmodel::Register32::WriteFn fn)
+    {
+        return set_write_callback(off, std::move(fn));
+    }
+    bool install_read(uint64_t off, regmodel::Register32::ReadFn fn)
+    {
+        return set_read_callback(off, std::move(fn));
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -159,14 +212,20 @@ struct tb : sc_core::sc_module {
     sc_core::sc_signal<bool> rst_n{"rst_n"};
 
     smc::pll::pll_wrapper dut;
+    probe_cntl            probe;
     driver                drv;
+    driver                probe_drv;
 
     SC_HAS_PROCESS(tb);
 
-    explicit tb(sc_module_name n) : sc_module(n), dut("dut"), drv("drv")
+    explicit tb(sc_module_name n)
+        : sc_module(n), dut("dut"), probe("probe"), drv("drv"),
+          probe_drv("probe_drv")
     {
         dut.rst_n_i(rst_n);
+        probe.rst_n_i(rst_n);
         drv.sock.bind(dut.reg_socket);
+        probe_drv.sock.bind(probe.reg_socket);
         SC_THREAD(run);
     }
 
@@ -375,7 +434,64 @@ struct tb : sc_core::sc_module {
                   drv.read16(W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT + 2));
         std::cout << "  [PASS] 16-bit RMW preserves 32-bit register high half\n";
 
-        // -- 15. TLM error paths forwarded into the sub-block -------------
+        // -- 15. 8-bit lane access (firmware may use byte MMIO) ------------
+        drv.write32(W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT, 0x11223344u);
+        {
+            uint8_t b = 0xAAu;
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      drv.raw_xfer(tlm::TLM_WRITE_COMMAND,
+                                   W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT + 1,
+                                   1, &b));
+            EXPECT_EQ(0x1122AA44u,
+                      drv.read32(W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT));
+            uint8_t rb = 0;
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                      drv.raw_xfer(tlm::TLM_READ_COMMAND,
+                                   W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT + 1,
+                                   1, &rb));
+            EXPECT_EQ(0xAAu, rb);
+        }
+        std::cout << "  [PASS] 8-bit lane RMW\n";
+
+        // -- 16. CGM_1 lock + REG_UPDATE with bit0 clear is a no-op --------
+        {
+            using CG = smc::pll::cgm;
+            drv.write16(W::OFF_CGM_1 + CG::OFF_ENABLES, 0x3u);
+            drv.write16(W::OFF_CGM_1 + CG::OFF_REG_UPDATE, 0x0u); // no strobe
+            EXPECT_EQ(0u,
+                      drv.read16(W::OFF_PLL_CNTL + PC::OFF_CGM_1_STATUS) & 0x1u);
+            drv.write16(W::OFF_CGM_1 + CG::OFF_REG_UPDATE, 0x1u);
+            EXPECT_EQ(1u,
+                      drv.read16(W::OFF_PLL_CNTL + PC::OFF_CGM_1_STATUS) & 0x1u);
+            // AWM_0 REG_UPDATE with bit0 clear must not change lock_detect.
+            const uint32_t before =
+                drv.read16(W::OFF_PLL_CNTL + PC::OFF_AWM_0_STATUS) & 0x7u;
+            drv.write32(W::OFF_AWM_0 + AW::GLOBAL_REG_UPDATE, 0x2u);
+            EXPECT_EQ(before,
+                      drv.read16(W::OFF_PLL_CNTL + PC::OFF_AWM_0_STATUS) & 0x7u);
+        }
+        std::cout << "  [PASS] CGM_1 lock + REG_UPDATE bit0-clear is a no-op\n";
+
+        // -- 17. TLM protocol errors at the wrapper decode -----------------
+        {
+            uint32_t scratch = 0;
+            uint8_t  be      = 0xFF;
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+                      drv.raw_xfer(tlm::TLM_READ_COMMAND, 0x0, 4, nullptr));
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+                      drv.raw_xfer(tlm::TLM_WRITE_COMMAND, 0x0, 0, &scratch));
+            EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                      drv.raw_xfer(tlm::TLM_READ_COMMAND, 0x0, 4, &scratch,
+                                   /*streaming_width=*/1));
+            EXPECT_EQ(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
+                      drv.raw_xfer_be(tlm::TLM_READ_COMMAND, 0x0, 4, &scratch,
+                                      &be, 1));
+            EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                      drv.raw_xfer(tlm::TLM_IGNORE_COMMAND, 0x0, 4, &scratch));
+        }
+        std::cout << "  [PASS] TLM protocol errors (null/len/be/sw/cmd)\n";
+
+        // -- 18. TLM error paths forwarded into the sub-block -------------
         {
             tlm::tlm_generic_payload gp;
             sc_time delay = SC_ZERO_TIME;
@@ -429,9 +545,36 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] TLM error paths on forwarded sub-block access\n";
 
-        // -- 16. Back-door peek/poke misses + dump_state + callbacks -------
+        // -- 19. Sub-block window overrun + callback install (probe) -------
+        {
+            uint32_t scratch = 0;
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      probe_drv.raw_xfer(tlm::TLM_READ_COMMAND,
+                                         smc::pll::pll_cntl_cfg::WINDOW_SIZE, 4,
+                                         &scratch));
+            // Unknown offset: callback install fails.
+            EXPECT_TRUE(!probe.install_write(
+                0x1000, [](uint32_t cur, uint32_t) { return cur; }));
+            EXPECT_TRUE(!probe.install_read(
+                0x1000, [](uint32_t stored) { return stored; }));
+            // Known offset: replace write (keep only low byte) and read.
+            EXPECT_TRUE(probe.install_write(
+                PC::OFF_AG_MUX_SELECT,
+                [](uint32_t, uint32_t in) { return in & 0xFFu; }));
+            probe_drv.write32(PC::OFF_AG_MUX_SELECT, 0xFFFFFFFFu);
+            EXPECT_EQ(0xFFu, probe_drv.read32(PC::OFF_AG_MUX_SELECT));
+            EXPECT_TRUE(probe.install_read(
+                PC::OFF_AG_MUX_SELECT,
+                [](uint32_t) { return 0xA5A5A5A5u; }));
+            EXPECT_EQ(0xA5A5A5A5u, probe_drv.read32(PC::OFF_AG_MUX_SELECT));
+        }
+        std::cout << "  [PASS] window overrun + set_read/write_callback\n";
+
+        // -- 20. Back-door peek/poke misses + dump_state + callbacks -------
         {
             uint32_t tmp = 0xA5A5A5A5u;
+            EXPECT_TRUE(!dut.cntl().peek(0x1000, tmp));
+            EXPECT_TRUE(!dut.cntl().poke(0x1000, 0x1u));
             EXPECT_EQ(0, dut.awm_0().peek(0xFFF0, tmp) ? 1 : 0);
             EXPECT_EQ(0, dut.awm_0().poke(0xFFF0, 0x1u) ? 1 : 0);
             EXPECT_EQ(1, dut.awm_0().peek(AW::GLOBAL_REG_UPDATE, tmp) ? 1 : 0);
@@ -462,7 +605,12 @@ struct tb : sc_core::sc_module {
                       drv.try_access(tlm::TLM_WRITE_COMMAND,
                                      W::OFF_PLL_CNTL + PC::OFF_AG_MUX_SELECT,
                                      1));
-            dut.dump_state(std::cout);
+            std::ostringstream oss;
+            dut.dump_state(oss);
+            const std::string s = oss.str();
+            EXPECT_TRUE(s.find("pll_wrapper composed state") != std::string::npos);
+            EXPECT_TRUE(s.find("reg_block state") != std::string::npos);
+            EXPECT_TRUE(s.find("CGM_0_STATUS") != std::string::npos);
         }
         std::cout << "  [PASS] peek/poke misses, dump_state, and callbacks\n";
 

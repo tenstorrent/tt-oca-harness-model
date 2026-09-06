@@ -16,7 +16,7 @@ class sep_output_remap_ctrl_ip : public sep_output_remap_ctrl_base
 
 ----
 sep_output_remap_ctrl_ip     remap_address, source-id re-tag   (sep_output_remap_ctrl.*)
-  └─ sep_output_remap_ctrl_base   csml_memory + REGION_ATTRS[16]
+  └─ sep_output_remap_ctrl_base   regmodel::Memory + REGION_ATTRS[16]
        └─ sep_output_remap_ctrl_register.h
 ----
 
@@ -55,7 +55,7 @@ and `IDX_START` 19 (512 KiB granules).
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

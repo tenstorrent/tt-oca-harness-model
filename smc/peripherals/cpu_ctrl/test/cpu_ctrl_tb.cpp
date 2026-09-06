@@ -227,8 +227,8 @@ struct tb : sc_core::sc_module {
         std::cout << "==== CPU Control TB ====\n";
 
         // 1. Power-on defaults (offset and absolute addressing).
-        EXPECT_EQ(0xC000'0000ULL, dut.dbg_reg(smc::cpu_ctrl_cfg::OFF_LOCAL_BASE));
-        EXPECT_EQ(0xC000'0000U, read32(BASE + smc::cpu_ctrl_cfg::OFF_LOCAL_BASE));
+        EXPECT_EQ(0u, dut.dbg_reg(smc::cpu_ctrl_cfg::OFF_RESET_TIMEOUT));
+        EXPECT_EQ(0u, read32(BASE + smc::cpu_ctrl_cfg::OFF_RESET_TIMEOUT));
         for (unsigned i = 0; i < smc::CPU_CTRL_SCRATCH_COUNT; ++i)
             EXPECT_EQ(0u, dut.scratch(i));
         EXPECT_EQ(0xC004'0000ULL,
@@ -285,17 +285,24 @@ struct tb : sc_core::sc_module {
                   read32(BASE + smc::cpu_ctrl_cfg::OFF_SCRATCH + 15 * 8));
         std::cout << "  [PASS] inter-stage handoff scratch sequence\n";
 
-        // 4. LOCAL_BASE is SW read-only.
-        write32(BASE + smc::cpu_ctrl_cfg::OFF_LOCAL_BASE, 0x1111'1111u);
-        EXPECT_EQ(0xC000'0000U, read32(BASE + smc::cpu_ctrl_cfg::OFF_LOCAL_BASE));
-        std::cout << "  [PASS] LOCAL_BASE read-only\n";
+        // 4. RESET_TIMEOUT: RW bits [16:0]; status bits [32]/[36] are RO.
+        {
+            constexpr uint64_t addr = BASE + smc::cpu_ctrl_cfg::OFF_RESET_TIMEOUT;
+            write64(addr, 0xFFFF'FFFF'FFFF'FFFFULL);
+            EXPECT_EQ(0x1FFFFULL, read64(addr));
+            write64(addr, 0);
+            EXPECT_EQ(0u, read64(addr));
+        }
+        std::cout << "  [PASS] RESET_TIMEOUT write mask\n";
 
-        // 5. GLOBAL_BASE / REGION_SIZE R/W.
-        write32(BASE + smc::cpu_ctrl_cfg::OFF_GLOBAL_BASE, 0x5000'0000u);
-        EXPECT_EQ(0x5000'0000U, read32(BASE + smc::cpu_ctrl_cfg::OFF_GLOBAL_BASE));
-        write32(BASE + smc::cpu_ctrl_cfg::OFF_REGION_SIZE, 0x0200'0000u);
-        EXPECT_EQ(0x0200'0000U, read32(BASE + smc::cpu_ctrl_cfg::OFF_REGION_SIZE));
-        std::cout << "  [PASS] GLOBAL_BASE / REGION_SIZE\n";
+        // 5. PeakRDL hole between RESET_TIMEOUT (0x30) and REFERENCE_COUNTER (0x40).
+        {
+            constexpr uint64_t addr = BASE + 0x038u;
+            EXPECT_EQ(0u, read32(addr));
+            write32(addr, 0xDEAD'BEEFu);
+            EXPECT_EQ(0u, read32(addr));
+        }
+        std::cout << "  [PASS] unmapped hole RAZ/WI\n";
 
         // 6. HW-visible registers via backdoor + SW read.
         dut.set_smc_attributes(0x0000'0001'0203'0405ULL);
@@ -398,14 +405,14 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] CORE_RESET_PULSE_COUNT RO bits\n";
 
-        // 16. CLOCK_GATE_CONTROL plain R/W.
+        // 16. RESET_TIMEOUT timeout_mode bit [16] is writable.
         {
             constexpr uint64_t addr =
-                BASE + smc::cpu_ctrl_cfg::OFF_CLOCK_GATE_CONTROL;
-            write32(addr, 0x0000'00FFu);
-            EXPECT_EQ(0x0000'00FFu, read32(addr));
+                BASE + smc::cpu_ctrl_cfg::OFF_RESET_TIMEOUT;
+            write32(addr, 0x0001'0001u);
+            EXPECT_EQ(0x0001'0001u, read32(addr));
         }
-        std::cout << "  [PASS] CLOCK_GATE_CONTROL R/W\n";
+        std::cout << "  [PASS] RESET_TIMEOUT timeout_mode\n";
 
         // 17. REFERENCE_COUNTER plain R/W.
         {
@@ -424,16 +431,15 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] WDT_TIMEOUT write masking\n";
 
-        // 19. DEBUG_CTRL (32-bit masked) / DEBUG_BUS_MUX (plain) R/W.
+        // 19. RESET_VECTOR[1] is a distinct 64-bit word at +0x08 (PeakRDL array).
         {
-            constexpr uint64_t dc_addr  = BASE + smc::cpu_ctrl_cfg::OFF_DEBUG_CTRL;
-            constexpr uint64_t dbm_addr = BASE + smc::cpu_ctrl_cfg::OFF_DEBUG_BUS_MUX;
-            write64(dc_addr, 0xFFFF'FFFF'FFFF'FFFFULL);
-            EXPECT_EQ(0x0000'0000'FFFF'FFFFULL, read64(dc_addr));
-            write32(dbm_addr, 0x5A5A'5A5Au);
-            EXPECT_EQ(0x5A5A'5A5Au, read32(dbm_addr));
+            constexpr uint64_t addr = BASE + smc::cpu_ctrl_cfg::OFF_RESET_VECTOR + 8;
+            write64(addr, 0x0000'0000'C006'0000ULL);
+            EXPECT_EQ(0x0000'0000'C006'0000ULL, read64(addr));
+            EXPECT_EQ(0xC004'0000ULL,
+                      dut.dbg_reg(smc::cpu_ctrl_cfg::OFF_RESET_VECTOR));
         }
-        std::cout << "  [PASS] DEBUG_CTRL / DEBUG_BUS_MUX R/W\n";
+        std::cout << "  [PASS] RESET_VECTOR[1] independent of [0]\n";
 
         // 20. TEST_CTRL / SMC_ATTRIBUTES are SW read-only; SW writes are silently
         //     ignored -- the HW-backdoor values set in test 6 must stick.
@@ -482,14 +488,14 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] WB_PC SW-write ignored\n";
 
-        // 24. Unmapped offset in the middle of the window -> RAZ/WI hole.
+        // 24. Unmapped offset after SMC_ATTRIBUTES (0x200) and before MUTEX (0x240).
         {
-            constexpr uint64_t addr = BASE + 0x1100u;  // gap: SEMA .. DUMMY_ROM_0
+            constexpr uint64_t addr = BASE + 0x220u;
             EXPECT_EQ(0u, read32(addr));
             write32(addr, 0xDEAD'BEEFu);
             EXPECT_EQ(0u, read32(addr));
         }
-        std::cout << "  [PASS] unmapped hole RAZ/WI\n";
+        std::cout << "  [PASS] attributes/mutex gap RAZ/WI\n";
 
         // 25. API-level out-of-range guards (set_wb_pc / scratch / set_scratch),
         //     plus set_scratch()'s normal (in-range) write path.
@@ -510,7 +516,7 @@ struct tb : sc_core::sc_module {
             std::ostringstream oss;
             dut.dump_state(oss);
             EXPECT_TRUE(oss.str().find("cpu_ctrl @") != std::string::npos);
-            EXPECT_TRUE(oss.str().find("LOCAL_BASE") != std::string::npos);
+            EXPECT_TRUE(oss.str().find("RESET_VECTOR") != std::string::npos);
         }
         std::cout << "  [PASS] dump_state()\n";
 

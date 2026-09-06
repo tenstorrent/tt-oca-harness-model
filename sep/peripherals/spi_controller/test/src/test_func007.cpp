@@ -10,7 +10,7 @@ void testbench::test_func007_multi_segment_csaat()
     int sub_tests_passed = 0;
     int sub_tests_failed = 0;
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "[TEST FUNC-007] Multi-Segment CSAAT" << std::endl
                          << "========================================" << std::endl
                          << "Testing multi-segment transaction support with CSAAT flag:" << std::endl
@@ -45,7 +45,7 @@ void testbench::test_func007_multi_segment_csaat()
             wait(1, SC_MS);
             elapsed += 1;
         }
-        CSML_WARN(1, logger) << "  [WARNING] Command queue timeout waiting for space (CMDQD still > " << max_depth_allowed << ")" << std::endl;
+        REG_WARN(1, logger) << "  [WARNING] Command queue timeout waiting for space (CMDQD still > " << max_depth_allowed << ")" << std::endl;
         return false;
     };
 
@@ -62,14 +62,14 @@ void testbench::test_func007_multi_segment_csaat()
             wait(1, SC_MS);
             elapsed += 1;
         }
-        CSML_WARN(1, logger) << "  [WARNING] Timeout waiting for transaction to complete" << std::endl;
+        REG_WARN(1, logger) << "  [WARNING] Timeout waiting for transaction to complete" << std::endl;
         return false;
     };
 
     // ==========================================================================
     // Initial Setup and Verification
     // ==========================================================================
-    CSML_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host" << std::endl;
+    REG_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host" << std::endl;
 
     // Software reset to clear any previous state
     test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST
@@ -86,10 +86,10 @@ void testbench::test_func007_multi_segment_csaat()
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 0x1;
     if (ready) {
-        CSML_INFO(2, logger) << "  [PASS] SPI Host ready for operation" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] SPI Host ready for operation" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] SPI Host not ready after enable" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] SPI Host not ready after enable" << std::endl;
         sub_tests_failed++;
         test_passed = false;
         report_test_result("FUNC-007: Multi-Segment CSAAT", false);
@@ -102,17 +102,17 @@ void testbench::test_func007_multi_segment_csaat()
     test->write_register_32(CFG_OFFSET, 0x04440010);  /// CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4
     wait(10, SC_NS);
 
-    CSML_INFO(2, logger) << "  [INFO] Device 0 configured: CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4\n" << std::endl;
+    REG_INFO(2, logger) << "  [INFO] Device 0 configured: CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4\n" << std::endl;
 
     // ==========================================================================
     // Test 1: Basic CSAAT=1 Keeps CSB Asserted Between Segments
     // ==========================================================================
-    CSML_INFO(1, logger) << "[FUNC-007] Test 1: CSAAT=1 Keeps CSB Asserted" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 1: CSAAT=1 Keeps CSB Asserted" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Simulating Flash Quad Read: 1-1-4 transaction" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Segment 1: Standard TX (command byte) with CSAAT=1" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Segment 2: Standard TX (address bytes) with CSAAT=1" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Segment 3: Quad RX (data bytes) with CSAAT=0" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Simulating Flash Quad Read: 1-1-4 transaction" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Segment 1: Standard TX (command byte) with CSAAT=1" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Segment 2: Standard TX (address bytes) with CSAAT=1" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Segment 3: Quad RX (data bytes) with CSAAT=0" << std::endl;
 
     // Clear any errors from previous operations
     clear_errors();
@@ -125,22 +125,22 @@ void testbench::test_func007_multi_segment_csaat()
     // Segment 1: 1-byte Standard TX with CSAAT=1
     test->read_register_32(STATUS_OFFSET, status);
     if (!((status >> 31) & 1)) {
-        CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     } else {
-        CSML_INFO(2, logger) << "[ACTION] Issuing Segment 1: Standard TX, 1 byte, CSAAT=1..." << std::endl;
+        REG_INFO(2, logger) << "[ACTION] Issuing Segment 1: Standard TX, 1 byte, CSAAT=1..." << std::endl;
         test->write_register_32(CMD_OFFSET, make_command(1, 2, 0, 1));  /// 1 byte, TX, Std, CSAAT=1
         wait(50, SC_US);  /// Allow transaction to complete
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
         if (error_status != 0) {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after Segment 1: 0x" << std::hex << error_status << std::dec << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after Segment 1: 0x" << std::hex << error_status << std::dec << std::endl;
             sub_tests_failed++;
             test_passed = false;
         } else {
             test->read_register_32(STATUS_OFFSET, status);
-            CSML_INFO(2, logger) << "[INFO] After Segment 1: READY=" << ((status >> 31) & 1)
+            REG_INFO(2, logger) << "[INFO] After Segment 1: READY=" << ((status >> 31) & 1)
                       << ", ACTIVE=" << ((status >> 29) & 1) << std::endl;
             sub_tests_passed++;
         }
@@ -149,22 +149,22 @@ void testbench::test_func007_multi_segment_csaat()
     // Segment 2: 3-byte Standard TX with CSAAT=1
     test->read_register_32(STATUS_OFFSET, status);
     if (!((status >> 31) & 1)) {
-        CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 2" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 2" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     } else {
-        CSML_INFO(2, logger) << "[ACTION] Issuing Segment 2: Standard TX, 3 bytes, CSAAT=1..." << std::endl;
+        REG_INFO(2, logger) << "[ACTION] Issuing Segment 2: Standard TX, 3 bytes, CSAAT=1..." << std::endl;
         test->write_register_32(CMD_OFFSET, make_command(3, 2, 0, 1));  /// 3 bytes, TX, Std, CSAAT=1
         wait(100, SC_US);  /// Allow transaction to complete
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
         if (error_status != 0) {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after Segment 2: 0x" << std::hex << error_status << std::dec << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after Segment 2: 0x" << std::hex << error_status << std::dec << std::endl;
             sub_tests_failed++;
             test_passed = false;
         } else {
             test->read_register_32(STATUS_OFFSET, status);
-            CSML_INFO(2, logger) << "[INFO] After Segment 2: READY=" << ((status >> 31) & 1)
+            REG_INFO(2, logger) << "[INFO] After Segment 2: READY=" << ((status >> 31) & 1)
                       << ", ACTIVE=" << ((status >> 29) & 1) << std::endl;
             sub_tests_passed++;
         }
@@ -173,17 +173,17 @@ void testbench::test_func007_multi_segment_csaat()
     // Segment 3: 16-byte Quad RX with CSAAT=0 (final segment)
     test->read_register_32(STATUS_OFFSET, status);
     if (!((status >> 31) & 1)) {
-        CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 3" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 3" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     } else {
-        CSML_INFO(2, logger) << "[ACTION] Issuing Segment 3: Quad RX, 16 bytes, CSAAT=0..." << std::endl;
+        REG_INFO(2, logger) << "[ACTION] Issuing Segment 3: Quad RX, 16 bytes, CSAAT=0..." << std::endl;
         test->write_register_32(CMD_OFFSET, make_command(16, 1, 2, 0));  /// 16 bytes, RX, Quad, CSAAT=0
         wait(200, SC_US);  /// Allow transaction to complete
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
         if (error_status != 0) {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after Segment 3: 0x" << std::hex << error_status << std::dec << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after Segment 3: 0x" << std::hex << error_status << std::dec << std::endl;
             sub_tests_failed++;
             test_passed = false;
         } else {
@@ -192,14 +192,14 @@ void testbench::test_func007_multi_segment_csaat()
             active = (status >> 29) & 1;
             uint32_t rxqd = (status >> 8) & 0xFF;
 
-            CSML_INFO(2, logger) << "[INFO] After Segment 3: READY=" << ready << ", ACTIVE=" << active
+            REG_INFO(2, logger) << "[INFO] After Segment 3: READY=" << ready << ", ACTIVE=" << active
                       << ", RXQD=" << rxqd << std::endl;
 
             if (rxqd >= 4) {  /// Expect at least 4 words (16 bytes) in RX FIFO
-                CSML_INFO(2, logger) << "  [PASS] Multi-segment CSAAT transaction completed, RX data available" << std::endl;
+                REG_INFO(2, logger) << "  [PASS] Multi-segment CSAAT transaction completed, RX data available" << std::endl;
                 sub_tests_passed++;
             } else {
-                CSML_ERROR(2, logger) << "  [FAIL] Expected RX data not available (RXQD=" << rxqd << ")" << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] Expected RX data not available (RXQD=" << rxqd << ")" << std::endl;
                 sub_tests_failed++;
                 test_passed = false;
             }
@@ -208,14 +208,14 @@ void testbench::test_func007_multi_segment_csaat()
 
     test->clear_slave_state();
     wait(10, SC_NS);
-    CSML_INFO(1, logger) << std::endl;
+    REG_INFO(1, logger) << std::endl;
 
     // ==========================================================================
     // Test 2: Multi-Segment with Varying Directions
     // ==========================================================================
-    CSML_INFO(1, logger) << "[FUNC-007] Test 2: Multi-Segment with Varying Directions" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 2: Multi-Segment with Varying Directions" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Testing TX -> Dummy -> RX -> Bidirectional sequence" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Testing TX -> Dummy -> RX -> Bidirectional sequence" << std::endl;
 
     // Clear any errors
     clear_errors();
@@ -229,21 +229,21 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 1: TX (4 bytes) with CSAAT=1
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 1" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 1" << std::endl;
         test2_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
             test2_passed = false;
         } else {
-            CSML_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
             wait(100, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test2_passed = false;
             }
         }
@@ -251,21 +251,21 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 2: Dummy (2 bytes) with CSAAT=1
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 2" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 2" << std::endl;
         test2_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 2" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 2" << std::endl;
             test2_passed = false;
         } else {
-            CSML_INFO(2, logger) << "[ACTION] Segment 2: Dummy 2 bytes, CSAAT=1..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 2: Dummy 2 bytes, CSAAT=1..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(2, 0, 0, 1));  /// 2 bytes, Dummy, Std, CSAAT=1
             wait(50, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test2_passed = false;
             }
         }
@@ -273,21 +273,21 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 3: RX (8 bytes) with CSAAT=1
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 3" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 3" << std::endl;
         test2_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 3" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 3" << std::endl;
             test2_passed = false;
         } else {
-            CSML_INFO(2, logger) << "[ACTION] Segment 3: RX 8 bytes, CSAAT=1..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 3: RX 8 bytes, CSAAT=1..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(8, 1, 0, 1));  /// 8 bytes, RX, Std, CSAAT=1
             wait(150, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test2_passed = false;
             }
         }
@@ -295,21 +295,21 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 4: Bidirectional (4 bytes) with CSAAT=0
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 4" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 4" << std::endl;
         test2_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 4" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 4" << std::endl;
             test2_passed = false;
         } else {
-            CSML_INFO(2, logger) << "[ACTION] Segment 4: Bidirectional 4 bytes, CSAAT=0..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 4: Bidirectional 4 bytes, CSAAT=0..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(4, 3, 0, 0));  /// 4 bytes, Bidir, Std, CSAAT=0
             wait(100, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test2_passed = false;
             }
         }
@@ -318,27 +318,27 @@ void testbench::test_func007_multi_segment_csaat()
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
     active = (status >> 29) & 1;
-    CSML_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
+    REG_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test2_passed && ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] Multi-direction segment sequence completed" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Multi-direction segment sequence completed" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Multi-direction segment sequence had errors" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Multi-direction segment sequence had errors" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     test->clear_slave_state();
     wait(10, SC_US);
-    CSML_INFO(1, logger) << std::endl;
+    REG_INFO(1, logger) << std::endl;
 
     // ==========================================================================
     // Test 3: CSAAT=0 Deasserts CSB with Proper Timing
     // ==========================================================================
-    CSML_INFO(1, logger) << "[FUNC-007] Test 3: CSAAT=0 Deasserts CSB Properly" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 3: CSAAT=0 Deasserts CSB Properly" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Verifying CSB deasserted after final segment with CSAAT=0" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Verifying CSB deasserted after final segment with CSAAT=0" << std::endl;
 
     // Clear any errors
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -357,16 +357,16 @@ void testbench::test_func007_multi_segment_csaat()
     // Segment 1: TX with CSAAT=1
     test->read_register_32(STATUS_OFFSET, status);
     if (!((status >> 31) & 1)) {
-        CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
         test3_passed = false;
     } else {
-        CSML_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
+        REG_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
         test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
         wait(100, SC_US);
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
         if (error_status != 0) {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
             test3_passed = false;
         }
     }
@@ -374,16 +374,16 @@ void testbench::test_func007_multi_segment_csaat()
     // Segment 2: TX with CSAAT=0 (should deassert CSB)
     test->read_register_32(STATUS_OFFSET, status);
     if (!((status >> 31) & 1)) {
-        CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 2" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 2" << std::endl;
         test3_passed = false;
     } else {
-        CSML_INFO(2, logger) << "[ACTION] Segment 2: TX 4 bytes, CSAAT=0..." << std::endl;
+        REG_INFO(2, logger) << "[ACTION] Segment 2: TX 4 bytes, CSAAT=0..." << std::endl;
         test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
         wait(100, SC_US);
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
         if (error_status != 0) {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
             test3_passed = false;
         }
     }
@@ -391,30 +391,30 @@ void testbench::test_func007_multi_segment_csaat()
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
     active = (status >> 29) & 1;
-    CSML_INFO(2, logger) << "[INFO] After CSAAT=0: READY=" << ready << ", ACTIVE=" << active << std::endl;
+    REG_INFO(2, logger) << "[INFO] After CSAAT=0: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test3_passed && ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] CSB deasserted correctly after CSAAT=0" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CSB deasserted correctly after CSAAT=0" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CSB deassertion test had errors" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CSB deassertion test had errors" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     test->clear_slave_state();
     wait(10, SC_US);
-    CSML_INFO(1, logger) << std::endl;
+    REG_INFO(1, logger) << std::endl;
 
     // ==========================================================================
     // Test 4: CSID Change Terminates CSAAT Transaction
     // ==========================================================================
     // Skip this test if NumCS < 2 (CSID=1 not available)
     if (dut->get_num_cs() >= 2) {
-    CSML_INFO(1, logger) << "[FUNC-007] Test 4: CSID Change Terminates CSAAT" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 4: CSID Change Terminates CSAAT" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Testing CSID change overrides CSAAT=1 and terminates transaction" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Per datasheet: CSID change should force CSB idle even with CSAAT=1" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Testing CSID change overrides CSAAT=1 and terminates transaction" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Per datasheet: CSID change should force CSB idle even with CSAAT=1" << std::endl;
 
     // Clear any errors
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -428,7 +428,7 @@ void testbench::test_func007_multi_segment_csaat()
     wait(5, SC_US);
     test->write_register_32(CFG_OFFSET, 0x04440020);  /// CLKDIV=32, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4
     wait(10, SC_US);
-    CSML_INFO(2, logger) << "  [INFO] Device 1 configured: CLKDIV=32" << std::endl;
+    REG_INFO(2, logger) << "  [INFO] Device 1 configured: CLKDIV=32" << std::endl;
 
     // Set CSID=0 to start
     test->write_register_32(CSID_OFFSET, 0x0);
@@ -442,45 +442,45 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 1: TX with CSAAT=1 on Device 0
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 1" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 1" << std::endl;
         test4_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
             test4_passed = false;
         } else {
-            CSML_INFO(2, logger) << "[ACTION] Segment 1: CSID=0, TX 4 bytes, CSAAT=1..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 1: CSID=0, TX 4 bytes, CSAAT=1..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
             wait(100, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test4_passed = false;
             }
         }
     }
 
     // Change CSID to 1 (different device) - should terminate CSAAT transaction
-    CSML_INFO(2, logger) << "[ACTION] Changing CSID from 0 to 1 (should terminate CSAAT transaction)..." << std::endl;
+    REG_INFO(2, logger) << "[ACTION] Changing CSID from 0 to 1 (should terminate CSAAT transaction)..." << std::endl;
     test->write_register_32(CSID_OFFSET, 0x1);
     wait(50, SC_US);  /// Allow time for CSB transition timing (CSNTRAIL + CSNIDLE)
 
     // Verify no errors from CSID change
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
     if (error_status != 0) {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after CSID change: 0x" << std::hex << error_status << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after CSID change: 0x" << std::hex << error_status << std::dec << std::endl;
         // Note: CSID=1 might be invalid if NumCS=1, which would set CSIDINVAL
         bool csidinval = (error_status >> 16) & 0x1;  /// CSIDINVAL at bit 16 per RDL spec
         if (csidinval) {
-            CSML_INFO(2, logger) << "  [INFO] CSIDINVAL error - NumCS=1, CSID=1 is invalid (expected)" << std::endl;
+            REG_INFO(2, logger) << "  [INFO] CSIDINVAL error - NumCS=1, CSID=1 is invalid (expected)" << std::endl;
             // Clear the error and switch back to CSID=0
             test->write_register_32(ERROR_STATUS_OFFSET, error_status);
             wait(10, SC_US);
             test->write_register_32(CSID_OFFSET, 0x0);
             wait(10, SC_US);
-            CSML_INFO(2, logger) << "  [INFO] Reverting to CSID=0 for remainder of test" << std::endl;
+            REG_INFO(2, logger) << "  [INFO] Reverting to CSID=0 for remainder of test" << std::endl;
         } else {
             test4_passed = false;
         }
@@ -492,22 +492,22 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 2: New transaction on current CSID
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 2" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 2" << std::endl;
         test4_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted after CSID change" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted after CSID change" << std::endl;
             test4_passed = false;
         } else {
             test->read_register_32(CSID_OFFSET, csid);
-            CSML_INFO(2, logger) << "[ACTION] Segment 2: CSID=" << csid << ", TX 4 bytes, CSAAT=0..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 2: CSID=" << csid << ", TX 4 bytes, CSAAT=0..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
             wait(150, SC_US);  /// Extra time for slower clock on Device 1
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test4_passed = false;
             }
         }
@@ -516,13 +516,13 @@ void testbench::test_func007_multi_segment_csaat()
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
     active = (status >> 29) & 1;
-    CSML_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
+    REG_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test4_passed && ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] CSID change correctly terminated CSAAT transaction" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CSID change correctly terminated CSAAT transaction" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CSID change behavior test had errors" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CSID change behavior test had errors" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -532,20 +532,20 @@ void testbench::test_func007_multi_segment_csaat()
     wait(10, SC_US);
     test->clear_slave_state();
     wait(10, SC_US);
-    CSML_INFO(1, logger) << std::endl;
+    REG_INFO(1, logger) << std::endl;
 
     // ==========================================================================
     } else {
-        CSML_INFO(2, logger) << "  [SKIP] Test 4 requires NumCS >= 2 (current: " << dut->get_num_cs() << ")" << std::endl;
+        REG_INFO(2, logger) << "  [SKIP] Test 4 requires NumCS >= 2 (current: " << dut->get_num_cs() << ")" << std::endl;
         sub_tests_passed++;  /// Count as passed since this is a configuration limitation
     }
 
     // Test 5: CFG Change Terminates CSAAT Transaction
     // ==========================================================================
-    CSML_INFO(1, logger) << "[FUNC-007] Test 5: CFG Change Terminates CSAAT" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 5: CFG Change Terminates CSAAT" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Testing configuration change overrides CSAAT=1" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Per datasheet: CFG change forces CSB idle before applying" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Testing configuration change overrides CSAAT=1" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Per datasheet: CFG change forces CSB idle before applying" << std::endl;
 
     // Clear any errors
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -568,21 +568,21 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 1: TX with CSAAT=1
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 1" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 1" << std::endl;
         test5_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before Segment 1" << std::endl;
             test5_passed = false;
         } else {
-            CSML_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
             wait(200, SC_US);  /// Allow transaction to complete
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test5_passed = false;
             }
         }
@@ -590,18 +590,18 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Wait for segment 1 to complete before changing CFG
     if (!wait_for_idle()) {
-        CSML_ERROR(2, logger) << "  [FAIL] Segment 1 did not complete before CFG change" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Segment 1 did not complete before CFG change" << std::endl;
         test5_passed = false;
     }
 
     // Change CFG (should force CSB idle before applying)
-    CSML_INFO(2, logger) << "[ACTION] Changing CFG (CLKDIV=32) during CSAAT transaction..." << std::endl;
+    REG_INFO(2, logger) << "[ACTION] Changing CFG (CLKDIV=32) during CSAAT transaction..." << std::endl;
     test->write_register_32(CFG_OFFSET, 0x04440020);  /// CLKDIV=32, others same
     wait(100, SC_US);  /// Allow time for CSB to go idle
 
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
     if (error_status != 0) {
-        CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after CFG change: 0x" << std::hex << error_status << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after CFG change: 0x" << std::hex << error_status << std::dec << std::endl;
         test5_passed = false;
     }
 
@@ -611,21 +611,21 @@ void testbench::test_func007_multi_segment_csaat()
 
     // Segment 2: Next segment should use new config (CSB was deasserted/reasserted)
     if (!wait_for_cmd_queue_space(3)) {
-        CSML_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 2" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Command queue full before Segment 2" << std::endl;
         test5_passed = false;
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted after CFG change" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted after CFG change" << std::endl;
             test5_passed = false;
         } else {
-            CSML_INFO(2, logger) << "[ACTION] Segment 2: TX 4 bytes with new config (CLKDIV=32)..." << std::endl;
+            REG_INFO(2, logger) << "[ACTION] Segment 2: TX 4 bytes with new config (CLKDIV=32)..." << std::endl;
             test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
             wait(300, SC_US);  /// Extra time due to slower clock
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
             if (error_status != 0) {
-                CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
                 test5_passed = false;
             }
         }
@@ -637,28 +637,28 @@ void testbench::test_func007_multi_segment_csaat()
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
     active = (status >> 29) & 1;
-    CSML_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
+    REG_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test5_passed && ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] CFG change correctly terminated CSAAT transaction" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CFG change correctly terminated CSAAT transaction" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] CFG change behavior test had errors" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CFG change behavior test had errors" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     test->clear_slave_state();
     wait(10, SC_US);
-    CSML_INFO(1, logger) << std::endl;
+    REG_INFO(1, logger) << std::endl;
 
     // ==========================================================================
     // Test 6: Large Multi-Segment TX Transfer (1 KB)
     // ==========================================================================
-    CSML_INFO(1, logger) << "[FUNC-007] Test 6: Large Multi-Segment TX Transfer (1 KB)" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 6: Large Multi-Segment TX Transfer (1 KB)" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Testing 1024-byte TX transfer using 4 segments of 256 bytes" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Validates FIFO refill management and CSB assertion across KB transfer" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Testing 1024-byte TX transfer using 4 segments of 256 bytes" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Validates FIFO refill management and CSB assertion across KB transfer" << std::endl;
 
     // Reset FIFOs to ensure clean state
     software_reset();
@@ -686,7 +686,7 @@ void testbench::test_func007_multi_segment_csaat()
     const uint32_t num_segments = total_bytes / segment_bytes;  /// 4 segments
     const uint32_t words_per_segment = segment_bytes / 4;       /// 64 words
 
-    CSML_INFO(2, logger) << "[INFO] Transfer plan: " << num_segments << " segments × "
+    REG_INFO(2, logger) << "[INFO] Transfer plan: " << num_segments << " segments × "
                          << segment_bytes << " bytes = " << total_bytes << " bytes total" << std::endl;
 
     // Generate test pattern for 1 KB
@@ -700,7 +700,7 @@ void testbench::test_func007_multi_segment_csaat()
         bool is_last_segment = (seg == num_segments - 1);
         uint32_t csaat = is_last_segment ? 0 : 1;
 
-        CSML_INFO(2, logger) << "\n[Segment " << (seg + 1) << "/" << num_segments << "] "
+        REG_INFO(2, logger) << "\n[Segment " << (seg + 1) << "/" << num_segments << "] "
                              << "TX " << segment_bytes << " bytes, CSAAT=" << csaat << std::endl;
 
         // Load TX FIFO with 64 words (256 bytes)
@@ -715,11 +715,11 @@ void testbench::test_func007_multi_segment_csaat()
         uint32_t txqd = (status >> 20) & 0xFF;  /// TX FIFO depth
         bool ready_flag = (status >> 31) & 1;
 
-        CSML_INFO(2, logger) << "  [STATUS] Before CMD: READY=" << ready_flag
+        REG_INFO(2, logger) << "  [STATUS] Before CMD: READY=" << ready_flag
                              << ", TXQD=" << txqd << std::endl;
 
         if (!ready_flag) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before segment " << (seg + 1) << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before segment " << (seg + 1) << std::endl;
             test6_passed = false;
             break;
         }
@@ -738,7 +738,7 @@ void testbench::test_func007_multi_segment_csaat()
         bool active = (status >> 29) & 1;
 
         if (!ready_flag || active) {
-            CSML_ERROR(2, logger) << "  [FAIL] Segment " << (seg + 1) << " did not complete (READY="
+            REG_ERROR(2, logger) << "  [FAIL] Segment " << (seg + 1) << " did not complete (READY="
                                   << ready_flag << ", ACTIVE=" << active << ")" << std::endl;
             test6_passed = false;
             break;
@@ -747,7 +747,7 @@ void testbench::test_func007_multi_segment_csaat()
         // Verify no errors occurred
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
         if (error_status != 0) {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << error_status << std::dec
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << error_status << std::dec
                                   << " after segment " << (seg + 1) << std::endl;
             test6_passed = false;
             break;
@@ -757,21 +757,21 @@ void testbench::test_func007_multi_segment_csaat()
         test->read_register_32(STATUS_OFFSET, status);
         txqd = (status >> 20) & 0xFF;
         bool txempty = (status >> 26) & 1;
-        CSML_INFO(2, logger) << "  [STATUS] After segment: TXQD=" << txqd << ", TXEMPTY=" << txempty << std::endl;
+        REG_INFO(2, logger) << "  [STATUS] After segment: TXQD=" << txqd << ", TXEMPTY=" << txempty << std::endl;
 
-        CSML_INFO(2, logger) << "  [PASS] Segment " << (seg + 1) << " completed successfully" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Segment " << (seg + 1) << " completed successfully" << std::endl;
     }
 
     // Verify slave received all 1024 bytes
     // Note: get_slave_tx_bytes() counts master TX (which is slave RX)
     uint32_t slave_rx_count = test->get_slave_tx_bytes();
-    CSML_INFO(2, logger) << "\n[VERIFICATION] Slave received " << slave_rx_count << " bytes (expected: "
+    REG_INFO(2, logger) << "\n[VERIFICATION] Slave received " << slave_rx_count << " bytes (expected: "
                          << total_bytes << ")" << std::endl;
 
     if (slave_rx_count == total_bytes) {
-        CSML_INFO(2, logger) << "  [PASS] Slave received correct number of bytes" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Slave received correct number of bytes" << std::endl;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Slave byte count mismatch" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Slave byte count mismatch" << std::endl;
         test6_passed = false;
     }
 
@@ -781,25 +781,25 @@ void testbench::test_func007_multi_segment_csaat()
     active = (status >> 29) & 1;
 
     if (test6_passed && ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] Test 6: 1 KB multi-segment TX transfer successful" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Test 6: 1 KB multi-segment TX transfer successful" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Test 6: 1 KB multi-segment TX transfer failed" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Test 6: 1 KB multi-segment TX transfer failed" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     test->clear_slave_state();
     wait(10, SC_US);
-    CSML_INFO(1, logger) << std::endl;
+    REG_INFO(1, logger) << std::endl;
 
     // ==========================================================================
     // Test 7: Large Multi-Segment RX Transfer (2 KB)
     // ==========================================================================
-    CSML_INFO(1, logger) << "[FUNC-007] Test 7: Large Multi-Segment RX Transfer (2 KB)" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 7: Large Multi-Segment RX Transfer (2 KB)" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Testing 2048-byte RX transfer using 8 segments of 256 bytes" << std::endl;
-    CSML_INFO(2, logger) << "[INFO] Validates FIFO drain management and data integrity across KB transfer" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Testing 2048-byte RX transfer using 8 segments of 256 bytes" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Validates FIFO drain management and data integrity across KB transfer" << std::endl;
 
     // Reset FIFOs to ensure clean state
     software_reset();
@@ -827,7 +827,7 @@ void testbench::test_func007_multi_segment_csaat()
     const uint32_t num_rx_segments = total_rx_bytes / rx_segment_bytes;  /// 8 segments
     const uint32_t rx_words_per_segment = rx_segment_bytes / 4;          /// 64 words
 
-    CSML_INFO(2, logger) << "[INFO] Transfer plan: " << num_rx_segments << " segments × "
+    REG_INFO(2, logger) << "[INFO] Transfer plan: " << num_rx_segments << " segments × "
                          << rx_segment_bytes << " bytes = " << total_rx_bytes << " bytes total" << std::endl;
 
     // Pre-load slave with 2 KB of test data
@@ -839,7 +839,7 @@ void testbench::test_func007_multi_segment_csaat()
     // Load slave TX buffer with 2 KB
     test->load_slave_rx_data(expected_rx_bytes);
     wait(10, SC_US);
-    CSML_INFO(2, logger) << "[INFO] Pre-loaded slave with " << total_rx_bytes << " bytes" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Pre-loaded slave with " << total_rx_bytes << " bytes" << std::endl;
 
     std::vector<uint32_t> received_data;  /// Accumulate all received data
 
@@ -848,7 +848,7 @@ void testbench::test_func007_multi_segment_csaat()
         bool is_last_segment = (seg == num_rx_segments - 1);
         uint32_t csaat = is_last_segment ? 0 : 1;
 
-        CSML_INFO(2, logger) << "\n[Segment " << (seg + 1) << "/" << num_rx_segments << "] "
+        REG_INFO(2, logger) << "\n[Segment " << (seg + 1) << "/" << num_rx_segments << "] "
                              << "RX " << rx_segment_bytes << " bytes, CSAAT=" << csaat << std::endl;
 
         // Check STATUS before issuing command
@@ -856,11 +856,11 @@ void testbench::test_func007_multi_segment_csaat()
         uint32_t rxqd = (status >> 16) & 0xFF;  /// RX FIFO depth
         bool ready_flag = (status >> 31) & 1;
 
-        CSML_INFO(2, logger) << "  [STATUS] Before CMD: READY=" << ready_flag
+        REG_INFO(2, logger) << "  [STATUS] Before CMD: READY=" << ready_flag
                              << ", RXQD=" << rxqd << std::endl;
 
         if (!ready_flag) {
-            CSML_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before segment " << (seg + 1) << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted before segment " << (seg + 1) << std::endl;
             test7_passed = false;
             break;
         }
@@ -879,7 +879,7 @@ void testbench::test_func007_multi_segment_csaat()
         bool active = (status >> 29) & 1;
 
         if (!ready_flag || active) {
-            CSML_ERROR(2, logger) << "  [FAIL] Segment " << (seg + 1) << " did not complete (READY="
+            REG_ERROR(2, logger) << "  [FAIL] Segment " << (seg + 1) << " did not complete (READY="
                                   << ready_flag << ", ACTIVE=" << active << ")" << std::endl;
             test7_passed = false;
             break;
@@ -888,7 +888,7 @@ void testbench::test_func007_multi_segment_csaat()
         // Verify no errors occurred
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
         if (error_status != 0) {
-            CSML_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << error_status << std::dec
+            REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS=0x" << std::hex << error_status << std::dec
                                   << " after segment " << (seg + 1) << std::endl;
             test7_passed = false;
             break;
@@ -898,7 +898,7 @@ void testbench::test_func007_multi_segment_csaat()
         test->read_register_32(STATUS_OFFSET, status);
         rxqd = (status >> 16) & 0xFF;
         bool rxfull = (status >> 25) & 1;
-        CSML_INFO(2, logger) << "  [STATUS] After segment: RXQD=" << rxqd << ", RXFULL=" << rxfull << std::endl;
+        REG_INFO(2, logger) << "  [STATUS] After segment: RXQD=" << rxqd << ", RXFULL=" << rxfull << std::endl;
 
         // Read all data from RX FIFO (64 words)
         for (uint32_t w = 0; w < rx_words_per_segment; w++) {
@@ -912,12 +912,12 @@ void testbench::test_func007_multi_segment_csaat()
         rxqd = (status >> 16) & 0xFF;
         bool rxempty = (status >> 27) & 1;
 
-        CSML_INFO(2, logger) << "  [PASS] Segment " << (seg + 1) << " completed and FIFO drained (RXQD="
+        REG_INFO(2, logger) << "  [PASS] Segment " << (seg + 1) << " completed and FIFO drained (RXQD="
                              << rxqd << ", RXEMPTY=" << rxempty << ")" << std::endl;
     }
 
     // Verify data integrity - compare all 512 words (2048 bytes)
-    CSML_INFO(2, logger) << "\n[VERIFICATION] Checking data integrity for all " << received_data.size()
+    REG_INFO(2, logger) << "\n[VERIFICATION] Checking data integrity for all " << received_data.size()
                          << " words (" << (received_data.size() * 4) << " bytes)..." << std::endl;
 
     bool data_match = true;
@@ -944,7 +944,7 @@ void testbench::test_func007_multi_segment_csaat()
 
         if (received_data[w] != expected_word) {
             if (mismatch_count < 5) {  /// Report first 5 mismatches
-                CSML_ERROR(2, logger) << "  [MISMATCH] Word " << w << ": received=0x"
+                REG_ERROR(2, logger) << "  [MISMATCH] Word " << w << ": received=0x"
                                       << std::hex << received_data[w]
                                       << ", expected=0x" << expected_word << std::dec << std::endl;
             }
@@ -954,9 +954,9 @@ void testbench::test_func007_multi_segment_csaat()
     }
 
     if (data_match && received_data.size() == expected_words) {
-        CSML_INFO(2, logger) << "  [PASS] All " << received_data.size() << " words match expected data" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] All " << received_data.size() << " words match expected data" << std::endl;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Data integrity check failed: " << mismatch_count
+        REG_ERROR(2, logger) << "  [FAIL] Data integrity check failed: " << mismatch_count
                               << " mismatches, received " << received_data.size() << " words, expected "
                               << expected_words << " words" << std::endl;
         test7_passed = false;
@@ -968,22 +968,22 @@ void testbench::test_func007_multi_segment_csaat()
     active = (status >> 29) & 1;
 
     if (test7_passed && ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] Test 7: 2 KB multi-segment RX transfer successful" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Test 7: 2 KB multi-segment RX transfer successful" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Test 7: 2 KB multi-segment RX transfer failed" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Test 7: 2 KB multi-segment RX transfer failed" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
     test->clear_slave_state();
     wait(10, SC_US);
-    CSML_INFO(1, logger) << std::endl;
+    REG_INFO(1, logger) << std::endl;
 
     // ==========================================================================
     // Final Verification
     // ==========================================================================
-    CSML_INFO(1, logger) << "[FUNC-007] Final State Verification" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Final State Verification" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
 
     test->read_register_32(CSID_OFFSET, csid);
@@ -992,20 +992,20 @@ void testbench::test_func007_multi_segment_csaat()
     ready = (status >> 31) & 1;
     active = (status >> 29) & 1;
 
-    CSML_INFO(2, logger) << "[VERIFY] Final CSID: " << csid << std::endl;
-    CSML_INFO(2, logger) << "[VERIFY] Final ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
-    CSML_INFO(2, logger) << "[VERIFY] Final STATUS: READY=" << ready << ", ACTIVE=" << active << std::endl;
+    REG_INFO(2, logger) << "[VERIFY] Final CSID: " << csid << std::endl;
+    REG_INFO(2, logger) << "[VERIFY] Final ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
+    REG_INFO(2, logger) << "[VERIFY] Final STATUS: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (error_status == 0 && csid == 0 && ready && !active) {
-        CSML_INFO(2, logger) << "  [PASS] IP in clean state after all tests" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] IP in clean state after all tests" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] IP not in expected clean state" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] IP not in expected clean state" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "[TEST FUNC-007] Multi-Segment CSAAT Summary" << std::endl
                          << "========================================" << std::endl
                          << "Sub-tests Passed: " << sub_tests_passed << std::endl
@@ -1075,7 +1075,7 @@ void testbench::test_repro_second_read_tx_drop()
     const std::string test_name = "REPRO: second flash read TX-command drop after SW_RST";
     uint32_t status = 0, error_status = 0;
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "[REPRO] Second-read TX-command drop after SW_RST" << std::endl
                          << "========================================" << std::endl;
 
@@ -1135,10 +1135,10 @@ void testbench::test_repro_second_read_tx_drop()
     uint32_t got1 = 0;
     uint32_t txqd1 = run_flash_read(0xA5u, 512u, got1);
     if (got1 == 512u && txqd1 == 0u) {
-        CSML_INFO(2, logger) << "  [PASS] Read 1: 512 B drained, TX FIFO empty (opcode+addr consumed)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Read 1: 512 B drained, TX FIFO empty (opcode+addr consumed)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Read 1: drained=" << got1 << " TXQD=" << txqd1 << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Read 1: drained=" << got1 << " TXQD=" << txqd1 << std::endl;
         sub_tests_failed++; test_passed = false;
     }
 
@@ -1156,28 +1156,28 @@ void testbench::test_repro_second_read_tx_drop()
     // i.e. the TX FIFO must be empty. A dropped command strands the pushed
     // opcode+address word (TXQD > 0).
     if (txqd2 == 0u) {
-        CSML_INFO(2, logger) << "  [PASS] Read 2: opcode+addr TX command processed (TX FIFO empty)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Read 2: opcode+addr TX command processed (TX FIFO empty)" << std::endl;
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Read 2: opcode+addr TX command DROPPED — "
+        REG_ERROR(2, logger) << "  [FAIL] Read 2: opcode+addr TX command DROPPED — "
                               << txqd2 << " word(s) stranded in TX FIFO (reproduces the E2E bug)" << std::endl;
         sub_tests_failed++; test_passed = false;
     }
     if (got2 == 512u) {
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Read 2: only " << got2 << "/512 B drained" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Read 2: only " << got2 << "/512 B drained" << std::endl;
         sub_tests_failed++; test_passed = false;
     }
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
     if (((error_status >> 4) & 0x1u) == 0u) {
         sub_tests_passed++;
     } else {
-        CSML_ERROR(2, logger) << "  [FAIL] Read 2: unexpected ERROR_STATUS.OVERFLOW" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Read 2: unexpected ERROR_STATUS.OVERFLOW" << std::endl;
         sub_tests_failed++; test_passed = false;
     }
 
-    CSML_INFO(1, logger) << "  [REPRO] sub-tests passed=" << sub_tests_passed
+    REG_INFO(1, logger) << "  [REPRO] sub-tests passed=" << sub_tests_passed
                          << " failed=" << sub_tests_failed << std::endl;
     report_test_result(test_name.c_str(), test_passed);
 }

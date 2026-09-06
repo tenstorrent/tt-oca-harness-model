@@ -22,8 +22,8 @@
  */
 #pragma once
 #include "el2_pic_base.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 
 // Forward-declare the ISS wrapper to break the mutual include cycle.
 // VeeR-ISSTlm.hpp includes this header, so we cannot include it here.
@@ -36,10 +36,10 @@ class el2_pic_model : public el2_pic_base {
 public:
     SC_HAS_PROCESS(el2_pic_model);
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-    csml_param<int> verbosity;
+    regmodel::Param<int> verbosity;
 
     el2_pic_model(sc_module_name n);
 
@@ -107,7 +107,7 @@ private:
     // Hart back-reference; set via bind_hart() during elaboration.
     VeeRISSTlm *hart_ = nullptr;
 
-    CsmlLogger logger;
+    RegLogger logger;
 };
 
 } // namespace el2_pic

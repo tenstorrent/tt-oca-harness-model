@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "el2_pic_basetest.h"
-#include "csml_parameter.h"
+#include "reg_param.h"
 #include <sstream>
 #include <iomanip>
 
@@ -106,7 +106,7 @@ void testbench::unbound_write_32(unsigned byte_offset, uint32_t value)
 // ---------------------------------------------------------------------------
 void testbench::report_test_start(const std::string& test_name)
 {
-    CSML_INFO(1, logger) << "========================================\n"
+    REG_INFO(1, logger) << "========================================\n"
                          << test_name << "\n"
                          << "========================================" << std::endl;
 }
@@ -115,7 +115,7 @@ void testbench::report_test_pass(const std::string& test_name)
 {
     m_tests_passed++;
     m_tests_run++;
-    CSML_INFO(1, logger) << test_name << ": PASS" << std::endl;
+    REG_INFO(1, logger) << test_name << ": PASS" << std::endl;
 }
 
 void testbench::report_test_fail(const std::string& test_name, const std::string& reason)
@@ -123,7 +123,7 @@ void testbench::report_test_fail(const std::string& test_name, const std::string
     m_tests_failed++;
     m_tests_run++;
     m_failed_tests.push_back(test_name);
-    CSML_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
+    REG_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
 }
 
 void testbench::report_test_summary()
@@ -136,7 +136,7 @@ void testbench::report_test_summary()
        << "Passed: " << m_tests_passed << "\n"
        << "Failed: " << m_tests_failed << "\n"
        << "========================================";
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +165,7 @@ void testbench::run_tests()
         m_test->irq_o[i].write(false);
     wait(5, SC_NS);
 
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << " EL2 PIC TESTBENCH START "
                          << "========================================" << std::endl;
 
@@ -238,6 +238,21 @@ void testbench::run_tests()
     do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
     test_priord_raw_zero_is_highest();
 
+    // FUNC-EL2PIC-015: meipt / meicurpl threshold + notify_threshold_changed
+    report_test_start("FUNC-EL2PIC-015: Threshold Blocks and Notify");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    test_threshold_blocks_and_notify();
+
+    // FUNC-EL2PIC-016: Winner change while EIP already asserted
+    report_test_start("FUNC-EL2PIC-016: Winner Change While Asserted");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    test_winner_change_while_asserted();
+
+    // FUNC-EL2PIC-017: Source 0 ignored; unbound instance has no hart
+    report_test_start("FUNC-EL2PIC-017: Source 0 and Null Hart");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    test_source0_and_null_hart();
+
     // FUNC-EL2PIC-012: Unbound sources tied low
     report_test_start("FUNC-EL2PIC-012: Unbound Sources Tied Low");
     test_unbound_sources_tied_low();
@@ -251,32 +266,32 @@ void testbench::run_tests()
     // ------------------------------------------------------------------
     // Final summary
     // ------------------------------------------------------------------
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "       TEST SUITE SUMMARY"
                          << "========================================" << std::endl;
 
     std::stringstream ss;
     ss << "Total Tests:  " << m_tests_run;
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
     ss.str(""); ss << "Passed:       " << m_tests_passed << " (PASS)";
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
     ss.str(""); ss << "Failed:       " << m_tests_failed << " (FAIL)";
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
     if (m_tests_run > 0) {
         double rate = 100.0 * m_tests_passed / m_tests_run;
         ss.str(""); ss << "Success Rate: " << std::fixed << std::setprecision(1) << rate << "%";
-        CSML_INFO(1, logger) << ss.str() << std::endl;
+        REG_INFO(1, logger) << ss.str() << std::endl;
     }
     if (m_tests_failed > 0) {
-        CSML_ERROR(0, logger) << "\nFailed Tests:" << std::endl;
+        REG_ERROR(0, logger) << "\nFailed Tests:" << std::endl;
         for (const auto& t : m_failed_tests) {
-            CSML_ERROR(0, logger) << "  - " << t << std::endl;
+            REG_ERROR(0, logger) << "  - " << t << std::endl;
         }
-        CSML_ERROR(0, logger) << "[OVERALL RESULT: FAILED]" << std::endl;
+        REG_ERROR(0, logger) << "[OVERALL RESULT: FAILED]" << std::endl;
     } else if (m_tests_passed > 0) {
-        CSML_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
+        REG_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
     } else {
-        CSML_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
+        REG_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
     }
 
     wait(100, SC_NS);
@@ -1131,6 +1146,171 @@ void testbench::test_unbound_sources_tied_low()
 }
 
 // ===========================================================================
+// FUNC-EL2PIC-015: meipt / meicurpl threshold drops an asserted EIP and
+// notify_threshold_changed() reapplies the new threshold immediately.
+//
+// Firmware writes meipt (0xBC9) / meicurpl (0xBCC) and the ISS wrapper calls
+// notify_threshold_changed(). Without that hook the PIC would keep EIP high
+// until the next gateway event. Also covers the "threshold already blocking
+// before the source pends" path (eip_asserted_ is false, just return).
+// ===========================================================================
+void testbench::test_threshold_blocks_and_notify()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src = 14;
+
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), 0x0u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), 5u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(src), 0x1u);
+    mock_hart.meipt        = 0u;
+    mock_hart.meicurpl_csr = 0u;
+    wait(SC_ZERO_TIME);
+
+    // Source pends with no threshold: EIP must assert.
+    m_test->drive_irq(src, true);
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "EIP not asserted before threshold; ";
+    }
+
+    // Raise meipt to 5 (eff 5); prio 5 is not strictly greater → drop EIP.
+    mock_hart.meipt = 5u;
+    m_dut->notify_threshold_changed();
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "EIP still asserted after meipt=5 blocked prio 5; ";
+    }
+
+    // Lower meipt so the still-pending source wins again.
+    mock_hart.meipt = 4u;
+    m_dut->notify_threshold_changed();
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "EIP not re-asserted after meipt lowered; ";
+    }
+
+    // meicurpl at 5 also blocks (same compare as meipt).
+    mock_hart.meicurpl_csr = 5u;
+    m_dut->notify_threshold_changed();
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "EIP still asserted after meicurpl=5; ";
+    }
+
+    // Fresh source with threshold already blocking: no EIP, no clear path.
+    m_test->drive_irq(src, false);
+    mock_hart.meipt        = 15u;
+    mock_hart.meicurpl_csr = 0u;
+    wait(SC_ZERO_TIME);
+    m_test->drive_irq(src, true);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "EIP asserted while meipt=15 blocks every source";
+    }
+
+    m_test->drive_irq(src, false);
+    mock_hart.meipt        = 0u;
+    mock_hart.meicurpl_csr = 0u;
+    wait(1, sc_core::SC_NS);
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-015: test_threshold_blocks_and_notify");
+    else
+        report_test_fail("FUNC-EL2PIC-015: test_threshold_blocks_and_notify", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-016: A higher-priority source arriving while EIP is already
+// asserted must retarget claim_id (best_id != current_claim_id_).
+// FUNC-EL2PIC-006 asserts both sources in the same delta, so it never takes
+// the "already asserted, different winner" branch.
+// ===========================================================================
+void testbench::test_winner_change_while_asserted()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src_lo = 15;
+    const unsigned src_hi = 16;
+
+    for (unsigned s : {src_lo, src_hi}) {
+        m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(s), 0x0u);
+        m_test->reg_write_32(el2_pic_basetest::meie_offset(s), 0x1u);
+    }
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src_lo), 3u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src_hi), 9u);
+    wait(SC_ZERO_TIME);
+
+    m_test->drive_irq(src_lo, true);
+    wait(SC_ZERO_TIME);
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != src_lo) {
+        pass = false;
+        reason += "low-prio source did not claim first (claim=" +
+                  std::to_string(mock_hart.claim_id) + "); ";
+    }
+
+    m_test->drive_irq(src_hi, true);
+    wait(SC_ZERO_TIME);
+    if (mock_hart.claim_id != src_hi) {
+        pass = false;
+        reason += "high-prio source did not steal claim (claim=" +
+                  std::to_string(mock_hart.claim_id) + ")";
+    }
+
+    m_test->drive_irq(src_lo, false);
+    m_test->drive_irq(src_hi, false);
+    wait(1, sc_core::SC_NS);
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-016: test_winner_change_while_asserted");
+    else
+        report_test_fail("FUNC-EL2PIC-016: test_winner_change_while_asserted", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-017: Source 0 is reserved (gateway_changed returns immediately)
+// and the unbound companion instance has no hart, so arbitration must return
+// on hart_ == nullptr rather than touching a claim_id.
+// ===========================================================================
+void testbench::test_source0_and_null_hart()
+{
+    bool pass = true;
+    std::string reason;
+
+    // Source 0: configure as if it were a real source, then toggle the pin.
+    // MEIE[0] / MEIPL[0] have no post-write callbacks (registration skips 0),
+    // so this only exercises gateway_changed(0).
+    m_test->drive_irq(0, true);
+    wait(SC_ZERO_TIME);
+    uint32_t meip0 = m_test->reg_read_32(el2_pic_basetest::meip_offset(0));
+    if (meip0 & 1u) {
+        pass = false; reason += "source 0 set meip bit 0; ";
+    }
+    if (mock_hart.claim_id == 0 && mock_hart.eip_asserted) {
+        pass = false; reason += "source 0 asserted EIP; ";
+    }
+    m_test->drive_irq(0, false);
+    wait(SC_ZERO_TIME);
+
+    // Unbound instance: write MEIE[1] / MEIPL[1] so post_write re-evaluates
+    // with hart_ == nullptr. Must not crash; pending stays 0 (inputs tied low).
+    unbound_write_32(el2_pic_basetest::meipl_offset(1), 0xFu);
+    unbound_write_32(el2_pic_basetest::meie_offset(1), 0x1u);
+    unbound_write_32(el2_pic_basetest::meigwctrl_offset(1), 0x0u);
+    wait(SC_ZERO_TIME);
+    uint32_t unbound_meip = unbound_read_32(el2_pic_basetest::meip_offset(0));
+    if (unbound_meip != 0) {
+        pass = false;
+        reason += "unbound instance meip[0]=0x" + std::to_string(unbound_meip);
+    }
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-017: test_source0_and_null_hart");
+    else
+        report_test_fail("FUNC-EL2PIC-017: test_source0_and_null_hart", reason);
+}
+
+// ===========================================================================
 // FUNC-EL2PIC-015: meipt/meicurpl threshold, reserved source 0, null hart
 // ===========================================================================
 void testbench::test_threshold_and_reserved_source()
@@ -1215,13 +1395,13 @@ void testbench::test_threshold_and_reserved_source()
 int sc_main(int argc, char* argv[])
 {
     // Initialize CCI broker and optionally load INI config file.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     testbench tb("testbench");
 
-    CSML_INFO(1, tb.logger) << "Starting EL2 PIC Testbench" << std::endl;
+    REG_INFO(1, tb.logger) << "Starting EL2 PIC Testbench" << std::endl;
     sc_start();
-    CSML_INFO(1, tb.logger) << "Simulation completed" << std::endl;
+    REG_INFO(1, tb.logger) << "Simulation completed" << std::endl;
 
 #ifdef __COVERAGE__
     __gcov_dump();  // Flush coverage data before quick_exit

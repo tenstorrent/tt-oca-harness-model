@@ -7,10 +7,10 @@
 
 /**
  * @file aon_timer_register.h
- * @brief AON Timer CSML register type definitions.
+ * @brief AON Timer regmodel register type definitions.
  *
  * This header defines all 14 register types for the Always-On Timer (AON Timer)
- * peripheral. Each register class is derived from csml_reg<N> and encapsulates
+ * peripheral. Each register class is derived from regmodel::Reg<N> and encapsulates
  * its constituent bitfields. Register types correspond directly to the hardware
  * memory-mapped register specification at the respective offsets.
  *
@@ -34,7 +34,7 @@
 #pragma once
 #include<iostream>
 #include<systemc.h>
-#include "csml_register.h"
+#include "reg_file.h"
 
 /// @brief Namespace encapsulating all AON Timer register type definitions.
 namespace aon_timer {
@@ -51,38 +51,38 @@ namespace aon_timer {
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class ALERT_TEST_type : public csml_reg<N>
+class ALERT_TEST_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct ALERT_TEST register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     ALERT_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x0, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0xffffffff, 0x0),
       fatal_fault(reg_name + ".fatal_fault", *this, 0, 1),
       reserved0(reg_name + ".reserved0", *this, 1, 31)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> fatal_fault; ///< Bit[0]: Write 1 to trigger one fatal alert test event (WO).
-    csml_bitfield<N> reserved0;   ///< Bits[31:1]: Reserved. Reads as 0; writes ignored.
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> fatal_fault; ///< Bit[0]: Write 1 to trigger one fatal alert test event (WO).
+    regmodel::Bitfield<N> reserved0;   ///< Bits[31:1]: Reserved. Reads as 0; writes ignored.
 };
 
 /**
@@ -99,19 +99,19 @@ class ALERT_TEST_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WKUP_CTRL_type : public csml_reg<N>
+class WKUP_CTRL_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WKUP_CTRL register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WKUP_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       enable(reg_name + ".enable", *this, 0, 1),
       prescaler(reg_name + ".prescaler", *this, 1, 12),
       reserved0(reg_name + ".reserved0", *this, 13, 19)
@@ -119,20 +119,20 @@ class WKUP_CTRL_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> enable;    ///< Bit[0]: Set to 1 to start wakeup timer counting; 0 to stop (RW).
-    csml_bitfield<N> prescaler; ///< Bits[12:1]: 12-bit prescaler; count rate = clk_aon / (prescaler+1) (RW).
-    csml_bitfield<N> reserved0; ///< Bits[31:13]: Reserved. Reads as 0; writes ignored.
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> enable;    ///< Bit[0]: Set to 1 to start wakeup timer counting; 0 to stop (RW).
+    regmodel::Bitfield<N> prescaler; ///< Bits[12:1]: 12-bit prescaler; count rate = clk_aon / (prescaler+1) (RW).
+    regmodel::Bitfield<N> reserved0; ///< Bits[31:13]: Reserved. Reads as 0; writes ignored.
 };
 
 /**
@@ -148,36 +148,36 @@ class WKUP_CTRL_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WKUP_THOLD_HI_type : public csml_reg<N>
+class WKUP_THOLD_HI_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WKUP_THOLD_HI register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WKUP_THOLD_HI_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       threshold_hi(reg_name + ".threshold_hi", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> threshold_hi; ///< Bits[31:0]: Upper 32 bits of the 64-bit wakeup timer threshold (RW).
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> threshold_hi; ///< Bits[31:0]: Upper 32 bits of the 64-bit wakeup timer threshold (RW).
 };
 
 /**
@@ -193,36 +193,36 @@ class WKUP_THOLD_HI_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WKUP_THOLD_LO_type : public csml_reg<N>
+class WKUP_THOLD_LO_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WKUP_THOLD_LO register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WKUP_THOLD_LO_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       threshold_lo(reg_name + ".threshold_lo", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> threshold_lo; ///< Bits[31:0]: Lower 32 bits of the 64-bit wakeup timer threshold (RW).
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> threshold_lo; ///< Bits[31:0]: Lower 32 bits of the 64-bit wakeup timer threshold (RW).
 };
 
 /**
@@ -238,36 +238,36 @@ class WKUP_THOLD_LO_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WKUP_COUNT_HI_type : public csml_reg<N>
+class WKUP_COUNT_HI_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WKUP_COUNT_HI register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WKUP_COUNT_HI_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       count_hi(reg_name + ".count_hi", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> count_hi; ///< Bits[31:0]: Upper 32 bits of the live 64-bit wakeup timer counter (RW, volatile).
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> count_hi; ///< Bits[31:0]: Upper 32 bits of the live 64-bit wakeup timer counter (RW, volatile).
 };
 
 /**
@@ -282,36 +282,36 @@ class WKUP_COUNT_HI_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WKUP_COUNT_LO_type : public csml_reg<N>
+class WKUP_COUNT_LO_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WKUP_COUNT_LO register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WKUP_COUNT_LO_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       count_lo(reg_name + ".count_lo", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> count_lo; ///< Bits[31:0]: Lower 32 bits of the live 64-bit wakeup timer counter (RW, volatile).
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> count_lo; ///< Bits[31:0]: Lower 32 bits of the live 64-bit wakeup timer counter (RW, volatile).
 };
 
 /**
@@ -327,38 +327,38 @@ class WKUP_COUNT_LO_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WDOG_REGWEN_type : public csml_reg<N>
+class WDOG_REGWEN_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WDOG_REGWEN register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WDOG_REGWEN_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x1),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x1),
       regwen(reg_name + ".regwen", *this, 0, 1),
       reserved0(reg_name + ".reserved0", *this, 1, 31)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> regwen;   ///< Bit[0]: 1=unlocked (reset default); write 0 to permanently lock watchdog config (RW0C).
-    csml_bitfield<N> reserved0; ///< Bits[31:1]: Reserved. Reads as 0; writes ignored.
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> regwen;   ///< Bit[0]: 1=unlocked (reset default); write 0 to permanently lock watchdog config (RW0C).
+    regmodel::Bitfield<N> reserved0; ///< Bits[31:1]: Reserved. Reads as 0; writes ignored.
 };
 
 /**
@@ -375,19 +375,19 @@ class WDOG_REGWEN_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WDOG_CTRL_type : public csml_reg<N>
+class WDOG_CTRL_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WDOG_CTRL register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WDOG_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       enable(reg_name + ".enable", *this, 0, 1),
       pause_in_sleep(reg_name + ".pause_in_sleep", *this, 1, 1),
       reserved0(reg_name + ".reserved0", *this, 2, 30)
@@ -395,20 +395,20 @@ class WDOG_CTRL_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> enable;         ///< Bit[0]: Set to 1 to start watchdog counting; 0 to stop (RW, gated by WDOG_REGWEN).
-    csml_bitfield<N> pause_in_sleep; ///< Bit[1]: When 1, halts watchdog counter while sleep_mode is asserted (RW, gated by WDOG_REGWEN).
-    csml_bitfield<N> reserved0;      ///< Bits[31:2]: Reserved. Reads as 0; writes ignored.
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> enable;         ///< Bit[0]: Set to 1 to start watchdog counting; 0 to stop (RW, gated by WDOG_REGWEN).
+    regmodel::Bitfield<N> pause_in_sleep; ///< Bit[1]: When 1, halts watchdog counter while sleep_mode is asserted (RW, gated by WDOG_REGWEN).
+    regmodel::Bitfield<N> reserved0;      ///< Bits[31:2]: Reserved. Reads as 0; writes ignored.
 };
 
 /**
@@ -423,36 +423,36 @@ class WDOG_CTRL_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WDOG_BARK_THOLD_type : public csml_reg<N>
+class WDOG_BARK_THOLD_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WDOG_BARK_THOLD register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WDOG_BARK_THOLD_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       threshold(reg_name + ".threshold", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> threshold; ///< Bits[31:0]: 32-bit watchdog bark threshold; bark fires when WDOG_COUNT >= this value (RW).
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> threshold; ///< Bits[31:0]: 32-bit watchdog bark threshold; bark fires when WDOG_COUNT >= this value (RW).
 };
 
 /**
@@ -468,36 +468,36 @@ class WDOG_BARK_THOLD_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WDOG_BITE_THOLD_type : public csml_reg<N>
+class WDOG_BITE_THOLD_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WDOG_BITE_THOLD register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WDOG_BITE_THOLD_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       threshold(reg_name + ".threshold", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> threshold; ///< Bits[31:0]: 32-bit watchdog bite threshold; bite reset fires when WDOG_COUNT >= this value (RW).
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> threshold; ///< Bits[31:0]: 32-bit watchdog bite threshold; bite reset fires when WDOG_COUNT >= this value (RW).
 };
 
 /**
@@ -514,36 +514,36 @@ class WDOG_BITE_THOLD_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WDOG_COUNT_type : public csml_reg<N>
+class WDOG_COUNT_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WDOG_COUNT register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WDOG_COUNT_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       count(reg_name + ".count", *this, 0, 32)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> count; ///< Bits[31:0]: Live 32-bit watchdog counter; any write resets to 0 (watchdog pet, RW, volatile).
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> count; ///< Bits[31:0]: Live 32-bit watchdog counter; any write resets to 0 (watchdog pet, RW, volatile).
 };
 
 /**
@@ -559,19 +559,19 @@ class WDOG_COUNT_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class INTR_STATE_type : public csml_reg<N>
+class INTR_STATE_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct INTR_STATE register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     INTR_STATE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       wkup_timer_expired(reg_name + ".wkup_timer_expired", *this, 0, 1),
       wdog_timer_bark(reg_name + ".wdog_timer_bark", *this, 1, 1),
       reserved0(reg_name + ".reserved0", *this, 2, 30)
@@ -579,20 +579,20 @@ class INTR_STATE_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> wkup_timer_expired; ///< Bit[0]: Set by HW when wakeup counter >= WKUP_THOLD; write 1 to clear (RW1C).
-    csml_bitfield<N> wdog_timer_bark;    ///< Bit[1]: Set by HW when watchdog counter >= WDOG_BARK_THOLD; write 1 to clear (RW1C).
-    csml_bitfield<N> reserved0;          ///< Bits[31:2]: Reserved. Reads as 0; writes ignored.
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> wkup_timer_expired; ///< Bit[0]: Set by HW when wakeup counter >= WKUP_THOLD; write 1 to clear (RW1C).
+    regmodel::Bitfield<N> wdog_timer_bark;    ///< Bit[1]: Set by HW when watchdog counter >= WDOG_BARK_THOLD; write 1 to clear (RW1C).
+    regmodel::Bitfield<N> reserved0;          ///< Bits[31:2]: Reserved. Reads as 0; writes ignored.
 };
 
 /**
@@ -609,19 +609,19 @@ class INTR_STATE_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class INTR_TEST_type : public csml_reg<N>
+class INTR_TEST_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct INTR_TEST register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     INTR_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x0, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0xffffffff, 0x0),
       wkup_timer_expired(reg_name + ".wkup_timer_expired", *this, 0, 1),
       wdog_timer_bark(reg_name + ".wdog_timer_bark", *this, 1, 1),
       reserved0(reg_name + ".reserved0", *this, 2, 30)
@@ -629,20 +629,20 @@ class INTR_TEST_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> wkup_timer_expired; ///< Bit[0]: Write 1 to force-assert wkup_timer_expired interrupt for testing (WO).
-    csml_bitfield<N> wdog_timer_bark;    ///< Bit[1]: Write 1 to force-assert wdog_timer_bark interrupt for testing (WO).
-    csml_bitfield<N> reserved0;          ///< Bits[31:2]: Reserved. Reads as 0; writes ignored.
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> wkup_timer_expired; ///< Bit[0]: Write 1 to force-assert wkup_timer_expired interrupt for testing (WO).
+    regmodel::Bitfield<N> wdog_timer_bark;    ///< Bit[1]: Write 1 to force-assert wdog_timer_bark interrupt for testing (WO).
+    regmodel::Bitfield<N> reserved0;          ///< Bits[31:2]: Reserved. Reads as 0; writes ignored.
 };
 
 /**
@@ -659,38 +659,38 @@ class INTR_TEST_type : public csml_reg<N>
  * @tparam N Memory template width in bits (32 for this peripheral).
  */
 template<unsigned int N>
-class WKUP_CAUSE_type : public csml_reg<N>
+class WKUP_CAUSE_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     /**
      * @brief Construct WKUP_CAUSE register and bind bitfields.
      * @param reg_name Hierarchical name string for this register instance.
-     * @param memory   Reference to the shared CSML memory backing store.
+     * @param memory   Reference to the shared regmodel memory backing store.
      * @param offset   Word-addressed offset into the memory backing store.
      */
     WKUP_CAUSE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x0),
       cause(reg_name + ".cause", *this, 0, 1),
       reserved0(reg_name + ".reserved0", *this, 1, 31)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> cause;    ///< Bit[0]: Set by HW when wkup_req is asserted; write 0 to clear and de-assert wkup_req (RW0C).
-    csml_bitfield<N> reserved0; ///< Bits[31:1]: Reserved. Reads as 0; writes ignored.
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> cause;    ///< Bit[0]: Set by HW when wkup_req is asserted; write 0 to clear and de-assert wkup_req (RW0C).
+    regmodel::Bitfield<N> reserved0; ///< Bits[31:1]: Reserved. Reads as 0; writes ignored.
 };
 
 

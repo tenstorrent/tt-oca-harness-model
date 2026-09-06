@@ -50,7 +50,7 @@ otbn_algorithm_p256_ecdsa::otbn_algorithm_p256_ecdsa(size_t dmem_size)
     : otbn_algorithm(dmem_size, false), instruction_count(100000) {}
 
 otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
-    CSML_INFO(1, logger) << "[OTBN P256 ECDSA] Starting signature verification";
+    REG_INFO(1, logger) << "[OTBN P256 ECDSA] Starting signature verification";
 
     // Read inputs from DMEM
     unsigned char msg[32], r[32], s[32], pubkey_x[32], pubkey_y[32];
@@ -68,7 +68,7 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
     EC_KEY* key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
     // LCOV_EXCL_START — OpenSSL curve/key init failure cannot be injected from the TB
     if (!key) {
-        CSML_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to create EC_KEY";
+        REG_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to create EC_KEY";
             return otbn_algorithm::ERROR;
     }
     // LCOV_EXCL_STOP
@@ -80,7 +80,7 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
     BIGNUM* bn_y = BN_bin2bn(pubkey_y, 32, NULL);
 
     if (!EC_POINT_set_affine_coordinates(group, pub_point, bn_x, bn_y, NULL)) {
-        CSML_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to set public key point";
+        REG_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to set public key point";
         BN_free(bn_x);
         BN_free(bn_y);
         EC_POINT_free(pub_point);
@@ -90,7 +90,7 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
 
     // LCOV_EXCL_START — EC_KEY_set_public_key fails only if OpenSSL is broken
     if (!EC_KEY_set_public_key(key, pub_point)) {
-        CSML_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to set public key";
+        REG_ERROR(0, logger) << "[OTBN P256 ECDSA] Failed to set public key";
         BN_free(bn_x);
         BN_free(bn_y);
         EC_POINT_free(pub_point);
@@ -108,7 +108,7 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
     // Verify signature
     int verify_result = ECDSA_do_verify(msg, 32, sig, key);
 
-    CSML_INFO(1, logger) << "[OTBN P256 ECDSA] Verification result: " << verify_result;
+    REG_INFO(1, logger) << "[OTBN P256 ECDSA] Verification result: " << verify_result;
 
     // Write results to DMEM
     uint32_t* dmem_words = reinterpret_cast<uint32_t*>(dmem);
@@ -118,11 +118,11 @@ otbn_algorithm::status_t otbn_algorithm_p256_ecdsa::execute(char* dmem) {
         dmem_words[OK_OFFSET / 4] = HARDENED_BOOL_TRUE;
         // Write recovered x_r (should equal r)
         write_p256_value(dmem, X_R_OFFSET, r);
-        CSML_INFO(1, logger) << "[OTBN P256 ECDSA] Signature VALID";
+        REG_INFO(1, logger) << "[OTBN P256 ECDSA] Signature VALID";
     } else {
         // Signature invalid
         dmem_words[OK_OFFSET / 4] = HARDENED_BOOL_FALSE;
-        CSML_INFO(1, logger) << "[OTBN P256 ECDSA] Signature INVALID";
+        REG_INFO(1, logger) << "[OTBN P256 ECDSA] Signature INVALID";
     }
 
     // Cleanup
@@ -150,6 +150,6 @@ void otbn_algorithm_p256_ecdsa::reset() {
 }
 
 void otbn_algorithm_p256_ecdsa::message_objects(std::ostream &debug, std::ostream &info) {
-    CSML_INFO(1, logger) << "[OTBN P256 ECDSA] Debug stream configured";
+    REG_INFO(1, logger) << "[OTBN P256 ECDSA] Debug stream configured";
 }
 

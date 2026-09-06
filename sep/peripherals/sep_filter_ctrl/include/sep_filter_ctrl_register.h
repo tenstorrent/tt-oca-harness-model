@@ -8,18 +8,18 @@
 #pragma once
 #include <iostream>
 #include <systemc.h>
-#include "csml.h"
+#include "reg_file.h"
 
 namespace sep_filter_ctrl {
 
 template<unsigned int N>
-class FILTER_CONFIG_type : public csml_reg<N>
+class FILTER_CONFIG_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     FILTER_CONFIG_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0x8000000001ff0113, 0x8000000001ff0113, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x8000000001ff0113, 0x8000000001ff0113, 0x0),
       read_allowed(reg_name + ".read_allowed", *this, 0, 1),
       write_allowed(reg_name + ".write_allowed", *this, 1, 1),
       reserved0(reg_name + ".reserved0", *this, 2, 2),
@@ -38,89 +38,89 @@ class FILTER_CONFIG_type : public csml_reg<N>
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> read_allowed;
-    csml_bitfield<N> write_allowed;
-    csml_bitfield<N> reserved0;
-    csml_bitfield<N> entry_enabled;
-    csml_bitfield<N> reserved1;
-    csml_bitfield<N> allow_ns;
-    csml_bitfield<N> reserved2;
-    csml_bitfield<N> data_bus_width;
-    csml_bitfield<N> reserved3;
-    csml_bitfield<N> src_id;
-    csml_bitfield<N> group_id;
-    csml_bitfield<N> allow_burst;
-    csml_bitfield<N> reserved4;
-    csml_bitfield<N> locked;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> read_allowed;
+    regmodel::Bitfield<N> write_allowed;
+    regmodel::Bitfield<N> reserved0;
+    regmodel::Bitfield<N> entry_enabled;
+    regmodel::Bitfield<N> reserved1;
+    regmodel::Bitfield<N> allow_ns;
+    regmodel::Bitfield<N> reserved2;
+    regmodel::Bitfield<N> data_bus_width;
+    regmodel::Bitfield<N> reserved3;
+    regmodel::Bitfield<N> src_id;
+    regmodel::Bitfield<N> group_id;
+    regmodel::Bitfield<N> allow_burst;
+    regmodel::Bitfield<N> reserved4;
+    regmodel::Bitfield<N> locked;
 };
 
 template<unsigned int N>
-class START_ADDR_type : public csml_reg<N>
+class START_ADDR_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     START_ADDR_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffffffffff, 0xffffffffffffff, 0x0),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffffffffff, 0xffffffffffffff, 0x0),
       start_addr(reg_name + ".start_addr", *this, 0, 56),
       reserved(reg_name + ".reserved", *this, 56, 8)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> start_addr;
-    csml_bitfield<N> reserved;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> start_addr;
+    regmodel::Bitfield<N> reserved;
 };
 
 template<unsigned int N>
-class END_ADDR_type : public csml_reg<N>
+class END_ADDR_type : public regmodel::Reg<N>
 {
   public:
-    using typename csml_reg<N>::memory_type;
-    typedef typename csml_word<N>::wordtype DT;
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
     END_ADDR_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      csml_reg<N>(reg_name, memory, offset, 0xffffffffffffff, 0xffffffffffffff, 0x7),
+      regmodel::Reg<N>(reg_name, memory, offset, 0xffffffffffffff, 0xffffffffffffff, 0x7),
       end_addr(reg_name + ".end_addr", *this, 0, 56),
       reserved(reg_name + ".reserved", *this, 56, 8)
     {
       this->set_read_write_restrictions(memory);
     }
 
-    using csml_reg<N>::operator=;
-    using csml_reg<N>::operator+=;
-    using csml_reg<N>::operator-=;
-    using csml_reg<N>::operator/=;
-    using csml_reg<N>::operator*=;
-    using csml_reg<N>::operator%=;
-    using csml_reg<N>::operator^=;
-    using csml_reg<N>::operator&=;
-    using csml_reg<N>::operator|=;
-    using csml_reg<N>::operator>>=;
-    using csml_reg<N>::operator<<=;
-    csml_bitfield<N> end_addr;
-    csml_bitfield<N> reserved;
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> end_addr;
+    regmodel::Bitfield<N> reserved;
 };
 
 }

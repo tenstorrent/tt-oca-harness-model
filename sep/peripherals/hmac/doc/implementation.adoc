@@ -17,7 +17,7 @@ class hmac_ip : public hmac_base
 
 ----
 hmac_ip          engine threads, interrupts, KM sideload   (hmac.*)
-  └─ hmac_base   csml_memory + software-visible words      (hmac_base.*)
+  └─ hmac_base   regmodel::Memory + software-visible words      (hmac_base.*)
        └─ hmac_register.h   RO/WO/RW types
 sha2_engine      SHA-256/384/512 core, loadable state      (sha2_engine.*)
 hmac_interface.h   unused abstract `hmac_if` (ports are native sc_in/sc_out)
@@ -76,13 +76,13 @@ OpenSSL remains the reference the digests are checked against.
 
 ====== CCI parameters
 
-Knobs are `csml_param`. Block and finalize costs are compile-time cycle
+Knobs are `regmodel::Param`. Block and finalize costs are compile-time cycle
 constants, scaled by `clk_i`.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

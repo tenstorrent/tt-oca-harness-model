@@ -39,7 +39,7 @@ sep_output_remap_ctrl_ip::sep_output_remap_ctrl_ip(
     , data_socket("data_socket")
     , remapped_socket("remapped_socket")
     , rst_ni("rst_ni")
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");

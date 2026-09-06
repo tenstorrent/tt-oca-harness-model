@@ -17,7 +17,7 @@ class entropy_src_ip : public entropy_src_base, public entropy_src_if
 
 ----
 entropy_src_ip          generation thread, FIFO, irq_o   (entropy_src.*)
-  └─ entropy_src_base   csml_memory + software-visible words
+  └─ entropy_src_base   regmodel::Memory + software-visible words
        └─ entropy_src_register.h   RO/WO/RW types
 entropy_src_interface.h   register-callback contract
 ----
@@ -56,13 +56,13 @@ enable is captured; the running tests are a stub.
 
 ====== CCI parameters
 
-Knobs are `csml_param`. Startup delay and downsample come from CSRs, not
+Knobs are `regmodel::Param`. Startup delay and downsample come from CSRs, not
 CCI.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

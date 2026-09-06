@@ -30,6 +30,8 @@
 // catches it and asserts that exactly one fatal was raised.
 
 #include <systemc>
+#include <tlm>
+#include <tlm_utils/simple_initiator_socket.h>
 
 #include <cci_configuration>
 #include <cci/utils/consuming_broker.h>
@@ -126,6 +128,32 @@ bool expect_fatal(F&& body)
       catch (...)                       { return true; }
     return false;
 }
+
+// Minimal TLM initiator so this binary also exercises `b_transport`
+// (the primary benches already do; llvm-cov counts each linked copy).
+struct tlm_probe : sc_core::sc_module {
+    tlm_utils::simple_initiator_socket<tlm_probe> sock;
+    explicit tlm_probe(sc_core::sc_module_name n) : sc_module(n), sock("sock") {}
+
+    tlm::tlm_response_status xfer(tlm::tlm_command cmd, uint64_t addr,
+                                  unsigned len, void* data,
+                                  unsigned sw = 0,
+                                  uint8_t* be_ptr = nullptr,
+                                  unsigned be_len = 0) {
+        tlm::tlm_generic_payload gp;
+        sc_core::sc_time t = sc_core::SC_ZERO_TIME;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(sw == 0 ? len : sw);
+        gp.set_byte_enable_ptr(be_ptr);
+        gp.set_byte_enable_length(be_len);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, t);
+        return gp.get_response_status();
+    }
+};
 
 } // namespace
 
@@ -367,6 +395,121 @@ int sc_main(int, char**)
         EXPECT_EQ(uint32_t(0), rom.dbg_read32(0x100));
 
         std::cout << "  [PASS] dbg_read32 happy / misaligned / OOB\n";
+    }
+
+    // Empty init_file → zero-initialised ROM.  Also drives resolve_format
+    // with a path shorter than ".img"/".bin" (ends_with_ci early-out).
+    {
+        presets p{broker, "rom_zero_init"};
+        p.set_size(0x10);
+        p.set_file("");
+        p.set_format("auto");
+        smc::bootrom rom("rom_zero_init");
+        EXPECT_EQ(uint64_t(0), rom.dbg_read64(0));
+        EXPECT_EQ(uint64_t(0), rom.dbg_read64(8));
+        EXPECT_EQ(uint64_t(0), rom.dbg_read64(1));       // misaligned
+        EXPECT_EQ(uint64_t(0), rom.dbg_read64(0x100));   // OOB
+        EXPECT_EQ(0u, rom.dbg_load_bytes(0, nullptr, 4));
+        std::cout << "  [PASS] empty init_file zero-initialises the ROM\n";
+    }
+
+    // Hex parser edges: inline `#` comments, trailing whitespace, and a
+    // `0x` prefix that leaves an empty token (skipped, not fatal).
+    {
+        TempFile edge("hexedge", ".hex");
+        edge.write_text("00000000000000CC # inline comment\n"
+                        "00000000000000DD   \n"
+                        "0x\n"
+                        "0X   \n"
+                        "   \n");
+        presets p{broker, "rom_hex_edge"};
+        p.set_size(0x10);
+        p.set_file(edge.path);
+        p.set_format("hex");
+        smc::bootrom rom("rom_hex_edge");
+        EXPECT_EQ(uint64_t(0xCC), rom.dbg_read64(0));
+        EXPECT_EQ(uint64_t(0xDD), rom.dbg_read64(8));
+        std::cout << "  [PASS] hex inline comment / trailing ws / empty 0x\n";
+    }
+
+    // Uppercase `.BIN` suffix + explicit `bin` format on a non-standard
+    // extension both resolve to the binary preload path.
+    {
+        const std::vector<uint8_t> bytes = {0x01, 0x02, 0x03, 0x04,
+                                            0x05, 0x06, 0x07, 0x08,
+                                            0x11, 0x12, 0x13, 0x14,
+                                            0x15, 0x16, 0x17, 0x18};
+        TempFile upper("upper", ".BIN");
+        upper.write_binary(bytes);
+        presets p1{broker, "rom_upper_bin"};
+        p1.set_size(0x10);
+        p1.set_file(upper.path);
+        p1.set_format("auto");
+        smc::bootrom rom1("rom_upper_bin");
+        EXPECT_EQ(uint64_t(0x0807060504030201ULL), rom1.dbg_read64(0));
+
+        TempFile raw("explicitbin", ".dat");
+        raw.write_binary(bytes);
+        presets p2{broker, "rom_explicit_bin"};
+        p2.set_size(0x10);
+        p2.set_file(raw.path);
+        p2.set_format("bin");
+        smc::bootrom rom2("rom_explicit_bin");
+        EXPECT_EQ(uint64_t(0x1817161514131211ULL), rom2.dbg_read64(8));
+        std::cout << "  [PASS] .BIN auto-detect and explicit format=bin\n";
+    }
+
+    // Drive every b_transport validation arm from this binary so its
+    // linked copy of bootrom.cpp is not reported as uncovered.
+    {
+        TempFile good("tlm", ".hex");
+        good.write_text("0123456789ABCDEF\n"
+                        "FEDCBA9876543210\n");
+        presets p{broker, "rom_tlm"};
+        p.set_size(0x10);
+        p.set_file(good.path);
+        p.set_format("hex");
+        smc::bootrom rom("rom_tlm");
+        tlm_probe probe("probe_tlm");
+        probe.sock.bind(rom.reg_socket);
+
+        uint64_t w = 0;
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  probe.xfer(tlm::TLM_READ_COMMAND, 0, 8, &w));
+        EXPECT_EQ(uint64_t(0x0123456789ABCDEFULL), w);
+
+        uint64_t before = w;
+        uint64_t poison = 0xDEADBEEFCAFEBABEULL;
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+                  probe.xfer(tlm::TLM_WRITE_COMMAND, 0, 8, &poison));
+        EXPECT_EQ(before, rom.dbg_read64(0));
+
+        uint32_t scratch = 0;
+        EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                  probe.xfer(tlm::TLM_READ_COMMAND, 0, 3, &scratch));
+        EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                  probe.xfer(tlm::TLM_READ_COMMAND, 1, 4, &scratch));
+        EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                  probe.xfer(tlm::TLM_READ_COMMAND, 0, 4, &scratch, /*sw=*/1));
+        uint8_t be = 0xFF;
+        EXPECT_EQ(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
+                  probe.xfer(tlm::TLM_READ_COMMAND, 0, 4, &scratch, 0, &be, 1));
+        EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                  probe.xfer(tlm::TLM_READ_COMMAND, 0x10, 4, &scratch));
+        EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                  probe.xfer(tlm::TLM_READ_COMMAND, 0x0C, 8, &w));
+        EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                  probe.xfer(tlm::TLM_IGNORE_COMMAND, 0, 4, &scratch));
+
+        tlm::tlm_generic_payload gp;
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(0);
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(&w));
+        gp.set_data_length(8);
+        gp.set_streaming_width(8);
+        EXPECT_EQ(8u, probe.sock->transport_dbg(gp));
+
+        std::cout << "  [PASS] b_transport happy + error paths from neg bench\n";
     }
 
     if (g_failures == 0) {

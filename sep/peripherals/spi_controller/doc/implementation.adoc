@@ -7,7 +7,7 @@
 `spi_controller_ip` is a loosely-timed TLM-2.0 model of the OpenTitan
 SPI host. Segment timing is `ClkPeriodNs` multiplied by CLKDIV and
 CS margins, not a pin-accurate SCK. The register file follows the
-HMAC / KMAC pattern: `spi_controller_base` is the CSML declaration
+HMAC / KMAC pattern: `spi_controller_base` is the regmodel declaration
 so a map change lands in one header.
 
 [source,cpp]
@@ -17,7 +17,7 @@ class spi_controller_ip : public spi_controller_base
 
 ----
 spi_controller_ip     FSM, FIFOs, interrupts, DMA trigger   (spi_controller.*)
-  └─ spi_controller_base   csml_memory + software-visible words
+  └─ spi_controller_base   regmodel::Memory + software-visible words
        └─ spi_controller_register.h   RO/WO/RW types
 spi_if / spi_segment_t    transaction contract (spi_controller_interface.h)
 ----
@@ -64,7 +64,7 @@ and interrupt registers recompute the pins.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used. `TimeKeeperQuantumNs`
+Knobs are `regmodel::Param` and are re-read when used. `TimeKeeperQuantumNs`
 greater than zero installs a TLM global quantum; the default 0 leaves
 the keeper off.
 
@@ -78,7 +78,7 @@ the keeper off.
 |`CmdDepth` |4 |Command-queue depth
 |`ClkPeriodNs` |10.0 |Core clock period for LT segment delay
 |`TimeKeeperQuantumNs` |0.0 |TLM quantum; 0 disables
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

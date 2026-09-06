@@ -27,14 +27,14 @@ testbench::testbench(sc_module_name name)
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    // Instantiate DUT - parameters resolved via csml_param (CCI preset or compile-time defaults)
+    // Instantiate DUT - parameters resolved via regmodel::Param (CCI preset or compile-time defaults)
     dut = new spi_controller_ip("spi_controller_dut");
 
     // Sync all loggers with DUT verbosity (CCI preset may have overridden the build default)
     int resolved_verbosity = dut->verbosity.get_param_value();
     logger.setMaxVerbosity(resolved_verbosity);
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "SPI CONTROLLER Testbench Configuration" << std::endl
                          << "========================================" << std::endl
                          << "NumCS:      " << dut->get_num_cs() << std::endl
@@ -122,7 +122,7 @@ void testbench::bind_ports()
 /// =============================================================================
 void testbench::run_tests()
 {
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "SPI CONTROLLER Testbench Starting" << std::endl
                          << "========================================" << std::endl;
 
@@ -130,7 +130,7 @@ void testbench::run_tests()
     initialize_environment();
 
     // Run test cases
-    CSML_INFO(1, logger) << "\n[TESTBENCH] Running test cases..." << std::endl
+    REG_INFO(1, logger) << "\n[TESTBENCH] Running test cases..." << std::endl
                          << "\n========================================" << std::endl
                          << "Starting Top 10 Critical Functional Tests" << std::endl
                          << "========================================\n" << std::endl;
@@ -148,7 +148,7 @@ void testbench::run_tests()
     test_func009_command_queue_depth();
     test_func010_dma_trigger();
 
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Starting Code Coverage Targeted Tests" << std::endl
                          << "========================================\n" << std::endl;
 
@@ -165,7 +165,7 @@ void testbench::run_tests()
 
 
     // Print final test summary
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "       TEST SUITE SUMMARY" << std::endl
                          << "========================================" << std::endl
                          << "Total Tests:  " << m_tests_run << std::endl
@@ -174,20 +174,20 @@ void testbench::run_tests()
 
     if (m_tests_run > 0) {
         double success_rate = (100.0 * m_tests_passed) / m_tests_run;
-        CSML_INFO(1, logger) << "Success Rate: " << std::fixed << std::setprecision(1) << success_rate << "%" << std::endl;
+        REG_INFO(1, logger) << "Success Rate: " << std::fixed << std::setprecision(1) << success_rate << "%" << std::endl;
     }
 
-    CSML_INFO(1, logger) << "========================================" << std::endl;
+    REG_INFO(1, logger) << "========================================" << std::endl;
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "[OVERALL RESULT: FAILED - " << m_tests_failed << " test(s) failed]" << std::endl;
+        REG_ERROR(1, logger) << "[OVERALL RESULT: FAILED - " << m_tests_failed << " test(s) failed]" << std::endl;
     } else if (m_tests_passed > 0) {
-        CSML_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
+        REG_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
     } else {
-        CSML_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
+        REG_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
     }
 
-    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+    REG_INFO(1, logger) << "========================================\n" << std::endl;
 
     // Stop simulation
     sc_stop();
@@ -199,7 +199,7 @@ void testbench::run_tests()
 /// =============================================================================
 void testbench::initialize_environment()
 {
-    CSML_INFO(1, logger) << "[TESTBENCH] Initializing test environment..." << std::endl;
+    REG_INFO(1, logger) << "[TESTBENCH] Initializing test environment..." << std::endl;
 
     // Configure clock
     configure_clock();
@@ -207,7 +207,7 @@ void testbench::initialize_environment()
     // Apply reset
     apply_reset();
 
-    CSML_INFO(1, logger) << "[TESTBENCH] Initialization complete\n" << std::endl;
+    REG_INFO(1, logger) << "[TESTBENCH] Initialization complete\n" << std::endl;
 }
 
 /// =============================================================================
@@ -218,7 +218,7 @@ void testbench::configure_clock()
     // Set functional clock frequency (e.g., 50 MHz)
     double clk_freq_hz = 100e6;  /// 50 MHz
     test->clk_i.write(1);
-    CSML_INFO(1, logger) << "[TESTBENCH] Clock configured: " << (clk_freq_hz / 1e6) << " MHz" << std::endl;
+    REG_INFO(1, logger) << "[TESTBENCH] Clock configured: " << (clk_freq_hz / 1e6) << " MHz" << std::endl;
 }
 
 /// =============================================================================
@@ -226,7 +226,7 @@ void testbench::configure_clock()
 /// =============================================================================
 void testbench::apply_reset()
 {
-    CSML_INFO(1, logger) << "[TESTBENCH] Applying reset..." << std::endl;
+    REG_INFO(1, logger) << "[TESTBENCH] Applying reset..." << std::endl;
 
     // Assert reset (active-low)
     test->rst_ni.write(false);
@@ -236,7 +236,7 @@ void testbench::apply_reset()
     test->rst_ni.write(true);
     wait(100, SC_NS);
 
-    CSML_INFO(1, logger) << "[TESTBENCH] Reset complete" << std::endl;
+    REG_INFO(1, logger) << "[TESTBENCH] Reset complete" << std::endl;
 }
 
 /// =============================================================================
@@ -248,16 +248,16 @@ void testbench::report_test_result(const char* test_name, bool passed)
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "\n========================================" << std::endl
+        REG_INFO(1, logger) << "\n========================================" << std::endl
                              << "[*** TEST PASSED ***] " << test_name << std::endl
                              << "========================================\n" << std::endl;
     } else {
         m_tests_failed++;
-        CSML_ERROR(1, logger) << "\n========================================" << std::endl
+        REG_ERROR(1, logger) << "\n========================================" << std::endl
                               << "[XXX TEST FAILED XXX] " << test_name << std::endl
                               << "========================================\n" << std::endl;
 
-        CSML_ERROR(1, logger) << "\nError: TEST_FAILURE: " << test_name << std::endl
+        REG_ERROR(1, logger) << "\nError: TEST_FAILURE: " << test_name << std::endl
                               << "In file: test/src/testbench.cpp:" << __LINE__ << std::endl
                               << "In process: " << sc_core::sc_get_current_process_handle().name()
                               << " @ " << sc_time_stamp() << std::endl;
@@ -334,7 +334,7 @@ bool testbench::check_ready(const char* context)
     test->read_register_32(spi_controller_regs::STATUS_OFFSET, status_val);
     bool ready = (status_val >> 31) & 0x1;
     if (!ready) {
-        CSML_WARN(1, logger) << "  [FAIL] STATUS.READY=0 during " << context << std::endl;
+        REG_WARN(1, logger) << "  [FAIL] STATUS.READY=0 during " << context << std::endl;
     }
     return ready;
 }
@@ -367,7 +367,7 @@ void testbench::drain_rx_fifo(int num_words)
  */
 void testbench::print_test_summary(int passed, int failed)
 {
-    CSML_INFO(1, logger) << "\n========================================" << std::endl
+    REG_INFO(1, logger) << "\n========================================" << std::endl
                          << "Sub-tests Passed: " << passed << std::endl
                          << "Sub-tests Failed: " << failed << std::endl
                          << "========================================\n" << std::endl;
@@ -403,9 +403,9 @@ bool testbench::wait_for_transaction_complete(uint32_t timeout_us)
 int sc_main(int argc, char* argv[])
 {
     // Initialize CCI broker and optionally load INI config file.
-    // load_config_file() registers the global CCI broker and, if a filename
+    // regmodel::load_config_file() registers the global CCI broker and, if a filename
     // is provided, applies preset parameter values from the INI file.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     testbench tb("testbench");
     sc_start();

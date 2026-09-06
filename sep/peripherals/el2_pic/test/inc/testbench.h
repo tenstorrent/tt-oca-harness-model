@@ -5,14 +5,14 @@
 #include "el2_pic.h"
 #include "VeeR-ISSTlm.hpp"
 #include "el2_pic_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <memory>
 #include <vector>
 #include <string>
 
 class testbench : public sc_module {
 public:
-    CsmlLogger logger;
+    RegLogger logger;
 
     std::unique_ptr<el2_pic::el2_pic_model> m_dut;
     std::unique_ptr<el2_pic_test>           m_test;
@@ -33,7 +33,8 @@ public:
 
     // CSR path to m_dut_unbound. A target socket must still be bound to
     // something even when the test never transacts on it, so this doubles as the
-    // way to read that instance's pending words.
+    // way to read/write that instance's registers (writes also hit the
+    // null-hart arbitration early-return).
     tlm_utils::simple_initiator_socket<testbench> unbound_isock;
     uint32_t unbound_read_32(unsigned byte_offset);
     void     unbound_write_32(unsigned byte_offset, uint32_t value);
@@ -131,6 +132,21 @@ public:
     // FUNC-EL2PIC-012: Unbound irq_in sources are tied low
     // -------------------------------------------------------------------------
     void test_unbound_sources_tied_low();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-015: meipt / meicurpl threshold drops and re-raises EIP
+    // -------------------------------------------------------------------------
+    void test_threshold_blocks_and_notify();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-016: Winner changes while EIP is already asserted
+    // -------------------------------------------------------------------------
+    void test_winner_change_while_asserted();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-017: Reserved source 0 and null-hart arbitration
+    // -------------------------------------------------------------------------
+    void test_source0_and_null_hart();
 
     // -------------------------------------------------------------------------
     // FUNC-EL2PIC-015: Threshold CSRs, reserved source 0, null-hart arbiter

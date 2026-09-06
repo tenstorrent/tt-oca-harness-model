@@ -16,7 +16,7 @@ class kmac_ip : public kmac_base
 
 ----
 kmac_ip          FSM, app exports, KM sideload, quantum keeper   (kmac.*)
-  └─ kmac_base   csml_memory + software-visible words            (kmac_base.*)
+  └─ kmac_base   regmodel::Memory + software-visible words            (kmac_base.*)
        └─ kmac_register.h   RO/WO/RW types
 kmac_interface.h   kmac_app_if (and unused kmac_keymgr_if)
 ----
@@ -63,13 +63,13 @@ the PRNG is marked ready.
 
 ====== CCI parameters
 
-Knobs are `csml_param`. `NumAppIntf` and `EnMasking` are constructor
+Knobs are `regmodel::Param`. `NumAppIntf` and `EnMasking` are constructor
 arguments (defaults 3 and true), not CCI.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL

@@ -28,8 +28,8 @@
 
 #include "otbn_base.h"
 #include "otbn_interfaces.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <functional>
 #include <cstring>
 /**
@@ -105,7 +105,7 @@ public:
         : m_dmem_size(dmem_size), m_is_key_required(is_key_required)
     {
         // Initialize logger
-        logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+        logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
         logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
         logger.setFunctionTrace(false);
     }
@@ -176,7 +176,7 @@ protected:
     std::function<bool()> m_key_status_cb;
     std::function<void(uint32_t)> m_err_bits_write_cb;
     std::function<status_t(uint32_t*)> m_rnd_read_cb;
-    CsmlLogger logger;  // Logger instance for structured logging
+    RegLogger logger;  // Logger instance for structured logging
 };
 
 // Forward declarations for algorithm classes
@@ -233,10 +233,10 @@ public:
    sc_in<bool> lc_rma_req;
    sc_out<bool>  lc_rma_rsp;
 
-   /// CSML Logger instance
-   CsmlLogger logger;  ///< Logger for debug and tracing
-   csml_param<int> verbosity;                   ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
-   csml_param<std::string> algorithm_type;      ///< Algorithm type ("rsa_2048", "p256_ecdsa", etc.)
+   /// RegLogger instance
+   RegLogger logger;  ///< Logger for debug and tracing
+   regmodel::Param<int> verbosity;                   ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+   regmodel::Param<std::string> algorithm_type;      ///< Algorithm type ("rsa_2048", "p256_ecdsa", etc.)
 
    /*
     * Constructor
@@ -247,12 +247,12 @@ public:
     *
     * Per otbn_plan.md: URND uses C rand() with configurable srand() seed
     */
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
    otbn_ip(sc_module_name n, unsigned int memory_size,
         unsigned int urnd_seed = 0x12345678,
-        int log_verbosity = CSML_DEFAULT_VERBOSITY);
+        int log_verbosity = REG_DEFAULT_VERBOSITY);
    ~otbn_ip();
 
    friend class testbench;

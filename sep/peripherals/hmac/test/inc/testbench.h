@@ -4,7 +4,7 @@
 #include <systemc.h>
 #include "../../include/hmac.h"
 #include "hmac_test.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 // Expected CFG read-back for a given written value.
 //
@@ -200,6 +200,7 @@ private:
     void test_context_save_basic();
     void test_hash_stop_sync_fifo_drain();
     void test_context_sha_en_disable_clear();
+    void test_coverage_reject_paths();
 
     // Command rejects, leftover-FIFO start, SHA-384 stop/continue, keymgr read
     void test_coverage_gap_paths();
@@ -209,7 +210,7 @@ private:
     void wait_for_hmac_done();
 
     // Logger instance for structured logging
-    CsmlLogger logger;
+    RegLogger logger;
 
 public:
     uint32_t m_tests_failed = 0;

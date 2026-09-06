@@ -38,6 +38,12 @@ else()
     message(WARNING "Doxygen not found - documentation target will not be available")
 endif()
 
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  if(NOT DEFINED BUILD_TESTS)
+    option(BUILD_TESTS "Build dma test executables" ON)
+  endif()
+endif()
+
 # -----------------------------------------------------------------------------
 # Definitions
 # -----------------------------------------------------------------------------
@@ -72,20 +78,20 @@ set(WFLAG "-Wall -Wextra")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
-  add_compile_definitions(DEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(DEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "secure_dma: Debug build - full logging enabled")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 ${WFLAG}")
-  add_compile_definitions(NDEBUG CSML_DEFAULT_VERBOSITY=3)
+  add_compile_definitions(NDEBUG REG_DEFAULT_VERBOSITY=3)
   message(STATUS "secure_dma: Release build - errors only, optimized")
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g -O0 -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address -fsanitize=undefined -fno-sanitize-recover=all -fsanitize=float-divide-by-zero -fsanitize=float-cast-overflow -fno-sanitize=null -fno-sanitize=alignment")
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=2)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=2)
   message(STATUS "secure_dma: ASAN build - AddressSanitizer enabled")
 endif()
 
@@ -93,8 +99,22 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  add_compile_definitions(CSML_DEFAULT_VERBOSITY=1 __COVERAGE__)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "secure_dma: Coverage build enabled")
+endif()
+
+# -----------------------------------------------------------------------------
+# External Dependencies (SystemC, CCI, OpenSSL)
+# -----------------------------------------------------------------------------
+find_package(Threads REQUIRED)
+include(FindCCI)
+include(FindSystemC)
+
+include(PeripheralOpenSSL)
+peripheral_find_openssl()
+
+if(CCI_FOUND)
+  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
 endif()
 
 # -----------------------------------------------------------------------------
@@ -102,25 +122,12 @@ endif()
 # -----------------------------------------------------------------------------
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
-  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/tlm_extensions
 )
-
-# -----------------------------------------------------------------------------
-# External Dependencies (SystemC, CCI, OpenSSL)
-# -----------------------------------------------------------------------------
-include(FindCCI)
-include(FindSystemC)
-
-if(CCI_FOUND)
-  include_directories(SYSTEM ${CCI_INCLUDE_DIR})
-endif()
-
-# OpenSSL (required for SHA-2 hash computation in FUNC-010)
-include(PeripheralOpenSSL)
-peripheral_find_openssl()
-include_directories(${OPENSSL_INCLUDE_DIR})
+# NOTE: test/inc is deliberately NOT added here — it's added per-target below,
+# only for secure_dma_testbench. Adding it globally would leak test-only
+# headers into secure_dma_model's (production) include path.
 
 # -----------------------------------------------------------------------------
 # Sources
@@ -136,19 +143,18 @@ set(TEST_BASE_SRCS
 )
 
 # -----------------------------------------------------------------------------
-# Libraries and Executables
+# Targets
 # -----------------------------------------------------------------------------
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    if(NOT DEFINED BUILD_TESTS)
-      option(BUILD_TESTS "Build dma test executables" ON)
-    endif()
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml ${CMAKE_CURRENT_BINARY_DIR}/csml)
-endif()
-
-# dma model library (always built)
 peripheral_add_model_library(secure_dma_model ${MODEL_SRCS})
-target_include_directories(secure_dma_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(secure_dma_model PUBLIC csml_logger SystemC::systemc Threads::Threads OpenSSL::Crypto ${CCI_LIBRARIES})
+target_include_directories(secure_dma_model PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/tlm_extensions
+)
+target_link_libraries(secure_dma_model PUBLIC SystemC::systemc Threads::Threads OpenSSL::Crypto)
+if(CCI_FOUND)
+  target_link_libraries(secure_dma_model PUBLIC ${CCI_LIBRARIES})
+endif()
 
 # dma testbench executable (only if BUILD_TESTS=ON)
 if(BUILD_TESTS)
@@ -166,15 +172,26 @@ if(BUILD_TESTS)
     test/src/test_dma_func_010.cpp
     test/src/test_dma_func_011.cpp
     test/src/test_dma_func_012.cpp
+    test/src/test_dma_coverage.cpp
     test/src/coverage_tests.cpp
     ${TEST_BASE_SRCS}
   )
   peripheral_link_test_to_model(secure_dma_testbench secure_dma_model)
+  target_include_directories(secure_dma_testbench PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/tlm_extensions
+  )
+  target_link_libraries(secure_dma_testbench PRIVATE SystemC::systemc)
+  if(CCI_FOUND)
+    target_link_libraries(secure_dma_testbench PRIVATE ${CCI_LIBRARIES})
+  endif()
+
   # -----------------------------------------------------------------------------
   # Coverage target
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Keep only model/ directory in coverage, exclude everything else
     peripheral_add_coverage_target(PRIMARY_TARGET secure_dma_testbench)
   endif()
 
@@ -203,7 +220,7 @@ if(CPPCHECK_EXECUTABLE)
       --template=gcc
       --cppcheck-build-dir=${CMAKE_BINARY_DIR}/cppcheck_results
       -I ${CMAKE_CURRENT_SOURCE_DIR}/include
-      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/csml/inc
+      -I ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
       -I ${CMAKE_CURRENT_SOURCE_DIR}/../../utils/tlm_extensions
       -I $ENV{SYSTEMC_HOME}/include
       ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp

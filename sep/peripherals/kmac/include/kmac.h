@@ -13,8 +13,8 @@
 
 #include "kmac_base.h"
 #include "kmac_interface.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <tlm_utils/tlm_quantumkeeper.h>
 #include <tlm_utils/simple_target_socket.h>
 #include <queue>
@@ -41,10 +41,10 @@ public:
      * @param num_app_intf Number of application interfaces (default 3)
      * @param en_masking Enable first-order masking (default true)
      */
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
-    csml_param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
+    regmodel::Param<int> verbosity;  ///< Logging verbosity: 0=error, 1=warn, 2=info, 3=debug
     kmac_ip(sc_module_name n,
             unsigned int memory_size = 0x1000,
             unsigned int num_app_intf = 3,
@@ -802,7 +802,7 @@ private:
     void clear_app_state();
 
     /// @brief Logger instance for structured logging
-    mutable CsmlLogger logger;
+    mutable RegLogger logger;
 
     // =========================================================================
     // FUNC-KMAC-024: Temporal Decoupling and Timing Abstraction

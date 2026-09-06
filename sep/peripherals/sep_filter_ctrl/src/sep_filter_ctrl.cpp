@@ -6,7 +6,7 @@
 
 namespace {
 
-// CSML 64-bit words receive RV32 stores as two 32-bit TLM beats. The legacy
+// 64-bit register words receive RV32 stores as two 32-bit TLM beats. The legacy
 // write callback is given only the bytes in this beat (other bytes zero), so
 // a high-half store of 0 would wipe START/END/FILTER_CONFIG. Merge with the
 // current word using the beat's byte-enable before applying register logic.
@@ -45,7 +45,7 @@ sep_filter_ctrl_ip::sep_filter_ctrl_ip(sc_module_name n, uint32_t num_instances)
     , filtered_socket("filtered_socket")
     , rst_ni("rst_ni")
     , filter_skip_i("filter_skip_i")
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
     , filter_skip_tie_low_("filter_skip_tie_low", false)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());

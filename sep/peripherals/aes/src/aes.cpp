@@ -151,12 +151,12 @@ bool resolve_shadow_fields(uint32_t staged, uint32_t incoming, uint32_t current,
  * 1. Initializes all internal state flags (idle, error, alert states)
  * 2. Sets up SystemC processes (reset, escalation, update handlers)
  * 3. Initializes the OpenSSL cipher context (EVP_CIPHER_CTX)
- * 4. Registers memory callbacks with the CSML base layer
+ * 4. Registers memory callbacks with the regmodel base layer
  */
     
 aes_model::aes_model(sc_module_name n)
     : aes_base(n, 0x8C)
-    , verbosity("verbosity", CSML_DEFAULT_VERBOSITY)
+    , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
     , clk_i("clk_i")
     , rst_ni("rst_ni")
     , keymgr_tl_socket("keymgr_tl_socket")
@@ -207,7 +207,7 @@ aes_model::aes_model(sc_module_name n)
     // Initialize temporal decoupling quantum keeper
     m_qk.reset();
 
-    // Initialize CSML logger
+    // Initialize regmodel logger
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
@@ -215,7 +215,7 @@ aes_model::aes_model(sc_module_name n)
     // Initialize OpenSSL cipher context
     m_cipher_ctx = EVP_CIPHER_CTX_new();
     if (!m_cipher_ctx) {
-        CSML_ERROR(0, logger) << "[AES] Failed to create OpenSSL cipher context" << std::endl;
+        REG_ERROR(0, logger) << "[AES] Failed to create OpenSSL cipher context" << std::endl;
         sc_stop();  // Equivalent to FATAL - stop simulation
     }
 
@@ -503,7 +503,7 @@ void aes_model::trigger_fatal_alert()
     // Note: update_idle_status() is an SC_METHOD that will be automatically triggered
 
     // Log fatal alert for debugging
-    CSML_WARN(1, logger) << "[AES] FATAL ALERT: AES unit entering terminal ERROR state. "
+    REG_WARN(1, logger) << "[AES] FATAL ALERT: AES unit entering terminal ERROR state. "
                          << "System reset (rst_ni) required for recovery." << std::endl;
 }
 
@@ -834,7 +834,7 @@ void aes_model::perform_prng_reseed()
     unsigned char rand_buf[48]; // 384 bits
     if (RAND_bytes(rand_buf, sizeof(rand_buf)) != 1) {
         // RAND_bytes failed - log warning but continue
-        CSML_WARN(1, logger) << "[AES] RAND_bytes failed - continuing without reseed" << std::endl;
+        REG_WARN(1, logger) << "[AES] RAND_bytes failed - continuing without reseed" << std::endl;
     }
 
     // Apply functional delay for PRNG reseed operation
@@ -976,7 +976,7 @@ bool aes_model::ensure_gcm_init()
 
     const std::array<uint8_t, 16> zero_block{};
     if (!aes_encrypt_block(zero_block.data(), m_gcm_hash_subkey.data())) {
-        CSML_ERROR(0, logger) << "[AES] GCM hash subkey derivation failed" << std::endl;
+        REG_ERROR(0, logger) << "[AES] GCM hash subkey derivation failed" << std::endl;
         trigger_fatal_alert();
         return false;
     }
@@ -991,7 +991,7 @@ bool aes_model::ensure_gcm_init()
     }
 
     if (!aes_encrypt_block(j0, m_gcm_s.data())) {
-        CSML_ERROR(0, logger) << "[AES] GCM S derivation failed" << std::endl;
+        REG_ERROR(0, logger) << "[AES] GCM S derivation failed" << std::endl;
         trigger_fatal_alert();
         return false;
     }
@@ -1060,7 +1060,7 @@ void aes_model::perform_gcm_block()
 
             uint8_t keystream[16];
             if (!aes_encrypt_block(counter, keystream)) {
-                CSML_ERROR(0, logger) << "[AES] GCM keystream generation failed" << std::endl;
+                REG_ERROR(0, logger) << "[AES] GCM keystream generation failed" << std::endl;
                 trigger_fatal_alert();
                 return;
             }
@@ -1416,7 +1416,7 @@ void aes_model::execute_encryption_decryption()
     // Get OpenSSL cipher
     const EVP_CIPHER* cipher = get_openssl_cipher();
     if (!cipher) {
-        CSML_ERROR(0, logger) << "[AES] Invalid cipher mode configuration" << std::endl;
+        REG_ERROR(0, logger) << "[AES] Invalid cipher mode configuration" << std::endl;
         trigger_fatal_alert();
         return;
     }
@@ -1426,13 +1426,13 @@ void aes_model::execute_encryption_decryption()
 
     if (m_current_mode == AESMode::AES_ECB) {
         if (!EVP_CipherInit_ex(m_cipher_ctx, cipher, nullptr, full_key.data(), nullptr, encrypt)) {
-            CSML_ERROR(0, logger) << "[AES] Failed to initialize cipher" << std::endl;
+            REG_ERROR(0, logger) << "[AES] Failed to initialize cipher" << std::endl;
             trigger_fatal_alert();
             return;
         }
     } else {
         if (!EVP_CipherInit_ex(m_cipher_ctx, cipher, nullptr, full_key.data(), iv_data, encrypt)) {
-            CSML_ERROR(0, logger) << "[AES] Failed to initialize cipher with IV" << std::endl;
+            REG_ERROR(0, logger) << "[AES] Failed to initialize cipher with IV" << std::endl;
             trigger_fatal_alert();
             return;
         }
@@ -1446,14 +1446,14 @@ void aes_model::execute_encryption_decryption()
     int outlen;
 
     if (!EVP_CipherUpdate(m_cipher_ctx, output_data, &outlen, input_data, 16)) {
-        CSML_ERROR(0, logger) << "[AES] Cipher operation failed" << std::endl;
+        REG_ERROR(0, logger) << "[AES] Cipher operation failed" << std::endl;
         trigger_fatal_alert();
         return;
     }
 
     int final_len;
     if (!EVP_CipherFinal_ex(m_cipher_ctx, output_data + outlen, &final_len)) {
-        CSML_ERROR(0, logger) << "[AES] Cipher finalization failed" << std::endl;
+        REG_ERROR(0, logger) << "[AES] Cipher finalization failed" << std::endl;
         trigger_fatal_alert();
         return;
     }
@@ -1592,7 +1592,7 @@ void aes_model::perform_cipher_operation()
                      " before=" + before_inc.to_string() +
                      " after=" + after_sync.to_string() +
                      " did_sync=" + (did_sync ? "yes" : "no");
-    CSML_INFO(1, logger) << msg << std::endl;
+    REG_INFO(1, logger) << msg << std::endl;
 
     // Execute the cipher operation
     execute_encryption_decryption();
@@ -2000,7 +2000,7 @@ bool aes_model::handle_write_CTRL_SHADOWED(uint32_t value, uint32_t write_mask)
     m_output_valid = false;
     update_status_register();
 
-    // Write to register for readback (CSML requires explicit write in callback)
+    // Write to register for readback (regmodel requires explicit write in callback)
     CTRL_SHADOWED = committed;
 
     return all_committed;
@@ -2075,7 +2075,7 @@ bool aes_model::handle_write_CTRL_AUX_SHADOWED(uint32_t value, uint32_t write_ma
     // : Extract KEY_TOUCH_FORCES_RESEED field
     m_key_touch_forces_reseed = ((committed >> 0) & 0x1) != 0;
 
-    // Write to register for readback (CSML requires explicit write in callback)
+    // Write to register for readback (regmodel requires explicit write in callback)
     CTRL_AUX_SHADOWED = committed;
 
     return all_committed;
@@ -2306,7 +2306,7 @@ bool aes_model::handle_write_TRIGGER(uint32_t value, uint32_t write_mask)
                 enter_busy(CipherState::INIT);
                 sc_spawn(sc_bind(&aes_model::perform_cipher_operation, this));
             } else {
-                CSML_WARN(1, logger) << "[AES] TRIGGER.START ignored: key not ready" << std::endl;
+                REG_WARN(1, logger) << "[AES] TRIGGER.START ignored: key not ready" << std::endl;
             }
         }
     }
@@ -2363,11 +2363,11 @@ bool aes_model::handle_read_STATUS(uint32_t& value, uint32_t read_mask)
 // =============================================================================
 
 /** 
- * @brief Registers all hardware register callbacks with the CSML model
+ * @brief Registers all hardware register callbacks with the regmodel model
  * 
  * Loops through all memory-mapped registers defined in the base class 
  * and binds the corresponding handle_write_* and handle_read_* methods 
- * to the CSML memory's callback interface. This enables the TL-UL 
+ * to the regmodel memory's callback interface. This enables the TL-UL 
  * target socket to trigger behavioral logic on register accesses.
  */
 void aes_model::register_all_callbacks()

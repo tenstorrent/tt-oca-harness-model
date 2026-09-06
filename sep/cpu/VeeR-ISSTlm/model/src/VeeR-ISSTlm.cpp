@@ -51,7 +51,7 @@ VeeRISSTlm::VeeRISSTlm(sc_module_name name, const Args &args, const WdRiscv::Har
 	logger.setMaxVerbosity(verbosity.get_param_value());
 	logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
 	logger.setFunctionTrace(false);
-	CSML_INFO(2, logger) << "VeeRISSTlm module constructor" <<  std::endl;
+	REG_INFO(2, logger) << "VeeRISSTlm module constructor" <<  std::endl;
 
 	// Register SystemC Thread to single step though riscv
 	SC_THREAD(run_thread);
@@ -67,9 +67,9 @@ VeeRISSTlm::VeeRISSTlm(sc_module_name name, const Args &args, const WdRiscv::Har
 
     bool ok = session();
     if (ok) {
-        CSML_INFO(2, logger) << "VeeRISSTlm module constructor completed" << std::endl;
+        REG_INFO(2, logger) << "VeeRISSTlm module constructor completed" << std::endl;
     } else { // LCOV_EXCL_START
-        CSML_INFO(2, logger) << "VeeRISSTlm module constructor error" << std::endl;
+        REG_INFO(2, logger) << "VeeRISSTlm module constructor error" << std::endl;
     } // LCOV_EXCL_STOP
 }
 
@@ -90,7 +90,7 @@ void VeeRISSTlm::end_of_elaboration()
 	// Register Memory write and read callbacks
 	system_->defineWriteMemoryCallback(write_cb);
 	system_->defineReadMemoryCallback(read_cb);
-	CSML_INFO(2, logger) << "VeeRISSTlm module end_of_elaboration - memory callback attached" <<  std::endl;
+	REG_INFO(2, logger) << "VeeRISSTlm module end_of_elaboration - memory callback attached" <<  std::endl;
 
 	// Debug prints
 	auto hart0 = system_->ithHart(hart_id);
@@ -108,13 +108,13 @@ void VeeRISSTlm::end_of_elaboration()
 	URV mtvec;
 	hart0->peekCsr(CsrNumber::MTVEC, mtvec);
 
-	CSML_DEBUG(3, logger) << "Register values before MIE enabled\n";
-	CSML_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
-	CSML_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
-	CSML_DEBUG(3, logger) << "mcause   = 0x" << std::hex << mcause << "\n";
-	CSML_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
-	CSML_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
-	CSML_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
+	REG_DEBUG(3, logger) << "Register values before MIE enabled\n";
+	REG_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
+	REG_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
+	REG_DEBUG(3, logger) << "mcause   = 0x" << std::hex << mcause << "\n";
+	REG_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
+	REG_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
+	REG_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
 
 	// Also enable global interrupts
 	hart0->peekCsr(CsrNumber::MSTATUS, mstatus);	
@@ -128,13 +128,13 @@ void VeeRISSTlm::end_of_elaboration()
 
 	hart0->enableNmi(enableNmi.get_param_value());
 
-	CSML_DEBUG(3, logger) << "Register values after MIE enabled\n";
-	CSML_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
-	CSML_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
-	CSML_DEBUG(3, logger) << "mcause  = 0x" << std::hex << mcause << "\n";
-	CSML_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
-	CSML_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
-	CSML_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
+	REG_DEBUG(3, logger) << "Register values after MIE enabled\n";
+	REG_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
+	REG_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
+	REG_DEBUG(3, logger) << "mcause  = 0x" << std::hex << mcause << "\n";
+	REG_DEBUG(3, logger) << "mtval   = 0x" << std::hex << mtval << "\n";
+	REG_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
+	REG_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
 }
 
 /// SystemC Veer/EL2 wrapper thread, which invokes the core
@@ -582,7 +582,7 @@ bool VeeRISSTlm::session()
 		(*system_->ithHart(i)).pokePc(URV(entrypoint));
 		auto& hart = *system_->ithHart(i);
 		pc = hart.peekPc();
-		CSML_DEBUG(5, logger) << "PC value = 0x" << std::hex << pc << "\n";
+		REG_DEBUG(5, logger) << "PC value = 0x" << std::hex << pc << "\n";
 	}
 
 	// In server/interactive modes: enable triggers and performance counters.
@@ -672,7 +672,7 @@ void VeeRISSTlm::handle_nmi_signal()
 
 		auto hart0 = system_->ithHart(hart_id);
 		if (hart0->isNmiActive()) {
-			CSML_INFO(2, logger) << "[NMI] bark fired while NMI active — ignoring\n";
+			REG_INFO(2, logger) << "[NMI] bark fired while NMI active — ignoring\n";
 			wait(nmi_i.negedge_event());
 			continue;
 		}
@@ -680,23 +680,23 @@ void VeeRISSTlm::handle_nmi_signal()
         uint32_t nmi_pc = nmi_vec_i.read();   // FW value (higher priority)
 
         if (nmi_pc != 0) {
-            CSML_INFO(2, logger) << "[NMI] FW-provided nmi_vec = 0x"
+            REG_INFO(2, logger) << "[NMI] FW-provided nmi_vec = 0x"
                                  << std::hex << nmi_pc << "\n";
             hart0->defineNmiPc(nmi_pc);       // update core with FW value
         } else {
             nmi_pc = hart0->getNmiPc();       // fall back to JSON/core fix value
             if (nmi_pc == 0) {
-                CSML_INFO(2, logger) << "[NMI] FW nmi_vec not set\n";
-                CSML_INFO(2, logger) << "[NMI] core/json nmi_vec not set either\n";
-                CSML_INFO(2, logger) << "[NMI] bark fired but nmi_vec not set — ignoring\n";
+                REG_INFO(2, logger) << "[NMI] FW nmi_vec not set\n";
+                REG_INFO(2, logger) << "[NMI] core/json nmi_vec not set either\n";
+                REG_INFO(2, logger) << "[NMI] bark fired but nmi_vec not set — ignoring\n";
                 continue;                     // skip, thread stays alive
             }
-            CSML_INFO(2, logger) << "[NMI] FW nmi_vec not set, falling back to core/json value 0x"
+            REG_INFO(2, logger) << "[NMI] FW nmi_vec not set, falling back to core/json value 0x"
                                  << std::hex << nmi_pc << "\n";
         }
 
         hart0->setPendingNmi(NmiCause::UNKNOWN);
-        CSML_INFO(2, logger) << "[NMI] NMI triggered — hart will jump to 0x"
+        REG_INFO(2, logger) << "[NMI] NMI triggered — hart will jump to 0x"
                              << std::hex << nmi_pc << "\n";
 		
 	}
@@ -755,7 +755,7 @@ void VeeRISSTlm::notifyWrite(uint64_t addr, unsigned size, int initiator_id)
 } 
 
 /// Direct TLM access to the internal PIC socket (bypasses system bus).
-/// addr is the absolute system address; CSML memory expects a PIC-relative offset,
+/// addr is the absolute system address; the PIC model expects a PIC-relative offset,
 /// so we subtract PIC_BASE here (same translation the bus router would do).
 bool VeeRISSTlm::doPicAccess(tlm_command cmd, uint64_t addr, unsigned char *data, unsigned len)
 {
@@ -811,7 +811,7 @@ bool VeeRISSTlm::externalRead(uint64_t addr, unsigned size, uint64_t &val)
 		return true;   // suppress synchronous fault; NMI pending instead
 	}
 
-	CSML_DEBUG(3, logger) << "externalRead Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
+	REG_DEBUG(3, logger) << "externalRead Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
 
 	return success;
 }
@@ -834,10 +834,10 @@ bool VeeRISSTlm::externalWrite(uint64_t addr, unsigned size, uint64_t val)
 	}
 
     if (addr >= 0x80000000 && addr < 0x80000010) {
-        CSML_INFO(5, logger) << "STDOUT_DEVICE: write addr=0x" << hex << addr << "val=0x" << *dataBuffer << "size=%u" << size << "\n";
+        REG_INFO(5, logger) << "STDOUT_DEVICE: write addr=0x" << hex << addr << "val=0x" << *dataBuffer << "size=%u" << size << "\n";
     }
 
-	CSML_DEBUG(5, logger) << "externalWrite Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
+	REG_DEBUG(5, logger) << "externalWrite Done addr=0x" << hex << addr << " size=" << size << " val=" << val << " pc=" << hart0->peekPc() << std::endl;
 
 	bool ok = doTlmAccess(TLM_WRITE_COMMAND, addr, dataBuffer, size,
 			(hart0->inDebugMode() || hart0->gdbAccessInProgress()));
@@ -882,10 +882,10 @@ bool VeeRISSTlm::doTlmAccess(tlm_command cmd, uint64_t addr, unsigned char *data
 
 	sc_time delay = sc_time(1, SC_NS);
 
-	CSML_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::Addr:0x" << addr << std::endl;
-	CSML_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::len:0x" << len << std::endl;
-	CSML_INFO(5, logger) << "VeeRISSTlm: inDebugMode " << inDebugMode << std::endl;
-	CSML_INFO(5, logger) << "VeeRISSTlm: doTlmAccess  end.." << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::Addr:0x" << addr << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm::doTlmAccess::len:0x" << len << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm: inDebugMode " << inDebugMode << std::endl;
+	REG_INFO(5, logger) << "VeeRISSTlm: doTlmAccess  end.." << std::endl;
 
 	if (inDebugMode)
 	{

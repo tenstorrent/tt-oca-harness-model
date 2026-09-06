@@ -42,7 +42,7 @@ otbn_algorithm::status_t otbn_algorithm_smoke::execute(char* dmem) {
 
     instruction_count = 39;
 
-    CSML_INFO(1, logger) << "[OTBN smoke] Completed: outer_inc=" << outer_inc << " inner_count=" << inner_count << " inner_inc=" << inner_inc << " result=" << x2 << " INSN_CNT=" << instruction_count;
+    REG_INFO(1, logger) << "[OTBN smoke] Completed: outer_inc=" << outer_inc << " inner_count=" << inner_count << " inner_inc=" << inner_inc << " result=" << x2 << " INSN_CNT=" << instruction_count;
 
     return otbn_algorithm::SUCCESS;
 }

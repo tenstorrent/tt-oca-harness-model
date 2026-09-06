@@ -18,7 +18,7 @@ testbench::testbench(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    // Initialize CSML logger
+    // Initialize regmodel logger
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
@@ -71,13 +71,13 @@ void testbench::report_test_result(const char* test_name, bool passed)
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "\n========================================\n"
+        REG_INFO(1, logger) << "\n========================================\n"
                              << "[*** TEST PASSED ***] " << test_name << "\n"
                              << "========================================\n" << std::endl;
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(0, logger) << "\n========================================\n"
+        REG_ERROR(0, logger) << "\n========================================\n"
                               << "[XXX TEST FAILED XXX] " << test_name << "\n"
                               << "========================================\n" << std::endl;
     }
@@ -85,7 +85,7 @@ void testbench::report_test_result(const char* test_name, bool passed)
 
 void testbench::report_test_start(const std::string& test_name)
 {
-    CSML_INFO(1, logger) << "========================================\n"
+    REG_INFO(1, logger) << "========================================\n"
                          << test_name << "\n"
                          << "========================================" << std::endl;
 }
@@ -94,7 +94,7 @@ void testbench::report_test_pass(const std::string& test_name)
 {
     m_tests_passed++;
     m_tests_run++;
-    CSML_INFO(1, logger) << test_name << ": PASS" << std::endl;
+    REG_INFO(1, logger) << test_name << ": PASS" << std::endl;
 }
 
 void testbench::report_test_fail(const std::string& test_name,
@@ -103,7 +103,7 @@ void testbench::report_test_fail(const std::string& test_name,
     m_tests_failed++;
     m_tests_run++;
     m_failed_tests.push_back(test_name);
-    CSML_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
+    REG_WARN(1, logger) << test_name << ": FAIL - " << reason << std::endl;
 }
 
 void testbench::report_test_summary()
@@ -115,7 +115,7 @@ void testbench::report_test_summary()
                           "Passed: " + std::to_string(m_tests_passed) + "\n" +
                           "Failed: " + std::to_string(m_tests_failed) + "\n" +
                           "========================================";
-    CSML_INFO(1, logger) << summary << std::endl;
+    REG_INFO(1, logger) << summary << std::endl;
 }
 
 void testbench::run_tests()
@@ -130,7 +130,7 @@ void testbench::run_tests()
 
     wait(10, SC_NS);
 
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "AES IP TESTBENCH" 
                          << "========================================" << std::endl;
 
@@ -240,12 +240,12 @@ void testbench::run_tests()
         }
     }
 
-    CSML_INFO(1, logger) << "========================================"
+    REG_INFO(1, logger) << "========================================"
                          << "All Port Binding Tests Completed"
                          << "========================================" << std::endl;
 
     // Run FUNC-AES-001 tests
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-001: Block Cipher Operations" 
                          << "========================================" << std::endl;
 
@@ -301,7 +301,7 @@ void testbench::run_tests()
     test_openssl_aes256_ctr_decryption_equivalence();
 
     // Run FUNC-AES-002 tests
-    CSML_INFO(1, logger) << "\n\n========================================"
+    REG_INFO(1, logger) << "\n\n========================================"
                          << "FUNC-AES-002: Sideload Key Management, Write Protection(non-idle), Invalid Key Length"
                          << "========================================" << std::endl;
 
@@ -319,7 +319,7 @@ void testbench::run_tests()
 
 
     // Run FUNC-AES-003 tests
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-003: Initialization Vector Management" 
                          << "========================================" << std::endl;
 
@@ -335,7 +335,7 @@ void testbench::run_tests()
     test_multi_block_cbc_chaining();
 
     // Run FUNC-AES-004 tests
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-004: Automatic Operation Mode" 
                          << "========================================" << std::endl;
 
@@ -350,7 +350,7 @@ void testbench::run_tests()
     test_status_transitions_during_operation();
 
     // Run FUNC-AES-005 tests
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-005: Manual Operation Mode" 
                          << "========================================" << std::endl;
 
@@ -364,7 +364,7 @@ void testbench::run_tests()
     test_manual_mode_multi_block_output_overwrite();
 
     // Run FUNC-AES-006 tests (except REGWEN locking tests - those run last)
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-006: Shadowed Register Fault Detection" 
                          << "========================================" << std::endl;
 
@@ -381,7 +381,7 @@ void testbench::run_tests()
     test_ctrl_shadowed_sanitised_readback();
 
     // Galois/Counter Mode
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "Galois/Counter Mode"
                          << "========================================" << std::endl;
 
@@ -392,7 +392,7 @@ void testbench::run_tests()
     test_gcm_save_restore();
 
     // Run FUNC-AES-007 tests (Register Interface Tests for Security Features)
-    CSML_INFO(1, logger) << "\n========================================"
+    REG_INFO(1, logger) << "\n========================================"
                          << "FUNC-AES-007: Register Interface Tests for Security Features"
                          << "========================================" << std::endl;
 
@@ -401,7 +401,7 @@ void testbench::run_tests()
     test_trigger_data_out_clear();
 
     // Run FUNC-AES-008 tests
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-008: Alert Generation and Error Reporting" 
                          << "========================================" << std::endl;
 
@@ -420,7 +420,7 @@ void testbench::run_tests()
 
 
     // Run FUNC-AES-009 tests
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-009: Functional Timing and Temporal Decoupling" 
                          << "========================================" << std::endl;
 
@@ -434,16 +434,22 @@ void testbench::run_tests()
     test_func009_aes256_block_latency();
     test_func009_timing_across_modes();
 
-    // Edge / error paths that the FUNC suites leave unhit.
-    CSML_INFO(1, logger) << "\n========================================"
-                         << "Coverage: extra edge paths"
+    REG_INFO(1, logger) << "\n========================================"
+                         << "Coverage: uncovered model paths"
                          << "========================================" << std::endl;
 
     m_test->trigger_reset();
     wait(20, SC_NS);
 
-    test_coverage_keymgr_rejects_non_write();
     test_coverage_prng_reseed_trigger_and_rates();
+    test_coverage_keymgr_read_rejected();
+    test_coverage_escalation_aborts_cipher();
+    test_coverage_error_state_writes_rejected();
+    test_coverage_gcm_shadow_and_busy();
+    test_coverage_sideload_and_gcm_init_guards();
+    test_coverage_gcm_aes192_aes256_init();
+    test_coverage_auto_start_gcm_and_output_valid();
+    test_coverage_keymgr_rejects_non_write();
     test_coverage_escalation_aborts_in_flight_cipher();
     test_coverage_sideload_missing_key_and_manual_start();
     test_coverage_error_state_and_busy_gcm_writes();
@@ -451,7 +457,7 @@ void testbench::run_tests()
     test_coverage_trigger_readback_and_gcm_manual_init();
     
     // Run FUNC-AES-006 REGWEN locking tests LAST (these lock CTRL_AUX_REGWEN permanently)
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "FUNC-AES-006: REGWEN Locking Tests (run last)" 
                          << "========================================" << std::endl;
 
@@ -464,49 +470,49 @@ void testbench::run_tests()
     test_ctrl_aux_shadowed_read_resets_sequence();
 
     // Print final test summary
-    CSML_INFO(1, logger) << "\n========================================" 
+    REG_INFO(1, logger) << "\n========================================" 
                          << "       TEST SUITE SUMMARY" 
                          << "========================================" << std::endl;
 
     std::stringstream ss;
     ss << "Total Tests:  " << m_tests_run;
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
 
     ss.str("");
     ss << "Passed:       " << m_tests_passed << " (PASS)";
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
 
     ss.str("");
     ss << "Failed:       " << m_tests_failed << " (FAIL)";
-    CSML_INFO(1, logger) << ss.str() << std::endl;
+    REG_INFO(1, logger) << ss.str() << std::endl;
 
     if (m_tests_run > 0) {
         double success_rate = (100.0 * m_tests_passed) / m_tests_run;
         ss.str("");
         ss << "Success Rate: " << std::fixed << std::setprecision(1) << success_rate << "%";
-        CSML_INFO(1, logger) << ss.str() << std::endl;
+        REG_INFO(1, logger) << ss.str() << std::endl;
     }
 
-    CSML_INFO(1, logger) << "========================================" << std::endl;
+    REG_INFO(1, logger) << "========================================" << std::endl;
 
     // Show list of failed tests if any
     if (m_tests_failed > 0) {
-        CSML_ERROR(0, logger) << "\nFailed Tests:" << std::endl;
+        REG_ERROR(0, logger) << "\nFailed Tests:" << std::endl;
         for (const auto& test : m_failed_tests) {
             ss.str("");
             ss << "  - " << test;
-            CSML_ERROR(0, logger) << ss.str() << std::endl;
+            REG_ERROR(0, logger) << ss.str() << std::endl;
         }
         ss.str("");
         ss << "\n[OVERALL RESULT: FAILED - " << m_tests_failed << " test(s) failed]";
-        CSML_ERROR(0, logger) << ss.str() << std::endl;
+        REG_ERROR(0, logger) << ss.str() << std::endl;
     } else if (m_tests_passed > 0) {
-        CSML_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
+        REG_INFO(1, logger) << "[OVERALL RESULT: PASSED - All tests passed]" << std::endl;
     } else {
-        CSML_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
+        REG_WARN(1, logger) << "[OVERALL RESULT: NO TESTS RUN]" << std::endl;
     }
 
-    CSML_INFO(1, logger) << "========================================\n" << std::endl;
+    REG_INFO(1, logger) << "========================================\n" << std::endl;
 
     wait(100, SC_NS);
     sc_stop();
@@ -519,13 +525,13 @@ void testbench::run_tests()
 int sc_main(int argc, char* argv[])
 {
     // Initialize CCI broker and optionally load INI config file.
-    load_config_file(argc > 1 ? argv[1] : nullptr);
+    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
 
     testbench tb("testbench");
 
-    CSML_INFO(1, tb.logger) << "Starting AES Port Binding Testbench" << std::endl;
+    REG_INFO(1, tb.logger) << "Starting AES Port Binding Testbench" << std::endl;
     sc_start();
-    CSML_INFO(1, tb.logger) << "Simulation completed" << std::endl;
+    REG_INFO(1, tb.logger) << "Simulation completed" << std::endl;
 
 #ifdef __COVERAGE__
     __gcov_dump();  // Flush coverage data before quick_exit

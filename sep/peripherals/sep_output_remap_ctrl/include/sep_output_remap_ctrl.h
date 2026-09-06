@@ -4,7 +4,7 @@
  * @file sep_output_remap_ctrl.h
  * @brief Generic SEP output remap controller — single model, two instances.
  *
- * Extends sep_output_remap_ctrl_base (csml register layer) with:
+ * Extends sep_output_remap_ctrl_base (regmodel register layer) with:
  *  - data_socket      : AXI data-path slave  — incoming transactions to remap
  *  - remapped_socket  : AXI data-path master — forwarded to fabric after remap
  *  - remap algorithm  : matches output_remap.sv exactly
@@ -20,7 +20,7 @@
  * Architecture:
  *
  *   sep_output_remap_ctrl_base
- *       csml_memory<64>  memory
+ *       regmodel::Memory<64>  memory
  *       target_socket    ──► SW reads/writes REGION_ATTRS[0..15] offsets
  *       REGION_ATTRS[16] ──► 16-entry 56-bit offset table
  *
@@ -36,13 +36,13 @@
 
 #pragma once
 #include "sep_output_remap_ctrl_base.h"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 #include <tlm_utils/simple_initiator_socket.h>
 #include <cstdint>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 class sep_output_remap_ctrl_ip : public sep_output_remap_ctrl_base
@@ -50,7 +50,7 @@ class sep_output_remap_ctrl_ip : public sep_output_remap_ctrl_base
 public:
     SC_HAS_PROCESS(sep_output_remap_ctrl_ip);
 
-    typedef typename csml_reg<64>::DT DT;
+    typedef typename regmodel::Reg<64>::DT DT;
 
     // =========================================================================
     // Instance selector — VP passes this instead of raw hardware constants
@@ -94,8 +94,8 @@ public:
     /// Active-low asynchronous reset (matches arst_n in RTL)
     sc_core::sc_in<bool> rst_ni;
 
-    csml_param<int> verbosity;
-    CsmlLogger      logger;
+    regmodel::Param<int> verbosity;
+    RegLogger            logger;
 
     // =========================================================================
     // Constructors

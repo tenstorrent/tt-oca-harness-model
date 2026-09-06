@@ -78,7 +78,7 @@ void lifecycle_ctrl_model::compute_feat_ctrl()
     // has been corrupted, and the RTL's response is to disable everything.
     const bool sigint = !lc_state_code_valid(m_in.lc_state_code);
     if (sigint && !m_lc_sigint_err)
-        CSML_REPORT(WARNING, "LC_CTRL", "LC_STATE is not a valid differential code — "
+        REG_REPORT(WARNING, "LC_CTRL", "LC_STATE is not a valid differential code — "
                                         "raising lc_sigint_err and zeroing FEAT_CTRL");
     m_lc_sigint_err = sigint;
 
@@ -147,7 +147,7 @@ bool lifecycle_ctrl_model::on_demote_write(lc_ctrl::DEMOTE_type<32> &reg,
     const bool     locked  = ((current >> 1) & 0x1u) != 0;
 
     if (locked && (value & 0x1u))
-        CSML_REPORT(WARNING, "LC_CTRL", std::string(name) +
+        REG_REPORT(WARNING, "LC_CTRL", std::string(name) +
                     " demote bit ignored — lock bit is set");
 
     uint32_t next = current | (value & ~0x1u);

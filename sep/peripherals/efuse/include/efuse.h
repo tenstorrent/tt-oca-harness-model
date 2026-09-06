@@ -2,16 +2,16 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 #include "efuse_base.h"
-#include "csml_logger.h"
-#include "csml_parameter.h"
+#include "reg_logger.h"
+#include "reg_param.h"
 #include <array>
 #include <functional>
 #include <string>
 #include <utility>
 #include <vector>
 
-#ifndef CSML_DEFAULT_VERBOSITY
-#define CSML_DEFAULT_VERBOSITY 2
+#ifndef REG_DEFAULT_VERBOSITY
+#define REG_DEFAULT_VERBOSITY 2
 #endif
 
 class efuse_model : public efuse_base
@@ -20,7 +20,7 @@ public:
     SC_HAS_PROCESS(efuse_model);
 
     efuse_model(sc_module_name n,
-                    int log_verbosity = CSML_DEFAULT_VERBOSITY);
+                    int log_verbosity = REG_DEFAULT_VERBOSITY);
 
     void end_of_elaboration() override;
 
@@ -101,7 +101,7 @@ public:
      * therefore not sufficient on its own, and sec_disable_rev_enable is how a run picks
      * which side of that cut it models.
      */
-    /// Not const: csml_param::get_param_value() is not a const member.
+    /// Not const: regmodel::Param::get_param_value() is not a const member.
     bool get_security_disable() {
         return sec_disable_rev_enable.get_param_value()
             && static_cast<uint32_t>(SEC_DISABLE_TOKEN_MATCH) == TOKEN_MATCH;
@@ -137,51 +137,51 @@ public:
     // -----------------------------------------------------------------------
     // CCI parameters — all configurable via ini file, no recompile needed
     // -----------------------------------------------------------------------
-    CsmlLogger      logger;
-    csml_param<int> verbosity;
+    RegLogger      logger;
+    regmodel::Param<int> verbosity;
 
     // Scalars
-    csml_param<uint32_t> locks_lo;
-    csml_param<uint32_t> lc_state;
-    csml_param<uint32_t> sboot_dis;
-    csml_param<uint32_t> transient_rma_en;
-    csml_param<uint32_t> sip_dis_lo;
-    csml_param<uint32_t> sip_dis_hi;
-    csml_param<uint32_t> sys_dis_lo;
-    csml_param<uint32_t> sys_dis_hi;
-    csml_param<uint32_t> chiplet_pubk_revoke;
-    csml_param<uint32_t> status_rpt;
-    csml_param<uint32_t> sep_rom_ctrl;
-    csml_param<uint32_t> sep_spi_ctrl_field_en;
-    csml_param<uint32_t> spi_discovery_ctrl;
-    csml_param<uint32_t> spi_phy_dq_timing;
-    csml_param<uint32_t> spi_phy_dqs_timing;
-    csml_param<uint32_t> spi_phy_gate_lpbk;
-    csml_param<uint32_t> spi_phy_dll_slave;
-    csml_param<uint32_t> spi_phy_dll_master;
-    csml_param<uint32_t> spi_phy_misc;
-    csml_param<uint32_t> spi_rb_valid_time;
-    csml_param<uint32_t> rma_sip_token_match;
-    csml_param<uint32_t> rma_chiplet_token_match;
-    csml_param<uint32_t> sec_disable_token_match;
+    regmodel::Param<uint32_t> locks_lo;
+    regmodel::Param<uint32_t> lc_state;
+    regmodel::Param<uint32_t> sboot_dis;
+    regmodel::Param<uint32_t> transient_rma_en;
+    regmodel::Param<uint32_t> sip_dis_lo;
+    regmodel::Param<uint32_t> sip_dis_hi;
+    regmodel::Param<uint32_t> sys_dis_lo;
+    regmodel::Param<uint32_t> sys_dis_hi;
+    regmodel::Param<uint32_t> chiplet_pubk_revoke;
+    regmodel::Param<uint32_t> status_rpt;
+    regmodel::Param<uint32_t> sep_rom_ctrl;
+    regmodel::Param<uint32_t> sep_spi_ctrl_field_en;
+    regmodel::Param<uint32_t> spi_discovery_ctrl;
+    regmodel::Param<uint32_t> spi_phy_dq_timing;
+    regmodel::Param<uint32_t> spi_phy_dqs_timing;
+    regmodel::Param<uint32_t> spi_phy_gate_lpbk;
+    regmodel::Param<uint32_t> spi_phy_dll_slave;
+    regmodel::Param<uint32_t> spi_phy_dll_master;
+    regmodel::Param<uint32_t> spi_phy_misc;
+    regmodel::Param<uint32_t> spi_rb_valid_time;
+    regmodel::Param<uint32_t> rma_sip_token_match;
+    regmodel::Param<uint32_t> rma_chiplet_token_match;
+    regmodel::Param<uint32_t> sec_disable_token_match;
 
     // Arrays (256-bit = 8 × 32-bit words; ini: JSON array [w0, w1, ..., w7])
-    csml_param<std::vector<uint32_t>> rma_sip_token;
-    csml_param<std::vector<uint32_t>> rma_chiplet_token;
-    csml_param<std::vector<uint32_t>> class_key;
-    csml_param<std::vector<uint32_t>> bl1_version;
-    csml_param<std::vector<uint32_t>> bl2_version;
-    csml_param<std::vector<uint32_t>> chiplet_uid;
-    csml_param<std::vector<uint32_t>> sip_uid;
-    csml_param<std::vector<uint32_t>> sys_uid;
-    csml_param<std::vector<uint32_t>> sip_pubk_hash0;
-    csml_param<std::vector<uint32_t>> sys_pubk_hash;
-    csml_param<std::vector<uint32_t>> chiplet_pubk_hash0;
-    csml_param<std::vector<uint32_t>> chiplet_pubk_hash1;
-    csml_param<std::vector<uint32_t>> sip_pubk_hash1;
-    csml_param<std::vector<uint32_t>> sep_chiplet_id;
-    csml_param<std::vector<uint32_t>> sep_sip_id;
-    csml_param<std::vector<uint32_t>> sep_sys_id;
+    regmodel::Param<std::vector<uint32_t>> rma_sip_token;
+    regmodel::Param<std::vector<uint32_t>> rma_chiplet_token;
+    regmodel::Param<std::vector<uint32_t>> class_key;
+    regmodel::Param<std::vector<uint32_t>> bl1_version;
+    regmodel::Param<std::vector<uint32_t>> bl2_version;
+    regmodel::Param<std::vector<uint32_t>> chiplet_uid;
+    regmodel::Param<std::vector<uint32_t>> sip_uid;
+    regmodel::Param<std::vector<uint32_t>> sys_uid;
+    regmodel::Param<std::vector<uint32_t>> sip_pubk_hash0;
+    regmodel::Param<std::vector<uint32_t>> sys_pubk_hash;
+    regmodel::Param<std::vector<uint32_t>> chiplet_pubk_hash0;
+    regmodel::Param<std::vector<uint32_t>> chiplet_pubk_hash1;
+    regmodel::Param<std::vector<uint32_t>> sip_pubk_hash1;
+    regmodel::Param<std::vector<uint32_t>> sep_chiplet_id;
+    regmodel::Param<std::vector<uint32_t>> sep_sip_id;
+    regmodel::Param<std::vector<uint32_t>> sep_sys_id;
 
     /**
      * Expected SHA-256 digest of the secure-disable token, as eight 32-bit words
@@ -199,7 +199,7 @@ public:
      * digest the run is meant to accept, exactly as the testbench overrides the
      * parameter.
      */
-    csml_param<std::vector<uint32_t>> sec_disable_token_digest;
+    regmodel::Param<std::vector<uint32_t>> sec_disable_token_digest;
 
     /**
      * Whether this silicon revision permits security disable at all.
@@ -210,7 +210,7 @@ public:
      * true, the later-revision behaviour, since it has no effect until a token matches
      * anyway.
      */
-    csml_param<bool> sec_disable_rev_enable;
+    regmodel::Param<bool> sec_disable_rev_enable;
 
     /**
      * `secure_tm_i` — the latched test_en strap that puts the part in secure test mode.
@@ -225,7 +225,7 @@ public:
      * platform it is sourced from here rather than from lc_ctrl's own parameter,
      * because in silicon the eFuse wrapper is what latches the strap and fans it out.
      */
-    csml_param<bool> secure_tm;
+    regmodel::Param<bool> secure_tm;
 
     /**
      * Path to a fuse array image, in either format the two testbenches use:
@@ -240,7 +240,7 @@ public:
      * image is supplied, it defines the fuse array and per-field params are not
      * applied.
      */
-    csml_param<std::string> fuse_preload_file;
+    regmodel::Param<std::string> fuse_preload_file;
 
     // OTP array size, in bits and 32-bit words (sep_efuse_pkg::NumEfuseBits).
     static constexpr unsigned int NUM_FUSE_BITS  = 8192;
@@ -248,12 +248,10 @@ public:
 
     /**
      * Bit index of LC_STATE in the array (sep_pkg::LC_STATE_BIT_POSITION). Derived
-     * from the register's own offset rather than reasoned out from what precedes
-     * it: this was written as a literal 64 on the argument that "LOCKS is 64 bits
-     * wide and comes first", which overlooked LOCKS_SPARE and so pointed the RMA
-     * gating at SBOOT_DIS's bits once the map was corrected. Bits +1 and +2 -- the
-     * two RMA advance bits -- are individually gated by the token matches, and
-     * gating the wrong bits means the token no longer authorises the transition.
+     * from the register's own offset: PeakRDL places LOCKS (64 bits) at 0x0 and
+     * LC_STATE at 0x8, so this is bit 64. Bits +1 and +2 -- the two RMA advance
+     * bits -- are individually gated by the token matches, and gating the wrong
+     * bits means the token no longer authorises the transition.
      */
     static constexpr unsigned int LC_STATE_BIT_POSITION =
         (sep_efuse::LC_STATE_OFFSET / 4u) * 32u;
@@ -406,7 +404,7 @@ private:
     const uint32_t m_zero_uid[8] = {};     // what get_chiplet_uid() returns under secure_tm
 
     // Sampled from the secure_tm parameter at elaboration, so the accessors and the
-    // command gate agree and neither has to reach into a csml_param on every call.
+    // command gate agree and neither has to reach into a regmodel::Param on every call.
     bool m_secure_tm_active = false;
 
     // WOSET shadow values — accumulate set bits across firmware writes

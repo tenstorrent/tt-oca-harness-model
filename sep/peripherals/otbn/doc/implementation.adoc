@@ -16,7 +16,7 @@ class otbn_ip : public otbn_base
 
 ----
 otbn_ip            CMD dispatch, IMEM/DMEM, KM, LC, alerts   (otbn.*)
-  └─ otbn_base     csml_memory + software-visible words      (otbn_base.*)
+  └─ otbn_base     regmodel::Memory + software-visible words      (otbn_base.*)
        └─ otbn_register.h   RO/WO/RW types
 otbn_interfaces.h  otp_key_req_if / otp_key_rsp_if
 algo/              otbn_algorithm_* implementations
@@ -69,13 +69,13 @@ the matching memory. LOAD_CHECKSUM updates CRC-32-IEEE on IMEM writes.
 
 ====== CCI parameters
 
-Knobs are `csml_param` and are re-read when used. `algorithm_type` is
+Knobs are `regmodel::Param` and are re-read when used. `algorithm_type` is
 applied at construction (`select_algorithm`).
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |`algorithm_type` |`rsa_2048` |Which `otbn_algorithm` to instantiate
 |===
 

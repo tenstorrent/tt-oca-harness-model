@@ -10,8 +10,8 @@
  */
 
 #include "VeeR-ISSTlm.hpp"
-#include "csml_parameter.h"
-#include "csml_logger.h"
+#include "reg_param.h"
+#include "reg_logger.h"
 
 #include <tlm_utils/simple_target_socket.h>
 
@@ -163,7 +163,7 @@ private:
 
 class veeriss_tb : public sc_core::sc_module {
 public:
-    CsmlLogger logger;
+    RegLogger logger;
     Args args;
     WdRiscv::HartConfig config;
 
@@ -223,10 +223,10 @@ public:
     {
         ++tests_run;
         if (ok) {
-            CSML_INFO(1, logger) << name << ": PASS" << std::endl;
+            REG_INFO(1, logger) << name << ": PASS" << std::endl;
         } else {
             ++tests_failed;
-            CSML_ERROR(0, logger) << name << ": FAIL " << why << std::endl;
+            REG_ERROR(0, logger) << name << ": FAIL " << why << std::endl;
         }
     }
 
@@ -372,12 +372,12 @@ public:
         wait(1, sc_core::SC_US);
         check("FUNC-CPU-016: reset deassert restarts the hart", true);
 
-        CSML_INFO(1, logger) << "Total: " << tests_run
+        REG_INFO(1, logger) << "Total: " << tests_run
                              << "  Failed: " << tests_failed << std::endl;
         if (tests_failed == 0)
-            CSML_INFO(1, logger) << "[OVERALL RESULT: PASSED]" << std::endl;
+            REG_INFO(1, logger) << "[OVERALL RESULT: PASSED]" << std::endl;
         else
-            CSML_ERROR(0, logger) << "[OVERALL RESULT: FAILED]" << std::endl;
+            REG_ERROR(0, logger) << "[OVERALL RESULT: FAILED]" << std::endl;
 
         sc_core::sc_stop();
     }
@@ -385,7 +385,7 @@ public:
 
 int sc_main(int argc, char* argv[])
 {
-    load_config_file(nullptr);
+    regmodel::load_config_file(nullptr);
 
     const std::string cfg = (argc > 1) ? argv[1]
                                        : std::string(FIXTURE_DIR) + "/veeriss_config.json";
@@ -394,9 +394,9 @@ int sc_main(int argc, char* argv[])
     const std::string freq = "/tmp/veeriss_tb_instfreq.txt";
 
     veeriss_tb tb("tb", cfg, hex, freq);
-    CSML_INFO(1, tb.logger) << "Starting VeeR-ISS TLM testbench" << std::endl;
+    REG_INFO(1, tb.logger) << "Starting VeeR-ISS TLM testbench" << std::endl;
     sc_core::sc_start();
-    CSML_INFO(1, tb.logger) << "Simulation completed" << std::endl;
+    REG_INFO(1, tb.logger) << "Simulation completed" << std::endl;
 
 #ifdef __COVERAGE__
     __gcov_dump();

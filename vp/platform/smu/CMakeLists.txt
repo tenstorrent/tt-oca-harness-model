@@ -299,7 +299,6 @@ target_link_libraries(smu-vp
         sep_reset_ctrl_model
         sep_cpu_ctrl_model
         local_master_alias_remap_ctrl_model
-        csml_logger
         spi_controller_model
         spi_flash_model
         kmac_model

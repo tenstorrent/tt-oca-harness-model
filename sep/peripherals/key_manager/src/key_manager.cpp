@@ -62,7 +62,7 @@ void key_manager_model::reset_process()
         m_mailbox.reset();
         m_firmware->reset();
         m_irq_update_event.notify(SC_ZERO_TIME);  // drives irq low via irq_update_process
-        CSML_INFO(1, logger) << "keymgr_tt: reset asserted — all registers cleared";
+        REG_INFO(1, logger) << "keymgr_tt: reset asserted — all registers cleared";
     }
 }
 
@@ -73,7 +73,7 @@ void key_manager_model::reset_process()
 void key_manager_model::wipe_process()
 {
     if (!wipe_ni.read()) {  // active-low: asserted when low
-        CSML_INFO(1, logger) << "keymgr_tt: emergency wipe triggered";
+        REG_INFO(1, logger) << "keymgr_tt: emergency wipe triggered";
 
         // Clear all KPV slots (flags + validity).
         m_kpv.reset();
@@ -108,7 +108,7 @@ void key_manager_model::wipe_process()
         }
         update_level_irq_bits();
 
-        CSML_INFO(1, logger) << "keymgr_tt: emergency wipe complete";
+        REG_INFO(1, logger) << "keymgr_tt: emergency wipe complete";
     }
 }
 
@@ -123,9 +123,9 @@ void key_manager_model::fw_thread()
         while (!rst_ni.read())
             wait(rst_ni.value_changed_event());
 
-        CSML_INFO(1, logger) << "keymgr_tt: firmware boot starting";
+        REG_INFO(1, logger) << "keymgr_tt: firmware boot starting";
         m_firmware->boot();
-        CSML_INFO(1, logger) << "keymgr_tt: firmware ready";
+        REG_INFO(1, logger) << "keymgr_tt: firmware ready";
 
         // Assert OUTBOUND_READ_DATA_AVAIL IRQ for the RESP_KM_READY message
         // boot() just pushed into the outbound FIFO.
@@ -186,7 +186,7 @@ uint32_t key_manager_model::get_random_word()
 {
     uint32_t w = 0;
     if (RAND_bytes(reinterpret_cast<unsigned char*>(&w), sizeof(w)) != 1)
-        CSML_WARN(1, logger) << "keymgr_tt: RAND_bytes failed";
+        REG_WARN(1, logger) << "keymgr_tt: RAND_bytes failed";
     return w;
 }
 
