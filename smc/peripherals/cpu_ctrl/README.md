@@ -30,10 +30,9 @@ cpu_ctrl/
 ├── test/
 │   └── cpu_ctrl_tb.cpp
 └── doc/
-    ├── index.adoc / implementation.adoc / test_plan.adoc
-    ├── 01_CPU_CTRL_Specification.md
-    ├── 02_CPU_CTRL_LowLevel_Design.md
-    └── 03_CPU_CTRL_Test_Plan.md
+    ├── index.adoc
+    ├── implementation.adoc
+    └── test_plan.adoc
 ```
 
 ## Quick start
@@ -65,4 +64,5 @@ absolute addresses from the fabric decode correctly.
 | 14 | SEP safe SRAM size |
 | 15 | Memory repair status |
 
-See `doc/01_CPU_CTRL_Specification.md` for full register map and bus contract.
+See `doc/implementation.adoc` for the register map and bus contract.
+Architecture and programming sequences are in the hardware TRM.

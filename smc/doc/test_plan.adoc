@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[smc-vp-test-plan]]
+=== Test Plan
+
+`smc-vp` needs C++20 SystemC/CCI. Set `SYSTEMC_HOME` and `CCI_HOME`
+before the commands below.
+
+==== Standalone peripheral tests
+
+[source,bash]
+----
+cd smc/peripherals/<ip>
+./run_tests.sh
+./run_tests.sh --asan
+----
+
+Or the SMC helper at `smc/run_all_smc_tests.sh` where that script
+exists for the IP.
+
+==== Build and run `smc-vp`
+
+[source,bash]
+----
+# from the repository root
+make smc-vp
+vp/build/bin/smc-vp vp/platform/smc/config/smc_platform_vp.ini <firmware.elf>
+----
+
+==== Firmware tests on `smc-vp`
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh
+
+cd sw/smc-vp-tests/smc-dma-test
+make sim
+----
+
+See `sw/smc-vp-tests/README.md` for the toolchain and the per-test
+list.

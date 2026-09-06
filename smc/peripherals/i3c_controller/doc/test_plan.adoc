@@ -33,7 +33,7 @@ cd smc
 ====== Standalone cases
 
 Sources: `test/i3c_controller_tb.cpp`, `i3c_controller_neg_tb.cpp`.
-Names follow `doc/03_I3C_CONTROLLER_Test_Plan.md`.
+Names follow the cases in `test/i3c_controller_tb.cpp`.
 
 [cols="8%,36%,40%,16%",options="header"]
 |===
@@ -69,10 +69,7 @@ first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
 ----
 cd sw/smc-vp-tests
 ./run_smc_vp_tests.sh smc-i3c-loopback-test
-./run_smc_vp_tests.sh smc-i3c-test
 ----
 
 `smc-i3c-loopback-test` uses the instance-0 echo bus model on `smc-vp`.
-`smc-i3c-test` is HCI_VERSION / HC_CONTROL / PIO_CONTROL;
-`sw/smc-vp-tests/README.md` currently lists that directory as
-documented but not present in the tree.
+There is no separate `smc-i3c-test` directory.

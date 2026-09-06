@@ -27,12 +27,13 @@ sideload sockets, and PIC inputs (`irq_map.h`).
 
 Every modeled IP has the two-page set under
 `sep/peripherals/<ip>/doc/` (`implementation.adoc` + `test_plan.adoc`).
-`gpio`, `uart_16550`, `sep_status_report`, and `sep_virt_console` are
-empty stub directories and have no model pages.
+There is no standalone `gpio`, `uart_16550`, `sep_status_report`, or
+`sep_virt_console` IP. The packed-scratch virtual console and status
+printer live in `sep_scratch_cold` (decoder in
+`common/include/virt_console_decoder.h`).
 
 ==== Modeling gaps
 
 PIC sources that RTL drives but the VP does not yet model stay tied
-low (`irq_map.h` comments). `uart_16550` under `sep/peripherals/` is a
-VP convenience; SEP RTL does not instantiate a UART. The entropy-pool
-FIFO has reserved IRQs and no model.
+low (`irq_map.h` comments). SEP RTL does not instantiate a UART. The
+entropy-pool FIFO has reserved IRQs and no model.

@@ -28,6 +28,13 @@ firmware's preload pipeline unmodified — pass an `.img` or `.hex` file
 through the `init_file` CCI param and the ROM exposes the correct bytes
 at offset 0.
 
+Architecture, CSRs, and programming are in the hardware TRM. Model and
+test docs:
+
+- `doc/index.adoc` — entry (includes the two pages below)
+- `doc/implementation.adoc` — SystemC/TLM model and `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 ---
 
 ## Layout
@@ -50,11 +57,9 @@ bootrom/
 │       ├── bootrom_sanity.rv64.hex Hex preload fixture
 │       └── bootrom.rv64.img        Binary preload fixture (verbatim)
 └── doc/
-    ├── 01_BOOTROM_Specification.md       External contract (RDL-traceable)
-    ├── 02_BOOTROM_LowLevel_Design.md     Internal SystemC + CCI design
-    ├── 03_BOOTROM_Test_Plan.md           Verification plan
-    ├── build_docs.sh                     Markdown → PDF helper
-    └── print.css                         PDF stylesheet (shared with CLINT)
+    ├── index.adoc
+    ├── implementation.adoc
+    └── test_plan.adoc
 ```
 
 ---
@@ -90,8 +95,7 @@ broker.set_preset_cci_value("smc.bootrom.access_delay_ns",
                             cci::cci_value(2.0));
 ```
 
-See `02_BOOTROM_LowLevel_Design.md §4` for the full CCI catalogue
-(including metadata keys).
+See `doc/implementation.adoc` for the CCI catalogue and `smc-vp` bind.
 
 ---
 
@@ -123,7 +127,8 @@ See `02_BOOTROM_LowLevel_Design.md §4` for the full CCI catalogue
 
 `SYSTEMC_HOME` and `CCI_HOME` are auto-probed for the common macOS
 (Homebrew) and Linux (system + `/usr/local`) install locations; set
-them manually for any non-standard prefix.
+them manually for any non-standard prefix. There is no
+`smc-bootrom-test` firmware directory; see `doc/test_plan.adoc`.
 
 ---
 
@@ -139,7 +144,7 @@ them manually for any non-standard prefix.
 
 Remaining uncovered lines are all `SC_REPORT_FATAL` paths, which would
 require a fork-based test harness to cover (tracked in
-`03_BOOTROM_Test_Plan.md §13`).
+`doc/test_plan.adoc`).
 
 ---
 

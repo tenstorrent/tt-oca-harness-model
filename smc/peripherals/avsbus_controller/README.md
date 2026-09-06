@@ -12,10 +12,10 @@ Register-accurate functional model of the SMC **AVSBus 1.3.1** controller
 
 | Doc | Role |
 |-----|------|
-| `doc/01_AVSBUS_CONTROLLER_Specification.md` | Externally-observable behaviour |
-| `doc/02_AVSBUS_CONTROLLER_LowLevel_Design.md` | TLM interface, register map, internals |
-| `doc/03_AVSBUS_CONTROLLER_Test_Plan.md` | Unit verification strategy |
-| `hw/ip/avsbus_controller/data/registers/rdl/avsbus_controller.rdl` | Ground-truth register map |
+| `doc/index.adoc` | Landing page |
+| `doc/implementation.adoc` | TLM interface, register map, internals |
+| `doc/test_plan.adoc` | Unit verification |
+| Hardware TRM RDL (`avsbus_controller.rdl`) | Ground-truth register map |
 
 ## Layout
 
@@ -26,8 +26,9 @@ avsbus_controller/
 ├── run_tests.sh
 ├── deps.env.example
 ├── doc/
-│   ├── index.adoc / implementation.adoc / test_plan.adoc
-│   └── 01_ / 02_ / 03_ numbered Markdown
+│   ├── index.adoc
+│   ├── implementation.adoc
+│   └── test_plan.adoc
 ├── include/avsbus_controller.h
 ├── src/avsbus_controller.cpp
 └── test/

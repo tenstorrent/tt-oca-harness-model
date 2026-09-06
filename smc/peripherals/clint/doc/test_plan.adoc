@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[clint-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/clint_tb.cpp` is a TLM initiator plus `msip_o` / `mtip_o` /
+`rst_n_i`. Auto-tick is disabled so time is advanced with
+`dbg_set_mtime()`. `test/clint_tick_tb.cpp` is a second bench that
+leaves auto-tick on and checks `mtime` advance, reset re-arm, and
+automatic `mtip_o`.
+
+Success: both benches print `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/clint`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh clint
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Sources: `test/clint_tb.cpp`, `test/clint_tick_tb.cpp`. Names are the
+`[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset clears MTIME / MSIP / MTIP |MTIMECMP parked at max |Positive
+|2 |MSIP R/W truncates to bit[0] |IPI bit; `msip_o` tracks |Positive
+|3 |MSIP per-hart isolation |One hart does not raise another |Positive
+|4 |MTIME 64-bit R/W |8-byte access |Positive
+|5 |MTIME 32-bit half-word R/W |Firmware RV32 split |Positive
+|6 |firmware-style MTIME read sequence |LO / HI / re-read LO |Positive
+|7 |MTIMECMP 64-bit R/W per hart |Comparator storage |Positive
+|8 |firmware-style MTIMECMP set sequence |Split write |Positive
+|9 |MTIP comparator at -1 / == / +1 |`mtime >= mtimecmp` |Positive
+|10 |MTIP cleared by raising MTIMECMP |Software clear |Positive
+|11 |per-hart MTIMECMP independence |Comparators do not alias |Positive
+|12 |MSIP and MTIP are independent |Two pin families |Positive
+|13 |synthetic MTIME advance |`dbg_set_mtime` with tick off |Positive
+|14 |transport_dbg back-door |Side-effect-free R/W |Positive
+|15 |negative tests: window, alignment, width |TLM error codes |Negative
+|16 |CCI discovery / mutation / immutability |Broker presets |Positive
+|17 |dump_state contains expected fields |Debug dump |Positive
+|18 |MTIMECMP 32-bit half-word READ |Split read |Positive
+|19 |in-window hole is RAZ/WI |Reserved offsets |Positive
+|20 |streaming_width / byte-enable / command |More TLM errors |Negative
+|21 |transport_dbg invalid-args |Debug reject path |Negative
+|T1 |MTIME advanced |`clint_tick_tb` auto-tick |Positive
+|T2 |reset cancels pending tick |Tick re-arm after reset |Positive
+|T3 |MTIP asserted automatically |Tick crosses comparator |Positive
+|===
+
+====== Platform firmware tests
+
+There is no `smc-clint-test` in `sw/smc-vp-tests/`. CLINT on `smc-vp` is
+covered by firmware that uses the machine timer or IPI. Standalone
+coverage is `./run_tests.sh` in this directory.

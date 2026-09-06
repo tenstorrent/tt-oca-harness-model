@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[cpu-ctrl-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/cpu_ctrl_tb.cpp` is a TLM initiator into the register window,
+plus WDT sticky inputs and the debug back-doors (`set_scratch`,
+`set_wb_pc`, `dbg_wdt_stage2_tick`).
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/cpu_ctrl`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh cpu_ctrl
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Source: `test/cpu_ctrl_tb.cpp`. Names are the `[PASS]` titles. Folded
+from `test/cpu_ctrl_tb.cpp`.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset defaults |Scratch / LOCAL_BASE reset |Positive
+|2 |scratch R/W |Mailbox storage |Positive
+|3 |inter-stage handoff scratch sequence |Indices used by SMC/SEP ROM |Positive
+|4 |LOCAL_BASE read-only |Software RO |Positive
+|5 |GLOBAL_BASE / REGION_SIZE |Address-space CSRs |Positive
+|6 |HW backdoor registers |`set_smc_attributes` / `set_wb_pc` |Positive
+|7 |mutex acquire/release |Test-and-set on live read |Positive
+|8 |semaphore inc/dec |Signed delta |Positive
+|9 |WDT_TIMEOUT_RESET pulse + stage-2 |Sticky + countdown |Positive
+|10 |transport_dbg mutex peek |No acquire on debug read |Positive
+|11 |out-of-window address error |Window decode |Negative
+|12 |CCI parameters |`access_delay_ns` |Positive
+|13 |RESET_VECTOR write masking |Field masks |Positive
+|14 |RESET_CTRL self-clearing pulse bits |Singlepulse |Positive
+|15 |CORE_RESET_PULSE_COUNT RO bits |Software RO |Positive
+|16 |CLOCK_GATE_CONTROL R/W |Storage |Positive
+|17 |REFERENCE_COUNTER R/W |Storage |Positive
+|18 |WDT_TIMEOUT write masking |Field masks |Positive
+|19 |DEBUG_CTRL / DEBUG_BUS_MUX R/W |Storage |Positive
+|20 |TEST_CTRL / SMC_ATTRIBUTES SW-write ignored |HW-only |Positive
+|21 |DUMMY_ROM_0..3 / DUMMY_ROM_NULL R/W |Storage |Positive
+|22 |WB_PC SW-write ignored |HW-only |Positive
+|23 |unmapped hole RAZ/WI |Decode holes |Positive
+|24 |API bounds guards |`set_wb_pc` / scratch |Negative
+|25 |dump_state() |Debug dump |Positive
+|26 |transport_dbg misalignment / write / command |Debug errors |Negative
+|27 |b_transport malformed-transaction |TLM error codes |Negative
+|===
+
+====== Platform firmware tests
+
+There is no `smc-cpu-ctrl-test` in `sw/smc-vp-tests/`. `smc-vp` routes
+the PeakRDL window to `cluster.ctrl`, not this standalone model's
+`reg_socket`. Stage-2 WDT on the platform is `smc-wdt-test`.

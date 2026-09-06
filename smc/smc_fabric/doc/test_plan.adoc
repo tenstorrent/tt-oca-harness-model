@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[smc-fabric-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/smc_fabric_tb.cpp` binds the six target sockets to probe
+initiators and the initiator sockets to stub targets. It covers reset
+defaults, local decode, alias/output remap, inbound/outbound filters,
+DMI denial, and CSR read-back.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on `smc_fabric.cpp` meets the repository
+≥ 95% gate.
+
+How to run (from `smc/smc_fabric`):
+
+[source,bash]
+----
+./run_tests.sh
+./run_tests.sh --asan
+./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+cd smc
+./run_all_smc_tests.sh smc_fabric
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+
+====== Standalone cases
+
+Source: `test/smc_fabric_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset / power-on defaults |Tables empty; CSR defaults |Positive
+|2 |local decode routing |Periph, SPM, DMA, DFD, DFT, mailbox |Positive
+|3 |periph_main / AOU park ends |Phase-2 window ends |Positive
+|4 |smc_base_config vs cpu_ctrl |Internal GLOBAL_BASE vs front-port |Positive
+|5 |alias remap |Hit, offset, debug |Positive
+|6 |outbound default-allow |Plain + M-mode identity at reset |Positive
+|7 |inbound filter allow/deny |Default deny; programmed allow |Positive
+|8 |inbound NS filtering |`allow_ns` match |Positive
+|9 |sep bypasses inbound filter |`sep_axi_in` not filtered |Positive
+|10 |outbound filter deny |Denied outbound |Negative
+|11 |unmapped local address |Decode miss → address error |Negative
+|12 |DMI denied |`get_direct_mem_ptr` false |Positive
+|13 |reset clears programmed tables |Alias/filter cleared |Positive
+|14 |M-mode output remap |Bit-exact `offset[55:0]` |Positive
+|15 |Xvisor output remap |Xvisor window |Positive
+|16 |reset clears output-remap |Tables restored |Positive
+|17 |filter CSR image |CONFIG/START/END + `locked` |Positive
+|18 |alternate internal masters |jtag / data_accel / log |Positive
+|19 |global CSR / testbench API |LOCAL_BASE / REGION_SIZE |Positive
+|20 |M-mode remap via local-base |Local-aperture remap |Positive
+|21 |PERIPH_EXT decode |sys / sep direct |Positive
+|22 |deny-read poison trailing bytes |`0xBADCAB1E` fill |Positive
+|23 |alias-remap CSR read-back |Cacheable + image |Positive
+|24 |output-remap 64-bit CSR write |REGION_ATTRS write |Positive
+|25 |filter CSR edge cases |src_id, R/W-only, burst, OOB |Mixed
+|26 |outbound-filter NS matching |NS on outbound |Positive
+|27 |DMI denied on internal masters |jtag / data_accel / log |Positive
+|28 |no_addr_remap bypass |Output remap skipped |Positive
+|===
+
+====== Platform firmware tests
+
+There is no dedicated `smc-fabric-test`. Firmware on `smc-vp` reaches
+peripherals through this model. Build `smc-vp` first.
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-dma-test
+./run_smc_vp_tests.sh smc-map-coherence-test
+----

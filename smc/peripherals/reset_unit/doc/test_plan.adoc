@@ -32,7 +32,7 @@ cd smc
 ====== Standalone cases
 
 Sources: `test/reset_unit_tb.cpp`, `reset_unit_neg_tb.cpp`. Names
-follow `doc/03_RESET_UNIT_Test_Plan.md`.
+follow the cases in `test/reset_unit_tb.cpp`.
 
 [cols="8%,36%,40%,16%",options="header"]
 |===
@@ -62,15 +62,5 @@ follow `doc/03_RESET_UNIT_Test_Plan.md`.
 
 ====== Platform firmware tests
 
-These run on `smc-vp` with a RISC-V bare-metal toolchain. Build the VP
-first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
-
-[source,bash]
-----
-cd sw/smc-vp-tests
-./run_smc_vp_tests.sh smc-reset-test
-----
-
-`smc-reset-test` is SS_CONFIG round-trip plus the two sticky locks.
-`sw/smc-vp-tests/README.md` currently lists that directory as
-documented but not present in the tree.
+There is no `smc-reset-test` in `sw/smc-vp-tests/`. Reset-unit coverage
+is the standalone `./run_tests.sh` suite in this directory.

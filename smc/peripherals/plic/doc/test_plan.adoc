@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[plic-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`test/plic_tb.cpp` is a TLM initiator into the register aperture plus
+`src_in` / `ctx_out` / `rst_n_i` drivers. It uses the debug back-door
+(`dbg_priority`, `dbg_pending`, `dbg_claim_top`, `dump_state`) so
+CLAIM side-effects can be checked without going through the bus.
+
+Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets the
+repository ≥ 95% gate.
+
+How to run (from `smc/peripherals/plic`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SMC IPs, this one included:
+cd smc
+./run_all_smc_tests.sh plic
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
+Set those in `vp/configure_vp.sh` or export them first.
+
+====== Standalone cases
+
+Source: `test/plic_tb.cpp`. Names are the `[PASS]` titles.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |reset clears state |Registers and `ctx_out` idle after reset |Positive
+|2 |priority R/W + 3-bit truncation |Priority field width |Positive
+|3 |source 0 reserved |RAZ/WI on architecturally reserved source |Positive
+|4 |pending latched on rising edge |`src_method` edge detect |Positive
+|5 |disabled source does not drive ctx_out |Enable gate |Positive
+|6 |per-context enable independence |Enable banks do not alias |Positive
+|7 |threshold gating |`priority > threshold` |Positive
+|8 |best-pending arbitration |Highest priority, lowest ID tie-break |Positive
+|9 |claim/complete with line still high |In-flight latch + re-pend |Positive
+|10 |complete after line de-asserted |No re-pend when the line dropped |Positive
+|11 |TLM error responses |Width / align / window |Negative
+|12 |transport_dbg has no side effects |CLAIM peek does not claim |Positive
+|13 |cross-context isolation |One context does not complete another’s view |Positive
+|14 |reset returns to clean state |Second reset after traffic |Positive
+|15 |debug back-door API |`dbg_*` / `dump_state` |Positive
+|16 |PENDING write silently discarded |Software RO |Positive
+|17 |context-block reserved sub-offset |RAZ/WI hole in the context block |Positive
+|18 |TLM_COMMAND_ERROR_RESPONSE |Unknown TLM command |Negative
+|19 |transport_dbg general read and write |Debug path decode |Positive
+|20 |enable last-word bit masking |Last enable word truncates extra sources |Positive
+|21 |CCI parameter introspection |Preset / discovery |Positive
+|===
+
+====== Platform firmware tests
+
+There is no `smc-plic-test` in `sw/smc-vp-tests/`. PLIC on `smc-vp` is
+covered indirectly by firmware tests that take an aggregated peripheral
+interrupt (for example `smc-beu-test`). Standalone coverage is
+`./run_tests.sh` in this directory.

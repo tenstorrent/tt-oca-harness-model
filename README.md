@@ -56,7 +56,7 @@ Three runnable platforms ship from `vp/`:
 ## Getting Started
 
 1. Install the host toolchain and libraries listed in [Requirements](#requirements)
-   (CMake 3.24+, a C++20 compiler, SystemC 3.0.2, CCI 1.0.2, Boost, OpenSSL).
+   (CMake 3.20+, a C++20 compiler, SystemC 3.0.2, CCI 1.0.2, Boost, OpenSSL).
 2. Clone this repository — [Installation](#installation).
 3. Build `sep-vp` — [Building the SEP VP](#building-the-sep-vp).
 4. To run SMC or SMU platforms, also install the public
@@ -84,7 +84,7 @@ current release.
 
 | Dependency | Version | Used by | Notes |
 |------------|---------|---------|-------|
-| CMake | 3.24+ | All builds | 3.20 is enough for some SMC standalone trees |
+| CMake | 3.20+ | All builds | `vp/CMakeLists.txt`; some SMC IP trees use 3.16 |
 | C++ compiler | GCC 11+ or Apple Clang | All builds | C++20 is the default and is **required** for `smc-vp` / `smu-vp` |
 | [SystemC](https://github.com/accellera-official/systemc) | 3.0.2 | All models | Build with the same `-std=c++NN` you will use to compile the VP |
 | [CCI](https://github.com/accellera-official/cci) | 1.0.2 (preferred) or 1.0.1 | All models | 1.0.2 bundles RapidJSON and is C++20-clean; 1.0.1 needs a patch |
@@ -130,9 +130,11 @@ OCAH subsystems:
 ```
 tt-oca-harness-model/
 ├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI, PeripheralCommon, …)
+├── aou/                           ← Always-On Unit models (used by smc-vp / smu-vp)
 ├── common/include/                ← shared register + logging helpers
 │                                  (reg_file.h, reg_param.h, reg_logger.h,
-│                                   reg_access.h, reg_map.h, sim_log.h)
+│                                   reg_access.h, reg_map.h, sim_log.h,
+│                                   virt_console_decoder.h)
 ├── sep/                           ← SEP IP peripheral models
 │   ├── peripherals/               ← individual IP models
 │   │   ├── adams_bridge/          ← Adams Bridge PQC (ML-DSA-87 / ML-KEM-1024)
@@ -169,14 +171,28 @@ tt-oca-harness-model/
 │       └── paged-memory/          ← PagedMemory header-only sparse storage engine
 ├── smc/                           ← SMC IP model library
 │   ├── peripherals/               ← SMC peripheral models
-│   │   ├── bootrom/               ← 64 KB Boot ROM
+│   │   ├── avsbus_controller/
+│   │   ├── beu/
+│   │   ├── bootrom/               ← 64 KiB Boot ROM
 │   │   ├── clint/                 ← RISC-V CLINT (mtime, MSIP, MTIMECMP)
-│   │   ├── i3c_controller/        ← MIPI I3C HCI v1.2 controller (×6 in HW)
-│   │   ├── plic/                  ← RISC-V PLIC (332 interrupt sources)
+│   │   ├── cpu_ctrl/              ← PeakRDL window at 0xC0039000 (4 KiB)
+│   │   ├── dma/
+│   │   ├── i2c_controller/
+│   │   ├── i3c_controller/        ← MIPI I3C HCI v1.2 controller
+│   │   ├── memory_zeroer/
+│   │   ├── octs_system_timer/
+│   │   ├── plic/                  ← RISC-V PLIC (336 interrupt sources)
+│   │   ├── pll_wrapper/
+│   │   ├── pvt_wrap/
 │   │   ├── reset_unit/            ← Reset generation unit (cold / cool / FLR)
-│   │   └── scratchpad_ram/        ← 1 MiB scratchpad SRAM (32 banks)
+│   │   ├── scratchpad_ram/        ← 64 KiB scratchpad SRAM
+│   │   ├── telemetry_receiver/
+│   │   ├── uart/
+│   │   └── wdt/
 │   ├── cpu_cluster/               ← SMC CPU cluster (1–4 RV64GC, Whisper ISS)
 │   ├── smc_fabric/                ← SMC AXI fabric / address router model
+│   ├── common/                    ← smc_axi_extension.h and shared SMC headers
+│   ├── run_all_smc_tests.sh       ← batch Accellera unit tests for all SMC IPs
 │   └── cmake/
 │       └── SmcSystemCStd.cmake    ← auto-detects SystemC C++ standard
 ├── vp/                            ← Virtual Platforms
@@ -215,6 +231,7 @@ tt-oca-harness-model/
 │   │                                 meta/registers/c, the shared SEP register headers
 │   ├── smc-vp-tests/              ← Bare-metal RV64 firmware tests (SMC, runs on smc-vp)
 │   │   └── run_smc_vp_tests.sh    ← host-agnostic runner: auto-detects toolchain + smc-vp, builds/runs tests
+│   ├── smu-vp-tests/              ← Combined SMC+SEP firmware tests on smu-vp
 │   └── zephyr-smc/                ← Out-of-tree Zephyr port for smc-vp (board/SoC + apps)
 │       ├── zephyr_smc.sh          ← setup / build / run / test
 │       └── apps/mmio_poke/        ← MMIO reachability of IPs with no Zephyr driver
@@ -240,11 +257,11 @@ tt-oca-harness-model/
 
 ### Dependencies
 
-- **CMake** 3.24+
-- **C++ compiler**: GCC 9+ (C++17) or GCC 11+ (C++20, default)
+- **CMake** 3.20+ (`vp/CMakeLists.txt`)
+- **C++ compiler**: GCC 11+ or Apple Clang (C++20; required for `smc-vp` / `smu-vp`)
 - **SystemC** 3.0.2
-- **CCI** 1.0.1
-- **Boost** **1.84.0** (`iostreams`, `program_options`, `regex`)
+- **CCI** 1.0.2 (preferred) or 1.0.1
+- **Boost** ≥ **1.74** (`iostreams`, `program_options`; 1.84 is commonly used)
 - **OpenSSL** (for HMAC, KMAC, CSRNG crypto models) — tested on **macOS** and **RHEL** with **3.0.13**; on Ubuntu with **3.2.1** and **3.5.2**
 
 ### 1. System packages (Ubuntu)
@@ -656,13 +673,14 @@ debug buffer to stdout so firmware `printf` is visible.
 
 #### smc-vp-tests (bare-metal RV64 firmware)
 
-Tests under `sw/smc-vp-tests/` exercise SMC peripherals (bootrom, CLINT,
-CPU control, DMA, I2C, I3C, PLIC, PVT wrapper, reset, scratchpad, UART, …)
+Tests under `sw/smc-vp-tests/` exercise SMC peripherals that have a
+checked-in firmware test (AOU, AVSbus, BEU, DMA, I2C/I3C loopback,
+memory zeroer, OCTS, PLL, PVT, telemetry, WDT, map coherence, …)
 from code running on the CVA6 cluster. Full guide:
 [`sw/smc-vp-tests/README.md`](sw/smc-vp-tests/README.md).
 
 ```bash
-cd sw/smc-vp-tests/smc-uart-test
+cd sw/smc-vp-tests/smc-dma-test
 make             # build ELF (RV64 toolchain)
 make sim         # build + run on smc-vp
 ```
@@ -670,7 +688,7 @@ make sim         # build + run on smc-vp
 ```bash
 cd sw/smc-vp-tests
 ./run_smc_vp_tests.sh               # run all smc-* tests
-./run_smc_vp_tests.sh smc-uart-test # run a single test by name
+./run_smc_vp_tests.sh smc-dma-test  # run a single test by name
 ./run_smc_vp_tests.sh -i            # numbered menu
 ./run_smc_vp_tests.sh --build-vp    # rebuild smc-vp first, then run all
 ```
@@ -939,7 +957,7 @@ chiplet bring-up and runtime management.
 | Inter-chiplet communication | 32-channel mailboxes, OCCP protocol, OCTS time-sync |
 | Security fabric | Inbound/outbound AXI filters, address remap, protection bits |
 | System monitoring | PVT sensors, telemetry (ATB sinks), log engine |
-| Interrupt management | PLIC (332 sources), CLINT, per-core WDTs, BEUs |
+| Interrupt management | PLIC (336 sources), CLINT, per-core WDTs, BEUs |
 | Debug | RISC-V Debug Module, JTAG-to-AXI bridge (DTP not modeled) |
 
 In a multi-chiplet SiP the **primary** chiplet's SMC additionally
@@ -1138,12 +1156,14 @@ On Ubuntu, install `g++-11` (or newer) and set `CC` / `CXX` before
 **KMAC / OpenSSL errors on RHEL 8.** System OpenSSL is 1.1.1. Install
 OpenSSL 3 (for example `~/local/openssl-3`) and set `OPENSSL_ROOT`.
 
-**SEP firmware setup failed partway.**
+**SEP firmware setup failed partway.** Use
+[`sw/sep-vp-tests/run_sep_vp_tests.sh`](sw/sep-vp-tests/run_sep_vp_tests.sh)
+(there is no `bin/sep_fw_standalone.sh` in this tree):
 
 ```bash
-bin/sep_fw_standalone.sh venv      # Python venv only
-bin/sep_fw_standalone.sh config    # VeeR EL2 config only
-bin/sep_fw_standalone.sh picolibc  # picolibc only
+cd sw/sep-vp-tests
+./run_sep_vp_tests.sh --build-vp          # rebuild sep-vp, then run all
+./run_sep_vp_tests.sh sep-hmac-test       # one test by name
 ```
 
 **SEP Boot ROM hangs in `BOOT_SECONDARY`.** Standalone `sep-vp` has no SMC

@@ -21,9 +21,9 @@ to match your own install):
 | Dependency | Env var | Version / notes |
 |-----------|---------|-----------------|
 | **RISC-V GNU toolchain** | `RISCV_PREFIX` | GCC 11+, RV64. Default prefix `riscv64-unknown-elf-`; on Homebrew use `riscv64-elf-`. Provides `gcc`, `objcopy`, `objdump`, `readelf`. |
-| **Accellera SystemC** | `SYSTEMC_HOME` | 3.0.2 built with **C++20** (`/Users/pdroy/local/systemc-3.0.2-cxx20`). The ABI is keyed to the C++ standard — consumers must also be C++20. |
-| **Accellera SystemC CCI** | `CCI_HOME` | CCI 1.0, C++20 (`/Users/pdroy/local/cci-cxx20`). Required for `cci_param` configuration. |
-| **Tenstorrent Whisper ISS** | `WHISPER_HOME` | The CVA6 instruction-set simulator. Must be built with `MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20` and contain `build-<OS>/librvcore.a` (e.g. `/Users/pdroy/tt_whisper/whisper`). |
+| **Accellera SystemC** | `SYSTEMC_HOME` | 3.0.2 built with **C++20** (`/path/to/systemc-3.0.2-cxx20`). The ABI is keyed to the C++ standard — consumers must also be C++20. |
+| **Accellera SystemC CCI** | `CCI_HOME` | CCI 1.0, C++20 (`/path/to/cci-cxx20`). Required for `cci_param` configuration. |
+| **Tenstorrent Whisper ISS** | `WHISPER_HOME` | The CVA6 instruction-set simulator. Must be built with `MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20` and contain `build-<OS>/librvcore.a` (e.g. `/path/to/whisper`). |
 | **Boost** | `BOOST_DIR` | ≥ 1.74, with `iostreams` and `program_options` (`/opt/homebrew/opt/boost` on macOS). Used by Whisper headers and `smc-vp`. |
 | **CMake** | — | ≥ 3.20. |
 | **Python 3** | — | Used by firmware/preload generators. |
@@ -50,9 +50,9 @@ from the repo root once (the build is incremental afterwards):
 ```bash
 # From the repo root.  The example uses an isolated bring-up build dir
 # (vp/build_smc); the canonical location is vp/build.
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
-WHISPER_HOME=/Users/pdroy/tt_whisper/whisper \
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
+WHISPER_HOME=/path/to/whisper \
 BOOST_DIR=/opt/homebrew/opt/boost \
 cmake -S vp -B vp/build_smc -DCMAKE_BUILD_TYPE=Release
 
@@ -83,7 +83,7 @@ cd sw/smc-vp-tests
 
 ./run_smc_vp_tests.sh --list          # list available tests
 ./run_smc_vp_tests.sh                 # build + run all smc-* tests
-./run_smc_vp_tests.sh smc-uart-test   # build + run a single test by name
+./run_smc_vp_tests.sh smc-dma-test    # build + run a single test by name
 ./run_smc_vp_tests.sh -i              # choose a single test from a numbered menu
 ./run_smc_vp_tests.sh --build-vp      # (re)build smc-vp first, then run all
 ```
@@ -93,9 +93,9 @@ setup is non-standard, override detection with environment variables:
 
 ```bash
 RISCV_PREFIX=riscv64-elf- \
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
-WHISPER_HOME=/Users/pdroy/tt_whisper/whisper \
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
+WHISPER_HOME=/path/to/whisper \
 BOOST_DIR=/opt/homebrew/opt/boost \
 ./run_smc_vp_tests.sh
 ```
@@ -106,32 +106,21 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 
 | Directory | Description |
 |-----------|-------------|
-| `smc-bootrom-test/` | BootROM reads at several offsets (zero-initialised by default) |
-| `smc-beu-test/` | BEU register smoke test: ENABLE reset value, PLIC_ENABLE/LOCAL_ENABLE mask-on-write, PHYS_ADDR read-only, CAUSE re-arm, all 4 per-core windows decode independently (Phase E1) |
-| `smc-beu-error-test/` | BEU error-injection + accrual + SW-ack + per-core isolation, driven by the platform's test-only CCI error-injection hook (Phase D1); see its `.ini` and `smc/peripherals/beu/doc/04_BEU_Platform_Integration_Test_Plan.md` Phases E2/E3 |
-| `smc-clint-test/` | CLINT MSIP write/read round-trip for hart 0 + MTIMECMP timer interrupt |
-| `smc-cpu-ctrl-test/` | CPU control SCRATCH, REFERENCE_COUNTER, MUTEX test-and-set, and SEMA up/down |
+| `smc-aou-test/` | Always-On Unit register smoke on `smc-vp` |
+| `smc-avsbus-test/` | AVSBus controller register smoke |
+| `smc-beu-test/` | BEU register smoke: ENABLE reset, PLIC/LOCAL enable masks, PHYS_ADDR RO, CAUSE re-arm, per-core windows |
+| `smc-beu-error-test/` | BEU error-injection + accrual + SW-ack + per-core isolation (own `.ini`) |
 | `smc-dma-test/` | DMA scratchpad-to-scratchpad copy |
-| `smc-i2c-loopback-test/` | I2C0 controller -> I2C1 target loopback (write + read) |
-| `smc-i2c-test/` | I2C controller 0 INTR_ENABLE / CTRL / FIFO_CTRL write/read round-trip |
-| `smc-i3c-loopback-test/` | I3C0 controller -> echo target loopback (write + read) |
-| `smc-i3c-test/` | I3C controller 0 HCI_VERSION read + HC_CONTROL / PIO_CONTROL round-trip |
-| `smc-memory-zeroer-test/` | memory_zeroer CSR program + DMA zero-fill write-back into scratchpad RAM (needs its own `.ini`; see `smc_memory_zeroer_test.ini`) |
-| `smc-octs-timer-test/` | octs_system_timer as the system PRIMARY: reset defaults, CTRL reserved-bit RAZ/WI, GPIO_ENABLE, 64-bit PRESET pair, TIMER_START singlepulse, RUNNING + counter monotonicity, RO writes ignored, CREDIT_EXPIRED stays 0, re-START reloads the preset. Mirrors `octs_p0_primary_test` / `octs_p0_credit_test` in `tt-oca-hw-main/fw/smc/tests` |
-| `smc-octs-timer-secondary-test/` | Same timer strapped SECONDARY (`dut.octs_is_primary=false` in its `.ini`): STATUS.MODE reads SECONDARY, registers behave as on a primary, and TIMER_START alone leaves the counter parked at 0 because nothing in the SMC VP drives `sync_load`. Mirrors `octs_p0_sec_test` |
-| `smc-plic-test/` | PLIC threshold + enable write/read + UART0 TX-empty interrupt claim/complete |
-| `smc-pvt-wrap-test/` | PVT wrapper process-clock count, voltage droop, and temperature status register access |
-| `smc-reset-test/` | Reset unit SS_CONFIG round-trip + SS_CONFIG_LOCK / SS_COLD_RESET_LOCK sticky locks |
-| `smc-scratch-test/` | Scratchpad RAM multi-word write/read round-trip from the CPU |
-| `smc-uart-test/` | UART0 SCR, divisor/LCR, FIFO enable, and MCR register tests |
-| `smc-wdt-test/` | SiFive TLWDT stage-1 KEY/CMP/IP/FEED + stage-2 WDT_TIMEOUT / RESET on front-port |
-
-> Some directories listed above (`smc-bootrom-test`, `smc-clint-test`,
-> `smc-cpu-ctrl-test`, `smc-i2c-test`, `smc-i3c-test`, `smc-plic-test`,
-> `smc-reset-test`, `smc-scratch-test`, `smc-uart-test`) are documented here
-> but are **not currently present** in the working tree or git history —
-> flagged for follow-up, out of scope for the BEU work that added the two
-> `smc-beu-*` rows above.
+| `smc-i2c-loopback-test/` | I2C0 controller → I2C1 target loopback (write + read) |
+| `smc-i3c-loopback-test/` | I3C0 controller → echo target loopback (write + read) |
+| `smc-map-coherence-test/` | Modeled IPs at RTL bases; named stubs expose identity tokens |
+| `smc-memory-zeroer-test/` | memory_zeroer CSR program + DMA zero-fill into scratchpad (own `.ini`) |
+| `smc-octs-timer-test/` | octs_system_timer as PRIMARY: reset defaults, CTRL RAZ/WI, GPIO_ENABLE, PRESET, TIMER_START, RUNNING |
+| `smc-octs-timer-secondary-test/` | Same timer strapped SECONDARY; TIMER_START leaves the counter parked (no `sync_load`) |
+| `smc-pll-wrapper-test/` | pll_wrapper CGM/AWM lock after REG_UPDATE |
+| `smc-pvt-wrap-test/` | PVT wrapper process-clock, voltage droop, temperature status |
+| `smc-telemetry-test/` | Telemetry receiver STATUS/CTRL/INTR + optional ATB inject |
+| `smc-wdt-test/` | SiFive TLWDT stage-1 KEY/CMP/IP/FEED + stage-2 WDT_TIMEOUT / RESET |
 
 ### Shared Support Code (`common/`)
 
@@ -173,8 +162,8 @@ fastest loop for iterating on a single IP.
 ```bash
 # Run one IP's tests (Release + ASan + Coverage are separate invocations):
 cd smc/peripherals/uart
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
 ./run_tests.sh                # incremental Release build + run
 ./run_tests.sh --asan         # AddressSanitizer build + run (isolated build_asan/)
 ./run_tests.sh --coverage     # source coverage build + report (isolated build_cov/)
@@ -195,9 +184,9 @@ summary into `smc/logs/`:
 
 ```bash
 cd smc
-SYSTEMC_HOME=/Users/pdroy/local/systemc-3.0.2-cxx20 \
-CCI_HOME=/Users/pdroy/local/cci-cxx20 \
-WHISPER_HOME=/Users/pdroy/tt_whisper/whisper \
+SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
+CCI_HOME=/path/to/cci-cxx20 \
+WHISPER_HOME=/path/to/whisper \
 BOOST_DIR=/opt/homebrew/opt/boost \
 ./run_all_smc_tests.sh                  # all IPs, incremental
 ./run_all_smc_tests.sh --clean          # wipe build dirs first
@@ -225,33 +214,25 @@ can run the same MMIO map as management firmware — see that README for
 Build a test and run it on `smc-vp`:
 
 ```bash
-cd sw/smc-vp-tests/smc-scratch-test
+cd sw/smc-vp-tests/smc-dma-test
 
 # Build the ELF (override RISCV_PREFIX on Homebrew):
 make RISCV_PREFIX=riscv64-elf-
 
-# Run on smc-vp (point VP at your build tree if not vp/build):
+# Run on smc-vp (point VP at your build tree if not vp/build_smc):
 make sim RISCV_PREFIX=riscv64-elf- \
      VP=../../../vp/build_smc/bin/smc-vp
 ```
 
-Expected output (tail):
+Expected UART verdict:
 
 ```
----- UART0 output ----
-
-=== SMC scratchpad RAM round-trip test ===
-
-wrote 0x1234abcd read 0x1234abcd
-
-PASS: scratchpad readback matches
-
----- end UART0 ----
+PASS: DMA scratchpad copy works
 ```
 
-Run the UART test the same way from `sw/smc-vp-tests/smc-uart-test/`. To run
-every test in this directory, prefer the `run_smc_vp_tests.sh` helper above;
-if you need to drive `make` directly:
+The same `make` / `make sim` pattern works from any present `smc-*-test/`
+directory. To run every test, prefer `run_smc_vp_tests.sh`; if you need to
+drive `make` directly:
 
 ```bash
 cd sw/smc-vp-tests
@@ -268,7 +249,7 @@ firmware prints the verdict). `make sim` runs a bounded simulation window
 ## Build and run a single test (quick reference)
 
 ```bash
-cd smc-scratch-test
+cd smc-dma-test
 make RISCV_PREFIX=riscv64-elf-                 # build the ELF
 make sim  RISCV_PREFIX=riscv64-elf- \
           VP=../../../vp/build_smc/bin/smc-vp  # run on smc-vp

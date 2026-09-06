@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # =============================================================================
 # sw/smc-vp-tests/run_smc_vp_tests.sh
 #
@@ -9,7 +11,7 @@
 # Usage:
 #   cd sw/smc-vp-tests
 #   ./run_smc_vp_tests.sh              # build + run all smc-* tests
-#   ./run_smc_vp_tests.sh smc-uart-test # build + run a single test
+#   ./run_smc_vp_tests.sh smc-dma-test  # build + run a single test
 #   ./run_smc_vp_tests.sh --build-vp   # (re)build smc-vp first, then run all
 #   ./run_smc_vp_tests.sh --help
 #
@@ -447,7 +449,7 @@ Environment overrides:
 
 Examples:
   ${0##*/}                     # run all smc-* tests
-  ${0##*/} smc-uart-test       # run a single test by name
+  ${0##*/} smc-dma-test        # run a single test by name
   ${0##*/} -i                  # choose a test interactively
   ${0##*/} --build-vp          # build smc-vp first, then run all tests
 EOF

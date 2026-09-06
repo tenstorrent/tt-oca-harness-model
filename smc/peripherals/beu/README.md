@@ -1,14 +1,19 @@
 # SMC Bus Error Unit (BEU) — SystemC / TLM-2.0 Loosely-Timed Model
 
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 A per-core **Bus Error Unit** modeled in Accellera SystemC 2.3.x / 3.0.x +
 TLM-2.0 (Loosely-Timed). It implements one instance of the SMC CPU-cluster BEU
-(the Rocket-chip `BusErrorUnit` behind an AXI4-Lite register window; the SMC
-packs one per core at `0xC801_0000 + N*0x1000`) as described in:
+(the Rocket-chip `BusErrorUnit` behind an AXI4-Lite register window) as described in:
 
-- `doc/01_BEU_Specification.md` — externally-observable behaviour
-- `doc/02_BEU_LowLevel_Design.md` — TLM interface, register map, internals
-- `doc/03_BEU_Test_Plan.md` — unit verification strategy and test list
-- `doc/04_BEU_Platform_Integration_Test_Plan.md` — what is required to wire BEU into `smc-vp` and add an `smc-beu-test` platform firmware test
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — TLM interface, register map, internals
+- `doc/test_plan.adoc` — unit verification and `smc-beu-test` / `smc-beu-error-test`
 - `hw/smc/smc_cpu/data/registers/rdl/bus_error_unit.rdl` — authoritative register map
 - `hw/smc/smc_cpu/chipyard_generated_files/4core/OCAH4CORECluster_BusErrorUnit.sv` — behaviour reference
 - `hw/smc/doc/interrupts.adoc` — BEU local (NMI-like) + PLIC delivery
@@ -59,12 +64,9 @@ beu/
 ├── run_tests.sh                  Build + run convenience script
 ├── deps.env.example              Template for local dependency paths
 ├── doc/
-│   ├── 01_BEU_Specification.md / .pdf
-│   ├── 02_BEU_LowLevel_Design.md / .pdf
-│   ├── 03_BEU_Test_Plan.md / .pdf
-│   ├── 04_BEU_Platform_Integration_Test_Plan.md / .pdf
-│   ├── 02_BEU_LowLevel_Design.md
-│   └── 03_BEU_Test_Plan.md
+│   ├── index.adoc
+│   ├── implementation.adoc
+│   └── test_plan.adoc
 ├── include/
 │   └── beu.h                     SC_MODULE(beu) declaration
 │                                 (uses shared smc/common/include/smc_axi_extension.h)
@@ -164,4 +166,4 @@ its bus behind a callback):
 - `dbg_reg(off)` — side-effect-free register peek
 - `dump_state(os)` — human-readable state dump
 
-See `doc/02_BEU_LowLevel_Design.md` for details.
+See `doc/implementation.adoc` for details.
