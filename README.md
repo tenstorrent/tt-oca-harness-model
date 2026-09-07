@@ -7,10 +7,14 @@ Atlas Harness (OCAH)**. It models the System Management Controller (SMC) and
 the Secure Enclave Processor (SEP) so firmware and pre-silicon tests can run
 before silicon.
 
-This repository includes Tenstorrent models built on
+This repository includes Tenstorrent SystemC/TLM models. Platform
+infrastructure in `vp/` is derived from
 [riscv-vp-plusplus](https://github.com/ics-jku/riscv-vp-plusplus) (MIT).
-Tenstorrent modifications and new models are licensed under Apache 2.0; see
-[License](#license).
+The SEP hart uses in-tree
+[VeeR-ISS](https://github.com/chipsalliance/VeeR-ISS) (Apache 2.0). The
+SMC CVA6 cluster uses [Tenstorrent Whisper](https://github.com/tenstorrent/whisper)
+(Apache 2.0, built separately). Tenstorrent modifications and new models
+are Apache 2.0; see [License](#license).
 
 **Open Chiplet Atlas (OCA)** is Tenstorrent's chiplet-based System-in-Package (SiP)
 architecture. It defines a standardized framework for building multi-chiplet systems
@@ -1225,7 +1229,8 @@ public issues).
 **What license applies to documentation versus code?**
 Software is Apache 2.0 ([LICENSE](LICENSE)). Documentation and images are
 CC-BY 4.0 ([LICENSE-DOCS](LICENSE-DOCS)). Upstream `riscv-vp-plusplus`
-remains MIT. See [License](#license).
+remains MIT. In-tree VeeR-ISS and external Tenstorrent Whisper are
+Apache 2.0. See [License](#license).
 
 ## Documentation
 
@@ -1268,7 +1273,11 @@ License for all documentation and images only:
 This repository includes a fork of
 [riscv-vp-plusplus](https://github.com/ics-jku/riscv-vp-plusplus), which remains
 under the MIT license; see [vp/LICENSE.riscv-vp-plusplus](vp/LICENSE.riscv-vp-plusplus).
-Tenstorrent modifications and new models are Apache 2.0.
+The SEP hart ISS is in-tree
+[VeeR-ISS](https://github.com/chipsalliance/VeeR-ISS) (Apache 2.0). The
+SMC CVA6 ISS is [Tenstorrent Whisper](https://github.com/tenstorrent/whisper)
+(Apache 2.0), built from a separate checkout. Tenstorrent modifications
+and new models are Apache 2.0.
 
 Third-party notices (VeeR ISS, SoftFloat, PQClean, OpenTitan, and others):
 [NOTICE](NOTICE).
