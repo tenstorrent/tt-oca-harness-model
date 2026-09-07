@@ -1,8 +1,8 @@
 # SMC Boot ROM — SystemC / TLM-2.0 Loosely-Timed Model
 
 A standards-compliant **SMC Boot ROM** modelled in Accellera SystemC
-2.3.x / 3.0 + TLM-2.0 (Loosely-Timed) and parameterised through SystemC
-CCI 1.0. It is a generic, role-agnostic read-only `mem` block in the SMC
+3.0.2 + TLM-2.0 (Loosely-Timed) and parameterised through SystemC
+CCI 1.0.2. It is a generic, role-agnostic read-only `mem` block in the SMC
 IP library: the same `smc::bootrom` backs the SMC CPU-cluster boot path
 and — being structurally identical — the SEP (Secure Enclave Processor)
 boot ROM, with the role selected entirely through CCI presets.
@@ -134,17 +134,11 @@ them manually for any non-standard prefix. There is no
 
 ## Current status
 
-| Metric                       | Value                              |
-|------------------------------|------------------------------------|
-| Test cases (across two TBs)  | 16/16 PASS                         |
-| AddressSanitizer             | 0 errors                           |
-| Function coverage            | 93.75% (`src/bootrom.cpp`)         |
-| Line coverage                | 80.77% (`src/bootrom.cpp`)         |
-| Region coverage              | 72.55% (`src/bootrom.cpp`)         |
-
-Remaining uncovered lines are all `SC_REPORT_FATAL` paths, which would
-require a fork-based test harness to cover (tracked in
-`doc/test_plan.adoc`).
+Release, ASan, and coverage are **three separate** `./run_tests.sh`
+invocations. Coverage must be ≥ 95% line on `src/bootrom.cpp` (the
+orchestrator fails below that). Benches: `bootrom_tb`, `bootrom_bin_tb`,
+`bootrom_neg_tb`. Re-run `./run_tests.sh --coverage` for current
+percentages; do not treat a checked-in snapshot as the gate.
 
 ---
 

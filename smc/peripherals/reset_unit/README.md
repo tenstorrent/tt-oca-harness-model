@@ -1,8 +1,8 @@
 # SMC Reset Unit — SystemC / TLM-2.0 Loosely-Timed Model
 
 A standards-compliant **SMC Reset Unit** modelled in Accellera SystemC
-2.3.x / 3.0 + TLM-2.0 (Loosely-Timed) and parameterised through SystemC
-CCI 1.0.  It is the register-driven reset controller of the System
+3.0.2 + TLM-2.0 (Loosely-Timed) and parameterised through SystemC
+CCI 1.0.2.  It is the register-driven reset controller of the System
 Management Controller (SMC): it sequences the chip-level cold / primary /
 core / WDT resets, distributes per-clock-domain synchronised resets, drives
 the 32 per-subsystem reset-control bundles, implements the PCIe
@@ -159,6 +159,7 @@ See `doc/implementation.adoc` for the CCI catalogue and `smc-vp` bind.
 ./run_tests.sh                   # Release build + run both test benches
 ./run_tests.sh --ctest           # Run via ctest (both binaries)
 ./run_tests.sh --asan            # AddressSanitizer (+ LSan on Linux)
+./run_tests.sh --coverage        # ≥ 95% line on src/; do not combine with --asan
 ./run_tests.sh --clean           # Wipe build/ first
 ```
 

@@ -1,5 +1,12 @@
 # `octs_system_timer` — OCTS System Timer model
 
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 A cycle-accurate SystemC/TLM-2.0 model of the **OCTS (Open Chiplet Time
 Synchronization) System Timer**: a 64-bit timer that keeps a nanosecond-level
 timeline coherent across chiplets using a PRIMARY/SECONDARY hierarchy with a
@@ -187,7 +194,7 @@ cp deps.env.example deps.env      # point SYSTEMC_HOME / CCI_HOME at your instal
 ./run_tests.sh --coverage         # instrumented build + line-coverage report
 ```
 
-Requires SystemC 3.0.2 and CCI 1.0.1 (the same versions as the other SMC
+Requires SystemC 3.0.2 and CCI 1.0.2 (the same versions as the other SMC
 peripheral models).
 
 ### What the testbench covers

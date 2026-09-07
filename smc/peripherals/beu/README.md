@@ -7,7 +7,7 @@ This tree has the model, its test plan, and how to run the tests.
 - `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
 - `doc/test_plan.adoc` — standalone cases and firmware tests
 
-A per-core **Bus Error Unit** modeled in Accellera SystemC 2.3.x / 3.0.x +
+A per-core **Bus Error Unit** modeled in Accellera SystemC 3.0.2 +
 TLM-2.0 (Loosely-Timed). It implements one instance of the SMC CPU-cluster BEU
 (the Rocket-chip `BusErrorUnit` behind an AXI4-Lite register window) as described in:
 

@@ -75,7 +75,7 @@ SC_MODULE(smc_cpu_cluster) {
 };
 ```
 
-Configuration is exposed via **SystemC CCI 1.0** `cci_param` members (broker
+Configuration is exposed via **SystemC CCI 1.0.2** `cci_param` members (broker
 presets override defaults).  The `config` struct constructor remains for
 backward compatibility.
 
@@ -163,10 +163,10 @@ Model and test pages are AsciiDoc under `doc/` (`index.adoc`,
 
 The model needs:
 
-- Accellera SystemC ≥ 2.3.4 built with **C++20** (matches this project)
+- Accellera SystemC **3.0.2** built with **C++20** (matches this project)
 - A Whisper source tree (built automatically by `run_tests.sh` when needed)
 - Boost ≥ 1.74 (headers + `program_options` library for Whisper)
-- Accellera SystemC CCI 1.0 when `SMC_BUILD_PLIC_INTEGRATION=ON` (default)
+- Accellera SystemC CCI **1.0.2** when `SMC_BUILD_PLIC_INTEGRATION=ON` (default)
 - `liblz4` development package (RHEL/CentOS: `lz4-devel`) for Whisper's
   snapshot compression
 
@@ -192,26 +192,25 @@ Work through these steps once.  Pick an install prefix (examples use
 
 #### 0. Toolchain
 
-- **CMake** ≥ 3.20, **GCC** ≥ 11 with C++20 (GCC 13 / `gcc-toolset-13` on
-  RHEL is what we use in CI-like environments).
+- **CMake** ≥ 3.20, **GCC** ≥ 11 with C++20 (RHEL 8 CI uses `gcc-toolset-12`).
 - On RHEL 8: `sudo yum install cmake lz4-devel` and enable the devtoolset /
   gcc-toolset you plan to compile with.
 
 #### 1. SystemC (C++20)
 
-Download [Accellera SystemC](https://accellera.org/downloads/) (2.3.4 or
-later), then build and install with C++20:
+Download [Accellera SystemC](https://accellera.org/downloads/) **3.0.2**,
+then build and install with C++20:
 
 ```bash
-tar xf systemc-2.3.4.tar.gz && cd systemc-2.3.4
+tar xf systemc-3.0.2.tar.gz && cd systemc-3.0.2
 cmake -S . -B build \
       -DCMAKE_CXX_STANDARD=20 \
-      -DCMAKE_INSTALL_PREFIX="$HOME/local/systemc-2.3.4"
+      -DCMAKE_INSTALL_PREFIX="$HOME/local/systemc-3.0.2-cxx20"
 cmake --build build -j"$(nproc)"
 cmake --install build
 ```
 
-Verify: `$HOME/local/systemc-2.3.4/include/systemc.h` exists.
+Verify: `$HOME/local/systemc-3.0.2-cxx20/include/systemc.h` exists.
 
 > SystemC and every consumer (this repo, Whisper, CCI) must agree on the same
 > C++ standard.  Mixing a C++17 SystemC build with C++20 models causes link
@@ -302,10 +301,10 @@ cp deps.env.example deps.env
 Edit `deps.env`:
 
 ```bash
-export SYSTEMC_HOME=$HOME/local/systemc-2.3.4
+export SYSTEMC_HOME=$HOME/local/systemc-3.0.2-cxx20
 export BOOST_DIR=$HOME/local/boost-1.84.0
 export WHISPER_HOME=/path/to/whisper/whisper    # directory with GNUmakefile
-export CCI_HOME=$HOME/local/cci-install
+export CCI_HOME=$HOME/local/cci-1.0.2
 ```
 
 `deps.env` is gitignored — each developer keeps their own copy.  Alternatively
@@ -465,7 +464,7 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
   Tier-0/Tier-1 tests. Coverage instrumentation is enabled by
   `./run_tests.sh --coverage` (or `-DENABLE_COVERAGE=ON` at configure time);
   the `coverage` custom target renders gcovr HTML under `build/coverage/`.
-  Current baseline: **98.5 %** line coverage on `src/`.
+  The gate is ≥ 95% line on `src/`; re-run `--coverage` for current figures.
 
 ---
 
@@ -487,4 +486,4 @@ identifies the cluster (`SMC_CPU_SOURCE_ID = 0x10`).
 | PLIC CPU→PLIC→CPU + scratchpad TC-CPU-004/005 in `cluster_tb`          | ✅      |
 | Full PLIC IP matrix (separate from cluster integration)                | `plic_tb` |
 | CLINT IP MMIO (cluster IRQ wire stubs only in `cluster_tb`)            | future  |
-| Coverage via `-DENABLE_COVERAGE=ON` / `./run_tests.sh --coverage` §A.4   | ✅ (98.5 % line on `src/`) |
+| Coverage via `-DENABLE_COVERAGE=ON` / `./run_tests.sh --coverage` §A.4   | ✅ (≥ 95% line on `src/`) |

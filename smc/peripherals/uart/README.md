@@ -1,6 +1,6 @@
 # SMC UART 16550 — SystemC / TLM-2.0 Loosely-Timed Model
 
-An NS16550A-compatible UART modeled in Accellera SystemC 2.3.x + TLM-2.0
+An NS16550A-compatible UART modeled in Accellera SystemC 3.0.2 + TLM-2.0
 (Loosely-Timed). Architecture, CSRs, and programming are in the hardware
 TRM. Model and test docs:
 

@@ -2,7 +2,8 @@
 
 - Version: 2.1
 - Release date: 15-Aug-2026
-- Release name: release_2.0
+- Notes updated: 07-Sep-2026
+- Release name: release_2.1
 
 # Release Details
 
@@ -31,103 +32,83 @@ Platforms: `smc-vp`, `sep-vp`, `smu-vp`.
 
 - Interconnect and interrupt: SimpleBus (enforcing the SEP crossbar's per-initiator connectivity matrix), EL2 PIC, local-master alias remap, output remap, filter control
 - Reset and CPU control: `sep_reset_ctrl`, `sep_cpu_ctrl`
-- Crypto and entropy: HMAC, KMAC, OTBN, CSRNG, AES, Key Manager, EDN, Entropy Source
+- Crypto and entropy: Adams Bridge (ML-DSA-87 / ML-KEM-1024), HMAC, KMAC, OTBN, CSRNG, AES, Key Manager, EDN, Entropy Source
 - Peripherals: secure DMA, mailbox, AON timer, eFuse/OTP, lifecycle controller, SPI controller (OpenTitan), SPI Flash (SFDP Profile 1)
 - Integration: SEP↔SMU AXI boundary (`smn_inbound_axi`, `smn_outbound_axi`, `sep_ext_to_smc_axi`), with the inbound-window CSRs exported so the SMU crossbar sizes its SEP aperture from them; OTP key-request stub, mailbox host stub, MailboxBridge, `dma_sys_bus_adapter`, stdout / virt-console / SEP status report
 
 ## Testing Status
 
-- All modeled peripheral IPs are unit tested (SEP: `sep/peripherals/run_all_peripherals.sh`; SMC: `smc/run_all_smc_tests.sh`)
-- Firmware tests written by Vayavya under `sw/sep-vp-tests/` run successfully on the VP
+- Modeled peripheral IPs are unit tested (SEP: `sep/peripherals/run_all_peripherals.sh`; SMC: `smc/run_all_smc_tests.sh`). `sep_memory` is excluded from the SEP orchestrator by design (no standalone coverage build).
+- SEP CPU (VeeR-ISS TLM wrapper) has standalone tests at `sep/cpu/` (`./run_tests.sh`, `--asan`, `--coverage`). Public CI runs those three invocations after the SEP peripheral suite.
+- Firmware tests written by Vayavya under `sw/sep-vp-tests/` run successfully on the VP.
 - TT firmware tests under `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/`
   - Tests exercising modeled SEP IPs run successfully on the VP
   - Tests that require DTP (JTAG / iJTAG / JTAG2AXI / cross-trigger) are not exercised
+
+Each orchestrator runs **three separate** builds: Release, ASan+UBSan, and coverage. ASan and coverage must not be combined. The coverage gate is **≥ 95% line coverage** on model `src/` (and `include/` / `algo/` where the IP extracts those). A figure below 95% fails the stage.
 
 ### Tested on
 
 - Ubuntu 22.04 LTS
 - RHEL 8.10
-- macOS 26.5.1 (Tahoe)
+- macOS (Apple Clang; Tahoe 26.x)
 
 ### Compiler versions tested
 
-- GCC 11.4.0, C++17 (Accellera flow)
-- GCC 9.5.0, C++17 (Accellera flow)
-- GCC 11.2, C++20 (Accellera flow)
+- GCC 11.4.0 / 11.2, C++20 (default; required for `smc-vp` / `smu-vp`)
+- GCC 11.4.0 / 9.5.0, C++17 (SEP / Accellera flow only)
+- Apple Clang, C++20 (macOS)
 
-### Peripheral unit test & line coverage
+Public CI (`.github/workflows/ci.yml` and `ci-rhel8.yml`) pins:
 
-All listed IPs **PASS** Release, Coverage, and CTest on the hosts below (ASAN is skipped on RHEL 8).  
-`—` means that IP was not in the coverage job on that host. `n/a` means tests passed but the coverage report was not produced.
+| Library | Version |
+|---------|---------|
+| SystemC | 3.0.2 |
+| CCI | 1.0.2 |
+| C++ standard | 20 |
+| Boost | ≥ 1.74 (`iostreams`, `program_options`); RHEL 8 CI builds **1.84.0** |
+| OpenSSL | 3.x (≥ 3.0); RHEL 8 CI builds **3.3.2** |
+| Whisper | `a53d0f3e` |
+| Zephyr | v4.3.0 |
+| RISC-V GCC | xpack **15.2.0-1** (`riscv-none-elf-`) |
+
+RHEL 8 ASan uses `gcc-toolset-12-libasan-devel` and `gcc-toolset-12-libubsan-devel`; ASan is **not** skipped on RHEL 8. CCI 1.0.1, Boost.Regex, Boost.Log, and libvncserver are not required.
+
+### Peripheral unit tests and coverage
+
+`sep/peripherals/Coverage_Report.md` is a historical snapshot and may lag the gate. Re-run the orchestrators for current percentages:
+
+```bash
+sep/peripherals/run_all_peripherals.sh          # Release + ASan + coverage
+smc/run_all_smc_tests.sh                        # same four stages (Release / ASan / coverage / CTest)
+sep/cpu/run_tests.sh && sep/cpu/run_tests.sh --asan && sep/cpu/run_tests.sh --coverage
+```
 
 #### SEP (`sep/peripherals/run_all_peripherals.sh`)
 
-RHEL 8.10 from CI on 13-Aug-2026 (`lcov` / `make coverage`).  
-Ubuntu 22.04 and macOS from `run_all_peripherals.sh` on 15-Aug-2026
-(Ubuntu: gcc / `gcovr`; macOS: clang / llvm-prof + Homebrew `lcov`).
+All of the following IPs are in the orchestrator (and in public CI):
 
-| Peripheral                   | RHEL 8.10 | macOS   | Ubuntu 22.04 |
-|------------------------------|----------:|--------:|-------------:|
-| aes                          | 92.8%     | 92.6%   | 92.6%        |
-| aon_timer                    | 98.5%     | 98.1%   | 98.5%        |
-| csrng                        | 92.2%     | 91.3%   | 92.2%        |
-| edn                          | 93.1%     | 93.1%   | 93.1%        |
-| efuse                        | 100.0%    | 100.0%  | 100.0%       |
-| el2_pic                      | 93.3%     | 92.5%   | 93.3%        |
-| entropy_src                  | 91.4%     | 92.0%   | 91.4%        |
-| hmac                         | 92.1%     | 91.5%   | 92.1%        |
-| key_manager                  | 98.0%     | 97.9%   | 98.0%        |
-| kmac                         | 80.9%     | 82.7%   | 80.9%        |
-| lifecycle_ctrl               | 98.1%     | 97.5%   | 98.1%        |
-| local_master_alias_remap_ctrl| 100.0%    | 100.0%  | 100.0%       |
-| mailbox                      | 98.0%     | 97.3%   | 98.0%        |
-| otbn                         | 91.9%     | 92.2%   | 91.9%        |
-| secure_dma                   | 92.0%     | 91.9%   | 92.1%        |
-| sep_cpu_ctrl                 | 100.0%    | 100.0%  | 100.0%       |
-| sep_filter_ctrl              | 94.4%     | 95.2%   | 94.9%        |
-| sep_output_remap_ctrl        | 97.8%     | 96.2%   | 97.8%        |
-| sep_reset_ctrl               | 100.0%    | 98.6%   | 100.0%       |
-| sep_scratch_cold             | 87.6%     | 90.2%   | 90.1%        |
-| sep_scratch_warm             | 100.0%    | 100.0%  | 100.0%       |
-| spi_controller               | 95.6%     | 94.9%   | 95.6%        |
-| spi_flash                    | 97.3%     | 97.7%   | 97.3%        |
+`adams_bridge`, `aes`, `aon_timer`, `csrng`, `edn`, `efuse`, `el2_pic`, `entropy_src`, `hmac`, `key_manager`, `kmac`, `lifecycle_ctrl`, `local_master_alias_remap_ctrl`, `mailbox`, `otbn`, `secure_dma`, `sep_cpu_ctrl`, `sep_filter_ctrl`, `sep_output_remap_ctrl`, `sep_reset_ctrl`, `sep_scratch_cold`, `sep_scratch_warm`, `spi_controller`, `spi_flash`.
+
+- `sep_memory` is skipped by design (`SKIP=("sep_memory" "cpu")`).
+- `sep_status_report` and `sep_virt_console` have no standalone suites. Both decoders live inside `sep_scratch_cold`, tapped on `COLD_SCRATCH[1]` and `COLD_SCRATCH[2]` (the registers the ROM's `STATUS_OUT()` and `simput*()` write).
+- `sep_scratch_warm` is a store-only stub with a standalone `run_tests.sh`.
 
 #### SMC (`smc/run_all_smc_tests.sh`)
 
-RHEL 8.10 and Ubuntu 22.04 from CI on 13-Aug-2026 (`gcovr` TOTAL, integer %).  
-macOS from `./run_tests.sh --coverage` llvm-cov **src/** line coverage (15-Aug-2026, plus earlier reports still on disk).
+Local default set: `avsbus_controller`, `beu`, `bootrom`, `clint`, `i2c_controller`, `cpu_ctrl`, `i3c_controller`, `dma`, `memory_zeroer`, `pll_wrapper`, `pvt_wrap`, `plic`, `reset_unit`, `scratchpad_ram`, `telemetry_receiver`, `uart`, `wdt`, `smc_fabric`, `octs_system_timer`, `aou`. `cpu_cluster` is added automatically when `WHISPER_HOME` and Boost are present.
 
-| Peripheral          | RHEL 8.10 | macOS   | Ubuntu 22.04 |
-|---------------------|----------:|--------:|-------------:|
-| avsbus_controller   | —         | 100.0%  | —            |
-| beu                 | —         | 100.0%  | —            |
-| bootrom             | 91%       | 100.0%  | 91%          |
-| clint               | 96%       | 96.7%   | 96%          |
-| cpu_cluster         | —         | 84.7%   | —            |
-| cpu_ctrl            | —         | 96.2%   | —            |
-| dma                 | 98%       | 97.5%   | 98%          |
-| i2c_controller      | —         | 100.0%  | —            |
-| i3c_controller      | 96%       | 96.3%   | 96%          |
-| memory_zeroer       | —         | 90.9%   | —            |
-| octs_system_timer   | —         | 94.1%   | —            |
-| plic                | 97%       | 97.9%   | 97%          |
-| pll_wrapper         | —         | 84.8%   | —            |
-| pvt_wrap            | 97%       | 97.3%   | 97%          |
-| reset_unit          | 98%       | 98.6%   | 98%          |
-| scratchpad_ram      | 96%       | 98.5%   | 96%          |
-| smc_fabric          | 97%       | 98.1%   | 97%          |
-| telemetry_receiver  | 98%       | 99.5%   | 98%          |
-| uart                | —         | 99.8%   | —            |
-| wdt                 | —         | 97.0%   | —            |
+Public CI currently runs a subset:
+
+- `smc-unit-tests`: `bootrom`, `clint`, `dma`, `i3c_controller`, `plic`, `pvt_wrap`, `reset_unit`, `scratchpad_ram`, `telemetry_receiver`, `aou`
+- `smc-fabric-tests`: `smc_fabric`
+
+`cpu_cluster` is not in the public CI matrix (requires Whisper).
 
 **Notes**
-- RHEL: gcc/gcov; Ubuntu: gcc/gcovr; macOS: clang/llvm-cov (SMC) or clang/llvm-prof + `lcov` (SEP).
-- `sep_status_report` and `sep_virt_console` no longer appear above: neither has its own
-  suite any more. Both decoders now live inside `sep_scratch_cold`, tapped on
-  `COLD_SCRATCH[1]` and `COLD_SCRATCH[2]` (the registers the ROM's `STATUS_OUT()` and
-  `simput*()` actually write), so its coverage number accounts for them.
-- SMC CI currently covers a subset of IPs (`bootrom`, `clint`, `dma`, `i3c_controller`, `plic`, `pvt_wrap`, `reset_unit`, `scratchpad_ram`, `telemetry_receiver`, `smc_fabric`).
-- `cpu_cluster` coverage is from the 22-Jul-2026 llvm-cov report (`src/smc_cpu_cluster.cpp` + `src/iss_backend_whisper.cpp`); it is not in the public CI matrix (requires Whisper).
+
+- RHEL: gcc/gcov; Ubuntu: gcc/gcovr; macOS: clang/llvm-cov (SMC) or clang/llvm-prof + Homebrew `lcov` (SEP).
+- Coverage and ASan use isolated build directories (`build_cov/`, `build_asan/`). Never reuse `build/` for an instrumented run.
 
 ---
 
@@ -168,15 +149,19 @@ macOS from `./run_tests.sh --coverage` llvm-cov **src/** line coverage (15-Aug-2
   register stub that reads back the `0x00000002` silicon reset default, so a driver's
   mux-select write does not fault. SPI leg selection and forced chip-select are not
   modeled.
-- **Key Manager**: unit-level testing only (no DV tests)
-
+- **Key Manager**: unit-level testing only. There is no dedicated keymgr firmware
+  test; sideload sequences in KMAC/OTBN tests may exercise the hardware port.
 
 # GCC and C++ Compatibility
 
 | CXX_STD  | Compiler                    | SYSTEMC_API| Status         |
 |----------|-----------------------------|------------|----------------|
-| c++17    | gcc-toolset-9 (GCC 9.2)     | cxx201703L |  OK            |
-| c++17    | system GCC 8.5              | cxx201703L |  OK            |
-| c++20    | gcc-toolset-11 (GCC 11.2)   | cxx202002L |  OK            |
+| c++17    | gcc-toolset-9 (GCC 9.2)     | cxx201703L |  OK (SEP / Accellera) |
+| c++17    | system GCC 8.5              | cxx201703L |  OK (SEP / Accellera) |
+| c++20    | gcc-toolset-11+ (GCC 11.2)  | cxx202002L |  OK (default; required for SMC/SMU) |
 | c++20    | system GCC 8.5              | cxx201709L |  Not Supported |
 | c++20    | gcc-toolset-9 (GCC 9.2)     | cxx201709L |  Not Supported |
+
+`vp/configure_vp.sh` defaults to **C++20**. Point `SYSTEMC_HOME` at a SystemC 3.0.2
+tree built with the same `-std=c++NN`. Mismatches fail at link time with an
+undefined `sc_api_version_*` symbol.
