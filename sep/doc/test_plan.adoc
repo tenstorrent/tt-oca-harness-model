@@ -42,7 +42,7 @@ vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
 
 ==== Firmware tests on `sep-vp`
 
-Vayavya-style tests:
+Standalone firmware tests:
 
 [source,bash]
 ----

@@ -237,7 +237,7 @@ tt-oca-harness-model/
 │           ├── config/
 │           └── docs/
 ├── sw/                            ← Firmware and DV tests
-│   ├── sep-vp-tests/              ← Vayavya peripheral verification tests (SEP)
+│   ├── sep-vp-tests/              ← SEP firmware tests
 │   │   └── fw-tests-from-tt-oca-hw/   ← TT firmware test suite (fw/sep), self-contained
 │   │       ├── fw/sep/tests/      ← the tests, plus run_all_tests.sh / run_test.sh
 │   │       ├── fw/sep/bootcode/   ← SEP Boot ROM (BL0)
@@ -463,7 +463,7 @@ vp/build/bin/sep-vp vp/platform/sep/config/accellera_config.ini <firmware.elf>
 
 Usage: `sep-vp <cci-ini> [targets override]`
 
-#### sep-vp-tests (Vayavya peripheral verification)
+#### sep-vp-tests (SEP firmware tests)
 
 Tests under `sw/sep-vp-tests/` verify modeled peripherals end-to-end from
 firmware running on the VeeR EL2 core. See [`sw/sep-vp-tests/README.md`](sw/sep-vp-tests/README.md).
@@ -1004,7 +1004,7 @@ tt-oca-harness-model/
 │       ├── smc/               smc-vp
 │       └── smu/               smu-vp: SMC + SEP + interconnect
 ├── sw/
-│   ├── sep-vp-tests/          SEP firmware + Vayavya tests
+│   ├── sep-vp-tests/          SEP firmware tests
 │   ├── smc-vp-tests/          bare-metal RV64 SMC tests
 │   ├── smu-vp-tests/          dual-firmware SMU tests
 │   └── zephyr-smc/            out-of-tree Zephyr port for smc-vp
