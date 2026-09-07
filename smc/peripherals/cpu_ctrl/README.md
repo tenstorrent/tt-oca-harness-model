@@ -12,9 +12,9 @@ the **`SCRATCH[16]`** array used for **SMC ROM ↔ SEP ROM inter-stage handoff**
 
 ## Authoritative sources
 
-- `tt-oca-hw/hw/smc/smc_misc/data/registers/rdl/cpu_ctrl.rdl` — register map
-- `tt-oca-hw/fw/smc/prod_rom/specification/smc_rom.adoc` — scratch handoff protocol
-- `tt-oca-hw/fw/smc/prod_rom/include/smc_rom_defs.h` — index / bit definitions
+- `tt-oca-harness/hw/smc/smc_misc/data/registers/rdl/cpu_ctrl.rdl` — register map
+- `tt-oca-harness/fw/smc/prod_rom/specification/smc_rom.adoc` — scratch handoff protocol
+- `tt-oca-harness/fw/smc/prod_rom/include/smc_rom_defs.h` — index / bit definitions
 
 ## Layout
 

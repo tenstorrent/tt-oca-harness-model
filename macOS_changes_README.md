@@ -3,7 +3,7 @@
 This document records the Apple Silicon (Darwin, Clang, libc++) port and the
 current macOS build recipe. The port kept Linux (Ubuntu/RHEL) working and
 fixed toolchain, header, and linker issues without forking the codebase.
-Historical CSML / SystemC 3.0.1 / C++17-only notes are marked as such.
+Historical SystemC 3.0.1 / C++17-only notes are marked as such.
 
 **Targets:** `sep-vp`, `smc-vp`, `smu-vp`  
 **Current toolchain:** Apple Clang, SystemC **3.0.2**, CCI **1.0.2**, C++20
@@ -69,11 +69,10 @@ Re-run `./configure_vp.sh` after changing `CMAKE_CXX_STANDARD` or install prefix
 | `sep/peripherals/spi_controller/include/spi_controller_register.h` | Register names | Yes |
 | `sep/peripherals/spi_controller/include/spi_controller.h` | Header guard | Yes |
 | `sep/peripherals/spi_controller/src/spi_controller.cpp` | Register field access | Yes |
-| `sep/utils/csml/inc/csml_report.h` | Clang overload fix (**historical**) | CSML is not a live dependency — do not revive |
 | `cmake/PeripheralCoverage.cmake` | Coverage linker flags (shared) | Yes — defers flags; `-lgcov` only on Linux |
 | `sep/peripherals/run_all_peripherals.sh` | Batch test driver | Yes — uses `vp/vp_build_env.sh` |
 | `sep/peripherals/*/CMakeLists.txt` | Coverage + lcov targets | Yes — see [Coverage section](#peripheral-tests--coverage-macos) |
-| `sep/peripherals/csrng/CMakeLists.txt` | csml ordering + coverage | Yes |
+| `sep/peripherals/csrng/CMakeLists.txt` | coverage | Yes |
 | `sep/peripherals/entropy_src/CMakeLists.txt` | Coverage target (find_program) | Yes |
 | `sep/peripherals/key_manager/CMakeLists.txt` | Coverage linker flags | Yes |
 
@@ -143,7 +142,7 @@ export BOOST_ROOT_C17=/opt/installs_c17/boost-1.84.0
 **What changed:**
 
 1. Replaced raw `-lboost_*`, `-lpthread`, `-ldl`, `${Boost_LIBRARIES}` with CMake targets: `Boost::iostreams`, `Boost::program_options`, `SystemC::systemc`, `Threads::Threads`, `z`.
-2. Removed redundant direct links to `softfloat`, `csml_logger`, and `spi_flash_core` — they are already pulled in via `veeriss_model` and peripheral models (`PUBLIC` / `PRIVATE` deps). This eliminates `ld: warning: ignoring duplicate libraries` on macOS.
+2. Removed redundant direct links to `softfloat` and `spi_flash_core` — they are already pulled in via `veeriss_model` and peripheral models (`PUBLIC` / `PRIVATE` deps). This eliminates `ld: warning: ignoring duplicate libraries` on macOS.
 
 **Why:** Raw `-lboost_iostreams` has no `-L` path to the custom Boost prefix on macOS → `library 'boost_iostreams' not found`. Imported targets propagate include dirs and library paths. Explicit `.a` entries duplicated what model targets already export.
 
@@ -278,16 +277,6 @@ simtlm::install_global_quantum_ns_if_unset(globalQuantumNs.get_param_value());
 
 ---
 
-### `sep/utils/csml/inc/csml_report.h` (submodule)
-
-**What changed:** Added non-template overloads for `(const char*, const char*)` and `(const string&, const char*)`; removed ambiguous two-argument template that clashed with the variadic overload on Clang.
-
-**Why:** `CSML_REPORT(…, regname, " message")` failed with “call to 'form_report_string' is ambiguous” on Apple Clang.
-
-**Linux impact:** Historical only. CSML is not in the tree (`sep/utils/` is `paged-memory/` and `tlm_extensions/`). SEP register models use in-house `regmodel` under `common/include`. Do not re-add `sep/utils/csml`.
-
----
-
 ## Peripheral tests & coverage (macOS)
 
 Standalone peripheral models are built and tested with `sep/peripherals/run_all_peripherals.sh` (Release, ASAN, Coverage, CTest; coverage gate ≥ 95% line). On macOS, coverage required several fixes beyond the VP port above.
@@ -391,22 +380,11 @@ COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category
 
 ---
 
-### `sep/peripherals/csrng/CMakeLists.txt` (configure order)
-
-**What changed (historical):** `add_subdirectory(…/csml)` was moved after `include(FindSystemC)`.
-
-**Why then:** `csml_logger` linked `SystemC::systemc` and csrng was the only peripheral that added CSML before SystemC discovery.
-
-**Now:** CSML is gone. `csrng/CMakeLists.txt` uses in-house `regmodel` and does not add a csml subdirectory.
-
----
-
 ### Coverage issues fixed on macOS (reference)
 
 | Symptom | Root cause | Fix |
 |---------|------------|-----|
 | `Could NOT find Threads` (Coverage configure) | `--coverage`/`-lgcov` in `CMAKE_EXE_LINKER_FLAGS` before `find_package(Threads)` | `PeripheralCoverage.cmake` deferred linker flags |
-| csrng Debug/ASAN/Coverage all fail | csml before `FindSystemC` (historical) | CSML removed; `regmodel` only |
 | `lcov: No such file or directory` | Tool not installed | `brew install lcov`; script skips stage if missing |
 | `SYSTEMC_HOME` empty in logs | Install paths not exported | Set `SYSTEMC_HOME_C17` (or `_C20`) per `vp/vp_build_env.sh` |
 | lcov `inconsistent` / `format` / `mismatch` on SystemC headers | llvm-gcov + TLM/SystemC template code | `--ignore-errors …` on lcov/genhtml |
@@ -455,8 +433,6 @@ Improvements that also help Linux:
 
 3. **Boost.Log removed from top-level find** — OK if Linux install also lacks `boost_log` or the component is unused. If some Linux image relied on Boost.Log, rebuild Boost or restore the component in cmake only where needed.
 
-4. **`csml` (historical)** — No longer a live dependency. Do not commit into `sep/utils/csml`; SEP uses in-house `regmodel` under `common/include`.
-
 ### Recommended Linux re-validation
 
 On a known-good Ubuntu/RHEL machine after merge:
@@ -480,7 +456,7 @@ Items below are **follow-ups**, not requirements for the macOS port. Builds and 
 
 | Item | Resolution |
 |------|------------|
-| Duplicate static `.a` on `sep-vp` link line | Removed `softfloat`, `csml_logger`, and `spi_flash_core` from `target_link_libraries(sep-vp …)` in `vp/platform/sep/CMakeLists.txt`. Each archive is linked once via `veeriss_model` or a peripheral model. |
+| Duplicate static `.a` on `sep-vp` link line | Removed `softfloat` and `spi_flash_core` from `target_link_libraries(sep-vp …)` in `vp/platform/sep/CMakeLists.txt`. Each archive is linked once via `veeriss_model` or a peripheral model. |
 | `softfloat/CMakeLists.txt` include path typo | Fixed `${SOURCE_DIR}//source/` → `${SOURCE_DIR}/source/`. |
 | `-mtune=native` on `veeriss_model` | Applied only when `CMAKE_CXX_COMPILER_ID STREQUAL "GNU"` in `sep/cpu/CMakeLists.txt`. |
 | Install paths in `configure_vp.sh` | Removed hardcoded paths; `vp/vp_build_env.sh` resolves `*_C17` / `*_C20` from env. |
@@ -490,7 +466,6 @@ Items below are **follow-ups**, not requirements for the macOS port. Builds and 
 | Item | Priority | Suggestion |
 |------|----------|------------|
 | `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` | **Done** | Tracked in git. |
-| `csml` (historical) | — | Not a live dependency. `sep/utils/csml` is not in the tree. |
 
 ### Optional polish (low priority)
 
@@ -502,7 +477,7 @@ Items below are **follow-ups**, not requirements for the macOS port. Builds and 
 
 | Item | Why closed |
 |------|------------|
-| `spi_controller.h` `get_clk_period()` | Uses `csml_param<double>` → `sc_time(double, SC_NS)` is already unambiguous. `spi_controller` passes Debug/ASAN/Coverage/CTest without change. |
+| `spi_controller.h` `get_clk_period()` | `sc_time(double, SC_NS)` is already unambiguous. `spi_controller` passes Debug/ASAN/Coverage/CTest without change. |
 | Duplicate `.a` trim (original backlog item) | Addressed — see **Done** above. |
 | Centralize OpenSSL on `sep-vp` link line | Repeated `libcrypto` / `libssl` in `ld` output is cosmetic only. Each crypto peripheral must keep `OpenSSL::Crypto` / `OpenSSL::SSL` in its own `CMakeLists.txt` for **standalone** builds. Trimming at `sep-vp` only would not remove all duplicates anyway. |
 
@@ -526,7 +501,6 @@ No open high-priority cleanup items remain for cross-platform merges.
 | Wrong SystemC ABI at link | Cached `SystemCLanguage_DIR` | `FindSystemC.cmake`, `configure_vp.sh` |
 | `vncserver` not found | Unused legacy link | `platform/infra/CMakeLists.txt` |
 | `Could NOT find Threads` (Coverage) | Coverage linker flags before `FindThreads` | `cmake/PeripheralCoverage.cmake` |
-| csrng `SystemC::systemc` not found | csml before `FindSystemC` (historical) | CSML removed |
 | `lcov` / genhtml failures on macOS | llvm-gcov + SystemC headers | peripheral `CMakeLists.txt` `--ignore-errors` |
 | `run_all_peripherals.sh` grep/nproc | BSD vs GNU tools | `run_all_peripherals.sh` |
 | `ld: ignoring duplicate libraries` (`.a`) | Redundant entries on `sep-vp` link line | `vp/platform/sep/CMakeLists.txt` |

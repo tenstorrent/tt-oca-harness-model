@@ -11,15 +11,15 @@ Because there is no separate `smc_boot_rom.rdl`, the model is specified
 and validated against the authoritative read-only `mem` contract that
 does exist:
 
-- `tt-oca-hw/meta/registers/rdl/sep_boot_rom.rdl` — authoritative
+- `tt-oca-harness/meta/registers/rdl/sep_boot_rom.rdl` — authoritative
   memory map (`mem`, 64-bit wide, software read-only).
-- `tt-oca-hw/dv/oss/shims/sep/memories/tests/conformance/test_sep_boot_rom_rw.py`
+- `tt-oca-harness/dv/oss/shims/sep/memories/tests/conformance/test_sep_boot_rom_rw.py`
   — read-after-reset, write-ignore (claims C2 / C3 / C4).
-- `tt-oca-hw/dv/oss/shims/sep/memories/tests/conformance/test_sep_boot_rom_preload.py`
+- `tt-oca-harness/dv/oss/shims/sep/memories/tests/conformance/test_sep_boot_rom_preload.py`
   — preload format and zero-init contract.
-- `tt-oca-hw/hw/smc/data/scripts/bootrom.rv64.img` — sample binary
+- `tt-oca-harness/hw/smc/data/scripts/bootrom.rv64.img` — sample binary
   preload image (raw little-endian 8-byte words).
-- `tt-oca-hw/dv/smc/tb/meta/scripts/bootrom_sanity.rv64.hex` — sample
+- `tt-oca-harness/dv/smc/tb/meta/scripts/bootrom_sanity.rv64.hex` — sample
   hex preload (one 64-bit big-endian ASCII word per line).
 
 The model is a drop-in `SC_MODULE` that the rest of the SMC SystemC IP

@@ -9,7 +9,7 @@
 
 ## Included Models
 
-All functional IPs from the OCH / `tt-oca-hw` SMU stack are modeled in this
+All functional IPs from the OCH / `tt-oca-harness` SMU stack are modeled in this
 virtual platform, except Debug and Test Ports (DTP). See
 [Current Limitations](#current-limitations).
 
@@ -40,7 +40,7 @@ Platforms: `smc-vp`, `sep-vp`, `smu-vp`.
 
 - Modeled peripheral IPs are unit tested (SEP: `sep/peripherals/run_all_peripherals.sh`; SMC: `smc/run_all_smc_tests.sh`). `sep_memory` is excluded from the SEP orchestrator by design (no standalone coverage build).
 - SEP CPU (VeeR-ISS TLM wrapper) has standalone tests at `sep/cpu/` (`./run_tests.sh`, `--asan`, `--coverage`). Public CI runs those three invocations after the SEP peripheral suite.
-- Firmware tests written by Vayavya under `sw/sep-vp-tests/` run successfully on the VP.
+- Firmware tests under `sw/sep-vp-tests/` run successfully on the VP.
 - TT firmware tests under `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/`
   - Tests exercising modeled SEP IPs run successfully on the VP
   - Tests that require DTP (JTAG / iJTAG / JTAG2AXI / cross-trigger) are not exercised
@@ -115,7 +115,7 @@ Public CI currently runs a subset:
 # Current Limitations
 
 - **Unmodeled IP — Debug and Test Ports (DTP)**: The hardware DTP block
-  (`hw/dtp` in `tt-oca-hw`) is not modeled. That includes the IEEE 1149.1 PTAP
+  (`hw/dtp` in `tt-oca-harness`) is not modeled. That includes the IEEE 1149.1 PTAP
   and STAPs, iJTAG / boundary-scan / DFT scan chains, JTAG2AXI, JTAG OTP
   AXI-Lite, IC_RESET TDRs, and the cross-trigger network. The VP uses ISS GDB
   for software debug; `jtag_axi_in` is present but idle. Tests or flows that

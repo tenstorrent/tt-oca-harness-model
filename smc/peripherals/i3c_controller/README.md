@@ -11,21 +11,21 @@ HCI command/response/TX/RX/IBI queues, device tables, and interrupt.
 
 The model tracks the RTL instantiated in the SMC sub-system:
 
-- `tt-oca-hw/hw/periph/i3ccore_wrap/rtl/i3ccore_wrapper.sv` — multi-instance
+- `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3ccore_wrapper.sv` — multi-instance
   top; AXI-Lite address demux (`INSTANCE_SPACING = 0x500`).
-- `tt-oca-hw/hw/periph/i3ccore_wrap/rtl/i3c_wrapper.sv` — per-instance wrapper.
-- `tt-oca-hw/hw/periph/i3ccore_wrap/rtl/i3c.sv` — main I3C module (HCI queues,
+- `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3c_wrapper.sv` — per-instance wrapper.
+- `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3c.sv` — main I3C module (HCI queues,
   controller/target FSMs, PHY).
-- `tt-oca-hw/hw/periph/i3ccore_wrap/rtl/i3ccore_wrap_pkg.sv` —
+- `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3ccore_wrap_pkg.sv` —
   `MAX_NUM_I3CS = 6`, `I3C_INSTANCE_SPACING = 0x500`, `I3C_REG_ADDR_WIDTH = 11`.
-- `tt-oca-hw/hw/periph/i3ccore_wrap/data/registers/rdl/oca_i3c_wrap.rdl` —
+- `tt-oca-harness/hw/periph/i3ccore_wrap/data/registers/rdl/oca_i3c_wrap.rdl` —
   `I3CCSR` register block.
-- `tt-oca-hw/hw/periph/i3ccore_wrap/doc/{architecture,memmap,interface}.adoc` —
+- `tt-oca-harness/hw/periph/i3ccore_wrap/doc/{architecture,memmap,interface}.adoc` —
   block diagram, transaction flows, and the ground-truth register map.
-- `tt-oca-hw/hw/smc/smc_peripherals/rtl/smc_peripherals.sv` —
+- `tt-oca-harness/hw/smc/smc_peripherals/rtl/smc_peripherals.sv` —
   `u_i3ccore_wrapper` instantiation (`NUM_I3C = 6`, `BASE = 0xC000_5000`).
-- `tt-oca-hw/hw/smc/smc_config_pkg.sv` — `NUM_I3C = 6`.
-- `tt-oca-hw/hw/smc/data/registers/rdl/smc_top.rdl` —
+- `tt-oca-harness/hw/smc/smc_config_pkg.sv` — `NUM_I3C = 6`.
+- `tt-oca-harness/hw/smc/data/registers/rdl/smc_top.rdl` —
   `oca_i3c_wrap_0 @ BASE_ADDR + 0x000_5000`, six instances at 0x500 spacing.
 
 Architecture, CSRs, and programming are in the hardware TRM. Model and

@@ -5,7 +5,7 @@ virtual platforms into one SystemC process, connected by the SMU on-die
 interconnect (RTL reference: `hw/smu/rtl/smu.sv`). It exists to run
 SMC and SEP firmware that talks to each other, and to carry chiplet-facing
 AXI through the AOU (AXI-over-UCIe) LT stub on `ext_in`/`ext_out` (RTL
-`smu_axi_in`/`smu_axi_out`; see `tt-oca-hw` `doc/architecture.adoc`).
+`smu_axi_in`/`smu_axi_out`; see `tt-oca-harness` `doc/architecture.adoc`).
 
 Directory shape matches `vp/platform/smc` and `vp/platform/sep`:
 
@@ -138,7 +138,7 @@ slot land in the ROM and vanish (reads return 0).
   ```
 
 * **Platform tests** (`sw/smu-vp-tests/`) — self-checking SMC+SEP firmware
-  ports of the tt-oca-hw SMU interconnect tests (`smu-link-test`,
+  ports of the tt-oca-harness SMU interconnect tests (`smu-link-test`,
   `smu-xbar-test`, `smu-traffic-test`, `smu-aou-ext-test`). Run via
   `sw/smu-vp-tests/run_smu_vp_tests.sh`. CI runs both the unit tests and
   this firmware suite (`smu-unit-tests` / `smu-vp` on Ubuntu,

@@ -50,7 +50,7 @@ Bug fixes and new functionality are submitted via
 
 ## Documentation
 
-Architecture and register maps live in the hardware TRM (`tt-oca-hw`).
+Architecture and register maps live in the hardware TRM (`tt-oca-harness`).
 This repository documents SystemC/TLM-2.0 models, test plans, and how to
 run tests. The customer-facing usage guide is
 [`doc/SystemC_Virtual_Platform_Customer_Guide.md`](doc/SystemC_Virtual_Platform_Customer_Guide.md).
