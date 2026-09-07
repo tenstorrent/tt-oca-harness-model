@@ -302,18 +302,12 @@ smc/platform/compile_commands.json
 !sep/cpu/VeeR-ISS/softfloat/build/**/platform.h
 
 # -----------------------------------------------------------------------------
-# Local-only doc tooling: stylesheets are developer helpers
-# (print stylesheets) and are intentionally not tracked.
-# cpu_ctrl still tracks print.css under its doc/ tree.
+# Local-only doc tooling: print stylesheets and generated figures
+# are developer helpers and are not tracked.
 *.css
 **/*.css
-!smc/peripherals/cpu_ctrl/doc/
-!smc/peripherals/cpu_ctrl/doc/**
 
 *.svg
-!smc/peripherals/cpu_ctrl/doc/
-!smc/peripherals/cpu_ctrl/doc/**
-!smc/peripherals/cpu_ctrl/README.md
 
 # Legacy peripheral Markdown (01/02/03 specs and OpenTitan copies).
 # Canonical pages are AsciiDoc: doc/{index,implementation,test_plan}.adoc.
