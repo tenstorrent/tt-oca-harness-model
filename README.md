@@ -28,7 +28,7 @@ every chiplet — common subsystems, AXI fabric topology, inter-chiplet protocol
 implement to be OCAH-compliant.
 
 Architecture and register specification live in the hardware TRM
-(`tt-oca-hw`). This repository documents the SystemC/TLM-2.0 implementation,
+(`tt-oca-harness`). This repository documents the SystemC/TLM-2.0 implementation,
 the test plan, and how to run tests.
 Subsystem books: [`sep/doc/`](sep/doc/index.adoc),
 [`smc/doc/`](smc/doc/index.adoc). IP example:
@@ -88,22 +88,22 @@ current release.
 
 | Dependency | Version | Used by | Notes |
 |------------|---------|---------|-------|
-| CMake | 3.20+ | All builds | `vp/CMakeLists.txt`; some SMC IP trees use 3.16 |
-| C++ compiler | GCC 11+ or Apple Clang | All builds | C++20 is the default and is **required** for `smc-vp` / `smu-vp` |
+| CMake | 3.20+ | VP / cluster | `vp/CMakeLists.txt` requires 3.20. Standalone SEP IPs use 3.14; SMC IPs use 3.16 |
+| C++ compiler | GCC 11+ or Apple Clang | All builds | C++20 is the default and is **required** for `smc-vp` / `smu-vp`. RHEL 8 ASan uses gcc-toolset-12 |
 | [SystemC](https://github.com/accellera-official/systemc) | 3.0.2 | All models | Build with the same `-std=c++NN` you will use to compile the VP |
-| [CCI](https://github.com/accellera-official/cci) | 1.0.2 (preferred) or 1.0.1 | All models | 1.0.2 bundles RapidJSON and is C++20-clean; 1.0.1 needs a patch |
-| Boost | 1.84 (`iostreams`, `program_options`, `regex`) | VP + Whisper | Homebrew or a custom prefix |
-| OpenSSL | 3.x | SEP crypto models | Tested: 3.0.13 (macOS/RHEL), 3.2.1 / 3.5.2 (Ubuntu). RHEL 8 system OpenSSL 1.1.1 is not enough for KMAC |
-| [Whisper](https://github.com/tenstorrent/whisper) | public ISS | `smc-vp`, `smu-vp` | Build with `MEM_CALLBACKS=1` and C++20 |
-| RISC-V GNU toolchain | GCC 11+, `riscv64-unknown-elf-` (or `riscv64-elf-`) | Firmware tests | SMU tests need both RV64 (SMC) and RV32 (SEP) |
+| [CCI](https://github.com/accellera-official/cci) | 1.0.2 | All models | Bundles RapidJSON; C++20-clean. This is the only version CI installs |
+| Boost | ≥ 1.74 (`iostreams`, `program_options`) | VP + Whisper | 1.84.0 is the CI pin on RHEL 8. No Boost.Regex or Boost.Log |
+| OpenSSL | 3.x (≥ 3.0) | SEP crypto models | CI RHEL 8 builds **3.3.2**. Ubuntu uses distro `libssl-dev` (3.0.x). RHEL 8 system 1.1.1 is not enough |
+| [Whisper](https://github.com/tenstorrent/whisper) | commit `a53d0f3e` | `smc-vp`, `smu-vp` | Build with `MEM_CALLBACKS=1` and C++20 |
+| RISC-V GNU toolchain | GCC 11+ | Firmware tests | Runners accept `riscv64-unknown-elf-`, `riscv64-elf-`, `riscv-none-elf-`. CI uses xpack **15.2.0-1**. SMU needs RV64 + RV32 |
+| [Zephyr](https://github.com/zephyrproject-rtos/zephyr) | v4.3.0 | `sw/zephyr-smc` | Optional; only for the Zephyr-on-`smc-vp` path |
 | Python 3 | 3.x | Firmware / preload helpers | — |
-| Git | — | Clone | No CSML submodule; SEP register models use `common/include` |
+| Git | — | Clone |  |
 
 Optional for docs and coverage:
 
 - `doxygen`, `graphviz` — peripheral `--docs`
 - `lcov` / `gcovr` — coverage reports (`brew install lcov` on macOS)
-- `pandoc` and Chrome/Chromium — Markdown → PDF via `scripts/build_docs.sh`
 
 C++ standard versus compiler:
 
@@ -125,7 +125,7 @@ OCAH subsystems:
 | Subsystem | What is provided |
 |-----------|-----------------|
 | **SEP** | Full, runnable Virtual Platform (`sep-vp`) — models all SEP peripherals, runs actual RISC-V VeeR EL2 firmware, used for pre-silicon DV and firmware development |
-| **SMC** | SystemC TLM-2.0 IP model library (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, DMA, PVT wrapper, I3C, …) with per-IP unit tests, **plus a full runnable Virtual Platform (`smc-vp`)** that wires the fabric + every peripheral + the Whisper-backed CVA6 cluster and runs bare-metal RV64 firmware |
+| **SMC** | SystemC TLM-2.0 IP model library (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, DMA, PVT wrapper, I3C, …) with per-IP unit tests, **plus a full runnable Virtual Platform (`smc-vp`)** that wires the fabric + every peripheral + the Whisper-backed CVA6 cluster and can run bare-metal RV64 firmware and also boot Zephyr RTOS|
 
 ---
 
@@ -138,7 +138,7 @@ tt-oca-harness-model/
 ├── common/include/                ← shared register + logging helpers
 │                                  (reg_file.h, reg_param.h, reg_logger.h,
 │                                   reg_access.h, reg_map.h, sim_log.h,
-│                                   virt_console_decoder.h)
+│                                   tlm_quantum_policy.h, virt_console_decoder.h)
 ├── sep/                           ← SEP IP peripheral models
 │   ├── peripherals/               ← individual IP models
 │   │   ├── adams_bridge/          ← Adams Bridge PQC (ML-DSA-87 / ML-KEM-1024)
@@ -166,13 +166,17 @@ tt-oca-harness-model/
 │   │   ├── sep_scratch_warm/      ← Warm-domain scratch registers (stub, store-only)
 │   │   ├── spi_controller/        ← SPI controller (OpenTitan)
 │   │   ├── spi_flash/             ← SPI flash model (SFDP Profile 1)
-│   │   ├── logs/                  ← per-peripheral run_all_peripherals.sh logs
 │   │   ├── Coverage_Report.md     ← per-peripheral line/function coverage summary
+│   │   ├── deps.env.example       ← example env for peripheral test builds
 │   │   ├── setup_build_env.sh     ← shared env for run_tests.sh / run_all_peripherals.sh
 │   │   └── run_all_peripherals.sh ← batch peripheral tests (sources vp/configure_vp.sh)
 │   ├── cpu/                       ← VeeR EL2 ISS + TLM-2.0 wrapper
+│   │   ├── test/                  ← standalone veeriss_tb (Release / ASan / coverage)
+│   │   └── run_tests.sh
+│   ├── doc/                       ← SEP subsystem books (index / implementation / test plan)
 │   └── utils/
-│       └── paged-memory/          ← PagedMemory header-only sparse storage engine
+│       ├── paged-memory/          ← PagedMemory header-only sparse storage engine
+│       └── tlm_extensions/        ← sep_axi_extension.h
 ├── smc/                           ← SMC IP model library
 │   ├── peripherals/               ← SMC peripheral models
 │   │   ├── avsbus_controller/
@@ -196,12 +200,17 @@ tt-oca-harness-model/
 │   ├── cpu_cluster/               ← SMC CPU cluster (1–4 RV64GC, Whisper ISS)
 │   ├── smc_fabric/                ← SMC AXI fabric / address router model
 │   ├── common/                    ← smc_axi_extension.h and shared SMC headers
+│   ├── doc/                       ← SMC subsystem books
+│   ├── scripts/                   ← enforce_asan_clean.sh, enforce_line_coverage.sh
 │   ├── run_all_smc_tests.sh       ← batch Accellera unit tests for all SMC IPs
 │   └── cmake/
+│       ├── SmcAxiExtension.cmake  ← shared include path for smc_axi_extension.h
 │       └── SmcSystemCStd.cmake    ← auto-detects SystemC C++ standard
 ├── vp/                            ← Virtual Platforms
 │   ├── configure_vp.sh            ← configure CMake + export build env (SEP)
 │   ├── vp_build_env.sh            ← derived paths (BOOST_LIB, LD_LIBRARY_PATH, …)
+│   ├── cmake/                     ← AddGitSubmodule.cmake
+│   ├── Dockerfile
 │   ├── CMakeLists.txt
 │   └── platform/
 │       ├── infra/                 ← bus, PLIC, CLINT, ELF loader (SEP)
@@ -212,13 +221,13 @@ tt-oca-harness-model/
 │       │   ├── inc/               ← helpers (Args, adapters, xbar policy, …)
 │       │   ├── config/            ← CCI / VeeR ISS runtime files
 │       │   └── docs/              ← abstractions and AXI notes
-│       └── smc/                   ← SMC platform wiring (smc-vp)
-│           ├── main.cpp           ← sc_main entry point
-│           ├── smc_platform.hpp   ← top-level SMC platform module
-│           ├── src/smc_platform.cpp
-│           ├── inc/               ← helpers (addr_router, width_adapter, stub_target, …)
-│           ├── config/            ← CCI runtime parameters
-│           └── docs/              ← platform notes
+│       ├── smc/                   ← SMC platform wiring (smc-vp)
+│       │   ├── main.cpp           ← sc_main entry point
+│       │   ├── smc_platform.hpp   ← top-level SMC platform module
+│       │   ├── src/smc_platform.cpp
+│       │   ├── inc/               ← helpers (addr_router, width_adapter, stub_target, …)
+│       │   ├── config/            ← CCI runtime parameters
+│       │   └── docs/              ← platform notes
 │       └── smu/                   ← SMU platform (smu-vp): SMC + SEP + interconnect
 │           ├── main.cpp
 │           ├── smu_platform.hpp
@@ -240,11 +249,10 @@ tt-oca-harness-model/
 │       ├── zephyr_smc.sh          ← setup / build / run / test
 │       └── apps/mmio_poke/        ← MMIO reachability of IPs with no Zephyr driver
 ├── doc/                           ← Architecture and design documentation
-│   ├── component-developer-guide.md/.pdf
-│   ├── maintainer-guide.md/.pdf
-│   └── SystemC_Virtual_Platform_Customer_Guide.md/.pdf
+│   └── SystemC_Virtual_Platform_Customer_Guide.md
 ├── Makefile                       ← top-level: sep-vp, smc-vp, submodule-init, clean
 ├── RELEASE_NOTES.md
+├── macOS_changes_README.md        ← macOS host notes
 ├── LICENSE                        ← Apache 2.0 (overall project license)
 ├── LICENSE-DOCS                   ← CC-BY 4.0 (documentation and images)
 ├── LICENSE_understanding.txt
@@ -264,17 +272,17 @@ tt-oca-harness-model/
 - **CMake** 3.20+ (`vp/CMakeLists.txt`)
 - **C++ compiler**: GCC 11+ or Apple Clang (C++20; required for `smc-vp` / `smu-vp`)
 - **SystemC** 3.0.2
-- **CCI** 1.0.2 (preferred) or 1.0.1
-- **Boost** ≥ **1.74** (`iostreams`, `program_options`; 1.84 is commonly used)
-- **OpenSSL** (for HMAC, KMAC, CSRNG crypto models) — tested on **macOS** and **RHEL** with **3.0.13**; on Ubuntu with **3.2.1** and **3.5.2**
+- **CCI** 1.0.2
+- **Boost** ≥ **1.74** (`iostreams`, `program_options`; CI RHEL uses 1.84.0)
+- **OpenSSL** 3.x (SEP crypto). CI RHEL 8 uses **3.3.2**; Ubuntu uses distro `libssl-dev`
 
 ### 1. System packages (Ubuntu)
 
 ```bash
 sudo apt-get update
 sudo apt install -y g++ make cmake autoconf \
-    libboost-iostreams-dev libboost-program-options-dev libboost-regex-dev \
-    libssl-dev libvncserver-dev doxygen graphviz
+    libboost-iostreams-dev libboost-program-options-dev \
+    libssl-dev
 ```
 
 Firmware toolchain (Debian / Ubuntu):
@@ -311,10 +319,11 @@ make && sudo make install
 Use a separate prefix (for example `/usr/local/systemc-3.0.2-cxx20`) if you
 also keep a C++17 SystemC tree.
 
-### 3. CCI 1.0.2 (recommended)
+### 3. CCI 1.0.2
 
-CCI 1.0.2 builds with CMake, bundles RapidJSON, and does not need the C++20
-`value_type` patch required by 1.0.1. This is the version CI installs.
+CCI 1.0.2 builds with CMake and bundles RapidJSON. This is the version CI
+installs. Do not use CCI 1.0.1 (it needs a separate RapidJSON tree and a
+C++20 iterator patch).
 
 ```bash
 cd ~/Downloads
@@ -334,62 +343,6 @@ sudo cmake --install build
 
 Set `SYSTEMC_HOME` in the environment before this configure so CMake finds
 SystemC, or pass `-DSystemCLanguage_DIR=...` if your install is non-standard.
-
-#### CCI 1.0.1 fallback
-
-If you must use CCI 1.0.1, clone RapidJSON and apply the C++20 iterator
-patch before `./configure`:
-
-```bash
-cd ~/Downloads && git clone https://github.com/Tencent/rapidjson.git
-
-cd ~/Downloads
-wget https://github.com/accellera-official/cci/releases/download/v1.0.1/cci_v1.0.1.tar.gz
-tar zxvf cci_v1.0.1.tar.gz && cd cci_v1.0.1
-```
-
-In `src/cci/core/cci_value.h`, change both `typedef void value_type;` lines
-(marked `// TODO`) to the concrete iterator type:
-
-```bash
-cd ~/Downloads/cci_v1.0.1
-patch -p1 <<'PATCH'
---- a/src/cci/core/cci_value.h
-+++ b/src/cci/core/cci_value.h
-@@ -764,7 +764,7 @@
-   template<typename U> friend class cci_impl::value_iterator_impl;
-   typedef cci_impl::value_ptr<cci_value_map_elem_cref> proxy_ptr;
- 
--  typedef void value_type; // TODO: add  explicit value_type 
-+  typedef cci_value_map_elem_cref value_type; // TODO: add  explicit value_type 
- public:
-   typedef cci_value_map_elem_cref const_reference;
-   typedef cci_value_map_elem_ref  reference;
-@@ -791,7 +791,7 @@
- {
-   template<typename U> friend class cci_impl::value_iterator_impl;
-   typedef cci_impl::value_ptr<cci_value_map_elem_ref> proxy_ptr;
--  typedef void value_type; // TODO: add  explicit value_type
-+  typedef cci_value_map_elem_ref value_type; // TODO: add  explicit value_type
- public:
-   typedef cci_value_map_elem_cref const_reference;
-   typedef cci_value_map_elem_ref  reference;
-PATCH
-```
-
-Then:
-
-```bash
-sudo mkdir -p /usr/local/cci-1.0.1
-mkdir objdir && cd objdir
-export LD_LIBRARY_PATH=/usr/local/systemc-3.0.2/lib-linux64/
-../configure \
-  --with-systemc=/usr/local/systemc-3.0.2/ \
-  --with-json=/home/$USER/Downloads/rapidjson/rapidjson \
-  --prefix=/usr/local/cci-1.0.1 \
-  CXXFLAGS="-std=c++20"
-make && sudo make install
-```
 
 ### 4. Clone this repository
 
@@ -1019,12 +972,15 @@ tt-oca-harness-model/
 ├── cmake/                     shared CMake helpers (FindSystemC, FindCCI, …)
 ├── common/include/            shared register + logging helpers
 │                              (reg_file.h, reg_param.h, reg_logger.h,
-│                               reg_access.h, reg_map.h, sim_log.h)
+│                               reg_access.h, reg_map.h, sim_log.h,
+│                               tlm_quantum_policy.h, virt_console_decoder.h)
 ├── sep/                       SEP IP peripheral models
 │   ├── peripherals/           individual IP models + run_all_peripherals.sh
-│   ├── cpu/                   VeeR EL2 ISS + TLM-2.0 wrapper
+│   ├── cpu/                   VeeR EL2 ISS + TLM wrapper; standalone tests
+│   ├── doc/                   SEP subsystem books
 │   └── utils/
-│       └── paged-memory/      sparse storage engine
+│       ├── paged-memory/      sparse storage engine
+│       └── tlm_extensions/    sep_axi_extension.h
 ├── smc/                       SMC IP model library
 │   ├── peripherals/           bootrom, clint, plic, uart, i2c, i3c, dma,
 │   │                          reset_unit, scratchpad_ram, cpu_ctrl, wdt,
@@ -1033,10 +989,14 @@ tt-oca-harness-model/
 │   │                          octs_system_timer, …
 │   ├── cpu_cluster/           1–4 RV64GC, Whisper ISS
 │   ├── smc_fabric/            AXI fabric / address router
-│   └── common/include/        canonical smc_axi_extension.h
+│   ├── common/include/        canonical smc_axi_extension.h
+│   ├── doc/                   SMC subsystem books
+│   ├── scripts/               ASan / coverage gates
+│   └── cmake/                 SmcAxiExtension.cmake, SmcSystemCStd.cmake
 ├── aou/                       AXI-over-UCIe loosely-timed model
 ├── vp/                        Virtual Platforms
 │   ├── configure_vp.sh        configure CMake + export build env
+│   ├── cmake/                 AddGitSubmodule.cmake
 │   └── platform/
 │       ├── infra/             bus, PLIC, CLINT, ELF loader (SEP)
 │       ├── sep/               sep-vp (och_sep_ss)
@@ -1047,10 +1007,10 @@ tt-oca-harness-model/
 │   ├── smc-vp-tests/          bare-metal RV64 SMC tests
 │   ├── smu-vp-tests/          dual-firmware SMU tests
 │   └── zephyr-smc/            out-of-tree Zephyr port for smc-vp
-├── doc/                       customer, component, and maintainer guides
-├── scripts/                   Markdown ↔ PDF helpers
+├── doc/                       SystemC_Virtual_Platform_Customer_Guide.md
 ├── Makefile                   sep-vp, smc-vp, submodule-init, clean
 ├── RELEASE_NOTES.md
+├── macOS_changes_README.md    macOS host notes
 ├── LICENSE                    Apache 2.0 (software)
 ├── LICENSE-DOCS               CC-BY 4.0 (documentation and images)
 ├── LICENSE_understanding.txt
@@ -1072,8 +1032,8 @@ not a packaged language SDK. The programming surfaces are:
 | Surface | Where to start |
 |---------|----------------|
 | Customer usage (build, run, add an IP to a platform) | [`doc/SystemC_Virtual_Platform_Customer_Guide.md`](doc/SystemC_Virtual_Platform_Customer_Guide.md) |
-| Writing / testing a new IP model | [`doc/component-developer-guide.md`](doc/component-developer-guide.md) |
-| Maintaining the tree and releases | [`doc/maintainer-guide.md`](doc/maintainer-guide.md) |
+| Writing / testing a new IP model | Customer guide §6 ([Adding a Module](doc/SystemC_Virtual_Platform_Customer_Guide.md#6-adding-a-module-to-the-oca-virtual-platforms)) and [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| Maintaining the tree and releases | [`CONTRIBUTING.md`](CONTRIBUTING.md), [`RELEASE_NOTES.md`](RELEASE_NOTES.md) |
 | SEP book | [`sep/doc/index.adoc`](sep/doc/index.adoc) |
 | SMC book | [`smc/doc/index.adoc`](smc/doc/index.adoc) |
 | Per-IP model + test plan | `<subsystem>/peripherals/<ip>/doc/` |
@@ -1104,12 +1064,11 @@ building the VP binaries on the machine that will run firmware.
 | Isolated CMake trees | Use `vp/build` for SEP and `vp/build_smc` for SMC/SMU so caches do not poison each other. ASan and coverage always use `build_asan/` and `build_cov/` under the IP directory. |
 
 CI caches SystemC 3.0.2 and CCI 1.0.2 keyed by OS + compiler + C++
-standard. The `smc-vp` job uploads the binary for the Zephyr job. Whisper
-is cloned from `https://github.com/tenstorrent/whisper.git` at the
-`WHISPER_REV` pin in the workflow.
-
-To convert Markdown design docs to PDF, use `scripts/build_docs.sh` — see
-[`scripts/README.md`](scripts/README.md).
+standard. RHEL 8 CI also pins Boost **1.84.0** and OpenSSL **3.3.2**.
+The `smc-vp` job uploads the binary for the Zephyr **v4.3.0** job. Whisper
+is cloned from `https://github.com/tenstorrent/whisper.git` at commit
+`a53d0f3e` (`WHISPER_REV` in the workflow). The firmware toolchain in CI
+is xpack RISC-V GCC **15.2.0-1** (`riscv-none-elf-`).
 
 ## Troubleshooting
 
@@ -1158,7 +1117,7 @@ On Ubuntu, install `g++-11` (or newer) and set `CC` / `CXX` before
 `grep CMAKE_CXX_COMPILER vp/build/CMakeCache.txt`.
 
 **KMAC / OpenSSL errors on RHEL 8.** System OpenSSL is 1.1.1. Install
-OpenSSL 3 (for example `~/local/openssl-3`) and set `OPENSSL_ROOT`.
+OpenSSL 3.x (CI uses **3.3.2**) and set `OPENSSL_ROOT`.
 
 **SEP firmware setup failed partway.** Use
 [`sw/sep-vp-tests/run_sep_vp_tests.sh`](sw/sep-vp-tests/run_sep_vp_tests.sh)
@@ -1216,10 +1175,11 @@ pre-silicon software tests. Pin-level JTAG, scan, and some mux/filter
 behaviors are stubbed or out of scope.
 
 **How do I add a new peripheral?**
-Follow [`doc/component-developer-guide.md`](doc/component-developer-guide.md)
-and the customer guide. New IPs need a `test/` directory, `run_tests.sh`
-(Release / ASan / coverage), an entry in the subsystem orchestrator, and a
-CI matrix row.
+Follow the customer guide §6
+([Adding a Module](doc/SystemC_Virtual_Platform_Customer_Guide.md#6-adding-a-module-to-the-oca-virtual-platforms))
+and [`CONTRIBUTING.md`](CONTRIBUTING.md). New IPs need a `test/` directory,
+`run_tests.sh` (Release / ASan / coverage), an entry in the subsystem
+orchestrator, and a CI matrix row.
 
 **How are bugs and security issues reported?**
 Functional bugs: [GitHub Issues](https://github.com/tenstorrent/tt-oca-harness-model/issues).
@@ -1237,15 +1197,14 @@ Apache 2.0. See [License](#license).
 | Document | Description |
 | -------- | ----------- |
 | [`doc/SystemC_Virtual_Platform_Customer_Guide.md`](doc/SystemC_Virtual_Platform_Customer_Guide.md) | Customer-facing VP usage and IP integration |
-| [`doc/component-developer-guide.md`](doc/component-developer-guide.md) | How to develop and test IP models in this tree |
-| [`doc/maintainer-guide.md`](doc/maintainer-guide.md) | Maintainer workflow and release notes process |
 | [`RELEASE_NOTES.md`](RELEASE_NOTES.md) | Modeled IP list, coverage, limitations |
 | [`sep/doc/index.adoc`](sep/doc/index.adoc) | SEP platform book |
 | [`smc/doc/index.adoc`](smc/doc/index.adoc) | SMC platform book |
+| [`smc/doc/platform_test_and_firmware_guide.adoc`](smc/doc/platform_test_and_firmware_guide.adoc) | SMC platform tests and firmware |
+| [`smc/doc/systemc_tlm2_integration_guide.adoc`](smc/doc/systemc_tlm2_integration_guide.adoc) | SMC SystemC/TLM-2.0 integration |
 | [`vp/platform/smu/docs/README.md`](vp/platform/smu/docs/README.md) | SMU combined platform |
 | [`sw/zephyr-smc/README.md`](sw/zephyr-smc/README.md) | Zephyr on `smc-vp` |
-| [`scripts/README.md`](scripts/README.md) | Doc conversion helpers |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution process |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution process, testing, and review |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting |
 | [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) | Community standards |
 

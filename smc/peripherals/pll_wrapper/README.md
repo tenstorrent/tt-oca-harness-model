@@ -1,5 +1,12 @@
 # SMC `pll_wrapper`
 
+Architecture, CSRs, and programming sequences are in the hardware TRM.
+This tree has the model, its test plan, and how to run the tests.
+
+- `doc/index.adoc` — landing page
+- `doc/implementation.adoc` — wrapper sockets, child decode, lock observe, `smc-vp` bind
+- `doc/test_plan.adoc` — standalone cases and firmware tests
+
 SystemC/TLM-2.0 register models for the SMC PLL wrapper, transcribed from the
 RDL under `sw/tt-oca-hw-main/hw/smc/dv_shims/pll/data/registers/rdl/`
 (`pll_wrap.rdl` and its includes `pll_cntl.rdl`, `cgm.rdl`, `awm.rdl`).
@@ -88,5 +95,5 @@ subdirectory (e.g. under `vp/platform/smc`) only the library target is built.
 
 ## Dependencies
 
-- SystemC 3.0.2, CCI 1.0.1 (matches the rest of the SMC IP suite).
+- SystemC 3.0.2, CCI 1.0.2 (matches the rest of the SMC IP suite).
 - C++17/20; CMake 3.16+.

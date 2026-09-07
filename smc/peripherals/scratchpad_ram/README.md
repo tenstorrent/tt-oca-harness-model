@@ -1,8 +1,8 @@
 # SMC Scratchpad RAM — SystemC / TLM-2.0 Loosely-Timed Model
 
 A standards-compliant **SMC Scratchpad RAM** modelled in Accellera SystemC
-2.3.x / 3.0 + TLM-2.0 (Loosely-Timed) and parameterised through SystemC
-CCI 1.0.  It is the read-write sibling of the Boot ROM model: a true
+3.0.2 + TLM-2.0 (Loosely-Timed) and parameterised through SystemC
+CCI 1.0.2.  It is the read-write sibling of the Boot ROM model: a true
 byte-addressable SRAM that the SMC Rocket CPU cluster uses for early-boot
 stack/data storage and fast local scratch.
 
@@ -140,14 +140,9 @@ is the DMA/memory-zeroer target). Full commands are in
 
 ## Current status
 
-| Metric                       | Value                                |
-|------------------------------|--------------------------------------|
-| Test cases (across two TBs)  | All PASS (ctest: 2/2)                |
-| AddressSanitizer             | 0 errors                             |
-| Function coverage            | 100% (`src/scratchpad_ram.cpp`)      |
-| Line coverage                | 98.5% (`src/scratchpad_ram.cpp`)     |
-| Region coverage              | 93.6% (`src/scratchpad_ram.cpp`)     |
-| Branch coverage              | 83.5% (`src/scratchpad_ram.cpp`)     |
+Release, ASan, and coverage are **three separate** `./run_tests.sh`
+invocations. Coverage must be ≥ 95% line on `src/scratchpad_ram.cpp`.
+Re-run `./run_tests.sh --coverage` for current percentages.
 
 ---
 

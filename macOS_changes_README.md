@@ -1,31 +1,46 @@
-# macOS port changes for tt-oca-harness-model VP (`sep-vp`)
+# macOS port notes for tt-oca-harness-model
 
-This document records the changes made to build and link the SystemC virtual platform on **Apple Silicon macOS** (Darwin, Clang, libc++). The goal was to keep Linux (Ubuntu/RHEL) behavior working where possible and to fix macOS-specific toolchain, header, and linker issues without forking the codebase.
+This document records the Apple Silicon (Darwin, Clang, libc++) port and the
+current macOS build recipe. The port kept Linux (Ubuntu/RHEL) working and
+fixed toolchain, header, and linker issues without forking the codebase.
+Historical CSML / SystemC 3.0.1 / C++17-only notes are marked as such.
 
-**Target:** `vp/build/bin/sep-vp`  
-**Tested host:** macOS, Apple Clang, SystemC **3.0.1**, C++17 (`installs_c17` prefix)
+**Targets:** `sep-vp`, `smc-vp`, `smu-vp`  
+**Current toolchain:** Apple Clang, SystemC **3.0.2**, CCI **1.0.2**, C++20
+(default in `vp/configure_vp.sh`; required for `smc-vp` / `smu-vp`). C++17
+SystemC still works for SEP-only builds if you set `CMAKE_CXX_STANDARD=17`
+and point at a C++17 SystemC prefix.
+
+Library pins (same as CI / `RELEASE_NOTES.md`): Boost ≥ 1.74 (examples use
+1.84.0), OpenSSL 3.x (RHEL CI uses 3.3.2; a local `openssl-3` prefix is
+fine). CCI 1.0.1, Boost.Regex, Boost.Log, and libvncserver are not required.
 
 ---
 
 ## Quick build (macOS)
 
-Set install paths once in your shell (example — adjust for your machine):
+Set install paths once in your shell (example — adjust for your machine).
+`configure_vp.sh` defaults to C++20:
 
 ```bash
-export SYSTEMC_HOME_C17=/path/to/installs_c17
-export CCI_HOME_C17=/path/to/installs_c17
-export OPENSSL_ROOT_C17=/path/to/installs_c17/openssl-3.0.13
-export BOOST_ROOT_C17=/path/to/installs_c17/boost-1.84.0
-export CMAKE_CXX_STANDARD=17
+export SYSTEMC_HOME_C20=/path/to/installs_c20
+export CCI_HOME_C20=/path/to/installs_c20
+export OPENSSL_ROOT_C20=/path/to/installs_c20/openssl-3
+export BOOST_ROOT_C20=/path/to/installs_c20/boost-1.84.0
+# CMAKE_CXX_STANDARD defaults to 20; export 17 only for a SEP C++17 tree.
 
 cd tt-oca-harness-model/vp
 source ./configure_vp.sh          # zsh or bash — sets env only
 ./configure_vp.sh                 # configure + cmake (recommended)
 cd build
 make sep-vp -j$(sysctl -n hw.ncpu)
+# smc-vp / smu-vp also need WHISPER_HOME and a C++20 SystemC/CCI prefix:
+# make smc-vp smu-vp -j$(sysctl -n hw.ncpu)
 ```
 
-Use `*_C20` variables when `CMAKE_CXX_STANDARD=20`. See `vp/vp_build_env.sh` for the full convention.
+Use `*_C17` variables when `CMAKE_CXX_STANDARD=17`. Unsuffixed `SYSTEMC_HOME`,
+`CCI_HOME`, `OPENSSL_ROOT`, and `BOOST_ROOT` work as a fallback. See
+`vp/vp_build_env.sh` for the full convention.
 
 Re-run `./configure_vp.sh` after changing `CMAKE_CXX_STANDARD` or install prefixes so `SystemCLanguage_DIR` and RPATH stay aligned.
 
@@ -43,7 +58,7 @@ Re-run `./configure_vp.sh` after changing `CMAKE_CXX_STANDARD` or install prefix
 | `vp/CMakeLists.txt` | Top-level VP cmake | Yes |
 | `vp/platform/sep/CMakeLists.txt` | `sep-vp` link line | Yes — better on all platforms |
 | `vp/platform/infra/CMakeLists.txt` | Platform infra deps | Yes — removes unused Linux libs |
-| `vp/platform/sep/och_sep_ss.hpp` | SystemC 3.0 API | Yes — recommended for SystemC 3.0 everywhere |
+| `vp/platform/sep/sep_platform.hpp` / `src/sep_platform.cpp` | SystemC 3.0 / TLM quantum | Yes — `simtlm::install_global_quantum_ns_if_unset` |
 | `sep/cpu/CMakeLists.txt` | VeeR ISS model | Yes |
 | `sep/cpu/VeeR-ISS/float.cpp` | x86 SSE guard | Yes — no change on x86 Linux with `SOFT_FLOAT` |
 | `sep/cpu/VeeR-ISS/vector.cpp` | Wide-int traits | Yes |
@@ -54,15 +69,15 @@ Re-run `./configure_vp.sh` after changing `CMAKE_CXX_STANDARD` or install prefix
 | `sep/peripherals/spi_controller/include/spi_controller_register.h` | Register names | Yes |
 | `sep/peripherals/spi_controller/include/spi_controller.h` | Header guard | Yes |
 | `sep/peripherals/spi_controller/src/spi_controller.cpp` | Register field access | Yes |
-| `sep/utils/csml/inc/csml_report.h` | Clang overload fix | Yes (submodule — commit separately) |
+| `sep/utils/csml/inc/csml_report.h` | Clang overload fix (**historical**) | CSML is not a live dependency — do not revive |
 | `cmake/PeripheralCoverage.cmake` | Coverage linker flags (shared) | Yes — defers flags; `-lgcov` only on Linux |
 | `sep/peripherals/run_all_peripherals.sh` | Batch test driver | Yes — uses `vp/vp_build_env.sh` |
-| `sep/peripherals/*/CMakeLists.txt` (16 models) | Coverage + lcov targets | Yes — see [Coverage section](#peripheral-tests--coverage-macos) |
+| `sep/peripherals/*/CMakeLists.txt` | Coverage + lcov targets | Yes — see [Coverage section](#peripheral-tests--coverage-macos) |
 | `sep/peripherals/csrng/CMakeLists.txt` | csml ordering + coverage | Yes |
 | `sep/peripherals/entropy_src/CMakeLists.txt` | Coverage target (find_program) | Yes |
 | `sep/peripherals/key_manager/CMakeLists.txt` | Coverage linker flags | Yes |
 
-**Untracked (new):** `cmake/PeripheralCoverage.cmake`, `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` — add to git when the port is permanent.
+**Now tracked:** `cmake/PeripheralCoverage.cmake` and `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` are in the tree.
 
 ---
 
@@ -72,7 +87,7 @@ Re-run `./configure_vp.sh` after changing `CMAKE_CXX_STANDARD` or install prefix
 
 **What changed:** When `SYSTEMC_HOME` is set, `find_package(SystemCLanguage …)` first searches `${SYSTEMC_HOME}/lib/cmake/SystemCLanguage` with `NO_DEFAULT_PATH` before falling back to generic hints.
 
-**Why:** CMake cache can pin `SystemCLanguage_DIR` to a **different** install (e.g. C++20 build tree) while the project compiles as C++17. That produces link errors such as `sc_api_version_3_0_1_cxx201703L` vs `cxx202002L` — same SystemC version, different C++ standard ABI tags.
+**Why:** CMake cache can pin `SystemCLanguage_DIR` to a **different** install (e.g. a C++17 tree while the project compiles as C++20). That produces link errors such as `sc_api_version_3_0_2_cxx201703L` vs `cxx202002L` — same SystemC version, different C++ standard ABI tags.
 
 **Linux impact:** Safe and beneficial. Prevents stale/wrong SystemC package discovery on multi-prefix machines. Pair with `configure_vp.sh` passing `-DSystemCLanguage_DIR=…`.
 
@@ -95,14 +110,15 @@ Re-run `./configure_vp.sh` after changing `CMAKE_CXX_STANDARD` or install prefix
 **Example (`~/.bashrc` / `~/.zshrc`):**
 
 ```bash
-export SYSTEMC_HOME_C17=/opt/installs_c17
-export CCI_HOME_C17=/opt/installs_c17
-export OPENSSL_ROOT_C17=/opt/installs_c17/openssl-3.0.13
-export BOOST_ROOT_C17=/opt/installs_c17/boost-1.84.0
 export SYSTEMC_HOME_C20=/opt/installs_c20
 export CCI_HOME_C20=/opt/installs_c20
-export OPENSSL_ROOT_C20=/opt/installs_c20/openssl-3.0.13
+export OPENSSL_ROOT_C20=/opt/installs_c20/openssl-3
 export BOOST_ROOT_C20=/opt/installs_c20/boost-1.84.0
+# Optional SEP-only C++17 prefix:
+export SYSTEMC_HOME_C17=/opt/installs_c17
+export CCI_HOME_C17=/opt/installs_c17
+export OPENSSL_ROOT_C17=/opt/installs_c17/openssl-3
+export BOOST_ROOT_C17=/opt/installs_c17/boost-1.84.0
 ```
 
 **Linux impact:** Same workflow on Ubuntu and RHEL — export `*_C17` / `*_C20` for your install layout, then `source configure_vp.sh`.
@@ -145,18 +161,22 @@ export BOOST_ROOT_C20=/opt/installs_c20/boost-1.84.0
 
 ---
 
-### `vp/platform/sep/och_sep_ss.hpp`
+### `vp/platform/sep/sep_platform.hpp` / `src/sep_platform.cpp`
 
-**What changed:**
+The SEP top module is still named `och_sep_ss`; the sources are
+`sep_platform.hpp` and `sep_platform.cpp` (there is no `och_sep_ss.hpp`).
+
+**What changed (port):** Apple Clang rejected the SystemC 3.0 `sc_time(T, bool)`
+overload as ambiguous. The platform now installs the TLM global quantum via
+`simtlm::install_global_quantum_ns_if_unset` in
+[`common/include/tlm_quantum_policy.h`](common/include/tlm_quantum_policy.h)
+instead of constructing `sc_time` inline:
 
 ```cpp
-sc_core::sc_time(static_cast<double>(globalQuantumNs.get_param_value()),
-                 sc_core::sc_time_unit::SC_NS);
+simtlm::install_global_quantum_ns_if_unset(globalQuantumNs.get_param_value());
 ```
 
-**Why:** SystemC 3.0 adds deprecated `sc_time(T, bool)`. With a numeric first argument and `SC_NS`, Apple Clang reports ambiguous overload vs `sc_time(double, sc_time_unit)`. Explicit types pick the intended constructor.
-
-**Linux impact:** Safe on all platforms; **recommended** when using SystemC 3.0 with GCC as well (GCC may silently pick one overload today; explicit is clearer).
+**Linux impact:** Same helper on all platforms. Safe with SystemC 3.0.2.
 
 ---
 
@@ -211,13 +231,13 @@ sc_core::sc_time(static_cast<double>(globalQuantumNs.get_param_value()),
 
 ---
 
-### `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` (new, untracked)
+### `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` (tracked)
 
 **What changed:** Copy of `RISCV-GCC` with `CC = clang` and `platform.h` defining `SOFTFLOAT_INTRINSIC_INT128` for macOS.
 
 **Why:** Produce `softfloat.a` on Apple Silicon for linking into `veeriss_model`.
 
-**Linux impact:** None — directory unused on Linux. Add to git if the port is permanent.
+**Linux impact:** None — directory unused on Linux.
 
 ---
 
@@ -264,13 +284,13 @@ sc_core::sc_time(static_cast<double>(globalQuantumNs.get_param_value()),
 
 **Why:** `CSML_REPORT(…, regname, " message")` failed with “call to 'form_report_string' is ambiguous” on Apple Clang.
 
-**Linux impact:** Safe on GCC. Historical note: this lived in the CSML submodule at the time of the port. CSML is no longer a live dependency — do not commit into `sep/utils/csml`.
+**Linux impact:** Historical only. CSML is not in the tree (`sep/utils/` is `paged-memory/` and `tlm_extensions/`). SEP register models use in-house `regmodel` under `common/include`. Do not re-add `sep/utils/csml`.
 
 ---
 
 ## Peripheral tests & coverage (macOS)
 
-Standalone peripheral models are built and tested with `sep/peripherals/run_all_peripherals.sh` (Debug, ASAN, Coverage, CTest). On macOS, coverage required several fixes beyond the VP port above.
+Standalone peripheral models are built and tested with `sep/peripherals/run_all_peripherals.sh` (Release, ASAN, Coverage, CTest; coverage gate ≥ 95% line). On macOS, coverage required several fixes beyond the VP port above.
 
 ### Quick run
 
@@ -287,11 +307,11 @@ Logs: `sep/peripherals/logs/<peripheral>/` and top-level `logs/Full_result.log`.
 Override install paths via the same `*_C17` / `*_C20` env vars as `configure_vp.sh` (see `vp/vp_build_env.sh`):
 
 ```bash
-export SYSTEMC_HOME_C17=/path/to/installs_c17
-export CCI_HOME_C17=/path/to/installs_c17
-export OPENSSL_ROOT_C17=/path/to/installs_c17/openssl-3.0.13
-export BOOST_ROOT_C17=/path/to/installs_c17/boost-1.84.0
-export CMAKE_CXX_STANDARD=17
+export SYSTEMC_HOME_C20=/path/to/installs_c20
+export CCI_HOME_C20=/path/to/installs_c20
+export OPENSSL_ROOT_C20=/path/to/installs_c20/openssl-3
+export BOOST_ROOT_C20=/path/to/installs_c20/boost-1.84.0
+# CMAKE_CXX_STANDARD defaults to 20 via configure_vp.sh
 ./run_all_peripherals.sh --clean
 ```
 
@@ -338,9 +358,9 @@ Requires `list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cm
 
 ### Per-peripheral `CMakeLists.txt` (coverage targets)
 
-**Models updated** (16 files — same pattern in each):
+**Models that use this coverage pattern** (current tree; `gpio` / `uart_16550` are not in git):
 
-`aes`, `aon_timer`, `csrng`, `edn`, `efuse`, `entropy_src`, `gpio`, `hmac`, `key_manager`, `kmac`, `lifecycle_ctrl`, `mailbox`, `otbn`, `secure_dma`, `spi_controller`, `spi_flash`, `uart_16550`
+`adams_bridge`, `aes`, `aon_timer`, `csrng`, `edn`, `efuse`, `el2_pic`, `entropy_src`, `hmac`, `key_manager`, `kmac`, `lifecycle_ctrl`, `local_master_alias_remap_ctrl`, `mailbox`, `otbn`, `secure_dma`, `sep_cpu_ctrl`, `sep_filter_ctrl`, `sep_output_remap_ctrl`, `sep_reset_ctrl`, `sep_scratch_cold`, `sep_scratch_warm`, `spi_controller`, `spi_flash`
 
 **Typical changes:**
 
@@ -373,11 +393,11 @@ COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category
 
 ### `sep/peripherals/csrng/CMakeLists.txt` (configure order)
 
-**What changed:** `add_subdirectory(…/csml)` moved from the top of the file to **after** `include(FindSystemC)`, guarded by `if(NOT TARGET csml_logger)`.
+**What changed (historical):** `add_subdirectory(…/csml)` was moved after `include(FindSystemC)`.
 
-**Why:** `csml_logger` links `SystemC::systemc`. csrng was the only peripheral that added csml **before** SystemC discovery, so configure failed with `Target "csml_logger" links to: SystemC::systemc but the target was not found`. Other models (e.g. aes) already add csml after `FindSystemC`.
+**Why then:** `csml_logger` linked `SystemC::systemc` and csrng was the only peripheral that added CSML before SystemC discovery.
 
-**Linux impact:** Safe — correct dependency order on all platforms.
+**Now:** CSML is gone. `csrng/CMakeLists.txt` uses in-house `regmodel` and does not add a csml subdirectory.
 
 ---
 
@@ -386,7 +406,7 @@ COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category
 | Symptom | Root cause | Fix |
 |---------|------------|-----|
 | `Could NOT find Threads` (Coverage configure) | `--coverage`/`-lgcov` in `CMAKE_EXE_LINKER_FLAGS` before `find_package(Threads)` | `PeripheralCoverage.cmake` deferred linker flags |
-| csrng Debug/ASAN/Coverage all fail | csml before `FindSystemC` | Reorder `add_subdirectory(csml)` in `csrng/CMakeLists.txt` |
+| csrng Debug/ASAN/Coverage all fail | csml before `FindSystemC` (historical) | CSML removed; `regmodel` only |
 | `lcov: No such file or directory` | Tool not installed | `brew install lcov`; script skips stage if missing |
 | `SYSTEMC_HOME` empty in logs | Install paths not exported | Set `SYSTEMC_HOME_C17` (or `_C20`) per `vp/vp_build_env.sh` |
 | lcov `inconsistent` / `format` / `mismatch` on SystemC headers | llvm-gcov + TLM/SystemC template code | `--ignore-errors …` on lcov/genhtml |
@@ -394,7 +414,7 @@ COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category
 | Coverage % always `n/a` | GNU `grep -oP` on macOS | `sed`-based `extract_coverage()` |
 | Coverage shown as SKIP when lcov ran | `if ! $LCOV_AVAILABLE` when value is `true` | String compare `[ "$LCOV_AVAILABLE" != true ]`; skip return code `3` |
 
-**Verified:** clean `./run_all_peripherals.sh --clean` passes Debug, ASAN, Coverage, and CTest for all 17 listed peripherals (e.g. aes 92.6%, aon_timer 98.1%, csrng 90.8%, edn 93.0%).
+**Verified (port era):** clean `./run_all_peripherals.sh --clean` passed Debug/ASAN/Coverage/CTest on macOS for the peripherals then in tree. The coverage **gate is now ≥ 95% line**; re-run the orchestrator for current percentages. Do not treat the August 2026 sample figures as current.
 
 ---
 
@@ -407,8 +427,8 @@ COMMAND genhtml --ignore-errors inconsistent,unsupported,format,corrupt,category
 Re-validate on Linux after merge:
 
 ```bash
-export SYSTEMC_HOME_C17=… CCI_HOME_C17=… BOOST_ROOT_C17=… OPENSSL_ROOT_C17=…
-export CMAKE_CXX_STANDARD=17
+export SYSTEMC_HOME_C20=… CCI_HOME_C20=… BOOST_ROOT_C20=… OPENSSL_ROOT_C20=…
+export CMAKE_CXX_STANDARD=20
 cd sep/peripherals && ./run_all_peripherals.sh --clean aes
 ```
 
@@ -429,9 +449,9 @@ Improvements that also help Linux:
 
 ### Requires attention before sharing branch with Linux team
 
-1. **Install path env vars** — Each developer/CI job must export `SYSTEMC_HOME_C17`, `CCI_HOME_C17`, `OPENSSL_ROOT_C17`, `BOOST_ROOT_C17` (and `_C20` if needed). Documented in `vp/vp_build_env.sh`; nothing to edit in git per machine.
+1. **Install path env vars** — Each developer/CI job must export `SYSTEMC_HOME_C20`, `CCI_HOME_C20`, `OPENSSL_ROOT_C20`, `BOOST_ROOT_C20` (and `_C17` if building SEP as C++17). Documented in `vp/vp_build_env.sh`; nothing to edit in git per machine.
 
-2. **SystemC 3.0 + C++ standard match** — Use C++17 SystemC with `CMAKE_CXX_STANDARD=17` (and vice versa for c20). `configure_vp.sh` pins `SystemCLanguage_DIR` to reduce mismatch; re-run configure after switching standard.
+2. **SystemC 3.0.2 + C++ standard match** — Default is C++20. Use a C++17 SystemC prefix only with `CMAKE_CXX_STANDARD=17` (SEP). `configure_vp.sh` pins `SystemCLanguage_DIR` to reduce mismatch; re-run configure after switching standard.
 
 3. **Boost.Log removed from top-level find** — OK if Linux install also lacks `boost_log` or the component is unused. If some Linux image relied on Boost.Log, rebuild Boost or restore the component in cmake only where needed.
 
@@ -442,11 +462,11 @@ Improvements that also help Linux:
 On a known-good Ubuntu/RHEL machine after merge:
 
 ```bash
-export SYSTEMC_HOME_C17=…/install_c17
-export CCI_HOME_C17=…/install_c17
-export BOOST_ROOT_C17=…/boost-1.84.0
-export OPENSSL_ROOT_C17=…/openssl-3.0.13
-export CMAKE_CXX_STANDARD=17
+export SYSTEMC_HOME_C20=…/install_c20
+export CCI_HOME_C20=…/install_c20
+export BOOST_ROOT_C20=…/boost-1.84.0
+export OPENSSL_ROOT_C20=…/openssl-3
+export CMAKE_CXX_STANDARD=20
 cd vp && ./configure_vp.sh && cd build && make sep-vp -j$(nproc)
 ```
 
@@ -465,12 +485,12 @@ Items below are **follow-ups**, not requirements for the macOS port. Builds and 
 | `-mtune=native` on `veeriss_model` | Applied only when `CMAKE_CXX_COMPILER_ID STREQUAL "GNU"` in `sep/cpu/CMakeLists.txt`. |
 | Install paths in `configure_vp.sh` | Removed hardcoded paths; `vp/vp_build_env.sh` resolves `*_C17` / `*_C20` from env. |
 
-### Recommended before sharing with Linux team
+### Follow-ups (status)
 
 | Item | Priority | Suggestion |
 |------|----------|------------|
-| `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` untracked | **Medium** | Add to git if macOS is a supported platform; document one-time `make` under that directory. |
-| `csml` (historical) | — | Not a live dependency. The `sep/utils/csml` submodule has been removed. |
+| `sep/cpu/VeeR-ISS/softfloat/build/Darwin-GCC/` | **Done** | Tracked in git. |
+| `csml` (historical) | — | Not a live dependency. `sep/utils/csml` is not in the tree. |
 
 ### Optional polish (low priority)
 
@@ -502,11 +522,11 @@ No open high-priority cleanup items remain for cross-platform merges.
 | `make_signed` specialization error | libc++ forbids `std` trait spec | `wideint.hpp`, `vector.cpp` |
 | `openssl/rand.h` not found (edn) | Raw `-lcrypto` | `edn/CMakeLists.txt` |
 | SPI `SC_THREAD` / `wait()` errors | `OVERFLOW`/`UNDERFLOW` macros | `spi_controller_register.h` |
-| Ambiguous `sc_time` constructor | SystemC 3.0 deprecated overloads | `och_sep_ss.hpp` |
+| Ambiguous `sc_time` constructor | SystemC 3.0 deprecated overloads | `sep_platform.cpp` + `tlm_quantum_policy.h` |
 | Wrong SystemC ABI at link | Cached `SystemCLanguage_DIR` | `FindSystemC.cmake`, `configure_vp.sh` |
 | `vncserver` not found | Unused legacy link | `platform/infra/CMakeLists.txt` |
 | `Could NOT find Threads` (Coverage) | Coverage linker flags before `FindThreads` | `cmake/PeripheralCoverage.cmake` |
-| csrng `SystemC::systemc` not found | csml before `FindSystemC` | `csrng/CMakeLists.txt` |
+| csrng `SystemC::systemc` not found | csml before `FindSystemC` (historical) | CSML removed |
 | `lcov` / genhtml failures on macOS | llvm-gcov + SystemC headers | peripheral `CMakeLists.txt` `--ignore-errors` |
 | `run_all_peripherals.sh` grep/nproc | BSD vs GNU tools | `run_all_peripherals.sh` |
 | `ld: ignoring duplicate libraries` (`.a`) | Redundant entries on `sep-vp` link line | `vp/platform/sep/CMakeLists.txt` |
@@ -518,18 +538,20 @@ No open high-priority cleanup items remain for cross-platform merges.
 Single SystemC install uses versioned symlinks (not two versions):
 
 ```text
-libsystemc.3.0.1.dylib   ← real library
-libsystemc.3.0.dylib     → libsystemc.3.0.1.dylib
+libsystemc.3.0.2.dylib   ← real library
+libsystemc.3.0.dylib     → libsystemc.3.0.2.dylib
 libsystemc.dylib         → libsystemc.3.0.dylib
 ```
 
-Use **one** prefix per build (`installs_c17` for C++17, `installs_c20` for C++20) and match `CMAKE_CXX_STANDARD` to the SystemC build’s C++ standard.
+Use **one** prefix per build (`installs_c20` for the default C++20 tree, `installs_c17` only for SEP C++17) and match `CMAKE_CXX_STANDARD` to the SystemC build’s C++ standard.
 
 ---
 
 ## Related reading
 
 - Main build docs: `README.md`
+- Release / coverage / compiler matrix: `RELEASE_NOTES.md`
 - VP configure: `vp/configure_vp.sh`, `vp/vp_build_env.sh`
 - Peripheral batch tests: `sep/peripherals/run_all_peripherals.sh`
+- SEP CPU tests: `sep/cpu/run_tests.sh`
 - Shared cmake modules: `cmake/FindSystemC.cmake`, `cmake/FindCCI.cmake`, `cmake/PeripheralCoverage.cmake`

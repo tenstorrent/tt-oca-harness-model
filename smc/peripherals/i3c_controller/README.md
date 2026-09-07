@@ -1,8 +1,8 @@
 # SMC I3C Controller — SystemC / TLM-2.0 Loosely-Timed Model
 
 A transaction-level, register-accurate **OCA I3C Controller** modelled in
-Accellera SystemC 2.3.x / 3.0 + TLM-2.0 (Loosely-Timed) and parameterised
-through SystemC CCI 1.0.  It models the multi-instance MIPI I3C Basic
+Accellera SystemC 3.0.2 + TLM-2.0 (Loosely-Timed) and parameterised
+through SystemC CCI 1.0.2.  It models the multi-instance MIPI I3C Basic
 v1.0/v1.1.1 + HCI v1.2 controller (`i3ccore_wrapper`, CHIPS-Alliance
 i3c-core fork with OCA enhancements) instantiated in the System Management
 Controller (SMC) peripheral sub-system: up to six independent I3C instances

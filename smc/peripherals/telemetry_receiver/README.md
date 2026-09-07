@@ -7,7 +7,7 @@ This tree has the model, its test plan, and how to run the tests.
 - `doc/implementation.adoc` — sockets, ports, processes, CCI, `smc-vp` bind
 - `doc/test_plan.adoc` — standalone cases and firmware tests
 
-A **telemetry receiver** modeled in Accellera SystemC 2.3.x / 3.0.x + TLM-2.0
+A **telemetry receiver** modeled in Accellera SystemC 3.0.2 + TLM-2.0
 (Loosely-Timed). It implements one instance of the SMC telemetry receiver — the
 sink of the SoC telemetry path, which re-assembles counter samples arriving over
 an **ATB** (AMBA Trace Bus) byte stream and exposes them to software one message
