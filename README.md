@@ -166,7 +166,6 @@ tt-oca-harness-model/
 │   │   ├── sep_scratch_warm/      ← Warm-domain scratch registers (stub, store-only)
 │   │   ├── spi_controller/        ← SPI controller (OpenTitan)
 │   │   ├── spi_flash/             ← SPI flash model (SFDP Profile 1)
-│   │   ├── Coverage_Report.md     ← per-peripheral line/function coverage summary
 │   │   ├── deps.env.example       ← example env for peripheral test builds
 │   │   ├── setup_build_env.sh     ← shared env for run_tests.sh / run_all_peripherals.sh
 │   │   └── run_all_peripherals.sh ← batch peripheral tests (sources vp/configure_vp.sh)

@@ -8,8 +8,8 @@
 peripherals, and a Whisper-backed RV64 cluster. Firmware sees the
 local-alias aperture. Bases must match the TRM RDL and xbar packages;
 where `smc_platform.cpp` still disagrees, treat that as a modeling
-bug, not a second spec. The pending remap is
-`doc/smc-vp-rtl-address-map-realignment.adoc`.
+bug, not a second spec. Bases live in `smc_common.h` / `smc_platform.cpp`
+and must match the TRM RDL and xbar packages.
 
 ==== Platform pieces
 
@@ -23,9 +23,11 @@ bug, not a second spec. The pending remap is
 |Wiring |`vp/platform/smc/` |CCI INI
 |===
 
-Every modeled IP has the two-page set under
-`smc/peripherals/<ip>/doc/` (`implementation.adoc` + `test_plan.adoc`).
-The fabric uses the same layout in `smc/smc_fabric/doc/`.
+Every modeled IP has the three-page set under
+`smc/peripherals/<ip>/doc/` (`index.adoc`, `implementation.adoc`,
+`test_plan.adoc`).
+The fabric, CPU cluster, and AOU use the same layout in
+`smc/smc_fabric/doc/`, `smc/cpu_cluster/doc/`, and `aou/doc/`.
 
 Existing integration notes in this directory
 (`systemc_tlm2_integration_guide.adoc`,

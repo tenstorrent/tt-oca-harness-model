@@ -76,7 +76,7 @@ RHEL 8 ASan uses `gcc-toolset-12-libasan-devel` and `gcc-toolset-12-libubsan-dev
 
 ### Peripheral unit tests and coverage
 
-`sep/peripherals/Coverage_Report.md` is a historical snapshot and may lag the gate. Re-run the orchestrators for current percentages:
+Coverage percentages are produced by the orchestrators (not a checked-in snapshot). Re-run them for current numbers:
 
 ```bash
 sep/peripherals/run_all_peripherals.sh          # Release + ASan + coverage
