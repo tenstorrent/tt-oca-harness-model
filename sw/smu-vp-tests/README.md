@@ -8,7 +8,7 @@ SEP VeeR core — reusing the `sw/smc-vp-tests/` and `sw/sep-vp-tests/`
 startup/printf/linker infrastructure, and runs them concurrently on
 `smu-vp`.
 
-These are VP-adapted ports of the tt-oca-hw SMU firmware/DV tests that
+These are VP-adapted ports of the tt-oca-harness SMU firmware/DV tests that
 exercise interconnect behaviour the VP actually models. RTL-only
 machinery (CLA, fuse-sense, AXI filter programming, cocotb `ext_in`
 master, mailbox, SPI/WDT/OTBN) is omitted; see the skip list at the
@@ -44,7 +44,7 @@ UART0, SEP on the virtconsole) and neither prints FAIL.
 
 ## Tests
 
-| Test | tt-oca-hw source | What it exercises |
+| Test | tt-oca-harness source | What it exercises |
 |---|---|---|
 | `smu-link-test` | (VP original) | Bidirectional SMU on-die link: SEP→SMC over the dedicated `sep_ext_to_smc_axi` path (SEP writes magic+doorbell into the SMC scratchpad via the `0x4000_0000` window; SMC polls it), then SMC→SEP over the SMU crossbar (SMC writes a response into SEP SRAM via the `0x5000_0000` global aperture; SEP polls it). The SEP also reads its own writes back through the dedicated path to prove the forward path (not the fallback stub) carried them. |
 | `smu-xbar-test` | `fw/smc/tests/smc_sep_xbar` + `smu_bidirect` / `fw/sep/tests/sep_smu_bidirect` | Same two AXI paths with the hardware handshake tokens (`0x13579BDF` / `0xC001CAFE` / `0x5E9ACCE5` / `0xD0E0F00D`). CLA / fuse-sense / filter programming omitted. |

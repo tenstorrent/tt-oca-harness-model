@@ -69,6 +69,8 @@ Three runnable platforms ship from `vp/`:
 5. Run firmware tests under `sw/sep-vp-tests/`, `sw/smc-vp-tests/`, and
    `sw/smu-vp-tests/`.
 
+The SEP hart ISS (VeeR-ISS) is already in this repo under `sep/cpu/VeeR-ISS/`; there is no separate install.
+
 Minimal SEP bring-up after dependencies are installed:
 
 ```bash
@@ -477,8 +479,8 @@ make gdb         # connect GDB (second terminal)
 #### Building and running TT firmware tests
 
 `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/` is the SEP firmware suite written
-by the TT RTL and firmware teams (`fw/sep` in `tt-oca-hw`), migrated here so
-it builds without a `tt-oca-hw` checkout. That directory's README covers the
+by the TT RTL and firmware teams (`fw/sep` in `tt-oca-harness`), migrated here so
+it builds without a `tt-oca-harness` checkout. That directory's README covers the
 layout, what `setup_dependencies.sh` builds, and the current pass/fail
 breakdown.
 
@@ -677,7 +679,7 @@ command, or a `REG_READ` / `REG_WRITE` app against
 ### Building and running the SMU VP
 
 `smu-vp` integrates SMC and SEP in one SystemC process over the SMU on-die
-interconnect (RTL reference: `hw/smu/rtl/smu.sv` in `tt-oca-hw`). It exists
+interconnect (RTL reference: `hw/smu/rtl/smu.sv` in `tt-oca-harness`). It exists
 to run firmware that talks across the SMC↔SEP boundary and to carry
 chiplet-facing AXI through the AoU LT stub. Details:
 [`vp/platform/smu/docs/README.md`](vp/platform/smu/docs/README.md).
@@ -1048,7 +1050,7 @@ inline mask arithmetic. Runtime configuration goes through CCI, not
 process-wide globals.
 
 Firmware-facing register maps and programming sequences are specified in
-the hardware TRM (`tt-oca-hw`), not duplicated here.
+the hardware TRM (`tt-oca-harness`), not duplicated here.
 
 ## Deployment
 
@@ -1150,7 +1152,7 @@ and other items in [RELEASE_NOTES.md](RELEASE_NOTES.md#current-limitations).
 
 ## FAQ
 
-**Do I need `tt-oca-hw` to build or run the VP?**
+**Do I need `tt-oca-harness` to build or run the VP?**
 No. Register maps and architecture live in that TRM, but this tree is
 self-contained. TT firmware tests were imported under
 `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/`.

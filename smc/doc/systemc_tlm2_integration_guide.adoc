@@ -56,7 +56,7 @@ So the PLIC essentially answers:
 
 This guide describes how to integrate the SMC SystemC/TLM2.0 models under
 `/path/to/tt-oca-harness-model/smc` so they track the RTL subsystem connected under
-`/path/to/tt-oca-hw/hw/smc`.
+`/path/to/tt-oca-harness/hw/smc`.
 
 For building/running the platform tests and booting bare-metal firmware on
 the CPU cluster, see `smc/doc/platform_test_and_firmware_guide.adoc`.

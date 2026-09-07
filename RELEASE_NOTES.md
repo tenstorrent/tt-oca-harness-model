@@ -9,7 +9,7 @@
 
 ## Included Models
 
-All functional IPs from the OCH / `tt-oca-hw` SMU stack are modeled in this
+All functional IPs from the OCH / `tt-oca-harness` SMU stack are modeled in this
 virtual platform, except Debug and Test Ports (DTP). See
 [Current Limitations](#current-limitations).
 
@@ -115,7 +115,7 @@ Public CI currently runs a subset:
 # Current Limitations
 
 - **Unmodeled IP — Debug and Test Ports (DTP)**: The hardware DTP block
-  (`hw/dtp` in `tt-oca-hw`) is not modeled. That includes the IEEE 1149.1 PTAP
+  (`hw/dtp` in `tt-oca-harness`) is not modeled. That includes the IEEE 1149.1 PTAP
   and STAPs, iJTAG / boundary-scan / DFT scan chains, JTAG2AXI, JTAG OTP
   AXI-Lite, IC_RESET TDRs, and the cross-trigger network. The VP uses ISS GDB
   for software debug; `jtag_axi_in` is present but idle. Tests or flows that

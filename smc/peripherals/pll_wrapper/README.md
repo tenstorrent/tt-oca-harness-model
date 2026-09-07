@@ -8,7 +8,7 @@ This tree has the model, its test plan, and how to run the tests.
 - `doc/test_plan.adoc` — standalone cases and firmware tests
 
 SystemC/TLM-2.0 register models for the SMC PLL wrapper, transcribed from the
-RDL under `sw/tt-oca-hw-main/hw/smc/dv_shims/pll/data/registers/rdl/`
+RDL under `sw/tt-oca-harness-main/hw/smc/dv_shims/pll/data/registers/rdl/`
 (`pll_wrap.rdl` and its includes `pll_cntl.rdl`, `cgm.rdl`, `awm.rdl`).
 
 The three sub-blocks (`pll_cntl`, `cgm`, `awm`) are **pure register-file
@@ -51,7 +51,7 @@ internal initiator socket (same pattern as the SMC platform fabric).
 
 ### Firmware-driven lock behaviour
 
-The SMC firmware (`sw/tt-oca-hw-main/fw/smc`) programs a PLL and then busy-polls
+The SMC firmware (`sw/tt-oca-harness-main/fw/smc`) programs a PLL and then busy-polls
 `pll_cntl` status until lock, e.g. `program_cgm()` / `program_awm0_functional()`
 in `common/smc_defines.h` and the `pll_*_sanity_sequence` headers. Firmware
 polls the **`pll_cntl`** aggregated status — never the sub-block's own status —

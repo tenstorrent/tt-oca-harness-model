@@ -20,7 +20,7 @@ credit-based synchronization protocol.
 
 The model is transcribed from the hardware sources, not from prose:
 
-| Source (under `sw/tt-oca-hw-main/hw/ip/system_timer_octs/`) | Used for |
+| Source (under `sw/tt-oca-harness-main/hw/ip/system_timer_octs/`) | Used for |
 |---|---|
 | `data/registers/rdl/system_timer_octs.rdl` | Register map, field masks, reset values |
 | `rtl/system_timer_octs_core.sv` | Datapath, credit accounting, pulse FSM |
@@ -28,7 +28,7 @@ The model is transcribed from the hardware sources, not from prose:
 | `hw/common/prim/rtl/prim_edge_detector.sv` | Input synchronizer depth and edge-pulse semantics |
 | `doc/{architecture,interface,memmap}.adoc` | Behavioural spec, programming sequence, access rules |
 
-The same material is in `sw/tt-oca-hw-main/doc/dist/ocah-documentation.pdf`.
+The same material is in `sw/tt-oca-harness-main/doc/dist/ocah-documentation.pdf`.
 
 ## Register map
 
@@ -172,7 +172,7 @@ Two things are specific to this IP:
   land on sinks.
 
 Firmware tests live in `sw/smc-vp-tests/` and mirror the RTL firmware OCTS tests
-in `tt-oca-hw-main/fw/smc/tests`:
+in `tt-oca-harness-main/fw/smc/tests`:
 
 | Test | Covers |
 |------|--------|

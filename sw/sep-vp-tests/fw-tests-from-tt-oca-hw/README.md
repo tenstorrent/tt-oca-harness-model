@@ -1,18 +1,18 @@
-# SEP firmware tests from tt-oca-hw
+# SEP firmware tests from tt-oca-harness
 
 The tests under `sw/sep-vp-tests/` are written by the people who build the
 virtual platform. The tests in *this* directory are the firmware tests from the
-`tt-oca-hw` repo (`fw/sep/tests`), written by the RTL and firmware teams, and
+`tt-oca-harness` repo (`fw/sep/tests`), written by the RTL and firmware teams, and
 run here against `sep-vp`. Running both suites means the VP is checked against
 software that was not written with the VP in mind.
 
 Everything needed to build and run them is either in this directory or built by
-`dependencies/setup_dependencies.sh`. There is no dependency on a `tt-oca-hw`
+`dependencies/setup_dependencies.sh`. There is no dependency on a `tt-oca-harness`
 checkout, a VeeR EL2 checkout, `bender`, or anything installed system-wide
 beyond a RISC-V toolchain, `git` and `python3`.
 
 This directory is also where the SEP register headers now live, in
-`dependencies/meta/registers/c`. They came from the `tt-oca-hw` tree that this
+`dependencies/meta/registers/c`. They came from the `tt-oca-harness` tree that this
 repo no longer carries, and `sw/sep-vp-tests/Makefile.common` includes them from
 here, so the two SEP suites share one authoritative copy.
 
@@ -55,7 +55,7 @@ located by walking up to the `tt-oca-harness-model` root. Override with `GCC_PRE
 
 ```
 fw-tests-from-tt-oca-hw/
-├── fw/sep/                     copy of tt-oca-hw fw/sep — the tests themselves
+├── fw/sep/                     copy of tt-oca-harness fw/sep — the tests themselves
 │   ├── tests/
 │   │   ├── run_all_tests.sh    build + run everything, print a summary
 │   │   ├── run_test.sh         build + run one test
@@ -63,7 +63,7 @@ fw-tests-from-tt-oca-hw/
 │   │   ├── common/             common.mk, crt0.s, init_stdout.c, …
 │   │   └── <test>/             one directory per test
 │   └── bootcode/               the SEP Boot ROM (BL0) — separate build, see below
-├── dependencies/               everything fw/sep needs from the rest of tt-oca-hw
+├── dependencies/               everything fw/sep needs from the rest of tt-oca-harness
 │   ├── setup_dependencies.sh   builds picolibc
 │   ├── meta/registers/c        SEP register headers (also used by sw/sep-vp-tests)
 │   ├── dv/sep/tests/           common + common_otbn test infrastructure
@@ -159,7 +159,7 @@ machine. Every one is commented in place.
 
 Everything above is infrastructure. These are edits to test *sources*, which is
 a higher bar, so each one is justified individually below. All are commented in
-place. Re-syncing them from `tt-oca-hw` verbatim has been tried and measured:
+place. Re-syncing them from `tt-oca-harness` verbatim has been tried and measured:
 it turns each of these back into a failure or a hang.
 
 | Test | Why it differs from upstream |
@@ -201,7 +201,7 @@ PASSED`. The ROM then parks the core in `wfi`, so the run needs a `Ctrl-C`.
 
 ## Current results
 
-The tree now mirrors all 181 test directories in `tt-oca-hw/fw/sep/tests`.
+The tree now mirrors all 181 test directories in `tt-oca-harness/fw/sep/tests`.
 141 run and **125 pass (88%)**; 14 fail, 2 hang, 43 are excluded. Each has a log
 in `fw/sep/tests/logs/<test>.log`.
 
@@ -209,7 +209,7 @@ in `fw/sep/tests/logs/<test>.log`.
 
 Not every test in `fw/sep/tests` runs in the *standalone* SEP testbench, and the
 distinction decides whether a failure here means anything. The authority is
-`tt-oca-hw/dv/sep/tb/tb_uvm/yaml/testlist_sep.yaml` versus
+`tt-oca-harness/dv/sep/tb/tb_uvm/yaml/testlist_sep.yaml` versus
 `dv/smu/tb/tb_uvm/yaml/testlist_smu_chiplet.yaml`. Nineteen of these tests are
 enrolled only in the SMU chiplet list, so even on RTL they need SMU + SMC + SEP
 elaborated together; they are excluded rather than reported (see below).
@@ -250,7 +250,7 @@ array, as their `+SEP_EFUSE_NO_PRELOAD` asks for.
 
 `bl1_pass_test` is the BL1 boot flow rather than a VP test, and `common`,
 `common_otbn`, `logs` and `otbn_km_sideload_keydump` (an `otbn_src/` asset tree
-with no Makefile, absent from `tt-oca-hw/fw/sep/Makefile` too) are not tests.
+with no Makefile, absent from `tt-oca-harness/fw/sep/Makefile` too) are not tests.
 Beyond those:
 
 - **Cadence xSPI (12).** `xspi_flash_*`, `spi_sanity`, `spi_sanity_cadence`,
@@ -261,11 +261,11 @@ Beyond those:
   macros and would not compile against the current header. The 27 `spi_ot_*`
   tests and `spi_sanity_ot` are unaffected.
 - **Six fabric P3 tests.** Do not compile upstream either:
-  `tt-oca-hw/fw/sep/Makefile` keeps the same set out of its own `DEFAULT_TESTS`
+  `tt-oca-harness/fw/sep/Makefile` keeps the same set out of its own `DEFAULT_TESTS`
   "temporarily disabled due to compilation errors", because each calls a helper
   nobody defined. Synced verbatim so the mirror stays honest; they return when
   upstream repairs them.
-- **`uart`.** Needs `uart_16550_*_reg.h`, which `tt-oca-hw` generates on demand
+- **`uart`.** Needs `uart_16550_*_reg.h`, which `tt-oca-harness` generates on demand
   and does not commit, and the VP models no UART — `printf` goes to the
   `0x8000_0000` mailbox instead.
 - **Eighteen SMU/SMC-level tests.** `sep_smu_*` (13), `sep_smc_interop`,
@@ -278,7 +278,7 @@ Beyond those:
   watches for. `sep_smc_notify` is deliberately *not* excluded: it needs no peer
   and passes here.
 - **`global_alias_remap_sanity`.** Superseded upstream, and in no regression
-  list: `tt-oca-hw` replaced it with the pure-UVM
+  list: `tt-oca-harness` replaced it with the pure-UVM
   `sep_global_alias_remap_uvm_test`, which runs with `+SEP_SKIP_CPU_RUN` and no
   firmware at all, having previously needed a `Force` on `security_disable` plus
   an external AXI master. A failure here would say nothing about the VP.
@@ -292,7 +292,7 @@ Beyond those:
   `SMC_EXTERNAL_MANDATORY_EFUSE_SHIM_CTRL_ln`. Re-syncing the register header
   brings this back. The counts above predate this exclusion.
 
-## Updating from tt-oca-hw
+## Updating from tt-oca-harness
 
 `rsync` the test directories into `fw/sep/tests/` and re-run. Three things need
 care:
@@ -311,7 +311,7 @@ care:
    files. Overwriting them costs five passing tests and the symptom is a hang,
    not a build error.
 
-If a new test pulls in a header from elsewhere in `tt-oca-hw`, add it under
+If a new test pulls in a header from elsewhere in `tt-oca-harness`, add it under
 `dependencies/` and, if it lives in a directory that is not already symlinked at
 the top level, add the symlink. Headers from a sibling firmware tree go in the
 mirrored path instead — see `fw/smc/tests/*/src`.

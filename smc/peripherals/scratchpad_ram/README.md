@@ -8,15 +8,15 @@ stack/data storage and fast local scratch.
 
 The model tracks the on-chip scratchpad instantiated by the SMC CPU cluster:
 
-- `tt-oca-hw/hw/smc/smc_cpu/data/registers/rdl/spm_memory.rdl` — the
+- `tt-oca-harness/hw/smc/smc_cpu/data/registers/rdl/spm_memory.rdl` — the
   read-write `mem` declaration (`mem`, 64-bit wide, `sw=rw, hw=rw`).
-- `tt-oca-hw/hw/smc/smc_cpu/chipyard_config/OCAH1CORECluster.scala` —
+- `tt-oca-harness/hw/smc/smc_cpu/chipyard_config/OCAH1CORECluster.scala` —
   `WithScratchpadWithECC(base = 0xC0040000, size = 0x10000, banks = 1,
   partitions = 4, ecc = SECDED)`.
-- `tt-oca-hw/hw/smc/smc_cpu/chipyard_generated_files/1core/OCAH1CORECluster_TLRAM.sv`
+- `tt-oca-harness/hw/smc/smc_cpu/chipyard_generated_files/1core/OCAH1CORECluster_TLRAM.sv`
   — the generated TileLink SRAM RTL (64-bit data, 8-bit byte mask, SECDED
   ECC, sub-word read-modify-write).
-- `tt-oca-hw/hw/smc/data/registers/rdl/smc_top.rdl` — SMC top-level address
+- `tt-oca-harness/hw/smc/data/registers/rdl/smc_top.rdl` — SMC top-level address
   map (`spm_memory @ BASE_ADDR + 0x06_0000`).
 
 Architecture, CSRs, and programming are in the hardware TRM. Model and

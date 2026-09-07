@@ -57,7 +57,7 @@ addressing, ordering, and completeness.
 
 All register addresses, fields, and the DMA programming model are hardcoded in `main.c`
 (matching the SEP platform memory map). The test builds and runs with only the RISC-V
-toolchain and the in-tree `sep-vp` — it does **not** depend on the tt-oca-hw hardware repo
+toolchain and the in-tree `sep-vp` — it does **not** depend on the tt-oca-harness hardware repo
 or its generated headers.
 
 ## Build & run

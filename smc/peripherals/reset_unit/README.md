@@ -11,20 +11,20 @@ register block to firmware.
 
 The model tracks the RTL instantiated in the SMC sub-system:
 
-- `tt-oca-hw/hw/smc/smc_reset_unit/data/registers/rdl/reset_unit.rdl` —
+- `tt-oca-harness/hw/smc/smc_reset_unit/data/registers/rdl/reset_unit.rdl` —
   the ground-truth register map.
-- `tt-oca-hw/hw/smc/smc_reset_unit/rtl/smc_reset_unit.sv` — structural
+- `tt-oca-harness/hw/smc/smc_reset_unit/rtl/smc_reset_unit.sv` — structural
   top wiring the four sub-blocks together.
-- `tt-oca-hw/hw/smc/smc_reset_unit/rtl/smc_reset_ctrl.sv` — cold / primary /
+- `tt-oca-harness/hw/smc/smc_reset_unit/rtl/smc_reset_ctrl.sv` — cold / primary /
   core / WDT reset derivation (de-glitch + extend counters).
-- `tt-oca-hw/hw/smc/smc_reset_unit/rtl/smc_subsystem_resets.sv` —
+- `tt-oca-harness/hw/smc/smc_reset_unit/rtl/smc_subsystem_resets.sv` —
   per-subsystem reset-control + lock logic.
-- `tt-oca-hw/hw/smc/smc_reset_unit/rtl/smc_cool_reset_wrap.sv` — FLR
+- `tt-oca-harness/hw/smc/smc_reset_unit/rtl/smc_cool_reset_wrap.sv` — FLR
   cool-reset counters + isolate-request logic.
-- `tt-oca-hw/hw/smc/smc_reset_unit/rtl/smc_reset_sync.sv` — per-clock-domain
+- `tt-oca-harness/hw/smc/smc_reset_unit/rtl/smc_reset_sync.sv` — per-clock-domain
   reset synchronisers.
-- `tt-oca-hw/hw/smc/smc_pkg.sv` — `jtag_smc_reset_ctrl_t` JTAG override struct.
-- `tt-oca-hw/hw/smc/data/registers/rdl/smc_top.rdl` — top-level map
+- `tt-oca-harness/hw/smc/smc_pkg.sv` — `jtag_smc_reset_ctrl_t` JTAG override struct.
+- `tt-oca-harness/hw/smc/data/registers/rdl/smc_top.rdl` — top-level map
   (`smc_reset_unit @ BASE_ADDR + 0x000_2000`).
 
 Architecture, CSRs, and programming are in the hardware TRM. Model and
