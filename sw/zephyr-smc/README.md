@@ -9,8 +9,14 @@ talk to it with MMIO, or add a driver later.
 
 ## One-time setup
 
-Needs Python ≥ 3.10, `west`, a RISC-V GCC (`riscv64-elf-` or
-`riscv64-unknown-elf-`), and a built `smc-vp`.
+Needs Python ≥ 3.10 (keep that interpreter first on `PATH`), `west` (created
+in `./.venv` by `setup`), Device Tree Compiler (`dtc` ≥ 1.4.6), `ninja`, a
+RISC-V GCC (`riscv-none-elf-`, `riscv64-elf-`, or `riscv64-unknown-elf-`),
+and a built `smc-vp`. Set `CROSS_COMPILE` / `RISCV_PREFIX` to the triple you
+installed. Set `SMC_VP` if the binary is not at `vp/build_smc/bin/smc-vp`
+or `vp/build/bin/smc-vp`. If `ccache` is on `PATH` but its cache directory
+is not writable, set `USE_CCACHE=0`. To keep `west update` small, set
+`ZEPHYR_WEST_PROJECT_FILTER` (CI drops unused vendor HALs).
 
 ```bash
 cd sw/zephyr-smc

@@ -46,7 +46,7 @@ Three runnable platforms ship from `vp/`:
 
 - [Getting Started](#getting-started)
 - [Requirements](#requirements)
-- [Installation](#installation)
+- [Building the SEP VP](#building-the-sep-vp)
 - [Usage](#usage)
 - [Options](#options)
 - [Architecture](#architecture)
@@ -61,17 +61,27 @@ Three runnable platforms ship from `vp/`:
 
 1. Install the host toolchain and libraries listed in [Requirements](#requirements)
    (CMake 3.20+, a C++20 compiler, SystemC 3.0.2, CCI 1.0.2, Boost, OpenSSL).
-2. Clone this repository — [Installation](#installation).
+2. Clone this repository — [Building the SEP VP](#building-the-sep-vp).
 3. Build `sep-vp` — [Building the SEP VP](#building-the-sep-vp).
 4. To run SMC or SMU platforms, also install the public
    [Whisper ISS](https://github.com/tenstorrent/whisper) and a RISC-V GNU
-   toolchain, then build `smc-vp` / `smu-vp`.
-5. Run firmware tests under `sw/sep-vp-tests/`, `sw/smc-vp-tests/`, and
-   `sw/smu-vp-tests/`.
+   toolchain. Build `smc-vp` with `make smc-vp` (after `WHISPER_HOME` is
+   set) or `cmake --build … --target smc-vp`. **`smu-vp` is cmake-only** —
+   there is no top-level `make smu-vp` target.
+5. Run firmware tests:
+   - `sw/sep-vp-tests/run_sep_vp_tests.sh` — standalone SEP suite
+   - `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/run_all_tests.sh` — TT suite
+   - `sw/smc-vp-tests/run_smc_vp_tests.sh`
+   - `sw/smu-vp-tests/run_smu_vp_tests.sh`
+   - `sw/zephyr-smc/zephyr_smc.sh` — optional Zephyr path
 
 The SEP hart ISS (VeeR-ISS) is already in this repo under `sep/cpu/VeeR-ISS/`; there is no separate install.
 
-Minimal SEP bring-up after dependencies are installed:
+Minimal SEP bring-up after dependencies are installed. Prefer
+`vp/configure_vp.sh` (C++20). Repo-root `make sep-vp` defaults to C++17
+unless you pass `CMAKE_CXX_STANDARD=20`. Export the prefixes from
+[Record install prefixes](#6-record-install-prefixes) first if you did
+not install into the probed `/usr` / `/usr/local` locations.
 
 ```bash
 git clone https://github.com/tenstorrent/tt-oca-harness-model.git
@@ -96,10 +106,10 @@ current release.
 | [CCI](https://github.com/accellera-official/cci) | 1.0.2 | All models | Bundles RapidJSON; C++20-clean. This is the only version CI installs |
 | Boost | ≥ 1.74 (`iostreams`, `program_options`) | VP + Whisper | 1.84.0 is the CI pin on RHEL 8. No Boost.Regex or Boost.Log |
 | OpenSSL | 3.x (≥ 3.0) | SEP crypto models | CI RHEL 8 builds **3.3.2**. Ubuntu uses distro `libssl-dev` (3.0.x). RHEL 8 system 1.1.1 is not enough |
-| [Whisper](https://github.com/tenstorrent/whisper) | commit `a53d0f3e` | `smc-vp`, `smu-vp` | Build with `MEM_CALLBACKS=1` and C++20 |
-| RISC-V GNU toolchain | GCC 11+ | Firmware tests | Runners accept `riscv64-unknown-elf-`, `riscv64-elf-`, `riscv-none-elf-`. CI uses xpack **15.2.0-1**. SMU needs RV64 + RV32 |
-| [Zephyr](https://github.com/zephyrproject-rtos/zephyr) | v4.3.0 | `sw/zephyr-smc` | Optional; only for the Zephyr-on-`smc-vp` path |
-| Python 3 | 3.x | Firmware / preload helpers | — |
+| [Whisper](https://github.com/tenstorrent/whisper) | commit `a53d0f3e` | `smc-vp`, `smu-vp` | Build with `MEM_CALLBACKS=1`, C++20, and `BOOST_ROOT` ≥ 1.74 (RHEL 8 `/usr` Boost is 1.66 and fails) |
+| RISC-V GNU toolchain | GCC 11+ | Firmware tests | Runners accept `riscv64-unknown-elf-`, `riscv64-elf-`, `riscv-none-elf-`. CI uses xpack **15.2.0-1**. SMU needs RV64 + RV32. Set `RISCV_TOOLCHAIN_PATH` / `RISCV_PREFIX` / `GCC_PREFIX` |
+| [Zephyr](https://github.com/zephyrproject-rtos/zephyr) | v4.3.0 | `sw/zephyr-smc` | Optional. Needs Python ≥ 3.10, `west`, `dtc` ≥ 1.4.6, and `ninja` |
+| Python 3 | ≥ 3.10 for Zephyr and first-time picolibc; 3.x otherwise | west / `setup_dependencies.sh` | Keep the intended interpreter first on `PATH`. TT firmware setup creates a local venv and installs meson/ninja there |
 | Git | — | Clone |  |
 
 Optional for docs and coverage:
@@ -238,14 +248,19 @@ tt-oca-harness-model/
 │           └── docs/
 ├── sw/                            ← Firmware and DV tests
 │   ├── sep-vp-tests/              ← SEP firmware tests
+│   │   ├── run_sep_vp_tests.sh    ← standalone suite (hmac, spi, otbn, mailbox, …)
+│   │   ├── sep-*-test/            ← Makefile-based tests; see sw/sep-vp-tests/README.md
 │   │   └── fw-tests-from-tt-oca-hw/   ← TT firmware test suite (fw/sep), self-contained
 │   │       ├── fw/sep/tests/      ← the tests, plus run_all_tests.sh / run_test.sh
 │   │       ├── fw/sep/bootcode/   ← SEP Boot ROM (BL0)
 │   │       └── dependencies/      ← setup_dependencies.sh builds picolibc; also holds
 │   │                                 meta/registers/c, the shared SEP register headers
 │   ├── smc-vp-tests/              ← Bare-metal RV64 firmware tests (SMC, runs on smc-vp)
-│   │   └── run_smc_vp_tests.sh    ← host-agnostic runner: auto-detects toolchain + smc-vp, builds/runs tests
+│   │   ├── run_smc_vp_tests.sh    ← auto-detects toolchain + smc-vp
+│   │   └── smc-*-test/            ← AOU, DMA, I2C/I3C, WDT, … (15 tests)
 │   ├── smu-vp-tests/              ← Combined SMC+SEP firmware tests on smu-vp
+│   │   ├── run_smu_vp_tests.sh
+│   │   └── smu-{link,xbar,traffic,aou-ext,mailbox}-test/
 │   └── zephyr-smc/                ← Out-of-tree Zephyr port for smc-vp (board/SoC + apps)
 │       ├── zephyr_smc.sh          ← setup / build / run / test
 │       └── apps/mmio_poke/        ← MMIO reachability of IPs with no Zephyr driver
@@ -277,7 +292,9 @@ tt-oca-harness-model/
 - **Boost** ≥ **1.74** (`iostreams`, `program_options`; CI RHEL uses 1.84.0)
 - **OpenSSL** 3.x (SEP crypto). CI RHEL 8 uses **3.3.2**; Ubuntu uses distro `libssl-dev`
 
-### 1. System packages (Ubuntu)
+### 1. System packages
+
+Ubuntu (needs `sudo` / `apt`):
 
 ```bash
 sudo apt-get update
@@ -291,6 +308,13 @@ Firmware toolchain (Debian / Ubuntu):
 ```bash
 sudo apt install gcc-riscv64-unknown-elf
 ```
+
+That `apt` block is **Ubuntu + root only**. On RHEL 8 (and any host without
+`sudo`), do not use `apt` and do **not** point `BOOST_ROOT` or `OPENSSL_ROOT`
+at `/usr`: system Boost is 1.66 (too old for C++20) and system OpenSSL is
+1.1.1 (too old for KMAC / `core_names.h`). Build Boost ≥ 1.74 (CI: 1.84.0)
+and OpenSSL 3.x (CI: 3.3.2) into a prefix you can write, then export those
+paths in [Record install prefixes](#6-record-install-prefixes).
 
 Site or module-managed installs:
 
@@ -317,8 +341,10 @@ touch ../docs/DEVELOPMENT.md   # workaround for a known packaging bug
 make && sudo make install
 ```
 
-Use a separate prefix (for example `/usr/local/systemc-3.0.2-cxx20`) if you
-also keep a C++17 SystemC tree.
+`/usr/local/...` values are **examples**. Install into a prefix you can
+write (no `sudo` required) and set `SYSTEMC_HOME` to that path. Use a
+separate prefix (for example `…/systemc-3.0.2-cxx20`) if you also keep a
+C++17 SystemC tree.
 
 ### 3. CCI 1.0.2
 
@@ -342,17 +368,18 @@ cmake --build build -j
 sudo cmake --install build
 ```
 
-Set `SYSTEMC_HOME` in the environment before this configure so CMake finds
-SystemC, or pass `-DSystemCLanguage_DIR=...` if your install is non-standard.
+`CMAKE_INSTALL_PREFIX` is an example; use a writable prefix and set
+`CCI_HOME` to it. Set `SYSTEMC_HOME` in the environment before this
+configure so CMake finds SystemC, or pass `-DSystemCLanguage_DIR=...` if
+your install is non-standard.
 
 ### 4. Clone this repository
 
 ```bash
-git clone git@github.com:tenstorrent/tt-oca-harness-model.git
+git clone https://github.com/tenstorrent/tt-oca-harness-model.git
+# or: git clone git@github.com:tenstorrent/tt-oca-harness-model.git
 cd tt-oca-harness-model
 ```
-
-SSH: `git clone git@github.com:tenstorrent/tt-oca-harness-model.git`
 
 ### 5. Whisper (SMC and SMU only)
 
@@ -362,15 +389,22 @@ ISS backend.
 ```bash
 git clone https://github.com/tenstorrent/whisper.git
 cd whisper
-make MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20
+# Same Boost ≥ 1.74 prefix as the VP. EXTRA_CXXFLAGS=-std=gnu++20 alone
+# picks the system Boost headers and fails on RHEL 8 (Boost 1.66).
+make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT="$BOOST_ROOT"
 ```
 
 Alternatively, configure with CMake against the same C++20 SystemC/CCI trees
 used for the VP. Point `WHISPER_HOME` at the Whisper **source** tree (the
-directory that contains `GNUmakefile`). `run_tests.sh` under
-`smc/cpu_cluster` will build Whisper on first run if the source is present.
+directory that contains `GNUmakefile`). `vp/platform/CMakeLists.txt` **skips**
+SMC/SMU unless the `WHISPER_HOME` **environment variable** is set — a
+sibling checkout alone is not enough for CMake. Test runners
+(`run_smc_vp_tests.sh`, `run_sep_vp_tests.sh`) also probe `../whisper`.
+`run_tests.sh` under `smc/cpu_cluster` will build Whisper on first run if
+the source is present. The built tree must contain
+`build-<OS>/librvcore.a` (usually `build-Linux`).
 
-Suggested layout (auto-detected without setting `WHISPER_HOME`):
+Suggested layout:
 
 ```
 parent/
@@ -382,18 +416,28 @@ CI validates against Whisper commit `a53d0f3e` (see `.github/workflows/ci.yml`).
 
 ### 6. Record install prefixes
 
-`vp/configure_vp.sh` probes well-known prefixes. To pin locations:
+`vp/configure_vp.sh` probes well-known prefixes. To pin locations, set these
+to **the prefixes where you installed** the dependencies (not necessarily
+the `/usr` / `/usr/local` examples):
 
 ```bash
-export SYSTEMC_HOME=/usr/local/systemc-3.0.2
-export CCI_HOME=/usr/local/cci-1.0.2
-export OPENSSL_ROOT=/usr
-export BOOST_ROOT=/usr
+export SYSTEMC_HOME=/path/to/your/systemc-3.0.2
+export CCI_HOME=/path/to/your/cci-1.0.2
+export OPENSSL_ROOT=/path/to/your/openssl
+export BOOST_ROOT=/path/to/your/boost
+export BOOST_DIR="$BOOST_ROOT"          # Whisper / smc-vp sometimes use BOOST_DIR
 export CMAKE_CXX_STANDARD=20
 # SMC / SMU:
-export WHISPER_HOME=/path/to/whisper
-export BOOST_DIR=/usr          # Whisper / smc-vp sometimes use BOOST_DIR
+export WHISPER_HOME=/path/to/your/whisper
+# Firmware / picolibc (replace prefix and triple with yours):
+export RISCV_TOOLCHAIN_PATH=/path/to/your/riscv-toolchain
+export RISCV_PREFIX=riscv-none-elf-     # or riscv64-unknown-elf- / riscv64-elf-
+export GCC_PREFIX=riscv-none-elf        # no trailing dash; used by setup_dependencies.sh
+export PATH="$RISCV_TOOLCHAIN_PATH/bin:$PATH"
 ```
+
+When running a VP binary, add the matching library dirs to
+`LD_LIBRARY_PATH`. SystemC may install under `lib/` or `lib-linux64/`.
 
 Per-standard variants (`SYSTEMC_HOME_C17` / `SYSTEMC_HOME_C20`, and the same
 for CCI, Boost, and OpenSSL) let both toolchains live in one shell profile.
@@ -413,17 +457,21 @@ prefer machine-local defaults over environment variables.
    passes paths to CMake via `-D` flags and creates `vp/build/`:
 
 ```bash
-unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
 cd vp
 ./configure_vp.sh
 cd build
 make sep-vp
 ```
 
+`configure_vp.sh` probes well-known prefixes only when a variable is
+**unset**. Do **not** `unset BOOST_ROOT` / `OPENSSL_ROOT` (or the others)
+if you installed into a custom prefix — on RHEL 8 the probe can land on
+system Boost 1.66 and OpenSSL 1.1.1. Keep the exports from
+[Record install prefixes](#6-record-install-prefixes).
+
 Override defaults on the command line:
 
 ```bash
-unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
 cd vp
 CMAKE_BUILD_TYPE=Release CMAKE_CXX_STANDARD=20 ./configure_vp.sh
 cd build && make sep-vp
@@ -469,12 +517,23 @@ Tests under `sw/sep-vp-tests/` verify modeled peripherals end-to-end from
 firmware running on the VeeR EL2 core. See [`sw/sep-vp-tests/README.md`](sw/sep-vp-tests/README.md).
 
 ```bash
+cd sw/sep-vp-tests
+./run_sep_vp_tests.sh            # all standalone tests
+./run_sep_vp_tests.sh sep-hmac-test
+```
+
+```bash
 cd sw/sep-vp-tests/sep-hmac-test
 make             # build ELF
 make sim         # run on VP
 make debug       # run with GDB enabled
 make gdb         # connect GDB (second terminal)
 ```
+
+`sep-vp` itself does not need Whisper. If the runner auto-builds the VP
+(`--build-vp` or no binary yet) it currently requires `WHISPER_HOME`
+because it shares the SMC-oriented env checks. Workaround: build
+`sep-vp` with `vp/configure_vp.sh` first, then set `VP=` to that binary.
 
 #### Building and running TT firmware tests
 
@@ -497,10 +556,36 @@ cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests
 ./run_test.sh aes_sanity -t 60              # custom timeout
 ```
 
-The first run also builds picolibc into `dependencies/`, which takes a few
-extra minutes. ELFs land in `fw/sep/tests/<test_name>/<test_name>.elf` and
-per-test logs in `fw/sep/tests/logs/`. `sep-vp` is located by walking up to
-the repo root.
+Put the RISC-V toolchain on `PATH` and set `GCC_PREFIX` /
+`RISCV_TOOLCHAIN_PATH` first (see [Record install prefixes](#6-record-install-prefixes)).
+A bare `./run_all_tests.sh` fails if `riscv-*-gcc` is not found.
+
+The first run also builds picolibc into `dependencies/` via
+`setup_dependencies.sh`, which takes a few extra minutes. If `MULTILIBS`
+is unset, a current script asks the compiler (`-print-multi-lib`) and
+builds the `rv32imac` / `rv32imc` / `rv32im` variants that exist. **xPack
+GCC 15 has no `rv32imac/ilp32`** — that is fine with auto-detect. If an
+older `setup_dependencies.sh` still hardcodes `rv32imac/ilp32` and Meson
+dies (`Unavailable multilib: rv32imac/ilp32`), force a list the compiler
+has:
+
+```bash
+export MULTILIBS=rv32imc/ilp32,rv32im/ilp32
+# then from dependencies/: ./setup_dependencies.sh --force
+```
+
+`sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/common/common.mk`
+already links `-march=rv32imc` when the compiler has no `rv32imac`
+multilib.
+
+A full suite pass is **not 100%**: known VP / harness gaps leave some tests
+FAIL or STUCK (typically around 90% pass). The suite README lists those
+tests. `run_all_tests.sh` still exits 0. `sep-vp` needs SystemC on
+`LD_LIBRARY_PATH`.
+
+ELFs land in `fw/sep/tests/<test_name>/<test_name>.elf` and per-test logs
+in `fw/sep/tests/logs/`. `sep-vp` is located by walking up to the repo
+root.
 
 ##### GDB debug workflow
 
@@ -592,6 +677,9 @@ erased. CCI requires JSON-quoted strings, for example
 ### Building the SMC VP
 
 C++20 is mandatory for `smc-vp`: the SystemC/CCI ABI is keyed per standard.
+`WHISPER_HOME` must point at a built Whisper tree (`build-<OS>/librvcore.a`);
+if it is unset, CMake **skips** the SMC platform. The build directory must
+be writable.
 
 `smc-vp` is built from the same `vp/` CMake tree as `sep-vp`. After
 configuring the VP and setting `WHISPER_HOME`:
@@ -603,7 +691,10 @@ make smc-vp
 
 Output binary: `vp/build/bin/smc-vp`
 
-Dedicated build tree (avoids mixing SEP and SMC CMake caches):
+Dedicated build tree (avoids mixing SEP and SMC CMake caches). Pin
+`-DSMC_CXX_STANDARD=20`: `CMAKE_CXX_STANDARD=20` alone is not enough if
+`find_package(SystemCLanguage)` picks a leftover SystemC 2.x install and
+then fails to link (`undefined reference to sc_api_version_3_0_2_…`).
 
 ```bash
 SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
@@ -612,6 +703,9 @@ WHISPER_HOME=/path/to/whisper \
 cmake -S vp -B vp/build_smc -DSMC_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=Release
 cmake --build vp/build_smc --target smc-vp -j
 ```
+
+`./configure_vp.sh -- -DSMC_CXX_STANDARD=20` is equivalent if you set
+`BUILD_DIR` to a writable tree.
 
 ### Running the SMC VP
 
@@ -625,9 +719,15 @@ vp/build/bin/smc-vp vp/platform/smc/config/smc_platform_vp.ini <firmware.elf>
 
 Usage: `smc-vp <cci-ini> <elf> [sim_time_ms] [--uart-live] [--uart-interactive]`
 
+The CCI ini is **required**. Without it, DMA uses wrong defaults
+(`base_addr=0`, `max_burst_bytes=64`) and firmware FAILs. Relative
+`../../../vp/platform/smc/config/…` paths only resolve when the working
+directory is inside the repo tree (not a copied test directory).
+
 `smc-vp` loads the ELF into the Whisper-backed CVA6 cluster fast-mem, sets
 `reset_pc` to the ELF entry, runs the simulation, and drains UART0's TX
-debug buffer to stdout so firmware `printf` is visible.
+debug buffer to stdout so firmware `printf` is visible. Same
+`LD_LIBRARY_PATH` rule as `sep-vp`.
 
 #### smc-vp-tests (bare-metal RV64 firmware)
 
@@ -652,7 +752,10 @@ cd sw/smc-vp-tests
 ```
 
 The helper auto-detects the toolchain and `smc-vp` binary, and builds
-`smc-vp` if it is missing.
+`smc-vp` if it is missing. Override with `VP` (path to `smc-vp`) and
+`RISCV_PREFIX` (xPack: `riscv-none-elf-`; the Makefile default is
+`riscv64-unknown-elf-`). xPack **does** compile RV64
+(`-march=rv64imac_zicsr_zifencei`).
 
 #### Zephyr RTOS on smc-vp
 
@@ -660,7 +763,17 @@ Zephyr is the RTOS path for **SMC management firmware** (threads, timers,
 shell, later real drivers). It is not Linux and it is not a replacement for
 `sw/smc-vp-tests/`. Out-of-tree port: [`sw/zephyr-smc/README.md`](sw/zephyr-smc/README.md).
 
+Needs Python ≥ 3.10, `west` (the script creates a local `.venv`), `dtc`
+≥ 1.4.6, `ninja`, a RISC-V GCC, and a built `smc-vp`. RHEL 8 does not
+ship `dtc` or `ninja-build` by default — put them on `PATH`.
+
 ```bash
+export SMC_VP=/path/to/smc-vp            # if not at vp/build_smc/bin or vp/build/bin
+export CROSS_COMPILE=/path/to/bin/riscv-none-elf-   # or riscv64-unknown-elf- / riscv64-elf-
+# optional: skip unused HALs (west update is multi-GB otherwise)
+# export ZEPHYR_WEST_PROJECT_FILTER="-hal_espressif,-hal_nordic,…"
+# if ccache is installed but its cache dir is not writable:
+# export USE_CCACHE=0
 cd sw/zephyr-smc
 ./zephyr_smc.sh setup            # once: clone Zephyr v4.3.0 + west update
 ./zephyr_smc.sh run hello        # boot banner on live UART0
@@ -684,11 +797,15 @@ to run firmware that talks across the SMC↔SEP boundary and to carry
 chiplet-facing AXI through the AoU LT stub. Details:
 [`vp/platform/smu/docs/README.md`](vp/platform/smu/docs/README.md).
 
+Same C++20 / Whisper / `LD_LIBRARY_PATH` rules as `smc-vp`. `WHISPER_HOME`
+is required or CMake skips SMC/SMU. Use a writable `-B` tree and pin
+`-DSMC_CXX_STANDARD=20`.
+
 ```bash
 SYSTEMC_HOME=/path/to/systemc-3.0.2-cxx20 \
 CCI_HOME=/path/to/cci-cxx20 \
 WHISPER_HOME=/path/to/whisper \
-cmake -S vp -B vp/build_smc -DCMAKE_BUILD_TYPE=Release
+cmake -S vp -B vp/build_smc -DSMC_CXX_STANDARD=20 -DCMAKE_BUILD_TYPE=Release
 cmake --build vp/build_smc --target smu-vp -j
 ```
 
@@ -715,13 +832,23 @@ Firmware suite (RV64 SMC half + RV32 SEP half):
 
 ```bash
 cd sw/smu-vp-tests
+# VP= and RISCV_PREFIX= if the binary / triple are not the defaults
 ./run_smu_vp_tests.sh
 ./run_smu_vp_tests.sh smu-link-test
 ```
 
+The runner defaults to `../../vp/build_smc/bin/smu-vp` and the inis under
+`vp/platform/smu/config/` (`smc_smu_vp.ini`, `sep_smu_config.ini`). Those
+relative paths only work from the repo tree. Set `VP`, `SMC_INI`, and
+`SEP_INI` if you built or copied elsewhere. Toolchain default is
+`riscv64-unknown-elf-`; xPack needs `RISCV_PREFIX=riscv-none-elf-` (auto-
+detected if that `gcc` is on `PATH`).
+
 See [`sw/smu-vp-tests/README.md`](sw/smu-vp-tests/README.md). A test passes
 when **both** firmware halves print PASS (SMC on UART0, SEP on the
-virtconsole) and neither prints FAIL.
+virtconsole) and neither prints FAIL. The suite includes `smu-link-test`,
+`smu-xbar-test`, `smu-traffic-test`, `smu-aou-ext-test`, and
+`smu-mailbox-test`.
 
 ### Peripheral model unit tests
 
@@ -816,9 +943,9 @@ smu-vp  <smc-cci-ini> <smc-elf> <sep-cci-ini> <sep-elf> [sim_time_ms]
 
 ### Configure / build environment
 
-Set these before `vp/configure_vp.sh`, `make`, or the test runners. All
-prefix variables are optional — the configure script probes well-known
-locations when they are unset.
+Set these before `vp/configure_vp.sh`, `make`, or the test runners. SystemC /
+CCI / Boost / OpenSSL are optional if they sit in a probed prefix.
+`WHISPER_HOME` is **required** to configure SMC/SMU.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
@@ -829,10 +956,12 @@ locations when they are unset.
 | `CMAKE_BUILD_TYPE` | `Debug` (`configure_vp.sh`) | `Debug` or `Release` |
 | `CMAKE_CXX_STANDARD` | `20` (`configure_vp.sh`); `17` (`make` at repo root) | Must match the SystemC ABI |
 | `CXX_STD` | — | Alternate `c++17` / `c++20` spelling used by the top-level `Makefile` |
-| `WHISPER_HOME` | auto-discovered next to the repo | Whisper source tree |
+| `WHISPER_HOME` | **required for CMake** (SMC/SMU skipped if unset). Test runners also probe `../whisper` | Whisper source tree (`GNUmakefile` + `build-<OS>/librvcore.a`) |
 | `WHISPER_BUILD_DIR` | `build-<OS>` | Override Whisper build subdirectory |
+| `BUILD_DIR` | `vp/build` (`configure_vp.sh`) | CMake output tree. Use a writable path; `vp/build_smc` is conventional for SMC/SMU |
 | `RISCV_TOOLCHAIN_PATH` / `RISCV_PREFIX` / `GCC_PREFIX` | probed on `PATH` | Bare-metal RISC-V GNU toolchain |
-| `VP` / `VP_BUILD_DIR` | `vp/build/bin/<platform>` | Override which VP binary a test runner uses |
+| `VP` / `VP_BUILD_DIR` | `vp/build/bin/<platform>` (`run_sep_vp_tests.sh` auto-build uses `vp/build_sep`) | Override which VP binary a test runner uses |
+| `SMC_VP` | `vp/build_smc/bin/smc-vp` or `vp/build/bin/smc-vp` | `zephyr_smc.sh` binary path |
 | `SMC_INI` / `SEP_INI` / `SIM_TIME_MS` | SMU runner defaults | `run_smu_vp_tests.sh` overrides |
 
 Per-standard aliases: `SYSTEMC_HOME_C17`, `SYSTEMC_HOME_C20`, `CCI_HOME_C17`,
@@ -993,6 +1122,7 @@ tt-oca-harness-model/
 │   ├── common/include/        canonical smc_axi_extension.h
 │   ├── doc/                   SMC subsystem books
 │   ├── scripts/               ASan / coverage gates
+│   ├── run_all_smc_tests.sh   batch Accellera unit tests
 │   └── cmake/                 SmcAxiExtension.cmake, SmcSystemCStd.cmake
 ├── aou/                       AXI-over-UCIe loosely-timed model
 ├── vp/                        Virtual Platforms
@@ -1002,11 +1132,11 @@ tt-oca-harness-model/
 │       ├── infra/             bus, PLIC, CLINT, ELF loader (SEP)
 │       ├── sep/               sep-vp (och_sep_ss)
 │       ├── smc/               smc-vp
-│       └── smu/               smu-vp: SMC + SEP + interconnect
+│       └── smu/               smu-vp + run_tests.sh (interconnect unit tests)
 ├── sw/
-│   ├── sep-vp-tests/          SEP firmware tests
-│   ├── smc-vp-tests/          bare-metal RV64 SMC tests
-│   ├── smu-vp-tests/          dual-firmware SMU tests
+│   ├── sep-vp-tests/          run_sep_vp_tests.sh + TT fw-tests-from-tt-oca-hw
+│   ├── smc-vp-tests/          run_smc_vp_tests.sh (15 smc-* tests)
+│   ├── smu-vp-tests/          run_smu_vp_tests.sh (5 dual-firmware tests)
 │   └── zephyr-smc/            out-of-tree Zephyr port for smc-vp
 ├── doc/                       SystemC_Virtual_Platform_Customer_Guide.md
 ├── Makefile                   sep-vp, smc-vp, submodule-init, clean
@@ -1060,7 +1190,7 @@ building the VP binaries on the machine that will run firmware.
 
 | Method | How |
 |--------|-----|
-| Local developer machine | [Installation](#installation) + [Usage](#usage). Binaries land in `vp/build/bin/` (or `vp/build_smc/bin/`). |
+| Local developer machine | [Building the SEP VP](#building-the-sep-vp) + [Usage](#usage). Binaries land in `vp/build/bin/` (or `vp/build_smc/bin/`). |
 | GitHub Actions CI | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds SystemC/CCI, then SEP/SMC/SMU unit tests, `sep-vp` firmware, `smc-vp` firmware, Zephyr, and `smu-vp`. RHEL 8 is covered by `.github/workflows/ci-rhel8.yml` (ASan via `gcc-toolset-12-libasan-devel` + `gcc-toolset-12-libubsan-devel`). |
 | Isolated CMake trees | Use `vp/build` for SEP and `vp/build_smc` for SMC/SMU so caches do not poison each other. ASan and coverage always use `build_asan/` and `build_cov/` under the IP directory. |
 
@@ -1082,8 +1212,12 @@ to 20; `make sep-vp` at the repo root defaults to 17.
 
 ```bash
 export RISCV_TOOLCHAIN_PATH=/path/to/riscv-toolchain
-# or:
-export RISCV_PREFIX=riscv64-elf-    # Homebrew
+export PATH="$RISCV_TOOLCHAIN_PATH/bin:$PATH"
+# triple (pick the one you installed):
+export RISCV_PREFIX=riscv-none-elf-     # xPack
+# export RISCV_PREFIX=riscv64-elf-      # Homebrew
+# export RISCV_PREFIX=riscv64-unknown-elf-
+export GCC_PREFIX=riscv-none-elf        # picolibc / TT firmware; no trailing dash
 ```
 
 **VP binary not found.**
@@ -1092,15 +1226,28 @@ export RISCV_PREFIX=riscv64-elf-    # Homebrew
 make sep-vp    # or: cd vp/build && make smc-vp
 ```
 
-**Whisper not found / `smc-vp` will not configure.** Set `WHISPER_HOME` to
-the directory that contains `GNUmakefile`, or clone Whisper next to this
-repo. Build with `MEM_CALLBACKS=1` and C++20.
+**Whisper not found / `smc-vp` will not configure.** Export `WHISPER_HOME`
+to the directory that contains `GNUmakefile` (CMake does not search a
+sibling tree). Build with `MEM_CALLBACKS=1`, C++20, and `BOOST_ROOT` ≥ 1.74
+(`make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT="$BOOST_ROOT"`).
+
+**Whisper fails to compile against Boost `alt_sstream`.** You picked the
+system Boost (RHEL 8 `/usr` is 1.66). Point `BOOST_ROOT` at ≥ 1.74.
+
+**`smc-vp` / `smu-vp` link fails with `sc_api_version_3_0_2_…`.** A leftover
+SystemC 2.x was found via `find_package(SystemCLanguage)`. Reconfigure with
+`-DSMC_CXX_STANDARD=20` and `SYSTEMC_HOME` set to your 3.0.2 C++20 prefix.
+
+**picolibc: `Unavailable multilib: rv32imac/ilp32`.** The compiler has no
+`rv32imac` (xPack 15). Use a current `setup_dependencies.sh` (it
+auto-detects) or set `MULTILIBS=rv32imc/ilp32,rv32im/ilp32` and re-run
+`dependencies/setup_dependencies.sh --force`.
 
 **C++20 configure fails on RHEL 8.**
 
 ```bash
 scl enable gcc-toolset-12 bash
-unset BOOST_ROOT SYSTEMC_HOME CCI_HOME OPENSSL_ROOT
+# Keep BOOST_ROOT / OPENSSL_ROOT if you built them into a custom prefix.
 cd vp
 CMAKE_CXX_STANDARD=20 ./configure_vp.sh
 ```
@@ -1136,6 +1283,22 @@ to wake a secondary chiplet. Set `och_sep_ss1.smc.primary_chiplet : true`.
 **Zephyr hangs at boot.** Use `sw/zephyr-smc/config/smc_zephyr.ini`. The
 default SMC INI freezes CLINT `mtime`.
 
+**Zephyr `west build` cannot find `dtc` or Ninja.** Install Device Tree
+Compiler ≥ 1.4.6 and `ninja` and put them on `PATH`. Neither is a default
+RHEL 8 package.
+
+**Zephyr compile fails in `ccache` (`Permission denied` on the cache dir).**
+Set `USE_CCACHE=0` / `CCACHE_DISABLE=1`, or point `CCACHE_DIR` at a
+writable directory.
+
+**`zephyr_smc.sh` cannot find `smc-vp`.** It only looks in `vp/build_smc/bin`
+and `vp/build/bin`. Set `SMC_VP` to the binary you built.
+
+**SMC / SMU firmware FAILs immediately (DMA / wrong map).** Pass the
+platform CCI ini (`smc_platform_vp.ini` or the SMU inis). Relative
+`../../../vp/…` paths only work from the repo tree; set `VP` / `SMC_INI` /
+`SEP_INI` otherwise.
+
 **Coverage percentages look impossibly low on macOS.** Re-run with
 `--coverage --clean`. Install `lcov` (`brew install lcov`).
 
@@ -1158,8 +1321,10 @@ self-contained. TT firmware tests were imported under
 `sw/sep-vp-tests/fw-tests-from-tt-oca-hw/`.
 
 **Do I need Whisper to run SEP tests?**
-No. Whisper is the SMC CVA6 backend. `sep-vp` uses the in-tree VeeR EL2
-ISS.
+No for `sep-vp` itself (in-tree VeeR EL2). Yes if
+`sw/sep-vp-tests/run_sep_vp_tests.sh` auto-builds the VP: that script
+currently requires `WHISPER_HOME` even for SEP. Build `sep-vp` with
+`vp/configure_vp.sh` first and pass `VP=` to skip that check.
 
 **Can I use C++17?**
 SEP / Accellera flows can still be built as C++17 if SystemC was built
@@ -1204,6 +1369,9 @@ Apache 2.0. See [License](#license).
 | [`smc/doc/platform_test_and_firmware_guide.adoc`](smc/doc/platform_test_and_firmware_guide.adoc) | SMC platform tests and firmware |
 | [`smc/doc/systemc_tlm2_integration_guide.adoc`](smc/doc/systemc_tlm2_integration_guide.adoc) | SMC SystemC/TLM-2.0 integration |
 | [`vp/platform/smu/docs/README.md`](vp/platform/smu/docs/README.md) | SMU combined platform |
+| [`sw/sep-vp-tests/README.md`](sw/sep-vp-tests/README.md) | Standalone SEP firmware tests |
+| [`sw/smc-vp-tests/README.md`](sw/smc-vp-tests/README.md) | Bare-metal SMC firmware tests |
+| [`sw/smu-vp-tests/README.md`](sw/smu-vp-tests/README.md) | Dual-firmware SMU tests |
 | [`sw/zephyr-smc/README.md`](sw/zephyr-smc/README.md) | Zephyr on `smc-vp` |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | Contribution process, testing, and review |
 | [`SECURITY.md`](SECURITY.md) | Vulnerability reporting |

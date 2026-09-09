@@ -202,8 +202,9 @@ PASSED`. The ROM then parks the core in `wfi`, so the run needs a `Ctrl-C`.
 ## Current results
 
 The tree now mirrors all 181 test directories in `tt-oca-harness/fw/sep/tests`.
-141 run and **125 pass (88%)**; 14 fail, 2 hang, 43 are excluded. Each has a log
-in `fw/sep/tests/logs/<test>.log`.
+A full run is **not 100%** (typically around 90% pass) because of known VP
+and harness gaps below. Exact counts move as models land. Each test has a
+log in `fw/sep/tests/logs/<test>.log`. `run_all_tests.sh` still exits 0.
 
 ### Which failures are the VP's fault
 
@@ -224,27 +225,26 @@ So the remaining failures split into two kinds:
 
 | Kind | Count | Tests |
 |---|---|---|
-| **VP model gap** — the VP should be fixed | 4 | `hmac_p2_sensreg_access_test`, `otbn_sw_error_test`, `sep_aes_reset_clear_test`, `sep_reset_ctrl_csr_test` |
+| **VP model gap** — the VP should be fixed | 2 | `hmac_p2_sensreg_access_test`, `otbn_sw_error_test` |
 | **VP harness gap** — the RTL TB provides something `sep-vp` has no equivalent for | 6 | `rom_sanity_test` (ROM instruction-pattern preload), `sep_aes_mb_stream_test` (cocotb scratch handshake), `sep_cpu_sram_aes_sram_test` and `sep_km_efuse_coexist_test` (key-manager CPU + its ROM), `lcc_inbound_filter_gating_test` and `sep_inbound_filter_decerr` (UVM master driving external AXI; both hang waiting for it) |
 
 Adams Bridge (`sep_abr_*`) is modeled: `abr_ip` is bound at `0x1094_0000` (PIC 35/36)
 with a FIPS 204/203 backend and key-manager DEST `0x10`/`0x20`/`0x40`/`0x80`
 sideload. The six firmware tests are in the `run_all_tests.sh` discovery set.
 
-The four model gaps in detail. The three eFuse tests that used to be here now pass:
-the shim moved to `0x2000_0000` in `SEP_EXTERNAL` where the register header puts it,
-a real fuse array sits behind program and read with the locks and token matching
-enforced against it, and the array is preloaded from the RTL's own
-`default_efuse.preload` — with the three `sep_efuse_fw_*` tests running on a blank
-array, as their `+SEP_EFUSE_NO_PRELOAD` asks for.
+The remaining model gaps in detail. The three eFuse tests that used to be here
+now pass: the shim moved to `0x2000_0000` in `SEP_EXTERNAL` where the register
+header puts it, a real fuse array sits behind program and read with the locks
+and token matching enforced against it, and the array is preloaded from the
+RTL's own `default_efuse.preload` — with the three `sep_efuse_fw_*` tests
+running on a blank array, as their `+SEP_EFUSE_NO_PRELOAD` asks for.
+`sep_aes_reset_clear_test` and `sep_reset_ctrl_csr_test` also pass on current
+`sep-vp`.
 
 - **HMAC.** `DIGEST_0..7` accept and echo software writes outside a context
   restore, where silicon ignores them.
 - **OTBN.** `ERR_BITS` stays zero after a `BAD_DATA_ADDR`; software errors are
   not reported.
-- **AES.** The `KEY_IV_DATA_IN_CLEAR` trigger leaves the IV registers unchanged.
-- **Reset controller.** Accesses to an isolated peripheral's port raise no NMI,
-  so none of the isolation checks observe anything.
 
 ### Excluded, and why
 

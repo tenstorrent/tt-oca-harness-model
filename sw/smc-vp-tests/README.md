@@ -23,7 +23,7 @@ to match your own install):
 | **RISC-V GNU toolchain** | `RISCV_PREFIX` | GCC 11+, RV64. Default prefix `riscv64-unknown-elf-`; on Homebrew use `riscv64-elf-`. Provides `gcc`, `objcopy`, `objdump`, `readelf`. |
 | **Accellera SystemC** | `SYSTEMC_HOME` | 3.0.2 built with **C++20** (`/path/to/systemc-3.0.2-cxx20`). The ABI is keyed to the C++ standard — consumers must also be C++20. |
 | **Accellera SystemC CCI** | `CCI_HOME` | CCI 1.0, C++20 (`/path/to/cci-cxx20`). Required for `cci_param` configuration. |
-| **Tenstorrent Whisper ISS** | `WHISPER_HOME` | The CVA6 instruction-set simulator. Must be built with `MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20` and contain `build-<OS>/librvcore.a` (e.g. `/path/to/whisper`). |
+| **Tenstorrent Whisper ISS** | `WHISPER_HOME` | The CVA6 instruction-set simulator. Must be built with `MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT="$BOOST_ROOT"` (Boost ≥ 1.74) and contain `build-<OS>/librvcore.a`. |
 | **Boost** | `BOOST_DIR` | ≥ 1.74, with `iostreams` and `program_options` (`/opt/homebrew/opt/boost` on macOS). Used by Whisper headers and `smc-vp`. |
 | **CMake** | — | ≥ 3.20. |
 | **Python 3** | — | Used by firmware/preload generators. |
@@ -32,7 +32,7 @@ Build Whisper once (from the cpu_cluster docs):
 
 ```bash
 cd "$WHISPER_HOME"
-make MEM_CALLBACKS=1 EXTRA_CXXFLAGS=-std=gnu++20
+make MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT="$BOOST_ROOT"
 ```
 
 > **C++20 is mandatory.** SystemC's ABI is keyed per language standard
