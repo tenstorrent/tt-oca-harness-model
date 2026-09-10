@@ -18,8 +18,11 @@ bottom.
 
 Same as `sw/smc-vp-tests/` (RISC-V GNU toolchain, SystemC/CCI, Whisper,
 Boost) — see `sw/smc-vp-tests/README.md`. The toolchain prefix defaults to
-`riscv64-unknown-elf-`; on Homebrew use `RISCV_PREFIX=riscv64-elf-`. The
-runner auto-detects a few common prefixes.
+`riscv64-unknown-elf-`; Homebrew is `RISCV_PREFIX=riscv64-elf-`; xPack is
+`RISCV_PREFIX=riscv-none-elf-`. The runner auto-detects those prefixes
+when the matching `gcc` is on `PATH`. If `smu-vp` is not at
+`../../vp/build_smc/bin/smu-vp`, set `VP`. Relative CCI ini paths only
+resolve from the repo tree.
 
 ## Running
 
@@ -50,6 +53,7 @@ UART0, SEP on the virtconsole) and neither prints FAIL.
 | `smu-xbar-test` | `fw/smc/tests/smc_sep_xbar` + `smu_bidirect` / `fw/sep/tests/sep_smu_bidirect` | Same two AXI paths with the hardware handshake tokens (`0x13579BDF` / `0xC001CAFE` / `0x5E9ACCE5` / `0xD0E0F00D`). CLA / fuse-sense / filter programming omitted. |
 | `smu-traffic-test` | DV `smc_cpu_traffic_sep_axi_test` | 50 SMC→SEP write+readback beats through `output_axi` → xbar → SEP SRAM. |
 | `smu-aou-ext-test` | `fw/smc/tests/smu_sep_ext_axi` | Activate AOU, then both CPUs write/readback a catch-all address through `xbar.ext_out` → local AOU → peer → `stub_sysmem`. SEP also reads AOU `ip_version` through the dedicated SMC window (`0x4000_C000`) and programs the outbound filter before its `smn_outbound` beat. |
+| `smu-mailbox-test` | SEP mailbox → SMC PLIC | SEP pushes an inbound mailbox beat; SMC checks PLIC pending, payload `READ_DATA`, and IRQS ack. |
 
 ## Address plan (smu-link-test)
 
@@ -72,7 +76,7 @@ outbound filter 0, and reads AOU `ip_version` at `0x4000_C000`.
 
 ## Not ported (VP does not model the stimulus)
 
-- Cocotb pin-toggle / CLA / fuse / filter-programming / mailbox tests
-- `sep_load_and_run_binary_test` (SMC mailbox stub)
+- Cocotb pin-toggle / CLA / fuse / filter-programming tests
+- `sep_load_and_run_binary_test` (SMC mailbox stub; `smu-mailbox-test` covers the inbound IRQ path)
 - Remap / SPI / WDT / OTBN / AES / efuse SMU tests
 - Cocotb `ext_in` master (peer `axi_s` is idle-terminated)

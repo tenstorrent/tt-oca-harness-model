@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # =============================================================================
 # setup_dependencies.sh — build the one dependency that cannot be copied.
 #
@@ -37,10 +39,11 @@ PICOLIBC_SRC="${BUILD_DIR}/picolibc-src"
 PICOLIBC_BUILD="${BUILD_DIR}/picolibc-build"
 TOOLENV="${BUILD_DIR}/.toolenv"
 
-# Multilib variants to build.  common.mk links with -march=rv32imac -mabi=ilp32,
-# so that is the one that matters; the others are cheap insurance for tests that
-# override LD_ABI.
-MULTILIBS="${MULTILIBS:-rv32imac/ilp32,rv32im/ilp32}"
+# Multilib variants to build.  Older toolchains ship rv32imac/ilp32 (what
+# common.mk used to link with).  xPack GCC 15+ dropped that directory and
+# ships rv32imc/ilp32 instead.  Leave MULTILIBS unset to pick from the
+# compiler; set it only to force a list.
+MULTILIBS="${MULTILIBS:-}"
 
 FORCE=0
 [ "${1:-}" = "--force" ] && FORCE=1
@@ -68,6 +71,21 @@ detect_prefix() {
 
 TRIPLE="$(detect_prefix)" || die "no RISC-V toolchain in PATH (brew install riscv64-elf-gcc / apt install gcc-riscv64-unknown-elf)"
 log "toolchain: ${TRIPLE}-gcc"
+
+# Prefer the historical VeeR set; skip any directory this GCC does not ship
+# (xPack 15: no rv32imac/ilp32 — "Unavailable multilib: rv32imac/ilp32").
+if [ -z "${MULTILIBS}" ]; then
+    available="$("${TRIPLE}-gcc" -print-multi-lib | cut -d';' -f1)"
+    chosen=""
+    for lib in rv32imac/ilp32 rv32imc/ilp32 rv32im/ilp32; do
+        if printf '%s\n' "${available}" | grep -qx "${lib}"; then
+            chosen="${chosen:+${chosen},}${lib}"
+        fi
+    done
+    [ -n "${chosen}" ] || die "${TRIPLE}-gcc has no rv32im* / ilp32 multilib"
+    MULTILIBS="${chosen}"
+fi
+log "multilibs: ${MULTILIBS}"
 
 if [ "${FORCE}" -eq 1 ]; then
     rm -rf "${PICOLIBC_BUILD}" "${INSTALL_DIR}"
