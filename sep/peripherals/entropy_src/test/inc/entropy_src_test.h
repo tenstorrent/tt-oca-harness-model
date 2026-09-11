@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file entropy_src_test.h
  * @brief entropy_src test harness class
@@ -15,13 +15,13 @@
  * Reference:
  *   - entropy_src/docs/sections/entropy_src-port-interfaces.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once
 
 #include "entropy_src_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 
 #include <cstdint>
 
@@ -61,7 +61,7 @@ public:
     /**
      * @brief Constructor
      *
-     * Initialises all port names and the CSML logger.
+     * Initialises all port names and the regmodel logger.
      *
      * @param name SystemC module name
      */
@@ -131,6 +131,6 @@ public:
     void register_write_8(unsigned int offset, uint8_t write_value);
 
 private:
-    /// CSML logger for test harness diagnostics
-    CsmlLogger logger;
+    /// regmodel logger for test harness diagnostics
+    RegLogger logger;
 };

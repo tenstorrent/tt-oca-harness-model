@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file testbench.cpp
  * @brief entropy_src SystemC testbench implementation
@@ -17,7 +17,7 @@
  *   - entropy_src/docs/sections/entropy_src-port-interfaces.md
  *   - entropy_src/docs/sections/entropy_src-assumptions.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"

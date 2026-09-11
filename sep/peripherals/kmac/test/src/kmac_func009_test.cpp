@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func009_test.cpp
  * @brief Test cases for FUNC-KMAC-009 (Application Interface - ROM_CTRL)
@@ -24,17 +24,17 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -118,7 +118,7 @@ static bool wait_app_completion(sc_port<kmac_app_if>& app_port, uint64_t timeout
  ******************************************************************************/
 void testbench::test_app_rom_ctrl_cshake256_operation()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-095: test_app_rom_ctrl_cshake256_operation");
 
     try {
@@ -134,10 +134,10 @@ void testbench::test_app_rom_ctrl_cshake256_operation()
                             "Precondition: FSM not in IDLE state");
             return;
         }
-        CSML_INFO(2, test_logger) << "Initial state: IDLE";
+        REG_INFO(2, test_logger) << "Initial state: IDLE";
 
         // Initiate ROM_CTRL app interface operation (app_port[2])
-        CSML_INFO(2, test_logger) << "Sending message via ROM_CTRL app interface (length=" << msg_len << ")";
+        REG_INFO(2, test_logger) << "Sending message via ROM_CTRL app interface (length=" << msg_len << ")";
         send_app_message(test->app_port[2], reinterpret_cast<const uint8_t*>(test_msg), msg_len);
 
         // Note: App operations are atomic - the model processes the entire operation
@@ -145,7 +145,7 @@ void testbench::test_app_rom_ctrl_cshake256_operation()
         // We verify the operation succeeded by checking for errors and digest validity.
 
         // Wait for operation completion
-        CSML_INFO(2, test_logger) << "Waiting for operation completion...";
+        REG_INFO(2, test_logger) << "Waiting for operation completion...";
         if (!wait_app_completion(test->app_port[2], 1000000)) {
             report_test_fail("TC-095: test_app_rom_ctrl_cshake256_operation",
                             "Timeout waiting for app operation completion");
@@ -162,7 +162,7 @@ void testbench::test_app_rom_ctrl_cshake256_operation()
         // Retrieve two-share digest
         uint32_t share0[8], share1[8];
         test->app_port[2]->get_digest(share0, share1);
-        CSML_INFO(2, test_logger) << "Retrieved digest shares";
+        REG_INFO(2, test_logger) << "Retrieved digest shares";
 
         // Note: OpenSSL's EVP_shake256 does NOT implement cSHAKE256 with function name
         // The model correctly implements cSHAKE256(N="ROM_CTRL", S="", message)
@@ -177,12 +177,12 @@ void testbench::test_app_rom_ctrl_cshake256_operation()
         }
 
         if (!has_valid_digest) {
-            CSML_INFO(2, test_logger) << "Digest is all zeros (invalid)";
+            REG_INFO(2, test_logger) << "Digest is all zeros (invalid)";
             report_test_fail("TC-095: test_app_rom_ctrl_cshake256_operation",
                             "cSHAKE256 digest is all zeros");
             return;
         }
-        CSML_INFO(2, test_logger) << "cSHAKE256 digest validated (non-zero)";
+        REG_INFO(2, test_logger) << "cSHAKE256 digest validated (non-zero)";
 
         // Verify FSM returned to IDLE
         wait(20, SC_NS);
@@ -193,7 +193,7 @@ void testbench::test_app_rom_ctrl_cshake256_operation()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "All checks passed";
+        REG_INFO(2, test_logger) << "All checks passed";
         report_test_pass("TC-095: test_app_rom_ctrl_cshake256_operation");
 
     } catch (const std::exception& e) {
@@ -210,7 +210,7 @@ void testbench::test_app_rom_ctrl_cshake256_operation()
  ******************************************************************************/
 void testbench::test_app_fixed_priority_arbitration_rom_ctrl()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-096: test_app_fixed_priority_arbitration_rom_ctrl");
 
     try {
@@ -219,7 +219,7 @@ void testbench::test_app_fixed_priority_arbitration_rom_ctrl()
         // For TLM testbench, we'll test priority by sequential activation
         // and verifying the servicing order.
 
-        CSML_INFO(2, test_logger) << "Testing fixed-priority arbitration";
+        REG_INFO(2, test_logger) << "Testing fixed-priority arbitration";
 
         // Test message
         const char* msg1 = "KeyMgr";
@@ -237,36 +237,36 @@ void testbench::test_app_fixed_priority_arbitration_rom_ctrl()
 
         // Initiate all three interfaces in quick succession (ROM_CTRL first)
         // The arbitration should still service KeyMgr first due to priority
-        CSML_INFO(2, test_logger) << "Initiating ROM_CTRL request...";
+        REG_INFO(2, test_logger) << "Initiating ROM_CTRL request...";
         send_app_message(test->app_port[2], reinterpret_cast<const uint8_t*>(msg3), strlen(msg3));
 
         wait(5, SC_NS); // Minimal delay
-        CSML_INFO(2, test_logger) << "Initiating LC_CTRL request...";
+        REG_INFO(2, test_logger) << "Initiating LC_CTRL request...";
         send_app_message(test->app_port[1], reinterpret_cast<const uint8_t*>(msg2), strlen(msg2));
 
         wait(5, SC_NS); // Minimal delay
-        CSML_INFO(2, test_logger) << "Initiating KeyMgr request...";
+        REG_INFO(2, test_logger) << "Initiating KeyMgr request...";
         send_app_message(test->app_port[0], reinterpret_cast<const uint8_t*>(msg1), strlen(msg1));
 
         // Wait for all operations to complete
         // Note: Actual arbitration behavior depends on model implementation
         // This test verifies that all requests are serviced without errors
 
-        CSML_INFO(2, test_logger) << "Waiting for KeyMgr completion...";
+        REG_INFO(2, test_logger) << "Waiting for KeyMgr completion...";
         if (!wait_app_completion(test->app_port[0], 1000000)) {
             report_test_fail("TC-096: test_app_fixed_priority_arbitration_rom_ctrl",
                             "Timeout waiting for KeyMgr completion");
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Waiting for LC_CTRL completion...";
+        REG_INFO(2, test_logger) << "Waiting for LC_CTRL completion...";
         if (!wait_app_completion(test->app_port[1], 1000000)) {
             report_test_fail("TC-096: test_app_fixed_priority_arbitration_rom_ctrl",
                             "Timeout waiting for LC_CTRL completion");
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Waiting for ROM_CTRL completion...";
+        REG_INFO(2, test_logger) << "Waiting for ROM_CTRL completion...";
         if (!wait_app_completion(test->app_port[2], 1000000)) {
             report_test_fail("TC-096: test_app_fixed_priority_arbitration_rom_ctrl",
                             "Timeout waiting for ROM_CTRL completion");
@@ -289,7 +289,7 @@ void testbench::test_app_fixed_priority_arbitration_rom_ctrl()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "All arbitration tests passed";
+        REG_INFO(2, test_logger) << "All arbitration tests passed";
         report_test_pass("TC-096: test_app_fixed_priority_arbitration_rom_ctrl");
 
     } catch (const std::exception& e) {
@@ -305,7 +305,7 @@ void testbench::test_app_fixed_priority_arbitration_rom_ctrl()
  ******************************************************************************/
 void testbench::test_app_data_interface_rom_ctrl()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-097: test_app_data_interface_rom_ctrl");
 
     try {
@@ -317,7 +317,7 @@ void testbench::test_app_data_interface_rom_ctrl()
         };
         size_t msg_len = sizeof(test_msg);
 
-        CSML_INFO(2, test_logger) << "Testing multi-beat data transfer (" << msg_len << " bytes)";
+        REG_INFO(2, test_logger) << "Testing multi-beat data transfer (" << msg_len << " bytes)";
 
         // Verify IDLE state
         bool idle, absorb, squeeze;
@@ -329,7 +329,7 @@ void testbench::test_app_data_interface_rom_ctrl()
         }
 
         // Send message via ROM_CTRL interface
-        CSML_INFO(2, test_logger) << "Sending multi-beat message...";
+        REG_INFO(2, test_logger) << "Sending multi-beat message...";
         send_app_message(test->app_port[2], test_msg, msg_len);
 
         // Wait for completion
@@ -350,7 +350,7 @@ void testbench::test_app_data_interface_rom_ctrl()
         uint32_t share0[8], share1[8];
         test->app_port[2]->get_digest(share0, share1);
 
-        CSML_INFO(2, test_logger) << "Multi-beat transfer completed successfully";
+        REG_INFO(2, test_logger) << "Multi-beat transfer completed successfully";
         report_test_pass("TC-097: test_app_data_interface_rom_ctrl");
 
     } catch (const std::exception& e) {
@@ -366,7 +366,7 @@ void testbench::test_app_data_interface_rom_ctrl()
  ******************************************************************************/
 void testbench::test_app_digest_two_share_output_rom_ctrl()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-098: test_app_digest_two_share_output_rom_ctrl");
 
     try {
@@ -383,7 +383,7 @@ void testbench::test_app_digest_two_share_output_rom_ctrl()
         }
 
         // Perform ROM_CTRL operation
-        CSML_INFO(2, test_logger) << "Initiating ROM_CTRL operation...";
+        REG_INFO(2, test_logger) << "Initiating ROM_CTRL operation...";
         send_app_message(test->app_port[2], reinterpret_cast<const uint8_t*>(test_msg), msg_len);
 
         if (!wait_app_completion(test->app_port[2], 1000000)) {
@@ -411,11 +411,11 @@ void testbench::test_app_digest_two_share_output_rom_ctrl()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "share0 is non-zero";
+        REG_INFO(2, test_logger) << "share0 is non-zero";
         if (share1_nonzero) {
-            CSML_INFO(2, test_logger) << "share1 is non-zero (masking enabled)";
+            REG_INFO(2, test_logger) << "share1 is non-zero (masking enabled)";
         } else {
-            CSML_INFO(2, test_logger) << "share1 is zero (masking disabled)";
+            REG_INFO(2, test_logger) << "share1 is zero (masking disabled)";
         }
 
         // Note: OpenSSL's EVP_shake256 does NOT implement cSHAKE256 with function name
@@ -423,7 +423,7 @@ void testbench::test_app_digest_two_share_output_rom_ctrl()
         // Since share0 is non-zero and we confirmed two-share output, the test passes
         // (Detailed cSHAKE256 correctness is verified in TC-094 with known test vectors)
 
-        CSML_INFO(2, test_logger) << "Two-share digest verification passed";
+        REG_INFO(2, test_logger) << "Two-share digest verification passed";
         report_test_pass("TC-098: test_app_digest_two_share_output_rom_ctrl");
 
     } catch (const std::exception& e) {
@@ -439,7 +439,7 @@ void testbench::test_app_digest_two_share_output_rom_ctrl()
  ******************************************************************************/
 void testbench::test_app_sw_lockout_during_app_active_rom_ctrl()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-099: test_app_sw_lockout_during_app_active_rom_ctrl");
 
     try {
@@ -461,7 +461,7 @@ void testbench::test_app_sw_lockout_during_app_active_rom_ctrl()
         // app_interface_active flag. This test verifies app operation succeeds.
         
         // Initiate ROM_CTRL operation
-        CSML_INFO(2, test_logger) << "Initiating ROM_CTRL operation...";
+        REG_INFO(2, test_logger) << "Initiating ROM_CTRL operation...";
         send_app_message(test->app_port[2], reinterpret_cast<const uint8_t*>(test_msg), msg_len);
 
         // Wait for app operation to complete (should already be done for atomic ops)
@@ -495,7 +495,7 @@ void testbench::test_app_sw_lockout_during_app_active_rom_ctrl()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "App operation unaffected by SW lockout";
+        REG_INFO(2, test_logger) << "App operation unaffected by SW lockout";
         report_test_pass("TC-099: test_app_sw_lockout_during_app_active_rom_ctrl");
 
     } catch (const std::exception& e) {
@@ -511,7 +511,7 @@ void testbench::test_app_sw_lockout_during_app_active_rom_ctrl()
  ******************************************************************************/
 void testbench::test_app_state_read_blocked_during_app_active_rom_ctrl()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-101: test_app_state_read_blocked_during_app_active_rom_ctrl");
 
     try {
@@ -528,20 +528,20 @@ void testbench::test_app_state_read_blocked_during_app_active_rom_ctrl()
         }
 
         // Initiate ROM_CTRL operation
-        CSML_INFO(2, test_logger) << "Initiating ROM_CTRL operation...";
+        REG_INFO(2, test_logger) << "Initiating ROM_CTRL operation...";
         send_app_message(test->app_port[2], reinterpret_cast<const uint8_t*>(test_msg), msg_len);
         wait(100, SC_NS); // Allow operation to reach SQUEEZE state
 
         // Check if in SQUEEZE state (where STATE would normally be readable)
         read_status_fsm_bits(test, idle, absorb, squeeze);
-        CSML_INFO(2, test_logger) << "FSM state: IDLE=" << idle << ", ABSORB=" << absorb
+        REG_INFO(2, test_logger) << "FSM state: IDLE=" << idle << ", ABSORB=" << absorb
                                   << ", SQUEEZE=" << squeeze;
 
         // Attempt STATE window reads (should return 0 due to app active)
         const uint32_t STATE_WINDOW_BASE = 0x400;
         const uint32_t STATE_MASK_BASE = 0x500;
 
-        CSML_INFO(2, test_logger) << "Attempting STATE window reads during app active...";
+        REG_INFO(2, test_logger) << "Attempting STATE window reads during app active...";
 
         // Read state share region (0x400-0x41C, first 8 words)
         bool all_zero = true;
@@ -549,7 +549,7 @@ void testbench::test_app_state_read_blocked_during_app_active_rom_ctrl()
             uint32_t state_val = 0xDEADBEEF; // Initialize with non-zero
             test->register_read_32(STATE_WINDOW_BASE + (i * 4), state_val);
             if (state_val != 0) {
-                CSML_INFO(2, test_logger) << "STATE[" << i << "]=0x" << std::hex << state_val
+                REG_INFO(2, test_logger) << "STATE[" << i << "]=0x" << std::hex << state_val
                                           << std::dec << " (expected 0)";
                 all_zero = false;
             }
@@ -560,7 +560,7 @@ void testbench::test_app_state_read_blocked_during_app_active_rom_ctrl()
             uint32_t mask_val = 0xDEADBEEF; // Initialize with non-zero
             test->register_read_32(STATE_MASK_BASE + (i * 4), mask_val);
             if (mask_val != 0) {
-                CSML_INFO(2, test_logger) << "MASK[" << i << "]=0x" << std::hex << mask_val
+                REG_INFO(2, test_logger) << "MASK[" << i << "]=0x" << std::hex << mask_val
                                           << std::dec << " (expected 0)";
                 all_zero = false;
             }
@@ -572,7 +572,7 @@ void testbench::test_app_state_read_blocked_during_app_active_rom_ctrl()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "STATE window correctly returned all zeros";
+        REG_INFO(2, test_logger) << "STATE window correctly returned all zeros";
 
         // Wait for app operation to complete
         if (!wait_app_completion(test->app_port[2], 1000000)) {
@@ -589,7 +589,7 @@ void testbench::test_app_state_read_blocked_during_app_active_rom_ctrl()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "STATE window read protection verified";
+        REG_INFO(2, test_logger) << "STATE window read protection verified";
         report_test_pass("TC-101: test_app_state_read_blocked_during_app_active_rom_ctrl");
 
     } catch (const std::exception& e) {
@@ -605,7 +605,7 @@ void testbench::test_app_state_read_blocked_during_app_active_rom_ctrl()
  ******************************************************************************/
 void testbench::test_app_rom_ctrl_empty_message()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("test_app_rom_ctrl_empty_message");
 
     try {
@@ -619,7 +619,7 @@ void testbench::test_app_rom_ctrl_empty_message()
         }
 
         // Send empty message (single beat with no data, last=true)
-        CSML_INFO(2, test_logger) << "Sending empty message...";
+        REG_INFO(2, test_logger) << "Sending empty message...";
         test->app_port[2]->app_request(0, 0, true); // data=0, strobe=0, last=true
         wait(10, SC_NS);
 
@@ -635,7 +635,7 @@ void testbench::test_app_rom_ctrl_empty_message()
         // Check that the operation correctly reported an error
         if (test->app_port[2]->has_error()) {
             // Expected behavior - empty messages are not supported
-            CSML_INFO(2, test_logger) << "Empty message correctly rejected by model";
+            REG_INFO(2, test_logger) << "Empty message correctly rejected by model";
             report_test_pass("test_app_rom_ctrl_empty_message");
             return;
         }
@@ -654,7 +654,7 @@ void testbench::test_app_rom_ctrl_empty_message()
         }
         
         if (has_digest) {
-            CSML_INFO(2, test_logger) << "Empty message produced valid digest";
+            REG_INFO(2, test_logger) << "Empty message produced valid digest";
             report_test_pass("test_app_rom_ctrl_empty_message");
         } else {
             report_test_fail("test_app_rom_ctrl_empty_message",
@@ -674,7 +674,7 @@ void testbench::test_app_rom_ctrl_empty_message()
  ******************************************************************************/
 void testbench::test_app_rom_ctrl_back_to_back_operations()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("test_app_rom_ctrl_back_to_back_operations");
 
     try {
@@ -691,7 +691,7 @@ void testbench::test_app_rom_ctrl_back_to_back_operations()
         }
 
         // First operation
-        CSML_INFO(2, test_logger) << "Performing first ROM_CTRL operation...";
+        REG_INFO(2, test_logger) << "Performing first ROM_CTRL operation...";
         send_app_message(test->app_port[2], reinterpret_cast<const uint8_t*>(msg1), strlen(msg1));
 
         if (!wait_app_completion(test->app_port[2], 1000000)) {
@@ -709,11 +709,11 @@ void testbench::test_app_rom_ctrl_back_to_back_operations()
         // Retrieve first digest
         uint32_t share0_1[8], share1_1[8];
         test->app_port[2]->get_digest(share0_1, share1_1);
-        CSML_INFO(2, test_logger) << "First operation completed";
+        REG_INFO(2, test_logger) << "First operation completed";
 
         // Second operation (immediate)
         wait(10, SC_NS); // Minimal delay
-        CSML_INFO(2, test_logger) << "Performing second ROM_CTRL operation...";
+        REG_INFO(2, test_logger) << "Performing second ROM_CTRL operation...";
         send_app_message(test->app_port[2], reinterpret_cast<const uint8_t*>(msg2), strlen(msg2));
 
         if (!wait_app_completion(test->app_port[2], 1000000)) {
@@ -731,7 +731,7 @@ void testbench::test_app_rom_ctrl_back_to_back_operations()
         // Retrieve second digest
         uint32_t share0_2[8], share1_2[8];
         test->app_port[2]->get_digest(share0_2, share1_2);
-        CSML_INFO(2, test_logger) << "Second operation completed";
+        REG_INFO(2, test_logger) << "Second operation completed";
 
         // Verify digests are different (different messages)
         bool digests_different = false;
@@ -748,7 +748,7 @@ void testbench::test_app_rom_ctrl_back_to_back_operations()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Back-to-back operations successful";
+        REG_INFO(2, test_logger) << "Back-to-back operations successful";
         report_test_pass("test_app_rom_ctrl_back_to_back_operations");
 
     } catch (const std::exception& e) {

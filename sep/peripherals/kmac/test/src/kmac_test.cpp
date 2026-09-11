@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_test.cpp
  * @brief KMAC test harness implementation
@@ -7,7 +7,7 @@
  * This file implements the KMAC test harness constructor, port binding,
  * and register access helper functions using TLM b_transport.
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
@@ -30,7 +30,7 @@ kmac_test::kmac_test(sc_module_name name, unsigned int num_app_intf)
     , logger()
 {
     // Configure logger
-    logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
@@ -47,7 +47,7 @@ kmac_test::kmac_test(sc_module_name name, unsigned int num_app_intf)
     // Register clock driver process
     SC_THREAD(clock_driver);
 
-    CSML_INFO(2, logger) << "KMAC test harness instantiated with "
+    REG_INFO(2, logger) << "KMAC test harness instantiated with "
                          << NumAppIntf << " application interfaces";
 }
 
@@ -211,4 +211,19 @@ void kmac_test::set_keymgr_key(const uint32_t* s0, const uint32_t* s1, size_t le
 void kmac_test::clear_keymgr_key()
 {
     keymgr_write_word(0x40, 0x0u);               // KEY_CTRL: invalid
+}
+
+void kmac_test::keymgr_read_word(uint64_t offset, uint32_t &value)
+{
+    tlm::tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    trans.set_command(tlm::TLM_READ_COMMAND);
+    trans.set_address(offset);
+    trans.set_data_ptr(reinterpret_cast<uint8_t*>(&value));
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_byte_enable_ptr(0);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    keymgr_socket->b_transport(trans, delay);
 }

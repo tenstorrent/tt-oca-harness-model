@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /**
  * @file test_mailbox_func004.cpp
  * @brief FUNC-004: FIFO Status Monitoring System - Test Suite
@@ -21,7 +21,7 @@
  * - Cross-port STATUS flag coherence (write affects peer read, read affects peer write)
  * - Hardware-controlled STATUS register behavior (no software writes allowed)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  */
 
 #include "testbench.h"
@@ -70,10 +70,10 @@
  */
 void testbench::test_status_empty_flag() {
   std::string test_name = "TC023: test_status_empty_flag";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Verify STATUS[0] empty flag reflects read FIFO state";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Verify STATUS[0] empty flag reflects read FIFO state";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t status_value = 0;
@@ -86,11 +86,11 @@ void testbench::test_status_empty_flag() {
   // =========================================================================
   // Step 1: Verify Port 0 read FIFO initially empty (STATUS[0]=1)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 1: Verifying Port 0 read FIFO initially empty";
+  REG_INFO(2, logger) << "Step 1: Verifying Port 0 read FIFO initially empty";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   if (status != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Could not read STATUS register";
+    REG_ERROR(0, logger) << "FAIL: Could not read STATUS register";
     test_passed = false;
   }
 
@@ -99,16 +99,16 @@ void testbench::test_status_empty_flag() {
     std::ostringstream msg;
     msg << "FAIL: Port 0 read FIFO not empty initially (STATUS[0]=0, expected 1). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 read FIFO empty initially (STATUS[0]=1)";
+    REG_INFO(2, logger) << "PASS: Port 0 read FIFO empty initially (STATUS[0]=1)";
   }
 
   // =========================================================================
   // Step 2: Peer port (Port 1) writes data to populate Port 0 read FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 2: Port 1 writes data (populates Port 0 read FIFO)";
+  REG_INFO(2, logger) << "Step 2: Port 1 writes data (populates Port 0 read FIFO)";
 
   std::vector<uint64_t> test_data = {
     0xDEADBEEF12345678ULL,
@@ -119,7 +119,7 @@ void testbench::test_status_empty_flag() {
   for (size_t i = 0; i < test_data.size(); i++) {
     status = mailbox_write(1, mailbox_basetest::WRITE_DATA_OFFSET, test_data[i]);
     if (status != tlm::TLM_OK_RESPONSE) {
-      CSML_ERROR(0, logger) << "FAIL: Port 1 write transaction failed";
+      REG_ERROR(0, logger) << "FAIL: Port 1 write transaction failed";
       test_passed = false;
     }
   }
@@ -129,7 +129,7 @@ void testbench::test_status_empty_flag() {
   // =========================================================================
   // Step 3: Verify Port 0 STATUS[0]=0 (read FIFO has data)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 3: Verifying Port 0 read FIFO has data (STATUS[0]=0)";
+  REG_INFO(2, logger) << "Step 3: Verifying Port 0 read FIFO has data (STATUS[0]=0)";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   bool fifo_empty_after_write = (status_value & 0x1) != 0;
@@ -138,21 +138,21 @@ void testbench::test_status_empty_flag() {
     std::ostringstream msg;
     msg << "FAIL: Port 0 read FIFO empty after Port 1 writes (STATUS[0]=1, expected 0). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 read FIFO has data (STATUS[0]=0)";
+    REG_INFO(2, logger) << "PASS: Port 0 read FIFO has data (STATUS[0]=0)";
   }
 
   // =========================================================================
   // Step 4: Port 0 reads all data (drains read FIFO)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 4: Port 0 reads all data (drains read FIFO)";
+  REG_INFO(2, logger) << "Step 4: Port 0 reads all data (drains read FIFO)";
 
   for (size_t i = 0; i < test_data.size(); i++) {
     status = mailbox_read(0, mailbox_basetest::READ_DATA_OFFSET, read_value);
     if (status != tlm::TLM_OK_RESPONSE) {
-      CSML_ERROR(0, logger) << "FAIL: Port 0 read transaction failed";
+      REG_ERROR(0, logger) << "FAIL: Port 0 read transaction failed";
       test_passed = false;
     }
   }
@@ -162,7 +162,7 @@ void testbench::test_status_empty_flag() {
   // =========================================================================
   // Step 5: Verify Port 0 STATUS[0]=1 (read FIFO empty again)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 5: Verifying Port 0 read FIFO empty after draining (STATUS[0]=1)";
+  REG_INFO(2, logger) << "Step 5: Verifying Port 0 read FIFO empty after draining (STATUS[0]=1)";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   bool final_empty = (status_value & 0x1) != 0;
@@ -171,22 +171,22 @@ void testbench::test_status_empty_flag() {
     std::ostringstream msg;
     msg << "FAIL: Port 0 read FIFO not empty after draining all data (STATUS[0]=0, expected 1). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 read FIFO empty after reads (STATUS[0]=1)";
+    REG_INFO(2, logger) << "PASS: Port 0 read FIFO empty after reads (STATUS[0]=1)";
   }
 
   // =========================================================================
   // Step 6: Repeat test for Port 1 to verify symmetry
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 6: Verifying Port 1 empty flag behavior (symmetry check)";
+  REG_INFO(2, logger) << "Step 6: Verifying Port 1 empty flag behavior (symmetry check)";
 
   // Check Port 1 initially empty
   status = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, status_value);
   bool port1_initial_empty = (status_value & 0x1) != 0;
   if (!port1_initial_empty) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 read FIFO not empty initially";
+    REG_ERROR(0, logger) << "FAIL: Port 1 read FIFO not empty initially";
     test_passed = false;
   }
 
@@ -198,7 +198,7 @@ void testbench::test_status_empty_flag() {
   status = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, status_value);
   bool port1_has_data = (status_value & 0x1) == 0;
   if (!port1_has_data) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] not cleared after Port 0 write";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] not cleared after Port 0 write";
     test_passed = false;
   }
 
@@ -210,25 +210,25 @@ void testbench::test_status_empty_flag() {
   status = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, status_value);
   bool port1_final_empty = (status_value & 0x1) != 0;
   if (!port1_final_empty) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] not set after reading all data";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] not set after reading all data";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 empty flag behavior matches Port 0";
+    REG_INFO(2, logger) << "PASS: Port 1 empty flag behavior matches Port 0";
   }
 
   // Report test result
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   if (test_passed) {
-    CSML_INFO(2, logger) << "TEST RESULT: PASS";
-    CSML_INFO(2, logger) << "All verification points passed:";
-    CSML_INFO(2, logger) << "  - Initial empty flag correct (STATUS[0]=1)";
-    CSML_INFO(2, logger) << "  - Empty flag clears when data available (STATUS[0]=0)";
-    CSML_INFO(2, logger) << "  - Empty flag sets after draining FIFO (STATUS[0]=1)";
-    CSML_INFO(2, logger) << "  - Behavior symmetric across both ports";
+    REG_INFO(2, logger) << "TEST RESULT: PASS";
+    REG_INFO(2, logger) << "All verification points passed:";
+    REG_INFO(2, logger) << "  - Initial empty flag correct (STATUS[0]=1)";
+    REG_INFO(2, logger) << "  - Empty flag clears when data available (STATUS[0]=0)";
+    REG_INFO(2, logger) << "  - Empty flag sets after draining FIFO (STATUS[0]=1)";
+    REG_INFO(2, logger) << "  - Behavior symmetric across both ports";
   } else {
-    CSML_ERROR(0, logger) << "TEST RESULT: FAIL";
+    REG_ERROR(0, logger) << "TEST RESULT: FAIL";
   }
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   report_test_result(test_name.c_str(), test_passed);
 }
@@ -265,10 +265,10 @@ void testbench::test_status_empty_flag() {
  */
 void testbench::test_status_full_flag() {
   std::string test_name = "TC024: test_status_full_flag";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Verify STATUS[1] full flag reflects write FIFO capacity";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Verify STATUS[1] full flag reflects write FIFO capacity";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t status_value = 0;
@@ -285,11 +285,11 @@ void testbench::test_status_full_flag() {
   // =========================================================================
   // Step 1: Verify Port 0 write FIFO initially not full (STATUS[1]=0)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 1: Verifying Port 0 write FIFO initially not full";
+  REG_INFO(2, logger) << "Step 1: Verifying Port 0 write FIFO initially not full";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   if (status != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Could not read STATUS register";
+    REG_ERROR(0, logger) << "FAIL: Could not read STATUS register";
     test_passed = false;
   }
 
@@ -298,16 +298,16 @@ void testbench::test_status_full_flag() {
     std::ostringstream msg;
     msg << "FAIL: Port 0 write FIFO full initially (STATUS[1]=1, expected 0). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 write FIFO not full initially (STATUS[1]=0)";
+    REG_INFO(2, logger) << "PASS: Port 0 write FIFO not full initially (STATUS[1]=0)";
   }
 
   // =========================================================================
   // Step 2: Port 0 writes MailboxDepth entries to fill write FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 2: Port 0 writes " << mailbox_depth << " entries (fills write FIFO)";
+  REG_INFO(2, logger) << "Step 2: Port 0 writes " << mailbox_depth << " entries (fills write FIFO)";
 
   for (unsigned int i = 0; i < mailbox_depth; i++) {
     uint64_t data = 0xA000000000000000ULL | i;
@@ -315,7 +315,7 @@ void testbench::test_status_full_flag() {
     if (status != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Port 0 write transaction " << i << " failed";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
@@ -325,7 +325,7 @@ void testbench::test_status_full_flag() {
   // =========================================================================
   // Step 3: Verify Port 0 STATUS[1]=1 (write FIFO full)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 3: Verifying Port 0 write FIFO full (STATUS[1]=1)";
+  REG_INFO(2, logger) << "Step 3: Verifying Port 0 write FIFO full (STATUS[1]=1)";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   bool fifo_full_after_writes = (status_value & 0x2) != 0;
@@ -335,26 +335,26 @@ void testbench::test_status_full_flag() {
     msg << "FAIL: Port 0 write FIFO not full after writing " << mailbox_depth
         << " entries (STATUS[1]=0, expected 1). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 write FIFO full (STATUS[1]=1)";
+    REG_INFO(2, logger) << "PASS: Port 0 write FIFO full (STATUS[1]=1)";
   }
 
   // =========================================================================
   // Step 4: Peer port (Port 1) reads one entry (frees space)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 4: Port 1 reads one entry (frees space in Port 0 write FIFO)";
+  REG_INFO(2, logger) << "Step 4: Port 1 reads one entry (frees space in Port 0 write FIFO)";
 
   status = mailbox_read(1, mailbox_basetest::READ_DATA_OFFSET, read_value);
   if (status != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 read transaction failed";
+    REG_ERROR(0, logger) << "FAIL: Port 1 read transaction failed";
     test_passed = false;
   } else {
     std::ostringstream msg;
     msg << "Port 1 read data: 0x" << std::hex << std::setw(16)
         << std::setfill('0') << read_value;
-    CSML_INFO(2, logger) << msg.str();
+    REG_INFO(2, logger) << msg.str();
   }
 
   wait(5, SC_NS); // Allow STATUS update
@@ -362,7 +362,7 @@ void testbench::test_status_full_flag() {
   // =========================================================================
   // Step 5: Verify Port 0 STATUS[1]=0 (write FIFO has space again)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 5: Verifying Port 0 write FIFO has space (STATUS[1]=0)";
+  REG_INFO(2, logger) << "Step 5: Verifying Port 0 write FIFO has space (STATUS[1]=0)";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   bool fifo_not_full_after_read = (status_value & 0x2) == 0;
@@ -371,22 +371,22 @@ void testbench::test_status_full_flag() {
     std::ostringstream msg;
     msg << "FAIL: Port 0 write FIFO still full after Port 1 read (STATUS[1]=1, expected 0). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 write FIFO has space (STATUS[1]=0)";
+    REG_INFO(2, logger) << "PASS: Port 0 write FIFO has space (STATUS[1]=0)";
   }
 
   // =========================================================================
   // Step 6: Repeat test for Port 1 to verify symmetry
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 6: Verifying Port 1 full flag behavior (symmetry check)";
+  REG_INFO(2, logger) << "Step 6: Verifying Port 1 full flag behavior (symmetry check)";
 
   // Check Port 1 initially not full
   status = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, status_value);
   bool port1_initial_full = (status_value & 0x2) != 0;
   if (port1_initial_full) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 write FIFO full initially";
+    REG_ERROR(0, logger) << "FAIL: Port 1 write FIFO full initially";
     test_passed = false;
   }
 
@@ -401,7 +401,7 @@ void testbench::test_status_full_flag() {
   status = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, status_value);
   bool port1_full = (status_value & 0x2) != 0;
   if (!port1_full) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[1] not set after filling FIFO";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[1] not set after filling FIFO";
     test_passed = false;
   }
 
@@ -413,25 +413,25 @@ void testbench::test_status_full_flag() {
   status = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, status_value);
   bool port1_not_full = (status_value & 0x2) == 0;
   if (!port1_not_full) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[1] not cleared after Port 0 read";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[1] not cleared after Port 0 read";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 full flag behavior matches Port 0";
+    REG_INFO(2, logger) << "PASS: Port 1 full flag behavior matches Port 0";
   }
 
   // Report test result
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   if (test_passed) {
-    CSML_INFO(2, logger) << "TEST RESULT: PASS";
-    CSML_INFO(2, logger) << "All verification points passed:";
-    CSML_INFO(2, logger) << "  - Initial full flag correct (STATUS[1]=0)";
-    CSML_INFO(2, logger) << "  - Full flag sets when FIFO full (STATUS[1]=1)";
-    CSML_INFO(2, logger) << "  - Full flag clears when space available (STATUS[1]=0)";
-    CSML_INFO(2, logger) << "  - Behavior symmetric across both ports";
+    REG_INFO(2, logger) << "TEST RESULT: PASS";
+    REG_INFO(2, logger) << "All verification points passed:";
+    REG_INFO(2, logger) << "  - Initial full flag correct (STATUS[1]=0)";
+    REG_INFO(2, logger) << "  - Full flag sets when FIFO full (STATUS[1]=1)";
+    REG_INFO(2, logger) << "  - Full flag clears when space available (STATUS[1]=0)";
+    REG_INFO(2, logger) << "  - Behavior symmetric across both ports";
   } else {
-    CSML_ERROR(0, logger) << "TEST RESULT: FAIL";
+    REG_ERROR(0, logger) << "TEST RESULT: FAIL";
   }
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   report_test_result(test_name.c_str(), test_passed);
 }
@@ -471,10 +471,10 @@ void testbench::test_status_full_flag() {
  */
 void testbench::test_status_write_threshold_flag() {
   std::string test_name = "TC025: test_status_write_threshold_flag";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Verify STATUS[2] write_level_above_thresh flag";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Verify STATUS[2] write_level_above_thresh flag";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t status_value = 0;
@@ -487,12 +487,12 @@ void testbench::test_status_write_threshold_flag() {
   // =========================================================================
   // Step 1: Program WIRQT threshold to 3 entries
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 1: Programming WIRQT threshold to 3";
+  REG_INFO(2, logger) << "Step 1: Programming WIRQT threshold to 3";
 
   const uint64_t threshold = 3;
   status = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, threshold);
   if (status != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Could not write WIRQT threshold";
+    REG_ERROR(0, logger) << "FAIL: Could not write WIRQT threshold";
     test_passed = false;
   }
 
@@ -500,16 +500,16 @@ void testbench::test_status_write_threshold_flag() {
   uint64_t wirqt_readback = 0;
   status = mailbox_read(0, mailbox_basetest::WIRQT_OFFSET, wirqt_readback);
   if (wirqt_readback != threshold) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT readback mismatch";
+    REG_ERROR(0, logger) << "FAIL: WIRQT readback mismatch";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: WIRQT threshold set to 3";
+    REG_INFO(2, logger) << "PASS: WIRQT threshold set to 3";
   }
 
   // =========================================================================
   // Step 2: Verify STATUS[2] initially 0 (usage=0 <= threshold=3)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 2: Verifying STATUS[2] initially 0 (no writes yet)";
+  REG_INFO(2, logger) << "Step 2: Verifying STATUS[2] initially 0 (no writes yet)";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   bool initial_above_thresh = (status_value & 0x4) != 0; // STATUS[2]
@@ -518,16 +518,16 @@ void testbench::test_status_write_threshold_flag() {
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] set initially (expected 0 when usage=0 <= threshold=3). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[2]=0 initially (usage <= threshold)";
+    REG_INFO(2, logger) << "PASS: STATUS[2]=0 initially (usage <= threshold)";
   }
 
   // =========================================================================
   // Step 3: Write entries incrementally and check STATUS[2] after each write
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 3: Writing entries incrementally to test threshold comparison";
+  REG_INFO(2, logger) << "Step 3: Writing entries incrementally to test threshold comparison";
 
   // Test data for incremental writes
   struct TestPoint {
@@ -552,7 +552,7 @@ void testbench::test_status_write_threshold_flag() {
       uint64_t data = 0xC000000000000000ULL | total_writes;
       status = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, data);
       if (status != tlm::TLM_OK_RESPONSE) {
-        CSML_ERROR(0, logger) << "FAIL: Write transaction failed";
+        REG_ERROR(0, logger) << "FAIL: Write transaction failed";
         test_passed = false;
       }
       total_writes++;
@@ -571,23 +571,23 @@ void testbench::test_status_write_threshold_flag() {
 
     if (above_thresh != tp.expect_above_thresh) {
       msg << " - FAIL";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     } else {
       msg << " - PASS";
-      CSML_INFO(2, logger) << msg.str();
+      REG_INFO(2, logger) << msg.str();
     }
   }
 
   // =========================================================================
   // Step 4: Peer port reads entries until usage drops to threshold
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 4: Port 1 reads entry to drop usage back to threshold";
+  REG_INFO(2, logger) << "Step 4: Port 1 reads entry to drop usage back to threshold";
 
   // Currently usage=4, read 1 entry to make usage=3
   status = mailbox_read(1, mailbox_basetest::READ_DATA_OFFSET, read_value);
   if (status != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 read transaction failed";
+    REG_ERROR(0, logger) << "FAIL: Port 1 read transaction failed";
     test_passed = false;
   }
 
@@ -601,16 +601,16 @@ void testbench::test_status_write_threshold_flag() {
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] not cleared after read (usage=3 <= threshold=3, expected STATUS[2]=0). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[2] cleared when usage dropped to threshold";
+    REG_INFO(2, logger) << "PASS: STATUS[2] cleared when usage dropped to threshold";
   }
 
   // =========================================================================
   // Step 5: Test edge case - threshold=0
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 5: Testing edge case with threshold=0";
+  REG_INFO(2, logger) << "Step 5: Testing edge case with threshold=0";
 
   // Drain remaining entries
   for (unsigned int i = 0; i < 3; i++) {
@@ -633,26 +633,26 @@ void testbench::test_status_write_threshold_flag() {
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] not set with threshold=0 and usage=1 (expected STATUS[2]=1). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Edge case threshold=0 handled correctly (STATUS[2]=1 when usage=1)";
+    REG_INFO(2, logger) << "PASS: Edge case threshold=0 handled correctly (STATUS[2]=1 when usage=1)";
   }
 
   // Report test result
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   if (test_passed) {
-    CSML_INFO(2, logger) << "TEST RESULT: PASS";
-    CSML_INFO(2, logger) << "All verification points passed:";
-    CSML_INFO(2, logger) << "  - STATUS[2]=0 when usage <= threshold";
-    CSML_INFO(2, logger) << "  - STATUS[2]=1 when usage > threshold";
-    CSML_INFO(2, logger) << "  - Strictly greater-than logic verified (usage=threshold does NOT set flag)";
-    CSML_INFO(2, logger) << "  - Flag clears when usage drops to or below threshold";
-    CSML_INFO(2, logger) << "  - Edge case threshold=0 handled correctly";
+    REG_INFO(2, logger) << "TEST RESULT: PASS";
+    REG_INFO(2, logger) << "All verification points passed:";
+    REG_INFO(2, logger) << "  - STATUS[2]=0 when usage <= threshold";
+    REG_INFO(2, logger) << "  - STATUS[2]=1 when usage > threshold";
+    REG_INFO(2, logger) << "  - Strictly greater-than logic verified (usage=threshold does NOT set flag)";
+    REG_INFO(2, logger) << "  - Flag clears when usage drops to or below threshold";
+    REG_INFO(2, logger) << "  - Edge case threshold=0 handled correctly";
   } else {
-    CSML_ERROR(0, logger) << "TEST RESULT: FAIL";
+    REG_ERROR(0, logger) << "TEST RESULT: FAIL";
   }
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   report_test_result(test_name.c_str(), test_passed);
 }
@@ -691,10 +691,10 @@ void testbench::test_status_write_threshold_flag() {
  */
 void testbench::test_status_read_threshold_flag() {
   std::string test_name = "TC026: test_status_read_threshold_flag";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Verify STATUS[3] read_level_above_thresh flag";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Verify STATUS[3] read_level_above_thresh flag";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t status_value = 0;
@@ -707,12 +707,12 @@ void testbench::test_status_read_threshold_flag() {
   // =========================================================================
   // Step 1: Program RIRQT threshold to 2 entries
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 1: Programming RIRQT threshold to 2";
+  REG_INFO(2, logger) << "Step 1: Programming RIRQT threshold to 2";
 
   const uint64_t threshold = 2;
   status = mailbox_write(0, mailbox_basetest::RIRQT_OFFSET, threshold);
   if (status != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Could not write RIRQT threshold";
+    REG_ERROR(0, logger) << "FAIL: Could not write RIRQT threshold";
     test_passed = false;
   }
 
@@ -720,16 +720,16 @@ void testbench::test_status_read_threshold_flag() {
   uint64_t rirqt_readback = 0;
   status = mailbox_read(0, mailbox_basetest::RIRQT_OFFSET, rirqt_readback);
   if (rirqt_readback != threshold) {
-    CSML_ERROR(0, logger) << "FAIL: RIRQT readback mismatch";
+    REG_ERROR(0, logger) << "FAIL: RIRQT readback mismatch";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: RIRQT threshold set to 2";
+    REG_INFO(2, logger) << "PASS: RIRQT threshold set to 2";
   }
 
   // =========================================================================
   // Step 2: Verify STATUS[3] initially 0 (fill=0 <= threshold=2)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 2: Verifying STATUS[3] initially 0 (no data in read FIFO)";
+  REG_INFO(2, logger) << "Step 2: Verifying STATUS[3] initially 0 (no data in read FIFO)";
 
   status = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
   bool initial_above_thresh = (status_value & 0x8) != 0; // STATUS[3]
@@ -738,16 +738,16 @@ void testbench::test_status_read_threshold_flag() {
     std::ostringstream msg;
     msg << "FAIL: STATUS[3] set initially (expected 0 when fill=0 <= threshold=2). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[3]=0 initially (fill <= threshold)";
+    REG_INFO(2, logger) << "PASS: STATUS[3]=0 initially (fill <= threshold)";
   }
 
   // =========================================================================
   // Step 3: Peer port writes entries incrementally, check STATUS[3] after each
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 3: Port 1 writes entries incrementally to test threshold comparison";
+  REG_INFO(2, logger) << "Step 3: Port 1 writes entries incrementally to test threshold comparison";
 
   // Test data for incremental writes from peer port
   struct TestPoint {
@@ -771,7 +771,7 @@ void testbench::test_status_read_threshold_flag() {
       uint64_t data = 0xD000000000000000ULL | total_writes;
       status = mailbox_write(1, mailbox_basetest::WRITE_DATA_OFFSET, data);
       if (status != tlm::TLM_OK_RESPONSE) {
-        CSML_ERROR(0, logger) << "FAIL: Port 1 write transaction failed";
+        REG_ERROR(0, logger) << "FAIL: Port 1 write transaction failed";
         test_passed = false;
       }
       total_writes++;
@@ -790,23 +790,23 @@ void testbench::test_status_read_threshold_flag() {
 
     if (above_thresh != tp.expect_above_thresh) {
       msg << " - FAIL";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     } else {
       msg << " - PASS";
-      CSML_INFO(2, logger) << msg.str();
+      REG_INFO(2, logger) << msg.str();
     }
   }
 
   // =========================================================================
   // Step 4: Port 0 reads entry to drop fill back to threshold
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 4: Port 0 reads entry to drop fill back to threshold";
+  REG_INFO(2, logger) << "Step 4: Port 0 reads entry to drop fill back to threshold";
 
   // Currently fill=3, read 1 entry to make fill=2
   status = mailbox_read(0, mailbox_basetest::READ_DATA_OFFSET, read_value);
   if (status != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 read transaction failed";
+    REG_ERROR(0, logger) << "FAIL: Port 0 read transaction failed";
     test_passed = false;
   }
 
@@ -820,16 +820,16 @@ void testbench::test_status_read_threshold_flag() {
     std::ostringstream msg;
     msg << "FAIL: STATUS[3] not cleared after read (fill=2 <= threshold=2, expected STATUS[3]=0). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[3] cleared when fill dropped to threshold";
+    REG_INFO(2, logger) << "PASS: STATUS[3] cleared when fill dropped to threshold";
   }
 
   // =========================================================================
   // Step 5: Test edge case - threshold=0
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 5: Testing edge case with threshold=0";
+  REG_INFO(2, logger) << "Step 5: Testing edge case with threshold=0";
 
   // Drain remaining entries
   for (unsigned int i = 0; i < 2; i++) {
@@ -852,26 +852,26 @@ void testbench::test_status_read_threshold_flag() {
     std::ostringstream msg;
     msg << "FAIL: STATUS[3] not set with threshold=0 and fill=1 (expected STATUS[3]=1). Full STATUS=0x"
         << std::hex << status_value;
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Edge case threshold=0 handled correctly (STATUS[3]=1 when fill=1)";
+    REG_INFO(2, logger) << "PASS: Edge case threshold=0 handled correctly (STATUS[3]=1 when fill=1)";
   }
 
   // Report test result
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   if (test_passed) {
-    CSML_INFO(2, logger) << "TEST RESULT: PASS";
-    CSML_INFO(2, logger) << "All verification points passed:";
-    CSML_INFO(2, logger) << "  - STATUS[3]=0 when fill <= threshold";
-    CSML_INFO(2, logger) << "  - STATUS[3]=1 when fill > threshold";
-    CSML_INFO(2, logger) << "  - Strictly greater-than logic verified (fill=threshold does NOT set flag)";
-    CSML_INFO(2, logger) << "  - Flag clears when fill drops to or below threshold";
-    CSML_INFO(2, logger) << "  - Edge case threshold=0 handled correctly";
+    REG_INFO(2, logger) << "TEST RESULT: PASS";
+    REG_INFO(2, logger) << "All verification points passed:";
+    REG_INFO(2, logger) << "  - STATUS[3]=0 when fill <= threshold";
+    REG_INFO(2, logger) << "  - STATUS[3]=1 when fill > threshold";
+    REG_INFO(2, logger) << "  - Strictly greater-than logic verified (fill=threshold does NOT set flag)";
+    REG_INFO(2, logger) << "  - Flag clears when fill drops to or below threshold";
+    REG_INFO(2, logger) << "  - Edge case threshold=0 handled correctly";
   } else {
-    CSML_ERROR(0, logger) << "TEST RESULT: FAIL";
+    REG_ERROR(0, logger) << "TEST RESULT: FAIL";
   }
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   report_test_result(test_name.c_str(), test_passed);
 }
@@ -897,12 +897,12 @@ void testbench::test_status_read_threshold_flag() {
  * - Reserved bit masking
  */
 void testbench::run_func004_tests() {
-  CSML_INFO(2, logger) << "";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "FUNC-004 TEST SUITE: FIFO Status Monitoring System";
-  CSML_INFO(2, logger) << "Test IDs: 4, 20-23, 49";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "";
+  REG_INFO(2, logger) << "";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "FUNC-004 TEST SUITE: FIFO Status Monitoring System";
+  REG_INFO(2, logger) << "Test IDs: 4, 20-23, 49";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "";
 
   wait(10, SC_NS);
 
@@ -922,9 +922,9 @@ void testbench::run_func004_tests() {
   test_status_read_threshold_flag();
   wait(10, SC_NS);
 
-  CSML_INFO(2, logger) << "";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "FUNC-004 TEST SUITE COMPLETED";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "";
+  REG_INFO(2, logger) << "";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "FUNC-004 TEST SUITE COMPLETED";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "";
 }

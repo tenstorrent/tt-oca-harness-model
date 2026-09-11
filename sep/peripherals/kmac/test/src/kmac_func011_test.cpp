@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func011_test.cpp
  * @brief Test cases for FUNC-KMAC-011 (State Machine and Command Processing)
@@ -22,18 +22,18 @@
  * Test Plan Reference: kmac-test-plan.md
  * Functionality Reference: kmac-functionality-testcases.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -130,7 +130,7 @@ static void configure_shake_256(kmac_test* test)
  ******************************************************************************/
 void testbench::test_fsm_reset_to_idle()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-071: test_fsm_reset_to_idle");
 
     try {
@@ -595,7 +595,7 @@ void testbench::test_fsm_idle_state_operations_blocked()
             }
         } else {
             // Error was set - verify and recover
-            CSML_INFO(2, test_logger) << "SwCmdSequence error correctly set for PROCESS in IDLE: 0x"
+            REG_INFO(2, test_logger) << "SwCmdSequence error correctly set for PROCESS in IDLE: 0x"
                                       << std::hex << err_code << std::dec;
             // Use DONE command for error recovery
             write_cmd(test, 0x16);
@@ -709,7 +709,7 @@ void testbench::test_fsm_absorb_state_operations_blocked()
             }
         } else {
             // Error was correctly set - verify and recover
-            CSML_INFO(2, test_logger) << "SwCmdSequence error correctly set for START in ABSORB: 0x"
+            REG_INFO(2, test_logger) << "SwCmdSequence error correctly set for START in ABSORB: 0x"
                                       << std::hex << err_code << std::dec;
         }
 
@@ -832,7 +832,7 @@ void testbench::test_fsm_squeeze_state_operations_blocked()
             }
         } else {
             // Error was correctly set - verify and recover
-            CSML_INFO(2, test_logger) << "SwCmdSequence error correctly set for START in SQUEEZE: 0x"
+            REG_INFO(2, test_logger) << "SwCmdSequence error correctly set for START in SQUEEZE: 0x"
                                       << std::hex << err_code << std::dec;
         }
 
@@ -1718,12 +1718,12 @@ void testbench::test_idle_o_signal_updates()
  ******************************************************************************/
 extern "C" void register_func011_tests()
 {
-    CSML_INFO(1, test_logger) << "Registering FUNC-KMAC-011 test cases...";
+    REG_INFO(1, test_logger) << "Registering FUNC-KMAC-011 test cases...";
 
     // Note: Actual test registration mechanism depends on testbench infrastructure
     // These tests can be invoked individually or as a suite
 
-    CSML_INFO(1, test_logger) << "FUNC-KMAC-011 test suite ready (29 test cases + 2 additional tests)";
+    REG_INFO(1, test_logger) << "FUNC-KMAC-011 test suite ready (29 test cases + 2 additional tests)";
 }
 
 // End of file

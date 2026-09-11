@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func012_test.cpp
  * @brief Test cases for FUNC-KMAC-012 (Endianness Configuration)
@@ -21,18 +21,18 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -228,7 +228,7 @@ static void cleanup_test(kmac_test* test)
 /**
  * @brief Helper function to print buffer in hex
  */
-static void print_hex_buffer(CsmlLogger& logger, const char* label, const uint8_t* buf, size_t len)
+static void print_hex_buffer(RegLogger& logger, const char* label, const uint8_t* buf, size_t len)
 {
     std::ostringstream oss;
     oss << label << ": ";
@@ -236,7 +236,7 @@ static void print_hex_buffer(CsmlLogger& logger, const char* label, const uint8_
         oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(buf[i]);
         if (i < len - 1) oss << " ";
     }
-    CSML_INFO(2, logger) << oss.str();
+    REG_INFO(2, logger) << oss.str();
 }
 
 /******************************************************************************
@@ -247,7 +247,7 @@ static void print_hex_buffer(CsmlLogger& logger, const char* label, const uint8_
  ******************************************************************************/
 void testbench::test_sha3_msg_endianness_little()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-024: test_sha3_msg_endianness_little");
 
     try {
@@ -259,7 +259,7 @@ void testbench::test_sha3_msg_endianness_little()
 
         // Configure SHA3-256 with msg_endianness=0 (little-endian)
         configure_sha3_with_endianness(test, 0x2, 0, 0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, msg_endianness=0 (little)";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, msg_endianness=0 (little)";
 
         // Verify IDLE state
         bool idle, absorb, squeeze;
@@ -272,15 +272,15 @@ void testbench::test_sha3_msg_endianness_little()
 
         // Issue START command
         write_cmd(test, 0x1D);
-        CSML_INFO(2, test_logger) << "Issued START command";
+        REG_INFO(2, test_logger) << "Issued START command";
 
         // Write message to MSG_FIFO
         write_msg_fifo(test, msg, msg_len);
-        CSML_INFO(2, test_logger) << "Wrote message to MSG_FIFO: \"abc\"";
+        REG_INFO(2, test_logger) << "Wrote message to MSG_FIFO: \"abc\"";
 
         // Issue PROCESS command
         write_cmd(test, 0x2E);
-        CSML_INFO(2, test_logger) << "Issued PROCESS command";
+        REG_INFO(2, test_logger) << "Issued PROCESS command";
 
         // Wait for SQUEEZE state
         wait(10, SC_NS);
@@ -327,7 +327,7 @@ void testbench::test_sha3_msg_endianness_little()
  ******************************************************************************/
 void testbench::test_sha3_msg_endianness_big()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-025: test_sha3_msg_endianness_big");
 
     try {
@@ -339,7 +339,7 @@ void testbench::test_sha3_msg_endianness_big()
 
         // Configure SHA3-256 with msg_endianness=1 (big-endian)
         configure_sha3_with_endianness(test, 0x2, 1, 0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, msg_endianness=1 (big)";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, msg_endianness=1 (big)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -351,7 +351,7 @@ void testbench::test_sha3_msg_endianness_big()
 
         write_cmd(test, 0x1D);
         write_msg_fifo(test, msg, msg_len);
-        CSML_INFO(2, test_logger) << "Wrote message to MSG_FIFO: \"abcd\"";
+        REG_INFO(2, test_logger) << "Wrote message to MSG_FIFO: \"abcd\"";
 
         write_cmd(test, 0x2E);
         wait(10, SC_NS);
@@ -403,7 +403,7 @@ void testbench::test_sha3_msg_endianness_big()
  ******************************************************************************/
 void testbench::test_sha3_state_endianness_little()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-026: test_sha3_state_endianness_little");
 
     try {
@@ -414,7 +414,7 @@ void testbench::test_sha3_state_endianness_little()
 
         // Configure SHA3-256 with state_endianness=0 (little-endian)
         configure_sha3_with_endianness(test, 0x2, 0, 0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, state_endianness=0 (little)";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, state_endianness=0 (little)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -462,7 +462,7 @@ void testbench::test_sha3_state_endianness_little()
  ******************************************************************************/
 void testbench::test_sha3_state_endianness_big()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-027: test_sha3_state_endianness_big");
 
     try {
@@ -474,7 +474,7 @@ void testbench::test_sha3_state_endianness_big()
 
         // Configure SHA3-256 with state_endianness=1 (big-endian)
         configure_sha3_with_endianness(test, 0x2, 0, 1);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, state_endianness=1 (big)";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3-256, state_endianness=1 (big)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -527,7 +527,7 @@ void testbench::test_sha3_state_endianness_big()
  ******************************************************************************/
 void testbench::test_state_endianness_word_granularity()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-142: test_state_endianness_word_granularity");
 
     try {
@@ -540,7 +540,7 @@ void testbench::test_state_endianness_word_granularity()
 
         // Test 1: state_endianness=0 (little-endian)
         configure_sha3_with_endianness(test, 0x2, 0, 0);
-        CSML_INFO(2, test_logger) << "Test 1: state_endianness=0";
+        REG_INFO(2, test_logger) << "Test 1: state_endianness=0";
 
         write_cmd(test, 0x1D);
         write_msg_fifo(test, msg, msg_len);
@@ -552,14 +552,14 @@ void testbench::test_state_endianness_word_granularity()
         test->register_read_32(STATE_BASE, share0_le);
         test->register_read_32(STATE_BASE + SHARE1_OFFSET, share1_le);
         word0_le = share0_le ^ share1_le;
-        CSML_INFO(2, test_logger) << "First word (LE): 0x" << std::hex << word0_le;
+        REG_INFO(2, test_logger) << "First word (LE): 0x" << std::hex << word0_le;
 
         cleanup_test(test);
         wait(10, SC_NS);
 
         // Test 2: state_endianness=1 (big-endian)
         configure_sha3_with_endianness(test, 0x2, 0, 1);
-        CSML_INFO(2, test_logger) << "Test 2: state_endianness=1";
+        REG_INFO(2, test_logger) << "Test 2: state_endianness=1";
 
         write_cmd(test, 0x1D);
         write_msg_fifo(test, msg, msg_len);
@@ -571,11 +571,11 @@ void testbench::test_state_endianness_word_granularity()
         test->register_read_32(STATE_BASE, share0_be);
         test->register_read_32(STATE_BASE + SHARE1_OFFSET, share1_be);
         word0_be = share0_be ^ share1_be;
-        CSML_INFO(2, test_logger) << "First word (BE): 0x" << std::hex << word0_be;
+        REG_INFO(2, test_logger) << "First word (BE): 0x" << std::hex << word0_be;
 
         // Verify byte swap relationship
         uint32_t word0_swapped = byte_swap_32(word0_le);
-        CSML_INFO(2, test_logger) << "Expected (byte_swap_32(LE)): 0x" << std::hex << word0_swapped;
+        REG_INFO(2, test_logger) << "Expected (byte_swap_32(LE)): 0x" << std::hex << word0_swapped;
 
         if (word0_be != word0_swapped) {
             cleanup_test(test);
@@ -600,7 +600,7 @@ void testbench::test_state_endianness_word_granularity()
  ******************************************************************************/
 void testbench::test_state_msg_endianness_independent()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-143: test_state_msg_endianness_independent");
 
     try {
@@ -612,7 +612,7 @@ void testbench::test_state_msg_endianness_independent()
         uint8_t digest_11[32] = {0};  // msg=1, state=1
 
         // Configuration 1: msg=0, state=0 (baseline)
-        CSML_INFO(2, test_logger) << "Configuration 1: msg_endianness=0, state_endianness=0";
+        REG_INFO(2, test_logger) << "Configuration 1: msg_endianness=0, state_endianness=0";
         configure_sha3_with_endianness(test, 0x2, 0, 0);
         write_cmd(test, 0x1D);
         write_msg_fifo(test, msg, msg_len);
@@ -624,7 +624,7 @@ void testbench::test_state_msg_endianness_independent()
         wait(10, SC_NS);
 
         // Configuration 2: msg=1, state=0 (input swapped)
-        CSML_INFO(2, test_logger) << "Configuration 2: msg_endianness=1, state_endianness=0";
+        REG_INFO(2, test_logger) << "Configuration 2: msg_endianness=1, state_endianness=0";
         configure_sha3_with_endianness(test, 0x2, 1, 0);
         write_cmd(test, 0x1D);
         write_msg_fifo(test, msg, msg_len);
@@ -636,7 +636,7 @@ void testbench::test_state_msg_endianness_independent()
         wait(10, SC_NS);
 
         // Configuration 3: msg=0, state=1 (output swapped)
-        CSML_INFO(2, test_logger) << "Configuration 3: msg_endianness=0, state_endianness=1";
+        REG_INFO(2, test_logger) << "Configuration 3: msg_endianness=0, state_endianness=1";
         configure_sha3_with_endianness(test, 0x2, 0, 1);
         write_cmd(test, 0x1D);
         write_msg_fifo(test, msg, msg_len);
@@ -648,7 +648,7 @@ void testbench::test_state_msg_endianness_independent()
         wait(10, SC_NS);
 
         // Configuration 4: msg=1, state=1 (both swapped)
-        CSML_INFO(2, test_logger) << "Configuration 4: msg_endianness=1, state_endianness=1";
+        REG_INFO(2, test_logger) << "Configuration 4: msg_endianness=1, state_endianness=1";
         configure_sha3_with_endianness(test, 0x2, 1, 1);
         write_cmd(test, 0x1D);
         write_msg_fifo(test, msg, msg_len);
@@ -663,14 +663,14 @@ void testbench::test_state_msg_endianness_independent()
             report_test_fail("TC-143", "msg_endianness=1 produced same result as msg_endianness=0");
             return;
         }
-        CSML_INFO(2, test_logger) << "PASS: msg_endianness change affects digest";
+        REG_INFO(2, test_logger) << "PASS: msg_endianness change affects digest";
 
         // Verification 2: digest_01 should differ from digest_00
         if (compare_buffers(digest_01, digest_00, 32)) {
             report_test_fail("TC-143", "state_endianness=1 produced same result as state_endianness=0");
             return;
         }
-        CSML_INFO(2, test_logger) << "PASS: state_endianness change affects digest";
+        REG_INFO(2, test_logger) << "PASS: state_endianness change affects digest";
 
         // Verification 3: digest_01 should be byte-swapped version of digest_00
         uint8_t digest_00_swapped[32];
@@ -680,7 +680,7 @@ void testbench::test_state_msg_endianness_independent()
             report_test_fail("TC-143", "state_endianness swap relationship incorrect");
             return;
         }
-        CSML_INFO(2, test_logger) << "PASS: state_endianness applies correct byte swap";
+        REG_INFO(2, test_logger) << "PASS: state_endianness applies correct byte swap";
 
         // Verification 4: Settings operate independently
         uint8_t digest_10_swapped[32];
@@ -690,7 +690,7 @@ void testbench::test_state_msg_endianness_independent()
             report_test_fail("TC-143", "msg_endianness and state_endianness not independent");
             return;
         }
-        CSML_INFO(2, test_logger) << "PASS: msg_endianness and state_endianness operate independently";
+        REG_INFO(2, test_logger) << "PASS: msg_endianness and state_endianness operate independently";
 
         report_test_pass("TC-143: test_state_msg_endianness_independent");
 

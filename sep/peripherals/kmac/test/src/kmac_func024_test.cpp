@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func024_test.cpp
  * @brief Test cases for FUNC-KMAC-024 (Temporal Decoupling and Timing Abstraction)
@@ -22,17 +22,17 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -106,7 +106,7 @@ static bool verify_no_error(kmac_test* test)
     uint32_t err_code = 0;
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
     if (err_code != 0) {
-        CSML_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
     }
     return (err_code == 0);
 }
@@ -154,15 +154,15 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void test_temporal_decoupling_fifo_full(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-125: test_temporal_decoupling_fifo_full";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-125: test_temporal_decoupling_fifo_full";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         // Configure SHA3-256 mode for testing
         configure_kmac_mode(test, 0x0, 0x2, 0x0);
-        CSML_INFO(2, test_logger) << "Configured SHA3-256 mode";
+        REG_INFO(2, test_logger) << "Configured SHA3-256 mode";
 
         bool idle, absorb, squeeze, fifo_empty, fifo_full;
         uint32_t fifo_depth;
@@ -171,24 +171,24 @@ void test_temporal_decoupling_fifo_full(kmac_test* test)
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
         // Issue START command to enter ABSORB state
         write_cmd(test, 0x1D);
-        CSML_INFO(2, test_logger) << "Issued START command";
+        REG_INFO(2, test_logger) << "Issued START command";
 
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
 
         // Fill MSG_FIFO to maximum depth (typically 10 entries for MsgFifoDepth=10)
         // Each write is a 32-bit word (4 bytes), packer accumulates to 64-bit entries
-        CSML_INFO(2, test_logger) << "Filling MSG_FIFO to capacity...";
+        REG_INFO(2, test_logger) << "Filling MSG_FIFO to capacity...";
         const int MAX_FIFO_DEPTH = 10; // Typical MsgFifoDepth parameter value
 
         // Write enough words to fill FIFO (2 words per 64-bit entry)
@@ -198,48 +198,48 @@ void test_temporal_decoupling_fifo_full(kmac_test* test)
             // Check FIFO status periodically
             if (i % 4 == 0) {
                 read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
-                CSML_INFO(2, test_logger) << "FIFO depth after " << i << " writes: "
+                REG_INFO(2, test_logger) << "FIFO depth after " << i << " writes: "
                                           << fifo_depth << " (full=" << fifo_full << ")";
             }
         }
 
         // Check if FIFO is now full
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
-        CSML_INFO(2, test_logger) << "FIFO status after filling: depth=" << fifo_depth
+        REG_INFO(2, test_logger) << "FIFO status after filling: depth=" << fifo_depth
                                   << ", full=" << fifo_full;
 
         if (!fifo_full) {
-            CSML_INFO(1, test_logger) << "INFO: FIFO not full after filling (model may have started draining)";
+            REG_INFO(1, test_logger) << "INFO: FIFO not full after filling (model may have started draining)";
             // This is acceptable - SHA3 engine may be consuming data
         }
 
         // Attempt additional write - should trigger temporal decoupling wait
-        CSML_INFO(2, test_logger) << "Attempting write when FIFO full (triggers backpressure)";
+        REG_INFO(2, test_logger) << "Attempting write when FIFO full (triggers backpressure)";
         sc_time before_write = sc_time_stamp();
         write_msg_fifo_word(test, 0xDEADBEEF);
         sc_time after_write = sc_time_stamp();
 
         sc_time write_duration = after_write - before_write;
-        CSML_INFO(2, test_logger) << "Write completed in " << write_duration.to_string();
+        REG_INFO(2, test_logger) << "Write completed in " << write_duration.to_string();
 
         // Verify write completed without error
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error occurred during FIFO full backpressure";
+            REG_INFO(1, test_logger) << "FAIL: Error occurred during FIFO full backpressure";
             cleanup_test(test);
             return;
         }
 
         // Verify temporal decoupling wait occurred (non-zero delay but not cycle-accurate)
         if (write_duration > sc_time(0, SC_NS)) {
-            CSML_INFO(2, test_logger) << "PASS: Temporal decoupling wait detected during FIFO full";
+            REG_INFO(2, test_logger) << "PASS: Temporal decoupling wait detected during FIFO full";
         } else {
-            CSML_INFO(2, test_logger) << "INFO: No temporal decoupling delay observed (FIFO may have drained immediately)";
+            REG_INFO(2, test_logger) << "INFO: No temporal decoupling delay observed (FIFO may have drained immediately)";
         }
 
         // Verify FSM still in ABSORB state
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM unexpectedly left ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM unexpectedly left ABSORB state";
             cleanup_test(test);
             return;
         }
@@ -251,10 +251,10 @@ void test_temporal_decoupling_fifo_full(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: Temporal decoupling FIFO full backpressure verified";
+        REG_INFO(1, test_logger) << "PASS: Temporal decoupling FIFO full backpressure verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -267,10 +267,10 @@ void test_temporal_decoupling_fifo_full(kmac_test* test)
  ******************************************************************************/
 void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-167: test_msg_fifo_temporal_decoupling_wait";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-167: test_msg_fifo_temporal_decoupling_wait";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         // Configure SHA3-256 mode
@@ -281,7 +281,7 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
@@ -289,13 +289,13 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
         write_cmd(test, 0x1D);
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
 
         // Fill FIFO to depth-1 (leave 1 entry available)
-        CSML_INFO(2, test_logger) << "Filling FIFO to near-capacity (depth-1)";
+        REG_INFO(2, test_logger) << "Filling FIFO to near-capacity (depth-1)";
         const int NEAR_FULL_ENTRIES = 9; // For MsgFifoDepth=10
 
         for (int i = 0; i < NEAR_FULL_ENTRIES * 2; i++) {
@@ -304,10 +304,10 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
 
         // Check FIFO status
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
-        CSML_INFO(2, test_logger) << "FIFO depth: " << fifo_depth << ", full: " << fifo_full;
+        REG_INFO(2, test_logger) << "FIFO depth: " << fifo_depth << ", full: " << fifo_full;
 
         // Write using byte granularity to test packer behavior
-        CSML_INFO(2, test_logger) << "Testing byte-granularity writes with packer";
+        REG_INFO(2, test_logger) << "Testing byte-granularity writes with packer";
         const uint32_t MSG_FIFO_BASE = 0x800;
 
         // Write individual bytes (packer accumulates to 64-bit)
@@ -318,17 +318,17 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
         }
 
         // Write 10th entry - should trigger longer blocking
-        CSML_INFO(2, test_logger) << "Writing 10th entry (triggers backpressure)";
+        REG_INFO(2, test_logger) << "Writing 10th entry (triggers backpressure)";
         sc_time before = sc_time_stamp();
         write_msg_fifo_word(test, 0x22222222);
         write_msg_fifo_word(test, 0x33333333);
         sc_time after = sc_time_stamp();
 
-        CSML_INFO(2, test_logger) << "Write duration: " << (after - before).to_string();
+        REG_INFO(2, test_logger) << "Write duration: " << (after - before).to_string();
 
         // Verify no data corruption
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error occurred during backpressure";
+            REG_INFO(1, test_logger) << "FAIL: Error occurred during backpressure";
             cleanup_test(test);
             return;
         }
@@ -339,10 +339,10 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: MSG_FIFO temporal decoupling wait verified";
+        REG_INFO(1, test_logger) << "PASS: MSG_FIFO temporal decoupling wait verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -355,17 +355,17 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
  ******************************************************************************/
 void test_functional_entropy_latency(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-106: test_functional_entropy_latency";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-106: test_functional_entropy_latency";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         // Configure ENTROPY_PERIOD register (wait_timer and prescaler)
         // wait_timer = 100 (bits 9:0), prescaler = 0 (bits 31:10)
         uint32_t entropy_period = 100; // Functional timeout value
         test->register_write_32(test->ENTROPY_PERIOD_OFFSET, entropy_period);
-        CSML_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=100, prescaler=0";
+        REG_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=100, prescaler=0";
 
         // Configure CFG_SHADOWED with entropy_mode = edn_mode (0x1)
         // Bits [9:8] = entropy_mode
@@ -374,7 +374,7 @@ void test_functional_entropy_latency(kmac_test* test)
         wait(5, SC_NS);
         test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=edn_mode";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=edn_mode";
 
         // Assert entropy_ready (bit 13 in CFG_SHADOWED)
         cfg_val |= 0x2000; // Set bit 13 (entropy_ready)
@@ -382,7 +382,7 @@ void test_functional_entropy_latency(kmac_test* test)
         wait(5, SC_NS);
         test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Asserted entropy_ready";
+        REG_INFO(2, test_logger) << "Asserted entropy_ready";
 
         // Configure SHA3-256 mode (will require entropy if EnMasking enabled)
         configure_kmac_mode(test, 0x0, 0x2, 0x0);
@@ -392,24 +392,24 @@ void test_functional_entropy_latency(kmac_test* test)
         read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
         // Issue START command (may trigger entropy request if masking enabled)
-        CSML_INFO(2, test_logger) << "Issuing START command (may trigger entropy request)";
+        REG_INFO(2, test_logger) << "Issuing START command (may trigger entropy request)";
         sc_time before_start = sc_time_stamp();
         write_cmd(test, 0x1D);
         sc_time after_start = sc_time_stamp();
 
         sc_time start_duration = after_start - before_start;
-        CSML_INFO(2, test_logger) << "START command duration: " << start_duration.to_string();
+        REG_INFO(2, test_logger) << "START command duration: " << start_duration.to_string();
 
         // Check if entropy request occurred (non-cycle-accurate timing)
         if (start_duration > sc_time(10, SC_NS)) {
-            CSML_INFO(2, test_logger) << "PASS: Functional entropy latency detected (duration > baseline)";
+            REG_INFO(2, test_logger) << "PASS: Functional entropy latency detected (duration > baseline)";
         } else {
-            CSML_INFO(2, test_logger) << "INFO: No entropy latency observed (EnMasking may be disabled)";
+            REG_INFO(2, test_logger) << "INFO: No entropy latency observed (EnMasking may be disabled)";
         }
 
         // Verify no timeout error occurred
@@ -420,10 +420,10 @@ void test_functional_entropy_latency(kmac_test* test)
             // Check if WaitTimerExpired error (0x04)
             uint32_t error_code_field = (err_code >> 24) & 0xFF;
             if (error_code_field == 0x04) {
-                CSML_INFO(2, test_logger) << "INFO: WaitTimerExpired error detected (entropy timeout)";
+                REG_INFO(2, test_logger) << "INFO: WaitTimerExpired error detected (entropy timeout)";
                 // This is expected if entropy channel not responsive
             } else {
-                CSML_INFO(1, test_logger) << "FAIL: Unexpected error during entropy request";
+                REG_INFO(1, test_logger) << "FAIL: Unexpected error during entropy request";
                 cleanup_test(test);
                 return;
             }
@@ -439,10 +439,10 @@ void test_functional_entropy_latency(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: Functional entropy latency verified (non-cycle-accurate)";
+        REG_INFO(1, test_logger) << "PASS: Functional entropy latency verified (non-cycle-accurate)";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -455,24 +455,24 @@ void test_functional_entropy_latency(kmac_test* test)
  ******************************************************************************/
 void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-186: test_rapid_command_sequence_no_timing_dependency";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-186: test_rapid_command_sequence_no_timing_dependency";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         // Configure SHA3-256 mode
         configure_kmac_mode(test, 0x0, 0x2, 0x0);
-        CSML_INFO(2, test_logger) << "Configured SHA3-256 mode";
+        REG_INFO(2, test_logger) << "Configured SHA3-256 mode";
 
         // Perform 10 rapid back-to-back operations
         const int NUM_ITERATIONS = 10;
-        CSML_INFO(2, test_logger) << "Performing " << NUM_ITERATIONS << " rapid back-to-back operations";
+        REG_INFO(2, test_logger) << "Performing " << NUM_ITERATIONS << " rapid back-to-back operations";
 
         sc_time total_start = sc_time_stamp();
 
         for (int iter = 0; iter < NUM_ITERATIONS; iter++) {
-            CSML_INFO(2, test_logger) << "Iteration " << (iter+1) << "/" << NUM_ITERATIONS;
+            REG_INFO(2, test_logger) << "Iteration " << (iter+1) << "/" << NUM_ITERATIONS;
 
             bool idle, absorb, squeeze, fifo_empty, fifo_full;
             uint32_t fifo_depth;
@@ -480,7 +480,7 @@ void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
             // Verify IDLE state
             read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
             if (!idle) {
-                CSML_INFO(1, test_logger) << "FAIL: FSM not in IDLE before iteration " << (iter+1);
+                REG_INFO(1, test_logger) << "FAIL: FSM not in IDLE before iteration " << (iter+1);
                 cleanup_test(test);
                 return;
             }
@@ -494,7 +494,7 @@ void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
             // Verify SQUEEZE state
             read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
             if (!squeeze) {
-                CSML_INFO(1, test_logger) << "FAIL: FSM not in SQUEEZE after PROCESS (iteration " << (iter+1) << ")";
+                REG_INFO(1, test_logger) << "FAIL: FSM not in SQUEEZE after PROCESS (iteration " << (iter+1) << ")";
                 cleanup_test(test);
                 return;
             }
@@ -505,7 +505,7 @@ void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
             test->register_read_32(STATE_BASE, digest_word0);
 
             if (digest_word0 == 0) {
-                CSML_INFO(1, test_logger) << "WARNING: STATE window returned zero (iteration " << (iter+1) << ")";
+                REG_INFO(1, test_logger) << "WARNING: STATE window returned zero (iteration " << (iter+1) << ")";
             }
 
             // Immediately issue DONE
@@ -514,14 +514,14 @@ void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
             // Verify returned to IDLE
             read_status_register(test, idle, absorb, squeeze, fifo_empty, fifo_full, fifo_depth);
             if (!idle) {
-                CSML_INFO(1, test_logger) << "FAIL: FSM not in IDLE after DONE (iteration " << (iter+1) << ")";
+                REG_INFO(1, test_logger) << "FAIL: FSM not in IDLE after DONE (iteration " << (iter+1) << ")";
                 cleanup_test(test);
                 return;
             }
 
             // Verify no errors
             if (!verify_no_error(test)) {
-                CSML_INFO(1, test_logger) << "FAIL: Error occurred during iteration " << (iter+1);
+                REG_INFO(1, test_logger) << "FAIL: Error occurred during iteration " << (iter+1);
                 cleanup_test(test);
                 return;
             }
@@ -530,25 +530,25 @@ void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
         sc_time total_end = sc_time_stamp();
         sc_time total_duration = total_end - total_start;
 
-        CSML_INFO(2, test_logger) << "Completed " << NUM_ITERATIONS << " iterations in "
+        REG_INFO(2, test_logger) << "Completed " << NUM_ITERATIONS << " iterations in "
                                   << total_duration.to_string();
 
         // Calculate average time per operation (should be fast, not cycle-accurate)
         sc_time avg_per_op = total_duration / NUM_ITERATIONS;
-        CSML_INFO(2, test_logger) << "Average time per operation: " << avg_per_op.to_string();
+        REG_INFO(2, test_logger) << "Average time per operation: " << avg_per_op.to_string();
 
         // Verify operations completed without cycle-level constraints
         // (i.e., total duration reasonable for functional model)
         if (total_duration < sc_time(1, SC_MS)) {
-            CSML_INFO(2, test_logger) << "PASS: Rapid operations completed without cycle-level timing constraints";
+            REG_INFO(2, test_logger) << "PASS: Rapid operations completed without cycle-level timing constraints";
         } else {
-            CSML_INFO(1, test_logger) << "WARNING: Operations took longer than expected (may indicate cycle-accurate modeling)";
+            REG_INFO(1, test_logger) << "WARNING: Operations took longer than expected (may indicate cycle-accurate modeling)";
         }
 
-        CSML_INFO(1, test_logger) << "PASS: Rapid command sequence verified (no cycle-level timing dependencies)";
+        REG_INFO(1, test_logger) << "PASS: Rapid command sequence verified (no cycle-level timing dependencies)";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }

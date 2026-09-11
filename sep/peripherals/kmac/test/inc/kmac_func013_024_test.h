@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func013_024_test.h
  * @brief Test declarations for FUNC-KMAC-013 through FUNC-KMAC-024
@@ -25,7 +25,7 @@
  * Test Plan Reference: kmac-test-plan.md
  * Functionality Reference: kmac-functionality-testcases.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once
@@ -51,6 +51,10 @@ void test_run_exhausts_kmac_output(kmac_test* test);
 void test_state_share1_masking_disabled(kmac_test* test);
 void test_state_read_straddles_digest_end(kmac_test* test);
 void test_keymgr_read_rejected(kmac_test* test);
+void test_invalid_key_len_on_kmac_start(kmac_test* test);
+void test_escalate_with_msg_fifo_data(kmac_test* test);
+void test_empty_app_message(kmac_test* test);
+void test_long_customization_string(kmac_test* test);
 void test_second_app_blocked_while_first_active(kmac_test* test);
 
 // =============================================================================

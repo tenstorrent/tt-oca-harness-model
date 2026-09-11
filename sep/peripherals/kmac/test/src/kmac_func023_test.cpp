@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func023_test.cpp
  * @brief Test cases for FUNC-KMAC-023 (OpenSSL Cryptographic Delegation)
@@ -23,11 +23,11 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
@@ -35,7 +35,7 @@
 #include <openssl/sha.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -109,7 +109,7 @@ static bool verify_no_error(kmac_test* test)
     uint32_t err_code = 0;
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
     if (err_code != 0) {
-        CSML_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
     }
     return (err_code == 0);
 }
@@ -171,7 +171,7 @@ static bool compare_digest(const uint8_t* digest, const uint8_t* expected, size_
 {
     for (size_t i = 0; i < length; i++) {
         if (digest[i] != expected[i]) {
-            CSML_INFO(2, test_logger) << "Digest mismatch at byte " << i
+            REG_INFO(2, test_logger) << "Digest mismatch at byte " << i
                                       << ": got 0x" << std::hex << (int)digest[i]
                                       << " expected 0x" << (int)expected[i] << std::dec;
             return false;
@@ -242,10 +242,10 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void test_sha3_224_openssl_delegation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-016: test_sha3_224_openssl_delegation";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-016: test_sha3_224_openssl_delegation";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         // Test message "abc"
@@ -262,51 +262,51 @@ void test_sha3_224_openssl_delegation(kmac_test* test)
 
         // Configure SHA3-224 mode (mode=0x0, kstrength=0x1, kmac_en=0)
         configure_kmac_mode(test, 0x0, 0x1, 0x0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L224";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L224";
 
         // Verify initial IDLE state
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
         // Issue START command (0x1D) to initialize OpenSSL EVP context
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         // Verify FSM transitioned to ABSORB state
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM transitioned to ABSORB state";
+        REG_INFO(2, test_logger) << "FSM transitioned to ABSORB state";
 
         // Write message to MSG_FIFO (triggers EVP_DigestUpdate)
-        CSML_INFO(2, test_logger) << "Writing message \"abc\" to MSG_FIFO";
+        REG_INFO(2, test_logger) << "Writing message \"abc\" to MSG_FIFO";
         write_message_to_fifo(test, message, msg_len);
 
         // Issue PROCESS command (0x2E) to finalize (triggers EVP_DigestFinal_ex)
-        CSML_INFO(2, test_logger) << "Issuing PROCESS command (0x2E)";
+        REG_INFO(2, test_logger) << "Issuing PROCESS command (0x2E)";
         write_cmd(test, 0x2E);
         wait(20, SC_NS); // Allow time for OpenSSL computation
 
         // Verify FSM transitioned to SQUEEZE state
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!squeeze) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
             cleanup_test(test);
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM transitioned to SQUEEZE state";
+        REG_INFO(2, test_logger) << "FSM transitioned to SQUEEZE state";
 
         // Verify no errors occurred
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error detected during operation";
+            REG_INFO(1, test_logger) << "FAIL: Error detected during operation";
             cleanup_test(test);
             return;
         }
@@ -315,16 +315,16 @@ void test_sha3_224_openssl_delegation(kmac_test* test)
         uint8_t digest[28] = {0};
         read_digest_from_state(test, digest, 28);
 
-        CSML_INFO(2, test_logger) << "Computed SHA3-224 digest:";
+        REG_INFO(2, test_logger) << "Computed SHA3-224 digest:";
         std::stringstream ss;
         for (size_t i = 0; i < 28; i++) {
             ss << std::hex << std::setw(2) << std::setfill('0') << (int)digest[i];
         }
-        CSML_INFO(2, test_logger) << ss.str();
+        REG_INFO(2, test_logger) << ss.str();
 
         // Compare with expected digest
         if (!compare_digest(digest, expected_digest, 28)) {
-            CSML_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-224 output";
+            REG_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-224 output";
             cleanup_test(test);
             return;
         }
@@ -333,7 +333,7 @@ void test_sha3_224_openssl_delegation(kmac_test* test)
         uint8_t reference_digest[28] = {0};
         if (compute_reference_hash(EVP_sha3_224(), message, msg_len, reference_digest, 28)) {
             if (!compare_digest(digest, reference_digest, 28)) {
-                CSML_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
+                REG_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
                 cleanup_test(test);
                 return;
             }
@@ -343,10 +343,10 @@ void test_sha3_224_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE command
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: SHA3-224 OpenSSL delegation verified";
+        REG_INFO(1, test_logger) << "PASS: SHA3-224 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -356,10 +356,10 @@ void test_sha3_224_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_sha3_256_openssl_delegation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-017: test_sha3_256_openssl_delegation";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-017: test_sha3_256_openssl_delegation";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         // Test message "abc"
@@ -376,14 +376,14 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
 
         // Configure SHA3-256 mode (mode=0x0, kstrength=0x2, kmac_en=0)
         configure_kmac_mode(test, 0x0, 0x2, 0x0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L256";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L256";
 
         // Verify initial IDLE state
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
@@ -393,7 +393,7 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
         // Verify ABSORB state
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
@@ -408,14 +408,14 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
         // Verify SQUEEZE state
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!squeeze) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
             cleanup_test(test);
             return;
         }
 
         // Verify no errors
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error detected during operation";
+            REG_INFO(1, test_logger) << "FAIL: Error detected during operation";
             cleanup_test(test);
             return;
         }
@@ -426,7 +426,7 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
 
         // Compare with expected digest
         if (!compare_digest(digest, expected_digest, 32)) {
-            CSML_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-256 output";
+            REG_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-256 output";
             cleanup_test(test);
             return;
         }
@@ -435,7 +435,7 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
         uint8_t reference_digest[32] = {0};
         if (compute_reference_hash(EVP_sha3_256(), message, msg_len, reference_digest, 32)) {
             if (!compare_digest(digest, reference_digest, 32)) {
-                CSML_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
+                REG_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
                 cleanup_test(test);
                 return;
             }
@@ -445,10 +445,10 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE command
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: SHA3-256 OpenSSL delegation verified";
+        REG_INFO(1, test_logger) << "PASS: SHA3-256 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -458,10 +458,10 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_sha3_384_openssl_delegation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-018: test_sha3_384_openssl_delegation";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-018: test_sha3_384_openssl_delegation";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         const uint8_t message[] = {0x61, 0x62, 0x63};  // "abc"
@@ -484,14 +484,14 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
         write_cmd(test, 0x1D); // START
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
@@ -502,13 +502,13 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
 
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!squeeze) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
             cleanup_test(test);
             return;
         }
 
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error detected during operation";
+            REG_INFO(1, test_logger) << "FAIL: Error detected during operation";
             cleanup_test(test);
             return;
         }
@@ -517,7 +517,7 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
         read_digest_from_state(test, digest, 48);
 
         if (!compare_digest(digest, expected_digest, 48)) {
-            CSML_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-384 output";
+            REG_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-384 output";
             cleanup_test(test);
             return;
         }
@@ -526,7 +526,7 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
         uint8_t reference_digest[48] = {0};
         if (compute_reference_hash(EVP_sha3_384(), message, msg_len, reference_digest, 48)) {
             if (!compare_digest(digest, reference_digest, 48)) {
-                CSML_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
+                REG_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
                 cleanup_test(test);
                 return;
             }
@@ -535,10 +535,10 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: SHA3-384 OpenSSL delegation verified";
+        REG_INFO(1, test_logger) << "PASS: SHA3-384 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -548,10 +548,10 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_sha3_512_openssl_delegation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-019: test_sha3_512_openssl_delegation";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-019: test_sha3_512_openssl_delegation";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         const uint8_t message[] = {0x61, 0x62, 0x63};  // "abc"
@@ -576,14 +576,14 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
         write_cmd(test, 0x1D); // START
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
@@ -594,13 +594,13 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
 
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!squeeze) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
             cleanup_test(test);
             return;
         }
 
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error detected during operation";
+            REG_INFO(1, test_logger) << "FAIL: Error detected during operation";
             cleanup_test(test);
             return;
         }
@@ -609,7 +609,7 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
         read_digest_from_state(test, digest, 64);
 
         if (!compare_digest(digest, expected_digest, 64)) {
-            CSML_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-512 output";
+            REG_INFO(1, test_logger) << "FAIL: Digest does not match expected SHA3-512 output";
             cleanup_test(test);
             return;
         }
@@ -618,7 +618,7 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
         uint8_t reference_digest[64] = {0};
         if (compute_reference_hash(EVP_sha3_512(), message, msg_len, reference_digest, 64)) {
             if (!compare_digest(digest, reference_digest, 64)) {
-                CSML_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
+                REG_INFO(1, test_logger) << "FAIL: Digest does not match OpenSSL reference";
                 cleanup_test(test);
                 return;
             }
@@ -627,10 +627,10 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: SHA3-512 OpenSSL delegation verified";
+        REG_INFO(1, test_logger) << "PASS: SHA3-512 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -640,10 +640,10 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_shake128_openssl_delegation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-029: test_shake128_openssl_delegation";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-029: test_shake128_openssl_delegation";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         const uint8_t message[] = {0x61, 0x62, 0x63};  // "abc"
@@ -659,20 +659,20 @@ void test_shake128_openssl_delegation(kmac_test* test)
 
         // Configure SHAKE128 mode (mode=0x2, kstrength=0x0, kmac_en=0)
         configure_kmac_mode(test, 0x2, 0x0, 0x0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L128";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L128";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
         write_cmd(test, 0x1D); // START
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
@@ -683,13 +683,13 @@ void test_shake128_openssl_delegation(kmac_test* test)
 
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!squeeze) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
             cleanup_test(test);
             return;
         }
 
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error detected during operation";
+            REG_INFO(1, test_logger) << "FAIL: Error detected during operation";
             cleanup_test(test);
             return;
         }
@@ -698,7 +698,7 @@ void test_shake128_openssl_delegation(kmac_test* test)
         read_digest_from_state(test, output, 32);
 
         if (!compare_digest(output, expected_output, 32)) {
-            CSML_INFO(1, test_logger) << "FAIL: Output does not match expected SHAKE128 output";
+            REG_INFO(1, test_logger) << "FAIL: Output does not match expected SHAKE128 output";
             cleanup_test(test);
             return;
         }
@@ -707,7 +707,7 @@ void test_shake128_openssl_delegation(kmac_test* test)
         uint8_t reference_output[32] = {0};
         if (compute_reference_hash(EVP_shake128(), message, msg_len, reference_output, 32)) {
             if (!compare_digest(output, reference_output, 32)) {
-                CSML_INFO(1, test_logger) << "FAIL: Output does not match OpenSSL EVP_shake128 reference";
+                REG_INFO(1, test_logger) << "FAIL: Output does not match OpenSSL EVP_shake128 reference";
                 cleanup_test(test);
                 return;
             }
@@ -716,10 +716,10 @@ void test_shake128_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: SHAKE128 OpenSSL delegation verified";
+        REG_INFO(1, test_logger) << "PASS: SHAKE128 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -729,10 +729,10 @@ void test_shake128_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_shake256_openssl_delegation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-030: test_shake256_openssl_delegation";
-    CSML_INFO(1, test_logger) << "========================================";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-030: test_shake256_openssl_delegation";
+    REG_INFO(1, test_logger) << "========================================";
 
     try {
         const uint8_t message[] = {0x61, 0x62, 0x63};  // "abc"
@@ -752,20 +752,20 @@ void test_shake256_openssl_delegation(kmac_test* test)
 
         // Configure SHAKE256 mode (mode=0x2, kstrength=0x2, kmac_en=0)
         configure_kmac_mode(test, 0x2, 0x2, 0x0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L256";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L256";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!idle) {
             cleanup_test(test);
-            CSML_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
+            REG_INFO(1, test_logger) << "FAIL: Precondition - FSM not in IDLE state";
             return;
         }
 
         write_cmd(test, 0x1D); // START
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!absorb) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to ABSORB state";
             cleanup_test(test);
             return;
         }
@@ -776,13 +776,13 @@ void test_shake256_openssl_delegation(kmac_test* test)
 
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (!squeeze) {
-            CSML_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
+            REG_INFO(1, test_logger) << "FAIL: FSM did not transition to SQUEEZE state";
             cleanup_test(test);
             return;
         }
 
         if (!verify_no_error(test)) {
-            CSML_INFO(1, test_logger) << "FAIL: Error detected during operation";
+            REG_INFO(1, test_logger) << "FAIL: Error detected during operation";
             cleanup_test(test);
             return;
         }
@@ -791,7 +791,7 @@ void test_shake256_openssl_delegation(kmac_test* test)
         read_digest_from_state(test, output, 64);
 
         if (!compare_digest(output, expected_output, 64)) {
-            CSML_INFO(1, test_logger) << "FAIL: Output does not match expected SHAKE256 output";
+            REG_INFO(1, test_logger) << "FAIL: Output does not match expected SHAKE256 output";
             cleanup_test(test);
             return;
         }
@@ -800,7 +800,7 @@ void test_shake256_openssl_delegation(kmac_test* test)
         uint8_t reference_output[64] = {0};
         if (compute_reference_hash(EVP_shake256(), message, msg_len, reference_output, 64)) {
             if (!compare_digest(output, reference_output, 64)) {
-                CSML_INFO(1, test_logger) << "FAIL: Output does not match OpenSSL EVP_shake256 reference";
+                REG_INFO(1, test_logger) << "FAIL: Output does not match OpenSSL EVP_shake256 reference";
                 cleanup_test(test);
                 return;
             }
@@ -809,10 +809,10 @@ void test_shake256_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(1, test_logger) << "PASS: SHAKE256 OpenSSL delegation verified";
+        REG_INFO(1, test_logger) << "PASS: SHAKE256 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
-        CSML_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
+        REG_INFO(1, test_logger) << "FAIL: Exception - " << e.what();
         cleanup_test(test);
     }
 }
@@ -830,54 +830,54 @@ void test_shake256_openssl_delegation(kmac_test* test)
 
 void test_cshake128_openssl_primitives(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-038: test_cshake128_openssl_primitives (STUB)";
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "STUB: Test implementation deferred - requires PREFIX register support";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-038: test_cshake128_openssl_primitives (STUB)";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "STUB: Test implementation deferred - requires PREFIX register support";
 }
 
 void test_cshake256_openssl_primitives(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-039: test_cshake256_openssl_primitives (STUB)";
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "STUB: Test implementation deferred - requires PREFIX register support";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-039: test_cshake256_openssl_primitives (STUB)";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "STUB: Test implementation deferred - requires PREFIX register support";
 }
 
 void test_kmac_128bit_openssl_implementation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-045: test_kmac_128bit_openssl_implementation (STUB)";
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "STUB: Test implementation deferred - requires KEY_SHARE and PREFIX support";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-045: test_kmac_128bit_openssl_implementation (STUB)";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "STUB: Test implementation deferred - requires KEY_SHARE and PREFIX support";
 }
 
 void test_kmac_256bit_openssl_implementation(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-046: test_kmac_256bit_openssl_implementation (STUB)";
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "STUB: Test implementation deferred - requires KEY_SHARE and PREFIX support";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-046: test_kmac_256bit_openssl_implementation (STUB)";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "STUB: Test implementation deferred - requires KEY_SHARE and PREFIX support";
 }
 
 void test_evp_digestfinal_ex_after_process(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-160: test_evp_digestfinal_ex_after_process (STUB)";
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "STUB: Test implementation deferred - requires multi-block message testing";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-160: test_evp_digestfinal_ex_after_process (STUB)";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "STUB: Test implementation deferred - requires multi-block message testing";
 }
 
 void test_evp_digestfinalxof_for_run_commands(kmac_test* test)
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "TC-161: test_evp_digestfinalxof_for_run_commands (STUB)";
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "STUB: Test implementation deferred - requires RUN command extended output support";
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "TC-161: test_evp_digestfinalxof_for_run_commands (STUB)";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "STUB: Test implementation deferred - requires RUN command extended output support";
 }

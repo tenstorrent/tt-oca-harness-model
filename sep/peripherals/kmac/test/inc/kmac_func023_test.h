@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func023_test.h
  * @brief Test declarations for FUNC-KMAC-023 (OpenSSL Cryptographic Delegation)
@@ -14,11 +16,11 @@
  * - EVP_DigestFinal_ex producing digest after PROCESS command
  * - EVP_DigestFinalXOF providing additional output for RUN commands
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Functionality Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md
- * Detailed Design: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-detailed-design.md (Section 7.3)
+ * Test Plan Reference: kmac-test-plan.md
+ * Functionality Reference: kmac-functionality-testcases.md
+ * Detailed Design: kmac-detailed-design.md (Section 7.3)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once

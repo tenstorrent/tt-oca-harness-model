@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /**
  * @file testbench.cpp
  * @brief Mailbox SystemC testbench implementation
@@ -8,7 +8,7 @@
  * between mailbox model and test harness, including dual TLM sockets for
  * slave ports, interrupt signals, clock, and reset.
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  */
 
 #include "testbench.h"

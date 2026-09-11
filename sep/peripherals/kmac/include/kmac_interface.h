@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_interface.h
  * @brief Abstract interface definitions for KMAC SystemC TLM custom ports
@@ -7,7 +9,7 @@
  * ROM_CTRL). These abstracts enable
  * separation between model and test harness components.
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once

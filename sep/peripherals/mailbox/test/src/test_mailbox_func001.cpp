@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /**
  * @file test_mailbox_func001.cpp
  * @brief FUNC-001: System Reset and Initialization Behavior test implementation
@@ -9,7 +9,7 @@
  * - Additional verification points for reset behavior, FIFO state, and
  * interrupts
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  */
 
 #include "testbench.h"
@@ -62,19 +62,19 @@
  */
 void testbench::test_reset_fifo_interrupt_state() {
   std::string test_name = "TC006: FIFO and Interrupt State Clear";
-  CSML_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Running: " << test_name;
 
   bool test_passed = true;
   uint64_t read_value = 0;
 
-  CSML_INFO(2, logger) << "========================================\n"
+  REG_INFO(2, logger) << "========================================\n"
                        << "TC006: test_reset_fifo_interrupt_state\n"
                        << "Description: Verify FIFO and interrupt state clears on reset\n"
                        << "Registers: WRITE_DATA, STATUS, IRQS, ERROR_FLAGS\n"
                        << "========================================";
 
   // Step 1: Fill FIFOs with data before reset
-  CSML_INFO(2, logger) << "Step 1: Filling FIFOs with data before reset";
+  REG_INFO(2, logger) << "Step 1: Filling FIFOs with data before reset";
 
   // Write multiple data entries to Port 0 (appears in Port 1 read FIFO)
   test_port0->register_write_64(mailbox_basetest::WRITE_DATA_OFFSET,
@@ -102,10 +102,10 @@ void testbench::test_reset_fifo_interrupt_state() {
   std::stringstream ss;
   ss << "Before reset: Port 0 FIFO empty=" << port0_empty_before
      << ", Port 1 FIFO empty=" << port1_empty_before;
-  CSML_INFO(2, logger) << ss.str();
+  REG_INFO(2, logger) << ss.str();
 
   // Step 2: Trigger interrupts (enable and set IRQS)
-  CSML_INFO(2, logger) << "Step 2: Triggering interrupts before reset";
+  REG_INFO(2, logger) << "Step 2: Triggering interrupts before reset";
 
   // Enable all interrupts on both ports
   test_port0->register_write_64(mailbox_basetest::IRQEN_OFFSET,
@@ -131,7 +131,7 @@ void testbench::test_reset_fifo_interrupt_state() {
   ss.str("");
   ss << "Before reset: Port 0 IRQS=0x" << std::hex << port0_irqs_before
      << ", Port 1 IRQS=0x" << port1_irqs_before;
-  CSML_INFO(2, logger) << ss.str();
+  REG_INFO(2, logger) << ss.str();
 
   // Read error flags before reset (may have errors from overflow/underflow
   // attempts)
@@ -146,19 +146,19 @@ void testbench::test_reset_fifo_interrupt_state() {
   ss.str("");
   ss << "Before reset: Port 0 ERROR_FLAGS=0x" << std::hex << port0_errors_before
      << ", Port 1 ERROR_FLAGS=0x" << port1_errors_before;
-  CSML_INFO(2, logger) << ss.str();
+  REG_INFO(2, logger) << ss.str();
 
   // Step 3 & 4: Assert and deassert reset
-  CSML_INFO(2, logger) << "Step 3: Asserting reset (rst_ni = 0)";
+  REG_INFO(2, logger) << "Step 3: Asserting reset (rst_ni = 0)";
   rst_ni_sig.write(false);
   wait(15, SC_NS);
 
-  CSML_INFO(2, logger) << "Step 4: Deasserting reset (rst_ni = 1)";
+  REG_INFO(2, logger) << "Step 4: Deasserting reset (rst_ni = 1)";
   rst_ni_sig.write(true);
   wait(10, SC_NS);
 
   // Step 5: Verify both FIFOs empty (STATUS[0]=1)
-  CSML_INFO(2, logger) <<
+  REG_INFO(2, logger) <<
                  "Step 5: Verifying both FIFOs empty after reset";
 
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, read_value);
@@ -168,21 +168,21 @@ void testbench::test_reset_fifo_interrupt_state() {
   bool port1_empty_after = (read_value & 0x1) != 0;
 
   if (!port0_empty_after) {
-    CSML_ERROR(0, logger) << "Port 0 FIFO not empty after reset (STATUS[0] should be 1)";
+    REG_ERROR(0, logger) << "Port 0 FIFO not empty after reset (STATUS[0] should be 1)";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 0 FIFO empty after reset (STATUS[0]=1) (PASS)";
+    REG_INFO(2, logger) << "Port 0 FIFO empty after reset (STATUS[0]=1) (PASS)";
   }
 
   if (!port1_empty_after) {
-    CSML_ERROR(0, logger) << "Port 1 FIFO not empty after reset (STATUS[0] should be 1)";
+    REG_ERROR(0, logger) << "Port 1 FIFO not empty after reset (STATUS[0] should be 1)";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 1 FIFO empty after reset (STATUS[0]=1) (PASS)";
+    REG_INFO(2, logger) << "Port 1 FIFO empty after reset (STATUS[0]=1) (PASS)";
   }
 
   // Step 6: Verify all interrupt status cleared (IRQS=0x0)
-  CSML_INFO(2, logger) <<
+  REG_INFO(2, logger) <<
                  "Step 6: Verifying all interrupt status cleared";
 
   test_port0->register_read_64(mailbox_basetest::IRQS_OFFSET, read_value);
@@ -190,10 +190,10 @@ void testbench::test_reset_fifo_interrupt_state() {
     ss.str("");
     ss << "Port 0 IRQS not cleared after reset. Expected: 0x0, Got: 0x"
        << std::hex << read_value;
-    CSML_ERROR(0, logger) << ss.str();
+    REG_ERROR(0, logger) << ss.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 0 IRQS = 0x0 after reset (PASS)";
+    REG_INFO(2, logger) << "Port 0 IRQS = 0x0 after reset (PASS)";
   }
 
   test_port1->register_read_64(mailbox_basetest::IRQS_OFFSET, read_value);
@@ -201,14 +201,14 @@ void testbench::test_reset_fifo_interrupt_state() {
     ss.str("");
     ss << "Port 1 IRQS not cleared after reset. Expected: 0x0, Got: 0x"
        << std::hex << read_value;
-    CSML_ERROR(0, logger) << ss.str();
+    REG_ERROR(0, logger) << ss.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 1 IRQS = 0x0 after reset (PASS)";
+    REG_INFO(2, logger) << "Port 1 IRQS = 0x0 after reset (PASS)";
   }
 
   // Step 7: Verify interrupt outputs deasserted
-  CSML_INFO(2, logger) <<
+  REG_INFO(2, logger) <<
                  "Step 7: Verifying interrupt outputs deasserted";
 
   // Note: Interrupt polarity depends on IrqActHigh configuration
@@ -221,27 +221,27 @@ void testbench::test_reset_fifo_interrupt_state() {
 
   ss.str("");
   ss << "After reset: irq_o[0]=" << irq0_state << ", irq_o[1]=" << irq1_state;
-  CSML_INFO(2, logger) << ss.str();
+  REG_INFO(2, logger) << ss.str();
 
   // Verify IRQP=0 which should result in inactive interrupt outputs
   test_port0->register_read_64(mailbox_basetest::IRQP_OFFSET, read_value);
   if (read_value != 0x0) {
-    CSML_ERROR(0, logger) << "Port 0 IRQP not 0x0 after reset";
+    REG_ERROR(0, logger) << "Port 0 IRQP not 0x0 after reset";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 0 IRQP = 0x0, interrupt output should be inactive (PASS)";
+    REG_INFO(2, logger) << "Port 0 IRQP = 0x0, interrupt output should be inactive (PASS)";
   }
 
   test_port1->register_read_64(mailbox_basetest::IRQP_OFFSET, read_value);
   if (read_value != 0x0) {
-    CSML_ERROR(0, logger) << "Port 1 IRQP not 0x0 after reset";
+    REG_ERROR(0, logger) << "Port 1 IRQP not 0x0 after reset";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 1 IRQP = 0x0, interrupt output should be inactive (PASS)";
+    REG_INFO(2, logger) << "Port 1 IRQP = 0x0, interrupt output should be inactive (PASS)";
   }
 
   // Step 8: Verify error flags reset to initial value (ERROR_FLAGS=0x0 per RDL: read_error=0, write_error=0)
-  CSML_INFO(2, logger) << "Step 8: Verifying ERROR_FLAGS reset to initial value (0x0: both flags clear per RDL)";
+  REG_INFO(2, logger) << "Step 8: Verifying ERROR_FLAGS reset to initial value (0x0: both flags clear per RDL)";
 
   test_port0->register_read_64(mailbox_basetest::ERROR_FLAGS_OFFSET,
                                read_value);
@@ -249,10 +249,10 @@ void testbench::test_reset_fifo_interrupt_state() {
     ss.str("");
     ss << "Port 0 ERROR_FLAGS not reset correctly. Expected: 0x0 (read_error=0), Got: 0x"
        << std::hex << read_value;
-    CSML_ERROR(0, logger) << ss.str();
+    REG_ERROR(0, logger) << ss.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 0 ERROR_FLAGS = 0x0 after reset (both flags clear per RDL) (PASS)";
+    REG_INFO(2, logger) << "Port 0 ERROR_FLAGS = 0x0 after reset (both flags clear per RDL) (PASS)";
   }
 
   test_port1->register_read_64(mailbox_basetest::ERROR_FLAGS_OFFSET,
@@ -261,35 +261,35 @@ void testbench::test_reset_fifo_interrupt_state() {
     ss.str("");
     ss << "Port 1 ERROR_FLAGS not reset correctly. Expected: 0x0 (read_error=0), Got: 0x"
        << std::hex << read_value;
-    CSML_ERROR(0, logger) << ss.str();
+    REG_ERROR(0, logger) << ss.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "Port 1 ERROR_FLAGS = 0x0 after reset (read_error=0) (PASS)";
+    REG_INFO(2, logger) << "Port 1 ERROR_FLAGS = 0x0 after reset (read_error=0) (PASS)";
   }
 
   // Step 9: Test reset can recover from error states
-  CSML_INFO(2, logger) <<
+  REG_INFO(2, logger) <<
                  "Step 9: Verifying reset recovers from error states";
-  CSML_INFO(2, logger) << "Reset successfully cleared all FIFO data, "
+  REG_INFO(2, logger) << "Reset successfully cleared all FIFO data, "
                                "interrupts, and error flags (PASS)";
 
   // Test result
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   if (test_passed) {
-    CSML_INFO(2, logger) << "TEST RESULT: PASS";
-    CSML_INFO(2, logger) << "All verification points passed:";
-    CSML_INFO(2, logger) << "  - Both FIFOs empty (STATUS[0]=1)";
-    CSML_INFO(2, logger) << "  - All interrupt status cleared (IRQS=0x0)";
-    CSML_INFO(2, logger) <<
+    REG_INFO(2, logger) << "TEST RESULT: PASS";
+    REG_INFO(2, logger) << "All verification points passed:";
+    REG_INFO(2, logger) << "  - Both FIFOs empty (STATUS[0]=1)";
+    REG_INFO(2, logger) << "  - All interrupt status cleared (IRQS=0x0)";
+    REG_INFO(2, logger) <<
                    "  - All interrupt outputs deasserted (IRQP=0x0)";
-    CSML_INFO(2, logger) <<
+    REG_INFO(2, logger) <<
                    "  - ERROR_FLAGS reset to initial value (ERROR_FLAGS=0x0: both flags clear per RDL)";
-    CSML_INFO(2, logger) << "  - Reset can recover from error states";
+    REG_INFO(2, logger) << "  - Reset can recover from error states";
   } else {
-    CSML_ERROR(0, logger) << "TEST RESULT: FAIL";
-    CSML_ERROR(0, logger) << "One or more verification points failed";
+    REG_ERROR(0, logger) << "TEST RESULT: FAIL";
+    REG_ERROR(0, logger) << "One or more verification points failed";
   }
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   report_test_result(test_name.c_str(), test_passed);
 }

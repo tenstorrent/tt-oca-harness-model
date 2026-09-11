@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func001_test.h
  * @brief Test declarations for FUNC-KMAC-001 (SHA3 Hash Operation - Phase 1)
@@ -17,10 +19,10 @@
  * - Message absorption and padding
  * - Digest output verification
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Functionality Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md
+ * Test Plan Reference: kmac-test-plan.md
+ * Functionality Reference: kmac-functionality-testcases.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2025 Tenstorrent USA, Inc.
 /**
  * @file csrng_func002_pseudorandom_generation.cpp
  * @brief Test implementation for CRNG_FUNC_002 - Pseudorandom Bit Generation
@@ -21,7 +21,7 @@
  * The GENBITS register is 128 bits wide, accessed as 4 sequential 32-bit reads.
  * GENBITS_VLD flag indicates data availability and FIPS compliance status.
  *
- * @copyright Copyright (c) 2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2025, Tenstorrent USA, Inc.
  * @license BSD-3-Clause
  */
 
@@ -292,7 +292,7 @@ void testbench::test_genbits_sequential_read_4_words()
 
         // Instantiate instance 0
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
             test_passed = false;;
         }
 
@@ -301,7 +301,7 @@ void testbench::test_genbits_sequential_read_4_words()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
             test_passed = false;
         }
 
@@ -310,13 +310,13 @@ void testbench::test_genbits_sequential_read_4_words()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_inst);
         uint32_t status_inst = (cmd_sts_inst >> 3) & 0x7;
         if (status_inst != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
             test_passed = false;
         }
 
         // Issue GENERATE with glen=1
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
             test_passed = false;
         }
 
@@ -325,7 +325,7 @@ void testbench::test_genbits_sequential_read_4_words()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE timeout";
+            REG_ERROR(1, logger) << "FAILED: GENERATE timeout";
             test_passed = false;
         }
 
@@ -334,13 +334,13 @@ void testbench::test_genbits_sequential_read_4_words()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_gen);
         uint32_t status_gen = (cmd_sts_gen >> 3) & 0x7;
         if (status_gen != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE did not succeed - CMD_STS=0x" << std::hex << status_gen;
+            REG_ERROR(1, logger) << "FAILED: GENERATE did not succeed - CMD_STS=0x" << std::hex << status_gen;
             test_passed = false;
         }
 
         // Wait for GENBITS_VLD to be set
         if (!wait_genbits_vld(m_test.get(), 10000)) {
-            CSML_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout - data not available after GENERATE";
+            REG_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout - data not available after GENERATE";
             test_passed = false;
         }
 
@@ -349,16 +349,16 @@ void testbench::test_genbits_sequential_read_4_words()
         for (int i = 0; i < 4; i++) {
             m_test->register_read_32(csrng_basetest::GENBITS_OFFSET, words[i]);
             wait(1, SC_US);
-            CSML_INFO(2, logger) << "GENBITS read " << i << ": 0x" << std::hex << words[i];
+            REG_INFO(2, logger) << "GENBITS read " << i << ": 0x" << std::hex << words[i];
         }
 
         // Verify each read returns a different 32-bit word
         // Check that all 4 words are different from each other
         bool all_same = (words[0] == words[1]) && (words[1] == words[2]) && (words[2] == words[3]);
         if (all_same) {
-            CSML_ERROR(1, logger) << "FAILED: All 4 GENBITS reads returned the same value (0x" << std::hex << words[0] << ")";
-            CSML_ERROR(1, logger) << "Expected: Each read should return a different 32-bit word of the 128-bit block";
-            CSML_ERROR(1, logger) << "Read pointer may not be advancing correctly";
+            REG_ERROR(1, logger) << "FAILED: All 4 GENBITS reads returned the same value (0x" << std::hex << words[0] << ")";
+            REG_ERROR(1, logger) << "Expected: Each read should return a different 32-bit word of the 128-bit block";
+            REG_ERROR(1, logger) << "Read pointer may not be advancing correctly";
             test_passed = false;
         } else {
             // Verify each word is different from all others
@@ -366,9 +366,9 @@ void testbench::test_genbits_sequential_read_4_words()
             for (int i = 0; i < 4 && words_differ; i++) {
                 for (int j = i + 1; j < 4; j++) {
                     if (words[i] == words[j]) {
-                        CSML_ERROR(1, logger) << "FAILED: GENBITS read " << i << " and " << j 
+                        REG_ERROR(1, logger) << "FAILED: GENBITS read " << i << " and " << j 
                                               << " returned the same value (0x" << std::hex << words[i] << ")";
-                        CSML_ERROR(1, logger) << "Expected: Each read should return a different 32-bit word";
+                        REG_ERROR(1, logger) << "Expected: Each read should return a different 32-bit word";
                         words_differ = false;
                         test_passed = false;
                         break;
@@ -376,23 +376,23 @@ void testbench::test_genbits_sequential_read_4_words()
                 }
             }
             if (words_differ) {
-                CSML_INFO(2, logger) << "PASS: All 4 sequential reads returned different 32-bit words";
-                CSML_INFO(2, logger) << "128-bit block: [0x" << std::hex << words[0] << ", 0x" << words[1]
+                REG_INFO(2, logger) << "PASS: All 4 sequential reads returned different 32-bit words";
+                REG_INFO(2, logger) << "128-bit block: [0x" << std::hex << words[0] << ", 0x" << words[1]
                                      << ", 0x" << words[2] << ", 0x" << words[3] << "]";
             }
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "GENBITS sequential read test successful: "
+            REG_INFO(2, logger) << "GENBITS sequential read test successful: "
                                   << "Each of 4 reads returned different 32-bit word of 128-bit block";
             report_test_pass("Test 085");
         } else {
-            CSML_ERROR(1, logger) << "GENBITS sequential read test FAILED";
+            REG_ERROR(1, logger) << "GENBITS sequential read test FAILED";
             report_test_fail("Test 085", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_085_genbits_sequential_read_4_words: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_085_genbits_sequential_read_4_words: " << e.what();
         report_test_fail("Test 085", e.what());
     }
 }
@@ -448,7 +448,7 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
 
         // Instantiate instance 0
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
             test_passed = false;
         }
 
@@ -457,7 +457,7 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
             test_passed = false;
         }
 
@@ -466,7 +466,7 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_inst);
         uint32_t status_inst = (cmd_sts_inst >> 3) & 0x7;
         if (status_inst != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
             test_passed = false;
         }
 
@@ -474,7 +474,7 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         // Build command with glen=2: acmd=3, clen=0, flag0=0, glen=2
         // Format: (glen << 12) | (flag0 << 8) | (clen << 4) | acmd
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
             test_passed = false;
         }
 
@@ -483,7 +483,7 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE timeout";
+            REG_ERROR(1, logger) << "FAILED: GENERATE timeout";
             test_passed = false;
         }
 
@@ -492,19 +492,19 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_gen);
         uint32_t status_gen = (cmd_sts_gen >> 3) & 0x7;
         if (status_gen != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE did not succeed - CMD_STS=0x" << std::hex << status_gen;
+            REG_ERROR(1, logger) << "FAILED: GENERATE did not succeed - CMD_STS=0x" << std::hex << status_gen;
             test_passed = false;
         }
 
         // Wait for GENBITS_VLD to be set
         if (!wait_genbits_vld(m_test.get(), 10000)) {
-            CSML_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout - data not available after GENERATE";
+            REG_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout - data not available after GENERATE";
             test_passed = false;
         }
 
         // Read GENBITS 4 times (1st block)
         auto block1 = read_genbits(m_test.get());
-        CSML_INFO(2, logger) << "Block 1 (reads 0-3): [0x" << std::hex << block1[0] << ", 0x"
+        REG_INFO(2, logger) << "Block 1 (reads 0-3): [0x" << std::hex << block1[0] << ", 0x"
                              << block1[1] << ", 0x" << block1[2] << ", 0x" << block1[3] << "]";
 
         // Verify GENBITS_VLD remains true after 4th read (2nd block available)
@@ -513,20 +513,20 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         wait(1, SC_US);
 
         bool vld_after_block1_set = (vld_after_block1 & 0x1) != 0;
-        CSML_INFO(2, logger) << "GENBITS_VLD after block 1 (4th read): 0x" << std::hex << vld_after_block1;
+        REG_INFO(2, logger) << "GENBITS_VLD after block 1 (4th read): 0x" << std::hex << vld_after_block1;
 
         if (!vld_after_block1_set) {
-            CSML_ERROR(1, logger) << "FAILED: GENBITS_VLD is not set after 4th read (1st block complete)";
-            CSML_ERROR(1, logger) << "Expected: GENBITS_VLD should remain true (2nd block available)";
-            CSML_ERROR(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld_after_block1;
+            REG_ERROR(1, logger) << "FAILED: GENBITS_VLD is not set after 4th read (1st block complete)";
+            REG_ERROR(1, logger) << "Expected: GENBITS_VLD should remain true (2nd block available)";
+            REG_ERROR(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld_after_block1;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: GENBITS_VLD remains true after 4th read (2nd block available)";
+            REG_INFO(2, logger) << "PASS: GENBITS_VLD remains true after 4th read (2nd block available)";
         }
 
         // Read GENBITS 4 more times (2nd block)
         auto block2 = read_genbits(m_test.get());
-        CSML_INFO(2, logger) << "Block 2 (reads 4-7): [0x" << std::hex << block2[0] << ", 0x"
+        REG_INFO(2, logger) << "Block 2 (reads 4-7): [0x" << std::hex << block2[0] << ", 0x"
                              << block2[1] << ", 0x" << block2[2] << ", 0x" << block2[3] << "]";
 
         // Verify GENBITS_VLD clears after 8th read (all data consumed)
@@ -539,22 +539,22 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         wait(1, SC_US);
 
         bool vld_after_block2_set = (vld_after_block2 & 0x1) != 0;
-        CSML_INFO(2, logger) << "GENBITS_VLD after block 2 (8th read): 0x" << std::hex << vld_after_block2;
+        REG_INFO(2, logger) << "GENBITS_VLD after block 2 (8th read): 0x" << std::hex << vld_after_block2;
 
         // The test plan expects VLD to clear after 2 blocks, but if there are
         // leftover blocks from previous tests, VLD may remain set.
         // The primary test requirement is that the pointer wraps correctly,
         // which we've verified by successfully reading 2 different blocks.
         if (vld_after_block2_set) {
-            CSML_WARN(1, logger) << "WARNING: GENBITS_VLD is still set after 8th read (2nd block complete)";
-            CSML_WARN(1, logger) << "Expected: GENBITS_VLD should clear after reading 2 blocks (glen=2)";
-            CSML_WARN(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld_after_block2;
-            CSML_WARN(1, logger) << "NOTE: This may indicate leftover blocks from previous GENERATE commands";
-            CSML_WARN(1, logger) << "NOTE: The pointer wrap behavior is still verified (2 blocks read successfully)";
+            REG_WARN(1, logger) << "WARNING: GENBITS_VLD is still set after 8th read (2nd block complete)";
+            REG_WARN(1, logger) << "Expected: GENBITS_VLD should clear after reading 2 blocks (glen=2)";
+            REG_WARN(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld_after_block2;
+            REG_WARN(1, logger) << "NOTE: This may indicate leftover blocks from previous GENERATE commands";
+            REG_WARN(1, logger) << "NOTE: The pointer wrap behavior is still verified (2 blocks read successfully)";
             // Don't fail the test - the pointer wrap is the primary requirement
             // VLD clearing is secondary and may be affected by leftover blocks
         } else {
-            CSML_INFO(2, logger) << "PASS: GENBITS_VLD clears after 8th read (all data consumed)";
+            REG_INFO(2, logger) << "PASS: GENBITS_VLD clears after 8th read (all data consumed)";
         }
 
         // Verify that we read 2 different blocks (pointer wrapped correctly)
@@ -562,33 +562,33 @@ void testbench::test_genbits_read_pointer_wrap_after_4th_read()
         bool blocks_different = (block1[0] != block2[0]) || (block1[1] != block2[1]) ||
                                 (block1[2] != block2[2]) || (block1[3] != block2[3]);
         if (!blocks_different) {
-            CSML_ERROR(1, logger) << "FAILED: Block 1 and Block 2 are identical - pointer may not have wrapped";
-            CSML_ERROR(1, logger) << "Block 1: [0x" << std::hex << block1[0] << ", 0x" << block1[1]
+            REG_ERROR(1, logger) << "FAILED: Block 1 and Block 2 are identical - pointer may not have wrapped";
+            REG_ERROR(1, logger) << "Block 1: [0x" << std::hex << block1[0] << ", 0x" << block1[1]
                                   << ", 0x" << block1[2] << ", 0x" << block1[3] << "]";
-            CSML_ERROR(1, logger) << "Block 2: [0x" << std::hex << block2[0] << ", 0x" << block2[1]
+            REG_ERROR(1, logger) << "Block 2: [0x" << std::hex << block2[0] << ", 0x" << block2[1]
                                   << ", 0x" << block2[2] << ", 0x" << block2[3] << "]";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: Block 1 and Block 2 are different (pointer wrapped correctly)";
+            REG_INFO(2, logger) << "PASS: Block 1 and Block 2 are different (pointer wrapped correctly)";
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "GENBITS read pointer wrap test successful: ";
-            CSML_INFO(2, logger) << "  - After 4th read: GENBITS_VLD remains true (2nd block available)";
+            REG_INFO(2, logger) << "GENBITS read pointer wrap test successful: ";
+            REG_INFO(2, logger) << "  - After 4th read: GENBITS_VLD remains true (2nd block available)";
             if (!vld_after_block2_set) {
-                CSML_INFO(2, logger) << "  - After 8th read: GENBITS_VLD clears (all data consumed)";
+                REG_INFO(2, logger) << "  - After 8th read: GENBITS_VLD clears (all data consumed)";
             } else {
-                CSML_INFO(2, logger) << "  - After 8th read: GENBITS_VLD still set (leftover blocks may exist)";
+                REG_INFO(2, logger) << "  - After 8th read: GENBITS_VLD still set (leftover blocks may exist)";
             }
-            CSML_INFO(2, logger) << "  - Pointer wrap validated: 2 different blocks read successfully";
+            REG_INFO(2, logger) << "  - Pointer wrap validated: 2 different blocks read successfully";
             report_test_pass("Test 086");
         } else {
-            CSML_ERROR(1, logger) << "GENBITS read pointer wrap test FAILED";
+            REG_ERROR(1, logger) << "GENBITS read pointer wrap test FAILED";
             report_test_fail("Test 086", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_086_genbits_read_pointer_wrap_after_4th_read: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_086_genbits_read_pointer_wrap_after_4th_read: " << e.what();
         report_test_fail("Test 086", e.what());
     }
 }
@@ -642,7 +642,7 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
 
         // Instantiate instance 0
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
             test_passed = false;
         }
 
@@ -651,7 +651,7 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
             test_passed = false;
         }
 
@@ -660,13 +660,13 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_inst);
         uint32_t status_inst = (cmd_sts_inst >> 3) & 0x7;
         if (status_inst != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
             test_passed = false;
         }
 
         // Issue GENERATE with glen=3
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
             test_passed = false;
         }
 
@@ -677,7 +677,7 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE timeout";
+            REG_ERROR(1, logger) << "FAILED: GENERATE timeout";
             test_passed = false;
         }
 
@@ -686,13 +686,13 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_gen);
         uint32_t status_gen = (cmd_sts_gen >> 3) & 0x7;
         if (status_gen != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE did not succeed - CMD_STS=0x" << std::hex << status_gen;
+            REG_ERROR(1, logger) << "FAILED: GENERATE did not succeed - CMD_STS=0x" << std::hex << status_gen;
             test_passed = false;
         }
 
         // Wait for GENBITS_VLD to be set
         if (!wait_genbits_vld(m_test.get(), 10000)) {
-            CSML_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout - data not available after GENERATE";
+            REG_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout - data not available after GENERATE";
             test_passed = false;
         }
 
@@ -703,8 +703,8 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
             // Wait for VLD before reading each block (except first, already checked)
             if (block_idx > 0) {
                 if (!wait_genbits_vld(m_test.get(), 10000)) {
-                    CSML_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout for block " << block_idx;
-                    CSML_ERROR(1, logger) << "Expected: GENBITS_VLD should be set before reading block " << block_idx;
+                    REG_ERROR(1, logger) << "FAILED: GENBITS_VLD timeout for block " << block_idx;
+                    REG_ERROR(1, logger) << "Expected: GENBITS_VLD should be set before reading block " << block_idx;
                     test_passed = false;
                     report_test_fail("Test 087", "GENBITS_VLD timeout for block " + std::to_string(block_idx));
                     return;
@@ -713,7 +713,7 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
 
             // Read 4 words for this block
             blocks[block_idx] = read_genbits(m_test.get());
-            CSML_INFO(2, logger) << "Block " << block_idx << " (reads " << (block_idx * 4) << "-" 
+            REG_INFO(2, logger) << "Block " << block_idx << " (reads " << (block_idx * 4) << "-" 
                                  << (block_idx * 4 + 3) << "): [0x" << std::hex
                                  << blocks[block_idx][0] << ", 0x" << blocks[block_idx][1] << ", 0x"
                                  << blocks[block_idx][2] << ", 0x" << blocks[block_idx][3] << "]" << std::dec;
@@ -733,8 +733,8 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
                                       (blocks[block_idx][0] != blocks[block_idx][3]) &&
                                       (blocks[block_idx][1] != blocks[block_idx][3]);
             if (!block_words_differ) {
-                CSML_ERROR(1, logger) << "FAILED: Block " << block_idx << " has duplicate words";
-                CSML_ERROR(1, logger) << "Block " << block_idx << ": [0x" << std::hex
+                REG_ERROR(1, logger) << "FAILED: Block " << block_idx << " has duplicate words";
+                REG_ERROR(1, logger) << "Block " << block_idx << ": [0x" << std::hex
                                       << blocks[block_idx][0] << ", 0x" << blocks[block_idx][1] << ", 0x"
                                       << blocks[block_idx][2] << ", 0x" << blocks[block_idx][3] << "]";
                 data_valid = false;
@@ -748,11 +748,11 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
                 bool blocks_different = (blocks[i][0] != blocks[j][0]) || (blocks[i][1] != blocks[j][1]) ||
                                         (blocks[i][2] != blocks[j][2]) || (blocks[i][3] != blocks[j][3]);
                 if (!blocks_different) {
-                    CSML_ERROR(1, logger) << "FAILED: Block " << i << " and Block " << j << " are identical";
-                    CSML_ERROR(1, logger) << "Block " << i << ": [0x" << std::hex
+                    REG_ERROR(1, logger) << "FAILED: Block " << i << " and Block " << j << " are identical";
+                    REG_ERROR(1, logger) << "Block " << i << ": [0x" << std::hex
                                           << blocks[i][0] << ", 0x" << blocks[i][1] << ", 0x"
                                           << blocks[i][2] << ", 0x" << blocks[i][3] << "]";
-                    CSML_ERROR(1, logger) << "Block " << j << ": [0x" << std::hex
+                    REG_ERROR(1, logger) << "Block " << j << ": [0x" << std::hex
                                           << blocks[j][0] << ", 0x" << blocks[j][1] << ", 0x"
                                           << blocks[j][2] << ", 0x" << blocks[j][3] << "]";
                     data_valid = false;
@@ -763,8 +763,8 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
         }
 
         if (data_valid) {
-            CSML_INFO(2, logger) << "PASS: All 12 reads returned different data (3 blocks × 4 words)";
-            CSML_INFO(2, logger) << "PASS: All 3 blocks are different from each other";
+            REG_INFO(2, logger) << "PASS: All 12 reads returned different data (3 blocks × 4 words)";
+            REG_INFO(2, logger) << "PASS: All 3 blocks are different from each other";
         }
 
         // Verify GENBITS_VLD clears after all blocks consumed (if no leftover blocks)
@@ -773,33 +773,33 @@ void testbench::test_genbits_multiple_blocks_pointer_management()
         wait(1, SC_US);
 
         bool vld_final_set = (vld_final & 0x1) != 0;
-        CSML_INFO(2, logger) << "GENBITS_VLD after 3 blocks (12 reads): 0x" << std::hex << vld_final;
+        REG_INFO(2, logger) << "GENBITS_VLD after 3 blocks (12 reads): 0x" << std::hex << vld_final;
 
         if (vld_final_set) {
-            CSML_WARN(1, logger) << "WARNING: GENBITS_VLD is still set after 12 reads (3 blocks complete)";
-            CSML_WARN(1, logger) << "Expected: GENBITS_VLD should clear after reading 3 blocks (glen=3)";
-            CSML_WARN(1, logger) << "NOTE: This may indicate leftover blocks from previous GENERATE commands";
-            CSML_WARN(1, logger) << "NOTE: Data delivery is still verified (12 reads completed successfully)";
+            REG_WARN(1, logger) << "WARNING: GENBITS_VLD is still set after 12 reads (3 blocks complete)";
+            REG_WARN(1, logger) << "Expected: GENBITS_VLD should clear after reading 3 blocks (glen=3)";
+            REG_WARN(1, logger) << "NOTE: This may indicate leftover blocks from previous GENERATE commands";
+            REG_WARN(1, logger) << "NOTE: Data delivery is still verified (12 reads completed successfully)";
         } else {
-            CSML_INFO(2, logger) << "PASS: GENBITS_VLD clears after 12 reads (all data consumed)";
+            REG_INFO(2, logger) << "PASS: GENBITS_VLD clears after 12 reads (all data consumed)";
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "GENBITS multiple blocks pointer management test successful: ";
-            CSML_INFO(2, logger) << "  - All 12 reads completed successfully (3 blocks × 4 reads)";
-            CSML_INFO(2, logger) << "  - All data delivered correctly (all words different)";
-            CSML_INFO(2, logger) << "  - Pointer management validated across 3 blocks";
+            REG_INFO(2, logger) << "GENBITS multiple blocks pointer management test successful: ";
+            REG_INFO(2, logger) << "  - All 12 reads completed successfully (3 blocks × 4 reads)";
+            REG_INFO(2, logger) << "  - All data delivered correctly (all words different)";
+            REG_INFO(2, logger) << "  - Pointer management validated across 3 blocks";
             if (!vld_final_set) {
-                CSML_INFO(2, logger) << "  - GENBITS_VLD clears after all data consumed";
+                REG_INFO(2, logger) << "  - GENBITS_VLD clears after all data consumed";
             }
             report_test_pass("Test 087");
         } else {
-            CSML_ERROR(1, logger) << "GENBITS multiple blocks pointer management test FAILED";
+            REG_ERROR(1, logger) << "GENBITS multiple blocks pointer management test FAILED";
             report_test_fail("Test 087", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_087_genbits_multiple_blocks_pointer_management: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_087_genbits_multiple_blocks_pointer_management: " << e.what();
         report_test_fail("Test 087", e.what());
     }
 }
@@ -875,8 +875,8 @@ void testbench::test_095_fips_compliance_entropy_mode()
 
         bool fips_flag = (genbits_vld & 0x2) != 0;
 
-        CSML_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
-        CSML_INFO(2, logger) << "GENBITS_FIPS: " << (fips_flag ? "1" : "0")
+        REG_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
+        REG_INFO(2, logger) << "GENBITS_FIPS: " << (fips_flag ? "1" : "0")
                              << " (entropy instantiation, expected 1)" << std::dec;
 
         report_test_pass("Test 095");
@@ -948,8 +948,8 @@ void testbench::test_096_fips_compliance_deterministic_mode_no_force()
 
         bool fips_flag = (genbits_vld & 0x2) != 0;
 
-        CSML_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
-        CSML_INFO(2, logger) << "GENBITS_FIPS: " << (fips_flag ? "1" : "0")
+        REG_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
+        REG_INFO(2, logger) << "GENBITS_FIPS: " << (fips_flag ? "1" : "0")
                              << " (deterministic instantiation, expected 0)" << std::dec;
 
         report_test_pass("Test 096");
@@ -994,7 +994,7 @@ void testbench::test_fips_force_deterministic_with_fips_assertion()
         m_test->register_write_32(csrng_basetest::FIPS_FORCE_OFFSET, 0x1);
         wait(5, SC_US);
 
-        CSML_INFO(2, logger) << "CTRL.FIPS_FORCE_ENABLE=0x6, FIPS_FORCE[0]=1";
+        REG_INFO(2, logger) << "CTRL.FIPS_FORCE_ENABLE=0x6, FIPS_FORCE[0]=1";
 
         // INSTANTIATE deterministic (flag0=0x9)
         if (!wait_cmd_ready(m_test.get())) {
@@ -1031,8 +1031,8 @@ void testbench::test_fips_force_deterministic_with_fips_assertion()
         if( !fips_flag ) {
             throw std::runtime_error("FIPS_FORCE failed: GENBITS_FIPS is 0 despite forcing");
         }
-        CSML_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
-        CSML_INFO(2, logger) << "GENBITS_FIPS: " << (fips_flag ? "1" : "0")
+        REG_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
+        REG_INFO(2, logger) << "GENBITS_FIPS: " << (fips_flag ? "1" : "0")
                              << " (FIPS forced, expected 1)" << std::dec;
 
         report_test_pass("Test test_fips_force_deterministic_with_fips_assertion");
@@ -1080,7 +1080,7 @@ void testbench::test_fips_force_per_instance_instance0()
         m_test->register_write_32(csrng_basetest::FIPS_FORCE_OFFSET, 0x1);
         wait(5, SC_US);
 
-        CSML_INFO(2, logger) << "FIPS_FORCE[0]=1 for Instance 0";
+        REG_INFO(2, logger) << "FIPS_FORCE[0]=1 for Instance 0";
 
         // Instantiate and generate on Instance 0
         if (!wait_cmd_ready(m_test.get())) {
@@ -1116,8 +1116,8 @@ void testbench::test_fips_force_per_instance_instance0()
         if( !fips_flag ) {
             throw std::runtime_error("FIPS_FORCE failed: GENBITS_FIPS is 0 despite forcing");
         }
-        CSML_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
-        CSML_INFO(2, logger) << "GENBITS_FIPS for Instance 0: " << (fips_flag ? "1" : "0")
+        REG_INFO(2, logger) << "GENBITS_VLD: 0x" << std::hex << genbits_vld;
+        REG_INFO(2, logger) << "GENBITS_FIPS for Instance 0: " << (fips_flag ? "1" : "0")
                              << " (expected 1 with FIPS_FORCE)" << std::dec;
 
         report_test_pass("Test test_fips_force_per_instance_instance0");
@@ -1217,7 +1217,7 @@ void testbench::test_fips_compliance_after_reseed_entropy()
         m_test->register_read_32(csrng_basetest::GENBITS_VLD_OFFSET, vld_before_reseed);
         bool fips_before = (vld_before_reseed & 0x2) != 0;
 
-        CSML_INFO(2, logger) << "GENBITS_FIPS before reseed: " << (fips_before ? "1" : "0")
+        REG_INFO(2, logger) << "GENBITS_FIPS before reseed: " << (fips_before ? "1" : "0")
                              << " (expected 0)" << std::dec;
 
         // RESEED with entropy (flag0=0x6)
@@ -1233,7 +1233,7 @@ void testbench::test_fips_compliance_after_reseed_entropy()
             throw std::runtime_error("RESEED timeout");
         }
 
-        CSML_INFO(2, logger) << "RESEED with entropy completed";
+        REG_INFO(2, logger) << "RESEED with entropy completed";
 
         // GENERATE again (should now have FIPS=1)
         if (!wait_cmd_ready(m_test.get())) {
@@ -1254,7 +1254,7 @@ void testbench::test_fips_compliance_after_reseed_entropy()
         if( !fips_after ) {
             throw std::runtime_error("FIPS compliance flag did not update after entropy RESEED");
         }
-        CSML_INFO(2, logger) << "GENBITS_FIPS after reseed: " << (fips_after ? "1" : "0")
+        REG_INFO(2, logger) << "GENBITS_FIPS after reseed: " << (fips_after ? "1" : "0")
                              << " (expected 1)" << std::dec;
 
         report_test_pass("Test 100");
@@ -1295,7 +1295,7 @@ void testbench::test_invalid_glen_zero()
 
         // Instantiate instance 0
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
             test_passed = false;
         }
 
@@ -1304,7 +1304,7 @@ void testbench::test_invalid_glen_zero()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
             test_passed = false;
         }
 
@@ -1313,13 +1313,13 @@ void testbench::test_invalid_glen_zero()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_inst);
         uint32_t status_inst = (cmd_sts_inst >> 3) & 0x7;
         if (status_inst != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
             test_passed = false;
         }
 
         // Issue GENERATE with glen=0 (invalid)
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE with glen=0";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE with glen=0";
             test_passed = false;
         }
 
@@ -1328,7 +1328,7 @@ void testbench::test_invalid_glen_zero()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE with glen=0 timeout";
+            REG_ERROR(1, logger) << "FAILED: GENERATE with glen=0 timeout";
             test_passed = false;
         }
 
@@ -1337,23 +1337,23 @@ void testbench::test_invalid_glen_zero()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts);
         uint32_t status_code = (cmd_sts >> 3) & 0x7;
 
-        CSML_INFO(2, logger) << "SW_CMD_STS after GENERATE with glen=0: 0x" << std::hex << cmd_sts;
-        CSML_INFO(2, logger) << "CMD_STS code: 0x" << std::hex << status_code;
+        REG_INFO(2, logger) << "SW_CMD_STS after GENERATE with glen=0: 0x" << std::hex << cmd_sts;
+        REG_INFO(2, logger) << "CMD_STS code: 0x" << std::hex << status_code;
 
         // Verify command handling (model-dependent behavior)
         // glen=0 should result in an error status
         // Expected: INVALID_CMD_SEQ (0x3) or INVALID_ACMD (0x1) or other error
         if (status_code == 0x0) {
-            CSML_INFO(2, logger) << "Model behavior: glen=0 treated as no-op (CMD_STS=SUCCESS)";
-            CSML_ERROR(1, logger) << "Error: This is unexpected - glen=0 should be rejected";
+            REG_INFO(2, logger) << "Model behavior: glen=0 treated as no-op (CMD_STS=SUCCESS)";
+            REG_ERROR(1, logger) << "Error: This is unexpected - glen=0 should be rejected";
             test_passed = false;
         } else if (status_code == 0x3) {
-            CSML_INFO(2, logger) << "Model behavior: glen=0 rejected with CMD_STS=INVALID_CMD_SEQ (0x3)";
+            REG_INFO(2, logger) << "Model behavior: glen=0 rejected with CMD_STS=INVALID_CMD_SEQ (0x3)";
         } else if (status_code == 0x1) {
-            CSML_INFO(2, logger) << "Model behavior: glen=0 rejected with CMD_STS=INVALID_ACMD (0x1)";
+            REG_INFO(2, logger) << "Model behavior: glen=0 rejected with CMD_STS=INVALID_ACMD (0x1)";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "Model behavior: glen=0 resulted in CMD_STS=0x" << std::hex << status_code;
+            REG_INFO(2, logger) << "Model behavior: glen=0 resulted in CMD_STS=0x" << std::hex << status_code;
             test_passed = false;
 
         }
@@ -1364,28 +1364,28 @@ void testbench::test_invalid_glen_zero()
         m_test->register_read_32(csrng_basetest::GENBITS_VLD_OFFSET, vld);
         bool genbits_vld_set = (vld & 0x1) != 0;
 
-        CSML_INFO(2, logger) << "GENBITS_VLD after GENERATE with glen=0: 0x" << std::hex << vld;
+        REG_INFO(2, logger) << "GENBITS_VLD after GENERATE with glen=0: 0x" << std::hex << vld;
 
         // Test plan expects 0 blocks generated, so GENBITS_VLD should be 0
         // However, model may set GENBITS_VLD even when glen=0 (model behavior)
         if (genbits_vld_set) {
             if (status_code != 0x0) {
                 // Model returned error but still set GENBITS_VLD - document this behavior
-                CSML_WARN(1, logger) << "WARNING: Model returned error (CMD_STS=0x" << std::hex << status_code
+                REG_WARN(1, logger) << "WARNING: Model returned error (CMD_STS=0x" << std::hex << status_code
                                      << ") but GENBITS_VLD is set - expected 0 blocks generated";
-                CSML_WARN(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld;
-                CSML_WARN(1, logger) << "NOTE: Test plan expects 0 blocks generated when glen=0";
+                REG_WARN(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld;
+                REG_WARN(1, logger) << "NOTE: Test plan expects 0 blocks generated when glen=0";
                 test_passed = false;
             } else {
                 // If CMD_STS=SUCCESS, then GENBITS_VLD being set might be acceptable
                 // but still unexpected for glen=0
-                CSML_WARN(1, logger) << "WARNING: glen=0 succeeded but GENBITS_VLD is set - "
+                REG_WARN(1, logger) << "WARNING: glen=0 succeeded but GENBITS_VLD is set - "
                                      << "expected 0 blocks generated";
-                CSML_WARN(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld;
+                REG_WARN(1, logger) << "GENBITS_VLD value: 0x" << std::hex << vld;
                 test_passed = false;
             }
         } else {
-            CSML_INFO(2, logger) << "PASS: GENBITS_VLD=0 (no data available) - 0 blocks generated";
+            REG_INFO(2, logger) << "PASS: GENBITS_VLD=0 (no data available) - 0 blocks generated";
         }
 
         // Verify no data available in GENBITS (should read as 0 when VLD=0)
@@ -1393,24 +1393,24 @@ void testbench::test_invalid_glen_zero()
         // If GENBITS_VLD=1, we can still read to see what data is there
         uint32_t genbits_read = 0;
         m_test->register_read_32(csrng_basetest::GENBITS_OFFSET, genbits_read);
-        CSML_INFO(2, logger) << "GENBITS read: 0x" << std::hex << genbits_read;
+        REG_INFO(2, logger) << "GENBITS read: 0x" << std::hex << genbits_read;
         if (genbits_vld_set) {
-            CSML_INFO(2, logger) << "NOTE: GENBITS contains data even though glen=0 (model behavior)";
+            REG_INFO(2, logger) << "NOTE: GENBITS contains data even though glen=0 (model behavior)";
         } else {
-            CSML_INFO(2, logger) << "NOTE: GENBITS read value is expected when GENBITS_VLD=0";
+            REG_INFO(2, logger) << "NOTE: GENBITS read value is expected when GENBITS_VLD=0";
         }
 
         // Test passes if command was handled (error status is acceptable)
         // The test plan says "verify command handling" - an error status is valid handling
         if (genbits_vld_set && (test_passed)) {
-            CSML_WARN(1, logger) << "Final assessment: Model behavior unexpected with glen=0";
+            REG_WARN(1, logger) << "Final assessment: Model behavior unexpected with glen=0";
             report_test_fail("Test test_invalid_glen_zero ", "Unexpected model behavior with glen=0");
         }else {
             report_test_pass("Test test_invalid_glen_zero");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_invalid_glen_zero: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_invalid_glen_zero: " << e.what();
         report_test_fail("Test test_invalid_glen_zero", e.what());
     }
 }
@@ -1461,20 +1461,20 @@ void testbench::test_corner_case_genbits_read_without_generate()
         if( (vld & 0x1) != 0 ) {
             throw std::runtime_error("GENBITS_VLD indicates data available without GENERATE");
         }
-        CSML_INFO(2, logger) << "GENBITS_VLD without GENERATE: 0x" << std::hex << vld;
+        REG_INFO(2, logger) << "GENBITS_VLD without GENERATE: 0x" << std::hex << vld;
 
         // Try to read GENBITS (should return zeros)
         auto block = read_genbits(m_test.get());
 
-        CSML_INFO(2, logger) << "GENBITS without GENERATE: [0x" << std::hex
+        REG_INFO(2, logger) << "GENBITS without GENERATE: [0x" << std::hex
                              << block[0] << ", 0x" << block[1] << ", 0x"
                              << block[2] << ", 0x" << block[3] << "]" << std::dec;
 
         bool all_zeros = (block[0] == 0 && block[1] == 0 && block[2] == 0 && block[3] == 0);
         if (all_zeros && (vld & 0x1) == 0) {
-            CSML_INFO(2, logger) << "Correct: No data available, GENBITS returns zeros";
+            REG_INFO(2, logger) << "Correct: No data available, GENBITS returns zeros";
         } else {
-            CSML_WARN(1, logger) << "Unexpected: Data appears available without GENERATE";
+            REG_WARN(1, logger) << "Unexpected: Data appears available without GENERATE";
             throw std::runtime_error("GENBITS read returned non-zero data without GENERATE");
         }
 
@@ -1544,7 +1544,7 @@ void testbench::test_sw_flow_instantiate_generate_loop()
                 auto block = read_genbits(m_test.get());
                 generated_blocks.push_back(block);
 
-                CSML_INFO(2, logger) << "Iteration " << i << ": [0x" << std::hex
+                REG_INFO(2, logger) << "Iteration " << i << ": [0x" << std::hex
                                      << block[0] << ", 0x" << block[1] << ", 0x"
                                      << block[2] << ", 0x" << block[3] << "]" << std::dec;
             }
@@ -1556,8 +1556,8 @@ void testbench::test_sw_flow_instantiate_generate_loop()
             unique_blocks.insert(block);
         }
 
-        CSML_INFO(2, logger) << "Generated " << generated_blocks.size() << " blocks";
-        CSML_INFO(2, logger) << "Unique blocks: " << unique_blocks.size();
+        REG_INFO(2, logger) << "Generated " << generated_blocks.size() << " blocks";
+        REG_INFO(2, logger) << "Unique blocks: " << unique_blocks.size();
 
         if (unique_blocks.size() != generated_blocks.size()) {
             throw std::runtime_error("Uniqueness check failed: expected 10 unique blocks, got " +
@@ -1623,12 +1623,12 @@ void testbench::test_193_boundary_cmd_req_glen_min_1()
 
         if (wait_genbits_vld(m_test.get(), 10000)) {
             auto block = read_genbits(m_test.get());
-            CSML_INFO(2, logger) << "glen=1 block: [0x" << std::hex
+            REG_INFO(2, logger) << "glen=1 block: [0x" << std::hex
                                  << block[0] << ", 0x" << block[1] << ", 0x"
                                  << block[2] << ", 0x" << block[3] << "]" << std::dec;
         }
 
-        CSML_INFO(2, logger) << "Boundary glen=1 validated successfully";
+        REG_INFO(2, logger) << "Boundary glen=1 validated successfully";
 
         report_test_pass("Test 193");
 
@@ -1691,7 +1691,7 @@ void testbench::test_194_boundary_cmd_req_glen_max_4095()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, gen_cmd);
         wait(5, SC_US);
 
-        CSML_INFO(2, logger) << "Issued GENERATE glen=100 (reduced for faster simulation)...";
+        REG_INFO(2, logger) << "Issued GENERATE glen=100 (reduced for faster simulation)...";
 
         if (!wait_cmd_ack(m_test.get(), 500000)) {
             throw std::runtime_error("GENERATE timeout (glen=100)");
@@ -1702,8 +1702,8 @@ void testbench::test_194_boundary_cmd_req_glen_max_4095()
         m_test->register_read_32(csrng_basetest::RESEED_COUNTER_0_OFFSET, reseed_ctr);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 after glen=100: " << std::dec << reseed_ctr;
-        CSML_INFO(2, logger) << "Boundary glen=100 validated successfully";
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 after glen=100: " << std::dec << reseed_ctr;
+        REG_INFO(2, logger) << "Boundary glen=100 validated successfully";
 
         report_test_pass("Test 194");
 
@@ -1744,7 +1744,7 @@ void testbench::test_combined_invalid_acmd_values()
 
         for (int i = 0; i < 3; i++) {
             uint32_t invalid_acmd = invalid_acmd_values[i];
-            CSML_INFO(2, logger) << "Testing invalid acmd=" << acmd_names[i];
+            REG_INFO(2, logger) << "Testing invalid acmd=" << acmd_names[i];
 
             // Clear alerts before each test
             m_test->register_write_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, 0x0);
@@ -1752,7 +1752,7 @@ void testbench::test_combined_invalid_acmd_values()
 
             // Wait for CMD_RDY
             if (!wait_cmd_ready(m_test.get())) {
-                CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout for acmd=" << acmd_names[i];
+                REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout for acmd=" << acmd_names[i];
                 test_passed = false;
                 continue;
             }
@@ -1763,7 +1763,7 @@ void testbench::test_combined_invalid_acmd_values()
             wait(5, SC_US);
 
             if (!wait_cmd_ack(m_test.get(), 50000)) {
-                CSML_ERROR(1, logger) << "FAILED: CMD_ACK timeout for acmd=" << acmd_names[i];
+                REG_ERROR(1, logger) << "FAILED: CMD_ACK timeout for acmd=" << acmd_names[i];
                 test_passed = false;
                 continue;
             }
@@ -1771,11 +1771,11 @@ void testbench::test_combined_invalid_acmd_values()
             // Verify CMD_STS=INVALID_ACMD (0x1)
             uint32_t cmd_status = get_cmd_status(m_test.get());
             if (cmd_status != 0x1) {
-                CSML_ERROR(1, logger) << "FAILED: CMD_STS not INVALID_ACMD for acmd=" << acmd_names[i]
+                REG_ERROR(1, logger) << "FAILED: CMD_STS not INVALID_ACMD for acmd=" << acmd_names[i]
                                       << " - expected 0x1, got 0x" << std::hex << cmd_status;
                 test_passed = false;
             } else {
-                CSML_INFO(2, logger) << "PASS: CMD_STS=INVALID_ACMD (0x1) for acmd=" << acmd_names[i];
+                REG_INFO(2, logger) << "PASS: CMD_STS=INVALID_ACMD (0x1) for acmd=" << acmd_names[i];
             }
 
             // For acmd=0x0, verify RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13)
@@ -1785,29 +1785,29 @@ void testbench::test_combined_invalid_acmd_values()
                 wait(1, SC_US);
 
                 if ((alert_sts & (1 << 13)) == 0) {
-                    CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) not set "
+                    REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) not set "
                                           << "for acmd=0x0";
-                    CSML_ERROR(1, logger) << "RECOV_ALERT_STS value: 0x" << std::hex << alert_sts;
+                    REG_ERROR(1, logger) << "RECOV_ALERT_STS value: 0x" << std::hex << alert_sts;
                     test_passed = false;
                 } else {
-                    CSML_INFO(2, logger) << "PASS: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) set for acmd=0x0";
+                    REG_INFO(2, logger) << "PASS: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) set for acmd=0x0";
                 }
             }
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Combined invalid acmd test successful:";
-            CSML_INFO(2, logger) << "  - Test 64: acmd=0x0 → CMD_STS=INVALID_ACMD (0x1) + alert bit set";
-            CSML_INFO(2, logger) << "  - Test 65: acmd=0x6 → CMD_STS=INVALID_ACMD (0x1)";
-            CSML_INFO(2, logger) << "  - Test 66: acmd=0xF → CMD_STS=INVALID_ACMD (0x1)";
+            REG_INFO(2, logger) << "Combined invalid acmd test successful:";
+            REG_INFO(2, logger) << "  - Test 64: acmd=0x0 → CMD_STS=INVALID_ACMD (0x1) + alert bit set";
+            REG_INFO(2, logger) << "  - Test 65: acmd=0x6 → CMD_STS=INVALID_ACMD (0x1)";
+            REG_INFO(2, logger) << "  - Test 66: acmd=0xF → CMD_STS=INVALID_ACMD (0x1)";
             report_test_pass("Combined Test 064/065/066");
         } else {
-            CSML_ERROR(1, logger) << "Combined invalid acmd test FAILED - one or more checks failed";
+            REG_ERROR(1, logger) << "Combined invalid acmd test FAILED - one or more checks failed";
             report_test_fail("Combined Test 064/065/066", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in combined invalid acmd test: " << e.what();
+        REG_ERROR(1, logger) << "Exception in combined invalid acmd test: " << e.what();
         report_test_fail("Combined Test 064/065/066", e.what());
     }
 }
@@ -1843,7 +1843,7 @@ void testbench::test_invalid_clen_greater_than_12()
         // =====================================================================
         // Part 1: Test clen=12 (valid boundary - should succeed)
         // =====================================================================
-        CSML_INFO(2, logger) << "Part 1: Testing clen=12 (valid boundary, should succeed)";
+        REG_INFO(2, logger) << "Part 1: Testing clen=12 (valid boundary, should succeed)";
 
         if (!wait_cmd_ready(m_test.get())) {
             throw std::runtime_error("CMD_RDY timeout before INSTANTIATE with clen=12");
@@ -1875,7 +1875,7 @@ void testbench::test_invalid_clen_greater_than_12()
             );
         }
 
-        CSML_INFO(2, logger) << "PASS: clen=12 (valid boundary) accepted with CMD_STS=SUCCESS (0x0)";
+        REG_INFO(2, logger) << "PASS: clen=12 (valid boundary) accepted with CMD_STS=SUCCESS (0x0)";
 
         // Clean up: Uninstantiate for next test
         if (!wait_cmd_ready(m_test.get())) {
@@ -1890,7 +1890,7 @@ void testbench::test_invalid_clen_greater_than_12()
         // =====================================================================
         // Part 2: Test clen=13 (invalid - should be rejected)
         // =====================================================================
-        CSML_INFO(2, logger) << "Part 2: Testing clen=13 (invalid, should be rejected with INVALID_ACMD)";
+        REG_INFO(2, logger) << "Part 2: Testing clen=13 (invalid, should be rejected with INVALID_ACMD)";
 
         if (!wait_cmd_ready(m_test.get())) {
             throw std::runtime_error("CMD_RDY timeout before INSTANTIATE with clen=13");
@@ -1922,9 +1922,9 @@ void testbench::test_invalid_clen_greater_than_12()
         uint32_t cmd_status_invalid = (cmd_sts_reg_invalid >> 3) & 0x7;
         bool cmd_rdy_set = (cmd_sts_reg_invalid & 0x2) != 0;
 
-        CSML_INFO(2, logger) << "SW_CMD_STS after clen=13 command: 0x" << std::hex << cmd_sts_reg_invalid;
-        CSML_INFO(2, logger) << "Command with clen=13 CMD_STS: 0x" << std::hex << cmd_status_invalid;
-        CSML_INFO(2, logger) << "CMD_RDY: " << (cmd_rdy_set ? "true" : "false");
+        REG_INFO(2, logger) << "SW_CMD_STS after clen=13 command: 0x" << std::hex << cmd_sts_reg_invalid;
+        REG_INFO(2, logger) << "Command with clen=13 CMD_STS: 0x" << std::hex << cmd_status_invalid;
+        REG_INFO(2, logger) << "CMD_RDY: " << (cmd_rdy_set ? "true" : "false");
 
         // Verify command interface is ready
         if (!cmd_rdy_set) {
@@ -1939,20 +1939,20 @@ void testbench::test_invalid_clen_greater_than_12()
             );
         }
 
-        CSML_INFO(2, logger) << "PASS: clen=13 (invalid) correctly rejected with CMD_STS=INVALID_ACMD (0x1)";
+        REG_INFO(2, logger) << "PASS: clen=13 (invalid) correctly rejected with CMD_STS=INVALID_ACMD (0x1)";
 
         // =====================================================================
         // Test Summary
         // =====================================================================
-        CSML_INFO(2, logger) << "Test 067 Summary:";
-        CSML_INFO(2, logger) << "  - clen=12 (valid boundary): Accepted with CMD_STS=SUCCESS (0x0)";
-        CSML_INFO(2, logger) << "  - clen=13 (invalid): Rejected with CMD_STS=INVALID_ACMD (0x1)";
-        CSML_INFO(2, logger) << "Invalid clen greater than 12 test successful: Boundary validation verified";
+        REG_INFO(2, logger) << "Test 067 Summary:";
+        REG_INFO(2, logger) << "  - clen=12 (valid boundary): Accepted with CMD_STS=SUCCESS (0x0)";
+        REG_INFO(2, logger) << "  - clen=13 (invalid): Rejected with CMD_STS=INVALID_ACMD (0x1)";
+        REG_INFO(2, logger) << "Invalid clen greater than 12 test successful: Boundary validation verified";
 
         report_test_pass("Test test_invalid_clen_greater_than_12");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_invalid_clen_greater_than_12: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_invalid_clen_greater_than_12: " << e.what();
         report_test_fail("Test test_invalid_clen_greater_than_12", e.what());
     }
 }
@@ -2020,7 +2020,7 @@ void testbench::test_int_state_val_sequential_read_14_words()
 
         // INSTANTIATE instance 0
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
             test_passed = false;
             report_test_fail("Test 088", "CMD_RDY timeout before INSTANTIATE");
             return;
@@ -2035,20 +2035,20 @@ void testbench::test_int_state_val_sequential_read_14_words()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_inst);
         uint32_t status_inst = (cmd_sts_inst >> 3) & 0x7;
         if (status_inst != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
             test_passed = false;
             report_test_fail("Test 088", "INSTANTIATE failed");
             return;
         }
 
-        CSML_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
+        REG_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
 
         // Set INT_STATE_NUM=0 to select instance 0 for internal state read
         // This also resets the read pointer to 0
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM set to 0 (instance 0 selected, read pointer reset)";
+        REG_INFO(2, logger) << "INT_STATE_NUM set to 0 (instance 0 selected, read pointer reset)";
 
         // Read INT_STATE_VAL 14 times to retrieve 448-bit state
         // State layout (448 bits = 14 words):
@@ -2070,26 +2070,26 @@ void testbench::test_int_state_val_sequential_read_14_words()
                 all_zeros = false;
             }
 
-            CSML_INFO(2, logger) << "INT_STATE_VAL read " << i << ": 0x" << std::hex << state_word;
+            REG_INFO(2, logger) << "INT_STATE_VAL read " << i << ": 0x" << std::hex << state_word;
         }
 
         // Verify 448-bit state retrieved correctly
         // For an instantiated instance, the state should not be all zeros
         if (all_zeros) {
-            CSML_ERROR(1, logger) << "FAILED: All 14 words of INT_STATE_VAL are zero";
-            CSML_ERROR(1, logger) << "Expected: Instantiated instance should have non-zero state";
-            CSML_ERROR(1, logger) << "NOTE: State read requires CTRL.READ_INT_STATE=0x6 and INT_STATE_READ_ENABLE[0]=1";
+            REG_ERROR(1, logger) << "FAILED: All 14 words of INT_STATE_VAL are zero";
+            REG_ERROR(1, logger) << "Expected: Instantiated instance should have non-zero state";
+            REG_ERROR(1, logger) << "NOTE: State read requires CTRL.READ_INT_STATE=0x6 and INT_STATE_READ_ENABLE[0]=1";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: State contains non-zero values (instance is instantiated)";
+            REG_INFO(2, logger) << "PASS: State contains non-zero values (instance is instantiated)";
         }
 
         // Verify state structure components
         // Word 0: Reseed Counter (should be 0 after INSTANTIATE)
         if (state_words[0] == 0) {
-            CSML_INFO(2, logger) << "PASS: Word 0 (Reseed Counter) = 0x0 (correct after INSTANTIATE)";
+            REG_INFO(2, logger) << "PASS: Word 0 (Reseed Counter) = 0x0 (correct after INSTANTIATE)";
         } else {
-            CSML_INFO(2, logger) << "Word 0 (Reseed Counter) = 0x" << std::hex << state_words[0];
+            REG_INFO(2, logger) << "Word 0 (Reseed Counter) = 0x" << std::hex << state_words[0];
             test_passed = false;
         }
 
@@ -2102,9 +2102,9 @@ void testbench::test_int_state_val_sequential_read_14_words()
             }
         }
         if (v_non_zero) { //TODO : Need to check later
-            CSML_INFO(2, logger) << "PASS: Words 1-4 (V counter) contain non-zero values";
+            REG_INFO(2, logger) << "PASS: Words 1-4 (V counter) contain non-zero values";
         } else {
-            CSML_WARN(1, logger) << "WARNING: Words 1-4 (V counter) are all zero";
+            REG_WARN(1, logger) << "WARNING: Words 1-4 (V counter) are all zero";
         }
 
         // Words 5-12: Key - should be non-zero for instantiated instance
@@ -2116,37 +2116,37 @@ void testbench::test_int_state_val_sequential_read_14_words()
             }
         }
         if (key_non_zero) {//TODO : Need to check later
-            CSML_INFO(2, logger) << "PASS: Words 5-12 (Key) contain non-zero values";
+            REG_INFO(2, logger) << "PASS: Words 5-12 (Key) contain non-zero values";
         } else {
-            CSML_WARN(1, logger) << "WARNING: Words 5-12 (Key) are all zero";
+            REG_WARN(1, logger) << "WARNING: Words 5-12 (Key) are all zero";
         }
 
         // Word 13: Status flags + Padding
-        CSML_INFO(2, logger) << "Word 13 (Status + Padding) = 0x" << std::hex << state_words[13];
+        REG_INFO(2, logger) << "Word 13 (Status + Padding) = 0x" << std::hex << state_words[13];
 
         // Verify all 14 words were read (448 bits total)
-        CSML_INFO(2, logger) << "448-bit state retrieved: 14 words read successfully";
-        CSML_INFO(2, logger) << "State components verified:";
-        CSML_INFO(2, logger) << "  - Reseed Counter (word 0): 0x" << std::hex << state_words[0];
-        CSML_INFO(2, logger) << "  - V counter (words 1-4): [0x" << std::hex << state_words[1]
+        REG_INFO(2, logger) << "448-bit state retrieved: 14 words read successfully";
+        REG_INFO(2, logger) << "State components verified:";
+        REG_INFO(2, logger) << "  - Reseed Counter (word 0): 0x" << std::hex << state_words[0];
+        REG_INFO(2, logger) << "  - V counter (words 1-4): [0x" << std::hex << state_words[1]
                               << ", 0x" << state_words[2] << ", 0x" << state_words[3]
                               << ", 0x" << state_words[4] << "]";
-        CSML_INFO(2, logger) << "  - Key (words 5-12): [0x" << std::hex << state_words[5]
+        REG_INFO(2, logger) << "  - Key (words 5-12): [0x" << std::hex << state_words[5]
                               << ", ..., 0x" << state_words[12] << "]";
-        CSML_INFO(2, logger) << "  - Status + Padding (word 13): 0x" << std::hex << state_words[13];
+        REG_INFO(2, logger) << "  - Status + Padding (word 13): 0x" << std::hex << state_words[13];
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "INT_STATE_VAL sequential read test successful: ";
-            CSML_INFO(2, logger) << "  - All 14 words read successfully (448-bit state retrieved)";
-            CSML_INFO(2, logger) << "  - State components verified (Reseed Counter, V, Key, Status)";
+            REG_INFO(2, logger) << "INT_STATE_VAL sequential read test successful: ";
+            REG_INFO(2, logger) << "  - All 14 words read successfully (448-bit state retrieved)";
+            REG_INFO(2, logger) << "  - State components verified (Reseed Counter, V, Key, Status)";
             report_test_pass("Test 088");
         } else {
-            CSML_ERROR(1, logger) << "INT_STATE_VAL sequential read test FAILED";
+            REG_ERROR(1, logger) << "INT_STATE_VAL sequential read test FAILED";
             report_test_fail("Test 088", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_088_int_state_val_sequential_read_14_words: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_088_int_state_val_sequential_read_14_words: " << e.what();
         report_test_fail("Test 088", e.what());
     }
 }
@@ -2206,7 +2206,7 @@ void testbench::test_int_state_val_pointer_wrap_after_14th_read()
 
         // INSTANTIATE instance 0
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
             test_passed = false;
         }
 
@@ -2215,7 +2215,7 @@ void testbench::test_int_state_val_pointer_wrap_after_14th_read()
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE timeout";
             test_passed = false;
         }
 
@@ -2224,18 +2224,18 @@ void testbench::test_int_state_val_pointer_wrap_after_14th_read()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_inst);
         uint32_t status_inst = (cmd_sts_inst >> 3) & 0x7;
         if (status_inst != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE did not succeed - CMD_STS=0x" << std::hex << status_inst;
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
+        REG_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
 
         // Set INT_STATE_NUM=0 to select instance 0 for internal state read
         // This also resets the read pointer to 0
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM set to 0 (instance 0 selected, read pointer reset)";
+        REG_INFO(2, logger) << "INT_STATE_NUM set to 0 (instance 0 selected, read pointer reset)";
 
         // Read INT_STATE_VAL 14 times (full 448-bit state)
         // Store word 0 (first read) to compare with 15th read
@@ -2253,29 +2253,29 @@ void testbench::test_int_state_val_pointer_wrap_after_14th_read()
                 word_0 = state_word; // Store first word for comparison
             }
 
-            CSML_INFO(2, logger) << "INT_STATE_VAL read " << (i + 1) << ": 0x" << std::hex << state_word;
+            REG_INFO(2, logger) << "INT_STATE_VAL read " << (i + 1) << ": 0x" << std::hex << state_word;
         }
 
-        CSML_INFO(2, logger) << "Completed 14 reads (full 448-bit state)";
-        CSML_INFO(2, logger) << "Word 0 (1st read): 0x" << std::hex << word_0;
+        REG_INFO(2, logger) << "Completed 14 reads (full 448-bit state)";
+        REG_INFO(2, logger) << "Word 0 (1st read): 0x" << std::hex << word_0;
 
         // Read INT_STATE_VAL 15th time - pointer should wrap and return word 0
         uint32_t word_15 = 0;
         m_test->register_read_32(csrng_basetest::INT_STATE_VAL_OFFSET, word_15);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_VAL read 15: 0x" << std::hex << word_15;
-        CSML_INFO(2, logger) << "Expected: 0x" << std::hex << word_0 << " (pointer wrapped to word 0)";
+        REG_INFO(2, logger) << "INT_STATE_VAL read 15: 0x" << std::hex << word_15;
+        REG_INFO(2, logger) << "Expected: 0x" << std::hex << word_0 << " (pointer wrapped to word 0)";
 
         // Verify pointer wrapped and 15th read returns word 0
         if (word_15 != 0) {
-            CSML_ERROR(1, logger) << "FAILED: 15th read did not return word 0 - pointer may not have wrapped";
-            CSML_ERROR(1, logger) << "Word 0 (1st read): 0x" << std::hex << word_0;
-            CSML_ERROR(1, logger) << "Word 15 (15th read): 0x" << std::hex << word_15;
-            CSML_ERROR(1, logger) << "Expected: 15th read should equal 1st read (pointer wrapped)";
+            REG_ERROR(1, logger) << "FAILED: 15th read did not return word 0 - pointer may not have wrapped";
+            REG_ERROR(1, logger) << "Word 0 (1st read): 0x" << std::hex << word_0;
+            REG_ERROR(1, logger) << "Word 15 (15th read): 0x" << std::hex << word_15;
+            REG_ERROR(1, logger) << "Expected: 15th read should equal 1st read (pointer wrapped)";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: 15th read returns word 0 (pointer wrapped correctly)";
+            REG_INFO(2, logger) << "PASS: 15th read returns word 0 (pointer wrapped correctly)";
         }
 
         // Verify all 14 words were different (ensures pointer advanced through state)
@@ -2288,24 +2288,24 @@ void testbench::test_int_state_val_pointer_wrap_after_14th_read()
         }
 
         if (all_same) {
-            CSML_WARN(1, logger) << "WARNING: All 14 words are identical - state may not be valid";
-            CSML_WARN(1, logger) << "NOTE: This may indicate access control issue or uninstantiated state";
+            REG_WARN(1, logger) << "WARNING: All 14 words are identical - state may not be valid";
+            REG_WARN(1, logger) << "NOTE: This may indicate access control issue or uninstantiated state";
         } else {
-            CSML_INFO(2, logger) << "PASS: State words differ (pointer advanced correctly through 14 words)";
+            REG_INFO(2, logger) << "PASS: State words differ (pointer advanced correctly through 14 words)";
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "INT_STATE_VAL pointer wrap test successful: ";
-            CSML_INFO(2, logger) << "  - 14 reads completed (full 448-bit state)";
-            CSML_INFO(2, logger) << "  - 15th read returns word 0 (pointer wrapped correctly)";
+            REG_INFO(2, logger) << "INT_STATE_VAL pointer wrap test successful: ";
+            REG_INFO(2, logger) << "  - 14 reads completed (full 448-bit state)";
+            REG_INFO(2, logger) << "  - 15th read returns word 0 (pointer wrapped correctly)";
             report_test_pass("Test 089");
         } else {
-            CSML_ERROR(1, logger) << "INT_STATE_VAL pointer wrap test FAILED";
+            REG_ERROR(1, logger) << "INT_STATE_VAL pointer wrap test FAILED";
             report_test_fail("Test 089", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_089_int_state_val_pointer_wrap_after_14th_read: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_089_int_state_val_pointer_wrap_after_14th_read: " << e.what();
         report_test_fail("Test 089", e.what());
     }
 }
@@ -2337,17 +2337,17 @@ void testbench::test_genbits_no_repetition_normal_operation() {
     // =====================================================================
     // Step 1: Enable module and SW_APP access
     // =====================================================================
-    CSML_INFO(2, logger) << "Step 1: Enabling module and SW_APP access";
+    REG_INFO(2, logger) << "Step 1: Enabling module and SW_APP access";
     // CTRL.ENABLE=0x6, CTRL.SW_APP_ENABLE=0x6
     uint32_t ctrl_val = 0x66;
     m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
     wait(10, SC_US);
-    CSML_INFO(2, logger) << "  CTRL = 0x" << std::hex << ctrl_val;
-    CSML_INFO(2, logger) << "    ENABLE = 0x6, SW_APP_ENABLE = 0x6";
+    REG_INFO(2, logger) << "  CTRL = 0x" << std::hex << ctrl_val;
+    REG_INFO(2, logger) << "    ENABLE = 0x6, SW_APP_ENABLE = 0x6";
     // =====================================================================
     // Step 2: INSTANTIATE
     // =====================================================================
-    CSML_INFO(2, logger) << "Step 2: INSTANTIATE";
+    REG_INFO(2, logger) << "Step 2: INSTANTIATE";
     if (!wait_cmd_ready(m_test.get())) {
       throw std::runtime_error("CMD_RDY timeout (INSTANTIATE)");
     }
@@ -2362,11 +2362,11 @@ void testbench::test_genbits_no_repetition_normal_operation() {
       throw std::runtime_error("INSTANTIATE failed: CMD_STS=0x" +
                                std::to_string(cmd_status));
     }
-    CSML_INFO(2, logger) << "  INSTANTIATE completed successfully";
+    REG_INFO(2, logger) << "  INSTANTIATE completed successfully";
     // =====================================================================
     // Step 3: Clear any existing alerts
     // =====================================================================
-    CSML_INFO(2, logger) << "Step 3: Clearing alerts";
+    REG_INFO(2, logger) << "Step 3: Clearing alerts";
     m_test->register_write_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, 0x1000);
     wait(1, SC_US);
     // Verify alert cleared
@@ -2375,12 +2375,12 @@ void testbench::test_genbits_no_repetition_normal_operation() {
                              alert_sts_initial);
     wait(1, SC_US);
     bool initial_alert = (alert_sts_initial & 0x1000) != 0;
-    CSML_INFO(2, logger) << "  Initial CS_BUS_CMP_ALERT = "
+    REG_INFO(2, logger) << "  Initial CS_BUS_CMP_ALERT = "
                          << (initial_alert ? "1" : "0");
     // =====================================================================
     // Step 4: Issue GENERATE command
     // =====================================================================
-    CSML_INFO(2, logger) << "Step 4: Issuing GENERATE (glen=5, 20 words)";
+    REG_INFO(2, logger) << "Step 4: Issuing GENERATE (glen=5, 20 words)";
     if (!wait_cmd_ready(m_test.get())) {
       throw std::runtime_error("CMD_RDY timeout (GENERATE)");
     }
@@ -2395,11 +2395,11 @@ void testbench::test_genbits_no_repetition_normal_operation() {
       throw std::runtime_error("GENERATE failed: CMD_STS=0x" +
                                std::to_string(cmd_status));
     }
-    CSML_INFO(2, logger) << "  GENERATE completed successfully";
+    REG_INFO(2, logger) << "  GENERATE completed successfully";
     // =====================================================================
     // Step 5: Read GENBITS multiple times (form multiple 64-bit values)
     // =====================================================================
-    CSML_INFO(2, logger)
+    REG_INFO(2, logger)
         << "Step 5: Reading GENBITS 16 times (8 × 64-bit values)";
     std::vector<uint32_t> genbits_words;
     std::vector<uint64_t> genbits_64bit_values;
@@ -2412,24 +2412,24 @@ void testbench::test_genbits_no_repetition_normal_operation() {
       if (i % 2 == 1) {
         uint64_t value_64bit = ((uint64_t)genbits_words[i - 1] << 32) | genbits;
         genbits_64bit_values.push_back(value_64bit);
-        CSML_INFO(2, logger) << "  64-bit value #" << (i / 2 + 1) << " = 0x"
+        REG_INFO(2, logger) << "  64-bit value #" << (i / 2 + 1) << " = 0x"
                              << std::hex << value_64bit;
       }
     }
-    CSML_INFO(2, logger) << "  Total 64-bit values read: "
+    REG_INFO(2, logger) << "  Total 64-bit values read: "
                          << genbits_64bit_values.size();
     // =====================================================================
     // Step 6: Verify CS_BUS_CMP_ALERT did NOT fire
     // =====================================================================
-    CSML_INFO(2, logger) << "Step 6: Verifying CS_BUS_CMP_ALERT did not fire";
+    REG_INFO(2, logger) << "Step 6: Verifying CS_BUS_CMP_ALERT did not fire";
     uint32_t alert_sts_final = 0;
     m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET,
                              alert_sts_final);
     wait(1, SC_US);
     bool alert_fired = (alert_sts_final & 0x1000) != 0; // bit 12
-    CSML_INFO(2, logger) << "  RECOV_ALERT_STS = 0x" << std::hex
+    REG_INFO(2, logger) << "  RECOV_ALERT_STS = 0x" << std::hex
                          << alert_sts_final;
-    CSML_INFO(2, logger) << "  CS_BUS_CMP_ALERT (bit 12) = "
+    REG_INFO(2, logger) << "  CS_BUS_CMP_ALERT (bit 12) = "
                          << (alert_fired ? "1 (FIRED)" : "0 (NOT FIRED)");
     // =====================================================================
     // Step 7: Validate - Alert should NOT fire
@@ -2438,7 +2438,7 @@ void testbench::test_genbits_no_repetition_normal_operation() {
       throw std::runtime_error("Test FAILED: CS_BUS_CMP_ALERT fired on normal "
                                "random data (false positive)");
     }
-    CSML_INFO(2, logger) <<  "PASS: No false alerts on normal DRBG operation";
+    REG_INFO(2, logger) <<  "PASS: No false alerts on normal DRBG operation";
     // =====================================================================
     // Optional: Check for any unexpected 64-bit repetitions
     // =====================================================================
@@ -2446,27 +2446,27 @@ void testbench::test_genbits_no_repetition_normal_operation() {
     for (size_t i = 1; i < genbits_64bit_values.size(); i++) {
       if (genbits_64bit_values[i] == genbits_64bit_values[i - 1]) {
         found_repetition = true;
-        CSML_INFO(1, logger) << "  WARNING: Repetition found at position " << i;
-        CSML_INFO(1, logger)
+        REG_INFO(1, logger) << "  WARNING: Repetition found at position " << i;
+        REG_INFO(1, logger)
             << "           (Statistically extremely unlikely!)";
       }
     }
     if (!found_repetition) {
-      CSML_INFO(2, logger) << "  All 64-bit values unique (as expected)";
+      REG_INFO(2, logger) << "  All 64-bit values unique (as expected)";
     }
     // =====================================================================
     // Test Summary
     // =====================================================================
-    CSML_INFO(2, logger) << "========================================";
-    CSML_INFO(2, logger) << "Test test_genbits_no_repetition_normal_operation Summary:";
-    CSML_INFO(2, logger) << "  GENBITS reads: 16 (32-bit words)";
-    CSML_INFO(2, logger) << "  64-bit values: " << genbits_64bit_values.size();
-    CSML_INFO(2, logger) << "  Repetitions found: "
+    REG_INFO(2, logger) << "========================================";
+    REG_INFO(2, logger) << "Test test_genbits_no_repetition_normal_operation Summary:";
+    REG_INFO(2, logger) << "  GENBITS reads: 16 (32-bit words)";
+    REG_INFO(2, logger) << "  64-bit values: " << genbits_64bit_values.size();
+    REG_INFO(2, logger) << "  Repetitions found: "
                          << (found_repetition ? "YES (unexpected)" : "NO");
-    CSML_INFO(2, logger) << "  CS_BUS_CMP_ALERT fired: "
+    REG_INFO(2, logger) << "  CS_BUS_CMP_ALERT fired: "
                          << (alert_fired ? "YES (FAIL)" : "NO (PASS)");
-    CSML_INFO(2, logger) << "  Result: No false positives detected";
-    CSML_INFO(2, logger) << "========================================";
+    REG_INFO(2, logger) << "  Result: No false positives detected";
+    REG_INFO(2, logger) << "========================================";
     report_test_pass("Test test_genbits_no_repetition_normal_operation");
   } catch (const std::exception &e) {
     report_test_fail("Test test_genbits_no_repetition_normal_operation", e.what());
@@ -2499,19 +2499,19 @@ void testbench::test_invalid_command_field_validation()
         // =====================================================================
         // Setup: Enable module
         // =====================================================================
-        CSML_INFO(2, logger) << "SETUP: Enabling module";
+        REG_INFO(2, logger) << "SETUP: Enabling module";
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x6666);
         wait(10, SC_US);
 
-        CSML_INFO(2, logger) << "  Module enabled (CTRL=0x6666)";
+        REG_INFO(2, logger) << "  Module enabled (CTRL=0x6666)";
 
         // =====================================================================
         // PART 1: Invalid acmd values (STRICT)
         // =====================================================================
-        CSML_INFO(2, logger) << "";
-        CSML_INFO(2, logger) << "========================================";
-        CSML_INFO(2, logger) << "PART 1: Testing Invalid acmd Values";
-        CSML_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "";
+        REG_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "PART 1: Testing Invalid acmd Values";
+        REG_INFO(2, logger) << "========================================";
 
         uint8_t invalid_acmds[] = {0x0, 0x6, 0x7};
 
@@ -2521,8 +2521,8 @@ void testbench::test_invalid_command_field_validation()
             wait(10, SC_US);
             uint8_t acmd = invalid_acmds[i];
 
-            CSML_INFO(2, logger) << "";
-            CSML_INFO(2, logger) << "Test 1." << (i + 1)
+            REG_INFO(2, logger) << "";
+            REG_INFO(2, logger) << "Test 1." << (i + 1)
                                  << ": acmd=0x" << std::hex << (int)acmd;
 
             // Clear alerts
@@ -2534,7 +2534,7 @@ void testbench::test_invalid_command_field_validation()
             }
 
             uint32_t cmd = build_cmd_header(acmd, 0, 0x9, 0);  // glen=0 for non-GENERATE commands
-            CSML_INFO(2, logger) << "  Issuing CMD_REQ = 0x" << std::hex << cmd;
+            REG_INFO(2, logger) << "  Issuing CMD_REQ = 0x" << std::hex << cmd;
 
             m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd);
             wait(5, SC_US);
@@ -2544,7 +2544,7 @@ void testbench::test_invalid_command_field_validation()
             }
 
             uint32_t cmd_status = get_cmd_status(m_test.get());
-            CSML_INFO(2, logger) << "  CMD_STS = 0x" << std::hex << cmd_status;
+            REG_INFO(2, logger) << "  CMD_STS = 0x" << std::hex << cmd_status;
 
             uint32_t alert_sts = 0;
             m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_sts);
@@ -2552,8 +2552,8 @@ void testbench::test_invalid_command_field_validation()
 
             bool invalid_acmd_alert = (alert_sts & 0x2000) != 0;
 
-            CSML_INFO(2, logger) << "  RECOV_ALERT_STS = 0x" << std::hex << alert_sts;
-            CSML_INFO(2, logger) << "  CMD_STAGE_INVALID_ACMD_ALERT (bit 13) = "
+            REG_INFO(2, logger) << "  RECOV_ALERT_STS = 0x" << std::hex << alert_sts;
+            REG_INFO(2, logger) << "  CMD_STAGE_INVALID_ACMD_ALERT (bit 13) = "
                                  << (invalid_acmd_alert ? "1" : "0");
 
             if (!invalid_acmd_alert) {
@@ -2562,16 +2562,16 @@ void testbench::test_invalid_command_field_validation()
                     std::to_string(acmd));
             }
 
-            CSML_INFO(2, logger) << "  ✓ PASS: Invalid acmd correctly flagged";
+            REG_INFO(2, logger) << "  ✓ PASS: Invalid acmd correctly flagged";
         }
 
         // =====================================================================
         // PART 2: Invalid flag0 values (RELAXED / MODEL-TOLERANT)
         // =====================================================================
-        CSML_INFO(2, logger) << "";
-        CSML_INFO(2, logger) << "========================================";
-        CSML_INFO(2, logger) << "PART 2: Testing Invalid flag0 Values";
-        CSML_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "";
+        REG_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "PART 2: Testing Invalid flag0 Values";
+        REG_INFO(2, logger) << "========================================";
 
         // Ensure instance exists
         if (!wait_cmd_ready(m_test.get())) {
@@ -2594,8 +2594,8 @@ void testbench::test_invalid_command_field_validation()
             wait(10, SC_US);
             uint8_t flag0 = invalid_flag0s[i];
 
-            CSML_INFO(2, logger) << "";
-            CSML_INFO(2, logger) << "Test 2." << (i + 1)
+            REG_INFO(2, logger) << "";
+            REG_INFO(2, logger) << "Test 2." << (i + 1)
                                  << ": flag0=0x" << std::hex << (int)flag0;
 
             // Clear only flag0 alert bit
@@ -2607,7 +2607,7 @@ void testbench::test_invalid_command_field_validation()
             }
 
             uint32_t cmd = build_cmd_header(3, 0, flag0, 1);
-            CSML_INFO(2, logger) << "  Issuing GENERATE CMD_REQ = 0x" << std::hex << cmd;
+            REG_INFO(2, logger) << "  Issuing GENERATE CMD_REQ = 0x" << std::hex << cmd;
 
             m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd);
             wait(5, SC_US);
@@ -2622,15 +2622,15 @@ void testbench::test_invalid_command_field_validation()
 
             bool flag0_alert = (alert_sts & 0x10) != 0;
 
-            CSML_INFO(2, logger) << "  RECOV_ALERT_STS = 0x" << std::hex << alert_sts;
-            CSML_INFO(2, logger) << "  ACMD_FLAG0_FIELD_ALERT (bit 4) = "
+            REG_INFO(2, logger) << "  RECOV_ALERT_STS = 0x" << std::hex << alert_sts;
+            REG_INFO(2, logger) << "  ACMD_FLAG0_FIELD_ALERT (bit 4) = "
                                  << (flag0_alert ? "1" : "0");
 
             if (!flag0_alert) {
-                CSML_INFO(1, logger)
+                REG_INFO(1, logger)
                     << "  NOTE: Model tolerates invalid flag0 (no alert raised)";
             } else {
-                CSML_INFO(2, logger)
+                REG_INFO(2, logger)
                     << "  ✓ Alert raised for invalid flag0";
             }
         }
@@ -2638,10 +2638,10 @@ void testbench::test_invalid_command_field_validation()
         // =====================================================================
         // PART 3: Invalid clen (Informational)
         // =====================================================================
-        CSML_INFO(2, logger) << "";
-        CSML_INFO(2, logger) << "========================================";
-        CSML_INFO(2, logger) << "PART 3: Invalid clen Values (Informational)";
-        CSML_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "";
+        REG_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "PART 3: Invalid clen Values (Informational)";
+        REG_INFO(2, logger) << "========================================";
 
         m_test->register_write_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, 0xFFFF);
         wait(1, SC_US);
@@ -2653,19 +2653,19 @@ void testbench::test_invalid_command_field_validation()
 
             if (wait_cmd_ack(m_test.get(), 50000)) {
                 uint32_t status = get_cmd_status(m_test.get());
-                CSML_INFO(2, logger)
+                REG_INFO(2, logger)
                     << "  CMD_ACK received, CMD_STS = 0x" << std::hex << status;
                 throw std::runtime_error(
                     "Unexpected CMD_ACK for invalid clen (should timeout)");
             } else {
-                CSML_INFO(2, logger)
+                REG_INFO(2, logger)
                     << "  CMD_ACK timeout for invalid clen (expected behavior)";
             }
         }
 
-        CSML_INFO(2, logger) << "========================================";
-        CSML_INFO(2, logger) << "Test 094 completed successfully";
-        CSML_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "========================================";
+        REG_INFO(2, logger) << "Test 094 completed successfully";
+        REG_INFO(2, logger) << "========================================";
 
         report_test_pass("Test test_invalid_command_field_validation");
 
@@ -2692,20 +2692,20 @@ void testbench::test_sw_flow_internal_state_inspection()
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true)";
+        REG_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true)";
 
         // Enable Instance 0 access via INT_STATE_READ_ENABLE[0]=1
         m_test->register_write_32(csrng_basetest::INT_STATE_READ_ENABLE_OFFSET, 0x1);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
 
         // Set INT_STATE_NUM to Instance 0 (resets read pointer to 0)
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM set to 0 (selecting Instance 0)";
-        CSML_INFO(1, logger) << "Note: Assuming otp_en_csrng_sw_app_read=1 (default state)";
+        REG_INFO(2, logger) << "INT_STATE_NUM set to 0 (selecting Instance 0)";
+        REG_INFO(1, logger) << "Note: Assuming otp_en_csrng_sw_app_read=1 (default state)";
 
         // Enable CTRL for software commands (ENABLE=0x6, SW_APP_ENABLE=0x6)
         ctrl_val = 0x6666;  // ENABLE=0x6, SW_APP_ENABLE=0x6, READ_INT_STATE=0x6
@@ -2725,13 +2725,13 @@ void testbench::test_sw_flow_internal_state_inspection()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "Instance 0 instantiated (deterministic mode)";
+        REG_INFO(2, logger) << "Instance 0 instantiated (deterministic mode)";
 
         // Reset read pointer by writing INT_STATE_NUM again
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "Reading INT_STATE_VAL 14 times to retrieve full 448-bit state";
+        REG_INFO(2, logger) << "Reading INT_STATE_VAL 14 times to retrieve full 448-bit state";
 
         // Read all 14 words of internal state
         // State layout: V (4 words, indices 0-3) + Key (8 words, indices 4-11) + 
@@ -2752,17 +2752,17 @@ void testbench::test_sw_flow_internal_state_inspection()
                 has_non_zero = true;
             }
 
-            CSML_INFO(2, logger) << "INT_STATE_VAL[" << i << "] = 0x" << std::hex << state_word << std::dec;
+            REG_INFO(2, logger) << "INT_STATE_VAL[" << i << "] = 0x" << std::hex << state_word << std::dec;
 
             // Verify state structure based on index
             if (i < 4) {
-                CSML_INFO(3, logger) << "  (V word " << i << ")";
+                REG_INFO(3, logger) << "  (V word " << i << ")";
             } else if (i < 12) {
-                CSML_INFO(3, logger) << "  (Key word " << (i - 4) << ")";
+                REG_INFO(3, logger) << "  (Key word " << (i - 4) << ")";
             } else if (i == 12) {
-                CSML_INFO(3, logger) << "  (ReseedCounter)";
+                REG_INFO(3, logger) << "  (ReseedCounter)";
             } else if (i == 13) {
-                CSML_INFO(3, logger) << "  (Status: bit0=status, bit1=compliance_flag)";
+                REG_INFO(3, logger) << "  (Status: bit0=status, bit1=compliance_flag)";
             }
         }
 
@@ -2790,15 +2790,15 @@ void testbench::test_sw_flow_internal_state_inspection()
             );
         }
 
-        CSML_INFO(2, logger) << "State consistency verified:";
-        CSML_INFO(2, logger) << "  - All 14 words read successfully";
-        CSML_INFO(2, logger) << "  - State contains non-zero values";
-        CSML_INFO(2, logger) << "  - Status word: instantiated=" << (is_instantiated ? "1" : "0")
+        REG_INFO(2, logger) << "State consistency verified:";
+        REG_INFO(2, logger) << "  - All 14 words read successfully";
+        REG_INFO(2, logger) << "  - State contains non-zero values";
+        REG_INFO(2, logger) << "  - Status word: instantiated=" << (is_instantiated ? "1" : "0")
                              << ", compliance=" << (compliance_flag ? "1" : "0");
 
         // Verify reseed counter (word 12) is reasonable (should be 0 after instantiate)
         uint32_t reseed_counter = state_words[12];
-        CSML_INFO(2, logger) << "  - ReseedCounter: " << reseed_counter << " (expected 0 after instantiate)";
+        REG_INFO(2, logger) << "  - ReseedCounter: " << reseed_counter << " (expected 0 after instantiate)";
 
         report_test_pass("Test test_sw_flow_internal_state_inspection");
 
@@ -2841,7 +2841,7 @@ void testbench::test_sw_flow_shutdown_sequence()
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
         wait(10, SC_US);
 
-        CSML_INFO(2, logger) << "Module enabled for shutdown sequence test";
+        REG_INFO(2, logger) << "Module enabled for shutdown sequence test";
 
         // Step 1: Instantiate all instances to have something to uninstantiate
         // Instance 0 (software)
@@ -2857,7 +2857,7 @@ void testbench::test_sw_flow_shutdown_sequence()
             throw std::runtime_error("INSTANTIATE Instance 0 timeout");
         }
 
-        CSML_INFO(2, logger) << "Instance 0 instantiated";
+        REG_INFO(2, logger) << "Instance 0 instantiated";
 
 
         // Step 2: UNINSTANTIATE all instances
@@ -2882,7 +2882,7 @@ void testbench::test_sw_flow_shutdown_sequence()
             );
         }
 
-        CSML_INFO(2, logger) << "Instance 0 uninstantiated successfully";
+        REG_INFO(2, logger) << "Instance 0 uninstantiated successfully";
 
 
         // Step 3: Disable CTRL.ENABLE
@@ -2896,7 +2896,7 @@ void testbench::test_sw_flow_shutdown_sequence()
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "CTRL.ENABLE set to 0x9 (disable-true)";
+        REG_INFO(2, logger) << "CTRL.ENABLE set to 0x9 (disable-true)";
 
         // Verify CTRL.ENABLE is disabled
         m_test->register_read_32(csrng_basetest::CTRL_OFFSET, ctrl_read);
@@ -2910,7 +2910,7 @@ void testbench::test_sw_flow_shutdown_sequence()
             );
         }
 
-        CSML_INFO(2, logger) << "CTRL.ENABLE=0x9 verified (disabled)";
+        REG_INFO(2, logger) << "CTRL.ENABLE=0x9 verified (disabled)";
 
         // Step 4: Verify module cleanly shut down
         // Check CMD_RDY is 0 (module not ready)
@@ -2925,7 +2925,7 @@ void testbench::test_sw_flow_shutdown_sequence()
             );
         }
 
-        CSML_INFO(2, logger) << "CMD_RDY=0 verified (module not ready)";
+        REG_INFO(2, logger) << "CMD_RDY=0 verified (module not ready)";
 
         // Verify no commands can be accepted (try to write CMD_REQ, should be ignored)
         uint32_t test_cmd = build_instantiate_cmd(0, 0x9);
@@ -2943,7 +2943,7 @@ void testbench::test_sw_flow_shutdown_sequence()
             );
         }
 
-        CSML_INFO(2, logger) << "Command rejection verified (CMD_RDY remains 0)";
+        REG_INFO(2, logger) << "Command rejection verified (CMD_RDY remains 0)";
 
         // Verify instance states are cleared (check RESEED_COUNTER_0)
         uint32_t reseed_counter = 0;
@@ -2957,13 +2957,13 @@ void testbench::test_sw_flow_shutdown_sequence()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0=0 verified (Instance 0 state cleared)";
+        REG_INFO(2, logger) << "RESEED_COUNTER_0=0 verified (Instance 0 state cleared)";
 
-        CSML_INFO(2, logger) << "Module cleanly shut down:";
-        CSML_INFO(2, logger) << "  - All instances uninstantiated";
-        CSML_INFO(2, logger) << "  - CTRL.ENABLE=0x9 (disabled)";
-        CSML_INFO(2, logger) << "  - CMD_RDY=0 (module not ready)";
-        CSML_INFO(2, logger) << "  - Commands rejected";
+        REG_INFO(2, logger) << "Module cleanly shut down:";
+        REG_INFO(2, logger) << "  - All instances uninstantiated";
+        REG_INFO(2, logger) << "  - CTRL.ENABLE=0x9 (disabled)";
+        REG_INFO(2, logger) << "  - CMD_RDY=0 (module not ready)";
+        REG_INFO(2, logger) << "  - Commands rejected";
 
         report_test_pass("Test test_sw_flow_shutdown_sequence");
 
@@ -3014,13 +3014,13 @@ void testbench::test_boundary_int_state_num_min_0()
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
         wait(10, SC_US);
 
-        CSML_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true)";
+        REG_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true)";
 
         // Enable Instance 0 access: INT_STATE_READ_ENABLE[0]=1
         m_test->register_write_32(csrng_basetest::INT_STATE_READ_ENABLE_OFFSET, 0x1);
         wait(10, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
 
         // Write INT_STATE_NUM=0 (minimum valid)
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
@@ -3038,7 +3038,7 @@ void testbench::test_boundary_int_state_num_min_0()
             );
         }
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM=0 (minimum valid) verified";
+        REG_INFO(2, logger) << "INT_STATE_NUM=0 (minimum valid) verified";
 
         // Instantiate Instance 0 to create state data
         if (!wait_cmd_ready(m_test.get())) {
@@ -3061,7 +3061,7 @@ void testbench::test_boundary_int_state_num_min_0()
             );
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete - Instance 0 has state data";
+        REG_INFO(2, logger) << "INSTANTIATE complete - Instance 0 has state data";
 
         // Reset INT_STATE_VAL read pointer by writing INT_STATE_NUM again
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
@@ -3076,11 +3076,11 @@ void testbench::test_boundary_int_state_num_min_0()
             m_test->register_read_32(csrng_basetest::INT_STATE_VAL_OFFSET, state_val);
             wait(10, SC_US);
 
-            CSML_INFO(2, logger) << "INT_STATE_VAL[" << i << "] = 0x" << std::hex << state_val;
+            REG_INFO(2, logger) << "INT_STATE_VAL[" << i << "] = 0x" << std::hex << state_val;
 
             if (state_val != 0x0) {
                 found_non_zero = true;
-                CSML_INFO(2, logger) << "PASS: INT_STATE_VAL[" << i << "] contains state data (0x" << std::hex << state_val << ")";
+                REG_INFO(2, logger) << "PASS: INT_STATE_VAL[" << i << "] contains state data (0x" << std::hex << state_val << ")";
             }
         }
 
@@ -3091,13 +3091,13 @@ void testbench::test_boundary_int_state_num_min_0()
             );
         }
 
-        CSML_INFO(2, logger) << "PASS: INT_STATE_VAL successfully reads Instance 0 state (non-zero data found)";
-        CSML_INFO(2, logger) << "Boundary INT_STATE_NUM=0 (minimum valid) verified";
+        REG_INFO(2, logger) << "PASS: INT_STATE_VAL successfully reads Instance 0 state (non-zero data found)";
+        REG_INFO(2, logger) << "Boundary INT_STATE_NUM=0 (minimum valid) verified";
 
         report_test_pass("Test test_boundary_int_state_num_min_0");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_boundary_int_state_num_min_0: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_boundary_int_state_num_min_0: " << e.what();
         report_test_fail("Test test_boundary_int_state_num_min_0", e.what());
     }
 }
@@ -3147,8 +3147,8 @@ void testbench::test_boundary_fips_force_all_bits_set()
             );
         }
 
-        CSML_INFO(2, logger) << "FIPS_FORCE boundary value 0x7 verified (all bits set)";
-        CSML_INFO(2, logger) << "All instances (0-2) will have FIPS compliance forced";
+        REG_INFO(2, logger) << "FIPS_FORCE boundary value 0x7 verified (all bits set)";
+        REG_INFO(2, logger) << "All instances (0-2) will have FIPS compliance forced";
 
         // Verify FIPS=1 for Instance 0 (software)
         // Enable CTRL for software commands
@@ -3194,7 +3194,7 @@ void testbench::test_boundary_fips_force_all_bits_set()
             );
         }
 
-        CSML_INFO(2, logger) << "Instance 0: GENBITS_FIPS=" << (fips_flag ? "1" : "0") 
+        REG_INFO(2, logger) << "Instance 0: GENBITS_FIPS=" << (fips_flag ? "1" : "0") 
                              << " (expected 1, forced)";
 
         // Note: Instances 1 and 2 require hardware client interface
@@ -3202,7 +3202,7 @@ void testbench::test_boundary_fips_force_all_bits_set()
         // - Instantiate Instance 1 via csrng_cmd[0]
         // - Instantiate Instance 2 via csrng_cmd[1]
         // - Generate on each and verify genbits_fips=1
-        CSML_INFO(1, logger) << "Note: Instances 1-2 verification requires hardware client interface";
+        REG_INFO(1, logger) << "Note: Instances 1-2 verification requires hardware client interface";
 
         report_test_pass("Test test_boundary_fips_force_all_bits_set");
 
@@ -3258,8 +3258,8 @@ void testbench::test_boundary_fips_force_all_bits_clear()
             );
         }
 
-        CSML_INFO(2, logger) << "FIPS_FORCE boundary value 0x0 verified (all bits clear)";
-        CSML_INFO(2, logger) << "No FIPS forcing active - compliance determined by entropy source only";
+        REG_INFO(2, logger) << "FIPS_FORCE boundary value 0x0 verified (all bits clear)";
+        REG_INFO(2, logger) << "No FIPS forcing active - compliance determined by entropy source only";
 
         // Enable CTRL for software commands
         ctrl_val = 0x6666;  // ENABLE=0x6, SW_APP_ENABLE=0x6, FIPS_FORCE_ENABLE=0x6
@@ -3303,7 +3303,7 @@ void testbench::test_boundary_fips_force_all_bits_clear()
             );
         }
 
-        CSML_INFO(2, logger) << "Entropy mode: GENBITS_FIPS=" << (fips_flag ? "1" : "0") 
+        REG_INFO(2, logger) << "Entropy mode: GENBITS_FIPS=" << (fips_flag ? "1" : "0") 
                              << " (expected 1, from entropy source)";
 
         // Clean up: UNINSTANTIATE Instance 0
@@ -3355,7 +3355,7 @@ void testbench::test_boundary_fips_force_all_bits_clear()
             );
         }
 
-        CSML_INFO(2, logger) << "Deterministic mode: GENBITS_FIPS=" << (fips_flag ? "1" : "0") 
+        REG_INFO(2, logger) << "Deterministic mode: GENBITS_FIPS=" << (fips_flag ? "1" : "0") 
                              << " (expected 0, no forcing)";
 
         report_test_pass("Test test_boundary_fips_force_all_bits_clear");
@@ -3393,11 +3393,11 @@ void testbench::test_corner_case_rapid_instantiate_uninstantiate_cycle()
         wait(1, SC_US);
 
         const int num_cycles = 5;
-        CSML_INFO(2, logger) << "Starting rapid INSTANTIATE/UNINSTANTIATE cycle test (" 
+        REG_INFO(2, logger) << "Starting rapid INSTANTIATE/UNINSTANTIATE cycle test (" 
                              << num_cycles << " cycles)";
 
         for (int cycle = 1; cycle <= num_cycles; cycle++) {
-            CSML_INFO(2, logger) << "--- Cycle " << cycle << " ---";
+            REG_INFO(2, logger) << "--- Cycle " << cycle << " ---";
 
             // INSTANTIATE
             if (!wait_cmd_ready(m_test.get())) {
@@ -3447,7 +3447,7 @@ void testbench::test_corner_case_rapid_instantiate_uninstantiate_cycle()
                                         std::to_string(inst_state_status));
             }
 
-            CSML_INFO(2, logger) << "Cycle " << cycle << " INSTANTIATE: SUCCESS, RESEED_COUNTER_0=0, status=1";
+            REG_INFO(2, logger) << "Cycle " << cycle << " INSTANTIATE: SUCCESS, RESEED_COUNTER_0=0, status=1";
 
             // UNINSTANTIATE
             if (!wait_cmd_ready(m_test.get())) {
@@ -3495,11 +3495,11 @@ void testbench::test_corner_case_rapid_instantiate_uninstantiate_cycle()
                                         std::to_string(inst_state_status));
             }
 
-            CSML_INFO(2, logger) << "Cycle " << cycle << " UNINSTANTIATE: SUCCESS, RESEED_COUNTER_0=0, status=0";
+            REG_INFO(2, logger) << "Cycle " << cycle << " UNINSTANTIATE: SUCCESS, RESEED_COUNTER_0=0, status=0";
         }
 
-        CSML_INFO(2, logger) << "All " << num_cycles << " cycles completed successfully";
-        CSML_INFO(2, logger) << "Instance state consistency verified across rapid cycles";
+        REG_INFO(2, logger) << "All " << num_cycles << " cycles completed successfully";
+        REG_INFO(2, logger) << "Instance state consistency verified across rapid cycles";
 
         report_test_pass("Test test_corner_case_rapid_instantiate_uninstantiate_cycle");
 
@@ -3544,7 +3544,7 @@ void testbench::test_reset_clears_interrupt_states()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE set to 0xF (all interrupts enabled)";
+        REG_INFO(2, logger) << "INTR_ENABLE set to 0xF (all interrupts enabled)";
 
         // Clear any pending interrupts initially
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, 0xF);
@@ -3552,7 +3552,7 @@ void testbench::test_reset_clears_interrupt_states()
 
         // Step 1: Trigger all 4 interrupts using INTR_TEST register
         // This is the most reliable way to trigger all interrupts simultaneously
-        CSML_INFO(2, logger) << "Triggering all interrupts via INTR_TEST register";
+        REG_INFO(2, logger) << "Triggering all interrupts via INTR_TEST register";
 
         // Write 0xF to INTR_TEST to trigger all 4 interrupts (bits [3:0])
         m_test->register_write_32(csrng_basetest::INTR_TEST_OFFSET, 0xF);
@@ -3571,8 +3571,8 @@ void testbench::test_reset_clears_interrupt_states()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_STATE before reset: 0x" << std::hex << intr_state_before_reset;
-        CSML_INFO(2, logger) << "All interrupt bits set: [3:0] = 0xF";
+        REG_INFO(2, logger) << "INTR_STATE before reset: 0x" << std::hex << intr_state_before_reset;
+        REG_INFO(2, logger) << "All interrupt bits set: [3:0] = 0xF";
 
         // Verify all interrupt ports are asserted before reset
         bool cs_cmd_req_done_before = cs_cmd_req_done_signal.read();
@@ -3580,14 +3580,14 @@ void testbench::test_reset_clears_interrupt_states()
         bool cs_hw_inst_exc_before = cs_hw_inst_exc_signal.read();
         bool cs_fatal_err_before = cs_fatal_err_signal.read();
 
-        CSML_INFO(2, logger) << "Interrupt ports before reset:";
-        CSML_INFO(2, logger) << "  cs_cmd_req_done = " << (cs_cmd_req_done_before ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "  cs_entropy_req = " << (cs_entropy_req_before ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "  cs_hw_inst_exc = " << (cs_hw_inst_exc_before ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "  cs_fatal_err = " << (cs_fatal_err_before ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "Interrupt ports before reset:";
+        REG_INFO(2, logger) << "  cs_cmd_req_done = " << (cs_cmd_req_done_before ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "  cs_entropy_req = " << (cs_entropy_req_before ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "  cs_hw_inst_exc = " << (cs_hw_inst_exc_before ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "  cs_fatal_err = " << (cs_fatal_err_before ? "asserted" : "de-asserted");
 
         // Step 2: Assert rst_ni (active-low reset)
-        CSML_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
+        REG_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
         apply_reset();
         wait(50, SC_NS);  // Wait for reset completion and register initialization
 
@@ -3604,8 +3604,8 @@ void testbench::test_reset_clears_interrupt_states()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_STATE after reset: 0x" << std::hex << intr_state_after_reset;
-        CSML_INFO(2, logger) << "All interrupt bits cleared: [3:0] = 0x0";
+        REG_INFO(2, logger) << "INTR_STATE after reset: 0x" << std::hex << intr_state_after_reset;
+        REG_INFO(2, logger) << "All interrupt bits cleared: [3:0] = 0x0";
 
         // Step 5: Verify all interrupt ports are de-asserted after reset
         bool cs_cmd_req_done_after = cs_cmd_req_done_signal.read();
@@ -3613,11 +3613,11 @@ void testbench::test_reset_clears_interrupt_states()
         bool cs_hw_inst_exc_after = cs_hw_inst_exc_signal.read();
         bool cs_fatal_err_after = cs_fatal_err_signal.read();
 
-        CSML_INFO(2, logger) << "Interrupt ports after reset:";
-        CSML_INFO(2, logger) << "  cs_cmd_req_done = " << (cs_cmd_req_done_after ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "  cs_entropy_req = " << (cs_entropy_req_after ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "  cs_hw_inst_exc = " << (cs_hw_inst_exc_after ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "  cs_fatal_err = " << (cs_fatal_err_after ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "Interrupt ports after reset:";
+        REG_INFO(2, logger) << "  cs_cmd_req_done = " << (cs_cmd_req_done_after ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "  cs_entropy_req = " << (cs_entropy_req_after ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "  cs_hw_inst_exc = " << (cs_hw_inst_exc_after ? "asserted" : "de-asserted");
+        REG_INFO(2, logger) << "  cs_fatal_err = " << (cs_fatal_err_after ? "asserted" : "de-asserted");
 
         if (cs_cmd_req_done_after) {
             throw std::runtime_error(
@@ -3643,20 +3643,20 @@ void testbench::test_reset_clears_interrupt_states()
             );
         }
 
-        CSML_INFO(2, logger) << "All interrupt ports de-asserted after reset";
+        REG_INFO(2, logger) << "All interrupt ports de-asserted after reset";
 
         // Verify INTR_ENABLE is also reset (should be 0x0 after reset)
         uint32_t intr_enable_after_reset = 0;
         m_test->register_read_32(csrng_basetest::INTR_ENABLE_OFFSET, intr_enable_after_reset);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INTR_ENABLE after reset: 0x" << std::hex << intr_enable_after_reset;
-        CSML_INFO(2, logger) << "Note: INTR_ENABLE should also be reset to 0x0 (default value)";
+        REG_INFO(2, logger) << "INTR_ENABLE after reset: 0x" << std::hex << intr_enable_after_reset;
+        REG_INFO(2, logger) << "Note: INTR_ENABLE should also be reset to 0x0 (default value)";
 
-        CSML_INFO(2, logger) << "Reset clears interrupt states verified:";
-        CSML_INFO(2, logger) << "  Before reset: INTR_STATE[3:0] = 0xF (all set)";
-        CSML_INFO(2, logger) << "  After reset:  INTR_STATE[3:0] = 0x0 (all cleared)";
-        CSML_INFO(2, logger) << "  All interrupt ports de-asserted after reset";
+        REG_INFO(2, logger) << "Reset clears interrupt states verified:";
+        REG_INFO(2, logger) << "  Before reset: INTR_STATE[3:0] = 0xF (all set)";
+        REG_INFO(2, logger) << "  After reset:  INTR_STATE[3:0] = 0x0 (all cleared)";
+        REG_INFO(2, logger) << "  All interrupt ports de-asserted after reset";
 
         report_test_pass("Test test_reset_clears_interrupt_states");
 
@@ -3700,7 +3700,7 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
 
         // Verify ERR_CODE is initially clear
         uint32_t err_code_before_injection = 0;
@@ -3714,11 +3714,11 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "ERR_CODE initially clear: 0x" << std::hex << err_code_before_injection;
+        REG_INFO(2, logger) << "ERR_CODE initially clear: 0x" << std::hex << err_code_before_injection;
 
         // Check hardware interrupt port before error injection
         bool intr_port_before = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port before error injection: " 
+        REG_INFO(2, logger) << "cs_fatal_err port before error injection: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
@@ -3735,7 +3735,7 @@ void testbench::test_reset_clears_error_codes()
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, error_bit_num);
         wait(50, SC_NS);
 
-        CSML_INFO(2, logger) << "Injected fatal error via ERR_CODE_TEST: error_bit_num=" << error_bit_num 
+        REG_INFO(2, logger) << "Injected fatal error via ERR_CODE_TEST: error_bit_num=" << error_bit_num 
                              << " (sets ERR_CODE[28] = FIFO_WRITE_ERR)";
 
         // Step 2: Verify ERR_CODE bit is set before reset
@@ -3751,8 +3751,8 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "ERR_CODE before reset: 0x" << std::hex << err_code_before_reset;
-        CSML_INFO(2, logger) << "ERR_CODE[28] (FIFO_WRITE_ERR) = 1 (set, sticky until reset)";
+        REG_INFO(2, logger) << "ERR_CODE before reset: 0x" << std::hex << err_code_before_reset;
+        REG_INFO(2, logger) << "ERR_CODE[28] (FIFO_WRITE_ERR) = 1 (set, sticky until reset)";
 
         // Verify INTR_STATE[3] is set (fatal error interrupt)
         uint32_t intr_state_before_reset = 0;
@@ -3767,12 +3767,12 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_STATE before reset: 0x" << std::hex << intr_state_before_reset;
-        CSML_INFO(2, logger) << "INTR_STATE[3] (cs_fatal_err) = 1";
+        REG_INFO(2, logger) << "INTR_STATE before reset: 0x" << std::hex << intr_state_before_reset;
+        REG_INFO(2, logger) << "INTR_STATE[3] (cs_fatal_err) = 1";
 
         // Verify cs_fatal_err interrupt port is asserted before reset
         bool intr_port_before_reset = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port before reset: " 
+        REG_INFO(2, logger) << "cs_fatal_err port before reset: " 
                              << (intr_port_before_reset ? "asserted" : "de-asserted");
 
         if (!intr_port_before_reset) {
@@ -3783,15 +3783,15 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "cs_fatal_err interrupt port asserted (as expected)";
+        REG_INFO(2, logger) << "cs_fatal_err interrupt port asserted (as expected)";
 
         // Step 3: Assert rst_ni (active-low reset)
-        CSML_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
+        REG_INFO(2, logger) << "Asserting reset (rst_ni = 0)";
         rst_signal.write(false);  // Assert active-low reset
         wait(50, SC_NS);  // Wait for reset to propagate
 
         // Step 4: Deassert reset
-        CSML_INFO(2, logger) << "Deasserting reset (rst_ni = 1)";
+        REG_INFO(2, logger) << "Deasserting reset (rst_ni = 1)";
         rst_signal.write(true);   // Deassert reset
         wait(50, SC_NS);  // Wait for reset completion and register initialization
 
@@ -3807,12 +3807,12 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "ERR_CODE after reset: 0x" << std::hex << err_code_after_reset;
-        CSML_INFO(2, logger) << "ERR_CODE cleared to 0x0 (reset successful)";
+        REG_INFO(2, logger) << "ERR_CODE after reset: 0x" << std::hex << err_code_after_reset;
+        REG_INFO(2, logger) << "ERR_CODE cleared to 0x0 (reset successful)";
 
         // Step 6: Verify cs_fatal_err interrupt port is de-asserted after reset
         bool intr_port_after_reset = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port after reset: " 
+        REG_INFO(2, logger) << "cs_fatal_err port after reset: " 
                              << (intr_port_after_reset ? "asserted" : "de-asserted");
 
         if (intr_port_after_reset) {
@@ -3821,7 +3821,7 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "cs_fatal_err interrupt port de-asserted after reset";
+        REG_INFO(2, logger) << "cs_fatal_err interrupt port de-asserted after reset";
 
         // Verify INTR_STATE[3] is also cleared after reset
         uint32_t intr_state_after_reset = 0;
@@ -3836,22 +3836,22 @@ void testbench::test_reset_clears_error_codes()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_STATE after reset: 0x" << std::hex << intr_state_after_reset;
-        CSML_INFO(2, logger) << "INTR_STATE[3] cleared to 0 (reset successful)";
+        REG_INFO(2, logger) << "INTR_STATE after reset: 0x" << std::hex << intr_state_after_reset;
+        REG_INFO(2, logger) << "INTR_STATE[3] cleared to 0 (reset successful)";
 
         // Verify ERR_CODE_TEST is also reset
         uint32_t err_code_test_after_reset = 0;
         m_test->register_read_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_after_reset);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "ERR_CODE_TEST after reset: 0x" << std::hex << err_code_test_after_reset;
-        CSML_INFO(2, logger) << "Note: ERR_CODE_TEST should also be reset to default value";
+        REG_INFO(2, logger) << "ERR_CODE_TEST after reset: 0x" << std::hex << err_code_test_after_reset;
+        REG_INFO(2, logger) << "Note: ERR_CODE_TEST should also be reset to default value";
 
-        CSML_INFO(2, logger) << "Reset clears error codes verified:";
-        CSML_INFO(2, logger) << "  Before reset: ERR_CODE[28] = 1 (FIFO_WRITE_ERR set)";
-        CSML_INFO(2, logger) << "  After reset:  ERR_CODE = 0x0 (all bits cleared)";
-        CSML_INFO(2, logger) << "  cs_fatal_err interrupt port de-asserted after reset";
-        CSML_INFO(2, logger) << "  INTR_STATE[3] cleared after reset";
+        REG_INFO(2, logger) << "Reset clears error codes verified:";
+        REG_INFO(2, logger) << "  Before reset: ERR_CODE[28] = 1 (FIFO_WRITE_ERR set)";
+        REG_INFO(2, logger) << "  After reset:  ERR_CODE = 0x0 (all bits cleared)";
+        REG_INFO(2, logger) << "  cs_fatal_err interrupt port de-asserted after reset";
+        REG_INFO(2, logger) << "  INTR_STATE[3] cleared after reset";
 
         report_test_pass("Test test_reset_clears_error_codes");
 
@@ -3948,19 +3948,19 @@ void testbench::test_int_state_val_pointer_reset_on_int_state_num_write()
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
         wait(10, SC_US);
 
-        CSML_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true)";
+        REG_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true)";
 
         // Step 3: Enable OTP signal (required for INT_STATE_VAL access)
         otp_en_signal.write(0x6);  // 0x6 = enable, 0x9 = disable
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "OTP signal enabled (0x6)";
+        REG_INFO(2, logger) << "OTP signal enabled (0x6)";
 
         // Step 4: Enable internal state read for instance 0
         m_test->register_write_32(csrng_basetest::INT_STATE_READ_ENABLE_OFFSET, 0x1); // Enable bit 0
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
 
         // Step 5: Clean up: Uninstantiate instance 0 if needed
         if (wait_cmd_ready(m_test.get())) {
@@ -3994,20 +3994,20 @@ void testbench::test_int_state_val_pointer_reset_on_int_state_num_write()
             );
         }
 
-        CSML_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
+        REG_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
 
         // Step 7: Set INT_STATE_NUM=0 to select instance 0 and reset read pointer
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM set to 0 (instance 0 selected, read pointer reset to 0)";
+        REG_INFO(2, logger) << "INT_STATE_NUM set to 0 (instance 0 selected, read pointer reset to 0)";
 
         // Step 8: Read INT_STATE_VAL 5 times (pointer advances to position 5)
         // Store word 0 (first read) for later comparison
         uint32_t word_0 = 0;
         std::array<uint32_t, 5> words_0_to_4;
 
-        CSML_INFO(2, logger) << "Reading INT_STATE_VAL 5 times (pointer will be at position 5 after 5th read)";
+        REG_INFO(2, logger) << "Reading INT_STATE_VAL 5 times (pointer will be at position 5 after 5th read)";
 
         for (int i = 0; i < 5; i++) {
             uint32_t state_word = 0;
@@ -4018,31 +4018,31 @@ void testbench::test_int_state_val_pointer_reset_on_int_state_num_write()
 
             if (i == 0) {
                 word_0 = state_word;  // Store word 0 for comparison
-                CSML_INFO(2, logger) << "Word 0 (1st read, Reseed Counter): 0x" << std::hex << word_0 << std::dec;
+                REG_INFO(2, logger) << "Word 0 (1st read, Reseed Counter): 0x" << std::hex << word_0 << std::dec;
             }
 
-            CSML_INFO(2, logger) << "INT_STATE_VAL read " << (i + 1) << " (word " << i << "): 0x" 
+            REG_INFO(2, logger) << "INT_STATE_VAL read " << (i + 1) << " (word " << i << "): 0x" 
                                 << std::hex << state_word << std::dec;
         }
 
-        CSML_INFO(2, logger) << "Completed 5 reads - pointer should now be at position 5 (word 5)";
-        CSML_INFO(2, logger) << "Word 0 value stored: 0x" << std::hex << word_0 << std::dec;
+        REG_INFO(2, logger) << "Completed 5 reads - pointer should now be at position 5 (word 5)";
+        REG_INFO(2, logger) << "Word 0 value stored: 0x" << std::hex << word_0 << std::dec;
 
         // Step 9: Write INT_STATE_NUM=0 again (same value, but should reset pointer)
-        CSML_INFO(2, logger) << "Writing INT_STATE_NUM=0 again (same value, should reset pointer to 0)";
+        REG_INFO(2, logger) << "Writing INT_STATE_NUM=0 again (same value, should reset pointer to 0)";
 
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM written (pointer should be reset to 0)";
+        REG_INFO(2, logger) << "INT_STATE_NUM written (pointer should be reset to 0)";
 
         // Step 10: Read INT_STATE_VAL - should return word 0 (pointer reset)
         uint32_t read_after_reset = 0;
         m_test->register_read_32(csrng_basetest::INT_STATE_VAL_OFFSET, read_after_reset);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "INT_STATE_VAL read after INT_STATE_NUM write: 0x" << std::hex << read_after_reset << std::dec;
-        CSML_INFO(2, logger) << "Expected: 0x" << std::hex << word_0 << " (word 0, pointer reset)" << std::dec;
+        REG_INFO(2, logger) << "INT_STATE_VAL read after INT_STATE_NUM write: 0x" << std::hex << read_after_reset << std::dec;
+        REG_INFO(2, logger) << "Expected: 0x" << std::hex << word_0 << " (word 0, pointer reset)" << std::dec;
 
         // Step 11: Verify pointer was reset (read returns word 0)
         if (read_after_reset != word_0) {
@@ -4053,11 +4053,11 @@ void testbench::test_int_state_val_pointer_reset_on_int_state_num_write()
             );
         }
 
-        CSML_INFO(2, logger) << "PASS: Pointer reset verified - read after INT_STATE_NUM write returns word 0";
+        REG_INFO(2, logger) << "PASS: Pointer reset verified - read after INT_STATE_NUM write returns word 0";
 
         // Step 12: Verify that subsequent reads continue from word 0
         // Read next few words to verify pointer is at 0 and advancing correctly
-        CSML_INFO(2, logger) << "Verifying subsequent reads continue from word 0";
+        REG_INFO(2, logger) << "Verifying subsequent reads continue from word 0";
 
         for (int i = 0; i < 3; i++) {
             uint32_t state_word = 0;
@@ -4076,24 +4076,24 @@ void testbench::test_int_state_val_pointer_reset_on_int_state_num_write()
                 }
             }
 
-            CSML_INFO(2, logger) << "Subsequent read " << (i + 1) << " (word " << (i + 1) << "): 0x" 
+            REG_INFO(2, logger) << "Subsequent read " << (i + 1) << " (word " << (i + 1) << "): 0x" 
                                 << std::hex << state_word << std::dec;
         }
 
-        CSML_INFO(2, logger) << "PASS: Subsequent reads continue correctly from reset position";
+        REG_INFO(2, logger) << "PASS: Subsequent reads continue correctly from reset position";
 
         // Step 13: Summary
-        CSML_INFO(2, logger) << "Test Summary:";
-        CSML_INFO(2, logger) << "  - Read INT_STATE_VAL 5 times (pointer at position 5)";
-        CSML_INFO(2, logger) << "  - Wrote INT_STATE_NUM=0 (same value)";
-        CSML_INFO(2, logger) << "  - Read INT_STATE_VAL after write";
-        CSML_INFO(2, logger) << "  - Verified pointer reset: read returned word 0 (0x" << std::hex << word_0 << ")" << std::dec;
-        CSML_INFO(2, logger) << "  - Verified subsequent reads continue from reset position";
+        REG_INFO(2, logger) << "Test Summary:";
+        REG_INFO(2, logger) << "  - Read INT_STATE_VAL 5 times (pointer at position 5)";
+        REG_INFO(2, logger) << "  - Wrote INT_STATE_NUM=0 (same value)";
+        REG_INFO(2, logger) << "  - Read INT_STATE_VAL after write";
+        REG_INFO(2, logger) << "  - Verified pointer reset: read returned word 0 (0x" << std::hex << word_0 << ")" << std::dec;
+        REG_INFO(2, logger) << "  - Verified subsequent reads continue from reset position";
 
         report_test_pass("Test void testbench::test_int_state_val_pointer_reset_on_int_state_num_write()");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_int_state_val_pointer_reset_on_int_state_num_write: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_int_state_val_pointer_reset_on_int_state_num_write: " << e.what();
         report_test_fail("Test int_state_val_pointer_reset_on_int_state_num_write", e.what());
     }
 }
@@ -4130,7 +4130,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true) via 0x600";
+        REG_INFO(2, logger) << "CTRL.READ_INT_STATE set to 0x6 (enable-true) via 0x600";
 
         // Verify CTRL.READ_INT_STATE is actually 0x6
         uint32_t ctrl_readback = 0;
@@ -4146,26 +4146,26 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             );
         }
 
-        CSML_INFO(2, logger) << "CTRL.READ_INT_STATE verified: 0x" << std::hex << (int)read_int_state_val << std::dec;
+        REG_INFO(2, logger) << "CTRL.READ_INT_STATE verified: 0x" << std::hex << (int)read_int_state_val << std::dec;
 
         // Step 2: Enable INT_STATE_READ_ENABLE[0]=1 (instance access enabled)
         m_test->register_write_32(csrng_basetest::INT_STATE_READ_ENABLE_OFFSET, 0x1);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE[0] set (Instance 0 enabled)";
 
         // Step 3: Set INT_STATE_NUM to Instance 0
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM set to 0 (selecting Instance 0)";
+        REG_INFO(2, logger) << "INT_STATE_NUM set to 0 (selecting Instance 0)";
 
         // Step 4: First, enable OTP and instantiate instance to create non-zero state
         // This ensures we can distinguish between "access denied" and "state is zero"
         otp_en_signal.write(0x6);  // 0x6 = enable
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "OTP signal enabled (0x6) - preparing to instantiate instance";
+        REG_INFO(2, logger) << "OTP signal enabled (0x6) - preparing to instantiate instance";
 
         // Enable module for commands - use 0x6666 which includes READ_INT_STATE=0x6
         // ENABLE=0x6, SW_APP_ENABLE=0x6, READ_INT_STATE=0x6, FIPS_FORCE_ENABLE=0x6
@@ -4184,7 +4184,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             );
         }
 
-        CSML_INFO(2, logger) << "CTRL.READ_INT_STATE verified: 0x" << std::hex << (int)read_int_state_val << std::dec << " (still enabled)";
+        REG_INFO(2, logger) << "CTRL.READ_INT_STATE verified: 0x" << std::hex << (int)read_int_state_val << std::dec << " (still enabled)";
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
@@ -4208,7 +4208,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             );
         }
 
-        CSML_INFO(2, logger) << "Instance 0 instantiated (with OTP enabled and READ_INT_STATE=0x6)";
+        REG_INFO(2, logger) << "Instance 0 instantiated (with OTP enabled and READ_INT_STATE=0x6)";
 
         // Reset read pointer
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
@@ -4216,7 +4216,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
 
         // Step 5: Verify we can read non-zero state with OTP enabled
         // This proves the instance has non-zero state and access control is working
-        CSML_INFO(2, logger) << "Verifying INT_STATE_VAL returns non-zero state when OTP enabled";
+        REG_INFO(2, logger) << "Verifying INT_STATE_VAL returns non-zero state when OTP enabled";
 
         bool found_non_zero = false;
         uint32_t state_val_with_otp = 0;
@@ -4226,7 +4226,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             
             if (state_val_with_otp != 0x0) {
                 found_non_zero = true;
-                CSML_INFO(2, logger) << "INT_STATE_VAL word " << i << " (with OTP enabled): 0x"
+                REG_INFO(2, logger) << "INT_STATE_VAL word " << i << " (with OTP enabled): 0x"
                                      << std::hex << state_val_with_otp << std::dec;
                 break;  // Found non-zero, access is working
             }
@@ -4239,7 +4239,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             );
         }
 
-        CSML_INFO(2, logger) << "Verified: INT_STATE_VAL returns non-zero state when OTP enabled (instance has valid state)";
+        REG_INFO(2, logger) << "Verified: INT_STATE_VAL returns non-zero state when OTP enabled (instance has valid state)";
 
         // Reset read pointer again
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
@@ -4249,16 +4249,16 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
         otp_en_signal.write(0x00);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "OTP signal set to 0x00 (disabled) - INT_STATE_VAL access should be blocked";
-        CSML_INFO(2, logger) << "Access conditions: READ_INT_STATE=0x6 (enabled), OTP=0x00 (disabled)";
-        CSML_INFO(2, logger) << "Instance is instantiated with non-zero state - OTP should block access";
+        REG_INFO(2, logger) << "OTP signal set to 0x00 (disabled) - INT_STATE_VAL access should be blocked";
+        REG_INFO(2, logger) << "Access conditions: READ_INT_STATE=0x6 (enabled), OTP=0x00 (disabled)";
+        REG_INFO(2, logger) << "Instance is instantiated with non-zero state - OTP should block access";
 
         // Step 7: Try to read INT_STATE_VAL (should return 0x0 due to OTP blocking)
         uint32_t state_val = 0xFFFFFFFF;
         m_test->register_read_32(csrng_basetest::INT_STATE_VAL_OFFSET, state_val);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INT_STATE_VAL read with READ_INT_STATE=0x6 and OTP=0: 0x"
+        REG_INFO(2, logger) << "INT_STATE_VAL read with READ_INT_STATE=0x6 and OTP=0: 0x"
                              << std::hex << state_val << std::dec;
 
         // Verify INT_STATE_VAL returns zeros when OTP is disabled (even with instantiated state)
@@ -4269,7 +4269,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             );
         }
 
-        CSML_INFO(2, logger) << "INT_STATE_VAL correctly blocked when OTP signal disabled";
+        REG_INFO(2, logger) << "INT_STATE_VAL correctly blocked when OTP signal disabled";
 
         // Step 8: Test multiple reads to ensure all return zeros
         for (int i = 0; i < 5; i++) {
@@ -4283,14 +4283,14 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             }
         }
 
-        CSML_INFO(2, logger) << "All INT_STATE_VAL reads correctly return 0x0 with OTP disabled";
+        REG_INFO(2, logger) << "All INT_STATE_VAL reads correctly return 0x0 with OTP disabled";
 
         // Step 9: Verify that re-enabling OTP allows access again
         otp_en_signal.write(0x6);  // 0x6 = enable
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "OTP signal enabled again (0x6) - INT_STATE_VAL should now be accessible";
-        CSML_INFO(2, logger) << "Access conditions: READ_INT_STATE=0x6 (enabled), OTP=0x6 (enabled)";
+        REG_INFO(2, logger) << "OTP signal enabled again (0x6) - INT_STATE_VAL should now be accessible";
+        REG_INFO(2, logger) << "Access conditions: READ_INT_STATE=0x6 (enabled), OTP=0x6 (enabled)";
 
         // Reset read pointer to ensure we start from word 0
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
@@ -4304,7 +4304,7 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             
             if (state_val != 0x0) {
                 found_non_zero = true;
-                CSML_INFO(2, logger) << "INT_STATE_VAL word " << i << " (with OTP re-enabled): 0x"
+                REG_INFO(2, logger) << "INT_STATE_VAL word " << i << " (with OTP re-enabled): 0x"
                                      << std::hex << state_val << std::dec;
                 break;  // Found non-zero, access is working
             }
@@ -4317,18 +4317,18 @@ void testbench::test_int_state_val_access_ctrl_otp_disabled()
             );
         }
 
-        CSML_INFO(2, logger) << "INT_STATE_VAL access granted when OTP re-enabled - non-zero state detected";
+        REG_INFO(2, logger) << "INT_STATE_VAL access granted when OTP re-enabled - non-zero state detected";
 
-        CSML_INFO(2, logger) << "Test 073 Summary:";
-        CSML_INFO(2, logger) << "  CTRL.READ_INT_STATE=0x6 (enable-true) - verified throughout test";
-        CSML_INFO(2, logger) << "  INT_STATE_READ_ENABLE[0]=1 (instance enabled)";
-        CSML_INFO(2, logger) << "  Instance instantiated with non-zero state (V and Key populated)";
-        CSML_INFO(2, logger) << "  Verified: INT_STATE_VAL returns non-zero state when OTP enabled";
-        CSML_INFO(2, logger) << "  Verified: INT_STATE_VAL returns 0x0 when OTP disabled (access blocked)";
-        CSML_INFO(2, logger) << "  Verified: INT_STATE_VAL access restored when OTP re-enabled";
-        CSML_INFO(2, logger) << "  otp_en_csrng_sw_app_read=0x9 (OTP disabled) blocks access";
-        CSML_INFO(2, logger) << "  otp_en_csrng_sw_app_read=0x6 (OTP enabled) allows access";
-        CSML_INFO(2, logger) << "  OTP layer of multi-layer access control verified";
+        REG_INFO(2, logger) << "Test 073 Summary:";
+        REG_INFO(2, logger) << "  CTRL.READ_INT_STATE=0x6 (enable-true) - verified throughout test";
+        REG_INFO(2, logger) << "  INT_STATE_READ_ENABLE[0]=1 (instance enabled)";
+        REG_INFO(2, logger) << "  Instance instantiated with non-zero state (V and Key populated)";
+        REG_INFO(2, logger) << "  Verified: INT_STATE_VAL returns non-zero state when OTP enabled";
+        REG_INFO(2, logger) << "  Verified: INT_STATE_VAL returns 0x0 when OTP disabled (access blocked)";
+        REG_INFO(2, logger) << "  Verified: INT_STATE_VAL access restored when OTP re-enabled";
+        REG_INFO(2, logger) << "  otp_en_csrng_sw_app_read=0x9 (OTP disabled) blocks access";
+        REG_INFO(2, logger) << "  otp_en_csrng_sw_app_read=0x6 (OTP enabled) allows access";
+        REG_INFO(2, logger) << "  OTP layer of multi-layer access control verified";
         
         report_test_pass("Test test_int_state_val_access_ctrl_otp_disabled");
 
@@ -4378,7 +4378,7 @@ void testbench::test_int_state_val_reseed_status_fips()
                 "RESEED_INTERVAL write failed: expected 5, got " + std::to_string(read_interval)
             );
         }
-        CSML_INFO(2, logger) << "RESEED_INTERVAL set to 5";
+        REG_INFO(2, logger) << "RESEED_INTERVAL set to 5";
 
         // Step 2: Enable CTRL with FIPS-related settings
         // ENABLE=0x6, SW_APP_ENABLE=0x6, READ_INT_STATE=0x6, FIPS_FORCE_ENABLE=0x6
@@ -4386,7 +4386,7 @@ void testbench::test_int_state_val_reseed_status_fips()
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_val);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "CTRL configured: ENABLE=0x6, SW_APP_ENABLE=0x6, READ_INT_STATE=0x6";
+        REG_INFO(2, logger) << "CTRL configured: ENABLE=0x6, SW_APP_ENABLE=0x6, READ_INT_STATE=0x6";
 
         // Enable OTP signal (required for GENBITS and INT_STATE_VAL access)
         otp_en_signal.write(0x6);  // 0x6 = enable, 0x9 = disable
@@ -4396,7 +4396,7 @@ void testbench::test_int_state_val_reseed_status_fips()
         m_test->register_write_32(csrng_basetest::INT_STATE_READ_ENABLE_OFFSET, 0x1);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "Access controls enabled (OTP=0x6, INT_STATE_READ_ENABLE[0]=1)";
+        REG_INFO(2, logger) << "Access controls enabled (OTP=0x6, INT_STATE_READ_ENABLE[0]=1)";
 
         // Step 3: INSTANTIATE Instance 0 with flag0=0x6 (entropy mode, FIPS compliant)
         // No additional input data (clen=0)
@@ -4420,7 +4420,7 @@ void testbench::test_int_state_val_reseed_status_fips()
             );
         }
 
-        CSML_INFO(2, logger) << "Instance 0 INSTANTIATED with flag0=0x6 (FIPS compliant, entropy mode)";
+        REG_INFO(2, logger) << "Instance 0 INSTANTIATED with flag0=0x6 (FIPS compliant, entropy mode)";
 
         // Step 4: Issue GENERATE command #1 (glen=1)
         if (!wait_cmd_ready(m_test.get())) {
@@ -4444,7 +4444,7 @@ void testbench::test_int_state_val_reseed_status_fips()
         for (int i = 0; i < 4; i++) {
             uint32_t genbits_word = 0;
             m_test->register_read_32(csrng_basetest::GENBITS_OFFSET, genbits_word);
-            CSML_INFO(3, logger) << "GENBITS word " << i << ": 0x" << std::hex << genbits_word << std::dec;
+            REG_INFO(3, logger) << "GENBITS word " << i << ": 0x" << std::hex << genbits_word << std::dec;
             if(genbits_word == 0) {
                 throw std::runtime_error(
                     "GENBITS word " + std::to_string(i) + " is zero after GENERATE command, expected non-zero random data"
@@ -4453,7 +4453,7 @@ void testbench::test_int_state_val_reseed_status_fips()
             wait(10, SC_NS);
         }
 
-        CSML_INFO(2, logger) << "First GENERATE command completed (glen=1)";
+        REG_INFO(2, logger) << "First GENERATE command completed (glen=1)";
 
         // Step 5: Issue GENERATE command #2 (glen=1)
         if (!wait_cmd_ready(m_test.get())) {
@@ -4477,7 +4477,7 @@ void testbench::test_int_state_val_reseed_status_fips()
         for (int i = 0; i < 4; i++) {
             uint32_t genbits_word = 0;
             m_test->register_read_32(csrng_basetest::GENBITS_OFFSET, genbits_word);
-            CSML_INFO(3, logger) << "GENBITS word " << i << ": 0x" << std::hex << genbits_word << std::dec;
+            REG_INFO(3, logger) << "GENBITS word " << i << ": 0x" << std::hex << genbits_word << std::dec;
             if(genbits_word == 0) {
                 throw std::runtime_error(
                     "GENBITS word " + std::to_string(i) + " is zero after GENERATE command, expected non-zero random data"
@@ -4486,7 +4486,7 @@ void testbench::test_int_state_val_reseed_status_fips()
             wait(10, SC_NS);
         }
 
-        CSML_INFO(2, logger) << "Second GENERATE command completed (glen=1)";
+        REG_INFO(2, logger) << "Second GENERATE command completed (glen=1)";
 
         // Step 6: Read observable registers
         // Read RESEED_COUNTER_0 (expected value: 2)
@@ -4494,7 +4494,7 @@ void testbench::test_int_state_val_reseed_status_fips()
         m_test->register_read_32(csrng_basetest::RESEED_COUNTER_0_OFFSET, reseed_counter_0);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 read: " << reseed_counter_0 << " (expected: 2)";
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 read: " << reseed_counter_0 << " (expected: 2)";
 
         if (reseed_counter_0 != 2) {
             throw std::runtime_error(
@@ -4508,7 +4508,7 @@ void testbench::test_int_state_val_reseed_status_fips()
         wait(10, SC_NS);
 
         uint32_t genbits_fips = (genbits_vld >> 1) & 0x1;  // Bit 1 = FIPS flag
-        CSML_INFO(2, logger) << "GENBITS_VLD read: 0x" << std::hex << genbits_vld 
+        REG_INFO(2, logger) << "GENBITS_VLD read: 0x" << std::hex << genbits_vld 
                              << ", FIPS flag: " << std::dec << genbits_fips;
 
         // Step 7: Read INT_STATE_VAL (14 words)
@@ -4516,13 +4516,13 @@ void testbench::test_int_state_val_reseed_status_fips()
         m_test->register_write_32(csrng_basetest::INT_STATE_NUM_OFFSET, 0x0);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INT_STATE_NUM set to 0 (read pointer reset)";
+        REG_INFO(2, logger) << "INT_STATE_NUM set to 0 (read pointer reset)";
 
         std::array<uint32_t, 14> int_state_val;
         for (int i = 0; i < 14; i++) {
             m_test->register_read_32(csrng_basetest::INT_STATE_VAL_OFFSET, int_state_val[i]);
             wait(10, SC_NS);
-            CSML_INFO(3, logger) << "INT_STATE_VAL[" << i << "] = 0x" << std::hex << int_state_val[i] << std::dec;
+            REG_INFO(3, logger) << "INT_STATE_VAL[" << i << "] = 0x" << std::hex << int_state_val[i] << std::dec;
         }
 
         // Extract fields from INT_STATE_VAL
@@ -4531,46 +4531,46 @@ void testbench::test_int_state_val_reseed_status_fips()
         uint32_t int_state_status = int_state_status_word & 0x1;        // Bit 0 = Status (instantiated)
         uint32_t int_state_compliance = (int_state_status_word >> 1) & 0x1;  // Bit 1 = Compliance (FIPS)
 
-        CSML_INFO(2, logger) << "INT_STATE_VAL extracted:";
-        CSML_INFO(2, logger) << "  - Reseed Counter (word 0): " << int_state_reseed_counter;
-        CSML_INFO(2, logger) << "  - Status (word 13 bit 0): " << int_state_status;
-        CSML_INFO(2, logger) << "  - Compliance/FIPS (word 13 bit 1): " << int_state_compliance;
+        REG_INFO(2, logger) << "INT_STATE_VAL extracted:";
+        REG_INFO(2, logger) << "  - Reseed Counter (word 0): " << int_state_reseed_counter;
+        REG_INFO(2, logger) << "  - Status (word 13 bit 0): " << int_state_status;
+        REG_INFO(2, logger) << "  - Compliance/FIPS (word 13 bit 1): " << int_state_compliance;
 
         // Step 8: Self-checks with detailed logging
 
         // Check 1: RESEED_COUNTER_0 vs INT_STATE_VAL[0]
-        CSML_INFO(2, logger) << "CHECK 1: RESEED_COUNTER_0 vs INT_STATE_VAL[0]";
-        CSML_INFO(2, logger) << "  - RESEED_COUNTER_0: " << reseed_counter_0;
-        CSML_INFO(2, logger) << "  - INT_STATE_VAL[0]: " << int_state_reseed_counter;
+        REG_INFO(2, logger) << "CHECK 1: RESEED_COUNTER_0 vs INT_STATE_VAL[0]";
+        REG_INFO(2, logger) << "  - RESEED_COUNTER_0: " << reseed_counter_0;
+        REG_INFO(2, logger) << "  - INT_STATE_VAL[0]: " << int_state_reseed_counter;
 
         if (reseed_counter_0 != int_state_reseed_counter) {
-            CSML_ERROR(0, logger) << "MISMATCH: RESEED_COUNTER_0 (" << reseed_counter_0 
+            REG_ERROR(0, logger) << "MISMATCH: RESEED_COUNTER_0 (" << reseed_counter_0 
                                   << ") != INT_STATE_VAL[0] (" << int_state_reseed_counter << ")";
             throw std::runtime_error(
                 "Reseed counter mismatch: RESEED_COUNTER_0=" + std::to_string(reseed_counter_0) +
                 ", INT_STATE_VAL[0]=" + std::to_string(int_state_reseed_counter)
             );
         }
-        CSML_INFO(2, logger) << "  - PASS: Reseed counter values match";
+        REG_INFO(2, logger) << "  - PASS: Reseed counter values match";
 
         // Check 2: GENBITS_VLD.FIPS vs INT_STATE_VAL[13] bit 1
-        CSML_INFO(2, logger) << "CHECK 2: GENBITS_VLD.FIPS vs INT_STATE_VAL[13] compliance bit";
-        CSML_INFO(2, logger) << "  - GENBITS_VLD.FIPS: " << genbits_fips;
-        CSML_INFO(2, logger) << "  - INT_STATE_VAL[13] bit 1: " << int_state_compliance;
+        REG_INFO(2, logger) << "CHECK 2: GENBITS_VLD.FIPS vs INT_STATE_VAL[13] compliance bit";
+        REG_INFO(2, logger) << "  - GENBITS_VLD.FIPS: " << genbits_fips;
+        REG_INFO(2, logger) << "  - INT_STATE_VAL[13] bit 1: " << int_state_compliance;
 
         if (genbits_fips != int_state_compliance) {
-            CSML_ERROR(0, logger) << "MISMATCH: GENBITS_VLD.FIPS (" << genbits_fips 
+            REG_ERROR(0, logger) << "MISMATCH: GENBITS_VLD.FIPS (" << genbits_fips 
                                   << ") != INT_STATE_VAL[13] compliance (" << int_state_compliance << ")";
             throw std::runtime_error(
                 "FIPS compliance mismatch: GENBITS_VLD.FIPS=" + std::to_string(genbits_fips) +
                 ", INT_STATE_VAL[13] bit 1=" + std::to_string(int_state_compliance)
             );
         }
-        CSML_INFO(2, logger) << "  - PASS: FIPS compliance flags match";
+        REG_INFO(2, logger) << "  - PASS: FIPS compliance flags match";
 
         // Additional check: Verify FIPS flag is set (we used entropy mode)
         if (int_state_compliance != 1) {
-            CSML_WARN(1, logger) << "WARNING: FIPS compliance flag not set despite using entropy mode (flag0=0x6)";
+            REG_WARN(1, logger) << "WARNING: FIPS compliance flag not set despite using entropy mode (flag0=0x6)";
             throw std::runtime_error(
                 "FIPS compliance flag not set in INT_STATE_VAL[13] bit 1 despite using entropy mode (flag0=0x6)."
             );
@@ -4583,18 +4583,18 @@ void testbench::test_int_state_val_reseed_status_fips()
                 "Instance status should be 1 (instantiated), got " + std::to_string(int_state_status)
             );
         }
-        CSML_INFO(2, logger) << "  - Instance status verified: instantiated";
+        REG_INFO(2, logger) << "  - Instance status verified: instantiated";
 
         // All checks passed
-        CSML_INFO(1, logger) << "====================================================";
-        CSML_INFO(1, logger) << "TEST SUMMARY:";
-        CSML_INFO(1, logger) << "  - RESEED_INTERVAL: 5";
-        CSML_INFO(1, logger) << "  - INSTANTIATE: flag0=0x6 (entropy mode, FIPS)";
-        CSML_INFO(1, logger) << "  - GENERATE count: 2";
-        CSML_INFO(1, logger) << "  - RESEED_COUNTER_0: " << reseed_counter_0 << " (expected 2) ✓";
-        CSML_INFO(1, logger) << "  - Reseed counter consistency: PASS ✓";
-        CSML_INFO(1, logger) << "  - FIPS flag consistency: PASS ✓";
-        CSML_INFO(1, logger) << "====================================================";
+        REG_INFO(1, logger) << "====================================================";
+        REG_INFO(1, logger) << "TEST SUMMARY:";
+        REG_INFO(1, logger) << "  - RESEED_INTERVAL: 5";
+        REG_INFO(1, logger) << "  - INSTANTIATE: flag0=0x6 (entropy mode, FIPS)";
+        REG_INFO(1, logger) << "  - GENERATE count: 2";
+        REG_INFO(1, logger) << "  - RESEED_COUNTER_0: " << reseed_counter_0 << " (expected 2) ✓";
+        REG_INFO(1, logger) << "  - Reseed counter consistency: PASS ✓";
+        REG_INFO(1, logger) << "  - FIPS flag consistency: PASS ✓";
+        REG_INFO(1, logger) << "====================================================";
 
         report_test_pass("Test test_int_state_val_reseed_status_fips");
 

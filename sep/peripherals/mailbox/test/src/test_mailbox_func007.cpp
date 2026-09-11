@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /**
  * @file test_mailbox_func007.cpp
  * @brief FUNC-007: Software-Controlled FIFO Management - Test Suite
@@ -22,7 +22,7 @@
  * - Atomic flush execution (immediate FIFO clearing)
  * - Data loss confirmation (flushed data permanently discarded)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  */
 
 #include "testbench.h"
@@ -77,10 +77,10 @@
  */
 void testbench::test_ctrl_flush_write_fifo() {
   std::string test_name = "TC046: test_ctrl_flush_write_fifo";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Verify write FIFO flush operation";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Verify write FIFO flush operation";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t status_value = 0;
@@ -92,7 +92,7 @@ void testbench::test_ctrl_flush_write_fifo() {
   // =========================================================================
   // Test Step 1: Fill Port 0 write FIFO with data
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 1: Filling Port 0 write FIFO with 3 entries";
+  REG_INFO(2, logger) << "Step 1: Filling Port 0 write FIFO with 3 entries";
 
   std::vector<uint64_t> test_data = {
     0xDEADBEEF12345678ULL,
@@ -108,21 +108,21 @@ void testbench::test_ctrl_flush_write_fifo() {
   // =========================================================================
   // Test Step 2: Verify Port 1 STATUS[0]=0 (data available in read FIFO)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 2: Verifying Port 1 read FIFO has data available";
+  REG_INFO(2, logger) << "Step 2: Verifying Port 1 read FIFO has data available";
 
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
 
   if ((status_value & 0x1) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] empty flag set before flush (expected data available)";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] empty flag set before flush (expected data available)";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 read FIFO has data available (STATUS[0]=0)";
+    REG_INFO(2, logger) << "PASS: Port 1 read FIFO has data available (STATUS[0]=0)";
   }
 
   // =========================================================================
   // Test Step 3: Write CTRL[0]=1 on Port 0 to flush write FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 3: Writing CTRL[0]=1 to flush Port 0 write FIFO";
+  REG_INFO(2, logger) << "Step 3: Writing CTRL[0]=1 to flush Port 0 write FIFO";
 
   test_port0->register_write_64(mailbox_basetest::CTRL_OFFSET, 0x1); // wflush bit
   wait(5, SC_NS);
@@ -130,62 +130,62 @@ void testbench::test_ctrl_flush_write_fifo() {
   // =========================================================================
   // Test Step 4: Verify Port 0 STATUS flags after flush
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 4: Verifying Port 0 STATUS flags after write FIFO flush";
+  REG_INFO(2, logger) << "Step 4: Verifying Port 0 STATUS flags after write FIFO flush";
 
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
 
   // STATUS[1] full flag should be 0 (not full)
   if ((status_value & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 STATUS[1] full flag set after flush (expected cleared)";
+    REG_ERROR(0, logger) << "FAIL: Port 0 STATUS[1] full flag set after flush (expected cleared)";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 STATUS[1] full flag cleared after flush";
+    REG_INFO(2, logger) << "PASS: Port 0 STATUS[1] full flag cleared after flush";
   }
 
   // STATUS[2] write threshold flag should be 0 (cleared)
   if ((status_value & 0x4) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 STATUS[2] write threshold flag set after flush";
+    REG_ERROR(0, logger) << "FAIL: Port 0 STATUS[2] write threshold flag set after flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 STATUS[2] write threshold flag cleared";
+    REG_INFO(2, logger) << "PASS: Port 0 STATUS[2] write threshold flag cleared";
   }
 
   // =========================================================================
   // Test Step 5: Verify Port 1 STATUS flags after flush (cross-port effect)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 5: Verifying Port 1 STATUS flags (cross-port effect)";
+  REG_INFO(2, logger) << "Step 5: Verifying Port 1 STATUS flags (cross-port effect)";
 
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
 
   // STATUS[0] empty flag should be 1 (read FIFO now empty)
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] empty flag not set after flush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] empty flag not set after flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 STATUS[0] empty flag set (read FIFO flushed)";
+    REG_INFO(2, logger) << "PASS: Port 1 STATUS[0] empty flag set (read FIFO flushed)";
   }
 
   // STATUS[3] read threshold flag should be 0 (cleared)
   if ((status_value & 0x8) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[3] read threshold flag set after flush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[3] read threshold flag set after flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 STATUS[3] read threshold flag cleared";
+    REG_INFO(2, logger) << "PASS: Port 1 STATUS[3] read threshold flag cleared";
   }
 
   // =========================================================================
   // Test Step 7: Verify Port 1 cannot read flushed data
   // =========================================================================
   // FIFO emptiness already verified via STATUS[0]=1 in Step 5.
-  // Note: TLM response status not checked (CSML framework limitation).
-  CSML_INFO(2, logger) << "Step 7: Verifying flushed data permanently discarded (STATUS[0]=1 confirmed)";
+  // Note: TLM response status not checked (regmodel limitation).
+  REG_INFO(2, logger) << "Step 7: Verifying flushed data permanently discarded (STATUS[0]=1 confirmed)";
   status = mailbox_read(1, mailbox_basetest::READ_DATA_OFFSET, read_value);
   (void)status;
 
   // =========================================================================
   // Test Step 8: Repeat test for Port 1 (symmetry verification)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 8: Verifying Port 1 write FIFO flush symmetry";
+  REG_INFO(2, logger) << "Step 8: Verifying Port 1 write FIFO flush symmetry";
 
   // Fill Port 1 write FIFO
   for (const auto& data : test_data) {
@@ -200,13 +200,13 @@ void testbench::test_ctrl_flush_write_fifo() {
   // Verify Port 0 read FIFO empty
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 STATUS[0] not set after Port 1 flush";
+    REG_ERROR(0, logger) << "FAIL: Port 0 STATUS[0] not set after Port 1 flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 write FIFO flush works symmetrically";
+    REG_INFO(2, logger) << "PASS: Port 1 write FIFO flush works symmetrically";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -250,10 +250,10 @@ void testbench::test_ctrl_flush_write_fifo() {
  */
 void testbench::test_ctrl_flush_read_fifo() {
   std::string test_name = "TC047: test_ctrl_flush_read_fifo";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Verify read FIFO flush operation";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Verify read FIFO flush operation";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t status_value = 0;
@@ -265,7 +265,7 @@ void testbench::test_ctrl_flush_read_fifo() {
   // =========================================================================
   // Test Step 1: Peer (Port 1) fills Port 0 read FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 1: Port 1 filling Port 0 read FIFO with 3 entries";
+  REG_INFO(2, logger) << "Step 1: Port 1 filling Port 0 read FIFO with 3 entries";
 
   std::vector<uint64_t> test_data = {
     0x1111111111111111ULL,
@@ -281,21 +281,21 @@ void testbench::test_ctrl_flush_read_fifo() {
   // =========================================================================
   // Test Step 2: Verify Port 0 STATUS[0]=0 (data available)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 2: Verifying Port 0 has data available in read FIFO";
+  REG_INFO(2, logger) << "Step 2: Verifying Port 0 has data available in read FIFO";
 
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
 
   if ((status_value & 0x1) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 STATUS[0] empty flag set (expected data available)";
+    REG_ERROR(0, logger) << "FAIL: Port 0 STATUS[0] empty flag set (expected data available)";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 read FIFO has data available";
+    REG_INFO(2, logger) << "PASS: Port 0 read FIFO has data available";
   }
 
   // =========================================================================
   // Test Step 3: Write CTRL[1]=1 on Port 0 to flush read FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 3: Writing CTRL[1]=1 to flush Port 0 read FIFO";
+  REG_INFO(2, logger) << "Step 3: Writing CTRL[1]=1 to flush Port 0 read FIFO";
 
   test_port0->register_write_64(mailbox_basetest::CTRL_OFFSET, 0x2); // rflush bit
   wait(5, SC_NS);
@@ -303,62 +303,62 @@ void testbench::test_ctrl_flush_read_fifo() {
   // =========================================================================
   // Test Step 4: Verify Port 0 STATUS flags after flush
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 4: Verifying Port 0 STATUS flags after read FIFO flush";
+  REG_INFO(2, logger) << "Step 4: Verifying Port 0 STATUS flags after read FIFO flush";
 
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
 
   // STATUS[0] empty flag should be 1 (read FIFO now empty)
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 STATUS[0] empty flag not set after flush";
+    REG_ERROR(0, logger) << "FAIL: Port 0 STATUS[0] empty flag not set after flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 STATUS[0] empty flag set (read FIFO flushed)";
+    REG_INFO(2, logger) << "PASS: Port 0 STATUS[0] empty flag set (read FIFO flushed)";
   }
 
   // STATUS[3] read threshold flag should be 0 (cleared)
   if ((status_value & 0x8) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 STATUS[3] read threshold flag set after flush";
+    REG_ERROR(0, logger) << "FAIL: Port 0 STATUS[3] read threshold flag set after flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 STATUS[3] read threshold flag cleared";
+    REG_INFO(2, logger) << "PASS: Port 0 STATUS[3] read threshold flag cleared";
   }
 
   // =========================================================================
   // Test Step 5: Verify Port 1 STATUS flags (cross-port effect)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 5: Verifying Port 1 STATUS flags (peer write FIFO flushed)";
+  REG_INFO(2, logger) << "Step 5: Verifying Port 1 STATUS flags (peer write FIFO flushed)";
 
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
 
   // STATUS[1] full flag should be 0 (write FIFO not full)
   if ((status_value & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[1] full flag set after flush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[1] full flag set after flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 STATUS[1] full flag cleared (write FIFO space available)";
+    REG_INFO(2, logger) << "PASS: Port 1 STATUS[1] full flag cleared (write FIFO space available)";
   }
 
   // STATUS[2] write threshold flag should be 0 (cleared)
   if ((status_value & 0x4) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[2] write threshold flag set after flush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[2] write threshold flag set after flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 STATUS[2] write threshold flag cleared";
+    REG_INFO(2, logger) << "PASS: Port 1 STATUS[2] write threshold flag cleared";
   }
 
   // =========================================================================
   // Test Step 6: Verify Port 0 cannot read flushed data
   // =========================================================================
   // FIFO emptiness already verified via STATUS[0]=1 in Step 4.
-  // Note: TLM response status not checked (CSML framework limitation).
-  CSML_INFO(2, logger) << "Step 6: Verifying flushed data permanently discarded (STATUS[0]=1 confirmed)";
+  // Note: TLM response status not checked (regmodel limitation).
+  REG_INFO(2, logger) << "Step 6: Verifying flushed data permanently discarded (STATUS[0]=1 confirmed)";
   status = mailbox_read(0, mailbox_basetest::READ_DATA_OFFSET, read_value);
   (void)status;
 
   // =========================================================================
   // Test Step 7: Repeat test for Port 1 (symmetry verification)
   // =========================================================================
-  CSML_INFO(2, logger) << "Step 7: Verifying Port 1 read FIFO flush symmetry";
+  REG_INFO(2, logger) << "Step 7: Verifying Port 1 read FIFO flush symmetry";
 
   // Port 0 fills Port 1 read FIFO
   for (const auto& data : test_data) {
@@ -373,13 +373,13 @@ void testbench::test_ctrl_flush_read_fifo() {
   // Verify Port 1 read FIFO empty
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] not set after read flush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 STATUS[0] not set after read flush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 read FIFO flush works symmetrically";
+    REG_INFO(2, logger) << "PASS: Port 1 read FIFO flush works symmetrically";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -430,10 +430,10 @@ void testbench::test_ctrl_flush_read_fifo() {
  */
 void testbench::test_ctrl_flush_dual_port_or() {
   std::string test_name = "TC048: test_ctrl_flush_dual_port_or";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Verify dual-port flush OR coordination";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Verify dual-port flush OR coordination";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t status_value = 0;
@@ -448,7 +448,7 @@ void testbench::test_ctrl_flush_dual_port_or() {
   // =========================================================================
   // Test Scenario A: Port 0 flushes write FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Scenario A: Port 0 flushes its write FIFO";
+  REG_INFO(2, logger) << "Scenario A: Port 0 flushes its write FIFO";
 
   for (const auto& data : test_data) {
     test_port0->register_write_64(mailbox_basetest::WRITE_DATA_OFFSET, data);
@@ -460,16 +460,16 @@ void testbench::test_ctrl_flush_dual_port_or() {
 
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 read FIFO not flushed by Port 0 wflush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 read FIFO not flushed by Port 0 wflush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 wflush flushed Port 1 read FIFO";
+    REG_INFO(2, logger) << "PASS: Port 0 wflush flushed Port 1 read FIFO";
   }
 
   // =========================================================================
   // Test Scenario B: Port 1 flushes write FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Scenario B: Port 1 flushes its write FIFO";
+  REG_INFO(2, logger) << "Scenario B: Port 1 flushes its write FIFO";
 
   for (const auto& data : test_data) {
     test_port1->register_write_64(mailbox_basetest::WRITE_DATA_OFFSET, data);
@@ -481,16 +481,16 @@ void testbench::test_ctrl_flush_dual_port_or() {
 
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 read FIFO not flushed by Port 1 wflush";
+    REG_ERROR(0, logger) << "FAIL: Port 0 read FIFO not flushed by Port 1 wflush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 wflush flushed Port 0 read FIFO";
+    REG_INFO(2, logger) << "PASS: Port 1 wflush flushed Port 0 read FIFO";
   }
 
   // =========================================================================
   // Test Scenario C: Port 0 flushes read FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Scenario C: Port 0 flushes its read FIFO";
+  REG_INFO(2, logger) << "Scenario C: Port 0 flushes its read FIFO";
 
   // Port 1 fills Port 0 read FIFO
   for (const auto& data : test_data) {
@@ -503,24 +503,24 @@ void testbench::test_ctrl_flush_dual_port_or() {
 
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 read FIFO not flushed by Port 0 rflush";
+    REG_ERROR(0, logger) << "FAIL: Port 0 read FIFO not flushed by Port 0 rflush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 rflush flushed Port 0 read FIFO";
+    REG_INFO(2, logger) << "PASS: Port 0 rflush flushed Port 0 read FIFO";
   }
 
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 write FIFO not cleared by Port 0 rflush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 write FIFO not cleared by Port 0 rflush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 rflush cleared Port 1 write FIFO (cross-connection)";
+    REG_INFO(2, logger) << "PASS: Port 0 rflush cleared Port 1 write FIFO (cross-connection)";
   }
 
   // =========================================================================
   // Test Scenario D: Port 1 flushes read FIFO
   // =========================================================================
-  CSML_INFO(2, logger) << "Scenario D: Port 1 flushes its read FIFO";
+  REG_INFO(2, logger) << "Scenario D: Port 1 flushes its read FIFO";
 
   // Port 0 fills Port 1 read FIFO
   for (const auto& data : test_data) {
@@ -533,24 +533,24 @@ void testbench::test_ctrl_flush_dual_port_or() {
 
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 read FIFO not flushed by Port 1 rflush";
+    REG_ERROR(0, logger) << "FAIL: Port 1 read FIFO not flushed by Port 1 rflush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 rflush flushed Port 1 read FIFO";
+    REG_INFO(2, logger) << "PASS: Port 1 rflush flushed Port 1 read FIFO";
   }
 
   test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 write FIFO not cleared by Port 1 rflush";
+    REG_ERROR(0, logger) << "FAIL: Port 0 write FIFO not cleared by Port 1 rflush";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 rflush cleared Port 0 write FIFO";
+    REG_INFO(2, logger) << "PASS: Port 1 rflush cleared Port 0 write FIFO";
   }
 
   // =========================================================================
   // Test Scenario E: Simultaneous flush (both bits set)
   // =========================================================================
-  CSML_INFO(2, logger) << "Scenario E: Simultaneous flush of both FIFOs";
+  REG_INFO(2, logger) << "Scenario E: Simultaneous flush of both FIFOs";
 
   // Fill both Port 0 FIFOs
   for (const auto& data : test_data) {
@@ -574,13 +574,13 @@ void testbench::test_ctrl_flush_dual_port_or() {
   bool port1_not_full = ((status_value & 0x2) == 0);
 
   if (!port0_empty || !port0_not_full || !port1_empty || !port1_not_full) {
-    CSML_ERROR(0, logger) << "FAIL: Simultaneous flush did not clear all FIFOs";
+    REG_ERROR(0, logger) << "FAIL: Simultaneous flush did not clear all FIFOs";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Simultaneous flush cleared both FIFOs correctly";
+    REG_INFO(2, logger) << "PASS: Simultaneous flush cleared both FIFOs correctly";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -603,21 +603,21 @@ void testbench::test_ctrl_flush_dual_port_or() {
  * test_mailbox_func002.cpp (shared with FUNC-002 Register Access suite).
  */
 void testbench::run_func007_tests() {
-  CSML_INFO(2, logger) << "\n";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "FUNC-007 TEST SUITE: Software-Controlled FIFO Management";
-  CSML_INFO(2, logger) << "Test Count: 3 test cases (Test IDs: 46-48)";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "\n";
+  REG_INFO(2, logger) << "\n";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "FUNC-007 TEST SUITE: Software-Controlled FIFO Management";
+  REG_INFO(2, logger) << "Test Count: 3 test cases (Test IDs: 46-48)";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "\n";
 
   // Control Operations Tests (Test IDs: 46-48)
   test_ctrl_flush_write_fifo();          // TC046
   test_ctrl_flush_read_fifo();           // TC047
   test_ctrl_flush_dual_port_or();        // TC048
 
-  CSML_INFO(2, logger) << "\n";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "FUNC-007 TEST SUITE COMPLETED";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "\n";
+  REG_INFO(2, logger) << "\n";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "FUNC-007 TEST SUITE COMPLETED";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "\n";
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func017_test.cpp
  * @brief Test cases for FUNC-KMAC-017 (Dynamic Register Write Protection)
@@ -25,16 +25,16 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -136,7 +136,7 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void testbench::test_cfg_regwen_protection_enable()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-008: test_cfg_regwen_protection_enable");
 
     try {
@@ -146,7 +146,7 @@ void testbench::test_cfg_regwen_protection_enable()
             report_test_fail("TC-008", "CFG_REGWEN.en not unlocked after reset");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en = 1 (unlocked) after reset";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en = 1 (unlocked) after reset";
 
         // Test 1: CFG_SHADOWED write
         configure_sha3_256_mode(test);
@@ -157,7 +157,7 @@ void testbench::test_cfg_regwen_protection_enable()
             report_test_fail("TC-008", "CFG_SHADOWED write rejected when CFG_REGWEN.en = 1");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_SHADOWED writable when unlocked";
+        REG_INFO(2, test_logger) << "CFG_SHADOWED writable when unlocked";
 
         // Test 2: ENTROPY_PERIOD write
         uint32_t entropy_period_val = 0x12345600;
@@ -170,7 +170,7 @@ void testbench::test_cfg_regwen_protection_enable()
             report_test_fail("TC-008", "ENTROPY_PERIOD write rejected when CFG_REGWEN.en = 1");
             return;
         }
-        CSML_INFO(2, test_logger) << "ENTROPY_PERIOD writable when unlocked";
+        REG_INFO(2, test_logger) << "ENTROPY_PERIOD writable when unlocked";
 
         // Test 3: ENTROPY_REFRESH_THRESHOLD_SHADOWED write
         uint32_t threshold_val = 0x100;
@@ -185,24 +185,24 @@ void testbench::test_cfg_regwen_protection_enable()
             report_test_fail("TC-008", "ENTROPY_REFRESH_THRESHOLD_SHADOWED write rejected when CFG_REGWEN.en = 1");
             return;
         }
-        CSML_INFO(2, test_logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED writable when unlocked";
+        REG_INFO(2, test_logger) << "ENTROPY_REFRESH_THRESHOLD_SHADOWED writable when unlocked";
 
         // Test 4: KEY_SHARE0_0 write (write-only, verify no error)
         uint32_t key_val = 0xDEADBEEF;
         test->register_write_32(test->KEY_SHARE0_OFFSET, key_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE0_0 writable when unlocked";
+        REG_INFO(2, test_logger) << "KEY_SHARE0_0 writable when unlocked";
 
         // Test 5: KEY_SHARE1_0 write (write-only, verify no error)
         test->register_write_32(test->KEY_SHARE1_OFFSET, key_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE1_0 writable when unlocked";
+        REG_INFO(2, test_logger) << "KEY_SHARE1_0 writable when unlocked";
 
         // Test 6: KEY_LEN write (write-only, verify no error)
         uint32_t key_len_val = 0x2; // 256-bit key
         test->register_write_32(test->KEY_LEN_OFFSET, key_len_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_LEN writable when unlocked";
+        REG_INFO(2, test_logger) << "KEY_LEN writable when unlocked";
 
         // Test 7: PREFIX_0 write
         uint32_t prefix_val = 0x4D4B2001; // encode_string("KMAC")
@@ -215,7 +215,7 @@ void testbench::test_cfg_regwen_protection_enable()
             report_test_fail("TC-008", "PREFIX_0 write rejected when CFG_REGWEN.en = 1");
             return;
         }
-        CSML_INFO(2, test_logger) << "PREFIX_0 writable when unlocked";
+        REG_INFO(2, test_logger) << "PREFIX_0 writable when unlocked";
 
         cleanup_test(test);
         report_test_pass("TC-008: test_cfg_regwen_protection_enable");
@@ -240,13 +240,13 @@ void testbench::test_cfg_regwen_protection_enable()
  ******************************************************************************/
 void testbench::test_cfg_regwen_protection_disable()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-009: test_cfg_regwen_protection_disable");
 
     try {
         // Configure SHA3-256 mode
         configure_sha3_256_mode(test);
-        CSML_INFO(2, test_logger) << "Configured SHA3-256 mode";
+        REG_INFO(2, test_logger) << "Configured SHA3-256 mode";
 
         // Set initial PREFIX value
         uint32_t initial_prefix = 0x12345678;
@@ -262,7 +262,7 @@ void testbench::test_cfg_regwen_protection_disable()
             report_test_fail("TC-009", "CFG_REGWEN.en not locked after START");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en = 0 (locked) after START command";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en = 0 (locked) after START command";
 
         // Verify FSM in ABSORB state
         bool idle, absorb, squeeze;
@@ -288,7 +288,7 @@ void testbench::test_cfg_regwen_protection_disable()
             report_test_fail("TC-009", "CFG_SHADOWED write not rejected when CFG_REGWEN.en = 0");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_SHADOWED write correctly rejected when locked";
+        REG_INFO(2, test_logger) << "CFG_SHADOWED write correctly rejected when locked";
 
         // Test 2: ENTROPY_PERIOD write attempt (should be rejected)
         uint32_t entropy_before = 0;
@@ -302,17 +302,17 @@ void testbench::test_cfg_regwen_protection_disable()
             report_test_fail("TC-009", "ENTROPY_PERIOD write not rejected when CFG_REGWEN.en = 0");
             return;
         }
-        CSML_INFO(2, test_logger) << "ENTROPY_PERIOD write correctly rejected when locked";
+        REG_INFO(2, test_logger) << "ENTROPY_PERIOD write correctly rejected when locked";
 
         // Test 3: KEY_SHARE0_0 write attempt (should be rejected)
         test->register_write_32(test->KEY_SHARE0_OFFSET, 0xFEEDFACE);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE0_0 write attempted when locked (expected rejection)";
+        REG_INFO(2, test_logger) << "KEY_SHARE0_0 write attempted when locked (expected rejection)";
 
         // Test 4: KEY_LEN write attempt (should be rejected)
         test->register_write_32(test->KEY_LEN_OFFSET, 0x4); // 512-bit
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_LEN write attempted when locked (expected rejection)";
+        REG_INFO(2, test_logger) << "KEY_LEN write attempted when locked (expected rejection)";
 
         // Test 5: PREFIX_0 write attempt (should be rejected)
         uint32_t prefix_before = 0;
@@ -326,7 +326,7 @@ void testbench::test_cfg_regwen_protection_disable()
             report_test_fail("TC-009", "PREFIX_0 write not rejected when CFG_REGWEN.en = 0");
             return;
         }
-        CSML_INFO(2, test_logger) << "PREFIX_0 write correctly rejected when locked";
+        REG_INFO(2, test_logger) << "PREFIX_0 write correctly rejected when locked";
 
         // Verify no error codes generated
         uint32_t err_code = 0;
@@ -360,7 +360,7 @@ void testbench::test_cfg_regwen_protection_disable()
  ******************************************************************************/
 void testbench::test_cfg_regwen_auto_clear_on_start()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-010: test_cfg_regwen_auto_clear_on_start");
 
     try {
@@ -370,7 +370,7 @@ void testbench::test_cfg_regwen_auto_clear_on_start()
             report_test_fail("TC-010", "Precondition: CFG_REGWEN.en not unlocked");
             return;
         }
-        CSML_INFO(2, test_logger) << "Initial CFG_REGWEN.en = 1 (unlocked)";
+        REG_INFO(2, test_logger) << "Initial CFG_REGWEN.en = 1 (unlocked)";
 
         // Configure SHA3-256 mode
         configure_sha3_256_mode(test);
@@ -383,7 +383,7 @@ void testbench::test_cfg_regwen_auto_clear_on_start()
         }
 
         // Issue START command
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         // Verify CFG_REGWEN.en auto-cleared to 0
@@ -392,7 +392,7 @@ void testbench::test_cfg_regwen_auto_clear_on_start()
             report_test_fail("TC-010", "CFG_REGWEN.en not auto-cleared after START command");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en auto-cleared to 0 after START";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en auto-cleared to 0 after START";
 
         // Verify FSM transitioned to ABSORB
         bool idle, absorb, squeeze;
@@ -402,7 +402,7 @@ void testbench::test_cfg_regwen_auto_clear_on_start()
             report_test_fail("TC-010", "FSM not in ABSORB state after START");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM transitioned to ABSORB state";
+        REG_INFO(2, test_logger) << "FSM transitioned to ABSORB state";
 
         // Verify protected register write rejected
         uint32_t cfg_before = 0;
@@ -416,7 +416,7 @@ void testbench::test_cfg_regwen_auto_clear_on_start()
             report_test_fail("TC-010", "Protected register write not rejected after START");
             return;
         }
-        CSML_INFO(2, test_logger) << "Protected registers correctly locked after START";
+        REG_INFO(2, test_logger) << "Protected registers correctly locked after START";
 
         cleanup_test(test);
         report_test_pass("TC-010: test_cfg_regwen_auto_clear_on_start");
@@ -441,7 +441,7 @@ void testbench::test_cfg_regwen_auto_clear_on_start()
  ******************************************************************************/
 void testbench::test_cfg_regwen_auto_set_on_done()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-011: test_cfg_regwen_auto_set_on_done");
 
     try {
@@ -455,10 +455,10 @@ void testbench::test_cfg_regwen_auto_set_on_done()
             report_test_fail("TC-011", "CFG_REGWEN.en not locked during operation");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en = 0 during operation";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en = 0 during operation";
 
         // Issue DONE command
-        CSML_INFO(2, test_logger) << "Issuing DONE command (0x16)";
+        REG_INFO(2, test_logger) << "Issuing DONE command (0x16)";
         write_cmd(test, 0x16);
 
         // Verify CFG_REGWEN.en auto-set to 1
@@ -467,7 +467,7 @@ void testbench::test_cfg_regwen_auto_set_on_done()
             report_test_fail("TC-011", "CFG_REGWEN.en not auto-set after DONE command");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en auto-set to 1 after DONE";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en auto-set to 1 after DONE";
 
         // Verify FSM returned to IDLE
         bool idle, absorb, squeeze;
@@ -477,7 +477,7 @@ void testbench::test_cfg_regwen_auto_set_on_done()
             report_test_fail("TC-011", "FSM not in IDLE state after DONE");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM returned to IDLE state";
+        REG_INFO(2, test_logger) << "FSM returned to IDLE state";
 
         // Verify protected register writable
         uint32_t prefix_val = 0xABCDEF00;
@@ -490,7 +490,7 @@ void testbench::test_cfg_regwen_auto_set_on_done()
             report_test_fail("TC-011", "Protected registers not writable after DONE");
             return;
         }
-        CSML_INFO(2, test_logger) << "Protected registers writable after DONE";
+        REG_INFO(2, test_logger) << "Protected registers writable after DONE";
 
         cleanup_test(test);
         report_test_pass("TC-011: test_cfg_regwen_auto_set_on_done");
@@ -514,7 +514,7 @@ void testbench::test_cfg_regwen_auto_set_on_done()
  ******************************************************************************/
 void testbench::test_key_protection_cfg_regwen()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-065: test_key_protection_cfg_regwen");
 
     try {
@@ -529,12 +529,12 @@ void testbench::test_key_protection_cfg_regwen()
         uint32_t key_val = 0x11223344;
         test->register_write_32(test->KEY_SHARE0_OFFSET, key_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE0_0 writable when unlocked";
+        REG_INFO(2, test_logger) << "KEY_SHARE0_0 writable when unlocked";
 
         // Write KEY_SHARE1_0 when unlocked
         test->register_write_32(test->KEY_SHARE1_OFFSET, key_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE1_0 writable when unlocked";
+        REG_INFO(2, test_logger) << "KEY_SHARE1_0 writable when unlocked";
 
         // Configure and start operation
         configure_sha3_256_mode(test);
@@ -546,17 +546,17 @@ void testbench::test_key_protection_cfg_regwen()
             report_test_fail("TC-065", "CFG_REGWEN.en not locked during operation");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en = 0 during operation";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en = 0 during operation";
 
         // Attempt KEY_SHARE0_0 write during operation (should be rejected)
         test->register_write_32(test->KEY_SHARE0_OFFSET, 0xFFFFFFFF);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE0_0 write attempted during operation (expected rejection)";
+        REG_INFO(2, test_logger) << "KEY_SHARE0_0 write attempted during operation (expected rejection)";
 
         // Attempt KEY_SHARE1_0 write during operation (should be rejected)
         test->register_write_32(test->KEY_SHARE1_OFFSET, 0xFFFFFFFF);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE1_0 write attempted during operation (expected rejection)";
+        REG_INFO(2, test_logger) << "KEY_SHARE1_0 write attempted during operation (expected rejection)";
 
         // Verify no errors generated
         uint32_t err_code = 0;
@@ -573,7 +573,7 @@ void testbench::test_key_protection_cfg_regwen()
         // Verify KEY_SHARE writable again after DONE
         test->register_write_32(test->KEY_SHARE0_OFFSET, 0xAABBCCDD);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "KEY_SHARE0_0 writable again after DONE";
+        REG_INFO(2, test_logger) << "KEY_SHARE0_0 writable again after DONE";
 
         cleanup_test(test);
         report_test_pass("TC-065: test_key_protection_cfg_regwen");

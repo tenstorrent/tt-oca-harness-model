@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2025 Tenstorrent USA, Inc.
 /**
  * @file csrng_func005_command_interface_fsm.cpp
  * @brief Test implementation for CRNG_FUNC_005 - Command Interface and FSM
@@ -22,13 +22,12 @@
  * Total Tests: 36 dedicated FUNC_005 tests
  * Note: Many FUNC_005 test IDs are covered by FUNC_001 command execution tests
  *
- * @copyright Copyright (c) 2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2025, Tenstorrent USA, Inc.
  * @license BSD-3-Clause
  */
 
 #include "testbench.h"
 #include "csrng_basetest.h"
-#include "csml_report.h"
 #include <cstdlib>
 #include <stdexcept>
 #include <ctime>
@@ -155,7 +154,7 @@ void testbench::test_078_cmd_rdy_initial_state_after_enable()
         wait(10, SC_NS);
 
         bool cmd_rdy_before = (cmd_sts_before & 0x2) != 0;
-        CSML_INFO(2, logger) << "CMD_RDY before enable: " << (cmd_rdy_before ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_RDY before enable: " << (cmd_rdy_before ? "1" : "0");
 
         // Enable module
         uint32_t ctrl_enable = 0x6;  // ENABLE=0x6
@@ -168,10 +167,10 @@ void testbench::test_078_cmd_rdy_initial_state_after_enable()
         wait(10, SC_NS);
 
         bool cmd_rdy_after = (cmd_sts_after & 0x2) != 0;
-        CSML_INFO(2, logger) << "CMD_RDY after enable: " << (cmd_rdy_after ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_RDY after enable: " << (cmd_rdy_after ? "1" : "0");
 
         if (!cmd_rdy_after) {
-            CSML_INFO(1, logger) << "Note: CMD_RDY not set (model may not fully implement FSM)";
+            REG_INFO(1, logger) << "Note: CMD_RDY not set (model may not fully implement FSM)";
         }
 
         report_test_pass("Test 078");
@@ -207,7 +206,7 @@ void testbench::test_079_cmd_rdy_clears_during_processing()
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_INFO(1, logger) << "Note: CMD_RDY polling not supported, continuing";
+            REG_INFO(1, logger) << "Note: CMD_RDY polling not supported, continuing";
         }
 
         // Issue INSTANTIATE command (deterministic to avoid entropy delays)
@@ -221,7 +220,7 @@ void testbench::test_079_cmd_rdy_clears_during_processing()
         wait(10, SC_NS);
 
         bool cmd_rdy_during = (cmd_sts_during & 0x2) != 0;
-        CSML_INFO(2, logger) << "CMD_RDY during processing: " << (cmd_rdy_during ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_RDY during processing: " << (cmd_rdy_during ? "1" : "0");
 
         // Wait for command completion
         wait_cmd_ack(m_test.get());
@@ -232,7 +231,7 @@ void testbench::test_079_cmd_rdy_clears_during_processing()
         wait(10, SC_NS);
 
         bool cmd_rdy_after = (cmd_sts_after & 0x2) != 0;
-        CSML_INFO(2, logger) << "CMD_RDY after completion: " << (cmd_rdy_after ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_RDY after completion: " << (cmd_rdy_after ? "1" : "0");
 
         report_test_pass("Test 079");
 
@@ -268,7 +267,7 @@ void testbench::test_080_cmd_ack_initial_state()
         wait(10, SC_NS);
 
         bool cmd_ack = (cmd_sts & 0x4) != 0;
-        CSML_INFO(2, logger) << "CMD_ACK before first command: " << (cmd_ack ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_ACK before first command: " << (cmd_ack ? "1" : "0");
 
         if (!(!cmd_ack)) { throw std::runtime_error("CMD_ACK should be 0 before first command"); }
 
@@ -309,7 +308,7 @@ void testbench::test_081_cmd_ack_sets_on_completion()
         uint32_t cmd_sts_before = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_before);
         bool cmd_ack_before = (cmd_sts_before & 0x4) != 0;
-        CSML_INFO(2, logger) << "CMD_ACK before command: " << (cmd_ack_before ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_ACK before command: " << (cmd_ack_before ? "1" : "0");
 
         // Issue INSTANTIATE command
         uint32_t cmd_header = build_cmd_header(0x1, 0, 0x9, 0);
@@ -319,10 +318,10 @@ void testbench::test_081_cmd_ack_sets_on_completion()
         // Wait for command completion
         bool ack_received = wait_cmd_ack(m_test.get());
 
-        CSML_INFO(2, logger) << "CMD_ACK after command: " << (ack_received ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_ACK after command: " << (ack_received ? "1" : "0");
 
         if (!ack_received) {
-            CSML_INFO(1, logger) << "Note: CMD_ACK polling not supported";
+            REG_INFO(1, logger) << "Note: CMD_ACK polling not supported";
         }
 
         report_test_pass("Test 081");
@@ -368,7 +367,7 @@ void testbench::test_082_cmd_ack_clears_on_new_command()
         uint32_t cmd_sts_after_first = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_after_first);
         bool cmd_ack_after_first = (cmd_sts_after_first & 0x4) != 0;
-        CSML_INFO(2, logger) << "CMD_ACK after first command: " << (cmd_ack_after_first ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_ACK after first command: " << (cmd_ack_after_first ? "1" : "0");
 
         // Second command: GENERATE
         wait_cmd_ready(m_test.get());
@@ -380,7 +379,7 @@ void testbench::test_082_cmd_ack_clears_on_new_command()
         uint32_t cmd_sts_after_second_write = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_after_second_write);
         bool cmd_ack_after_second_write = (cmd_sts_after_second_write & 0x4) != 0;
-        CSML_INFO(2, logger) << "CMD_ACK after second command write: "
+        REG_INFO(2, logger) << "CMD_ACK after second command write: "
                              << (cmd_ack_after_second_write ? "1" : "0");
 
         // Wait for second command completion
@@ -435,7 +434,7 @@ void testbench::test_083_cmd_sts_success_code()
 
         // Read CMD_STS
         uint32_t status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "CMD_STS after successful command: 0x" << std::hex << status;
+        REG_INFO(2, logger) << "CMD_STS after successful command: 0x" << std::hex << status;
 
         if (!(status == 0x0)) { throw std::runtime_error("CMD_STS should be 0x0 (SUCCESS) for successful command"); }
 
@@ -480,7 +479,7 @@ void testbench::test_084_cmd_sts_invalid_acmd_code()
 
         // Read CMD_STS
         uint32_t status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "CMD_STS after invalid acmd: 0x" << std::hex << status;
+        REG_INFO(2, logger) << "CMD_STS after invalid acmd: 0x" << std::hex << status;
 
         if (!(status == 0x1)) { throw std::runtime_error("CMD_STS should be 0x1 (INVALID_ACMD) for acmd=0x0"); }
 
@@ -488,7 +487,7 @@ void testbench::test_084_cmd_sts_invalid_acmd_code()
         uint32_t alert_sts = 0;
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_sts);
         bool invalid_acmd_alert = (alert_sts & (1 << 13)) != 0;
-        CSML_INFO(2, logger) << "CMD_STAGE_INVALID_ACMD_ALERT: " << invalid_acmd_alert;
+        REG_INFO(2, logger) << "CMD_STAGE_INVALID_ACMD_ALERT: " << invalid_acmd_alert;
 
         report_test_pass("Test 084");
 
@@ -539,7 +538,7 @@ void testbench::test_200_cmd_sts_invalid_cmd_seq_code()
 
         // Read CMD_STS
         uint32_t status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "CMD_STS after sequence error: 0x" << std::hex << status;
+        REG_INFO(2, logger) << "CMD_STS after sequence error: 0x" << std::hex << status;
 
         if (!(status == 0x3)) { throw std::runtime_error("CMD_STS should be 0x3 (INVALID_CMD_SEQ) for GENERATE before INSTANTIATE"); }
 
@@ -591,9 +590,9 @@ void testbench::test_201_sw_cmd_sts_field_persistence()
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, read3);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "SW_CMD_STS read 1: 0x" << std::hex << read1;
-        CSML_INFO(2, logger) << "SW_CMD_STS read 2: 0x" << std::hex << read2;
-        CSML_INFO(2, logger) << "SW_CMD_STS read 3: 0x" << std::hex << read3;
+        REG_INFO(2, logger) << "SW_CMD_STS read 1: 0x" << std::hex << read1;
+        REG_INFO(2, logger) << "SW_CMD_STS read 2: 0x" << std::hex << read2;
+        REG_INFO(2, logger) << "SW_CMD_STS read 3: 0x" << std::hex << read3;
 
         // Check persistence (relevant bits should match)
         bool cmd_rdy_consistent = ((read1 & 0x2) == (read2 & 0x2)) && ((read2 & 0x2) == (read3 & 0x2));
@@ -643,7 +642,7 @@ void testbench::test_202_cmd_rdy_blocking_behavior()
         uint32_t cmd_sts_busy = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_busy);
         bool cmd_rdy_busy = (cmd_sts_busy & 0x2) != 0;
-        CSML_INFO(2, logger) << "CMD_RDY while busy: " << (cmd_rdy_busy ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_RDY while busy: " << (cmd_rdy_busy ? "1" : "0");
 
         // Attempt to write second command while busy (should be ignored)
         uint32_t cmd2 = build_cmd_header(0x3, 0, 0x0, 1);
@@ -655,7 +654,7 @@ void testbench::test_202_cmd_rdy_blocking_behavior()
 
         // Check that first command completed successfully
         uint32_t status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "First command status: 0x" << std::hex << status;
+        REG_INFO(2, logger) << "First command status: 0x" << std::hex << status;
 
         if (!(status == 0x0)) { throw std::runtime_error("First command should complete successfully despite second write attempt"); }
 
@@ -707,11 +706,11 @@ void testbench::test_088_multiple_consecutive_commands_cycling()
         };
 
         for (int i = 0; i < 5; i++) {
-            CSML_INFO(2, logger) << "Issuing command " << (i+1) << "/5";
+            REG_INFO(2, logger) << "Issuing command " << (i+1) << "/5";
 
             // Wait for CMD_RDY
             bool ready = wait_cmd_ready(m_test.get());
-            CSML_INFO(2, logger) << "  CMD_RDY: " << (ready ? "1" : "0 (timeout)");
+            REG_INFO(2, logger) << "  CMD_RDY: " << (ready ? "1" : "0 (timeout)");
 
             // Write command
             m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, commands[i]);
@@ -719,11 +718,11 @@ void testbench::test_088_multiple_consecutive_commands_cycling()
 
             // Wait for CMD_ACK
             bool ack = wait_cmd_ack(m_test.get());
-            CSML_INFO(2, logger) << "  CMD_ACK: " << (ack ? "1" : "0 (timeout)");
+            REG_INFO(2, logger) << "  CMD_ACK: " << (ack ? "1" : "0 (timeout)");
 
             // Check status
             uint32_t status = get_cmd_status(m_test.get());
-            CSML_INFO(2, logger) << "  CMD_STS: 0x" << std::hex << status;
+            REG_INFO(2, logger) << "  CMD_STS: 0x" << std::hex << status;
 
             if (!(status == 0x0)) { throw std::runtime_error(
 "Command " + std::to_string(i+1) + " should succeed"); }
@@ -774,7 +773,7 @@ void testbench::test_089_cmd_sts_encoding_completeness()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_success);
         wait_cmd_ack(m_test.get());
         uint32_t sts_success = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "SUCCESS code: 0x" << std::hex << sts_success;
+        REG_INFO(2, logger) << "SUCCESS code: 0x" << std::hex << sts_success;
         if (!(sts_success == 0x0)) { throw std::runtime_error("SUCCESS should return 0x0"); }
 
         // Test 2: INVALID_ACMD (0x1)
@@ -783,7 +782,7 @@ void testbench::test_089_cmd_sts_encoding_completeness()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_invalid_acmd);
         wait_cmd_ack(m_test.get());
         uint32_t sts_invalid_acmd = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "INVALID_ACMD code: 0x" << std::hex << sts_invalid_acmd;
+        REG_INFO(2, logger) << "INVALID_ACMD code: 0x" << std::hex << sts_invalid_acmd;
         if (!(sts_invalid_acmd == 0x1)) { throw std::runtime_error("INVALID_ACMD should return 0x1"); }
 
         // Uninstantiate to create uninstantiated state for sequence error test
@@ -799,10 +798,10 @@ void testbench::test_089_cmd_sts_encoding_completeness()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_invalid_seq);
         wait_cmd_ack(m_test.get());
         uint32_t sts_invalid_seq = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "INVALID_CMD_SEQ code: 0x" << std::hex << sts_invalid_seq;
+        REG_INFO(2, logger) << "INVALID_CMD_SEQ code: 0x" << std::hex << sts_invalid_seq;
         if (!(sts_invalid_seq == 0x3)) { throw std::runtime_error("INVALID_CMD_SEQ should return 0x3"); }
 
-        CSML_INFO(2, logger) << "All CMD_STS codes verified";
+        REG_INFO(2, logger) << "All CMD_STS codes verified";
 
         report_test_pass("Test 089");
 
@@ -836,7 +835,7 @@ void testbench::test_090_cmd_rdy_ack_across_disable_enable()
 
         uint32_t cmd_sts_enabled = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_enabled);
-        CSML_INFO(2, logger) << "SW_CMD_STS after enable: 0x" << std::hex << cmd_sts_enabled;
+        REG_INFO(2, logger) << "SW_CMD_STS after enable: 0x" << std::hex << cmd_sts_enabled;
 
         // Disable module
         uint32_t ctrl_disable = 0x9;
@@ -846,8 +845,8 @@ void testbench::test_090_cmd_rdy_ack_across_disable_enable()
         uint32_t cmd_sts_disabled = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_disabled);
         bool cmd_rdy_disabled = (cmd_sts_disabled & 0x2) != 0;
-        CSML_INFO(2, logger) << "SW_CMD_STS after disable: 0x" << std::hex << cmd_sts_disabled;
-        CSML_INFO(2, logger) << "CMD_RDY when disabled: " << (cmd_rdy_disabled ? "1" : "0");
+        REG_INFO(2, logger) << "SW_CMD_STS after disable: 0x" << std::hex << cmd_sts_disabled;
+        REG_INFO(2, logger) << "CMD_RDY when disabled: " << (cmd_rdy_disabled ? "1" : "0");
 
         // Re-enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_enable);
@@ -855,7 +854,7 @@ void testbench::test_090_cmd_rdy_ack_across_disable_enable()
 
         uint32_t cmd_sts_reenabled = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_reenabled);
-        CSML_INFO(2, logger) << "SW_CMD_STS after re-enable: 0x" << std::hex << cmd_sts_reenabled;
+        REG_INFO(2, logger) << "SW_CMD_STS after re-enable: 0x" << std::hex << cmd_sts_reenabled;
 
         report_test_pass("Test 090");
 
@@ -894,8 +893,8 @@ void testbench::test_091_sw_cmd_sts_reserved_bits_zero()
         uint32_t reserved_mask = 0xFFFFFFC1;  // Bits [31:6] and [0]
         uint32_t reserved_bits = cmd_sts_idle & reserved_mask;
 
-        CSML_INFO(2, logger) << "SW_CMD_STS value: 0x" << std::hex << cmd_sts_idle;
-        CSML_INFO(2, logger) << "Reserved bits: 0x" << std::hex << reserved_bits;
+        REG_INFO(2, logger) << "SW_CMD_STS value: 0x" << std::hex << cmd_sts_idle;
+        REG_INFO(2, logger) << "Reserved bits: 0x" << std::hex << reserved_bits;
 
         if (!(reserved_bits == 0)) { throw std::runtime_error("Reserved bits in SW_CMD_STS should read as 0"); }
 
@@ -930,7 +929,7 @@ void testbench::test_092_sw_cmd_sts_readonly_verification()
         // Read original value
         uint32_t original_value = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, original_value);
-        CSML_INFO(2, logger) << "Original SW_CMD_STS: 0x" << std::hex << original_value;
+        REG_INFO(2, logger) << "Original SW_CMD_STS: 0x" << std::hex << original_value;
 
         // Attempt to write different value
         m_test->register_write_32(csrng_basetest::SW_CMD_STS_OFFSET, 0xFFFFFFFF);
@@ -939,10 +938,10 @@ void testbench::test_092_sw_cmd_sts_readonly_verification()
         // Read back
         uint32_t after_write = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, after_write);
-        CSML_INFO(2, logger) << "SW_CMD_STS after write attempt: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "SW_CMD_STS after write attempt: 0x" << std::hex << after_write;
 
         // Values should be similar (may differ slightly due to time passage)
-        CSML_INFO(2, logger) << "SW_CMD_STS is read-only (write ignored)";
+        REG_INFO(2, logger) << "SW_CMD_STS is read-only (write ignored)";
 
         report_test_pass("Test 092");
 
@@ -985,15 +984,15 @@ void testbench::test_093_cmd_ack_vs_interrupt_equivalence()
 
         // Wait for CMD_ACK
         bool ack_received = wait_cmd_ack(m_test.get());
-        CSML_INFO(2, logger) << "CMD_ACK received: " << (ack_received ? "yes" : "no");
+        REG_INFO(2, logger) << "CMD_ACK received: " << (ack_received ? "yes" : "no");
 
         // Check interrupt state
         uint32_t intr_state = 0;
         m_test->register_read_32(csrng_basetest::INTR_STATE_OFFSET, intr_state);
         bool intr_fired = (intr_state & 0x1) != 0;
-        CSML_INFO(2, logger) << "cs_cmd_req_done interrupt: " << (intr_fired ? "yes" : "no");
+        REG_INFO(2, logger) << "cs_cmd_req_done interrupt: " << (intr_fired ? "yes" : "no");
 
-        CSML_INFO(2, logger) << "CMD_ACK and interrupt mechanisms are equivalent";
+        REG_INFO(2, logger) << "CMD_ACK and interrupt mechanisms are equivalent";
 
         report_test_pass("Test 093");
 
@@ -1044,7 +1043,7 @@ void testbench::test_094_back_to_back_command_execution()
 "Back-to-back command " + std::to_string(i+1) + " should succeed"); }
         }
 
-        CSML_INFO(2, logger) << "10 back-to-back commands executed successfully";
+        REG_INFO(2, logger) << "10 back-to-back commands executed successfully";
 
         report_test_pass("Test 094");
 
@@ -1088,7 +1087,7 @@ void testbench::test_203_cmd_sts_persistence_until_next_command()
         wait(100, SC_NS);
         uint32_t status1_read3 = get_cmd_status(m_test.get());
 
-        CSML_INFO(2, logger) << "First command CMD_STS reads: 0x" << std::hex
+        REG_INFO(2, logger) << "First command CMD_STS reads: 0x" << std::hex
                              << status1_read1 << ", 0x" << status1_read2 << ", 0x" << status1_read3;
 
         if (!(status1_read1 == status1_read2 && status1_read2 == status1_read3)) { throw std::runtime_error("CMD_STS should persist across reads"); }
@@ -1100,9 +1099,9 @@ void testbench::test_203_cmd_sts_persistence_until_next_command()
         wait_cmd_ack(m_test.get());
 
         uint32_t status2 = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "Second command CMD_STS: 0x" << std::hex << status2;
+        REG_INFO(2, logger) << "Second command CMD_STS: 0x" << std::hex << status2;
 
-        CSML_INFO(2, logger) << "CMD_STS persists until next command completion";
+        REG_INFO(2, logger) << "CMD_STS persists until next command completion";
 
         report_test_pass("Test 095");
 
@@ -1150,14 +1149,14 @@ void testbench::test_204_command_interface_after_error()
         wait_cmd_ack(m_test.get());
 
         uint32_t error_status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "Error command CMD_STS: 0x" << std::hex << error_status;
+        REG_INFO(2, logger) << "Error command CMD_STS: 0x" << std::hex << error_status;
         if (!(error_status != 0x0)) { throw std::runtime_error("Command should return error status"); }
 
         // Check if CMD_RDY returns to 1
         uint32_t cmd_sts_after_error = 0;
         m_test->register_read_32(csrng_basetest::SW_CMD_STS_OFFSET, cmd_sts_after_error);
         bool cmd_rdy_after_error = (cmd_sts_after_error & 0x2) != 0;
-        CSML_INFO(2, logger) << "CMD_RDY after error: " << (cmd_rdy_after_error ? "1" : "0");
+        REG_INFO(2, logger) << "CMD_RDY after error: " << (cmd_rdy_after_error ? "1" : "0");
 
         // Issue valid command to verify recovery
         wait_cmd_ready(m_test.get());
@@ -1166,7 +1165,7 @@ void testbench::test_204_command_interface_after_error()
         wait_cmd_ack(m_test.get());
 
         uint32_t recovery_status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "Recovery command CMD_STS: 0x" << std::hex << recovery_status;
+        REG_INFO(2, logger) << "Recovery command CMD_STS: 0x" << std::hex << recovery_status;
         if (!(recovery_status == 0x0)) { throw std::runtime_error("Recovery command should succeed"); }
 
         report_test_pass("Test 096");
@@ -1209,13 +1208,13 @@ void testbench::test_205_cmd_req_write_only_verification()
         m_test->register_read_32(csrng_basetest::CMD_REQ_OFFSET, cmd_read);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "CMD_REQ written: 0x" << std::hex << cmd_written;
-        CSML_INFO(2, logger) << "CMD_REQ read: 0x" << std::hex << cmd_read;
+        REG_INFO(2, logger) << "CMD_REQ written: 0x" << std::hex << cmd_written;
+        REG_INFO(2, logger) << "CMD_REQ read: 0x" << std::hex << cmd_read;
 
         if (cmd_read == cmd_written) {
-            CSML_INFO(1, logger) << "Note: CMD_REQ appears readable (model behavior)";
+            REG_INFO(1, logger) << "Note: CMD_REQ appears readable (model behavior)";
         } else {
-            CSML_INFO(2, logger) << "CMD_REQ is write-only (read returns different value)";
+            REG_INFO(2, logger) << "CMD_REQ is write-only (read returns different value)";
         }
 
         // Wait for command completion
@@ -1251,13 +1250,13 @@ void testbench::test_206_main_sm_state_idle_after_reset()
         // Read MAIN_SM_STATE after reset
         uint32_t fsm_state = read_fsm_state(m_test.get());
 
-        CSML_INFO(2, logger) << "MAIN_SM_STATE after reset: 0x" << std::hex << fsm_state;
+        REG_INFO(2, logger) << "MAIN_SM_STATE after reset: 0x" << std::hex << fsm_state;
 
         // Expected idle state value is 0x4E (per specification)
         if (fsm_state == 0x4E) {
-            CSML_INFO(2, logger) << "FSM in idle state (0x4E)";
+            REG_INFO(2, logger) << "FSM in idle state (0x4E)";
         } else {
-            CSML_INFO(1, logger) << "Note: FSM state encoding may differ (0x"
+            REG_INFO(1, logger) << "Note: FSM state encoding may differ (0x"
                                  << std::hex << fsm_state << ")";
         }
 
@@ -1293,7 +1292,7 @@ void testbench::test_207_main_sm_state_during_command()
 
         // Read FSM state before command
         uint32_t state_before = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "MAIN_SM_STATE before command: 0x" << std::hex << state_before;
+        REG_INFO(2, logger) << "MAIN_SM_STATE before command: 0x" << std::hex << state_before;
 
         // Issue INSTANTIATE command
         wait_cmd_ready(m_test.get());
@@ -1303,19 +1302,19 @@ void testbench::test_207_main_sm_state_during_command()
 
         // Read FSM state during command (sample early)
         uint32_t state_during = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "MAIN_SM_STATE during command: 0x" << std::hex << state_during;
+        REG_INFO(2, logger) << "MAIN_SM_STATE during command: 0x" << std::hex << state_during;
 
         // Wait for completion
         wait_cmd_ack(m_test.get());
 
         // Read FSM state after command
         uint32_t state_after = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "MAIN_SM_STATE after command: 0x" << std::hex << state_after;
+        REG_INFO(2, logger) << "MAIN_SM_STATE after command: 0x" << std::hex << state_after;
 
         if (state_during != state_before) {
-            CSML_INFO(2, logger) << "FSM state changed during command processing";
+            REG_INFO(2, logger) << "FSM state changed during command processing";
         } else {
-            CSML_INFO(1, logger) << "Note: FSM state may transition too quickly to observe";
+            REG_INFO(1, logger) << "Note: FSM state may transition too quickly to observe";
         }
 
         report_test_pass("Test 099");
@@ -1360,7 +1359,7 @@ void testbench::test_208_main_sm_state_returns_idle()
             wait_cmd_ack(m_test.get());
 
             uint32_t state_after = read_fsm_state(m_test.get());
-            CSML_INFO(2, logger) << "MAIN_SM_STATE after command " << (i+1)
+            REG_INFO(2, logger) << "MAIN_SM_STATE after command " << (i+1)
                                  << ": 0x" << std::hex << state_after;
         }
 
@@ -1394,7 +1393,7 @@ void testbench::test_209_main_sm_state_readonly()
 
         // Read original state
         uint32_t original_state = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "Original MAIN_SM_STATE: 0x" << std::hex << original_state;
+        REG_INFO(2, logger) << "Original MAIN_SM_STATE: 0x" << std::hex << original_state;
 
         // Attempt to write different value
         m_test->register_write_32(csrng_basetest::MAIN_SM_STATE_OFFSET, 0xFF);
@@ -1402,9 +1401,9 @@ void testbench::test_209_main_sm_state_readonly()
 
         // Read back
         uint32_t after_write = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "MAIN_SM_STATE after write: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "MAIN_SM_STATE after write: 0x" << std::hex << after_write;
 
-        CSML_INFO(2, logger) << "MAIN_SM_STATE is read-only (write ignored)";
+        REG_INFO(2, logger) << "MAIN_SM_STATE is read-only (write ignored)";
 
         report_test_pass("Test 101");
 
@@ -1440,8 +1439,8 @@ void testbench::test_210_main_sm_state_reserved_bits()
 
         uint32_t reserved_bits = state_value & 0xFFFFFF00;  // Bits [31:8]
 
-        CSML_INFO(2, logger) << "MAIN_SM_STATE full value: 0x" << std::hex << state_value;
-        CSML_INFO(2, logger) << "Reserved bits [31:8]: 0x" << std::hex << reserved_bits;
+        REG_INFO(2, logger) << "MAIN_SM_STATE full value: 0x" << std::hex << state_value;
+        REG_INFO(2, logger) << "Reserved bits [31:8]: 0x" << std::hex << reserved_bits;
 
         if (!(reserved_bits == 0)) { throw std::runtime_error("Reserved bits [31:8] should read as 0"); }
 
@@ -1480,14 +1479,14 @@ void testbench::test_211_main_sm_state_during_error()
         wait(10, SC_NS);
 
         uint32_t state_during_error = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "MAIN_SM_STATE during error command: 0x"
+        REG_INFO(2, logger) << "MAIN_SM_STATE during error command: 0x"
                              << std::hex << state_during_error;
 
         // Wait for completion
         wait_cmd_ack(m_test.get());
 
         uint32_t state_after_error = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "MAIN_SM_STATE after error command: 0x"
+        REG_INFO(2, logger) << "MAIN_SM_STATE after error command: 0x"
                              << std::hex << state_after_error;
 
         report_test_pass("Test 103");
@@ -1532,10 +1531,10 @@ void testbench::test_212_main_sm_state_multiple_sampling()
         wait(100, SC_NS);
         uint32_t state_sample3 = read_fsm_state(m_test.get());
 
-        CSML_INFO(2, logger) << "FSM state samples during command:";
-        CSML_INFO(2, logger) << "  Sample 1 (early): 0x" << std::hex << state_sample1;
-        CSML_INFO(2, logger) << "  Sample 2 (mid):   0x" << std::hex << state_sample2;
-        CSML_INFO(2, logger) << "  Sample 3 (late):  0x" << std::hex << state_sample3;
+        REG_INFO(2, logger) << "FSM state samples during command:";
+        REG_INFO(2, logger) << "  Sample 1 (early): 0x" << std::hex << state_sample1;
+        REG_INFO(2, logger) << "  Sample 2 (mid):   0x" << std::hex << state_sample2;
+        REG_INFO(2, logger) << "  Sample 3 (late):  0x" << std::hex << state_sample3;
 
         // Wait for completion
         wait_cmd_ack(m_test.get());
@@ -1579,10 +1578,10 @@ void testbench::test_213_main_sm_state_stability_idle()
         wait(100, SC_NS);
         uint32_t state_read3 = read_fsm_state(m_test.get());
 
-        CSML_INFO(2, logger) << "FSM state in idle:";
-        CSML_INFO(2, logger) << "  Read 1: 0x" << std::hex << state_read1;
-        CSML_INFO(2, logger) << "  Read 2: 0x" << std::hex << state_read2;
-        CSML_INFO(2, logger) << "  Read 3: 0x" << std::hex << state_read3;
+        REG_INFO(2, logger) << "FSM state in idle:";
+        REG_INFO(2, logger) << "  Read 1: 0x" << std::hex << state_read1;
+        REG_INFO(2, logger) << "  Read 2: 0x" << std::hex << state_read2;
+        REG_INFO(2, logger) << "  Read 3: 0x" << std::hex << state_read3;
 
         if (!(state_read1 == state_read2 && state_read2 == state_read3)) { throw std::runtime_error("FSM state should be stable in idle"); }
 
@@ -1615,7 +1614,7 @@ void testbench::test_214_main_sm_state_across_disable_enable()
         wait(50, SC_NS);
 
         uint32_t state_enabled = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "FSM state when enabled: 0x" << std::hex << state_enabled;
+        REG_INFO(2, logger) << "FSM state when enabled: 0x" << std::hex << state_enabled;
 
         // Disable module
         uint32_t ctrl_disable = 0x9;
@@ -1623,14 +1622,14 @@ void testbench::test_214_main_sm_state_across_disable_enable()
         wait(50, SC_NS);
 
         uint32_t state_disabled = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "FSM state when disabled: 0x" << std::hex << state_disabled;
+        REG_INFO(2, logger) << "FSM state when disabled: 0x" << std::hex << state_disabled;
 
         // Re-enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, ctrl_enable);
         wait(50, SC_NS);
 
         uint32_t state_reenabled = read_fsm_state(m_test.get());
-        CSML_INFO(2, logger) << "FSM state when re-enabled: 0x" << std::hex << state_reenabled;
+        REG_INFO(2, logger) << "FSM state when re-enabled: 0x" << std::hex << state_reenabled;
 
         report_test_pass("Test 106");
 
@@ -1687,10 +1686,10 @@ void testbench::test_215_main_sm_state_all_commands()
 
             uint32_t state_after = read_fsm_state(m_test.get());
 
-            CSML_INFO(2, logger) << cmd_info.name << " command FSM states:";
-            CSML_INFO(2, logger) << "  Before: 0x" << std::hex << state_before;
-            CSML_INFO(2, logger) << "  During: 0x" << std::hex << state_during;
-            CSML_INFO(2, logger) << "  After:  0x" << std::hex << state_after;
+            REG_INFO(2, logger) << cmd_info.name << " command FSM states:";
+            REG_INFO(2, logger) << "  Before: 0x" << std::hex << state_before;
+            REG_INFO(2, logger) << "  During: 0x" << std::hex << state_during;
+            REG_INFO(2, logger) << "  After:  0x" << std::hex << state_after;
         }
 
         report_test_pass("Test 107");
@@ -1737,7 +1736,7 @@ void testbench::test_216_command_processing_latency()
         sc_time end_inst = sc_time_stamp();
         double latency_inst_us = (end_inst - start_inst).to_seconds() * 1e6;
 
-        CSML_INFO(2, logger) << "INSTANTIATE latency: " << latency_inst_us << " us";
+        REG_INFO(2, logger) << "INSTANTIATE latency: " << latency_inst_us << " us";
 
         // Measure GENERATE latency
         wait_cmd_ready(m_test.get());
@@ -1750,7 +1749,7 @@ void testbench::test_216_command_processing_latency()
         sc_time end_gen = sc_time_stamp();
         double latency_gen_us = (end_gen - start_gen).to_seconds() * 1e6;
 
-        CSML_INFO(2, logger) << "GENERATE latency: " << latency_gen_us << " us";
+        REG_INFO(2, logger) << "GENERATE latency: " << latency_gen_us << " us";
 
         report_test_pass("Test 195");
 
@@ -1785,21 +1784,21 @@ void testbench::test_217_cmd_rdy_ack_timing_relationship()
         // Wait for initial CMD_RDY
         wait_cmd_ready(m_test.get());
         sc_time time_rdy_set = sc_time_stamp();
-        CSML_INFO(2, logger) << "CMD_RDY=1 at " << time_rdy_set;
+        REG_INFO(2, logger) << "CMD_RDY=1 at " << time_rdy_set;
 
         // Write command
         uint32_t cmd_header = build_cmd_header(0x1, 0, 0x9, 0);
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         sc_time time_cmd_write = sc_time_stamp();
-        CSML_INFO(2, logger) << "CMD_REQ written at " << time_cmd_write;
+        REG_INFO(2, logger) << "CMD_REQ written at " << time_cmd_write;
 
         // Wait for CMD_ACK
         wait_cmd_ack(m_test.get());
         sc_time time_ack_set = sc_time_stamp();
-        CSML_INFO(2, logger) << "CMD_ACK=1 at " << time_ack_set;
+        REG_INFO(2, logger) << "CMD_ACK=1 at " << time_ack_set;
 
         double cmd_duration_us = (time_ack_set - time_cmd_write).to_seconds() * 1e6;
-        CSML_INFO(2, logger) << "Command duration: " << cmd_duration_us << " us";
+        REG_INFO(2, logger) << "Command duration: " << cmd_duration_us << " us";
 
         report_test_pass("Test 196");
 
@@ -1850,8 +1849,8 @@ void testbench::test_218_rapid_command_succession_timing()
         sc_time end_sequence = sc_time_stamp();
         double total_time_us = (end_sequence - start_sequence).to_seconds() * 1e6;
 
-        CSML_INFO(2, logger) << "5 rapid commands completed in " << total_time_us << " us";
-        CSML_INFO(2, logger) << "Average: " << (total_time_us / 5.0) << " us/command";
+        REG_INFO(2, logger) << "5 rapid commands completed in " << total_time_us << " us";
+        REG_INFO(2, logger) << "Average: " << (total_time_us / 5.0) << " us/command";
 
         report_test_pass("Test 197");
 
@@ -1905,11 +1904,11 @@ void testbench::test_219_fsm_state_transition_timing()
         uint32_t state_final = read_fsm_state(m_test.get());
         sc_time time_final = sc_time_stamp();
 
-        CSML_INFO(2, logger) << "FSM state transitions:";
-        CSML_INFO(2, logger) << "  T0 (" << time_initial << "): 0x" << std::hex << state_initial;
-        CSML_INFO(2, logger) << "  T1 (" << time_t1 << "): 0x" << std::hex << state_t1;
-        CSML_INFO(2, logger) << "  T2 (" << time_t2 << "): 0x" << std::hex << state_t2;
-        CSML_INFO(2, logger) << "  TF (" << time_final << "): 0x" << std::hex << state_final;
+        REG_INFO(2, logger) << "FSM state transitions:";
+        REG_INFO(2, logger) << "  T0 (" << time_initial << "): 0x" << std::hex << state_initial;
+        REG_INFO(2, logger) << "  T1 (" << time_t1 << "): 0x" << std::hex << state_t1;
+        REG_INFO(2, logger) << "  T2 (" << time_t2 << "): 0x" << std::hex << state_t2;
+        REG_INFO(2, logger) << "  TF (" << time_final << "): 0x" << std::hex << state_final;
 
         report_test_pass("Test 198");
 
@@ -1942,7 +1941,7 @@ void testbench::test_220_command_timeout_detection()
 
         // Try to wait for CMD_RDY with short timeout (should succeed)
         bool rdy_success = wait_cmd_ready(m_test.get(), 1000);
-        CSML_INFO(2, logger) << "CMD_RDY wait result: " << (rdy_success ? "success" : "timeout");
+        REG_INFO(2, logger) << "CMD_RDY wait result: " << (rdy_success ? "success" : "timeout");
 
         if (rdy_success) {
             // Issue command
@@ -1952,10 +1951,10 @@ void testbench::test_220_command_timeout_detection()
 
             // Wait for ACK with reasonable timeout
             bool ack_success = wait_cmd_ack(m_test.get(), 10000);
-            CSML_INFO(2, logger) << "CMD_ACK wait result: " << (ack_success ? "success" : "timeout");
+            REG_INFO(2, logger) << "CMD_ACK wait result: " << (ack_success ? "success" : "timeout");
         }
 
-        CSML_INFO(2, logger) << "Timeout detection mechanism functional";
+        REG_INFO(2, logger) << "Timeout detection mechanism functional";
 
         report_test_pass("Test 199");
 
@@ -1988,26 +1987,26 @@ void testbench::test_221_command_interface_synchronization()
         wait(50, SC_NS);
 
         // Synchronization point 1: Wait for CMD_RDY before command
-        CSML_INFO(2, logger) << "Sync point 1: Waiting for CMD_RDY...";
+        REG_INFO(2, logger) << "Sync point 1: Waiting for CMD_RDY...";
         bool rdy = wait_cmd_ready(m_test.get());
         if (!(rdy)) { throw std::runtime_error("CMD_RDY synchronization point"); }
 
         // Write command
-        CSML_INFO(2, logger) << "Writing command...";
+        REG_INFO(2, logger) << "Writing command...";
         uint32_t cmd_header = build_cmd_header(0x1, 0, 0x9, 0);
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
         // Synchronization point 2: Wait for CMD_ACK after command
-        CSML_INFO(2, logger) << "Sync point 2: Waiting for CMD_ACK...";
+        REG_INFO(2, logger) << "Sync point 2: Waiting for CMD_ACK...";
         bool ack = wait_cmd_ack(m_test.get());
         if (!(ack)) { throw std::runtime_error("CMD_ACK synchronization point"); }
 
         // Verify command succeeded
         uint32_t status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "Command status: 0x" << std::hex << status;
+        REG_INFO(2, logger) << "Command status: 0x" << std::hex << status;
 
-        CSML_INFO(2, logger) << "Command interface synchronization verified";
+        REG_INFO(2, logger) << "Command interface synchronization verified";
 
         report_test_pass("Test 200");
 
@@ -2068,11 +2067,11 @@ void testbench::test_interrupt_cs_cmd_req_done_assertion()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x1) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
             throw std::runtime_error("INTR_ENABLE[0] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -2080,23 +2079,23 @@ void testbench::test_interrupt_cs_cmd_req_done_assertion()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x1) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] already set before command";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] already set before command";
             throw std::runtime_error("INTR_STATE[0] not cleared");
         }
 
         // Check hardware interrupt port before command (use testbench signal)
         bool intr_port_before = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port before command: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port before command: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port already asserted before command";
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port already asserted before command";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -2105,12 +2104,12 @@ void testbench::test_interrupt_cs_cmd_req_done_assertion()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INSTANTIATE command issued";
+        REG_INFO(2, logger) << "INSTANTIATE command issued";
 
         // Wait for command completion (CMD_ACK)
         bool cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -2123,22 +2122,22 @@ void testbench::test_interrupt_cs_cmd_req_done_assertion()
         wait(10, SC_NS);
 
         bool intr_state_set = (intr_state_after & 0x1) != 0;
-        CSML_INFO(2, logger) << "INTR_STATE after command: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after command: 0x" << std::hex << intr_state_after;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after command completion";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after command completion";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[0] not asserted");
         }
 
         // Check hardware interrupt port after command (use testbench signal)
         bool intr_port_after = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after command: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after command: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         if (!intr_port_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after command completion";
-            CSML_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after command completion";
+            REG_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
                                   << ", INTR_ENABLE[0]=" << ((intr_enable & 0x1) ? "1" : "0");
             throw std::runtime_error("Hardware interrupt port not asserted");
         }
@@ -2149,26 +2148,26 @@ void testbench::test_interrupt_cs_cmd_req_done_assertion()
         wait(10, SC_NS);
 
         uint32_t cmd_status = (cmd_sts >> 3) & 0x7;  // CMD_STS is bits [5:3]
-        CSML_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
 
         if (cmd_status != 0x0) {
-            CSML_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
+            REG_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
                                   << std::hex << cmd_status;
             throw std::runtime_error("Command failed with status 0x" + std::to_string(cmd_status));
         }
 
         // Verify interrupt is gated by INTR_ENABLE (interrupt should be asserted)
         // Since INTR_ENABLE[0]=1 and INTR_STATE[0]=1, interrupt should be asserted
-        CSML_INFO(2, logger) << "Interrupt assertion verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[0] = 1";
-        CSML_INFO(2, logger) << "  INTR_STATE[0] = 1";
-        CSML_INFO(2, logger) << "  cs_cmd_req_done port = asserted";
+        REG_INFO(2, logger) << "Interrupt assertion verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[0] = 1";
+        REG_INFO(2, logger) << "  INTR_STATE[0] = 1";
+        REG_INFO(2, logger) << "  cs_cmd_req_done port = asserted";
 
-        CSML_INFO(2, logger) << "Test PASSED: cs_cmd_req_done interrupt asserted correctly";
+        REG_INFO(2, logger) << "Test PASSED: cs_cmd_req_done interrupt asserted correctly";
         report_test_pass("Test test_interrupt_cs_cmd_req_done_assertion");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_108: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_108: " << e.what();
         report_test_fail("Test test_interrupt_cs_cmd_req_done_assertion", e.what());
     }
 }
@@ -2224,15 +2223,15 @@ void testbench::test_interrupt_cs_cmd_req_done_deassertion()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x1) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
             throw std::runtime_error("INTR_ENABLE[0] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -2241,12 +2240,12 @@ void testbench::test_interrupt_cs_cmd_req_done_deassertion()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INSTANTIATE command issued";
+        REG_INFO(2, logger) << "INSTANTIATE command issued";
 
         // Wait for command completion (CMD_ACK)
         bool cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -2259,22 +2258,22 @@ void testbench::test_interrupt_cs_cmd_req_done_deassertion()
         wait(10, SC_NS);
 
         bool intr_state_set = (intr_state_before_clear & 0x1) != 0;
-        CSML_INFO(2, logger) << "INTR_STATE before clear: 0x" << std::hex << intr_state_before_clear;
+        REG_INFO(2, logger) << "INTR_STATE before clear: 0x" << std::hex << intr_state_before_clear;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after command completion";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_before_clear;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after command completion";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_before_clear;
             throw std::runtime_error("INTR_STATE[0] not asserted - cannot test deassertion");
         }
 
         // Check hardware interrupt port is asserted before clearing
         bool intr_port_before_clear = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port before clear: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port before clear: " 
                              << (intr_port_before_clear ? "asserted" : "de-asserted");
 
         if (!intr_port_before_clear) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted before clear";
-            CSML_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_before_clear & 0x1) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted before clear";
+            REG_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_before_clear & 0x1) ? "1" : "0")
                                   << ", INTR_ENABLE[0]=" << ((intr_enable & 0x1) ? "1" : "0");
             throw std::runtime_error("Interrupt port not asserted - cannot test deassertion");
         }
@@ -2283,7 +2282,7 @@ void testbench::test_interrupt_cs_cmd_req_done_deassertion()
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, 0x1);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Wrote 1 to INTR_STATE[0] to clear interrupt";
+        REG_INFO(2, logger) << "Wrote 1 to INTR_STATE[0] to clear interrupt";
 
         // Verify INTR_STATE[0] is cleared
         uint32_t intr_state_after_clear = 0;
@@ -2291,22 +2290,22 @@ void testbench::test_interrupt_cs_cmd_req_done_deassertion()
         wait(10, SC_NS);
 
         bool intr_state_cleared = ((intr_state_after_clear & 0x1) == 0);
-        CSML_INFO(2, logger) << "INTR_STATE after clear: 0x" << std::hex << intr_state_after_clear;
+        REG_INFO(2, logger) << "INTR_STATE after clear: 0x" << std::hex << intr_state_after_clear;
 
         if (!intr_state_cleared) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] not cleared after write-1-to-clear";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] not cleared after write-1-to-clear";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
             throw std::runtime_error("INTR_STATE[0] RW1C semantics failed");
         }
 
         // Check hardware interrupt port is de-asserted after clearing
         bool intr_port_after_clear = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after clear: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after clear: " 
                              << (intr_port_after_clear ? "asserted" : "de-asserted");
 
         if (intr_port_after_clear) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not de-asserted after clearing INTR_STATE[0]";
-            CSML_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after_clear & 0x1) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not de-asserted after clearing INTR_STATE[0]";
+            REG_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after_clear & 0x1) ? "1" : "0")
                                   << ", INTR_ENABLE[0]=" << ((intr_enable & 0x1) ? "1" : "0");
             throw std::runtime_error("Hardware interrupt port not de-asserted");
         }
@@ -2317,23 +2316,23 @@ void testbench::test_interrupt_cs_cmd_req_done_deassertion()
         wait(10, SC_NS);
 
         if ((intr_enable_after_clear & 0x1) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] was cleared (should remain set)";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] was cleared (should remain set)";
             throw std::runtime_error("INTR_ENABLE[0] incorrectly cleared");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[0] remains set: 0x" << std::hex << intr_enable_after_clear;
+        REG_INFO(2, logger) << "INTR_ENABLE[0] remains set: 0x" << std::hex << intr_enable_after_clear;
 
         // Verify interrupt de-assertion summary
-        CSML_INFO(2, logger) << "Interrupt de-assertion verified:";
-        CSML_INFO(2, logger) << "  Before clear: INTR_STATE[0]=1, cs_cmd_req_done port=asserted";
-        CSML_INFO(2, logger) << "  After clear:  INTR_STATE[0]=0, cs_cmd_req_done port=de-asserted";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[0] remains set (not affected by clear)";
+        REG_INFO(2, logger) << "Interrupt de-assertion verified:";
+        REG_INFO(2, logger) << "  Before clear: INTR_STATE[0]=1, cs_cmd_req_done port=asserted";
+        REG_INFO(2, logger) << "  After clear:  INTR_STATE[0]=0, cs_cmd_req_done port=de-asserted";
+        REG_INFO(2, logger) << "  INTR_ENABLE[0] remains set (not affected by clear)";
 
-        CSML_INFO(2, logger) << "Test 109 PASSED: cs_cmd_req_done interrupt de-asserted correctly";
+        REG_INFO(2, logger) << "Test 109 PASSED: cs_cmd_req_done interrupt de-asserted correctly";
         report_test_pass("Test test_interrupt_cs_cmd_req_done_deassertion");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_109: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_109: " << e.what();
         report_test_fail("Test test_interrupt_cs_cmd_req_done_deassertion", e.what());
     }
 }
@@ -2388,11 +2387,11 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x2) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] not set after write";
             throw std::runtime_error("INTR_ENABLE[1] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[1] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[1] enabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -2400,23 +2399,23 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x2) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] already set before command";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] already set before command";
             throw std::runtime_error("INTR_STATE[1] not cleared");
         }
 
         // Check hardware interrupt port before command (use testbench signal)
         bool intr_port_before = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port before command: " 
+        REG_INFO(2, logger) << "cs_entropy_req port before command: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port already asserted before command";
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port already asserted before command";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -2425,7 +2424,7 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INSTANTIATE command issued with flag0=0x6 (entropy mode)";
+        REG_INFO(2, logger) << "INSTANTIATE command issued with flag0=0x6 (entropy mode)";
 
         // Wait a bit for entropy request to be issued (interrupt should fire early)
         wait(100, SC_NS);
@@ -2436,22 +2435,22 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         wait(10, SC_NS);
 
         bool intr_state_set = (intr_state_during & 0x2) != 0;
-        CSML_INFO(2, logger) << "INTR_STATE during command (entropy request): 0x" << std::hex << intr_state_during;
+        REG_INFO(2, logger) << "INTR_STATE during command (entropy request): 0x" << std::hex << intr_state_during;
 
         // Check hardware interrupt port during entropy request
         bool intr_port_during = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port during entropy request: " 
+        REG_INFO(2, logger) << "cs_entropy_req port during entropy request: " 
                              << (intr_port_during ? "asserted" : "de-asserted");
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set when entropy is requested";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_during;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set when entropy is requested";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_during;
             throw std::runtime_error("INTR_STATE[1] not asserted during entropy request");
         }
 
         if (!intr_port_during) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted when entropy is requested";
-            CSML_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_during & 0x2) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted when entropy is requested";
+            REG_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_during & 0x2) ? "1" : "0")
                                   << ", INTR_ENABLE[1]=" << ((intr_enable & 0x2) ? "1" : "0");
             throw std::runtime_error("Hardware interrupt port not asserted during entropy request");
         }
@@ -2459,7 +2458,7 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         // Wait for command completion (CMD_ACK)
         bool cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -2472,12 +2471,12 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         wait(10, SC_NS);
 
         //bool intr_state_after_set = (intr_state_after & 0x2) != 0;
-        CSML_INFO(2, logger) << "INTR_STATE after command completion: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after command completion: 0x" << std::hex << intr_state_after;
 
         // Note: INTR_STATE[1] may remain set until explicitly cleared
         // The interrupt port should still be asserted if INTR_STATE[1]=1 and INTR_ENABLE[1]=1
         bool intr_port_after = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port after command completion: " 
+        REG_INFO(2, logger) << "cs_entropy_req port after command completion: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         // Verify command status is SUCCESS
@@ -2486,26 +2485,26 @@ void testbench::test_interrupt_cs_entropy_req_assertion()
         wait(10, SC_NS);
 
         uint32_t cmd_status = (cmd_sts >> 3) & 0x7;  // CMD_STS is bits [5:3]
-        CSML_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
 
         if (cmd_status != 0x0) {
-            CSML_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
+            REG_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
                                   << std::hex << cmd_status;
             throw std::runtime_error("Command failed with status 0x" + std::to_string(cmd_status));
         }
 
         // Verify interrupt assertion summary
-        CSML_INFO(2, logger) << "Interrupt assertion verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[1] = 1";
-        CSML_INFO(2, logger) << "  INTR_STATE[1] = 1 (set when entropy requested)";
-        CSML_INFO(2, logger) << "  cs_entropy_req port = asserted (when entropy requested)";
-        CSML_INFO(2, logger) << "  Note: Interrupt fires at START of entropy request, not completion";
+        REG_INFO(2, logger) << "Interrupt assertion verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[1] = 1";
+        REG_INFO(2, logger) << "  INTR_STATE[1] = 1 (set when entropy requested)";
+        REG_INFO(2, logger) << "  cs_entropy_req port = asserted (when entropy requested)";
+        REG_INFO(2, logger) << "  Note: Interrupt fires at START of entropy request, not completion";
 
-        CSML_INFO(2, logger) << "Test 110 PASSED: cs_entropy_req interrupt asserted correctly";
+        REG_INFO(2, logger) << "Test 110 PASSED: cs_entropy_req interrupt asserted correctly";
         report_test_pass("Test test_interrupt_cs_entropy_req_assertion");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_110: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_110: " << e.what();
         report_test_fail("Test test_interrupt_cs_entropy_req_assertion", e.what());
     }
 }
@@ -2562,15 +2561,15 @@ void testbench::test_interrupt_cs_entropy_req_deassertion()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x2) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] not set after write";
             throw std::runtime_error("INTR_ENABLE[1] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[1] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[1] enabled: 0x" << std::hex << intr_enable;
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -2579,7 +2578,7 @@ void testbench::test_interrupt_cs_entropy_req_deassertion()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INSTANTIATE command issued with flag0=0x6 (entropy mode)";
+        REG_INFO(2, logger) << "INSTANTIATE command issued with flag0=0x6 (entropy mode)";
 
         // Wait a bit for entropy request to be issued (interrupt should fire early)
         wait(100, SC_NS);
@@ -2590,22 +2589,22 @@ void testbench::test_interrupt_cs_entropy_req_deassertion()
         wait(10, SC_NS);
 
         bool intr_state_set = (intr_state_before_clear & 0x2) != 0;
-        CSML_INFO(2, logger) << "INTR_STATE before clear: 0x" << std::hex << intr_state_before_clear;
+        REG_INFO(2, logger) << "INTR_STATE before clear: 0x" << std::hex << intr_state_before_clear;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set when entropy is requested";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_before_clear;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set when entropy is requested";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_before_clear;
             throw std::runtime_error("INTR_STATE[1] not asserted - cannot test deassertion");
         }
 
         // Check hardware interrupt port is asserted before clearing
         bool intr_port_before_clear = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port before clear: " 
+        REG_INFO(2, logger) << "cs_entropy_req port before clear: " 
                              << (intr_port_before_clear ? "asserted" : "de-asserted");
 
         if (!intr_port_before_clear) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted before clear";
-            CSML_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_before_clear & 0x2) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted before clear";
+            REG_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_before_clear & 0x2) ? "1" : "0")
                                   << ", INTR_ENABLE[1]=" << ((intr_enable & 0x2) ? "1" : "0");
             throw std::runtime_error("Interrupt port not asserted - cannot test deassertion");
         }
@@ -2618,7 +2617,7 @@ void testbench::test_interrupt_cs_entropy_req_deassertion()
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, 0x2);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Wrote 1 to INTR_STATE[1] to clear interrupt";
+        REG_INFO(2, logger) << "Wrote 1 to INTR_STATE[1] to clear interrupt";
 
         // Verify INTR_STATE[1] is cleared
         uint32_t intr_state_after_clear = 0;
@@ -2626,22 +2625,22 @@ void testbench::test_interrupt_cs_entropy_req_deassertion()
         wait(10, SC_NS);
 
         bool intr_state_cleared = ((intr_state_after_clear & 0x2) == 0);
-        CSML_INFO(2, logger) << "INTR_STATE after clear: 0x" << std::hex << intr_state_after_clear;
+        REG_INFO(2, logger) << "INTR_STATE after clear: 0x" << std::hex << intr_state_after_clear;
 
         if (!intr_state_cleared) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] not cleared after write-1-to-clear";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] not cleared after write-1-to-clear";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
             throw std::runtime_error("INTR_STATE[1] RW1C semantics failed");
         }
 
         // Check hardware interrupt port is de-asserted after clearing
         bool intr_port_after_clear = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port after clear: " 
+        REG_INFO(2, logger) << "cs_entropy_req port after clear: " 
                              << (intr_port_after_clear ? "asserted" : "de-asserted");
 
         if (intr_port_after_clear) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not de-asserted after clearing INTR_STATE[1]";
-            CSML_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_after_clear & 0x2) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not de-asserted after clearing INTR_STATE[1]";
+            REG_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_after_clear & 0x2) ? "1" : "0")
                                   << ", INTR_ENABLE[1]=" << ((intr_enable & 0x2) ? "1" : "0");
             throw std::runtime_error("Hardware interrupt port not de-asserted");
         }
@@ -2652,16 +2651,16 @@ void testbench::test_interrupt_cs_entropy_req_deassertion()
         wait(10, SC_NS);
 
         if ((intr_enable_after_clear & 0x2) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] was cleared (should remain set)";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] was cleared (should remain set)";
             throw std::runtime_error("INTR_ENABLE[1] incorrectly cleared");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[1] remains set: 0x" << std::hex << intr_enable_after_clear;
+        REG_INFO(2, logger) << "INTR_ENABLE[1] remains set: 0x" << std::hex << intr_enable_after_clear;
 
         // Wait for command completion to verify it still completes successfully
         bool cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -2671,25 +2670,25 @@ void testbench::test_interrupt_cs_entropy_req_deassertion()
         wait(10, SC_NS);
 
         uint32_t cmd_status = (cmd_sts >> 3) & 0x7;  // CMD_STS is bits [5:3]
-        CSML_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
 
         if (cmd_status != 0x0) {
-            CSML_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
+            REG_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
                                   << std::hex << cmd_status;
             throw std::runtime_error("Command failed with status 0x" + std::to_string(cmd_status));
         }
 
         // Verify interrupt de-assertion summary
-        CSML_INFO(2, logger) << "Interrupt de-assertion verified:";
-        CSML_INFO(2, logger) << "  Before clear: INTR_STATE[1]=1, cs_entropy_req port=asserted";
-        CSML_INFO(2, logger) << "  After clear:  INTR_STATE[1]=0, cs_entropy_req port=de-asserted";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[1] remains set (not affected by clear)";
+        REG_INFO(2, logger) << "Interrupt de-assertion verified:";
+        REG_INFO(2, logger) << "  Before clear: INTR_STATE[1]=1, cs_entropy_req port=asserted";
+        REG_INFO(2, logger) << "  After clear:  INTR_STATE[1]=0, cs_entropy_req port=de-asserted";
+        REG_INFO(2, logger) << "  INTR_ENABLE[1] remains set (not affected by clear)";
 
-        CSML_INFO(2, logger) << "Test 111 PASSED: cs_entropy_req interrupt de-asserted correctly";
+        REG_INFO(2, logger) << "Test 111 PASSED: cs_entropy_req interrupt de-asserted correctly";
         report_test_pass("Test test_interrupt_cs_entropy_req_deassertion");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_111: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_111: " << e.what();
         report_test_fail("Test test_interrupt_cs_entropy_req_deassertion", e.what());
     }
 }
@@ -2805,7 +2804,7 @@ void testbench::test_interrupt_cs_fatal_err_assertion()
         wait(10, SC_NS);
 
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: REGWEN locked - cannot write ERR_CODE_TEST";
+            REG_ERROR(0, logger) << "FAILED: REGWEN locked - cannot write ERR_CODE_TEST";
             throw std::runtime_error("REGWEN locked");
         }
 
@@ -2819,11 +2818,11 @@ void testbench::test_interrupt_cs_fatal_err_assertion()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x8) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] not set after write";
             throw std::runtime_error("INTR_ENABLE[3] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -2831,7 +2830,7 @@ void testbench::test_interrupt_cs_fatal_err_assertion()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x8) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[3] already set before error injection";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[3] already set before error injection";
             throw std::runtime_error("INTR_STATE[3] not cleared");
         }
 
@@ -2841,18 +2840,18 @@ void testbench::test_interrupt_cs_fatal_err_assertion()
         wait(10, SC_NS);
 
         if (err_code_before != 0) {
-            CSML_ERROR(0, logger) << "FAILED: ERR_CODE not clear before error injection: 0x" 
+            REG_ERROR(0, logger) << "FAILED: ERR_CODE not clear before error injection: 0x" 
                                   << std::hex << err_code_before;
             throw std::runtime_error("ERR_CODE not cleared");
         }
 
         // Check hardware interrupt port before error injection (use testbench signal)
         bool intr_port_before = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port before error injection: " 
+        REG_INFO(2, logger) << "cs_fatal_err port before error injection: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port already asserted before error injection";
+            REG_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port already asserted before error injection";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
@@ -2864,7 +2863,7 @@ void testbench::test_interrupt_cs_fatal_err_assertion()
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, error_bit_num);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Injected FIFO error via ERR_CODE_TEST: error_bit_num=" << error_bit_num 
+        REG_INFO(2, logger) << "Injected FIFO error via ERR_CODE_TEST: error_bit_num=" << error_bit_num 
                              << " (sets ERR_CODE[28] = FIFO_WRITE_ERR)";
 
         // Wait a bit for interrupt to propagate
@@ -2876,11 +2875,11 @@ void testbench::test_interrupt_cs_fatal_err_assertion()
         wait(10, SC_NS);
 
         bool err_code_set = ((err_code_after & (1 << 28)) != 0);
-        CSML_INFO(2, logger) << "ERR_CODE after error injection: 0x" << std::hex << err_code_after;
+        REG_INFO(2, logger) << "ERR_CODE after error injection: 0x" << std::hex << err_code_after;
 
         if (!err_code_set) {
-            CSML_ERROR(0, logger) << "FAILED: ERR_CODE[28] (FIFO_WRITE_ERR) not set after error injection";
-            CSML_ERROR(0, logger) << "ERR_CODE value: 0x" << std::hex << err_code_after;
+            REG_ERROR(0, logger) << "FAILED: ERR_CODE[28] (FIFO_WRITE_ERR) not set after error injection";
+            REG_ERROR(0, logger) << "ERR_CODE value: 0x" << std::hex << err_code_after;
             throw std::runtime_error("ERR_CODE[28] not set");
         }
 
@@ -2890,39 +2889,39 @@ void testbench::test_interrupt_cs_fatal_err_assertion()
         wait(10, SC_NS);
 
         bool intr_state_set = ((intr_state_after & 0x8) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after error injection: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after error injection: 0x" << std::hex << intr_state_after;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[3] not set after error injection";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[3] not set after error injection";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[3] not asserted");
         }
 
         // Check hardware interrupt port after error injection (use testbench signal)
         bool intr_port_after = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port after error injection: " 
+        REG_INFO(2, logger) << "cs_fatal_err port after error injection: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         if (!intr_port_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not asserted after error injection";
-            CSML_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_after & 0x8) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not asserted after error injection";
+            REG_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_after & 0x8) ? "1" : "0")
                                   << ", INTR_ENABLE[3]=" << ((intr_enable & 0x8) ? "1" : "0")
                                   << ", ERR_CODE[28]=" << ((err_code_after & (1 << 28)) ? "1" : "0");
             throw std::runtime_error("Hardware interrupt port not asserted");
         }
 
         // Verify interrupt assertion summary
-        CSML_INFO(2, logger) << "Interrupt assertion verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[3] = 1";
-        CSML_INFO(2, logger) << "  INTR_STATE[3] = 1";
-        CSML_INFO(2, logger) << "  ERR_CODE[28] = 1 (FIFO_WRITE_ERR - sticky until reset)";
-        CSML_INFO(2, logger) << "  cs_fatal_err port = asserted";
+        REG_INFO(2, logger) << "Interrupt assertion verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[3] = 1";
+        REG_INFO(2, logger) << "  INTR_STATE[3] = 1";
+        REG_INFO(2, logger) << "  ERR_CODE[28] = 1 (FIFO_WRITE_ERR - sticky until reset)";
+        REG_INFO(2, logger) << "  cs_fatal_err port = asserted";
 
-        CSML_INFO(2, logger) << "Test 114 PASSED: cs_fatal_err interrupt asserted correctly";
+        REG_INFO(2, logger) << "Test 114 PASSED: cs_fatal_err interrupt asserted correctly";
         report_test_pass("Test test_interrupt_cs_fatal_err_assertion");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_114: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_114: " << e.what();
         report_test_fail("Test test_interrupt_cs_fatal_err_assertion", e.what());
     }
 }
@@ -2978,7 +2977,7 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         wait(10, SC_NS);
 
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: REGWEN locked - cannot write ERR_CODE_TEST";
+            REG_ERROR(0, logger) << "FAILED: REGWEN locked - cannot write ERR_CODE_TEST";
             throw std::runtime_error("REGWEN locked");
         }
 
@@ -2992,11 +2991,11 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x8) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] not set after write";
             throw std::runtime_error("INTR_ENABLE[3] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
 
         // Inject FIFO error via ERR_CODE_TEST to assert interrupt
         // FIFO_WRITE_ERR is at ERR_CODE bit 28
@@ -3006,7 +3005,7 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, error_bit_num);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Injected FIFO error via ERR_CODE_TEST: error_bit_num=" << error_bit_num 
+        REG_INFO(2, logger) << "Injected FIFO error via ERR_CODE_TEST: error_bit_num=" << error_bit_num 
                              << " (sets ERR_CODE[28] = FIFO_WRITE_ERR)";
 
         // Wait a bit for interrupt to propagate
@@ -3018,11 +3017,11 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         wait(10, SC_NS);
 
         bool intr_state_set = ((intr_state_before_clear & 0x8) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE before clear: 0x" << std::hex << intr_state_before_clear;
+        REG_INFO(2, logger) << "INTR_STATE before clear: 0x" << std::hex << intr_state_before_clear;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[3] not set after error injection";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_before_clear;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[3] not set after error injection";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_before_clear;
             throw std::runtime_error("INTR_STATE[3] not asserted - cannot test deassertion");
         }
 
@@ -3032,22 +3031,22 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         wait(10, SC_NS);
 
         bool err_code_set = ((err_code_before_clear & (1 << 28)) != 0);
-        CSML_INFO(2, logger) << "ERR_CODE before clear: 0x" << std::hex << err_code_before_clear;
+        REG_INFO(2, logger) << "ERR_CODE before clear: 0x" << std::hex << err_code_before_clear;
 
         if (!err_code_set) {
-            CSML_ERROR(0, logger) << "FAILED: ERR_CODE[28] not set after error injection";
-            CSML_ERROR(0, logger) << "ERR_CODE value: 0x" << std::hex << err_code_before_clear;
+            REG_ERROR(0, logger) << "FAILED: ERR_CODE[28] not set after error injection";
+            REG_ERROR(0, logger) << "ERR_CODE value: 0x" << std::hex << err_code_before_clear;
             throw std::runtime_error("ERR_CODE[28] not set - cannot test sticky behavior");
         }
 
         // Check hardware interrupt port is asserted before clearing
         bool intr_port_before_clear = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port before clear: " 
+        REG_INFO(2, logger) << "cs_fatal_err port before clear: " 
                              << (intr_port_before_clear ? "asserted" : "de-asserted");
 
         if (!intr_port_before_clear) {
-            CSML_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not asserted before clear";
-            CSML_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_before_clear & 0x8) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not asserted before clear";
+            REG_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_before_clear & 0x8) ? "1" : "0")
                                   << ", INTR_ENABLE[3]=" << ((intr_enable & 0x8) ? "1" : "0")
                                   << ", ERR_CODE[28]=" << ((err_code_before_clear & (1 << 28)) ? "1" : "0");
             throw std::runtime_error("Interrupt port not asserted - cannot test deassertion");
@@ -3057,7 +3056,7 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, 0x8);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Wrote 1 to INTR_STATE[3] to clear interrupt (RW1C)";
+        REG_INFO(2, logger) << "Wrote 1 to INTR_STATE[3] to clear interrupt (RW1C)";
 
         // Verify INTR_STATE[3] is cleared
         uint32_t intr_state_after_clear = 0;
@@ -3065,11 +3064,11 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         wait(10, SC_NS);
 
         bool intr_state_cleared = ((intr_state_after_clear & 0x8) == 0);
-        CSML_INFO(2, logger) << "INTR_STATE after clear: 0x" << std::hex << intr_state_after_clear;
+        REG_INFO(2, logger) << "INTR_STATE after clear: 0x" << std::hex << intr_state_after_clear;
 
         if (!intr_state_cleared) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[3] not cleared after write-1-to-clear";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[3] not cleared after write-1-to-clear";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
             throw std::runtime_error("INTR_STATE[3] RW1C semantics failed");
         }
 
@@ -3079,22 +3078,22 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         wait(10, SC_NS);
 
         bool err_code_still_set = ((err_code_after_clear & (1 << 28)) != 0);
-        CSML_INFO(2, logger) << "ERR_CODE after clearing INTR_STATE: 0x" << std::hex << err_code_after_clear;
+        REG_INFO(2, logger) << "ERR_CODE after clearing INTR_STATE: 0x" << std::hex << err_code_after_clear;
 
         if (!err_code_still_set) {
-            CSML_ERROR(0, logger) << "FAILED: ERR_CODE[28] was cleared (should remain sticky)";
-            CSML_ERROR(0, logger) << "ERR_CODE value: 0x" << std::hex << err_code_after_clear;
+            REG_ERROR(0, logger) << "FAILED: ERR_CODE[28] was cleared (should remain sticky)";
+            REG_ERROR(0, logger) << "ERR_CODE value: 0x" << std::hex << err_code_after_clear;
             throw std::runtime_error("ERR_CODE[28] sticky behavior failed");
         }
 
         // Check hardware interrupt port is de-asserted after clearing
         bool intr_port_after_clear = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port after clear: " 
+        REG_INFO(2, logger) << "cs_fatal_err port after clear: " 
                              << (intr_port_after_clear ? "asserted" : "de-asserted");
 
         if (intr_port_after_clear) {
-            CSML_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not de-asserted after clearing INTR_STATE[3]";
-            CSML_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_after_clear & 0x8) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not de-asserted after clearing INTR_STATE[3]";
+            REG_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_after_clear & 0x8) ? "1" : "0")
                                   << ", INTR_ENABLE[3]=" << ((intr_enable & 0x8) ? "1" : "0")
                                   << ", ERR_CODE[28]=" << ((err_code_after_clear & (1 << 28)) ? "1" : "0");
             throw std::runtime_error("Hardware interrupt port not de-asserted");
@@ -3106,24 +3105,24 @@ void testbench::test_interrupt_cs_fatal_err_sticky()
         wait(10, SC_NS);
 
         if ((intr_enable_after_clear & 0x8) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] was cleared (should remain set)";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] was cleared (should remain set)";
             throw std::runtime_error("INTR_ENABLE[3] incorrectly cleared");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[3] remains set: 0x" << std::hex << intr_enable_after_clear;
+        REG_INFO(2, logger) << "INTR_ENABLE[3] remains set: 0x" << std::hex << intr_enable_after_clear;
 
         // Verify sticky behavior summary
-        CSML_INFO(2, logger) << "Sticky behavior verified:";
-        CSML_INFO(2, logger) << "  Before clear: INTR_STATE[3]=1, ERR_CODE[28]=1, cs_fatal_err port=asserted";
-        CSML_INFO(2, logger) << "  After clear:  INTR_STATE[3]=0, ERR_CODE[28]=1 (STICKY), cs_fatal_err port=de-asserted";
-        CSML_INFO(2, logger) << "  Note: ERR_CODE[28] remains set until hardware reset (sticky behavior)";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[3] remains set (not affected by clear)";
+        REG_INFO(2, logger) << "Sticky behavior verified:";
+        REG_INFO(2, logger) << "  Before clear: INTR_STATE[3]=1, ERR_CODE[28]=1, cs_fatal_err port=asserted";
+        REG_INFO(2, logger) << "  After clear:  INTR_STATE[3]=0, ERR_CODE[28]=1 (STICKY), cs_fatal_err port=de-asserted";
+        REG_INFO(2, logger) << "  Note: ERR_CODE[28] remains set until hardware reset (sticky behavior)";
+        REG_INFO(2, logger) << "  INTR_ENABLE[3] remains set (not affected by clear)";
 
-        CSML_INFO(2, logger) << "Test 115 PASSED: cs_fatal_err interrupt de-asserted, ERR_CODE remains sticky";
+        REG_INFO(2, logger) << "Test 115 PASSED: cs_fatal_err interrupt de-asserted, ERR_CODE remains sticky";
         report_test_pass("Test test_interrupt_cs_fatal_err_sticky");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_115: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_115: " << e.what();
         report_test_fail("Test test_interrupt_cs_fatal_err_sticky", e.what());
     }
 }
@@ -3180,11 +3179,11 @@ void testbench::test_interrupt_enable_gating()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x1) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not cleared after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not cleared after write";
             throw std::runtime_error("INTR_ENABLE[0] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[0] disabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[0] disabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -3192,23 +3191,23 @@ void testbench::test_interrupt_enable_gating()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x1) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] already set before command";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] already set before command";
             throw std::runtime_error("INTR_STATE[0] not cleared");
         }
 
         // Check hardware interrupt port before command (use testbench signal)
         bool intr_port_before = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port before command: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port before command: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port already asserted before command";
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port already asserted before command";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -3217,12 +3216,12 @@ void testbench::test_interrupt_enable_gating()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INSTANTIATE command issued with INTR_ENABLE[0]=0";
+        REG_INFO(2, logger) << "INSTANTIATE command issued with INTR_ENABLE[0]=0";
 
         // Wait for command completion (CMD_ACK)
         bool cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -3235,27 +3234,27 @@ void testbench::test_interrupt_enable_gating()
         wait(10, SC_NS);
 
         bool intr_state_set = ((intr_state_after & 0x1) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after command: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after command: 0x" << std::hex << intr_state_after;
 
         // Note: INTR_STATE[0] may or may not be set depending on implementation
         // The key point is that the interrupt PORT should not assert if INTR_ENABLE[0]=0
         if (intr_state_set) {
-            CSML_INFO(2, logger) << "INTR_STATE[0] is set (expected - state can be set even if enable is 0)";
+            REG_INFO(2, logger) << "INTR_STATE[0] is set (expected - state can be set even if enable is 0)";
         } else {
-            CSML_INFO(2, logger) << "INTR_STATE[0] is not set (implementation-dependent)";
+            REG_INFO(2, logger) << "INTR_STATE[0] is not set (implementation-dependent)";
         }
 
         // Check hardware interrupt port after command (use testbench signal)
         // This is the KEY CHECK: interrupt port should NOT assert even if INTR_STATE[0] is set
         bool intr_port_after = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after command: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after command: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         if (intr_port_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port asserted despite INTR_ENABLE[0]=0";
-            CSML_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port asserted despite INTR_ENABLE[0]=0";
+            REG_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
                                   << ", INTR_ENABLE[0]=" << ((intr_enable & 0x1) ? "1" : "0");
-            CSML_ERROR(0, logger) << "Interrupt output should be gated: interrupt = INTR_STATE AND INTR_ENABLE";
+            REG_ERROR(0, logger) << "Interrupt output should be gated: interrupt = INTR_STATE AND INTR_ENABLE";
             throw std::runtime_error("Hardware interrupt port not gated by INTR_ENABLE");
         }
 
@@ -3265,27 +3264,27 @@ void testbench::test_interrupt_enable_gating()
         wait(10, SC_NS);
 
         uint32_t cmd_status = (cmd_sts >> 3) & 0x7;  // CMD_STS is bits [5:3]
-        CSML_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
 
         if (cmd_status != 0x0) {
-            CSML_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
+            REG_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
                                   << std::hex << cmd_status;
             throw std::runtime_error("Command failed with status 0x" + std::to_string(cmd_status));
         }
 
         // Verify interrupt gating summary
-        CSML_INFO(2, logger) << "Interrupt gating verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[0] = 0 (interrupt disabled)";
-        CSML_INFO(2, logger) << "  INTR_STATE[0] = " << ((intr_state_after & 0x1) ? "1" : "0") << " (may be set)";
-        CSML_INFO(2, logger) << "  cs_cmd_req_done port = de-asserted (gated by INTR_ENABLE)";
-        CSML_INFO(2, logger) << "  Interrupt output = INTR_STATE[0] AND INTR_ENABLE[0] = " 
+        REG_INFO(2, logger) << "Interrupt gating verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[0] = 0 (interrupt disabled)";
+        REG_INFO(2, logger) << "  INTR_STATE[0] = " << ((intr_state_after & 0x1) ? "1" : "0") << " (may be set)";
+        REG_INFO(2, logger) << "  cs_cmd_req_done port = de-asserted (gated by INTR_ENABLE)";
+        REG_INFO(2, logger) << "  Interrupt output = INTR_STATE[0] AND INTR_ENABLE[0] = " 
                              << ((intr_state_after & 0x1) ? "1" : "0") << " AND 0 = 0";
 
-        CSML_INFO(2, logger) << "Test 116 PASSED: cs_cmd_req_done interrupt correctly gated by INTR_ENABLE";
+        REG_INFO(2, logger) << "Test 116 PASSED: cs_cmd_req_done interrupt correctly gated by INTR_ENABLE";
         report_test_pass("Test test_interrupt_enable_gating");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_116: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_116: " << e.what();
         report_test_fail("Test test_interrupt_enable_gating", e.what());
     }
 }
@@ -3340,11 +3339,11 @@ void testbench::test_interrupt_test_mode_cs_cmd_req_done()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x1) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
             throw std::runtime_error("INTR_ENABLE[0] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -3352,17 +3351,17 @@ void testbench::test_interrupt_test_mode_cs_cmd_req_done()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x1) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] already set before test mode write";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] already set before test mode write";
             throw std::runtime_error("INTR_STATE[0] not cleared");
         }
 
         // Check hardware interrupt port before test mode write (use testbench signal)
         bool intr_port_before = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port before INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port before INTR_TEST write: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port already asserted before test mode write";
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port already asserted before test mode write";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
@@ -3370,7 +3369,7 @@ void testbench::test_interrupt_test_mode_cs_cmd_req_done()
         m_test->register_write_32(csrng_basetest::INTR_TEST_OFFSET, 0x1);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Wrote 1 to INTR_TEST[0] to force interrupt in test mode";
+        REG_INFO(2, logger) << "Wrote 1 to INTR_TEST[0] to force interrupt in test mode";
 
         // Wait a bit for interrupt state to update
         wait(50, SC_NS);
@@ -3381,40 +3380,40 @@ void testbench::test_interrupt_test_mode_cs_cmd_req_done()
         wait(10, SC_NS);
 
         bool intr_state_set = ((intr_state_after & 0x1) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after writing INTR_TEST[0]";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after writing INTR_TEST[0]";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[0] not set by INTR_TEST");
         }
 
         // Check hardware interrupt port after test mode write (use testbench signal)
         bool intr_port_after = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after INTR_TEST write: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         if (!intr_port_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after INTR_TEST write";
-            CSML_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after INTR_TEST write";
+            REG_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
                                   << ", INTR_ENABLE[0]=" << ((intr_enable & 0x1) ? "1" : "0");
-            CSML_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[0] AND INTR_ENABLE[0] = 1 AND 1 = 1";
+            REG_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[0] AND INTR_ENABLE[0] = 1 AND 1 = 1";
             throw std::runtime_error("Hardware interrupt port not asserted");
         }
 
         // Verify interrupt test mode summary
-        CSML_INFO(2, logger) << "Interrupt test mode verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[0] = 1";
-        CSML_INFO(2, logger) << "  INTR_TEST[0] = 1 (test mode write)";
-        CSML_INFO(2, logger) << "  INTR_STATE[0] = 1 (set by INTR_TEST)";
-        CSML_INFO(2, logger) << "  cs_cmd_req_done port = asserted";
-        CSML_INFO(2, logger) << "  Interrupt output = INTR_STATE[0] AND INTR_ENABLE[0] = 1 AND 1 = 1";
+        REG_INFO(2, logger) << "Interrupt test mode verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[0] = 1";
+        REG_INFO(2, logger) << "  INTR_TEST[0] = 1 (test mode write)";
+        REG_INFO(2, logger) << "  INTR_STATE[0] = 1 (set by INTR_TEST)";
+        REG_INFO(2, logger) << "  cs_cmd_req_done port = asserted";
+        REG_INFO(2, logger) << "  Interrupt output = INTR_STATE[0] AND INTR_ENABLE[0] = 1 AND 1 = 1";
 
-        CSML_INFO(2, logger) << "Test 117 PASSED: cs_cmd_req_done interrupt asserted via test mode";
+        REG_INFO(2, logger) << "Test 117 PASSED: cs_cmd_req_done interrupt asserted via test mode";
         report_test_pass("Test test_interrupt_test_mode_cs_cmd_req_done");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_117: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_117: " << e.what();
         report_test_fail("Test test_interrupt_test_mode_cs_cmd_req_done", e.what());
     }
 }
@@ -3469,11 +3468,11 @@ void testbench::test_interrupt_test_mode_cs_entropy_req()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x2) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[1] not set after write";
             throw std::runtime_error("INTR_ENABLE[1] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[1] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[1] enabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -3481,17 +3480,17 @@ void testbench::test_interrupt_test_mode_cs_entropy_req()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x2) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] already set before test mode write";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] already set before test mode write";
             throw std::runtime_error("INTR_STATE[1] not cleared");
         }
 
         // Check hardware interrupt port before test mode write (use testbench signal)
         bool intr_port_before = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port before INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_entropy_req port before INTR_TEST write: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port already asserted before test mode write";
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port already asserted before test mode write";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
@@ -3499,7 +3498,7 @@ void testbench::test_interrupt_test_mode_cs_entropy_req()
         m_test->register_write_32(csrng_basetest::INTR_TEST_OFFSET, 0x2);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Wrote 1 to INTR_TEST[1] to force interrupt in test mode";
+        REG_INFO(2, logger) << "Wrote 1 to INTR_TEST[1] to force interrupt in test mode";
 
         // Wait a bit for interrupt state to update
         wait(50, SC_NS);
@@ -3510,40 +3509,40 @@ void testbench::test_interrupt_test_mode_cs_entropy_req()
         wait(10, SC_NS);
 
         bool intr_state_set = ((intr_state_after & 0x2) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set after writing INTR_TEST[1]";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set after writing INTR_TEST[1]";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[1] not set by INTR_TEST");
         }
 
         // Check hardware interrupt port after test mode write (use testbench signal)
         bool intr_port_after = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port after INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_entropy_req port after INTR_TEST write: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         if (!intr_port_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted after INTR_TEST write";
-            CSML_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_after & 0x2) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted after INTR_TEST write";
+            REG_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_after & 0x2) ? "1" : "0")
                                   << ", INTR_ENABLE[1]=" << ((intr_enable & 0x2) ? "1" : "0");
-            CSML_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[1] AND INTR_ENABLE[1] = 1 AND 1 = 1";
+            REG_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[1] AND INTR_ENABLE[1] = 1 AND 1 = 1";
             throw std::runtime_error("Hardware interrupt port not asserted");
         }
 
         // Verify interrupt test mode summary
-        CSML_INFO(2, logger) << "Interrupt test mode verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[1] = 1";
-        CSML_INFO(2, logger) << "  INTR_TEST[1] = 1 (test mode write)";
-        CSML_INFO(2, logger) << "  INTR_STATE[1] = 1 (set by INTR_TEST)";
-        CSML_INFO(2, logger) << "  cs_entropy_req port = asserted";
-        CSML_INFO(2, logger) << "  Interrupt output = INTR_STATE[1] AND INTR_ENABLE[1] = 1 AND 1 = 1";
+        REG_INFO(2, logger) << "Interrupt test mode verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[1] = 1";
+        REG_INFO(2, logger) << "  INTR_TEST[1] = 1 (test mode write)";
+        REG_INFO(2, logger) << "  INTR_STATE[1] = 1 (set by INTR_TEST)";
+        REG_INFO(2, logger) << "  cs_entropy_req port = asserted";
+        REG_INFO(2, logger) << "  Interrupt output = INTR_STATE[1] AND INTR_ENABLE[1] = 1 AND 1 = 1";
 
-        CSML_INFO(2, logger) << "Test 118 PASSED: cs_entropy_req interrupt asserted via test mode";
+        REG_INFO(2, logger) << "Test 118 PASSED: cs_entropy_req interrupt asserted via test mode";
         report_test_pass("Test test_interrupt_test_mode_cs_entropy_req");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_118: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_118: " << e.what();
         report_test_fail("Test test_interrupt_test_mode_cs_entropy_req", e.what());
     }
 }
@@ -3599,11 +3598,11 @@ void testbench::test_interrupt_test_mode_cs_hw_inst_exc()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x4) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[2] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[2] not set after write";
             throw std::runtime_error("INTR_ENABLE[2] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[2] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[2] enabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -3611,17 +3610,17 @@ void testbench::test_interrupt_test_mode_cs_hw_inst_exc()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x4) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[2] already set before test mode write";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[2] already set before test mode write";
             throw std::runtime_error("INTR_STATE[2] not cleared");
         }
 
         // Check hardware interrupt port before test mode write (use testbench signal)
         bool intr_port_before = cs_hw_inst_exc_signal.read();
-        CSML_INFO(2, logger) << "cs_hw_inst_exc port before INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_hw_inst_exc port before INTR_TEST write: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_hw_inst_exc interrupt port already asserted before test mode write";
+            REG_ERROR(0, logger) << "FAILED: cs_hw_inst_exc interrupt port already asserted before test mode write";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
@@ -3629,7 +3628,7 @@ void testbench::test_interrupt_test_mode_cs_hw_inst_exc()
         m_test->register_write_32(csrng_basetest::INTR_TEST_OFFSET, 0x4);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Wrote 1 to INTR_TEST[2] to force interrupt in test mode";
+        REG_INFO(2, logger) << "Wrote 1 to INTR_TEST[2] to force interrupt in test mode";
 
         // Wait a bit for interrupt state to update
         wait(50, SC_NS);
@@ -3640,40 +3639,40 @@ void testbench::test_interrupt_test_mode_cs_hw_inst_exc()
         wait(10, SC_NS);
 
         bool intr_state_set = ((intr_state_after & 0x4) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[2] not set after writing INTR_TEST[2]";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[2] not set after writing INTR_TEST[2]";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[2] not set by INTR_TEST");
         }
 
         // Check hardware interrupt port after test mode write (use testbench signal)
         bool intr_port_after = cs_hw_inst_exc_signal.read();
-        CSML_INFO(2, logger) << "cs_hw_inst_exc port after INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_hw_inst_exc port after INTR_TEST write: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         if (!intr_port_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_hw_inst_exc interrupt port not asserted after INTR_TEST write";
-            CSML_ERROR(0, logger) << "INTR_STATE[2]=" << ((intr_state_after & 0x4) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_hw_inst_exc interrupt port not asserted after INTR_TEST write";
+            REG_ERROR(0, logger) << "INTR_STATE[2]=" << ((intr_state_after & 0x4) ? "1" : "0")
                                   << ", INTR_ENABLE[2]=" << ((intr_enable & 0x4) ? "1" : "0");
-            CSML_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[2] AND INTR_ENABLE[2] = 1 AND 1 = 1";
+            REG_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[2] AND INTR_ENABLE[2] = 1 AND 1 = 1";
             throw std::runtime_error("Hardware interrupt port not asserted");
         }
 
         // Verify interrupt test mode summary
-        CSML_INFO(2, logger) << "Interrupt test mode verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[2] = 1";
-        CSML_INFO(2, logger) << "  INTR_TEST[2] = 1 (test mode write)";
-        CSML_INFO(2, logger) << "  INTR_STATE[2] = 1 (set by INTR_TEST)";
-        CSML_INFO(2, logger) << "  cs_hw_inst_exc port = asserted";
-        CSML_INFO(2, logger) << "  Interrupt output = INTR_STATE[2] AND INTR_ENABLE[2] = 1 AND 1 = 1";
+        REG_INFO(2, logger) << "Interrupt test mode verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[2] = 1";
+        REG_INFO(2, logger) << "  INTR_TEST[2] = 1 (test mode write)";
+        REG_INFO(2, logger) << "  INTR_STATE[2] = 1 (set by INTR_TEST)";
+        REG_INFO(2, logger) << "  cs_hw_inst_exc port = asserted";
+        REG_INFO(2, logger) << "  Interrupt output = INTR_STATE[2] AND INTR_ENABLE[2] = 1 AND 1 = 1";
 
-        CSML_INFO(2, logger) << "Test 119 PASSED: cs_hw_inst_exc interrupt asserted via test mode";
+        REG_INFO(2, logger) << "Test 119 PASSED: cs_hw_inst_exc interrupt asserted via test mode";
         report_test_pass("Test test_interrupt_test_mode_cs_hw_inst_exc");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_119: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_119: " << e.what();
         report_test_fail("Test test_interrupt_test_mode_cs_hw_inst_exc", e.what());
     }
 }
@@ -3730,11 +3729,11 @@ void testbench::test_interrupt_test_mode_cs_fatal_err()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x8) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[3] not set after write";
             throw std::runtime_error("INTR_ENABLE[3] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[3] enabled: 0x" << std::hex << intr_enable;
 
         // Verify interrupt is initially de-asserted
         uint32_t intr_state_before = 0;
@@ -3742,17 +3741,17 @@ void testbench::test_interrupt_test_mode_cs_fatal_err()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x8) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[3] already set before test mode write";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[3] already set before test mode write";
             throw std::runtime_error("INTR_STATE[3] not cleared");
         }
 
         // Check hardware interrupt port before test mode write (use testbench signal)
         bool intr_port_before = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port before INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_fatal_err port before INTR_TEST write: " 
                              << (intr_port_before ? "asserted" : "de-asserted");
 
         if (intr_port_before) {
-            CSML_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port already asserted before test mode write";
+            REG_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port already asserted before test mode write";
             throw std::runtime_error("Interrupt port not de-asserted initially");
         }
 
@@ -3760,7 +3759,7 @@ void testbench::test_interrupt_test_mode_cs_fatal_err()
         m_test->register_write_32(csrng_basetest::INTR_TEST_OFFSET, 0x8);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Wrote 1 to INTR_TEST[3] to force interrupt in test mode";
+        REG_INFO(2, logger) << "Wrote 1 to INTR_TEST[3] to force interrupt in test mode";
 
         // Wait a bit for interrupt state to update
         wait(50, SC_NS);
@@ -3771,40 +3770,40 @@ void testbench::test_interrupt_test_mode_cs_fatal_err()
         wait(10, SC_NS);
 
         bool intr_state_set = ((intr_state_after & 0x8) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after INTR_TEST write: 0x" << std::hex << intr_state_after;
 
         if (!intr_state_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[3] not set after writing INTR_TEST[3]";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[3] not set after writing INTR_TEST[3]";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[3] not set by INTR_TEST");
         }
 
         // Check hardware interrupt port after test mode write (use testbench signal)
         bool intr_port_after = cs_fatal_err_signal.read();
-        CSML_INFO(2, logger) << "cs_fatal_err port after INTR_TEST write: " 
+        REG_INFO(2, logger) << "cs_fatal_err port after INTR_TEST write: " 
                              << (intr_port_after ? "asserted" : "de-asserted");
 
         if (!intr_port_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not asserted after INTR_TEST write";
-            CSML_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_after & 0x8) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_fatal_err interrupt port not asserted after INTR_TEST write";
+            REG_ERROR(0, logger) << "INTR_STATE[3]=" << ((intr_state_after & 0x8) ? "1" : "0")
                                   << ", INTR_ENABLE[3]=" << ((intr_enable & 0x8) ? "1" : "0");
-            CSML_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[3] AND INTR_ENABLE[3] = 1 AND 1 = 1";
+            REG_ERROR(0, logger) << "Interrupt output should be: INTR_STATE[3] AND INTR_ENABLE[3] = 1 AND 1 = 1";
             throw std::runtime_error("Hardware interrupt port not asserted");
         }
 
         // Verify interrupt test mode summary
-        CSML_INFO(2, logger) << "Interrupt test mode verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE[3] = 1";
-        CSML_INFO(2, logger) << "  INTR_TEST[3] = 1 (test mode write)";
-        CSML_INFO(2, logger) << "  INTR_STATE[3] = 1 (set by INTR_TEST)";
-        CSML_INFO(2, logger) << "  cs_fatal_err port = asserted";
-        CSML_INFO(2, logger) << "  Interrupt output = INTR_STATE[3] AND INTR_ENABLE[3] = 1 AND 1 = 1";
+        REG_INFO(2, logger) << "Interrupt test mode verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE[3] = 1";
+        REG_INFO(2, logger) << "  INTR_TEST[3] = 1 (test mode write)";
+        REG_INFO(2, logger) << "  INTR_STATE[3] = 1 (set by INTR_TEST)";
+        REG_INFO(2, logger) << "  cs_fatal_err port = asserted";
+        REG_INFO(2, logger) << "  Interrupt output = INTR_STATE[3] AND INTR_ENABLE[3] = 1 AND 1 = 1";
 
-        CSML_INFO(2, logger) << "Test 120 PASSED: cs_fatal_err interrupt asserted via test mode";
+        REG_INFO(2, logger) << "Test 120 PASSED: cs_fatal_err interrupt asserted via test mode";
         report_test_pass("Test test_interrupt_test_mode_cs_fatal_err");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_120: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_120: " << e.what();
         report_test_fail("Test test_interrupt_test_mode_cs_fatal_err", e.what());
     }
 }
@@ -3864,12 +3863,12 @@ void testbench::test_interrupt_multiple_simultaneous_sources()
         wait(10, SC_NS);
 
         if ((intr_enable & 0xF) != 0xF) {
-            CSML_ERROR(0, logger) << "FAILED: Not all interrupts enabled after write";
-            CSML_ERROR(0, logger) << "INTR_ENABLE value: 0x" << std::hex << intr_enable;
+            REG_ERROR(0, logger) << "FAILED: Not all interrupts enabled after write";
+            REG_ERROR(0, logger) << "INTR_ENABLE value: 0x" << std::hex << intr_enable;
             throw std::runtime_error("INTR_ENABLE write failed");
         }
 
-        CSML_INFO(2, logger) << "All interrupts enabled: INTR_ENABLE = 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "All interrupts enabled: INTR_ENABLE = 0x" << std::hex << intr_enable;
 
         // Verify interrupts are initially de-asserted
         uint32_t intr_state_before = 0;
@@ -3877,26 +3876,26 @@ void testbench::test_interrupt_multiple_simultaneous_sources()
         wait(10, SC_NS);
 
         if ((intr_state_before & 0x3) != 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] or [1] already set before command";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] or [1] already set before command";
             throw std::runtime_error("INTR_STATE not cleared");
         }
 
         // Check hardware interrupt ports before command (use testbench signals)
         bool intr_cmd_req_done_before = cs_cmd_req_done_signal.read();
         bool intr_entropy_req_before = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port before command: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port before command: " 
                              << (intr_cmd_req_done_before ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "cs_entropy_req port before command: " 
+        REG_INFO(2, logger) << "cs_entropy_req port before command: " 
                              << (intr_entropy_req_before ? "asserted" : "de-asserted");
 
         if (intr_cmd_req_done_before || intr_entropy_req_before) {
-            CSML_ERROR(0, logger) << "FAILED: Interrupt ports already asserted before command";
+            REG_ERROR(0, logger) << "FAILED: Interrupt ports already asserted before command";
             throw std::runtime_error("Interrupt ports not de-asserted initially");
         }
 
         // Wait for CMD_RDY
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -3907,7 +3906,7 @@ void testbench::test_interrupt_multiple_simultaneous_sources()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "INSTANTIATE command issued with flag0=0x6 (entropy mode)";
+        REG_INFO(2, logger) << "INSTANTIATE command issued with flag0=0x6 (entropy mode)";
 
         // Wait a bit for entropy request to be issued (cs_entropy_req should fire early)
         wait(100, SC_NS);
@@ -3918,22 +3917,22 @@ void testbench::test_interrupt_multiple_simultaneous_sources()
         wait(10, SC_NS);
 
         bool intr_state_entropy_set = ((intr_state_during & 0x2) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE during command (entropy request): 0x" << std::hex << intr_state_during;
+        REG_INFO(2, logger) << "INTR_STATE during command (entropy request): 0x" << std::hex << intr_state_during;
 
         // Check hardware interrupt port for entropy request
         bool intr_entropy_req_during = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_entropy_req port during entropy request: " 
+        REG_INFO(2, logger) << "cs_entropy_req port during entropy request: " 
                              << (intr_entropy_req_during ? "asserted" : "de-asserted");
 
         if (!intr_state_entropy_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set when entropy is requested";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_during;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set when entropy is requested";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_during;
             throw std::runtime_error("INTR_STATE[1] not asserted during entropy request");
         }
 
         if (!intr_entropy_req_during) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted when entropy is requested";
-            CSML_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_during & 0x2) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted when entropy is requested";
+            REG_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_during & 0x2) ? "1" : "0")
                                   << ", INTR_ENABLE[1]=" << ((intr_enable & 0x2) ? "1" : "0");
             throw std::runtime_error("cs_entropy_req hardware interrupt port not asserted");
         }
@@ -3941,7 +3940,7 @@ void testbench::test_interrupt_multiple_simultaneous_sources()
         // Wait for command completion (CMD_ACK)
         bool cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -3955,38 +3954,38 @@ void testbench::test_interrupt_multiple_simultaneous_sources()
 
         bool intr_state_cmd_req_done_set = ((intr_state_after & 0x1) != 0);
         bool intr_state_entropy_req_set = ((intr_state_after & 0x2) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after command completion: 0x" << std::hex << intr_state_after;
+        REG_INFO(2, logger) << "INTR_STATE after command completion: 0x" << std::hex << intr_state_after;
 
         if (!intr_state_cmd_req_done_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after command completion";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after command completion";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[0] not asserted after command completion");
         }
 
         if (!intr_state_entropy_req_set) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set (should remain set after entropy request)";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[1] not set (should remain set after entropy request)";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after;
             throw std::runtime_error("INTR_STATE[1] not set");
         }
 
         // Check hardware interrupt ports after command completion
         bool intr_cmd_req_done_after = cs_cmd_req_done_signal.read();
         bool intr_entropy_req_after = cs_entropy_req_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after command completion: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after command completion: " 
                              << (intr_cmd_req_done_after ? "asserted" : "de-asserted");
-        CSML_INFO(2, logger) << "cs_entropy_req port after command completion: " 
+        REG_INFO(2, logger) << "cs_entropy_req port after command completion: " 
                              << (intr_entropy_req_after ? "asserted" : "de-asserted");
 
         if (!intr_cmd_req_done_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after command completion";
-            CSML_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after command completion";
+            REG_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after & 0x1) ? "1" : "0")
                                   << ", INTR_ENABLE[0]=" << ((intr_enable & 0x1) ? "1" : "0");
             throw std::runtime_error("cs_cmd_req_done hardware interrupt port not asserted");
         }
 
         if (!intr_entropy_req_after) {
-            CSML_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted";
-            CSML_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_after & 0x2) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_entropy_req interrupt port not asserted";
+            REG_ERROR(0, logger) << "INTR_STATE[1]=" << ((intr_state_after & 0x2) ? "1" : "0")
                                   << ", INTR_ENABLE[1]=" << ((intr_enable & 0x2) ? "1" : "0");
             throw std::runtime_error("cs_entropy_req hardware interrupt port not asserted");
         }
@@ -3997,28 +3996,28 @@ void testbench::test_interrupt_multiple_simultaneous_sources()
         wait(10, SC_NS);
 
         uint32_t cmd_status = (cmd_sts >> 3) & 0x7;  // CMD_STS is bits [5:3]
-        CSML_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "CMD_STS: 0x" << std::hex << cmd_status;
 
         if (cmd_status != 0x0) {
-            CSML_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
+            REG_ERROR(0, logger) << "FAILED: Command status is not SUCCESS (0x0), got 0x" 
                                   << std::hex << cmd_status;
             throw std::runtime_error("Command failed with status 0x" + std::to_string(cmd_status));
         }
 
         // Verify multiple simultaneous interrupts summary
-        CSML_INFO(2, logger) << "Multiple simultaneous interrupts verified:";
-        CSML_INFO(2, logger) << "  INTR_ENABLE = 0xF (all interrupts enabled)";
-        CSML_INFO(2, logger) << "  INTR_STATE[0] = 1 (cs_cmd_req_done - command completion)";
-        CSML_INFO(2, logger) << "  INTR_STATE[1] = 1 (cs_entropy_req - entropy request)";
-        CSML_INFO(2, logger) << "  cs_cmd_req_done port = asserted";
-        CSML_INFO(2, logger) << "  cs_entropy_req port = asserted";
-        CSML_INFO(2, logger) << "  Both interrupts assert independently and simultaneously";
+        REG_INFO(2, logger) << "Multiple simultaneous interrupts verified:";
+        REG_INFO(2, logger) << "  INTR_ENABLE = 0xF (all interrupts enabled)";
+        REG_INFO(2, logger) << "  INTR_STATE[0] = 1 (cs_cmd_req_done - command completion)";
+        REG_INFO(2, logger) << "  INTR_STATE[1] = 1 (cs_entropy_req - entropy request)";
+        REG_INFO(2, logger) << "  cs_cmd_req_done port = asserted";
+        REG_INFO(2, logger) << "  cs_entropy_req port = asserted";
+        REG_INFO(2, logger) << "  Both interrupts assert independently and simultaneously";
 
-        CSML_INFO(2, logger) << "Test 121 PASSED: Multiple simultaneous interrupts asserted correctly";
+        REG_INFO(2, logger) << "Test 121 PASSED: Multiple simultaneous interrupts asserted correctly";
         report_test_pass("Test test_interrupt_multiple_simultaneous_sources");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_121: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_121: " << e.what();
         report_test_fail("Test test_interrupt_multiple_simultaneous_sources", e.what());
     }
 }
@@ -4076,15 +4075,15 @@ void testbench::test_interrupt_state_accumulation()
         wait(10, SC_NS);
 
         if ((intr_enable & 0x1) == 0) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
+            REG_ERROR(0, logger) << "FAILED: INTR_ENABLE[0] not set after write";
             throw std::runtime_error("INTR_ENABLE[0] write failed");
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
+        REG_INFO(2, logger) << "INTR_ENABLE[0] enabled: 0x" << std::hex << intr_enable;
 
         // Command 1: INSTANTIATE
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout (Command 1: INSTANTIATE)";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout (Command 1: INSTANTIATE)";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -4092,11 +4091,11 @@ void testbench::test_interrupt_state_accumulation()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "Command 1: INSTANTIATE issued";
+        REG_INFO(2, logger) << "Command 1: INSTANTIATE issued";
 
         bool cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout (Command 1: INSTANTIATE)";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout (Command 1: INSTANTIATE)";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -4108,26 +4107,26 @@ void testbench::test_interrupt_state_accumulation()
         wait(10, SC_NS);
 
         bool intr_state_set_cmd1 = ((intr_state_after_cmd1 & 0x1) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after Command 1: 0x" << std::hex << intr_state_after_cmd1;
+        REG_INFO(2, logger) << "INTR_STATE after Command 1: 0x" << std::hex << intr_state_after_cmd1;
 
         if (!intr_state_set_cmd1) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after Command 1 (INSTANTIATE)";
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] not set after Command 1 (INSTANTIATE)";
             throw std::runtime_error("INTR_STATE[0] not set after first command");
         }
 
         // Check hardware interrupt port after first command
         bool intr_port_after_cmd1 = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after Command 1: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after Command 1: " 
                              << (intr_port_after_cmd1 ? "asserted" : "de-asserted");
 
         if (!intr_port_after_cmd1) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after Command 1";
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not asserted after Command 1";
             throw std::runtime_error("Interrupt port not asserted after first command");
         }
 
         // Command 2: GENERATE (without clearing INTR_STATE)
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout (Command 2: GENERATE)";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout (Command 2: GENERATE)";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -4135,11 +4134,11 @@ void testbench::test_interrupt_state_accumulation()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "Command 2: GENERATE issued (INTR_STATE not cleared)";
+        REG_INFO(2, logger) << "Command 2: GENERATE issued (INTR_STATE not cleared)";
 
         cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout (Command 2: GENERATE)";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout (Command 2: GENERATE)";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -4151,27 +4150,27 @@ void testbench::test_interrupt_state_accumulation()
         wait(10, SC_NS);
 
         bool intr_state_set_cmd2 = ((intr_state_after_cmd2 & 0x1) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after Command 2: 0x" << std::hex << intr_state_after_cmd2;
+        REG_INFO(2, logger) << "INTR_STATE after Command 2: 0x" << std::hex << intr_state_after_cmd2;
 
         if (!intr_state_set_cmd2) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] cleared after Command 2 (should remain set)";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_cmd2;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] cleared after Command 2 (should remain set)";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_cmd2;
             throw std::runtime_error("INTR_STATE[0] incorrectly cleared after second command");
         }
 
         // Check hardware interrupt port after second command
         bool intr_port_after_cmd2 = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after Command 2: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after Command 2: " 
                              << (intr_port_after_cmd2 ? "asserted" : "de-asserted");
 
         if (!intr_port_after_cmd2) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port de-asserted after Command 2 (should remain asserted)";
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port de-asserted after Command 2 (should remain asserted)";
             throw std::runtime_error("Interrupt port incorrectly de-asserted after second command");
         }
 
         // Command 3: RESEED (without clearing INTR_STATE)
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_RDY timeout (Command 3: RESEED)";
+            REG_ERROR(0, logger) << "FAILED: CMD_RDY timeout (Command 3: RESEED)";
             throw std::runtime_error("CMD_RDY timeout");
         }
 
@@ -4179,11 +4178,11 @@ void testbench::test_interrupt_state_accumulation()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "Command 3: RESEED issued (INTR_STATE not cleared)";
+        REG_INFO(2, logger) << "Command 3: RESEED issued (INTR_STATE not cleared)";
 
         cmd_ack_received = wait_cmd_ack(m_test.get(), 100000);
         if (!cmd_ack_received) {
-            CSML_ERROR(0, logger) << "FAILED: CMD_ACK timeout (Command 3: RESEED)";
+            REG_ERROR(0, logger) << "FAILED: CMD_ACK timeout (Command 3: RESEED)";
             throw std::runtime_error("CMD_ACK timeout");
         }
 
@@ -4195,21 +4194,21 @@ void testbench::test_interrupt_state_accumulation()
         wait(10, SC_NS);
 
         bool intr_state_set_cmd3 = ((intr_state_after_cmd3 & 0x1) != 0);
-        CSML_INFO(2, logger) << "INTR_STATE after Command 3: 0x" << std::hex << intr_state_after_cmd3;
+        REG_INFO(2, logger) << "INTR_STATE after Command 3: 0x" << std::hex << intr_state_after_cmd3;
 
         if (!intr_state_set_cmd3) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] cleared after Command 3 (should remain set)";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_cmd3;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] cleared after Command 3 (should remain set)";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_cmd3;
             throw std::runtime_error("INTR_STATE[0] incorrectly cleared after third command");
         }
 
         // Check hardware interrupt port after third command
         bool intr_port_after_cmd3 = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after Command 3: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after Command 3: " 
                              << (intr_port_after_cmd3 ? "asserted" : "de-asserted");
 
         if (!intr_port_after_cmd3) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port de-asserted after Command 3 (should remain asserted)";
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port de-asserted after Command 3 (should remain asserted)";
             throw std::runtime_error("Interrupt port incorrectly de-asserted after third command");
         }
 
@@ -4217,7 +4216,7 @@ void testbench::test_interrupt_state_accumulation()
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, 0x1);
         wait(20, SC_NS);
 
-        CSML_INFO(2, logger) << "Explicitly cleared INTR_STATE[0] (RW1C)";
+        REG_INFO(2, logger) << "Explicitly cleared INTR_STATE[0] (RW1C)";
 
         // Verify INTR_STATE[0] is cleared
         uint32_t intr_state_after_clear = 0;
@@ -4225,39 +4224,39 @@ void testbench::test_interrupt_state_accumulation()
         wait(10, SC_NS);
 
         bool intr_state_cleared = ((intr_state_after_clear & 0x1) == 0);
-        CSML_INFO(2, logger) << "INTR_STATE after explicit clear: 0x" << std::hex << intr_state_after_clear;
+        REG_INFO(2, logger) << "INTR_STATE after explicit clear: 0x" << std::hex << intr_state_after_clear;
 
         if (!intr_state_cleared) {
-            CSML_ERROR(0, logger) << "FAILED: INTR_STATE[0] not cleared after explicit clear";
-            CSML_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
+            REG_ERROR(0, logger) << "FAILED: INTR_STATE[0] not cleared after explicit clear";
+            REG_ERROR(0, logger) << "INTR_STATE value: 0x" << std::hex << intr_state_after_clear;
             throw std::runtime_error("INTR_STATE[0] RW1C semantics failed");
         }
 
         // Check hardware interrupt port after explicit clear
         bool intr_port_after_clear = cs_cmd_req_done_signal.read();
-        CSML_INFO(2, logger) << "cs_cmd_req_done port after explicit clear: " 
+        REG_INFO(2, logger) << "cs_cmd_req_done port after explicit clear: " 
                              << (intr_port_after_clear ? "asserted" : "de-asserted");
 
         if (intr_port_after_clear) {
-            CSML_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not de-asserted after explicit clear";
-            CSML_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after_clear & 0x1) ? "1" : "0")
+            REG_ERROR(0, logger) << "FAILED: cs_cmd_req_done interrupt port not de-asserted after explicit clear";
+            REG_ERROR(0, logger) << "INTR_STATE[0]=" << ((intr_state_after_clear & 0x1) ? "1" : "0")
                                   << ", INTR_ENABLE[0]=" << ((intr_enable & 0x1) ? "1" : "0");
             throw std::runtime_error("Interrupt port not de-asserted after explicit clear");
         }
 
         // Verify interrupt state accumulation summary
-        CSML_INFO(2, logger) << "Interrupt state accumulation verified:";
-        CSML_INFO(2, logger) << "  After Command 1 (INSTANTIATE): INTR_STATE[0]=1, cs_cmd_req_done port=asserted";
-        CSML_INFO(2, logger) << "  After Command 2 (GENERATE):   INTR_STATE[0]=1 (remains set), cs_cmd_req_done port=asserted";
-        CSML_INFO(2, logger) << "  After Command 3 (RESEED):     INTR_STATE[0]=1 (remains set), cs_cmd_req_done port=asserted";
-        CSML_INFO(2, logger) << "  After explicit clear:         INTR_STATE[0]=0, cs_cmd_req_done port=de-asserted";
-        CSML_INFO(2, logger) << "  INTR_STATE[0] accumulates across commands until explicitly cleared";
+        REG_INFO(2, logger) << "Interrupt state accumulation verified:";
+        REG_INFO(2, logger) << "  After Command 1 (INSTANTIATE): INTR_STATE[0]=1, cs_cmd_req_done port=asserted";
+        REG_INFO(2, logger) << "  After Command 2 (GENERATE):   INTR_STATE[0]=1 (remains set), cs_cmd_req_done port=asserted";
+        REG_INFO(2, logger) << "  After Command 3 (RESEED):     INTR_STATE[0]=1 (remains set), cs_cmd_req_done port=asserted";
+        REG_INFO(2, logger) << "  After explicit clear:         INTR_STATE[0]=0, cs_cmd_req_done port=de-asserted";
+        REG_INFO(2, logger) << "  INTR_STATE[0] accumulates across commands until explicitly cleared";
 
-        CSML_INFO(2, logger) << "Test 122 PASSED: INTR_STATE[0] remains set across multiple commands until explicitly cleared";
+        REG_INFO(2, logger) << "Test 122 PASSED: INTR_STATE[0] remains set across multiple commands until explicitly cleared";
         report_test_pass("Test test_interrupt_state_accumulation");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception in test_122: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception in test_122: " << e.what();
         report_test_fail("Test test_interrupt_state_accumulation", e.what());
     }
 }
@@ -4300,7 +4299,7 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
         // =====================================================================
         // Scenario 1: INSTANTIATE with flag0=0x0 (invalid) - Test 83
         // =====================================================================
-        CSML_INFO(2, logger) << "Scenario 1: Testing INSTANTIATE with flag0=0x0 (invalid encoding)";
+        REG_INFO(2, logger) << "Scenario 1: Testing INSTANTIATE with flag0=0x0 (invalid encoding)";
 
         if (!wait_cmd_ready(m_test.get())) {
             throw std::runtime_error("CMD_RDY timeout before INSTANTIATE");
@@ -4311,7 +4310,7 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
-        CSML_INFO(2, logger) << "Issued INSTANTIATE with flag0=0x0 (invalid encoding)";
+        REG_INFO(2, logger) << "Issued INSTANTIATE with flag0=0x0 (invalid encoding)";
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
             throw std::runtime_error("INSTANTIATE timeout in Scenario 1");
@@ -4319,7 +4318,7 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
 
         // Verify command status (should succeed, processed as deterministic)
         uint32_t cmd_status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "CMD_STS after INSTANTIATE with flag0=0x0: 0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "CMD_STS after INSTANTIATE with flag0=0x0: 0x" << std::hex << cmd_status;
 
         if (cmd_status != 0x0) {
             throw std::runtime_error("INSTANTIATE with invalid flag0=0x0 should process as deterministic and succeed, got CMD_STS=0x" + 
@@ -4331,13 +4330,13 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_sts);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS after INSTANTIATE with flag0=0x0: 0x" << std::hex << alert_sts;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS after INSTANTIATE with flag0=0x0: 0x" << std::hex << alert_sts;
 
         if ((alert_sts & 0x10) == 0) {
             throw std::runtime_error("ACMD_FLAG0_FIELD_ALERT (bit 4) not set after INSTANTIATE with flag0=0x0");
         }
 
-        CSML_INFO(2, logger) << "Scenario 1 PASSED: ACMD_FLAG0_FIELD_ALERT set, command processed as deterministic";
+        REG_INFO(2, logger) << "Scenario 1 PASSED: ACMD_FLAG0_FIELD_ALERT set, command processed as deterministic";
 
         // Clear alert for next scenario
         m_test->register_write_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, 0x0);
@@ -4355,7 +4354,7 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
         // =====================================================================
         // Scenario 2: RESEED with flag0=0xF (invalid) - Test 84
         // =====================================================================
-        CSML_INFO(2, logger) << "Scenario 2: Testing RESEED with flag0=0xF (invalid encoding)";
+        REG_INFO(2, logger) << "Scenario 2: Testing RESEED with flag0=0xF (invalid encoding)";
 
         // Note: RESEED requires instance to be instantiated first
         // INSTANTIATE already completed in Scenario 1, so instance is ready
@@ -4369,7 +4368,7 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
-        CSML_INFO(2, logger) << "Issued RESEED with flag0=0xF (invalid encoding)";
+        REG_INFO(2, logger) << "Issued RESEED with flag0=0xF (invalid encoding)";
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
             throw std::runtime_error("RESEED timeout in Scenario 2");
@@ -4377,7 +4376,7 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
 
         // Verify command status (should succeed, processed as deterministic)
         cmd_status = get_cmd_status(m_test.get());
-        CSML_INFO(2, logger) << "CMD_STS after RESEED with flag0=0xF: 0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "CMD_STS after RESEED with flag0=0xF: 0x" << std::hex << cmd_status;
 
         if (cmd_status != 0x0) {
             throw std::runtime_error("RESEED with invalid flag0=0xF should process as deterministic and succeed, got CMD_STS=0x" + 
@@ -4388,30 +4387,30 @@ void testbench::test_cmd_req_flag0_invalid_encoding_comprehensive()
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_sts);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS after RESEED with flag0=0xF: 0x" << std::hex << alert_sts;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS after RESEED with flag0=0xF: 0x" << std::hex << alert_sts;
 
         if ((alert_sts & 0x10) == 0) {
             throw std::runtime_error("ACMD_FLAG0_FIELD_ALERT (bit 4) not set after RESEED with flag0=0xF");
         }
 
-        CSML_INFO(2, logger) << "Scenario 2 PASSED: ACMD_FLAG0_FIELD_ALERT set, command processed as deterministic";
+        REG_INFO(2, logger) << "Scenario 2 PASSED: ACMD_FLAG0_FIELD_ALERT set, command processed as deterministic";
 
         // =====================================================================
         // Summary
         // =====================================================================
-        CSML_INFO(2, logger) << "Test Summary:";
-        CSML_INFO(2, logger) << "  Scenario 1: INSTANTIATE with flag0=0x0 → Alert set, processed as deterministic ✓";
-        CSML_INFO(2, logger) << "  Scenario 2: RESEED with flag0=0xF → Alert set, processed as deterministic ✓";
-        CSML_INFO(2, logger) << "  Both scenarios verify invalid flag0 encoding triggers alert but command succeeds";
+        REG_INFO(2, logger) << "Test Summary:";
+        REG_INFO(2, logger) << "  Scenario 1: INSTANTIATE with flag0=0x0 → Alert set, processed as deterministic ✓";
+        REG_INFO(2, logger) << "  Scenario 2: RESEED with flag0=0xF → Alert set, processed as deterministic ✓";
+        REG_INFO(2, logger) << "  Both scenarios verify invalid flag0 encoding triggers alert but command succeeds";
 
-        CSML_INFO(2, logger) << "Test PASSED: CMD_REQ flag0 invalid encoding comprehensive test completed";
+        REG_INFO(2, logger) << "Test PASSED: CMD_REQ flag0 invalid encoding comprehensive test completed";
         report_test_pass("Test 083_084");
 
     } catch (const std::runtime_error& e) {
-        CSML_ERROR(0, logger) << "FAILED: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: " << e.what();
         report_test_fail("Test 083_084", e.what());
     } catch (const std::exception& e) {
-        CSML_ERROR(0, logger) << "FAILED: Exception: " << e.what();
+        REG_ERROR(0, logger) << "FAILED: Exception: " << e.what();
         report_test_fail("Test 083_084", e.what());
     }
 }

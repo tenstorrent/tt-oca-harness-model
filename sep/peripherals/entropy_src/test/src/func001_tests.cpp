@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func001_tests.cpp
  * @brief FUNC-001 TLM Register Transport Interface — test case implementations
@@ -43,7 +43,7 @@
  *  - Each test case is self-checking and returns bool (true = PASS).
  *  - apply_reset() is called by run_tests() between test groups so each
  *    method starts from a clean, defined register state.
- *  - CSML enforces write masks; reserved bits always read as zero regardless
+ *  - regmodel enforces write masks; reserved bits always read as zero regardless
  *    of what was written.
  *  - CTRL[0] (RESET) self-clears after triggering the reset sequence, so
  *    writing 0xFFFFFFFF to CTRL triggers a reset then reads back 0x03FF0110
@@ -55,7 +55,7 @@
  *  - entropy_src/docs/entropy_src-test-plan.md
  *  - entropy_src/test/inc/testbench.h
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
@@ -75,7 +75,7 @@
     do {                                           \
         if (!(cond))                               \
         {                                          \
-            CSML_ERROR(0, logger) << msg_stream;   \
+            REG_ERROR(0, logger) << msg_stream;   \
             ok = false;                            \
         }                                          \
     } while (false)
@@ -87,18 +87,18 @@
 
 /******************************************************************************
  * @brief Verify that b_transport returns TLM_OK_RESPONSE for COMPONENT_ID
- *        (0x00) and that the CSML read-restriction path correctly enforces
+ *        (0x00) and that the regmodel read-restriction path correctly enforces
  *        read_bit_mask = 0.
  *
  * COMPONENT_ID has read_bit_mask = 0, write_bit_mask = 0, and reset = 0x01000001.
- * The CSML read path for read_bit_mask == 0 invokes handle_read_restriction_error
+ * The regmodel read path for read_bit_mask == 0 invokes handle_read_restriction_error
  * which returns false (not writing to the data buffer) and reports a warning.
  * The b_transport always sets TLM_OK_RESPONSE regardless.
  *
  * Observed behavior:
  *  - The TLM data buffer is NOT updated when read_bit_mask == 0 (the callback
  *    returns false, suppressing the data-copy step in read_registers()).
- *  - The CSML framework returns TLM_OK_RESPONSE unconditionally.
+ *  - The regmodel framework returns TLM_OK_RESPONSE unconditionally.
  *
  * This test verifies the TLM transport connectivity (b_transport reachable)
  * and that the read-restriction path does not corrupt the data buffer.
@@ -134,9 +134,9 @@ bool testbench::tc_f001_component_id_reset_value()
 
 /******************************************************************************
  * @brief Confirm that b_transport write to COMPONENT_ID (read_mask=0,
- *        write_mask=0) is silently discarded by CSML.
+ *        write_mask=0) is silently discarded by regmodel.
  *
- * COMPONENT_ID has write_bit_mask = 0.  CSML registers handle_write_restriction_error
+ * COMPONENT_ID has write_bit_mask = 0.  regmodel registers handle_write_restriction_error
  * as the write callback, which discards the data and returns false.
  * Reads of COMPONENT_ID use the read_bit_mask=0 restriction path which returns
  * false without updating the data buffer.
@@ -147,7 +147,7 @@ bool testbench::tc_f001_component_id_reset_value()
  *  - read_val stays at its initialized value (0u) for both pre- and post-write reads.
  *
  * The key assertion: the data buffer remains consistent (0u) across write attempts,
- * confirming the CSML double-restriction (both read and write) is correctly applied.
+ * confirming the regmodel double-restriction (both read and write) is correctly applied.
  *
  * Pass criterion: Both reads leave read_val at 0u (buffer unchanged by restriction).
  *
@@ -223,7 +223,7 @@ bool testbench::tc_f001_status_register_always_zero()
 
 /******************************************************************************
  * @brief Validate that the 0x00001111 write mask on INTR_ENABLE (0x14) is
- *        correctly enforced by CSML for both all-ones and all-zeros patterns.
+ *        correctly enforced by regmodel for both all-ones and all-zeros patterns.
  *
  * INTR_ENABLE has four active bits at positions 0, 4, 8, 12 (one per
  * interrupt source).  All other bits are reserved and must always read as zero
@@ -268,48 +268,37 @@ bool testbench::tc_f001_intr_enable_write_mask_validation()
 }
 
 // =============================================================================
-// TC-F001-020 — INTR_TEST is write-only; read buffer not updated (read_mask=0)
+// TC-F001-020 — INTR_TEST is write-only; reads return 0
 // =============================================================================
 
 /******************************************************************************
- * @brief Confirm WO semantics on INTR_TEST (0x18) via the CSML read restriction
+ * @brief Confirm WO semantics on INTR_TEST (0x18) via the regmodel read restriction
  *        path (read_bit_mask=0).
  *
- * INTR_TEST has read_bit_mask=0, write_bit_mask=0x1111.  The CSML read
+ * INTR_TEST has read_bit_mask=0, write_bit_mask=0x1111.  The regmodel read
  * restriction path (handle_read_restriction_error) is registered for this
- * register because read_bit_mask==0.  When the callback fires:
- *  - It sets read_value=0 inside the callback.
- *  - It returns false.
- *  - CSML does NOT copy read_value into the TLM data buffer (false return).
+ * register because read_bit_mask==0.  On a TLM read, Memory initialises
+ * read_value to 0, the restriction callback leaves it at 0, and Memory copies
+ * that value into the TLM payload.  Prior WO writes must not be readable.
  *
- * The test initializes read_val to 0u (a known clean value).  After the read,
- * read_val must remain 0u — the restriction path did not corrupt the buffer.
- * This is different from the case where the buffer is actively set to 0 by
- * the framework; here the buffer is simply not touched.
- *
- * Pass criterion: read_val == 0u after the read (buffer unchanged by restriction).
+ * Pass criterion: read_val == 0 after writing 0x00001111.
  *
  * @return true if the WO read-restriction assertion passes
  ******************************************************************************/
 bool testbench::tc_f001_intr_test_is_write_only_reads_zero()
 {
     bool ok = true;
-    // Initialize to 0u (clean sentinel).  The CSML restriction returns false,
-    // so the buffer is NOT updated.  read_val must remain 0u.
     uint32_t read_val = 0xDEADBEEFu;
 
     // Write all four interrupt-inject bits via the valid WO write path.
     test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET, 0x00001111u);
 
-    // Read INTR_TEST: read_mask=0 → handle_read_restriction_error → returns false
-    // → CSML does NOT write to data buffer → read_val stays 0xDEADBEEFu.
+    // Read INTR_TEST: read_mask=0 → handle_read_restriction_error → 0 in payload.
     test->register_read_32(entropy_src_basetest::INTR_TEST_OFFSET, read_val);
 
-    FUNC001_CHECK(read_val == 0xDEADBEEFu,
-        "TC-F001-020 INTR_TEST: WO read-restriction path corrupted buffer — "
-        "expected 0xDEADBEEF (buffer unchanged), got 0x"
-        << std::hex << read_val
-        << " (read_bit_mask=0 must prevent any data from being written to buffer)");
+    FUNC001_CHECK(read_val == 0u,
+        "TC-F001-020 INTR_TEST: WO register must read as 0 — "
+        "expected 0x0, got 0x" << std::hex << read_val);
 
     return ok;
 }
@@ -324,7 +313,7 @@ bool testbench::tc_f001_intr_test_is_write_only_reads_zero()
  *
  * FIFO_STATUS is updated exclusively by the background thread (push path) and
  * handle_read_FIFO_RDATA (pop path).  Software writes must be silently
- * discarded by CSML.
+ * discarded by regmodel.
  *
  * @return true if FIFO_STATUS reads 0x00000000 after the write
  ******************************************************************************/
@@ -353,7 +342,7 @@ bool testbench::tc_f001_fifo_status_is_read_only()
  * @brief Confirm RO enforcement on HEALTH_TEST_STATUS (0x40); write of
  *        0xFFFFFFFF leaves the register at 0x00000000.
  *
- * HEALTH_TEST_STATUS is a hardware-driven RO register.  CSML write mask is
+ * HEALTH_TEST_STATUS is a hardware-driven RO register.  regmodel write mask is
  * 0x00000000, so all writes are discarded.
  *
  * @return true if HEALTH_TEST_STATUS reads 0x00000000 after the write
@@ -420,7 +409,7 @@ bool testbench::tc_f001_repetition_test_count_is_read_only()
  * @brief Confirm RO enforcement on all 12 GENERATOR_x_HEALTH_STATUS registers
  *
  * All twelve GENERATOR_x_HEALTH_STATUS registers are RO with reset default
- * 0x00000000.  Testing all registers confirms the CSML
+ * 0x00000000.  Testing all registers confirms the regmodel
  * RO enforcement pattern is applied consistently.
  *
  * @return true if all GENERATOR_x_HEALTH_STATUS read != 0xFFFFFFFF after the write
@@ -534,7 +523,7 @@ bool testbench::tc_f001_rw_pattern_test_ctrl()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on DEBUG_CTRL (0x0C).
+ * @brief Validate the regmodel write and read mask enforcement on DEBUG_CTRL (0x0C).
  *
  * DEBUG_CTRL has write_bit_mask = read_bit_mask = 0x000007FF.  Bits [10:0] are
  * writable and readable; all higher bits are reserved and must always read as
@@ -632,7 +621,7 @@ bool testbench::tc_f001_rw_pattern_test_intr_enable()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on HEALTH_TEST_CTRL
+ * @brief Validate the regmodel write and read mask enforcement on HEALTH_TEST_CTRL
  *        (0x30).
  *
  * HEALTH_TEST_CTRL has write_bit_mask = read_bit_mask = 0x0000FFFF.  Bits
@@ -643,7 +632,7 @@ bool testbench::tc_f001_rw_pattern_test_intr_enable()
  *
  * HEALTH_TEST_CTRL has a registered model write callback
  * (handle_write_HEALTH_TEST_CTRL).  The callback stores the written value
- * subject to the write mask (0x0000FFFF) into the CSML word_ref and updates
+ * subject to the write mask (0x0000FFFF) into the regmodel word_ref and updates
  * the internal m_health_test_enabled mirror variable.  Readback therefore
  * reflects the last written value masked by write_bit_mask, not the reset
  * default.
@@ -651,7 +640,7 @@ bool testbench::tc_f001_rw_pattern_test_intr_enable()
  * Observable TLM behaviour:
  *  - Writes to HEALTH_TEST_CTRL update both word_ref (masked) and
  *    m_health_test_enabled.
- *  - Readback returns the CSML word_ref, which equals the written value ANDed
+ *  - Readback returns the regmodel word_ref, which equals the written value ANDed
  *    with 0x0000FFFF (write_bit_mask == read_bit_mask for this register).
  *  - Reserved bits [31:16] are guaranteed zero by the read mask (0x0000FFFF).
  *
@@ -674,7 +663,7 @@ bool testbench::tc_f001_rw_pattern_test_health_test_ctrl()
     bool ok = true;
     uint32_t read_val = 0xDEADBEEFu;
 
-    // The CSML read mask determines which bits are accessible via TLM reads.
+    // The regmodel read mask determines which bits are accessible via TLM reads.
     const uint32_t rmask =
         static_cast<uint32_t>(entropy_src_basetest::HEALTH_TEST_CTRL_READ);  // 0x0000FFFF
 
@@ -724,7 +713,7 @@ bool testbench::tc_f001_rw_pattern_test_health_test_ctrl()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on the four
+ * @brief Validate the regmodel write and read mask enforcement on the four
  *        APT_PROPORTION registers (0x60, 0x64, 0x68, 0x6C).
  *
  * All four APT_PROPORTION register types have write_bit_mask = read_bit_mask =
@@ -808,7 +797,7 @@ bool testbench::tc_f001_rw_pattern_test_apt_proportion_registers()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on RING_OSC_ENABLE
+ * @brief Validate the regmodel write and read mask enforcement on RING_OSC_ENABLE
  *        (0x90).
  *
  * RING_OSC_ENABLE has write_bit_mask = read_bit_mask = 0x00FFFFFF.  Bits
@@ -862,7 +851,7 @@ bool testbench::tc_f001_rw_pattern_test_ring_osc_enable()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on RING_OSC_CTRL
+ * @brief Validate the regmodel write and read mask enforcement on RING_OSC_CTRL
  *        (0x98).
  *
  * RING_OSC_CTRL has write_bit_mask = read_bit_mask = 0x00000FFF.  Bits [11:0]
@@ -916,7 +905,7 @@ bool testbench::tc_f001_rw_pattern_test_ring_osc_ctrl()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on DECORRELATOR_CTRL
+ * @brief Validate the regmodel write and read mask enforcement on DECORRELATOR_CTRL
  *        (0xA0).
  *
  * DECORRELATOR_CTRL has write_bit_mask = read_bit_mask = 0xFFFFFFFF (fully
@@ -969,7 +958,7 @@ bool testbench::tc_f001_rw_pattern_test_decorrelator_ctrl()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on DECORRELATOR_MASK
+ * @brief Validate the regmodel write and read mask enforcement on DECORRELATOR_MASK
  *        (0xA4).
  *
  * DECORRELATOR_MASK has write_bit_mask = read_bit_mask = 0x000000FF.  Bits
@@ -1023,7 +1012,7 @@ bool testbench::tc_f001_rw_pattern_test_decorrelator_mask()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate the CSML write and read mask enforcement on STARTUP_CTRL
+ * @brief Validate the regmodel write and read mask enforcement on STARTUP_CTRL
  *        (0xB0).
  *
  * STARTUP_CTRL has write_bit_mask = read_bit_mask = 0x0000FFFF.  Bits [15:0]

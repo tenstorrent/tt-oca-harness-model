@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func006_tests.cpp
  * @brief FUNC-006 FIFO-Based Entropy Data Queue Operation — test case
@@ -43,7 +43,7 @@
  *
  * ## FIFO_STATUS observability model
  *
- * FIFO_STATUS (0x24, RO) has read_mask = 0x00000000 in the CSML register
+ * FIFO_STATUS (0x24, RO) has read_mask = 0x00000000 in the regmodel register
  * definition, which means TLM b_transport reads of FIFO_STATUS always return
  * 0x00000000 through the register layer.  The FIFO fill level is inferred
  * through two indirect mechanisms:
@@ -77,7 +77,7 @@
  *  - Each test case is self-checking and returns bool (true = PASS).
  *  - apply_reset() is called by run_tests() before each test case to
  *    guarantee a clean, defined register and FIFO state.
- *  - The FUNC006_CHECK macro sets ok = false and emits a CSML_ERROR log
+ *  - The FUNC006_CHECK macro sets ok = false and emits a REG_ERROR log
  *    entry naming both the expected and observed values.
  *  - FIFO_CTRL reset value = 0x00000001 (FIFO enabled by default).
  *  - FIFO_STATUS reset value = 0x00000000 (LEVEL=0, WPTR=0, RPTR=0).
@@ -94,7 +94,7 @@
  *  - entropy_src/test/src/func004_tests.cpp (polling pattern reference)
  *  - entropy_src/test/src/func005_tests.cpp (CHECK macro and style reference)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
@@ -115,7 +115,7 @@
     do {                                           \
         if (!(cond))                               \
         {                                          \
-            CSML_ERROR(0, logger) << msg_stream;   \
+            REG_ERROR(0, logger) << msg_stream;   \
             ok = false;                            \
         }                                          \
     } while (false)
@@ -186,7 +186,7 @@ static constexpr double F006_BASE_ITER_PERIOD_NS = 100.0;
 /******************************************************************************
  * @brief TC-F006-037: Verify FIFO_CTRL (0x20) reset value
  *
- * After apply_reset() the CSML framework must restore FIFO_CTRL to its
+ * After apply_reset() the regmodel framework must restore FIFO_CTRL to its
  * hardware reset default 0x00000001:
  *   - Bit  [0]    ENABLE = 1  (FIFO fill enabled by default)
  *   - Bits [31:1] reserved = 0
@@ -407,11 +407,11 @@ bool testbench::tc_f006_fifo_ctrl_enable_disable_fifo()
  *   - RPTR[20:14] = 0
  *   - Reserved bits [31:21] = 0
  *
- * Note: FIFO_STATUS has read_mask = 0x00000000 in the CSML register
+ * Note: FIFO_STATUS has read_mask = 0x00000000 in the regmodel register
  * definition, which means the TLM layer enforces a zero return for all
  * reads through b_transport.  A return of 0x00000000 is therefore the
  * only possible response and simultaneously confirms reset state and
- * correct CSML read-restriction enforcement.
+ * correct regmodel read-restriction enforcement.
  *
  * Procedure:
  *  1. Disable FIFO fill before reading to ensure no background pushes occur
@@ -467,8 +467,8 @@ bool testbench::tc_f006_fifo_status_reset_value()
  * Procedure:
  *  1. With FIFO_CTRL[0]=1 (enabled at reset), poll FIFO_RDATA for a non-zero
  *     value (proves at least one push occurred, i.e., LEVEL >= 1).
- *  2. Read FIFO_STATUS; assert read_value == 0x00000000 (CSML read restriction
- *     confirmation — read_mask = 0x0 enforced by CSML).
+ *  2. Read FIFO_STATUS; assert read_value == 0x00000000 (regmodel read restriction
+ *     confirmation — read_mask = 0x0 enforced by regmodel).
  *  3. Assert the non-zero word was obtained within F006_POLL_LIMIT iterations.
  *
  * Pass criterion:
@@ -676,14 +676,14 @@ bool testbench::tc_f006_fifo_status_level_decrements_on_fifo_rdata_read()
  *  - Enable INTR_ENABLE[8] (FIFO_OVERFLOW).
  *  - Allow the background thread to fill the FIFO to capacity.
  *  - Once intr_o asserts, LEVEL == FIFO_DEPTH is confirmed.
- *  - Read FIFO_STATUS and confirm 0x00000000 (CSML read restriction).
+ *  - Read FIFO_STATUS and confirm 0x00000000 (regmodel read restriction).
  *
  * Procedure:
  *  1. Enable INTR_ENABLE[8] to allow the overflow port to assert.
  *  2. Ensure FIFO fill is enabled (FIFO_CTRL[0]=1, reset default).
  *  3. Poll intr_o port until it asserts (max F006_FILL_POLL_LIMIT).
  *  4. Assert overflow port == true (LEVEL reached FIFO_DEPTH).
- *  5. Read FIFO_STATUS; assert 0x00000000 (CSML enforcement).
+ *  5. Read FIFO_STATUS; assert 0x00000000 (regmodel enforcement).
  *  6. Clean up: clear INTR_STATUS[8] via W1C; disable INTR_ENABLE[8].
  *
  * Pass criterion:
@@ -761,7 +761,7 @@ bool testbench::tc_f006_fifo_status_level_at_maximum_depth()
  *        no observable effect
  *
  * FIFO_STATUS is a read-only register (write_mask = 0x00000000).  A software
- * write of 0xFFFFFFFF must be silently ignored by CSML.  A subsequent read
+ * write of 0xFFFFFFFF must be silently ignored by regmodel.  A subsequent read
  * must return the same value as before the write (0x00000000, since
  * read_mask = 0x0).
  *
@@ -938,7 +938,7 @@ bool testbench::tc_f006_fifo_rdata_successive_reads_yield_different_values()
  * When FIFO_RDATA is read while the internal queue is empty,
  * handle_read_FIFO_RDATA must:
  *  - Return 0x00000000 in the TLM payload.
- *  - Set INTR_STATUS[12] (FIFO_UNDERFLOW) via CSML internal write.
+ *  - Set INTR_STATUS[12] (FIFO_UNDERFLOW) via regmodel internal write.
  *  - Call update_interrupt_outputs.
  *
  * Because INTR_STATUS has read_mask = 0x0 (TLM reads return 0), underflow
@@ -1288,7 +1288,7 @@ bool testbench::tc_f006_fifo_drain_to_empty_and_verify_level_zero()
  *
  * When the background thread attempts to push a word into a full FIFO
  * (LEVEL == FIFO_DEPTH = 127), the push is discarded and INTR_STATUS[8]
- * is set via CSML internal write.  LEVEL must not exceed FIFO_DEPTH.
+ * is set via regmodel internal write.  LEVEL must not exceed FIFO_DEPTH.
  *
  * Overflow is detected via the intr_o port (INTR_ENABLE[8]=1)
  * since INTR_STATUS has read_mask = 0x0.
@@ -1298,7 +1298,7 @@ bool testbench::tc_f006_fifo_drain_to_empty_and_verify_level_zero()
  *  2. Allow the background thread to fill the FIFO (FIFO_CTRL[0]=1, default).
  *  3. Poll intr_o until asserted (LEVEL reached 127).
  *  4. Assert intr_o == true.
- *  5. Read FIFO_STATUS; assert 0x00000000 (CSML enforcement).
+ *  5. Read FIFO_STATUS; assert 0x00000000 (regmodel enforcement).
  *  6. Read one word from FIFO_RDATA; assert it is non-zero (FIFO was full).
  *  7. Clean up.
  *
@@ -1581,7 +1581,7 @@ bool testbench::tc_f006_fifo_fill_resumes_after_reenable()
  *        software perspective
  *
  * An explicit write-then-read check: writing 0xFFFFFFFF to FIFO_STATUS
- * must leave the register value unchanged at 0x00000000.  The CSML write-mask
+ * must leave the register value unchanged at 0x00000000.  The regmodel write-mask
  * enforcement (write_mask = 0x0) silently discards the write.
  *
  * Procedure:
@@ -1733,7 +1733,7 @@ bool testbench::tc_f006_fifo_rptr_advances_with_read()
         rd_val = 0u;
         test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, rd_val);
         uint32_t current_rptr = (rd_val >> 16) & 0x1F;
-        CSML_DEBUG(2, logger) << "TC-F006-137: RPTR advanced to " << std::hex << current_rptr;
+        REG_DEBUG(2, logger) << "TC-F006-137: RPTR advanced to " << std::hex << current_rptr;
         if (current_rptr != prev_rptr)
         {
             ++advances;

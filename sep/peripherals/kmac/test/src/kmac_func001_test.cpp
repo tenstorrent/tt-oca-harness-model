@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func001_test.cpp
  * @brief Test cases for FUNC-KMAC-001 (SHA3 Hash Operation - Phase 1)
@@ -31,16 +31,16 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -123,7 +123,7 @@ static bool verify_no_error(kmac_test* test)
     uint32_t err_code = 0;
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
     if (err_code != 0) {
-        CSML_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
     }
     return (err_code == 0);
 }
@@ -189,13 +189,13 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void testbench::test_sha3_224_algorithm_selection()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-016: test_sha3_224_algorithm_selection");
 
     try {
         // Configure SHA3 mode with L224 strength (kstrength = 0x1)
         configure_sha3_mode(test, 0x1);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L224";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L224";
 
         // Verify initial IDLE state
         bool idle, absorb, squeeze;
@@ -208,7 +208,7 @@ void testbench::test_sha3_224_algorithm_selection()
         }
 
         // Issue START command (0x1D) to trigger OpenSSL context initialization
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         // Verify no UnexpectedModeStrength error
@@ -258,12 +258,12 @@ void testbench::test_sha3_224_algorithm_selection()
  ******************************************************************************/
 void testbench::test_sha3_256_algorithm_selection()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-017: test_sha3_256_algorithm_selection");
 
     try {
         configure_sha3_mode(test, 0x2);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L256";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L256";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -273,7 +273,7 @@ void testbench::test_sha3_256_algorithm_selection()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         if (!verify_no_error(test)) {
@@ -314,12 +314,12 @@ void testbench::test_sha3_256_algorithm_selection()
  ******************************************************************************/
 void testbench::test_sha3_384_algorithm_selection()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-018: test_sha3_384_algorithm_selection");
 
     try {
         configure_sha3_mode(test, 0x3);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L384";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L384";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -329,7 +329,7 @@ void testbench::test_sha3_384_algorithm_selection()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         if (!verify_no_error(test)) {
@@ -370,12 +370,12 @@ void testbench::test_sha3_384_algorithm_selection()
  ******************************************************************************/
 void testbench::test_sha3_512_algorithm_selection()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-019: test_sha3_512_algorithm_selection");
 
     try {
         configure_sha3_mode(test, 0x4);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L512";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L512";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -385,7 +385,7 @@ void testbench::test_sha3_512_algorithm_selection()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         if (!verify_no_error(test)) {
@@ -427,12 +427,12 @@ void testbench::test_sha3_512_algorithm_selection()
  ******************************************************************************/
 void testbench::test_sha3_invalid_strength_l128()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-028: test_sha3_invalid_strength_l128");
 
     try {
         configure_sha3_mode(test, 0x0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L128 (INVALID)";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, kstrength=L128 (INVALID)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -442,7 +442,7 @@ void testbench::test_sha3_invalid_strength_l128()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D) - expecting error";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D) - expecting error";
         write_cmd(test, 0x1D);
 
         if (!verify_unexpected_modestrength_error(test, 0x00, 0x00)) {
@@ -451,7 +451,7 @@ void testbench::test_sha3_invalid_strength_l128()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected";
+        REG_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected";
 
         uint32_t intr_state = 0;
         test->register_read_32(test->INTR_STATE_OFFSET, intr_state);
@@ -485,7 +485,7 @@ void testbench::test_sha3_invalid_strength_l128()
  ******************************************************************************/
 void testbench::test_sha3_configuration_validation()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("test_sha3_configuration_validation");
 
     try {
@@ -495,7 +495,7 @@ void testbench::test_sha3_configuration_validation()
 
         for (size_t i = 0; i < sizeof(valid_kstrengths) / sizeof(valid_kstrengths[0]); i++) {
             uint32_t kstrength = valid_kstrengths[i];
-            CSML_INFO(2, test_logger) << "Testing SHA3 configuration with kstrength=" << strength_names[i];
+            REG_INFO(2, test_logger) << "Testing SHA3 configuration with kstrength=" << strength_names[i];
 
             configure_sha3_mode(test, kstrength);
 
@@ -505,7 +505,7 @@ void testbench::test_sha3_configuration_validation()
             uint32_t mode_read = (cfg_read >> 4) & 0x3;
 
             if (kstrength_read != kstrength || mode_read != 0x0) {
-                CSML_ERROR(1, test_logger) << "[FAIL] Configuration readback mismatch for " << strength_names[i];
+                REG_ERROR(1, test_logger) << "[FAIL] Configuration readback mismatch for " << strength_names[i];
                 all_configs_valid = false;
                 continue;
             }
@@ -513,7 +513,7 @@ void testbench::test_sha3_configuration_validation()
             write_cmd(test, 0x1D);
 
             if (!verify_no_error(test)) {
-                CSML_ERROR(1, test_logger) << "[FAIL] Error during START for " << strength_names[i];
+                REG_ERROR(1, test_logger) << "[FAIL] Error during START for " << strength_names[i];
                 all_configs_valid = false;
                 cleanup_test(test);
                 continue;
@@ -522,11 +522,11 @@ void testbench::test_sha3_configuration_validation()
             uint32_t cfg_regwen = 0;
             test->register_read_32(test->CFG_REGWEN_OFFSET, cfg_regwen);
             if ((cfg_regwen & 0x1) != 0) {
-                CSML_ERROR(1, test_logger) << "[FAIL] CFG_REGWEN not locked for " << strength_names[i];
+                REG_ERROR(1, test_logger) << "[FAIL] CFG_REGWEN not locked for " << strength_names[i];
                 all_configs_valid = false;
             }
 
-            CSML_INFO(2, test_logger) << "  " << strength_names[i] << " configuration validated";
+            REG_INFO(2, test_logger) << "  " << strength_names[i] << " configuration validated";
 
             cleanup_test(test);
             wait(10, SC_NS);
@@ -552,7 +552,7 @@ void testbench::test_sha3_configuration_validation()
  ******************************************************************************/
 void testbench::test_sha3_reserved_kstrength_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("test_sha3_reserved_kstrength_error");
 
     try {
@@ -561,17 +561,17 @@ void testbench::test_sha3_reserved_kstrength_error()
 
         for (size_t i = 0; i < sizeof(reserved_kstrengths) / sizeof(reserved_kstrengths[0]); i++) {
             uint32_t kstrength = reserved_kstrengths[i];
-            CSML_INFO(2, test_logger) << "Testing reserved kstrength=0x" << std::hex << kstrength << std::dec;
+            REG_INFO(2, test_logger) << "Testing reserved kstrength=0x" << std::hex << kstrength << std::dec;
 
             configure_sha3_mode(test, kstrength);
             write_cmd(test, 0x1D);
 
             if (!verify_unexpected_modestrength_error(test, 0x00, kstrength)) {
-                CSML_ERROR(1, test_logger) << "[FAIL] Expected error not detected for kstrength=0x"
+                REG_ERROR(1, test_logger) << "[FAIL] Expected error not detected for kstrength=0x"
                                      << std::hex << kstrength << std::dec;
                 all_errors_detected = false;
             } else {
-                CSML_INFO(2, test_logger) << "  Error correctly detected for kstrength=0x"
+                REG_INFO(2, test_logger) << "  Error correctly detected for kstrength=0x"
                                     << std::hex << kstrength << std::dec;
             }
 
@@ -581,7 +581,7 @@ void testbench::test_sha3_reserved_kstrength_error()
             bool idle, absorb, squeeze;
             read_status_fsm_bits(test, idle, absorb, squeeze);
             if (!idle) {
-                CSML_ERROR(1, test_logger) << "[FAIL] FSM not in IDLE after error recovery";
+                REG_ERROR(1, test_logger) << "[FAIL] FSM not in IDLE after error recovery";
                 all_errors_detected = false;
             }
 
@@ -608,7 +608,7 @@ void testbench::test_sha3_reserved_kstrength_error()
  ******************************************************************************/
 void testbench::test_sha3_back_to_back_algorithm_switching()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("test_sha3_back_to_back_algorithm_switching");
 
     try {
@@ -618,7 +618,7 @@ void testbench::test_sha3_back_to_back_algorithm_switching()
 
         for (size_t i = 0; i < sizeof(test_sequence) / sizeof(test_sequence[0]); i++) {
             uint32_t kstrength = test_sequence[i];
-            CSML_INFO(2, test_logger) << "Operation " << (i+1) << ": Testing " << algo_names[i];
+            REG_INFO(2, test_logger) << "Operation " << (i+1) << ": Testing " << algo_names[i];
 
             // Configure
             configure_sha3_mode(test, kstrength);
@@ -669,16 +669,16 @@ void testbench::test_sha3_back_to_back_algorithm_switching()
                 return;
             }
 
-            CSML_INFO(2, test_logger) << "  " << algo_names[i] << " operation successful";
+            REG_INFO(2, test_logger) << "  " << algo_names[i] << " operation successful";
             wait(10, SC_NS);
         }
 
         // All operations successful
         cleanup_test(test);
-        CSML_INFO(2, test_logger) << "  - 4 consecutive operations completed";
-        CSML_INFO(2, test_logger) << "  - OpenSSL context reinitialization works";
-        CSML_INFO(2, test_logger) << "  - FSM cycling correct";
-        CSML_INFO(2, test_logger) << "  - CFG_REGWEN protection cycles correctly";
+        REG_INFO(2, test_logger) << "  - 4 consecutive operations completed";
+        REG_INFO(2, test_logger) << "  - OpenSSL context reinitialization works";
+        REG_INFO(2, test_logger) << "  - FSM cycling correct";
+        REG_INFO(2, test_logger) << "  - CFG_REGWEN protection cycles correctly";
         report_test_pass("test_sha3_back_to_back_algorithm_switching");
 
     } catch (const std::exception& e) {

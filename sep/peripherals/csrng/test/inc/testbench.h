@@ -1,9 +1,9 @@
 /******************************************************************************
- * Copyright (c) 2025, Vayavya Labs Pvt. Ltd.
+ * Copyright (c) 2025, Tenstorrent USA, Inc.
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
-// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2025 Tenstorrent USA, Inc.
  *
  * CRNG Testbench
  * Top-level testbench that instantiates CRNG DUT and test infrastructure

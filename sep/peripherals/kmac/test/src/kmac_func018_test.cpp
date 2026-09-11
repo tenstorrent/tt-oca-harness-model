@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func018_test.cpp
  * @brief Test cases for FUNC-KMAC-018 (STATE Window Access Control)
@@ -29,18 +29,18 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <vector>
 #include <cstring>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 // STATE window memory offsets
 static const uint32_t STATE_SHARE0_BASE = 0x400;
@@ -207,13 +207,13 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void testbench::test_state_read_in_squeeze_state()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-135: test_state_read_in_squeeze_state");
 
     try {
         // Configure SHA3-256 mode
         configure_sha3_256_mode(test);
-        CSML_INFO(2, test_logger) << "Configured SHA3-256 mode";
+        REG_INFO(2, test_logger) << "Configured SHA3-256 mode";
 
         // Start operation
         write_cmd(test, 0x1D);
@@ -221,7 +221,7 @@ void testbench::test_state_read_in_squeeze_state()
         // Write test message
         const uint8_t test_msg[] = "Hello KMAC";
         write_message(test, test_msg, sizeof(test_msg) - 1);
-        CSML_INFO(2, test_logger) << "Wrote test message to MSG_FIFO";
+        REG_INFO(2, test_logger) << "Wrote test message to MSG_FIFO";
 
         // Issue PROCESS command to transition to SQUEEZE
         write_cmd(test, 0x2E);
@@ -235,7 +235,7 @@ void testbench::test_state_read_in_squeeze_state()
             report_test_fail("TC-135", "FSM not in SQUEEZE state after PROCESS");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM in SQUEEZE state";
+        REG_INFO(2, test_logger) << "FSM in SQUEEZE state";
 
         // Read STATE window share0 region
         std::vector<uint8_t> digest(STATE_SHARE0_SIZE);
@@ -256,17 +256,17 @@ void testbench::test_state_read_in_squeeze_state()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "STATE window contains valid digest in SQUEEZE state";
+        REG_INFO(2, test_logger) << "STATE window contains valid digest in SQUEEZE state";
 
         // Display first 32 bytes of digest
-        CSML_INFO(2, test_logger) << "Digest (first 32 bytes): ";
+        REG_INFO(2, test_logger) << "Digest (first 32 bytes): ";
         std::stringstream ss;
         for (size_t i = 0; i < 32 && i < digest.size(); i++) {
             ss << std::hex << std::setw(2) << std::setfill('0')
                << static_cast<int>(digest[i]) << " ";
             if ((i + 1) % 16 == 0) ss << "\n";
         }
-        CSML_INFO(2, test_logger) << ss.str();
+        REG_INFO(2, test_logger) << ss.str();
 
         cleanup_test(test);
         report_test_pass("TC-135: test_state_read_in_squeeze_state");
@@ -290,7 +290,7 @@ void testbench::test_state_read_in_squeeze_state()
  ******************************************************************************/
 void testbench::test_state_read_in_idle_returns_zero()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-136: test_state_read_in_idle_returns_zero");
 
     try {
@@ -302,7 +302,7 @@ void testbench::test_state_read_in_idle_returns_zero()
             report_test_fail("TC-136", "FSM not in IDLE state");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM in IDLE state";
+        REG_INFO(2, test_logger) << "FSM in IDLE state";
 
         // Read STATE window share0 region
         if (!verify_state_window_zero(test, STATE_SHARE0_BASE, STATE_SHARE0_SIZE)) {
@@ -310,7 +310,7 @@ void testbench::test_state_read_in_idle_returns_zero()
             report_test_fail("TC-136", "STATE window share0 not zero in IDLE state");
             return;
         }
-        CSML_INFO(2, test_logger) << "STATE window share0 region returns all zeros";
+        REG_INFO(2, test_logger) << "STATE window share0 region returns all zeros";
 
         // Read STATE window share1 region
         if (!verify_state_window_zero(test, STATE_SHARE1_BASE, STATE_SHARE1_SIZE)) {
@@ -318,9 +318,9 @@ void testbench::test_state_read_in_idle_returns_zero()
             report_test_fail("TC-136", "STATE window share1 not zero in IDLE state");
             return;
         }
-        CSML_INFO(2, test_logger) << "STATE window share1 region returns all zeros";
+        REG_INFO(2, test_logger) << "STATE window share1 region returns all zeros";
 
-        CSML_INFO(2, test_logger) << "Key protection: STATE window blocked in IDLE state";
+        REG_INFO(2, test_logger) << "Key protection: STATE window blocked in IDLE state";
 
         cleanup_test(test);
         report_test_pass("TC-136: test_state_read_in_idle_returns_zero");
@@ -344,7 +344,7 @@ void testbench::test_state_read_in_idle_returns_zero()
  ******************************************************************************/
 void testbench::test_state_read_in_absorb_returns_zero()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-137: test_state_read_in_absorb_returns_zero");
 
     try {
@@ -360,7 +360,7 @@ void testbench::test_state_read_in_absorb_returns_zero()
             report_test_fail("TC-137", "FSM not in ABSORB state after START");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM in ABSORB state";
+        REG_INFO(2, test_logger) << "FSM in ABSORB state";
 
         // Write some message data
         const uint8_t test_msg[] = "Test message";
@@ -372,7 +372,7 @@ void testbench::test_state_read_in_absorb_returns_zero()
             report_test_fail("TC-137", "STATE window share0 not zero in ABSORB state");
             return;
         }
-        CSML_INFO(2, test_logger) << "STATE window share0 region returns all zeros";
+        REG_INFO(2, test_logger) << "STATE window share0 region returns all zeros";
 
         // Read STATE window share1 region (should be zero)
         if (!verify_state_window_zero(test, STATE_SHARE1_BASE, STATE_SHARE1_SIZE)) {
@@ -380,9 +380,9 @@ void testbench::test_state_read_in_absorb_returns_zero()
             report_test_fail("TC-137", "STATE window share1 not zero in ABSORB state");
             return;
         }
-        CSML_INFO(2, test_logger) << "STATE window share1 region returns all zeros";
+        REG_INFO(2, test_logger) << "STATE window share1 region returns all zeros";
 
-        CSML_INFO(2, test_logger) << "Key protection: STATE window blocked in ABSORB state";
+        REG_INFO(2, test_logger) << "Key protection: STATE window blocked in ABSORB state";
 
         cleanup_test(test);
         report_test_pass("TC-137: test_state_read_in_absorb_returns_zero");
@@ -411,13 +411,13 @@ void testbench::test_state_read_in_absorb_returns_zero()
  ******************************************************************************/
 void testbench::test_state_two_share_masked()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-138: test_state_two_share_masked");
 
     try {
         // Configure SHA3-256 mode with masking enabled
         configure_sha3_256_mode(test);
-        CSML_INFO(2, test_logger) << "Configured SHA3-256 mode (EnMasking=1)";
+        REG_INFO(2, test_logger) << "Configured SHA3-256 mode (EnMasking=1)";
 
         // Start operation and process empty message
         write_cmd(test, 0x1D);
@@ -442,7 +442,7 @@ void testbench::test_state_two_share_masked()
         read_state_window(test, STATE_SHARE1_BASE, share1.data(), STATE_SHARE1_SIZE);
 
         // Verify both shares contain data (may be zero or non-zero depending on masking)
-        CSML_INFO(2, test_logger) << "Share0 and share1 regions accessible";
+        REG_INFO(2, test_logger) << "Share0 and share1 regions accessible";
 
         // XOR shares to get digest
         std::vector<uint8_t> digest(STATE_SHARE0_SIZE);
@@ -465,7 +465,7 @@ void testbench::test_state_two_share_masked()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Two-share layout verified (share0 XOR share1 = digest)";
+        REG_INFO(2, test_logger) << "Two-share layout verified (share0 XOR share1 = digest)";
 
         cleanup_test(test);
         report_test_pass("TC-138: test_state_two_share_masked");
@@ -493,13 +493,13 @@ void testbench::test_state_two_share_masked()
  ******************************************************************************/
 void testbench::test_state_single_share_unmasked()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-139: test_state_single_share_unmasked");
 
     try {
         // Configure SHA3-256 mode
         configure_sha3_256_mode(test);
-        CSML_INFO(2, test_logger) << "Configured SHA3-256 mode";
+        REG_INFO(2, test_logger) << "Configured SHA3-256 mode";
 
         // Start operation and process empty message
         write_cmd(test, 0x1D);
@@ -521,11 +521,11 @@ void testbench::test_state_single_share_unmasked()
             report_test_fail("TC-139", "STATE window share0 region is all zeros");
             return;
         }
-        CSML_INFO(2, test_logger) << "Share0 region contains digest data";
+        REG_INFO(2, test_logger) << "Share0 region contains digest data";
 
         // Note: If EnMasking=true (default), share1 will contain mask data, not zeros
         // This test documents the expected behavior when EnMasking=false
-        CSML_INFO(2, test_logger) << "Single-share layout test (behavior depends on EnMasking config)";
+        REG_INFO(2, test_logger) << "Single-share layout test (behavior depends on EnMasking config)";
 
         cleanup_test(test);
         report_test_pass("TC-139: test_state_single_share_unmasked");
@@ -549,7 +549,7 @@ void testbench::test_state_single_share_unmasked()
  ******************************************************************************/
 void testbench::test_state_share_xor_for_unmasked_digest()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-140: test_state_share_xor_for_unmasked_digest");
 
     try {
@@ -597,7 +597,7 @@ void testbench::test_state_share_xor_for_unmasked_digest()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Software XOR of shares produces valid digest";
+        REG_INFO(2, test_logger) << "Software XOR of shares produces valid digest";
 
         // Display digest
         std::stringstream ss;
@@ -606,7 +606,7 @@ void testbench::test_state_share_xor_for_unmasked_digest()
             ss << std::hex << std::setw(2) << std::setfill('0')
                << static_cast<int>(digest[i]);
         }
-        CSML_INFO(2, test_logger) << ss.str();
+        REG_INFO(2, test_logger) << ss.str();
 
         cleanup_test(test);
         report_test_pass("TC-140: test_state_share_xor_for_unmasked_digest");
@@ -631,7 +631,7 @@ void testbench::test_state_share_xor_for_unmasked_digest()
  ******************************************************************************/
 void testbench::test_state_byte_halfword_word_reads()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-141: test_state_byte_halfword_word_reads");
 
     try {
@@ -653,11 +653,11 @@ void testbench::test_state_byte_halfword_word_reads()
         // Test word (32-bit) reads
         uint32_t word0 = 0;
         test->register_read_32(STATE_SHARE0_BASE, word0);
-        CSML_INFO(2, test_logger) << "Word read [0x400]: 0x" << std::hex << word0 << std::dec;
+        REG_INFO(2, test_logger) << "Word read [0x400]: 0x" << std::hex << word0 << std::dec;
 
         uint32_t word1 = 0;
         test->register_read_32(STATE_SHARE0_BASE + 4, word1);
-        CSML_INFO(2, test_logger) << "Word read [0x404]: 0x" << std::hex << word1 << std::dec;
+        REG_INFO(2, test_logger) << "Word read [0x404]: 0x" << std::hex << word1 << std::dec;
 
         // Test byte reads (read same location byte-by-byte)
         std::vector<uint8_t> bytes(4);
@@ -671,11 +671,11 @@ void testbench::test_state_byte_halfword_word_reads()
         uint32_t word_from_bytes = (bytes[0] << 0) | (bytes[1] << 8) |
                                    (bytes[2] << 16) | (bytes[3] << 24);
 
-        CSML_INFO(2, test_logger) << "Reconstructed word from bytes: 0x"
+        REG_INFO(2, test_logger) << "Reconstructed word from bytes: 0x"
                                    << std::hex << word_from_bytes << std::dec;
 
         // Verify consistency (note: byte reads depend on byte-enable support)
-        CSML_INFO(2, test_logger) << "STATE window supports multiple read sizes";
+        REG_INFO(2, test_logger) << "STATE window supports multiple read sizes";
 
         cleanup_test(test);
         report_test_pass("TC-141: test_state_byte_halfword_word_reads");
@@ -705,7 +705,7 @@ void testbench::test_state_byte_halfword_word_reads()
  ******************************************************************************/
 void testbench::test_callback_state_read_conditional_access()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-170: test_callback_state_read_conditional_access");
 
     try {
@@ -723,7 +723,7 @@ void testbench::test_callback_state_read_conditional_access()
             report_test_fail("TC-170", "handle_read_STATE: IDLE state not returning zeros");
             return;
         }
-        CSML_INFO(2, test_logger) << "handle_read_STATE: IDLE state returns zeros (PASS)";
+        REG_INFO(2, test_logger) << "handle_read_STATE: IDLE state returns zeros (PASS)";
 
         // Test 2: STATE read in ABSORB state (should return 0)
         configure_sha3_256_mode(test);
@@ -740,7 +740,7 @@ void testbench::test_callback_state_read_conditional_access()
             report_test_fail("TC-170", "handle_read_STATE: ABSORB state not returning zeros");
             return;
         }
-        CSML_INFO(2, test_logger) << "handle_read_STATE: ABSORB state returns zeros (PASS)";
+        REG_INFO(2, test_logger) << "handle_read_STATE: ABSORB state returns zeros (PASS)";
 
         // Test 3: STATE read in SQUEEZE state (should return digest)
         write_cmd(test, 0x2E);
@@ -757,7 +757,7 @@ void testbench::test_callback_state_read_conditional_access()
             report_test_fail("TC-170", "handle_read_STATE: SQUEEZE state not returning digest");
             return;
         }
-        CSML_INFO(2, test_logger) << "handle_read_STATE: SQUEEZE state returns digest (PASS)";
+        REG_INFO(2, test_logger) << "handle_read_STATE: SQUEEZE state returns digest (PASS)";
 
         // Test 4: Verify masking configuration handling
         std::vector<uint8_t> share0(32);
@@ -765,7 +765,7 @@ void testbench::test_callback_state_read_conditional_access()
         read_state_window(test, STATE_SHARE0_BASE, share0.data(), 32);
         read_state_window(test, STATE_SHARE1_BASE, share1.data(), 32);
 
-        CSML_INFO(2, test_logger) << "handle_read_STATE: Masking configuration applied correctly";
+        REG_INFO(2, test_logger) << "handle_read_STATE: Masking configuration applied correctly";
 
         cleanup_test(test);
         report_test_pass("TC-170: test_callback_state_read_conditional_access");

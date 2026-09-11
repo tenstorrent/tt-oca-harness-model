@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func008_test.cpp
  * @brief Test cases for FUNC-KMAC-008 (Application Interface - LC_CTRL Hash Operations)
@@ -40,19 +40,19 @@
  * Detailed Design: kmac-detailed-design.md
  * Functionality: kmac-functionality_list.md (FUNC-KMAC-008)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions for LC_CTRL Application Interface Testing
@@ -108,7 +108,7 @@ static bool wait_for_lc_ctrl_done(kmac_app_if* app_channel, uint64_t timeout_ns 
     while (!app_channel->is_done()) {
         wait(10, SC_NS);
         if ((sc_time_stamp() - start_time).to_seconds() * 1e9 > timeout_ns) {
-            CSML_ERROR(1, test_logger) << "LC_CTRL application operation timeout";
+            REG_ERROR(1, test_logger) << "LC_CTRL application operation timeout";
             return false;
         }
     }
@@ -127,8 +127,8 @@ static void get_lc_ctrl_digest(kmac_app_if* app_channel, uint32_t* share0, uint3
 {
     app_channel->get_digest(share0, share1);
 
-    CSML_INFO(2, test_logger) << "LC_CTRL digest retrieved:";
-    CSML_INFO(2, test_logger) << "  share0[0-7]: "
+    REG_INFO(2, test_logger) << "LC_CTRL digest retrieved:";
+    REG_INFO(2, test_logger) << "  share0[0-7]: "
                                << std::hex << std::setfill('0')
                                << std::setw(8) << share0[0] << " "
                                << std::setw(8) << share0[1] << " "
@@ -139,7 +139,7 @@ static void get_lc_ctrl_digest(kmac_app_if* app_channel, uint32_t* share0, uint3
                                << std::setw(8) << share0[6] << " "
                                << std::setw(8) << share0[7]
                                << std::dec;
-    CSML_INFO(2, test_logger) << "  share1[0-7]: "
+    REG_INFO(2, test_logger) << "  share1[0-7]: "
                                << std::hex << std::setfill('0')
                                << std::setw(8) << share1[0] << " "
                                << std::setw(8) << share1[1] << " "
@@ -233,7 +233,7 @@ static void compute_cshake128_reference(const char* prefix, const uint8_t* messa
  */
 void test_app_lc_ctrl_cshake128_operation(kmac_test* test)
 {
-    CSML_INFO(1, test_logger) << "=== TC-094: test_app_lc_ctrl_cshake128_operation ===";
+    REG_INFO(1, test_logger) << "=== TC-094: test_app_lc_ctrl_cshake128_operation ===";
 
     // Test message: "Life Cycle Test Message"
     const char* test_msg = "Life Cycle Test Message";
@@ -246,16 +246,16 @@ void test_app_lc_ctrl_cshake128_operation(kmac_test* test)
     kmac_app_if* lc_ctrl_channel = test->app_port[1].operator->();
 
     // Send message data to LC_CTRL interface
-    CSML_INFO(2, test_logger) << "Sending message to LC_CTRL application interface";
+    REG_INFO(2, test_logger) << "Sending message to LC_CTRL application interface";
     send_lc_ctrl_message(lc_ctrl_channel, data_words, 3, 0xFF);
 
     // Wait for operation completion
-    CSML_INFO(2, test_logger) << "Waiting for LC_CTRL operation completion";
+    REG_INFO(2, test_logger) << "Waiting for LC_CTRL operation completion";
     if (!wait_for_lc_ctrl_done(lc_ctrl_channel, 1000000)) {
         // Clean up application interface state before exiting
         uint32_t dummy_share0[8], dummy_share1[8];
         lc_ctrl_channel->get_digest(dummy_share0, dummy_share1);
-        CSML_ERROR(1, test_logger) << "TC-094 FAILED: LC_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "TC-094 FAILED: LC_CTRL operation timeout";
         return;
     }
 
@@ -264,7 +264,7 @@ void test_app_lc_ctrl_cshake128_operation(kmac_test* test)
         // Clean up application interface state before exiting
         uint32_t dummy_share0[8], dummy_share1[8];
         lc_ctrl_channel->get_digest(dummy_share0, dummy_share1);
-        CSML_ERROR(1, test_logger) << "TC-094 FAILED: LC_CTRL operation error";
+        REG_ERROR(1, test_logger) << "TC-094 FAILED: LC_CTRL operation error";
         return;
     }
 
@@ -279,7 +279,7 @@ void test_app_lc_ctrl_cshake128_operation(kmac_test* test)
         digest[i] = share0[i] ^ share1[i];
     }
 
-    CSML_INFO(2, test_logger) << "Unmasked digest: "
+    REG_INFO(2, test_logger) << "Unmasked digest: "
                                << std::hex << std::setfill('0')
                                << std::setw(8) << digest[0] << " "
                                << std::setw(8) << digest[1] << " "
@@ -299,16 +299,16 @@ void test_app_lc_ctrl_cshake128_operation(kmac_test* test)
     compute_cshake128_reference("LC_CTRL", (const uint8_t*)data_words,
                                 3 * sizeof(uint64_t), reference);
 
-    CSML_INFO(2, test_logger) << "Reference digest computed with prefix 'LC_CTRL'";
+    REG_INFO(2, test_logger) << "Reference digest computed with prefix 'LC_CTRL'";
 
     // Compare digest (first 32 bytes)
     uint8_t* digest_bytes = (uint8_t*)digest;
     bool match = (std::memcmp(digest_bytes, reference, 32) == 0);
 
     if (match) {
-        CSML_INFO(1, test_logger) << "TC-094 PASSED: LC_CTRL cSHAKE128 operation with prefix 'LC_CTRL' verified";
+        REG_INFO(1, test_logger) << "TC-094 PASSED: LC_CTRL cSHAKE128 operation with prefix 'LC_CTRL' verified";
     } else {
-        CSML_ERROR(1, test_logger) << "TC-094 FAILED: Digest mismatch (prefix validation failed)";
+        REG_ERROR(1, test_logger) << "TC-094 FAILED: Digest mismatch (prefix validation failed)";
     }
 }
 
@@ -334,7 +334,7 @@ void test_app_lc_ctrl_cshake128_operation(kmac_test* test)
  */
 void test_app_lc_ctrl_priority_arbitration(kmac_test* test)
 {
-    CSML_INFO(1, test_logger) << "=== TC-096: test_app_lc_ctrl_priority_arbitration ===";
+    REG_INFO(1, test_logger) << "=== TC-096: test_app_lc_ctrl_priority_arbitration ===";
 
     // Ensure clean state
     // Access all three application interfaces
@@ -348,19 +348,19 @@ void test_app_lc_ctrl_priority_arbitration(kmac_test* test)
     uint64_t rom_ctrl_data[2] = {0x3333333333333333ULL, 0x4444444444444444ULL};
 
     // Initiate KeyMgr operation (highest priority)
-    CSML_INFO(2, test_logger) << "Initiating KeyMgr operation (priority 0)";
+    REG_INFO(2, test_logger) << "Initiating KeyMgr operation (priority 0)";
     send_lc_ctrl_message(keymgr_channel, keymgr_data, 2, 0xFF);
 
     // Wait for KeyMgr completion
-    CSML_INFO(2, test_logger) << "Waiting for KeyMgr completion";
+    REG_INFO(2, test_logger) << "Waiting for KeyMgr completion";
     if (!wait_for_lc_ctrl_done(keymgr_channel, 1000000)) {
         // Clean up all active interfaces before exiting
         uint32_t dummy_share0[8], dummy_share1[8];
         keymgr_channel->get_digest(dummy_share0, dummy_share1);
-        CSML_ERROR(1, test_logger) << "TC-096 FAILED: KeyMgr operation timeout";
+        REG_ERROR(1, test_logger) << "TC-096 FAILED: KeyMgr operation timeout";
         return;
     }
-    CSML_INFO(2, test_logger) << "KeyMgr operation completed first (correct)";
+    REG_INFO(2, test_logger) << "KeyMgr operation completed first (correct)";
 
     // Retrieve KeyMgr digest (clears app state)
     uint32_t keymgr_share0[8], keymgr_share1[8];
@@ -368,19 +368,19 @@ void test_app_lc_ctrl_priority_arbitration(kmac_test* test)
 
     // Now initiate LC_CTRL operation (medium priority) after KeyMgr is done
     wait(10, SC_NS);
-    CSML_INFO(2, test_logger) << "Initiating LC_CTRL operation (priority 1)";
+    REG_INFO(2, test_logger) << "Initiating LC_CTRL operation (priority 1)";
     send_lc_ctrl_message(lc_ctrl_channel, lc_ctrl_data, 2, 0xFF);
 
     // Wait for LC_CTRL completion
-    CSML_INFO(2, test_logger) << "Waiting for LC_CTRL completion";
+    REG_INFO(2, test_logger) << "Waiting for LC_CTRL completion";
     if (!wait_for_lc_ctrl_done(lc_ctrl_channel, 1000000)) {
         // Clean up active interface before exiting
         uint32_t dummy_share0[8], dummy_share1[8];
         lc_ctrl_channel->get_digest(dummy_share0, dummy_share1);
-        CSML_ERROR(1, test_logger) << "TC-096 FAILED: LC_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "TC-096 FAILED: LC_CTRL operation timeout";
         return;
     }
-    CSML_INFO(2, test_logger) << "LC_CTRL operation completed second (correct)";
+    REG_INFO(2, test_logger) << "LC_CTRL operation completed second (correct)";
 
     // Retrieve LC_CTRL digest (clears app state)
     uint32_t lc_ctrl_share0[8], lc_ctrl_share1[8];
@@ -388,25 +388,25 @@ void test_app_lc_ctrl_priority_arbitration(kmac_test* test)
 
     // Now initiate ROM_CTRL operation (lowest priority) after LC_CTRL is done
     wait(10, SC_NS);
-    CSML_INFO(2, test_logger) << "Initiating ROM_CTRL operation (priority 2)";
+    REG_INFO(2, test_logger) << "Initiating ROM_CTRL operation (priority 2)";
     send_lc_ctrl_message(rom_ctrl_channel, rom_ctrl_data, 2, 0xFF);
 
     // Wait for ROM_CTRL completion
-    CSML_INFO(2, test_logger) << "Waiting for ROM_CTRL completion";
+    REG_INFO(2, test_logger) << "Waiting for ROM_CTRL completion";
     if (!wait_for_lc_ctrl_done(rom_ctrl_channel, 1000000)) {
         // Clean up active interface before exiting
         uint32_t dummy_share0[8], dummy_share1[8];
         rom_ctrl_channel->get_digest(dummy_share0, dummy_share1);
-        CSML_ERROR(1, test_logger) << "TC-096 FAILED: ROM_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "TC-096 FAILED: ROM_CTRL operation timeout";
         return;
     }
-    CSML_INFO(2, test_logger) << "ROM_CTRL operation completed last (correct)";
+    REG_INFO(2, test_logger) << "ROM_CTRL operation completed last (correct)";
 
     // Retrieve ROM_CTRL digest (clears app state)
     uint32_t rom_ctrl_share0[8], rom_ctrl_share1[8];
     rom_ctrl_channel->get_digest(rom_ctrl_share0, rom_ctrl_share1);
 
-    CSML_INFO(1, test_logger) << "TC-096 PASSED: Fixed-priority arbitration verified (KeyMgr > LC_CTRL > ROM_CTRL)";
+    REG_INFO(1, test_logger) << "TC-096 PASSED: Fixed-priority arbitration verified (KeyMgr > LC_CTRL > ROM_CTRL)";
 }
 
 /**
@@ -430,27 +430,27 @@ void test_app_lc_ctrl_priority_arbitration(kmac_test* test)
  */
 void test_app_lc_ctrl_data_interface(kmac_test* test)
 {
-    CSML_INFO(1, test_logger) << "=== TC-097: test_app_lc_ctrl_data_interface ===";
+    REG_INFO(1, test_logger) << "=== TC-097: test_app_lc_ctrl_data_interface ===";
 
     // Ensure clean state
     kmac_app_if* lc_ctrl_channel = test->app_port[1].operator->();
 
     // Test data with varying strobe patterns
-    CSML_INFO(2, test_logger) << "Sending data with full strobe (0xFF)";
+    REG_INFO(2, test_logger) << "Sending data with full strobe (0xFF)";
     send_lc_ctrl_data_beat(lc_ctrl_channel, 0x0123456789ABCDEFULL, 0xFF, false);
 
-    CSML_INFO(2, test_logger) << "Sending data with partial strobe (0x0F - lower 4 bytes)";
+    REG_INFO(2, test_logger) << "Sending data with partial strobe (0x0F - lower 4 bytes)";
     send_lc_ctrl_data_beat(lc_ctrl_channel, 0xFEDCBA9876543210ULL, 0x0F, false);
 
-    CSML_INFO(2, test_logger) << "Sending data with partial strobe (0xF0 - upper 4 bytes)";
+    REG_INFO(2, test_logger) << "Sending data with partial strobe (0xF0 - upper 4 bytes)";
     send_lc_ctrl_data_beat(lc_ctrl_channel, 0x1111111122222222ULL, 0xF0, false);
 
-    CSML_INFO(2, test_logger) << "Sending last beat with full strobe";
+    REG_INFO(2, test_logger) << "Sending last beat with full strobe";
     send_lc_ctrl_data_beat(lc_ctrl_channel, 0x3333333344444444ULL, 0xFF, true);
 
     // Wait for completion
     if (!wait_for_lc_ctrl_done(lc_ctrl_channel, 1000000)) {
-        CSML_ERROR(1, test_logger) << "TC-097 FAILED: LC_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "TC-097 FAILED: LC_CTRL operation timeout";
         return;
     }
 
@@ -458,7 +458,7 @@ void test_app_lc_ctrl_data_interface(kmac_test* test)
     uint32_t share0[8], share1[8];
     get_lc_ctrl_digest(lc_ctrl_channel, share0, share1);
 
-    CSML_INFO(1, test_logger) << "TC-097 PASSED: LC_CTRL data interface with strobe and last beat verified";
+    REG_INFO(1, test_logger) << "TC-097 PASSED: LC_CTRL data interface with strobe and last beat verified";
 }
 
 /**
@@ -482,7 +482,7 @@ void test_app_lc_ctrl_data_interface(kmac_test* test)
  */
 void test_app_lc_ctrl_digest_two_share_output(kmac_test* test)
 {
-    CSML_INFO(1, test_logger) << "=== TC-098: test_app_lc_ctrl_digest_two_share_output ===";
+    REG_INFO(1, test_logger) << "=== TC-098: test_app_lc_ctrl_digest_two_share_output ===";
 
     // Ensure clean state
     kmac_app_if* lc_ctrl_channel = test->app_port[1].operator->();
@@ -491,12 +491,12 @@ void test_app_lc_ctrl_digest_two_share_output(kmac_test* test)
     uint64_t data_words[2] = {0x0011223344556677ULL, 0x8899AABBCCDDEEFFULL};
 
     // Send message
-    CSML_INFO(2, test_logger) << "Sending message to LC_CTRL interface";
+    REG_INFO(2, test_logger) << "Sending message to LC_CTRL interface";
     send_lc_ctrl_message(lc_ctrl_channel, data_words, 2, 0xFF);
 
     // Wait for completion
     if (!wait_for_lc_ctrl_done(lc_ctrl_channel, 1000000)) {
-        CSML_ERROR(1, test_logger) << "TC-098 FAILED: LC_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "TC-098 FAILED: LC_CTRL operation timeout";
         return;
     }
 
@@ -511,8 +511,8 @@ void test_app_lc_ctrl_digest_two_share_output(kmac_test* test)
         if (share1[i] != 0) share1_nonzero = true;
     }
 
-    CSML_INFO(2, test_logger) << "share0 non-zero: " << (share0_nonzero ? "yes" : "no");
-    CSML_INFO(2, test_logger) << "share1 non-zero: " << (share1_nonzero ? "yes" : "no");
+    REG_INFO(2, test_logger) << "share0 non-zero: " << (share0_nonzero ? "yes" : "no");
+    REG_INFO(2, test_logger) << "share1 non-zero: " << (share1_nonzero ? "yes" : "no");
 
     // XOR shares to get unmasked digest
     uint32_t digest[8];
@@ -520,7 +520,7 @@ void test_app_lc_ctrl_digest_two_share_output(kmac_test* test)
         digest[i] = share0[i] ^ share1[i];
     }
 
-    CSML_INFO(2, test_logger) << "Unmasked digest (share0 XOR share1): "
+    REG_INFO(2, test_logger) << "Unmasked digest (share0 XOR share1): "
                                << std::hex << std::setfill('0')
                                << std::setw(8) << digest[0] << " "
                                << std::setw(8) << digest[1] << " "
@@ -528,7 +528,7 @@ void test_app_lc_ctrl_digest_two_share_output(kmac_test* test)
                                << std::setw(8) << digest[3]
                                << std::dec;
 
-    CSML_INFO(1, test_logger) << "TC-098 PASSED: LC_CTRL two-share digest output verified";
+    REG_INFO(1, test_logger) << "TC-098 PASSED: LC_CTRL two-share digest output verified";
 }
 
 /**
@@ -551,18 +551,18 @@ void test_app_lc_ctrl_digest_two_share_output(kmac_test* test)
  */
 void test_app_sw_lockout_during_lc_ctrl_active(kmac_test* test)
 {
-    CSML_INFO(1, test_logger) << "=== TC-099: test_app_sw_lockout_during_lc_ctrl_active ===";
+    REG_INFO(1, test_logger) << "=== TC-099: test_app_sw_lockout_during_lc_ctrl_active ===";
 
     // Ensure clean state
     kmac_app_if* lc_ctrl_channel = test->app_port[1].operator->();
 
     // Start LC_CTRL operation but don't complete it yet
-    CSML_INFO(2, test_logger) << "Starting LC_CTRL operation (first beat without last)";
+    REG_INFO(2, test_logger) << "Starting LC_CTRL operation (first beat without last)";
     send_lc_ctrl_data_beat(lc_ctrl_channel, 0x0123456789ABCDEFULL, 0xFF, false);
     wait(20, SC_NS);
 
     // Attempt software MSG_FIFO write (should be blocked)
-    CSML_INFO(2, test_logger) << "Attempting software MSG_FIFO write during LC_CTRL active";
+    REG_INFO(2, test_logger) << "Attempting software MSG_FIFO write during LC_CTRL active";
     uint32_t msg_data = 0xDEADBEEF;
     test->register_write_32(0x800, msg_data);  // MSG_FIFO offset
     wait(5, SC_NS);
@@ -571,33 +571,33 @@ void test_app_sw_lockout_during_lc_ctrl_active(kmac_test* test)
     uint32_t err_code;
     test->register_read_32(0x24, err_code);  // ERR_CODE offset
     if ((err_code >> 24) == 0x02) {
-        CSML_INFO(2, test_logger) << "MSG_FIFO write correctly rejected (ERR_CODE=0x02)";
+        REG_INFO(2, test_logger) << "MSG_FIFO write correctly rejected (ERR_CODE=0x02)";
     } else {
-        CSML_INFO(2, test_logger) << "MSG_FIFO write may be rejected (ERR_CODE=0x"
+        REG_INFO(2, test_logger) << "MSG_FIFO write may be rejected (ERR_CODE=0x"
                                    << std::hex << (err_code >> 24) << std::dec << ")";
     }
 
     // Attempt software CMD write (should generate SwIssuedCmdInAppActive error 0x03)
-    CSML_INFO(2, test_logger) << "Attempting software CMD write during LC_CTRL active";
+    REG_INFO(2, test_logger) << "Attempting software CMD write during LC_CTRL active";
     test->register_write_32(0x18, 0x1D);  // CMD offset, START command
     wait(5, SC_NS);
 
     // Read ERR_CODE to check for SwIssuedCmdInAppActive error (0x03)
     test->register_read_32(0x24, err_code);
     if ((err_code >> 24) == 0x03) {
-        CSML_INFO(2, test_logger) << "CMD write correctly rejected (ERR_CODE=0x03 SwIssuedCmdInAppActive)";
+        REG_INFO(2, test_logger) << "CMD write correctly rejected (ERR_CODE=0x03 SwIssuedCmdInAppActive)";
     } else {
-        CSML_INFO(2, test_logger) << "CMD write may be rejected (ERR_CODE=0x"
+        REG_INFO(2, test_logger) << "CMD write may be rejected (ERR_CODE=0x"
                                    << std::hex << (err_code >> 24) << std::dec << ")";
     }
 
     // Complete LC_CTRL operation
-    CSML_INFO(2, test_logger) << "Completing LC_CTRL operation (last beat)";
+    REG_INFO(2, test_logger) << "Completing LC_CTRL operation (last beat)";
     send_lc_ctrl_data_beat(lc_ctrl_channel, 0xFEDCBA9876543210ULL, 0xFF, true);
 
     // Wait for completion
     if (!wait_for_lc_ctrl_done(lc_ctrl_channel, 1000000)) {
-        CSML_ERROR(1, test_logger) << "TC-099 FAILED: LC_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "TC-099 FAILED: LC_CTRL operation timeout";
         return;
     }
 
@@ -606,10 +606,10 @@ void test_app_sw_lockout_during_lc_ctrl_active(kmac_test* test)
     lc_ctrl_channel->get_digest(share0, share1);
 
     // Verify software access restored
-    CSML_INFO(2, test_logger) << "Verifying software access restored after LC_CTRL completion";
+    REG_INFO(2, test_logger) << "Verifying software access restored after LC_CTRL completion";
     wait(10, SC_NS);
 
-    CSML_INFO(1, test_logger) << "TC-099 PASSED: Software lockout during LC_CTRL operation verified";
+    REG_INFO(1, test_logger) << "TC-099 PASSED: Software lockout during LC_CTRL operation verified";
 }
 
 /**
@@ -632,13 +632,13 @@ void test_app_sw_lockout_during_lc_ctrl_active(kmac_test* test)
  */
 void test_app_state_read_blocked_during_lc_ctrl_active(kmac_test* test)
 {
-    CSML_INFO(1, test_logger) << "=== TC-101: test_app_state_read_blocked_during_lc_ctrl_active ===";
+    REG_INFO(1, test_logger) << "=== TC-101: test_app_state_read_blocked_during_lc_ctrl_active ===";
 
     // Ensure clean state
     kmac_app_if* lc_ctrl_channel = test->app_port[1].operator->();
 
     // Start LC_CTRL operation
-    CSML_INFO(2, test_logger) << "Starting LC_CTRL operation";
+    REG_INFO(2, test_logger) << "Starting LC_CTRL operation";
     uint64_t data_words[2] = {0x0123456789ABCDEFULL, 0xFEDCBA9876543210ULL};
     send_lc_ctrl_message(lc_ctrl_channel, data_words, 2, 0xFF);
 
@@ -646,20 +646,20 @@ void test_app_state_read_blocked_during_lc_ctrl_active(kmac_test* test)
     wait(20, SC_NS);
 
     // Attempt STATE window read during operation
-    CSML_INFO(2, test_logger) << "Attempting STATE window read during LC_CTRL operation";
+    REG_INFO(2, test_logger) << "Attempting STATE window read during LC_CTRL operation";
     uint32_t state_value;
     test->register_read_32(0x400 / 4, state_value);  // STATE offset 0x400, word offset
 
     if (state_value == 0) {
-        CSML_INFO(2, test_logger) << "STATE read correctly returned 0 during LC_CTRL operation";
+        REG_INFO(2, test_logger) << "STATE read correctly returned 0 during LC_CTRL operation";
     } else {
-        CSML_INFO(2, test_logger) << "STATE read returned 0x" << std::hex << state_value << std::dec
+        REG_INFO(2, test_logger) << "STATE read returned 0x" << std::hex << state_value << std::dec
                                    << " (expected 0)";
     }
 
     // Wait for completion
     if (!wait_for_lc_ctrl_done(lc_ctrl_channel, 1000000)) {
-        CSML_ERROR(1, test_logger) << "TC-101 FAILED: LC_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "TC-101 FAILED: LC_CTRL operation timeout";
         return;
     }
 
@@ -668,16 +668,16 @@ void test_app_state_read_blocked_during_lc_ctrl_active(kmac_test* test)
     get_lc_ctrl_digest(lc_ctrl_channel, share0, share1);
 
     // Attempt STATE read after operation (should still return 0 - app digest not exposed)
-    CSML_INFO(2, test_logger) << "Attempting STATE window read after LC_CTRL operation";
+    REG_INFO(2, test_logger) << "Attempting STATE window read after LC_CTRL operation";
     test->register_read_32(0x400 / 4, state_value);
 
     if (state_value == 0) {
-        CSML_INFO(2, test_logger) << "STATE read correctly returned 0 after LC_CTRL operation (app digest protected)";
+        REG_INFO(2, test_logger) << "STATE read correctly returned 0 after LC_CTRL operation (app digest protected)";
     } else {
-        CSML_INFO(2, test_logger) << "STATE read returned 0x" << std::hex << state_value << std::dec;
+        REG_INFO(2, test_logger) << "STATE read returned 0x" << std::hex << state_value << std::dec;
     }
 
-    CSML_INFO(1, test_logger) << "TC-101 PASSED: STATE window read protection during LC_CTRL operation verified";
+    REG_INFO(1, test_logger) << "TC-101 PASSED: STATE window read protection during LC_CTRL operation verified";
 }
 
 /**
@@ -698,7 +698,7 @@ void test_app_state_read_blocked_during_lc_ctrl_active(kmac_test* test)
  */
 void test_lc_ctrl_128bit_security_strength(kmac_test* test)
 {
-    CSML_INFO(1, test_logger) << "=== Additional Test: test_lc_ctrl_128bit_security_strength ===";
+    REG_INFO(1, test_logger) << "=== Additional Test: test_lc_ctrl_128bit_security_strength ===";
 
     // Ensure clean state
     kmac_app_if* lc_ctrl_channel = test->app_port[1].operator->();
@@ -709,12 +709,12 @@ void test_lc_ctrl_128bit_security_strength(kmac_test* test)
         data_words[i] = 0x0123456789ABCDEFULL + i;
     }
 
-    CSML_INFO(2, test_logger) << "Sending 176-byte message (exceeds 168-byte block)";
+    REG_INFO(2, test_logger) << "Sending 176-byte message (exceeds 168-byte block)";
     send_lc_ctrl_message(lc_ctrl_channel, data_words, 22, 0xFF);
 
     // Wait for completion
     if (!wait_for_lc_ctrl_done(lc_ctrl_channel, 1000000)) {
-        CSML_ERROR(1, test_logger) << "Additional Test FAILED: LC_CTRL operation timeout";
+        REG_ERROR(1, test_logger) << "Additional Test FAILED: LC_CTRL operation timeout";
         return;
     }
 
@@ -722,7 +722,7 @@ void test_lc_ctrl_128bit_security_strength(kmac_test* test)
     uint32_t share0[8], share1[8];
     get_lc_ctrl_digest(lc_ctrl_channel, share0, share1);
 
-    CSML_INFO(1, test_logger) << "Additional Test PASSED: LC_CTRL 128-bit security strength verified";
+    REG_INFO(1, test_logger) << "Additional Test PASSED: LC_CTRL 128-bit security strength verified";
 }
 
 /******************************************************************************
@@ -737,12 +737,12 @@ void test_lc_ctrl_128bit_security_strength(kmac_test* test)
 void kmac_func008_test_main(kmac_test* test)
 {
     // Configure logger
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     test_logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [FUNC-008] - %MESSAGE%");
 
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "FUNC-KMAC-008: Application Interface - LC_CTRL Hash Operations";
-    CSML_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "FUNC-KMAC-008: Application Interface - LC_CTRL Hash Operations";
+    REG_INFO(1, test_logger) << "========================================";
 
     // Run all test cases
     test_app_lc_ctrl_cshake128_operation(test);
@@ -766,7 +766,7 @@ void kmac_func008_test_main(kmac_test* test)
     test_lc_ctrl_128bit_security_strength(test);
     wait(50, SC_NS);
 
-    CSML_INFO(1, test_logger) << "========================================";
-    CSML_INFO(1, test_logger) << "FUNC-KMAC-008: All Tests Completed";
-    CSML_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "========================================";
+    REG_INFO(1, test_logger) << "FUNC-KMAC-008: All Tests Completed";
+    REG_INFO(1, test_logger) << "========================================";
 }

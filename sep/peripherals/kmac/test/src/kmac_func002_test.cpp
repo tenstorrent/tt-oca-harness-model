@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func002_test.cpp
  * @brief Test cases for FUNC-KMAC-002 (SHAKE Extendable Output Function)
@@ -37,19 +37,19 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions for SHAKE Testing
@@ -188,7 +188,7 @@ static bool verify_no_error(kmac_test* test)
     uint32_t err_code = 0;
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
     if (err_code != 0) {
-        CSML_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
     }
     return (err_code == 0);
 }
@@ -434,7 +434,7 @@ static bool compare_buffers(const uint8_t* expected, const uint8_t* actual, size
 {
     for (size_t i = 0; i < len; i++) {
         if (expected[i] != actual[i]) {
-            CSML_ERROR(1, test_logger) << "Buffer mismatch at byte " << i
+            REG_ERROR(1, test_logger) << "Buffer mismatch at byte " << i
                                 << ": expected=0x" << std::hex << (int)expected[i]
                                 << ", actual=0x" << (int)actual[i] << std::dec;
             return false;
@@ -455,7 +455,7 @@ static bool compare_buffers(const uint8_t* expected, const uint8_t* actual, size
  ******************************************************************************/
 void testbench::test_shake128_fixed_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-029: test_shake128_fixed_output");
 
     try {
@@ -466,7 +466,7 @@ void testbench::test_shake128_fixed_output()
 
         // Configure SHAKE128 mode (kstrength = 0x0)
         configure_shake_mode(test, 0x0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L128";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L128";
 
         // Verify initial IDLE state
         bool idle, absorb, squeeze;
@@ -478,7 +478,7 @@ void testbench::test_shake128_fixed_output()
         }
 
         // Issue START command
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         if (!verify_no_error(test)) {
@@ -496,11 +496,11 @@ void testbench::test_shake128_fixed_output()
         }
 
         // Write message to MSG_FIFO
-        CSML_INFO(2, test_logger) << "Writing message (" << msg_len << " bytes) to MSG_FIFO";
+        REG_INFO(2, test_logger) << "Writing message (" << msg_len << " bytes) to MSG_FIFO";
         write_msg_fifo(test, (const uint8_t*)test_msg, msg_len);
 
         // Issue PROCESS command
-        CSML_INFO(2, test_logger) << "Issuing PROCESS command (0x2E)";
+        REG_INFO(2, test_logger) << "Issuing PROCESS command (0x2E)";
         write_cmd(test, 0x2E);
 
         if (!verify_no_error(test)) {
@@ -519,7 +519,7 @@ void testbench::test_shake128_fixed_output()
 
         // Read digest from STATE window
         uint8_t actual_digest[32];
-        CSML_INFO(2, test_logger) << "Reading " << output_len << "-byte digest from STATE window";
+        REG_INFO(2, test_logger) << "Reading " << output_len << "-byte digest from STATE window";
         read_state_digest(test, actual_digest, output_len);
 
         // Compute reference digest using OpenSSL
@@ -538,7 +538,7 @@ void testbench::test_shake128_fixed_output()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "SHAKE128 digest matches OpenSSL reference";
+        REG_INFO(2, test_logger) << "SHAKE128 digest matches OpenSSL reference";
 
         // Clean up
         cleanup_test(test);
@@ -562,7 +562,7 @@ void testbench::test_shake128_fixed_output()
  ******************************************************************************/
 void testbench::test_shake256_fixed_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-030: test_shake256_fixed_output");
 
     try {
@@ -571,7 +571,7 @@ void testbench::test_shake256_fixed_output()
         const size_t output_len = 64; // 512 bits
 
         configure_shake_mode(test, 0x2);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L256";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHAKE, kstrength=L256";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -628,7 +628,7 @@ void testbench::test_shake256_fixed_output()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "SHAKE256 digest matches OpenSSL reference";
+        REG_INFO(2, test_logger) << "SHAKE256 digest matches OpenSSL reference";
 
         cleanup_test(test);
         report_test_pass("TC-030: test_shake256_fixed_output");
@@ -653,7 +653,7 @@ void testbench::test_shake256_fixed_output()
  ******************************************************************************/
 void testbench::test_shake128_extended_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-031: test_shake128_extended_output");
 
     try {
@@ -664,7 +664,7 @@ void testbench::test_shake128_extended_output()
         const size_t total_output = block1_len + block2_len;
 
         configure_shake_mode(test, 0x0);
-        CSML_INFO(2, test_logger) << "Configured SHAKE128 for extended output";
+        REG_INFO(2, test_logger) << "Configured SHAKE128 for extended output";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -699,11 +699,11 @@ void testbench::test_shake128_extended_output()
 
         // Read first block (up to rate size)
         uint8_t actual_output[300];
-        CSML_INFO(2, test_logger) << "Reading first block (" << block1_len << " bytes)";
+        REG_INFO(2, test_logger) << "Reading first block (" << block1_len << " bytes)";
         read_state_digest(test, actual_output, block1_len);
 
         // Issue RUN command for extended output
-        CSML_INFO(2, test_logger) << "Issuing RUN command (0x31) for extended output";
+        REG_INFO(2, test_logger) << "Issuing RUN command (0x31) for extended output";
         write_cmd(test, 0x31);
 
         if (!verify_no_error(test)) {
@@ -721,7 +721,7 @@ void testbench::test_shake128_extended_output()
         }
 
         // Read second block
-        CSML_INFO(2, test_logger) << "Reading second block (" << block2_len << " bytes)";
+        REG_INFO(2, test_logger) << "Reading second block (" << block2_len << " bytes)";
         read_state_digest(test, actual_output + block1_len, block2_len);
 
         // Compute reference extended output using OpenSSL (block-by-block to match hardware)
@@ -742,7 +742,7 @@ void testbench::test_shake128_extended_output()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "SHAKE128 extended output validated: " << total_output << " bytes";
+        REG_INFO(2, test_logger) << "SHAKE128 extended output validated: " << total_output << " bytes";
 
         cleanup_test(test);
         report_test_pass("TC-031: test_shake128_extended_output");
@@ -766,7 +766,7 @@ void testbench::test_shake128_extended_output()
  ******************************************************************************/
 void testbench::test_shake256_extended_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-032: test_shake256_extended_output");
 
     try {
@@ -777,7 +777,7 @@ void testbench::test_shake256_extended_output()
         const size_t total_output = block1_len + block2_len;
 
         configure_shake_mode(test, 0x2);
-        CSML_INFO(2, test_logger) << "Configured SHAKE256 for extended output";
+        REG_INFO(2, test_logger) << "Configured SHAKE256 for extended output";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -834,7 +834,7 @@ void testbench::test_shake256_extended_output()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "SHAKE256 extended output validated: " << total_output << " bytes";
+        REG_INFO(2, test_logger) << "SHAKE256 extended output validated: " << total_output << " bytes";
 
         cleanup_test(test);
         report_test_pass("TC-032: test_shake256_extended_output");
@@ -856,7 +856,7 @@ void testbench::test_shake256_extended_output()
  ******************************************************************************/
 void testbench::test_shake_padding_mechanism()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-033: test_shake_padding_mechanism");
 
     try {
@@ -871,7 +871,7 @@ void testbench::test_shake_padding_mechanism()
         const size_t output_len = 32;
 
         configure_shake_mode(test, 0x0);
-        CSML_INFO(2, test_logger) << "Testing SHAKE padding with " << msg_len << "-byte message";
+        REG_INFO(2, test_logger) << "Testing SHAKE padding with " << msg_len << "-byte message";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -914,7 +914,7 @@ void testbench::test_shake_padding_mechanism()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "SHAKE padding mechanism validated (4-bit '1111' + pad10*1)";
+        REG_INFO(2, test_logger) << "SHAKE padding mechanism validated (4-bit '1111' + pad10*1)";
 
         cleanup_test(test);
         report_test_pass("TC-033: test_shake_padding_mechanism");
@@ -938,7 +938,7 @@ void testbench::test_shake_padding_mechanism()
  ******************************************************************************/
 void testbench::test_shake_run_command_squeeze_state()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-034: test_shake_run_command_squeeze_state");
 
     try {
@@ -947,7 +947,7 @@ void testbench::test_shake_run_command_squeeze_state()
         const size_t output_len = 64;
 
         configure_shake_mode(test, 0x0);
-        CSML_INFO(2, test_logger) << "Testing RUN command in SQUEEZE state";
+        REG_INFO(2, test_logger) << "Testing RUN command in SQUEEZE state";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -968,14 +968,14 @@ void testbench::test_shake_run_command_squeeze_state()
             report_test_fail("TC-034", "Not in SQUEEZE state after PROCESS");
             return;
         }
-        CSML_INFO(2, test_logger) << "STATUS.sha3_squeeze = 1 after PROCESS";
+        REG_INFO(2, test_logger) << "STATUS.sha3_squeeze = 1 after PROCESS";
 
         // Read first digest
         uint8_t digest_before_run[64];
         read_state_digest(test, digest_before_run, output_len);
 
         // Issue RUN command
-        CSML_INFO(2, test_logger) << "Issuing RUN command (0x31)";
+        REG_INFO(2, test_logger) << "Issuing RUN command (0x31)";
         write_cmd(test, 0x31);
 
         if (!verify_no_error(test)) {
@@ -991,7 +991,7 @@ void testbench::test_shake_run_command_squeeze_state()
             report_test_fail("TC-034", "Not in SQUEEZE state after RUN");
             return;
         }
-        CSML_INFO(2, test_logger) << "STATUS.sha3_squeeze = 1 after RUN (FSM remains in SQUEEZE)";
+        REG_INFO(2, test_logger) << "STATUS.sha3_squeeze = 1 after RUN (FSM remains in SQUEEZE)";
 
         // Read digest after RUN (should be different - next block)
         uint8_t digest_after_run[64];
@@ -1012,7 +1012,7 @@ void testbench::test_shake_run_command_squeeze_state()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "STATE window updated after RUN (24 Keccak rounds executed)";
+        REG_INFO(2, test_logger) << "STATE window updated after RUN (24 Keccak rounds executed)";
 
         cleanup_test(test);
         report_test_pass("TC-034: test_shake_run_command_squeeze_state");
@@ -1031,12 +1031,12 @@ void testbench::test_shake_run_command_squeeze_state()
  ******************************************************************************/
 void testbench::test_shake_invalid_strength_l224()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-035: test_shake_invalid_strength_l224");
 
     try {
         configure_shake_mode(test, 0x1); // L224 - INVALID for SHAKE
-        CSML_INFO(2, test_logger) << "Configured SHAKE with kstrength=L224 (INVALID)";
+        REG_INFO(2, test_logger) << "Configured SHAKE with kstrength=L224 (INVALID)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1046,7 +1046,7 @@ void testbench::test_shake_invalid_strength_l224()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Issuing START command - expecting error";
+        REG_INFO(2, test_logger) << "Issuing START command - expecting error";
         write_cmd(test, 0x1D);
 
         // Verify UnexpectedModeStrength error (mode=0x2, kstrength=0x1)
@@ -1056,7 +1056,7 @@ void testbench::test_shake_invalid_strength_l224()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected";
+        REG_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected";
 
         // Verify kmac_err interrupt set
         uint32_t intr_state = 0;
@@ -1084,12 +1084,12 @@ void testbench::test_shake_invalid_strength_l224()
  ******************************************************************************/
 void testbench::test_shake_invalid_strength_l384()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-036: test_shake_invalid_strength_l384");
 
     try {
         configure_shake_mode(test, 0x3); // L384 - INVALID for SHAKE
-        CSML_INFO(2, test_logger) << "Configured SHAKE with kstrength=L384 (INVALID)";
+        REG_INFO(2, test_logger) << "Configured SHAKE with kstrength=L384 (INVALID)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1107,7 +1107,7 @@ void testbench::test_shake_invalid_strength_l384()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected for L384";
+        REG_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected for L384";
 
         cleanup_test(test);
         report_test_pass("TC-036: test_shake_invalid_strength_l384");
@@ -1126,12 +1126,12 @@ void testbench::test_shake_invalid_strength_l384()
  ******************************************************************************/
 void testbench::test_shake_invalid_strength_l512()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-037: test_shake_invalid_strength_l512");
 
     try {
         configure_shake_mode(test, 0x4); // L512 - INVALID for SHAKE
-        CSML_INFO(2, test_logger) << "Configured SHAKE with kstrength=L512 (INVALID)";
+        REG_INFO(2, test_logger) << "Configured SHAKE with kstrength=L512 (INVALID)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1149,7 +1149,7 @@ void testbench::test_shake_invalid_strength_l512()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected for L512";
+        REG_INFO(2, test_logger) << "UnexpectedModeStrength error correctly detected for L512";
 
         cleanup_test(test);
         report_test_pass("TC-037: test_shake_invalid_strength_l512");
@@ -1172,7 +1172,7 @@ void testbench::test_shake_invalid_strength_l512()
  ******************************************************************************/
 void testbench::test_corner_extended_output_many_runs()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-182: test_corner_extended_output_many_runs");
 
     try {
@@ -1183,7 +1183,7 @@ void testbench::test_corner_extended_output_many_runs()
         const size_t total_output = rate * num_runs; // 1680 bytes
 
         configure_shake_mode(test, 0x0);
-        CSML_INFO(2, test_logger) << "Testing extended output with " << num_runs << " RUN commands";
+        REG_INFO(2, test_logger) << "Testing extended output with " << num_runs << " RUN commands";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1210,7 +1210,7 @@ void testbench::test_corner_extended_output_many_runs()
 
         // Read first block (after PROCESS)
         read_state_digest(test, actual_output, rate);
-        CSML_INFO(2, test_logger) << "Read block 0: " << rate << " bytes";
+        REG_INFO(2, test_logger) << "Read block 0: " << rate << " bytes";
 
         // Issue RUN commands and read subsequent blocks
         for (size_t i = 1; i < num_runs; i++) {
@@ -1234,7 +1234,7 @@ void testbench::test_corner_extended_output_many_runs()
             }
 
             read_state_digest(test, actual_output + i * rate, rate);
-            CSML_INFO(2, test_logger) << "Read block " << i << ": " << rate << " bytes";
+            REG_INFO(2, test_logger) << "Read block " << i << ": " << rate << " bytes";
         }
 
         // Compute reference extended output using OpenSSL (block-by-block to match hardware)
@@ -1268,7 +1268,7 @@ void testbench::test_corner_extended_output_many_runs()
         delete[] actual_output;
         delete[] expected_output;
 
-        CSML_INFO(2, test_logger) << "Extended output validated: " << num_runs
+        REG_INFO(2, test_logger) << "Extended output validated: " << num_runs
                             << " RUN commands, " << total_output << " bytes total";
 
         cleanup_test(test);

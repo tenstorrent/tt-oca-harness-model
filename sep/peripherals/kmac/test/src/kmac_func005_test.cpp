@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func005_test.cpp
  * @brief Test cases for FUNC-KMAC-005 (Software Key Management)
@@ -49,19 +49,19 @@
  * Detailed Design: kmac-detailed-design.md
  * Functionality: kmac-functionality_list.md (FUNC-KMAC-005)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions for Key Management Testing
@@ -244,7 +244,7 @@ static bool verify_no_error(kmac_test* test)
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
 
     if (err_code != 0) {
-        CSML_ERROR(1, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
+        REG_ERROR(1, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
         return false;
     }
     return true;
@@ -286,7 +286,7 @@ static void cleanup_test(kmac_test* test)
  */
 void testbench::test_key_single_share_128bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-056: test_key_single_share_128bit");
 
     try {
@@ -299,7 +299,7 @@ void testbench::test_key_single_share_128bit()
             key[i] = (uint8_t)(0xA0 + i);
         }
 
-        CSML_INFO(2, test_logger) << "Testing single-share 128-bit key (EnMasking=0, SwKeyMasked=0)";
+        REG_INFO(2, test_logger) << "Testing single-share 128-bit key (EnMasking=0, SwKeyMasked=0)";
 
         // Configure KMAC128 mode
         configure_kmac_mode(test, 0x0);
@@ -352,13 +352,13 @@ void testbench::test_key_single_share_128bit()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Single-share 128-bit key operation completed successfully";
+        REG_INFO(2, test_logger) << "Single-share 128-bit key operation completed successfully";
 
         cleanup_test(test);
         report_test_pass("TC-056");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-056", "Exception occurred");
     }
 }
@@ -371,7 +371,7 @@ void testbench::test_key_single_share_128bit()
  */
 void testbench::test_key_single_share_256bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-057: test_key_single_share_256bit");
 
     try {
@@ -384,7 +384,7 @@ void testbench::test_key_single_share_256bit()
             key[i] = (uint8_t)(0xB0 + (i % 16));
         }
 
-        CSML_INFO(2, test_logger) << "Testing single-share 256-bit key";
+        REG_INFO(2, test_logger) << "Testing single-share 256-bit key";
 
         configure_kmac_mode(test, 0x2);  // KMAC256
         write_key_share0(test, key, 32);
@@ -430,13 +430,13 @@ void testbench::test_key_single_share_256bit()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Single-share 256-bit key operation completed";
+        REG_INFO(2, test_logger) << "Single-share 256-bit key operation completed";
 
         cleanup_test(test);
         report_test_pass("TC-057");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-057", "Exception occurred");
     }
 }
@@ -460,11 +460,11 @@ void testbench::test_key_single_share_256bit()
  */
 void testbench::test_key_zeroization_on_reset()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-062: test_key_zeroization_on_reset");
 
     try {
-        CSML_INFO(2, test_logger) << "Testing key zeroization on reset";
+        REG_INFO(2, test_logger) << "Testing key zeroization on reset";
 
         // Write non-zero key data
         uint8_t key[64];
@@ -475,7 +475,7 @@ void testbench::test_key_zeroization_on_reset()
         write_key_share0(test, key, 64);
         write_key_share1(test, key, 64);
 
-        CSML_INFO(2, test_logger) << "Non-zero keys written to KEY_SHARE0 and KEY_SHARE1";
+        REG_INFO(2, test_logger) << "Non-zero keys written to KEY_SHARE0 and KEY_SHARE1";
 
         // Note: KEY_SHARE registers are typically write-only for security reasons
         // In a real hardware test, reset would be applied via rst_ni signal
@@ -502,13 +502,13 @@ void testbench::test_key_zeroization_on_reset()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Reset state verified: IDLE state and CFG_REGWEN unlocked";
-        CSML_INFO(2, test_logger) << "Key zeroization on reset test passed (keys cleared per architecture spec)";
+        REG_INFO(2, test_logger) << "Reset state verified: IDLE state and CFG_REGWEN unlocked";
+        REG_INFO(2, test_logger) << "Key zeroization on reset test passed (keys cleared per architecture spec)";
 
         report_test_pass("TC-062");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-062", "Exception occurred");
     }
 }
@@ -536,7 +536,7 @@ void testbench::test_key_zeroization_on_reset()
  */
 void testbench::test_key_zeroization_on_done()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-063: test_key_zeroization_on_done");
 
     try {
@@ -548,7 +548,7 @@ void testbench::test_key_zeroization_on_done()
             key[i] = (uint8_t)(0xCC + i);
         }
 
-        CSML_INFO(2, test_logger) << "Testing internal key buffer clearing on DONE command";
+        REG_INFO(2, test_logger) << "Testing internal key buffer clearing on DONE command";
 
         configure_kmac_mode(test, 0x0);
         write_key_share0(test, key, 16);
@@ -581,7 +581,7 @@ void testbench::test_key_zeroization_on_done()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Reached SQUEEZE state, issuing DONE command";
+        REG_INFO(2, test_logger) << "Reached SQUEEZE state, issuing DONE command";
 
         // Issue DONE command
         write_cmd(test, 0x16);  // DONE
@@ -602,13 +602,13 @@ void testbench::test_key_zeroization_on_done()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "DONE command executed: returned to IDLE, CFG_REGWEN unlocked";
-        CSML_INFO(2, test_logger) << "Internal Keccak state cleared per architecture specification";
+        REG_INFO(2, test_logger) << "DONE command executed: returned to IDLE, CFG_REGWEN unlocked";
+        REG_INFO(2, test_logger) << "Internal Keccak state cleared per architecture specification";
 
         report_test_pass("TC-063");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-063", "Exception occurred");
     }
 }
@@ -636,7 +636,7 @@ void testbench::test_key_zeroization_on_done()
  */
 void testbench::test_key_cfg_regwen_protection()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-065: test_key_cfg_regwen_protection");
 
     try {
@@ -653,7 +653,7 @@ void testbench::test_key_cfg_regwen_protection()
             different_key[i] = (uint8_t)(0x55);
         }
 
-        CSML_INFO(2, test_logger) << "Testing CFG_REGWEN protection of KEY_SHARE registers";
+        REG_INFO(2, test_logger) << "Testing CFG_REGWEN protection of KEY_SHARE registers";
 
         configure_kmac_mode(test, 0x0);
 
@@ -664,7 +664,7 @@ void testbench::test_key_cfg_regwen_protection()
             report_test_fail("TC-065", "CFG_REGWEN.en not 1 in IDLE state");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en = 1 in IDLE (keys writable)";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en = 1 in IDLE (keys writable)";
 
         // Write original key
         write_key_share0(test, original_key, 16);
@@ -681,11 +681,11 @@ void testbench::test_key_cfg_regwen_protection()
             report_test_fail("TC-065", "CFG_REGWEN.en not cleared by START command");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en = 0 after START (keys protected)";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en = 0 after START (keys protected)";
 
         // Attempt to write different key (should be ignored)
         write_key_share0(test, different_key, 16);
-        CSML_INFO(2, test_logger) << "Attempted to write different key (should be ignored)";
+        REG_INFO(2, test_logger) << "Attempted to write different key (should be ignored)";
 
         // Continue operation
         const uint32_t MSG_FIFO_BASE = 0x800;
@@ -719,13 +719,13 @@ void testbench::test_key_cfg_regwen_protection()
             report_test_fail("TC-065", "CFG_REGWEN.en not set by DONE command");
             return;
         }
-        CSML_INFO(2, test_logger) << "CFG_REGWEN.en = 1 after DONE (keys writable again)";
+        REG_INFO(2, test_logger) << "CFG_REGWEN.en = 1 after DONE (keys writable again)";
 
-        CSML_INFO(2, test_logger) << "CFG_REGWEN protection test passed";
+        REG_INFO(2, test_logger) << "CFG_REGWEN protection test passed";
         report_test_pass("TC-065");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-065", "Exception occurred");
     }
 }
@@ -753,7 +753,7 @@ void testbench::test_key_cfg_regwen_protection()
  */
 void testbench::test_key_all_lengths_unmasked()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-060: test_key_all_lengths_unmasked");
 
     try {
@@ -774,7 +774,7 @@ void testbench::test_key_all_lengths_unmasked()
         for (size_t cfg_idx = 0; cfg_idx < 5; cfg_idx++) {
             const KeyLengthConfig& cfg = configs[cfg_idx];
 
-            CSML_INFO(2, test_logger) << "Testing " << cfg.description << " key length (KEY_LEN = 0x"
+            REG_INFO(2, test_logger) << "Testing " << cfg.description << " key length (KEY_LEN = 0x"
                                       << std::hex << cfg.key_len_val << std::dec << ")";
 
             uint8_t key[64];
@@ -825,17 +825,17 @@ void testbench::test_key_all_lengths_unmasked()
                 return;
             }
 
-            CSML_INFO(2, test_logger) << cfg.description << " key operation completed successfully";
+            REG_INFO(2, test_logger) << cfg.description << " key operation completed successfully";
 
             write_cmd(test, 0x16);  // DONE
             wait(5, SC_NS);
         }
 
-        CSML_INFO(2, test_logger) << "All key lengths (128/192/256/384/512 bits) tested successfully";
+        REG_INFO(2, test_logger) << "All key lengths (128/192/256/384/512 bits) tested successfully";
         report_test_pass("TC-060");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-060", "Exception occurred");
     }
 }
@@ -861,7 +861,7 @@ void testbench::test_key_all_lengths_unmasked()
  */
 void testbench::test_key_zeroization_on_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-064: test_key_zeroization_on_error");
 
     try {
@@ -870,7 +870,7 @@ void testbench::test_key_zeroization_on_error()
             key[i] = (uint8_t)(0xDD);
         }
 
-        CSML_INFO(2, test_logger) << "Testing key protection on error condition";
+        REG_INFO(2, test_logger) << "Testing key protection on error condition";
 
         configure_kmac_mode(test, 0x0);
         write_key_share0(test, key, 16);
@@ -898,17 +898,17 @@ void testbench::test_key_zeroization_on_error()
         }
 
         uint8_t error_type = (err_code >> 24) & 0xFF;
-        CSML_INFO(2, test_logger) << "Error detected: ERR_CODE = 0x" << std::hex << err_code
+        REG_INFO(2, test_logger) << "Error detected: ERR_CODE = 0x" << std::hex << err_code
                                   << ", error type = 0x" << (int)error_type << std::dec;
 
         // Verify error state (likely SwCmdSequence 0x08)
         if (error_type == 0x08) {
-            CSML_INFO(2, test_logger) << "SwCmdSequence error correctly detected";
+            REG_INFO(2, test_logger) << "SwCmdSequence error correctly detected";
         }
 
         // In error state, system protects keys
-        CSML_INFO(2, test_logger) << "System in error state - keys protected";
-        CSML_INFO(2, test_logger) << "Key protection on error verified";
+        REG_INFO(2, test_logger) << "System in error state - keys protected";
+        REG_INFO(2, test_logger) << "Key protection on error verified";
 
         // Cleanup: clear error and return to IDLE
         uint32_t intr_state = 0;
@@ -923,7 +923,7 @@ void testbench::test_key_zeroization_on_error()
         report_test_pass("TC-064");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-064", "Exception occurred");
     }
 }
@@ -953,21 +953,21 @@ void testbench::test_key_zeroization_on_error()
  */
 void testbench::test_security_key_zeroization_on_escalation()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-192: test_security_key_zeroization_on_escalation");
 
     try {
-        CSML_INFO(2, test_logger) << "Testing key zeroization on security escalation";
+        REG_INFO(2, test_logger) << "Testing key zeroization on security escalation";
 
         // Note: Full escalation testing requires lc_escalate_en_i interface
         // This test documents the architectural requirement
 
-        CSML_INFO(2, test_logger) << "Architectural requirement: lc_escalate_en_i assertion causes:";
-        CSML_INFO(2, test_logger) << "  1. Immediate KEY_SHARE0/KEY_SHARE1 zeroization";
-        CSML_INFO(2, test_logger) << "  2. Internal Keccak state cleared";
-        CSML_INFO(2, test_logger) << "  3. FSM transitions to invalid state";
-        CSML_INFO(2, test_logger) << "  4. All operations blocked";
-        CSML_INFO(2, test_logger) << "  5. Only reset (rst_ni) can recover";
+        REG_INFO(2, test_logger) << "Architectural requirement: lc_escalate_en_i assertion causes:";
+        REG_INFO(2, test_logger) << "  1. Immediate KEY_SHARE0/KEY_SHARE1 zeroization";
+        REG_INFO(2, test_logger) << "  2. Internal Keccak state cleared";
+        REG_INFO(2, test_logger) << "  3. FSM transitions to invalid state";
+        REG_INFO(2, test_logger) << "  4. All operations blocked";
+        REG_INFO(2, test_logger) << "  5. Only reset (rst_ni) can recover";
 
         // Verify system is in operational state initially
         uint32_t status_val = 0;
@@ -979,7 +979,7 @@ void testbench::test_security_key_zeroization_on_escalation()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "System operational before escalation";
+        REG_INFO(2, test_logger) << "System operational before escalation";
 
         // If escalation interface available, test would:
         // 1. Assert lc_escalate_en_i
@@ -988,12 +988,12 @@ void testbench::test_security_key_zeroization_on_escalation()
         // 4. Verify operations blocked
         // 5. Apply reset to recover
 
-        CSML_INFO(2, test_logger) << "Escalation key zeroization requirement documented and verified";
+        REG_INFO(2, test_logger) << "Escalation key zeroization requirement documented and verified";
 
         report_test_pass("TC-192");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-192", "Exception occurred");
     }
 }

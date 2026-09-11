@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file entropy_src.cpp
  * @brief entropy_src TLM model — register callback and FIFO thread
@@ -62,7 +62,7 @@
  * @see entropy_src_base.h for the regmodel socket binding
  * @see reg_file.h for the regmodel::Memory<32>::b_transport implementation
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "entropy_src.h"

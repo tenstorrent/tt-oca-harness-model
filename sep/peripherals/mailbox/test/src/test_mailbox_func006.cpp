@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /**
  * @file test_mailbox_func006.cpp
  * @brief FUNC-006: Programmable Threshold-Based Interrupt System — Test Suite
@@ -28,7 +28,7 @@
  *
  * Architecture Context (Composition + sc_fifo):
  *   - mailbox_ip contains mailbox_base b0/b1 (register containers, no sockets)
- *   - socket0/socket1 are standalone csml_memory sockets bound to b0.memory/b1.memory
+ *   - socket0/socket1 are mailbox_ip TLM targets that delegate to b0.memory / b1.memory
  *   - fifo_0_to_1: Port 0 writes → Port 1 reads
  *   - fifo_1_to_0: Port 1 writes → Port 0 reads
  *   - irq_o[port] is driven exclusively by irq_driver() SC_METHOD
@@ -39,7 +39,7 @@
  *   mailbox_ip("dut", 0x50, 8, true)
  *   → memory_size=0x50, mailbox_depth=8, irq_act_high=true
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  */
 
 #include "testbench.h"
@@ -97,11 +97,11 @@ namespace {
 void testbench::test_interrupt_wtirq_port0()
 {
   const std::string test_name = "TC033: test_interrupt_wtirq_port0";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: WTIRQ end-to-end for Port 0 "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: WTIRQ end-to-end for Port 0 "
                           "(threshold=3, write 4 entries, verify IRQS/IRQP/irq_o, W1C clear)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -114,53 +114,53 @@ void testbench::test_interrupt_wtirq_port0()
   // Step 2-3: Program and verify WIRQT threshold on Port 0
   // -----------------------------------------------------------------------
   const uint64_t THRESHOLD = 3;
-  CSML_INFO(2, logger) << "Step 2: Writing WIRQT=" << THRESHOLD << " to Port 0";
+  REG_INFO(2, logger) << "Step 2: Writing WIRQT=" << THRESHOLD << " to Port 0";
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, THRESHOLD);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT write rejected (expected TLM_OK_RESPONSE)";
+    REG_ERROR(0, logger) << "FAIL: WIRQT write rejected (expected TLM_OK_RESPONSE)";
     test_passed = false;
   }
 
   // handle_read_WIRQT returns the saturated shadow-state value; verify readback
-  CSML_INFO(2, logger) << "Step 3: Reading back WIRQT (expect saturated value=" << THRESHOLD << ")";
+  REG_INFO(2, logger) << "Step 3: Reading back WIRQT (expect saturated value=" << THRESHOLD << ")";
   resp = mailbox_read(0, mailbox_basetest::WIRQT_OFFSET, reg_val);
   if (reg_val != THRESHOLD) {
     std::ostringstream msg;
     msg << "FAIL: WIRQT readback mismatch (got 0x" << std::hex << reg_val
         << ", expected 0x" << THRESHOLD << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: WIRQT readback correct (" << THRESHOLD << ")";
+    REG_INFO(2, logger) << "PASS: WIRQT readback correct (" << THRESHOLD << ")";
   }
 
   // -----------------------------------------------------------------------
   // Step 4: Enable WTIRQ interrupt (IRQEN[0]=1)
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 4: Writing IRQEN=0x1 (WTIRQ enable) to Port 0";
+  REG_INFO(2, logger) << "Step 4: Writing IRQEN=0x1 (WTIRQ enable) to Port 0";
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected";
     test_passed = false;
   }
   resp = mailbox_read(0, mailbox_basetest::IRQEN_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN[0] not set after write";
+    REG_ERROR(0, logger) << "FAIL: IRQEN[0] not set after write";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQEN[0]=1 confirmed";
+    REG_INFO(2, logger) << "PASS: IRQEN[0]=1 confirmed";
   }
 
   // -----------------------------------------------------------------------
   // Step 5: Write 4 entries to Port 0 (usage=4 > WIRQT=3 → IRQS[0] set)
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 5: Writing 4 entries to Port 0 WRITE_DATA (usage=4 > threshold=3)";
+  REG_INFO(2, logger) << "Step 5: Writing 4 entries to Port 0 WRITE_DATA (usage=4 > threshold=3)";
   for (int i = 0; i < 4; i++) {
     resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xAA00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
@@ -168,115 +168,115 @@ void testbench::test_interrupt_wtirq_port0()
   // -----------------------------------------------------------------------
   // Step 6: Verify STATUS[2]=1 (write_level_above_thresh)
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 6: Verifying STATUS[2]=1 (write_level_above_thresh)";
+  REG_INFO(2, logger) << "Step 6: Verifying STATUS[2]=1 (write_level_above_thresh)";
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x4) == 0) {
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] not set (STATUS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh)";
+    REG_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh)";
   }
 
   // -----------------------------------------------------------------------
   // Step 7: Verify IRQS[0]=1 (WTIRQ sticky status)
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 7: Verifying IRQS[0]=1 (WTIRQ sticky status)";
+  REG_INFO(2, logger) << "Step 7: Verifying IRQS[0]=1 (WTIRQ sticky status)";
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQS[0] not set (IRQS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[0]=1 (WTIRQ status set)";
+    REG_INFO(2, logger) << "PASS: IRQS[0]=1 (WTIRQ status set)";
   }
 
   // -----------------------------------------------------------------------
   // Step 8: Verify IRQP[0]=1 (IRQS[0] & IRQEN[0] = 1)
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 8: Verifying IRQP[0]=1 (hardware-computed: IRQS[0] & IRQEN[0])";
+  REG_INFO(2, logger) << "Step 8: Verifying IRQP[0]=1 (hardware-computed: IRQS[0] & IRQEN[0])";
   resp = mailbox_read(0, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQP[0] not set (IRQP=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQP[0]=1 (WTIRQ interrupt pending)";
+    REG_INFO(2, logger) << "PASS: IRQP[0]=1 (WTIRQ interrupt pending)";
   }
 
   // -----------------------------------------------------------------------
   // Step 9-10: Check irq_o[0] assertion via irq_port0_sig
   // wait(SC_ZERO_TIME) yields to irq_driver() SC_METHOD before reading sc_signal
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 9: wait(SC_ZERO_TIME) to allow irq_driver() SC_METHOD to fire";
+  REG_INFO(2, logger) << "Step 9: wait(SC_ZERO_TIME) to allow irq_driver() SC_METHOD to fire";
   wait(SC_ZERO_TIME);
 
-  CSML_INFO(2, logger) << "Step 10: Reading irq_port0_sig (expect true: active-high, level-triggered)";
+  REG_INFO(2, logger) << "Step 10: Reading irq_port0_sig (expect true: active-high, level-triggered)";
   {
     bool irq_asserted = irq_port0_sig.read();
     if (!irq_asserted) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] not asserted (expected true, active-high level-triggered)";
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] not asserted (expected true, active-high level-triggered)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=true (active-high level-triggered, IRQP[0]=1)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=true (active-high level-triggered, IRQP[0]=1)";
     }
   }
 
   // -----------------------------------------------------------------------
   // Step 11: Clear IRQS[0] via write-1-to-clear
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 11: Clearing IRQS[0] with write-1-to-clear (write 0x1 to IRQS)";
+  REG_INFO(2, logger) << "Step 11: Clearing IRQS[0] with write-1-to-clear (write 0x1 to IRQS)";
   resp = mailbox_write(0, mailbox_basetest::IRQS_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
     test_passed = false;
   }
 
   // -----------------------------------------------------------------------
   // Step 12: Verify IRQS[0]=0 after clear
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 12: Verifying IRQS[0]=0 after W1C clear";
+  REG_INFO(2, logger) << "Step 12: Verifying IRQS[0]=0 after W1C clear";
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: IRQS[0] still set after W1C clear";
+    REG_ERROR(0, logger) << "FAIL: IRQS[0] still set after W1C clear";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[0]=0 (cleared)";
+    REG_INFO(2, logger) << "PASS: IRQS[0]=0 (cleared)";
   }
 
   // -----------------------------------------------------------------------
   // Step 13: Verify IRQP[0]=0
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 13: Verifying IRQP[0]=0 after IRQS[0] clear";
+  REG_INFO(2, logger) << "Step 13: Verifying IRQP[0]=0 after IRQS[0] clear";
   resp = mailbox_read(0, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x1) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: IRQP[0] still set after IRQS[0] clear";
+    REG_ERROR(0, logger) << "FAIL: IRQP[0] still set after IRQS[0] clear";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQP[0]=0 (no interrupt pending)";
+    REG_INFO(2, logger) << "PASS: IRQP[0]=0 (no interrupt pending)";
   }
 
   // -----------------------------------------------------------------------
   // Step 14-15: Verify irq_o[0] deassertion
   // -----------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Step 14: wait(SC_ZERO_TIME) to allow irq_driver() to deassert irq_o[0]";
+  REG_INFO(2, logger) << "Step 14: wait(SC_ZERO_TIME) to allow irq_driver() to deassert irq_o[0]";
   wait(SC_ZERO_TIME);
 
-  CSML_INFO(2, logger) << "Step 15: Reading irq_port0_sig (expect false: no pending interrupt)";
+  REG_INFO(2, logger) << "Step 15: Reading irq_port0_sig (expect false: no pending interrupt)";
   {
     bool irq_still_asserted = irq_port0_sig.read();
     if (irq_still_asserted) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] still asserted after IRQS[0] cleared";
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] still asserted after IRQS[0] cleared";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=false (deasserted after IRQS[0] clear)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=false (deasserted after IRQS[0] clear)";
     }
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -319,11 +319,11 @@ void testbench::test_interrupt_wtirq_port0()
 void testbench::test_interrupt_rtirq_port0()
 {
   const std::string test_name = "TC034: test_interrupt_rtirq_port0";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: RTIRQ end-to-end for Port 0 "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: RTIRQ end-to-end for Port 0 "
                           "(Port 0 RIRQT=2, Port 1 writes 3 entries, verify IRQS/IRQP/irq_o, W1C clear)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -333,48 +333,48 @@ void testbench::test_interrupt_rtirq_port0()
 
   // Step 2-3: Program and verify RIRQT on Port 0
   const uint64_t THRESHOLD = 2;
-  CSML_INFO(2, logger) << "Step 2: Writing Port 0 RIRQT=" << THRESHOLD;
+  REG_INFO(2, logger) << "Step 2: Writing Port 0 RIRQT=" << THRESHOLD;
   resp = mailbox_write(0, mailbox_basetest::RIRQT_OFFSET, THRESHOLD);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: RIRQT write rejected";
+    REG_ERROR(0, logger) << "FAIL: RIRQT write rejected";
     test_passed = false;
   }
 
-  CSML_INFO(2, logger) << "Step 3: Reading back Port 0 RIRQT (expect " << THRESHOLD << ")";
+  REG_INFO(2, logger) << "Step 3: Reading back Port 0 RIRQT (expect " << THRESHOLD << ")";
   resp = mailbox_read(0, mailbox_basetest::RIRQT_OFFSET, reg_val);
   if (reg_val != THRESHOLD) {
     std::ostringstream msg;
     msg << "FAIL: RIRQT readback mismatch (got 0x" << std::hex << reg_val
         << ", expected 0x" << THRESHOLD << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: RIRQT readback correct (" << THRESHOLD << ")";
+    REG_INFO(2, logger) << "PASS: RIRQT readback correct (" << THRESHOLD << ")";
   }
 
   // Step 4: Enable RTIRQ on Port 0 (IRQEN[1]=1)
-  CSML_INFO(2, logger) << "Step 4: Writing Port 0 IRQEN=0x2 (RTIRQ enable)";
+  REG_INFO(2, logger) << "Step 4: Writing Port 0 IRQEN=0x2 (RTIRQ enable)";
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected";
     test_passed = false;
   }
   resp = mailbox_read(0, mailbox_basetest::IRQEN_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN[1] not set";
+    REG_ERROR(0, logger) << "FAIL: IRQEN[1] not set";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQEN[1]=1 confirmed";
+    REG_INFO(2, logger) << "PASS: IRQEN[1]=1 confirmed";
   }
 
   // Step 5: Port 1 writes 3 entries → fifo_1_to_0 fill=3 > Port 0 RIRQT=2
-  CSML_INFO(2, logger) << "Step 5: Port 1 writing 3 entries (Port 0 read-FIFO fill=3 > RIRQT=2)";
+  REG_INFO(2, logger) << "Step 5: Port 1 writing 3 entries (Port 0 read-FIFO fill=3 > RIRQT=2)";
   for (int i = 0; i < 3; i++) {
     resp = mailbox_write(1, mailbox_basetest::WRITE_DATA_OFFSET, 0xBB00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Port 1 WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
@@ -386,39 +386,39 @@ void testbench::test_interrupt_rtirq_port0()
   wait(SC_ZERO_TIME);
 
   // Step 6: STATUS[3] must reflect read_level_above_thresh
-  CSML_INFO(2, logger) << "Step 6: Verifying Port 0 STATUS[3]=1 (read_level_above_thresh)";
+  REG_INFO(2, logger) << "Step 6: Verifying Port 0 STATUS[3]=1 (read_level_above_thresh)";
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x8) == 0) {
     std::ostringstream msg;
     msg << "FAIL: STATUS[3] not set (STATUS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[3]=1 (read_level_above_thresh)";
+    REG_INFO(2, logger) << "PASS: STATUS[3]=1 (read_level_above_thresh)";
   }
 
   // Step 7: IRQS[1] sticky status
-  CSML_INFO(2, logger) << "Step 7: Verifying Port 0 IRQS[1]=1";
+  REG_INFO(2, logger) << "Step 7: Verifying Port 0 IRQS[1]=1";
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQS[1] not set (IRQS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[1]=1 (RTIRQ status set)";
+    REG_INFO(2, logger) << "PASS: IRQS[1]=1 (RTIRQ status set)";
   }
 
   // Step 8: IRQP[1] = IRQS[1] & IRQEN[1]
-  CSML_INFO(2, logger) << "Step 8: Verifying Port 0 IRQP[1]=1";
+  REG_INFO(2, logger) << "Step 8: Verifying Port 0 IRQP[1]=1";
   resp = mailbox_read(0, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQP[1] not set (IRQP=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQP[1]=1 (RTIRQ pending)";
+    REG_INFO(2, logger) << "PASS: IRQP[1]=1 (RTIRQ pending)";
   }
 
   // Step 9-10: irq_o[0] assertion
@@ -426,37 +426,37 @@ void testbench::test_interrupt_rtirq_port0()
   {
     bool irq_asserted = irq_port0_sig.read();
     if (!irq_asserted) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] not asserted after RTIRQ threshold exceeded";
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] not asserted after RTIRQ threshold exceeded";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=true (IRQP[1]=1, active-high level-triggered)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=true (IRQP[1]=1, active-high level-triggered)";
     }
   }
 
   // Step 11: W1C clear IRQS[1]
-  CSML_INFO(2, logger) << "Step 11: Clearing Port 0 IRQS[1] (write 0x2 W1C)";
+  REG_INFO(2, logger) << "Step 11: Clearing Port 0 IRQS[1] (write 0x2 W1C)";
   resp = mailbox_write(0, mailbox_basetest::IRQS_OFFSET, 0x2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
     test_passed = false;
   }
 
   // Step 12: Verify IRQS[1]=0
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: IRQS[1] still set after W1C";
+    REG_ERROR(0, logger) << "FAIL: IRQS[1] still set after W1C";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[1]=0 (cleared)";
+    REG_INFO(2, logger) << "PASS: IRQS[1]=0 (cleared)";
   }
 
   // Step 13: Verify IRQP[1]=0
   resp = mailbox_read(0, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: IRQP[1] still set after IRQS[1] clear";
+    REG_ERROR(0, logger) << "FAIL: IRQP[1] still set after IRQS[1] clear";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQP[1]=0";
+    REG_INFO(2, logger) << "PASS: IRQP[1]=0";
   }
 
   // Step 14-15: irq_o[0] deassertion
@@ -464,14 +464,14 @@ void testbench::test_interrupt_rtirq_port0()
   {
     bool irq_still = irq_port0_sig.read();
     if (irq_still) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] still asserted after IRQS[1] cleared";
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] still asserted after IRQS[1] cleared";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=false (deasserted)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=false (deasserted)";
     }
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -514,11 +514,11 @@ void testbench::test_interrupt_rtirq_port0()
 void testbench::test_interrupt_wtirq_port1()
 {
   const std::string test_name = "TC035: test_interrupt_wtirq_port1";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: WTIRQ end-to-end for Port 1 "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: WTIRQ end-to-end for Port 1 "
                           "(threshold=4, write 5 entries, verify IRQS/IRQP/irq_o[1], W1C clear)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -528,86 +528,86 @@ void testbench::test_interrupt_wtirq_port1()
 
   // Step 2-3: Program and verify WIRQT on Port 1
   const uint64_t THRESHOLD = 4;
-  CSML_INFO(2, logger) << "Step 2: Writing Port 1 WIRQT=" << THRESHOLD;
+  REG_INFO(2, logger) << "Step 2: Writing Port 1 WIRQT=" << THRESHOLD;
   resp = mailbox_write(1, mailbox_basetest::WIRQT_OFFSET, THRESHOLD);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 WIRQT write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 1 WIRQT write rejected";
     test_passed = false;
   }
 
-  CSML_INFO(2, logger) << "Step 3: Reading back Port 1 WIRQT (expect " << THRESHOLD << ")";
+  REG_INFO(2, logger) << "Step 3: Reading back Port 1 WIRQT (expect " << THRESHOLD << ")";
   resp = mailbox_read(1, mailbox_basetest::WIRQT_OFFSET, reg_val);
   if (reg_val != THRESHOLD) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 WIRQT readback mismatch (got 0x" << std::hex << reg_val
         << ", expected 0x" << THRESHOLD << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 WIRQT readback correct (" << THRESHOLD << ")";
+    REG_INFO(2, logger) << "PASS: Port 1 WIRQT readback correct (" << THRESHOLD << ")";
   }
 
   // Step 4: Enable WTIRQ on Port 1 (IRQEN[0]=1)
-  CSML_INFO(2, logger) << "Step 4: Writing Port 1 IRQEN=0x1 (WTIRQ enable)";
+  REG_INFO(2, logger) << "Step 4: Writing Port 1 IRQEN=0x1 (WTIRQ enable)";
   resp = mailbox_write(1, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQEN write rejected";
     test_passed = false;
   }
   resp = mailbox_read(1, mailbox_basetest::IRQEN_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQEN[0] not set";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQEN[0] not set";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQEN[0]=1 confirmed";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQEN[0]=1 confirmed";
   }
 
   // Step 5: Port 1 writes 5 entries (usage=5 > WIRQT=4)
-  CSML_INFO(2, logger) << "Step 5: Port 1 writing 5 entries (usage=5 > threshold=4)";
+  REG_INFO(2, logger) << "Step 5: Port 1 writing 5 entries (usage=5 > threshold=4)";
   for (int i = 0; i < 5; i++) {
     resp = mailbox_write(1, mailbox_basetest::WRITE_DATA_OFFSET, 0xCC00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Port 1 WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
 
   // Step 6: STATUS[2]=1 on Port 1
-  CSML_INFO(2, logger) << "Step 6: Verifying Port 1 STATUS[2]=1";
+  REG_INFO(2, logger) << "Step 6: Verifying Port 1 STATUS[2]=1";
   resp = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x4) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 STATUS[2] not set (STATUS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 STATUS[2]=1";
+    REG_INFO(2, logger) << "PASS: Port 1 STATUS[2]=1";
   }
 
   // Step 7: IRQS[0] on Port 1
-  CSML_INFO(2, logger) << "Step 7: Verifying Port 1 IRQS[0]=1";
+  REG_INFO(2, logger) << "Step 7: Verifying Port 1 IRQS[0]=1";
   resp = mailbox_read(1, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 IRQS[0] not set (IRQS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQS[0]=1 (WTIRQ status set)";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQS[0]=1 (WTIRQ status set)";
   }
 
   // Step 8: IRQP[0] on Port 1
-  CSML_INFO(2, logger) << "Step 8: Verifying Port 1 IRQP[0]=1";
+  REG_INFO(2, logger) << "Step 8: Verifying Port 1 IRQP[0]=1";
   resp = mailbox_read(1, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 IRQP[0] not set (IRQP=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQP[0]=1 (WTIRQ pending)";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQP[0]=1 (WTIRQ pending)";
   }
 
   // Step 9-10: irq_o[1] assertion
@@ -615,37 +615,37 @@ void testbench::test_interrupt_wtirq_port1()
   {
     bool irq_asserted = irq_port1_sig.read();
     if (!irq_asserted) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[1] not asserted (expected true, active-high level-triggered)";
+      REG_ERROR(0, logger) << "FAIL: irq_o[1] not asserted (expected true, active-high level-triggered)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[1]=true (IRQP[0]=1 on Port 1)";
+      REG_INFO(2, logger) << "PASS: irq_o[1]=true (IRQP[0]=1 on Port 1)";
     }
   }
 
   // Step 11: W1C clear Port 1 IRQS[0]
-  CSML_INFO(2, logger) << "Step 11: Clearing Port 1 IRQS[0] (write 0x1 W1C)";
+  REG_INFO(2, logger) << "Step 11: Clearing Port 1 IRQS[0] (write 0x1 W1C)";
   resp = mailbox_write(1, mailbox_basetest::IRQS_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQS W1C write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQS W1C write rejected";
     test_passed = false;
   }
 
   // Step 12: Verify Port 1 IRQS[0]=0
   resp = mailbox_read(1, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQS[0] still set after W1C";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQS[0] still set after W1C";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQS[0]=0 (cleared)";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQS[0]=0 (cleared)";
   }
 
   // Step 13: Verify Port 1 IRQP[0]=0
   resp = mailbox_read(1, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x1) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQP[0] still set after IRQS[0] clear";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQP[0] still set after IRQS[0] clear";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQP[0]=0";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQP[0]=0";
   }
 
   // Step 14-15: irq_o[1] deassertion
@@ -653,14 +653,14 @@ void testbench::test_interrupt_wtirq_port1()
   {
     bool irq_still = irq_port1_sig.read();
     if (irq_still) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[1] still asserted after Port 1 IRQS[0] cleared";
+      REG_ERROR(0, logger) << "FAIL: irq_o[1] still asserted after Port 1 IRQS[0] cleared";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[1]=false (deasserted); Port 1 WTIRQ consistent with Port 0";
+      REG_INFO(2, logger) << "PASS: irq_o[1]=false (deasserted); Port 1 WTIRQ consistent with Port 0";
     }
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -703,11 +703,11 @@ void testbench::test_interrupt_wtirq_port1()
 void testbench::test_interrupt_rtirq_port1()
 {
   const std::string test_name = "TC036: test_interrupt_rtirq_port1";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: RTIRQ end-to-end for Port 1 "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: RTIRQ end-to-end for Port 1 "
                           "(Port 1 RIRQT=3, Port 0 writes 4 entries, verify IRQS/IRQP/irq_o[1], W1C clear)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -717,48 +717,48 @@ void testbench::test_interrupt_rtirq_port1()
 
   // Step 2-3: Program and verify Port 1 RIRQT
   const uint64_t THRESHOLD = 3;
-  CSML_INFO(2, logger) << "Step 2: Writing Port 1 RIRQT=" << THRESHOLD;
+  REG_INFO(2, logger) << "Step 2: Writing Port 1 RIRQT=" << THRESHOLD;
   resp = mailbox_write(1, mailbox_basetest::RIRQT_OFFSET, THRESHOLD);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 RIRQT write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 1 RIRQT write rejected";
     test_passed = false;
   }
 
-  CSML_INFO(2, logger) << "Step 3: Reading back Port 1 RIRQT (expect " << THRESHOLD << ")";
+  REG_INFO(2, logger) << "Step 3: Reading back Port 1 RIRQT (expect " << THRESHOLD << ")";
   resp = mailbox_read(1, mailbox_basetest::RIRQT_OFFSET, reg_val);
   if (reg_val != THRESHOLD) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 RIRQT readback mismatch (got 0x" << std::hex << reg_val
         << ", expected 0x" << THRESHOLD << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 RIRQT readback correct (" << THRESHOLD << ")";
+    REG_INFO(2, logger) << "PASS: Port 1 RIRQT readback correct (" << THRESHOLD << ")";
   }
 
   // Step 4: Enable RTIRQ on Port 1 (IRQEN[1]=1)
-  CSML_INFO(2, logger) << "Step 4: Writing Port 1 IRQEN=0x2 (RTIRQ enable)";
+  REG_INFO(2, logger) << "Step 4: Writing Port 1 IRQEN=0x2 (RTIRQ enable)";
   resp = mailbox_write(1, mailbox_basetest::IRQEN_OFFSET, 0x2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQEN write rejected";
     test_passed = false;
   }
   resp = mailbox_read(1, mailbox_basetest::IRQEN_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQEN[1] not set";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQEN[1] not set";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQEN[1]=1 confirmed";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQEN[1]=1 confirmed";
   }
 
   // Step 5: Port 0 writes 4 entries → fifo_0_to_1 fill=4 > Port 1 RIRQT=3
-  CSML_INFO(2, logger) << "Step 5: Port 0 writing 4 entries (Port 1 read-FIFO fill=4 > RIRQT=3)";
+  REG_INFO(2, logger) << "Step 5: Port 0 writing 4 entries (Port 1 read-FIFO fill=4 > RIRQT=3)";
   for (int i = 0; i < 4; i++) {
     resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xDD00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Port 0 WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
@@ -767,39 +767,39 @@ void testbench::test_interrupt_rtirq_port1()
   wait(SC_ZERO_TIME);
 
   // Step 6: Port 1 STATUS[3]
-  CSML_INFO(2, logger) << "Step 6: Verifying Port 1 STATUS[3]=1";
+  REG_INFO(2, logger) << "Step 6: Verifying Port 1 STATUS[3]=1";
   resp = mailbox_read(1, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x8) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 STATUS[3] not set (STATUS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 STATUS[3]=1 (read_level_above_thresh)";
+    REG_INFO(2, logger) << "PASS: Port 1 STATUS[3]=1 (read_level_above_thresh)";
   }
 
   // Step 7: Port 1 IRQS[1]
-  CSML_INFO(2, logger) << "Step 7: Verifying Port 1 IRQS[1]=1";
+  REG_INFO(2, logger) << "Step 7: Verifying Port 1 IRQS[1]=1";
   resp = mailbox_read(1, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 IRQS[1] not set (IRQS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQS[1]=1 (RTIRQ status set)";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQS[1]=1 (RTIRQ status set)";
   }
 
   // Step 8: Port 1 IRQP[1]
-  CSML_INFO(2, logger) << "Step 8: Verifying Port 1 IRQP[1]=1";
+  REG_INFO(2, logger) << "Step 8: Verifying Port 1 IRQP[1]=1";
   resp = mailbox_read(1, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 1 IRQP[1] not set (IRQP=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQP[1]=1 (RTIRQ pending)";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQP[1]=1 (RTIRQ pending)";
   }
 
   // Step 9-10: irq_o[1] assertion
@@ -807,37 +807,37 @@ void testbench::test_interrupt_rtirq_port1()
   {
     bool irq_asserted = irq_port1_sig.read();
     if (!irq_asserted) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[1] not asserted after Port 1 RTIRQ threshold exceeded";
+      REG_ERROR(0, logger) << "FAIL: irq_o[1] not asserted after Port 1 RTIRQ threshold exceeded";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[1]=true (IRQP[1]=1 on Port 1)";
+      REG_INFO(2, logger) << "PASS: irq_o[1]=true (IRQP[1]=1 on Port 1)";
     }
   }
 
   // Step 11: W1C clear Port 1 IRQS[1]
-  CSML_INFO(2, logger) << "Step 11: Clearing Port 1 IRQS[1] (write 0x2 W1C)";
+  REG_INFO(2, logger) << "Step 11: Clearing Port 1 IRQS[1] (write 0x2 W1C)";
   resp = mailbox_write(1, mailbox_basetest::IRQS_OFFSET, 0x2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQS W1C write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQS W1C write rejected";
     test_passed = false;
   }
 
   // Step 12: Verify Port 1 IRQS[1]=0
   resp = mailbox_read(1, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQS[1] still set after W1C";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQS[1] still set after W1C";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQS[1]=0 (cleared)";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQS[1]=0 (cleared)";
   }
 
   // Step 13: Verify Port 1 IRQP[1]=0
   resp = mailbox_read(1, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x2) != 0) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 IRQP[1] still set after IRQS[1] clear";
+    REG_ERROR(0, logger) << "FAIL: Port 1 IRQP[1] still set after IRQS[1] clear";
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 1 IRQP[1]=0";
+    REG_INFO(2, logger) << "PASS: Port 1 IRQP[1]=0";
   }
 
   // Step 14-15: irq_o[1] deassertion
@@ -845,14 +845,14 @@ void testbench::test_interrupt_rtirq_port1()
   {
     bool irq_still = irq_port1_sig.read();
     if (irq_still) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[1] still asserted after Port 1 IRQS[1] cleared";
+      REG_ERROR(0, logger) << "FAIL: irq_o[1] still asserted after Port 1 IRQS[1] cleared";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[1]=false (deasserted); Port 1 RTIRQ consistent with Port 0";
+      REG_INFO(2, logger) << "PASS: irq_o[1]=false (deasserted); Port 1 RTIRQ consistent with Port 0";
     }
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -892,11 +892,11 @@ void testbench::test_interrupt_rtirq_port1()
 void testbench::test_threshold_saturation_wirqt()
 {
   const std::string test_name = "TC037: test_threshold_saturation_wirqt";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: WIRQT saturation (0xFF→7) and retroactive trigger "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: WIRQT saturation (0xFF→7) and retroactive trigger "
                           "(fill=5, lower threshold=3)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -905,12 +905,12 @@ void testbench::test_threshold_saturation_wirqt()
   // ------------------------------------------------------------------
   // Part A: Saturation verification
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part A: Saturation — write WIRQT=0xFF, expect readback=7";
+  REG_INFO(2, logger) << "Part A: Saturation — write WIRQT=0xFF, expect readback=7";
   apply_reset();
 
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, 0xFF);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=0xFF write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=0xFF write rejected";
     test_passed = false;
   }
 
@@ -921,17 +921,17 @@ void testbench::test_threshold_saturation_wirqt()
     msg << "FAIL: WIRQT saturation incorrect (got 0x" << std::hex << reg_val
         << ", expected 0x" << MAX_THRESHOLD
         << " = MailboxDepth-1=" << MAILBOX_DEPTH-1 << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: WIRQT=0xFF saturated to " << MAX_THRESHOLD
+    REG_INFO(2, logger) << "PASS: WIRQT=0xFF saturated to " << MAX_THRESHOLD
                          << " (MailboxDepth-1)";
   }
 
   // ------------------------------------------------------------------
   // Part B: Retroactive trigger
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part B: Retroactive trigger — fill=5, lower WIRQT to 3";
+  REG_INFO(2, logger) << "Part B: Retroactive trigger — fill=5, lower WIRQT to 3";
   apply_reset();
 
   // Fill Port 0 write FIFO to usage=5
@@ -940,19 +940,19 @@ void testbench::test_threshold_saturation_wirqt()
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: WRITE_DATA fill entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
-  CSML_INFO(2, logger) << "INFO: Port 0 write FIFO filled to usage=5";
+  REG_INFO(2, logger) << "INFO: Port 0 write FIFO filled to usage=5";
 
   // Lower WIRQT to 3 (usage=5 > 3 → retroactive IRQS[0] set inside callback)
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, 3);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=3 write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=3 write rejected";
     test_passed = false;
   }
-  CSML_INFO(2, logger) << "INFO: WIRQT lowered to 3 (below current usage=5)";
+  REG_INFO(2, logger) << "INFO: WIRQT lowered to 3 (below current usage=5)";
 
   // IRQS[0] must be set immediately (retroactive trigger in handle_write_WIRQT)
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
@@ -960,10 +960,10 @@ void testbench::test_threshold_saturation_wirqt()
     std::ostringstream msg;
     msg << "FAIL: IRQS[0] not set after retroactive WIRQT trigger (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[0]=1 (retroactive WIRQT trigger works)";
+    REG_INFO(2, logger) << "PASS: IRQS[0]=1 (retroactive WIRQT trigger works)";
   }
 
   // STATUS[2] must reflect usage > new threshold
@@ -972,13 +972,13 @@ void testbench::test_threshold_saturation_wirqt()
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] not set after WIRQT lowered (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh after retroactive trigger)";
+    REG_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh after retroactive trigger)";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -1017,11 +1017,11 @@ void testbench::test_threshold_saturation_wirqt()
 void testbench::test_threshold_saturation_rirqt()
 {
   const std::string test_name = "TC038: test_threshold_saturation_rirqt";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: RIRQT saturation (200→7) and retroactive trigger "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: RIRQT saturation (200→7) and retroactive trigger "
                           "(Port 1 fill=4, lower Port 0 RIRQT=2)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -1030,12 +1030,12 @@ void testbench::test_threshold_saturation_rirqt()
   // ------------------------------------------------------------------
   // Part A: Saturation verification
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part A: Saturation — write Port 0 RIRQT=200, expect readback=7";
+  REG_INFO(2, logger) << "Part A: Saturation — write Port 0 RIRQT=200, expect readback=7";
   apply_reset();
 
   resp = mailbox_write(0, mailbox_basetest::RIRQT_OFFSET, 200);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: RIRQT=200 write rejected";
+    REG_ERROR(0, logger) << "FAIL: RIRQT=200 write rejected";
     test_passed = false;
   }
 
@@ -1044,17 +1044,17 @@ void testbench::test_threshold_saturation_rirqt()
     std::ostringstream msg;
     msg << "FAIL: RIRQT saturation incorrect (got 0x" << std::hex << reg_val
         << ", expected 0x" << MAX_THRESHOLD << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: RIRQT=200 saturated to " << MAX_THRESHOLD
+    REG_INFO(2, logger) << "PASS: RIRQT=200 saturated to " << MAX_THRESHOLD
                          << " (MailboxDepth-1)";
   }
 
   // ------------------------------------------------------------------
   // Part B: Retroactive trigger
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part B: Retroactive trigger — Port 1 fill=4, lower Port 0 RIRQT=2";
+  REG_INFO(2, logger) << "Part B: Retroactive trigger — Port 1 fill=4, lower Port 0 RIRQT=2";
   apply_reset();
 
   // Port 1 writes 4 entries → fifo_1_to_0 fill=4 = Port 0 read-FIFO fill
@@ -1063,19 +1063,19 @@ void testbench::test_threshold_saturation_rirqt()
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Port 1 WRITE_DATA fill entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
-  CSML_INFO(2, logger) << "INFO: Port 1 filled fifo_1_to_0 to fill=4 (Port 0 read-FIFO)";
+  REG_INFO(2, logger) << "INFO: Port 1 filled fifo_1_to_0 to fill=4 (Port 0 read-FIFO)";
 
   // Lower Port 0 RIRQT to 2 (fill=4 > 2 → retroactive IRQS[1] set in callback)
   resp = mailbox_write(0, mailbox_basetest::RIRQT_OFFSET, 2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 RIRQT=2 write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 0 RIRQT=2 write rejected";
     test_passed = false;
   }
-  CSML_INFO(2, logger) << "INFO: Port 0 RIRQT lowered to 2 (below current fill=4)";
+  REG_INFO(2, logger) << "INFO: Port 0 RIRQT lowered to 2 (below current fill=4)";
 
   // IRQS[1] must be set immediately
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
@@ -1083,10 +1083,10 @@ void testbench::test_threshold_saturation_rirqt()
     std::ostringstream msg;
     msg << "FAIL: Port 0 IRQS[1] not set after retroactive RIRQT trigger (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 IRQS[1]=1 (retroactive RIRQT trigger works)";
+    REG_INFO(2, logger) << "PASS: Port 0 IRQS[1]=1 (retroactive RIRQT trigger works)";
   }
 
   // STATUS[3] uses num_available() which updates after a delta cycle.
@@ -1099,13 +1099,13 @@ void testbench::test_threshold_saturation_rirqt()
     std::ostringstream msg;
     msg << "FAIL: Port 0 STATUS[3] not set after RIRQT lowered (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 STATUS[3]=1 (read_level_above_thresh)";
+    REG_INFO(2, logger) << "PASS: Port 0 STATUS[3]=1 (read_level_above_thresh)";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -1143,11 +1143,11 @@ void testbench::test_threshold_saturation_rirqt()
 void testbench::test_threshold_zero_wirqt()
 {
   const std::string test_name = "TC039: test_threshold_zero_wirqt";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Zero WIRQT threshold — any write triggers WTIRQ "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Zero WIRQT threshold — any write triggers WTIRQ "
                           "(usage=1 > threshold=0)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -1156,63 +1156,63 @@ void testbench::test_threshold_zero_wirqt()
   apply_reset();
 
   // Step 2: Write WIRQT=0 (explicit write exercises the callback path)
-  CSML_INFO(2, logger) << "Step 2: Writing WIRQT=0 to Port 0";
+  REG_INFO(2, logger) << "Step 2: Writing WIRQT=0 to Port 0";
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, 0);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=0 write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=0 write rejected";
     test_passed = false;
   }
 
   // Step 3: Enable WTIRQ
-  CSML_INFO(2, logger) << "Step 3: Writing IRQEN=0x1 (WTIRQ enable)";
+  REG_INFO(2, logger) << "Step 3: Writing IRQEN=0x1 (WTIRQ enable)";
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected";
     test_passed = false;
   }
 
   // Step 4: Single write — usage=1 > threshold=0
-  CSML_INFO(2, logger) << "Step 4: Writing single entry to WRITE_DATA (usage=1 > WIRQT=0)";
+  REG_INFO(2, logger) << "Step 4: Writing single entry to WRITE_DATA (usage=1 > WIRQT=0)";
   resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xAA00000000000001ULL);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WRITE_DATA single write rejected";
+    REG_ERROR(0, logger) << "FAIL: WRITE_DATA single write rejected";
     test_passed = false;
   }
 
   // Step 5: STATUS[2]
-  CSML_INFO(2, logger) << "Step 5: Verifying STATUS[2]=1 (usage=1 > WIRQT=0)";
+  REG_INFO(2, logger) << "Step 5: Verifying STATUS[2]=1 (usage=1 > WIRQT=0)";
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x4) == 0) {
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] not set with zero threshold (STATUS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh, WIRQT=0)";
+    REG_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh, WIRQT=0)";
   }
 
   // Step 6: IRQS[0]
-  CSML_INFO(2, logger) << "Step 6: Verifying IRQS[0]=1";
+  REG_INFO(2, logger) << "Step 6: Verifying IRQS[0]=1";
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQS[0] not set with zero threshold (IRQS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[0]=1 (zero threshold allows immediate interrupt)";
+    REG_INFO(2, logger) << "PASS: IRQS[0]=1 (zero threshold allows immediate interrupt)";
   }
 
   // Step 7: IRQP[0]
-  CSML_INFO(2, logger) << "Step 7: Verifying IRQP[0]=1";
+  REG_INFO(2, logger) << "Step 7: Verifying IRQP[0]=1";
   resp = mailbox_read(0, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQP[0] not set (IRQP=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQP[0]=1 (interrupt pending)";
+    REG_INFO(2, logger) << "PASS: IRQP[0]=1 (interrupt pending)";
   }
 
   // Step 8-9: irq_o[0] assertion
@@ -1220,14 +1220,14 @@ void testbench::test_threshold_zero_wirqt()
   {
     bool irq_asserted = irq_port0_sig.read();
     if (!irq_asserted) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] not asserted with zero WIRQT threshold";
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] not asserted with zero WIRQT threshold";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=true (zero threshold interrupt delivered)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=true (zero threshold interrupt delivered)";
     }
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -1265,11 +1265,11 @@ void testbench::test_threshold_zero_wirqt()
 void testbench::test_threshold_zero_rirqt()
 {
   const std::string test_name = "TC040: test_threshold_zero_rirqt";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Zero RIRQT threshold — any peer write triggers RTIRQ "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Zero RIRQT threshold — any peer write triggers RTIRQ "
                           "(Port 1 fill=1 > Port 0 RIRQT=0)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -1278,26 +1278,26 @@ void testbench::test_threshold_zero_rirqt()
   apply_reset();
 
   // Step 2: Write Port 0 RIRQT=0
-  CSML_INFO(2, logger) << "Step 2: Writing Port 0 RIRQT=0";
+  REG_INFO(2, logger) << "Step 2: Writing Port 0 RIRQT=0";
   resp = mailbox_write(0, mailbox_basetest::RIRQT_OFFSET, 0);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: RIRQT=0 write rejected";
+    REG_ERROR(0, logger) << "FAIL: RIRQT=0 write rejected";
     test_passed = false;
   }
 
   // Step 3: Enable RTIRQ on Port 0
-  CSML_INFO(2, logger) << "Step 3: Writing Port 0 IRQEN=0x2 (RTIRQ enable)";
+  REG_INFO(2, logger) << "Step 3: Writing Port 0 IRQEN=0x2 (RTIRQ enable)";
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected";
     test_passed = false;
   }
 
   // Step 4: Port 1 writes 1 entry → fifo_1_to_0 fill=1 > Port 0 RIRQT=0
-  CSML_INFO(2, logger) << "Step 4: Port 1 writing single entry (Port 0 fill=1 > RIRQT=0)";
+  REG_INFO(2, logger) << "Step 4: Port 1 writing single entry (Port 0 fill=1 > RIRQT=0)";
   resp = mailbox_write(1, mailbox_basetest::WRITE_DATA_OFFSET, 0xBB00000000000001ULL);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 1 WRITE_DATA single write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 1 WRITE_DATA single write rejected";
     test_passed = false;
   }
 
@@ -1306,39 +1306,39 @@ void testbench::test_threshold_zero_rirqt()
   wait(SC_ZERO_TIME);
 
   // Step 5: STATUS[3]
-  CSML_INFO(2, logger) << "Step 5: Verifying Port 0 STATUS[3]=1 (fill=1 > RIRQT=0)";
+  REG_INFO(2, logger) << "Step 5: Verifying Port 0 STATUS[3]=1 (fill=1 > RIRQT=0)";
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x8) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 0 STATUS[3] not set (STATUS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 STATUS[3]=1 (read_level_above_thresh, RIRQT=0)";
+    REG_INFO(2, logger) << "PASS: Port 0 STATUS[3]=1 (read_level_above_thresh, RIRQT=0)";
   }
 
   // Step 6: IRQS[1]
-  CSML_INFO(2, logger) << "Step 6: Verifying Port 0 IRQS[1]=1";
+  REG_INFO(2, logger) << "Step 6: Verifying Port 0 IRQS[1]=1";
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 0 IRQS[1] not set (IRQS=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 IRQS[1]=1 (zero threshold allows immediate RTIRQ)";
+    REG_INFO(2, logger) << "PASS: Port 0 IRQS[1]=1 (zero threshold allows immediate RTIRQ)";
   }
 
   // Step 7: IRQP[1]
-  CSML_INFO(2, logger) << "Step 7: Verifying Port 0 IRQP[1]=1";
+  REG_INFO(2, logger) << "Step 7: Verifying Port 0 IRQP[1]=1";
   resp = mailbox_read(0, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Port 0 IRQP[1] not set (IRQP=0x" << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Port 0 IRQP[1]=1 (interrupt pending)";
+    REG_INFO(2, logger) << "PASS: Port 0 IRQP[1]=1 (interrupt pending)";
   }
 
   // Step 8-9: irq_o[0] assertion
@@ -1346,14 +1346,14 @@ void testbench::test_threshold_zero_rirqt()
   {
     bool irq_asserted = irq_port0_sig.read();
     if (!irq_asserted) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] not asserted with zero RIRQT threshold";
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] not asserted with zero RIRQT threshold";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=true (zero RIRQT threshold interrupt delivered)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=true (zero RIRQT threshold interrupt delivered)";
     }
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -1396,11 +1396,11 @@ void testbench::test_threshold_zero_rirqt()
 void testbench::test_threshold_retroactive_trigger()
 {
   const std::string test_name = "TC041: test_threshold_retroactive_trigger";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Retroactive threshold triggering for WIRQT (fill=6, lower=4) "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Retroactive threshold triggering for WIRQT (fill=6, lower=4) "
                           "and RIRQT (fill=5, lower=3)";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -1409,7 +1409,7 @@ void testbench::test_threshold_retroactive_trigger()
   // ------------------------------------------------------------------
   // Part 1: WIRQT retroactive trigger
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part 1: WIRQT retroactive trigger (Port 0 usage=6, lower WIRQT to 4)";
+  REG_INFO(2, logger) << "Part 1: WIRQT retroactive trigger (Port 0 usage=6, lower WIRQT to 4)";
   apply_reset();
 
   for (int i = 0; i < 6; i++) {
@@ -1417,22 +1417,22 @@ void testbench::test_threshold_retroactive_trigger()
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: WIRQT-part WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
-  CSML_INFO(2, logger) << "INFO: Port 0 write FIFO usage=6";
+  REG_INFO(2, logger) << "INFO: Port 0 write FIFO usage=6";
 
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part 1)";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part 1)";
     test_passed = false;
   }
 
   // Lower WIRQT to 4 — retroactive trigger fires inside handle_write_WIRQT
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, 4);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=4 write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=4 write rejected";
     test_passed = false;
   }
 
@@ -1441,10 +1441,10 @@ void testbench::test_threshold_retroactive_trigger()
     std::ostringstream msg;
     msg << "FAIL: Part 1 — IRQS[0] not set after retroactive WIRQT trigger (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part 1 — IRQS[0]=1 (WIRQT retroactive trigger)";
+    REG_INFO(2, logger) << "PASS: Part 1 — IRQS[0]=1 (WIRQT retroactive trigger)";
   }
 
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
@@ -1452,16 +1452,16 @@ void testbench::test_threshold_retroactive_trigger()
     std::ostringstream msg;
     msg << "FAIL: Part 1 — STATUS[2] not set after WIRQT lowered (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part 1 — STATUS[2]=1 (write_level_above_thresh)";
+    REG_INFO(2, logger) << "PASS: Part 1 — STATUS[2]=1 (write_level_above_thresh)";
   }
 
   // ------------------------------------------------------------------
   // Part 2: RIRQT retroactive trigger
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part 2: RIRQT retroactive trigger (Port 0 read-FIFO fill=5, lower RIRQT to 3)";
+  REG_INFO(2, logger) << "Part 2: RIRQT retroactive trigger (Port 0 read-FIFO fill=5, lower RIRQT to 3)";
   apply_reset();
 
   for (int i = 0; i < 5; i++) {
@@ -1469,22 +1469,22 @@ void testbench::test_threshold_retroactive_trigger()
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: RIRQT-part Port 1 WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
-  CSML_INFO(2, logger) << "INFO: Port 0 read-FIFO (fifo_1_to_0) fill=5";
+  REG_INFO(2, logger) << "INFO: Port 0 read-FIFO (fifo_1_to_0) fill=5";
 
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part 2)";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part 2)";
     test_passed = false;
   }
 
   // Lower Port 0 RIRQT to 3 — retroactive trigger fires inside handle_write_RIRQT
   resp = mailbox_write(0, mailbox_basetest::RIRQT_OFFSET, 3);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 RIRQT=3 write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 0 RIRQT=3 write rejected";
     test_passed = false;
   }
 
@@ -1493,10 +1493,10 @@ void testbench::test_threshold_retroactive_trigger()
     std::ostringstream msg;
     msg << "FAIL: Part 2 — Port 0 IRQS[1] not set after retroactive RIRQT trigger (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part 2 — Port 0 IRQS[1]=1 (RIRQT retroactive trigger)";
+    REG_INFO(2, logger) << "PASS: Part 2 — Port 0 IRQS[1]=1 (RIRQT retroactive trigger)";
   }
 
   // STATUS[3] uses num_available() — yield for delta-cycle update before reading.
@@ -1507,13 +1507,13 @@ void testbench::test_threshold_retroactive_trigger()
     std::ostringstream msg;
     msg << "FAIL: Part 2 — Port 0 STATUS[3] not set after RIRQT lowered (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part 2 — Port 0 STATUS[3]=1 (read_level_above_thresh)";
+    REG_INFO(2, logger) << "PASS: Part 2 — Port 0 STATUS[3]=1 (read_level_above_thresh)";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -1553,10 +1553,10 @@ void testbench::test_threshold_retroactive_trigger()
 void testbench::test_boundary_threshold_max_value()
 {
   const std::string test_name = "TC042: test_boundary_threshold_max_value";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Threshold=MailboxDepth-1 (7); interrupt triggers at full FIFO";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Threshold=MailboxDepth-1 (7); interrupt triggers at full FIFO";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -1565,18 +1565,18 @@ void testbench::test_boundary_threshold_max_value()
   // ------------------------------------------------------------------
   // Part A: WIRQT = MailboxDepth-1
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part A: WIRQT=7 (MailboxDepth-1), write 8 entries (full FIFO)";
+  REG_INFO(2, logger) << "Part A: WIRQT=7 (MailboxDepth-1), write 8 entries (full FIFO)";
   apply_reset();
 
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, MAX_THRESHOLD);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=7 write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=7 write rejected";
     test_passed = false;
   }
 
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part A)";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part A)";
     test_passed = false;
   }
 
@@ -1585,21 +1585,21 @@ void testbench::test_boundary_threshold_max_value()
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Part A WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
-  CSML_INFO(2, logger) << "INFO: Port 0 write FIFO filled to capacity (usage=" << MAILBOX_DEPTH << ")";
+  REG_INFO(2, logger) << "INFO: Port 0 write FIFO filled to capacity (usage=" << MAILBOX_DEPTH << ")";
 
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Part A — IRQS[0] not set when FIFO full with max threshold (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part A — IRQS[0]=1 (max threshold, full FIFO triggers interrupt)";
+    REG_INFO(2, logger) << "PASS: Part A — IRQS[0]=1 (max threshold, full FIFO triggers interrupt)";
   }
 
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
@@ -1607,27 +1607,27 @@ void testbench::test_boundary_threshold_max_value()
     std::ostringstream msg;
     msg << "FAIL: Part A — STATUS[2] not set with max threshold (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part A — STATUS[2]=1";
+    REG_INFO(2, logger) << "PASS: Part A — STATUS[2]=1";
   }
 
   // ------------------------------------------------------------------
   // Part B: RIRQT = MailboxDepth-1
   // ------------------------------------------------------------------
-  CSML_INFO(2, logger) << "Part B: Port 0 RIRQT=7, Port 1 writes 8 entries";
+  REG_INFO(2, logger) << "Part B: Port 0 RIRQT=7, Port 1 writes 8 entries";
   apply_reset();
 
   resp = mailbox_write(0, mailbox_basetest::RIRQT_OFFSET, MAX_THRESHOLD);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: Port 0 RIRQT=7 write rejected";
+    REG_ERROR(0, logger) << "FAIL: Port 0 RIRQT=7 write rejected";
     test_passed = false;
   }
 
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part B)";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected (Part B)";
     test_passed = false;
   }
 
@@ -1636,21 +1636,21 @@ void testbench::test_boundary_threshold_max_value()
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Part B Port 1 WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
-  CSML_INFO(2, logger) << "INFO: Port 0 read-FIFO filled to capacity (fill=" << MAILBOX_DEPTH << ")";
+  REG_INFO(2, logger) << "INFO: Port 0 read-FIFO filled to capacity (fill=" << MAILBOX_DEPTH << ")";
 
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x2) == 0) {
     std::ostringstream msg;
     msg << "FAIL: Part B — Port 0 IRQS[1] not set with max threshold (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part B — Port 0 IRQS[1]=1 (max RIRQT, full read-FIFO)";
+    REG_INFO(2, logger) << "PASS: Part B — Port 0 IRQS[1]=1 (max RIRQT, full read-FIFO)";
   }
 
   // STATUS[3] uses num_available() which updates after a delta cycle.
@@ -1661,13 +1661,13 @@ void testbench::test_boundary_threshold_max_value()
     std::ostringstream msg;
     msg << "FAIL: Part B — Port 0 STATUS[3] not set with max threshold (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: Part B — Port 0 STATUS[3]=1";
+    REG_INFO(2, logger) << "PASS: Part B — Port 0 STATUS[3]=1";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -1704,11 +1704,11 @@ void testbench::test_boundary_threshold_max_value()
 void testbench::test_boundary_threshold_equal_usage()
 {
   const std::string test_name = "TC043: test_boundary_threshold_equal_usage";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Strictly-greater-than comparison: usage=5 == WIRQT=5 "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Strictly-greater-than comparison: usage=5 == WIRQT=5 "
                           "must NOT trigger; usage=6 must trigger";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -1720,94 +1720,94 @@ void testbench::test_boundary_threshold_equal_usage()
   const int      EQUAL_CNT = 5;   ///< Writes equal to threshold (no interrupt expected)
 
   // Step 2: Write WIRQT=5
-  CSML_INFO(2, logger) << "Step 2: Writing WIRQT=5";
+  REG_INFO(2, logger) << "Step 2: Writing WIRQT=5";
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, THRESHOLD);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=5 write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=5 write rejected";
     test_passed = false;
   }
 
   // Step 3: Enable WTIRQ
-  CSML_INFO(2, logger) << "Step 3: Writing IRQEN=0x1";
+  REG_INFO(2, logger) << "Step 3: Writing IRQEN=0x1";
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected";
     test_passed = false;
   }
 
   // Step 4: Write exactly 5 entries (usage == threshold, no interrupt)
-  CSML_INFO(2, logger) << "Step 4: Writing exactly 5 entries (usage=5, equal to threshold=5)";
+  REG_INFO(2, logger) << "Step 4: Writing exactly 5 entries (usage=5, equal to threshold=5)";
   for (int i = 0; i < EQUAL_CNT; i++) {
     resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xAA00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: WRITE_DATA equal-count entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
 
   // Step 5: IRQS[0] must be 0 (usage NOT > threshold)
-  CSML_INFO(2, logger) << "Step 5: Verifying IRQS[0]=0 (usage=5 NOT > threshold=5)";
+  REG_INFO(2, logger) << "Step 5: Verifying IRQS[0]=0 (usage=5 NOT > threshold=5)";
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) != 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQS[0] set when usage equals threshold — should be 0 (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[0]=0 (equal usage does NOT trigger interrupt)";
+    REG_INFO(2, logger) << "PASS: IRQS[0]=0 (equal usage does NOT trigger interrupt)";
   }
 
   // Step 6: STATUS[2] must be 0
-  CSML_INFO(2, logger) << "Step 6: Verifying STATUS[2]=0";
+  REG_INFO(2, logger) << "Step 6: Verifying STATUS[2]=0";
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x4) != 0) {
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] set when usage equals threshold (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[2]=0 (threshold not exceeded)";
+    REG_INFO(2, logger) << "PASS: STATUS[2]=0 (threshold not exceeded)";
   }
 
   // Step 7: Write 6th entry (usage=6 > threshold=5 → IRQS[0] must set now)
-  CSML_INFO(2, logger) << "Step 7: Writing 6th entry (usage=6 > threshold=5)";
+  REG_INFO(2, logger) << "Step 7: Writing 6th entry (usage=6 > threshold=5)";
   resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xAA00000000000006ULL);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: 6th WRITE_DATA entry rejected";
+    REG_ERROR(0, logger) << "FAIL: 6th WRITE_DATA entry rejected";
     test_passed = false;
   }
 
   // Step 8: IRQS[0] must now be set
-  CSML_INFO(2, logger) << "Step 8: Verifying IRQS[0]=1 (usage=6 > threshold=5)";
+  REG_INFO(2, logger) << "Step 8: Verifying IRQS[0]=1 (usage=6 > threshold=5)";
   resp = mailbox_read(0, mailbox_basetest::IRQS_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
     std::ostringstream msg;
     msg << "FAIL: IRQS[0] not set when usage exceeds threshold (IRQS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: IRQS[0]=1 (usage > threshold triggers interrupt)";
+    REG_INFO(2, logger) << "PASS: IRQS[0]=1 (usage > threshold triggers interrupt)";
   }
 
   // Step 9: STATUS[2] must now be set
-  CSML_INFO(2, logger) << "Step 9: Verifying STATUS[2]=1";
+  REG_INFO(2, logger) << "Step 9: Verifying STATUS[2]=1";
   resp = mailbox_read(0, mailbox_basetest::STATUS_OFFSET, reg_val);
   if ((reg_val & 0x4) == 0) {
     std::ostringstream msg;
     msg << "FAIL: STATUS[2] not set when usage exceeds threshold (STATUS=0x"
         << std::hex << reg_val << ")";
-    CSML_ERROR(0, logger) << msg.str();
+    REG_ERROR(0, logger) << msg.str();
     test_passed = false;
   } else {
-    CSML_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh)";
+    REG_INFO(2, logger) << "PASS: STATUS[2]=1 (write_level_above_thresh)";
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -1856,13 +1856,13 @@ void testbench::test_boundary_threshold_equal_usage()
 void testbench::test_config_interrupt_level_triggered()
 {
   const std::string test_name = "TC044: test_config_interrupt_level_triggered";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Level-triggered irq_o behaviour (default DUT: "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Level-triggered irq_o behaviour (default DUT: "
                           "irq_act_high=true)";
-  CSML_INFO(2, logger) << "NOTE: Level-triggered DUT is the testbench default; edge-triggered "
+  REG_INFO(2, logger) << "NOTE: Level-triggered DUT is the testbench default; edge-triggered "
                           "validation requires a separately elaborated DUT instance.";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   uint64_t reg_val = 0;
@@ -1871,102 +1871,102 @@ void testbench::test_config_interrupt_level_triggered()
   apply_reset();
 
   // Step 2: Configure Port 0 threshold and enable
-  CSML_INFO(2, logger) << "Step 2: WIRQT=2, IRQEN[0]=1 on Port 0";
+  REG_INFO(2, logger) << "Step 2: WIRQT=2, IRQEN[0]=1 on Port 0";
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, 2);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=2 write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=2 write rejected";
     test_passed = false;
   }
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected";
     test_passed = false;
   }
 
   // Step 3: Write 3 entries → usage=3 > WIRQT=2 → IRQS[0]=1, IRQP[0]=1
-  CSML_INFO(2, logger) << "Step 3: Writing 3 entries (usage=3 > WIRQT=2)";
+  REG_INFO(2, logger) << "Step 3: Writing 3 entries (usage=3 > WIRQT=2)";
   for (int i = 0; i < 3; i++) {
     resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xAA00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
 
   // Step 4: irq_o[0] must assert
-  CSML_INFO(2, logger) << "Step 4: wait(SC_ZERO_TIME) then read irq_port0_sig (expect true)";
+  REG_INFO(2, logger) << "Step 4: wait(SC_ZERO_TIME) then read irq_port0_sig (expect true)";
   wait(SC_ZERO_TIME);
   {
     bool irq_val = irq_port0_sig.read();
     if (!irq_val) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] not asserted after threshold exceeded "
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] not asserted after threshold exceeded "
                                "(level-triggered mode)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=true (asserted, level-triggered mode)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=true (asserted, level-triggered mode)";
     }
   }
 
   // Step 5: Write 2 more entries — IRQS[0] sticky, IRQP[0] still set
-  CSML_INFO(2, logger) << "Step 5: Writing 2 more entries (FIFO usage=5, irq_o should stay asserted)";
+  REG_INFO(2, logger) << "Step 5: Writing 2 more entries (FIFO usage=5, irq_o should stay asserted)";
   for (int i = 3; i < 5; i++) {
     resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xAA00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: Additional WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
 
   // Step 6: irq_o[0] must still be asserted (level held while IRQP[0]=1)
-  CSML_INFO(2, logger) << "Step 6: wait(SC_ZERO_TIME) then read irq_port0_sig "
+  REG_INFO(2, logger) << "Step 6: wait(SC_ZERO_TIME) then read irq_port0_sig "
                           "(expect still true — level held while IRQP[0] set)";
   wait(SC_ZERO_TIME);
   {
     bool irq_val = irq_port0_sig.read();
     if (!irq_val) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] deasserted unexpectedly while IRQP[0]=1 "
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] deasserted unexpectedly while IRQP[0]=1 "
                                "(should hold active level in level-triggered mode)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0] holds active level while IRQP[0]=1 (level-triggered)";
+      REG_INFO(2, logger) << "PASS: irq_o[0] holds active level while IRQP[0]=1 (level-triggered)";
     }
   }
 
   // Verify IRQP[0] is indeed still set before clearing
   resp = mailbox_read(0, mailbox_basetest::IRQP_OFFSET, reg_val);
   if ((reg_val & 0x1) == 0) {
-    CSML_ERROR(0, logger) << "FAIL: IRQP[0] unexpectedly 0 before W1C clear";
+    REG_ERROR(0, logger) << "FAIL: IRQP[0] unexpectedly 0 before W1C clear";
     test_passed = false;
   }
 
   // Step 7: W1C clear IRQS[0] → IRQP[0] becomes 0 → irq_o[0] must deassert
-  CSML_INFO(2, logger) << "Step 7: Clearing IRQS[0] (write 0x1 W1C)";
+  REG_INFO(2, logger) << "Step 7: Clearing IRQS[0] (write 0x1 W1C)";
   resp = mailbox_write(0, mailbox_basetest::IRQS_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
     test_passed = false;
   }
 
   // Step 8: irq_o[0] must deassert immediately (no IRQP bits set)
-  CSML_INFO(2, logger) << "Step 8: wait(SC_ZERO_TIME) then read irq_port0_sig "
+  REG_INFO(2, logger) << "Step 8: wait(SC_ZERO_TIME) then read irq_port0_sig "
                           "(expect false — level drops when IRQP=0)";
   wait(SC_ZERO_TIME);
   {
     bool irq_val = irq_port0_sig.read();
     if (irq_val) {
-      CSML_ERROR(0, logger) << "FAIL: irq_o[0] still asserted after IRQS[0] cleared "
+      REG_ERROR(0, logger) << "FAIL: irq_o[0] still asserted after IRQS[0] cleared "
                                "(level-triggered should deassert when IRQP=0)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_o[0]=false (deasserted when IRQP[0] cleared, level-triggered)";
+      REG_INFO(2, logger) << "PASS: irq_o[0]=false (deasserted when IRQP[0] cleared, level-triggered)";
     }
   }
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -2010,13 +2010,13 @@ void testbench::test_config_interrupt_level_triggered()
 void testbench::test_config_interrupt_polarity()
 {
   const std::string test_name = "TC045: test_config_interrupt_polarity";
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "Running: " << test_name;
-  CSML_INFO(2, logger) << "Description: Active-high polarity verification "
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "Running: " << test_name;
+  REG_INFO(2, logger) << "Description: Active-high polarity verification "
                           "(default DUT: irq_act_high=true)";
-  CSML_INFO(2, logger) << "NOTE: Active-low polarity (irq_act_high=false) requires a separately "
+  REG_INFO(2, logger) << "NOTE: Active-low polarity (irq_act_high=false) requires a separately "
                           "elaborated DUT; cannot be verified in this testbench binary.";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
   tlm::tlm_response_status resp;
@@ -2024,16 +2024,16 @@ void testbench::test_config_interrupt_polarity()
   apply_reset();
 
   // Step 2: Verify inactive baseline — after reset irq_o must be inactive (false)
-  CSML_INFO(2, logger) << "Step 2: Verify inactive baseline after reset (irq_port0_sig == false)";
+  REG_INFO(2, logger) << "Step 2: Verify inactive baseline after reset (irq_port0_sig == false)";
   wait(SC_ZERO_TIME);
   {
     bool baseline = irq_port0_sig.read();
     if (baseline != false) {
-      CSML_ERROR(0, logger) << "FAIL: irq_port0_sig is not false at inactive baseline "
+      REG_ERROR(0, logger) << "FAIL: irq_port0_sig is not false at inactive baseline "
                                "(active-high: inactive=0)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_port0_sig=false at inactive baseline (active-high inactive=0)";
+      REG_INFO(2, logger) << "PASS: irq_port0_sig=false at inactive baseline (active-high inactive=0)";
     }
   }
 
@@ -2041,82 +2041,82 @@ void testbench::test_config_interrupt_polarity()
   {
     bool baseline1 = irq_port1_sig.read();
     if (baseline1 != false) {
-      CSML_ERROR(0, logger) << "FAIL: irq_port1_sig is not false at inactive baseline";
+      REG_ERROR(0, logger) << "FAIL: irq_port1_sig is not false at inactive baseline";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_port1_sig=false at inactive baseline";
+      REG_INFO(2, logger) << "PASS: irq_port1_sig=false at inactive baseline";
     }
   }
 
   // Step 3: Configure Port 0 for an easy interrupt trigger
-  CSML_INFO(2, logger) << "Step 3: Write WIRQT=1, IRQEN[0]=1 on Port 0";
+  REG_INFO(2, logger) << "Step 3: Write WIRQT=1, IRQEN[0]=1 on Port 0";
   resp = mailbox_write(0, mailbox_basetest::WIRQT_OFFSET, 1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: WIRQT=1 write rejected";
+    REG_ERROR(0, logger) << "FAIL: WIRQT=1 write rejected";
     test_passed = false;
   }
   resp = mailbox_write(0, mailbox_basetest::IRQEN_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQEN write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQEN write rejected";
     test_passed = false;
   }
 
   // Step 4: Write 2 entries (usage=2 > WIRQT=1)
-  CSML_INFO(2, logger) << "Step 4: Writing 2 entries (usage=2 > WIRQT=1)";
+  REG_INFO(2, logger) << "Step 4: Writing 2 entries (usage=2 > WIRQT=1)";
   for (int i = 0; i < 2; i++) {
     resp = mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, 0xAA00000000000000ULL | i);
     if (resp != tlm::TLM_OK_RESPONSE) {
       std::ostringstream msg;
       msg << "FAIL: WRITE_DATA entry " << i << " rejected";
-      CSML_ERROR(0, logger) << msg.str();
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
 
   // Step 5: Active state — irq_o must be true (active-high active=1)
-  CSML_INFO(2, logger) << "Step 5: wait(SC_ZERO_TIME), read irq_port0_sig "
+  REG_INFO(2, logger) << "Step 5: wait(SC_ZERO_TIME), read irq_port0_sig "
                           "(expect true — active-high active state=1)";
   wait(SC_ZERO_TIME);
   {
     bool active_val = irq_port0_sig.read();
     if (active_val != true) {
-      CSML_ERROR(0, logger) << "FAIL: irq_port0_sig not true in active state "
+      REG_ERROR(0, logger) << "FAIL: irq_port0_sig not true in active state "
                                "(active-high active=1 expected)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_port0_sig=true (active-high active state=1 confirmed)";
+      REG_INFO(2, logger) << "PASS: irq_port0_sig=true (active-high active state=1 confirmed)";
     }
   }
 
   // Step 6: W1C clear
-  CSML_INFO(2, logger) << "Step 6: Clearing IRQS[0] (write 0x1 W1C)";
+  REG_INFO(2, logger) << "Step 6: Clearing IRQS[0] (write 0x1 W1C)";
   resp = mailbox_write(0, mailbox_basetest::IRQS_OFFSET, 0x1);
   if (resp != tlm::TLM_OK_RESPONSE) {
-    CSML_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
+    REG_ERROR(0, logger) << "FAIL: IRQS W1C write rejected";
     test_passed = false;
   }
 
   // Step 7: Inactive state — irq_o must return to false (active-high inactive=0)
-  CSML_INFO(2, logger) << "Step 7: wait(SC_ZERO_TIME), read irq_port0_sig "
+  REG_INFO(2, logger) << "Step 7: wait(SC_ZERO_TIME), read irq_port0_sig "
                           "(expect false — active-high inactive state=0)";
   wait(SC_ZERO_TIME);
   {
     bool inactive_val = irq_port0_sig.read();
     if (inactive_val != false) {
-      CSML_ERROR(0, logger) << "FAIL: irq_port0_sig not false after clear "
+      REG_ERROR(0, logger) << "FAIL: irq_port0_sig not false after clear "
                                "(active-high inactive=0 expected)";
       test_passed = false;
     } else {
-      CSML_INFO(2, logger) << "PASS: irq_port0_sig=false (active-high inactive state=0 confirmed)";
+      REG_INFO(2, logger) << "PASS: irq_port0_sig=false (active-high inactive state=0 confirmed)";
     }
   }
 
-  CSML_INFO(2, logger) << "INFO: Active-high polarity fully verified. "
+  REG_INFO(2, logger) << "INFO: Active-high polarity fully verified. "
                           "Inactive=0, Active=1 both confirmed via irq_port0_sig.";
-  CSML_INFO(2, logger) << "INFO: Active-low polarity requires a separately elaborated DUT "
+  REG_INFO(2, logger) << "INFO: Active-low polarity requires a separately elaborated DUT "
                           "(irq_act_high=false); not verified in this testbench binary.";
 
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
 }
 
@@ -2133,9 +2133,9 @@ void testbench::test_config_interrupt_polarity()
  */
 void testbench::run_func006_tests()
 {
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "FUNC-006: Programmable Threshold-Based Interrupt System";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "FUNC-006: Programmable Threshold-Based Interrupt System";
+  REG_INFO(2, logger) << "========================================";
 
 
   // Test IDs 33-36: Interrupt type end-to-end tests
@@ -2159,7 +2159,7 @@ void testbench::run_func006_tests()
   test_config_interrupt_level_triggered();    // TC044 [this file]
   test_config_interrupt_polarity();           // TC045 [this file]
 
-  CSML_INFO(2, logger) << "========================================";
-  CSML_INFO(2, logger) << "FUNC-006 Test Suite Complete";
-  CSML_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "========================================";
+  REG_INFO(2, logger) << "FUNC-006 Test Suite Complete";
+  REG_INFO(2, logger) << "========================================";
 }

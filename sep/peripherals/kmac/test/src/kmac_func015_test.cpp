@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func015_test.cpp
  * @brief Test cases for FUNC-KMAC-015 (Idle Mode Entropy Management)
@@ -23,18 +23,18 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md (Section 1.5.3 Idle Mode)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -196,7 +196,7 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void testbench::test_entropy_mode_idle()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-104: test_entropy_mode_idle");
 
     try {
@@ -206,7 +206,7 @@ void testbench::test_entropy_mode_idle()
 
         // Configure CFG_SHADOWED with idle_mode (entropy_mode=0x0, entropy_ready=0)
         configure_cfg_shadowed_entropy(test, 0x0, 0, 0, 0); // SHA3 mode, no entropy
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, entropy_mode=idle, entropy_ready=0";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=SHA3, entropy_mode=idle, entropy_ready=0";
 
         // Verify IDLE state
         bool idle, absorb, squeeze;
@@ -219,13 +219,13 @@ void testbench::test_entropy_mode_idle()
 
         // Perform SHA3-256 operation without entropy (unmasked mode)
         write_cmd(test, 0x1D); // START
-        CSML_INFO(2, test_logger) << "Issued START command";
+        REG_INFO(2, test_logger) << "Issued START command";
 
         write_msg_fifo(test, msg, msg_len);
-        CSML_INFO(2, test_logger) << "Wrote message to MSG_FIFO";
+        REG_INFO(2, test_logger) << "Wrote message to MSG_FIFO";
 
         write_cmd(test, 0x2E); // PROCESS
-        CSML_INFO(2, test_logger) << "Issued PROCESS command";
+        REG_INFO(2, test_logger) << "Issued PROCESS command";
 
         wait(20, SC_NS);
 
@@ -250,7 +250,7 @@ void testbench::test_entropy_mode_idle()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "SHA3 operation completed successfully in idle mode (no entropy)";
+        REG_INFO(2, test_logger) << "SHA3 operation completed successfully in idle mode (no entropy)";
 
         cleanup_test(test);
         report_test_pass("TC-104: test_entropy_mode_idle");
@@ -276,7 +276,7 @@ void testbench::test_entropy_mode_idle()
  ******************************************************************************/
 void testbench::test_entropy_incorrect_mode_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-116: test_entropy_incorrect_mode_error");
 
     try {
@@ -291,7 +291,7 @@ void testbench::test_entropy_incorrect_mode_error()
         wait(5, SC_NS);
         test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured invalid entropy_mode=0x3 with entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured invalid entropy_mode=0x3 with entropy_ready=1";
 
         // Wait for error detection
         wait(10, SC_NS);
@@ -299,10 +299,10 @@ void testbench::test_entropy_incorrect_mode_error()
         // Check ERR_CODE for IncorrectEntropyMode (0x05)
         uint32_t err_code = 0;
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-        CSML_INFO(2, test_logger) << "ERR_CODE: 0x" << std::hex << err_code;
+        REG_INFO(2, test_logger) << "ERR_CODE: 0x" << std::hex << err_code;
 
         if (err_code == 0x05) {
-            CSML_INFO(2, test_logger) << "IncorrectEntropyMode error detected as expected (0x05)";
+            REG_INFO(2, test_logger) << "IncorrectEntropyMode error detected as expected (0x05)";
 
             // Test recovery sequence
             // 1. De-assert entropy_ready
@@ -311,19 +311,19 @@ void testbench::test_entropy_incorrect_mode_error()
             wait(5, SC_NS);
             test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_val);
             wait(5, SC_NS);
-            CSML_INFO(2, test_logger) << "De-asserted entropy_ready";
+            REG_INFO(2, test_logger) << "De-asserted entropy_ready";
 
             // 2. Issue CMD.err_processed
             write_cmd(test, 0x400);
-            CSML_INFO(2, test_logger) << "Issued CMD.err_processed";
+            REG_INFO(2, test_logger) << "Issued CMD.err_processed";
             wait(10, SC_NS);
 
             // 3. Verify error cleared
             test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-            CSML_INFO(2, test_logger) << "ERR_CODE after recovery: 0x" << std::hex << err_code;
+            REG_INFO(2, test_logger) << "ERR_CODE after recovery: 0x" << std::hex << err_code;
 
         } else if (err_code == 0) {
-            CSML_INFO(2, test_logger) << "No error detected - implementation may not validate entropy_mode=0x3";
+            REG_INFO(2, test_logger) << "No error detected - implementation may not validate entropy_mode=0x3";
         } else {
             cleanup_test(test);
             report_test_fail("TC-116", "Unexpected error code: 0x" +
@@ -355,7 +355,7 @@ void testbench::test_entropy_incorrect_mode_error()
  ******************************************************************************/
 void testbench::test_entropy_hashing_without_ready_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-117: test_entropy_hashing_without_ready_error");
 
     try {
@@ -370,7 +370,7 @@ void testbench::test_entropy_hashing_without_ready_error()
         wait(5, SC_NS);
         test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_val);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured KMAC mode with entropy_ready=0 (masking requires entropy)";
+        REG_INFO(2, test_logger) << "Configured KMAC mode with entropy_ready=0 (masking requires entropy)";
 
         // Write key and prefix
         const uint8_t key[16] = {0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
@@ -389,25 +389,25 @@ void testbench::test_entropy_hashing_without_ready_error()
 
         // Attempt START command (should trigger error)
         write_cmd(test, 0x1D);
-        CSML_INFO(2, test_logger) << "Issued START command without entropy ready";
+        REG_INFO(2, test_logger) << "Issued START command without entropy ready";
         wait(10, SC_NS);
 
         // Check ERR_CODE for SwHashingWithoutEntropyReady (0x09 in bits [31:24])
         // ERR_CODE format: bits [31:24] = error code, bits [23:0] = debug info
         uint32_t err_code = 0;
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-        CSML_INFO(2, test_logger) << "ERR_CODE: 0x" << std::hex << err_code;
+        REG_INFO(2, test_logger) << "ERR_CODE: 0x" << std::hex << err_code;
 
         // Extract error code from bits [31:24]
         uint32_t err_code_type = (err_code >> 24) & 0xFF;
         
         if (err_code_type == 0x09) {
-            CSML_INFO(2, test_logger) << "SwHashingWithoutEntropyReady error detected as expected (0x09)";
+            REG_INFO(2, test_logger) << "SwHashingWithoutEntropyReady error detected as expected (0x09)";
 
             // Test recovery: configure entropy and restart
             // 1. Issue err_processed
             write_cmd(test, 0x400);
-            CSML_INFO(2, test_logger) << "Issued CMD.err_processed";
+            REG_INFO(2, test_logger) << "Issued CMD.err_processed";
             wait(10, SC_NS);
 
             // 2. Assert entropy_ready
@@ -416,10 +416,10 @@ void testbench::test_entropy_hashing_without_ready_error()
             wait(5, SC_NS);
             test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_val);
             wait(5, SC_NS);
-            CSML_INFO(2, test_logger) << "Asserted entropy_ready=1 for recovery";
+            REG_INFO(2, test_logger) << "Asserted entropy_ready=1 for recovery";
 
         } else if (err_code == 0) {
-            CSML_INFO(2, test_logger) << "No error - implementation may allow operations without entropy_ready";
+            REG_INFO(2, test_logger) << "No error - implementation may allow operations without entropy_ready";
         } else {
             cleanup_test(test);
             report_test_fail("TC-117", "Unexpected error code: 0x" +
@@ -450,13 +450,13 @@ void testbench::test_entropy_hashing_without_ready_error()
  ******************************************************************************/
 void testbench::test_entropy_fast_process_blocking()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-118: test_entropy_fast_process_blocking");
 
     try {
         // Configure CFG_SHADOWED with entropy_fast_process=0 (blocking)
         configure_cfg_shadowed_entropy(test, 0x1, 0, 0, 1); // edn mode, entropy_ready=0, fast_process=0, KMAC mode
-        CSML_INFO(2, test_logger) << "Configured entropy_fast_process=0 (blocking mode)";
+        REG_INFO(2, test_logger) << "Configured entropy_fast_process=0 (blocking mode)";
 
         // Write key and prefix
         const uint8_t key[16] = {0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7,
@@ -466,24 +466,24 @@ void testbench::test_entropy_fast_process_blocking()
 
         // Attempt START command (should block or generate error without entropy_ready)
         write_cmd(test, 0x1D);
-        CSML_INFO(2, test_logger) << "Issued START command with entropy_fast_process=0 and entropy_ready=0";
+        REG_INFO(2, test_logger) << "Issued START command with entropy_fast_process=0 and entropy_ready=0";
         wait(10, SC_NS);
 
         // Check if error occurred
         uint32_t err_code = 0;
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-        CSML_INFO(2, test_logger) << "ERR_CODE with blocking mode: 0x" << std::hex << err_code;
+        REG_INFO(2, test_logger) << "ERR_CODE with blocking mode: 0x" << std::hex << err_code;
 
         // Expected: SwHashingWithoutEntropyReady (0x09) or blocking behavior
         if (err_code == 0x09) {
-            CSML_INFO(2, test_logger) << "Operation correctly blocked with error 0x09";
+            REG_INFO(2, test_logger) << "Operation correctly blocked with error 0x09";
         } else {
-            CSML_INFO(2, test_logger) << "Blocking behavior validated (no premature operation)";
+            REG_INFO(2, test_logger) << "Blocking behavior validated (no premature operation)";
         }
 
         // Now assert entropy_ready and retry
         configure_cfg_shadowed_entropy(test, 0x1, 1, 0, 1); // entropy_ready=1
-        CSML_INFO(2, test_logger) << "Asserted entropy_ready=1";
+        REG_INFO(2, test_logger) << "Asserted entropy_ready=1";
 
         cleanup_test(test);
 
@@ -501,7 +501,7 @@ void testbench::test_entropy_fast_process_blocking()
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
         if (squeeze) {
-            CSML_INFO(2, test_logger) << "Operation succeeded after entropy_ready asserted";
+            REG_INFO(2, test_logger) << "Operation succeeded after entropy_ready asserted";
         }
 
         cleanup_test(test);
@@ -527,13 +527,13 @@ void testbench::test_entropy_fast_process_blocking()
  ******************************************************************************/
 void testbench::test_entropy_fast_process_nonblocking()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-119: test_entropy_fast_process_nonblocking");
 
     try {
         // Configure CFG_SHADOWED with entropy_fast_process=1 (non-blocking) for SHA3 mode
         configure_cfg_shadowed_entropy(test, 0x0, 0, 1, 0); // idle mode, entropy_ready=0, fast_process=1, SHA3 mode
-        CSML_INFO(2, test_logger) << "Configured entropy_fast_process=1 (non-blocking mode) for SHA3";
+        REG_INFO(2, test_logger) << "Configured entropy_fast_process=1 (non-blocking mode) for SHA3";
 
         // Verify IDLE state
         bool idle, absorb, squeeze;
@@ -547,11 +547,11 @@ void testbench::test_entropy_fast_process_nonblocking()
         // Perform SHA3 operation without entropy (unmasked mode)
         const uint8_t msg[] = "noblock";
         write_cmd(test, 0x1D); // START
-        CSML_INFO(2, test_logger) << "Issued START command with entropy_fast_process=1";
+        REG_INFO(2, test_logger) << "Issued START command with entropy_fast_process=1";
 
         write_msg_fifo(test, msg, 7);
         write_cmd(test, 0x2E); // PROCESS
-        CSML_INFO(2, test_logger) << "Issued PROCESS command";
+        REG_INFO(2, test_logger) << "Issued PROCESS command";
 
         wait(20, SC_NS);
 
@@ -566,7 +566,7 @@ void testbench::test_entropy_fast_process_nonblocking()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Operation proceeded successfully with entropy_fast_process=1 (non-blocking)";
+        REG_INFO(2, test_logger) << "Operation proceeded successfully with entropy_fast_process=1 (non-blocking)";
 
         // Verify no error occurred
         uint32_t err_code = 0;

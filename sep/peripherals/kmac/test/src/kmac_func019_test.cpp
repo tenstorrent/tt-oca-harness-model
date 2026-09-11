@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func019_test.cpp
  * @brief FUNC-KMAC-019: Error Detection and Reporting Test Implementation
@@ -50,7 +50,7 @@
  * Test Plan Reference: kmac-test-plan.md
  * Functionality Reference: kmac-functionality-testcases.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_func013_024_test.h"
@@ -709,7 +709,25 @@ void test_err_code_incorrectfunctionname_0x07(kmac_test* test)
     KMAC_CHECK(((err_code >> 24) & 0xFF) == 0); // No error with correct PREFIX
 
     // Cleanup
+    test->register_write_32(kmac_basetest::CMD_OFFSET, 0x2E); // PROCESS
+    wait(200, SC_NS);
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16); // DONE
+    wait(100, SC_NS);
+
+    // Test Case 3: valid KMAC prefix + 0x02 left_encode with a forged
+    // bit-length larger than the 44-byte PREFIX window.  Must not over-read.
+    printf("  Test 3: PREFIX 0x02 encode with oversized bit-length\n");
+    test->register_write_32(kmac_basetest::PREFIX_0_OFFSET, 0x4D4B2001);
+    test->register_write_32(kmac_basetest::PREFIX_1_OFFSET, 0xFF024341);
+    test->register_write_32(kmac_basetest::PREFIX_2_OFFSET, 0x000000FF);
+    test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
+    test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg);
+    wait(100, SC_NS);
+    test->register_write_32(kmac_basetest::CMD_OFFSET, 0x1D);
+    wait(100, SC_NS);
+    test->register_write_32(kmac_basetest::CMD_OFFSET, 0x2E);
+    wait(200, SC_NS);
+    test->register_write_32(kmac_basetest::CMD_OFFSET, 0x16);
     wait(100, SC_NS);
 
     printf("[TC-150] PASSED: IncorrectFunctionName error correctly detected\n");

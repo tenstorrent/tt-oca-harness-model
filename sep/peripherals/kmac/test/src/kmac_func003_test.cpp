@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func003_test.cpp
  * @brief Test cases for FUNC-KMAC-003 (cSHAKE Customizable Hash Function)
@@ -47,19 +47,19 @@
  * Detailed Design: kmac-detailed-design.md
  * Functionality: kmac-functionality_list.md (FUNC-KMAC-003)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions for cSHAKE Testing
@@ -279,7 +279,7 @@ static bool verify_no_error(kmac_test* test)
     uint32_t err_code = 0;
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
     if (err_code != 0) {
-        CSML_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "verify_no_error: ERR_CODE=0x" << std::hex << err_code << std::dec;
     }
     return (err_code == 0);
 }
@@ -530,7 +530,7 @@ static bool compare_buffers(const uint8_t* expected, const uint8_t* actual, size
 {
     for (size_t i = 0; i < len; i++) {
         if (expected[i] != actual[i]) {
-            CSML_ERROR(1, test_logger) << "Buffer mismatch at byte " << i
+            REG_ERROR(1, test_logger) << "Buffer mismatch at byte " << i
                                 << ": expected=0x" << std::hex << (int)expected[i]
                                 << ", actual=0x" << (int)actual[i] << std::dec;
             return false;
@@ -552,7 +552,7 @@ static bool compare_buffers(const uint8_t* expected, const uint8_t* actual, size
  ******************************************************************************/
 void testbench::test_cshake128_with_empty_customization()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-038: test_cshake128_with_empty_customization");
 
     try {
@@ -562,12 +562,12 @@ void testbench::test_cshake128_with_empty_customization()
 
         // Configure cSHAKE128 mode
         configure_cshake_mode(test, 0x0);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=cSHAKE, kstrength=L128, kmac_en=0";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=cSHAKE, kstrength=L128, kmac_en=0";
 
         // Write empty PREFIX (all zeros)
         uint8_t empty_prefix[40] = {0};
         write_prefix_registers(test, empty_prefix, 0);
-        CSML_INFO(2, test_logger) << "Wrote empty PREFIX registers (all zeros)";
+        REG_INFO(2, test_logger) << "Wrote empty PREFIX registers (all zeros)";
 
         // Verify initial IDLE state
         bool idle, absorb, squeeze;
@@ -579,7 +579,7 @@ void testbench::test_cshake128_with_empty_customization()
         }
 
         // Issue START command
-        CSML_INFO(2, test_logger) << "Issuing START command (0x1D)";
+        REG_INFO(2, test_logger) << "Issuing START command (0x1D)";
         write_cmd(test, 0x1D);
 
         if (!verify_no_error(test)) {
@@ -597,11 +597,11 @@ void testbench::test_cshake128_with_empty_customization()
         }
 
         // Write message to MSG_FIFO
-        CSML_INFO(2, test_logger) << "Writing message (" << msg_len << " bytes) to MSG_FIFO";
+        REG_INFO(2, test_logger) << "Writing message (" << msg_len << " bytes) to MSG_FIFO";
         write_msg_fifo(test, (const uint8_t*)test_msg, msg_len);
 
         // Issue PROCESS command
-        CSML_INFO(2, test_logger) << "Issuing PROCESS command (0x2E)";
+        REG_INFO(2, test_logger) << "Issuing PROCESS command (0x2E)";
         write_cmd(test, 0x2E);
 
         if (!verify_no_error(test)) {
@@ -620,7 +620,7 @@ void testbench::test_cshake128_with_empty_customization()
 
         // Read digest from STATE window
         uint8_t actual_digest[32];
-        CSML_INFO(2, test_logger) << "Reading " << output_len << "-byte digest from STATE window";
+        REG_INFO(2, test_logger) << "Reading " << output_len << "-byte digest from STATE window";
         read_state_digest(test, actual_digest, output_len);
 
         // Compute reference digest (empty cSHAKE == SHAKE per NIST spec)
@@ -639,7 +639,7 @@ void testbench::test_cshake128_with_empty_customization()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "cSHAKE128 empty customization digest matches reference";
+        REG_INFO(2, test_logger) << "cSHAKE128 empty customization digest matches reference";
 
         cleanup_test(test);
         report_test_pass("TC-038: test_cshake128_with_empty_customization");
@@ -663,7 +663,7 @@ void testbench::test_cshake128_with_empty_customization()
  ******************************************************************************/
 void testbench::test_cshake256_with_empty_customization()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-039: test_cshake256_with_empty_customization");
 
     try {
@@ -672,11 +672,11 @@ void testbench::test_cshake256_with_empty_customization()
         const size_t output_len = 64; // 512 bits
 
         configure_cshake_mode(test, 0x2);
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=cSHAKE, kstrength=L256, kmac_en=0";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=cSHAKE, kstrength=L256, kmac_en=0";
 
         uint8_t empty_prefix[40] = {0};
         write_prefix_registers(test, empty_prefix, 0);
-        CSML_INFO(2, test_logger) << "Wrote empty PREFIX registers";
+        REG_INFO(2, test_logger) << "Wrote empty PREFIX registers";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -733,7 +733,7 @@ void testbench::test_cshake256_with_empty_customization()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "cSHAKE256 empty customization digest matches reference";
+        REG_INFO(2, test_logger) << "cSHAKE256 empty customization digest matches reference";
 
         cleanup_test(test);
         report_test_pass("TC-039: test_cshake256_with_empty_customization");
@@ -756,7 +756,7 @@ void testbench::test_cshake256_with_empty_customization()
  ******************************************************************************/
 void testbench::test_cshake128_with_function_name()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-040: test_cshake128_with_function_name");
 
     try {
@@ -784,7 +784,7 @@ void testbench::test_cshake128_with_function_name()
         memcpy(prefix_data + prefix_len, encoded_S, encoded_S_len);
         prefix_len += encoded_S_len;
 
-        CSML_INFO(2, test_logger) << "Encoded PREFIX: N=\"" << function_name
+        REG_INFO(2, test_logger) << "Encoded PREFIX: N=\"" << function_name
                             << "\", S=\"\" (total " << prefix_len << " bytes)";
 
         configure_cshake_mode(test, 0x0);
@@ -840,7 +840,7 @@ void testbench::test_cshake128_with_function_name()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "cSHAKE128 with function name verified";
+        REG_INFO(2, test_logger) << "cSHAKE128 with function name verified";
 
         cleanup_test(test);
         report_test_pass("TC-040: test_cshake128_with_function_name");
@@ -864,7 +864,7 @@ void testbench::test_cshake128_with_function_name()
  ******************************************************************************/
 void testbench::test_cshake256_with_customization_string()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-041: test_cshake256_with_customization_string");
 
     try {
@@ -892,7 +892,7 @@ void testbench::test_cshake256_with_customization_string()
         memcpy(prefix_data + prefix_len, encoded_S, encoded_S_len);
         prefix_len += encoded_S_len;
 
-        CSML_INFO(2, test_logger) << "Encoded PREFIX: N=\"\", S=\"" << customization_string
+        REG_INFO(2, test_logger) << "Encoded PREFIX: N=\"\", S=\"" << customization_string
                             << "\" (total " << prefix_len << " bytes)";
 
         configure_cshake_mode(test, 0x2);
@@ -941,7 +941,7 @@ void testbench::test_cshake256_with_customization_string()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "cSHAKE256 with customization string verified";
+        REG_INFO(2, test_logger) << "cSHAKE256 with customization string verified";
 
         cleanup_test(test);
         report_test_pass("TC-041: test_cshake256_with_customization_string");
@@ -966,7 +966,7 @@ void testbench::test_cshake256_with_customization_string()
  ******************************************************************************/
 void testbench::test_cshake_prefix_expansion()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-042: test_cshake_prefix_expansion");
 
     try {
@@ -993,7 +993,7 @@ void testbench::test_cshake_prefix_expansion()
         memcpy(prefix_data + prefix_len, encoded_S, encoded_S_len);
         prefix_len += encoded_S_len;
 
-        CSML_INFO(2, test_logger) << "Small PREFIX: " << prefix_len
+        REG_INFO(2, test_logger) << "Small PREFIX: " << prefix_len
                             << " bytes (hardware will expand to 168-byte block)";
 
         configure_cshake_mode(test, 0x0);
@@ -1043,7 +1043,7 @@ void testbench::test_cshake_prefix_expansion()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "PREFIX expansion to full block verified";
+        REG_INFO(2, test_logger) << "PREFIX expansion to full block verified";
 
         cleanup_test(test);
         report_test_pass("TC-042: test_cshake_prefix_expansion");
@@ -1065,7 +1065,7 @@ void testbench::test_cshake_prefix_expansion()
  ******************************************************************************/
 void testbench::test_cshake_padding_mechanism()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-043: test_cshake_padding_mechanism");
 
     try {
@@ -1099,7 +1099,7 @@ void testbench::test_cshake_padding_mechanism()
 
         configure_cshake_mode(test, 0x0);
         write_prefix_registers(test, prefix_data, prefix_len);
-        CSML_INFO(2, test_logger) << "Testing cSHAKE padding with " << msg_len << "-byte message";
+        REG_INFO(2, test_logger) << "Testing cSHAKE padding with " << msg_len << "-byte message";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1137,7 +1137,7 @@ void testbench::test_cshake_padding_mechanism()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "cSHAKE padding mechanism validated (2-bit '00' + pad10*1)";
+        REG_INFO(2, test_logger) << "cSHAKE padding mechanism validated (2-bit '00' + pad10*1)";
 
         cleanup_test(test);
         report_test_pass("TC-043: test_cshake_padding_mechanism");
@@ -1162,7 +1162,7 @@ void testbench::test_cshake_padding_mechanism()
  ******************************************************************************/
 void testbench::test_cshake_extended_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-044: test_cshake_extended_output");
 
     try {
@@ -1192,7 +1192,7 @@ void testbench::test_cshake_extended_output()
 
         configure_cshake_mode(test, 0x0);
         write_prefix_registers(test, prefix_data, prefix_len);
-        CSML_INFO(2, test_logger) << "Configured cSHAKE128 for extended output";
+        REG_INFO(2, test_logger) << "Configured cSHAKE128 for extended output";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1221,11 +1221,11 @@ void testbench::test_cshake_extended_output()
 
         // Read first block
         uint8_t actual_output[300];
-        CSML_INFO(2, test_logger) << "Reading first block (" << block1_len << " bytes)";
+        REG_INFO(2, test_logger) << "Reading first block (" << block1_len << " bytes)";
         read_state_digest(test, actual_output, block1_len);
 
         // Issue RUN command for extended output
-        CSML_INFO(2, test_logger) << "Issuing RUN command (0x31) for extended output";
+        REG_INFO(2, test_logger) << "Issuing RUN command (0x31) for extended output";
         write_cmd(test, 0x31);
 
         if (!verify_no_error(test)) {
@@ -1243,7 +1243,7 @@ void testbench::test_cshake_extended_output()
         }
 
         // Read second block
-        CSML_INFO(2, test_logger) << "Reading second block (" << block2_len << " bytes)";
+        REG_INFO(2, test_logger) << "Reading second block (" << block2_len << " bytes)";
         read_state_digest(test, actual_output + block1_len, block2_len);
 
         // Compute reference extended output
@@ -1263,7 +1263,7 @@ void testbench::test_cshake_extended_output()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "cSHAKE extended output validated: " << total_output << " bytes";
+        REG_INFO(2, test_logger) << "cSHAKE extended output validated: " << total_output << " bytes";
 
         cleanup_test(test);
         report_test_pass("TC-044: test_cshake_extended_output");

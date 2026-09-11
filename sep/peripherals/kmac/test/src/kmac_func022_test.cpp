@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func022_test.cpp
  * @brief Test cases for FUNC-KMAC-022 (Idle Status Signaling)
@@ -17,16 +17,16 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -84,7 +84,7 @@ static void write_cmd(kmac_test* test, uint32_t cmd_value)
  ******************************************************************************/
 void testbench::test_idle_o_high_after_reset()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-071: test_idle_o_high_after_reset");
 
     try {
@@ -97,7 +97,7 @@ void testbench::test_idle_o_high_after_reset()
 
         // Verify idle_o is high
         if (idle_o_value) {
-            CSML_INFO(2, test_logger) << "idle_o correctly asserted (1) after reset";
+            REG_INFO(2, test_logger) << "idle_o correctly asserted (1) after reset";
         } else {
             report_test_fail("TC-071: test_idle_o_high_after_reset",
                            "idle_o not asserted after reset");
@@ -109,7 +109,7 @@ void testbench::test_idle_o_high_after_reset()
         read_status_fsm_bits(test, sha3_idle, sha3_absorb, sha3_squeeze);
 
         if (sha3_idle && idle_o_value) {
-            CSML_INFO(2, test_logger) << "STATUS.sha3_idle and idle_o both correctly set";
+            REG_INFO(2, test_logger) << "STATUS.sha3_idle and idle_o both correctly set";
             report_test_pass("TC-071: test_idle_o_high_after_reset");
         } else {
             std::stringstream reason;
@@ -131,7 +131,7 @@ void testbench::test_idle_o_high_after_reset()
  ******************************************************************************/
 void testbench::test_idle_o_low_during_absorb()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-072: test_idle_o_low_during_absorb");
 
     try {
@@ -146,13 +146,13 @@ void testbench::test_idle_o_low_during_absorb()
                            "idle_o not high initially");
             return;
         }
-        CSML_INFO(2, test_logger) << "Initial state: idle_o = 1 (correct)";
+        REG_INFO(2, test_logger) << "Initial state: idle_o = 1 (correct)";
 
         // Configure SHA3-256 mode
         configure_sha3_256_mode(test);
 
         // Issue START command to enter ABSORB state
-        CSML_INFO(2, test_logger) << "Issuing START command to enter ABSORB state";
+        REG_INFO(2, test_logger) << "Issuing START command to enter ABSORB state";
         write_cmd(test, 0x1D); // START command
         wait(5, SC_NS); // Allow time for idle_o update
 
@@ -161,7 +161,7 @@ void testbench::test_idle_o_low_during_absorb()
 
         // Verify idle_o is low
         if (!idle_o_after_start) {
-            CSML_INFO(2, test_logger) << "idle_o correctly deasserted (0) during ABSORB state";
+            REG_INFO(2, test_logger) << "idle_o correctly deasserted (0) during ABSORB state";
         } else {
             report_test_fail("TC-072: test_idle_o_low_during_absorb",
                            "idle_o not deasserted during ABSORB");
@@ -174,7 +174,7 @@ void testbench::test_idle_o_low_during_absorb()
         read_status_fsm_bits(test, sha3_idle, sha3_absorb, sha3_squeeze);
 
         if (sha3_absorb && !idle_o_after_start && !sha3_idle) {
-            CSML_INFO(2, test_logger) << "FSM state and idle_o signal correctly synchronized";
+            REG_INFO(2, test_logger) << "FSM state and idle_o signal correctly synchronized";
             report_test_pass("TC-072: test_idle_o_low_during_absorb");
         } else {
             std::stringstream reason;
@@ -200,7 +200,7 @@ void testbench::test_idle_o_low_during_absorb()
  ******************************************************************************/
 void testbench::test_idle_o_returns_high_on_done()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-074: test_idle_o_returns_high_on_done");
 
     try {
@@ -212,7 +212,7 @@ void testbench::test_idle_o_returns_high_on_done()
         configure_sha3_256_mode(test);
 
         // Issue START command
-        CSML_INFO(2, test_logger) << "Starting hash operation";
+        REG_INFO(2, test_logger) << "Starting hash operation";
         write_cmd(test, 0x1D); // START command
 
         // Verify idle_o is low
@@ -222,7 +222,7 @@ void testbench::test_idle_o_returns_high_on_done()
                            "idle_o not low during operation");
             return;
         }
-        CSML_INFO(2, test_logger) << "During operation: idle_o = 0 (correct)";
+        REG_INFO(2, test_logger) << "During operation: idle_o = 0 (correct)";
 
         // Issue PROCESS command
         write_cmd(test, 0x2E); // PROCESS command
@@ -235,10 +235,10 @@ void testbench::test_idle_o_returns_high_on_done()
                            "idle_o high during SQUEEZE state");
             return;
         }
-        CSML_INFO(2, test_logger) << "During SQUEEZE: idle_o = 0 (correct)";
+        REG_INFO(2, test_logger) << "During SQUEEZE: idle_o = 0 (correct)";
 
         // Issue DONE command to return to IDLE
-        CSML_INFO(2, test_logger) << "Issuing DONE command to return to IDLE";
+        REG_INFO(2, test_logger) << "Issuing DONE command to return to IDLE";
         write_cmd(test, 0x16); // DONE command
         wait(5, SC_NS); // Allow time for idle_o update
 
@@ -247,7 +247,7 @@ void testbench::test_idle_o_returns_high_on_done()
 
         // Verify idle_o is high again
         if (idle_o_after_done) {
-            CSML_INFO(2, test_logger) << "idle_o correctly reasserted (1) after DONE command";
+            REG_INFO(2, test_logger) << "idle_o correctly reasserted (1) after DONE command";
         } else {
             report_test_fail("TC-074: test_idle_o_returns_high_on_done",
                            "idle_o not reasserted after DONE");
@@ -259,7 +259,7 @@ void testbench::test_idle_o_returns_high_on_done()
         read_status_fsm_bits(test, sha3_idle, sha3_absorb, sha3_squeeze);
 
         if (sha3_idle && idle_o_after_done && !sha3_absorb && !sha3_squeeze) {
-            CSML_INFO(2, test_logger) << "FSM returned to IDLE, idle_o correctly synchronized";
+            REG_INFO(2, test_logger) << "FSM returned to IDLE, idle_o correctly synchronized";
             report_test_pass("TC-074: test_idle_o_returns_high_on_done");
         } else {
             std::stringstream reason;

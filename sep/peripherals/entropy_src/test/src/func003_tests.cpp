@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func003_tests.cpp
  * @brief FUNC-003 Peripheral Configuration Register Retention — test case
@@ -43,9 +43,9 @@
  *
  * ## Architectural facts
  *
- *  - All six registers are pure CSML storage with no write or read callbacks.
+ *  - All six registers are pure regmodel storage with no write or read callbacks.
  *    There are no side-effects on INTR_STATUS, interrupt ports, or FIFO state.
- *  - CSML enforces write masks automatically: bits outside the mask are
+ *  - regmodel enforces write masks automatically: bits outside the mask are
  *    discarded on write and always read as zero.
  *  - No wait(SC_ZERO_TIME) is required: these registers have no delta-cycle
  *    side effects on sc_out<bool> ports.
@@ -60,7 +60,7 @@
  *    entropy_src_ip::target_socket.
  *  - Each test case is self-checking and returns bool (true = PASS).
  *  - apply_reset() is called by run_tests() before each test group.
- *  - The FUNC003_CHECK macro sets ok = false and emits a CSML_ERROR log entry
+ *  - The FUNC003_CHECK macro sets ok = false and emits a REG_ERROR log entry
  *    naming both the expected and observed values.
  *
  * References:
@@ -69,7 +69,7 @@
  *  - entropy_src/docs/entropy_src-test-plan.md
  *  - entropy_src/test/inc/testbench.h
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
@@ -89,7 +89,7 @@
     do {                                           \
         if (!(cond))                               \
         {                                          \
-            CSML_ERROR(0, logger) << msg_stream;   \
+            REG_ERROR(0, logger) << msg_stream;   \
             ok = false;                            \
         }                                          \
     } while (false)
@@ -412,7 +412,7 @@ bool testbench::tc_f003_ring_osc_tune_write_mask_validation()
 
 /******************************************************************************
  * @brief Verify that RING_OSC_TUNE retains written values across consecutive
- *        write-read cycles (pure CSML storage — no callbacks erase the value).
+ *        write-read cycles (pure regmodel storage — no callbacks erase the value).
  *
  * Procedure:
  *  1. Write 0x00AABBCC; read back and assert readback == 0x00AABBCC.
@@ -723,7 +723,7 @@ bool testbench::tc_f003_decorrelator_mask_write_mask_validation()
  *
  * This test is the primary end-to-end retention test: it confirms that the
  * reset sequence (handle_write_CTRL callback) correctly reloads every FUNC-003
- * register and that CSML's post-reset readback matches the documented default.
+ * register and that regmodel's post-reset readback matches the documented default.
  *
  * Procedure:
  *  1. Write a non-default pattern to each register.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file entropy_src_test.cpp
  * @brief entropy_src test harness implementation
@@ -9,14 +9,14 @@
  *   1. Construct a tlm::tlm_generic_payload.
  *   2. Set command, address, data pointer, and data_length.
  *   3. Call initiator_socket->b_transport.
- *   4. Check the response status and log any error via CSML_ERROR.
+ *   4. Check the response status and log any error via REG_ERROR.
  *   5. Call wait(delay) to advance simulation time if a non-zero delay was
  *      returned.
  *
  * Reference:
  *   - entropy_src/docs/sections/entropy_src-port-interfaces.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "entropy_src_test.h"
@@ -26,7 +26,7 @@
  *
  * Constructs a TLM_READ_COMMAND payload with data_length = 4 and issues it
  * through initiator_socket->b_transport.  The 32-bit bus width of the
- * entropy_src_basetest::initiator_socket and the CSML memory layer both
+ * entropy_src_basetest::initiator_socket and the regmodel memory layer both
  * support atomic 32-bit word accesses.
  *
  * @param offset     Byte offset of the target register
@@ -50,7 +50,7 @@ void entropy_src_test::register_read_32(unsigned int offset, uint32_t& read_valu
 
     if (trans.is_response_error())
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "register_read_32: TLM read error at offset 0x"
             << std::hex << offset;
     }
@@ -85,7 +85,7 @@ void entropy_src_test::register_write_32(unsigned int offset, uint32_t write_val
 
     if (trans.is_response_error())
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "register_write_32: TLM write error at offset 0x"
             << std::hex << offset;
     }
@@ -120,7 +120,7 @@ void entropy_src_test::register_read_8(unsigned int offset, uint8_t& read_value)
 
     if (trans.is_response_error())
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "register_read_8: TLM read error at offset 0x"
             << std::hex << offset;
     }
@@ -155,7 +155,7 @@ void entropy_src_test::register_write_8(unsigned int offset, uint8_t write_value
 
     if (trans.is_response_error())
     {
-        CSML_ERROR(0, logger)
+        REG_ERROR(0, logger)
             << "register_write_8: TLM write error at offset 0x"
             << std::hex << offset;
     }

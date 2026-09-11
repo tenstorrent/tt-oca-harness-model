@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func012_test.h
  * @brief Test declarations for FUNC-KMAC-012 (Endianness Configuration)
@@ -13,10 +15,10 @@
  * - Big-endian mode (value = 1): 32-bit word-granularity byte swap
  * - Independent operation of msg_endianness and state_endianness
  *
- * Test Plan Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-test-plan.md
- * Functionality Reference: /home/shravanr/Documents/tvastaavp/kmac/docs/kmac-functionality-testcases.md
+ * Test Plan Reference: kmac-test-plan.md
+ * Functionality Reference: kmac-functionality-testcases.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func016_test.cpp
  * @brief FUNC-KMAC-016: Configuration Shadow Register Protection Test Implementation
@@ -27,12 +27,32 @@
  * Test Plan Reference: kmac-test-plan.md
  * Functionality Reference: kmac-functionality-testcases.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_func013_024_test.h"
-#include <cassert>
 #include <cstdio>
+
+// =============================================================================
+// Shared check facility for the FUNC-016 and FUNC-019 groups
+// =============================================================================
+
+unsigned int kmac_check_failures = 0;
+
+void kmac_check_reset()
+{
+    kmac_check_failures = 0;
+}
+
+bool kmac_check_report(bool condition, const char* expression, const char* file,
+                       int line)
+{
+    if (!condition) {
+        kmac_check_failures++;
+        printf("  CHECK FAILED: %s (%s:%d)\n", expression, file, line);
+    }
+    return condition;
+}
 
 /******************************************************************************
  * @brief TC-012: Shadow register CFG_SHADOWED duplicate write test
@@ -71,7 +91,7 @@ void test_shadow_register_cfg_shadowed_duplicate_write(kmac_test* test)
     // Step 1: Read initial CFG_SHADOWED value
     test->register_read_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg_value);
     printf("  Initial CFG_SHADOWED: 0x%08X\n", cfg_value);
-    assert(cfg_value == kmac_basetest::CFG_SHADOWED_RESET);
+    KMAC_CHECK(cfg_value == kmac_basetest::CFG_SHADOWED_RESET);
 
     // Step 2: Perform first write
     test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, target_cfg);
@@ -92,13 +112,13 @@ void test_shadow_register_cfg_shadowed_duplicate_write(kmac_test* test)
     // Step 5: Read CFG_SHADOWED (should now show new value)
     test->register_read_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg_value);
     printf("  CFG_SHADOWED after second write: 0x%08X\n", cfg_value);
-    assert((cfg_value & 0x01) == (target_cfg & 0x01)); // Check kmac_en bit updated
+    KMAC_CHECK((cfg_value & 0x01) == (target_cfg & 0x01)); // Check kmac_en bit updated
 
     // Step 6: Verify no alert asserted
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("  STATUS: 0x%08X\n", status_value);
-    // ALERT_RECOV_CTRL_UPDATE_ERR is bit 15 in STATUS register
-    assert((status_value & (1 << 15)) == 0); // No alert should be set
+    // ALERT_RECOV_CTRL_UPDATE_ERR is bit 17 in STATUS register
+    KMAC_CHECK((status_value & (1 << 17)) == 0); // No alert should be set
 
     printf("[TC-012] PASSED: CFG_SHADOWED duplicate write successful\n");
 }
@@ -114,12 +134,12 @@ void test_shadow_register_cfg_shadowed_duplicate_write(kmac_test* test)
  * 1. Perform first write to CFG_SHADOWED with value A
  * 2. Perform second write to CFG_SHADOWED with different value B
  * 3. Read STATUS register
- * 4. Verify ALERT_RECOV_CTRL_UPDATE_ERR bit (bit 15) is set
+ * 4. Verify ALERT_RECOV_CTRL_UPDATE_ERR bit (bit 17) is set
  * 5. Read CFG_SHADOWED to verify it did not update
  * 6. Clear alert by writing to ALERT_TEST (if needed for recovery)
  *
  * Expected Result:
- * - STATUS.ALERT_RECOV_CTRL_UPDATE_ERR (bit 15) asserts
+ * - STATUS.ALERT_RECOV_CTRL_UPDATE_ERR (bit 17) asserts
  * - CFG_SHADOWED does not update to either value
  * - Alert is recoverable (not fatal)
  *
@@ -157,10 +177,10 @@ void test_shadow_register_cfg_shadowed_mismatch(kmac_test* test)
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("  STATUS: 0x%08X\n", status_value);
 
-    // Verify ALERT_RECOV_CTRL_UPDATE_ERR (bit 15) is set
-    bool alert_set = (status_value & (1 << 15)) != 0;
+    // Verify ALERT_RECOV_CTRL_UPDATE_ERR (bit 17) is set
+    bool alert_set = (status_value & (1 << 17)) != 0;
     printf("  ALERT_RECOV_CTRL_UPDATE_ERR: %s\n", alert_set ? "SET" : "CLEAR");
-    assert(alert_set); // Alert must be set on mismatch
+    KMAC_CHECK(alert_set); // Alert must be set on mismatch
 
     // Step 5: Verify CFG_SHADOWED did NOT update
     test->register_read_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg_value);
@@ -210,7 +230,7 @@ void test_shadow_register_entropy_threshold_duplicate_write(kmac_test* test)
     // Step 1: Read initial threshold
     test->register_read_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold_value);
     printf("  Initial ENTROPY_REFRESH_THRESHOLD_SHADOWED: 0x%08X\n", threshold_value);
-    assert(threshold_value == kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_RESET);
+    KMAC_CHECK(threshold_value == kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_RESET);
 
     // Step 2: First write
     test->register_write_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, target_threshold);
@@ -230,12 +250,12 @@ void test_shadow_register_entropy_threshold_duplicate_write(kmac_test* test)
     // Step 5: Read after second write
     test->register_read_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold_value);
     printf("  Threshold after second write: 0x%08X\n", threshold_value);
-    assert((threshold_value & 0x3FF) == (target_threshold & 0x3FF)); // Threshold is 10 bits [9:0]
+    KMAC_CHECK((threshold_value & 0x3FF) == (target_threshold & 0x3FF)); // Threshold is 10 bits [9:0]
 
     // Step 6: Verify no alert
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("  STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 15)) == 0); // No alert
+    KMAC_CHECK((status_value & (1 << 17)) == 0); // No alert
 
     printf("[TC-014] PASSED: ENTROPY_REFRESH_THRESHOLD_SHADOWED duplicate write successful\n");
 }
@@ -293,9 +313,9 @@ void test_shadow_register_entropy_threshold_mismatch(kmac_test* test)
     printf("  STATUS: 0x%08X\n", status_value);
 
     // Verify alert bit
-    bool alert_set = (status_value & (1 << 15)) != 0;
+    bool alert_set = (status_value & (1 << 17)) != 0;
     printf("  ALERT_RECOV_CTRL_UPDATE_ERR: %s\n", alert_set ? "SET" : "CLEAR");
-    assert(alert_set);
+    KMAC_CHECK(alert_set);
 
     // Verify threshold not updated
     test->register_read_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold_value);
@@ -321,8 +341,8 @@ void test_shadow_register_entropy_threshold_mismatch(kmac_test* test)
  * 5. Verify normal operation can resume
  *
  * Expected Result:
- * - ALERT_RECOV_CTRL_UPDATE_ERR (bit 15) set on mismatch
- * - ALERT_FATAL_FAULT (bit 14) NOT set
+ * - ALERT_RECOV_CTRL_UPDATE_ERR (bit 17) set on mismatch
+ * - ALERT_FATAL_FAULT (bit 16) NOT set
  * - Alert clears after proper duplicate write
  * - Operations can resume
  *
@@ -348,15 +368,15 @@ void test_alert_recov_ctrl_update_err_bit(kmac_test* test)
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("  STATUS: 0x%08X\n", status_value);
 
-    bool recov_alert = (status_value & (1 << 15)) != 0;
-    bool fatal_alert = (status_value & (1 << 14)) != 0;
+    bool recov_alert = (status_value & (1 << 17)) != 0;
+    bool fatal_alert = (status_value & (1 << 16)) != 0;
 
     printf("  ALERT_RECOV_CTRL_UPDATE_ERR: %s\n", recov_alert ? "SET" : "CLEAR");
     printf("  ALERT_FATAL_FAULT: %s\n", fatal_alert ? "SET" : "CLEAR");
 
     // Step 3: Verify this is recoverable (not fatal)
-    assert(recov_alert);  // Recoverable alert must be set
-    assert(!fatal_alert); // Fatal alert must NOT be set
+    KMAC_CHECK(recov_alert);  // Recoverable alert must be set
+    KMAC_CHECK(!fatal_alert); // Fatal alert must NOT be set
 
     // Step 4: Perform recovery - correct duplicate write
     printf("  Performing recovery with correct duplicate write...\n");
@@ -423,10 +443,10 @@ void test_callback_cfg_shadowed_write_validation(kmac_test* test)
 
     test->register_read_32(kmac_basetest::CFG_SHADOWED_OFFSET, cfg_value);
     printf("    CFG_SHADOWED: 0x%08X\n", cfg_value);
-    assert((cfg_value & 0x01) == match_value);
+    KMAC_CHECK((cfg_value & 0x01) == match_value);
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
-    assert((status_value & (1 << 15)) == 0); // No alert on match
+    KMAC_CHECK((status_value & (1 << 17)) == 0); // No alert on match
 
     // Test 2: Mismatch detection
     printf("  Test 2: Mismatch detection\n");
@@ -436,16 +456,25 @@ void test_callback_cfg_shadowed_write_validation(kmac_test* test)
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 15)) != 0); // Alert on mismatch
+    KMAC_CHECK((status_value & (1 << 17)) != 0); // Alert on mismatch
 
     // Test 3: CFG_REGWEN protection check
     printf("  Test 3: CFG_REGWEN protection verification\n");
     test->register_read_32(kmac_basetest::CFG_REGWEN_OFFSET, regwen_value);
     printf("    CFG_REGWEN: 0x%08X (should be 1 in IDLE)\n", regwen_value);
-    assert((regwen_value & 0x01) == 1); // Should be enabled in IDLE state
+    KMAC_CHECK((regwen_value & 0x01) == 1); // Should be enabled in IDLE state
 
     // Test 4: Write during operation (after START command)
     printf("  Test 4: State-dependent write rejection\n");
+    // Commit a config that actually starts. The 0x1 used above is kmac_en=1
+    // with kstrength=L128 and entropy_ready=0, which START rejects, so the FSM
+    // would never leave IDLE and CFG_REGWEN would never clear.
+    // SHA3-256: kmac_en=0, kstrength=L256 (bits [3:1]), mode=SHA3 (bits [5:4]).
+    const uint32_t sha3_256_cfg = (2u << 1);
+    test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, sha3_256_cfg);
+    test->register_write_32(kmac_basetest::CFG_SHADOWED_OFFSET, sha3_256_cfg);
+    wait(100, SC_NS);
+
     // Issue START command to transition to ABSORB state
     test->register_write_32(kmac_basetest::CMD_OFFSET, 0x1D); // START
     wait(100, SC_NS);
@@ -453,7 +482,7 @@ void test_callback_cfg_shadowed_write_validation(kmac_test* test)
     // Check CFG_REGWEN auto-cleared
     test->register_read_32(kmac_basetest::CFG_REGWEN_OFFSET, regwen_value);
     printf("    CFG_REGWEN after START: 0x%08X (should be 0)\n", regwen_value);
-    assert((regwen_value & 0x01) == 0); // Should be disabled during operation
+    KMAC_CHECK((regwen_value & 0x01) == 0); // Should be disabled during operation
 
     // Attempt to write CFG_SHADOWED during operation (should be rejected)
     uint32_t cfg_before;
@@ -517,10 +546,10 @@ void test_callback_entropy_refresh_threshold_validation(kmac_test* test)
 
     test->register_read_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold_value);
     printf("    Threshold: 0x%08X\n", threshold_value);
-    assert((threshold_value & 0x3FF) == (valid_threshold & 0x3FF));
+    KMAC_CHECK((threshold_value & 0x3FF) == (valid_threshold & 0x3FF));
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
-    assert((status_value & (1 << 15)) == 0); // No alert
+    KMAC_CHECK((status_value & (1 << 17)) == 0); // No alert
 
     // Test 2: Mismatch detection
     printf("  Test 2: Threshold mismatch detection\n");
@@ -530,7 +559,7 @@ void test_callback_entropy_refresh_threshold_validation(kmac_test* test)
 
     test->register_read_32(kmac_basetest::STATUS_OFFSET, status_value);
     printf("    STATUS: 0x%08X\n", status_value);
-    assert((status_value & (1 << 15)) != 0); // Alert on mismatch
+    KMAC_CHECK((status_value & (1 << 17)) != 0); // Alert on mismatch
 
     // Test 3: Reserved bits handling
     printf("  Test 3: Reserved bits handling (bits [31:10] ignored)\n");
@@ -542,8 +571,8 @@ void test_callback_entropy_refresh_threshold_validation(kmac_test* test)
     test->register_read_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold_value);
     printf("    Threshold (reserved bits masked): 0x%08X\n", threshold_value);
     // Only bits [9:0] should be stored, reserved bits read as 0
-    assert((threshold_value & 0x3FF) == 0x00000055);
-    assert((threshold_value & 0xFFFFFC00) == 0); // Reserved bits read as 0
+    KMAC_CHECK((threshold_value & 0x3FF) == 0x00000055);
+    KMAC_CHECK((threshold_value & 0xFFFFFC00) == 0); // Reserved bits read as 0
 
     // Test 4: Zero threshold (disables automatic refresh)
     printf("  Test 4: Zero threshold (disables auto-refresh)\n");
@@ -554,7 +583,7 @@ void test_callback_entropy_refresh_threshold_validation(kmac_test* test)
 
     test->register_read_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold_value);
     printf("    Threshold (zero = auto-refresh disabled): 0x%08X\n", threshold_value);
-    assert(threshold_value == 0);
+    KMAC_CHECK(threshold_value == 0);
 
     // Test 5: Maximum threshold value (0x3FF = 1023)
     printf("  Test 5: Maximum threshold value\n");
@@ -565,7 +594,7 @@ void test_callback_entropy_refresh_threshold_validation(kmac_test* test)
 
     test->register_read_32(kmac_basetest::ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold_value);
     printf("    Threshold (max = 1023): 0x%08X\n", threshold_value);
-    assert(threshold_value == max_threshold);
+    KMAC_CHECK(threshold_value == max_threshold);
 
     printf("[TC-165] PASSED: ENTROPY_REFRESH_THRESHOLD callback validation complete\n");
 }

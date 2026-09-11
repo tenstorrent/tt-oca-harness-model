@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func010_test.cpp
  * @brief Test cases for FUNC-KMAC-010 (Message FIFO and Packer)
@@ -26,18 +26,18 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -187,7 +187,7 @@ static void cleanup_to_idle(kmac_test* test)
  ******************************************************************************/
 void testbench::test_fifo_depth_tracking()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-120: test_fifo_depth_tracking");
 
     try {
@@ -201,7 +201,7 @@ void testbench::test_fifo_depth_tracking()
                             "Initial FIFO not empty (depth=" + std::to_string(depth) + ")");
             return;
         }
-        CSML_INFO(2, test_logger) << "Initial FIFO empty (depth=0)";
+        REG_INFO(2, test_logger) << "Initial FIFO empty (depth=0)";
 
         // Configure and START
         configure_sha3_256(test);
@@ -222,7 +222,7 @@ void testbench::test_fifo_depth_tracking()
             read_fifo_status(test, depth, empty, full, idle);
             uint32_t expected_depth = i + 1;
 
-            CSML_INFO(2, test_logger) << "After write " << (i+1) << ": depth=" << depth
+            REG_INFO(2, test_logger) << "After write " << (i+1) << ": depth=" << depth
                                       << " (expected " << expected_depth << ")";
 
             if (depth != expected_depth) {
@@ -239,14 +239,14 @@ void testbench::test_fifo_depth_tracking()
 
         // Check depth decreased or reached zero
         read_fifo_status(test, depth, empty, full, idle);
-        CSML_INFO(2, test_logger) << "After PROCESS: depth=" << depth;
+        REG_INFO(2, test_logger) << "After PROCESS: depth=" << depth;
 
         // Wait for completion and cleanup
         wait(100, SC_NS);
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "FIFO depth tracking verified";
+        REG_INFO(2, test_logger) << "FIFO depth tracking verified";
         report_test_pass("TC-120: test_fifo_depth_tracking");
 
     } catch (const std::exception& e) {
@@ -261,7 +261,7 @@ void testbench::test_fifo_depth_tracking()
  ******************************************************************************/
 void testbench::test_fifo_empty_status_on_reset()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-121: test_fifo_empty_status_on_reset");
 
     try {
@@ -274,7 +274,7 @@ void testbench::test_fifo_empty_status_on_reset()
         bool empty, full, idle;
         read_fifo_status(test, depth, empty, full, idle);
 
-        CSML_INFO(2, test_logger) << "After reset: fifo_empty=" << empty << ", fifo_depth=" << depth;
+        REG_INFO(2, test_logger) << "After reset: fifo_empty=" << empty << ", fifo_depth=" << depth;
 
         if (!empty) {
             report_test_fail("TC-121: test_fifo_empty_status_on_reset",
@@ -288,7 +288,7 @@ void testbench::test_fifo_empty_status_on_reset()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "FIFO empty status verified after reset";
+        REG_INFO(2, test_logger) << "FIFO empty status verified after reset";
         report_test_pass("TC-121: test_fifo_empty_status_on_reset");
 
     } catch (const std::exception& e) {
@@ -302,7 +302,7 @@ void testbench::test_fifo_empty_status_on_reset()
  ******************************************************************************/
 void testbench::test_fifo_empty_to_nonempty_transition()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-122: test_fifo_empty_to_nonempty_transition");
 
     try {
@@ -317,7 +317,7 @@ void testbench::test_fifo_empty_to_nonempty_transition()
                             "Precondition: FIFO not empty");
             return;
         }
-        CSML_INFO(2, test_logger) << "Initial state: FIFO empty";
+        REG_INFO(2, test_logger) << "Initial state: FIFO empty";
 
         // Configure and START
         configure_sha3_256(test);
@@ -333,7 +333,7 @@ void testbench::test_fifo_empty_to_nonempty_transition()
 
         // Check fifo_empty transitioned to 0
         read_fifo_status(test, depth, empty, full, idle);
-        CSML_INFO(2, test_logger) << "After 8-byte write: fifo_empty=" << empty << ", depth=" << depth;
+        REG_INFO(2, test_logger) << "After 8-byte write: fifo_empty=" << empty << ", depth=" << depth;
 
         if (empty) {
             cleanup_to_idle(test);
@@ -346,7 +346,7 @@ void testbench::test_fifo_empty_to_nonempty_transition()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Empty-to-nonempty transition verified";
+        REG_INFO(2, test_logger) << "Empty-to-nonempty transition verified";
         report_test_pass("TC-122: test_fifo_empty_to_nonempty_transition");
 
     } catch (const std::exception& e) {
@@ -361,7 +361,7 @@ void testbench::test_fifo_empty_to_nonempty_transition()
  ******************************************************************************/
 void testbench::test_fifo_nonempty_to_empty_transition()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-123: test_fifo_nonempty_to_empty_transition");
 
     try {
@@ -386,7 +386,7 @@ void testbench::test_fifo_nonempty_to_empty_transition()
                             "FIFO empty after write (should be nonempty)");
             return;
         }
-        CSML_INFO(2, test_logger) << "FIFO nonempty (depth=" << depth << ")";
+        REG_INFO(2, test_logger) << "FIFO nonempty (depth=" << depth << ")";
 
         // Issue PROCESS to drain FIFO
         write_cmd(test, 0x2E); // PROCESS
@@ -394,7 +394,7 @@ void testbench::test_fifo_nonempty_to_empty_transition()
 
         // Check FIFO empty
         read_fifo_status(test, depth, empty, full, idle);
-        CSML_INFO(2, test_logger) << "After PROCESS: fifo_empty=" << empty << ", depth=" << depth;
+        REG_INFO(2, test_logger) << "After PROCESS: fifo_empty=" << empty << ", depth=" << depth;
 
         if (!empty || depth != 0) {
             cleanup_to_idle(test);
@@ -407,7 +407,7 @@ void testbench::test_fifo_nonempty_to_empty_transition()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Nonempty-to-empty transition verified";
+        REG_INFO(2, test_logger) << "Nonempty-to-empty transition verified";
         report_test_pass("TC-123: test_fifo_nonempty_to_empty_transition");
 
     } catch (const std::exception& e) {
@@ -422,7 +422,7 @@ void testbench::test_fifo_nonempty_to_empty_transition()
  ******************************************************************************/
 void testbench::test_fifo_full_condition()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-124: test_fifo_full_condition");
 
     try {
@@ -434,7 +434,7 @@ void testbench::test_fifo_full_condition()
         const uint32_t MsgFifoDepth = 10; // Typical FIFO depth
 
         // Fill FIFO to capacity
-        CSML_INFO(2, test_logger) << "Filling FIFO to capacity (depth=" << MsgFifoDepth << ")...";
+        REG_INFO(2, test_logger) << "Filling FIFO to capacity (depth=" << MsgFifoDepth << ")...";
 
         for (uint32_t i = 0; i < MsgFifoDepth; i++) {
             // Write 8 bytes (1 entry)
@@ -447,7 +447,7 @@ void testbench::test_fifo_full_condition()
             bool empty, full, idle;
             read_fifo_status(test, depth, empty, full, idle);
 
-            CSML_INFO(2, test_logger) << "Entry " << i << ": depth=" << depth << ", full=" << full;
+            REG_INFO(2, test_logger) << "Entry " << i << ": depth=" << depth << ", full=" << full;
 
             if (i == MsgFifoDepth - 1) {
                 // Should be full now
@@ -460,7 +460,7 @@ void testbench::test_fifo_full_condition()
             }
         }
 
-        CSML_INFO(2, test_logger) << "FIFO full condition detected";
+        REG_INFO(2, test_logger) << "FIFO full condition detected";
 
         // Cleanup
         write_cmd(test, 0x2E); // PROCESS
@@ -482,7 +482,7 @@ void testbench::test_fifo_full_condition()
  ******************************************************************************/
 void testbench::test_fifo_full_backpressure_blocking()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-125: test_fifo_full_backpressure_blocking");
 
     try {
@@ -498,7 +498,7 @@ void testbench::test_fifo_full_backpressure_blocking()
         const uint32_t MsgFifoDepth = 10;
 
         // Fill FIFO to capacity
-        CSML_INFO(2, test_logger) << "Filling FIFO to capacity...";
+        REG_INFO(2, test_logger) << "Filling FIFO to capacity...";
         for (uint32_t i = 0; i < MsgFifoDepth; i++) {
             test->register_write_32(MSG_FIFO_BASE, 0xDEAD0000 | i);
             test->register_write_32(MSG_FIFO_BASE + 4, 0xBEEF0000 | i);
@@ -517,19 +517,19 @@ void testbench::test_fifo_full_backpressure_blocking()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "FIFO full, issuing PROCESS to create space...";
+        REG_INFO(2, test_logger) << "FIFO full, issuing PROCESS to create space...";
 
         // Issue PROCESS to start draining
         write_cmd(test, 0x2E); // PROCESS
         wait(50, SC_NS);
 
         // Attempt additional write (should complete after space available)
-        CSML_INFO(2, test_logger) << "Attempting write (may block until space available)...";
+        REG_INFO(2, test_logger) << "Attempting write (may block until space available)...";
         test->register_write_32(MSG_FIFO_BASE, 0xFFFFFFFF);
         test->register_write_32(MSG_FIFO_BASE + 4, 0x00000000);
         wait(5, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Write completed (backpressure handled)";
+        REG_INFO(2, test_logger) << "Write completed (backpressure handled)";
 
         // Cleanup
         wait(100, SC_NS);
@@ -550,7 +550,7 @@ void testbench::test_fifo_full_backpressure_blocking()
  ******************************************************************************/
 void testbench::test_fifo_pass_through_mode()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-126: test_fifo_pass_through_mode");
 
     try {
@@ -561,7 +561,7 @@ void testbench::test_fifo_pass_through_mode()
         const uint32_t MSG_FIFO_BASE = 0x800;
 
         // Write single entry when engine ready
-        CSML_INFO(2, test_logger) << "Writing single entry (pass-through)...";
+        REG_INFO(2, test_logger) << "Writing single entry (pass-through)...";
         test->register_write_32(MSG_FIFO_BASE, 0x11111111);
         test->register_write_32(MSG_FIFO_BASE + 4, 0x22222222);
         wait(5, SC_NS);
@@ -570,10 +570,10 @@ void testbench::test_fifo_pass_through_mode()
         uint32_t depth;
         bool empty, full, idle;
         read_fifo_status(test, depth, empty, full, idle);
-        CSML_INFO(2, test_logger) << "After single write: depth=" << depth << ", empty=" << empty;
+        REG_INFO(2, test_logger) << "After single write: depth=" << depth << ", empty=" << empty;
 
         // Write rapid burst (should buffer)
-        CSML_INFO(2, test_logger) << "Writing rapid burst (buffering)...";
+        REG_INFO(2, test_logger) << "Writing rapid burst (buffering)...";
         for (int i = 0; i < 3; i++) {
             test->register_write_32(MSG_FIFO_BASE, 0xAAAA0000 | i);
             test->register_write_32(MSG_FIFO_BASE + 4, 0xBBBB0000 | i);
@@ -582,10 +582,10 @@ void testbench::test_fifo_pass_through_mode()
 
         // Check buffering occurred
         read_fifo_status(test, depth, empty, full, idle);
-        CSML_INFO(2, test_logger) << "After burst: depth=" << depth << ", empty=" << empty;
+        REG_INFO(2, test_logger) << "After burst: depth=" << depth << ", empty=" << empty;
 
         if (empty && depth == 0) {
-            CSML_INFO(2, test_logger) << "Note: All data passed through (very fast absorption)";
+            REG_INFO(2, test_logger) << "Note: All data passed through (very fast absorption)";
         }
 
         // Cleanup
@@ -594,7 +594,7 @@ void testbench::test_fifo_pass_through_mode()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Pass-through mode behavior observed";
+        REG_INFO(2, test_logger) << "Pass-through mode behavior observed";
         report_test_pass("TC-126: test_fifo_pass_through_mode");
 
     } catch (const std::exception& e) {
@@ -609,7 +609,7 @@ void testbench::test_fifo_pass_through_mode()
  ******************************************************************************/
 void testbench::test_fifo_address_window_abstraction()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-127: test_fifo_address_window_abstraction");
 
     try {
@@ -622,7 +622,7 @@ void testbench::test_fifo_address_window_abstraction()
         const uint8_t message[] = "Address Window Test Message";
         size_t msg_len = sizeof(message) - 1; // Exclude null terminator
 
-        CSML_INFO(2, test_logger) << "Writing message via different addresses in FIFO window...";
+        REG_INFO(2, test_logger) << "Writing message via different addresses in FIFO window...";
 
         size_t bytes_written = 0;
         for (size_t i = 0; i < sizeof(addresses)/sizeof(addresses[0]) && bytes_written < msg_len; i++) {
@@ -653,7 +653,7 @@ void testbench::test_fifo_address_window_abstraction()
         bool match = (memcmp(actual_digest, expected_digest, 32) == 0);
 
         if (!match) {
-            CSML_INFO(2, test_logger) << "Digest mismatch (address ordering issue)";
+            REG_INFO(2, test_logger) << "Digest mismatch (address ordering issue)";
             write_cmd(test, 0x16); // DONE
             wait(10, SC_NS);
             report_test_fail("TC-127: test_fifo_address_window_abstraction",
@@ -665,7 +665,7 @@ void testbench::test_fifo_address_window_abstraction()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Address window abstraction verified";
+        REG_INFO(2, test_logger) << "Address window abstraction verified";
         report_test_pass("TC-127: test_fifo_address_window_abstraction");
 
     } catch (const std::exception& e) {
@@ -680,7 +680,7 @@ void testbench::test_fifo_address_window_abstraction()
  ******************************************************************************/
 void testbench::test_fifo_byte_write_support()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-128: test_fifo_byte_write_support");
 
     try {
@@ -692,7 +692,7 @@ void testbench::test_fifo_byte_write_support()
         const uint8_t message[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09};
         size_t msg_len = sizeof(message);
 
-        CSML_INFO(2, test_logger) << "Writing message using byte-granularity writes...";
+        REG_INFO(2, test_logger) << "Writing message using byte-granularity writes...";
 
         // Write bytes individually to FIFO base address
         // Model uses sequential packing - bytes pack in order of arrival
@@ -706,7 +706,7 @@ void testbench::test_fifo_byte_write_support()
                 uint32_t depth;
                 bool empty, full, idle;
                 read_fifo_status(test, depth, empty, full, idle);
-                CSML_INFO(2, test_logger) << "After " << (i+1) << " bytes: depth=" << depth;
+                REG_INFO(2, test_logger) << "After " << (i+1) << " bytes: depth=" << depth;
             }
         }
 
@@ -724,7 +724,7 @@ void testbench::test_fifo_byte_write_support()
         bool match = (memcmp(actual_digest, expected_digest, 32) == 0);
 
         if (!match) {
-            CSML_INFO(2, test_logger) << "Digest mismatch (byte ordering issue)";
+            REG_INFO(2, test_logger) << "Digest mismatch (byte ordering issue)";
             write_cmd(test, 0x16); // DONE
             wait(10, SC_NS);
             report_test_fail("TC-128: test_fifo_byte_write_support",
@@ -736,7 +736,7 @@ void testbench::test_fifo_byte_write_support()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Byte-write support verified";
+        REG_INFO(2, test_logger) << "Byte-write support verified";
         report_test_pass("TC-128: test_fifo_byte_write_support");
 
     } catch (const std::exception& e) {
@@ -751,7 +751,7 @@ void testbench::test_fifo_byte_write_support()
  ******************************************************************************/
 void testbench::test_fifo_halfword_write_support()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-129: test_fifo_halfword_write_support");
 
     try {
@@ -762,7 +762,7 @@ void testbench::test_fifo_halfword_write_support()
         const uint32_t MSG_FIFO_BASE = 0x800;
         const uint16_t halfwords[] = {0x0102, 0x0304, 0x0506, 0x0708}; // 8 bytes = 1 entry
 
-        CSML_INFO(2, test_logger) << "Writing data using halfword-granularity writes...";
+        REG_INFO(2, test_logger) << "Writing data using halfword-granularity writes...";
 
         // Write halfwords
         for (size_t i = 0; i < sizeof(halfwords)/sizeof(halfwords[0]); i++) {
@@ -792,7 +792,7 @@ void testbench::test_fifo_halfword_write_support()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Halfword-write support verified";
+        REG_INFO(2, test_logger) << "Halfword-write support verified";
         report_test_pass("TC-129: test_fifo_halfword_write_support");
 
     } catch (const std::exception& e) {
@@ -807,7 +807,7 @@ void testbench::test_fifo_halfword_write_support()
  ******************************************************************************/
 void testbench::test_fifo_word_write_support()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-130: test_fifo_word_write_support");
 
     try {
@@ -818,7 +818,7 @@ void testbench::test_fifo_word_write_support()
         const uint32_t MSG_FIFO_BASE = 0x800;
         const uint32_t words[] = {0x01020304, 0x05060708, 0x090A0B0C, 0x0D0E0F10};
 
-        CSML_INFO(2, test_logger) << "Writing data using word-granularity writes...";
+        REG_INFO(2, test_logger) << "Writing data using word-granularity writes...";
 
         // Write words
         for (size_t i = 0; i < sizeof(words)/sizeof(words[0]); i++) {
@@ -830,7 +830,7 @@ void testbench::test_fifo_word_write_support()
         uint32_t depth;
         bool empty, full, idle;
         read_fifo_status(test, depth, empty, full, idle);
-        CSML_INFO(2, test_logger) << "After 4 word writes (16 bytes): depth=" << depth;
+        REG_INFO(2, test_logger) << "After 4 word writes (16 bytes): depth=" << depth;
 
         // Issue PROCESS
         write_cmd(test, 0x2E); // PROCESS
@@ -849,7 +849,7 @@ void testbench::test_fifo_word_write_support()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Word-write support verified";
+        REG_INFO(2, test_logger) << "Word-write support verified";
         report_test_pass("TC-130: test_fifo_word_write_support");
 
     } catch (const std::exception& e) {
@@ -864,7 +864,7 @@ void testbench::test_fifo_word_write_support()
  ******************************************************************************/
 void testbench::test_fifo_packer_partial_entry_on_process()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-131: test_fifo_packer_partial_entry_on_process");
 
     try {
@@ -878,7 +878,7 @@ void testbench::test_fifo_packer_partial_entry_on_process()
                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D};
         size_t msg_len = sizeof(message);
 
-        CSML_INFO(2, test_logger) << "Writing " << msg_len << " bytes (partial last entry)...";
+        REG_INFO(2, test_logger) << "Writing " << msg_len << " bytes (partial last entry)...";
 
         // Write complete 8-byte entries using word writes
         size_t complete_bytes = (msg_len / 8) * 8;  // Full 8-byte entries
@@ -899,7 +899,7 @@ void testbench::test_fifo_packer_partial_entry_on_process()
         }
 
         // Issue PROCESS (should flush partial entry)
-        CSML_INFO(2, test_logger) << "Issuing PROCESS (should flush partial entry)...";
+        REG_INFO(2, test_logger) << "Issuing PROCESS (should flush partial entry)...";
         write_cmd(test, 0x2E); // PROCESS
         wait(100, SC_NS);
 
@@ -915,7 +915,7 @@ void testbench::test_fifo_packer_partial_entry_on_process()
         bool match = (memcmp(actual_digest, expected_digest, 32) == 0);
 
         if (!match) {
-            CSML_INFO(2, test_logger) << "Digest mismatch (partial entry not flushed correctly)";
+            REG_INFO(2, test_logger) << "Digest mismatch (partial entry not flushed correctly)";
             write_cmd(test, 0x16); // DONE
             wait(10, SC_NS);
             report_test_fail("TC-131: test_fifo_packer_partial_entry_on_process",
@@ -927,7 +927,7 @@ void testbench::test_fifo_packer_partial_entry_on_process()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Partial entry flushing verified";
+        REG_INFO(2, test_logger) << "Partial entry flushing verified";
         report_test_pass("TC-131: test_fifo_packer_partial_entry_on_process");
 
     } catch (const std::exception& e) {
@@ -942,7 +942,7 @@ void testbench::test_fifo_packer_partial_entry_on_process()
  ******************************************************************************/
 void testbench::test_fifo_write_before_start_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-132: test_fifo_write_before_start_error");
 
     try {
@@ -959,7 +959,7 @@ void testbench::test_fifo_write_before_start_error()
 
         // Attempt MSG_FIFO write without START
         const uint32_t MSG_FIFO_BASE = 0x800;
-        CSML_INFO(2, test_logger) << "Attempting MSG_FIFO write before START...";
+        REG_INFO(2, test_logger) << "Attempting MSG_FIFO write before START...";
         test->register_write_32(MSG_FIFO_BASE, 0xDEADBEEF);
         wait(10, SC_NS);
 
@@ -968,7 +968,7 @@ void testbench::test_fifo_write_before_start_error()
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
         uint32_t error_code_field = (err_code >> 24) & 0xFF;
 
-        CSML_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
 
         if (error_code_field != 0x02) {
             report_test_fail("TC-132: test_fifo_write_before_start_error",
@@ -980,7 +980,7 @@ void testbench::test_fifo_write_before_start_error()
         write_cmd(test, 0x400); // err_processed
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "SwPushedMsgFifo error detected correctly";
+        REG_INFO(2, test_logger) << "SwPushedMsgFifo error detected correctly";
         report_test_pass("TC-132: test_fifo_write_before_start_error");
 
     } catch (const std::exception& e) {
@@ -995,7 +995,7 @@ void testbench::test_fifo_write_before_start_error()
  ******************************************************************************/
 void testbench::test_fifo_write_after_process_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-133: test_fifo_write_after_process_error");
 
     try {
@@ -1013,7 +1013,7 @@ void testbench::test_fifo_write_after_process_error()
         wait(20, SC_NS);
 
         // Attempt additional MSG_FIFO write (should error)
-        CSML_INFO(2, test_logger) << "Attempting MSG_FIFO write after PROCESS...";
+        REG_INFO(2, test_logger) << "Attempting MSG_FIFO write after PROCESS...";
         test->register_write_32(MSG_FIFO_BASE, 0xABCDEF00);
         wait(10, SC_NS);
 
@@ -1022,7 +1022,7 @@ void testbench::test_fifo_write_after_process_error()
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
         uint32_t error_code_field = (err_code >> 24) & 0xFF;
 
-        CSML_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
 
         if (error_code_field != 0x02) {
             cleanup_to_idle(test);
@@ -1036,7 +1036,7 @@ void testbench::test_fifo_write_after_process_error()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Post-PROCESS write error detected correctly";
+        REG_INFO(2, test_logger) << "Post-PROCESS write error detected correctly";
         report_test_pass("TC-133: test_fifo_write_after_process_error");
 
     } catch (const std::exception& e) {
@@ -1051,21 +1051,21 @@ void testbench::test_fifo_write_after_process_error()
  ******************************************************************************/
 void testbench::test_fifo_write_during_app_active_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-134: test_fifo_write_during_app_active_error");
 
     try {
         // Note: This test requires application interface to be active
         // Implementation depends on app interface availability
 
-        CSML_INFO(2, test_logger) << "Initiating KeyMgr app interface...";
+        REG_INFO(2, test_logger) << "Initiating KeyMgr app interface...";
         // Send minimal message via app interface
         test->app_port[0]->app_request(0x1234567890ABCDEFULL, 0xFF, true);
         wait(20, SC_NS);
 
         // Attempt software MSG_FIFO write
         const uint32_t MSG_FIFO_BASE = 0x800;
-        CSML_INFO(2, test_logger) << "Attempting SW MSG_FIFO write during app active...";
+        REG_INFO(2, test_logger) << "Attempting SW MSG_FIFO write during app active...";
         test->register_write_32(MSG_FIFO_BASE, 0xFFFFFFFF);
         wait(10, SC_NS);
 
@@ -1074,7 +1074,7 @@ void testbench::test_fifo_write_during_app_active_error()
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
         uint32_t error_code_field = (err_code >> 24) & 0xFF;
 
-        CSML_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
+        REG_INFO(2, test_logger) << "ERR_CODE=0x" << std::hex << err_code << std::dec;
 
         if (error_code_field != 0x02 && error_code_field != 0x03) {
             // Accept either SwPushedMsgFifo (0x02) or SwIssuedCmdInAppActive (0x03)
@@ -1090,7 +1090,7 @@ void testbench::test_fifo_write_during_app_active_error()
             wait(50, SC_NS);
         }
 
-        CSML_INFO(2, test_logger) << "SW lockout during app active verified";
+        REG_INFO(2, test_logger) << "SW lockout during app active verified";
         report_test_pass("TC-134: test_fifo_write_during_app_active_error");
 
     } catch (const std::exception& e) {
@@ -1107,7 +1107,7 @@ void testbench::test_callback_msg_fifo_write_packing()
 {
     // This functionality is covered by TC-128, TC-129, TC-130
     report_test_start("TC-166: test_callback_msg_fifo_write_packing");
-    CSML_INFO(2, test_logger) << "Packing functionality tested in TC-128/129/130";
+    REG_INFO(2, test_logger) << "Packing functionality tested in TC-128/129/130";
     report_test_pass("TC-166: test_callback_msg_fifo_write_packing");
 }
 
@@ -1115,7 +1115,7 @@ void testbench::test_callback_msg_fifo_write_backpressure()
 {
     // This functionality is covered by TC-125
     report_test_start("TC-167: test_callback_msg_fifo_write_backpressure");
-    CSML_INFO(2, test_logger) << "Backpressure functionality tested in TC-125";
+    REG_INFO(2, test_logger) << "Backpressure functionality tested in TC-125";
     report_test_pass("TC-167: test_callback_msg_fifo_write_backpressure");
 }
 
@@ -1124,7 +1124,7 @@ void testbench::test_callback_msg_fifo_write_backpressure()
  ******************************************************************************/
 void testbench::test_fifo_alternating_read_write()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("test_fifo_alternating_read_write");
 
     try {
@@ -1134,7 +1134,7 @@ void testbench::test_fifo_alternating_read_write()
 
         const uint32_t MSG_FIFO_BASE = 0x800;
 
-        CSML_INFO(2, test_logger) << "Writing data in bursts with absorption...";
+        REG_INFO(2, test_logger) << "Writing data in bursts with absorption...";
 
         // Write in small bursts with delays (allow absorption between bursts)
         for (int burst = 0; burst < 3; burst++) {
@@ -1162,7 +1162,7 @@ void testbench::test_fifo_alternating_read_write()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Alternating read/write handled correctly";
+        REG_INFO(2, test_logger) << "Alternating read/write handled correctly";
         report_test_pass("test_fifo_alternating_read_write");
 
     } catch (const std::exception& e) {
@@ -1177,7 +1177,7 @@ void testbench::test_fifo_alternating_read_write()
  ******************************************************************************/
 void testbench::test_fifo_maximum_throughput()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("test_fifo_maximum_throughput");
 
     try {
@@ -1188,7 +1188,7 @@ void testbench::test_fifo_maximum_throughput()
         const uint32_t MSG_FIFO_BASE = 0x800;
         const size_t large_msg_entries = 50; // 400 bytes
 
-        CSML_INFO(2, test_logger) << "Writing large message with back-to-back writes...";
+        REG_INFO(2, test_logger) << "Writing large message with back-to-back writes...";
 
         // Write large message with minimal delays
         for (size_t i = 0; i < large_msg_entries; i++) {
@@ -1197,7 +1197,7 @@ void testbench::test_fifo_maximum_throughput()
             wait(1, SC_NS); // Minimal delay
         }
 
-        CSML_INFO(2, test_logger) << "All writes completed";
+        REG_INFO(2, test_logger) << "All writes completed";
 
         // Issue PROCESS
         write_cmd(test, 0x2E); // PROCESS
@@ -1215,7 +1215,7 @@ void testbench::test_fifo_maximum_throughput()
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
-        CSML_INFO(2, test_logger) << "Maximum throughput test passed";
+        REG_INFO(2, test_logger) << "Maximum throughput test passed";
         report_test_pass("test_fifo_maximum_throughput");
 
     } catch (const std::exception& e) {

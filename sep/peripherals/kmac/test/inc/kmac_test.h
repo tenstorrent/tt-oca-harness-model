@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_test.h
  * @brief KMAC test harness header with complementary ports
@@ -9,13 +9,13 @@
  * socket for register access, KeyMgr sideload provider, application interface
  * stubs, and control signal drivers.
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once
 #include "kmac_basetest.h"
 #include "kmac_interface.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <cstring>
 
@@ -126,6 +126,9 @@ public:
     /// @brief Invalidate sideload key in model via TLM
     void clear_keymgr_key();
 
+    /// @brief Read is rejected by the model (write-only sideload bus).
+    void keymgr_read_word(uint64_t offset, uint32_t &value);
+
     /// @brief Application interface ports (array) - TLM pattern: port connects to model's export
     sc_port<kmac_app_if>* app_port;
 
@@ -172,7 +175,7 @@ private:
     void clock_driver();
 
     /// @brief Logger instance for structured logging
-    mutable CsmlLogger logger;
+    mutable RegLogger logger;
 
 private:
     void keymgr_write_word(uint64_t offset, uint32_t value);
