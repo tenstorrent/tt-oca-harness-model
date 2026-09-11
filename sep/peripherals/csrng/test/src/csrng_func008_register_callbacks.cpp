@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2025 Tenstorrent USA, Inc.
 /**
  * @file csrng_func008_register_callbacks.cpp
  * @brief Test implementation for CRNG_FUNC_008 - Register Callbacks
@@ -15,7 +15,7 @@
  *   - Test 109: Register access masking
  *   - Test 183: Register lock mechanisms
  *
- * @copyright Copyright (c) 2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2025, Tenstorrent USA, Inc.
  * @license BSD-3-Clause
  */
 
@@ -113,7 +113,7 @@ void testbench::test_001_intr_state_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_STATE reset value verified: 0x"
+        REG_INFO(2, logger) << "INTR_STATE reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 001");
 
@@ -150,7 +150,7 @@ void testbench::test_002_intr_enable_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE reset value verified: 0x"
+        REG_INFO(2, logger) << "INTR_ENABLE reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 002");
 
@@ -184,7 +184,7 @@ void testbench::test_003_intr_test_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_TEST reset value verified: 0x"
+        REG_INFO(2, logger) << "INTR_TEST reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 003");
 
@@ -217,7 +217,7 @@ void testbench::test_004_alert_test_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "ALERT_TEST reset value verified: 0x"
+        REG_INFO(2, logger) << "ALERT_TEST reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 004");
 
@@ -251,7 +251,7 @@ void testbench::test_005_regwen_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "REGWEN reset value verified: 0x"
+        REG_INFO(2, logger) << "REGWEN reset value verified: 0x"
                              << std::hex << read_val << " (unlocked)";
         report_test_pass("Test 005");
 
@@ -290,7 +290,7 @@ void testbench::test_006_ctrl_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "CTRL reset value verified: 0x"
+        REG_INFO(2, logger) << "CTRL reset value verified: 0x"
                              << std::hex << read_val << " (all fields disabled)";
         report_test_pass("Test 006");
 
@@ -323,7 +323,7 @@ void testbench::test_007_cmd_req_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "CMD_REQ reset value verified: 0x"
+        REG_INFO(2, logger) << "CMD_REQ reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 007");
 
@@ -357,7 +357,7 @@ void testbench::test_008_reseed_interval_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_INTERVAL reset value verified: 0x"
+        REG_INFO(2, logger) << "RESEED_INTERVAL reset value verified: 0x"
                              << std::hex << read_val << " (unlimited)";
         report_test_pass("Test 008");
 
@@ -390,7 +390,7 @@ void testbench::test_009_reseed_counter_0_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 reset value verified: 0x"
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 009");
 
@@ -423,7 +423,7 @@ void testbench::test_010_sw_cmd_sts_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "SW_CMD_STS reset value verified: 0x"
+        REG_INFO(2, logger) << "SW_CMD_STS reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 010");
 
@@ -456,7 +456,7 @@ void testbench::test_011_genbits_vld_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "GENBITS_VLD reset value verified: 0x"
+        REG_INFO(2, logger) << "GENBITS_VLD reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 011");
 
@@ -490,7 +490,7 @@ void testbench::test_012_int_state_read_enable_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "INT_STATE_READ_ENABLE reset value verified: 0x"
+        REG_INFO(2, logger) << "INT_STATE_READ_ENABLE reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 012");
 
@@ -523,7 +523,7 @@ void testbench::test_013_hw_exc_sts_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "HW_EXC_STS reset value verified: 0x"
+        REG_INFO(2, logger) << "HW_EXC_STS reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 013");
 
@@ -556,7 +556,7 @@ void testbench::test_014_recov_alert_sts_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS reset value verified: 0x"
+        REG_INFO(2, logger) << "RECOV_ALERT_STS reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 014");
 
@@ -593,7 +593,7 @@ void testbench::test_015_err_code_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "ERR_CODE reset value verified: 0x"
+        REG_INFO(2, logger) << "ERR_CODE reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 015");
 
@@ -627,7 +627,7 @@ void testbench::test_016_main_sm_state_reset()
             );
         }
 
-        CSML_INFO(2, logger) << "MAIN_SM_STATE reset value verified: 0x"
+        REG_INFO(2, logger) << "MAIN_SM_STATE reset value verified: 0x"
                              << std::hex << read_val;
         report_test_pass("Test 016");
 
@@ -717,7 +717,7 @@ void testbench::test_reserved_bits_read_zero()
         bool all_passed = true;
         size_t num_registers = sizeof(registers) / sizeof(registers[0]);
 
-        CSML_INFO(2, logger) << "Testing " << num_registers << " registers for reserved bits read zero";
+        REG_INFO(2, logger) << "Testing " << num_registers << " registers for reserved bits read zero";
 
         // Iterate through all registers
         for (size_t i = 0; i < num_registers; i++) {
@@ -725,7 +725,7 @@ void testbench::test_reserved_bits_read_zero()
 
             // Skip if no reserved bits
             if (reg.reserved_mask == 0) {
-                CSML_INFO(2, logger) << "Register " << reg.name << " (0x" << std::hex << reg.offset
+                REG_INFO(2, logger) << "Register " << reg.name << " (0x" << std::hex << reg.offset
                                      << "): No reserved bits (full 32-bit register)";
                 continue;
             }
@@ -740,7 +740,7 @@ void testbench::test_reserved_bits_read_zero()
 
             // Verify reserved bits are zero
             if (reserved_bits != 0) {
-                CSML_ERROR(0, logger) << "FAILURE: Register " << reg.name
+                REG_ERROR(0, logger) << "FAILURE: Register " << reg.name
                                        << " (address 0x" << std::hex << reg.offset << ")"
                                        << " has non-zero reserved bits!"
                                        << " Expected: 0x0, Actual: 0x" << reserved_bits
@@ -748,7 +748,7 @@ void testbench::test_reserved_bits_read_zero()
                                        << " (Reserved mask: 0x" << reg.reserved_mask << ")";
                 all_passed = false;
             } else {
-                CSML_INFO(2, logger) << "Register " << reg.name << " (0x" << std::hex << reg.offset
+                REG_INFO(2, logger) << "Register " << reg.name << " (0x" << std::hex << reg.offset
                                      << "): Reserved bits read as 0 (OK)";
             }
         }
@@ -757,7 +757,7 @@ void testbench::test_reserved_bits_read_zero()
             throw std::runtime_error("One or more registers have non-zero reserved bits");
         }
 
-        CSML_INFO(2, logger) << "All " << num_registers << " registers verified: reserved bits read as 0";
+        REG_INFO(2, logger) << "All " << num_registers << " registers verified: reserved bits read as 0";
         report_test_pass("Test 015");
 
     } catch (const std::exception& e) {
@@ -796,10 +796,10 @@ void testbench::test_034_ctrl_multibit_encoding()
         // Bit 0 is ENABLE_FIELD_ALERT
         bool enable_alert_set = (alert_sts & 0x1) != 0;
 
-        CSML_INFO(2, logger) << "Invalid CTRL.ENABLE encoding written: 0x"
+        REG_INFO(2, logger) << "Invalid CTRL.ENABLE encoding written: 0x"
                              << std::hex << invalid_ctrl;
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS value: 0x" << std::hex << alert_sts;
-        CSML_INFO(2, logger) << "ENABLE_FIELD_ALERT " << (enable_alert_set ? "SET" : "NOT SET");
+        REG_INFO(2, logger) << "RECOV_ALERT_STS value: 0x" << std::hex << alert_sts;
+        REG_INFO(2, logger) << "ENABLE_FIELD_ALERT " << (enable_alert_set ? "SET" : "NOT SET");
 
         // The exact behavior depends on implementation
         // For now, we verify the register write was accepted
@@ -857,7 +857,7 @@ void testbench::test_069_regwen_lock_basic()
             throw std::runtime_error("REGWEN lock bypassed (was unlocked)");
         }
 
-        CSML_INFO(2, logger) << "REGWEN lock mechanism verified: permanent until reset";
+        REG_INFO(2, logger) << "REGWEN lock mechanism verified: permanent until reset";
         report_test_pass("Test 069");
 
     } catch (const std::exception& e) {
@@ -894,7 +894,7 @@ void testbench::test_070_ctrl_regwen_protection()
             wait(10, SC_NS);
 
             if (ctrl_val != test_value) {
-                CSML_INFO(2, logger) << "CTRL write succeeded with REGWEN=1: 0x"
+                REG_INFO(2, logger) << "CTRL write succeeded with REGWEN=1: 0x"
                                      << std::hex << ctrl_val;
             }
 
@@ -918,8 +918,8 @@ void testbench::test_070_ctrl_regwen_protection()
 
         // In locked state, CTRL should not change
         // Note: Exact behavior depends on implementation
-        CSML_INFO(2, logger) << "CTRL value before locked write: 0x" << std::hex << current_ctrl;
-        CSML_INFO(2, logger) << "CTRL value after locked write: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "CTRL value before locked write: 0x" << std::hex << current_ctrl;
+        REG_INFO(2, logger) << "CTRL value after locked write: 0x" << std::hex << after_write;
 
         report_test_pass("Test 070");
 
@@ -965,11 +965,11 @@ void testbench::test_071_batch_reset_verification()
             wait(5, SC_NS);
 
             if (read_val != test.expected) {
-                CSML_ERROR(0, logger) << test.name << " reset mismatch: expected 0x"
+                REG_ERROR(0, logger) << test.name << " reset mismatch: expected 0x"
                                      << std::hex << test.expected << ", got 0x" << read_val;
                 all_passed = false;
             } else {
-                CSML_INFO(2, logger) << test.name << " reset OK: 0x" << std::hex << read_val;
+                REG_INFO(2, logger) << test.name << " reset OK: 0x" << std::hex << read_val;
             }
         }
 
@@ -1009,7 +1009,7 @@ void testbench::test_072_fips_force_regwen_protection()
             m_test->register_read_32(csrng_basetest::FIPS_FORCE_OFFSET, fips_force_val);
             wait(10, SC_NS);
 
-            CSML_INFO(2, logger) << "FIPS_FORCE with REGWEN=1: 0x" << std::hex << fips_force_val;
+            REG_INFO(2, logger) << "FIPS_FORCE with REGWEN=1: 0x" << std::hex << fips_force_val;
 
             // Lock REGWEN
             m_test->register_write_32(csrng_basetest::REGWEN_OFFSET, 0x0);
@@ -1029,9 +1029,9 @@ void testbench::test_072_fips_force_regwen_protection()
         m_test->register_read_32(csrng_basetest::FIPS_FORCE_OFFSET, after_write);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "FIPS_FORCE before locked write: 0x" << std::hex << current_fips;
-        CSML_INFO(2, logger) << "FIPS_FORCE after locked write: 0x" << std::hex << after_write;
-        CSML_INFO(2, logger) << "REGWEN protection verified for FIPS_FORCE";
+        REG_INFO(2, logger) << "FIPS_FORCE before locked write: 0x" << std::hex << current_fips;
+        REG_INFO(2, logger) << "FIPS_FORCE after locked write: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "REGWEN protection verified for FIPS_FORCE";
 
         report_test_pass("Test 072");
 
@@ -1055,7 +1055,7 @@ void testbench::test_073_err_code_test_regwen_protection()
         m_test->register_read_32(csrng_basetest::REGWEN_OFFSET, regwen_val);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "REGWEN state: 0x" << std::hex << regwen_val;
+        REG_INFO(2, logger) << "REGWEN state: 0x" << std::hex << regwen_val;
 
         // Read current ERR_CODE to see if any errors already set
         uint32_t err_code_before = 0;
@@ -1072,13 +1072,13 @@ void testbench::test_073_err_code_test_regwen_protection()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, err_code_after);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "ERR_CODE before: 0x" << std::hex << err_code_before;
-        CSML_INFO(2, logger) << "ERR_CODE after locked write: 0x" << std::hex << err_code_after;
+        REG_INFO(2, logger) << "ERR_CODE before: 0x" << std::hex << err_code_before;
+        REG_INFO(2, logger) << "ERR_CODE after locked write: 0x" << std::hex << err_code_after;
 
         if (regwen_val == 0x0) {
-            CSML_INFO(2, logger) << "REGWEN protection verified for ERR_CODE_TEST (locked)";
+            REG_INFO(2, logger) << "REGWEN protection verified for ERR_CODE_TEST (locked)";
         } else {
-            CSML_INFO(2, logger) << "REGWEN unlocked - ERR_CODE_TEST may inject error";
+            REG_INFO(2, logger) << "REGWEN unlocked - ERR_CODE_TEST may inject error";
         }
 
         report_test_pass("Test 073");
@@ -1108,10 +1108,10 @@ void testbench::test_074_regwen_lock_persistence()
                 throw std::runtime_error("REGWEN lock not persistent across reads");
             }
 
-            CSML_INFO(2, logger) << "Read " << i << ": REGWEN=0x" << std::hex << regwen_val;
+            REG_INFO(2, logger) << "Read " << i << ": REGWEN=0x" << std::hex << regwen_val;
         }
 
-        CSML_INFO(2, logger) << "REGWEN lock persists across multiple reads";
+        REG_INFO(2, logger) << "REGWEN lock persists across multiple reads";
         report_test_pass("Test 074");
 
     } catch (const std::exception& e) {
@@ -1152,11 +1152,11 @@ void testbench::test_075_multiple_locked_register_writes()
         m_test->register_read_32(csrng_basetest::FIPS_FORCE_OFFSET, fips_after);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "CTRL before/after: 0x" << std::hex << ctrl_before
+        REG_INFO(2, logger) << "CTRL before/after: 0x" << std::hex << ctrl_before
                              << " / 0x" << ctrl_after;
-        CSML_INFO(2, logger) << "FIPS_FORCE before/after: 0x" << std::hex << fips_before
+        REG_INFO(2, logger) << "FIPS_FORCE before/after: 0x" << std::hex << fips_before
                              << " / 0x" << fips_after;
-        CSML_INFO(2, logger) << "All protected registers remain unchanged when REGWEN=0";
+        REG_INFO(2, logger) << "All protected registers remain unchanged when REGWEN=0";
 
         report_test_pass("Test 075");
 
@@ -1181,7 +1181,7 @@ void testbench::test_076_regwen_write_one_when_locked()
         wait(10, SC_NS);
 
         if (regwen_before != 0x0) {
-            CSML_INFO(2, logger) << "REGWEN not locked, test may not be meaningful";
+            REG_INFO(2, logger) << "REGWEN not locked, test may not be meaningful";
         }
 
         // Attempt to write 1 (unlock attempt)
@@ -1197,7 +1197,7 @@ void testbench::test_076_regwen_write_one_when_locked()
             throw std::runtime_error("REGWEN lock was bypassed by writing 1!");
         }
 
-        CSML_INFO(2, logger) << "REGWEN remains locked after write 1 attempt: 0x"
+        REG_INFO(2, logger) << "REGWEN remains locked after write 1 attempt: 0x"
                              << std::hex << regwen_after;
         report_test_pass("Test 076");
 
@@ -1226,10 +1226,10 @@ void testbench::test_077_regwen_unlock_only_by_reset()
             throw std::runtime_error("REGWEN should be locked at this point");
         }
 
-        CSML_INFO(2, logger) << "REGWEN is locked: 0x" << std::hex << regwen_val;
-        CSML_INFO(2, logger) << "NOTE: REGWEN can only be unlocked by hardware reset (rst_ni)";
-        CSML_INFO(2, logger) << "All protected registers (CTRL, FIPS_FORCE, ERR_CODE_TEST)";
-        CSML_INFO(2, logger) << "remain locked until reset is asserted";
+        REG_INFO(2, logger) << "REGWEN is locked: 0x" << std::hex << regwen_val;
+        REG_INFO(2, logger) << "NOTE: REGWEN can only be unlocked by hardware reset (rst_ni)";
+        REG_INFO(2, logger) << "All protected registers (CTRL, FIPS_FORCE, ERR_CODE_TEST)";
+        REG_INFO(2, logger) << "remain locked until reset is asserted";
 
         report_test_pass("Test 077");
 
@@ -1272,12 +1272,12 @@ void testbench::test_085_intr_enable_rw_mask()
             );
         }
 
-        CSML_INFO(2, logger) << "INTR_ENABLE write mask verified: 0x"
+        REG_INFO(2, logger) << "INTR_ENABLE write mask verified: 0x"
                              << std::hex << read_val;
 
         // Test read mask by verifying reserved bits read as 0
         uint32_t read_masked = read_val & csrng_basetest::INTR_ENABLE_READ;
-        CSML_INFO(2, logger) << "INTR_ENABLE read mask applied: 0x"
+        REG_INFO(2, logger) << "INTR_ENABLE read mask applied: 0x"
                              << std::hex << read_masked;
 
         report_test_pass("Test 085");
@@ -1313,11 +1313,11 @@ void testbench::test_086_sw_cmd_sts_readonly()
 
         // Value should be unchanged (write mask = 0x0)
         if (after_write != initial_val) {
-            CSML_WARN(1, logger) << "SW_CMD_STS changed after write (may be dynamic)";
+            REG_WARN(1, logger) << "SW_CMD_STS changed after write (may be dynamic)";
         }
 
-        CSML_INFO(2, logger) << "SW_CMD_STS initial: 0x" << std::hex << initial_val;
-        CSML_INFO(2, logger) << "SW_CMD_STS after write: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "SW_CMD_STS initial: 0x" << std::hex << initial_val;
+        REG_INFO(2, logger) << "SW_CMD_STS after write: 0x" << std::hex << after_write;
 
         report_test_pass("Test 086");
 
@@ -1350,8 +1350,8 @@ void testbench::test_087_genbits_readonly()
         m_test->register_read_32(csrng_basetest::GENBITS_OFFSET, after_write);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "GENBITS initial: 0x" << std::hex << initial_val;
-        CSML_INFO(2, logger) << "GENBITS after write attempt: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "GENBITS initial: 0x" << std::hex << initial_val;
+        REG_INFO(2, logger) << "GENBITS after write attempt: 0x" << std::hex << after_write;
 
         report_test_pass("Test 087");
 
@@ -1375,7 +1375,7 @@ void testbench::test_088_alert_test_write_only()
         m_test->register_read_32(csrng_basetest::ALERT_TEST_OFFSET, read_val);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "ALERT_TEST read value: 0x" << std::hex << read_val;
+        REG_INFO(2, logger) << "ALERT_TEST read value: 0x" << std::hex << read_val;
 
         // Write to ALERT_TEST (triggers alert outputs)
         m_test->register_write_32(csrng_basetest::ALERT_TEST_OFFSET, 0x3);
@@ -1386,8 +1386,8 @@ void testbench::test_088_alert_test_write_only()
         m_test->register_read_32(csrng_basetest::ALERT_TEST_OFFSET, read_after);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "ALERT_TEST after write: 0x" << std::hex << read_after;
-        CSML_INFO(2, logger) << "ALERT_TEST is write-only (does not retain value)";
+        REG_INFO(2, logger) << "ALERT_TEST after write: 0x" << std::hex << read_after;
+        REG_INFO(2, logger) << "ALERT_TEST is write-only (does not retain value)";
 
         report_test_pass("Test 088");
 
@@ -1420,9 +1420,9 @@ void testbench::test_089_reseed_counter_0_readonly()
         m_test->register_read_32(csrng_basetest::RESEED_COUNTER_0_OFFSET, after_write);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 initial: 0x" << std::hex << initial_val;
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 after write: 0x" << std::hex << after_write;
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 is read-only (managed by hardware)";
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 initial: 0x" << std::hex << initial_val;
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 after write: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 is read-only (managed by hardware)";
 
         report_test_pass("Test 089");
 
@@ -1462,10 +1462,10 @@ void testbench::test_090_hw_exc_sts_rw0c()
         m_test->register_read_32(csrng_basetest::HW_EXC_STS_OFFSET, after_write_zero);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "HW_EXC_STS initial: 0x" << std::hex << initial_val;
-        CSML_INFO(2, logger) << "HW_EXC_STS after write 1s: 0x" << std::hex << after_write_ones;
-        CSML_INFO(2, logger) << "HW_EXC_STS after write 0s: 0x" << std::hex << after_write_zero;
-        CSML_INFO(2, logger) << "HW_EXC_STS follows RW0C semantics (write 0 to clear)";
+        REG_INFO(2, logger) << "HW_EXC_STS initial: 0x" << std::hex << initial_val;
+        REG_INFO(2, logger) << "HW_EXC_STS after write 1s: 0x" << std::hex << after_write_ones;
+        REG_INFO(2, logger) << "HW_EXC_STS after write 0s: 0x" << std::hex << after_write_zero;
+        REG_INFO(2, logger) << "HW_EXC_STS follows RW0C semantics (write 0 to clear)";
 
         report_test_pass("Test 090");
 
@@ -1505,10 +1505,10 @@ void testbench::test_091_recov_alert_sts_rw0c()
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, after_write_zero);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS initial: 0x" << std::hex << initial_val;
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS after write 1s: 0x" << std::hex << after_write_ones;
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS after write 0s: 0x" << std::hex << after_write_zero;
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS follows RW0C semantics";
+        REG_INFO(2, logger) << "RECOV_ALERT_STS initial: 0x" << std::hex << initial_val;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS after write 1s: 0x" << std::hex << after_write_ones;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS after write 0s: 0x" << std::hex << after_write_zero;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS follows RW0C semantics";
 
         report_test_pass("Test 091");
 
@@ -1541,10 +1541,10 @@ void testbench::test_092_err_code_readonly()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, after_write);
         wait(10, SC_NS);
 
-        CSML_INFO(2, logger) << "ERR_CODE initial: 0x" << std::hex << initial_val;
-        CSML_INFO(2, logger) << "ERR_CODE after write attempt: 0x" << std::hex << after_write;
-        CSML_INFO(2, logger) << "ERR_CODE is read-only (errors set by hardware)";
-        CSML_INFO(2, logger) << "NOTE: Use ERR_CODE_TEST to inject errors for testing";
+        REG_INFO(2, logger) << "ERR_CODE initial: 0x" << std::hex << initial_val;
+        REG_INFO(2, logger) << "ERR_CODE after write attempt: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "ERR_CODE is read-only (errors set by hardware)";
+        REG_INFO(2, logger) << "NOTE: Use ERR_CODE_TEST to inject errors for testing";
 
         report_test_pass("Test 092");
 
@@ -1578,12 +1578,12 @@ void testbench::test_093_main_sm_state_readonly()
         wait(10, SC_NS);
 
         if (after_write != initial_val) {
-            CSML_WARN(1, logger) << "MAIN_SM_STATE changed (may be dynamic FSM state)";
+            REG_WARN(1, logger) << "MAIN_SM_STATE changed (may be dynamic FSM state)";
         }
 
-        CSML_INFO(2, logger) << "MAIN_SM_STATE initial: 0x" << std::hex << initial_val;
-        CSML_INFO(2, logger) << "MAIN_SM_STATE after write: 0x" << std::hex << after_write;
-        CSML_INFO(2, logger) << "MAIN_SM_STATE is read-only debug register";
+        REG_INFO(2, logger) << "MAIN_SM_STATE initial: 0x" << std::hex << initial_val;
+        REG_INFO(2, logger) << "MAIN_SM_STATE after write: 0x" << std::hex << after_write;
+        REG_INFO(2, logger) << "MAIN_SM_STATE is read-only debug register";
 
         report_test_pass("Test 093");
 
@@ -1637,13 +1637,13 @@ void testbench::test_109_comprehensive_access_masks()
             // uint32_t expected_write = 0xFFFFFFFF & test.write_mask;
             // uint32_t read_masked = read_val & test.read_mask;
 
-            CSML_INFO(2, logger) << test.name << " - Write mask: 0x" << std::hex << test.write_mask
+            REG_INFO(2, logger) << test.name << " - Write mask: 0x" << std::hex << test.write_mask
                                 << ", Read mask: 0x" << test.read_mask
                                 << ", Actual read: 0x" << read_val;
 
             // For read-only registers, verify write had no effect
             if (test.write_mask == 0x0) {
-                CSML_INFO(2, logger) << test.name << " is read-only (verified)";
+                REG_INFO(2, logger) << test.name << " is read-only (verified)";
             }
         }
 
@@ -1673,7 +1673,7 @@ void testbench::test_183_register_lock_comprehensive()
         wait(10, SC_NS);
 
         bool was_locked = (regwen == 0x0);
-        CSML_INFO(2, logger) << "Initial REGWEN state: 0x" << std::hex << regwen
+        REG_INFO(2, logger) << "Initial REGWEN state: 0x" << std::hex << regwen
                              << (was_locked ? " (locked)" : " (unlocked)");
 
         if (!was_locked) {
@@ -1685,7 +1685,7 @@ void testbench::test_183_register_lock_comprehensive()
             uint32_t ctrl_before_lock = 0;
             m_test->register_read_32(csrng_basetest::CTRL_OFFSET, ctrl_before_lock);
             wait(10, SC_NS);
-            CSML_INFO(2, logger) << "CTRL before lock: 0x" << std::hex << ctrl_before_lock;
+            REG_INFO(2, logger) << "CTRL before lock: 0x" << std::hex << ctrl_before_lock;
 
             // Lock REGWEN
             m_test->register_write_32(csrng_basetest::REGWEN_OFFSET, 0x0);
@@ -1698,7 +1698,7 @@ void testbench::test_183_register_lock_comprehensive()
             if (regwen != 0x0) {
                 throw std::runtime_error("REGWEN lock failed");
             }
-            CSML_INFO(2, logger) << "REGWEN locked successfully";
+            REG_INFO(2, logger) << "REGWEN locked successfully";
         }
 
         // Try to modify CTRL while locked
@@ -1709,7 +1709,7 @@ void testbench::test_183_register_lock_comprehensive()
         uint32_t ctrl_after_locked_write = 0;
         m_test->register_read_32(csrng_basetest::CTRL_OFFSET, ctrl_after_locked_write);
         wait(10, SC_NS);
-        CSML_INFO(2, logger) << "CTRL after locked write: 0x" << std::hex << ctrl_after_locked_write;
+        REG_INFO(2, logger) << "CTRL after locked write: 0x" << std::hex << ctrl_after_locked_write;
 
         // Try to unlock REGWEN (should fail)
         m_test->register_write_32(csrng_basetest::REGWEN_OFFSET, 0x1);
@@ -1722,9 +1722,9 @@ void testbench::test_183_register_lock_comprehensive()
             throw std::runtime_error("REGWEN lock was bypassed!");
         }
 
-        CSML_INFO(2, logger) << "REGWEN remains locked (cannot be unlocked): 0x"
+        REG_INFO(2, logger) << "REGWEN remains locked (cannot be unlocked): 0x"
                              << std::hex << regwen;
-        CSML_INFO(2, logger) << "Register lock mechanism working correctly";
+        REG_INFO(2, logger) << "Register lock mechanism working correctly";
 
         report_test_pass("Test 183");
 
@@ -1771,12 +1771,12 @@ void testbench::test_error_code_fifo_write_error_injection()
         wait(1, SC_US);
         
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
                                   << std::hex << regwen;
             test_passed = false;
         }
         
-        CSML_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
+        REG_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
 
         // Enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x6666);
@@ -1804,7 +1804,7 @@ void testbench::test_error_code_fifo_write_error_injection()
         m_test->register_read_32(csrng_basetest::INTR_ENABLE_OFFSET, intr_enable_read);
         wait(1, SC_US);
         if ((intr_enable_read & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
                                   << std::hex << intr_enable_read;
             test_passed = false;
         }
@@ -1818,7 +1818,7 @@ void testbench::test_error_code_fifo_write_error_injection()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, err_code_initial);
         wait(1, SC_US);
         if ((err_code_initial & (1 << 28)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) already set before injection - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) already set before injection - value: 0x"
                                   << std::hex << err_code_initial;
             test_passed = false;
         }
@@ -1826,7 +1826,7 @@ void testbench::test_error_code_fifo_write_error_injection()
         // Write ERR_CODE_TEST with value 28 to inject FIFO_WRITE_ERR
         // ERR_CODE_TEST[4:0] specifies the bit position in ERR_CODE to force
         uint32_t err_code_test_value = 28; // FIFO_WRITE_ERR is at bit 28
-        CSML_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
+        REG_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
                              << " to inject FIFO_WRITE_ERR (bit 28)";
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_value);
         wait(10, SC_US); // Allow time for error propagation
@@ -1835,7 +1835,7 @@ void testbench::test_error_code_fifo_write_error_injection()
         uint32_t err_code_test_read = 0;
         m_test->register_read_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_read);
         wait(1, SC_US);
-        CSML_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
+        REG_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
 
         // Verify ERR_CODE.FIFO_WRITE_ERR (bit 28) is set
         uint32_t err_code = 0;
@@ -1843,12 +1843,12 @@ void testbench::test_error_code_fifo_write_error_injection()
         wait(1, SC_US);
 
         if ((err_code & (1 << 28)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) not set after error injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) not set after error injection - ERR_CODE: 0x"
                                   << std::hex << err_code;
-            CSML_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
+            REG_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) is set - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) is set - ERR_CODE: 0x"
                                   << std::hex << err_code;
         }
 
@@ -1858,26 +1858,26 @@ void testbench::test_error_code_fifo_write_error_injection()
         wait(1, SC_US);
 
         if ((intr_state & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
+            REG_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
-            CSML_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
+            REG_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
+            REG_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Error Code FIFO Write Error Injection test successful: "
+            REG_INFO(2, logger) << "Error Code FIFO Write Error Injection test successful: "
                                   << "ERR_CODE.FIFO_WRITE_ERR set and cs_fatal_err interrupt fired";
             report_test_pass("Test 133");
         } else {
-            CSML_ERROR(1, logger) << "Error Code FIFO Write Error Injection test FAILED";
+            REG_ERROR(1, logger) << "Error Code FIFO Write Error Injection test FAILED";
             report_test_fail("Test 133", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_133_error_code_fifo_write_error_injection: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_133_error_code_fifo_write_error_injection: " << e.what();
         report_test_fail("Test 133", e.what());
     }
 }
@@ -1919,12 +1919,12 @@ void testbench::test_error_code_fifo_read_error_injection()
         wait(1, SC_US);
         
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
                                   << std::hex << regwen;
             test_passed = false;
         }
         
-        CSML_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
+        REG_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
 
         // Enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x6666);
@@ -1952,7 +1952,7 @@ void testbench::test_error_code_fifo_read_error_injection()
         m_test->register_read_32(csrng_basetest::INTR_ENABLE_OFFSET, intr_enable_read);
         wait(1, SC_US);
         if ((intr_enable_read & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
                                   << std::hex << intr_enable_read;
             test_passed = false;
         }
@@ -1966,7 +1966,7 @@ void testbench::test_error_code_fifo_read_error_injection()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, err_code_initial);
         wait(1, SC_US);
         if ((err_code_initial & (1 << 29)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_READ_ERR (bit 29) already set before injection - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_READ_ERR (bit 29) already set before injection - value: 0x"
                                   << std::hex << err_code_initial;
             test_passed = false;
         }
@@ -1974,7 +1974,7 @@ void testbench::test_error_code_fifo_read_error_injection()
         // Write ERR_CODE_TEST with value 29 to inject FIFO_READ_ERR
         // ERR_CODE_TEST[4:0] specifies the bit position in ERR_CODE to force
         uint32_t err_code_test_value = 29; // FIFO_READ_ERR is at bit 29
-        CSML_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
+        REG_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
                              << " to inject FIFO_READ_ERR (bit 29)";
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_value);
         wait(10, SC_US); // Allow time for error propagation
@@ -1983,7 +1983,7 @@ void testbench::test_error_code_fifo_read_error_injection()
         uint32_t err_code_test_read = 0;
         m_test->register_read_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_read);
         wait(1, SC_US);
-        CSML_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
+        REG_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
 
         // Verify ERR_CODE.FIFO_READ_ERR (bit 29) is set
         uint32_t err_code = 0;
@@ -1991,12 +1991,12 @@ void testbench::test_error_code_fifo_read_error_injection()
         wait(1, SC_US);
 
         if ((err_code & (1 << 29)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_READ_ERR (bit 29) not set after error injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_READ_ERR (bit 29) not set after error injection - ERR_CODE: 0x"
                                   << std::hex << err_code;
-            CSML_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
+            REG_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.FIFO_READ_ERR (bit 29) is set - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.FIFO_READ_ERR (bit 29) is set - ERR_CODE: 0x"
                                   << std::hex << err_code;
         }
 
@@ -2006,26 +2006,26 @@ void testbench::test_error_code_fifo_read_error_injection()
         wait(1, SC_US);
 
         if ((intr_state & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
+            REG_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
-            CSML_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
+            REG_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
+            REG_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Error Code FIFO Read Error Injection test successful: "
+            REG_INFO(2, logger) << "Error Code FIFO Read Error Injection test successful: "
                                   << "ERR_CODE.FIFO_READ_ERR set and cs_fatal_err interrupt fired";
             report_test_pass("Test 134");
         } else {
-            CSML_ERROR(1, logger) << "Error Code FIFO Read Error Injection test FAILED";
+            REG_ERROR(1, logger) << "Error Code FIFO Read Error Injection test FAILED";
             report_test_fail("Test 134", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_134_error_code_fifo_read_error_injection: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_134_error_code_fifo_read_error_injection: " << e.what();
         report_test_fail("Test 134", e.what());
     }
 }
@@ -2067,12 +2067,12 @@ void testbench::test_error_code_fsm_illegal_state_main_sm()
         wait(1, SC_US);
         
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
                                   << std::hex << regwen;
             test_passed = false;
         }
         
-        CSML_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
+        REG_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
 
         // Enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x6666);
@@ -2100,7 +2100,7 @@ void testbench::test_error_code_fsm_illegal_state_main_sm()
         m_test->register_read_32(csrng_basetest::INTR_ENABLE_OFFSET, intr_enable_read);
         wait(1, SC_US);
         if ((intr_enable_read & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
                                   << std::hex << intr_enable_read;
             test_passed = false;
         }
@@ -2114,7 +2114,7 @@ void testbench::test_error_code_fsm_illegal_state_main_sm()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, err_code_initial);
         wait(1, SC_US);
         if ((err_code_initial & (1 << 21)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.MAIN_SM_ERR (bit 21) already set before injection - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.MAIN_SM_ERR (bit 21) already set before injection - value: 0x"
                                   << std::hex << err_code_initial;
             test_passed = false;
         }
@@ -2122,7 +2122,7 @@ void testbench::test_error_code_fsm_illegal_state_main_sm()
         // Write ERR_CODE_TEST with value 21 to inject MAIN_SM_ERR
         // ERR_CODE_TEST[4:0] specifies the bit position in ERR_CODE to force
         uint32_t err_code_test_value = 21; // MAIN_SM_ERR is at bit 21
-        CSML_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
+        REG_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
                              << " to inject MAIN_SM_ERR (bit 21)";
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_value);
         wait(10, SC_US); // Allow time for error propagation
@@ -2131,7 +2131,7 @@ void testbench::test_error_code_fsm_illegal_state_main_sm()
         uint32_t err_code_test_read = 0;
         m_test->register_read_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_read);
         wait(1, SC_US);
-        CSML_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
+        REG_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
 
         // Verify ERR_CODE.MAIN_SM_ERR (bit 21) is set
         uint32_t err_code = 0;
@@ -2139,12 +2139,12 @@ void testbench::test_error_code_fsm_illegal_state_main_sm()
         wait(1, SC_US);
 
         if ((err_code & (1 << 21)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.MAIN_SM_ERR (bit 21) not set after error injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.MAIN_SM_ERR (bit 21) not set after error injection - ERR_CODE: 0x"
                                   << std::hex << err_code;
-            CSML_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
+            REG_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.MAIN_SM_ERR (bit 21) is set - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.MAIN_SM_ERR (bit 21) is set - ERR_CODE: 0x"
                                   << std::hex << err_code;
         }
 
@@ -2154,26 +2154,26 @@ void testbench::test_error_code_fsm_illegal_state_main_sm()
         wait(1, SC_US);
 
         if ((intr_state & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
+            REG_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
-            CSML_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
+            REG_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
+            REG_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Error Code FSM Illegal State Main SM Error Injection test successful: "
+            REG_INFO(2, logger) << "Error Code FSM Illegal State Main SM Error Injection test successful: "
                                   << "ERR_CODE.MAIN_SM_ERR set and cs_fatal_err interrupt fired";
             report_test_pass("Test 135");
         } else {
-            CSML_ERROR(1, logger) << "Error Code FSM Illegal State Main SM Error Injection test FAILED";
+            REG_ERROR(1, logger) << "Error Code FSM Illegal State Main SM Error Injection test FAILED";
             report_test_fail("Test 135", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_135_error_code_fsm_illegal_state_main_sm: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_135_error_code_fsm_illegal_state_main_sm: " << e.what();
         report_test_fail("Test 135", e.what());
     }
 }
@@ -2215,12 +2215,12 @@ void testbench::test_error_code_fsm_illegal_state_cmd_stage()
         wait(1, SC_US);
         
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
                                   << std::hex << regwen;
             test_passed = false;
         }
         
-        CSML_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
+        REG_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
 
         // Enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x6666);
@@ -2248,7 +2248,7 @@ void testbench::test_error_code_fsm_illegal_state_cmd_stage()
         m_test->register_read_32(csrng_basetest::INTR_ENABLE_OFFSET, intr_enable_read);
         wait(1, SC_US);
         if ((intr_enable_read & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
                                   << std::hex << intr_enable_read;
             test_passed = false;
 
@@ -2263,7 +2263,7 @@ void testbench::test_error_code_fsm_illegal_state_cmd_stage()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, err_code_initial);
         wait(1, SC_US);
         if ((err_code_initial & (1 << 20)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.CMD_STAGE_SM_ERR (bit 20) already set before injection - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.CMD_STAGE_SM_ERR (bit 20) already set before injection - value: 0x"
                                   << std::hex << err_code_initial;
             test_passed = false;
         }
@@ -2271,7 +2271,7 @@ void testbench::test_error_code_fsm_illegal_state_cmd_stage()
         // Write ERR_CODE_TEST with value 20 to inject CMD_STAGE_SM_ERR
         // ERR_CODE_TEST[4:0] specifies the bit position in ERR_CODE to force
         uint32_t err_code_test_value = 20; // CMD_STAGE_SM_ERR is at bit 20
-        CSML_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
+        REG_INFO(2, logger) << "Writing ERR_CODE_TEST with value " << err_code_test_value 
                              << " to inject CMD_STAGE_SM_ERR (bit 20)";
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_value);
         wait(10, SC_US); // Allow time for error propagation
@@ -2280,7 +2280,7 @@ void testbench::test_error_code_fsm_illegal_state_cmd_stage()
         uint32_t err_code_test_read = 0;
         m_test->register_read_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_read);
         wait(1, SC_US);
-        CSML_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
+        REG_INFO(2, logger) << "ERR_CODE_TEST read back: 0x" << std::hex << err_code_test_read;
 
         // Verify ERR_CODE.CMD_STAGE_SM_ERR (bit 20) is set
         uint32_t err_code = 0;
@@ -2288,12 +2288,12 @@ void testbench::test_error_code_fsm_illegal_state_cmd_stage()
         wait(1, SC_US);
 
         if ((err_code & (1 << 20)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.CMD_STAGE_SM_ERR (bit 20) not set after error injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.CMD_STAGE_SM_ERR (bit 20) not set after error injection - ERR_CODE: 0x"
                                   << std::hex << err_code;
-            CSML_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
+            REG_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.CMD_STAGE_SM_ERR (bit 20) is set - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.CMD_STAGE_SM_ERR (bit 20) is set - ERR_CODE: 0x"
                                   << std::hex << err_code;
         }
 
@@ -2303,26 +2303,26 @@ void testbench::test_error_code_fsm_illegal_state_cmd_stage()
         wait(1, SC_US);
 
         if ((intr_state & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
+            REG_ERROR(1, logger) << "FAILED: cs_fatal_err interrupt did not fire (INTR_STATE[3] = 0) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
-            CSML_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
+            REG_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
+            REG_INFO(2, logger) << "PASS: cs_fatal_err interrupt fired (INTR_STATE[3] = 1) - INTR_STATE: 0x"
                                   << std::hex << intr_state;
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Error Code FSM Illegal State Command Stage Error Injection test successful: "
+            REG_INFO(2, logger) << "Error Code FSM Illegal State Command Stage Error Injection test successful: "
                                   << "ERR_CODE.CMD_STAGE_SM_ERR set and cs_fatal_err interrupt fired";
             report_test_pass("Test 136");
         } else {
-            CSML_ERROR(1, logger) << "Error Code FSM Illegal State Command Stage Error Injection test FAILED";
+            REG_ERROR(1, logger) << "Error Code FSM Illegal State Command Stage Error Injection test FAILED";
             report_test_fail("Test 136", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_136_error_code_fsm_illegal_state_cmd_stage: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_136_error_code_fsm_illegal_state_cmd_stage: " << e.what();
         report_test_fail("Test 136", e.what());
     }
 }
@@ -2367,12 +2367,12 @@ void testbench::test_error_code_sticky_behavior()
         wait(1, SC_US);
         
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
                                   << std::hex << regwen;
             test_passed = false;
         }
         
-        CSML_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
+        REG_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
 
         // Enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x6666);
@@ -2400,7 +2400,7 @@ void testbench::test_error_code_sticky_behavior()
         m_test->register_read_32(csrng_basetest::INTR_ENABLE_OFFSET, intr_enable_read);
         wait(1, SC_US);
         if ((intr_enable_read & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_ENABLE[3] (cs_fatal_err) not set - value: 0x"
                                   << std::hex << intr_enable_read;
             test_passed = false;
         }
@@ -2414,14 +2414,14 @@ void testbench::test_error_code_sticky_behavior()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, err_code_initial);
         wait(1, SC_US);
         if ((err_code_initial & (1 << 28)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) already set before injection - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) already set before injection - value: 0x"
                                   << std::hex << err_code_initial;
             test_passed = false;
         }
 
         // Inject error via ERR_CODE_TEST (using FIFO_WRITE_ERR bit 28)
         uint32_t err_code_test_value = 28; // FIFO_WRITE_ERR is at bit 28
-        CSML_INFO(2, logger) << "Injecting error via ERR_CODE_TEST with value " << err_code_test_value 
+        REG_INFO(2, logger) << "Injecting error via ERR_CODE_TEST with value " << err_code_test_value 
                              << " to set FIFO_WRITE_ERR (bit 28)";
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_value);
         wait(10, SC_US); // Allow time for error propagation
@@ -2432,12 +2432,12 @@ void testbench::test_error_code_sticky_behavior()
         wait(1, SC_US);
 
         if ((err_code_after_injection & (1 << 28)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) not set after error injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) not set after error injection - ERR_CODE: 0x"
                                   << std::hex << err_code_after_injection;
-            CSML_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
+            REG_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) is set after injection - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) is set after injection - ERR_CODE: 0x"
                                   << std::hex << err_code_after_injection;
         }
 
@@ -2447,17 +2447,17 @@ void testbench::test_error_code_sticky_behavior()
         wait(1, SC_US);
 
         if ((intr_state_after_injection & (1 << 3)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_STATE[3] (cs_fatal_err) not set after error injection - INTR_STATE: 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_STATE[3] (cs_fatal_err) not set after error injection - INTR_STATE: 0x"
                                   << std::hex << intr_state_after_injection;
-            CSML_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
+            REG_ERROR(1, logger) << "NOTE: Interrupt may not fire if ERR_CODE bit was not set";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: INTR_STATE[3] (cs_fatal_err) is set after error injection - INTR_STATE: 0x"
+            REG_INFO(2, logger) << "PASS: INTR_STATE[3] (cs_fatal_err) is set after error injection - INTR_STATE: 0x"
                                   << std::hex << intr_state_after_injection;
         }
 
         // Clear INTR_STATE[3] by writing 1 to bit 3 (RW1C - write-1-to-clear)
-        CSML_INFO(2, logger) << "Clearing INTR_STATE[3] by writing 1 to bit 3";
+        REG_INFO(2, logger) << "Clearing INTR_STATE[3] by writing 1 to bit 3";
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, (1 << 3));
         wait(1, SC_US);
 
@@ -2467,11 +2467,11 @@ void testbench::test_error_code_sticky_behavior()
         wait(1, SC_US);
 
         if ((intr_state_after_clear & (1 << 3)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_STATE[3] not cleared after write-1-to-clear - INTR_STATE: 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_STATE[3] not cleared after write-1-to-clear - INTR_STATE: 0x"
                                   << std::hex << intr_state_after_clear;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: INTR_STATE[3] is cleared after write-1-to-clear - INTR_STATE: 0x"
+            REG_INFO(2, logger) << "PASS: INTR_STATE[3] is cleared after write-1-to-clear - INTR_STATE: 0x"
                                   << std::hex << intr_state_after_clear;
         }
 
@@ -2481,28 +2481,28 @@ void testbench::test_error_code_sticky_behavior()
         wait(1, SC_US);
 
         if ((err_code_after_clear & (1 << 28)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) cleared after clearing interrupt - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) cleared after clearing interrupt - ERR_CODE: 0x"
                                   << std::hex << err_code_after_clear;
-            CSML_ERROR(1, logger) << "ERR_CODE bits should remain set (sticky) until reset";
-            CSML_ERROR(1, logger) << "ERR_CODE before clear: 0x" << std::hex << err_code_after_injection;
-            CSML_ERROR(1, logger) << "ERR_CODE after clear: 0x" << std::hex << err_code_after_clear;
+            REG_ERROR(1, logger) << "ERR_CODE bits should remain set (sticky) until reset";
+            REG_ERROR(1, logger) << "ERR_CODE before clear: 0x" << std::hex << err_code_after_injection;
+            REG_ERROR(1, logger) << "ERR_CODE after clear: 0x" << std::hex << err_code_after_clear;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) remains set after clearing interrupt (sticky) - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) remains set after clearing interrupt (sticky) - ERR_CODE: 0x"
                                   << std::hex << err_code_after_clear;
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Error Code Sticky Behavior test successful: "
+            REG_INFO(2, logger) << "Error Code Sticky Behavior test successful: "
                                   << "ERR_CODE bit remains set after clearing INTR_STATE[3] (sticky until reset)";
             report_test_pass("Test 137");
         } else {
-            CSML_ERROR(1, logger) << "Error Code Sticky Behavior test FAILED";
+            REG_ERROR(1, logger) << "Error Code Sticky Behavior test FAILED";
             report_test_fail("Test 137", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_137_error_code_sticky_behavior: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_137_error_code_sticky_behavior: " << e.what();
         report_test_fail("Test 137", e.what());
     }
 }
@@ -2546,12 +2546,12 @@ void testbench::test_error_code_multiple_errors()
         wait(1, SC_US);
         
         if ((regwen & 0x1) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: REGWEN is locked (REGWEN[0] = 0) - cannot write to ERR_CODE_TEST - value: 0x"
                                   << std::hex << regwen;
             test_passed = false;
         }
         
-        CSML_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
+        REG_INFO(2, logger) << "REGWEN is unlocked (REGWEN[0] = 1) - value: 0x" << std::hex << regwen;
 
         // Enable module
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x6666);
@@ -2571,14 +2571,14 @@ void testbench::test_error_code_multiple_errors()
         m_test->register_read_32(csrng_basetest::ERR_CODE_OFFSET, err_code_initial);
         wait(1, SC_US);
         if ((err_code_initial & ((1 << 28) | (1 << 21))) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE bits already set before injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE bits already set before injection - ERR_CODE: 0x"
                                   << std::hex << err_code_initial;
             test_passed = false;
         }
 
         // Inject first error: FIFO error (FIFO_WRITE_ERR bit 28)
         uint32_t err_code_test_value_fifo = 28; // FIFO_WRITE_ERR is at bit 28
-        CSML_INFO(2, logger) << "Injecting first error: FIFO_WRITE_ERR (bit 28) via ERR_CODE_TEST";
+        REG_INFO(2, logger) << "Injecting first error: FIFO_WRITE_ERR (bit 28) via ERR_CODE_TEST";
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_value_fifo);
         wait(10, SC_US); // Allow time for error propagation
 
@@ -2588,18 +2588,18 @@ void testbench::test_error_code_multiple_errors()
         wait(1, SC_US);
 
         if ((err_code_after_first & (1 << 28)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) not set after first injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) not set after first injection - ERR_CODE: 0x"
                                   << std::hex << err_code_after_first;
-            CSML_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
+            REG_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) is set after first injection - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) is set after first injection - ERR_CODE: 0x"
                                   << std::hex << err_code_after_first;
         }
 
         // Inject second error: FSM error (MAIN_SM_ERR bit 21)
         uint32_t err_code_test_value_fsm = 21; // MAIN_SM_ERR is at bit 21
-        CSML_INFO(2, logger) << "Injecting second error: MAIN_SM_ERR (bit 21) via ERR_CODE_TEST";
+        REG_INFO(2, logger) << "Injecting second error: MAIN_SM_ERR (bit 21) via ERR_CODE_TEST";
         m_test->register_write_32(csrng_basetest::ERR_CODE_TEST_OFFSET, err_code_test_value_fsm);
         wait(10, SC_US); // Allow time for error propagation
 
@@ -2610,53 +2610,53 @@ void testbench::test_error_code_multiple_errors()
 
         // Check FIFO_WRITE_ERR (bit 28) is still set
         if ((err_code_after_both & (1 << 28)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) cleared after second injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.FIFO_WRITE_ERR (bit 28) cleared after second injection - ERR_CODE: 0x"
                                   << std::hex << err_code_after_both;
-            CSML_ERROR(1, logger) << "ERR_CODE after first injection: 0x" << std::hex << err_code_after_first;
-            CSML_ERROR(1, logger) << "ERR_CODE after second injection: 0x" << std::hex << err_code_after_both;
+            REG_ERROR(1, logger) << "ERR_CODE after first injection: 0x" << std::hex << err_code_after_first;
+            REG_ERROR(1, logger) << "ERR_CODE after second injection: 0x" << std::hex << err_code_after_both;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) remains set - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.FIFO_WRITE_ERR (bit 28) remains set - ERR_CODE: 0x"
                                   << std::hex << err_code_after_both;
         }
 
         // Check MAIN_SM_ERR (bit 21) is set
         if ((err_code_after_both & (1 << 21)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: ERR_CODE.MAIN_SM_ERR (bit 21) not set after second injection - ERR_CODE: 0x"
+            REG_ERROR(1, logger) << "FAILED: ERR_CODE.MAIN_SM_ERR (bit 21) not set after second injection - ERR_CODE: 0x"
                                   << std::hex << err_code_after_both;
-            CSML_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
+            REG_ERROR(1, logger) << "NOTE: Model may not implement ERR_CODE_TEST error injection functionality";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: ERR_CODE.MAIN_SM_ERR (bit 21) is set after second injection - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: ERR_CODE.MAIN_SM_ERR (bit 21) is set after second injection - ERR_CODE: 0x"
                                   << std::hex << err_code_after_both;
         }
 
         // Verify both bits are set simultaneously
         uint32_t expected_bits = (1 << 28) | (1 << 21);
         if ((err_code_after_both & expected_bits) != expected_bits) {
-            CSML_ERROR(1, logger) << "FAILED: Multiple ERR_CODE bits not set simultaneously";
-            CSML_ERROR(1, logger) << "Expected ERR_CODE bits: 0x" << std::hex << expected_bits;
-            CSML_ERROR(1, logger) << "Actual ERR_CODE value: 0x" << std::hex << err_code_after_both;
-            CSML_ERROR(1, logger) << "Missing bits: 0x" << std::hex << (expected_bits & ~err_code_after_both);
+            REG_ERROR(1, logger) << "FAILED: Multiple ERR_CODE bits not set simultaneously";
+            REG_ERROR(1, logger) << "Expected ERR_CODE bits: 0x" << std::hex << expected_bits;
+            REG_ERROR(1, logger) << "Actual ERR_CODE value: 0x" << std::hex << err_code_after_both;
+            REG_ERROR(1, logger) << "Missing bits: 0x" << std::hex << (expected_bits & ~err_code_after_both);
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: Multiple ERR_CODE bits set simultaneously - ERR_CODE: 0x"
+            REG_INFO(2, logger) << "PASS: Multiple ERR_CODE bits set simultaneously - ERR_CODE: 0x"
                                   << std::hex << err_code_after_both;
-            CSML_INFO(2, logger) << "  - FIFO_WRITE_ERR (bit 28): SET";
-            CSML_INFO(2, logger) << "  - MAIN_SM_ERR (bit 21): SET";
+            REG_INFO(2, logger) << "  - FIFO_WRITE_ERR (bit 28): SET";
+            REG_INFO(2, logger) << "  - MAIN_SM_ERR (bit 21): SET";
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Error Code Multiple Errors test successful: "
+            REG_INFO(2, logger) << "Error Code Multiple Errors test successful: "
                                   << "Multiple ERR_CODE bits (FIFO error and FSM error) set simultaneously";
             report_test_pass("Test 138");
         } else {
-            CSML_ERROR(1, logger) << "Error Code Multiple Errors test FAILED";
+            REG_ERROR(1, logger) << "Error Code Multiple Errors test FAILED";
             report_test_fail("Test 138", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_138_error_code_multiple_errors: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_138_error_code_multiple_errors: " << e.what();
         report_test_fail("Test 138", e.what());
     }
 }
@@ -2714,7 +2714,7 @@ void testbench::test_recov_alert_sts_clear_mechanism()
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_sts_initial);
         wait(1, SC_US);
         if ((alert_sts_initial & (1 << 4)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) already set before test - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) already set before test - value: 0x"
                                   << std::hex << alert_sts_initial;
             test_passed = false;
         }
@@ -2722,17 +2722,17 @@ void testbench::test_recov_alert_sts_clear_mechanism()
         // Trigger recoverable alert by issuing INSTANTIATE with invalid flag0 encoding
         // Invalid flag0=0x5 (valid values are 0x6=entropy, 0x9=deterministic)
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout - module not ready for commands";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout - module not ready for commands";
             test_passed = false;
         }
 
         uint32_t cmd_header = build_cmd_header(1, 0, 0x5, 0); // acmd=1 (INSTANTIATE), flag0=0x5 (invalid)
-        CSML_INFO(2, logger) << "Triggering recoverable alert with invalid flag0=0x5";
+        REG_INFO(2, logger) << "Triggering recoverable alert with invalid flag0=0x5";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             test_passed = false;
         }
 
@@ -2742,16 +2742,16 @@ void testbench::test_recov_alert_sts_clear_mechanism()
         wait(1, SC_US);
 
         if ((alert_sts_after_trigger & (1 << 4)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) not set after triggering alert - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) not set after triggering alert - value: 0x"
                                   << std::hex << alert_sts_after_trigger;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) is set after triggering alert - value: 0x"
+            REG_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) is set after triggering alert - value: 0x"
                                   << std::hex << alert_sts_after_trigger;
         }
 
         // Write 0 to bit 4 to clear the alert (RW0C - write-0-to-clear)
-        CSML_INFO(2, logger) << "Writing 0 to RECOV_ALERT_STS bit 4 to clear alert";
+        REG_INFO(2, logger) << "Writing 0 to RECOV_ALERT_STS bit 4 to clear alert";
         m_test->register_write_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, (1 << 4)); // Write 1 to bit 4 position
         wait(1, SC_US);
 
@@ -2769,14 +2769,14 @@ void testbench::test_recov_alert_sts_clear_mechanism()
         wait(1, SC_US);
 
         if ((alert_sts_after_clear & (1 << 4)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) not cleared after write-0-to-clear - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) not cleared after write-0-to-clear - value: 0x"
                                   << std::hex << alert_sts_after_clear;
-            CSML_ERROR(1, logger) << "RECOV_ALERT_STS before clear: 0x" << std::hex << alert_sts_after_trigger;
-            CSML_ERROR(1, logger) << "RECOV_ALERT_STS after clear: 0x" << std::hex << alert_sts_after_clear;
-            CSML_ERROR(1, logger) << "NOTE: Model may implement RW1C (write-1-to-clear) instead of RW0C";
+            REG_ERROR(1, logger) << "RECOV_ALERT_STS before clear: 0x" << std::hex << alert_sts_after_trigger;
+            REG_ERROR(1, logger) << "RECOV_ALERT_STS after clear: 0x" << std::hex << alert_sts_after_clear;
+            REG_ERROR(1, logger) << "NOTE: Model may implement RW1C (write-1-to-clear) instead of RW0C";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) is cleared after write-0-to-clear - value: 0x"
+            REG_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) is cleared after write-0-to-clear - value: 0x"
                                   << std::hex << alert_sts_after_clear;
         }
 
@@ -2786,25 +2786,25 @@ void testbench::test_recov_alert_sts_clear_mechanism()
         wait(1, SC_US);
 
         if ((alert_sts_verify & (1 << 4)) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) re-set after clear - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) re-set after clear - value: 0x"
                                   << std::hex << alert_sts_verify;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) remains cleared - value: 0x"
+            REG_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ACMD_FLAG0_FIELD_ALERT (bit 4) remains cleared - value: 0x"
                                   << std::hex << alert_sts_verify;
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Recoverable Alert Status Clear Mechanism test successful: "
+            REG_INFO(2, logger) << "Recoverable Alert Status Clear Mechanism test successful: "
                                   << "Alert triggered and cleared via write-0-to-clear mechanism";
             report_test_pass("Test 139");
         } else {
-            CSML_ERROR(1, logger) << "Recoverable Alert Status Clear Mechanism test FAILED";
+            REG_ERROR(1, logger) << "Recoverable Alert Status Clear Mechanism test FAILED";
             report_test_fail("Test 139", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_139_recov_alert_sts_clear_mechanism: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_139_recov_alert_sts_clear_mechanism: " << e.what();
         report_test_fail("Test 139", e.what());
     }
 }
@@ -2860,7 +2860,7 @@ void testbench::test_recov_alert_sts_multiple_alerts()
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_sts_initial);
         wait(1, SC_US);
         if ((alert_sts_initial & ((1 << 0) | (1 << 13))) != 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS bits already set before test - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS bits already set before test - value: 0x"
                                   << std::hex << alert_sts_initial;
             test_passed = false;
         }
@@ -2869,7 +2869,7 @@ void testbench::test_recov_alert_sts_multiple_alerts()
         // Write invalid CTRL.ENABLE encoding (0x5 instead of 0x6 or 0x9)
         // CTRL.ENABLE is bits [3:0], valid values are 0x6 (enable) or 0x9 (disable)
         uint32_t invalid_ctrl = 0x5000; // ENABLE=0x5 (invalid), other fields default
-        CSML_INFO(2, logger) << "Triggering first alert: ENABLE_FIELD_ALERT (bit 0) via invalid CTRL.ENABLE=0x5";
+        REG_INFO(2, logger) << "Triggering first alert: ENABLE_FIELD_ALERT (bit 0) via invalid CTRL.ENABLE=0x5";
         m_test->register_write_32(csrng_basetest::CTRL_OFFSET, invalid_ctrl);
         wait(10, SC_US);
 
@@ -2879,11 +2879,11 @@ void testbench::test_recov_alert_sts_multiple_alerts()
         wait(1, SC_US);
 
         if ((alert_sts_after_first & (1 << 0)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) not set after invalid CTRL write - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) not set after invalid CTRL write - value: 0x"
                                   << std::hex << alert_sts_after_first;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) is set after invalid CTRL write - value: 0x"
+            REG_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) is set after invalid CTRL write - value: 0x"
                                   << std::hex << alert_sts_after_first;
         }
 
@@ -2894,17 +2894,17 @@ void testbench::test_recov_alert_sts_multiple_alerts()
         wait(10, SC_US);
 
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout - module not ready for commands";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout - module not ready for commands";
             test_passed = false;
         }
 
         uint32_t invalid_cmd = build_cmd_header(0, 0, 0x6, 0); // acmd=0x0 (invalid), flag0=0x6 (valid)
-        CSML_INFO(2, logger) << "Triggering second alert: CMD_STAGE_INVALID_ACMD_ALERT (bit 13) via invalid acmd=0x0";
+        REG_INFO(2, logger) << "Triggering second alert: CMD_STAGE_INVALID_ACMD_ALERT (bit 13) via invalid acmd=0x0";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, invalid_cmd);
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK timeout - command did not complete";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK timeout - command did not complete";
             test_passed = false;
         }
 
@@ -2915,52 +2915,52 @@ void testbench::test_recov_alert_sts_multiple_alerts()
 
         // Check ENABLE_FIELD_ALERT (bit 0) is still set
         if ((alert_sts_after_both & (1 << 0)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) cleared after second alert - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) cleared after second alert - value: 0x"
                                   << std::hex << alert_sts_after_both;
-            CSML_ERROR(1, logger) << "RECOV_ALERT_STS after first alert: 0x" << std::hex << alert_sts_after_first;
-            CSML_ERROR(1, logger) << "RECOV_ALERT_STS after second alert: 0x" << std::hex << alert_sts_after_both;
+            REG_ERROR(1, logger) << "RECOV_ALERT_STS after first alert: 0x" << std::hex << alert_sts_after_first;
+            REG_ERROR(1, logger) << "RECOV_ALERT_STS after second alert: 0x" << std::hex << alert_sts_after_both;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) remains set - value: 0x"
+            REG_INFO(2, logger) << "PASS: RECOV_ALERT_STS.ENABLE_FIELD_ALERT (bit 0) remains set - value: 0x"
                                   << std::hex << alert_sts_after_both;
         }
 
         // Check CMD_STAGE_INVALID_ACMD_ALERT (bit 13) is set
         if ((alert_sts_after_both & (1 << 13)) == 0) {
-            CSML_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) not set after invalid command - value: 0x"
+            REG_ERROR(1, logger) << "FAILED: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) not set after invalid command - value: 0x"
                                   << std::hex << alert_sts_after_both;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) is set after invalid command - value: 0x"
+            REG_INFO(2, logger) << "PASS: RECOV_ALERT_STS.CMD_STAGE_INVALID_ACMD_ALERT (bit 13) is set after invalid command - value: 0x"
                                   << std::hex << alert_sts_after_both;
         }
 
         // Verify both bits are set simultaneously
         uint32_t expected_bits = (1 << 0) | (1 << 13);
         if ((alert_sts_after_both & expected_bits) != expected_bits) {
-            CSML_ERROR(1, logger) << "FAILED: Multiple RECOV_ALERT_STS bits not set simultaneously";
-            CSML_ERROR(1, logger) << "Expected RECOV_ALERT_STS bits: 0x" << std::hex << expected_bits;
-            CSML_ERROR(1, logger) << "Actual RECOV_ALERT_STS value: 0x" << std::hex << alert_sts_after_both;
-            CSML_ERROR(1, logger) << "Missing bits: 0x" << std::hex << (expected_bits & ~alert_sts_after_both);
+            REG_ERROR(1, logger) << "FAILED: Multiple RECOV_ALERT_STS bits not set simultaneously";
+            REG_ERROR(1, logger) << "Expected RECOV_ALERT_STS bits: 0x" << std::hex << expected_bits;
+            REG_ERROR(1, logger) << "Actual RECOV_ALERT_STS value: 0x" << std::hex << alert_sts_after_both;
+            REG_ERROR(1, logger) << "Missing bits: 0x" << std::hex << (expected_bits & ~alert_sts_after_both);
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: Multiple RECOV_ALERT_STS bits set simultaneously - value: 0x"
+            REG_INFO(2, logger) << "PASS: Multiple RECOV_ALERT_STS bits set simultaneously - value: 0x"
                                   << std::hex << alert_sts_after_both;
-            CSML_INFO(2, logger) << "  - ENABLE_FIELD_ALERT (bit 0): SET";
-            CSML_INFO(2, logger) << "  - CMD_STAGE_INVALID_ACMD_ALERT (bit 13): SET";
+            REG_INFO(2, logger) << "  - ENABLE_FIELD_ALERT (bit 0): SET";
+            REG_INFO(2, logger) << "  - CMD_STAGE_INVALID_ACMD_ALERT (bit 13): SET";
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "Recoverable Alert Status Multiple Alerts test successful: "
+            REG_INFO(2, logger) << "Recoverable Alert Status Multiple Alerts test successful: "
                                   << "Multiple RECOV_ALERT_STS bits (multi-bit encoding and command error) set simultaneously";
             report_test_pass("Test 140");
         } else {
-            CSML_ERROR(1, logger) << "Recoverable Alert Status Multiple Alerts test FAILED";
+            REG_ERROR(1, logger) << "Recoverable Alert Status Multiple Alerts test FAILED";
             report_test_fail("Test 140", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_140_recov_alert_sts_multiple_alerts: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_140_recov_alert_sts_multiple_alerts: " << e.what();
         report_test_fail("Test 140", e.what());
     }
 }

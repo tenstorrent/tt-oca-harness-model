@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func007_tests.cpp
  * @brief FUNC-007 Software Reset Sequence — test case implementations
@@ -112,7 +112,7 @@
  *  - entropy_src/test/src/func006_tests.cpp (polling pattern reference)
  *  - entropy_src/test/src/func005_tests.cpp (CHECK macro and style reference)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"

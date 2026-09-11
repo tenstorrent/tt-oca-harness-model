@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func004_test.cpp
  * @brief Test cases for FUNC-KMAC-004 (KMAC Message Authentication Code)
@@ -52,19 +52,19 @@
  * Detailed Design: kmac-detailed-design.md
  * Functionality: kmac-functionality_list.md (FUNC-KMAC-004)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions for KMAC Testing
@@ -328,7 +328,7 @@ static void write_msg_fifo(kmac_test* test, const uint8_t* data, size_t data_len
             trans.set_data_ptr(data_buf);
             trans.set_data_length(bytes_this_word);  // IMPORTANT: Only valid bytes!
             trans.set_streaming_width(bytes_this_word);
-            trans.set_byte_enable_ptr(0);  // Let CSML generate byte enables from length
+            trans.set_byte_enable_ptr(0);  // Let regmodel generate byte enables from length
             trans.set_dmi_allowed(false);
             trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
@@ -382,7 +382,7 @@ static bool verify_no_error(kmac_test* test)
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
 
     if (err_code != 0) {
-        CSML_ERROR(1, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
+        REG_ERROR(1, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
         return false;
     }
     return true;
@@ -482,13 +482,13 @@ static bool compute_kmac_reference(const uint8_t* key_data, size_t key_len_bytes
     }
 
     // Debug: Log first 40 bytes of bytepadded PREFIX
-    CSML_INFO(2, test_logger) << "TEST REF PREFIX block (first 40 bytes):";
+    REG_INFO(2, test_logger) << "TEST REF PREFIX block (first 40 bytes):";
     std::stringstream ss_prefix;
     for (size_t i = 0; i < 40 && i < rate; i++) {
         ss_prefix << std::hex << std::setfill('0') << std::setw(2) << (int)bytepadded_prefix[i];
         if (i < 39) ss_prefix << " ";
     }
-    CSML_INFO(2, test_logger) << ss_prefix.str();
+    REG_INFO(2, test_logger) << ss_prefix.str();
 
     // Absorb PREFIX block FIRST
     if (EVP_DigestUpdate(ctx, bytepadded_prefix, rate) != 1) {
@@ -576,7 +576,7 @@ static bool compute_kmac_reference(const uint8_t* key_data, size_t key_len_bytes
  */
 void testbench::test_kmac_128bit_key_256bit_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-045: test_kmac_128bit_key_256bit_output");
 
     try {
@@ -596,7 +596,7 @@ void testbench::test_kmac_128bit_key_256bit_output()
         write_key_len(test, 0x0);  // 128-bit key
         write_kmac_prefix_registers(test, NULL, 0);  // No customization
 
-        CSML_INFO(2, test_logger) << "Testing KMAC128 with 128-bit key, 256-bit output";
+        REG_INFO(2, test_logger) << "Testing KMAC128 with 128-bit key, 256-bit output";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -646,10 +646,10 @@ void testbench::test_kmac_128bit_key_256bit_output()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "KMAC128 MAC matches reference";
+            REG_INFO(2, test_logger) << "KMAC128 MAC matches reference";
             report_test_pass("TC-045");
         } else {
-            CSML_ERROR(1, test_logger) << "Actual MAC  (first 16): " << std::hex << std::setfill('0')
+            REG_ERROR(1, test_logger) << "Actual MAC  (first 16): " << std::hex << std::setfill('0')
                                         << std::setw(2) << (int)actual_mac[0] << " "
                                         << std::setw(2) << (int)actual_mac[1] << " "
                                         << std::setw(2) << (int)actual_mac[2] << " "
@@ -666,7 +666,7 @@ void testbench::test_kmac_128bit_key_256bit_output()
                                         << std::setw(2) << (int)actual_mac[13] << " "
                                         << std::setw(2) << (int)actual_mac[14] << " "
                                         << std::setw(2) << (int)actual_mac[15] << std::dec;
-            CSML_ERROR(1, test_logger) << "Expected MAC (first 16): " << std::hex << std::setfill('0')
+            REG_ERROR(1, test_logger) << "Expected MAC (first 16): " << std::hex << std::setfill('0')
                                         << std::setw(2) << (int)expected_mac[0] << " "
                                         << std::setw(2) << (int)expected_mac[1] << " "
                                         << std::setw(2) << (int)expected_mac[2] << " "
@@ -687,7 +687,7 @@ void testbench::test_kmac_128bit_key_256bit_output()
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-045", "Exception occurred");
     }
 }
@@ -700,7 +700,7 @@ void testbench::test_kmac_128bit_key_256bit_output()
  */
 void testbench::test_kmac_256bit_key_256bit_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-046: test_kmac_256bit_key_256bit_output");
 
     try {
@@ -720,7 +720,7 @@ void testbench::test_kmac_256bit_key_256bit_output()
         write_key_len(test, 0x2);  // 256-bit key
         write_kmac_prefix_registers(test, "CustomString", 12);
 
-        CSML_INFO(2, test_logger) << "Testing KMAC256 with 256-bit key, 256-bit output, customization string";
+        REG_INFO(2, test_logger) << "Testing KMAC256 with 256-bit key, 256-bit output, customization string";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -770,14 +770,14 @@ void testbench::test_kmac_256bit_key_256bit_output()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "KMAC256 MAC matches reference";
+            REG_INFO(2, test_logger) << "KMAC256 MAC matches reference";
             report_test_pass("TC-046");
         } else {
             report_test_fail("TC-046", "MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-046", "Exception occurred");
     }
 }
@@ -790,7 +790,7 @@ void testbench::test_kmac_256bit_key_256bit_output()
  */
 void testbench::test_kmac_key_length_128bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-047: test_kmac_key_length_128bit");
 
     try {
@@ -809,7 +809,7 @@ void testbench::test_kmac_key_length_128bit()
         write_key_len(test, 0x0);  // KEY_LEN = 0x0 (128 bits)
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KEY_LEN = 0x0 (128-bit key)";
+        REG_INFO(2, test_logger) << "Testing KEY_LEN = 0x0 (128-bit key)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -857,14 +857,14 @@ void testbench::test_kmac_key_length_128bit()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "KEY_LEN=0x0 MAC matches reference";
+            REG_INFO(2, test_logger) << "KEY_LEN=0x0 MAC matches reference";
             report_test_pass("TC-047");
         } else {
             report_test_fail("TC-047", "MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-047", "Exception occurred");
     }
 }
@@ -877,7 +877,7 @@ void testbench::test_kmac_key_length_128bit()
  */
 void testbench::test_kmac_key_length_192bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-048: test_kmac_key_length_192bit");
 
     try {
@@ -896,7 +896,7 @@ void testbench::test_kmac_key_length_192bit()
         write_key_len(test, 0x1);  // KEY_LEN = 0x1 (192 bits)
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KEY_LEN = 0x1 (192-bit key)";
+        REG_INFO(2, test_logger) << "Testing KEY_LEN = 0x1 (192-bit key)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -944,14 +944,14 @@ void testbench::test_kmac_key_length_192bit()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "KEY_LEN=0x1 (192-bit) MAC matches reference";
+            REG_INFO(2, test_logger) << "KEY_LEN=0x1 (192-bit) MAC matches reference";
             report_test_pass("TC-048");
         } else {
             report_test_fail("TC-048", "MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-048", "Exception occurred");
     }
 }
@@ -964,7 +964,7 @@ void testbench::test_kmac_key_length_192bit()
  */
 void testbench::test_kmac_key_length_256bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-049: test_kmac_key_length_256bit");
 
     try {
@@ -983,7 +983,7 @@ void testbench::test_kmac_key_length_256bit()
         write_key_len(test, 0x2);  // KEY_LEN = 0x2 (256 bits)
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KEY_LEN = 0x2 (256-bit key)";
+        REG_INFO(2, test_logger) << "Testing KEY_LEN = 0x2 (256-bit key)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1031,14 +1031,14 @@ void testbench::test_kmac_key_length_256bit()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "KEY_LEN=0x2 (256-bit) MAC matches reference";
+            REG_INFO(2, test_logger) << "KEY_LEN=0x2 (256-bit) MAC matches reference";
             report_test_pass("TC-049");
         } else {
             report_test_fail("TC-049", "MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-049", "Exception occurred");
     }
 }
@@ -1051,7 +1051,7 @@ void testbench::test_kmac_key_length_256bit()
  */
 void testbench::test_kmac_key_length_384bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-050: test_kmac_key_length_384bit");
 
     try {
@@ -1070,7 +1070,7 @@ void testbench::test_kmac_key_length_384bit()
         write_key_len(test, 0x3);  // KEY_LEN = 0x3 (384 bits)
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KEY_LEN = 0x3 (384-bit key)";
+        REG_INFO(2, test_logger) << "Testing KEY_LEN = 0x3 (384-bit key)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1118,14 +1118,14 @@ void testbench::test_kmac_key_length_384bit()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "KEY_LEN=0x3 (384-bit) MAC matches reference";
+            REG_INFO(2, test_logger) << "KEY_LEN=0x3 (384-bit) MAC matches reference";
             report_test_pass("TC-050");
         } else {
             report_test_fail("TC-050", "MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-050", "Exception occurred");
     }
 }
@@ -1138,7 +1138,7 @@ void testbench::test_kmac_key_length_384bit()
  */
 void testbench::test_kmac_key_length_512bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-051: test_kmac_key_length_512bit");
 
     try {
@@ -1157,7 +1157,7 @@ void testbench::test_kmac_key_length_512bit()
         write_key_len(test, 0x4);  // KEY_LEN = 0x4 (512 bits)
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KEY_LEN = 0x4 (512-bit key - maximum)";
+        REG_INFO(2, test_logger) << "Testing KEY_LEN = 0x4 (512-bit key - maximum)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1205,14 +1205,14 @@ void testbench::test_kmac_key_length_512bit()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "KEY_LEN=0x4 (512-bit) MAC matches reference";
+            REG_INFO(2, test_logger) << "KEY_LEN=0x4 (512-bit) MAC matches reference";
             report_test_pass("TC-051");
         } else {
             report_test_fail("TC-051", "MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-051", "Exception occurred");
     }
 }
@@ -1225,7 +1225,7 @@ void testbench::test_kmac_key_length_512bit()
  */
 void testbench::test_kmac_prefix_validation()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-052: test_kmac_prefix_validation");
 
     try {
@@ -1246,7 +1246,7 @@ void testbench::test_kmac_prefix_validation()
         // Write correct PREFIX starting with encode_string("KMAC")
         write_kmac_prefix_registers(test, "TestCustomization", 17);
 
-        CSML_INFO(2, test_logger) << "Testing PREFIX validation with correct encode_string(\"KMAC\")";
+        REG_INFO(2, test_logger) << "Testing PREFIX validation with correct encode_string(\"KMAC\")";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1265,7 +1265,7 @@ void testbench::test_kmac_prefix_validation()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "PREFIX validation passed (no error after START)";
+        REG_INFO(2, test_logger) << "PREFIX validation passed (no error after START)";
 
         write_msg_fifo(test, (const uint8_t*)test_msg, msg_len);
 
@@ -1287,11 +1287,11 @@ void testbench::test_kmac_prefix_validation()
 
         cleanup_test(test);
 
-        CSML_INFO(2, test_logger) << "PREFIX validation test passed - correct encode_string(\"KMAC\") accepted";
+        REG_INFO(2, test_logger) << "PREFIX validation test passed - correct encode_string(\"KMAC\") accepted";
         report_test_pass("TC-052");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-052", "Exception occurred");
     }
 }
@@ -1304,7 +1304,7 @@ void testbench::test_kmac_prefix_validation()
  */
 void testbench::test_kmac_incorrect_function_name_error()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-053: test_kmac_incorrect_function_name_error");
 
     try {
@@ -1329,7 +1329,7 @@ void testbench::test_kmac_incorrect_function_name_error()
             wait(2, SC_NS);
         }
 
-        CSML_INFO(2, test_logger) << "Testing PREFIX validation with INCORRECT format";
+        REG_INFO(2, test_logger) << "Testing PREFIX validation with INCORRECT format";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1348,8 +1348,8 @@ void testbench::test_kmac_incorrect_function_name_error()
         uint8_t error_type = (err_code >> 24) & 0xFF;
 
         if (error_type == 0x07) {
-            CSML_INFO(2, test_logger) << "IncorrectFunctionName error (0x07) correctly detected";
-            CSML_INFO(2, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
+            REG_INFO(2, test_logger) << "IncorrectFunctionName error (0x07) correctly detected";
+            REG_INFO(2, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
 
             // Check that kmac_err interrupt bit is set
             uint32_t intr_state = 0;
@@ -1357,19 +1357,19 @@ void testbench::test_kmac_incorrect_function_name_error()
             bool kmac_err = (intr_state & 0x4) != 0;
 
             if (kmac_err) {
-                CSML_INFO(2, test_logger) << "INTR_STATE.kmac_err correctly asserted";
+                REG_INFO(2, test_logger) << "INTR_STATE.kmac_err correctly asserted";
             }
 
             cleanup_test(test);
             report_test_pass("TC-053");
         } else {
-            CSML_ERROR(1, test_logger) << "Expected error 0x07, got 0x" << std::hex << (int)error_type << std::dec;
+            REG_ERROR(1, test_logger) << "Expected error 0x07, got 0x" << std::hex << (int)error_type << std::dec;
             cleanup_test(test);
             report_test_fail("TC-053", "IncorrectFunctionName error not detected");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-053", "Exception occurred");
     }
 }
@@ -1382,7 +1382,7 @@ void testbench::test_kmac_incorrect_function_name_error()
  */
 void testbench::test_kmac_output_length_encoding()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-054: test_kmac_output_length_encoding");
 
     try {
@@ -1401,7 +1401,7 @@ void testbench::test_kmac_output_length_encoding()
         write_key_len(test, 0x0);
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing right_encode(" << output_bits << ") appended to message";
+        REG_INFO(2, test_logger) << "Testing right_encode(" << output_bits << ") appended to message";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1421,7 +1421,7 @@ void testbench::test_kmac_output_length_encoding()
         size_t right_enc_len = 0;
         right_encode(output_bits, right_enc, right_enc_len);
 
-        CSML_INFO(2, test_logger) << "right_encode(" << output_bits << ") = "
+        REG_INFO(2, test_logger) << "right_encode(" << output_bits << ") = "
                                   << right_enc_len << " bytes";
 
         write_msg_fifo(test, right_enc, right_enc_len);
@@ -1456,14 +1456,14 @@ void testbench::test_kmac_output_length_encoding()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "Output length encoding test passed - MAC matches";
+            REG_INFO(2, test_logger) << "Output length encoding test passed - MAC matches";
             report_test_pass("TC-054");
         } else {
             report_test_fail("TC-054", "MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-054", "Exception occurred");
     }
 }
@@ -1476,7 +1476,7 @@ void testbench::test_kmac_output_length_encoding()
  */
 void testbench::test_kmac_extended_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-055: test_kmac_extended_output");
 
     try {
@@ -1496,7 +1496,7 @@ void testbench::test_kmac_extended_output()
         write_key_len(test, 0x0);
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KMAC extended output (512 bits) using RUN command";
+        REG_INFO(2, test_logger) << "Testing KMAC extended output (512 bits) using RUN command";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1524,11 +1524,11 @@ void testbench::test_kmac_extended_output()
 
         // Read first block
         uint8_t actual_output[64];
-        CSML_INFO(2, test_logger) << "Reading first block (256 bits)";
+        REG_INFO(2, test_logger) << "Reading first block (256 bits)";
         read_state_digest(test, actual_output, block1_bytes);
 
         // Issue RUN command for extended output
-        CSML_INFO(2, test_logger) << "Issuing RUN command for extended output";
+        REG_INFO(2, test_logger) << "Issuing RUN command for extended output";
         write_cmd(test, 0x31);  // RUN
 
         if (!verify_no_error(test)) {
@@ -1538,7 +1538,7 @@ void testbench::test_kmac_extended_output()
         }
 
         // Read second block
-        CSML_INFO(2, test_logger) << "Reading second block (256 bits)";
+        REG_INFO(2, test_logger) << "Reading second block (256 bits)";
         read_state_digest(test, actual_output + block1_bytes, block1_bytes);
 
         uint8_t expected_output[64];
@@ -1560,14 +1560,14 @@ void testbench::test_kmac_extended_output()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "Extended output test passed - 512-bit MAC matches";
+            REG_INFO(2, test_logger) << "Extended output test passed - 512-bit MAC matches";
             report_test_pass("TC-055");
         } else {
             report_test_fail("TC-055", "Extended output mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-055", "Exception occurred");
     }
 }
@@ -1580,7 +1580,7 @@ void testbench::test_kmac_extended_output()
  */
 void testbench::test_corner_empty_message_kmac()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-172: test_corner_empty_message_kmac");
 
     try {
@@ -1597,7 +1597,7 @@ void testbench::test_corner_empty_message_kmac()
         write_key_len(test, 0x0);
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KMAC with empty message";
+        REG_INFO(2, test_logger) << "Testing KMAC with empty message";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1645,14 +1645,14 @@ void testbench::test_corner_empty_message_kmac()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "Empty message KMAC test passed";
+            REG_INFO(2, test_logger) << "Empty message KMAC test passed";
             report_test_pass("TC-172");
         } else {
             report_test_fail("TC-172", "Empty message MAC mismatch");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-172", "Exception occurred");
     }
 }
@@ -1665,7 +1665,7 @@ void testbench::test_corner_empty_message_kmac()
  */
 void testbench::test_corner_maximum_key_length_512bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-177: test_corner_maximum_key_length_512bit");
 
     try {
@@ -1685,7 +1685,7 @@ void testbench::test_corner_maximum_key_length_512bit()
         write_key_len(test, 0x4);  // KEY_LEN = 0x4 (512 bits - maximum)
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KMAC with MAXIMUM key length (512 bits)";
+        REG_INFO(2, test_logger) << "Testing KMAC with MAXIMUM key length (512 bits)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1733,14 +1733,14 @@ void testbench::test_corner_maximum_key_length_512bit()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "Maximum key length (512-bit) test passed";
+            REG_INFO(2, test_logger) << "Maximum key length (512-bit) test passed";
             report_test_pass("TC-177");
         } else {
             report_test_fail("TC-177", "MAC mismatch with maximum key");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-177", "Exception occurred");
     }
 }
@@ -1753,7 +1753,7 @@ void testbench::test_corner_maximum_key_length_512bit()
  */
 void testbench::test_corner_minimum_key_length_128bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-178: test_corner_minimum_key_length_128bit");
 
     try {
@@ -1773,7 +1773,7 @@ void testbench::test_corner_minimum_key_length_128bit()
         write_key_len(test, 0x0);  // KEY_LEN = 0x0 (128 bits - minimum)
         write_kmac_prefix_registers(test, NULL, 0);
 
-        CSML_INFO(2, test_logger) << "Testing KMAC with MINIMUM key length (128 bits)";
+        REG_INFO(2, test_logger) << "Testing KMAC with MINIMUM key length (128 bits)";
 
         bool idle, absorb, squeeze;
         read_status_fsm_bits(test, idle, absorb, squeeze);
@@ -1821,14 +1821,14 @@ void testbench::test_corner_minimum_key_length_128bit()
         cleanup_test(test);
 
         if (match) {
-            CSML_INFO(2, test_logger) << "Minimum key length (128-bit) test passed";
+            REG_INFO(2, test_logger) << "Minimum key length (128-bit) test passed";
             report_test_pass("TC-178");
         } else {
             report_test_fail("TC-178", "MAC mismatch with minimum key");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-178", "Exception occurred");
     }
 }

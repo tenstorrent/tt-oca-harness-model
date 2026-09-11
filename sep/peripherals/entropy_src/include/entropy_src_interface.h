@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file entropy_src_interface.h
  * @brief Abstract interface class for the entropy_src TLM model
@@ -20,7 +20,7 @@
  *   - entropy_src/docs/sections/entropy_src-register-callbacks.md
  *   - entropy_src/docs/entropy_src-detailed-design.md  Section 4
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #pragma once

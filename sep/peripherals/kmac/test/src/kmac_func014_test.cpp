@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func014_test.cpp
  * @brief Test cases for FUNC-KMAC-014 (Software Mode Entropy Management)
@@ -21,18 +21,18 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md (Section 1.5.2 SW Mode)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -212,7 +212,7 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void testbench::test_entropy_mode_sw_seed()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-106: test_entropy_mode_sw_seed");
 
     try {
@@ -224,7 +224,7 @@ void testbench::test_entropy_mode_sw_seed()
 
         // Configure CFG_SHADOWED with sw_mode and entropy_ready=1
         configure_kmac_sw_entropy(test, 0x2, 1); // entropy_mode=sw, entropy_ready=1
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: entropy_mode=sw, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: entropy_mode=sw, entropy_ready=1";
 
         // Prepare 6 x 32-bit seed values (192 bits total)
         const uint32_t seeds[6] = {
@@ -237,13 +237,13 @@ void testbench::test_entropy_mode_sw_seed()
         };
 
         // Write 6-write ENTROPY_SEED sequence
-        CSML_INFO(2, test_logger) << "Writing 6-write ENTROPY_SEED sequence:";
+        REG_INFO(2, test_logger) << "Writing 6-write ENTROPY_SEED sequence:";
         for (int i = 0; i < 6; i++) {
             write_entropy_seed(test, seeds[i]);
-            CSML_INFO(2, test_logger) << "  Write " << (i + 1) << ": 0x" << std::hex << seeds[i];
+            REG_INFO(2, test_logger) << "  Write " << (i + 1) << ": 0x" << std::hex << seeds[i];
         }
 
-        CSML_INFO(2, test_logger) << "Completed 6-write sequence - PRNG should be active";
+        REG_INFO(2, test_logger) << "Completed 6-write sequence - PRNG should be active";
 
         // Write key and prefix
         write_kmac_key_128bit(test, key);
@@ -260,14 +260,14 @@ void testbench::test_entropy_mode_sw_seed()
 
         // Perform KMAC operation with SW entropy
         write_cmd(test, 0x1D); // START
-        CSML_INFO(2, test_logger) << "Issued START command";
+        REG_INFO(2, test_logger) << "Issued START command";
 
         write_msg_fifo(test, msg, msg_len);
         write_output_length_encoding(test, 256);
-        CSML_INFO(2, test_logger) << "Wrote message and output length encoding";
+        REG_INFO(2, test_logger) << "Wrote message and output length encoding";
 
         write_cmd(test, 0x2E); // PROCESS
-        CSML_INFO(2, test_logger) << "Issued PROCESS command";
+        REG_INFO(2, test_logger) << "Issued PROCESS command";
 
         wait(20, SC_NS);
 
@@ -317,16 +317,16 @@ void testbench::test_entropy_mode_sw_seed()
  ******************************************************************************/
 void testbench::test_entropy_sw_mode_six_write_sequence()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-106-Ext1: test_entropy_sw_mode_six_write_sequence");
 
     try {
         // Configure CFG_SHADOWED with sw_mode and entropy_ready=1
         configure_kmac_sw_entropy(test, 0x2, 1);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=sw, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=sw, entropy_ready=1";
 
         // Test 1: Write fewer than 6 times and attempt operation
-        CSML_INFO(2, test_logger) << "Test 1: Writing only 5 seeds (incomplete sequence)";
+        REG_INFO(2, test_logger) << "Test 1: Writing only 5 seeds (incomplete sequence)";
         const uint32_t partial_seeds[5] = {
             0xAAAAAAAA, 0xBBBBBBBB, 0xCCCCCCCC, 0xDDDDDDDD, 0xEEEEEEEE
         };
@@ -334,7 +334,7 @@ void testbench::test_entropy_sw_mode_six_write_sequence()
         for (int i = 0; i < 5; i++) {
             write_entropy_seed(test, partial_seeds[i]);
         }
-        CSML_INFO(2, test_logger) << "Wrote 5 seeds (incomplete)";
+        REG_INFO(2, test_logger) << "Wrote 5 seeds (incomplete)";
 
         // Attempt KMAC operation (should fail with SwHashingWithoutEntropyReady)
         const uint8_t key[16] = {0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
@@ -349,20 +349,20 @@ void testbench::test_entropy_sw_mode_six_write_sequence()
         // ERR_CODE format: bits [31:24] = error code, bits [23:0] = debug info
         uint32_t err_code = 0;
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-        CSML_INFO(2, test_logger) << "ERR_CODE after incomplete seed: 0x" << std::hex << err_code;
+        REG_INFO(2, test_logger) << "ERR_CODE after incomplete seed: 0x" << std::hex << err_code;
 
         uint32_t err_type = (err_code >> 24) & 0xFF;
         if (err_type == 0x09) {
-            CSML_INFO(2, test_logger) << "SwHashingWithoutEntropyReady error detected as expected (0x09)";
+            REG_INFO(2, test_logger) << "SwHashingWithoutEntropyReady error detected as expected (0x09)";
         } else if (err_code == 0) {
-            CSML_INFO(2, test_logger) << "No error - implementation may allow incomplete seed";
+            REG_INFO(2, test_logger) << "No error - implementation may allow incomplete seed";
         }
         
         // Always cleanup after Test 1 to recover FSM to IDLE
         cleanup_test(test);
 
         // Test 2: Write complete 6-seed sequence
-        CSML_INFO(2, test_logger) << "Test 2: Writing complete 6-seed sequence";
+        REG_INFO(2, test_logger) << "Test 2: Writing complete 6-seed sequence";
 
         // Reconfigure
         configure_kmac_sw_entropy(test, 0x2, 1);
@@ -373,9 +373,9 @@ void testbench::test_entropy_sw_mode_six_write_sequence()
 
         for (int i = 0; i < 6; i++) {
             write_entropy_seed(test, complete_seeds[i]);
-            CSML_INFO(2, test_logger) << "  Seed " << (i + 1) << "/6: 0x" << std::hex << complete_seeds[i];
+            REG_INFO(2, test_logger) << "  Seed " << (i + 1) << "/6: 0x" << std::hex << complete_seeds[i];
         }
-        CSML_INFO(2, test_logger) << "Completed 6-write sequence";
+        REG_INFO(2, test_logger) << "Completed 6-write sequence";
 
         // Perform KMAC operation (should succeed)
         write_kmac_key_128bit(test, key);
@@ -428,13 +428,13 @@ void testbench::test_entropy_sw_mode_six_write_sequence()
  ******************************************************************************/
 void testbench::test_entropy_sw_mode_activation_after_sixth_write()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-106-Ext2: test_entropy_sw_mode_activation_after_sixth_write");
 
     try {
         // Configure CFG_SHADOWED with sw_mode
         configure_kmac_sw_entropy(test, 0x2, 1);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=sw, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=sw, entropy_ready=1";
 
         // Write seeds one at a time, checking state after each
         const uint32_t seeds[6] = {
@@ -443,12 +443,12 @@ void testbench::test_entropy_sw_mode_activation_after_sixth_write()
 
         for (int i = 0; i < 6; i++) {
             write_entropy_seed(test, seeds[i]);
-            CSML_INFO(2, test_logger) << "Wrote seed " << (i + 1) << "/6: 0x" << std::hex << seeds[i];
+            REG_INFO(2, test_logger) << "Wrote seed " << (i + 1) << "/6: 0x" << std::hex << seeds[i];
 
             if (i == 5) {
-                CSML_INFO(2, test_logger) << "After 6th write - PRNG should now be active";
+                REG_INFO(2, test_logger) << "After 6th write - PRNG should now be active";
             } else {
-                CSML_INFO(2, test_logger) << "After write " << (i + 1) << " - PRNG not yet active";
+                REG_INFO(2, test_logger) << "After write " << (i + 1) << " - PRNG not yet active";
             }
         }
 
@@ -476,7 +476,7 @@ void testbench::test_entropy_sw_mode_activation_after_sixth_write()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Operation succeeded after 6th write - PRNG activated correctly";
+        REG_INFO(2, test_logger) << "Operation succeeded after 6th write - PRNG activated correctly";
 
         cleanup_test(test);
         report_test_pass("TC-106-Ext2: test_entropy_sw_mode_activation_after_sixth_write");
@@ -501,13 +501,13 @@ void testbench::test_entropy_sw_mode_activation_after_sixth_write()
  ******************************************************************************/
 void testbench::test_entropy_sw_mode_post_activation_write_rejection()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-106-Ext3: test_entropy_sw_mode_post_activation_write_rejection");
 
     try {
         // Configure CFG_SHADOWED with sw_mode
         configure_kmac_sw_entropy(test, 0x2, 1);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=sw, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=sw, entropy_ready=1";
 
         // Write complete 6-seed sequence
         const uint32_t seeds[6] = {
@@ -515,14 +515,14 @@ void testbench::test_entropy_sw_mode_post_activation_write_rejection()
         };
 
         write_entropy_seed_sequence(test, seeds);
-        CSML_INFO(2, test_logger) << "Completed initial 6-write seed sequence";
+        REG_INFO(2, test_logger) << "Completed initial 6-write seed sequence";
 
         // Attempt additional writes (should be ignored)
-        CSML_INFO(2, test_logger) << "Attempting post-activation writes (should be ignored):";
+        REG_INFO(2, test_logger) << "Attempting post-activation writes (should be ignored):";
         for (int i = 0; i < 3; i++) {
             uint32_t ignored_seed = 0xFFFFFFFF - i;
             write_entropy_seed(test, ignored_seed);
-            CSML_INFO(2, test_logger) << "  Write " << (7 + i) << ": 0x" << std::hex << ignored_seed
+            REG_INFO(2, test_logger) << "  Write " << (7 + i) << ": 0x" << std::hex << ignored_seed
                                      << " (should be ignored)";
         }
 
@@ -560,7 +560,7 @@ void testbench::test_entropy_sw_mode_post_activation_write_rejection()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Operation succeeded - post-activation writes correctly ignored";
+        REG_INFO(2, test_logger) << "Operation succeeded - post-activation writes correctly ignored";
 
         cleanup_test(test);
         report_test_pass("TC-106-Ext3: test_entropy_sw_mode_post_activation_write_rejection");

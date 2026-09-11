@@ -1,9 +1,9 @@
 /******************************************************************************
- * Copyright (c) 2025, Vayavya Labs Pvt. Ltd.
+ * Copyright (c) 2025, Tenstorrent USA, Inc.
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
-// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2025 Tenstorrent USA, Inc.
  *
  * CRNG Test Component - Enhanced Version
  * Comprehensive test infrastructure with register access and port management
@@ -12,7 +12,7 @@
 #pragma once
 
 #include "csrng_basetest.h"
-#include <csml_logger.h>
+#include <reg_logger.h>
 #include <iomanip>
 
 class csrng_test : public csrng_basetest {
@@ -35,7 +35,7 @@ public:
     entropy_provider* m_entropy_provider;
 
     // Logger instance
-    CsmlLogger m_logger;
+    RegLogger m_logger;
 
     SC_HAS_PROCESS(csrng_test);
 
@@ -58,12 +58,12 @@ public:
         rst_n_signal.write(true);         // Deasserted reset
 
         // Configure logger
-        m_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+        m_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
 
         // Create entropy provider
         m_entropy_provider = new entropy_provider("entropy_provider");
 
-        CSML_INFO(0, m_logger) << "CRNG Test component initialized";
+        REG_INFO(0, m_logger) << "CRNG Test component initialized";
     }
 
     ~csrng_test() {
@@ -93,11 +93,11 @@ public:
         initiator_socket->b_transport(trans, delay);
 
         if (trans.is_response_ok()) {
-            CSML_DEBUG(2, m_logger) << "Read from offset 0x" << std::hex << offset
+            REG_DEBUG(2, m_logger) << "Read from offset 0x" << std::hex << offset
                                     << ": 0x" << read_data << std::dec;
             return read_data;
         } else {
-            CSML_ERROR(0, m_logger) << "Read failed at offset 0x" << std::hex << offset;
+            REG_ERROR(0, m_logger) << "Read failed at offset 0x" << std::hex << offset;
             return 0;
         }
     }
@@ -118,10 +118,10 @@ public:
         initiator_socket->b_transport(trans, delay);
 
         if (trans.is_response_ok()) {
-            CSML_DEBUG(2, m_logger) << "Write to offset 0x" << std::hex << offset
+            REG_DEBUG(2, m_logger) << "Write to offset 0x" << std::hex << offset
                                     << ": 0x" << write_value << std::dec;
         } else {
-            CSML_ERROR(0, m_logger) << "Write failed at offset 0x" << std::hex << offset;
+            REG_ERROR(0, m_logger) << "Write failed at offset 0x" << std::hex << offset;
         }
     }
 
@@ -143,7 +143,7 @@ public:
         register_write_32(CTRL_OFFSET, ctrl_val);
         wait(100, SC_NS);
 
-        CSML_INFO(1, m_logger) << "CRNG module enabled (SW_APP=" << enable_sw_app
+        REG_INFO(1, m_logger) << "CRNG module enabled (SW_APP=" << enable_sw_app
                                << ", FIPS=" << enable_fips << ")";
     }
 
@@ -152,7 +152,7 @@ public:
         register_write_32(CTRL_OFFSET, 0x999);  // All MUBI4_DISABLE
         wait(100, SC_NS);
 
-        CSML_INFO(1, m_logger) << "CRNG module disabled";
+        REG_INFO(1, m_logger) << "CRNG module disabled";
     }
 
     // Write command request header
@@ -161,7 +161,7 @@ public:
                              ((flag0 & 0xF) << 8) | ((glen & 0xFFF) << 12);
         register_write_32(CMD_REQ_OFFSET, cmd_header);
 
-        CSML_INFO(1, m_logger) << "CMD_REQ written: acmd=" << acmd << ", clen=" << clen
+        REG_INFO(1, m_logger) << "CMD_REQ written: acmd=" << acmd << ", clen=" << clen
                                << ", flag0=" << flag0 << ", glen=" << glen;
     }
 
@@ -172,7 +172,7 @@ public:
             wait(10, SC_NS);
         }
 
-        CSML_INFO(1, m_logger) << "Additional data written (" << data.size() << " words)";
+        REG_INFO(1, m_logger) << "Additional data written (" << data.size() << " words)";
     }
 
     // Read command status
@@ -195,7 +195,7 @@ public:
             wait(10, SC_NS);
         }
 
-        CSML_INFO(1, m_logger) << "GENBITS read: [0x" << std::hex << data[0] << ", 0x"
+        REG_INFO(1, m_logger) << "GENBITS read: [0x" << std::hex << data[0] << ", 0x"
                                << data[1] << ", 0x" << data[2] << ", 0x" << data[3]
                                << "], FIPS=" << fips_compliant << std::dec;
     }
@@ -219,7 +219,7 @@ public:
     // Enable interrupts
     void enable_interrupts(uint32_t mask = 0xF) {
         register_write_32(INTR_ENABLE_OFFSET, mask);
-        CSML_INFO(1, m_logger) << "Interrupts enabled: 0x" << std::hex << mask << std::dec;
+        REG_INFO(1, m_logger) << "Interrupts enabled: 0x" << std::hex << mask << std::dec;
     }
 
     // Read interrupt status
@@ -230,7 +230,7 @@ public:
     // Clear interrupts
     void clear_interrupts(uint32_t mask) {
         register_write_32(INTR_STATE_OFFSET, mask);
-        CSML_INFO(1, m_logger) << "Interrupts cleared: 0x" << std::hex << mask << std::dec;
+        REG_INFO(1, m_logger) << "Interrupts cleared: 0x" << std::hex << mask << std::dec;
     }
 
     // ========================================================================
@@ -240,13 +240,13 @@ public:
     void assert_reset() {
         rst_n_signal.write(false);
         wait(100, SC_NS);
-        CSML_INFO(1, m_logger) << "Reset asserted";
+        REG_INFO(1, m_logger) << "Reset asserted";
     }
 
     void deassert_reset() {
         rst_n_signal.write(true);
         wait(100, SC_NS);
-        CSML_INFO(1, m_logger) << "Reset deasserted";
+        REG_INFO(1, m_logger) << "Reset deasserted";
     }
 
     // ========================================================================
@@ -268,9 +268,9 @@ public:
         bool pass = ((readback & write_mask) == test_pattern);
 
         if (pass) {
-            CSML_INFO(0, m_logger) << "PASS: " << reg_name << " R/W test";
+            REG_INFO(0, m_logger) << "PASS: " << reg_name << " R/W test";
         } else {
-            CSML_ERROR(0, m_logger) << "FAIL: " << reg_name << " R/W test - Expected: 0x"
+            REG_ERROR(0, m_logger) << "FAIL: " << reg_name << " R/W test - Expected: 0x"
                                     << std::hex << test_pattern << ", Got: 0x" << readback;
         }
 
@@ -293,9 +293,9 @@ public:
         bool pass = (readback == original);
 
         if (pass) {
-            CSML_INFO(0, m_logger) << "PASS: " << reg_name << " read-only test";
+            REG_INFO(0, m_logger) << "PASS: " << reg_name << " read-only test";
         } else {
-            CSML_ERROR(0, m_logger) << "FAIL: " << reg_name << " not read-only - "
+            REG_ERROR(0, m_logger) << "FAIL: " << reg_name << " not read-only - "
                                     << "Original: 0x" << std::hex << original
                                     << ", After write: 0x" << readback;
         }
@@ -309,12 +309,12 @@ public:
         while (!interrupt_signal.read()) {
             wait(1, SC_US);
             if ((sc_time_stamp() - start_time) > timeout) {
-                CSML_ERROR(0, m_logger) << "Interrupt timeout";
+                REG_ERROR(0, m_logger) << "Interrupt timeout";
                 return false;
             }
         }
 
-        CSML_INFO(1, m_logger) << "Interrupt received at " << sc_time_stamp();
+        REG_INFO(1, m_logger) << "Interrupt received at " << sc_time_stamp();
         return true;
     }
 };

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func021_test.cpp
  * @brief Test cases for FUNC-KMAC-021 (Life Cycle Escalation Response)
@@ -19,16 +19,16 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -106,7 +106,7 @@ static void deassert_escalation(kmac_test* test)
  ******************************************************************************/
 void testbench::test_escalation_immediate_key_zeroization()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-190: test_escalation_immediate_key_zeroization");
 
     try {
@@ -115,7 +115,7 @@ void testbench::test_escalation_immediate_key_zeroization()
         wait(10, SC_NS);
 
         // Write non-zero values to KEY_SHARE registers
-        CSML_INFO(2, test_logger) << "Writing test pattern to KEY_SHARE registers";
+        REG_INFO(2, test_logger) << "Writing test pattern to KEY_SHARE registers";
         for (int i = 0; i < 16; i++) {
             uint32_t test_value = 0xABCDEF00 + i;
             test->register_write_32(test->KEY_SHARE0_OFFSET + i*4, test_value);
@@ -127,7 +127,7 @@ void testbench::test_escalation_immediate_key_zeroization()
         // Instead, we'll proceed with escalation test
 
         // Assert lc_escalate_en_i
-        CSML_INFO(2, test_logger) << "Asserting lc_escalate_en_i";
+        REG_INFO(2, test_logger) << "Asserting lc_escalate_en_i";
         assert_escalation(test);
 
         // Verify all KEY_SHARE0 registers are zeroed (read returns 0 for WO registers anyway)
@@ -137,14 +137,14 @@ void testbench::test_escalation_immediate_key_zeroization()
             uint32_t state_val = 0xFFFFFFFF;
             test->register_read_32(0x400 + i*4, state_val); // STATE window
             if (state_val != 0x00000000) {
-                CSML_ERROR(1, test_logger) << "STATE[" << i << "] not zero: 0x"
+                REG_ERROR(1, test_logger) << "STATE[" << i << "] not zero: 0x"
                                           << std::hex << state_val << std::dec;
                 all_zero = false;
             }
         }
 
         if (all_zero) {
-            CSML_INFO(2, test_logger) << "Escalation immediately zeroed internal state";
+            REG_INFO(2, test_logger) << "Escalation immediately zeroed internal state";
             report_test_pass("TC-190: test_escalation_immediate_key_zeroization");
         } else {
             report_test_fail("TC-190: test_escalation_immediate_key_zeroization",
@@ -169,7 +169,7 @@ void testbench::test_escalation_immediate_key_zeroization()
  ******************************************************************************/
 void testbench::test_escalation_fsm_invalid_state()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-191: test_escalation_fsm_invalid_state");
 
     try {
@@ -187,7 +187,7 @@ void testbench::test_escalation_fsm_invalid_state()
         }
 
         // Assert lc_escalate_en_i
-        CSML_INFO(2, test_logger) << "Asserting lc_escalate_en_i";
+        REG_INFO(2, test_logger) << "Asserting lc_escalate_en_i";
         assert_escalation(test);
 
         // Read FSM status bits
@@ -196,8 +196,8 @@ void testbench::test_escalation_fsm_invalid_state()
         // Verify FSM is in invalid state (all bits should be 0 or in locked state)
         // After escalation, FSM should not report any valid state
         if (!sha3_idle && !sha3_absorb && !sha3_squeeze) {
-            CSML_INFO(2, test_logger) << "FSM correctly entered invalid/locked state";
-            CSML_INFO(2, test_logger) << "  All FSM status bits = 0";
+            REG_INFO(2, test_logger) << "FSM correctly entered invalid/locked state";
+            REG_INFO(2, test_logger) << "  All FSM status bits = 0";
             report_test_pass("TC-191: test_escalation_fsm_invalid_state");
         } else {
             std::stringstream reason;
@@ -225,7 +225,7 @@ void testbench::test_escalation_fsm_invalid_state()
  ******************************************************************************/
 void testbench::test_escalation_key_share_zeroed()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-192: test_escalation_key_share_zeroed");
 
     try {
@@ -237,7 +237,7 @@ void testbench::test_escalation_key_share_zeroed()
         configure_sha3_256_mode(test);
 
         // Write key data
-        CSML_INFO(2, test_logger) << "Writing key data to KEY_SHARE registers";
+        REG_INFO(2, test_logger) << "Writing key data to KEY_SHARE registers";
         for (int i = 0; i < 8; i++) { // 256-bit key
             uint32_t key_val = 0x11223344 + i;
             test->register_write_32(test->KEY_SHARE0_OFFSET + i*4, key_val);
@@ -245,7 +245,7 @@ void testbench::test_escalation_key_share_zeroed()
         wait(5, SC_NS);
 
         // Assert escalation
-        CSML_INFO(2, test_logger) << "Asserting lc_escalate_en_i to trigger key zeroization";
+        REG_INFO(2, test_logger) << "Asserting lc_escalate_en_i to trigger key zeroization";
         assert_escalation(test);
 
         // Verify STATE window returns all zeros (indicating internal state cleared)
@@ -260,7 +260,7 @@ void testbench::test_escalation_key_share_zeroed()
         }
 
         if (all_zero) {
-            CSML_INFO(2, test_logger) << "KEY_SHARE registers and internal state verified zeroed";
+            REG_INFO(2, test_logger) << "KEY_SHARE registers and internal state verified zeroed";
             report_test_pass("TC-192: test_escalation_key_share_zeroed");
         } else {
             report_test_fail("TC-192: test_escalation_key_share_zeroed",
@@ -285,7 +285,7 @@ void testbench::test_escalation_key_share_zeroed()
  ******************************************************************************/
 void testbench::test_escalation_abort_in_progress_operation()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-193: test_escalation_abort_in_progress_operation");
 
     try {
@@ -297,7 +297,7 @@ void testbench::test_escalation_abort_in_progress_operation()
         configure_sha3_256_mode(test);
 
         // Start hash operation
-        CSML_INFO(2, test_logger) << "Starting hash operation";
+        REG_INFO(2, test_logger) << "Starting hash operation";
         write_cmd(test, 0x1D); // START command
 
         // Verify in ABSORB state
@@ -308,20 +308,20 @@ void testbench::test_escalation_abort_in_progress_operation()
                            "Failed to enter ABSORB state");
             return;
         }
-        CSML_INFO(2, test_logger) << "Operation in progress (ABSORB state)";
+        REG_INFO(2, test_logger) << "Operation in progress (ABSORB state)";
 
         // Write message data
         test->register_write_32(0x800, 0xDEADBEEF); // MSG_FIFO
         wait(5, SC_NS);
 
         // Assert escalation during operation
-        CSML_INFO(2, test_logger) << "Asserting lc_escalate_en_i during operation";
+        REG_INFO(2, test_logger) << "Asserting lc_escalate_en_i during operation";
         assert_escalation(test);
 
         // Verify operation aborted - FSM in invalid state
         read_status_fsm_bits(test, sha3_idle, sha3_absorb, sha3_squeeze);
         if (!sha3_idle && !sha3_absorb && !sha3_squeeze) {
-            CSML_INFO(2, test_logger) << "Operation correctly aborted";
+            REG_INFO(2, test_logger) << "Operation correctly aborted";
         } else {
             report_test_fail("TC-193: test_escalation_abort_in_progress_operation",
                            "Operation not aborted");
@@ -336,7 +336,7 @@ void testbench::test_escalation_abort_in_progress_operation()
         // FSM should still be in invalid state
         read_status_fsm_bits(test, sha3_idle, sha3_absorb, sha3_squeeze);
         if (!sha3_idle && !sha3_absorb && !sha3_squeeze) {
-            CSML_INFO(2, test_logger) << "Commands correctly blocked after escalation";
+            REG_INFO(2, test_logger) << "Commands correctly blocked after escalation";
             report_test_pass("TC-193: test_escalation_abort_in_progress_operation");
         } else {
             report_test_fail("TC-193: test_escalation_abort_in_progress_operation",
@@ -362,7 +362,7 @@ void testbench::test_escalation_abort_in_progress_operation()
  ******************************************************************************/
 void testbench::test_escalation_reset_only_recovery()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-194: test_escalation_reset_only_recovery");
 
     try {
@@ -380,7 +380,7 @@ void testbench::test_escalation_reset_only_recovery()
         }
 
         // Assert escalation
-        CSML_INFO(2, test_logger) << "Asserting lc_escalate_en_i";
+        REG_INFO(2, test_logger) << "Asserting lc_escalate_en_i";
         assert_escalation(test);
 
         // Verify FSM in invalid state
@@ -391,10 +391,10 @@ void testbench::test_escalation_reset_only_recovery()
             deassert_escalation(test);
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM in invalid state as expected";
+        REG_INFO(2, test_logger) << "FSM in invalid state as expected";
 
         // Deassert escalation (should NOT restore functionality)
-        CSML_INFO(2, test_logger) << "Deasserting lc_escalate_en_i (should not restore)";
+        REG_INFO(2, test_logger) << "Deasserting lc_escalate_en_i (should not restore)";
         deassert_escalation(test);
         wait(10, SC_NS);
 
@@ -405,7 +405,7 @@ void testbench::test_escalation_reset_only_recovery()
                            "FSM incorrectly restored without reset");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM remains locked after escalation deassertion (correct)";
+        REG_INFO(2, test_logger) << "FSM remains locked after escalation deassertion (correct)";
 
         // Try to issue command (should be blocked)
         configure_sha3_256_mode(test);
@@ -418,10 +418,10 @@ void testbench::test_escalation_reset_only_recovery()
                            "Commands incorrectly accepted after escalation");
             return;
         }
-        CSML_INFO(2, test_logger) << "Commands correctly blocked (correct)";
+        REG_INFO(2, test_logger) << "Commands correctly blocked (correct)";
 
         // Apply hardware reset (should restore functionality)
-        CSML_INFO(2, test_logger) << "Applying hardware reset to restore functionality";
+        REG_INFO(2, test_logger) << "Applying hardware reset to restore functionality";
         apply_reset();
         wait(10, SC_NS);
 
@@ -432,7 +432,7 @@ void testbench::test_escalation_reset_only_recovery()
                            "FSM not restored to IDLE after reset");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM restored to IDLE state after reset";
+        REG_INFO(2, test_logger) << "FSM restored to IDLE state after reset";
 
         // Verify commands now work
         configure_sha3_256_mode(test);
@@ -446,7 +446,7 @@ void testbench::test_escalation_reset_only_recovery()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Functionality fully restored after reset";
+        REG_INFO(2, test_logger) << "Functionality fully restored after reset";
         report_test_pass("TC-194: test_escalation_reset_only_recovery");
 
         // Cleanup

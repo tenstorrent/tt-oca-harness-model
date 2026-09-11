@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func007_test.cpp
  * @brief Test cases for FUNC-KMAC-007 (Application Interface - KeyMgr Hash Operations)
@@ -42,19 +42,19 @@
  * Detailed Design: kmac-detailed-design.md
  * Functionality: kmac-functionality_list.md (FUNC-KMAC-007)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions for Application Interface Testing
@@ -80,7 +80,7 @@ static void configure_keymgr_sideload(kmac_test* test, size_t key_size_bytes)
     }
 
     test->set_keymgr_key(keymgr_share0, keymgr_share1, key_size_bytes);
-    CSML_INFO(2, test_logger) << "Configured " << key_size_bytes * 8
+    REG_INFO(2, test_logger) << "Configured " << key_size_bytes * 8
                                << "-bit sideloaded key via keymgr_channel";
 }
 
@@ -186,7 +186,7 @@ static void ensure_idle_state(kmac_test* test)
  */
 void testbench::test_app_keymgr_kmac_operation()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-093: test_app_keymgr_kmac_operation");
 
     try {
@@ -202,7 +202,7 @@ void testbench::test_app_keymgr_kmac_operation()
         const char* test_msg = "KeyMgr application interface KMAC test message data";
         size_t msg_len = strlen(test_msg);
 
-        CSML_INFO(2, test_logger) << "Sending " << msg_len
+        REG_INFO(2, test_logger) << "Sending " << msg_len
                                    << " bytes via KeyMgr app interface";
 
         // Send data beats
@@ -221,7 +221,7 @@ void testbench::test_app_keymgr_kmac_operation()
             bool is_last = (offset + bytes_this_beat >= msg_len);
             send_app_data_beat(keymgr_app, data_word, strobe, is_last);
 
-            CSML_INFO(2, test_logger) << "Sent beat: offset=" << offset
+            REG_INFO(2, test_logger) << "Sent beat: offset=" << offset
                                        << ", bytes=" << bytes_this_beat
                                        << ", last=" << (is_last ? "true" : "false");
             offset += bytes_this_beat;
@@ -234,7 +234,7 @@ void testbench::test_app_keymgr_kmac_operation()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Application operation completed";
+        REG_INFO(2, test_logger) << "Application operation completed";
 
         // Check for errors
         if (keymgr_app->has_error()) {
@@ -259,13 +259,13 @@ void testbench::test_app_keymgr_kmac_operation()
             ss_digest << std::hex << std::setfill('0') << std::setw(8) << digest_share0[i];
             if (i < 7) ss_digest << " ";
         }
-        CSML_INFO(2, test_logger) << "Digest share0: " << ss_digest.str();
+        REG_INFO(2, test_logger) << "Digest share0: " << ss_digest.str();
 
-        CSML_INFO(2, test_logger) << "KeyMgr app interface KMAC operation verified";
+        REG_INFO(2, test_logger) << "KeyMgr app interface KMAC operation verified";
         report_test_pass("TC-093");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-093", "Exception occurred");
     }
 }
@@ -290,7 +290,7 @@ void testbench::test_app_keymgr_kmac_operation()
  */
 void testbench::test_app_fixed_priority_arbitration()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-096: test_app_fixed_priority_arbitration");
 
     try {
@@ -309,7 +309,7 @@ void testbench::test_app_fixed_priority_arbitration()
             rom_data |= ((uint64_t)rom_msg[i]) << (i * 8);
         }
         send_app_data_beat(rom_ctrl_app, rom_data, 0xFF, true);
-        CSML_INFO(2, test_logger) << "ROM_CTRL request sent (low priority)";
+        REG_INFO(2, test_logger) << "ROM_CTRL request sent (low priority)";
 
         wait(2, SC_NS);
 
@@ -320,7 +320,7 @@ void testbench::test_app_fixed_priority_arbitration()
             keymgr_data |= ((uint64_t)keymgr_msg[i]) << (i * 8);
         }
         send_app_data_beat(keymgr_app, keymgr_data, 0xFF, true);
-        CSML_INFO(2, test_logger) << "KeyMgr request sent (high priority)";
+        REG_INFO(2, test_logger) << "KeyMgr request sent (high priority)";
 
         // KeyMgr should complete first due to priority
         bool keymgr_done = poll_app_done(keymgr_app, 500);
@@ -329,7 +329,7 @@ void testbench::test_app_fixed_priority_arbitration()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "KeyMgr request completed first (priority arbitration)";
+        REG_INFO(2, test_logger) << "KeyMgr request completed first (priority arbitration)";
 
         // ROM_CTRL should complete after KeyMgr
         bool rom_done = poll_app_done(rom_ctrl_app, 500);
@@ -338,12 +338,12 @@ void testbench::test_app_fixed_priority_arbitration()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "ROM_CTRL request completed after KeyMgr";
-        CSML_INFO(2, test_logger) << "Fixed-priority arbitration verified: KeyMgr > ROM_CTRL";
+        REG_INFO(2, test_logger) << "ROM_CTRL request completed after KeyMgr";
+        REG_INFO(2, test_logger) << "Fixed-priority arbitration verified: KeyMgr > ROM_CTRL";
         report_test_pass("TC-096");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-096", "Exception occurred");
     }
 }
@@ -369,7 +369,7 @@ void testbench::test_app_fixed_priority_arbitration()
  */
 void testbench::test_app_keymgr_data_interface()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-097: test_app_keymgr_data_interface");
 
     try {
@@ -382,21 +382,21 @@ void testbench::test_app_keymgr_data_interface()
         uint64_t beat1_data = 0x0706050403020100ULL;
         uint8_t beat1_strobe = 0x0F; // Lower 4 bytes valid
         send_app_data_beat(keymgr_app, beat1_data, beat1_strobe, false);
-        CSML_INFO(2, test_logger) << "Beat 1: data=0x" << std::hex << beat1_data
+        REG_INFO(2, test_logger) << "Beat 1: data=0x" << std::hex << beat1_data
                                    << ", strobe=0x" << (int)beat1_strobe << std::dec;
 
         // Beat 2: Full strobe (8 bytes valid)
         uint64_t beat2_data = 0x0F0E0D0C0B0A0908ULL;
         uint8_t beat2_strobe = 0xFF; // All 8 bytes valid
         send_app_data_beat(keymgr_app, beat2_data, beat2_strobe, false);
-        CSML_INFO(2, test_logger) << "Beat 2: data=0x" << std::hex << beat2_data
+        REG_INFO(2, test_logger) << "Beat 2: data=0x" << std::hex << beat2_data
                                    << ", strobe=0x" << (int)beat2_strobe << std::dec;
 
         // Beat 3: Final beat with partial strobe (2 bytes valid)
         uint64_t beat3_data = 0x0000000000001110ULL;
         uint8_t beat3_strobe = 0x03; // Lower 2 bytes valid
         send_app_data_beat(keymgr_app, beat3_data, beat3_strobe, true);
-        CSML_INFO(2, test_logger) << "Beat 3 (final): data=0x" << std::hex << beat3_data
+        REG_INFO(2, test_logger) << "Beat 3 (final): data=0x" << std::hex << beat3_data
                                    << ", strobe=0x" << (int)beat3_strobe << std::dec;
 
         // Poll for completion
@@ -423,12 +423,12 @@ void testbench::test_app_keymgr_data_interface()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Data interface with strobe and last beat verified";
-        CSML_INFO(2, test_logger) << "Total: 4 + 8 + 2 = 14 bytes transferred";
+        REG_INFO(2, test_logger) << "Data interface with strobe and last beat verified";
+        REG_INFO(2, test_logger) << "Total: 4 + 8 + 2 = 14 bytes transferred";
         report_test_pass("TC-097");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-097", "Exception occurred");
     }
 }
@@ -453,7 +453,7 @@ void testbench::test_app_keymgr_data_interface()
  */
 void testbench::test_app_digest_two_share_output()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-098: test_app_digest_two_share_output");
 
     try {
@@ -498,14 +498,14 @@ void testbench::test_app_digest_two_share_output()
                 ss1 << " ";
             }
         }
-        CSML_INFO(2, test_logger) << "Digest share0: " << ss0.str();
-        CSML_INFO(2, test_logger) << "Digest share1: " << ss1.str();
+        REG_INFO(2, test_logger) << "Digest share0: " << ss0.str();
+        REG_INFO(2, test_logger) << "Digest share1: " << ss1.str();
 
-        CSML_INFO(2, test_logger) << "Two-share digest output verified";
+        REG_INFO(2, test_logger) << "Two-share digest output verified";
         report_test_pass("TC-098");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-098", "Exception occurred");
     }
 }
@@ -530,7 +530,7 @@ void testbench::test_app_digest_two_share_output()
  */
 void testbench::test_app_sw_lockout_during_app_active()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-099: test_app_sw_lockout_during_app_active");
 
     try {
@@ -542,7 +542,7 @@ void testbench::test_app_sw_lockout_during_app_active()
         // Start application request (don't send last beat yet)
         uint64_t app_data = 0x0706050403020100ULL;
         send_app_data_beat(keymgr_app, app_data, 0xFF, false);
-        CSML_INFO(2, test_logger) << "Application request started (not completed)";
+        REG_INFO(2, test_logger) << "Application request started (not completed)";
 
         wait(5, SC_NS); // Let app interface become active
 
@@ -565,7 +565,7 @@ void testbench::test_app_sw_lockout_during_app_active()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "MSG_FIFO write blocked during app active (ERR_CODE=0x02)";
+        REG_INFO(2, test_logger) << "MSG_FIFO write blocked during app active (ERR_CODE=0x02)";
 
         // Complete application request
         send_app_data_beat(keymgr_app, 0, 0xFF, true);
@@ -575,11 +575,11 @@ void testbench::test_app_sw_lockout_during_app_active()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Software MMIO lockout verified during app operation";
+        REG_INFO(2, test_logger) << "Software MMIO lockout verified during app operation";
         report_test_pass("TC-099");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-099", "Exception occurred");
     }
 }
@@ -604,7 +604,7 @@ void testbench::test_app_sw_lockout_during_app_active()
  */
 void testbench::test_app_cmd_rejected_during_app_active()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-100: test_app_cmd_rejected_during_app_active");
 
     try {
@@ -616,7 +616,7 @@ void testbench::test_app_cmd_rejected_during_app_active()
         // Start application request
         uint64_t app_data = 0x0706050403020100ULL;
         send_app_data_beat(keymgr_app, app_data, 0xFF, false);
-        CSML_INFO(2, test_logger) << "Application request started";
+        REG_INFO(2, test_logger) << "Application request started";
 
         wait(5, SC_NS);
 
@@ -638,7 +638,7 @@ void testbench::test_app_cmd_rejected_during_app_active()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "CMD write rejected during app active (ERR_CODE=0x03)";
+        REG_INFO(2, test_logger) << "CMD write rejected during app active (ERR_CODE=0x03)";
 
         // Complete application request
         send_app_data_beat(keymgr_app, 0, 0xFF, true);
@@ -648,11 +648,11 @@ void testbench::test_app_cmd_rejected_during_app_active()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "CMD rejection verified with ERR_CODE=0x03";
+        REG_INFO(2, test_logger) << "CMD rejection verified with ERR_CODE=0x03";
         report_test_pass("TC-100");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-100", "Exception occurred");
     }
 }
@@ -677,7 +677,7 @@ void testbench::test_app_cmd_rejected_during_app_active()
  */
 void testbench::test_app_state_read_blocked_during_app_active()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-101: test_app_state_read_blocked_during_app_active");
 
     try {
@@ -689,7 +689,7 @@ void testbench::test_app_state_read_blocked_during_app_active()
         // Start application request
         uint64_t app_data = 0x0706050403020100ULL;
         send_app_data_beat(keymgr_app, app_data, 0xFF, false);
-        CSML_INFO(2, test_logger) << "Application request started";
+        REG_INFO(2, test_logger) << "Application request started";
 
         wait(5, SC_NS);
 
@@ -702,7 +702,7 @@ void testbench::test_app_state_read_blocked_during_app_active()
             test->register_read_32(STATE_BASE + i * 4, state_val);
             if (state_val != 0) {
                 all_zeros = false;
-                CSML_ERROR(1, test_logger) << "STATE[" << i << "] = 0x" << std::hex
+                REG_ERROR(1, test_logger) << "STATE[" << i << "] = 0x" << std::hex
                                             << state_val << " (expected 0x00000000)";
             }
         }
@@ -716,7 +716,7 @@ void testbench::test_app_state_read_blocked_during_app_active()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "STATE reads return 0 during app active (key protection)";
+        REG_INFO(2, test_logger) << "STATE reads return 0 during app active (key protection)";
 
         // Complete application request
         send_app_data_beat(keymgr_app, 0, 0xFF, true);
@@ -726,11 +726,11 @@ void testbench::test_app_state_read_blocked_during_app_active()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "STATE read protection verified during app operation";
+        REG_INFO(2, test_logger) << "STATE read protection verified during app operation";
         report_test_pass("TC-101");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-101", "Exception occurred");
     }
 }
@@ -755,7 +755,7 @@ void testbench::test_app_state_read_blocked_during_app_active()
  */
 void testbench::test_app_keymgr_automatic_output_length()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-102: test_app_keymgr_automatic_output_length");
 
     try {
@@ -784,7 +784,7 @@ void testbench::test_app_keymgr_automatic_output_length()
             offset += bytes_this_beat;
         }
 
-        CSML_INFO(2, test_logger) << "Message sent without explicit right_encode(256)";
+        REG_INFO(2, test_logger) << "Message sent without explicit right_encode(256)";
 
         // Wait for completion
         bool done = poll_app_done(keymgr_app, 1000);
@@ -804,12 +804,12 @@ void testbench::test_app_keymgr_automatic_output_length()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Automatic right_encode(256) appending verified";
-        CSML_INFO(2, test_logger) << "Digest produced is exactly 256 bits";
+        REG_INFO(2, test_logger) << "Automatic right_encode(256) appending verified";
+        REG_INFO(2, test_logger) << "Digest produced is exactly 256 bits";
         report_test_pass("TC-102");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-102", "Exception occurred");
     }
 }
@@ -832,7 +832,7 @@ void testbench::test_app_keymgr_automatic_output_length()
  */
 void testbench::test_app_empty_message_not_supported()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-103: test_app_empty_message_not_supported");
 
     try {
@@ -844,13 +844,13 @@ void testbench::test_app_empty_message_not_supported()
         // Attempt to send empty message (last=true with no preceding data)
         // Send a beat with all-zero strobe (no valid bytes) and last=true
         send_app_data_beat(keymgr_app, 0, 0x00, true);
-        CSML_INFO(2, test_logger) << "Attempted empty message (strobe=0x00, last=true)";
+        REG_INFO(2, test_logger) << "Attempted empty message (strobe=0x00, last=true)";
 
         wait(50, SC_NS);
 
         // Check if error is reported
         if (keymgr_app->has_error()) {
-            CSML_INFO(2, test_logger) << "Application interface correctly reported error for empty message";
+            REG_INFO(2, test_logger) << "Application interface correctly reported error for empty message";
             report_test_pass("TC-103");
             return;
         }
@@ -858,7 +858,7 @@ void testbench::test_app_empty_message_not_supported()
         // Alternative: check if operation times out (doesn't complete)
         bool done = poll_app_done(keymgr_app, 100);
         if (!done) {
-            CSML_INFO(2, test_logger) << "Empty message operation correctly timed out (not supported)";
+            REG_INFO(2, test_logger) << "Empty message operation correctly timed out (not supported)";
             report_test_pass("TC-103");
             return;
         }
@@ -867,7 +867,7 @@ void testbench::test_app_empty_message_not_supported()
         report_test_fail("TC-103", "Empty message unexpectedly succeeded");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-103", "Exception occurred");
     }
 }
@@ -892,7 +892,7 @@ void testbench::test_app_empty_message_not_supported()
  */
 void testbench::test_err_code_swissuedcmdinappactive_0x03()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-145: test_err_code_swissuedcmdinappactive_0x03");
 
     try {
@@ -908,7 +908,7 @@ void testbench::test_err_code_swissuedcmdinappactive_0x03()
             // Start application request
             uint64_t app_data = 0x0706050403020100ULL;
             send_app_data_beat(keymgr_app, app_data, 0xFF, false);
-            CSML_INFO(2, test_logger) << "Application request started";
+            REG_INFO(2, test_logger) << "Application request started";
 
             wait(5, SC_NS);
 
@@ -931,7 +931,7 @@ void testbench::test_err_code_swissuedcmdinappactive_0x03()
                 return;
             }
 
-            CSML_INFO(2, test_logger) << "ERR_CODE=0x03 verified for " << CMD_NAMES[cmd_idx];
+            REG_INFO(2, test_logger) << "ERR_CODE=0x03 verified for " << CMD_NAMES[cmd_idx];
 
             // Complete application request
             send_app_data_beat(keymgr_app, 0, 0xFF, true);
@@ -948,11 +948,11 @@ void testbench::test_err_code_swissuedcmdinappactive_0x03()
             wait(10, SC_NS);
         }
 
-        CSML_INFO(2, test_logger) << "ERR_CODE=0x03 verified for all CMD encodings";
+        REG_INFO(2, test_logger) << "ERR_CODE=0x03 verified for all CMD encodings";
         report_test_pass("TC-145");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-145", "Exception occurred");
     }
 }

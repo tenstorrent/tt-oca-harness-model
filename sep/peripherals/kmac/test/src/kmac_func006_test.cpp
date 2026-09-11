@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func006_test.cpp
  * @brief Test cases for FUNC-KMAC-006 (KeyMgr Sideloaded Key Interface)
@@ -40,19 +40,19 @@
  * Functionality: kmac-functionality_list.md (FUNC-KMAC-006)
  * Model Implementation: sep/peripherals/kmac/src/kmac.cpp (lines 924-1033)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_test.h"
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions for Sideloaded Key Testing
@@ -96,7 +96,7 @@ static void configure_kmac_with_sideload(kmac_test* test, uint32_t kstrength,
     test->register_write_32(test->CFG_SHADOWED_OFFSET, cfg_val);
     wait(5, SC_NS);
 
-    CSML_INFO(2, test_logger) << "CFG_SHADOWED configured: kstrength=0x" << std::hex << kstrength
+    REG_INFO(2, test_logger) << "CFG_SHADOWED configured: kstrength=0x" << std::hex << kstrength
                                << ", sideload=" << (enable_sideload ? "1" : "0")
                                << ", masking=" << (enable_masking ? "enabled" : "disabled") << std::dec;
 }
@@ -176,7 +176,7 @@ static bool execute_kmac_operation(kmac_test* test, const uint8_t* message,
     uint32_t err_code = 0;
     test->register_read_32(test->ERR_CODE_OFFSET, err_code);
     if (err_code != 0) {
-        CSML_ERROR(1, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
+        REG_ERROR(1, test_logger) << "ERR_CODE = 0x" << std::hex << err_code << std::dec;
         return false;
     }
 
@@ -186,7 +186,7 @@ static bool execute_kmac_operation(kmac_test* test, const uint8_t* message,
     bool squeeze_bit = (status_val & 0x4) != 0;
 
     if (!squeeze_bit) {
-        CSML_ERROR(1, test_logger) << "Not in SQUEEZE state after PROCESS";
+        REG_ERROR(1, test_logger) << "Not in SQUEEZE state after PROCESS";
         return false;
     }
 
@@ -262,7 +262,7 @@ static void cleanup_test(kmac_test* test)
  */
 void testbench::test_key_sideload_enable_128bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-068: test_key_sideload_enable_128bit");
 
     try {
@@ -276,7 +276,7 @@ void testbench::test_key_sideload_enable_128bit()
         size_t keymgr_key_len = 16; // 128 bits = 16 bytes
 
         test->set_keymgr_key(keymgr_share0, keymgr_share1, keymgr_key_len);
-        CSML_INFO(2, test_logger) << "Configured 128-bit sideloaded key via keymgr_channel";
+        REG_INFO(2, test_logger) << "Configured 128-bit sideloaded key via keymgr_channel";
 
         // Write dummy data to KEY_SHARE0 (should be ignored when sideload=1)
         uint32_t dummy_key[4] = {0xDEADBEEF, 0xCAFEBABE, 0xFEEDFACE, 0xBADDCAFE};
@@ -284,7 +284,7 @@ void testbench::test_key_sideload_enable_128bit()
             test->register_write_32(test->KEY_SHARE0_OFFSET + i * 4, dummy_key[i]);
             wait(2, SC_NS);
         }
-        CSML_INFO(2, test_logger) << "Wrote dummy data to KEY_SHARE0 (should be ignored)";
+        REG_INFO(2, test_logger) << "Wrote dummy data to KEY_SHARE0 (should be ignored)";
 
         // Configure KMAC128 mode with sideload=1
         configure_kmac_with_sideload(test, 0x0, true, false); // KMAC128, sideload=1, EnMasking=0
@@ -321,16 +321,16 @@ void testbench::test_key_sideload_enable_128bit()
             ss_digest << std::hex << std::setfill('0') << std::setw(2) << (int)digest[i];
             if (i < 31) ss_digest << " ";
         }
-        CSML_INFO(2, test_logger) << "Digest (256 bits): " << ss_digest.str();
+        REG_INFO(2, test_logger) << "Digest (256 bits): " << ss_digest.str();
 
-        CSML_INFO(2, test_logger) << "Sideload enable test completed successfully";
-        CSML_INFO(2, test_logger) << "Verified: sideload=1 selects KeyMgr key, KEY_SHARE0 ignored";
+        REG_INFO(2, test_logger) << "Sideload enable test completed successfully";
+        REG_INFO(2, test_logger) << "Verified: sideload=1 selects KeyMgr key, KEY_SHARE0 ignored";
 
         cleanup_test(test);
         report_test_pass("TC-068");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-068", "Exception occurred");
     }
 }
@@ -356,7 +356,7 @@ void testbench::test_key_sideload_enable_128bit()
  */
 void testbench::test_key_sideload_256bit_automatic_unmasking()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-069: test_key_sideload_256bit_automatic_unmasking");
 
     try {
@@ -376,7 +376,7 @@ void testbench::test_key_sideload_256bit_automatic_unmasking()
         size_t keymgr_key_len = 32; // 256 bits = 32 bytes
 
         test->set_keymgr_key(keymgr_share0, keymgr_share1, keymgr_key_len);
-        CSML_INFO(2, test_logger) << "Configured 256-bit sideloaded key via keymgr_channel";
+        REG_INFO(2, test_logger) << "Configured 256-bit sideloaded key via keymgr_channel";
 
         // Calculate expected unmasked key (share0 XOR share1) for reference
         uint8_t expected_key[32];
@@ -393,7 +393,7 @@ void testbench::test_key_sideload_256bit_automatic_unmasking()
             ss_key << std::hex << std::setfill('0') << std::setw(2) << (int)expected_key[i];
             if (i < 31) ss_key << " ";
         }
-        CSML_INFO(2, test_logger) << "Expected unmasked key (XOR): " << ss_key.str();
+        REG_INFO(2, test_logger) << "Expected unmasked key (XOR): " << ss_key.str();
 
         // Configure KMAC256 mode with sideload=1
         configure_kmac_with_sideload(test, 0x2, true, false); // KMAC256, sideload=1, EnMasking=0
@@ -417,16 +417,16 @@ void testbench::test_key_sideload_256bit_automatic_unmasking()
             ss_digest << std::hex << std::setfill('0') << std::setw(2) << (int)digest[i];
             if (i < 31) ss_digest << " ";
         }
-        CSML_INFO(2, test_logger) << "Digest (256 bits): " << ss_digest.str();
+        REG_INFO(2, test_logger) << "Digest (256 bits): " << ss_digest.str();
 
-        CSML_INFO(2, test_logger) << "Automatic unmasking test completed successfully";
-        CSML_INFO(2, test_logger) << "Verified: EnMasking=0 automatically XORs sideloaded key shares";
+        REG_INFO(2, test_logger) << "Automatic unmasking test completed successfully";
+        REG_INFO(2, test_logger) << "Verified: EnMasking=0 automatically XORs sideloaded key shares";
 
         cleanup_test(test);
         report_test_pass("TC-069");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-069", "Exception occurred");
     }
 }
@@ -454,7 +454,7 @@ void testbench::test_key_sideload_256bit_automatic_unmasking()
  */
 void testbench::test_key_sideload_keylength_override()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-070: test_key_sideload_keylength_override");
 
     try {
@@ -473,7 +473,7 @@ void testbench::test_key_sideload_keylength_override()
         for (size_t cfg_idx = 0; cfg_idx < 3; cfg_idx++) {
             const KeyLengthConfig& cfg = configs[cfg_idx];
 
-            CSML_INFO(2, test_logger) << "Testing " << cfg.description;
+            REG_INFO(2, test_logger) << "Testing " << cfg.description;
 
             // Configure sideloaded key with specific length
             uint32_t keymgr_share0[8];
@@ -484,12 +484,12 @@ void testbench::test_key_sideload_keylength_override()
             }
 
             test->set_keymgr_key(keymgr_share0, keymgr_share1, cfg.key_bytes);
-            CSML_INFO(2, test_logger) << "Configured " << (cfg.key_bytes * 8) << "-bit sideloaded key";
+            REG_INFO(2, test_logger) << "Configured " << (cfg.key_bytes * 8) << "-bit sideloaded key";
 
             // Write KEY_LEN register with different value (should be ignored)
             test->register_write_32(test->KEY_LEN_OFFSET, cfg.key_len_reg_val);
             wait(2, SC_NS);
-            CSML_INFO(2, test_logger) << "Wrote KEY_LEN = 0x" << std::hex << cfg.key_len_reg_val
+            REG_INFO(2, test_logger) << "Wrote KEY_LEN = 0x" << std::hex << cfg.key_len_reg_val
                                       << std::dec << " (should be ignored)";
 
             // Configure KMAC with sideload=1
@@ -517,22 +517,22 @@ void testbench::test_key_sideload_keylength_override()
                 ss_digest << std::hex << std::setfill('0') << std::setw(2) << (int)digest[i];
                 if (i < 15) ss_digest << " ";
             }
-            CSML_INFO(2, test_logger) << "Digest (first 128 bits): " << ss_digest.str();
+            REG_INFO(2, test_logger) << "Digest (first 128 bits): " << ss_digest.str();
 
-            CSML_INFO(2, test_logger) << cfg.description << " completed successfully";
+            REG_INFO(2, test_logger) << cfg.description << " completed successfully";
 
             // Cleanup before next iteration
             cleanup_test(test);
             wait(5, SC_NS);
         }
 
-        CSML_INFO(2, test_logger) << "All sideloaded key length override tests passed";
-        CSML_INFO(2, test_logger) << "Verified: KEY_LEN register ignored when sideload=1";
+        REG_INFO(2, test_logger) << "All sideloaded key length override tests passed";
+        REG_INFO(2, test_logger) << "Verified: KEY_LEN register ignored when sideload=1";
 
         report_test_pass("TC-070");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("TC-070", "Exception occurred");
     }
 }
@@ -560,7 +560,7 @@ void testbench::test_key_sideload_keylength_override()
  */
 void testbench::test_key_sideload_toggle_switch()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("Additional: test_key_sideload_toggle_switch");
 
     try {
@@ -572,7 +572,7 @@ void testbench::test_key_sideload_toggle_switch()
         uint32_t keymgr_share0[8] = {0xAAAAAAAA, 0xBBBBBBBB, 0xCCCCCCCC, 0xDDDDDDDD, 0, 0, 0, 0};
         uint32_t keymgr_share1[8] = {0x11111111, 0x22222222, 0x33333333, 0x44444444, 0, 0, 0, 0};
         test->set_keymgr_key(keymgr_share0, keymgr_share1, 16);
-        CSML_INFO(2, test_logger) << "Configured KeyMgr sideloaded key";
+        REG_INFO(2, test_logger) << "Configured KeyMgr sideloaded key";
 
         // Configure software key (KEY_SHARE0 registers) - different from sideloaded key
         uint32_t sw_key[4] = {0x12345678, 0x9ABCDEF0, 0x11223344, 0x55667788};
@@ -582,14 +582,14 @@ void testbench::test_key_sideload_toggle_switch()
         }
         test->register_write_32(test->KEY_LEN_OFFSET, 0x0); // 128-bit key
         wait(2, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured software KEY_SHARE0 key";
+        REG_INFO(2, test_logger) << "Configured software KEY_SHARE0 key";
 
         uint8_t digest1[32], digest2[32], digest3[32];
 
         // ====================================================================
         // Operation 1: sideload=1 (use KeyMgr key)
         // ====================================================================
-        CSML_INFO(2, test_logger) << "Operation 1: sideload=1 (KeyMgr key)";
+        REG_INFO(2, test_logger) << "Operation 1: sideload=1 (KeyMgr key)";
         configure_kmac_with_sideload(test, 0x0, true, false); // sideload=1
         write_minimal_kmac_prefix(test);
 
@@ -601,14 +601,14 @@ void testbench::test_key_sideload_toggle_switch()
         }
 
         read_digest_from_state(test, digest1, 32);
-        CSML_INFO(2, test_logger) << "Operation 1 digest captured";
+        REG_INFO(2, test_logger) << "Operation 1 digest captured";
         cleanup_test(test);
         wait(5, SC_NS);
 
         // ====================================================================
         // Operation 2: sideload=0 (use KEY_SHARE0 key)
         // ====================================================================
-        CSML_INFO(2, test_logger) << "Operation 2: sideload=0 (KEY_SHARE0 key)";
+        REG_INFO(2, test_logger) << "Operation 2: sideload=0 (KEY_SHARE0 key)";
         configure_kmac_with_sideload(test, 0x0, false, false); // sideload=0
         write_minimal_kmac_prefix(test);
 
@@ -620,14 +620,14 @@ void testbench::test_key_sideload_toggle_switch()
         }
 
         read_digest_from_state(test, digest2, 32);
-        CSML_INFO(2, test_logger) << "Operation 2 digest captured";
+        REG_INFO(2, test_logger) << "Operation 2 digest captured";
         cleanup_test(test);
         wait(5, SC_NS);
 
         // ====================================================================
         // Operation 3: sideload=1 (use KeyMgr key again)
         // ====================================================================
-        CSML_INFO(2, test_logger) << "Operation 3: sideload=1 (KeyMgr key again)";
+        REG_INFO(2, test_logger) << "Operation 3: sideload=1 (KeyMgr key again)";
         configure_kmac_with_sideload(test, 0x0, true, false); // sideload=1
         write_minimal_kmac_prefix(test);
 
@@ -639,7 +639,7 @@ void testbench::test_key_sideload_toggle_switch()
         }
 
         read_digest_from_state(test, digest3, 32);
-        CSML_INFO(2, test_logger) << "Operation 3 digest captured";
+        REG_INFO(2, test_logger) << "Operation 3 digest captured";
         cleanup_test(test);
 
         // ====================================================================
@@ -658,14 +658,14 @@ void testbench::test_key_sideload_toggle_switch()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Sideload toggle test passed:";
-        CSML_INFO(2, test_logger) << "  - Digest1 (sideload=1) != Digest2 (sideload=0) [different keys]";
-        CSML_INFO(2, test_logger) << "  - Digest1 (sideload=1) == Digest3 (sideload=1) [same key]";
+        REG_INFO(2, test_logger) << "Sideload toggle test passed:";
+        REG_INFO(2, test_logger) << "  - Digest1 (sideload=1) != Digest2 (sideload=0) [different keys]";
+        REG_INFO(2, test_logger) << "  - Digest1 (sideload=1) == Digest3 (sideload=1) [same key]";
 
         report_test_pass("Additional: test_key_sideload_toggle_switch");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("Additional", "Exception occurred");
     }
 }
@@ -691,7 +691,7 @@ void testbench::test_key_sideload_toggle_switch()
  */
 void testbench::test_key_sideload_maximum_length_256bit()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("Additional: test_key_sideload_maximum_length_256bit");
 
     try {
@@ -708,7 +708,7 @@ void testbench::test_key_sideload_maximum_length_256bit()
         }
 
         test->set_keymgr_key(keymgr_share0, keymgr_share1, 32); // 256 bits = 32 bytes
-        CSML_INFO(2, test_logger) << "Configured maximum 256-bit sideloaded key";
+        REG_INFO(2, test_logger) << "Configured maximum 256-bit sideloaded key";
 
         // Configure KMAC256 mode with sideload=1
         configure_kmac_with_sideload(test, 0x2, true, false);
@@ -731,16 +731,16 @@ void testbench::test_key_sideload_maximum_length_256bit()
             ss_digest << std::hex << std::setfill('0') << std::setw(2) << (int)digest[i];
             if (i < 31) ss_digest << " ";
         }
-        CSML_INFO(2, test_logger) << "Digest (256 bits): " << ss_digest.str();
+        REG_INFO(2, test_logger) << "Digest (256 bits): " << ss_digest.str();
 
-        CSML_INFO(2, test_logger) << "Maximum sideloaded key length test passed";
-        CSML_INFO(2, test_logger) << "Verified: 256-bit (32-byte) maximum key length supported";
+        REG_INFO(2, test_logger) << "Maximum sideloaded key length test passed";
+        REG_INFO(2, test_logger) << "Verified: 256-bit (32-byte) maximum key length supported";
 
         cleanup_test(test);
         report_test_pass("Additional: test_key_sideload_maximum_length_256bit");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("Additional", "Exception occurred");
     }
 }
@@ -768,7 +768,7 @@ void testbench::test_key_sideload_maximum_length_256bit()
  */
 void testbench::test_key_sideload_empty_message()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("Additional: test_key_sideload_empty_message");
 
     try {
@@ -776,7 +776,7 @@ void testbench::test_key_sideload_empty_message()
         uint32_t keymgr_share0[8] = {0x12345678, 0x9ABCDEF0, 0xFEDCBA98, 0x76543210, 0, 0, 0, 0};
         uint32_t keymgr_share1[8] = {0xABCDEF01, 0x23456789, 0xA1B2C3D4, 0xE5F60718, 0, 0, 0, 0};
         test->set_keymgr_key(keymgr_share0, keymgr_share1, 16);
-        CSML_INFO(2, test_logger) << "Configured 128-bit sideloaded key";
+        REG_INFO(2, test_logger) << "Configured 128-bit sideloaded key";
 
         // Configure KMAC128 mode with sideload=1
         configure_kmac_with_sideload(test, 0x0, true, false);
@@ -825,15 +825,15 @@ void testbench::test_key_sideload_empty_message()
             ss_digest << std::hex << std::setfill('0') << std::setw(2) << (int)digest[i];
             if (i < 15) ss_digest << " ";
         }
-        CSML_INFO(2, test_logger) << "Digest (first 128 bits): " << ss_digest.str();
+        REG_INFO(2, test_logger) << "Digest (first 128 bits): " << ss_digest.str();
 
-        CSML_INFO(2, test_logger) << "Empty message with sideloaded key test passed";
+        REG_INFO(2, test_logger) << "Empty message with sideloaded key test passed";
 
         cleanup_test(test);
         report_test_pass("Additional: test_key_sideload_empty_message");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("Additional", "Exception occurred");
     }
 }
@@ -859,7 +859,7 @@ void testbench::test_key_sideload_empty_message()
  */
 void testbench::test_key_sideload_back_to_back_operations()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("Additional: test_key_sideload_back_to_back_operations");
 
     try {
@@ -867,7 +867,7 @@ void testbench::test_key_sideload_back_to_back_operations()
         uint32_t keymgr_share0[8] = {0xAABBCCDD, 0xEEFF0011, 0x22334455, 0x66778899, 0, 0, 0, 0};
         uint32_t keymgr_share1[8] = {0x11223344, 0x55667788, 0x99AABBCC, 0xDDEEFF00, 0, 0, 0, 0};
         test->set_keymgr_key(keymgr_share0, keymgr_share1, 16);
-        CSML_INFO(2, test_logger) << "Configured 128-bit sideloaded key (persistent)";
+        REG_INFO(2, test_logger) << "Configured 128-bit sideloaded key (persistent)";
 
         const char* messages[] = {
             "First operation",
@@ -878,7 +878,7 @@ void testbench::test_key_sideload_back_to_back_operations()
         uint8_t digests[3][32];
 
         for (size_t op_idx = 0; op_idx < 3; op_idx++) {
-            CSML_INFO(2, test_logger) << "Operation " << (op_idx + 1) << " with message: \""
+            REG_INFO(2, test_logger) << "Operation " << (op_idx + 1) << " with message: \""
                                       << messages[op_idx] << "\"";
 
             // Configure KMAC mode (CFG_SHADOWED) for each operation
@@ -905,7 +905,7 @@ void testbench::test_key_sideload_back_to_back_operations()
                 ss_digest << std::hex << std::setfill('0') << std::setw(2) << (int)digests[op_idx][i];
                 if (i < 15) ss_digest << " ";
             }
-            CSML_INFO(2, test_logger) << "Digest " << (op_idx + 1) << " (first 128 bits): " << ss_digest.str();
+            REG_INFO(2, test_logger) << "Digest " << (op_idx + 1) << " (first 128 bits): " << ss_digest.str();
 
             cleanup_test(test);
             wait(5, SC_NS);
@@ -921,13 +921,13 @@ void testbench::test_key_sideload_back_to_back_operations()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Back-to-back operations test passed";
-        CSML_INFO(2, test_logger) << "Verified: Sideloaded key persists, different messages produce different MACs";
+        REG_INFO(2, test_logger) << "Back-to-back operations test passed";
+        REG_INFO(2, test_logger) << "Verified: Sideloaded key persists, different messages produce different MACs";
 
         report_test_pass("Additional: test_key_sideload_back_to_back_operations");
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, test_logger) << "Test exception: " << e.what();
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("Additional", "Exception occurred");
     }
 }

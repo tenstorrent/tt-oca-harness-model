@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
+
 #include "testbench.h"
 #include "aes_basetest.h"
 #include <cstring>

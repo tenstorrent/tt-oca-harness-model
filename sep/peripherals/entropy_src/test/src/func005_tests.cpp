@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func005_tests.cpp
  * @brief FUNC-005 Health Test Subsystem Behavior — test case implementations
@@ -45,7 +45,7 @@
  *
  * The health test subsystem is driven by the background entropy_generation_thread.
  * During each iteration where health_tests_enabled is true (HEALTH_TEST_CTRL[7:0]
- * != 0x00), the thread updates the following CSML registers via internal writes:
+ * != 0x00), the thread updates the following regmodel registers via internal writes:
  *
  *  - REPETITION_TEST_COUNT (0x44): incremented by 1 per iteration.
  *  - APT_PATTERN_COUNT_1BIT (0x50), _2BIT (0x54), _3BIT (0x58), _4BIT (0x5C):
@@ -59,13 +59,13 @@
  *
  * All registers are RO from the TLM perspective (write_mask = 0, read_mask = 0).
  * Reads of these registers via b_transport always return 0x00000000 because the
- * CSML read_mask for all counter/status registers is 0x0.  Counter updates are
+ * regmodel read_mask for all counter/status registers is 0x0.  Counter updates are
  * observable only through the interrupt port (HEALTH_TEST_STATUS-derived events)
  * or indirectly by proving the background thread is alive via FIFO_RDATA reads.
  *
  * ## Counter observability model
  *
- * The CSML read_mask for all health test counter registers is 0x00000000, meaning
+ * The regmodel read_mask for all health test counter registers is 0x00000000, meaning
  * all TLM reads of REPETITION_TEST_COUNT, APT_PATTERN_COUNTs, MARKOV_TEST_COUNTs,
  * MARKOV_TEST_PROBABILITIES, HEALTH_TEST_STATUS, and GENERATOR_x_HEALTH_STATUS
  * return 0x00000000 through b_transport.
@@ -90,7 +90,7 @@
  *  - Each test case is self-checking and returns bool (true = PASS).
  *  - apply_reset() is called by run_tests() before each test case to
  *    guarantee a clean, defined register and FIFO state.
- *  - The FUNC005_CHECK macro sets ok = false and emits a CSML_ERROR log
+ *  - The FUNC005_CHECK macro sets ok = false and emits a REG_ERROR log
  *    entry naming both the expected and observed values.
  *  - HEALTH_TEST_CTRL reset value = 0x00000F07 (REPETITION_LIMIT=15, ENABLE=0x07).
  *    This means health tests are ENABLED at reset.  Tests that need health tests
@@ -106,7 +106,7 @@
  *  - entropy_src/model/inc/entropy_src.h (health test internals)
  *  - entropy_src/test/src/func004_tests.cpp (polling pattern reference)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
@@ -127,7 +127,7 @@
     do {                                           \
         if (!(cond))                               \
         {                                          \
-            CSML_ERROR(0, logger) << msg_stream;   \
+            REG_ERROR(0, logger) << msg_stream;   \
             ok = false;                            \
         }                                          \
     } while (false)
@@ -200,7 +200,7 @@ static constexpr double F005_BASE_ITER_PERIOD_NS = 100.0;
 /******************************************************************************
  * @brief TC-F005-055: Verify HEALTH_TEST_CTRL (0x30) reset value
  *
- * After apply_reset() the CSML framework must restore HEALTH_TEST_CTRL to its
+ * After apply_reset() the regmodel framework must restore HEALTH_TEST_CTRL to its
  * hardware reset default 0x00000F07:
  *   - Bits [7:0]  ENABLE        = 0x07  (health tests enabled for three sources)
  *   - Bits [15:8] REPETITION_LIMIT = 0x0F (15 repetitions per window)
@@ -247,7 +247,7 @@ bool testbench::tc_f005_health_test_ctrl_reset_value()
  *  1. Write 0xFFFFFFFF (all-ones) to HEALTH_TEST_CTRL.
  *     Note: this sets ENABLE=0xFF (non-zero, health tests enabled) and
  *     REPETITION_LIMIT=0xFF.  The RESET bit effect (if any) is handled by
- *     the CSML write mask clipping reserved bits to zero.
+ *     the regmodel write mask clipping reserved bits to zero.
  *  2. Read back HEALTH_TEST_CTRL; assert (read_value & ~0x0000FFFF) == 0
  *     to confirm reserved bits [31:16] are zero.
  *  3. Write 0x00000000 to disable health tests cleanly.
@@ -498,8 +498,8 @@ bool testbench::tc_f005_health_test_ctrl_repetition_limit_readback()
  *   - PROB_10[23:16] = 0x64
  *   - PROB_11[31:24] = 0x64
  *
- * This is a pure CSML storage register with no write callbacks; its value
- * is restored by apply_reset() via the CSML reset-default mechanism.
+ * This is a pure regmodel storage register with no write callbacks; its value
+ * is restored by apply_reset() via the regmodel reset-default mechanism.
  *
  * Procedure:
  *  1. Read MARKOV_TEST_PROB_THRESHOLDS immediately after apply_reset().
@@ -682,7 +682,7 @@ bool testbench::tc_f005_health_test_status_reset_to_zero_after_reset()
  *        effect
  *
  * HEALTH_TEST_STATUS has write_mask = 0x0, meaning all write attempts are
- * silently rejected by CSML.  A write of 0xFFFFFFFF must leave the register
+ * silently rejected by regmodel.  A write of 0xFFFFFFFF must leave the register
  * returning 0x00000000 on a subsequent read.
  *
  * This test is cross-functional (also mapped to FUNC-001) but is included
@@ -771,7 +771,7 @@ bool testbench::tc_f005_repetition_test_count_reset_to_zero()
  *        no effect
  *
  * REPETITION_TEST_COUNT has write_mask = 0x0; all write attempts are silently
- * rejected by CSML.  A write of 0xFFFFFFFF must not alter the value read back.
+ * rejected by regmodel.  A write of 0xFFFFFFFF must not alter the value read back.
  *
  * Procedure:
  *  1. Read REPETITION_TEST_COUNT before write; assert 0x00000000.
@@ -954,7 +954,7 @@ bool testbench::tc_f005_apt_pattern_count_4bit_reset_to_zero()
 /******************************************************************************
  * @brief TC-F005-075: Verify APT_PROPORTION_1BIT (0x60) reset value
  *
- * APT_PROPORTION_1BIT is a pure CSML storage register (no callbacks) with
+ * APT_PROPORTION_1BIT is a pure regmodel storage register (no callbacks) with
  * reset value 0x00000200 (LIMIT = 512, encoding a 10-bit field).
  *
  * Procedure:

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func020_test.cpp
  * @brief Test cases for FUNC-KMAC-020 (Reset and Initialization)
@@ -21,16 +21,16 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -88,7 +88,7 @@ static void write_cmd(kmac_test* test, uint32_t cmd_value)
  ******************************************************************************/
 void testbench::test_reset_all_registers_default_values()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-001: test_reset_all_registers_default_values");
 
     try {
@@ -182,7 +182,7 @@ void testbench::test_reset_all_registers_default_values()
         }
 
         if (all_pass) {
-            CSML_INFO(2, test_logger) << "All registers verified at correct reset values";
+            REG_INFO(2, test_logger) << "All registers verified at correct reset values";
             report_test_pass("TC-001: test_reset_all_registers_default_values");
         } else {
             report_test_fail("TC-001: test_reset_all_registers_default_values", failures.str());
@@ -201,12 +201,12 @@ void testbench::test_reset_all_registers_default_values()
  ******************************************************************************/
 void testbench::test_reset_key_shares_cleared()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-062: test_reset_key_shares_cleared");
 
     try {
         // First, write non-zero values to KEY_SHARE registers
-        CSML_INFO(2, test_logger) << "Writing non-zero values to KEY_SHARE registers";
+        REG_INFO(2, test_logger) << "Writing non-zero values to KEY_SHARE registers";
         for (int i = 0; i < 16; i++) {
             uint32_t test_value = 0xDEADBEEF + i;
             test->register_write_32(test->KEY_SHARE0_OFFSET + i*4, test_value);
@@ -215,7 +215,7 @@ void testbench::test_reset_key_shares_cleared()
         wait(10, SC_NS);
 
         // Apply reset
-        CSML_INFO(2, test_logger) << "Applying hardware reset";
+        REG_INFO(2, test_logger) << "Applying hardware reset";
         apply_reset();
         wait(10, SC_NS);
 
@@ -225,7 +225,7 @@ void testbench::test_reset_key_shares_cleared()
             uint32_t key_val = 0xFFFFFFFF;
             test->register_read_32(test->KEY_SHARE0_OFFSET + i*4, key_val);
             if (key_val != 0x00000000) {
-                CSML_ERROR(1, test_logger) << "KEY_SHARE0[" << i << "] not zero: 0x"
+                REG_ERROR(1, test_logger) << "KEY_SHARE0[" << i << "] not zero: 0x"
                                           << std::hex << key_val << std::dec;
                 all_zero = false;
             }
@@ -236,14 +236,14 @@ void testbench::test_reset_key_shares_cleared()
             uint32_t key_val = 0xFFFFFFFF;
             test->register_read_32(test->KEY_SHARE1_OFFSET + i*4, key_val);
             if (key_val != 0x00000000) {
-                CSML_ERROR(1, test_logger) << "KEY_SHARE1[" << i << "] not zero: 0x"
+                REG_ERROR(1, test_logger) << "KEY_SHARE1[" << i << "] not zero: 0x"
                                           << std::hex << key_val << std::dec;
                 all_zero = false;
             }
         }
 
         if (all_zero) {
-            CSML_INFO(2, test_logger) << "All KEY_SHARE0 and KEY_SHARE1 registers correctly zeroed";
+            REG_INFO(2, test_logger) << "All KEY_SHARE0 and KEY_SHARE1 registers correctly zeroed";
             report_test_pass("TC-062: test_reset_key_shares_cleared");
         } else {
             report_test_fail("TC-062: test_reset_key_shares_cleared",
@@ -263,7 +263,7 @@ void testbench::test_reset_key_shares_cleared()
  ******************************************************************************/
 void testbench::test_reset_fsm_idle_state()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-071: test_reset_fsm_idle_state");
 
     try {
@@ -277,8 +277,8 @@ void testbench::test_reset_fsm_idle_state()
 
         // Verify FSM state bits
         if (sha3_idle && !sha3_absorb && !sha3_squeeze) {
-            CSML_INFO(2, test_logger) << "FSM correctly initialized to IDLE state";
-            CSML_INFO(2, test_logger) << "  sha3_idle=1, sha3_absorb=0, sha3_squeeze=0";
+            REG_INFO(2, test_logger) << "FSM correctly initialized to IDLE state";
+            REG_INFO(2, test_logger) << "  sha3_idle=1, sha3_absorb=0, sha3_squeeze=0";
             report_test_pass("TC-071: test_reset_fsm_idle_state");
         } else {
             std::stringstream reason;
@@ -301,7 +301,7 @@ void testbench::test_reset_fsm_idle_state()
  ******************************************************************************/
 void testbench::test_reset_fifo_empty_status()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-121: test_reset_fifo_empty_status");
 
     try {
@@ -319,7 +319,7 @@ void testbench::test_reset_fifo_empty_status()
 
         // Verify FIFO empty status
         if (fifo_empty && fifo_depth == 0) {
-            CSML_INFO(2, test_logger) << "FIFO correctly initialized: empty=1, depth=0";
+            REG_INFO(2, test_logger) << "FIFO correctly initialized: empty=1, depth=0";
             report_test_pass("TC-121: test_reset_fifo_empty_status");
         } else {
             std::stringstream reason;
@@ -342,7 +342,7 @@ void testbench::test_reset_fifo_empty_status()
  ******************************************************************************/
 void testbench::test_reset_during_absorb_state()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-184: test_reset_during_absorb_state");
 
     try {
@@ -354,7 +354,7 @@ void testbench::test_reset_during_absorb_state()
         configure_sha3_256_mode(test);
 
         // Issue START command to enter ABSORB state
-        CSML_INFO(2, test_logger) << "Entering ABSORB state via START command";
+        REG_INFO(2, test_logger) << "Entering ABSORB state via START command";
         write_cmd(test, 0x1D); // START command
 
         // Verify in ABSORB state
@@ -365,14 +365,14 @@ void testbench::test_reset_during_absorb_state()
                            "Failed to enter ABSORB state");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM confirmed in ABSORB state";
+        REG_INFO(2, test_logger) << "FSM confirmed in ABSORB state";
 
         // Write some message data to MSG_FIFO
         test->register_write_32(0x800, 0x12345678); // MSG_FIFO address
         wait(5, SC_NS);
 
         // Assert reset while in ABSORB state
-        CSML_INFO(2, test_logger) << "Asserting reset during ABSORB state";
+        REG_INFO(2, test_logger) << "Asserting reset during ABSORB state";
         apply_reset();
         wait(10, SC_NS);
 
@@ -403,7 +403,7 @@ void testbench::test_reset_during_absorb_state()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Reset during ABSORB properly reinitialized hardware";
+        REG_INFO(2, test_logger) << "Reset during ABSORB properly reinitialized hardware";
         report_test_pass("TC-184: test_reset_during_absorb_state");
 
     } catch (const std::exception& e) {
@@ -419,7 +419,7 @@ void testbench::test_reset_during_absorb_state()
  ******************************************************************************/
 void testbench::test_reset_during_squeeze_state()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-185: test_reset_during_squeeze_state");
 
     try {
@@ -431,11 +431,11 @@ void testbench::test_reset_during_squeeze_state()
         configure_sha3_256_mode(test);
 
         // Issue START command
-        CSML_INFO(2, test_logger) << "Starting hash operation";
+        REG_INFO(2, test_logger) << "Starting hash operation";
         write_cmd(test, 0x1D); // START command
 
         // Issue PROCESS command to enter SQUEEZE state
-        CSML_INFO(2, test_logger) << "Entering SQUEEZE state via PROCESS command";
+        REG_INFO(2, test_logger) << "Entering SQUEEZE state via PROCESS command";
         write_cmd(test, 0x2E); // PROCESS command
         wait(20, SC_NS); // Allow time for padding and Keccak rounds
 
@@ -447,10 +447,10 @@ void testbench::test_reset_during_squeeze_state()
                            "Failed to enter SQUEEZE state");
             return;
         }
-        CSML_INFO(2, test_logger) << "FSM confirmed in SQUEEZE state";
+        REG_INFO(2, test_logger) << "FSM confirmed in SQUEEZE state";
 
         // Assert reset while in SQUEEZE state
-        CSML_INFO(2, test_logger) << "Asserting reset during SQUEEZE state";
+        REG_INFO(2, test_logger) << "Asserting reset during SQUEEZE state";
         apply_reset();
         wait(10, SC_NS);
 
@@ -490,7 +490,7 @@ void testbench::test_reset_during_squeeze_state()
             return;
         }
 
-        CSML_INFO(2, test_logger) << "Reset during SQUEEZE properly reinitialized hardware";
+        REG_INFO(2, test_logger) << "Reset during SQUEEZE properly reinitialized hardware";
         report_test_pass("TC-185: test_reset_during_squeeze_state");
 
     } catch (const std::exception& e) {

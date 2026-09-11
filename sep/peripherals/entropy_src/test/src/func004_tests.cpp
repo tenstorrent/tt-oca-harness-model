@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func004_tests.cpp
  * @brief FUNC-004 Background Entropy Generation Process — test case
@@ -65,7 +65,7 @@
  *  - Each test case is self-checking and returns bool (true = PASS).
  *  - apply_reset() is called by run_tests() before each test case to
  *    guarantee a clean, defined register and FIFO state.
- *  - The FUNC004_CHECK macro sets ok = false and emits a CSML_ERROR log
+ *  - The FUNC004_CHECK macro sets ok = false and emits a REG_ERROR log
  *    entry naming both the expected and observed values.
  *  - Polling loops are bounded (max 512 iterations of SC_ZERO_TIME) to
  *    prevent infinite simulation when a condition is not met.
@@ -82,7 +82,7 @@
  *  - entropy_src/test/src/func002_tests.cpp (TC-F002-051/052 overflow pattern)
  *  - entropy_src/test/inc/testbench.h
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
@@ -104,7 +104,7 @@
     do {                                           \
         if (!(cond))                               \
         {                                          \
-            CSML_ERROR(0, logger) << msg_stream;   \
+            REG_ERROR(0, logger) << msg_stream;   \
             ok = false;                            \
         }                                          \
     } while (false)
@@ -200,7 +200,7 @@ bool testbench::tc_f004_fifo_ctrl_enable_disable_fifo()
     // delta cycle, allowing the thread to run and push.
     //
     // rd_val is explicitly reset to 0 before every register_read_32 call.
-    // The CSML framework does NOT write into the TLM payload data buffer when a
+    // The regmodel framework does NOT write into the TLM payload data buffer when a
     // read callback returns false (e.g. FIFO underflow); the buffer retains its
     // previous content.  Resetting rd_val to 0 before each read ensures that a
     // stale non-zero value from a previous successful pop does not produce a
@@ -211,7 +211,7 @@ bool testbench::tc_f004_fifo_ctrl_enable_disable_fifo()
     {
         //wait(sc_core::SC_ZERO_TIME);
         wait(sc_core::sc_time(F004_BASE_ITER_PERIOD_NS, sc_core::SC_NS));
-        rd_val = 0u;  // Reset before read: CSML does not update buf on callback false
+        rd_val = 0u;  // Reset before read: regmodel does not update buf on callback false
         test->register_read_32(entropy_src_basetest::FIFO_RDATA_OFFSET, rd_val);
         if (rd_val != 0x00000000u)
         {
@@ -333,7 +333,7 @@ bool testbench::tc_f004_fifo_status_level_increments_with_background_fill()
 
     // Poll: yield SC_ZERO_TIME each iteration to let the background thread
     // execute its push-and-yield loop until it produces at least one word.
-    // Reset rd_val before each read: CSML does not update the TLM payload
+    // Reset rd_val before each read: regmodel does not update the TLM payload
     // data buffer when a read callback returns false (underflow path), so a
     // stale value could mask an empty-FIFO condition without this reset.
     bool thread_alive = false;
@@ -428,7 +428,7 @@ bool testbench::tc_f004_fifo_fill_halts_when_disabled_during_operation()
     // Step 4: Drain check — read FIFO_RDATA 8 times; all must return 0x00000000.
     // The FIFO was drained by the disable callback; the thread is suspended so
     // no new data is being pushed.
-    // IMPORTANT: reset rd_val to 0 before every read.  The CSML framework does
+    // IMPORTANT: reset rd_val to 0 before every read.  The regmodel framework does
     // not update the TLM data buffer when the read callback returns false
     // (empty-FIFO underflow path); without the reset rd_val would retain the
     // non-zero value from the pre-disable poll and every assertion would fail.
@@ -597,7 +597,7 @@ bool testbench::tc_f004_ctrl_downsample_rate_readback()
 
     FUNC004_CHECK((rd_val & ~ctrl_mask) == 0u,
         "TC-F004-006 sub-test 1: reserved bits set in CTRL after write — "
-        "CSML mask enforcement failed; (read & ~mask) = 0x"
+        "regmodel mask enforcement failed; (read & ~mask) = 0x"
         << std::hex << (rd_val & ~ctrl_mask));
 
     // -------------------------------------------------------------------------
@@ -1196,7 +1196,7 @@ bool testbench::tc_f004_software_reset_fifo_disabled_does_not_fill()
     test->register_read_32(entropy_src_basetest::FIFO_RDATA_OFFSET, rd_val);
 
     // Now confirm no further data is pushed (thread is in WAITING_FOR_ENABLE).
-    // Reset rd_val before each read: CSML does not clear the data buffer on a
+    // Reset rd_val before each read: regmodel does not clear the data buffer on a
     // false-returning callback (underflow path), so without the reset rd_val
     // would keep whatever value was last set (possibly non-zero from draining).
     static constexpr int STEADY_STATE_CHECKS = 32;

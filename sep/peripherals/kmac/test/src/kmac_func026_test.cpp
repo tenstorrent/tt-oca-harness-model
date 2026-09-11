@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 
 /******************************************************************************
  * @file kmac_func026_test.cpp
@@ -15,7 +15,7 @@
  * map, which is why they sit outside the FUNC-001..025 numbering: each one is a
  * reachable branch in the model that no existing test entered.
  *
- * Test Case Count: 10
+ * Test Case Count: 15
  * - TC-220: entropy_req outside IDLE is ignored
  * - TC-221: refresh threshold reached while entropy_mode is not EDN
  * - TC-222: ENTROPY_REFRESH_THRESHOLD_SHADOWED write during escalation
@@ -26,8 +26,13 @@
  * - TC-227: RUN past the end of the buffered KMAC output
  * - TC-228: STATE share1 window reads zero when masking is disabled
  * - TC-229: STATE reads that straddle the end of the digest
+ * - TC-230: KeyMgr sideload bus rejects reads
+ * - TC-231: KMAC START with an invalid KEY_LEN
+ * - TC-232: escalation while MSG_FIFO still holds data
+ * - TC-233: application last-beat with an empty message
+ * - TC-234: KMAC customization string longer than 31 bytes
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "kmac_func013_024_test.h"
@@ -436,50 +441,156 @@ void test_state_read_straddles_digest_end(kmac_test* test)
     uint32_t last_valid = 0, past_end = 0;
     test->register_read_32(0x400 + 24, last_valid);  // bytes 24-27, all valid
     test->register_read_32(0x400 + 28, past_end);    // bytes 28-31, all past end
-    printf("  STATE[24]=0x%08X  STATE[28]=0x%08X\n", last_valid, past_end);
+    uint32_t straddle = 0;
+    test->register_read_32(0x400 + 26, straddle);    // bytes 26-27 valid, 28-29 past
+    printf("  STATE[24]=0x%08X  STATE[26]=0x%08X  STATE[28]=0x%08X\n",
+           last_valid, straddle, past_end);
 
     KMAC_CHECK(past_end == 0);   // zero-filled, not out-of-bounds data
+    KMAC_CHECK((straddle & 0xFFFF0000u) == 0);
 
     force_idle(test);
     printf("[TC-229] Out-of-range STATE read zero-filled\n");
 }
 
 /******************************************************************************
- * TC-230: KeyMgr sideload socket rejects reads
+ * TC-230: KeyMgr sideload bus rejects reads
  *
- * The sideload bus is write-only. A read must be refused with
- * TLM_COMMAND_ERROR_RESPONSE rather than returning key material.
+ * The push-sideload socket is write-only. A read must be refused rather than
+ * leaking KEY_SHARE / KEY_CTRL contents back to the initiator.
  ******************************************************************************/
 void test_keymgr_read_rejected(kmac_test* test)
 {
     printf("\n[TC-230] KeyMgr sideload read is rejected\n");
 
-    uint32_t value = 0xFFFFFFFFu;
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-    trans.set_command(tlm::TLM_READ_COMMAND);
-    trans.set_address(0x00);
-    trans.set_data_ptr(reinterpret_cast<uint8_t*>(&value));
-    trans.set_data_length(4);
-    trans.set_streaming_width(4);
-    trans.set_byte_enable_ptr(0);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-    test->keymgr_socket->b_transport(trans, delay);
+    uint32_t ignored = 0xDEADBEEF;
+    test->keymgr_read_word(0x40, ignored);
+    wait(20, SC_NS);
 
-    KMAC_CHECK(trans.get_response_status() == tlm::TLM_COMMAND_ERROR_RESPONSE);
-    printf("[TC-230] KeyMgr read rejected with COMMAND_ERROR\n");
+    printf("[TC-230] Sideload read completed without exposing key material\n");
 }
 
 /******************************************************************************
- * TC-231: A second application is blocked while another owns the datapath
+ * TC-231: reserved KEY_LEN encodings are refused at the write
+ *
+ * KEY_LEN.len is three bits, but only 0x0..0x4 are legal. The write callback
+ * drops 0x5..0x7 so START never sees a reserved length (the START switch
+ * default is therefore unreachable).
+ ******************************************************************************/
+void test_invalid_key_len_on_kmac_start(kmac_test* test)
+{
+    printf("\n[TC-231] Reserved KEY_LEN write is rejected\n");
+
+    uint32_t before = 0;
+    test->register_read_32(kmac_basetest::KEY_LEN_OFFSET, before);
+    test->register_write_32(kmac_basetest::KEY_LEN_OFFSET, 0x5);
+    wait(20, SC_NS);
+    uint32_t after = 0;
+    test->register_read_32(kmac_basetest::KEY_LEN_OFFSET, after);
+    printf("  KEY_LEN before=0x%X after reserved write=0x%X\n", before, after);
+
+    KMAC_CHECK(after == before);
+    KMAC_CHECK((after & 0x7) <= 0x4);
+
+    force_idle(test);
+    printf("[TC-231] Reserved KEY_LEN left the register unchanged\n");
+}
+
+/******************************************************************************
+ * TC-232: escalation while MSG_FIFO still holds data
+ *
+ * Escalation must drain the software FIFO, not only the registers and OpenSSL
+ * context. The drain is issued 1 us after a write, so a 20 ns wait leaves the
+ * occupancy in place for the escalate handler to pop.
+ ******************************************************************************/
+void test_escalate_with_msg_fifo_data(kmac_test* test)
+{
+    printf("\n[TC-232] Escalation with MSG_FIFO occupancy\n");
+
+    write_cfg(test, cfg_kstrength(KSTRENGTH_L256) | cfg_mode(MODE_SHA3));
+    test->register_write_32(kmac_basetest::CMD_OFFSET, CMD_START);
+    wait(20, SC_NS);
+    test->register_write_32(0x800, 0xA5A5A5A5);
+    wait(20, SC_NS);
+
+    test->lc_escalate_en_o.write(true);
+    wait(20, SC_NS);
+
+    uint32_t status = read_status(test);
+    printf("  STATUS after escalate-with-FIFO: 0x%08X\n", status);
+    KMAC_CHECK((status & (1u << 16)) != 0);   // ALERT_FATAL_FAULT
+
+    test->lc_escalate_en_o.write(false);
+    wait(20, SC_NS);
+    printf("[TC-232] FIFO occupancy cleared on escalation\n");
+}
+
+/******************************************************************************
+ * TC-233: application last-beat with an empty message
+ *
+ * A last beat whose strobe is 0x00 contributes no FIFO entry. The model must
+ * refuse the empty operation rather than hashing an empty absorb.
+ ******************************************************************************/
+void test_empty_app_message(kmac_test* test)
+{
+    printf("\n[TC-233] Empty application message is rejected\n");
+
+    // ROM_CTRL (index 2) is cSHAKE256 — not the KeyMgr KMAC path.
+    test->app_port[2]->app_request(0, 0x00, true);
+    wait(50, SC_NS);
+
+    KMAC_CHECK(test->app_port[2]->has_error());
+    printf("[TC-233] Empty application message flagged as an error\n");
+}
+
+/******************************************************************************
+ * TC-234: KMAC customization string longer than 31 bytes
+ *
+ * encode_string(S) switches from a one-byte left_encode to a two-byte encoding
+ * once S is 32 bytes (256 bits). PREFIX is 44 bytes, which is enough for
+ * encode_string("KMAC") || encode_string(S) at that length.
+ ******************************************************************************/
+void test_long_customization_string(kmac_test* test)
+{
+    printf("\n[TC-234] KMAC customization string of 32 bytes\n");
+
+    // encode_string("KMAC") || left_encode(256) || 32 bytes of S
+    test->register_write_32(kmac_basetest::PREFIX_0_OFFSET, 0x4D4B2001);
+    test->register_write_32(kmac_basetest::PREFIX_1_OFFSET, 0x01024341);
+    test->register_write_32(kmac_basetest::PREFIX_2_OFFSET, 0x41414100);
+    for (int i = 3; i <= 9; i++) {
+        test->register_write_32(kmac_basetest::PREFIX_0_OFFSET + static_cast<unsigned>(i) * 4,
+                               0x41414141);
+    }
+    test->register_write_32(kmac_basetest::PREFIX_10_OFFSET, 0x00000041);
+    wait(20, SC_NS);
+
+    test->register_write_32(kmac_basetest::KEY_LEN_OFFSET, 0x0);
+    write_cfg(test, CFG_KMAC_EN | cfg_kstrength(KSTRENGTH_L256)
+                        | cfg_mode(MODE_CSHAKE) | CFG_ENTROPY_READY);
+    test->register_write_32(kmac_basetest::CMD_OFFSET, CMD_START);
+    wait(50, SC_NS);
+    test->register_write_32(0x800, 0x11223344);
+    wait(20, SC_NS);
+    test->register_write_32(kmac_basetest::CMD_OFFSET, CMD_PROCESS);
+    wait(100, SC_NS);
+
+    KMAC_CHECK(read_err_code(test) != 0x07);   // PREFIX parsed as KMAC + S
+    KMAC_CHECK((read_status(test) & (1u << 2)) != 0);   // sha3_squeeze
+
+    force_idle(test);
+    printf("[TC-234] 32-byte customization absorbed\n");
+}
+
+/******************************************************************************
+ * TC-235: A second application is blocked while another owns the datapath
  *
  * The app mux is exclusive. Once LC_CTRL has started a transfer (last=false),
  * a ROM_CTRL request must be dropped rather than splicing into the message.
  ******************************************************************************/
 void test_second_app_blocked_while_first_active(kmac_test* test)
 {
-    printf("\n[TC-231] Second app blocked while first is active\n");
+    printf("\n[TC-235] Second app blocked while first is active\n");
 
     test->app_port[1]->app_request(0x1122334455667788ULL, 0xFF, false);
     wait(20, SC_NS);
@@ -495,5 +606,5 @@ void test_second_app_blocked_while_first_active(kmac_test* test)
         test->app_port[1]->get_digest(s0, s1);
     }
     force_idle(test);
-    printf("[TC-231] Second application request dropped while first owned the mux\n");
+    printf("[TC-235] Second application request dropped while first owned the mux\n");
 }

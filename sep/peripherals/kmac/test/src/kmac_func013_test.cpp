@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file kmac_func013_test.cpp
  * @brief Test cases for FUNC-KMAC-013 (EDN Mode Entropy Management)
@@ -32,18 +32,18 @@
  * Architecture Reference: kmac-architecture-behaviour-map.json
  * Detailed Design: kmac-detailed-design.md (Section 1.5.1 EDN Mode)
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
 #include <iostream>
 #include <iomanip>
 #include <cstring>
 #include <openssl/evp.h>
 
 // Logger for test output
-static CsmlLogger test_logger;
+static RegLogger test_logger;
 
 /******************************************************************************
  * Helper Functions
@@ -207,7 +207,7 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void testbench::test_entropy_mode_edn_request()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-105: test_entropy_mode_edn_request");
 
     try {
@@ -221,21 +221,21 @@ void testbench::test_entropy_mode_edn_request()
         uint32_t entropy_period = (5000 << 0) | (0 << 10);
         test->register_write_32(test->ENTROPY_PERIOD_OFFSET, entropy_period);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=5000, prescaler=0";
+        REG_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=5000, prescaler=0";
 
         // Configure CFG_SHADOWED with edn_mode and entropy_ready
         configure_kmac_with_entropy(test, 0x1, 1); // entropy_mode=edn, entropy_ready=1
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=KMAC, entropy_mode=edn, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: mode=KMAC, entropy_mode=edn, entropy_ready=1";
 
         // Read initial hash count
         uint32_t hash_cnt_initial = 0;
         test->register_read_32(test->ENTROPY_REFRESH_HASH_CNT_OFFSET, hash_cnt_initial);
-        CSML_INFO(2, test_logger) << "Initial ENTROPY_REFRESH_HASH_CNT: " << hash_cnt_initial;
+        REG_INFO(2, test_logger) << "Initial ENTROPY_REFRESH_HASH_CNT: " << hash_cnt_initial;
 
         // Write key and prefix
         write_kmac_key_128bit(test, key);
         write_kmac_prefix(test);
-        CSML_INFO(2, test_logger) << "Wrote 128-bit key and KMAC prefix";
+        REG_INFO(2, test_logger) << "Wrote 128-bit key and KMAC prefix";
 
         // Verify IDLE state
         bool idle, absorb, squeeze;
@@ -248,16 +248,16 @@ void testbench::test_entropy_mode_edn_request()
 
         // Issue START command
         write_cmd(test, 0x1D);
-        CSML_INFO(2, test_logger) << "Issued START command";
+        REG_INFO(2, test_logger) << "Issued START command";
 
         // Write message to MSG_FIFO
         write_msg_fifo(test, msg, msg_len);
         write_output_length_encoding(test, 256);
-        CSML_INFO(2, test_logger) << "Wrote message and output length encoding to MSG_FIFO";
+        REG_INFO(2, test_logger) << "Wrote message and output length encoding to MSG_FIFO";
 
         // Issue PROCESS command
         write_cmd(test, 0x2E);
-        CSML_INFO(2, test_logger) << "Issued PROCESS command";
+        REG_INFO(2, test_logger) << "Issued PROCESS command";
 
         // Wait for SQUEEZE state
         wait(20, SC_NS);
@@ -273,13 +273,13 @@ void testbench::test_entropy_mode_edn_request()
 
         // Issue DONE command
         write_cmd(test, 0x16);
-        CSML_INFO(2, test_logger) << "Issued DONE command";
+        REG_INFO(2, test_logger) << "Issued DONE command";
         wait(10, SC_NS);
 
         // Read final hash count (should have incremented)
         uint32_t hash_cnt_final = 0;
         test->register_read_32(test->ENTROPY_REFRESH_HASH_CNT_OFFSET, hash_cnt_final);
-        CSML_INFO(2, test_logger) << "Final ENTROPY_REFRESH_HASH_CNT: " << hash_cnt_final;
+        REG_INFO(2, test_logger) << "Final ENTROPY_REFRESH_HASH_CNT: " << hash_cnt_final;
 
         // Verify no error occurred
         uint32_t err_code = 0;
@@ -314,7 +314,7 @@ void testbench::test_entropy_mode_edn_request()
  ******************************************************************************/
 void testbench::test_entropy_ready_assertion()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-107: test_entropy_ready_assertion");
 
     try {
@@ -325,7 +325,7 @@ void testbench::test_entropy_ready_assertion()
 
         // Configure CFG_SHADOWED with edn_mode but entropy_ready=0 initially
         configure_kmac_with_entropy(test, 0x1, 0); // entropy_mode=edn, entropy_ready=0
-        CSML_INFO(2, test_logger) << "Configured CFG_SHADOWED: entropy_mode=edn, entropy_ready=0";
+        REG_INFO(2, test_logger) << "Configured CFG_SHADOWED: entropy_mode=edn, entropy_ready=0";
 
         // Read CFG_SHADOWED to verify entropy_ready=0
         uint32_t cfg_val = 0;
@@ -335,11 +335,11 @@ void testbench::test_entropy_ready_assertion()
             report_test_fail("TC-107", "entropy_ready should be 0 initially");
             return;
         }
-        CSML_INFO(2, test_logger) << "Verified entropy_ready=0";
+        REG_INFO(2, test_logger) << "Verified entropy_ready=0";
 
         // Assert entropy_ready
         configure_kmac_with_entropy(test, 0x1, 1); // entropy_mode=edn, entropy_ready=1
-        CSML_INFO(2, test_logger) << "Asserted entropy_ready=1";
+        REG_INFO(2, test_logger) << "Asserted entropy_ready=1";
 
         // Verify entropy_ready=1 in CFG_SHADOWED
         test->register_read_32(test->CFG_SHADOWED_OFFSET, cfg_val);
@@ -348,16 +348,16 @@ void testbench::test_entropy_ready_assertion()
             report_test_fail("TC-107", "entropy_ready assertion failed");
             return;
         }
-        CSML_INFO(2, test_logger) << "Verified entropy_ready=1 asserted successfully";
+        REG_INFO(2, test_logger) << "Verified entropy_ready=1 asserted successfully";
 
         // Attempt to change entropy_mode (should update register but not affect hardware)
         configure_kmac_with_entropy(test, 0x2, 1); // entropy_mode=sw, entropy_ready=1
-        CSML_INFO(2, test_logger) << "Attempted to change entropy_mode to sw_mode";
+        REG_INFO(2, test_logger) << "Attempted to change entropy_mode to sw_mode";
 
         // Read CFG_SHADOWED to verify mode change in register
         test->register_read_32(test->CFG_SHADOWED_OFFSET, cfg_val);
         uint32_t entropy_mode_bits = (cfg_val >> 16) & 0x3;
-        CSML_INFO(2, test_logger) << "CFG_SHADOWED.entropy_mode register value: " << entropy_mode_bits;
+        REG_INFO(2, test_logger) << "CFG_SHADOWED.entropy_mode register value: " << entropy_mode_bits;
 
         // Note: According to spec, register value updates but hardware mode is locked
         // This test verifies that entropy_ready can be asserted and mode locking behavior exists
@@ -386,7 +386,7 @@ void testbench::test_entropy_ready_assertion()
  ******************************************************************************/
 void testbench::test_entropy_mode_lock_after_ready()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-108: test_entropy_mode_lock_after_ready");
 
     try {
@@ -402,7 +402,7 @@ void testbench::test_entropy_mode_lock_after_ready()
 
         // Configure CFG_SHADOWED with edn_mode and entropy_ready=1
         configure_kmac_with_entropy(test, 0x1, 1); // entropy_mode=edn, entropy_ready=1
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
 
         // Write key and prefix
         write_kmac_key_128bit(test, key);
@@ -419,17 +419,17 @@ void testbench::test_entropy_mode_lock_after_ready()
 
         // Issue START command (this locks the entropy mode)
         write_cmd(test, 0x1D);
-        CSML_INFO(2, test_logger) << "Issued START command - entropy_mode should now be locked";
+        REG_INFO(2, test_logger) << "Issued START command - entropy_mode should now be locked";
 
         // Attempt to change entropy_mode to sw_mode
         configure_kmac_with_entropy(test, 0x2, 1); // entropy_mode=sw, entropy_ready=1
-        CSML_INFO(2, test_logger) << "Attempted to change entropy_mode to sw_mode after START";
+        REG_INFO(2, test_logger) << "Attempted to change entropy_mode to sw_mode after START";
 
         // Read CFG_SHADOWED to verify register value changed
         uint32_t cfg_val = 0;
         test->register_read_32(test->CFG_SHADOWED_OFFSET, cfg_val);
         uint32_t entropy_mode_bits = (cfg_val >> 16) & 0x3;
-        CSML_INFO(2, test_logger) << "CFG_SHADOWED.entropy_mode register value: " << entropy_mode_bits;
+        REG_INFO(2, test_logger) << "CFG_SHADOWED.entropy_mode register value: " << entropy_mode_bits;
 
         // Continue with operation (should use locked edn_mode)
         write_msg_fifo(test, msg, msg_len);
@@ -483,7 +483,7 @@ void testbench::test_entropy_mode_lock_after_ready()
  ******************************************************************************/
 void testbench::test_entropy_timeout_edn_mode()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-109: test_entropy_timeout_edn_mode");
 
     try {
@@ -496,11 +496,11 @@ void testbench::test_entropy_timeout_edn_mode()
         uint32_t entropy_period = (1 << 0) | (0 << 10);
         test->register_write_32(test->ENTROPY_PERIOD_OFFSET, entropy_period);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=1, prescaler=0 (short timeout)";
+        REG_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=1, prescaler=0 (short timeout)";
 
         // Configure CFG_SHADOWED with edn_mode and entropy_ready=1
         configure_kmac_with_entropy(test, 0x1, 1); // entropy_mode=edn, entropy_ready=1
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
 
         // Write key and prefix
         write_kmac_key_128bit(test, key);
@@ -517,7 +517,7 @@ void testbench::test_entropy_timeout_edn_mode()
 
         // Issue START command (may trigger entropy request)
         write_cmd(test, 0x1D);
-        CSML_INFO(2, test_logger) << "Issued START command";
+        REG_INFO(2, test_logger) << "Issued START command";
 
         // Write message
         write_msg_fifo(test, msg, msg_len);
@@ -525,7 +525,7 @@ void testbench::test_entropy_timeout_edn_mode()
 
         // Issue PROCESS command
         write_cmd(test, 0x2E);
-        CSML_INFO(2, test_logger) << "Issued PROCESS command";
+        REG_INFO(2, test_logger) << "Issued PROCESS command";
 
         // Wait for timeout to occur
         wait(100, SC_NS);
@@ -533,20 +533,20 @@ void testbench::test_entropy_timeout_edn_mode()
         // Check ERR_CODE for WaitTimerExpired (0x04)
         uint32_t err_code = 0;
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-        CSML_INFO(2, test_logger) << "ERR_CODE after timeout: 0x" << std::hex << err_code;
+        REG_INFO(2, test_logger) << "ERR_CODE after timeout: 0x" << std::hex << err_code;
 
         // Note: Timeout error may or may not occur depending on EDN mock behavior
         // If ERR_CODE is 0x04, test passes (timeout detected)
         // If ERR_CODE is 0, EDN responded before timeout (also valid)
         if (err_code == 0x04) {
-            CSML_INFO(2, test_logger) << "WaitTimerExpired error detected as expected (0x04)";
+            REG_INFO(2, test_logger) << "WaitTimerExpired error detected as expected (0x04)";
 
             // Verify that operation can continue (deadlock prevention)
             read_status_fsm_bits(test, idle, absorb, squeeze);
-            CSML_INFO(2, test_logger) << "FSM state after timeout - idle:" << idle
+            REG_INFO(2, test_logger) << "FSM state after timeout - idle:" << idle
                                      << " absorb:" << absorb << " squeeze:" << squeeze;
         } else if (err_code == 0) {
-            CSML_INFO(2, test_logger) << "No timeout error - EDN responded within timeout period (valid)";
+            REG_INFO(2, test_logger) << "No timeout error - EDN responded within timeout period (valid)";
         } else {
             cleanup_test(test);
             report_test_fail("TC-109", "Unexpected error code: 0x" +
@@ -579,7 +579,7 @@ void testbench::test_entropy_timeout_edn_mode()
  ******************************************************************************/
 void testbench::test_entropy_timeout_recovery()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-110: test_entropy_timeout_recovery");
 
     try {
@@ -587,11 +587,11 @@ void testbench::test_entropy_timeout_recovery()
         uint32_t entropy_period = (1 << 0) | (0 << 10);
         test->register_write_32(test->ENTROPY_PERIOD_OFFSET, entropy_period);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured short ENTROPY_PERIOD to force timeout";
+        REG_INFO(2, test_logger) << "Configured short ENTROPY_PERIOD to force timeout";
 
         // Configure CFG_SHADOWED with edn_mode and entropy_ready=1
         configure_kmac_with_entropy(test, 0x1, 1);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
 
         // Attempt operation that may timeout
         const uint8_t key[16] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
@@ -605,20 +605,20 @@ void testbench::test_entropy_timeout_recovery()
         // Check if timeout error occurred
         uint32_t err_code = 0;
         test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-        CSML_INFO(2, test_logger) << "ERR_CODE: 0x" << std::hex << err_code;
+        REG_INFO(2, test_logger) << "ERR_CODE: 0x" << std::hex << err_code;
 
         if (err_code == 0x04) {
-            CSML_INFO(2, test_logger) << "WaitTimerExpired error occurred, proceeding with recovery";
+            REG_INFO(2, test_logger) << "WaitTimerExpired error occurred, proceeding with recovery";
 
             // Recovery sequence:
             // 1. De-assert entropy_ready
             configure_kmac_with_entropy(test, 0x1, 0); // entropy_ready=0
-            CSML_INFO(2, test_logger) << "De-asserted entropy_ready";
+            REG_INFO(2, test_logger) << "De-asserted entropy_ready";
             wait(5, SC_NS);
 
             // 2. Issue CMD.err_processed
             write_cmd(test, 0x400); // err_processed bit 10
-            CSML_INFO(2, test_logger) << "Issued CMD.err_processed";
+            REG_INFO(2, test_logger) << "Issued CMD.err_processed";
             wait(10, SC_NS);
 
             // 3. Verify FSM returned to IDLE
@@ -628,18 +628,18 @@ void testbench::test_entropy_timeout_recovery()
                 report_test_fail("TC-110", "FSM did not return to IDLE after recovery");
                 return;
             }
-            CSML_INFO(2, test_logger) << "FSM returned to IDLE state";
+            REG_INFO(2, test_logger) << "FSM returned to IDLE state";
 
             // 4. Verify ERR_CODE cleared
             test->register_read_32(test->ERR_CODE_OFFSET, err_code);
-            CSML_INFO(2, test_logger) << "ERR_CODE after recovery: 0x" << std::hex << err_code;
+            REG_INFO(2, test_logger) << "ERR_CODE after recovery: 0x" << std::hex << err_code;
 
             // 5. Reconfigure to sw_mode (demonstrates entropy FSM reset)
             configure_kmac_with_entropy(test, 0x2, 0); // entropy_mode=sw, entropy_ready=0
-            CSML_INFO(2, test_logger) << "Reconfigured to sw_mode successfully";
+            REG_INFO(2, test_logger) << "Reconfigured to sw_mode successfully";
 
         } else {
-            CSML_INFO(2, test_logger) << "No timeout occurred (EDN responded), recovery test skipped";
+            REG_INFO(2, test_logger) << "No timeout occurred (EDN responded), recovery test skipped";
         }
 
         cleanup_test(test);
@@ -664,7 +664,7 @@ void testbench::test_entropy_timeout_recovery()
  ******************************************************************************/
 void testbench::test_entropy_period_prescaler()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-111: test_entropy_period_prescaler");
 
     try {
@@ -678,7 +678,7 @@ void testbench::test_entropy_period_prescaler()
             uint32_t entropy_period = (prescaler << 0) | (wait_timer << 16);
             test->register_write_32(test->ENTROPY_PERIOD_OFFSET, entropy_period);
             wait(5, SC_NS);
-            CSML_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: prescaler=" << prescaler
+            REG_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: prescaler=" << prescaler
                                      << ", wait_timer=" << wait_timer;
 
             // Read back to verify
@@ -691,7 +691,7 @@ void testbench::test_entropy_period_prescaler()
                 report_test_fail("TC-111", "ENTROPY_PERIOD readback mismatch");
                 return;
             }
-            CSML_INFO(2, test_logger) << "Verified prescaler=" << read_prescaler
+            REG_INFO(2, test_logger) << "Verified prescaler=" << read_prescaler
                                      << ", wait_timer=" << read_wait_timer;
         }
 
@@ -716,7 +716,7 @@ void testbench::test_entropy_period_prescaler()
  ******************************************************************************/
 void testbench::test_entropy_period_wait_timer()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-112: test_entropy_period_wait_timer");
 
     try {
@@ -729,7 +729,7 @@ void testbench::test_entropy_period_wait_timer()
             uint32_t entropy_period = (wait_timer << 0) | (prescaler << 10);
             test->register_write_32(test->ENTROPY_PERIOD_OFFSET, entropy_period);
             wait(5, SC_NS);
-            CSML_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=" << wait_timer
+            REG_INFO(2, test_logger) << "Configured ENTROPY_PERIOD: wait_timer=" << wait_timer
                                      << ", prescaler=" << prescaler;
 
             // Read back to verify
@@ -741,7 +741,7 @@ void testbench::test_entropy_period_wait_timer()
                 report_test_fail("TC-112", "wait_timer readback mismatch");
                 return;
             }
-            CSML_INFO(2, test_logger) << "Verified wait_timer=" << read_wait_timer;
+            REG_INFO(2, test_logger) << "Verified wait_timer=" << read_wait_timer;
         }
 
         report_test_pass("TC-112: test_entropy_period_wait_timer");
@@ -765,7 +765,7 @@ void testbench::test_entropy_period_wait_timer()
  ******************************************************************************/
 void testbench::test_entropy_refresh_hash_cnt()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-113: test_entropy_refresh_hash_cnt");
 
     try {
@@ -781,7 +781,7 @@ void testbench::test_entropy_refresh_hash_cnt()
 
         // Configure CFG_SHADOWED with edn_mode
         configure_kmac_with_entropy(test, 0x1, 1);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
 
         // Write key and prefix
         write_kmac_key_128bit(test, key);
@@ -790,7 +790,7 @@ void testbench::test_entropy_refresh_hash_cnt()
         // Read initial hash count
         uint32_t hash_cnt_initial = 0;
         test->register_read_32(test->ENTROPY_REFRESH_HASH_CNT_OFFSET, hash_cnt_initial);
-        CSML_INFO(2, test_logger) << "Initial hash count: " << hash_cnt_initial;
+        REG_INFO(2, test_logger) << "Initial hash count: " << hash_cnt_initial;
 
         // Perform 3 KMAC operations and verify counter increments
         for (int i = 0; i < 3; i++) {
@@ -825,7 +825,7 @@ void testbench::test_entropy_refresh_hash_cnt()
             uint32_t hash_cnt = 0;
             test->register_read_32(test->ENTROPY_REFRESH_HASH_CNT_OFFSET, hash_cnt);
             uint32_t expected_cnt = hash_cnt_initial + i + 1;
-            CSML_INFO(2, test_logger) << "Hash count after operation " << i << ": " << hash_cnt
+            REG_INFO(2, test_logger) << "Hash count after operation " << i << ": " << hash_cnt
                                      << " (expected: " << expected_cnt << ")";
 
             if (hash_cnt != expected_cnt) {
@@ -859,7 +859,7 @@ void testbench::test_entropy_refresh_hash_cnt()
  ******************************************************************************/
 void testbench::test_entropy_refresh_threshold_trigger()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-114: test_entropy_refresh_threshold_trigger");
 
     try {
@@ -879,11 +879,11 @@ void testbench::test_entropy_refresh_threshold_trigger()
         wait(5, SC_NS);
         test->register_write_32(test->ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured ENTROPY_REFRESH_THRESHOLD_SHADOWED: " << threshold;
+        REG_INFO(2, test_logger) << "Configured ENTROPY_REFRESH_THRESHOLD_SHADOWED: " << threshold;
 
         // Configure CFG_SHADOWED with edn_mode
         configure_kmac_with_entropy(test, 0x1, 1);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
 
         // Write key and prefix
         write_kmac_key_128bit(test, key);
@@ -923,11 +923,11 @@ void testbench::test_entropy_refresh_threshold_trigger()
             // Read hash count after operation
             uint32_t hash_cnt_after = 0;
             test->register_read_32(test->ENTROPY_REFRESH_HASH_CNT_OFFSET, hash_cnt_after);
-            CSML_INFO(2, test_logger) << "Operation " << i << " - hash_cnt before: " << hash_cnt_before
+            REG_INFO(2, test_logger) << "Operation " << i << " - hash_cnt before: " << hash_cnt_before
                                      << ", after: " << hash_cnt_after;
 
             if (hash_cnt_after >= threshold) {
-                CSML_INFO(2, test_logger) << "Hash count reached/exceeded threshold - automatic reseed should occur";
+                REG_INFO(2, test_logger) << "Hash count reached/exceeded threshold - automatic reseed should occur";
             }
         }
 
@@ -965,7 +965,7 @@ void testbench::test_entropy_refresh_threshold_trigger()
  ******************************************************************************/
 void testbench::test_entropy_refresh_threshold_zero_disable()
 {
-    test_logger.setMaxVerbosity(CSML_DEFAULT_VERBOSITY);
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     report_test_start("TC-115: test_entropy_refresh_threshold_zero_disable");
 
     try {
@@ -985,11 +985,11 @@ void testbench::test_entropy_refresh_threshold_zero_disable()
         wait(5, SC_NS);
         test->register_write_32(test->ENTROPY_REFRESH_THRESHOLD_SHADOWED_OFFSET, threshold);
         wait(5, SC_NS);
-        CSML_INFO(2, test_logger) << "Configured ENTROPY_REFRESH_THRESHOLD_SHADOWED: 0 (disabled)";
+        REG_INFO(2, test_logger) << "Configured ENTROPY_REFRESH_THRESHOLD_SHADOWED: 0 (disabled)";
 
         // Configure CFG_SHADOWED with edn_mode
         configure_kmac_with_entropy(test, 0x1, 1);
-        CSML_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
+        REG_INFO(2, test_logger) << "Configured entropy_mode=edn, entropy_ready=1";
 
         // Write key and prefix
         write_kmac_key_128bit(test, key);
@@ -998,7 +998,7 @@ void testbench::test_entropy_refresh_threshold_zero_disable()
         // Read initial hash count
         uint32_t hash_cnt_initial = 0;
         test->register_read_32(test->ENTROPY_REFRESH_HASH_CNT_OFFSET, hash_cnt_initial);
-        CSML_INFO(2, test_logger) << "Initial hash count: " << hash_cnt_initial;
+        REG_INFO(2, test_logger) << "Initial hash count: " << hash_cnt_initial;
 
         // Perform multiple operations
         for (int i = 0; i < 5; i++) {
@@ -1029,7 +1029,7 @@ void testbench::test_entropy_refresh_threshold_zero_disable()
             uint32_t hash_cnt = 0;
             test->register_read_32(test->ENTROPY_REFRESH_HASH_CNT_OFFSET, hash_cnt);
             uint32_t expected_cnt = hash_cnt_initial + i + 1;
-            CSML_INFO(2, test_logger) << "Hash count after operation " << i << ": " << hash_cnt
+            REG_INFO(2, test_logger) << "Hash count after operation " << i << ": " << hash_cnt
                                      << " (expected monotonic increase: " << expected_cnt << ")";
 
             // With threshold=0, counter should continue incrementing

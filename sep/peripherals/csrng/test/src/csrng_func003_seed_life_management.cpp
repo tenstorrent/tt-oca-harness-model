@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2025 Tenstorrent USA, Inc.
 /**
  * @file csrng_func003_seed_life_management.cpp
  * @brief Test implementation for CRNG_FUNC_003 - Seed Life Management and Reseeding
@@ -29,7 +29,7 @@
  * @note Tests 58, 61-62 (command sequences) are in csrng_func001_drbg_lifecycle.cpp
  * @note Test 126 (edn_reseed_command) requires hardware client interface not yet available
  *
- * @copyright Copyright (c) 2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2025, Tenstorrent USA, Inc.
  * @license BSD-3-Clause
  */
 
@@ -165,7 +165,7 @@ void testbench::test_101_reseed_interval_enforcement_exact_threshold()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=10";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=10";
 
         // GENERATE 10 times (should all succeed)
         for (int i = 0; i < 10; i++) {
@@ -194,7 +194,7 @@ void testbench::test_101_reseed_interval_enforcement_exact_threshold()
             }
         }
 
-        CSML_INFO(2, logger) << "10 GENERATE commands succeeded";
+        REG_INFO(2, logger) << "10 GENERATE commands succeeded";
 
         // Verify counter = 10
         uint32_t counter = 0;
@@ -207,7 +207,7 @@ void testbench::test_101_reseed_interval_enforcement_exact_threshold()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER verified: " << counter;
+        REG_INFO(2, logger) << "RESEED_COUNTER verified: " << counter;
 
         // 11th GENERATE should fail with RESEED_CNT_EXCEEDED
         if (!wait_cmd_ready(m_test.get())) {
@@ -230,7 +230,7 @@ void testbench::test_101_reseed_interval_enforcement_exact_threshold()
             );
         }
 
-        CSML_INFO(2, logger) << "11th GENERATE correctly failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
+        REG_INFO(2, logger) << "11th GENERATE correctly failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
 
         // Verify RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT sets (bit 7)
         uint32_t alert_sts = 0;
@@ -238,9 +238,9 @@ void testbench::test_101_reseed_interval_enforcement_exact_threshold()
         wait(1, SC_US);
 
         if (!(alert_sts & (1 << 7))) {
-            CSML_WARN(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT not set (expected bit 7)";
+            REG_WARN(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT not set (expected bit 7)";
         } else {
-            CSML_INFO(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT correctly set";
+            REG_INFO(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT correctly set";
         }
 
         report_test_pass("Test 101");
@@ -298,7 +298,7 @@ void testbench::test_reseed_interval_enforcement_below_threshold()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=100";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=100";
 
         // GENERATE 50 times (all should succeed)
         for (int i = 0; i < 50; i++) {
@@ -327,7 +327,7 @@ void testbench::test_reseed_interval_enforcement_below_threshold()
             }
         }
 
-        CSML_INFO(2, logger) << "50 GENERATE commands succeeded";
+        REG_INFO(2, logger) << "50 GENERATE commands succeeded";
 
         // Verify counter = 50
         uint32_t counter = 0;
@@ -340,7 +340,7 @@ void testbench::test_reseed_interval_enforcement_below_threshold()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER verified: " << counter << " (below threshold 100)";
+        REG_INFO(2, logger) << "RESEED_COUNTER verified: " << counter << " (below threshold 100)";
         report_test_pass("Test 102");
 
     } catch (const std::exception& e) {
@@ -396,7 +396,7 @@ void testbench::test_reseed_interval_enforcement_disabled()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=0xFFFFFFFF (unlimited)";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=0xFFFFFFFF (unlimited)";
 
         // GENERATE 1000 times (all should succeed - reduced from spec to save simulation time)
         // Note: Full 1000 iterations can take significant time; using 100 for practical testing
@@ -427,7 +427,7 @@ void testbench::test_reseed_interval_enforcement_disabled()
             }
         }
 
-        CSML_INFO(2, logger) << test_iterations << " GENERATE commands succeeded with unlimited interval";
+        REG_INFO(2, logger) << test_iterations << " GENERATE commands succeeded with unlimited interval";
 
         // Verify counter incremented
         uint32_t counter = 0;
@@ -441,7 +441,7 @@ void testbench::test_reseed_interval_enforcement_disabled()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER verified: " << counter << " (enforcement disabled)";
+        REG_INFO(2, logger) << "RESEED_COUNTER verified: " << counter << " (enforcement disabled)";
         report_test_pass("Test 103");
 
     } catch (const std::exception& e) {
@@ -489,7 +489,7 @@ void testbench::test_reseed_interval_enforcement_after_reseed_recovery()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=5";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=5";
 
         // GENERATE 5 times to reach threshold
         for (int i = 0; i < 5; i++) {
@@ -506,7 +506,7 @@ void testbench::test_reseed_interval_enforcement_after_reseed_recovery()
             }
         }
 
-        CSML_INFO(2, logger) << "Generated 5 times (threshold reached)";
+        REG_INFO(2, logger) << "Generated 5 times (threshold reached)";
 
         // Verify counter = 5
         uint32_t counter_before = 0;
@@ -533,7 +533,7 @@ void testbench::test_reseed_interval_enforcement_after_reseed_recovery()
             throw std::runtime_error("RESEED timeout");
         }
 
-        CSML_INFO(2, logger) << "RESEED completed";
+        REG_INFO(2, logger) << "RESEED completed";
 
         // Verify counter reset to 0
         uint32_t counter_after = 0;
@@ -546,7 +546,7 @@ void testbench::test_reseed_interval_enforcement_after_reseed_recovery()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER reset to 0";
+        REG_INFO(2, logger) << "RESEED_COUNTER reset to 0";
 
         // GENERATE should now succeed
         if (!wait_cmd_ready(m_test.get())) {
@@ -568,7 +568,7 @@ void testbench::test_reseed_interval_enforcement_after_reseed_recovery()
             );
         }
 
-        CSML_INFO(2, logger) << "GENERATE after RESEED succeeded";
+        REG_INFO(2, logger) << "GENERATE after RESEED succeeded";
         report_test_pass("Test 104");
 
     } catch (const std::exception& e) {
@@ -617,7 +617,7 @@ void testbench::test_reseed_interval_enforcement_after_instantiate_recovery()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=5";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=5";
 
         // GENERATE 5 times to reach threshold
         for (int i = 0; i < 5; i++) {
@@ -634,7 +634,7 @@ void testbench::test_reseed_interval_enforcement_after_instantiate_recovery()
             }
         }
 
-        CSML_INFO(2, logger) << "Generated 5 times (threshold reached)";
+        REG_INFO(2, logger) << "Generated 5 times (threshold reached)";
 
         // UNINSTANTIATE
         if (!wait_cmd_ready(m_test.get())) {
@@ -649,7 +649,7 @@ void testbench::test_reseed_interval_enforcement_after_instantiate_recovery()
             throw std::runtime_error("UNINSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "UNINSTANTIATE completed";
+        REG_INFO(2, logger) << "UNINSTANTIATE completed";
 
         // Verify counter cleared
         uint32_t counter_after_uninst = 0;
@@ -676,7 +676,7 @@ void testbench::test_reseed_interval_enforcement_after_instantiate_recovery()
             throw std::runtime_error("re-INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "Re-INSTANTIATE completed";
+        REG_INFO(2, logger) << "Re-INSTANTIATE completed";
 
         // Verify counter = 0
         uint32_t counter_after_inst = 0;
@@ -714,14 +714,14 @@ void testbench::test_reseed_interval_enforcement_after_instantiate_recovery()
         wait(1, SC_US);
 
         if (counter_after_generate != 1) {
-            CSML_ERROR(1, logger) << "FAILED: RESEED_COUNTER after GENERATE mismatch - expected 1, got " << counter_after_generate;
-            CSML_ERROR(1, logger) << "NOTE: After re-INSTANTIATE (counter=0) and one GENERATE (glen=1), counter should be 1";
+            REG_ERROR(1, logger) << "FAILED: RESEED_COUNTER after GENERATE mismatch - expected 1, got " << counter_after_generate;
+            REG_ERROR(1, logger) << "NOTE: After re-INSTANTIATE (counter=0) and one GENERATE (glen=1), counter should be 1";
             throw std::runtime_error("RESEED_COUNTER verification failed");
         } else {
-            CSML_INFO(2, logger) << "RESEED_COUNTER after GENERATE verified: " << counter_after_generate;
+            REG_INFO(2, logger) << "RESEED_COUNTER after GENERATE verified: " << counter_after_generate;
         }
 
-        CSML_INFO(2, logger) << "GENERATE after UNINSTANTIATE+INSTANTIATE succeeded";
+        REG_INFO(2, logger) << "GENERATE after UNINSTANTIATE+INSTANTIATE succeeded";
         report_test_pass("Test 105");
 
     } catch (const std::exception& e) {
@@ -782,7 +782,7 @@ void testbench::test_reseed_interval_enforcement_per_instance_independent()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "Instance 0 INSTANTIATE complete";
+        REG_INFO(2, logger) << "Instance 0 INSTANTIATE complete";
 
         // GENERATE 9 times on Instance 0
         for (int i = 0; i < 9; i++) {
@@ -799,7 +799,7 @@ void testbench::test_reseed_interval_enforcement_per_instance_independent()
             }
         }
 
-        CSML_INFO(2, logger) << "Instance 0: Generated 9 times";
+        REG_INFO(2, logger) << "Instance 0: Generated 9 times";
 
         // Verify Instance 0 counter = 9
         uint32_t counter_0 = 0;
@@ -812,14 +812,14 @@ void testbench::test_reseed_interval_enforcement_per_instance_independent()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 verified: " << counter_0;
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 verified: " << counter_0;
 
         // Read Instance 1 counter (hardware instance)
         uint32_t counter_1 = 0;
         m_test->register_read_32(csrng_basetest::RESEED_COUNTER_1_OFFSET, counter_1);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_1: " << counter_1
+        REG_INFO(2, logger) << "RESEED_COUNTER_1: " << counter_1
                              << " (independent from Instance 0)";
 
         // Note: Without hardware client interface, we can only verify:
@@ -838,8 +838,8 @@ void testbench::test_reseed_interval_enforcement_per_instance_independent()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_INTERVAL verified: " << interval << " (shared across instances)";
-        CSML_INFO(2, logger) << "Independent counter management confirmed";
+        REG_INFO(2, logger) << "RESEED_INTERVAL verified: " << interval << " (shared across instances)";
+        REG_INFO(2, logger) << "Independent counter management confirmed";
 
         report_test_pass("Test 106");
 
@@ -900,7 +900,7 @@ void testbench::test_reseed_interval_alert_on_exceeded()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=5";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=5";
 
         // GENERATE 5 times to reach threshold
         for (int i = 0; i < 5; i++) {
@@ -917,14 +917,14 @@ void testbench::test_reseed_interval_alert_on_exceeded()
             }
         }
 
-        CSML_INFO(2, logger) << "Generated 5 times (threshold reached)";
+        REG_INFO(2, logger) << "Generated 5 times (threshold reached)";
 
         // Read alert status before 6th GENERATE
         uint32_t alert_before = 0;
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_before);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS before: 0x" << std::hex << alert_before;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS before: 0x" << std::hex << alert_before;
 
         // 6th GENERATE should fail and set alert
         if (!wait_cmd_ready(m_test.get())) {
@@ -947,14 +947,14 @@ void testbench::test_reseed_interval_alert_on_exceeded()
             );
         }
 
-        CSML_INFO(2, logger) << "6th GENERATE correctly failed: CMD_STS=0x4";
+        REG_INFO(2, logger) << "6th GENERATE correctly failed: CMD_STS=0x4";
 
         // Read alert status after failure
         uint32_t alert_after = 0;
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_after);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS after: 0x" << std::hex << alert_after;
+        REG_INFO(2, logger) << "RECOV_ALERT_STS after: 0x" << std::hex << alert_after;
 
         // Verify CMD_STAGE_RESEED_CNT_ALERT bit (bit 15) is set
         if (!(alert_after & (1 << 15))) {
@@ -963,7 +963,7 @@ void testbench::test_reseed_interval_alert_on_exceeded()
             );
         }
 
-        CSML_INFO(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT correctly set (bit 15)";
+        REG_INFO(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT correctly set (bit 15)";
         report_test_pass("Test 107");
 
     } catch (const std::exception& e) {
@@ -1014,14 +1014,14 @@ void testbench::test_146_corner_case_reseed_interval_zero()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=0";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=0";
 
         // Verify counter = 0 after INSTANTIATE
         uint32_t counter = 0;
         m_test->register_read_32(csrng_basetest::RESEED_COUNTER_0_OFFSET, counter);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER_0 after INSTANTIATE: " << counter;
+        REG_INFO(2, logger) << "RESEED_COUNTER_0 after INSTANTIATE: " << counter;
 
         // 1st GENERATE should fail immediately
         if (!wait_cmd_ready(m_test.get())) {
@@ -1044,8 +1044,8 @@ void testbench::test_146_corner_case_reseed_interval_zero()
             );
         }
 
-        CSML_INFO(2, logger) << "1st GENERATE correctly failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
-        CSML_INFO(2, logger) << "RESEED_INTERVAL=0 causes immediate threshold enforcement";
+        REG_INFO(2, logger) << "1st GENERATE correctly failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
+        REG_INFO(2, logger) << "RESEED_INTERVAL=0 causes immediate threshold enforcement";
 
         report_test_pass("Test 146");
 
@@ -1102,7 +1102,7 @@ void testbench::test_147_corner_case_reseed_interval_one()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=1";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=1";
 
         // 1st GENERATE should succeed
         if (!wait_cmd_ready(m_test.get())) {
@@ -1124,7 +1124,7 @@ void testbench::test_147_corner_case_reseed_interval_one()
             );
         }
 
-        CSML_INFO(2, logger) << "1st GENERATE succeeded";
+        REG_INFO(2, logger) << "1st GENERATE succeeded";
 
         // Verify counter = 1
         uint32_t counter = 0;
@@ -1132,10 +1132,10 @@ void testbench::test_147_corner_case_reseed_interval_one()
         wait(1, SC_US);
 
         if (counter != 1) {
-            CSML_WARN(2, logger) << "RESEED_COUNTER expected 1, got " << counter;
+            REG_WARN(2, logger) << "RESEED_COUNTER expected 1, got " << counter;
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER: " << counter;
+        REG_INFO(2, logger) << "RESEED_COUNTER: " << counter;
 
         // 2nd GENERATE should fail
         if (!wait_cmd_ready(m_test.get())) {
@@ -1158,8 +1158,8 @@ void testbench::test_147_corner_case_reseed_interval_one()
             );
         }
 
-        CSML_INFO(2, logger) << "2nd GENERATE correctly failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
-        CSML_INFO(2, logger) << "RESEED_INTERVAL=1 allows exactly one GENERATE";
+        REG_INFO(2, logger) << "2nd GENERATE correctly failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
+        REG_INFO(2, logger) << "RESEED_INTERVAL=1 allows exactly one GENERATE";
 
         report_test_pass("Test 147");
 
@@ -1212,7 +1212,7 @@ void testbench::test_158_sw_flow_reseed_interval_enforcement_recovery()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=20";
+        REG_INFO(2, logger) << "INSTANTIATE complete, RESEED_INTERVAL=20";
 
         // GENERATE 15 times (near threshold but not at it)
         for (int i = 0; i < 15; i++) {
@@ -1229,17 +1229,17 @@ void testbench::test_158_sw_flow_reseed_interval_enforcement_recovery()
             }
         }
 
-        CSML_INFO(2, logger) << "Generated 15 times (near threshold 20)";
+        REG_INFO(2, logger) << "Generated 15 times (near threshold 20)";
 
         // Monitor counter (software would do this periodically)
         uint32_t counter = 0;
         m_test->register_read_32(csrng_basetest::RESEED_COUNTER_0_OFFSET, counter);
         wait(1, SC_US);
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER: " << counter << " (proactive monitoring)";
+        REG_INFO(2, logger) << "RESEED_COUNTER: " << counter << " (proactive monitoring)";
 
         if (counter >= 15) {
-            CSML_INFO(2, logger) << "Counter near threshold, issuing proactive RESEED";
+            REG_INFO(2, logger) << "Counter near threshold, issuing proactive RESEED";
         }
 
         // Proactive RESEED before reaching threshold
@@ -1255,7 +1255,7 @@ void testbench::test_158_sw_flow_reseed_interval_enforcement_recovery()
             throw std::runtime_error("RESEED timeout");
         }
 
-        CSML_INFO(2, logger) << "Proactive RESEED completed";
+        REG_INFO(2, logger) << "Proactive RESEED completed";
 
         // Verify counter reset
         uint32_t counter_after = 0;
@@ -1268,7 +1268,7 @@ void testbench::test_158_sw_flow_reseed_interval_enforcement_recovery()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER reset to 0";
+        REG_INFO(2, logger) << "RESEED_COUNTER reset to 0";
 
         // Continue GENERATE (should succeed)
         for (int i = 0; i < 10; i++) {
@@ -1292,8 +1292,8 @@ void testbench::test_158_sw_flow_reseed_interval_enforcement_recovery()
             }
         }
 
-        CSML_INFO(2, logger) << "10 additional GENERATE commands succeeded after proactive RESEED";
-        CSML_INFO(2, logger) << "Proactive reseeding flow validated";
+        REG_INFO(2, logger) << "10 additional GENERATE commands succeeded after proactive RESEED";
+        REG_INFO(2, logger) << "Proactive reseeding flow validated";
 
         report_test_pass("Test 158");
 
@@ -1345,7 +1345,7 @@ void testbench::test_boundary_reseed_interval_min_0()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_INTERVAL=0 (minimum boundary)";
+        REG_INFO(2, logger) << "RESEED_INTERVAL=0 (minimum boundary)";
 
         // INSTANTIATE
         if (!wait_cmd_ready(m_test.get())) {
@@ -1360,7 +1360,7 @@ void testbench::test_boundary_reseed_interval_min_0()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete";
+        REG_INFO(2, logger) << "INSTANTIATE complete";
 
         // GENERATE should fail immediately
         if (!wait_cmd_ready(m_test.get())) {
@@ -1383,8 +1383,8 @@ void testbench::test_boundary_reseed_interval_min_0()
             );
         }
 
-        CSML_INFO(2, logger) << "GENERATE immediately failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
-        CSML_INFO(2, logger) << "Minimum boundary (0) enforced correctly";
+        REG_INFO(2, logger) << "GENERATE immediately failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
+        REG_INFO(2, logger) << "Minimum boundary (0) enforced correctly";
 
         report_test_pass("Test 195");
 
@@ -1440,7 +1440,7 @@ void testbench::test_boundary_reseed_interval_max_0xFFFFFFFF()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_INTERVAL=0xFFFFFFFF (maximum boundary / unlimited)";
+        REG_INFO(2, logger) << "RESEED_INTERVAL=0xFFFFFFFF (maximum boundary / unlimited)";
 
         // INSTANTIATE
         if (!wait_cmd_ready(m_test.get())) {
@@ -1455,7 +1455,7 @@ void testbench::test_boundary_reseed_interval_max_0xFFFFFFFF()
             throw std::runtime_error("INSTANTIATE timeout");
         }
 
-        CSML_INFO(2, logger) << "INSTANTIATE complete";
+        REG_INFO(2, logger) << "INSTANTIATE complete";
 
         // GENERATE many times (reduced to 50 for simulation time)
         const int test_iterations = 50;
@@ -1481,7 +1481,7 @@ void testbench::test_boundary_reseed_interval_max_0xFFFFFFFF()
             }
         }
 
-        CSML_INFO(2, logger) << test_iterations << " GENERATE commands succeeded";
+        REG_INFO(2, logger) << test_iterations << " GENERATE commands succeeded";
 
         // Verify counter incremented
         uint32_t counter = 0;
@@ -1495,8 +1495,8 @@ void testbench::test_boundary_reseed_interval_max_0xFFFFFFFF()
             );
         }
 
-        CSML_INFO(2, logger) << "RESEED_COUNTER: " << counter << " (no threshold enforcement)";
-        CSML_INFO(2, logger) << "Maximum boundary (0xFFFFFFFF) disables enforcement correctly";
+        REG_INFO(2, logger) << "RESEED_COUNTER: " << counter << " (no threshold enforcement)";
+        REG_INFO(2, logger) << "Maximum boundary (0xFFFFFFFF) disables enforcement correctly";
 
         report_test_pass("Test 196");
 
@@ -1555,17 +1555,17 @@ void testbench::test_sw_flow_error_recovery_sequence()
         // Cause command error: Try GENERATE on uninstantiated instance
         // This should fail with INVALID_CMD_SEQ (0x3)
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before error command";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before error command";
             test_passed = false;
         }
 
         uint32_t cmd_header = build_cmd_header(3, 0, 0, 1); // acmd=3 (GENERATE), glen=1
-        CSML_INFO(2, logger) << "Causing command error: GENERATE on uninstantiated instance (should fail)";
+        REG_INFO(2, logger) << "Causing command error: GENERATE on uninstantiated instance (should fail)";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK timeout after error command";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK timeout after error command";
             test_passed = false;
         }
 
@@ -1577,37 +1577,37 @@ void testbench::test_sw_flow_error_recovery_sequence()
         uint32_t cmd_status = (cmd_sts >> 3) & 0x7; // CMD_STS is bits [5:3]
 
         if (cmd_status == 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: Command unexpectedly succeeded - expected error, got CMD_STS=0x0 (SUCCESS)";
-            CSML_ERROR(1, logger) << "NOTE: GENERATE on uninstantiated instance should fail with INVALID_CMD_SEQ (0x3)";
+            REG_ERROR(1, logger) << "FAILED: Command unexpectedly succeeded - expected error, got CMD_STS=0x0 (SUCCESS)";
+            REG_ERROR(1, logger) << "NOTE: GENERATE on uninstantiated instance should fail with INVALID_CMD_SEQ (0x3)";
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: Command error detected - SW_CMD_STS.CMD_STS=0x" << std::hex << cmd_status;
-        CSML_INFO(2, logger) << "SW_CMD_STS register: 0x" << std::hex << cmd_sts;
+        REG_INFO(2, logger) << "PASS: Command error detected - SW_CMD_STS.CMD_STS=0x" << std::hex << cmd_status;
+        REG_INFO(2, logger) << "SW_CMD_STS register: 0x" << std::hex << cmd_sts;
 
         // Verify expected error code (INVALID_CMD_SEQ = 0x3)
         if (cmd_status != 0x3) {
-            CSML_ERROR(1, logger) << "FAILED: Unexpected error code - expected INVALID_CMD_SEQ (0x3), got 0x"
+            REG_ERROR(1, logger) << "FAILED: Unexpected error code - expected INVALID_CMD_SEQ (0x3), got 0x"
                                   << std::hex << cmd_status;
-            CSML_ERROR(1, logger) << "NOTE: GENERATE on uninstantiated instance should return INVALID_CMD_SEQ (0x3)";
+            REG_ERROR(1, logger) << "NOTE: GENERATE on uninstantiated instance should return INVALID_CMD_SEQ (0x3)";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: Error code verified - INVALID_CMD_SEQ (0x3) as expected";
+            REG_INFO(2, logger) << "PASS: Error code verified - INVALID_CMD_SEQ (0x3) as expected";
         }
 
         // Recovery: Issue UNINSTANTIATE to clear state
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before UNINSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before UNINSTANTIATE";
             test_passed = false;
         }
 
         cmd_header = build_cmd_header(5, 0, 0, 0); // acmd=5 (UNINSTANTIATE)
-        CSML_INFO(2, logger) << "Recovery step 1: Issuing UNINSTANTIATE to clear state";
+        REG_INFO(2, logger) << "Recovery step 1: Issuing UNINSTANTIATE to clear state";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK timeout after UNINSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK timeout after UNINSTANTIATE";
             test_passed = false;
         }
 
@@ -1618,26 +1618,26 @@ void testbench::test_sw_flow_error_recovery_sequence()
         uint32_t uninst_status = (uninst_cmd_sts >> 3) & 0x7;
 
         if (uninst_status != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: UNINSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
+            REG_ERROR(1, logger) << "FAILED: UNINSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
                                   << std::hex << uninst_status;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: UNINSTANTIATE succeeded (CMD_STS=0x0) - state cleared";
+            REG_INFO(2, logger) << "PASS: UNINSTANTIATE succeeded (CMD_STS=0x0) - state cleared";
         }
 
         // Recovery: Issue INSTANTIATE to reinitialize
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before recovery INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before recovery INSTANTIATE";
             test_passed = false;
         }
 
         cmd_header = build_cmd_header(1, 0, 0x9, 0); // acmd=1 (INSTANTIATE), flag0=0x9 (deterministic)
-        CSML_INFO(2, logger) << "Recovery step 2: Issuing INSTANTIATE to reinitialize";
+        REG_INFO(2, logger) << "Recovery step 2: Issuing INSTANTIATE to reinitialize";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK timeout after recovery INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK timeout after recovery INSTANTIATE";
             test_passed = false;
         }
 
@@ -1648,27 +1648,27 @@ void testbench::test_sw_flow_error_recovery_sequence()
         uint32_t inst_status = (inst_cmd_sts >> 3) & 0x7;
 
         if (inst_status != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: Recovery INSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
+            REG_ERROR(1, logger) << "FAILED: Recovery INSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
                                   << std::hex << inst_status;
-            CSML_ERROR(1, logger) << "NOTE: INSTANTIATE should succeed after UNINSTANTIATE clears the error state";
+            REG_ERROR(1, logger) << "NOTE: INSTANTIATE should succeed after UNINSTANTIATE clears the error state";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: Recovery INSTANTIATE succeeded (CMD_STS=0x0) - recovery verified";
+            REG_INFO(2, logger) << "PASS: Recovery INSTANTIATE succeeded (CMD_STS=0x0) - recovery verified";
         }
 
         // Verify recovery: Try GENERATE again (should now succeed)
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before recovery GENERATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before recovery GENERATE";
             test_passed = false;
         }
 
         cmd_header = build_cmd_header(3, 0, 0, 1); // acmd=3 (GENERATE), glen=1
-        CSML_INFO(2, logger) << "Verifying recovery: Issuing GENERATE (should now succeed)";
+        REG_INFO(2, logger) << "Verifying recovery: Issuing GENERATE (should now succeed)";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         if (!wait_cmd_ack(m_test.get(), 50000)) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK timeout after recovery GENERATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK timeout after recovery GENERATE";
             test_passed = false;
         }
 
@@ -1679,29 +1679,29 @@ void testbench::test_sw_flow_error_recovery_sequence()
         uint32_t gen_status = (gen_cmd_sts >> 3) & 0x7;
 
         if (gen_status != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: Recovery GENERATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
+            REG_ERROR(1, logger) << "FAILED: Recovery GENERATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
                                   << std::hex << gen_status;
-            CSML_ERROR(1, logger) << "NOTE: GENERATE should succeed after INSTANTIATE (recovery complete)";
+            REG_ERROR(1, logger) << "NOTE: GENERATE should succeed after INSTANTIATE (recovery complete)";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: Recovery GENERATE succeeded (CMD_STS=0x0) - normal operation resumed";
+            REG_INFO(2, logger) << "PASS: Recovery GENERATE succeeded (CMD_STS=0x0) - normal operation resumed";
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "SW Flow Error Recovery Sequence test successful:";
-            CSML_INFO(2, logger) << "  - Command error caused (GENERATE on uninstantiated instance)";
-            CSML_INFO(2, logger) << "  - SW_CMD_STS.CMD_STS checked and verified (INVALID_CMD_SEQ=0x3)";
-            CSML_INFO(2, logger) << "  - UNINSTANTIATE succeeded (state cleared)";
-            CSML_INFO(2, logger) << "  - Recovery INSTANTIATE succeeded (reinitialized)";
-            CSML_INFO(2, logger) << "  - Recovery GENERATE succeeded (normal operation resumed)";
+            REG_INFO(2, logger) << "SW Flow Error Recovery Sequence test successful:";
+            REG_INFO(2, logger) << "  - Command error caused (GENERATE on uninstantiated instance)";
+            REG_INFO(2, logger) << "  - SW_CMD_STS.CMD_STS checked and verified (INVALID_CMD_SEQ=0x3)";
+            REG_INFO(2, logger) << "  - UNINSTANTIATE succeeded (state cleared)";
+            REG_INFO(2, logger) << "  - Recovery INSTANTIATE succeeded (reinitialized)";
+            REG_INFO(2, logger) << "  - Recovery GENERATE succeeded (normal operation resumed)";
             report_test_pass("Test test_sw_flow_error_recovery_sequence");
         } else {
-            CSML_ERROR(1, logger) << "SW Flow Error Recovery Sequence test FAILED";
+            REG_ERROR(1, logger) << "SW Flow Error Recovery Sequence test FAILED";
             report_test_fail("Test test_sw_flow_error_recovery_sequence", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_sw_flow_error_recovery_sequence: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_sw_flow_error_recovery_sequence: " << e.what();
         report_test_fail("Test test_sw_flow_error_recovery_sequence", e.what());
     }
 }
@@ -1760,7 +1760,7 @@ void testbench::test_sw_flow_interrupt_driven_operation()
         wait(1, SC_US);
 
         // Step 1: Enable all interrupts (INTR_ENABLE=0xF)
-        CSML_INFO(2, logger) << "Step 1: Enabling all interrupts (INTR_ENABLE=0xF)";
+        REG_INFO(2, logger) << "Step 1: Enabling all interrupts (INTR_ENABLE=0xF)";
         m_test->register_write_32(csrng_basetest::INTR_ENABLE_OFFSET, 0xF);
         wait(1, SC_US);
 
@@ -1769,26 +1769,26 @@ void testbench::test_sw_flow_interrupt_driven_operation()
         wait(1, SC_US);
 
         if ((intr_enable & 0xF) != 0xF) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_ENABLE not set correctly - expected 0xF, got 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_ENABLE not set correctly - expected 0xF, got 0x"
                                   << std::hex << (intr_enable & 0xF);
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: All interrupts enabled (INTR_ENABLE=0x" << std::hex << (intr_enable & 0xF) << ")";
+        REG_INFO(2, logger) << "PASS: All interrupts enabled (INTR_ENABLE=0x" << std::hex << (intr_enable & 0xF) << ")";
 
         // Step 2: Issue INSTANTIATE command
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before INSTANTIATE";
             test_passed = false;
         }
 
         uint32_t cmd_header = build_cmd_header(1, 0, 0x9, 0); // acmd=1 (INSTANTIATE), flag0=0x9 (deterministic)
-        CSML_INFO(2, logger) << "Step 2: Issuing INSTANTIATE command";
+        REG_INFO(2, logger) << "Step 2: Issuing INSTANTIATE command";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         // Step 3: Use interrupt pin to detect INSTANTIATE completion (no register reads)
-        CSML_INFO(2, logger) << "Step 3: Waiting for cs_cmd_req_done interrupt pin to assert (INSTANTIATE completion)";
+        REG_INFO(2, logger) << "Step 3: Waiting for cs_cmd_req_done interrupt pin to assert (INSTANTIATE completion)";
         sc_time start_inst = sc_time_stamp();
         bool interrupt_fired_inst = false;
         while ((sc_time_stamp() - start_inst).to_seconds() * 1e6 < 50000) {
@@ -1800,55 +1800,55 @@ void testbench::test_sw_flow_interrupt_driven_operation()
         }
 
         if (!interrupt_fired_inst) {
-            CSML_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin timeout - did not assert after INSTANTIATE";
-            CSML_ERROR(1, logger) << "NOTE: Interrupt pin should assert when command completes";
+            REG_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin timeout - did not assert after INSTANTIATE";
+            REG_ERROR(1, logger) << "NOTE: Interrupt pin should assert when command completes";
             test_passed = false;
         }
 
         // Verify interrupt pin is asserted
         if (!cs_cmd_req_done_signal.read()) {
-            CSML_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin not asserted - INSTANTIATE completion";
+            REG_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin not asserted - INSTANTIATE completion";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin asserted - INSTANTIATE completion detected";
+            REG_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin asserted - INSTANTIATE completion detected";
         }
 
         // Verify INSTANTIATE command status
         uint32_t inst_cmd_status = get_cmd_status(m_test.get());
         if (inst_cmd_status != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
                                   << std::hex << inst_cmd_status;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
+            REG_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0)";
         }
 
         // Clear interrupt (RW1C - write 1 to clear)
-        CSML_INFO(2, logger) << "Clearing cs_cmd_req_done interrupt (writing 1 to INTR_STATE[0])";
+        REG_INFO(2, logger) << "Clearing cs_cmd_req_done interrupt (writing 1 to INTR_STATE[0])";
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, (1 << 0));
         wait(1, SC_US);
 
         // Verify interrupt pin de-asserted
         if (cs_cmd_req_done_signal.read()) {
-            CSML_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin still asserted after clear";
+            REG_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin still asserted after clear";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin de-asserted";
+            REG_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin de-asserted";
         }
 
         // Step 4: Issue GENERATE command
         if (!wait_cmd_ready(m_test.get())) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY timeout before GENERATE";
             test_passed = false;
         }
 
         cmd_header = build_cmd_header(3, 0, 0, 1); // acmd=3 (GENERATE), glen=1
-        CSML_INFO(2, logger) << "Step 4: Issuing GENERATE command";
+        REG_INFO(2, logger) << "Step 4: Issuing GENERATE command";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         // Step 5: Use interrupt pin to detect GENERATE completion (no register reads)
-        CSML_INFO(2, logger) << "Step 5: Waiting for cs_cmd_req_done interrupt pin to assert (GENERATE completion)";
+        REG_INFO(2, logger) << "Step 5: Waiting for cs_cmd_req_done interrupt pin to assert (GENERATE completion)";
         sc_time start_gen = sc_time_stamp();
         bool interrupt_fired_gen = false;
         while ((sc_time_stamp() - start_gen).to_seconds() * 1e6 < 50000) {
@@ -1860,56 +1860,56 @@ void testbench::test_sw_flow_interrupt_driven_operation()
         }
 
         if (!interrupt_fired_gen) {
-            CSML_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin timeout - did not assert after GENERATE";
-            CSML_ERROR(1, logger) << "NOTE: Interrupt pin should assert when command completes";
+            REG_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin timeout - did not assert after GENERATE";
+            REG_ERROR(1, logger) << "NOTE: Interrupt pin should assert when command completes";
             test_passed = false;
         }
 
         // Verify interrupt pin is asserted
         if (!cs_cmd_req_done_signal.read()) {
-            CSML_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin not asserted - GENERATE completion";
+            REG_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin not asserted - GENERATE completion";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin asserted - GENERATE completion detected";
+            REG_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin asserted - GENERATE completion detected";
         }
 
         // Verify GENERATE command status
         uint32_t gen_cmd_status = get_cmd_status(m_test.get());
         if (gen_cmd_status != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
+            REG_ERROR(1, logger) << "FAILED: GENERATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
                                   << std::hex << gen_cmd_status;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: GENERATE succeeded (CMD_STS=0x0)";
+            REG_INFO(2, logger) << "PASS: GENERATE succeeded (CMD_STS=0x0)";
         }
 
         // Clear interrupt (RW1C - write 1 to clear)
-        CSML_INFO(2, logger) << "Clearing cs_cmd_req_done interrupt (writing 1 to INTR_STATE[0])";
+        REG_INFO(2, logger) << "Clearing cs_cmd_req_done interrupt (writing 1 to INTR_STATE[0])";
         m_test->register_write_32(csrng_basetest::INTR_STATE_OFFSET, (1 << 0));
         wait(1, SC_US);
 
         // Verify interrupt pin de-asserted
         if (cs_cmd_req_done_signal.read()) {
-            CSML_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin still asserted after clear";
+            REG_ERROR(1, logger) << "FAILED: cs_cmd_req_done interrupt pin still asserted after clear";
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin de-asserted";
+            REG_INFO(2, logger) << "PASS: cs_cmd_req_done interrupt pin de-asserted";
         }
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "SW Flow Interrupt-Driven Operation test successful:";
-            CSML_INFO(2, logger) << "  - All interrupts enabled (INTR_ENABLE=0xF)";
-            CSML_INFO(2, logger) << "  - INSTANTIATE issued and completion detected via cs_cmd_req_done interrupt pin";
-            CSML_INFO(2, logger) << "  - GENERATE issued and completion detected via cs_cmd_req_done interrupt pin";
-            CSML_INFO(2, logger) << "  - Interrupt-driven operation verified using interrupt pins (no INTR_STATE reads)";
+            REG_INFO(2, logger) << "SW Flow Interrupt-Driven Operation test successful:";
+            REG_INFO(2, logger) << "  - All interrupts enabled (INTR_ENABLE=0xF)";
+            REG_INFO(2, logger) << "  - INSTANTIATE issued and completion detected via cs_cmd_req_done interrupt pin";
+            REG_INFO(2, logger) << "  - GENERATE issued and completion detected via cs_cmd_req_done interrupt pin";
+            REG_INFO(2, logger) << "  - Interrupt-driven operation verified using interrupt pins (no INTR_STATE reads)";
             report_test_pass("Test test_sw_flow_interrupt_driven_operation");
         } else {
-            CSML_ERROR(1, logger) << "SW Flow Interrupt-Driven Operation test FAILED";
+            REG_ERROR(1, logger) << "SW Flow Interrupt-Driven Operation test FAILED";
             report_test_fail("Test test_sw_flow_interrupt_driven_operation", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_160_sw_flow_interrupt_driven_operation: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_160_sw_flow_interrupt_driven_operation: " << e.what();
         report_test_fail("Test test_sw_flow_interrupt_driven_operation", e.what());
     }
 }
@@ -1968,7 +1968,7 @@ void testbench::test_sw_flow_polling_operation()
         }
 
         // Step 1: Disable all interrupts (INTR_ENABLE=0x0)
-        CSML_INFO(2, logger) << "Step 1: Disabling all interrupts (INTR_ENABLE=0x0) for polling-based operation";
+        REG_INFO(2, logger) << "Step 1: Disabling all interrupts (INTR_ENABLE=0x0) for polling-based operation";
         m_test->register_write_32(csrng_basetest::INTR_ENABLE_OFFSET, 0x0);
         wait(1, SC_US);
 
@@ -1977,15 +1977,15 @@ void testbench::test_sw_flow_polling_operation()
         wait(1, SC_US);
 
         if ((intr_enable & 0xF) != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INTR_ENABLE not disabled correctly - expected 0x0, got 0x"
+            REG_ERROR(1, logger) << "FAILED: INTR_ENABLE not disabled correctly - expected 0x0, got 0x"
                                   << std::hex << (intr_enable & 0xF);
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: All interrupts disabled (INTR_ENABLE=0x0) - using polling mode";
+        REG_INFO(2, logger) << "PASS: All interrupts disabled (INTR_ENABLE=0x0) - using polling mode";
 
         // Step 2: Poll CMD_RDY before INSTANTIATE
-        CSML_INFO(2, logger) << "Step 2: Polling CMD_RDY before INSTANTIATE command";
+        REG_INFO(2, logger) << "Step 2: Polling CMD_RDY before INSTANTIATE command";
         bool cmd_rdy_inst = false;
         int poll_count_rdy_inst = 0;
         for (int i = 0; i < 100; i++) {
@@ -1996,27 +1996,27 @@ void testbench::test_sw_flow_polling_operation()
             if (cmd_sts & 0x2) {  // CMD_RDY is bit [1]
                 cmd_rdy_inst = true;
                 poll_count_rdy_inst = i;
-                CSML_INFO(2, logger) << "CMD_RDY detected after " << poll_count_rdy_inst << " polls";
+                REG_INFO(2, logger) << "CMD_RDY detected after " << poll_count_rdy_inst << " polls";
                 break;
             }
         }
 
         if (!cmd_rdy_inst) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY never became true after polling";
-            CSML_ERROR(1, logger) << "NOTE: CMD_RDY should be true when module is ready for commands";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY never became true after polling";
+            REG_ERROR(1, logger) << "NOTE: CMD_RDY should be true when module is ready for commands";
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: CMD_RDY polling successful - ready for INSTANTIATE";
+        REG_INFO(2, logger) << "PASS: CMD_RDY polling successful - ready for INSTANTIATE";
 
         // Step 3: Issue INSTANTIATE command
         uint32_t cmd_header = build_cmd_header(1, 0, 0x9, 0); // acmd=1 (INSTANTIATE), flag0=0x9 (deterministic)
-        CSML_INFO(2, logger) << "Step 3: Issuing INSTANTIATE command";
+        REG_INFO(2, logger) << "Step 3: Issuing INSTANTIATE command";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         // Step 4: Poll CMD_ACK to detect INSTANTIATE completion
-        CSML_INFO(2, logger) << "Step 4: Polling CMD_ACK to detect INSTANTIATE completion";
+        REG_INFO(2, logger) << "Step 4: Polling CMD_ACK to detect INSTANTIATE completion";
         bool cmd_ack_inst = false;
         int poll_count_ack_inst = 0;
         for (int i = 0; i < 10000; i++) {
@@ -2027,31 +2027,31 @@ void testbench::test_sw_flow_polling_operation()
             if (cmd_sts & 0x4) {  // CMD_ACK is bit [2]
                 cmd_ack_inst = true;
                 poll_count_ack_inst = i;
-                CSML_INFO(2, logger) << "CMD_ACK detected after " << poll_count_ack_inst << " polls";
+                REG_INFO(2, logger) << "CMD_ACK detected after " << poll_count_ack_inst << " polls";
                 break;
             }
         }
 
         if (!cmd_ack_inst) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK never became true after INSTANTIATE";
-            CSML_ERROR(1, logger) << "NOTE: CMD_ACK should be true when command completes";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK never became true after INSTANTIATE";
+            REG_ERROR(1, logger) << "NOTE: CMD_ACK should be true when command completes";
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: CMD_ACK polling successful - INSTANTIATE completion detected";
+        REG_INFO(2, logger) << "PASS: CMD_ACK polling successful - INSTANTIATE completion detected";
 
         // Verify INSTANTIATE command status
         uint32_t inst_cmd_status = get_cmd_status(m_test.get());
         if (inst_cmd_status != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: INSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
+            REG_ERROR(1, logger) << "FAILED: INSTANTIATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
                                   << std::hex << inst_cmd_status;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0) via polling";
+            REG_INFO(2, logger) << "PASS: INSTANTIATE succeeded (CMD_STS=0x0) via polling";
         }
 
         // Step 5: Poll CMD_RDY before GENERATE
-        CSML_INFO(2, logger) << "Step 5: Polling CMD_RDY before GENERATE command";
+        REG_INFO(2, logger) << "Step 5: Polling CMD_RDY before GENERATE command";
         bool cmd_rdy_gen = false;
         int poll_count_rdy_gen = 0;
         for (int i = 0; i < 100; i++) {
@@ -2062,27 +2062,27 @@ void testbench::test_sw_flow_polling_operation()
             if (cmd_sts & 0x2) {  // CMD_RDY is bit [1]
                 cmd_rdy_gen = true;
                 poll_count_rdy_gen = i;
-                CSML_INFO(2, logger) << "CMD_RDY detected after " << poll_count_rdy_gen << " polls";
+                REG_INFO(2, logger) << "CMD_RDY detected after " << poll_count_rdy_gen << " polls";
                 break;
             }
         }
 
         if (!cmd_rdy_gen) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_RDY never became true after polling before GENERATE";
-            CSML_ERROR(1, logger) << "NOTE: CMD_RDY should be true when module is ready for next command";
+            REG_ERROR(1, logger) << "FAILED: CMD_RDY never became true after polling before GENERATE";
+            REG_ERROR(1, logger) << "NOTE: CMD_RDY should be true when module is ready for next command";
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: CMD_RDY polling successful - ready for GENERATE";
+        REG_INFO(2, logger) << "PASS: CMD_RDY polling successful - ready for GENERATE";
 
         // Step 6: Issue GENERATE command
         cmd_header = build_cmd_header(3, 0, 0, 1); // acmd=3 (GENERATE), glen=1
-        CSML_INFO(2, logger) << "Step 6: Issuing GENERATE command";
+        REG_INFO(2, logger) << "Step 6: Issuing GENERATE command";
         m_test->register_write_32(csrng_basetest::CMD_REQ_OFFSET, cmd_header);
         wait(5, SC_US);
 
         // Step 7: Poll CMD_ACK to detect GENERATE completion
-        CSML_INFO(2, logger) << "Step 7: Polling CMD_ACK to detect GENERATE completion";
+        REG_INFO(2, logger) << "Step 7: Polling CMD_ACK to detect GENERATE completion";
         bool cmd_ack_gen = false;
         int poll_count_ack_gen = 0;
         for (int i = 0; i < 10000; i++) {
@@ -2093,27 +2093,27 @@ void testbench::test_sw_flow_polling_operation()
             if (cmd_sts & 0x4) {  // CMD_ACK is bit [2]
                 cmd_ack_gen = true;
                 poll_count_ack_gen = i;
-                CSML_INFO(2, logger) << "CMD_ACK detected after " << poll_count_ack_gen << " polls";
+                REG_INFO(2, logger) << "CMD_ACK detected after " << poll_count_ack_gen << " polls";
                 break;
             }
         }
 
         if (!cmd_ack_gen) {
-            CSML_ERROR(1, logger) << "FAILED: CMD_ACK never became true after GENERATE";
-            CSML_ERROR(1, logger) << "NOTE: CMD_ACK should be true when command completes";
+            REG_ERROR(1, logger) << "FAILED: CMD_ACK never became true after GENERATE";
+            REG_ERROR(1, logger) << "NOTE: CMD_ACK should be true when command completes";
             test_passed = false;
         }
 
-        CSML_INFO(2, logger) << "PASS: CMD_ACK polling successful - GENERATE completion detected";
+        REG_INFO(2, logger) << "PASS: CMD_ACK polling successful - GENERATE completion detected";
 
         // Verify GENERATE command status
         uint32_t gen_cmd_status = get_cmd_status(m_test.get());
         if (gen_cmd_status != 0x0) {
-            CSML_ERROR(1, logger) << "FAILED: GENERATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
+            REG_ERROR(1, logger) << "FAILED: GENERATE failed - expected CMD_STS=0x0 (SUCCESS), got 0x"
                                   << std::hex << gen_cmd_status;
             test_passed = false;
         } else {
-            CSML_INFO(2, logger) << "PASS: GENERATE succeeded (CMD_STS=0x0) via polling";
+            REG_INFO(2, logger) << "PASS: GENERATE succeeded (CMD_STS=0x0) via polling";
         }
 
         // Verify interrupts are still disabled (should not have fired)
@@ -2124,25 +2124,25 @@ void testbench::test_sw_flow_polling_operation()
         // Note: INTR_STATE may still be set even if interrupts are disabled
         // (interrupts are gated by INTR_ENABLE, but state bits can still be set)
         // The key is that we're using polling, not interrupts
-        CSML_INFO(2, logger) << "INTR_STATE value: 0x" << std::hex << intr_state;
-        CSML_INFO(2, logger) << "NOTE: INTR_STATE may be set, but interrupts are disabled (polling mode)";
+        REG_INFO(2, logger) << "INTR_STATE value: 0x" << std::hex << intr_state;
+        REG_INFO(2, logger) << "NOTE: INTR_STATE may be set, but interrupts are disabled (polling mode)";
 
         if (test_passed) {
-            CSML_INFO(2, logger) << "SW Flow Polling Operation test successful:";
-            CSML_INFO(2, logger) << "  - All interrupts disabled (INTR_ENABLE=0x0)";
-            CSML_INFO(2, logger) << "  - CMD_RDY polled before INSTANTIATE (polling-based)";
-            CSML_INFO(2, logger) << "  - CMD_ACK polled after INSTANTIATE (detected completion)";
-            CSML_INFO(2, logger) << "  - CMD_RDY polled before GENERATE (polling-based)";
-            CSML_INFO(2, logger) << "  - CMD_ACK polled after GENERATE (detected completion)";
-            CSML_INFO(2, logger) << "  - Both commands succeeded using polling only (no interrupts)";
+            REG_INFO(2, logger) << "SW Flow Polling Operation test successful:";
+            REG_INFO(2, logger) << "  - All interrupts disabled (INTR_ENABLE=0x0)";
+            REG_INFO(2, logger) << "  - CMD_RDY polled before INSTANTIATE (polling-based)";
+            REG_INFO(2, logger) << "  - CMD_ACK polled after INSTANTIATE (detected completion)";
+            REG_INFO(2, logger) << "  - CMD_RDY polled before GENERATE (polling-based)";
+            REG_INFO(2, logger) << "  - CMD_ACK polled after GENERATE (detected completion)";
+            REG_INFO(2, logger) << "  - Both commands succeeded using polling only (no interrupts)";
             report_test_pass("Test test_sw_flow_polling_operation");
         } else {
-            CSML_ERROR(1, logger) << "SW Flow Polling Operation test FAILED";
+            REG_ERROR(1, logger) << "SW Flow Polling Operation test FAILED";
             report_test_fail("Test test_sw_flow_polling_operation", "One or more verification checks failed");
         }
 
     } catch (const std::exception& e) {
-        CSML_ERROR(1, logger) << "Exception in test_sw_flow_polling_operation: " << e.what();
+        REG_ERROR(1, logger) << "Exception in test_sw_flow_polling_operation: " << e.what();
         report_test_fail("Test test_sw_flow_polling_operation", e.what());
     }
 }

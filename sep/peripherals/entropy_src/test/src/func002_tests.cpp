@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2021-2025 Vayavya Labs Pvt. Ltd.
+// SPDX-FileCopyrightText: 2021-2025 Tenstorrent USA, Inc.
 /******************************************************************************
  * @file func002_tests.cpp
  * @brief FUNC-002 Interrupt Controller Behavior — test case implementations
@@ -39,15 +39,15 @@
  * ## Key architectural facts governing this test file
  *
  *  - INTR_STATUS (0x10) has read_bit_mask = 0x0 per entropy_src_basetest, meaning
- *    CSML returns 0x00000000 on every TLM b_transport read of INTR_STATUS.  The
- *    model writes INTR_STATUS using direct CSML register assignment (bypassing the
+ *    regmodel returns 0x00000000 on every TLM b_transport read of INTR_STATUS.  The
+ *    model writes INTR_STATUS using direct regmodel register assignment (bypassing the
  *    TLM path), so the only way to observe INTR_STATUS contents from the testbench
  *    is to read the sc_in<bool> interrupt ports, or to confirm their state relative
  *    to the known INTR_ENABLE register contents.
  *
  *  - INTR_TEST (0x18) is write-only; reads always return 0x00000000.  Writing to
  *    INTR_TEST ORs the written value (masked to INTR_ALL_BITS_MASK = 0x00001111)
- *    into INTR_STATUS via direct CSML write, then calls update_interrupt_outputs().
+ *    into INTR_STATUS via direct regmodel write, then calls update_interrupt_outputs().
  *    This is the primary inject mechanism used by these tests.
  *
  *  - INTR_ENABLE (0x14) is fully readable (read_bit_mask = 0x00001111).  Writing
@@ -88,7 +88,7 @@
  *  - entropy_src/model/inc/entropy_src.h (INTR_BIT_* constants)
  *  - entropy_src/test/inc/testbench.h
  *
- * @copyright Copyright (c) 2021-2025, Vayavya Labs Pvt. Ltd.
+ * @copyright Copyright (c) 2021-2025, Tenstorrent USA, Inc.
  ******************************************************************************/
 
 #include "testbench.h"
@@ -108,7 +108,7 @@
     do {                                           \
         if (!(cond))                               \
         {                                          \
-            CSML_ERROR(0, logger) << msg_stream;   \
+            REG_ERROR(0, logger) << msg_stream;   \
             ok = false;                            \
         }                                          \
     } while (false)
@@ -304,7 +304,7 @@ bool testbench::tc_f002_intr_status_w1c_write_zero_does_not_clear()
  * @brief Confirm that only bits [0], [4], [8], [12] of INTR_STATUS can be set;
  *        all reserved positions read as zero.
  *
- * INTR_STATUS has read_bit_mask = 0x0 (CSML restriction).  Therefore all
+ * INTR_STATUS has read_bit_mask = 0x0 (regmodel restriction).  Therefore all
  * reads via b_transport return 0x00000000.  To validate that reserved bit
  * positions are never driven by the model, this test checks that writing a
  * value with reserved bits set to INTR_TEST (which ORs into INTR_STATUS)
@@ -344,7 +344,7 @@ bool testbench::tc_f002_intr_status_reserved_bits_always_zero()
                             F002_INTR_ALL_BITS_MASK);
     wait(sc_core::SC_ZERO_TIME);
 
-    // Inject all valid bits via INTR_TEST (write mask 0x1111 enforced by CSML).
+    // Inject all valid bits via INTR_TEST (write mask 0x1111 enforced by regmodel).
     test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET,
                             F002_INTR_ALL_BITS_MASK);
     wait(sc_core::SC_ZERO_TIME);
@@ -920,14 +920,14 @@ bool testbench::tc_f002_intr_all_ports_deasserted_after_software_reset()
  * Procedure:
  *  1. Disable FIFO via FIFO_CTRL=0x00000000 (stops background fill).
  *  2. Enable INTR_ENABLE[12] = F002_INTR_BIT_FIFO_UNDERFLOW.
- *  3. Read FIFO_RDATA; on empty FIFO the CSML read_status is false (callback
- *     returns false), so the TLM data buffer is NOT updated by CSML.  The test
+ *  3. Read FIFO_RDATA; on empty FIFO the regmodel read_status is false (callback
+ *     returns false), so the TLM data buffer is NOT updated by regmodel.  The test
  *     therefore does not assert a data value — it only asserts the port.
  *  4. Wait SC_ZERO_TIME; assert intr_fifo_underflow == true.
  *
  * Architectural note: handle_read_FIFO_RDATA returns false on empty FIFO.
- * The CSML b_transport read path only copies `read_value` into the TLM payload
- * when the callback returns true (see csml_register.h read_transport lines
+ * The regmodel b_transport read path only copies `read_value` into the TLM payload
+ * when the callback returns true (see reg_file.h read_transport lines
  * 368-376).  Therefore the data buffer is undefined when the FIFO is empty;
  * only the interrupt port assertion is a defined, testable outcome.
  *
@@ -941,7 +941,7 @@ bool testbench::tc_f002_intr_all_ports_deasserted_after_software_reset()
 bool testbench::tc_f002_fifo_rdata_empty_fifo_returns_zero_underflow()
 {
     bool     ok       = true;
-    uint32_t read_val = 0xDEADBEEFu;  // Value will not be updated by CSML on false return.
+    uint32_t read_val = 0xDEADBEEFu;  // Value will not be updated by regmodel on false return.
 
     // Step 1: Disable FIFO so background thread does not fill it.
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
