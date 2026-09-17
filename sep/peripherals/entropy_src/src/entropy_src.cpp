@@ -752,6 +752,10 @@ void entropy_src_ip::entropy_generation_thread()
                 {
                     qk_sync_interruptible();
                 }
+                if (!rst_ni.read() || m_hw_reset_in_progress)
+                {
+                    continue;
+                }
                 if (m_reset_in_progress)
                 {
                     handle_reset_recovery();
