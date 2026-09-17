@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // vp/platform/smc/src/smc_platform.cpp
 // ===========================================================================
@@ -37,10 +38,13 @@ static constexpr uint64_t A_MISC_WRAP    = 0xC000'2800ULL;  // named stub
 static constexpr uint64_t A_GPIO_INTF    = 0xC000'3000ULL;  // named stub (was pll)
 static constexpr uint64_t A_AVSBUS       = 0xC000'4000ULL;
 static constexpr uint64_t A_I2C0         = 0xC000'5000ULL;  // RTL smc_i2c_wrap
-// uart_wrap @ 0xC000_6000; route each 16550 at +0x100 (D3=U1).
+static constexpr uint64_t A_I2C_CTRL     = A_I2C0 + 0xE00ULL; // i2c_ctrl.rdl
+// uart_wrap @ 0xC000_6000; 16550 at +0x100, wrap CSRs at +0x0 / +0x200.
+static constexpr uint64_t A_UART_WRAP    = 0xC000'6000ULL;
 static constexpr uint64_t A_UART0_16550  = 0xC000'6100ULL;
 static constexpr uint64_t A_UART_STRIDE  = 0x400ULL;
 static constexpr uint64_t A_UART_WIN     = 0x100ULL;        // uart::WINDOW_SIZE
+static constexpr uint64_t A_STRAPS       = 0xC040'5800ULL;  // straps.rdl
 static constexpr uint64_t A_EFUSE_MAP    = 0xC000'7000ULL;  // named stub
 static constexpr uint64_t A_EFUSE_CTRL   = 0xC000'8000ULL;  // named stub
 static constexpr uint64_t A_TELEMETRY    = 0xC000'9000ULL;  // RTL telemetry_receiver_wrap
@@ -302,17 +306,22 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.add_route(1, A_I2C0,      0x200,  "i2c0");
     periph_router.add_route(2, A_I2C0 + 0x200,  0x200, "i2c1");
     periph_router.add_route(3, A_I2C0 + 0x400, 0x200, "i2c2");
+    periph_router.add_route(21, A_I2C_CTRL, 0x10, "i2c_ctrl");
     periph_router.add_route(4, A_TELEMETRY, 0x300,  "telemetry");
-    // 16550 windows (D3=U1); wrap base / log-engine fall to catch-all.
+    // 16550 at +0x100 is the narrower window and wins over the 0x400 wrap.
     for (unsigned u = 0; u < NUM_UART; ++u) {
         periph_router.add_route(5 + u, A_UART0_16550 + u * A_UART_STRIDE,
                                 A_UART_WIN,
                                 std::string("uart") + std::to_string(u));
+        periph_router.add_route(22 + u, A_UART_WRAP + u * A_UART_STRIDE,
+                                A_UART_STRIDE,
+                                std::string("uart_wrap") + std::to_string(u));
     }
     // Named stubs for unmodeled RTL slots (map-coherence identity tokens).
     periph_router.add_route(9,  A_GPIO_INTF,  0x1000, "gpio_intf_stub");
-    // i3c_controller packs NUM_I3C instances at INSTANCE_SPACING=0x500.
-    periph_router.add_route(10, A_I3C, 0x1E00, "i3c");
+    // i3c_controller packs NUM_I3C instances at INSTANCE_SPACING=0x1000.
+    periph_router.add_route(10, A_I3C, 0x6000, "i3c");
+    periph_router.add_route(26, A_STRAPS, 0x8, "straps");
     periph_router.add_route(11, A_PVT_WRAP, 0x1000, "pvt_wrap");
     periph_router.add_route(12, A_PLL_WRAP, 0x1000, "pll_wrap");
     periph_router.add_route(13, A_AVSBUS,   0x1000, "avsbus");
@@ -330,6 +339,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[1].bind(i2c[0].reg_socket);
     periph_router.out[2].bind(i2c[1].reg_socket);
     periph_router.out[3].bind(i2c[2].reg_socket);
+    periph_router.out[21].bind(i2c_ctrl_.reg_socket);
     periph_router.out[4].bind(telemetry_router.tgt);
     for (unsigned n = 0; n < NUM_TELEMETRY; ++n) {
         telemetry_router.add_route(n, n * 0x100ULL, 0x100,
@@ -347,6 +357,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[6].bind(uart_[1].reg_socket);
     periph_router.out[7].bind(uart_[2].reg_socket);
     periph_router.out[8].bind(uart_[3].reg_socket);
+    periph_router.out[22].bind(uart_wrap_[0].reg_socket);
+    periph_router.out[23].bind(uart_wrap_[1].reg_socket);
+    periph_router.out[24].bind(uart_wrap_[2].reg_socket);
+    periph_router.out[25].bind(uart_wrap_[3].reg_socket);
+    periph_router.out[26].bind(straps_.reg_socket);
     // Dual periph cpu_ctrl @ 0xC040_0000 dropped; live path is cluster.ctrl
     // @ A_CPU_CTRL_FP. Keep the modeled IP elaboratable via idle initiator.
     idle_cpu_ctrl_init_.bind(cpu_ctrl_.reg_socket);
@@ -479,6 +494,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     reset.cfg_flr_pf_active_i    .bind(sig_flr);
     reset.ss_reset_complete_i    .bind(sig_ss_complete);
     reset.captured_straps_i      .bind(sig_straps);
+    straps_.captured_straps_i    .bind(sig_straps);
 
     reset.powergood_stable_o           .bind(sig_powergood_stable);
     reset.rst_cold_stable_ref_clk_no    .bind(sig_rst_cold_stable_ref);
@@ -528,6 +544,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         uart_[i].txrdy_o.bind(uart_txrdy[i]);
         uart_[i].err_o   .bind(uart_err[i]);
         uart_[i].irq_o   .bind(uart_irq[i]);
+        uart_wrap_[i].rst_n_i.bind(rst_n_sig);
     }
 
     // -- I3C port binding --------------------------------------------------
@@ -547,6 +564,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         i2c[i].rst_n_i.bind(rst_n_sig);
         i2c[i].irq_o.bind(i2c_irq[i]);
     }
+    i2c_ctrl_.rst_n_i.bind(rst_n_sig);
 
     // -- AVSBus reset + IRQ + GPIO-enable sink -----------------------------
     avsbus.rst_n_i.bind(rst_n_sig);

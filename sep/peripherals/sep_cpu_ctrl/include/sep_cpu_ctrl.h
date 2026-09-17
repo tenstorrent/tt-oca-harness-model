@@ -113,6 +113,8 @@ private:
     bool handle_write_EXT_TRNG_SRC_SEL_LOCK(DT value, DT write_bit_mask);
     bool handle_write_TIMEOUT_CLEAR(DT value, DT write_bit_mask);
     bool handle_write_REFERENCE_COUNTER(DT value, DT write_bit_mask);
+    bool handle_write_DMA_BUS_ERR_CLEAR(DT value, DT write_bit_mask);
+    bool handle_write_PERIPH_BUS_ERR_CLEAR(DT value, DT write_bit_mask);
 
     // Post-write hook, not a write callback: registering a write callback for an
     // offset *replaces* regmodel::Reg's own handle_write, which is what performs the

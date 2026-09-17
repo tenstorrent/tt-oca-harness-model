@@ -167,7 +167,9 @@ struct tb : sc_core::sc_module {
     SC_HAS_PROCESS(tb);
 
     smc::i2c_controller dut;
+    smc::i2c_wrap_ctrl  wrap;
     driver              drv;
+    driver              wrap_drv;
 
     sc_core::sc_signal<bool> rst_n;
     sc_core::sc_signal<bool> irq;
@@ -216,10 +218,13 @@ struct tb : sc_core::sc_module {
     }
 
     explicit tb(sc_module_name n)
-        : sc_module(n), dut("i2c"), drv("drv"), rst_n("rst_n"), irq("irq")
+        : sc_module(n), dut("i2c"), wrap("i2c_ctrl"), drv("drv"),
+          wrap_drv("wrap_drv"), rst_n("rst_n"), irq("irq")
     {
         drv.sock.bind(dut.reg_socket);
+        wrap_drv.sock.bind(wrap.reg_socket);
         dut.rst_n_i(rst_n);
+        wrap.rst_n_i(rst_n);
         dut.irq_o(irq);
 
         dut.set_bus_model(std::bind(&tb::emulate_remote_slave, this,
@@ -659,6 +664,25 @@ void tb::run()
                       << (h.is_preset_value() ? " [preset]" : " [default]") << "\n";
         }
         std::cout << "  [PASS] CCI introspection\n";
+    }
+
+    {
+        using C = smc::i2c_wrap_ctrl_cfg;
+        wrap_drv.write32(C::OFF_I2C_CTRL, 0x111);
+        EXPECT_EQ(0x111u, wrap_drv.read32(C::OFF_I2C_CTRL));
+        wrap_drv.write32(C::OFF_I2C_CTRL + 4, 0x001);
+        EXPECT_EQ(0x001u, wrap_drv.read32(C::OFF_I2C_CTRL + 4));
+        wrap_drv.write32(C::OFF_I2C_CTRL + 8, 0xFFF);
+        EXPECT_EQ(0x111u, wrap_drv.read32(C::OFF_I2C_CTRL + 8));
+        uint32_t dbg = 0;
+        EXPECT_EQ(4u, wrap_drv.dbg_read(C::OFF_I2C_CTRL, dbg));
+        EXPECT_EQ(0x111u, dbg);
+        rst_n.write(false);
+        sc_core::wait(20, SC_NS);
+        rst_n.write(true);
+        sc_core::wait(20, SC_NS);
+        EXPECT_EQ(0u, wrap_drv.read32(C::OFF_I2C_CTRL));
+        std::cout << "  [PASS] i2c_wrap_ctrl CSRs\n";
     }
 
     // dump_state for visual inspection / coverage of the dump path.

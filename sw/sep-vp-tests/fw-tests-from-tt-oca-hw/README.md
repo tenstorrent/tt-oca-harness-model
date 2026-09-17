@@ -166,7 +166,7 @@ it turns each of these back into a failure or a hang.
 |---|---|
 | `kmac_prefix_test` | Upstream's `PREFIX` does not start with `encode_string("KMAC")`, which NIST SP 800-185 requires. The RTL feeds raw `PREFIX` bytes into `bytepad` without checking, so upstream gets a different digest by accident; the VP model raises `IncorrectFunctionName` (ERR 0x07) and the result is undefined. The local value is the conforming encoding. |
 | `kmac_key_length_test` | Upstream configures `mode = 0x2`. Per `kmac.hjson` a KMAC operation needs cSHAKE (`0x3`) with `kmac_en = 1`; with `0x2` the key length is not consumed and every key length yields the same digest. |
-| `local_alias_sanity` | Upstream still assumes the pre-#3711 alias base of `0xC000_0000` with `target_base = 0`. The register header it now ships with has already moved to `0xD000_0000` / `0x1000_0000`, so the upstream test contradicts its own header. |
+| `local_alias_sanity` | Upstream still assumes the pre-#3711 alias base of `0xC000_0000` with `target_base = 0`. This copy uses the post-#3711 pair `0xD000_0000` / `0x1000_0000` that the register header and `sep-vp` adapter both implement, and it checks the alias on the **read** side only: alias stores hang because the remapped write is re-injected onto SimpleBus as a nested `b_transport` while the CPU store is still in flight. Re-syncing the upstream source hangs the test. |
 | `wdt_count_overflow_test` | Step 6 needs NMI and reset to arrive at distinguishable times. The VP fires both in one delta cycle because the power-manager latency that separates them on silicon is not modelled, so the upstream step waits forever. The local step 6 tests near-max counter preload plus bark and pet, with `BARK_THOLD < BITE_THOLD`. |
 | `wdt_cfg_lock_test` | Uses the mailbox `nmi_set_vector()` rather than `nmi_set_vector_reg()` / `nmi_lock_vector_reg()`, and a `0x1000` bark threshold. With the upstream pair the test hangs rather than reaching its assertions. |
 
@@ -225,8 +225,8 @@ So the remaining failures split into two kinds:
 
 | Kind | Count | Tests |
 |---|---|---|
-| **VP model gap** — the VP should be fixed | 2 | `hmac_p2_sensreg_access_test`, `otbn_sw_error_test` |
-| **VP harness gap** — the RTL TB provides something `sep-vp` has no equivalent for | 6 | `rom_sanity_test` (ROM instruction-pattern preload), `sep_aes_mb_stream_test` (cocotb scratch handshake), `sep_cpu_sram_aes_sram_test` and `sep_km_efuse_coexist_test` (key-manager CPU + its ROM), `lcc_inbound_filter_gating_test` and `sep_inbound_filter_decerr` (UVM master driving external AXI; both hang waiting for it) |
+| **VP model gap** — the VP should be fixed | 1 | `otbn_sw_error_test` (excluded from `run_all_tests.sh`: algorithm models do not report IMEM `BAD_DATA_ADDR`) |
+| **VP harness gap** — the RTL TB provides something `sep-vp` has no equivalent for | 6 | `rom_sanity_test` (ROM instruction-pattern preload), `sep_aes_mb_stream_test` (cocotb scratch handshake), `sep_cpu_sram_aes_sram_test` and `sep_km_efuse_coexist_test` (key-manager CPU + its ROM), `lcc_inbound_filter_gating_test` and `sep_inbound_filter_decerr` (UVM master driving external AXI; both hang waiting for it). Excluded from `run_all_tests.sh`. |
 
 Adams Bridge (`sep_abr_*`) is modeled: `abr_ip` is bound at `0x1094_0000` (PIC 35/36)
 with a FIPS 204/203 backend and key-manager DEST `0x10`/`0x20`/`0x40`/`0x80`
@@ -241,10 +241,8 @@ running on a blank array, as their `+SEP_EFUSE_NO_PRELOAD` asks for.
 `sep_aes_reset_clear_test` and `sep_reset_ctrl_csr_test` also pass on current
 `sep-vp`.
 
-- **HMAC.** `DIGEST_0..7` accept and echo software writes outside a context
-  restore, where silicon ignores them.
 - **OTBN.** `ERR_BITS` stays zero after a `BAD_DATA_ADDR`; software errors are
-  not reported.
+  not reported. The test is excluded from the runnable set.
 
 ### Excluded, and why
 

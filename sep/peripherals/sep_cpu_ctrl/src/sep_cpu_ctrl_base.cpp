@@ -35,5 +35,9 @@ void sep_cpu_ctrl_base::reset_all_registers()
   EXT_TRNG_SRC_SEL.reset();
   EXT_TRNG_SRC_SEL_LOCK.reset();
   KM_WIPE_CTRL.reset();
+  DMA_BUS_ERR_STATUS.reset();
+  DMA_BUS_ERR_CLEAR.reset();
+  PERIPH_BUS_ERR_STATUS.reset();
+  PERIPH_BUS_ERR_CLEAR.reset();
   SEP_VERSION_ID.reset();
 }

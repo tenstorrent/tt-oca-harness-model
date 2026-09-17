@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "sep_cpu_ctrl_basetest.h"
 
-sep_cpu_ctrl_basetest::Register_Property_t reg_map[32] = {
+sep_cpu_ctrl_basetest::Register_Property_t reg_map[36] = {
 {sep_cpu_ctrl_basetest::CLOCK_GATE_CTRL_OFFSET, sep_cpu_ctrl_basetest::CLOCK_GATE_CTRL_READ, sep_cpu_ctrl_basetest::CLOCK_GATE_CTRL_WRITE, sep_cpu_ctrl_basetest::CLOCK_GATE_CTRL_RESET, "CLOCK_GATE_CTRL"},
 {sep_cpu_ctrl_basetest::REFERENCE_COUNTER_OFFSET, sep_cpu_ctrl_basetest::REFERENCE_COUNTER_READ, sep_cpu_ctrl_basetest::REFERENCE_COUNTER_WRITE, sep_cpu_ctrl_basetest::REFERENCE_COUNTER_RESET, "REFERENCE_COUNTER"},
 {sep_cpu_ctrl_basetest::TIMEOUT_INTERRUPT_OFFSET, sep_cpu_ctrl_basetest::TIMEOUT_INTERRUPT_READ, sep_cpu_ctrl_basetest::TIMEOUT_INTERRUPT_WRITE, sep_cpu_ctrl_basetest::TIMEOUT_INTERRUPT_RESET, "TIMEOUT_INTERRUPT"},
@@ -34,4 +34,8 @@ sep_cpu_ctrl_basetest::Register_Property_t reg_map[32] = {
 {sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_OFFSET, sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_READ, sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_WRITE, sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_RESET, "EXT_TRNG_SRC_SEL"}, 
 {sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_LOCK_OFFSET, sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_LOCK_READ, sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_LOCK_WRITE, sep_cpu_ctrl_basetest::EXT_TRNG_SRC_SEL_LOCK_RESET, "EXT_TRNG_SRC_SEL_LOCK"},
 {sep_cpu_ctrl_basetest::KM_WIPE_CTRL_OFFSET, sep_cpu_ctrl_basetest::KM_WIPE_CTRL_READ, sep_cpu_ctrl_basetest::KM_WIPE_CTRL_WRITE, sep_cpu_ctrl_basetest::KM_WIPE_CTRL_RESET, "KM_WIPE_CTRL"},
+{sep_cpu_ctrl_basetest::DMA_BUS_ERR_STATUS_OFFSET, sep_cpu_ctrl_basetest::DMA_BUS_ERR_STATUS_READ, sep_cpu_ctrl_basetest::DMA_BUS_ERR_STATUS_WRITE, sep_cpu_ctrl_basetest::DMA_BUS_ERR_STATUS_RESET, "DMA_BUS_ERR_STATUS"},
+{sep_cpu_ctrl_basetest::DMA_BUS_ERR_CLEAR_OFFSET, sep_cpu_ctrl_basetest::DMA_BUS_ERR_CLEAR_READ, sep_cpu_ctrl_basetest::DMA_BUS_ERR_CLEAR_WRITE, sep_cpu_ctrl_basetest::DMA_BUS_ERR_CLEAR_RESET, "DMA_BUS_ERR_CLEAR"},
+{sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_STATUS_OFFSET, sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_STATUS_READ, sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_STATUS_WRITE, sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_STATUS_RESET, "PERIPH_BUS_ERR_STATUS"},
+{sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_CLEAR_OFFSET, sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_CLEAR_READ, sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_CLEAR_WRITE, sep_cpu_ctrl_basetest::PERIPH_BUS_ERR_CLEAR_RESET, "PERIPH_BUS_ERR_CLEAR"},
 {sep_cpu_ctrl_basetest::SEP_VERSION_ID_OFFSET, sep_cpu_ctrl_basetest::SEP_VERSION_ID_READ, sep_cpu_ctrl_basetest::SEP_VERSION_ID_WRITE, sep_cpu_ctrl_basetest::SEP_VERSION_ID_RESET, "SEP_VERSION_ID"}};

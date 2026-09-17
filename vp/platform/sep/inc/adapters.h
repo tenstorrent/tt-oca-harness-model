@@ -217,10 +217,10 @@ private:
  * directly reachable — the RTL comment above the instance calls this out as
  * deliberate.
  *
- * Unlike local_alias_remap_adapter, which serves the CPU path and works in
- * port-local coordinates against the programmable region size, this one is on
- * an initiator and works in global bus addresses with the fixed region
- * constants the RTL hard-wires.
+ * Unlike local_alias_remap_adapter, which serves the CPU path (same
+ * target_base = 0x1000_0000, but a programmable region size and port-local
+ * coordinates), this one is on an initiator and works in global bus addresses
+ * with the fixed region constants the RTL hard-wires.
  */
 class dma_alias_remap_adapter : public sc_core::sc_module {
 public:
@@ -289,23 +289,34 @@ private:
     sep_cpu_ctrl_ip* cpu_ctrl_;
     uint64_t         static_bus_offset_;
 
-    uint64_t remap(uint64_t local_in) const {
-        const uint64_t global_addr = local_in + static_bus_offset_;
+    uint64_t remap(uint64_t addr) const {
         const uint64_t local_base  = static_cast<uint64_t>(cpu_ctrl_->SEP_LOCAL_BASE_ADDR);
         const uint64_t region_size = static_cast<uint64_t>(
             static_cast<uint32_t>(cpu_ctrl_->SEP_REGION_SIZE));
 
+        // SimpleBus b_transport subtracts static_bus_offset_ (0xC000_0000) so
+        // `addr` is port-local; some ISS store paths deliver the leftover
+        // global address instead. Discriminate: every local coordinate on this
+        // 1 GiB port is < 0xC000_0000, every global address in the port is not.
+        const uint64_t global_addr =
+            (addr >= static_bus_offset_) ? addr : addr + static_bus_offset_;
+
+        // target_base is SEP_LOCAL_ALIAS_REGION_BASE (0x1000_0000), matching
+        // axi_local_alias_remap / dma_alias_remap_adapter. A reset
+        // SEP_LOCAL_BASE_ADDR of 0xD000_0000 therefore maps 0xD080_2000 →
+        // 0x1080_2000. target_base = 0 was the pre-#3711 formula and sent
+        // those accesses to 0x0080_2000, which nothing answers.
+        static constexpr uint64_t TARGET_BASE = 0x10000000ULL;
         if (global_addr >= local_base && global_addr < local_base + region_size)
-            return global_addr - local_base;   // target_base = 0
+            return global_addr - local_base + TARGET_BASE;
 
         // Outside the currently-configured dynamic window (e.g. before firmware
         // widens SEP_REGION_SIZE past its 16 MiB reset default): fall back to
-        // the VP's static default mapping instead of returning global_addr
+        // the VP's static default mapping instead of returning a global address
         // unchanged. This PortMapping covers the whole 0xC0000000-0xFFFFFFFF
         // range, so an unchanged address would re-enter this same adapter and
-        // recurse forever. `local_in` is exactly the old unconditional
-        // bus-level subtraction (global_addr - static_bus_offset_).
-        return local_in;
+        // recurse forever.
+        return (addr >= static_bus_offset_) ? addr - static_bus_offset_ : addr;
     }
 
     void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay) {

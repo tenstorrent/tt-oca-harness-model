@@ -7,7 +7,7 @@
 //
 // SEP boundary port for the SMC global window (SEP CPU addresses
 // [0x4000_0000, +1 GiB) per hw/sep/doc/memory_map.adoc; the VP maps the
-// first 2 MiB, see Args.hpp smc_global_start/end_addr).
+// first 8 MiB, see Args.hpp smc_global_start/end_addr).
 //
 // Models the SEP-side end of the dedicated SEP->SMC AXI path
 // (`sep_ext_to_smc_axi` in hw/sep/sep.sv).  Two operating modes:

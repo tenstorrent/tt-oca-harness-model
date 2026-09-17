@@ -191,7 +191,7 @@ static constexpr uint32_t F007_CTRL_RESET       = 0x00000000u;
 
 /// CTRL write mask: 0x03FF0111 (DOWNSAMPLE_RATE[25:16], BYPASS_COMPRESSOR[8],
 /// AUTOTUNE_ENABLE[4], RESET[0]).
-static constexpr uint32_t F007_CTRL_WRITE_MASK  = 0x13FF0110u;
+static constexpr uint32_t F007_CTRL_WRITE_MASK  = 0x13FF0112u;
 
 /// FIFO_CTRL reset value: 0x00000001 (FIFO enabled by default).
 static constexpr uint32_t F007_FIFO_CTRL_RESET  = 0x00000001u;

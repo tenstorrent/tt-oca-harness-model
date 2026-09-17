@@ -66,6 +66,7 @@
  ******************************************************************************/
 
 #include "entropy_src.h"
+#include "reg_access.h"
 #include <openssl/rand.h>
 
 // =============================================================================
@@ -188,7 +189,12 @@ void entropy_src_ip::update_fifo_status()
  ******************************************************************************/
 bool entropy_src_ip::handle_write_CTRL(uint32_t value)
 {
-    CTRL = value & static_cast<uint32_t>(CTRL.write_bit_mask);
+    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
+    CTRL = regmodel::apply_lock_gated(
+        static_cast<uint32_t>(CTRL),
+        value & static_cast<uint32_t>(CTRL.write_bit_mask),
+        lock);
+    update_boot_phase_done();
 
     REG_INFO(3, logger)
         << "CTRL write: stored 0x"
@@ -301,10 +307,15 @@ bool entropy_src_ip::handle_write_INTR_TEST(uint32_t value)
  ******************************************************************************/
 bool entropy_src_ip::handle_write_FIFO_CTRL(uint32_t value)
 {
-    bool new_enable = (value & 0x1u) != 0u;
+    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
+    const uint32_t next = regmodel::apply_lock_gated(
+        static_cast<uint32_t>(FIFO_CTRL),
+        value & static_cast<uint32_t>(FIFO_CTRL.write_bit_mask),
+        lock);
+    bool new_enable = (next & 0x1u) != 0u;
     bool prev_enable = m_fifo_enabled;
 
-    FIFO_CTRL = value & static_cast<uint32_t>(FIFO_CTRL.write_bit_mask);
+    FIFO_CTRL = next;
     m_fifo_enabled = new_enable;
 
     // if (prev_enable && !new_enable)
@@ -373,7 +384,11 @@ bool entropy_src_ip::handle_write_HEALTH_TEST_CTRL(uint32_t value)
     //
     // Note: some regmodel versions auto-apply the write mask before calling the
     // callback; writing the masked value here is therefore idempotent and safe.
-    HEALTH_TEST_CTRL = value & static_cast<uint32_t>(HEALTH_TEST_CTRL.write_bit_mask);
+    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
+    HEALTH_TEST_CTRL = regmodel::apply_lock_gated(
+        static_cast<uint32_t>(HEALTH_TEST_CTRL),
+        value & static_cast<uint32_t>(HEALTH_TEST_CTRL.write_bit_mask),
+        lock);
 
     // Derive the enable state from bits [7:0] (ENABLE field).
     // Any non-zero ENABLE value transitions the HealthTestCounterControl state
@@ -441,28 +456,51 @@ bool entropy_src_ip::handle_write_STARTUP_CTRL(uint32_t value)
  ******************************************************************************/
 bool entropy_src_ip::handle_write_RING_OSC_ENABLE(uint32_t value)
 {
-    RING_OSC_ENABLE = value & static_cast<uint32_t>(RING_OSC_ENABLE.write_bit_mask);
+    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
+    RING_OSC_ENABLE = regmodel::apply_lock_gated(
+        static_cast<uint32_t>(RING_OSC_ENABLE),
+        value & static_cast<uint32_t>(RING_OSC_ENABLE.write_bit_mask),
+        lock);
+    update_boot_phase_done();
+    return true;
+}
 
-    // Gated on the generators alone, NOT on CTRL.MODULE_ENABLE: this model's CTRL
-    // does not implement that field. Its bit 0 is RESET and bits 1-3 are
-    // reserved, whereas the RDL defines bit 0 as reserved and bit 1 as
-    // MODULE_ENABLE (reset 1). That drift is pre-existing and left alone here --
-    // changing CTRL's layout would alter the software-reset behaviour existing
-    // tests rely on. It is harmless for this gate: firmware cannot usefully run
-    // the generators without the module enabled anyway.
+bool entropy_src_ip::handle_write_ALERT_THRESHOLD(uint32_t value)
+{
+    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
+    ALERT_THRESHOLD = regmodel::apply_lock_gated(
+        static_cast<uint32_t>(ALERT_THRESHOLD),
+        value & static_cast<uint32_t>(ALERT_THRESHOLD.write_bit_mask),
+        lock);
+    return true;
+}
+
+bool entropy_src_ip::handle_write_MIN_ENTROPY_H(uint32_t value)
+{
+    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
+    MIN_ENTROPY_H = regmodel::apply_lock_gated(
+        static_cast<uint32_t>(MIN_ENTROPY_H),
+        value & static_cast<uint32_t>(MIN_ENTROPY_H.write_bit_mask),
+        lock);
+    return true;
+}
+
+void entropy_src_ip::update_boot_phase_done()
+{
+    const bool module_on = (static_cast<uint32_t>(CTRL.MODULE_ENABLE) != 0u);
     const bool generators_on = (static_cast<uint32_t>(RING_OSC_ENABLE.ENABLE) != 0u);
 
-    if (generators_on) {
+    if (module_on && generators_on) {
         if (static_cast<uint32_t>(MAIN_SM_STATUS.BOOT_PHASE_DONE) == 0u) {
             MAIN_SM_STATUS.BOOT_PHASE_DONE = 1;
             MAIN_SM_STATUS.IDLE = 0;
             REG_INFO(3, logger)
-                << "RING_OSC_ENABLE: generators enabled -- "
-                << "MAIN_SM_STATUS.BOOT_PHASE_DONE asserted";
+                << "BOOT_PHASE_DONE asserted (MODULE_ENABLE and generators on)";
         }
+    } else if (!module_on) {
+        MAIN_SM_STATUS.BOOT_PHASE_DONE = 0;
+        MAIN_SM_STATUS.IDLE = 1;
     }
-
-    return true;
 }
 
 // =============================================================================

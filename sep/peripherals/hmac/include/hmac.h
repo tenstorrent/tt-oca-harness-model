@@ -282,6 +282,11 @@ private:
   // the absorbed bit count from MSG_LENGTH. Backs hash_continue.
   void import_state_from_digest();
 
+  // Silicon DIGEST is hwext: software writes are consumed at hash_continue
+  // and do not echo on read. Store them here until import_state_from_digest().
+  uint32_t m_digest_restore[16]{};
+  bool m_digest_restore_valid[16]{};
+
   // Register Callback Functions
 
   // Handle write to INTR_STATE register

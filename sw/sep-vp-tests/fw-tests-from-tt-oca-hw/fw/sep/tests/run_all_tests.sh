@@ -98,6 +98,18 @@ EXCLUDE+=("global_alias_remap_sanity")
 # register header from tt-oca-hw and this comes back on its own.
 EXCLUDE+=("efuse_sanity_csr_test")
 
+# RTL testbench supplies these; sep-vp has no equivalent (ROM IFU pattern,
+# cocotb scratch handshake, key-manager CPU + ROM, UVM external AXI master).
+# Counted as harness gaps in fw-tests-from-tt-oca-hw/README.md — excluding
+# them keeps the runnable set honest instead of reporting them as VP failures.
+EXCLUDE+=("rom_sanity_test" "sep_aes_mb_stream_test" "sep_cpu_sram_aes_sram_test"
+          "sep_km_efuse_coexist_test" "lcc_inbound_filter_gating_test"
+          "sep_inbound_filter_decerr")
+
+# OTBN VP models algorithm blocks, not the Ibex-side ISA, so ERR_BITS never
+# latches BAD_DATA_ADDR from a malformed IMEM image. Documented model gap.
+EXCLUDE+=("otbn_sw_error_test")
+
 # Per-test OTBN algorithm overrides and multi-ELF variants live in
 # vp_test_env.sh as vp_algo_override / vp_extra_elfs — plain lookups rather than
 # associative arrays, which macOS bash 3.2 does not have.

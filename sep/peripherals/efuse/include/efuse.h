@@ -248,8 +248,8 @@ public:
 
     /**
      * Bit index of LC_STATE in the array (sep_pkg::LC_STATE_BIT_POSITION). Derived
-     * from the register's own offset: PeakRDL places LOCKS (64 bits) at 0x0 and
-     * LC_STATE at 0x8, so this is bit 64. Bits +1 and +2 -- the two RMA advance
+     * from the register's own offset: PeakRDL places LOCKS (64 bits) at 0x0,
+     * LOCKS_SPARE at 0x8, and LC_STATE at 0xC, so this is bit 96. Bits +1 and +2 -- the two RMA advance
      * bits -- are individually gated by the token matches, and gating the wrong
      * bits means the token no longer authorises the transition.
      */
@@ -354,7 +354,7 @@ private:
     struct lock_region {
         unsigned int first_word;   ///< inclusive index into the array / shadow map
         unsigned int last_word;    ///< inclusive
-        bool         in_locks_hi;  ///< which LOCKS register holds the pair
+        unsigned     lock_bank;    ///< 0=LOCKS_LO, 1=LOCKS_HI, 2=LOCKS_SPARE
         unsigned int write_bit;    ///< read lock is always write_bit + 1
     };
 
@@ -410,6 +410,7 @@ private:
     // WOSET shadow values — accumulate set bits across firmware writes
     uint32_t m_locks_lo_val;
     uint32_t m_locks_hi_val;
+    uint32_t m_locks_spare_val;
     uint32_t m_lc_state_val;
     uint32_t m_sip_dis_lo_val;
     uint32_t m_sip_dis_hi_val;
@@ -440,6 +441,7 @@ private:
     // WOSET callback handlers
     bool handle_write_LOCKS_LO(uint32_t value);
     bool handle_write_LOCKS_HI(uint32_t value);
+    bool handle_write_LOCKS_SPARE(uint32_t value);
     bool handle_write_LC_STATE(uint32_t value);
     bool handle_write_SIP_DIS_LO(uint32_t value);
     bool handle_write_SIP_DIS_HI(uint32_t value);

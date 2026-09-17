@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iomanip>
+#include <string>
 
 namespace smc {
 
@@ -736,6 +737,106 @@ void i2c_controller::dump_state(std::ostream& os) const
        << " halted=" << halted_
        << " target_nack_count=" << target_nack_count_ << "\n";
     os << "  irq=" << irq_active() << "\n";
+}
+
+// ---------------------------------------------------------------------------
+// i2c_wrap_ctrl
+// ---------------------------------------------------------------------------
+
+i2c_wrap_ctrl::i2c_wrap_ctrl(sc_core::sc_module_name name)
+    : sc_core::sc_module(name)
+    , access_delay_ns_p_("access_delay_ns", 2.0,
+          "TLM register-access annotated delay (ns). Mutable at run-time.")
+    , reg_socket("reg_socket")
+    , rst_n_i("rst_n_i")
+    , ctrl_{
+          regmodel::Register32{i2c_wrap_ctrl_cfg::I2C_CTRL_MASK,
+                               i2c_wrap_ctrl_cfg::I2C_CTRL_MASK, 0},
+          regmodel::Register32{i2c_wrap_ctrl_cfg::I2C_CTRL_MASK,
+                               i2c_wrap_ctrl_cfg::I2C_CTRL_MASK, 0},
+          regmodel::Register32{i2c_wrap_ctrl_cfg::I2C_CTRL_MASK,
+                               i2c_wrap_ctrl_cfg::I2C_CTRL_MASK, 0},
+      }
+{
+    access_delay_ns_p_.add_metadata("unit", cci::cci_value(std::string("nanoseconds")));
+    access_delay_ns_p_.add_metadata("tlm_phase", cci::cci_value(std::string("annotated_delay")));
+    for (unsigned i = 0; i < i2c_wrap_ctrl_cfg::NUM_I2CS; ++i) {
+        regmap_.add(i2c_wrap_ctrl_cfg::OFF_I2C_CTRL + i * 4u,
+                    std::string("I2C_CTRL") + std::to_string(i), ctrl_[i]);
+    }
+    reg_socket.register_b_transport(this, &i2c_wrap_ctrl::b_transport);
+    reg_socket.register_transport_dbg(this, &i2c_wrap_ctrl::transport_dbg);
+    SC_METHOD(reset_proc);
+    sensitive << rst_n_i;
+    dont_initialize();
+    SIM_LOG_INFO(this, "i2c_wrap_ctrl instantiated (3 x I2C_CTRL @ +0xE00)");
+}
+
+void i2c_wrap_ctrl::reset_proc()
+{
+    if (!rst_n_i.read()) {
+        for (auto& r : ctrl_) r.reset(0);
+    }
+}
+
+void i2c_wrap_ctrl::b_transport(tlm::tlm_generic_payload& gp,
+                                sc_core::sc_time& delay)
+{
+    const auto cmd = gp.get_command();
+    const uint64_t adr = gp.get_address();
+    const uint32_t len = gp.get_data_length();
+    uint8_t* const buf = gp.get_data_ptr();
+
+    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
+        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
+        return;
+    }
+    if (len != 4) {
+        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+    if (adr >= i2c_wrap_ctrl_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
+        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        return;
+    }
+
+    bool ok = false;
+    if (cmd == tlm::TLM_READ_COMMAND) {
+        uint32_t v = 0;
+        ok = regmap_.read(adr, v);
+        if (ok) std::memcpy(buf, &v, 4);
+        SIM_LOG_TRACE(this, "read  off=0x" << std::hex << adr << " data=0x" << v);
+    } else {
+        uint32_t v = 0;
+        std::memcpy(&v, buf, 4);
+        ok = regmap_.write(adr, v);
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << adr << " data=0x" << v);
+    }
+    if (!ok) {
+        SIM_LOG_DEBUG(this, "decode miss at off=0x" << std::hex << adr);
+        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        return;
+    }
+    delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
+    gp.set_response_status(tlm::TLM_OK_RESPONSE);
+}
+
+unsigned int i2c_wrap_ctrl::transport_dbg(tlm::tlm_generic_payload& gp)
+{
+    const uint64_t adr = gp.get_address();
+    const uint32_t len = gp.get_data_length();
+    if (len != 4 || adr >= i2c_wrap_ctrl_cfg::WINDOW_SIZE || (adr & 0x3u) != 0)
+        return 0;
+    uint32_t v = 0;
+    if (gp.is_read()) {
+        if (!regmap_.read(adr, v)) return 0;
+        std::memcpy(gp.get_data_ptr(), &v, 4);
+    } else {
+        std::memcpy(&v, gp.get_data_ptr(), 4);
+        if (!regmap_.write(adr, v)) return 0;
+    }
+    gp.set_response_status(tlm::TLM_OK_RESPONSE);
+    return 4;
 }
 
 } // namespace smc

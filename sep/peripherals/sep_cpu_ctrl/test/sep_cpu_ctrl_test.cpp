@@ -336,6 +336,33 @@ SC_MODULE(Tb) {
         assert(region_size_sig.read() == 0x0800'0000ULL);
         std::cout << "[PASS] T14: publish_inbound_window() re-samples the register file\n";
 
+        // ------------------------------------------------------------------
+        // T15: DMA/PERIPH bus-error status is RO; CLEAR is singlepulse
+        // ------------------------------------------------------------------
+        assert(do_read(0x1A8) == 0);
+        assert(do_read(0x1B8) == 0);
+        do_write(0x1A8, 0x3ULL);
+        do_write(0x1B8, 0x7FULL);
+        assert(do_read(0x1A8) == 0);
+        assert(do_read(0x1B8) == 0);
+
+        dut.DMA_BUS_ERR_STATUS = 0x3ULL;
+        dut.PERIPH_BUS_ERR_STATUS = 0x15ULL; // aes + kmac + csrng
+        assert(do_read(0x1A8) == 0x3ULL);
+        assert(do_read(0x1B8) == 0x15ULL);
+
+        do_write(0x1B0, 0x1ULL);
+        assert(do_read(0x1A8) == 0);
+        assert(do_read(0x1B0) == 0);
+
+        do_write(0x1C0, 0x01ULL); // clear aes only
+        assert((do_read(0x1B8) & 0x01ULL) == 0);
+        assert((do_read(0x1B8) & 0x14ULL) == 0x14ULL);
+        do_write(0x1C0, 0x7FULL);
+        assert(do_read(0x1B8) == 0);
+        assert(do_read(0x1C0) == 0);
+        std::cout << "[PASS] T15: DMA/PERIPH_BUS_ERR status/clear match RTL\n";
+
         std::cout << "\n=== All tests PASSED ===\n";
         sc_core::sc_stop();
     }

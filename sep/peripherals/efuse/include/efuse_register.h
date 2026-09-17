@@ -9,9 +9,8 @@
  *   EFUSE_INTERFACE_CTRL   0x400–0x418  Raw OTP interface control
  *   EFUSE_MMR              0x500–0x56C  Token input / match result registers
  *
- * Register offsets confirmed from PeakRDL:
- *   tt-oca-hw/meta/registers/rdl/sep_efuse_map.rdl
- *   tt-oca-hw/meta/registers/c/och_sep_top_reg.h
+ * Register offsets match harness PeakRDL:
+ *   hw/sys/sep/regs/blocks/sep_efuse_map/sep_efuse_map.rdl
  * Base address deferred to VP integration time.
  */
 
@@ -25,64 +24,54 @@ namespace sep_efuse {
 // ============================================================================
 // SEP_EFUSE_MAP register offsets  (physical base 0x10930000)
 // ============================================================================
-// Offsets match PeakRDL sep_efuse_map.rdl / och_sep_top_reg.h.
-// LOCKS is a 64-bit register at 0x0; LC_STATE is the next word at 0x8.
+// 96-bit LOCK field is LOCKS (64-bit @0x0) + LOCKS_SPARE (32-bit @0x8).
 static constexpr unsigned int LOCKS_LO_OFFSET               = 0x000;
 static constexpr unsigned int LOCKS_HI_OFFSET               = 0x004;
-// LOCKS is 64 bits at 0x000. There is no LOCKS_SPARE. LC_STATE follows at
-// 0x008 (och_sep_top_reg.h / sep_efuse_map.rdl). A spare word must not occupy
-// that address — firmware and default_efuse.preload both use 0x008.
-static constexpr unsigned int LC_STATE_OFFSET               = 0x008;
-static constexpr unsigned int SBOOT_DIS_OFFSET              = 0x00C;
-// Remaining map matches och_sep_top_reg.h (TRANSIENT_RMA_EN at 0x010, not 0x014).
-static constexpr unsigned int TRANSIENT_RMA_EN_OFFSET       = 0x010;
-static constexpr unsigned int SIP_DIS_LO_OFFSET             = 0x014;
-static constexpr unsigned int SIP_DIS_HI_OFFSET             = 0x018;
-static constexpr unsigned int SYS_DIS_LO_OFFSET             = 0x01C;
-static constexpr unsigned int SYS_DIS_HI_OFFSET             = 0x020;
-static constexpr unsigned int RMA_SIP_TOKEN_OFFSET          = 0x024; ///< [8] × 4 bytes each
-static constexpr unsigned int RMA_CHIPLET_TOKEN_OFFSET      = 0x044; ///< [8] × 4 bytes each
-static constexpr unsigned int CLASS_KEY_OFFSET              = 0x064; ///< [8] × 4 bytes each
-static constexpr unsigned int CHIPLET_PUBK_REVOKE_OFFSET    = 0x084;
-static constexpr unsigned int BL1_VERSION_OFFSET            = 0x088; ///< [8] × 4 bytes each
-static constexpr unsigned int BL2_VERSION_OFFSET            = 0x0A8; ///< [8] × 4 bytes each
-static constexpr unsigned int CHIPLET_UID_OFFSET            = 0x0C8; ///< [8] × 4 bytes each
-static constexpr unsigned int SIP_PUBK_HASH0_OFFSET         = 0x0E8; ///< [8] × 4 bytes each
-static constexpr unsigned int SIP_UID_OFFSET                = 0x108; ///< [8] × 4 bytes each
-static constexpr unsigned int SYS_PUBK_HASH_OFFSET          = 0x128; ///< [8] × 4 bytes each
-static constexpr unsigned int SYS_UID_OFFSET                = 0x148; ///< [8] × 4 bytes each
-static constexpr unsigned int STATUS_RPT_OFFSET             = 0x168;
-static constexpr unsigned int SEP_ROM_CTRL_OFFSET           = 0x16C;
-static constexpr unsigned int SEP_SPI_CTRL_FIELD_EN_OFFSET  = 0x170;
-static constexpr unsigned int SPI_DISCOVERY_CTRL_OFFSET     = 0x174;
-static constexpr unsigned int SPI_PHY_DQ_TIMING_OFFSET      = 0x178;
-static constexpr unsigned int SPI_PHY_DQS_TIMING_OFFSET     = 0x17C;
-static constexpr unsigned int SPI_PHY_GATE_LPBK_OFFSET      = 0x180;
-static constexpr unsigned int SPI_PHY_DLL_SLAVE_OFFSET      = 0x184;
-static constexpr unsigned int SPI_PHY_DLL_MASTER_OFFSET     = 0x188;
-static constexpr unsigned int SPI_PHY_MISC_OFFSET           = 0x18C;
-static constexpr unsigned int SPI_RB_VALID_TIME_OFFSET      = 0x190;
-static constexpr unsigned int CHIPLET_PUBK_HASH0_OFFSET     = 0x194; ///< PUBLIC_KEY_0 [8]
-static constexpr unsigned int CHIPLET_PUBK_HASH1_OFFSET     = 0x1B4; ///< PUBLIC_KEY_1 [8]
-static constexpr unsigned int REQUIRED_SIGNERS_OFFSET       = 0x1D4;
-static constexpr unsigned int REQUIRED_ALGS_OFFSET          = 0x1D8;
-static constexpr unsigned int CHIPLET_PUBK_PQC_HASH0_OFFSET = 0x1DC; ///< [8] x 4 bytes each
-static constexpr unsigned int CHIPLET_PUBK_PQC_HASH1_OFFSET = 0x1FC; ///< [8] x 4 bytes each
-static constexpr unsigned int SIP_PUBK_PQC_HASH0_OFFSET     = 0x21C; ///< [8] x 4 bytes each
-static constexpr unsigned int SYS_PUBK_PQC_HASH_OFFSET      = 0x23C; ///< [8] x 4 bytes each
-static constexpr unsigned int SIP_PUBK_HASH1_OFFSET         = 0x25C; ///< [8] x 4 bytes each
-static constexpr unsigned int SIP_PUBK_PQC_HASH1_OFFSET     = 0x27C; ///< [8] x 4 bytes each
-static constexpr unsigned int SEP_CHIPLET_ID_OFFSET         = 0x29C; ///< [8] x 4 bytes each
-static constexpr unsigned int SEP_SIP_ID_OFFSET             = 0x2BC; ///< [8] x 4 bytes each
-static constexpr unsigned int SEP_SYS_ID_OFFSET             = 0x2DC; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE0_OFFSET                 = 0x2FC; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE1_OFFSET                 = 0x31C; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE2_OFFSET                 = 0x33C; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE3_OFFSET                 = 0x35C; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE4_OFFSET                 = 0x37C; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE5_OFFSET                 = 0x39C; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE6_OFFSET                 = 0x3BC; ///< [8] x 4 bytes each
-static constexpr unsigned int SPARE7_OFFSET                 = 0x3DC; ///< [8] x 4 bytes each
+static constexpr unsigned int LOCKS_SPARE_OFFSET            = 0x008;
+static constexpr unsigned int LC_STATE_OFFSET               = 0x00C;
+static constexpr unsigned int SBOOT_DIS_OFFSET              = 0x010;
+static constexpr unsigned int TRANSIENT_RMA_EN_OFFSET       = 0x014;
+static constexpr unsigned int SIP_DIS_LO_OFFSET             = 0x018;
+static constexpr unsigned int SIP_DIS_HI_OFFSET             = 0x01C;
+static constexpr unsigned int SYS_DIS_LO_OFFSET             = 0x020;
+static constexpr unsigned int SYS_DIS_HI_OFFSET             = 0x024;
+static constexpr unsigned int RMA_SIP_TOKEN_OFFSET          = 0x028; ///< [8] × 4 bytes each
+static constexpr unsigned int RMA_CHIPLET_TOKEN_OFFSET      = 0x048; ///< [8] × 4 bytes each
+static constexpr unsigned int CLASS_KEY_OFFSET              = 0x068; ///< [8] × 4 bytes each
+static constexpr unsigned int CHIPLET_PUBK_REVOKE_OFFSET    = 0x088;
+static constexpr unsigned int BL1_VERSION_OFFSET            = 0x08C; ///< [8] × 4 bytes each
+static constexpr unsigned int BL2_VERSION_OFFSET            = 0x0AC; ///< [8] × 4 bytes each
+static constexpr unsigned int CHIPLET_UID_OFFSET            = 0x0CC; ///< [8] × 4 bytes each
+static constexpr unsigned int SIP_PUBK_HASH0_OFFSET         = 0x0EC; ///< [8] × 4 bytes each
+static constexpr unsigned int SIP_UID_OFFSET                = 0x10C; ///< [8] × 4 bytes each
+static constexpr unsigned int SYS_PUBK_HASH_OFFSET          = 0x12C; ///< [8] × 4 bytes each
+static constexpr unsigned int SYS_UID_OFFSET                = 0x14C; ///< [8] × 4 bytes each
+static constexpr unsigned int STATUS_RPT_OFFSET             = 0x16C;
+static constexpr unsigned int SEP_ROM_CTRL_OFFSET           = 0x170;
+// RTL SYSCLK_FREQ_MHZ @0x174. Kept under the existing software name.
+static constexpr unsigned int SEP_SPI_CTRL_FIELD_EN_OFFSET  = 0x174;
+static constexpr unsigned int CHIPLET_PUBK_HASH0_OFFSET     = 0x178; ///< [8]
+static constexpr unsigned int CHIPLET_PUBK_HASH1_OFFSET     = 0x198; ///< [8]
+static constexpr unsigned int REQUIRED_SIGNERS_OFFSET       = 0x1B8;
+static constexpr unsigned int REQUIRED_ALGS_OFFSET          = 0x1BC;
+static constexpr unsigned int CHIPLET_PUBK_PQC_HASH0_OFFSET = 0x1C0; ///< [8]
+static constexpr unsigned int CHIPLET_PUBK_PQC_HASH1_OFFSET = 0x1E0; ///< [8]
+static constexpr unsigned int SIP_PUBK_PQC_HASH0_OFFSET     = 0x200; ///< [8]
+static constexpr unsigned int SYS_PUBK_PQC_HASH_OFFSET      = 0x220; ///< [8]
+static constexpr unsigned int SIP_PUBK_HASH1_OFFSET         = 0x240; ///< [8]
+static constexpr unsigned int SIP_PUBK_PQC_HASH1_OFFSET     = 0x260; ///< [8]
+static constexpr unsigned int SEP_CHIPLET_ID_OFFSET         = 0x280; ///< [8]
+static constexpr unsigned int SEP_SIP_ID_OFFSET             = 0x2A0; ///< [8]
+static constexpr unsigned int SEP_SYS_ID_OFFSET             = 0x2C0; ///< [8]
+static constexpr unsigned int SPARE0_OFFSET                 = 0x2E0; ///< [8]
+static constexpr unsigned int SPARE1_OFFSET                 = 0x300; ///< [8]
+static constexpr unsigned int SPARE2_OFFSET                 = 0x320; ///< [8]
+static constexpr unsigned int SPARE3_OFFSET                 = 0x340; ///< [8]
+static constexpr unsigned int SPARE4_OFFSET                 = 0x360; ///< [8]
+static constexpr unsigned int SPARE5_OFFSET                 = 0x380; ///< [8]
+static constexpr unsigned int SPARE6_OFFSET                 = 0x3A0; ///< [8]
+static constexpr unsigned int SPARE7_OFFSET                 = 0x3C0; ///< [8]
+static constexpr unsigned int SPARE8_OFFSET                 = 0x3E0; ///< [8]
 
 // ============================================================================
 // EFUSE_INTERFACE_CTRL register offsets
@@ -340,6 +329,75 @@ public:
     regmodel::Bitfield<N> RESERVED_LAST_64_READ_LOCK;     ///< [29]
     regmodel::Bitfield<N> RESERVED_LAST_32_WRITE_LOCK;    ///< [30]
     regmodel::Bitfield<N> RESERVED_LAST_32_READ_LOCK;     ///< [31]
+};
+
+/**
+ * LOCKS_SPARE — upper 32 bits of the 96-bit LOCK field (RDL @0x8).
+ * Slots 32-40 lock spare0-spare8; [31:18] reserved. WOSET.
+ */
+template<unsigned int N>
+class LOCKS_SPARE_type : public regmodel::Reg<N>
+{
+public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+
+    LOCKS_SPARE_type(std::string reg_name, memory_type &memory, unsigned int offset)
+      : regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0xffffffff, 0x00000000),
+        SPARE0_WRITE_LOCK(reg_name + ".SPARE0_WRITE_LOCK", *this,  0, 1),
+        SPARE0_READ_LOCK (reg_name + ".SPARE0_READ_LOCK",  *this,  1, 1),
+        SPARE1_WRITE_LOCK(reg_name + ".SPARE1_WRITE_LOCK", *this,  2, 1),
+        SPARE1_READ_LOCK (reg_name + ".SPARE1_READ_LOCK",  *this,  3, 1),
+        SPARE2_WRITE_LOCK(reg_name + ".SPARE2_WRITE_LOCK", *this,  4, 1),
+        SPARE2_READ_LOCK (reg_name + ".SPARE2_READ_LOCK",  *this,  5, 1),
+        SPARE3_WRITE_LOCK(reg_name + ".SPARE3_WRITE_LOCK", *this,  6, 1),
+        SPARE3_READ_LOCK (reg_name + ".SPARE3_READ_LOCK",  *this,  7, 1),
+        SPARE4_WRITE_LOCK(reg_name + ".SPARE4_WRITE_LOCK", *this,  8, 1),
+        SPARE4_READ_LOCK (reg_name + ".SPARE4_READ_LOCK",  *this,  9, 1),
+        SPARE5_WRITE_LOCK(reg_name + ".SPARE5_WRITE_LOCK", *this, 10, 1),
+        SPARE5_READ_LOCK (reg_name + ".SPARE5_READ_LOCK",  *this, 11, 1),
+        SPARE6_WRITE_LOCK(reg_name + ".SPARE6_WRITE_LOCK", *this, 12, 1),
+        SPARE6_READ_LOCK (reg_name + ".SPARE6_READ_LOCK",  *this, 13, 1),
+        SPARE7_WRITE_LOCK(reg_name + ".SPARE7_WRITE_LOCK", *this, 14, 1),
+        SPARE7_READ_LOCK (reg_name + ".SPARE7_READ_LOCK",  *this, 15, 1),
+        SPARE8_WRITE_LOCK(reg_name + ".SPARE8_WRITE_LOCK", *this, 16, 1),
+        SPARE8_READ_LOCK (reg_name + ".SPARE8_READ_LOCK",  *this, 17, 1),
+        SPARE_LOCK_RSVD  (reg_name + ".SPARE_LOCK_RSVD",   *this, 18, 14)
+    {
+        this->set_read_write_restrictions(memory);
+    }
+
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+
+    regmodel::Bitfield<N> SPARE0_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE0_READ_LOCK;
+    regmodel::Bitfield<N> SPARE1_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE1_READ_LOCK;
+    regmodel::Bitfield<N> SPARE2_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE2_READ_LOCK;
+    regmodel::Bitfield<N> SPARE3_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE3_READ_LOCK;
+    regmodel::Bitfield<N> SPARE4_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE4_READ_LOCK;
+    regmodel::Bitfield<N> SPARE5_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE5_READ_LOCK;
+    regmodel::Bitfield<N> SPARE6_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE6_READ_LOCK;
+    regmodel::Bitfield<N> SPARE7_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE7_READ_LOCK;
+    regmodel::Bitfield<N> SPARE8_WRITE_LOCK;
+    regmodel::Bitfield<N> SPARE8_READ_LOCK;
+    regmodel::Bitfield<N> SPARE_LOCK_RSVD;
 };
 
 /**

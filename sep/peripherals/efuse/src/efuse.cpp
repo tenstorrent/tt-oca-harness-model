@@ -66,7 +66,7 @@ efuse_model::efuse_model(sc_module_name n, int log_verbosity)
     , m_req_error(false)
     , m_program_addr_error(false)
     , m_read_addr_error(false)
-    , m_locks_lo_val(0), m_locks_hi_val(0)
+    , m_locks_lo_val(0), m_locks_hi_val(0), m_locks_spare_val(0)
     , m_lc_state_val(0)
     , m_sip_dis_lo_val(0), m_sip_dis_hi_val(0)
     , m_sys_dis_lo_val(0), m_sys_dis_hi_val(0)
@@ -134,6 +134,8 @@ void efuse_model::register_callbacks()
         [this](uint32_t v){ return handle_write_LOCKS_LO(v); }, LOCKS_LO.offset);
     memory.register_write_callback(
         [this](uint32_t v){ return handle_write_LOCKS_HI(v); }, LOCKS_HI.offset);
+    memory.register_write_callback(
+        [this](uint32_t v){ return handle_write_LOCKS_SPARE(v); }, LOCKS_SPARE.offset);
     memory.register_write_callback(
         [this](uint32_t v){ return handle_write_LC_STATE(v); }, LC_STATE.offset);
     memory.register_write_callback(
@@ -372,7 +374,7 @@ const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     { k_word(sep_efuse::SEP_ROM_CTRL_OFFSET),        k_word(sep_efuse::SEP_ROM_CTRL_OFFSET),        true,   2 },
     // One pair covers the whole SPI control group: the field-enable register plus
     // the discovery and PHY timing registers that follow it.
-    { k_word(sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET), k_word(sep_efuse::SPI_RB_VALID_TIME_OFFSET), true,  4 },
+    { k_word(sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET), k_word(sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET), 1,  4 },
     { k_word(sep_efuse::CHIPLET_PUBK_HASH0_OFFSET),  k_last(sep_efuse::CHIPLET_PUBK_HASH0_OFFSET, 8), true,  6 },
     { k_word(sep_efuse::CHIPLET_PUBK_HASH1_OFFSET),  k_last(sep_efuse::CHIPLET_PUBK_HASH1_OFFSET, 8), true,  8 },
     { k_word(sep_efuse::REQUIRED_SIGNERS_OFFSET),    k_word(sep_efuse::REQUIRED_SIGNERS_OFFSET),    true,  10 },
@@ -385,10 +387,16 @@ const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     { k_word(sep_efuse::SIP_PUBK_PQC_HASH1_OFFSET),  k_last(sep_efuse::SIP_PUBK_PQC_HASH1_OFFSET, 8), true, 24 },
     { k_word(sep_efuse::SEP_CHIPLET_ID_OFFSET),      k_last(sep_efuse::SEP_CHIPLET_ID_OFFSET, 8),    true, 26 },
     { k_word(sep_efuse::SEP_SIP_ID_OFFSET),          k_last(sep_efuse::SEP_SIP_ID_OFFSET, 8),        true, 28 },
-    { k_word(sep_efuse::SEP_SYS_ID_OFFSET),          k_last(sep_efuse::SEP_SYS_ID_OFFSET, 8),        true, 30 },
-    // SPARE0..7 sit in PeakRDL RESERVED_* after PUBLIC_KEY_1. There is no
-    // LOCKS_SPARE; they have no dedicated pair in the 64-bit LOCKS register
-    // and are left unlocked here.
+    { k_word(sep_efuse::SEP_SYS_ID_OFFSET),          k_last(sep_efuse::SEP_SYS_ID_OFFSET, 8),        1, 30 },
+    { k_word(sep_efuse::SPARE0_OFFSET),              k_last(sep_efuse::SPARE0_OFFSET, 8),            2,  0 },
+    { k_word(sep_efuse::SPARE1_OFFSET),              k_last(sep_efuse::SPARE1_OFFSET, 8),            2,  2 },
+    { k_word(sep_efuse::SPARE2_OFFSET),              k_last(sep_efuse::SPARE2_OFFSET, 8),            2,  4 },
+    { k_word(sep_efuse::SPARE3_OFFSET),              k_last(sep_efuse::SPARE3_OFFSET, 8),            2,  6 },
+    { k_word(sep_efuse::SPARE4_OFFSET),              k_last(sep_efuse::SPARE4_OFFSET, 8),            2,  8 },
+    { k_word(sep_efuse::SPARE5_OFFSET),              k_last(sep_efuse::SPARE5_OFFSET, 8),            2, 10 },
+    { k_word(sep_efuse::SPARE6_OFFSET),              k_last(sep_efuse::SPARE6_OFFSET, 8),            2, 12 },
+    { k_word(sep_efuse::SPARE7_OFFSET),              k_last(sep_efuse::SPARE7_OFFSET, 8),            2, 14 },
+    { k_word(sep_efuse::SPARE8_OFFSET),              k_last(sep_efuse::SPARE8_OFFSET, 8),            2, 16 },
 };
 
 const unsigned int efuse_model::k_lock_region_count =
@@ -408,7 +416,9 @@ bool efuse_model::is_write_locked(unsigned int word) const
     const lock_region *r = region_for_word(word);
     if (r == nullptr)
         return false;
-    const uint32_t locks = r->in_locks_hi ? m_locks_hi_val : m_locks_lo_val;
+    const uint32_t locks = r->lock_bank == 1 ? m_locks_hi_val
+                         : r->lock_bank == 2 ? m_locks_spare_val
+                         : m_locks_lo_val;
     return (locks >> r->write_bit) & 1u;
 }
 
@@ -417,7 +427,9 @@ bool efuse_model::is_read_locked(unsigned int word) const
     const lock_region *r = region_for_word(word);
     if (r == nullptr)
         return false;
-    const uint32_t locks = r->in_locks_hi ? m_locks_hi_val : m_locks_lo_val;
+    const uint32_t locks = r->lock_bank == 1 ? m_locks_hi_val
+                         : r->lock_bank == 2 ? m_locks_spare_val
+                         : m_locks_lo_val;
     return (locks >> (r->write_bit + 1u)) & 1u;
 }
 
@@ -608,6 +620,7 @@ void efuse_model::sense_fuses_into_shadows()
     // into the shadow register and still leave the policy wide open.
     m_locks_lo_val            = memory.memory_block[LOCKS_LO.offset];
     m_locks_hi_val            = memory.memory_block[LOCKS_HI.offset];
+    m_locks_spare_val         = memory.memory_block[LOCKS_SPARE.offset];
     m_lc_state_val            = memory.memory_block[LC_STATE.offset];
     m_sip_dis_lo_val          = memory.memory_block[SIP_DIS_LO.offset];
     m_sip_dis_hi_val          = memory.memory_block[SIP_DIS_HI.offset];
@@ -743,14 +756,6 @@ void efuse_model::load_fuses()
     set(STATUS_RPT,            status_rpt.get_param_value());
     set(SEP_ROM_CTRL,          sep_rom_ctrl.get_param_value());
     set(SEP_SPI_CTRL_FIELD_EN, sep_spi_ctrl_field_en.get_param_value());
-    set(SPI_DISCOVERY_CTRL,    spi_discovery_ctrl.get_param_value());
-    set(SPI_PHY_DQ_TIMING,     spi_phy_dq_timing.get_param_value());
-    set(SPI_PHY_DQS_TIMING,    spi_phy_dqs_timing.get_param_value());
-    set(SPI_PHY_GATE_LPBK,     spi_phy_gate_lpbk.get_param_value());
-    set(SPI_PHY_DLL_SLAVE,     spi_phy_dll_slave.get_param_value());
-    set(SPI_PHY_DLL_MASTER,    spi_phy_dll_master.get_param_value());
-    set(SPI_PHY_MISC,          spi_phy_misc.get_param_value());
-    set(SPI_RB_VALID_TIME,     spi_rb_valid_time.get_param_value());
 
     sense_fuses_into_shadows();
     load_non_fuse_defaults();
@@ -795,6 +800,13 @@ bool efuse_model::handle_write_LOCKS_HI(uint32_t value)
 {
     m_locks_hi_val |= value;
     LOCKS_HI = m_locks_hi_val;
+    return true;
+}
+
+bool efuse_model::handle_write_LOCKS_SPARE(uint32_t value)
+{
+    m_locks_spare_val |= value;
+    LOCKS_SPARE = m_locks_spare_val;
     return true;
 }
 

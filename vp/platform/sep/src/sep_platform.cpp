@@ -329,13 +329,13 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         smc_global->load_data(reinterpret_cast<const char*>(&dft_status),
                               SMC_DFT_CTRL_STATUS, sizeof(dft_status));
 
-        // Reset-unit latched boot straps (STRAPS_LO/HI), composed from CCI params so
+        // SMC_EXTERNAL straps (STRAPS_LO/HI @ +0x5800), composed from CCI params so
         // the ROM boot mode is invocation-selectable. init_straps() reads these
         // (fw/sep/bootcode/src/boot_straps.c): STRAPS_LO[25]=primary_chiplet selects
         // Primary (SPI boot) vs Secondary (wait for SMC manifest). Bit positions per
         // sep_smc_interface.h; HI bits are relative to the STRAPS_HI word.
-        constexpr uint64_t SMC_STRAPS_LO = 0x2090;  // SMC_STRAPS_LO_OFFSET
-        constexpr uint64_t SMC_STRAPS_HI = 0x2094;  // SMC_STRAPS_HI_OFFSET
+        constexpr uint64_t SMC_STRAPS_LO = 0x405800;  // SMC_STRAPS_LO_OFFSET
+        constexpr uint64_t SMC_STRAPS_HI = 0x405804;  // SMC_STRAPS_HI_OFFSET
         uint32_t straps_lo = 0u;
         uint32_t straps_hi = 0u;
         // Bit positions per the open-tree SEP↔SMC interface contract:

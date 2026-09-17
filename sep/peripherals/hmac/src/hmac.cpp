@@ -10,8 +10,10 @@
  */
 
 #include "hmac.h"
-#include <iostream>
+#include <algorithm>
 #include <cstring>
+#include <iostream>
+#include <iterator>
 #include <tlm.h>
 #include <systemc.h>
 
@@ -251,6 +253,8 @@ void hmac_ip::reset_handler() {
       m_sha.init(sha2_mode::sha256);
       m_hmac_key.clear();
       m_final_tail.clear();
+      std::fill(std::begin(m_digest_restore_valid),
+                std::end(m_digest_restore_valid), false);
       REG_DEBUG(2, logger) << "Hash engine reset" << std::endl;
 
       // Reset all registers
@@ -650,19 +654,27 @@ void hmac_ip::import_state_from_digest() {
       return;
    }
 
+   auto digest_word = [this](unsigned int i) -> uint32_t {
+      return m_digest_restore_valid[i] ? m_digest_restore[i]
+                                       : static_cast<uint32_t>(DIGEST[i]);
+   };
+
    m_sha.init(mode);
 
    if (mode == sha2_mode::sha256) {
       for (unsigned int i = 0; i < 8; i++) {
-         m_sha.set_chain(i, DIGEST[i]);
+         m_sha.set_chain(i, digest_word(i));
       }
    } else {
       for (unsigned int i = 0; i < 8; i++) {
-         const uint64_t hi = DIGEST[i * 2];
-         const uint64_t lo = DIGEST[i * 2 + 1];
+         const uint64_t hi = digest_word(i * 2);
+         const uint64_t lo = digest_word(i * 2 + 1);
          m_sha.set_chain(i, (hi << 32) | lo);
       }
    }
+
+   std::fill(std::begin(m_digest_restore_valid),
+             std::end(m_digest_restore_valid), false);
 
    uint64_t bits = (static_cast<uint64_t>(MSG_LENGTH_UPPER) << 32) | MSG_LENGTH_LOWER;
    if (CFG.hmac_en) {
@@ -1473,9 +1485,11 @@ bool hmac_ip::handle_write_WIPE_SECRET(uint32_t value, uint32_t write_mask) {
    m_keymgr_key_valid = false;
    REG_DEBUG(2, logger) << "Key storage and sideload buffers wiped" << std::endl;
 
-   // Wipe digest registers
+   // Wipe digest registers and any pending software context-restore writes
    for (unsigned int i = 0; i < 16; i++) {
       DIGEST[i] = value;
+      m_digest_restore[i] = 0;
+      m_digest_restore_valid[i] = false;
    }
    REG_DEBUG(2, logger) << "DIGEST registers wiped" << std::endl;
 
@@ -1589,12 +1603,16 @@ bool hmac_ip::handle_write_DIGEST(unsigned int index, uint32_t value, uint32_t w
       value = byte_reverse32(value);
    }
 
-   // Manually write the value to DIGEST register with proper mask handling
-   uint32_t current = DIGEST[index];
-   uint32_t new_value = (current & ~write_mask) | (value & write_mask);
-   DIGEST[index] = new_value;
+   // DIGEST is hwext on silicon: a software write is held for hash_continue
+   // and does not update the value a subsequent read returns. hmac_p2_sensreg
+   // checks that idle writes do not echo.
+   const uint32_t current =
+       m_digest_restore_valid[index] ? m_digest_restore[index] : 0u;
+   const uint32_t new_value = (current & ~write_mask) | (value & write_mask);
+   m_digest_restore[index] = new_value;
+   m_digest_restore_valid[index] = true;
 
-   REG_DEBUG(2, logger) << "DIGEST[" << index << "] updated for context restore" << std::endl;
+   REG_DEBUG(2, logger) << "DIGEST[" << index << "] SW write captured for context restore" << std::endl;
 
    return false; // Callback handled the write
 }

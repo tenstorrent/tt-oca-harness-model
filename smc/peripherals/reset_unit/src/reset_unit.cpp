@@ -402,12 +402,6 @@ bool reset_unit::reg_read(uint64_t off, uint32_t& data) const
     case reset_unit_cfg::SS_RESET_COMPLETE:    data = ss_reset_complete_;    break;
     case reset_unit_cfg::SS_COLD_RESET_LOCK:   data = ss_cold_reset_lock_;   break;
     case reset_unit_cfg::SS_FORCE_TO_REF_CLK:  data = ss_force_to_ref_clk_n_; break;
-    case reset_unit_cfg::STRAPS_LO:
-        data = static_cast<uint32_t>(captured_straps_i.read());
-        break;
-    case reset_unit_cfg::STRAPS_HI:
-        data = static_cast<uint32_t>(captured_straps_i.read() >> 32);
-        break;
     case reset_unit_cfg::SYNC_REG:             data = sync_reg_ & 1u;        break;
     case reset_unit_cfg::ISOLATE_REQ_REG:      data = isolate_req_reg_;      break;
     case reset_unit_cfg::ISOLATE_REQ_PINEN_REG: data = isolate_req_pinen_reg_; break;
@@ -459,8 +453,6 @@ bool reset_unit::reg_write(uint64_t off, uint32_t data)
         ss_cold_reset_lock_ = apply_woset(ss_cold_reset_lock_, data);
         break;
     case reset_unit_cfg::SS_FORCE_TO_REF_CLK: ss_force_to_ref_clk_n_ = data; break;
-    case reset_unit_cfg::STRAPS_LO:          /* SW read-only */         break;
-    case reset_unit_cfg::STRAPS_HI:          /* SW read-only */         break;
     case reset_unit_cfg::SYNC_REG:           sync_reg_ = data & 1u;      break;
     case reset_unit_cfg::ISOLATE_REQ_REG:    isolate_req_reg_       = data; break;
     case reset_unit_cfg::ISOLATE_REQ_PINEN_REG: isolate_req_pinen_reg_ = data; break;
@@ -628,6 +620,93 @@ void reset_unit::dump_state(std::ostream& os) const
        << " core_n=" << d.rst_core_int_n
        << " wdt_n=" << d.rst_wdt_n
        << " flr_cool_n=" << flr_cool_n_ << "\n";
+}
+
+// ---------------------------------------------------------------------------
+// straps
+// ---------------------------------------------------------------------------
+
+straps::straps(sc_core::sc_module_name name)
+    : sc_core::sc_module(name)
+    , access_delay_ns_p_("access_delay_ns", 2.0,
+          "TLM register-access annotated delay (ns). Mutable at run-time.")
+    , reg_socket("reg_socket")
+    , captured_straps_i("captured_straps_i")
+{
+    access_delay_ns_p_.add_metadata("unit", cci::cci_value(std::string("nanoseconds")));
+    access_delay_ns_p_.add_metadata("tlm_phase", cci::cci_value(std::string("annotated_delay")));
+    reg_socket.register_b_transport(this, &straps::b_transport);
+    reg_socket.register_transport_dbg(this, &straps::transport_dbg);
+    SIM_LOG_INFO(this, "straps instantiated at SMC_EXTERNAL + 0x5800");
+}
+
+bool straps::reg_read(uint64_t off, uint32_t& data) const
+{
+    data = 0;
+    if (off >= straps_cfg::WINDOW_SIZE) return false;
+    const uint64_t v = captured_straps_i.read();
+    switch (off) {
+    case straps_cfg::OFF_STRAPS_LO:
+        data = static_cast<uint32_t>(v);
+        break;
+    case straps_cfg::OFF_STRAPS_HI:
+        data = static_cast<uint32_t>(v >> 32) & straps_cfg::STRAPS_HI_MASK;
+        break;
+    default:
+        break; // hole: RAZ
+    }
+    return true;
+}
+
+void straps::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
+{
+    const auto cmd = gp.get_command();
+    const uint64_t adr = gp.get_address();
+    const uint32_t len = gp.get_data_length();
+    uint8_t* const buf = gp.get_data_ptr();
+
+    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
+        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
+        return;
+    }
+    if (len != 4 || gp.get_byte_enable_ptr() != nullptr) {
+        gp.set_response_status(len != 4 ? tlm::TLM_BURST_ERROR_RESPONSE
+                                        : tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
+        return;
+    }
+    if (adr >= straps_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
+        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        return;
+    }
+
+    if (cmd == tlm::TLM_READ_COMMAND) {
+        uint32_t v = 0;
+        (void)reg_read(adr, v);
+        std::memcpy(buf, &v, 4);
+        SIM_LOG_TRACE(this, "read  off=0x" << std::hex << adr << " data=0x" << v);
+    } else {
+        uint32_t v = 0;
+        std::memcpy(&v, buf, 4);
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << adr << " data=0x" << v
+                          << " [RO ignored]");
+    }
+    delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
+    gp.set_response_status(tlm::TLM_OK_RESPONSE);
+}
+
+unsigned int straps::transport_dbg(tlm::tlm_generic_payload& gp)
+{
+    const uint64_t adr = gp.get_address();
+    const uint32_t len = gp.get_data_length();
+    if (len != 4 || adr >= straps_cfg::WINDOW_SIZE || (adr & 0x3u) != 0)
+        return 0;
+    if (gp.is_read()) {
+        uint32_t v = 0;
+        (void)reg_read(adr, v);
+        std::memcpy(gp.get_data_ptr(), &v, 4);
+    }
+    gp.set_response_status(tlm::TLM_OK_RESPONSE);
+    return 4;
 }
 
 } // namespace smc

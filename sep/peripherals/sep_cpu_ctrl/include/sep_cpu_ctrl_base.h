@@ -40,6 +40,10 @@ class sep_cpu_ctrl_base : public sc_module
        EXT_TRNG_SRC_SEL(std::string(name) + ".EXT_TRNG_SRC_SEL", memory, (0x190 + 0x00)/sizeof(unsigned long long)), 
        EXT_TRNG_SRC_SEL_LOCK(std::string(name) + ".EXT_TRNG_SRC_SEL_LOCK", memory, (0x198 + 0x00)/sizeof(unsigned long long)),
        KM_WIPE_CTRL(std::string(name) + ".KM_WIPE_CTRL", memory, (0x1A0 + 0x00)/sizeof(unsigned long long)),
+       DMA_BUS_ERR_STATUS(std::string(name) + ".DMA_BUS_ERR_STATUS", memory, (0x1A8 + 0x00)/sizeof(unsigned long long)),
+       DMA_BUS_ERR_CLEAR(std::string(name) + ".DMA_BUS_ERR_CLEAR", memory, (0x1B0 + 0x00)/sizeof(unsigned long long)),
+       PERIPH_BUS_ERR_STATUS(std::string(name) + ".PERIPH_BUS_ERR_STATUS", memory, (0x1B8 + 0x00)/sizeof(unsigned long long)),
+       PERIPH_BUS_ERR_CLEAR(std::string(name) + ".PERIPH_BUS_ERR_CLEAR", memory, (0x1C0 + 0x00)/sizeof(unsigned long long)),
        SEP_VERSION_ID(std::string(name) + ".SEP_VERSION_ID", memory, (0x1000 + 0x00)/sizeof(unsigned long long))
        {
          memory.bind_to_socket(target_socket);
@@ -111,6 +115,11 @@ class sep_cpu_ctrl_base : public sc_module
       sep_cpu_ctrl::EXT_TRNG_SRC_SEL_LOCK_type<64> EXT_TRNG_SRC_SEL_LOCK;
 
       sep_cpu_ctrl::KM_WIPE_CTRL_type<64> KM_WIPE_CTRL;
+
+      sep_cpu_ctrl::DMA_BUS_ERR_STATUS_type<64> DMA_BUS_ERR_STATUS;
+      sep_cpu_ctrl::DMA_BUS_ERR_CLEAR_type<64> DMA_BUS_ERR_CLEAR;
+      sep_cpu_ctrl::PERIPH_BUS_ERR_STATUS_type<64> PERIPH_BUS_ERR_STATUS;
+      sep_cpu_ctrl::PERIPH_BUS_ERR_CLEAR_type<64> PERIPH_BUS_ERR_CLEAR;
 
       sep_cpu_ctrl::SEP_VERSION_ID_type<64> SEP_VERSION_ID;
       

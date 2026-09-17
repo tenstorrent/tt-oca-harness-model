@@ -16,7 +16,7 @@
  * enhancements) supporting active-controller, secondary-controller, and
  * target operation with I2C backward compatibility.  The RTL wraps up to
  * `MAX_NUM_I3CS` (6) independent instances behind a single AXI4-Lite slave,
- * decoding the instance from the access address (`INSTANCE_SPACING = 0x500`).
+ * decoding the instance from the access address (`INSTANCE_SPACING = 0x1000`).
  *
  * ---
  * ## Authoritative references (tt-oca-hw)
@@ -282,10 +282,10 @@ struct i3c_controller_cfg {
     static constexpr unsigned DCT_ENTRIES = 16;    ///< 4 DWORDs per entry
     static constexpr unsigned DCT_DWORDS  = 4;
 
-    /// Per-instance decoded window (I3C_REG_ADDR_WIDTH = 11 bits ⇒ 0x800,
-    /// but instances are packed at INSTANCE_SPACING; the live map ends at
-    /// 0x4FF and the unused 0x500..0x7FF region is RAZ/WI within the window).
-    static constexpr uint64_t INSTANCE_SPACING = 0x500;
+    /// Per-instance decoded window (i3ccore_wrap_pkg::I3C_INSTANCE_SPACING
+    /// / I3C_REG_ADDR_WIDTH = 0x1000 / 12 bits). The live HCI map ends at
+    /// 0x4FF; 0x500..0xFFF is RAZ/WI inside the instance window.
+    static constexpr uint64_t INSTANCE_SPACING = 0x1000;
 
     /// Reset values.
     static constexpr uint32_t HCI_VERSION_VALUE      = 0x0000'0120;

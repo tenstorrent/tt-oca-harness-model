@@ -44,6 +44,10 @@ class sep_cpu_ctrl_basetest : public sc_module
       EXT_TRNG_SRC_SEL_OFFSET = (0x190 + 0x00), 
       EXT_TRNG_SRC_SEL_LOCK_OFFSET = (0x198 + 0x00),
       KM_WIPE_CTRL_OFFSET = (0x1A0 + 0x00),
+      DMA_BUS_ERR_STATUS_OFFSET = (0x1A8 + 0x00),
+      DMA_BUS_ERR_CLEAR_OFFSET = (0x1B0 + 0x00),
+      PERIPH_BUS_ERR_STATUS_OFFSET = (0x1B8 + 0x00),
+      PERIPH_BUS_ERR_CLEAR_OFFSET = (0x1C0 + 0x00),
       SEP_VERSION_ID_OFFSET = (0x1000 + 0x00)
     };
 
@@ -80,6 +84,10 @@ class sep_cpu_ctrl_basetest : public sc_module
       EXT_TRNG_SRC_SEL_READ = (0x7), 
       EXT_TRNG_SRC_SEL_LOCK_READ = (0x1),
       KM_WIPE_CTRL_READ = (0x1),
+      DMA_BUS_ERR_STATUS_READ = (0x3),
+      DMA_BUS_ERR_CLEAR_READ = (0x0),
+      PERIPH_BUS_ERR_STATUS_READ = (0x7F),
+      PERIPH_BUS_ERR_CLEAR_READ = (0x0),
       SEP_VERSION_ID_READ = (0x0)
     };
 
@@ -116,6 +124,10 @@ class sep_cpu_ctrl_basetest : public sc_module
       EXT_TRNG_SRC_SEL_WRITE = (0x7), 
       EXT_TRNG_SRC_SEL_LOCK_WRITE = (0x1),
       KM_WIPE_CTRL_WRITE = (0x1),
+      DMA_BUS_ERR_STATUS_WRITE = (0x0),
+      DMA_BUS_ERR_CLEAR_WRITE = (0x1),
+      PERIPH_BUS_ERR_STATUS_WRITE = (0x0),
+      PERIPH_BUS_ERR_CLEAR_WRITE = (0x7F),
       SEP_VERSION_ID_WRITE = (0x0)
     };
 
@@ -152,6 +164,10 @@ class sep_cpu_ctrl_basetest : public sc_module
       EXT_TRNG_SRC_SEL_RESET = (0x7), 
       EXT_TRNG_SRC_SEL_LOCK_RESET = (0x0),
       KM_WIPE_CTRL_RESET = (0x0),
+      DMA_BUS_ERR_STATUS_RESET = (0x0),
+      DMA_BUS_ERR_CLEAR_RESET = (0x0),
+      PERIPH_BUS_ERR_STATUS_RESET = (0x0),
+      PERIPH_BUS_ERR_CLEAR_RESET = (0x0),
       SEP_VERSION_ID_RESET = (0xdeadbeef)
     };
      

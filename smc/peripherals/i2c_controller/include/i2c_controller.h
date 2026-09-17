@@ -30,7 +30,7 @@
  * | `hw/comp/i2c/doc/programming.adoc`              | Controller/Target programming sequences |
  * | `hw/comp/i2c/doc/memmap.adoc`                    | Register offsets |
  * | `hw/periph/i2c_wrap/data/registers/rdl/i2c_wrap.rdl` | Multi-instance packing (i2c[3] @0x0 += 0x200, i2c_ctrl @0xe00) |
- * | `hw/periph/i2c_wrap/data/registers/rdl/i2c_ctrl.rdl` | Wrapper enable register (out of scope here) |
+ * | `hw/periph/i2c_wrap/data/registers/rdl/i2c_ctrl.rdl` | Wrapper enable register (`i2c_wrap_ctrl`) |
  *
  * ---
  * ## Register map (per core, 0x200-byte window; all 32-bit, word-aligned)
@@ -126,6 +126,7 @@
 #include <tlm>
 #include <tlm_utils/simple_target_socket.h>
 
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -573,6 +574,37 @@ private:
     sc_core::sc_event recompute_event_; ///< Triggers recompute_method().
     sc_core::sc_event xfer_event_;      ///< Triggers xfer_method().
     sc_core::sc_time  xfer_delay_;      ///< Modelled FMT-drain latency.
+};
+
+// ---------------------------------------------------------------------------
+// i2c_wrap_ctrl — i2c_ctrl.rdl at i2c_wrap + 0xE00
+// ---------------------------------------------------------------------------
+
+struct i2c_wrap_ctrl_cfg {
+    static constexpr unsigned NUM_I2CS    = 3;
+    static constexpr uint64_t WINDOW_SIZE = 0x10;
+    static constexpr uint64_t OFF_I2C_CTRL = 0x0;
+    static constexpr uint32_t I2C_CTRL_MASK = 0x00000111u; ///< EN[0], CTRL_MODE[4], SMBUS[8]
+};
+
+class i2c_wrap_ctrl : public sc_core::sc_module {
+    cci::cci_param<double> access_delay_ns_p_;
+
+public:
+    SC_HAS_PROCESS(i2c_wrap_ctrl);
+
+    tlm_utils::simple_target_socket<i2c_wrap_ctrl> reg_socket;
+    sc_core::sc_in<bool> rst_n_i;
+
+    explicit i2c_wrap_ctrl(sc_core::sc_module_name name);
+
+private:
+    void         b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
+    unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    void         reset_proc();
+
+    std::array<regmodel::Register32, i2c_wrap_ctrl_cfg::NUM_I2CS> ctrl_;
+    regmodel::RegisterMap32 regmap_;
 };
 
 } // namespace smc
