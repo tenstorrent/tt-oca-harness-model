@@ -78,6 +78,7 @@
 #include <tlm>
 #include <tlm_utils/simple_target_socket.h>
 
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <iostream>
@@ -581,6 +582,70 @@ private:
     sc_core::sc_event recompute_event_;   ///< Triggers recompute_method().
     sc_core::sc_event rx_timeout_event_;  ///< Fires RX timeout.
     sc_core::sc_time  rx_timeout_delay_;  ///< Coarse functional timeout period.
+};
+
+// ---------------------------------------------------------------------------
+// uart_wrap — uart_log_engine_ctrl @0x0 + log_engine @0x200 (16550 is @0x100)
+// ---------------------------------------------------------------------------
+
+struct uart_wrap_cfg {
+    static constexpr uint64_t WINDOW_SIZE = 0x400;
+    static constexpr uint64_t OFF_WRAP_CTRL = 0x00;
+    static constexpr uint64_t OFF_LOG       = 0x200;
+    static constexpr unsigned NUM_LOG_ENTRIES = 16;
+
+    static constexpr uint64_t OFF_LOG_CTRL         = OFF_LOG + 0x00;
+    static constexpr uint64_t OFF_LOG_REGION_SIZE  = OFF_LOG + 0x04;
+    static constexpr uint64_t OFF_LOG_REGION_LO    = OFF_LOG + 0x08;
+    static constexpr uint64_t OFF_LOG_REGION_HI    = OFF_LOG + 0x0C;
+    static constexpr uint64_t OFF_LOG_WRITE_ADDR   = OFF_LOG + 0x10;
+    static constexpr uint64_t OFF_LOG_INTR_STATUS  = OFF_LOG + 0x14;
+    static constexpr uint64_t OFF_LOG_INTR_ENABLE  = OFF_LOG + 0x18;
+    static constexpr uint64_t OFF_LOG_INTR_TEST    = OFF_LOG + 0x1C;
+    static constexpr uint64_t OFF_LOG_ENTRY        = OFF_LOG + 0x40;
+
+    static constexpr uint32_t WRAP_CTRL_MASK      = 0x1u;
+    static constexpr uint32_t LOG_EN_MASK         = 0x1u;
+    static constexpr uint32_t LOG_REGION_SIZE_MASK = 0x000FFFFFu;
+    static constexpr uint32_t LOG_REGION_HI_MASK  = 0x00FFFFFFu; ///< [55:32]
+    static constexpr uint32_t LOG_INTR_MASK       = 0x11u;       ///< bits 0, 4
+    static constexpr uint32_t LOG_LEN_MASK        = 0xFFFFu;
+};
+
+class uart_wrap : public sc_core::sc_module {
+    cci::cci_param<double> access_delay_ns_p_;
+
+public:
+    SC_HAS_PROCESS(uart_wrap);
+
+    tlm_utils::simple_target_socket<uart_wrap> reg_socket;
+    sc_core::sc_in<bool> rst_n_i;
+
+    explicit uart_wrap(sc_core::sc_module_name name);
+
+private:
+    void         b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
+    unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    void         reset_proc();
+    void         reset_log_engine();
+
+    regmodel::Register32 wrap_ctrl_{uart_wrap_cfg::WRAP_CTRL_MASK,
+                                    uart_wrap_cfg::WRAP_CTRL_MASK, 0};
+    regmodel::Register32 log_en_{uart_wrap_cfg::LOG_EN_MASK,
+                                 uart_wrap_cfg::LOG_EN_MASK, 0};
+    regmodel::Register32 log_region_size_{uart_wrap_cfg::LOG_REGION_SIZE_MASK,
+                                          uart_wrap_cfg::LOG_REGION_SIZE_MASK, 0};
+    regmodel::Register32 log_region_lo_{0xFFFFFFFFu, 0xFFFFFFFFu, 0};
+    regmodel::Register32 log_region_hi_{uart_wrap_cfg::LOG_REGION_HI_MASK,
+                                        uart_wrap_cfg::LOG_REGION_HI_MASK, 0};
+    regmodel::Register32 log_write_addr_{0xFFFFFFFFu, 0xFFFFFFFFu, 0};
+    regmodel::Register32 log_intr_status_{uart_wrap_cfg::LOG_INTR_MASK,
+                                          uart_wrap_cfg::LOG_INTR_MASK, 0};
+    regmodel::Register32 log_intr_enable_{uart_wrap_cfg::LOG_INTR_MASK,
+                                          uart_wrap_cfg::LOG_INTR_MASK, 0};
+    regmodel::Register32 log_intr_test_{0u, uart_wrap_cfg::LOG_INTR_MASK, 0};
+    std::array<regmodel::Register32, uart_wrap_cfg::NUM_LOG_ENTRIES> log_entry_{};
+    regmodel::RegisterMap32 regmap_;
 };
 
 } // namespace smc

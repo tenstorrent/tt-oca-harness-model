@@ -7,7 +7,7 @@
 #include <sstream>
 
 // Fuse-array word indices for the registers the .preload images below populate.
-// Derived from PeakRDL register offsets (LOCKS at 0x0, LC_STATE at 0x8 = word 2)
+// Derived from PeakRDL register offsets (LOCKS at 0x0, LOCKS_SPARE at 0x8, LC_STATE at 0xC = word 3)
 // rather than literals so a map change cannot silently point images at the
 // wrong word. Matches och_sep_top_reg.h / sep_efuse_map.rdl.
 namespace {
@@ -859,7 +859,7 @@ void testbench::test_token_matching()
     else
         report_test_fail("TOKEN_EOP readback", "expected 0x0 got 0x" + std::to_string(val));
 
-    // What the match authorises: LC_STATE bit 1 (array bit 65) can only be burned
+    // What the match authorises: LC_STATE bit 1 (array bit 97) can only be burned
     // while the SIP token matches. Restore the matching token first.
     const uint32_t enable_prog = (1u << 27) | (1u << 16);
     m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET,
@@ -917,7 +917,7 @@ void testbench::test_lc_state_transitions()
     };
 
     // RMA_SIP_TOKEN_DIGEST is shadow byte 0x24 (words 9-16), RMA_CHIPLET_TOKEN_DIGEST
-    // 0x44 (words 17-24), LC_STATE 0x08 (word 2), starting at TEST_DEV.
+    // 0x44 (words 17-24), LC_STATE 0x0C (word 3), starting at TEST_DEV.
     const std::string image = "/tmp/efuse_test_lc_walk.preload";
     {
         std::ofstream out(image);

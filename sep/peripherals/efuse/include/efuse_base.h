@@ -37,6 +37,7 @@ public:
           // ── Shadow registers ─────────────────────────────────────────────
           LOCKS_LO         (std::string(name) + ".LOCKS_LO",          memory, sep_efuse::LOCKS_LO_OFFSET/4),
           LOCKS_HI         (std::string(name) + ".LOCKS_HI",          memory, sep_efuse::LOCKS_HI_OFFSET/4),
+          LOCKS_SPARE      (std::string(name) + ".LOCKS_SPARE",       memory, sep_efuse::LOCKS_SPARE_OFFSET/4),
           LC_STATE         (std::string(name) + ".LC_STATE",           memory, sep_efuse::LC_STATE_OFFSET/4),
           SBOOT_DIS        (std::string(name) + ".SBOOT_DIS",          memory, sep_efuse::SBOOT_DIS_OFFSET/4),
           TRANSIENT_RMA_EN (std::string(name) + ".TRANSIENT_RMA_EN",   memory, sep_efuse::TRANSIENT_RMA_EN_OFFSET/4),
@@ -58,14 +59,6 @@ public:
           STATUS_RPT       (std::string(name) + ".STATUS_RPT",          memory, sep_efuse::STATUS_RPT_OFFSET/4),
           SEP_ROM_CTRL     (std::string(name) + ".SEP_ROM_CTRL",        memory, sep_efuse::SEP_ROM_CTRL_OFFSET/4),
           SEP_SPI_CTRL_FIELD_EN(std::string(name) + ".SEP_SPI_CTRL_FIELD_EN", memory, sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET/4),
-          SPI_DISCOVERY_CTRL(std::string(name) + ".SPI_DISCOVERY_CTRL", memory, sep_efuse::SPI_DISCOVERY_CTRL_OFFSET/4),
-          SPI_PHY_DQ_TIMING (std::string(name) + ".SPI_PHY_DQ_TIMING",  memory, sep_efuse::SPI_PHY_DQ_TIMING_OFFSET/4),
-          SPI_PHY_DQS_TIMING(std::string(name) + ".SPI_PHY_DQS_TIMING", memory, sep_efuse::SPI_PHY_DQS_TIMING_OFFSET/4),
-          SPI_PHY_GATE_LPBK (std::string(name) + ".SPI_PHY_GATE_LPBK",  memory, sep_efuse::SPI_PHY_GATE_LPBK_OFFSET/4),
-          SPI_PHY_DLL_SLAVE (std::string(name) + ".SPI_PHY_DLL_SLAVE",  memory, sep_efuse::SPI_PHY_DLL_SLAVE_OFFSET/4),
-          SPI_PHY_DLL_MASTER(std::string(name) + ".SPI_PHY_DLL_MASTER", memory, sep_efuse::SPI_PHY_DLL_MASTER_OFFSET/4),
-          SPI_PHY_MISC      (std::string(name) + ".SPI_PHY_MISC",        memory, sep_efuse::SPI_PHY_MISC_OFFSET/4),
-          SPI_RB_VALID_TIME (std::string(name) + ".SPI_RB_VALID_TIME",   memory, sep_efuse::SPI_RB_VALID_TIME_OFFSET/4),
           CHIPLET_PUBK_HASH0     (std::string(name) + ".CHIPLET_PUBK_HASH0", memory, sep_efuse::CHIPLET_PUBK_HASH0_OFFSET/4, 1),
           CHIPLET_PUBK_HASH1     (std::string(name) + ".CHIPLET_PUBK_HASH1", memory, sep_efuse::CHIPLET_PUBK_HASH1_OFFSET/4, 1),
           CHIPLET_PUBK_PQC_HASH0 (std::string(name) + ".CHIPLET_PUBK_PQC_HASH0", memory, sep_efuse::CHIPLET_PUBK_PQC_HASH0_OFFSET/4, 1),
@@ -85,6 +78,7 @@ public:
           SPARE5                 (std::string(name) + ".SPARE5", memory, sep_efuse::SPARE5_OFFSET/4, 1),
           SPARE6                 (std::string(name) + ".SPARE6", memory, sep_efuse::SPARE6_OFFSET/4, 1),
           SPARE7                 (std::string(name) + ".SPARE7", memory, sep_efuse::SPARE7_OFFSET/4, 1),
+          SPARE8                 (std::string(name) + ".SPARE8", memory, sep_efuse::SPARE8_OFFSET/4, 1),
           REQUIRED_SIGNERS       (std::string(name) + ".REQUIRED_SIGNERS", memory, sep_efuse::REQUIRED_SIGNERS_OFFSET/4),
           REQUIRED_ALGS          (std::string(name) + ".REQUIRED_ALGS", memory, sep_efuse::REQUIRED_ALGS_OFFSET/4),
 
@@ -121,6 +115,7 @@ public:
     // Shadow registers
     sep_efuse::LOCKS_LO_type<32>          LOCKS_LO;
     sep_efuse::LOCKS_HI_type<32>          LOCKS_HI;
+    sep_efuse::LOCKS_SPARE_type<32>       LOCKS_SPARE;
     sep_efuse::LC_STATE_type<32>          LC_STATE;
     sep_efuse::SBOOT_DIS_type<32>         SBOOT_DIS;
     sep_efuse::TRANSIENT_RMA_EN_type<32>  TRANSIENT_RMA_EN;
@@ -142,14 +137,6 @@ public:
     sep_efuse::STATUS_RPT_type<32>            STATUS_RPT;
     sep_efuse::SEP_ROM_CTRL_type<32>          SEP_ROM_CTRL;
     sep_efuse::SEP_SPI_CTRL_FIELD_EN_type<32> SEP_SPI_CTRL_FIELD_EN;
-    sep_efuse::ro_stub_type<32>               SPI_DISCOVERY_CTRL;
-    sep_efuse::ro_stub_type<32>               SPI_PHY_DQ_TIMING;
-    sep_efuse::ro_stub_type<32>               SPI_PHY_DQS_TIMING;
-    sep_efuse::ro_stub_type<32>               SPI_PHY_GATE_LPBK;
-    sep_efuse::ro_stub_type<32>               SPI_PHY_DLL_SLAVE;
-    sep_efuse::ro_stub_type<32>               SPI_PHY_DLL_MASTER;
-    sep_efuse::ro_stub_type<32>               SPI_PHY_MISC;
-    sep_efuse::ro_stub_type<32>               SPI_RB_VALID_TIME;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH0;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH1;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH0;
@@ -169,6 +156,7 @@ public:
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE5;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE6;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE7;
+    regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  SPARE8;
     sep_efuse::ro_stub_type<32>                     REQUIRED_SIGNERS;
     sep_efuse::ro_stub_type<32>                     REQUIRED_ALGS;
 

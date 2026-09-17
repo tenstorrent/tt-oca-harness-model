@@ -101,23 +101,31 @@ vp_ensure_dependencies() {
 # sits one level deeper, so walk up until vp/ shows up instead.
 # -----------------------------------------------------------------------------
 vp_find_sep_vp() {
-    local dir="${VP_TESTS_DIR}" cand
+    local dir="${VP_TESTS_DIR}" cand mtime newest="" newest_mtime=0
 
     if [ -n "${SEP_VP:-}" ] && [ -x "${SEP_VP}" ]; then
         VP_ROOT="${VP_ROOT:-$(cd "$(dirname "${SEP_VP}")/../.." && pwd)}"
     else
+        # Prefer the newest built sep-vp. vp/build/bin/sep-vp is often months
+        # stale and lacks peripherals (sep_reset_ctrl at 0x10803000, ABR, …)
+        # that firmware tests walk on first access; a store there traps with
+        # mcause=7. run_sep_vp_tests.sh uses the same newest-mtime rule.
         while [ "${dir}" != "/" ]; do
-            for cand in "${dir}/vp/build/bin/sep-vp" "${dir}/vp/build_sep/bin/sep-vp"; do
+            for cand in "${dir}/vp/build_sep/bin/sep-vp" "${dir}/vp/build/bin/sep-vp"; do
                 if [ -x "${cand}" ]; then
-                    SEP_VP="${cand}"
-                    VP_ROOT="${dir}"
-                    break 2
+                    mtime="$(stat -f %m "${cand}" 2>/dev/null || stat -c %Y "${cand}" 2>/dev/null || echo 0)"
+                    if [ "${mtime}" -ge "${newest_mtime}" ]; then
+                        newest="${cand}"
+                        newest_mtime="${mtime}"
+                        VP_ROOT="${dir}"
+                    fi
                 fi
             done
             # Remember the repo root even if sep-vp has not been built yet.
             [ -d "${dir}/vp/platform/sep" ] && VP_ROOT="${dir}"
             dir="$(dirname "${dir}")"
         done
+        [ -n "${newest}" ] && SEP_VP="${newest}"
     fi
 
     if [ -z "${SEP_VP:-}" ] || [ ! -x "${SEP_VP}" ]; then

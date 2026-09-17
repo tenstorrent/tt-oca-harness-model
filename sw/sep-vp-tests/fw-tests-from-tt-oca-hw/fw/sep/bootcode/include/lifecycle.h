@@ -12,7 +12,7 @@
 //   DEMOTE_1   @ 0x10918008 (demote[0] + lock[1])
 //   DEMOTE_2   @ 0x10918010 (demote[0] + lock[1])
 // Efuse:
-//   LC_STATE   @ 0x10930008 (8-bit field; low 4 bits = raw LC state)
+//   LC_STATE   @ 0x1093000C (8-bit field; low 4 bits = raw LC state)
 
 #pragma once
 

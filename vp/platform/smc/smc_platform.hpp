@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 // ===========================================================================
 // vp/platform/smc/smc_platform.hpp
 //
@@ -188,7 +189,10 @@ public:
     pvt_wrap        pvt_wrap_{"pvt_wrap"};
     i3c_controller  i3c{"i3c"};
     sc_core::sc_vector<i2c_controller> i2c{"i2c", NUM_I2C};
+    i2c_wrap_ctrl                      i2c_ctrl_{"i2c_ctrl"};
     sc_core::sc_vector<uart>           uart_{"uart", NUM_UART};
+    sc_core::sc_vector<uart_wrap>      uart_wrap_{"uart_wrap", NUM_UART};
+    straps                             straps_{"straps"};
     // Trailing underscore avoids colliding with class smc::wdt (GCC -fpermissive).
     sc_core::sc_vector<wdt>            wdt_{"wdt", NUM_HARTS};
     sc_core::sc_vector<beu>            beu_{"beu", NUM_BEU};
@@ -223,8 +227,8 @@ public:
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
     // gpio stub, i3c, pvt_wrap, pll_wrap, avsbus, aou, octs_system_timer,
-    // catch-all stub, misc/efuse/dtp stubs (21).
-    addr_router<64, 32>         periph_router{"periph_router", 21};
+    // catch-all stub, misc/efuse/dtp stubs, i2c_ctrl, uart_wrap[4], straps (27).
+    addr_router<64, 32>         periph_router{"periph_router", 27};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};

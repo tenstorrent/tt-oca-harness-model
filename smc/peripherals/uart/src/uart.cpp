@@ -882,4 +882,134 @@ void uart::dump_state(std::ostream& os) const
     os << std::dec << std::setfill(' ');
 }
 
+// ---------------------------------------------------------------------------
+// uart_wrap
+// ---------------------------------------------------------------------------
+
+uart_wrap::uart_wrap(sc_core::sc_module_name name)
+    : sc_core::sc_module(name)
+    , access_delay_ns_p_("access_delay_ns", 2.0,
+          "TLM register-access annotated delay (ns). Mutable at run-time.")
+    , reg_socket("reg_socket")
+    , rst_n_i("rst_n_i")
+{
+    access_delay_ns_p_.add_metadata("unit", cci::cci_value(std::string("nanoseconds")));
+    access_delay_ns_p_.add_metadata("tlm_phase", cci::cci_value(std::string("annotated_delay")));
+
+    log_intr_status_.on_write([](uint32_t cur, uint32_t in) {
+        return regmodel::apply_w1c(cur, in, uart_wrap_cfg::LOG_INTR_MASK);
+    });
+    log_intr_test_.on_write([this](uint32_t, uint32_t in) {
+        const uint32_t bits = in & uart_wrap_cfg::LOG_INTR_MASK;
+        log_intr_status_.set_raw(log_intr_status_.raw() | bits);
+        return 0u;
+    });
+    log_en_.on_write([this](uint32_t cur, uint32_t in) {
+        const uint32_t next = (cur & ~uart_wrap_cfg::LOG_EN_MASK)
+                            | (in & uart_wrap_cfg::LOG_EN_MASK);
+        if ((cur & 1u) && !(next & 1u))
+            reset_log_engine();
+        return next;
+    });
+
+    for (auto& e : log_entry_)
+        e = regmodel::Register32{uart_wrap_cfg::LOG_LEN_MASK,
+                                 uart_wrap_cfg::LOG_LEN_MASK, 0};
+
+    regmap_.add(uart_wrap_cfg::OFF_WRAP_CTRL, "UART_EN", wrap_ctrl_)
+           .add(uart_wrap_cfg::OFF_LOG_CTRL, "LOG_EN", log_en_)
+           .add(uart_wrap_cfg::OFF_LOG_REGION_SIZE, "LOG_REGION_SIZE", log_region_size_)
+           .add(uart_wrap_cfg::OFF_LOG_REGION_LO, "LOG_REGION_ADDR_LO", log_region_lo_)
+           .add(uart_wrap_cfg::OFF_LOG_REGION_HI, "LOG_REGION_ADDR_HI", log_region_hi_)
+           .add(uart_wrap_cfg::OFF_LOG_WRITE_ADDR, "LOG_WRITE_ADDR", log_write_addr_)
+           .add(uart_wrap_cfg::OFF_LOG_INTR_STATUS, "LOG_INTR_STATUS", log_intr_status_)
+           .add(uart_wrap_cfg::OFF_LOG_INTR_ENABLE, "LOG_INTR_ENABLE", log_intr_enable_)
+           .add(uart_wrap_cfg::OFF_LOG_INTR_TEST, "LOG_INTR_TEST", log_intr_test_);
+    for (unsigned i = 0; i < uart_wrap_cfg::NUM_LOG_ENTRIES; ++i) {
+        regmap_.add(uart_wrap_cfg::OFF_LOG_ENTRY + i * 4u,
+                    std::string("LOG_CTRL") + std::to_string(i), log_entry_[i]);
+    }
+
+    reg_socket.register_b_transport(this, &uart_wrap::b_transport);
+    reg_socket.register_transport_dbg(this, &uart_wrap::transport_dbg);
+    SC_METHOD(reset_proc);
+    sensitive << rst_n_i;
+    dont_initialize();
+    SIM_LOG_INFO(this, "uart_wrap instantiated (ctrl@0x0 log_engine@0x200)");
+}
+
+void uart_wrap::reset_log_engine()
+{
+    log_en_.reset(0);
+    log_region_size_.reset(0);
+    log_region_lo_.reset(0);
+    log_region_hi_.reset(0);
+    log_write_addr_.reset(0);
+    log_intr_status_.reset(0);
+    log_intr_enable_.reset(0);
+    log_intr_test_.reset(0);
+    for (auto& e : log_entry_) e.reset(0);
+}
+
+void uart_wrap::reset_proc()
+{
+    if (!rst_n_i.read()) {
+        wrap_ctrl_.reset(0);
+        reset_log_engine();
+    }
+}
+
+void uart_wrap::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
+{
+    const auto cmd = gp.get_command();
+    const uint64_t adr = gp.get_address();
+    const uint32_t len = gp.get_data_length();
+    uint8_t* const buf = gp.get_data_ptr();
+
+    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
+        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
+        return;
+    }
+    if (len != 4) {
+        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+    if (adr >= uart_wrap_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
+        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        return;
+    }
+
+    if (cmd == tlm::TLM_READ_COMMAND) {
+        uint32_t v = 0;
+        (void)regmap_.read(adr, v); // miss → RAZ
+        std::memcpy(buf, &v, 4);
+        SIM_LOG_TRACE(this, "read  off=0x" << std::hex << adr << " data=0x" << v);
+    } else {
+        uint32_t v = 0;
+        std::memcpy(&v, buf, 4);
+        (void)regmap_.write(adr, v); // miss → WI
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << adr << " data=0x" << v);
+    }
+    delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
+    gp.set_response_status(tlm::TLM_OK_RESPONSE);
+}
+
+unsigned int uart_wrap::transport_dbg(tlm::tlm_generic_payload& gp)
+{
+    const uint64_t adr = gp.get_address();
+    const uint32_t len = gp.get_data_length();
+    if (len != 4 || adr >= uart_wrap_cfg::WINDOW_SIZE || (adr & 0x3u) != 0)
+        return 0;
+    uint32_t v = 0;
+    if (gp.is_read()) {
+        (void)regmap_.read(adr, v);
+        std::memcpy(gp.get_data_ptr(), &v, 4);
+    } else {
+        std::memcpy(&v, gp.get_data_ptr(), 4);
+        (void)regmap_.write(adr, v);
+    }
+    gp.set_response_status(tlm::TLM_OK_RESPONSE);
+    return 4;
+}
+
 } // namespace smc

@@ -12,12 +12,12 @@ HCI command/response/TX/RX/IBI queues, device tables, and interrupt.
 The model tracks the RTL instantiated in the SMC sub-system:
 
 - `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3ccore_wrapper.sv` — multi-instance
-  top; AXI-Lite address demux (`INSTANCE_SPACING = 0x500`).
+  top; AXI-Lite address demux (`INSTANCE_SPACING = 0x1000`).
 - `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3c_wrapper.sv` — per-instance wrapper.
 - `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3c.sv` — main I3C module (HCI queues,
   controller/target FSMs, PHY).
 - `tt-oca-harness/hw/periph/i3ccore_wrap/rtl/i3ccore_wrap_pkg.sv` —
-  `MAX_NUM_I3CS = 6`, `I3C_INSTANCE_SPACING = 0x500`, `I3C_REG_ADDR_WIDTH = 11`.
+  `MAX_NUM_I3CS = 6`, `I3C_INSTANCE_SPACING = 0x1000`, `I3C_REG_ADDR_WIDTH = 12`.
 - `tt-oca-harness/hw/periph/i3ccore_wrap/data/registers/rdl/oca_i3c_wrap.rdl` —
   `I3CCSR` register block.
 - `tt-oca-harness/hw/periph/i3ccore_wrap/doc/{architecture,memmap,interface}.adoc` —
@@ -26,7 +26,7 @@ The model tracks the RTL instantiated in the SMC sub-system:
   `u_i3ccore_wrapper` instantiation (`NUM_I3C = 6`, `BASE = 0xC000_5000`).
 - `tt-oca-harness/hw/smc/smc_config_pkg.sv` — `NUM_I3C = 6`.
 - `tt-oca-harness/hw/smc/data/registers/rdl/smc_top.rdl` —
-  `oca_i3c_wrap_0 @ BASE_ADDR + 0x000_5000`, six instances at 0x500 spacing.
+  `oca_i3c_wrap @ BASE_ADDR + 0x003_A000`, six instances at 0x1000 spacing.
 
 Architecture, CSRs, and programming are in the hardware TRM. Model and
 test docs:
@@ -114,8 +114,8 @@ See `doc/implementation.adoc` for the CCI catalogue and `smc-vp` bind.
 ## Behaviour highlights
 
 - **Multi-instance decode**: the single `reg_socket` carries the whole
-  `num_instances × 0x500` aperture; `instance = offset / 0x500`,
-  `local_offset = offset % 0x500` — exactly the RTL `axi_lite_demux`.
+  `num_instances × 0x1000` aperture; `instance = offset / 0x1000`,
+  `local_offset = offset % 0x1000` — exactly the RTL `axi_lite_demux`.
 - **Register block** (per instance, 11-bit window): the I3CCSR HCI v1.2 map —
   `HCI_VERSION` (0x120), `HC_CONTROL`, `RESET_CONTROL`, `PRESENT_STATE`,
   `INTR_*` / `PIO_INTR_*` (RW1C), `COMMAND/RESPONSE/XFER_DATA/IBI` FIFO ports,

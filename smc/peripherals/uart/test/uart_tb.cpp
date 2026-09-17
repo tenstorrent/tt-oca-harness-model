@@ -165,8 +165,10 @@ struct driver : sc_core::sc_module {
 struct tb : sc_core::sc_module {
     SC_HAS_PROCESS(tb);
 
-    smc::uart dut;
-    driver    drv;
+    smc::uart      dut;
+    smc::uart_wrap wrap;
+    driver         drv;
+    driver         wrap_drv;
 
     sc_core::sc_signal<bool> rst_n;
     sc_core::sc_signal<bool> tx_sig, rx_sig;
@@ -177,7 +179,9 @@ struct tb : sc_core::sc_module {
     explicit tb(sc_module_name n)
         : sc_module(n)
         , dut("uart")
+        , wrap("uart_wrap")
         , drv("drv")
+        , wrap_drv("wrap_drv")
         , rst_n("rst_n")
         , tx_sig("tx_sig"), rx_sig("rx_sig")
         , cts_n("cts_n"), dsr_n("dsr_n"), ri_n("ri_n"), dcd_n("dcd_n")
@@ -185,7 +189,9 @@ struct tb : sc_core::sc_module {
         , rxrdy("rxrdy"), txrdy("txrdy"), err("err"), irq("irq")
     {
         drv.sock.bind(dut.reg_socket);
+        wrap_drv.sock.bind(wrap.reg_socket);
         dut.rst_n_i(rst_n);
+        wrap.rst_n_i(rst_n);
         dut.tx_o(tx_sig);   dut.rx_i(rx_sig);
         dut.cts_ni(cts_n);  dut.dsr_ni(dsr_n);
         dut.ri_ni(ri_n);    dut.dcd_ni(dcd_n);
@@ -708,6 +714,39 @@ void tb::run() {
                       << (h.is_preset_value() ? " [preset]" : " [default]") << "\n";
         }
         std::cout << "  [PASS] CCI introspection\n";
+    }
+
+    // ----------------------------------------------------------------------
+    // uart_wrap: log-engine-ctrl @0x0 and log_engine @0x200
+    // ----------------------------------------------------------------------
+    {
+        using C = smc::uart_wrap_cfg;
+        wrap_drv.write32(C::OFF_WRAP_CTRL, 0x1);
+        EXPECT_EQ(0x1u, wrap_drv.read32(C::OFF_WRAP_CTRL));
+        wrap_drv.write32(C::OFF_LOG_CTRL, 0x1);
+        wrap_drv.write32(C::OFF_LOG_REGION_SIZE, 0x12345);
+        wrap_drv.write32(C::OFF_LOG_REGION_LO, 0xAABBCCDD);
+        wrap_drv.write32(C::OFF_LOG_REGION_HI, 0xFF123456);
+        wrap_drv.write32(C::OFF_LOG_WRITE_ADDR, 0x1000);
+        wrap_drv.write32(C::OFF_LOG_ENTRY, 0x80);
+        EXPECT_EQ(0x1u, wrap_drv.read32(C::OFF_LOG_CTRL));
+        EXPECT_EQ(0x12345u, wrap_drv.read32(C::OFF_LOG_REGION_SIZE));
+        EXPECT_EQ(0xAABBCCDDu, wrap_drv.read32(C::OFF_LOG_REGION_LO));
+        EXPECT_EQ(0x00123456u, wrap_drv.read32(C::OFF_LOG_REGION_HI));
+        EXPECT_EQ(0x80u, wrap_drv.read32(C::OFF_LOG_ENTRY));
+        wrap_drv.write32(C::OFF_LOG_INTR_TEST, 0x11);
+        EXPECT_EQ(0x11u, wrap_drv.read32(C::OFF_LOG_INTR_STATUS));
+        wrap_drv.write32(C::OFF_LOG_INTR_STATUS, 0x01);
+        EXPECT_EQ(0x10u, wrap_drv.read32(C::OFF_LOG_INTR_STATUS));
+        wrap_drv.write32(C::OFF_LOG_CTRL, 0x0); // disable resets log engine
+        EXPECT_EQ(0u, wrap_drv.read32(C::OFF_LOG_REGION_SIZE));
+        EXPECT_EQ(0x1u, wrap_drv.read32(C::OFF_WRAP_CTRL)); // wrap ctrl survives
+        uint32_t dbg = 0;
+        EXPECT_EQ(4u, wrap_drv.dbg_read(C::OFF_WRAP_CTRL, dbg));
+        EXPECT_EQ(0x1u, dbg);
+        EXPECT_EQ(4u, wrap_drv.dbg_write(C::OFF_WRAP_CTRL, 0));
+        EXPECT_EQ(0u, wrap_drv.read32(C::OFF_WRAP_CTRL));
+        std::cout << "  [PASS] uart_wrap CSRs\n";
     }
 
     // dump_state for visual inspection / coverage of the dump path.

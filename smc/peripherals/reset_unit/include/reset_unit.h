@@ -52,8 +52,6 @@
  * 0x60    SS_RESET_COMPLETE                    r    0x00000000   Per-SS reset-complete status (HW driven)
  * 0x70    SS_COLD_RESET_LOCK                   rw   0x00000000   woset: write-1-to-set sticky lock
  * 0x80    SS_FORCE_TO_REF_CLK                  rw   0x00000000   Force SS clock to ref clk during reset
- * 0x90    STRAPS_LO                            r    (HW)         Captured straps[31:0]
- * 0x94    STRAPS_HI                            r    (HW)         Captured straps[63:32]
  * 0xA8    SYNC_REG                             rw   0x00000000   bit0: global sync IRQ
  * 0xB0    ISOLATE_REQ_REG                      rw   0x00000000   SW isolate request (per-SS)
  * 0xB4    ISOLATE_REQ_PINEN_REG                rw   0x00000000   Enable external pin → isolate
@@ -266,8 +264,6 @@ struct reset_unit_cfg {
     static constexpr uint64_t SS_RESET_COMPLETE                   = 0x60;
     static constexpr uint64_t SS_COLD_RESET_LOCK                  = 0x70;
     static constexpr uint64_t SS_FORCE_TO_REF_CLK                 = 0x80;
-    static constexpr uint64_t STRAPS_LO                           = 0x90;
-    static constexpr uint64_t STRAPS_HI                           = 0x94;
     static constexpr uint64_t SYNC_REG                            = 0xA8;
     static constexpr uint64_t ISOLATE_REQ_REG                     = 0xB0;
     static constexpr uint64_t ISOLATE_REQ_PINEN_REG               = 0xB4;
@@ -311,7 +307,7 @@ struct reset_unit_cfg {
  * | `isolate_req_pin_i`           | in  | 1b    | External isolate-request pin. |
  * | `cfg_flr_pf_active_i`         | in  | 1b    | PCIe FLR active (rising edge starts cool-reset flow). |
  * | `ss_reset_complete_i`         | in  | 32b   | Per-subsystem reset-complete status. |
- * | `captured_straps_i`           | in  | 64b   | Captured GPIO straps (visible via STRAPS_LO/HI). |
+ * | `captured_straps_i`           | in  | 64b   | Captured GPIO straps (MMIO is the separate `straps` addrmap). |
  * | `powergood_stable_o`          | out | 1b    | Stable (stretched) power-good. |
  * | `rst_cold_stable_ref_clk_no`  | out | 1b    | Stable cold reset, ref-clk domain. |
  * | `rst_cold_stable_smc_clk_no`  | out | 1b    | Stable cold reset, SMC-clk domain. |
@@ -547,6 +543,36 @@ private:
 
     // Output idempotence caches (avoid spurious value-changed events).
     std::vector<reset_ctrl_t> ss_ctrl_cache_;
+};
+
+// ---------------------------------------------------------------------------
+// straps — PeakRDL `straps` addrmap (SMC_EXTERNAL + 0x5800)
+// ---------------------------------------------------------------------------
+
+struct straps_cfg {
+    static constexpr uint64_t OFF_STRAPS_LO  = 0x0;
+    static constexpr uint64_t OFF_STRAPS_HI  = 0x4;
+    static constexpr uint64_t WINDOW_SIZE    = 0x8;
+    static constexpr uint32_t STRAPS_HI_MASK = 0x1FFFFFFFu; ///< [28:0]
+    static constexpr uint64_t SMC_BASE_ADDR  = 0xC040'5800ULL;
+};
+
+/// Firmware-visible captured GPIO straps. Separate from reset_unit.rdl.
+class straps : public sc_core::sc_module {
+    cci::cci_param<double> access_delay_ns_p_;
+
+public:
+    SC_HAS_PROCESS(straps);
+
+    tlm_utils::simple_target_socket<straps> reg_socket;
+    sc_core::sc_in<uint64_t> captured_straps_i;
+
+    explicit straps(sc_core::sc_module_name name);
+
+private:
+    void         b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
+    unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    bool         reg_read(uint64_t off, uint32_t& data) const;
 };
 
 } // namespace smc

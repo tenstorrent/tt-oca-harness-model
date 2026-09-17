@@ -424,7 +424,7 @@ bool testbench::test_reset()
     // Step 2: Trigger software reset.
     apply_reset();
 
-    // Step 3a: Verify CTRL reset value (0x10000000).
+    // Step 3a: Verify CTRL reset value (0x10000002).
     const uint32_t ctrl_reset_val =
         static_cast<uint32_t>(entropy_src_basetest::CTRL_RESET);  // 0x10000000
     test->register_read_32(entropy_src_basetest::CTRL_OFFSET, read_val);
@@ -1426,7 +1426,7 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
     if (read_val != entropy_src_basetest::CTRL_RESET)
     {
         REG_ERROR(0, logger)
-            << "HW-001: CTRL expected 0x10000000 after hw reset, got 0x"
+            << "HW-001: CTRL expected 0x10000002 after hw reset, got 0x"
             << std::hex << read_val;
         ok = false;
     }

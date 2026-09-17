@@ -141,10 +141,10 @@ class BasicOptions : public Args {
         // defaults for och_sep_ss's smc_global_base/smc_region_size, which model
         // RTL's smc_global_base_addr_i/smc_region_size_i and are what the bus
         // actually decodes against; a platform with a real SMC attached presets
-        // them to the window that SMC declares. 2 MiB covers the SMC regs plus
-        // its SRAM, which is all the standalone fallback store needs.
+        // them to the window that SMC declares. 8 MiB covers the SMC regs,
+        // SRAM, and the straps addrmap at SMC_EXTERNAL + 0x5800 (offset 0x405800).
         addr_t smc_global_start_addr      = 0x40000000;  // SEP_SMC_GLOBAL_BASE
-        addr_t smc_global_end_addr        = 0x401FFFFF;  // 2 MiB (regs + SMC SRAM)
+        addr_t smc_global_end_addr        = 0x407FFFFF;  // 8 MiB
 
         // SMU window (u_axi_demux's SEP_EXT_TO_SMU leg — forwards straight
         // into outbound_filter_mux, no stub of its own). No longer decoded from

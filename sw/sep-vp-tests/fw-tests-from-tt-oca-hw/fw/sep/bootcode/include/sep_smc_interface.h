@@ -35,9 +35,10 @@ static inline uint32_t sep_get_smc_base(void) {
 // SMC register offsets (relative to SMC base)
 // ---------------------------------------------------------------------------
 
-// Reset unit — latched strap values (32-bit LO + 32-bit HI).
-#define SMC_STRAPS_LO_OFFSET        0x2090u
-#define SMC_STRAPS_HI_OFFSET        0x2094u
+// Captured GPIO straps (straps.rdl in SMC_EXTERNAL, not reset_unit).
+// Absolute SMC address 0xC040_5800; SEP window base is 0x4000_0000.
+#define SMC_STRAPS_LO_OFFSET        0x405800u
+#define SMC_STRAPS_HI_OFFSET        0x405804u
 
 // CPU_CTRL scratch registers (64-bit stride: index * 8).
 #define SMC_SCRATCH_BASE_OFFSET     0x10100u

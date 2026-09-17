@@ -71,11 +71,14 @@ void testbench::test_read_write_registers()
     // DIGEST and MSG_LENGTH are only writable when the engine is IDLE; run these
     // before the CMD hash_start test which transitions to PROCESSING.
 
-    // Test 4: DIGEST registers (RW - for context switching)
+    // Test 4: DIGEST registers (hwext: SW write does not echo; used at hash_continue)
     REG_INFO(1, logger) << "\n--- Test 1.4: DIGEST[0] register (offset 0xA4) ---" << std::endl;
     write_val = 0x12345678;
+    uint32_t digest_before = 0;
     read_val = 0;
 
+    test->read_register_32(hmac_basetest::DIGEST_OFFSET, digest_before);
+    wait(5, SC_NS);
     REG_INFO(1, logger) << "Writing 0x" << std::hex << write_val << std::dec
               << " to DIGEST[0] register..." << std::endl;
     test->write_register_32(hmac_basetest::DIGEST_OFFSET, write_val);
@@ -85,7 +88,7 @@ void testbench::test_read_write_registers()
     test->read_register_32(hmac_basetest::DIGEST_OFFSET, read_val);
     wait(5, SC_NS);
 
-    test->assert_equal(write_val, read_val, "DIGEST[0] read-write test");
+    test->assert_equal(digest_before, read_val, "DIGEST[0] SW write does not echo");
 
     // Test 5: MSG_LENGTH_LOWER (RW)
     REG_INFO(1, logger) << "\n--- Test 1.5: MSG_LENGTH_LOWER register (offset 0xE4) ---" << std::endl;
@@ -329,7 +332,7 @@ void testbench::test_reset_functionality()
     test->write_register_32(hmac_basetest::CFG_OFFSET, write_val);
     wait(5, SC_NS);
 
-    // Write to DIGEST[0] register (RW, reset value = 0)
+    // Write to DIGEST[0] (hwext: captured for hash_continue, does not echo)
     write_val = 0xDEADBEEF;
     REG_INFO(1, logger) << "Writing 0x" << std::hex << write_val << std::dec << " to DIGEST[0]..." << std::endl;
     test->write_register_32(hmac_basetest::DIGEST_OFFSET, write_val);
@@ -354,7 +357,9 @@ void testbench::test_reset_functionality()
 
     test->read_register_32(hmac_basetest::DIGEST_OFFSET, read_val);
     wait(5, SC_NS);
-    REG_INFO(1, logger) << "DIGEST[0] = 0x" << std::hex << read_val << std::dec << " (expected 0xDEADBEEF)" << std::endl;
+    REG_INFO(1, logger) << "DIGEST[0] = 0x" << std::hex << read_val << std::dec
+              << " (expected 0x" << hmac_basetest::DIGEST_RESET
+              << ", SW write does not echo)" << std::endl;
 
     test->read_register_32(hmac_basetest::MSG_LENGTH_LOWER_OFFSET, read_val);
     wait(5, SC_NS);
@@ -799,16 +804,19 @@ void testbench::test_readwrite_registers()
     test->assert_equal(expected_cfg_readback(write_val), read_val,
                        "CFG read-write (key_length sanitised to Key_None)");
 
-    // Test DIGEST_0 register (RW)
-    REG_INFO(1, logger) << "\n--- Test 4.4: DIGEST_0 Register (RW) ---" << std::endl;
+    // Test DIGEST_0 register (hwext: SW write does not echo)
+    REG_INFO(1, logger) << "\n--- Test 4.4: DIGEST_0 Register (hwext) ---" << std::endl;
     write_val = 0x12345678;
+    uint32_t digest_before = 0;
+    test->read_register_32(hmac_basetest::DIGEST_OFFSET, digest_before);
+    wait(5, SC_NS);
     REG_INFO(1, logger) << "Writing 0x" << std::hex << write_val << std::dec << " to DIGEST_0..." << std::endl;
     test->write_register_32(hmac_basetest::DIGEST_OFFSET, write_val);
     wait(5, SC_NS);
 
     test->read_register_32(hmac_basetest::DIGEST_OFFSET, read_val);
     wait(5, SC_NS);
-    test->assert_equal(write_val, read_val, "DIGEST_0 read-write");
+    test->assert_equal(digest_before, read_val, "DIGEST_0 SW write does not echo");
 
     // Test MSG_LENGTH_LOWER register (RW)
     REG_INFO(1, logger) << "\n--- Test 4.5: MSG_LENGTH_LOWER Register (RW) ---" << std::endl;
@@ -833,5 +841,5 @@ void testbench::test_readwrite_registers()
     test->assert_equal(write_val, read_val, "MSG_LENGTH_UPPER read-write");
 
     REG_INFO(1, logger) << "\n--- Test Complete: Read-Write Registers ---" << std::endl;
-    REG_INFO(1, logger) << "INTR_STATE, INTR_ENABLE, CFG, DIGEST_*, MSG_LENGTH_* verified as read-write" << std::endl;
+    REG_INFO(1, logger) << "INTR_STATE, INTR_ENABLE, CFG, MSG_LENGTH_* verified as read-write; DIGEST_* is hwext" << std::endl;
 }

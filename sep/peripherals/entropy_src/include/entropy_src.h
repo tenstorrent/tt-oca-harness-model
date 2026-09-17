@@ -140,7 +140,7 @@ public:
      *                    Must be at least 0x160 to cover all 66 registers
      *                    (highest offset 0x150 + 4 bytes).
      */
-    entropy_src_ip(sc_module_name n, unsigned int memory_size = 0x160)
+    entropy_src_ip(sc_module_name n, unsigned int memory_size = 0x180)
         : entropy_src_base(n, memory_size)
         , entropy_src_if()
         , rst_ni("rst_ni")
@@ -166,9 +166,17 @@ public:
             "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
         logger.setFunctionTrace(false);
 
-        // Register the eight behavioural callbacks with the regmodel memory layer.
+        // Register the behavioural callbacks with the regmodel memory layer.
         // Offsets are divided by sizeof(DT) (= 4) to obtain the word index
         // used internally by regmodel::Memory.
+        memory.register_write_callback(
+            [this](DT v) {
+                FIPS_LOCK = static_cast<DT>(FIPS_LOCK)
+                          | (v & static_cast<DT>(FIPS_LOCK.write_bit_mask));
+                return true;
+            },
+            FIPS_LOCK.offset);
+
         memory.register_write_callback(
             [this](DT v) { return this->handle_write_CTRL(v); },
             CTRL.offset);
@@ -200,6 +208,14 @@ public:
         memory.register_write_callback(
             [this](DT v) { return this->handle_write_RING_OSC_ENABLE(v); },
             RING_OSC_ENABLE.offset);
+
+        memory.register_write_callback(
+            [this](DT v) { return this->handle_write_ALERT_THRESHOLD(v); },
+            ALERT_THRESHOLD.offset);
+
+        memory.register_write_callback(
+            [this](DT v) { return this->handle_write_MIN_ENTROPY_H(v); },
+            MIN_ENTROPY_H.offset);
 
         memory.register_read_callback(
             [this](DT &v) { return this->handle_read_FIFO_RDATA(v); },
@@ -310,6 +326,9 @@ public:
      * boot-phase model, so it is a plain member rather than an override.
      */
     bool handle_write_RING_OSC_ENABLE(uint32_t value);
+    bool handle_write_ALERT_THRESHOLD(uint32_t value);
+    bool handle_write_MIN_ENTROPY_H(uint32_t value);
+    void update_boot_phase_done();
 
     // =========================================================================
     // entropy_src_if — read callback implementation

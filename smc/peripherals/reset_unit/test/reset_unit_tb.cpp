@@ -13,7 +13,7 @@
 //   • JTAG overrides (cold reset + per-subsystem warm reset)
 //   • FLR cool-reset flow: isolate_req_smc set, skip_mem_repair, rst_cool_no pulse
 //   • isolate-request logic (SW reg + pin-enable + smc-enable)
-//   • STRAPS_LO / STRAPS_HI reflect captured straps
+//   • reset_unit 0x90/0x94 is a hole; straps addrmap reflects captured straps
 //   • register reset domains: cold reset clears all; cool reset retains FLR regs
 //   • transport_dbg back-door read/write
 //   • CCI introspection / mutation / immutability
@@ -124,6 +124,17 @@ struct driver : sc_core::sc_module {
         sock->b_transport(gp, t);
         return gp.get_response_status();
     }
+
+    unsigned dbg_read(uint64_t addr, uint32_t& out) {
+        tlm::tlm_generic_payload gp;
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(&out));
+        gp.set_data_length(4);
+        gp.set_streaming_width(4);
+        gp.set_byte_enable_ptr(nullptr);
+        return sock->transport_dbg(gp);
+    }
 };
 
 using smc::reset_unit_cfg;
@@ -135,7 +146,9 @@ struct tb : sc_core::sc_module {
     SC_HAS_PROCESS(tb);
 
     smc::reset_unit dut;
+    smc::straps     strap_dut;
     driver          drv;
+    driver          strap_drv;
 
     // Input signals.
     sc_core::sc_signal<bool>     powergood{"powergood"};
@@ -167,9 +180,11 @@ struct tb : sc_core::sc_module {
     sc_core::sc_vector<sc_core::sc_signal<smc::reset_ctrl_t>> ss_ctrl{"ss_ctrl", 32};
 
     explicit tb(sc_module_name n)
-        : sc_module(n), dut("reset_unit"), drv("drv")
+        : sc_module(n), dut("reset_unit"), strap_dut("strap_regs"), drv("drv"),
+          strap_drv("strap_drv")
     {
         drv.sock.bind(dut.reg_socket);
+        strap_drv.sock.bind(strap_dut.reg_socket);
 
         dut.powergood_i(powergood);
         dut.rst_cold_ni(rst_cold_n);
@@ -182,6 +197,7 @@ struct tb : sc_core::sc_module {
         dut.cfg_flr_pf_active_i(cfg_flr);
         dut.ss_reset_complete_i(ss_reset_complete);
         dut.captured_straps_i(straps);
+        strap_dut.captured_straps_i(straps);
 
         dut.powergood_stable_o(powergood_stable);
         dut.rst_cold_stable_ref_clk_no(cold_stable_ref);
@@ -300,13 +316,27 @@ struct tb : sc_core::sc_module {
         std::cout << "  [PASS] SS_CONFIG drives ss_config_o\n";
 
         // ------------------------------------------------------------------
-        // 6. STRAPS reflect captured straps input.
+        // 6. reset_unit hole at 0x90/0x94; straps addrmap follows the input.
         // ------------------------------------------------------------------
         straps.write(0xCAFEF00D'12345678ull);
         settle();
-        EXPECT_EQ(uint32_t(0x12345678u), drv.read(reset_unit_cfg::STRAPS_LO));
-        EXPECT_EQ(uint32_t(0xCAFEF00Du), drv.read(reset_unit_cfg::STRAPS_HI));
-        std::cout << "  [PASS] STRAPS_LO/HI reflect captured straps\n";
+        EXPECT_EQ(uint32_t(0), drv.read(0x90));
+        EXPECT_EQ(uint32_t(0), drv.read(0x94));
+        EXPECT_EQ(uint32_t(0x12345678u), strap_drv.read(smc::straps_cfg::OFF_STRAPS_LO));
+        EXPECT_EQ(uint32_t(0x0AFEF00Du), strap_drv.read(smc::straps_cfg::OFF_STRAPS_HI));
+        strap_drv.write(smc::straps_cfg::OFF_STRAPS_LO, 0xDEADBEEFu);
+        EXPECT_EQ(uint32_t(0x12345678u), strap_drv.read(smc::straps_cfg::OFF_STRAPS_LO));
+        uint32_t scratch = 0;
+        EXPECT_TRUE(strap_drv.raw_xfer(tlm::TLM_READ_COMMAND, 0x8, 4, &scratch)
+                    == tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        EXPECT_TRUE(strap_drv.raw_xfer(tlm::TLM_READ_COMMAND, 0x0, 2, &scratch)
+                    == tlm::TLM_BURST_ERROR_RESPONSE);
+        {
+            uint32_t v = 0;
+            EXPECT_EQ(4u, strap_drv.dbg_read(0, v));
+            EXPECT_EQ(uint32_t(0x12345678u), v);
+        }
+        std::cout << "  [PASS] straps addrmap reflects captured straps\n";
 
         // ------------------------------------------------------------------
         // 7. Cold reset asserts the whole tree and clears all registers.
@@ -559,10 +589,10 @@ struct tb : sc_core::sc_module {
         // Read-only registers: writes are silently ignored.
         drv.write(reset_unit_cfg::SS_RESET_COMPLETE, 0xFFFFFFFFu);
         EXPECT_EQ(uint32_t(0x000000A5u), drv.read(reset_unit_cfg::SS_RESET_COMPLETE));
-        drv.write(reset_unit_cfg::STRAPS_LO, 0xDEADBEEFu);
-        EXPECT_EQ(uint32_t(0x12345678u), drv.read(reset_unit_cfg::STRAPS_LO));
-        drv.write(reset_unit_cfg::STRAPS_HI, 0xDEADBEEFu);
-        EXPECT_EQ(uint32_t(0xCAFEF00Du), drv.read(reset_unit_cfg::STRAPS_HI));
+        drv.write(0x90, 0xDEADBEEFu);
+        EXPECT_EQ(uint32_t(0), drv.read(0x90));
+        drv.write(0x94, 0xDEADBEEFu);
+        EXPECT_EQ(uint32_t(0), drv.read(0x94));
         drv.write(reset_unit_cfg::ISOLATE_REQ_VIS, 0xFFFFFFFFu); // RO no-op
         std::cout << "  [PASS] SS_COLD_RESET_LOCK woset + read-only write no-ops\n";
 

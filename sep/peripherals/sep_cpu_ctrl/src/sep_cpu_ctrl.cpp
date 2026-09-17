@@ -101,6 +101,12 @@ void sep_cpu_ctrl_ip::register_callbacks()
     std::function<bool(DT)> timeout_clear_write = std::bind(&sep_cpu_ctrl_ip::handle_write_TIMEOUT_CLEAR, this, _1, TIMEOUT_CLEAR.write_bit_mask);
     memory.register_write_callback(timeout_clear_write, TIMEOUT_CLEAR.offset);
 
+    std::function<bool(DT)> dma_bus_err_clear_write = std::bind(&sep_cpu_ctrl_ip::handle_write_DMA_BUS_ERR_CLEAR, this, _1, DMA_BUS_ERR_CLEAR.write_bit_mask);
+    memory.register_write_callback(dma_bus_err_clear_write, DMA_BUS_ERR_CLEAR.offset);
+
+    std::function<bool(DT)> periph_bus_err_clear_write = std::bind(&sep_cpu_ctrl_ip::handle_write_PERIPH_BUS_ERR_CLEAR, this, _1, PERIPH_BUS_ERR_CLEAR.write_bit_mask);
+    memory.register_write_callback(periph_bus_err_clear_write, PERIPH_BUS_ERR_CLEAR.offset);
+
     std::function<bool(DT)> ref_counter_write = std::bind(&sep_cpu_ctrl_ip::handle_write_REFERENCE_COUNTER, this, _1, REFERENCE_COUNTER.write_bit_mask);
     memory.register_write_callback(ref_counter_write, REFERENCE_COUNTER.offset);
 
@@ -217,6 +223,23 @@ bool sep_cpu_ctrl_ip::handle_write_TIMEOUT_CLEAR(DT value, DT write_bit_mask)
     if (clear & (DT(1) << 7)) hwif_in.outbound_mailbox_timeout_int  = false;
 
     TIMEOUT_CLEAR = 0;  // singlepulse — never retains state
+    return true;
+}
+
+bool sep_cpu_ctrl_ip::handle_write_DMA_BUS_ERR_CLEAR(DT value, DT write_bit_mask)
+{
+    if ((value & write_bit_mask) != 0) {
+        DMA_BUS_ERR_STATUS = 0;
+    }
+    DMA_BUS_ERR_CLEAR = 0;
+    return true;
+}
+
+bool sep_cpu_ctrl_ip::handle_write_PERIPH_BUS_ERR_CLEAR(DT value, DT write_bit_mask)
+{
+    const DT pulse = value & write_bit_mask;
+    PERIPH_BUS_ERR_STATUS = static_cast<DT>(PERIPH_BUS_ERR_STATUS) & ~pulse;
+    PERIPH_BUS_ERR_CLEAR = 0;
     return true;
 }
 

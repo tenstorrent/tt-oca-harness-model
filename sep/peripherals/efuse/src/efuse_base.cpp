@@ -6,6 +6,7 @@ void efuse_base::reset_all_registers()
 {
     LOCKS_LO.reset();
     LOCKS_HI.reset();
+    LOCKS_SPARE.reset();
     LC_STATE.reset();
     SBOOT_DIS.reset();
     TRANSIENT_RMA_EN.reset();
@@ -43,19 +44,12 @@ void efuse_base::reset_all_registers()
     for (size_t i = 0; i < 8; i++) SPARE5[i].reset();
     for (size_t i = 0; i < 8; i++) SPARE6[i].reset();
     for (size_t i = 0; i < 8; i++) SPARE7[i].reset();
+    for (size_t i = 0; i < 8; i++) SPARE8[i].reset();
     REQUIRED_SIGNERS.reset();
     REQUIRED_ALGS.reset();
     STATUS_RPT.reset();
     SEP_ROM_CTRL.reset();
     SEP_SPI_CTRL_FIELD_EN.reset();
-    SPI_DISCOVERY_CTRL.reset();
-    SPI_PHY_DQ_TIMING.reset();
-    SPI_PHY_DQS_TIMING.reset();
-    SPI_PHY_GATE_LPBK.reset();
-    SPI_PHY_DLL_SLAVE.reset();
-    SPI_PHY_DLL_MASTER.reset();
-    SPI_PHY_MISC.reset();
-    SPI_RB_VALID_TIME.reset();
 
     // EFUSE_INTERFACE_CTRL — STATUS reset=0x1 (efuse_sense_done=1)
     EFUSE_INTERFACE_CTRL_STATUS.reset();

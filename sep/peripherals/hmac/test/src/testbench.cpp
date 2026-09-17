@@ -1971,17 +1971,9 @@ void testbench::test_wipe_secret()
         test->write_register_32(hmac_basetest::KEY_OFFSET + (i * hmac_basetest::KEY_SPACING), 0xDEADBEEF);
         wait(5, SC_NS);
     }
-    for (int i = 0; i < 8; i++) {   // DIGEST_0 through DIGEST_7
+    for (int i = 0; i < 8; i++) {   // DIGEST_0 through DIGEST_7 (hwext: writes do not echo)
         test->write_register_32(hmac_basetest::DIGEST_OFFSET + (i * hmac_basetest::DIGEST_SPACING), 0xCAFEBABE);
         wait(5, SC_NS);
-    }
-    for (int i = 0; i < 8; i++) {
-        test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * hmac_basetest::DIGEST_SPACING), read_val);
-        wait(5, SC_NS);
-        if (read_val != 0xCAFEBABE) {
-            REG_INFO(1, logger) << "Read value is not same as write value" << std::endl;
-            return;
-        }
     }
     // Step 2: Write pattern to WIPE_SECRET register
     REG_INFO(1, logger) << "\n--- Step 2: Write Pattern to WIPE_SECRET Register ---" << std::endl;

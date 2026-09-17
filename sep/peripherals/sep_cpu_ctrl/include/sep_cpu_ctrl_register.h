@@ -1046,5 +1046,143 @@ class SEP_VERSION_ID_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> Reserved0;
 };
 
+template<unsigned int N>
+class DMA_BUS_ERR_STATUS_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    DMA_BUS_ERR_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x3, 0x0, 0x0),
+      reg_path_err(reg_name + ".reg_path_err", *this, 0, 1),
+      host_path_err(reg_name + ".host_path_err", *this, 1, 1),
+      Reserved0(reg_name + ".Reserved0", *this, 2, 62)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> reg_path_err;
+    regmodel::Bitfield<N> host_path_err;
+    regmodel::Bitfield<N> Reserved0;
+};
+
+template<unsigned int N>
+class DMA_BUS_ERR_CLEAR_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    DMA_BUS_ERR_CLEAR_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0x1, 0x0),
+      clr(reg_name + ".clr", *this, 0, 1),
+      Reserved0(reg_name + ".Reserved0", *this, 1, 63)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> clr;
+    regmodel::Bitfield<N> Reserved0;
+};
+
+template<unsigned int N>
+class PERIPH_BUS_ERR_STATUS_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    PERIPH_BUS_ERR_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x7F, 0x0, 0x0),
+      aes(reg_name + ".aes", *this, 0, 1),
+      hmac(reg_name + ".hmac", *this, 1, 1),
+      kmac(reg_name + ".kmac", *this, 2, 1),
+      otbn(reg_name + ".otbn", *this, 3, 1),
+      csrng(reg_name + ".csrng", *this, 4, 1),
+      edn(reg_name + ".edn", *this, 5, 1),
+      wdt(reg_name + ".wdt", *this, 6, 1),
+      Reserved0(reg_name + ".Reserved0", *this, 7, 57)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> aes;
+    regmodel::Bitfield<N> hmac;
+    regmodel::Bitfield<N> kmac;
+    regmodel::Bitfield<N> otbn;
+    regmodel::Bitfield<N> csrng;
+    regmodel::Bitfield<N> edn;
+    regmodel::Bitfield<N> wdt;
+    regmodel::Bitfield<N> Reserved0;
+};
+
+template<unsigned int N>
+class PERIPH_BUS_ERR_CLEAR_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    PERIPH_BUS_ERR_CLEAR_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0x7F, 0x0),
+      aes(reg_name + ".aes", *this, 0, 1),
+      hmac(reg_name + ".hmac", *this, 1, 1),
+      kmac(reg_name + ".kmac", *this, 2, 1),
+      otbn(reg_name + ".otbn", *this, 3, 1),
+      csrng(reg_name + ".csrng", *this, 4, 1),
+      edn(reg_name + ".edn", *this, 5, 1),
+      wdt(reg_name + ".wdt", *this, 6, 1),
+      Reserved0(reg_name + ".Reserved0", *this, 7, 57)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> aes;
+    regmodel::Bitfield<N> hmac;
+    regmodel::Bitfield<N> kmac;
+    regmodel::Bitfield<N> otbn;
+    regmodel::Bitfield<N> csrng;
+    regmodel::Bitfield<N> edn;
+    regmodel::Bitfield<N> wdt;
+    regmodel::Bitfield<N> Reserved0;
+};
+
 
 }
