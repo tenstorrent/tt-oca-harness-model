@@ -158,7 +158,7 @@ class entropy_src_basetest : public sc_module
     enum Register_Write_Access
     {
       COMPONENT_ID_WRITE = (0x0), 
-      CTRL_WRITE = (0x13FF0111),
+      CTRL_WRITE = (0x13FF0110),
       STATUS_WRITE = (0x0),
       DEBUG_CTRL_WRITE = (0x000007FF),
       INTR_STATUS_WRITE = (0x0), 

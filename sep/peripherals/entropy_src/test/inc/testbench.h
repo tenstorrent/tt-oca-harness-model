@@ -107,7 +107,7 @@ private:
     // =========================================================================
 
     /**
-     * @brief Apply a software reset to the DUT via CTRL.RESET
+     * @brief Apply a reset to the DUT via rst_ni (TRNG domain)
      *
      * Writes 0x1 to CTRL (offset 0x04) through the test harness, which
      * triggers the entropy_src::handle_write_CTRL callback to execute the

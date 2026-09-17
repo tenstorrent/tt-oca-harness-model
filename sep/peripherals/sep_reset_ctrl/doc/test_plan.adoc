@@ -7,7 +7,7 @@
 ====== Standalone bench
 
 `sep_reset_ctrl_testbench` (`test/src/sep_reset_ctrl_testbench.cpp`)
-is a TLM initiator into SW_RESET_N plus `global_rst_ni` and the five
+is a TLM initiator into SW_RESET_N plus `global_rst_ni` and the seven
 output pins.
 
 Success: the harness cases and the two pin-level tests pass;
@@ -44,7 +44,7 @@ Sources: `test/src/sep_reset_ctrl_test.cpp`,
 |===
 |ID |Name |What the model test proves |Type
 |1 |Reset values |Default SW_RESET_N (KM held, crypto released) |Positive
-|2 |Register access |RW of the five bits |Positive
+|2 |Register access |RW of the seven bits |Positive
 |3 |Output updates |Each bit drives the matching `rst_n` |Positive
 |4 |Global reset behaviour |CSR returns to default |Positive
 |5 |Pin-level reset |Outputs follow AND with `global_rst_ni` |Positive

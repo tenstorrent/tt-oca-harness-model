@@ -53,8 +53,8 @@ class CTRL_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x13FF0111, 0x13FF0111, 0x10000000),
-      RESET(reg_name + ".RESET", *this, 0, 1), 
+      regmodel::Reg<N>(reg_name, memory, offset, 0x13FF0111, 0x13FF0110, 0x10000000),
+      RSVD0(reg_name + ".RSVD0", *this, 0, 1), 
       reserved0(reg_name + ".reserved0", *this, 1, 3), 
       AUTOTUNE_ENABLE(reg_name + ".AUTOTUNE_ENABLE", *this, 4, 1), 
       reserved1(reg_name + ".reserved1", *this, 5, 3), 
@@ -79,7 +79,7 @@ class CTRL_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator|=;
     using regmodel::Reg<N>::operator>>=;
     using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> RESET;
+    regmodel::Bitfield<N> RSVD0;
     regmodel::Bitfield<N> reserved0;
     regmodel::Bitfield<N> AUTOTUNE_ENABLE;
     regmodel::Bitfield<N> reserved1;

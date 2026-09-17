@@ -4650,6 +4650,8 @@ typedef struct {
     uint64_t aes_sw_rst_n : 1;
     uint64_t hmac_sw_rst_n : 1;
     uint64_t kmac_sw_rst_n : 1;
+    uint64_t trng_sw_rst_n : 1;
+    uint64_t abr_sw_rst_n : 1;
 } SEP_RESET_CTRL_SW_RESET_N_reg_t;
 
 typedef union {
@@ -4657,7 +4659,7 @@ typedef union {
     SEP_RESET_CTRL_SW_RESET_N_reg_t f;
 } SEP_RESET_CTRL_SW_RESET_N_reg_u;
 
-#define SEP_RESET_CTRL_SW_RESET_N_REG_DEFAULT (0x0000001E)
+#define SEP_RESET_CTRL_SW_RESET_N_REG_DEFAULT (0x0000007E)
 
 
 typedef struct {
@@ -9705,6 +9707,12 @@ typedef struct {
 
 #define SEP_RESET_CTRL_SW_RESET_N_KMAC_SW_RST_N_MASK  0x10
 #define SEP_RESET_CTRL_SW_RESET_N_KMAC_SW_RST_N_SHIFT 4
+
+#define SEP_RESET_CTRL_SW_RESET_N_TRNG_SW_RST_N_MASK  0x20
+#define SEP_RESET_CTRL_SW_RESET_N_TRNG_SW_RST_N_SHIFT 5
+
+#define SEP_RESET_CTRL_SW_RESET_N_ABR_SW_RST_N_MASK  0x40
+#define SEP_RESET_CTRL_SW_RESET_N_ABR_SW_RST_N_SHIFT 6
 
 #define OTBN_INTR_STATE_DONE_MASK  0x1
 #define OTBN_INTR_STATE_DONE_SHIFT 0

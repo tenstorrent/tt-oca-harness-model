@@ -151,14 +151,9 @@ void entropy_src_ip::interrupt_output_method()
  ******************************************************************************/
 void entropy_src_ip::update_fifo_status()
 {
-    // LEVEL: current queue occupancy, saturated at FIFO_DEPTH (32).
-    // m_fifo.size() can never exceed FIFO_DEPTH because the background thread
-    // guards against overflow, but the cap is applied defensively.
+    // LEVEL: current queue occupancy. The generation thread never pushes
+    // past FIFO_DEPTH, so size() is already the software-visible level.
     uint32_t level = static_cast<uint32_t>(m_fifo.size());
-    if (level > FIFO_DEPTH)
-    {
-        level = FIFO_DEPTH;
-    }
 
     // Encode all three fields into a single 32-bit word:
     //   bits [6:0]   = LEVEL
@@ -184,310 +179,20 @@ void entropy_src_ip::update_fifo_status()
 // =============================================================================
 
 /******************************************************************************
- * @brief Write callback for CTRL register (offset 0x04) — Software
- *        Reset Sequence
+ * @brief Write callback for CTRL register (offset 0x04)
  *
- * Invoked by regmodel after every write to CTRL (0x04).  When CTRL.RESET (bit 0)
- * is set in the written value, this callback executes the full eight-action
- * software reset sequence.
- *
- * Writes that do NOT set CTRL[0] (e.g. writes to DOWNSAMPLE_RATE, AUTOTUNE_ENABLE,
- * BYPASS_COMPRESSOR only) are stored by regmodel before the callback fires; this
- * callback applies the write mask and returns without further action.
- *
- * ## Eight-Action Software Reset Sequence
- *
- * **Action 1 — Interrupt background thread:**
- *   Set `m_reset_in_progress = true`, then notify `m_reset_event` with
- *   SC_ZERO_TIME.  The flag is set BEFORE the notification to guarantee
- *   coherency: the background SC_THREAD checks `m_reset_in_progress` after
- *   every `wait()` return to distinguish a reset interrupt from a normal
- *   timeout, even in the edge case where both events are scheduled at the same
- *   delta cycle.
- *   Trigger "Software reset (CTRL[0]=1)".
- *
- * **Action 2 — Drain internal FIFO queue:**
- *   Pop all entries from `m_fifo` until empty.  Reset `m_wptr` and `m_rptr`
- *   to 0.  Any in-flight entropy values are permanently discarded.
- *   "FIFO cleared on reset"; FIFO_STATUS fields
- *   LEVEL[6:0], WPTR[12:8], RPTR[20:16] — all reset to 0.
- *
- * **Action 3 — Clear FIFO_STATUS register:**
- *   Write 0x00000000 directly to the FIFO_STATUS regmodel register object via the
- *   assignment operator (bypasses b_transport and callback dispatch — correct
- *   for an RO register that has no write callback).  Encodes LEVEL=0, WPTR=0,
- *   RPTR=0 atomically in a single 32-bit write.
- *   Architecture map: registers.FIFO_STATUS (0x24), reset_value 0x00000000.
- *
- * **Action 4 — Clear all 21 health test counter and status registers:**
- *   Write 0x00000000 to each of the following RO registers via regmodel direct
- *   assignment (no callback for RO registers):
- *     HEALTH_TEST_STATUS        (0x40)
- *     REPETITION_TEST_COUNT     (0x44)
- *     APT_PATTERN_COUNT_1BIT    (0x50)
- *     APT_PATTERN_COUNT_2BIT    (0x54)
- *     APT_PATTERN_COUNT_3BIT    (0x58)
- *     APT_PATTERN_COUNT_4BIT    (0x5C)
- *     MARKOV_TEST_COUNTS_0      (0x80)
- *     MARKOV_TEST_COUNTS_1      (0x84)
- *     MARKOV_TEST_PROBABILITIES (0x88)
- *     GENERATOR_0–11_HEALTH_STATUS (0xC0–0xEC, 12 registers)
- *   Registers have reset_value 0x00000000.
- *
- * **Action 5 — Clear INTR_STATUS register:**
- *   Write 0x00000000 directly to INTR_STATUS via regmodel assignment.  All four
- *   interrupt status bits (bits 0, 4, 8, 12) are cleared simultaneously,
- *   bypassing the W1C callback (which is only invoked on TLM write transactions,
- *   not on internal model writes via the assignment operator).
- *   Architecture map: registers.INTR_STATUS (0x10), reset_value 0x00000000.
- *   INTR_ENABLE (0x14) is intentionally NOT modified by reset
- *
- * **Action 6 — Re-evaluate interrupt output port:**
- *   Notify `m_interrupt_update_event` with SC_ZERO_TIME to trigger
- *   `interrupt_output_method` (the sole driver of sc_out<bool> interrupt port).
- *   Because INTR_STATUS is now 0x00000000, all port values resolve to false
- *   regardless of the current INTR_ENABLE value.
- *   Single-writer compliance: this callback does NOT call .write() on any port.
- *
- * **Action 7 — Stabilization delay (20 APB clock cycles = 100 ns):**
- *   Execute `sc_core::wait(RESET_STABILIZATION_DELAY_NS, SC_NS)` to advance
- *   simulation time by the minimum stabilization period required after reset
- *   deasserts before software can safely access registers.  This wait is legal
- *   because `b_transport` (and therefore this callback) runs in the SystemC
- *   SC_THREAD context of the TLM initiator; a blocking `wait()` inside an
- *   SC_THREAD-initiated `b_transport` call conforms to the TLM-2.0 LT model.
- *   The delay is observable in simulation time as a gap between the CTRL write
- *   and the first post-reset entropy value being available.
- *   Timing constraint: "minimum 20 APB clock cycles".
- *
- * **Action 8 — Self-clear CTRL register:**
- *   Write 0x10000000 to CTRL via regmodel assignment.  Clears the RESET bit and
- *   all other CTRL fields (DOWNSAMPLE_RATE, BYPASS_COMPRESSOR, AUTOTUNE_ENABLE)
- *   to their hardware reset defaults simultaneously.  Software polling CTRL[0]
- *   after the stabilization period will read 0x10000000, confirming completion.
- *
- * ## Thread Coordination
- *
- * `m_reset_in_progress` is set in Action 1 and cleared by the background
- * SC_THREAD inside its RESET_PENDING state, AFTER the thread has woken from
- * the `m_reset_event` notification.  The background thread re-derives
- * `m_fifo_enabled` and `m_health_test_enabled` from the regmodel register values
- * that were restored by Actions 3–8.  No second synchronisation event is
- * required because all state updates happen before the SC_ZERO_TIME
- * `m_reset_event` notification is delivered (SystemC delta-cycle semantics
- * guarantee that `.notify(SC_ZERO_TIME)` is evaluated in the next delta, after
- * the current process — this callback — finishes all its synchronous work
- * including the `wait()` stabilisation delay).
- *
- * ## Entropy Generation State
- *
- * Entropy is generated using the OpenSSL RAND_bytes() API to ensure
- * cryptographically secure data. The internal state is preserved across 
- * software resets to ensure entropy generation can resume immediately 
- * after the thread restarts.
- *
- * @param value  32-bit value written to CTRL.  The write mask (0x03FF0111) is
- *               applied by this callback before storage; reserved bits are
- *               silently discarded.
- * @return true always (callback return value is not used by regmodel for error
- *                      propagation in this model).
+ * Stores AUTOTUNE_ENABLE, BYPASS_ENTROPY_COMPRESSOR, DOWNSAMPLE_RATE, and
+ * SHA256_WHITENING_ENABLE. Bit 0 is RSVD0 (read-only zero): the coordinated
+ * TRNG reset lives on sep_reset_ctrl SW_RESET_N.trng_sw_rst_n and arrives
+ * here as rst_ni, not as a CTRL write.
  ******************************************************************************/
 bool entropy_src_ip::handle_write_CTRL(uint32_t value)
 {
-    // Apply the CTRL write mask (0x03FF0111) to silently discard writes to
-    // reserved bits [31:26], [15:9], [7:5], [3:1].  The resulting value is
-    // stored in the regmodel register object via the regmodel::Reg assignment operator.
-    //
-    // Architecturally valid writable fields within 0x03FF0111:
-    //   bit [0]      RESET
-    //   bit [4]      AUTOTUNE_ENABLE
-    //   bit [8]      BYPASS_COMPRESSOR
-    //   bits [25:16] DOWNSAMPLE_RATE
     CTRL = value & static_cast<uint32_t>(CTRL.write_bit_mask);
 
-    // Examine the RESET bit AFTER masking so that reserved-bit writes cannot
-    // falsely assert RESET.  Bit [0] is the sole trigger for the reset sequence.
-    bool reset_requested = (static_cast<uint32_t>(CTRL.RESET) != 0u);
-
-    if (!reset_requested)
-    {
-        // No reset: CTRL fields (DOWNSAMPLE_RATE, BYPASS_COMPRESSOR,
-        // AUTOTUNE_ENABLE) have been stored above; no behavioural side-effects
-        // are required for these fields beyond regmodel storage.
-        REG_INFO(3, logger)
-            << "CTRL write (no reset): stored 0x"
-            << std::hex << static_cast<uint32_t>(CTRL);
-        return true;
-    }
-
-    // =========================================================================
-    // Software Reset Sequence — eight actions in architectural order
-    // Architecture map: side_effects[0] CTRL.RESET auto-clear;
-    //   transaction_timelines.SoftwareReset_Sequence;
-    //   detailed-design.md Section 11.2
-    // =========================================================================
-
-    REG_INFO(2, logger) << "handle_write_CTRL: CTRL.RESET=1 — software reset sequence begins";
-
-    // -------------------------------------------------------------------------
-    // Action 1: Interrupt background SC_THREAD
-    //
-    // Set m_reset_in_progress to true BEFORE notifying m_reset_event.  The
-    // background thread tests this flag after each wait() return to determine
-    // whether a reset preempted the wait; without this flag, there is no
-    // SystemC API call that reliably indicates which reason caused a combined
-    // timed/event wait to return early.
-    //
-    // m_reset_event is notified with SC_ZERO_TIME so that the scheduler
-    // delivers the interrupt to the background thread in the immediately
-    // following delta cycle, after this callback's current synchronous
-    // execution phase completes.
-    // -------------------------------------------------------------------------
-    m_reset_in_progress = true;
-    m_reset_event.notify(sc_core::SC_ZERO_TIME);
-
-    // -------------------------------------------------------------------------
-    // Action 2: Drain internal FIFO queue and reset write/read pointers
-    //
-    // All entropy values currently in the FIFO are abandoned; any in-flight
-    // generation is discarded.  m_wptr and m_rptr are reset to 0 so that
-    // FIFO_STATUS accurately reflects the post-reset empty state (LEVEL=0,
-    // WPTR=0, RPTR=0) after the register reset in Actions 3–5.
-    //
-    // RESET EFFECTS:
-    //   - "FIFO cleared on reset: Internal FIFO queue drained to
-    //     empty; wptr and rptr member variables reset to 0"
-    //   - registers.FIFO_STATUS: reset_value 0x00000000
-    // -------------------------------------------------------------------------
-    while (!m_fifo.empty())
-    {
-        m_fifo.pop();
-    }
-    m_wptr = 0u;
-    m_rptr = 0u;
-
-    // -------------------------------------------------------------------------
-    // Actions 3–5: Restore all register defaults via regmodel and preserve
-    //              INTR_ENABLE
-    //
-    // requires that "all registers return to reset values" after a
-    // software reset.  This covers:
-    //   - All RO status registers (FIFO_STATUS, health counters, HEALTH_TEST_STATUS,
-    //     GENERATOR_0..11_HEALTH_STATUS, INTR_STATUS) → 0x00000000
-    //   - All RW configuration registers (FIFO_CTRL, HEALTH_TEST_CTRL, STARTUP_CTRL,
-    //     APT_PROPORTION_*, MARKOV_TEST_PROB_THRESHOLDS, RING_OSC_*, DECORRELATOR_*,
-    //     DEBUG_CTRL, CTRL, INTR_ENABLE) → their hardware reset defaults
-    //
-    // The mechanism is reset_all_registers() which calls .reset() on every
-    // register object, restoring the regmodel-stored default value defined in each
-    // register type constructor.  COMPONENT_ID.reset() is also called but its
-    // reset value is 0x01000001 (the synthesis-time constant), so it is
-    // effectively immune — calling .reset() on an RO register with a non-zero
-    // default simply restores the same value.
-    //
-     // To honour the exception, the pre-reset INTR_ENABLE value
-     // is saved before the call and written back immediately after.
-     //
-     // SIDE EFFECTS:
-     //   - "All RW register fields restored to reset values by regmodel"
-     //   - "all registers return to reset values"
-     // -------------------------------------------------------------------------
-
-    // Save INTR_ENABLE to preserve it across the reset_all_registers() call.
-   // const uint32_t preserved_intr_enable = static_cast<uint32_t>(INTR_ENABLE);
-
-    // Actions performed during software reset:
-    // 1. Resolve pending entropy generation cycle (via m_reset_event).
-    // 2. Set stabilization delay (100 ns).
-    // 3. Clear all registers to reset values.
-    // ------------------------------------------------------------------------------------------------------------------------------------------------
-
-    // Restore all 42 registers to their regmodel-defined hardware reset defaults.
-    // This single call covers Actions 3, 4, and 5 as described above.
-    reset_all_registers();
-
     REG_INFO(3, logger)
-        << "handle_write_CTRL: registers reset to hardware defaults.";
-
-    // INTR_STATUS is now 0x00000000 (restored to its reset default of
-    // 0x00000000 by the reset_all_registers() call above).
-    // Architecture map: Action 5; registers.INTR_STATUS reset_value.
-
-    // -------------------------------------------------------------------------
-    // Action 6: Re-evaluate interrupt output port
-    //
-    // Notify m_interrupt_update_event to trigger interrupt_output_method (the
-    // sole SC_METHOD driver of sc_out<bool> interrupt port).  Because
-    // INTR_STATUS is now 0x00000000, all four port values resolve to false
-    // regardless of the current INTR_ENABLE value:
-    //   port_value = INTR_STATUS[bit] AND INTR_ENABLE[bit] = 0 AND x = 0
-    //
-    // Single-writer compliance: this callback NEVER calls .write() on any
-    // sc_out<bool> port directly.  Port updates are exclusively driven by
-    // interrupt_output_method in response to m_interrupt_update_event.
-    //
-    // SIDE EFFECTS:
-    //   - all sources de-asserted on reset
-    // -------------------------------------------------------------------------
-    m_interrupt_update_event.notify(sc_core::SC_ZERO_TIME);
-
-    REG_INFO(3, logger) << "handle_write_CTRL: INTR_STATUS cleared; interrupt ports de-assertion scheduled";
-
-    // -------------------------------------------------------------------------
-    // Action 7: Stabilization delay (minimum 20 APB clock cycles = 100 ns)
-    //
-    // Model the hardware stabilization period using the quantum keeper for
-    // temporal decoupling (consistent with the project-wide LT modelling
-    // pattern).  The delay is accumulated in the quantum keeper and only
-    // synchronised with the SystemC kernel when the global quantum is
-    // exceeded, yielding faster simulation speed than a blocking wait().
-    //
-    // STABILIZATION:
-    //   - "minimum 20 APB clock cycles for stabilization"
-    //   - "loosely-timed stabilization hold-off"
-    // -------------------------------------------------------------------------
-    m_qk.inc(sc_core::sc_time(RESET_STABILIZATION_DELAY_NS, sc_core::SC_NS));
-    if (m_qk.need_sync())
-    {
-        m_qk.sync();
-    }
-
-    REG_INFO(2, logger)
-        << "handle_write_CTRL: stabilization delay complete ("
-        << RESET_STABILIZATION_DELAY_NS << " ns)";
-
-    // -------------------------------------------------------------------------
-    // Action 8: Self-clear CTRL register (regmodel internal write)
-    //
-    // Write 0x10000000u to CTRL via direct regmodel assignment.  This clears:
-    //   bit [0]      RESET            → 0 (self-clear)
-    //   bit [4]      AUTOTUNE_ENABLE  → 0 (reset default)
-    //   bit [8]      BYPASS_COMPRESSOR→ 0 (reset default)
-    //   bits [25:16] DOWNSAMPLE_RATE  → 0 (reset default)
-    //
-    // After this write, software polling CTRL[0] will read 0x10000000,
-    // confirming the reset has completed and the peripheral is ready.
-    //
-    // The internal state mirrors (m_fifo_enabled, m_health_test_enabled,
-    // m_startup_delay_ns) are NOT updated here.  Per they are
-    // re-derived by the background SC_THREAD from the post-reset regmodel register
-    // values when it processes the RESET_PENDING state.  This separation of
-    // concerns ensures that the thread always reads the authoritative regmodel state
-    // rather than a redundant in-memory mirror that could become stale.
-    //
-    // SIDE EFFECTS:
-    // CTRL.RESET auto-clear to 0x10000000.
-    // This ensures that a subsequent read of CTRL after the reset returns 0x10000000 as expected.
-    // -------------------------------------------------------------------------
-    CTRL = 0x10000000u;
-
-    // Notify background thread that the full reset sequence is complete.
-    m_reset_complete_event.notify(sc_core::SC_ZERO_TIME);
-
-    REG_INFO(2, logger)
-        << "handle_write_CTRL: software reset sequence complete — CTRL=0x"
+        << "CTRL write: stored 0x"
         << std::hex << static_cast<uint32_t>(CTRL);
-
     return true;
 }
 
@@ -860,8 +565,10 @@ void entropy_src_ip::reset_process()
         m_hw_reset_in_progress = true;
         m_reset_in_progress = false;  // Clear any pending software reset
 
-        // Notify the background thread to break out of any wait
+        // Notify the background thread to break out of any wait, including
+        // leftover handle_reset_recovery (CTRL.RESET no longer posts this).
         m_reset_event.notify(sc_core::SC_ZERO_TIME);
+        m_reset_complete_event.notify(sc_core::SC_ZERO_TIME);
 
         // Re-evaluate interrupt outputs (all will de-assert since
         // INTR_STATUS is cleared by reset_all_registers)
@@ -955,7 +662,7 @@ void entropy_src_ip::entropy_generation_thread()
             static_cast<double>(m_startup_delay_ns), sc_core::SC_NS));
         if (m_qk.need_sync())
         {
-            m_qk.sync();
+            qk_sync_interruptible();
         }
     }
 
@@ -1043,7 +750,7 @@ void entropy_src_ip::entropy_generation_thread()
                     static_cast<double>(m_startup_delay_ns), sc_core::SC_NS));
                 if (m_qk.need_sync())
                 {
-                    m_qk.sync();
+                    qk_sync_interruptible();
                 }
                 if (m_reset_in_progress)
                 {
@@ -1097,7 +804,7 @@ void entropy_src_ip::entropy_generation_thread()
                 m_qk.inc(sc_core::sc_time(BASE_ITERATION_PERIOD_NS, sc_core::SC_NS));
                 if (m_qk.need_sync())
                 {
-                    m_qk.sync();
+                    qk_sync_interruptible();
                 }
             }
         }
@@ -1118,7 +825,7 @@ void entropy_src_ip::entropy_generation_thread()
             m_qk.inc(sc_core::sc_time(effective_period_ns, sc_core::SC_NS));
             if (m_qk.need_sync())
             {
-                m_qk.sync();
+                qk_sync_interruptible();
             }
         }
 
@@ -1185,8 +892,26 @@ void entropy_src_ip::handle_reset_recovery()
             static_cast<double>(m_startup_delay_ns), sc_core::SC_NS));
         if (m_qk.need_sync())
         {
-            m_qk.sync();
+            qk_sync_interruptible();
         }
+    }
+}
+
+/******************************************************************************
+ * @brief Sync the quantum keeper, returning early on TRNG reset.
+ *
+ * tlm_quantumkeeper::sync() is a plain timed wait and cannot see rst_ni or
+ * m_reset_event. After CTRL.RESET was retired, that left the generation
+ * thread parked in a leftover quantum across apply_hw_reset(), so FIFO-fill
+ * tests that only yield SC_ZERO_TIME never observed a post-reset word.
+ ******************************************************************************/
+void entropy_src_ip::qk_sync_interruptible()
+{
+    const sc_core::sc_time local = m_qk.get_local_time();
+    m_qk.reset();
+    if (local > sc_core::SC_ZERO_TIME)
+    {
+        wait(local, m_reset_event | rst_ni.value_changed_event());
     }
 }
 
