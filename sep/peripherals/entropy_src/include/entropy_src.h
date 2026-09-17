@@ -166,9 +166,17 @@ public:
             "[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
         logger.setFunctionTrace(false);
 
-        // Register the eight behavioural callbacks with the regmodel memory layer.
+        // Register the behavioural callbacks with the regmodel memory layer.
         // Offsets are divided by sizeof(DT) (= 4) to obtain the word index
         // used internally by regmodel::Memory.
+        memory.register_write_callback(
+            [this](DT v) {
+                FIPS_LOCK = static_cast<DT>(FIPS_LOCK)
+                          | (v & static_cast<DT>(FIPS_LOCK.write_bit_mask));
+                return true;
+            },
+            FIPS_LOCK.offset);
+
         memory.register_write_callback(
             [this](DT v) { return this->handle_write_CTRL(v); },
             CTRL.offset);
