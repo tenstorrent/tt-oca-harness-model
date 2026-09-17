@@ -30,9 +30,11 @@
 #define RST_AES   (1u << 2)
 #define RST_HMAC  (1u << 3)
 #define RST_KMAC  (1u << 4)
+#define RST_TRNG  (1u << 5)
+#define RST_ABR   (1u << 6)
 
-/* Release all crypto IPs from reset (baseline state) */
-#define RST_ALL_RELEASE (RST_KM | RST_OTBN | RST_AES | RST_HMAC | RST_KMAC)
+/* Release all SW_RESET_N domains (baseline state) */
+#define RST_ALL_RELEASE (RST_KM | RST_OTBN | RST_AES | RST_HMAC | RST_KMAC | RST_TRNG | RST_ABR)
 
 static int test_errors = 0;
 

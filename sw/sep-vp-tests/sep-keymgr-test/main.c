@@ -365,7 +365,7 @@ static void phase1_boot(void)
 
     printf("\n=== Phase 1: boot handshake ===\n");
 
-    /* SW_RESET_N resets to 0x1E: the crypto engines come up released but the KM
+    /* SW_RESET_N resets to 0x7E: the crypto/TRNG/ABR engines come up released but the KM
      * is held in software reset, so SEP has to let it go before it will boot. */
     rst = READ_REG(SEP_RESET_CTRL_SW_RESET_N_REG_ADDR);
     chk_eq(rst & SW_RESET_N_KM, 0u, "KM starts held in software reset");

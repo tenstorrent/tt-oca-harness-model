@@ -50,10 +50,8 @@ public:
     /**
      * @brief Write callback for CTRL register (offset 0x04)
      *
-     * Monitors the RESET field (bit 0).  When written 1, triggers a full
-     * software reset sequence: reset_all_registers() is called, the FIFO
-     * queue is cleared, all interrupt output ports are de-asserted, and the
-     * CTRL.RESET bit is self-cleared to 0.
+     * Stores writable CTRL fields. Bit 0 is reserved (RSVD0). The entropy
+     * source is reset from rst_ni (SW_RESET_N.trng_sw_rst_n), not CTRL.
      *
      * @param value 32-bit value written to CTRL
      * @return true on successful callback execution

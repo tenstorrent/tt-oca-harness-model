@@ -5,7 +5,9 @@
  *
  * This test verifies the sep_reset_ctrl CSR and the sw-reset isolation
  * sequencing (sep_crypto_axi_isolate) in front of the crypto accelerator
- * wrappers. For each accelerator (OTBN, AES, HMAC, KMAC):
+ * wrappers. For each accelerator (OTBN, AES, HMAC, KMAC).
+ * TRNG and ABR bits exist on SW_RESET_N (default 0x7E) but their
+ * isolate/drain path is not modelled on the VP, so they are not walked here:
  *
  *   a) Probe write/readback proves the port is open and the IP is alive.
  *   b) Assert only that IP's SW_RESET_N bit and HOLD it.
@@ -19,13 +21,15 @@
  *      proving the reset wire reached the IP.
  *
  * SW_RESET_N bit layout:
+ *   bit 6 = abr_sw_rst_n   (default 1, released)
+ *   bit 5 = trng_sw_rst_n  (default 1, released)
  *   bit 4 = kmac_sw_rst_n  (default 1, released)
  *   bit 3 = hmac_sw_rst_n  (default 1, released)
  *   bit 2 = aes_sw_rst_n   (default 1, released)
  *   bit 1 = otbn_sw_rst_n  (default 1, released)
  *   bit 0 = km_sw_rst_n    (default 0, held in reset)
  *
- * Default value: 0x1E = 0b11110
+ * Default value: 0x7E = 0b1111110
  *
  * KM is skipped because it cannot be brought out of reset in this test case.
  *

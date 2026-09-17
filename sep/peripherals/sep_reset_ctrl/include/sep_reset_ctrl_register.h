@@ -20,13 +20,15 @@ class SW_RESET_N_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     SW_RESET_N_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x1f, 0x1f, 0x1e),
-      km_sw_rst_n(reg_name + ".km_sw_rst_n", *this, 0, 1), 
-      otbn_sw_rst_n(reg_name + ".otbn_sw_rst_n", *this, 1, 1), 
-      aes_sw_rst_n(reg_name + ".aes_sw_rst_n", *this, 2, 1), 
-      hmac_sw_rst_n(reg_name + ".hmac_sw_rst_n", *this, 3, 1), 
-      kmac_sw_rst_n(reg_name + ".kmac_sw_rst_n", *this, 4, 1), 
-      Reserved0(reg_name + ".Reserved0", *this, 5, 59)
+      regmodel::Reg<N>(reg_name, memory, offset, 0x7f, 0x7f, 0x7e),
+      km_sw_rst_n(reg_name + ".km_sw_rst_n", *this, 0, 1),
+      otbn_sw_rst_n(reg_name + ".otbn_sw_rst_n", *this, 1, 1),
+      aes_sw_rst_n(reg_name + ".aes_sw_rst_n", *this, 2, 1),
+      hmac_sw_rst_n(reg_name + ".hmac_sw_rst_n", *this, 3, 1),
+      kmac_sw_rst_n(reg_name + ".kmac_sw_rst_n", *this, 4, 1),
+      trng_sw_rst_n(reg_name + ".trng_sw_rst_n", *this, 5, 1),
+      abr_sw_rst_n(reg_name + ".abr_sw_rst_n", *this, 6, 1),
+      Reserved0(reg_name + ".Reserved0", *this, 7, 57)
     {
       this->set_read_write_restrictions(memory);
     }
@@ -47,6 +49,8 @@ class SW_RESET_N_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> aes_sw_rst_n;
     regmodel::Bitfield<N> hmac_sw_rst_n;
     regmodel::Bitfield<N> kmac_sw_rst_n;
+    regmodel::Bitfield<N> trng_sw_rst_n;
+    regmodel::Bitfield<N> abr_sw_rst_n;
     regmodel::Bitfield<N> Reserved0;
 };
 

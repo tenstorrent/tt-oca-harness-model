@@ -156,19 +156,13 @@ void testbench::bind_ports()
 // =============================================================================
 
 /******************************************************************************
- * @brief Apply a software reset to the DUT via CTRL.RESET
+ * @brief Apply a reset to the DUT via rst_ni
  *
- * Writes the value 0x1 to CTRL (offset 0x04).  The entropy_src callback
- * handle_write_CTRL detects bit 0 and executes the full reset sequence
- * before self-clearing the bit.
+ * CTRL.RESET was retired; the coordinated TRNG reset is rst_ni.
  ******************************************************************************/
 void testbench::apply_reset()
 {
-    REG_INFO(2, logger) << "apply_reset: asserting CTRL.RESET";
-    test->register_write_32(entropy_src_basetest::CTRL_OFFSET, 0x10000001u);
-    // Advance time by one delta so the reset completes before assertions.
-    wait(sc_core::SC_ZERO_TIME);
-    REG_INFO(2, logger) << "apply_reset: reset complete";
+    apply_hw_reset();
 }
 
 /******************************************************************************
@@ -521,7 +515,7 @@ void testbench::run_tests()
     // Test 4: Reset functionality
     // =========================================================================
     // apply_reset() is called internally by test_reset().
-    record_result("TC_RESET: Software reset via CTRL.RESET", test_reset());
+    record_result("TC_RESET: Reset via rst_ni (TRNG domain)", test_reset());
 
     // =========================================================================
     // FUNC-001 test cases — TLM Register Transport Interface
@@ -1408,12 +1402,10 @@ void testbench::run_tests()
  *
  * Procedure:
  *  1. Write non-default values to CTRL and INTR_ENABLE.
- *  2. Assert hardware reset (rst_ni = 0 then 1).
- *  3. Verify CTRL returns to reset value (0x10000000).
- *  4. Verify INTR_ENABLE returns to reset value (0x00000000).
- *  5. Verify FIFO_STATUS returns to 0x00000000.
- *  6. Verify INTR_STATUS returns to 0x00000000.
- *  7. Verify interrupt output port is de-asserted.
+ *  2. Assert rst_ni and read defaults while the pin is still low. FIFO_CTRL
+ *     resets enabled, so releasing rst_ni lets the thread push immediately;
+ *     FIFO_STATUS=0 is only observable while reset is held.
+ *  3. Release rst_ni.
  ******************************************************************************/
 bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
 {
@@ -1425,10 +1417,11 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
     test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0x00001111u);
     wait(sc_core::SC_ZERO_TIME);
 
-    // Step 2: Apply hardware reset.
-    apply_hw_reset();
+    // Step 2: Hold rst_ni low and sample reset defaults.
+    sig_rst_n.write(false);
+    wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::SC_ZERO_TIME);
 
-    // Step 3: Verify CTRL reset value.
     test->register_read_32(entropy_src_basetest::CTRL_OFFSET, read_val);
     if (read_val != entropy_src_basetest::CTRL_RESET)
     {
@@ -1438,7 +1431,6 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
         ok = false;
     }
 
-    // Step 4: Verify INTR_ENABLE reset value.
     test->register_read_32(entropy_src_basetest::INTR_ENABLE_OFFSET, read_val);
     if (read_val != entropy_src_basetest::INTR_ENABLE_RESET)
     {
@@ -1448,18 +1440,15 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
         ok = false;
     }
 
-    // Step 5: Verify FIFO_STATUS = 0.
     test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, read_val);
-    // Mask with observable bits (LEVEL, WPTR, RPTR)
     if ((read_val & entropy_src_basetest::FIFO_STATUS_READ) != entropy_src_basetest::FIFO_STATUS_RESET)
     {
         REG_ERROR(0, logger)
-            << "HW-001: FIFO_STATUS expected 0x0 after hw reset, got 0x"
+            << "HW-001: FIFO_STATUS expected 0x0 while rst_ni is held, got 0x"
             << std::hex << read_val;
         ok = false;
     }
 
-    // Step 6: Verify INTR_STATUS = 0.
     test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, read_val);
     if (read_val != entropy_src_basetest::INTR_STATUS_RESET)
     {
@@ -1469,7 +1458,6 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
         ok = false;
     }
 
-    // Step 7: Verify interrupt output de-asserted.
     wait(sc_core::SC_ZERO_TIME);
     if (test->intr_i.read())
     {
@@ -1477,6 +1465,10 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
             << "HW-001: intr_o not de-asserted after hw reset";
         ok = false;
     }
+
+    sig_rst_n.write(true);
+    wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::SC_ZERO_TIME);
 
     return ok;
 }
@@ -1486,9 +1478,8 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
  *
  * Procedure:
  *  1. Enable FIFO and wait for some entries to fill.
- *  2. Assert hardware reset.
- *  3. Verify FIFO is drained (FIFO_STATUS.LEVEL = 0).
- *  4. Verify FIFO re-fills after rst_ni release.
+ *  2. Hold rst_ni low and confirm the FIFO is drained.
+ *  3. Release rst_ni and confirm the FIFO starts filling again.
  ******************************************************************************/
 bool testbench::tc_f004_hw_reset_during_fifo_filling()
 {
@@ -1497,25 +1488,28 @@ bool testbench::tc_f004_hw_reset_during_fifo_filling()
 
     // Step 1: Enable FIFO and let it fill for a bit.
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x1u);
-    // Wait enough time for the background thread to push some entries.
     wait(sc_core::sc_time(500, sc_core::SC_NS));
 
-    // Step 2: Apply hardware reset.
-    apply_hw_reset();
+    // Step 2: Hold reset and confirm drain (FIFO_CTRL defaults enabled, so
+    // the thread pushes again as soon as rst_ni is released).
+    sig_rst_n.write(false);
+    wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::SC_ZERO_TIME);
 
-    // Step 3: Verify FIFO is empty.
     test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, read_val);
     uint32_t level = read_val & 0x7Fu;
     if (level != 0u)
     {
         REG_ERROR(0, logger)
-            << "HW-002: FIFO LEVEL expected 0 after hw reset, got "
+            << "HW-002: FIFO LEVEL expected 0 while rst_ni is held, got "
             << std::dec << level;
         ok = false;
     }
 
-    // Step 4: Re-enable FIFO and verify it starts refilling.
-    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x1u);
+    // Step 3: Release reset and verify refill.
+    sig_rst_n.write(true);
+    wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::SC_ZERO_TIME);
     wait(sc_core::sc_time(500, sc_core::SC_NS));
 
     test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, read_val);
@@ -1523,7 +1517,7 @@ bool testbench::tc_f004_hw_reset_during_fifo_filling()
     if (level == 0u)
     {
         REG_ERROR(0, logger)
-            << "HW-002: FIFO LEVEL expected >0 after re-enable, got 0";
+            << "HW-002: FIFO LEVEL expected >0 after rst_ni release, got 0";
         ok = false;
     }
 

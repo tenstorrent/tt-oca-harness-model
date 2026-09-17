@@ -13,7 +13,7 @@
 sep_reset_ctrl_ip::sep_reset_ctrl_ip(sc_module_name n)
     : sep_reset_ctrl_base(n, "sep_reset_ctrl", 0x8)
     , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
-    , sw_reset_current_value_(0x1E)
+    , sw_reset_current_value_(SW_RESET_N_RESET)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
@@ -55,7 +55,7 @@ void sep_reset_ctrl_ip::reset()
     reset_all_registers();
     
     // Reset current value to reset state
-    sw_reset_current_value_ = 0x1E;
+    sw_reset_current_value_ = SW_RESET_N_RESET;
     
     // Notify that reset values are applied
     sw_reset_changed_.notify(sc_core::SC_ZERO_TIME);
@@ -74,11 +74,13 @@ void sep_reset_ctrl_ip::update_rst_outputs()
     bool global_rst = global_rst_ni.read();
     
     // Use the current SW reset value for output generation
-    km_rst_ni.write(global_rst   && bool(sw_reset_current_value_ & 0x01u));
-    otbn_rst_n.write(global_rst  && bool(sw_reset_current_value_ & 0x02u));
-    aes_rst_ni.write(global_rst  && bool(sw_reset_current_value_ & 0x04u));
-    hmac_rst_ni.write(global_rst && bool(sw_reset_current_value_ & 0x08u));
-    kmac_rst_ni.write(global_rst && bool(sw_reset_current_value_ & 0x10u));
+    km_rst_ni.write(global_rst   && bool(sw_reset_current_value_ & SW_RESET_N_KM));
+    otbn_rst_n.write(global_rst  && bool(sw_reset_current_value_ & SW_RESET_N_OTBN));
+    aes_rst_ni.write(global_rst  && bool(sw_reset_current_value_ & SW_RESET_N_AES));
+    hmac_rst_ni.write(global_rst && bool(sw_reset_current_value_ & SW_RESET_N_HMAC));
+    kmac_rst_ni.write(global_rst && bool(sw_reset_current_value_ & SW_RESET_N_KMAC));
+    trng_rst_ni.write(global_rst && bool(sw_reset_current_value_ & SW_RESET_N_TRNG));
+    abr_rst_ni.write(global_rst  && bool(sw_reset_current_value_ & SW_RESET_N_ABR));
 }
 
 // Write callback - AES pattern

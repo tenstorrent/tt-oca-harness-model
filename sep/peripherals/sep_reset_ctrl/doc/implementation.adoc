@@ -29,8 +29,8 @@ the documented default so firmware writes do not survive a platform
 reset.
 
 `sep-vp` maps the TLM target at the TRM reset-ctrl window. Outputs
-feed key-manager, OTBN, AES, HMAC, and KMAC `rst_ni`. ABR stays on
-the global reset.
+feed key-manager, OTBN, AES, HMAC, KMAC, the TRNG complex
+(entropy_src / CSRNG / EDN), and Adams Bridge `rst_ni`.
 
 [cols="32%,28%,40%",options="header"]
 |===
@@ -42,17 +42,19 @@ the global reset.
 |`aes_rst_ni` |`sc_out<bool>` |AES `rst_ni`
 |`hmac_rst_ni` |`sc_out<bool>` |HMAC `rst_ni`
 |`kmac_rst_ni` |`sc_out<bool>` |KMAC `rst_ni`
+|`trng_rst_ni` |`sc_out<bool>` |entropy_src / CSRNG / EDN `rst_ni`
+|`abr_rst_ni` |`sc_out<bool>` |Adams Bridge `rst_ni`
 |===
 
 AND of `global_rst_ni` and the matching SW_RESET_N bit. KM's bit
-resets to 0 (held in reset); the crypto bits reset to 1.
+resets to 0 (held in reset); the crypto, TRNG, and ABR bits reset to 1.
 
 ----
   TLM MMIO ──► SW_RESET_N write ──► sw_reset_changed_
   global_rst_ni ──► reset_handler
                          │
                          ▼
-                  update_rst_outputs ──► km/otbn/aes/hmac/kmac rst_n
+                  update_rst_outputs ──► km/otbn/aes/hmac/kmac/trng/abr rst_n
 ----
 
 ====== CCI parameters
@@ -65,7 +67,7 @@ resets to 0 (held in reset); the crypto bits reset to 1.
 
 ====== Modeling gaps versus RTL
 
-* Only the five SW_RESET_N bits that this VP wires. Other RTL reset
-  consumers are not modelled here.
-* ABR / CSRNG / entropy are not behind this block on `sep-vp`.
+* No isolate/drain before asserting a domain reset (RTL
+  `sep_isolate_rst_seq`). An access while an IP is held still reaches
+  the model.
 * No reset stretcher or synchronizer; the pin is a boolean.

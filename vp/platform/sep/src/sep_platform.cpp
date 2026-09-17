@@ -731,10 +731,9 @@ void och_sep_ss::module_bind() {
     kmac_clk_signal.write(true);
     kmac_lc_escalate_signal.write(false);
 
-    // Adams Bridge (SEP crypto aperture 0x1094_0000). No dedicated SW reset
-    // bit in sep_reset_ctrl; bind rst_ni to the global reset like CSRNG.
+    // Adams Bridge (SEP crypto aperture 0x1094_0000). SW_RESET_N.abr_sw_rst_n.
     abr->clk_i(abr_clk_signal);
-    abr->rst_ni(reset_signal);
+    abr->rst_ni(abr_sw_rst_n_signal);
     abr->intr_abr_error(abr_error_signal);
     abr->intr_abr_notif(abr_notif_signal);
     abr_clk_signal.write(100000000.0);  // 100 MHz
@@ -845,7 +844,7 @@ void och_sep_ss::module_bind() {
 
     // CSRNG
     csrng->clk_i(csrng_clk_signal);
-    csrng->rst_ni(reset_signal);
+    csrng->rst_ni(trng_sw_rst_n_signal);
     csrng->otp_en_csrng_sw_app_read(csrng_otp_en_signal);
     csrng->cs_cmd_req_done(csrng_cs_cmd_req_done_signal);
     csrng->cs_entropy_req(csrng_cs_entropy_req_signal);
@@ -868,12 +867,12 @@ void och_sep_ss::module_bind() {
     aes_lc_escalate_signal.write(false);
 
     // Entropy Source
-    entropy_src->rst_ni(reset_signal);
+    entropy_src->rst_ni(trng_sw_rst_n_signal);
     entropy_src->irq_o(entropy_src_irq_signal);
 
     // EDN
     edn->clk_i(edn_clk_signal);
-    edn->rst_ni(reset_signal);
+    edn->rst_ni(trng_sw_rst_n_signal);
     edn->intr_edn_cmd_req_done(edn_cmd_req_done_signal);
     edn->intr_edn_fatal_err(edn_fatal_err_signal);
     edn->alert_recov_alert(edn_recov_alert_signal);
@@ -904,6 +903,8 @@ void och_sep_ss::module_bind() {
     reset_ctrl->aes_rst_ni(aes_sw_rst_n_signal);
     reset_ctrl->hmac_rst_ni(hmac_sw_rst_n_signal);
     reset_ctrl->kmac_rst_ni(kmac_sw_rst_n_signal);
+    reset_ctrl->trng_rst_ni(trng_sw_rst_n_signal);
+    reset_ctrl->abr_rst_ni(abr_sw_rst_n_signal);
 
     // Remaining peripherals — reset
     scratch_warm->rst_ni(reset_signal);

@@ -230,9 +230,8 @@ public:
     /**
      * @brief Handle write to CTRL register
      *
-     * If CTRL.RESET (bit 0) is set, execute the software reset sequence:
-     * call reset_all_registers(), de-assert interrupt output port,
-     * and self-clear CTRL.RESET to 0.
+     * Stores the writable CTRL fields. Bit 0 (RSVD0) is ignored; reset
+     * arrives on rst_ni from SW_RESET_N.trng_sw_rst_n.
      *
      * @param value 32-bit value written to CTRL
      * @return true always
@@ -426,6 +425,13 @@ private:
     void handle_reset_recovery();
 
     /**
+     * @brief Advance the quantum keeper, but return early on rst_ni or
+     *        m_reset_event so a TRNG-domain reset is not stuck behind
+     *        an in-flight m_qk.sync() timed wait.
+     */
+    void qk_sync_interruptible();
+
+    /**
      * @brief SC_METHOD — sole driver of all four interrupt output ports.
      *
      * Sensitive to m_interrupt_update_event. Calls update_interrupt_outputs()
@@ -598,16 +604,5 @@ private:
     /// Derivation:
     ///   Nominal APB clock period = 5 ns (200 MHz APB assumed for the LT model).
     ///   Minimum stabilization = 20 APB cycles × 5 ns = 100 ns.
-    ///
-    /// This delay is applied as a blocking `sc_core::wait()` call inside
-    /// `handle_write_CTRL` between Action 6 (interrupt port de-assertion) and
-    /// Action 8 (CTRL self-clear).  Because `handle_write_CTRL` is invoked from
-    /// the TLM `b_transport` handler, which runs in the SystemC SC_THREAD context
-    /// of the initiator, the `wait()` call is legal and advances simulation time
-    /// in a software-observable manner.
-    ///
-    /// Functional references:
-    ///   - "minimum 20 APB clock cycles for stabilization"
-    ///   - FUNC-007 description: "loosely-timed stabilization hold-off"
-    static constexpr double RESET_STABILIZATION_DELAY_NS = 100.0;
 };
+

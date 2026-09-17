@@ -72,8 +72,8 @@ bool testbench::tc_cov_fifo_reenable_startup_delay()
             break;
     }
 
-    for (int i = 0; i < 32; ++i)
-        wait(sc_core::SC_ZERO_TIME);
+    // Finish any leftover quantum so the thread parks in WAITING_FOR_ENABLE.
+    wait(sc_core::sc_time(200.0, sc_core::SC_US));
 
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000001u);
     wait(sc_core::SC_ZERO_TIME);
@@ -117,14 +117,17 @@ bool testbench::tc_cov_sw_reset_during_reenable_startup_delay()
     wait(sc_core::SC_ZERO_TIME);
 
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
-    for (int i = 0; i < 32; ++i)
-        wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::sc_time(200.0, sc_core::SC_US));
 
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000001u);
     wait(sc_core::SC_ZERO_TIME);
 
-    // Reset while thread is still in STARTUP_DELAY (no timed wait elapsed).
-    apply_reset();
+    // Interrupt the post-reenable STARTUP_DELAY the way CTRL.RESET used to:
+    // set the software-reset flag and wake the quantum wait.
+    dut->m_reset_in_progress = true;
+    dut->m_reset_complete_event.notify(sc_core::sc_time(1.0, sc_core::SC_NS));
+    dut->m_reset_event.notify(sc_core::SC_ZERO_TIME);
+    wait(sc_core::sc_time(10.0, sc_core::SC_NS));
 
     test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0x00000000u);
     wait(sc_core::SC_ZERO_TIME);
@@ -369,7 +372,7 @@ bool testbench::tc_cov_reset_while_fifo_disabled()
 
     test->register_read_32(entropy_src_basetest::CTRL_OFFSET, rd_val);
     COV_CHECK((rd_val & 0x1u) == 0u,
-        "TC-COV-009: CTRL.RESET did not self-clear after sw reset from IDLE");
+        "TC-COV-009: CTRL bit 0 (RSVD0) not zero after rst_ni from IDLE");
 
     return ok;
 }
@@ -424,10 +427,24 @@ bool testbench::tc_cov_verbose_callbacks_and_recovery()
     }
     COV_CHECK(got_word, "TC-COV-010: FIFO never produced a word");
 
+    // RUNNING-path RESET_PENDING (top-of-loop / post-pacing checks).
+    dut->m_reset_in_progress = true;
+    dut->m_reset_complete_event.notify(sc_core::sc_time(150.0, sc_core::SC_NS));
+    wait(sc_core::sc_time(200.0, sc_core::SC_NS));
+
     // Park the generation thread so it cannot refill during recovery.
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
-    for (int i = 0; i < 8; ++i)
-        wait(sc_core::SC_ZERO_TIME);
+    wait(sc_core::sc_time(200.0, sc_core::SC_US));
+
+    // In-thread RESET_PENDING: wake WAITING_FOR_ENABLE via m_reset_event.
+    dut->m_reset_in_progress = true;
+    dut->m_reset_complete_event.notify(sc_core::sc_time(1.0, sc_core::SC_NS));
+    dut->m_reset_event.notify(sc_core::SC_ZERO_TIME);
+    wait(sc_core::sc_time(10.0, sc_core::SC_NS));
+
+    // qk_sync_interruptible early-return when the keeper has no local time.
+    dut->m_qk.reset();
+    dut->qk_sync_interruptible();
 
     // Direct recovery helper: leftover FIFO words + non-zero startup delay.
     dut->m_fifo.push(0xA5A5A5A5u);

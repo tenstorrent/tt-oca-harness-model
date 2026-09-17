@@ -49,7 +49,7 @@ Sources: `test/src/func001_tests.cpp` … `func008_tests.cpp`,
 |FUNC-004 |Background fill |FIFO enable, downsample, startup delay |Positive
 |FUNC-005 |Health-test CSRs |Enable and status (stubbed tests) |Positive
 |FUNC-006 |FIFO queue |Push / pop / overflow / underflow |Mixed
-|FUNC-007 |Software reset |CTRL.RESET sequence |Positive
+|FUNC-007 |Reset |rst_ni (TRNG domain) sequence |Positive
 |FUNC-008 |Added RDL regs |Reset and access on extra words |Positive
 |===
 

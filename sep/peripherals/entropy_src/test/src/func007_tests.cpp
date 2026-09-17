@@ -189,9 +189,9 @@ static constexpr uint32_t F007_COMPONENT_ID_VAL = 0x01000001u;
 /// CTRL reset value: 0x00000000 (all fields cleared; RESET bit self-clears).
 static constexpr uint32_t F007_CTRL_RESET       = 0x00000000u;
 
-/// CTRL write mask: 0x03FF0111 (DOWNSAMPLE_RATE[25:16], BYPASS_COMPRESSOR[8],
-/// AUTOTUNE_ENABLE[4], RESET[0]).
-static constexpr uint32_t F007_CTRL_WRITE_MASK  = 0x03FF0111u;
+/// CTRL write mask: 0x13FF0110 (SHA256_WHITENING_ENABLE[28],
+/// DOWNSAMPLE_RATE[25:16], BYPASS_COMPRESSOR[8], AUTOTUNE_ENABLE[4]).
+static constexpr uint32_t F007_CTRL_WRITE_MASK  = 0x13FF0110u;
 
 /// FIFO_CTRL reset value: 0x00000001 (FIFO enabled by default).
 static constexpr uint32_t F007_FIFO_CTRL_RESET  = 0x00000001u;

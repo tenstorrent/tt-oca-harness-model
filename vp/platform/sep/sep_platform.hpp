@@ -239,6 +239,8 @@ private:
     sc_signal<bool> aes_sw_rst_n_signal;
     sc_signal<bool> hmac_sw_rst_n_signal;
     sc_signal<bool> kmac_sw_rst_n_signal;
+    sc_signal<bool> trng_sw_rst_n_signal;
+    sc_signal<bool> abr_sw_rst_n_signal;
 
     // SPI
     sc_signal<bool, SC_MANY_WRITERS> spi_clk_signal;

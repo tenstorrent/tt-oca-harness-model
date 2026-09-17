@@ -18,19 +18,18 @@ class sep_reset_ctrl_basetest : public sc_module
 
     enum Register_Read_Access
     {
-      SW_RESET_N_READ = (0x1f)  
+      SW_RESET_N_READ = (0x7f)
     };
 
     enum Register_Write_Access
     {
-      SW_RESET_N_WRITE = (0x1f)
+      SW_RESET_N_WRITE = (0x7f)
     };
 
     enum Register_Reset_Val
     {
-      // km_n resets asserted (0), the other four released — sep_reset_ctrl.rdl
-      // and sep_reset_ctrl_reg.sv:318-410.
-      SW_RESET_N_RESET = (0x000000000000001e)
+      // km held (0); OTBN/AES/HMAC/KMAC/TRNG/ABR released — sep_reset_ctrl.rdl
+      SW_RESET_N_RESET = (0x000000000000007e)
     };
      
     struct Register_Property_t
