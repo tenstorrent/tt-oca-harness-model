@@ -39,7 +39,7 @@
 #include "sep_outbound_filter.h"
 #include "spi_clk.h"
 
-/* Frequency-robust: SCLK tracks the sensed core freq (eFuse smu_pll_sysclk)
+/* Frequency-robust: SCLK tracks the sensed core freq (eFuse sysclk_freq_mhz)
  * from directed preload content for a constant 25 MHz target. */
 #define SPI_CLKDIV      spi_clkdiv()
 #define TIMEOUT_LIMIT   200000

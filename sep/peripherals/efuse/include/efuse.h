@@ -152,15 +152,7 @@ public:
     regmodel::Param<uint32_t> chiplet_pubk_revoke;
     regmodel::Param<uint32_t> status_rpt;
     regmodel::Param<uint32_t> sep_rom_ctrl;
-    regmodel::Param<uint32_t> sep_spi_ctrl_field_en;
-    regmodel::Param<uint32_t> spi_discovery_ctrl;
-    regmodel::Param<uint32_t> spi_phy_dq_timing;
-    regmodel::Param<uint32_t> spi_phy_dqs_timing;
-    regmodel::Param<uint32_t> spi_phy_gate_lpbk;
-    regmodel::Param<uint32_t> spi_phy_dll_slave;
-    regmodel::Param<uint32_t> spi_phy_dll_master;
-    regmodel::Param<uint32_t> spi_phy_misc;
-    regmodel::Param<uint32_t> spi_rb_valid_time;
+    regmodel::Param<uint32_t> sysclk_freq_mhz;
     regmodel::Param<uint32_t> rma_sip_token_match;
     regmodel::Param<uint32_t> rma_chiplet_token_match;
     regmodel::Param<uint32_t> sec_disable_token_match;

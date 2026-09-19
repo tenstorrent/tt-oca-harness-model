@@ -31,15 +31,7 @@ efuse_model::efuse_model(sc_module_name n, int log_verbosity)
     , chiplet_pubk_revoke("chiplet_pubk_revoke", 0u)
     , status_rpt("status_rpt", 0u)
     , sep_rom_ctrl("sep_rom_ctrl", 0u)
-    , sep_spi_ctrl_field_en("sep_spi_ctrl_field_en", 0u)
-    , spi_discovery_ctrl("spi_discovery_ctrl", 0u)
-    , spi_phy_dq_timing("spi_phy_dq_timing", 0u)
-    , spi_phy_dqs_timing("spi_phy_dqs_timing", 0u)
-    , spi_phy_gate_lpbk("spi_phy_gate_lpbk", 0u)
-    , spi_phy_dll_slave("spi_phy_dll_slave", 0u)
-    , spi_phy_dll_master("spi_phy_dll_master", 0u)
-    , spi_phy_misc("spi_phy_misc", 0u)
-    , spi_rb_valid_time("spi_rb_valid_time", 0u)
+    , sysclk_freq_mhz("sysclk_freq_mhz", 0u)
     , rma_sip_token_match("rma_sip_token_match", 0u)
     , rma_chiplet_token_match("rma_chiplet_token_match", 0u)
     , sec_disable_token_match("sec_disable_token_match", 0u)
@@ -372,9 +364,7 @@ const efuse_model::lock_region efuse_model::k_lock_regions[] = {
     { k_word(sep_efuse::SYS_UID_OFFSET),             k_last(sep_efuse::SYS_UID_OFFSET, 8),          false, 30 },
     { k_word(sep_efuse::STATUS_RPT_OFFSET),          k_word(sep_efuse::STATUS_RPT_OFFSET),          true,   0 },
     { k_word(sep_efuse::SEP_ROM_CTRL_OFFSET),        k_word(sep_efuse::SEP_ROM_CTRL_OFFSET),        true,   2 },
-    // One pair covers the whole SPI control group: the field-enable register plus
-    // the discovery and PHY timing registers that follow it.
-    { k_word(sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET), k_word(sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET), 1,  4 },
+    { k_word(sep_efuse::SYSCLK_FREQ_MHZ_OFFSET),     k_word(sep_efuse::SYSCLK_FREQ_MHZ_OFFSET),     true,   4 },
     { k_word(sep_efuse::CHIPLET_PUBK_HASH0_OFFSET),  k_last(sep_efuse::CHIPLET_PUBK_HASH0_OFFSET, 8), true,  6 },
     { k_word(sep_efuse::CHIPLET_PUBK_HASH1_OFFSET),  k_last(sep_efuse::CHIPLET_PUBK_HASH1_OFFSET, 8), true,  8 },
     { k_word(sep_efuse::REQUIRED_SIGNERS_OFFSET),    k_word(sep_efuse::REQUIRED_SIGNERS_OFFSET),    true,  10 },
@@ -755,7 +745,7 @@ void efuse_model::load_fuses()
 
     set(STATUS_RPT,            status_rpt.get_param_value());
     set(SEP_ROM_CTRL,          sep_rom_ctrl.get_param_value());
-    set(SEP_SPI_CTRL_FIELD_EN, sep_spi_ctrl_field_en.get_param_value());
+    set(SYSCLK_FREQ_MHZ,       sysclk_freq_mhz.get_param_value());
 
     sense_fuses_into_shadows();
     load_non_fuse_defaults();

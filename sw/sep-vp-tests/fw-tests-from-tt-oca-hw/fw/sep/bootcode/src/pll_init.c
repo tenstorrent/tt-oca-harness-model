@@ -44,11 +44,11 @@ uint16_t pll_init(bool bl0_pll_clk_strap)
     simputshex32("SMC_BASE=", smc_base);
 
     // Read PLL frequency from fuse.
-    // smu_pll_sysclk: 11-bit field indicating configured sysclk PLL frequency in MHz.
+    // sysclk_freq_mhz: 11-bit field indicating configured sysclk PLL frequency in MHz.
     // If 0 (fuses blank), fall back to REF_CLK.
-    SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_reg_u spi_ctrl;
-    spi_ctrl.val = mmio_read32(SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR);
-    uint16_t pll_freq_mhz = (uint16_t)spi_ctrl.f.smu_pll_sysclk;
+    SEP_EFUSE_MAP_SYSCLK_FREQ_MHZ_reg_u sysclk_fuse;
+    sysclk_fuse.val = mmio_read32(SEP_EFUSE_MAP_SYSCLK_FREQ_MHZ_REG_ADDR);
+    uint16_t pll_freq_mhz = (uint16_t)sysclk_fuse.f.sysclk_freq_mhz;
     if (pll_freq_mhz == 0u) {
         report_status(STATUS_TYPE_WARN, SEP_MSG_PLL_FUSES_BLANK);
         simputs("PLL_FUSES_BLANK\n");

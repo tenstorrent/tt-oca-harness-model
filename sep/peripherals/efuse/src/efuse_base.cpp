@@ -49,7 +49,7 @@ void efuse_base::reset_all_registers()
     REQUIRED_ALGS.reset();
     STATUS_RPT.reset();
     SEP_ROM_CTRL.reset();
-    SEP_SPI_CTRL_FIELD_EN.reset();
+    SYSCLK_FREQ_MHZ.reset();
 
     // EFUSE_INTERFACE_CTRL — STATUS reset=0x1 (efuse_sense_done=1)
     EFUSE_INTERFACE_CTRL_STATUS.reset();
