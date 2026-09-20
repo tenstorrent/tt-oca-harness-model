@@ -36,12 +36,12 @@ static void configure_spi_mux_ot(void)
 
 static void spi_controller_init(void)
 {
-    SPI_CONTROLLER_CTRL_reg_u ctrl = {.val = SPI_CONTROLLER_CTRL_REG_DEFAULT};
-    SPI_CONTROLLER_CFG_reg_u cfg = {.val = 0};
+    SPI_CONTROLLER_CONTROL_reg_u ctrl = {.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT};
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg = {.val = 0};
 
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     cfg.f.clkdiv = 9;
     cfg.f.cpol = 0;
@@ -49,7 +49,7 @@ static void spi_controller_init(void)
     cfg.f.csnidle = 2;
     cfg.f.csnlead = 2;
     cfg.f.csntrail = 2;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFFu);
@@ -79,7 +79,7 @@ static int wait_idle(void)
 
 static int run_spi_txrx_sequence(void)
 {
-    SPI_CONTROLLER_CMD_reg_u cmd = {.val = 0};
+    SPI_CONTROLLER_COMMAND_reg_u cmd = {.val = 0};
     SPI_CONTROLLER_ERROR_STATUS_reg_u err = {.val = 0};
 
     configure_spi_mux_ot();
@@ -93,7 +93,7 @@ static int run_spi_txrx_sequence(void)
     cmd.f.csaat = 0;
     cmd.f.speed = 0;        /* standard */
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     if (wait_idle() != 0) return SPI_ERR_WAIT_IDLE_CMD;
 
     /* Step 2: TX address phase (4 bytes) with CS held. */
@@ -104,7 +104,7 @@ static int run_spi_txrx_sequence(void)
     cmd.f.csaat = 1;        /* hold CS */
     cmd.f.speed = 0;
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     /* Step 3: RX 4 bytes and release CS. */
     if (wait_ready() != 0) return SPI_ERR_WAIT_READY_RX;
@@ -113,7 +113,7 @@ static int run_spi_txrx_sequence(void)
     cmd.f.csaat = 0;        /* release CS */
     cmd.f.speed = 0;
     cmd.f.direction = 1;    /* RX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     if (wait_idle() != 0) return SPI_ERR_WAIT_IDLE_RX;
 
     /* Hard failures: malformed command / invalid CSID. */

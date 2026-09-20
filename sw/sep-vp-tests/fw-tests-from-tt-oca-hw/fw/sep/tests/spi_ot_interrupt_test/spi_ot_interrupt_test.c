@@ -56,26 +56,26 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_INTR_STATUS_reg_u intr_status;
+    SPI_CONTROLLER_INTR_STATE_reg_u intr_status;
     SPI_CONTROLLER_INTR_ENABLE_reg_u intr_enable;
     SPI_CONTROLLER_INTR_TEST_reg_u intr_test;
     SPI_CONTROLLER_EVENT_ENABLE_reg_u event_enable;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
     uint32_t dummy_rx;
 
     configure_spi_mux_ot();
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller (required for event signals to be valid) */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien     = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Step 1: INTR_STATUS default */
     printf("\nStep 1: INTR_STATUS default\n");
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     printf("  INTR_STATUS=0x%08x (ERROR=%u, SPI_EVENT=%u)\n",
            intr_status.val, intr_status.f.error, intr_status.f.spi_event);
 
@@ -101,25 +101,25 @@ int main(void)
     intr_test.val = 0;
     intr_test.f.error = 1;
     WRITE_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR, intr_test.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.error=1 via INTR_TEST injection", intr_status.f.error, 1)) pass = 0;
 
     /* Release INTR_TEST — INTR_STATUS should deassert (no real error active) */
     intr_test.val = 0;
     WRITE_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR, intr_test.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.error=0 after INTR_TEST release", intr_status.f.error, 0)) pass = 0;
 
     intr_test.val = 0;
     intr_test.f.spi_event = 1;
     WRITE_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR, intr_test.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=1 via INTR_TEST injection", intr_status.f.spi_event, 1)) pass = 0;
 
     /* Release INTR_TEST — INTR_STATUS should deassert */
     intr_test.val = 0;
     WRITE_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR, intr_test.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=0 after INTR_TEST release", intr_status.f.spi_event, 0)) pass = 0;
 
     /* Step 3.5: INTR_STATUS.error functional verification via UNDERFLOW */
@@ -129,11 +129,11 @@ int main(void)
     (void)dummy_rx;
     err_status.val = READ_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR);
     if (!check_reg("UNDERFLOW triggered", err_status.f.underflow, 1)) pass = 0;
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.error=1 on underflow", intr_status.f.error, 1)) pass = 0;
     /* W1C clear ERROR_STATUS → INTR_STATUS.error should deassert */
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, err_status.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.error=0 after clear", intr_status.f.error, 0)) pass = 0;
 
     /* Step 4: EVENT_ENABLE configuration */
@@ -146,12 +146,12 @@ int main(void)
     event_enable.val = 0;
     event_enable.f.txempty = 1;
     WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, event_enable.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=1 (txempty)", intr_status.f.spi_event, 1)) pass = 0;
     /* Disable txempty → spi_event should deassert */
     event_enable.val = 0;
     WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, event_enable.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=0 (no events)", intr_status.f.spi_event, 0)) pass = 0;
 
     /* Step 4.6: EVENT_ENABLE.ready and .idle functional path
@@ -162,21 +162,21 @@ int main(void)
     event_enable.val = 0;
     event_enable.f.ready = 1;
     WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, event_enable.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=1 (ready event)", intr_status.f.spi_event, 1)) pass = 0;
     event_enable.val = 0;
     WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, event_enable.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=0 after ready disable", intr_status.f.spi_event, 0)) pass = 0;
 
     event_enable.val = 0;
     event_enable.f.idle = 1;
     WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, event_enable.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=1 (idle event)", intr_status.f.spi_event, 1)) pass = 0;
     event_enable.val = 0;
     WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, event_enable.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=0 after idle disable", intr_status.f.spi_event, 0)) pass = 0;
 
     /* Enable all events for write-readback verification */
@@ -210,7 +210,7 @@ int main(void)
     intr_test.val = 0;
     intr_test.f.error = 1;
     WRITE_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR, intr_test.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.error=0 when INTR_ENABLE.error=0 (masked)", intr_status.f.error, 0)) pass = 0;
 
     /* Release INTR_TEST */
@@ -224,7 +224,7 @@ int main(void)
     intr_test.val = 0;
     intr_test.f.spi_event = 1;
     WRITE_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR, intr_test.val);
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS.spi_event=0 when INTR_ENABLE.spi_event=0 (masked)", intr_status.f.spi_event, 0)) pass = 0;
     intr_test.val = 0;
     WRITE_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR, intr_test.val);

@@ -15,7 +15,7 @@ void testbench::test_func006_multi_device_switching()
                          << "========================================" << std::endl
                          << "Testing multi-device support with NumCS parameter:" << std::endl
                          << "  1. Basic CSID switching between devices" << std::endl
-                         << "  2. Per-device CFG independence" << std::endl
+                         << "  2. Per-device CONFIGOPTS independence" << std::endl
                          << "  3. CSID change terminates previous command" << std::endl
                          << "  4. CSIDINVAL error for invalid CSID" << std::endl
                          << "  5. CS timing with CSNIDLE between switches" << std::endl
@@ -35,7 +35,7 @@ void testbench::test_func006_multi_device_switching()
     REG_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host" << std::endl;
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     test->read_register_32(STATUS_OFFSET, read_val);
@@ -76,29 +76,31 @@ void testbench::test_func006_multi_device_switching()
     }
 
     // =========================================================================
-    // Test 2: Per-Device CFG Configuration
+    // Test 2: Per-Device CONFIGOPTS Configuration
     // =========================================================================
-    REG_INFO(1, logger) << "\n[Test 2] Per-Device CFG Independence" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 2] Per-Device CONFIGOPTS Independence" << std::endl;
 
     // Configure Device 0 with specific settings
     REG_INFO(2, logger) << "[ACTION] Configuring Device 0 (CSID=0)..." << std::endl;
     test->write_register_32(CSID_OFFSET, 0);
     wait(10, SC_NS);
 
+    // CONFIGOPTS: CLKDIV[15:0], CSNIDLE[19:16], CSNTRAIL[23:20], CSNLEAD[27:24],
+    //             FULLCYC[29], CPHA[30], CPOL[31]
     // Device 0: CLKDIV=8, CSNIDLE=2, CSNTRAIL=2, CSNLEAD=2, FULLCYC=1, CPHA=0, CPOL=0
-    uint32_t config_dev0 = (8 << 16) | (2 << 12) | (2 << 8) | (2 << 4) | (1 << 2) | (0 << 1) | 0;
-    test->write_register_32(CFG_OFFSET, config_dev0);
+    uint32_t config_dev0 = 8u | (2u << 16) | (2u << 20) | (2u << 24) | (1u << 29);
+    test->write_register_32(CONFIGOPTS_OFFSET, config_dev0);
     wait(10, SC_NS);
 
     REG_INFO(2, logger) << "  [INFO] Device 0 config: CLKDIV=8, CSNIDLE=2, CSNTRAIL=2, CSNLEAD=2, FULLCYC=1" << std::endl;
 
     // Read back Device 0 config
-    test->read_register_32(CFG_OFFSET, read_val);
+    test->read_register_32(CONFIGOPTS_OFFSET, read_val);
     if (read_val == config_dev0) {
-        REG_INFO(2, logger) << "  [PASS] Device 0 CFG configured correctly (0x" << std::hex << read_val << std::dec << ")" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Device 0 CONFIGOPTS configured correctly (0x" << std::hex << read_val << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Device 0 CFG mismatch (expected 0x" << std::hex << config_dev0
+        REG_ERROR(2, logger) << "  [FAIL] Device 0 CONFIGOPTS mismatch (expected 0x" << std::hex << config_dev0
                   << ", got 0x" << read_val << std::dec << ")" << std::endl;
         sub_tests_failed++;
         test_passed = false;
@@ -110,21 +112,21 @@ void testbench::test_func006_multi_device_switching()
     wait(10, SC_NS);
 
     // Device 1: CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4, FULLCYC=0, CPHA=1, CPOL=1
-    uint32_t config_dev1 = (16 << 16) | (4 << 12) | (4 << 8) | (4 << 4) | (0 << 2) | (1 << 1) | 1;
-    test->write_register_32(CFG_OFFSET, config_dev1);
+    uint32_t config_dev1 = 16u | (4u << 16) | (4u << 20) | (4u << 24) | (1u << 30) | (1u << 31);
+    test->write_register_32(CONFIGOPTS_OFFSET, config_dev1);
     wait(10, SC_NS);
 
     REG_INFO(2, logger) << "  [INFO] Device 1 config: CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4, CPOL=1, CPHA=1" << std::endl;
 
     // Read back Device 1 config
-    test->read_register_32(CFG_OFFSET, read_val);
-    REG_INFO(2, logger) << "  [INFO] Device 1 CFG readback: 0x" << std::hex << read_val << std::dec << std::endl;
+    test->read_register_32(CONFIGOPTS_OFFSET, read_val);
+    REG_INFO(2, logger) << "  [INFO] Device 1 CONFIGOPTS readback: 0x" << std::hex << read_val << std::dec << std::endl;
 
     if (read_val == config_dev1) {
-        REG_INFO(2, logger) << "  [PASS] Device 1 CFG configured correctly" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Device 1 CONFIGOPTS configured correctly" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_INFO(2, logger) << "  [INFO] Device 1 CFG differs (NumCS may be 1, CSID=1 invalid)" << std::endl;
+        REG_INFO(2, logger) << "  [INFO] Device 1 CONFIGOPTS differs (NumCS may be 1, CSID=1 invalid)" << std::endl;
         // Don't fail - NumCS=1 is acceptable default
         sub_tests_passed++;
     }
@@ -134,8 +136,8 @@ void testbench::test_func006_multi_device_switching()
     test->write_register_32(CSID_OFFSET, 0);
     wait(10, SC_NS);
 
-    test->read_register_32(CFG_OFFSET, read_val);
-    REG_INFO(2, logger) << "  [INFO] Device 0 CFG readback: 0x" << std::hex << read_val << std::dec << std::endl;
+    test->read_register_32(CONFIGOPTS_OFFSET, read_val);
+    REG_INFO(2, logger) << "  [INFO] Device 0 CONFIGOPTS readback: 0x" << std::hex << read_val << std::dec << std::endl;
 
     if (read_val == config_dev0) {
         REG_INFO(2, logger) << "  [PASS] Device 0 config preserved after Device 1 configuration" << std::endl;
@@ -180,7 +182,7 @@ void testbench::test_func006_multi_device_switching()
         // Issue command to Device 0
         REG_INFO(2, logger) << "  [ACTION] Issuing 16-byte TX command to Device 0..." << std::endl;
         uint32_t cmd = BUILD_CMD(15, 2, 0, 0);  /// 16 bytes, TX_ONLY, Standard
-        test->write_register_32(CMD_OFFSET, cmd);
+        test->write_register_32(COMMAND_OFFSET, cmd);
         wait(200, SC_US);
 
         // Verify transaction completed
@@ -231,45 +233,67 @@ void testbench::test_func006_multi_device_switching()
     } else {
         REG_INFO(2, logger) << "  [ACTION] Issuing first segment to Device 0 with CSAAT=1..." << std::endl;
         uint32_t cmd_csaat = BUILD_CMD(7, 2, 0, 1);  /// 8 bytes, TX_ONLY, CSAAT=1
-        test->write_register_32(CMD_OFFSET, cmd_csaat);
+        test->write_register_32(COMMAND_OFFSET, cmd_csaat);
         wait(50, SC_US);
 
-        // Change CSID while transaction is pending (should terminate previous command)
-        REG_INFO(2, logger) << "  [ACTION] Changing CSID to 1 (should terminate Device 0 command)..." << std::endl;
-        test->write_register_32(CSID_OFFSET, 1);
-        wait(10, SC_NS);
-
-        // Load new TX data for Device 1
-        for (int i = 0; i < 2; i++) {
-            test->write_register_32(TXDATA_OFFSET, 0xCC000000 + i);
-        }
-        wait(10, SC_NS);
-
-        // Issue command to Device 1
-        test->read_register_32(STATUS_OFFSET, read_val);
-        ready = (read_val >> 31) & 0x1;
-
-        if (!ready) {
-            REG_ERROR(2, logger) << "  [FAIL] Not READY after CSID change" << std::endl;
-            sub_tests_failed++;
-            test_passed = false;
-        } else {
-            REG_INFO(2, logger) << "  [ACTION] Issuing command to Device 1..." << std::endl;
-            uint32_t cmd1 = BUILD_CMD(7, 2, 0, 0);  /// 8 bytes, TX_ONLY
-            test->write_register_32(CMD_OFFSET, cmd1);
+        if (dut->get_num_cs() < 2) {
+            // NumCS=1: CSID=1 is invalid. Close the CSAAT chain on Device 0 instead.
+            REG_INFO(2, logger) << "  [SKIP] CSID=1 requires NumCS >= 2; completing CSAAT on Device 0" << std::endl;
+            for (int i = 0; i < 2; i++) {
+                test->write_register_32(TXDATA_OFFSET, 0xCC000000 + i);
+            }
+            wait(10, SC_NS);
+            uint32_t cmd0 = BUILD_CMD(7, 2, 0, 0);  /// 8 bytes, TX_ONLY, CSAAT=0
+            test->write_register_32(COMMAND_OFFSET, cmd0);
             wait(200, SC_US);
-
-            // Verify completion
             test->read_register_32(STATUS_OFFSET, read_val);
             bool active = (read_val >> 30) & 0x1;
-
             if (!active) {
-                REG_INFO(2, logger) << "  [PASS] CSID change successfully switched between devices" << std::endl;
+                REG_INFO(2, logger) << "  [PASS] CSAAT chain completed on Device 0 (NumCS=1)" << std::endl;
                 sub_tests_passed++;
             } else {
-                REG_ERROR(2, logger) << "  [FAIL] Device 1 transaction still active" << std::endl;
+                REG_ERROR(2, logger) << "  [FAIL] Device 0 CSAAT completion still active" << std::endl;
                 sub_tests_failed++;
                 test_passed = false;
+            }
+        } else {
+            // Change CSID while transaction is pending (should terminate previous command)
+            REG_INFO(2, logger) << "  [ACTION] Changing CSID to 1 (should terminate Device 0 command)..." << std::endl;
+            test->write_register_32(CSID_OFFSET, 1);
+            wait(10, SC_NS);
+
+            // Load new TX data for Device 1
+            for (int i = 0; i < 2; i++) {
+                test->write_register_32(TXDATA_OFFSET, 0xCC000000 + i);
+            }
+            wait(10, SC_NS);
+
+            // Issue command to Device 1
+            test->read_register_32(STATUS_OFFSET, read_val);
+            ready = (read_val >> 31) & 0x1;
+
+            if (!ready) {
+                REG_ERROR(2, logger) << "  [FAIL] Not READY after CSID change" << std::endl;
+                sub_tests_failed++;
+                test_passed = false;
+            } else {
+                REG_INFO(2, logger) << "  [ACTION] Issuing command to Device 1..." << std::endl;
+                uint32_t cmd1 = BUILD_CMD(7, 2, 0, 0);  /// 8 bytes, TX_ONLY
+                test->write_register_32(COMMAND_OFFSET, cmd1);
+                wait(200, SC_US);
+
+                // Verify completion
+                test->read_register_32(STATUS_OFFSET, read_val);
+                bool active = (read_val >> 30) & 0x1;
+
+                if (!active) {
+                    REG_INFO(2, logger) << "  [PASS] CSID change successfully switched between devices" << std::endl;
+                    sub_tests_passed++;
+                } else {
+                    REG_ERROR(2, logger) << "  [FAIL] Device 1 transaction still active" << std::endl;
+                    sub_tests_failed++;
+                    test_passed = false;
+                }
             }
         }
     }
@@ -307,12 +331,12 @@ void testbench::test_func006_multi_device_switching()
     } else {
         REG_INFO(2, logger) << "  [ACTION] Issuing command with invalid CSID=15..." << std::endl;
         uint32_t cmd = BUILD_CMD(7, 2, 0, 0);
-        test->write_register_32(CMD_OFFSET, cmd);
+        test->write_register_32(COMMAND_OFFSET, cmd);
         wait(50, SC_US);
 
         // Check for CSIDINVAL error
         test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-        bool csidinval = (read_val >> 16) & 0x1;  /// CSIDINVAL at bit 16 per sparse RDL layout
+        bool csidinval = (read_val >> 4) & 0x1;  /// CSIDINVAL at bit 4
         REG_INFO(2, logger) << "  [INFO] ERROR_STATUS: 0x" << std::hex << read_val << std::dec
                   << ", CSIDINVAL=" << csidinval << std::endl;
 
@@ -370,8 +394,8 @@ void testbench::test_func006_multi_device_switching()
                          << "========================================" << std::endl
                          << "Test Coverage:" << std::endl
                          << "  1. CSID register write/read" << std::endl
-                         << "  2. Per-device CFG configuration" << std::endl
-                         << "  3. Per-device CFG shadow array preservation" << std::endl
+                         << "  2. Per-device CONFIGOPTS configuration" << std::endl
+                         << "  3. Per-device CONFIGOPTS shadow array preservation" << std::endl
                          << "  4. Transaction to Device 0" << std::endl
                          << "  5. CSID change behavior with CSAAT" << std::endl
                          << "  6. CSIDINVAL error detection" << std::endl

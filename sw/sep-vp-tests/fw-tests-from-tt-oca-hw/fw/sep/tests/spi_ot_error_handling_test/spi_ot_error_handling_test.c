@@ -57,10 +57,10 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     SPI_CONTROLLER_STATUS_reg_u status;
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
     SPI_CONTROLLER_ERROR_ENABLE_reg_u err_enable;
     uint32_t dummy;
@@ -72,10 +72,10 @@ int main(void)
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Step 1: ERROR_ENABLE defaults */
     printf("\nStep 1: ERROR_ENABLE defaults (all enabled)\n");
@@ -141,10 +141,12 @@ int main(void)
     }
     /* Clear overflow and drain TX FIFO via SW_RST */
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     for (delay = 0; delay < 1000; delay++) {}
+    ctrl.f.sw_rst = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Step 4.6: CMDINVAL test (CMD.SPEED=3, reserved value) */
     printf("\nStep 4.6: CMDINVAL test (CMD.SPEED=3)\n");
@@ -160,7 +162,7 @@ int main(void)
         cmd.f.speed     = 3;    /* reserved speed → CMDINVAL */
         cmd.f.direction = 2;
         WRITE_REG(SPI_CONTROLLER_TXDATA_REG_ADDR, 0x00);
-        WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+        WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
         for (delay = 0; delay < 100; delay++) {}
         err_status.val = READ_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR);
         printf("  ERROR_STATUS=0x%08x, CMDINVAL=%u\n", err_status.val, err_status.f.cmdinval);
@@ -179,7 +181,7 @@ int main(void)
     printf("\nStep 4.7: CMDBUSY test (CLKDIV=0xFFFF, fill CMD FIFO)\n");
     cfg.val = 0;
     cfg.f.clkdiv = 0xFFFF;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
     /* Pre-fill TX FIFO (8 bytes for up to 8 single-byte CMDs) */
     for (i = 0; i < 8; i++) {
@@ -192,7 +194,7 @@ int main(void)
         cmd.f.len       = 0;    /* 1 byte TX per CMD */
         cmd.f.direction = 2;
         cmd.f.speed     = 0;
-        WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+        WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
         err_status.val = READ_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR);
         if (err_status.f.cmdbusy) {
             cmdbusy_detected = 1;
@@ -206,13 +208,15 @@ int main(void)
     }
     /* Recover: clear errors and SW_RST to drain CMD + TX FIFOs */
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     for (delay = 0; delay < 1000; delay++) {}
+    ctrl.f.sw_rst = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     /* Restore CLKDIV */
     cfg.val = 0;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     /* Step 5: ERROR_ENABLE masking test */
     printf("\nStep 5: ERROR_ENABLE masking\n");

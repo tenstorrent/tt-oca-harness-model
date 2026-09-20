@@ -61,18 +61,18 @@ static void configure_spi_mux_ot(void)
 
 static void init_spi_controller(void)
 {
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
     ctrl.val = 0;
     ctrl.f.rx_watermark = RX_WATERMARK;
     ctrl.f.tx_watermark = TX_WATERMARK;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     cfg.val = 0;
     cfg.f.clkdiv = SPI_CLKDIV;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     SPI_CONTROLLER_EVENT_ENABLE_reg_u event_en;
     event_en.val = 0;
@@ -180,13 +180,13 @@ int main(void)
     }
 
     /* Step 3: Issue SPI CMD for RX direction */
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
     cmd.val = 0;
     cmd.f.len = DMA_RX_SIZE - 1;
     cmd.f.direction = 1;
     cmd.f.speed = 0;
     cmd.f.csaat = 0;
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     printf("SPI CMD issued: LEN=%u, DIRECTION=RX, SPEED=Standard\n", DMA_RX_SIZE - 1);
 
     /* Step 4: Configure and start DMA */

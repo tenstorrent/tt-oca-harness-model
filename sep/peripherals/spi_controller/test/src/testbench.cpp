@@ -282,8 +282,10 @@ void testbench::report_test_result(const char* test_name, bool passed)
  */
 void testbench::software_reset()
 {
-    test->write_register_32(spi_controller_regs::CTRL_OFFSET, 0x40000000);  /// Set SW_RST bit (bit 30)
+    test->write_register_32(spi_controller_regs::CONTROL_OFFSET, 0x40000000);  /// Assert SW_RST (level)
     wait(50, SC_NS);  /// Allow reset to complete
+    test->write_register_32(spi_controller_regs::CONTROL_OFFSET, 0x00000000);  /// Release SW_RST
+    wait(10, SC_NS);
 }
 
 /**
@@ -291,8 +293,8 @@ void testbench::software_reset()
  */
 void testbench::configure_spi_controller_basic(uint32_t clkdiv, uint32_t csid)
 {
-    test->write_register_32(spi_controller_regs::CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
-    test->write_register_32(spi_controller_regs::CFG_OFFSET, clkdiv);
+    test->write_register_32(spi_controller_regs::CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(spi_controller_regs::CONFIGOPTS_OFFSET, clkdiv);
     test->write_register_32(spi_controller_regs::CSID_OFFSET, csid);
     wait(10, SC_NS);
 }
@@ -300,10 +302,10 @@ void testbench::configure_spi_controller_basic(uint32_t clkdiv, uint32_t csid)
 /**
  * @brief Quiet the interrupt lines by removing their causes
  *
- * INTR_STATUS is read-only and tracks its inputs live, so it cannot be written
+ * INTR_STATE is read-only and tracks its inputs live, so it cannot be written
  * clear. Drop the software-forced sources instead: INTR_TEST and any latched
  * ERROR_STATUS bit. A level event that is still true (say TXEMPTY while idle)
- * keeps INTR_STATUS.spi_event asserted — mask EVENT_ENABLE to silence those.
+ * keeps INTR_STATE.spi_event asserted — mask EVENT_ENABLE to silence those.
  */
 void testbench::clear_interrupts()
 {

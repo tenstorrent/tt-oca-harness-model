@@ -57,7 +57,7 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
     SPI_CONTROLLER_STATUS_reg_u status;
     volatile int delay;
 
@@ -65,17 +65,17 @@ int main(void)
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller with defaults (TX_WM=0, RX_WM=127) */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* ------------------------------------------------------------------ */
     /* Step 1: Verify default watermarks                                   */
     /* Default CTRL=0x7F: rx_watermark=127, tx_watermark=0                */
     /* ------------------------------------------------------------------ */
     printf("Step 1: Default watermark values\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     printf("  CTRL=0x%08x: TX_WM=%u, RX_WM=%u\n",
            ctrl.val, ctrl.f.tx_watermark, ctrl.f.rx_watermark);
     if (ctrl.f.tx_watermark != 0) {
@@ -106,9 +106,9 @@ int main(void)
     /* Step 2: Set TX_WM=1: TXWM=1 (TXQD=0 < TX_WM=1)                    */
     /* ------------------------------------------------------------------ */
     printf("\nStep 2: Set TX_WM=1, verify TXWM=1 (TX FIFO below watermark)\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.tx_watermark = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     status.val = READ_REG(SPI_CONTROLLER_STATUS_REG_ADDR);
     printf("  TX_WM=1, TXQD=%u → TXWM=%u (expected 1)\n",
@@ -141,9 +141,9 @@ int main(void)
     /* Step 4: Raise TX_WM to 4: TXWM=1 (TXQD=2 < TX_WM=4)              */
     /* ------------------------------------------------------------------ */
     printf("\nStep 4: Set TX_WM=4, verify TXWM=1 (TXQD=2 < 4)\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.tx_watermark = 4;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     status.val = READ_REG(SPI_CONTROLLER_STATUS_REG_ADDR);
     printf("  TX_WM=4, TXQD=%u → TXWM=%u (expected 1)\n",
@@ -176,9 +176,9 @@ int main(void)
     /* Step 6: Set TX_WM=0: TXWM=0 always (TXQD < 0 is impossible)       */
     /* ------------------------------------------------------------------ */
     printf("\nStep 6: Set TX_WM=0, verify TXWM=0 (threshold disabled)\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.tx_watermark = 0;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     status.val = READ_REG(SPI_CONTROLLER_STATUS_REG_ADDR);
     printf("  TX_WM=0, TXQD=%u → TXWM=%u (expected 0)\n",
@@ -195,10 +195,10 @@ int main(void)
     /* ------------------------------------------------------------------ */
     printf("\nStep 7: RX_WM write-readback (min=0, max=0xFF, restore)\n");
     /* min: RX_WM=0 */
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.rx_watermark = 0;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     printf("  RX_WM=0 readback: %u\n", ctrl.f.rx_watermark);
     if (ctrl.f.rx_watermark != 0) {
         printf("  FAIL: RX_WM=0 readback failed\n");
@@ -208,10 +208,10 @@ int main(void)
     }
 
     /* max: RX_WM=0xFF */
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.rx_watermark = 0xFF;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     printf("  RX_WM=0xFF readback: 0x%02x\n", ctrl.f.rx_watermark);
     if (ctrl.f.rx_watermark != 0xFF) {
         printf("  FAIL: RX_WM=0xFF readback failed\n");
@@ -221,17 +221,17 @@ int main(void)
     }
 
     /* Restore default RX_WM=127 */
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.rx_watermark = 0x7F;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* ------------------------------------------------------------------ */
     /* Step 8: SW_RST to drain TX FIFO                                     */
     /* ------------------------------------------------------------------ */
     printf("\nStep 8: SW_RST to drain TX FIFO\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     for (delay = 0; delay < 1000; delay++) {}
 
     status.val = READ_REG(SPI_CONTROLLER_STATUS_REG_ADDR);
@@ -243,6 +243,8 @@ int main(void)
     } else {
         printf("  PASS: TX FIFO drained by SW_RST\n");
     }
+    ctrl.f.sw_rst = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     printf("\n========================================\n");
     if (pass) {

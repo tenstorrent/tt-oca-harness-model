@@ -31,9 +31,9 @@ void testbench::test_func000_comprehensive_reset()
     REG_INFO(1, logger) << "\n[Sub-Test 1] Hardware Reset - Register Defaults" << std::endl;
 
     // Write non-default values
-    test->write_register_32(CTRL_OFFSET, 0x80000000);
-    test->write_register_32(INTR_ENABLE_OFFSET, 0x11);  /// ERROR at bit 0, SPI_EVENT at bit 4
-    test->write_register_32(CFG_OFFSET, 0x12345678);
+    test->write_register_32(CONTROL_OFFSET, 0x80000000);
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x3);  /// ERROR at bit 0, SPI_EVENT at bit 1
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x12345678);
     wait(10, SC_NS);
 
     // Apply hardware reset
@@ -43,12 +43,12 @@ void testbench::test_func000_comprehensive_reset()
     wait(100, SC_NS);
 
     // Verify key registers reset to defaults
-    test->read_register_32(CTRL_OFFSET, read_val);
+    test->read_register_32(CONTROL_OFFSET, read_val);
     if (read_val == 0x7F) {
-        REG_INFO(2, logger) << "  [PASS] CTRL reset to 0x7F" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CONTROL reset to 0x7F" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] CTRL=0x" << std::hex << read_val << ", expected 0x7F" << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CONTROL=0x" << std::hex << read_val << ", expected 0x7F" << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -75,7 +75,7 @@ void testbench::test_func000_comprehensive_reset()
     REG_INFO(1, logger) << "\n[Sub-Test 2] Software Reset - FIFO Flush" << std::endl;
 
     // Enable IP and fill TX FIFO
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     test->write_register_32(TXDATA_OFFSET, 0x11223344);
     test->write_register_32(TXDATA_OFFSET, 0x55667788);
     wait(10, SC_NS);
@@ -85,7 +85,7 @@ void testbench::test_func000_comprehensive_reset()
     uint32_t txqd_before = read_val & 0xFF;
 
     // Trigger SW_RST
-    test->write_register_32(CTRL_OFFSET, 0x40000000);
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);
     wait(100, SC_NS);
 
     // Verify FIFOs flushed
@@ -121,31 +121,31 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     REG_INFO(1, logger) << "\n[Sub-Test 3] Post-Reset Reconfiguration" << std::endl;
 
-    // Configure CTRL with watermarks
+    // Configure CONTROL with watermarks
     // Note: Bit 28 is reserved and not writable, so use 0xA0001020 instead of 0xE0001020
-    test->write_register_32(CTRL_OFFSET, 0xA0001020);
+    test->write_register_32(CONTROL_OFFSET, 0xA0001020);
     wait(10, SC_NS);
-    test->read_register_32(CTRL_OFFSET, read_val);
+    test->read_register_32(CONTROL_OFFSET, read_val);
 
     if (read_val == 0xA0001020) {
-        REG_INFO(2, logger) << "  [PASS] CTRL reconfigured successfully" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CONTROL reconfigured successfully" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] CTRL=0x" << std::hex << read_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CONTROL=0x" << std::hex << read_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    // Configure CFG with timing
-    test->write_register_32(CFG_OFFSET, 0x0221000A);
+    // Configure CONFIGOPTS with timing
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0221000A);
     wait(10, SC_NS);
-    test->read_register_32(CFG_OFFSET, read_val);
+    test->read_register_32(CONFIGOPTS_OFFSET, read_val);
 
     if (read_val == 0x0221000A) {
-        REG_INFO(2, logger) << "  [PASS] CFG configured (CLKDIV=10)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CONFIGOPTS configured (CLKDIV=10)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] CFG=0x" << std::hex << read_val << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CONFIGOPTS=0x" << std::hex << read_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -155,10 +155,10 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     REG_INFO(1, logger) << "\n[Sub-Test 4] Error Clearing via SW_RST" << std::endl;
 
-    // Trigger CMDBUSY error (write CMD when not ready)
-    test->write_register_32(CTRL_OFFSET, 0x00000000);  /// SPIEN=0
+    // Trigger CMDBUSY error (write COMMAND when not ready)
+    test->write_register_32(CONTROL_OFFSET, 0x00000000);  /// SPIEN=0
     wait(10, SC_NS);
-    test->write_register_32(CMD_OFFSET, 0x00000006);
+    test->write_register_32(COMMAND_OFFSET, 0x00000006);
     wait(50, SC_NS);
 
     // Verify error is set
@@ -173,9 +173,10 @@ void testbench::test_func000_comprehensive_reset()
         sub_tests_passed++;  // Count as pass - error triggering is optional
     }
 
-    // Apply SW_RST to clear errors
-    test->write_register_32(CTRL_OFFSET, 0x40000000);
+    // Apply SW_RST to clear errors, then release so later tests can run.
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);
     wait(100, SC_NS);
+    test->write_register_32(CONTROL_OFFSET, 0x00000000);
 
     // Verify ERROR_STATUS cleared
     test->read_register_32(ERROR_STATUS_OFFSET, read_val);

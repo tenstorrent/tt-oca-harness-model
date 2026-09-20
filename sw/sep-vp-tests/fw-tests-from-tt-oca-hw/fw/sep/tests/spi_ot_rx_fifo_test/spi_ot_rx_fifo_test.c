@@ -71,13 +71,13 @@ static int wait_for_idle(int timeout)
 /* Issue an RX-only command of rx_bytes bytes (max 256) */
 static void issue_rx_cmd(uint32_t rx_bytes)
 {
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
     cmd.val = 0;
     cmd.f.len       = rx_bytes - 1;
     cmd.f.csaat     = 0;
     cmd.f.speed     = 0;
     cmd.f.direction = 1;    /* RX only */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 }
 
 int main(void)
@@ -89,7 +89,7 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
     SPI_CONTROLLER_STATUS_reg_u status;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
     uint32_t i;
@@ -98,13 +98,13 @@ int main(void)
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien     = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Configure SPI clock */
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     cfg.val = 0;
     cfg.f.clkdiv    = SPI_CLKDIV;
     cfg.f.cpol      = 0;
@@ -112,7 +112,7 @@ int main(void)
     cfg.f.csnidle   = 2;
     cfg.f.csnlead   = 2;
     cfg.f.csntrail  = 2;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
 
@@ -237,9 +237,9 @@ int main(void)
      * RXWM should be 1
      * ------------------------------------------------------------------- */
     printf("\nStep 6: RXWM test (RX_WATERMARK=2)\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.rx_watermark = 2;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     if (wait_for_ready(TIMEOUT_LIMIT)) { pass = 0; goto done; }
     issue_rx_cmd(RX_LEN_BYTES);

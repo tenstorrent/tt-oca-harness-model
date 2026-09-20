@@ -79,16 +79,30 @@ static bool ot_rx_wait_data(void)
     return false;
 }
 
-/* Flush the TX and RX FIFOs (and reset the datapath) via a single SW_RST pulse,
- * preserving the enabled config. SW_RST self-clears. Used to start every read from
- * a known-empty state so residual bytes from a prior or aborted transfer can never
- * leak into the next one. */
+/* Flush the TX and RX FIFOs (and reset the datapath) via CONTROL.SW_RST.
+ * SW_RST is a level: the core, both data FIFOs and the command queue stay held
+ * in reset until software clears it, so the release below is what makes the
+ * controller usable again. The CDC FIFOs drain rather than reset, so both must
+ * read empty before that release. The drain poll is bounded; a controller that
+ * never drains is released anyway and surfaces as a timeout in the transfer that
+ * follows. */
 static void ot_spi_flush_fifos(void)
 {
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    ctrl.val = mmio_read32(SPI_CONTROLLER_CTRL_REG_ADDR);
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    ctrl.val = mmio_read32(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1u;
-    mmio_write32(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    mmio_write32(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
+
+    SPI_CONTROLLER_STATUS_reg_u status;
+    for (uint32_t i = 0u; i < OT_SPI_POLL_MAX; i++) {
+        status.val = mmio_read32(SPI_CONTROLLER_STATUS_REG_ADDR);
+        if (status.f.txempty && status.f.rxempty && !status.f.active) {
+            break;
+        }
+    }
+
+    ctrl.f.sw_rst = 0u;
+    mmio_write32(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 }
 
 /* ── Configuration + bring-up ─────────────────────────────────────────────── */
@@ -140,7 +154,7 @@ static uint32_t ot_apply_profile(const ot_spi_params_t *p)
     mmio_write32(SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_REG_ADDR, mux.val);
 
     /* Clock / mode / chip-select timing. */
-    SPI_CONTROLLER_CFG_reg_u cfg = { .val = 0u };
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg = { .val = 0u };
     cfg.f.clkdiv   = ot_calc_clkdiv(g_sysclk_mhz, p->sck_mhz);
     cfg.f.cpol     = p->cpol ? 1u : 0u;
     cfg.f.cpha     = p->cpha ? 1u : 0u;
@@ -148,7 +162,7 @@ static uint32_t ot_apply_profile(const ot_spi_params_t *p)
     cfg.f.csnidle  = p->csnidle;
     cfg.f.csnlead  = p->csnlead;
     cfg.f.csntrail = p->csntrail;
-    mmio_write32(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    mmio_write32(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     /* Single chip-select (CS0). */
     mmio_write32(SPI_CONTROLLER_CSID_REG_ADDR, 0u);
@@ -160,11 +174,11 @@ static uint32_t ot_apply_profile(const ot_spi_params_t *p)
         simputshex32("OT_SPI: rx_watermark out of range, clamped from=",
                      (uint32_t)p->rx_watermark);
     }
-    SPI_CONTROLLER_CTRL_reg_u ctrl = { .val = 0u };
+    SPI_CONTROLLER_CONTROL_reg_u ctrl = { .val = 0u };
     ctrl.f.spien        = 1u;
     ctrl.f.output_en    = 1u;
     ctrl.f.rx_watermark = rx_wm;
-    mmio_write32(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    mmio_write32(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Clear any latched error bits (write-1-to-clear). */
     mmio_write32(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFFu);
@@ -217,12 +231,12 @@ static int ot_spi_segment(uint8_t dir, uint8_t speed, uint16_t len_bytes, bool c
     if (ot_spi_wait_ready() != 0) {
         return -1;
     }
-    SPI_CONTROLLER_CMD_reg_u cmd = { .val = 0u };
+    SPI_CONTROLLER_COMMAND_reg_u cmd = { .val = 0u };
     cmd.f.len       = (uint32_t)(len_bytes - 1u); /* LEN encodes count - 1 */
     cmd.f.csaat     = csaat ? 1u : 0u;
     cmd.f.speed     = (uint32_t)speed & 0x3u;
     cmd.f.direction = (uint32_t)dir & 0x3u;
-    mmio_write32(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    mmio_write32(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     return 0;
 }
 

@@ -55,7 +55,7 @@
 const unsigned int PIC_NUM_INTERRUPTS = 256;
 
 // sep_mailbox_interrupt[7:0] → sources 1-8, one per mailbox channel. These are
-// the outbound interrupts; the inbound ones go to the SMC, not to this PIC.
+// the inbound interrupts; the outbound ones go to the SMC, not to this PIC.
 const unsigned int MAILBOX_IRQ0        = 1;   //   [0] sep_mailbox_interrupt[0]
 const unsigned int MAILBOX_IRQ1        = 2;   //   [1] sep_mailbox_interrupt[1]
 const unsigned int MAILBOX_IRQ2        = 3;   //   [2] sep_mailbox_interrupt[2]

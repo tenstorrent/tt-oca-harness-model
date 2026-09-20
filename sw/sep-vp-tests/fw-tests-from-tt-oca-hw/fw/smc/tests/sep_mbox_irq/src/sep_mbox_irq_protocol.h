@@ -18,8 +18,10 @@
  *   SEP-local  OUTBOUND_MAILBOX_ch @ 0x10A00000 + 0x1000*ch  (the SEP pushes the token here)
  *   SMC-facing INBOUND_MAILBOX_ch  @ 0x10A00800 + 0x1000*ch  (the SMC pops / W1C-clears here)
  * A WRITE_DATA push at the SEP-local (outbound) port makes the SMC-facing (inbound) port's RX
- * FIFO non-empty, which asserts that channel's read-data-available IRQ ->
+ * FIFO non-empty. After the inbound/outbound IRQ swap, outbound_interrupt_o[ch]
+ * (write-threshold on the SEP-local port) is what leaves towards the SMC:
  * smc_mailbox_interrupt_o[ch] -> sep_mailbox_interrupts[ch] -> cpu_interrupts[256+ch].
+ * inbound_interrupt_o[ch] is the SEP PIC source.
  *
  * Rendezvous / progress -- the SEP reaches SMC CPU_CTRL scratch through the SEP->SMC alias
  * (SEP-view 0x4000_0000 -> SMC-local 0xC000_0000); the SMC accesses the same scratch locally.

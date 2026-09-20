@@ -29,15 +29,15 @@ void testbench::test_func002_speed_mode_validation()
     // =======================================================================
     REG_INFO(1, logger) << "\n[FUNC-002] Initial Configuration" << std::endl;
 
-    // Enable SPIEN and OUTPUT_EN (CTRL: bits 31=SPIEN, 30=OUTPUT_EN)
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    // Enable SPIEN and OUTPUT_EN (CONTROL: bits 31=SPIEN, 30=OUTPUT_EN)
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
-    REG_INFO(2, logger) << "  CTRL configured: SPIEN=1, OUTPUT_EN=1" << std::endl;
+    REG_INFO(2, logger) << "  CONTROL configured: SPIEN=1, OUTPUT_EN=1" << std::endl;
 
     // Configure timing parameters (CLKDIV=10)
-    test->write_register_32(CFG_OFFSET, 0x0000000A);
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);
     wait(10, SC_NS);
-    REG_INFO(2, logger) << "  CFG configured: CLKDIV=10" << std::endl;
+    REG_INFO(2, logger) << "  CONFIGOPTS configured: CLKDIV=10" << std::endl;
 
     // Select chip select 0
     test->write_register_32(CSID_OFFSET, 0x0);
@@ -67,9 +67,9 @@ void testbench::test_func002_speed_mode_validation()
         test_passed = false;
     }
 
-    // Issue CMD: LEN=7 (8 bytes), DIRECTION=TX(2), SPEED=DUAL(1), CSAAT=0
+    // Issue COMMAND: LEN=7 (8 bytes), DIRECTION=TX(2), SPEED=DUAL(1), CSAAT=0
     uint32_t cmd1 = BUILD_CMD(7, 2, 1, 0);
-    test->write_register_32(CMD_OFFSET, cmd1);
+    test->write_register_32(COMMAND_OFFSET, cmd1);
     wait(80, SC_US);
 
     // Verify completion
@@ -144,9 +144,9 @@ void testbench::test_func002_speed_mode_validation()
         return;
     }
 
-    // Issue CMD: LEN=7 (8 bytes), DIRECTION=RX(1), SPEED=DUAL(1), CSAAT=0
+    // Issue COMMAND: LEN=7 (8 bytes), DIRECTION=RX(1), SPEED=DUAL(1), CSAAT=0
     uint32_t cmd2 = BUILD_CMD(7, 1, 1, 0);
-    test->write_register_32(CMD_OFFSET, cmd2);
+    test->write_register_32(COMMAND_OFFSET, cmd2);
     wait(100, SC_US);
 
     // Verify completion
@@ -259,9 +259,9 @@ void testbench::test_func002_speed_mode_validation()
         return;
     }
 
-    // Issue CMD: LEN=15 (16 bytes), DIRECTION=TX_ONLY(2), SPEED=QUAD(2), CSAAT=0
+    // Issue COMMAND: LEN=15 (16 bytes), DIRECTION=TX_ONLY(2), SPEED=QUAD(2), CSAAT=0
     uint32_t cmd3 = BUILD_CMD(15, 2, 2, 0);
-    test->write_register_32(CMD_OFFSET, cmd3);
+    test->write_register_32(COMMAND_OFFSET, cmd3);
     wait(100, SC_US);
 
     // Verify transaction completed
@@ -347,9 +347,9 @@ void testbench::test_func002_speed_mode_validation()
         return;
     }
 
-    // Issue CMD: LEN=31 (32 bytes), DIRECTION=RX_ONLY(1), SPEED=QUAD(2), CSAAT=0
+    // Issue COMMAND: LEN=31 (32 bytes), DIRECTION=RX_ONLY(1), SPEED=QUAD(2), CSAAT=0
     uint32_t cmd4 = BUILD_CMD(31, 1, 2, 0);
-    test->write_register_32(CMD_OFFSET, cmd4);
+    test->write_register_32(COMMAND_OFFSET, cmd4);
     wait(150, SC_US);
 
     // Verify transaction completed
@@ -480,9 +480,9 @@ void testbench::test_func002_speed_mode_validation()
         return;
     }
 
-    // Issue CMD: LEN=3 (4 bytes), DIRECTION=BIDIR(3), SPEED=STANDARD(0), CSAAT=0
+    // Issue COMMAND: LEN=3 (4 bytes), DIRECTION=BIDIR(3), SPEED=STANDARD(0), CSAAT=0
     uint32_t cmd5 = BUILD_CMD(3, 3, 0, 0);
-    test->write_register_32(CMD_OFFSET, cmd5);
+    test->write_register_32(COMMAND_OFFSET, cmd5);
     wait(50, SC_US);
 
     // Verify transaction completed
@@ -610,14 +610,14 @@ void testbench::test_func002_speed_mode_validation()
         return;
     }
 
-    // Issue INVALID CMD: LEN=3 (4 bytes), DIRECTION=BIDIR(3), SPEED=DUAL(1), CSAAT=0
+    // Issue INVALID COMMAND: LEN=3 (4 bytes), DIRECTION=BIDIR(3), SPEED=DUAL(1), CSAAT=0
     uint32_t cmd6 = BUILD_CMD(3, 3, 1, 0);
-    test->write_register_32(CMD_OFFSET, cmd6);
+    test->write_register_32(COMMAND_OFFSET, cmd6);
     wait(50, SC_US);
 
     // Verify ERROR_STATUS.CMDINVAL is set
     test->read_register_32(ERROR_STATUS_OFFSET, status_val);
-    bool cmdinval = (status_val >> 12) & 0x1;  /// CMDINVAL at bit 12 per RDL spec
+    bool cmdinval = (status_val >> 3) & 0x1;  /// CMDINVAL at bit 3
 
     if (cmdinval) {
         REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for DUAL+BIDIR (invalid combination)" << std::endl;
@@ -652,20 +652,20 @@ void testbench::test_func002_speed_mode_validation()
     REG_INFO(1, logger) << "\n[Test 7] SPI Mode 1 - CPOL=0, CPHA=1" << std::endl;
 
     // Software reset to ensure clean state before mode change
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SW_RST
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// Assert SW_RST
     wait(50, SC_NS);
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// Re-enable after reset
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CFG: CLKDIV=10, CPOL=0, CPHA=1
-    // CFG: bits [15:0]=CLKDIV, bit 1=CPHA, bit 0=CPOL
+    // Configure CONFIGOPTS: CLKDIV=10, CPOL=0, CPHA=1
+    // CONFIGOPTS: bits [15:0]=CLKDIV, bit 1=CPHA, bit 0=CPOL
     uint32_t config_mode1 = (10 << 16) | (1 << 1) | 0;  /// CPHA=1, CPOL=0
-    test->write_register_32(CFG_OFFSET, config_mode1);
+    test->write_register_32(CONFIGOPTS_OFFSET, config_mode1);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // Read back and verify
-    test->read_register_32(CFG_OFFSET, status_val);
+    test->read_register_32(CONFIGOPTS_OFFSET, status_val);
     uint32_t cpol = status_val & 0x1;
     uint32_t cpha = (status_val >> 1) & 0x1;
 
@@ -693,7 +693,7 @@ void testbench::test_func002_speed_mode_validation()
     }
 
     uint32_t cmd_mode1 = BUILD_CMD(3, 2, 0, 0);  /// 4 bytes TX
-    test->write_register_32(CMD_OFFSET, cmd_mode1);
+    test->write_register_32(COMMAND_OFFSET, cmd_mode1);
     wait(50, SC_US);
 
     // Verify transaction completed
@@ -719,19 +719,19 @@ void testbench::test_func002_speed_mode_validation()
     REG_INFO(1, logger) << "\n[Test 8] SPI Mode 2 - CPOL=1, CPHA=0" << std::endl;
 
     // Software reset to ensure clean state
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// Assert SW_RST
     wait(50, SC_NS);
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CFG: CLKDIV=10, CPOL=1, CPHA=0
+    // Configure CONFIGOPTS: CLKDIV=10, CPOL=1, CPHA=0
     uint32_t config_mode2 = (10 << 16) | (0 << 1) | 1;  /// CPHA=0, CPOL=1
-    test->write_register_32(CFG_OFFSET, config_mode2);
+    test->write_register_32(CONFIGOPTS_OFFSET, config_mode2);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // Read back and verify
-    test->read_register_32(CFG_OFFSET, status_val);
+    test->read_register_32(CONFIGOPTS_OFFSET, status_val);
     cpol = status_val & 0x1;
     cpha = (status_val >> 1) & 0x1;
 
@@ -759,7 +759,7 @@ void testbench::test_func002_speed_mode_validation()
     }
 
     uint32_t cmd_mode2 = BUILD_CMD(3, 2, 0, 0);  /// 4 bytes TX
-    test->write_register_32(CMD_OFFSET, cmd_mode2);
+    test->write_register_32(COMMAND_OFFSET, cmd_mode2);
     wait(50, SC_US);
 
     // Verify transaction completed
@@ -785,19 +785,19 @@ void testbench::test_func002_speed_mode_validation()
     REG_INFO(1, logger) << "\n[Test 9] SPI Mode 3 - CPOL=1, CPHA=1" << std::endl;
 
     // Software reset to ensure clean state
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// Assert SW_RST
     wait(50, SC_NS);
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CFG: CLKDIV=10, CPOL=1, CPHA=1
+    // Configure CONFIGOPTS: CLKDIV=10, CPOL=1, CPHA=1
     uint32_t config_mode3 = (10 << 16) | (1 << 1) | 1;  /// CPHA=1, CPOL=1
-    test->write_register_32(CFG_OFFSET, config_mode3);
+    test->write_register_32(CONFIGOPTS_OFFSET, config_mode3);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // Read back and verify
-    test->read_register_32(CFG_OFFSET, status_val);
+    test->read_register_32(CONFIGOPTS_OFFSET, status_val);
     cpol = status_val & 0x1;
     cpha = (status_val >> 1) & 0x1;
 
@@ -825,7 +825,7 @@ void testbench::test_func002_speed_mode_validation()
     }
 
     uint32_t cmd_mode3 = BUILD_CMD(3, 2, 0, 0);  /// 4 bytes TX
-    test->write_register_32(CMD_OFFSET, cmd_mode3);
+    test->write_register_32(COMMAND_OFFSET, cmd_mode3);
     wait(50, SC_US);
 
     // Verify transaction completed
@@ -851,20 +851,20 @@ void testbench::test_func002_speed_mode_validation()
     REG_INFO(1, logger) << "\n[Test 10] FULLCYC Sampling Mode" << std::endl;
 
     // Software reset to ensure clean state
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// Assert SW_RST
     wait(50, SC_NS);
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CFG: CLKDIV=10, FULLCYC=1, CPOL=0, CPHA=0
-    // CFG: bit 2=FULLCYC
+    // Configure CONFIGOPTS: CLKDIV=10, FULLCYC=1, CPOL=0, CPHA=0
+    // CONFIGOPTS: bit 2=FULLCYC
     uint32_t config_fullcyc = (10 << 16) | (1 << 2) | 0;  /// FULLCYC=1
-    test->write_register_32(CFG_OFFSET, config_fullcyc);
+    test->write_register_32(CONFIGOPTS_OFFSET, config_fullcyc);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
     // Read back and verify
-    test->read_register_32(CFG_OFFSET, status_val);
+    test->read_register_32(CONFIGOPTS_OFFSET, status_val);
     uint32_t fullcyc = (status_val >> 2) & 0x1;
 
     if (fullcyc == 1) {
@@ -891,7 +891,7 @@ void testbench::test_func002_speed_mode_validation()
     }
 
     uint32_t cmd_fullcyc = BUILD_CMD(3, 2, 0, 0);  /// 4 bytes TX
-    test->write_register_32(CMD_OFFSET, cmd_fullcyc);
+    test->write_register_32(COMMAND_OFFSET, cmd_fullcyc);
     wait(50, SC_US);
 
     // Verify transaction completed
@@ -919,7 +919,7 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Load TX FIFO with 64 words (255 bytes needs 64 words)
@@ -935,7 +935,7 @@ void testbench::test_func002_speed_mode_validation()
     if (ready) {
         // Issue command with LEN=255 (maximum valid value, encoded as 254)
         uint32_t cmd_max_len = BUILD_CMD(254, 2, 0, 0);  // LEN=254 means 255 bytes
-        test->write_register_32(CMD_OFFSET, cmd_max_len);
+        test->write_register_32(COMMAND_OFFSET, cmd_max_len);
         wait(500, SC_US);
 
         // Verify transaction completed without error
@@ -975,12 +975,12 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Enable error interrupts
-    test->write_register_32(ERROR_ENABLE_OFFSET, 0x11111);
-    test->write_register_32(INTR_ENABLE_OFFSET, 0x11);
+    test->write_register_32(ERROR_ENABLE_OFFSET, 0x1F);
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x3);
     wait(10, SC_NS);
 
     // Load some TX data
@@ -994,13 +994,13 @@ void testbench::test_func002_speed_mode_validation()
 
     // Build command with LEN field = 255 (means 256 bytes, which exceeds spec)
     uint32_t cmd_invalid_len256 = (255 << 0) | (0 << 9) | (0 << 10) | (2 << 12);
-    test->write_register_32(CMD_OFFSET, cmd_invalid_len256);
+    test->write_register_32(COMMAND_OFFSET, cmd_invalid_len256);
     wait(10, SC_US);
 
     // Check for CMDINVAL error (bit 12)
     uint32_t error_status256 = 0;
     test->read_register_32(ERROR_STATUS_OFFSET, error_status256);
-    bool cmdinval_len256 = (error_status256 >> 12) & 0x1;
+    bool cmdinval_len256 = (error_status256 >> 3) & 0x1;
 
     if (cmdinval_len256) {
         REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=256 (ERROR_STATUS=0x"
@@ -1020,13 +1020,13 @@ void testbench::test_func002_speed_mode_validation()
 
     // Build command with LEN field = 299 (9 bits can hold up to 511)
     uint32_t cmd_invalid_len300 = (299 << 0) | (0 << 9) | (0 << 10) | (2 << 12);
-    test->write_register_32(CMD_OFFSET, cmd_invalid_len300);
+    test->write_register_32(COMMAND_OFFSET, cmd_invalid_len300);
     wait(10, SC_US);
 
     // Check for CMDINVAL error
     uint32_t error_status300 = 0;
     test->read_register_32(ERROR_STATUS_OFFSET, error_status300);
-    bool cmdinval_len300 = (error_status300 >> 12) & 0x1;
+    bool cmdinval_len300 = (error_status300 >> 3) & 0x1;
 
     if (cmdinval_len300) {
         REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=300" << std::endl;
@@ -1048,12 +1048,12 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Enable error interrupts
-    test->write_register_32(ERROR_ENABLE_OFFSET, 0x11111);
-    test->write_register_32(INTR_ENABLE_OFFSET, 0x11);
+    test->write_register_32(ERROR_ENABLE_OFFSET, 0x1F);
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x3);
     wait(10, SC_NS);
 
     // Load TX data
@@ -1066,13 +1066,13 @@ void testbench::test_func002_speed_mode_validation()
     REG_INFO(2, logger) << "  [Sub-test 13a] Testing SPEED=3 (invalid)..." << std::endl;
 
     uint32_t cmd_invalid_speed = BUILD_CMD(7, 2, 3, 0);  // SPEED=3 is invalid
-    test->write_register_32(CMD_OFFSET, cmd_invalid_speed);
+    test->write_register_32(COMMAND_OFFSET, cmd_invalid_speed);
     wait(10, SC_US);
 
     // Check for CMDINVAL error
     uint32_t error_status_speed = 0;
     test->read_register_32(ERROR_STATUS_OFFSET, error_status_speed);
-    bool cmdinval_speed3 = (error_status_speed >> 12) & 0x1;
+    bool cmdinval_speed3 = (error_status_speed >> 3) & 0x1;
 
     if (cmdinval_speed3) {
         REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for SPEED=3 (ERROR_STATUS=0x"
@@ -1091,15 +1091,15 @@ void testbench::test_func002_speed_mode_validation()
     REG_INFO(2, logger) << "  [Sub-test 13b] Testing DIRECTION=4 (invalid)..." << std::endl;
 
     // Build command manually with DIRECTION=4 (bits 13:12)
-    // CMD format: LEN(8:0), CSAAT(9), SPEED(11:10), DIRECTION(13:12)
+    // COMMAND format: LEN(8:0), CSAAT(9), SPEED(11:10), DIRECTION(13:12)
     uint32_t cmd_invalid_dir = (7 << 0) | (0 << 9) | (0 << 10) | (4 << 12);
-    test->write_register_32(CMD_OFFSET, cmd_invalid_dir);
+    test->write_register_32(COMMAND_OFFSET, cmd_invalid_dir);
     wait(10, SC_US);
 
     // Check for CMDINVAL error
     uint32_t error_status_dir = 0;
     test->read_register_32(ERROR_STATUS_OFFSET, error_status_dir);
-    bool cmdinval_dir4 = (error_status_dir >> 12) & 0x1;
+    bool cmdinval_dir4 = (error_status_dir >> 3) & 0x1;
 
     if (cmdinval_dir4) {
         REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for DIRECTION=4 (ERROR_STATUS=0x"
@@ -1123,7 +1123,7 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Load 1 byte worth of TX data
@@ -1132,7 +1132,7 @@ void testbench::test_func002_speed_mode_validation()
 
     // Issue command with LEN=0 (means 1 byte according to spec)
     uint32_t cmd_len0 = BUILD_CMD(0, 2, 0, 0);  // LEN=0 encodes 1 byte
-    test->write_register_32(CMD_OFFSET, cmd_len0);
+    test->write_register_32(COMMAND_OFFSET, cmd_len0);
     wait(50, SC_US);
 
     // Verify transaction completed without error
@@ -1158,40 +1158,40 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // =======================================================================
-    // Test 15: CFG Register Access with Invalid CSID
+    // Test 15: CONFIGOPTS Register Access with Invalid CSID
     // =======================================================================
-    REG_INFO(1, logger) << "\n[Test 15] CFG Register Access with Invalid CSID" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 15] CONFIGOPTS Register Access with Invalid CSID" << std::endl;
 
     software_reset();
     wait(10, SC_NS);
 
     // Enable SPIEN
-    test->write_register_32(CTRL_OFFSET, 0x80000000);
+    test->write_register_32(CONTROL_OFFSET, 0x80000000);
     wait(10, SC_NS);
 
-    // Set valid CSID first and write CFG (baseline)
-    REG_INFO(2, logger) << "  [Sub-test 15a] Baseline: CFG write with valid CSID=0..." << std::endl;
+    // Set valid CSID first and write CONFIGOPTS (baseline)
+    REG_INFO(2, logger) << "  [Sub-test 15a] Baseline: CONFIGOPTS write with valid CSID=0..." << std::endl;
     test->write_register_32(CSID_OFFSET, 0);
     wait(10, SC_NS);
 
-    test->write_register_32(CFG_OFFSET, 0x00001234);  // Valid CFG write
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x00001234);  // Valid CONFIGOPTS write
     wait(10, SC_NS);
 
-    // Read back CFG
-    test->read_register_32(CFG_OFFSET, read_val);
+    // Read back CONFIGOPTS
+    test->read_register_32(CONFIGOPTS_OFFSET, read_val);
 
     if (read_val == 0x00001234) {
-        REG_INFO(2, logger) << "  [PASS] CFG write/read with valid CSID=0 successful" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CONFIGOPTS write/read with valid CSID=0 successful" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] CFG mismatch: wrote 0x1234, read 0x"
+        REG_ERROR(2, logger) << "  [FAIL] CONFIGOPTS mismatch: wrote 0x1234, read 0x"
                   << std::hex << read_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    // Now set INVALID CSID and try to write CFG
-    REG_INFO(2, logger) << "  [Sub-test 15b] CFG write with invalid CSID=5..." << std::endl;
+    // Now set INVALID CSID and try to write CONFIGOPTS
+    REG_INFO(2, logger) << "  [Sub-test 15b] CONFIGOPTS write with invalid CSID=5..." << std::endl;
     test->write_register_32(CSID_OFFSET, 5);  // NumCS=1, so 5 is invalid
     wait(10, SC_NS);
 
@@ -1201,33 +1201,33 @@ void testbench::test_func002_speed_mode_validation()
         REG_INFO(2, logger) << "  [INFO] CSID set to invalid value: " << read_val << std::endl;
     }
 
-    // Try to write CFG with invalid CSID
-    test->write_register_32(CFG_OFFSET, 0x00005678);
+    // Try to write CONFIGOPTS with invalid CSID
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x00005678);
     wait(10, SC_NS);
 
-    // Read back CFG - should either:
+    // Read back CONFIGOPTS - should either:
     // 1. Return 0 (error case)
     // 2. Return previous valid value (write rejected)
-    test->read_register_32(CFG_OFFSET, read_val);
+    test->read_register_32(CONFIGOPTS_OFFSET, read_val);
 
     if (read_val == 0 || read_val == 0x00001234) {
-        REG_INFO(2, logger) << "  [PASS] CFG write rejected for invalid CSID (CFG=0x"
+        REG_INFO(2, logger) << "  [PASS] CONFIGOPTS write rejected for invalid CSID (CONFIGOPTS=0x"
                   << std::hex << read_val << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else if (read_val == 0x00005678) {
-        REG_WARN(1, logger) << "  [WARN] CFG write succeeded despite invalid CSID (implementation allows)" << std::endl;
+        REG_WARN(1, logger) << "  [WARN] CONFIGOPTS write succeeded despite invalid CSID (implementation allows)" << std::endl;
         // Don't fail - implementation may allow this
     } else {
-        REG_WARN(1, logger) << "  [INFO] CFG read returned: 0x"
+        REG_WARN(1, logger) << "  [INFO] CONFIGOPTS read returned: 0x"
                   << std::hex << read_val << std::dec << std::endl;
     }
 
-    // Try to read CFG with invalid CSID
-    REG_INFO(2, logger) << "  [Sub-test 15c] CFG read with invalid CSID=5..." << std::endl;
+    // Try to read CONFIGOPTS with invalid CSID
+    REG_INFO(2, logger) << "  [Sub-test 15c] CONFIGOPTS read with invalid CSID=5..." << std::endl;
 
     // The read itself should work (return 0 or warning)
-    test->read_register_32(CFG_OFFSET, read_val);
-    REG_INFO(2, logger) << "  [INFO] CFG read with invalid CSID returned: 0x"
+    test->read_register_32(CONFIGOPTS_OFFSET, read_val);
+    REG_INFO(2, logger) << "  [INFO] CONFIGOPTS read with invalid CSID returned: 0x"
               << std::hex << read_val << std::dec << std::endl;
 
     // Restore valid CSID for cleanup
@@ -1288,7 +1288,7 @@ void testbench::test_func002_speed_mode_validation()
                          << "  12. Invalid LEN Values (>255)" << std::endl
                          << "  13. Invalid SPEED and DIRECTION Values" << std::endl
                          << "  14. Zero-Length Transaction (LEN=0)" << std::endl
-                         << "  15. CFG Register Access with Invalid CSID" << std::endl
+                         << "  15. CONFIGOPTS Register Access with Invalid CSID" << std::endl
                          << "  Note: STANDARD TX/RX covered by FUNC-001/003/004" << std::endl
                          << "========================================\n" << std::endl;
 

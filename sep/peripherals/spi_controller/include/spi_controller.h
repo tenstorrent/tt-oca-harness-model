@@ -114,12 +114,12 @@ private:
     */
 
    /**
-    * @brief Handle write to INTR_STATUS register
+    * @brief Handle write to INTR_STATE register
     * @param value Value to write
     * @param write_bit_mask Bit mask for write operation
     * @return True if write succeeded, false otherwise
     */
-   bool handle_write_INTR_STATUS(uint32_t value, uint32_t write_bit_mask);
+   bool handle_write_INTR_STATE(uint32_t value, uint32_t write_bit_mask);
 
    /**
     * @brief Handle write to INTR_ENABLE register
@@ -138,20 +138,20 @@ private:
    bool handle_write_INTR_TEST(uint32_t value, uint32_t write_bit_mask);
 
    /**
-    * @brief Handle write to CTRL register
+    * @brief Handle write to CONTROL register
     * @param value Value to write
     * @param write_bit_mask Bit mask for write operation
     * @return True if write succeeded, false otherwise
     */
-   bool handle_write_CTRL(uint32_t value, uint32_t write_bit_mask);
+   bool handle_write_CONTROL(uint32_t value, uint32_t write_bit_mask);
 
    /**
-    * @brief Handle write to CMD register
+    * @brief Handle write to COMMAND register
     * @param value Value to write
     * @param write_bit_mask Bit mask for write operation
     * @return True if write succeeded, false otherwise
     */
-   bool handle_write_CMD(uint32_t value, uint32_t write_bit_mask);
+   bool handle_write_COMMAND(uint32_t value, uint32_t write_bit_mask);
 
    /**
     * @brief Handle read from STATUS register
@@ -195,20 +195,20 @@ private:
    bool handle_write_TXDATA(uint32_t value, uint8_t byte_enable, uint32_t write_bit_mask);
 
    /**
-    * @brief Handle write to CFG register
+    * @brief Handle write to CONFIGOPTS register
     * @param value Value to write
     * @param write_bit_mask Bit mask for write operation
     * @return True if write succeeded, false otherwise
     */
-   bool handle_write_CFG(uint32_t value, uint32_t write_bit_mask);
+   bool handle_write_CONFIGOPTS(uint32_t value, uint32_t write_bit_mask);
 
    /**
-    * @brief Handle read from CFG register
+    * @brief Handle read from CONFIGOPTS register
     * @param value Reference to store read value
     * @param read_bit_mask Bit mask for read operation
     * @return True if read succeeded, false otherwise
     */
-   bool handle_read_CFG(uint32_t& value, uint32_t read_bit_mask);
+   bool handle_read_CONFIGOPTS(uint32_t& value, uint32_t read_bit_mask);
 
    /**
     * @brief Handle read from RXDATA register
@@ -243,10 +243,10 @@ private:
    void update_dma_trigger();
 
    /**
-    * @brief Level-sensitive recompute of INTR_STATUS.spi_event per RTL equation:
+    * @brief Level-sensitive recompute of INTR_STATE.spi_event per RTL equation:
     *   spi_event_intr = (|(event_vector & event_mask) || INTR_TEST.spi_event) && INTR_ENABLE.spi_event
     *
-    * The RTL drives INTR_STATUS combinationally, so this both sets and clears.
+    * The RTL drives INTR_STATE combinationally, so this both sets and clears.
     * Call it wherever an event condition, EVENT_ENABLE, INTR_ENABLE or INTR_TEST
     * can change — there is deliberately no edge-triggered latch alongside it.
     */

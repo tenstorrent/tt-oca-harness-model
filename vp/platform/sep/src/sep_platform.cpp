@@ -828,10 +828,10 @@ void och_sep_ss::module_bind() {
     // A pulse, not a level: configure the gateway edge-triggered to catch it, as the
     // RTL's one-cycle assertion requires there too.
     pic_inputs[LOCKED_FIELD_ACCESS_IRQ] = &efuse_locked_field_irq_sig;
-    // sep.sv routes only the outbound interrupts to the SEP PIC, one source per
-    // channel; the inbound ones go out to the SMC instead.
+    // sep.sv routes inbound mailbox interrupts to the SEP PIC (one source per
+    // channel); outbound interrupts go out to the SMC via smc_mailbox_interrupt_o.
     for (unsigned int m = 0; m < mailbox_unit::NUM_CHANNELS; ++m) {
-        pic_inputs[MAILBOX_IRQ0 + m] = &mbox_outbound_irq_signal[m];
+        pic_inputs[MAILBOX_IRQ0 + m] = &mbox_inbound_irq_signal[m];
     }
     pic_inputs[CS_CMD_REQ_DONE]     = &csrng_cs_cmd_req_done_signal;
     pic_inputs[CS_ENTROPY_REQ]      = &csrng_cs_entropy_req_signal;

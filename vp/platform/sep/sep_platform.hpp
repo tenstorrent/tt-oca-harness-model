@@ -156,13 +156,14 @@ public:
     sc_signal<uint64_t> sep_global_base_addr_signal{"sep_global_base_addr_signal"};
     sc_signal<uint64_t> sep_region_size_signal{"sep_region_size_signal"};
 
-    // Inbound mailbox interrupts (sep.sv: smc_mailbox_interrupt_o), one per
+    // Outbound mailbox interrupts (sep.sv: smc_mailbox_interrupt_o), one per
     // channel.  Exported for the same reason as the window signals above:
     // standalone sep-vp has no parent to bind an sc_out to.  An enclosing
     // platform binds the SMC's inputs to these; in sep-vp they simply have no
-    // reader.  The outbound half stays private — it never leaves the subsystem.
+    // reader.  The inbound half stays private — it never leaves the subsystem
+    // (it drives the SEP PIC).
     sc_signal<bool, SC_MANY_WRITERS>
-        mbox_inbound_irq_signal[mailbox_unit::NUM_CHANNELS];
+        mbox_outbound_irq_signal[mailbox_unit::NUM_CHANNELS];
 
     och_sep_ss(sc_module_name name, BasicOptions& opt_in);
     explicit och_sep_ss(sc_module_name name);
@@ -319,9 +320,9 @@ private:
 
     // Mailbox
     sc_signal<double, SC_MANY_WRITERS> mbox_clk_signal;
-    // Outbound interrupts reach the SEP PIC; the inbound half leaves the
+    // Inbound interrupts reach the SEP PIC; the outbound half leaves the
     // subsystem towards the SMC and is declared with the exported signals above.
-    sc_signal<bool, SC_MANY_WRITERS>   mbox_outbound_irq_signal[mailbox_unit::NUM_CHANNELS];
+    sc_signal<bool, SC_MANY_WRITERS>   mbox_inbound_irq_signal[mailbox_unit::NUM_CHANNELS];
 
     // AON Timer
     sc_signal<double, SC_MANY_WRITERS> aon_clk_aon_freq_signal;

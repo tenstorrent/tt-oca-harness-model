@@ -61,7 +61,7 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
     SPI_CONTROLLER_STATUS_reg_u status;
     uint32_t read_val;
 
@@ -74,13 +74,13 @@ int main(void)
     ctrl.f.tx_watermark = 4;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Configure clock */
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     cfg.val = 0;
     cfg.f.clkdiv = spi_clkdiv();
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     /* Step 1: Verify TXWM when TX FIFO empty (TXQD=0 < TX_WATERMARK=4) */
     printf("\nStep 1: TXWM with empty FIFO (expect TXWM=1)\n");
@@ -111,12 +111,16 @@ int main(void)
 
     /* Step 3: SW_RST to drain, verify TXWM re-asserts */
     printf("\nStep 3: SW_RST drain, verify TXWM re-asserts\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     volatile int delay;
     for (delay = 0; delay < 5000; delay++) {}
+
+    /* Release SW_RST (level, not singlepulse) so later STATUS reads are live. */
+    ctrl.f.sw_rst = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     status.val = READ_REG(SPI_CONTROLLER_STATUS_REG_ADDR);
     printf("  After SW_RST: TXWM=%u, TXQD=%u, TXEMPTY=%u\n",
@@ -124,7 +128,7 @@ int main(void)
 
     /* Step 4: Verify RX watermark field */
     printf("\nStep 4: RX_WATERMARK configuration\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     if (!check_reg("RX_WATERMARK readback", ctrl.f.rx_watermark, 1)) pass = 0;
 
     /* Re-read STATUS for RXWM (empty RX FIFO, RXQD=0 < RX_WATERMARK=1) */
@@ -159,9 +163,9 @@ int main(void)
 
     /* Step 7: DMA INTR_SRC_ADDR_0 register (configure source address for handshake) */
     printf("\nStep 7: DMA INTR_SRC_ADDR_0 register\n");
-    WRITE_REG(SECURE_DMA_INTR_SRC_ADDR_0_REG_ADDR, SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    WRITE_REG(SECURE_DMA_INTR_SRC_ADDR_0_REG_ADDR, SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     read_val = READ_REG(SECURE_DMA_INTR_SRC_ADDR_0_REG_ADDR);
-    if (!check_reg("INTR_SRC_ADDR_0", read_val, SPI_CONTROLLER_INTR_STATUS_REG_ADDR)) pass = 0;
+    if (!check_reg("INTR_SRC_ADDR_0", read_val, SPI_CONTROLLER_INTR_STATE_REG_ADDR)) pass = 0;
 
     /* Step 8: EVENT_ENABLE for DMA trigger path */
     printf("\nStep 8: SPI EVENT_ENABLE for DMA trigger events\n");

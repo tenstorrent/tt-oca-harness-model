@@ -84,9 +84,9 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    SPI_CONTROLLER_CFG_reg_u cfg;
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
     SPI_CONTROLLER_STATUS_reg_u status;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
     volatile int delay;
@@ -95,10 +95,10 @@ int main(void)
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Configure: freq-robust 25 MHz SCLK (spi_clkdiv), SPI Mode 0, standard CS timing */
     cfg.val = 0;
@@ -108,7 +108,7 @@ int main(void)
     cfg.f.csnidle  = 2;
     cfg.f.csnlead  = 2;
     cfg.f.csntrail = 2;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
 
@@ -126,7 +126,7 @@ int main(void)
     cmd.f.csaat     = 1;    /* keep CS# low for next segment */
     cmd.f.speed     = 2;    /* Quad */
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_ready(TIMEOUT_LIMIT)) { pass = 0; goto done; }
 
@@ -152,7 +152,7 @@ int main(void)
     cmd.f.csaat     = 1;    /* keep CS# low */
     cmd.f.speed     = 2;    /* Quad */
     cmd.f.direction = 0;    /* Dummy */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_ready(TIMEOUT_LIMIT)) { pass = 0; goto done; }
 
@@ -178,7 +178,7 @@ int main(void)
     cmd.f.csaat     = 0;    /* release CS# after */
     cmd.f.speed     = 2;    /* Quad */
     cmd.f.direction = 1;    /* RX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     wait_for_idle(TIMEOUT_LIMIT);
 
@@ -197,10 +197,12 @@ int main(void)
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
 
     /* SW_RST to drain RX FIFO before CMDINVAL test */
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     for (delay = 0; delay < 200; delay++) {}
+    ctrl.f.sw_rst = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* ------------------------------------------------------------------ */
     /* Step 4: CMDINVAL — DIRECTION=3 (bidirectional) at Quad speed        */
@@ -217,7 +219,7 @@ int main(void)
     cmd.f.csaat     = 0;
     cmd.f.speed     = 2;    /* Quad */
     cmd.f.direction = 3;    /* Bidirectional — invalid at Quad speed */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     for (delay = 0; delay < 200; delay++) {}
 

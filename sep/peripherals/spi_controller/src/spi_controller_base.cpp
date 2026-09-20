@@ -18,14 +18,15 @@
  */
 void spi_controller_base::reset_all_registers()
 {
-  INTR_STATUS.reset();
+  INTR_STATE.reset();
   INTR_ENABLE.reset();
   INTR_TEST.reset();
-  CTRL.reset();
+  ALERT_TEST.reset();
+  CONTROL.reset();
   STATUS.reset();
-  CFG.reset();
+  CONFIGOPTS.reset();
   CSID.reset();
-  CMD.reset();
+  COMMAND.reset();
   RXDATA.reset();
   TXDATA.reset();
   ERROR_ENABLE.reset();
