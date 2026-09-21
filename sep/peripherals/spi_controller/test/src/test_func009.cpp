@@ -27,11 +27,11 @@ void testbench::test_func009_command_queue_depth()
 
     // Step 1: Initial Configuration
     REG_INFO(2, logger) << "[9.1.1] Initial Configuration..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
-    test->write_register_32(CFG_OFFSET, 0x0000000A);  /// CLKDIV=10
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);  /// CLKDIV=10
     test->write_register_32(CSID_OFFSET, 0x0);
-    test->write_register_32(INTR_ENABLE_OFFSET, 0x11);      /// ERROR at bit 0, SPI_EVENT at bit 4
-    test->write_register_32(ERROR_ENABLE_OFFSET, 0x11111);  /// Sparse: bits 0,4,8,12,16
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x3);      /// ERROR at bit 0, SPI_EVENT at bit 1
+    test->write_register_32(ERROR_ENABLE_OFFSET, 0x1F);  /// contiguous bits 0..4
     wait(10, SC_NS);
 
     // Step 2: Verify CMDQD=0 initially
@@ -56,7 +56,7 @@ void testbench::test_func009_command_queue_depth()
     // Step 4: Submit one command segment
     REG_INFO(2, logger) << "[9.1.3] Submitting 1 command segment..." << std::endl;
     uint32_t cmd = BUILD_CMD(3, 2, 0, 0);  /// 4 bytes TX, Standard, CSAAT=0
-    test->write_register_32(CMD_OFFSET, cmd);
+    test->write_register_32(COMMAND_OFFSET, cmd);
     wait(5, SC_NS);
 
     // Step 5: Check CMDQD immediately after submission (should be 1 or 0 if processed quickly)
@@ -116,7 +116,7 @@ void testbench::test_func009_command_queue_depth()
 
     // Segment 1: 4 bytes TX, CSAAT=1
     uint32_t cmd1 = BUILD_CMD(3, 2, 0, 1);
-    test->write_register_32(CMD_OFFSET, cmd1);
+    test->write_register_32(COMMAND_OFFSET, cmd1);
     wait(2, SC_NS);
 
     // Check CMDQD after 1st segment
@@ -126,7 +126,7 @@ void testbench::test_func009_command_queue_depth()
 
     // Segment 2: 4 bytes TX, CSAAT=1
     uint32_t cmd2 = BUILD_CMD(3, 2, 0, 1);
-    test->write_register_32(CMD_OFFSET, cmd2);
+    test->write_register_32(COMMAND_OFFSET, cmd2);
     wait(2, SC_NS);
 
     // Check CMDQD after 2nd segment
@@ -136,7 +136,7 @@ void testbench::test_func009_command_queue_depth()
 
     // Segment 3: 4 bytes TX, CSAAT=1
     uint32_t cmd3 = BUILD_CMD(3, 2, 0, 1);
-    test->write_register_32(CMD_OFFSET, cmd3);
+    test->write_register_32(COMMAND_OFFSET, cmd3);
     wait(2, SC_NS);
 
     // Check CMDQD after 3rd segment
@@ -146,7 +146,7 @@ void testbench::test_func009_command_queue_depth()
 
     // Segment 4: 4 bytes TX, CSAAT=0 (final segment)
     uint32_t cmd4 = BUILD_CMD(3, 2, 0, 0);
-    test->write_register_32(CMD_OFFSET, cmd4);
+    test->write_register_32(COMMAND_OFFSET, cmd4);
     wait(2, SC_NS);
 
     // Check CMDQD after 4th segment
@@ -226,7 +226,7 @@ void testbench::test_func009_command_queue_depth()
     REG_INFO(2, logger) << "[9.3.3] Filling command FIFO with 4 segments..." << std::endl;
     for (int i = 0; i < 4; i++) {
         uint32_t cmd_seg = BUILD_CMD(3, 2, 0, 1);  /// 4 bytes TX, CSAAT=1
-        test->write_register_32(CMD_OFFSET, cmd_seg);
+        test->write_register_32(COMMAND_OFFSET, cmd_seg);
         wait(1, SC_NS);  /// Minimal delay to queue rapidly
     }
 
@@ -239,7 +239,7 @@ void testbench::test_func009_command_queue_depth()
     // Step 4: Attempt to write 5th segment (should trigger CMDBUSY error)
     REG_INFO(2, logger) << "[9.3.4] Attempting 5th segment (should trigger CMDBUSY)..." << std::endl;
     uint32_t cmd5 = BUILD_CMD(3, 2, 0, 0);  /// 4 bytes TX, CSAAT=0
-    test->write_register_32(CMD_OFFSET, cmd5);
+    test->write_register_32(COMMAND_OFFSET, cmd5);
     wait(10, SC_US);
 
     // Step 5: Check for CMDBUSY error
@@ -322,7 +322,7 @@ void testbench::test_func009_command_queue_depth()
 
     // Segment 1
     uint32_t cmd_a = BUILD_CMD(3, 2, 0, 1);
-    test->write_register_32(CMD_OFFSET, cmd_a);
+    test->write_register_32(COMMAND_OFFSET, cmd_a);
     wait(5, SC_US);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -331,7 +331,7 @@ void testbench::test_func009_command_queue_depth()
 
     // Segment 2
     uint32_t cmd_b = BUILD_CMD(3, 2, 0, 1);
-    test->write_register_32(CMD_OFFSET, cmd_b);
+    test->write_register_32(COMMAND_OFFSET, cmd_b);
     wait(5, SC_US);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -340,7 +340,7 @@ void testbench::test_func009_command_queue_depth()
 
     // Segment 3 (final)
     uint32_t cmd_c = BUILD_CMD(3, 2, 0, 0);
-    test->write_register_32(CMD_OFFSET, cmd_c);
+    test->write_register_32(COMMAND_OFFSET, cmd_c);
     wait(5, SC_US);
 
     test->read_register_32(STATUS_OFFSET, status_val);

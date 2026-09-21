@@ -25,16 +25,16 @@ void testbench::test_func010_dma_trigger()
 
     // CRITICAL: Perform software reset first to ensure clean initial state
     // This clears any residual data from previous test cases
-    test->write_register_32(CTRL_OFFSET, 0xE0000810);  /// Set SW_RST bit (bit 30)
+    test->write_register_32(CONTROL_OFFSET, 0xE0000810);  /// Set SW_RST bit (bit 30)
     wait(50, SC_NS);  /// Allow reset to complete
 
     // Enable SPIEN, OUTPUT_EN, set watermarks (TX=8, RX=16)
-    // CTRL: SPIEN(31)=1, SW_RST(30)=0, OUTPUT_EN(29)=1, TX_WATERMARK(15:8)=8, RX_WATERMARK(7:0)=16
-    test->write_register_32(CTRL_OFFSET, 0xA0000810);
+    // CONTROL: SPIEN(31)=1, SW_RST(30)=0, OUTPUT_EN(29)=1, TX_WATERMARK(15:8)=8, RX_WATERMARK(7:0)=16
+    test->write_register_32(CONTROL_OFFSET, 0xA0000810);
     wait(10, SC_NS);
 
     // Configure timing: CLKDIV=10
-    test->write_register_32(CFG_OFFSET, 0x0000000A);
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);
     wait(10, SC_NS);
 
     // Set CSID=0
@@ -143,7 +143,7 @@ void testbench::test_func010_dma_trigger()
 
     // Issue command to drain 32 bytes (8 words) from TX FIFO
     uint32_t cmd1 = BUILD_CMD(31, 2, 0, 0);  /// LEN=31 (32 bytes), TX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd1);
+    test->write_register_32(COMMAND_OFFSET, cmd1);
     wait(300, SC_US);
 
     // Check TX FIFO depth (should be 2 words remaining: 10 - 8 = 2)
@@ -173,7 +173,7 @@ void testbench::test_func010_dma_trigger()
 
     // Drain remaining TX FIFO
     uint32_t cmd_drain = BUILD_CMD(7, 2, 0, 0);  /// LEN=7 (8 bytes), TX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd_drain);
+    test->write_register_32(COMMAND_OFFSET, cmd_drain);
     wait(150, SC_US);
 
     test->clear_slave_state();
@@ -201,7 +201,7 @@ void testbench::test_func010_dma_trigger()
 
     // Issue RX command for 32 bytes
     uint32_t cmd2 = BUILD_CMD(31, 1, 0, 0);  /// LEN=31 (32 bytes), RX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd2);
+    test->write_register_32(COMMAND_OFFSET, cmd2);
     wait(400, SC_US);
 
     // Check RX FIFO depth
@@ -245,7 +245,7 @@ void testbench::test_func010_dma_trigger()
 
     // Issue RX command for 64 bytes
     uint32_t cmd3 = BUILD_CMD(63, 1, 0, 0);  /// LEN=63 (64 bytes), RX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd3);
+    test->write_register_32(COMMAND_OFFSET, cmd3);
     wait(700, SC_US);
 
     // Check RX FIFO depth (should be 8 + 16 = 24 words)
@@ -368,7 +368,7 @@ void testbench::test_func010_dma_trigger()
 
     // Drain TX FIFO
     uint32_t cmd4 = BUILD_CMD(19, 2, 0, 0);  /// LEN=19 (20 bytes), TX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd4);
+    test->write_register_32(COMMAND_OFFSET, cmd4);
     wait(250, SC_US);
 
     test->clear_slave_state();
@@ -395,7 +395,7 @@ void testbench::test_func010_dma_trigger()
 
     // Issue RX command for 80 bytes
     uint32_t cmd5 = BUILD_CMD(79, 1, 0, 0);  /// LEN=79 (80 bytes), RX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd5);
+    test->write_register_32(COMMAND_OFFSET, cmd5);
     wait(800, SC_US);
 
     // Check FIFO depths
@@ -426,7 +426,7 @@ void testbench::test_func010_dma_trigger()
 
     // Cleanup: drain both FIFOs
     uint32_t cmd6 = BUILD_CMD(11, 2, 0, 0);  /// LEN=11 (12 bytes), TX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd6);
+    test->write_register_32(COMMAND_OFFSET, cmd6);
     wait(200, SC_US);
 
     for (int i = 0; i < 20; i++) {
@@ -452,8 +452,8 @@ void testbench::test_func010_dma_trigger()
     REG_INFO(2, logger) << "  Logic: (TX < 0) is always FALSE, (RX >= 1) controls trigger" << std::endl;
 
     // Set TX_WATERMARK=0, RX_WATERMARK=1
-    // CTRL: SPIEN(31)=1, OUTPUT_EN(29)=1, TX_WATERMARK=0, RX_WATERMARK=1
-    test->write_register_32(CTRL_OFFSET, 0xA0000001);
+    // CONTROL: SPIEN(31)=1, OUTPUT_EN(29)=1, TX_WATERMARK=0, RX_WATERMARK=1
+    test->write_register_32(CONTROL_OFFSET, 0xA0000001);
     wait(20, SC_NS);
 
     // Load TX FIFO with 1 word (TX < 0 is FALSE)
@@ -488,7 +488,7 @@ void testbench::test_func010_dma_trigger()
 
     // Drain TX FIFO
     uint32_t cmd7 = BUILD_CMD(3, 2, 0, 0);  /// LEN=3 (4 bytes), TX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd7);
+    test->write_register_32(COMMAND_OFFSET, cmd7);
     wait(150, SC_US);
 
     // Verify trigger still LOW
@@ -514,7 +514,7 @@ void testbench::test_func010_dma_trigger()
     REG_INFO(2, logger) << " Scenario: Change watermark while FIFOs have data" << std::endl;
 
     // Set TX_WATERMARK=20, RX_WATERMARK=10
-    test->write_register_32(CTRL_OFFSET, 0xA0001410);
+    test->write_register_32(CONTROL_OFFSET, 0xA0001410);
     wait(10, SC_NS);
 
     // Load TX FIFO with 15 words (below new watermark of 20)
@@ -538,7 +538,7 @@ void testbench::test_func010_dma_trigger()
     }
 
     // Change TX_WATERMARK to 10 (now TX=15 >= 10, trigger should go LOW)
-    test->write_register_32(CTRL_OFFSET, 0xA0000A10);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000A10);
     wait(20, SC_NS);
 
     // Check updated state
@@ -555,7 +555,7 @@ void testbench::test_func010_dma_trigger()
 
     // Drain TX FIFO
     uint32_t cmd8 = BUILD_CMD(59, 2, 0, 0);  /// LEN=59 (60 bytes), TX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd8);
+    test->write_register_32(COMMAND_OFFSET, cmd8);
     wait(600, SC_US);
 
     test->clear_slave_state();
@@ -568,7 +568,7 @@ void testbench::test_func010_dma_trigger()
     REG_INFO(2, logger) << "  Scenario: SW_RST clears FIFOs, trigger recalculated" << std::endl;
 
     // Load TX FIFO with 5 words (below watermark, trigger should be HIGH)
-    test->write_register_32(CTRL_OFFSET, 0xA0000810);  /// TX_WM=8, RX_WM=16
+    test->write_register_32(CONTROL_OFFSET, 0xA0000810);  /// TX_WM=8, RX_WM=16
     wait(10, SC_NS);
 
     for (int i = 0; i < 5; i++) {
@@ -592,7 +592,7 @@ void testbench::test_func010_dma_trigger()
 
     // Issue SW_RST with watermarks that would NOT assert trigger when empty
     // Set TX_WATERMARK=0, RX_WATERMARK=1 (so TX=0 < 0? NO, RX=0 >= 1? NO)
-    test->write_register_32(CTRL_OFFSET, 0xE0000001);  /// SPIEN=1, SW_RST=1, OUTPUT_EN=1, TX_WM=0, RX_WM=1
+    test->write_register_32(CONTROL_OFFSET, 0xE0000001);  /// SPIEN=1, SW_RST=1, OUTPUT_EN=1, TX_WM=0, RX_WM=1
     wait(50, SC_NS);
 
     // Check state after reset
@@ -613,7 +613,7 @@ void testbench::test_func010_dma_trigger()
     }
 
     // Restore normal operation with original watermarks
-    test->write_register_32(CTRL_OFFSET, 0xA0000810);  /// TX_WM=8, RX_WM=16
+    test->write_register_32(CONTROL_OFFSET, 0xA0000810);  /// TX_WM=8, RX_WM=16
     wait(10, SC_NS);
 
     test->clear_slave_state();

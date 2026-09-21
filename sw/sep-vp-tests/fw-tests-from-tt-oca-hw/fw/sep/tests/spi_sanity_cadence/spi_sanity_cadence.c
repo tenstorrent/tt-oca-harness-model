@@ -268,7 +268,7 @@ int main(void)
      * ================================================================== */
     int pass = 1;
     SPI_CONTROLLER_STATUS_reg_u status;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
 
     printf("\n========================================\n");
     printf("OCH SEP OpenTitan SPI Sanity Test\n");
@@ -286,20 +286,20 @@ int main(void)
     printf("SPI mux configured: spi_sel=1 (OpenTitan), cs_force_high=0\n");
 
     /* Step 2: Enable OT SPI controller (SPIEN=1, OUTPUT_EN=1) */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Configure clock divider: CLKDIV=9 → SCK = 100 MHz / (2*(9+1)) = 5 MHz */
     {
-        SPI_CONTROLLER_CFG_reg_u cfg;
+        SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
         cfg.val = 0;
         cfg.f.clkdiv = 9;
         cfg.f.csnidle = 2;
         cfg.f.csnlead = 2;
         cfg.f.csntrail = 2;
-        WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+        WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
     }
     printf("OT SPI controller enabled: SPIEN=1, OUTPUT_EN=1, CLKDIV=9\n");
 
@@ -317,13 +317,13 @@ int main(void)
     /* Step 4: Issue 1-byte TX command (0xAB = dummy), wait for completion */
     if (pass) {
         WRITE_REG(SPI_CONTROLLER_TXDATA_REG_ADDR, 0x000000AB);
-        SPI_CONTROLLER_CMD_reg_u cmd;
+        SPI_CONTROLLER_COMMAND_reg_u cmd;
         cmd.val = 0;
         cmd.f.len       = 0;    /* 1 byte */
         cmd.f.csaat     = 0;
         cmd.f.speed     = 0;    /* Standard */
         cmd.f.direction = 2;    /* TX */
-        WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+        WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
         /* Wait for READY (cmd consumed and SPI idle) */
         int timeout = 100000;

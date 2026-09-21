@@ -27,8 +27,8 @@ void testbench::test_func008_control_flow()
 
     // Step 1: Initial Configuration
     REG_INFO(2, logger) << "[8.1.1] Initial Configuration..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
-    test->write_register_32(CFG_OFFSET, 0x0000000A);  /// CLKDIV=10
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);  /// CLKDIV=10
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
@@ -54,7 +54,7 @@ void testbench::test_func008_control_flow()
     // Step 3: Start long transaction (32 bytes TX)
     REG_INFO(2, logger) << "[8.1.3] Starting 32-byte TX transaction..." << std::endl;
     uint32_t cmd = BUILD_CMD(31, 2, 0, 0);  /// LEN=31 (32 bytes), TX-only, Standard, CSAAT=0
-    test->write_register_32(CMD_OFFSET, cmd);
+    test->write_register_32(COMMAND_OFFSET, cmd);
     wait(50, SC_US);  /// Wait for transaction to start
 
     // Verify transaction is active
@@ -69,9 +69,9 @@ void testbench::test_func008_control_flow()
         test_passed = false;
     }
 
-    // Step 4: Suspend by clearing SPIEN (CTRL.SPIEN=0)
+    // Step 4: Suspend by clearing SPIEN (CONTROL.SPIEN=0)
     REG_INFO(2, logger) << "[8.1.4] Suspending transaction (SPIEN=0)..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0x60000000);  /// SPIEN=0, OUTPUT_EN=1, SW_RST=0
+    test->write_register_32(CONTROL_OFFSET, 0x60000000);  /// SPIEN=0, OUTPUT_EN=1, SW_RST=0
     wait(10, SC_US);
 
     // Verify transaction is still suspended (FSM should hold state)
@@ -81,7 +81,7 @@ void testbench::test_func008_control_flow()
 
     // Step 5: Resume by setting SPIEN=1
     REG_INFO(2, logger) << "[8.1.5] Resuming transaction (SPIEN=1)..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
     wait(200, SC_US);  /// Wait for transaction to complete
 
     // Verify transaction completed
@@ -122,8 +122,8 @@ void testbench::test_func008_control_flow()
 
     // Step 1: Re-enable and reconfigure
     REG_INFO(2, logger) << "[8.2.1] Reconfiguring IP..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
-    test->write_register_32(CFG_OFFSET, 0x0000000A);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
@@ -149,7 +149,7 @@ void testbench::test_func008_control_flow()
     // Step 3: Start transaction
     REG_INFO(2, logger) << "[8.2.3] Starting 16-byte TX transaction..." << std::endl;
     cmd = BUILD_CMD(15, 2, 0, 0);  /// LEN=15 (16 bytes), TX-only
-    test->write_register_32(CMD_OFFSET, cmd);
+    test->write_register_32(COMMAND_OFFSET, cmd);
     wait(30, SC_US);
 
     // Verify transaction active
@@ -164,7 +164,7 @@ void testbench::test_func008_control_flow()
 
     // Step 4: Trigger SW_RST
     REG_INFO(2, logger) << "[8.2.4] Triggering SW_RST..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST=1, SPIEN=0, OUTPUT_EN=0
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// SW_RST=1, SPIEN=0, OUTPUT_EN=0
     wait(50, SC_US);
 
     // Step 5: Verify FIFOs are flushed
@@ -211,7 +211,7 @@ void testbench::test_func008_control_flow()
 
     // Step 8: Release SW_RST and verify IP can be reconfigured
     REG_INFO(2, logger) << "[8.2.6] Releasing SW_RST and reconfiguring..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1, SW_RST=0
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1, SW_RST=0
     wait(10, SC_NS);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -236,10 +236,10 @@ void testbench::test_func008_control_flow()
 
     // Step 1: Configure with OUTPUT_EN=0
     REG_INFO(2, logger) << "[8.3.1] Configuring with OUTPUT_EN=0..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0x80000000);  /// SPIEN=1, OUTPUT_EN=0
+    test->write_register_32(CONTROL_OFFSET, 0x80000000);  /// SPIEN=1, OUTPUT_EN=0
     wait(10, SC_NS);
 
-    test->read_register_32(CTRL_OFFSET, status_val);
+    test->read_register_32(CONTROL_OFFSET, status_val);
     bool output_en = (status_val >> 29) & 0x1;
     if (!output_en) {
         REG_INFO(2, logger) << "  [PASS] OUTPUT_EN=0 configured" << std::endl;
@@ -252,10 +252,10 @@ void testbench::test_func008_control_flow()
 
     // Step 2: Enable OUTPUT_EN
     REG_INFO(2, logger) << "[8.3.2] Enabling OUTPUT_EN..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
     wait(10, SC_NS);
 
-    test->read_register_32(CTRL_OFFSET, status_val);
+    test->read_register_32(CONTROL_OFFSET, status_val);
     output_en = (status_val >> 29) & 0x1;
     if (output_en) {
         REG_INFO(2, logger) << "  [PASS] OUTPUT_EN=1 configured" << std::endl;
@@ -272,7 +272,7 @@ void testbench::test_func008_control_flow()
     wait(10, SC_NS);
 
     cmd = BUILD_CMD(3, 2, 0, 0);  /// 4 bytes TX
-    test->write_register_32(CMD_OFFSET, cmd);
+    test->write_register_32(COMMAND_OFFSET, cmd);
     wait(50, SC_US);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -300,7 +300,7 @@ void testbench::test_func008_control_flow()
     // Step 1: Fill TX FIFO to capacity
     // Capacity is TxDepth + 1: the byte_select stage holds one extra word.
     REG_INFO(2, logger) << "[8.4.1] Filling TX FIFO (73 words = 292 bytes)..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0x80000000);  /// SPIEN=1, OUTPUT_EN=0 (prevent draining)
+    test->write_register_32(CONTROL_OFFSET, 0x80000000);  /// SPIEN=1, OUTPUT_EN=0 (prevent draining)
     wait(10, SC_NS);
 
     for (int i = 0; i < 73; i++) {
@@ -324,7 +324,7 @@ void testbench::test_func008_control_flow()
 
     // Step 2: Trigger SW_RST
     REG_INFO(2, logger) << "[8.4.2] Triggering SW_RST with full FIFO..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST=1
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// SW_RST=1
     wait(100, SC_US);
 
     // Step 3: Verify TX FIFO flushed
@@ -345,7 +345,7 @@ void testbench::test_func008_control_flow()
 
     // Step 4: Release SW_RST and verify IP operational
     REG_INFO(2, logger) << "[8.4.3] Releasing SW_RST..." << std::endl;
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     test->read_register_32(STATUS_OFFSET, status_val);

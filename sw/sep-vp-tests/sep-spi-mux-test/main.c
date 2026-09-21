@@ -39,12 +39,13 @@ extern int printf(const char *format, ...);
 #define SPI_CTRL_SPIEN          (1u << 31)
 #define SPI_CTRL_SW_RST         (1u << 30)
 #define SPI_CTRL_OUTPUT_EN      (1u << 29)
-#define SPI_CTRL_TX_WATERMARK_POS  16
+#define SPI_CTRL_TX_WATERMARK_POS  8
 #define SPI_CTRL_RX_WATERMARK_POS  0
 
-#define SPI_CMD_LEN_POS         0
-#define SPI_CMD_CSAAT           (1u << 9)
-#define SPI_CMD_DIRECTION_POS   12
+// COMMAND: [24:5] LEN, [4:3] DIRECTION, [2:1] SPEED, [0] CSAAT
+#define SPI_CMD_LEN_POS         5
+#define SPI_CMD_CSAAT           (1u << 0)
+#define SPI_CMD_DIRECTION_POS   3
 
 // Fixture bytes expected at flash offset 0 when an image is staged (bank-A manifest magic
 // "MAN1"). Must match sw/sep-vp-tests/sep-spi-mux-test/gen_flash_fixture.py.

@@ -18,14 +18,14 @@ void testbench::test_func007_multi_segment_csaat()
                          << "  2. Multi-segment with varying directions (TX/RX/Dummy)" << std::endl
                          << "  3. CSAAT=0 on final segment deasserts CSB" << std::endl
                          << "  4. CSID change terminates CSAAT transaction" << std::endl
-                         << "  5. CFG change terminates CSAAT transaction" << std::endl
+                         << "  5. CONFIGOPTS change terminates CSAAT transaction" << std::endl
                          << "========================================\n" << std::endl;
 
     uint32_t status, error_status, csid;
     bool ready, active;
 
-    // Helper lambda to construct CMD register value
-    // CMD format per RDL: [13:12]=DIR, [11:10]=SPEED, [9]=CSAAT, [8:0]=LEN (bytes-1)
+    // Helper lambda to construct COMMAND register value
+    // COMMAND format per RDL: [13:12]=DIR, [11:10]=SPEED, [9]=CSAAT, [8:0]=LEN (bytes-1)
     // DIR: 0=Dummy, 1=RX, 2=TX, 3=Bidir
     // SPEED: 0=Std, 1=Dual, 2=Quad
     auto make_command = [](uint32_t bytes, uint32_t dir, uint32_t speed, uint32_t csaat) -> uint32_t {
@@ -55,7 +55,7 @@ void testbench::test_func007_multi_segment_csaat()
         while (elapsed < timeout_ms) {
             test->read_register_32(STATUS_OFFSET, status);
             bool ready = (status >> 31) & 1;
-            bool active = (status >> 29) & 1;
+            bool active = (status >> 30) & 1;
             if (ready && !active) {
                 return true;
             }
@@ -72,14 +72,14 @@ void testbench::test_func007_multi_segment_csaat()
     REG_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host" << std::endl;
 
     // Software reset to clear any previous state
-    test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// SW_RST
     wait(50, SC_NS);
 
     // Clear any previous errors
     clear_errors();
 
     // Enable SPI Host with OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1 (bit 31=SPIEN, bit 29=OUTPUT_EN)
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1 (bit 31=SPIEN, bit 29=OUTPUT_EN)
     wait(10, SC_NS);
 
     // Verify SPI Host is ready
@@ -99,7 +99,7 @@ void testbench::test_func007_multi_segment_csaat()
     // Configure Device 0 with known timing parameters
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(5, SC_NS);
-    test->write_register_32(CFG_OFFSET, 0x04440010);  /// CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x04440010);  /// CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4
     wait(10, SC_NS);
 
     REG_INFO(2, logger) << "  [INFO] Device 0 configured: CLKDIV=16, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4\n" << std::endl;
@@ -130,7 +130,7 @@ void testbench::test_func007_multi_segment_csaat()
         test_passed = false;
     } else {
         REG_INFO(2, logger) << "[ACTION] Issuing Segment 1: Standard TX, 1 byte, CSAAT=1..." << std::endl;
-        test->write_register_32(CMD_OFFSET, make_command(1, 2, 0, 1));  /// 1 byte, TX, Std, CSAAT=1
+        test->write_register_32(COMMAND_OFFSET, make_command(1, 2, 0, 1));  /// 1 byte, TX, Std, CSAAT=1
         wait(50, SC_US);  /// Allow transaction to complete
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -141,7 +141,7 @@ void testbench::test_func007_multi_segment_csaat()
         } else {
             test->read_register_32(STATUS_OFFSET, status);
             REG_INFO(2, logger) << "[INFO] After Segment 1: READY=" << ((status >> 31) & 1)
-                      << ", ACTIVE=" << ((status >> 29) & 1) << std::endl;
+                      << ", ACTIVE=" << ((status >> 30) & 1) << std::endl;
             sub_tests_passed++;
         }
     }
@@ -154,7 +154,7 @@ void testbench::test_func007_multi_segment_csaat()
         test_passed = false;
     } else {
         REG_INFO(2, logger) << "[ACTION] Issuing Segment 2: Standard TX, 3 bytes, CSAAT=1..." << std::endl;
-        test->write_register_32(CMD_OFFSET, make_command(3, 2, 0, 1));  /// 3 bytes, TX, Std, CSAAT=1
+        test->write_register_32(COMMAND_OFFSET, make_command(3, 2, 0, 1));  /// 3 bytes, TX, Std, CSAAT=1
         wait(100, SC_US);  /// Allow transaction to complete
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -165,7 +165,7 @@ void testbench::test_func007_multi_segment_csaat()
         } else {
             test->read_register_32(STATUS_OFFSET, status);
             REG_INFO(2, logger) << "[INFO] After Segment 2: READY=" << ((status >> 31) & 1)
-                      << ", ACTIVE=" << ((status >> 29) & 1) << std::endl;
+                      << ", ACTIVE=" << ((status >> 30) & 1) << std::endl;
             sub_tests_passed++;
         }
     }
@@ -178,7 +178,7 @@ void testbench::test_func007_multi_segment_csaat()
         test_passed = false;
     } else {
         REG_INFO(2, logger) << "[ACTION] Issuing Segment 3: Quad RX, 16 bytes, CSAAT=0..." << std::endl;
-        test->write_register_32(CMD_OFFSET, make_command(16, 1, 2, 0));  /// 16 bytes, RX, Quad, CSAAT=0
+        test->write_register_32(COMMAND_OFFSET, make_command(16, 1, 2, 0));  /// 16 bytes, RX, Quad, CSAAT=0
         wait(200, SC_US);  /// Allow transaction to complete
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -189,7 +189,7 @@ void testbench::test_func007_multi_segment_csaat()
         } else {
             test->read_register_32(STATUS_OFFSET, status);
             ready = (status >> 31) & 1;
-            active = (status >> 29) & 1;
+            active = (status >> 30) & 1;
             uint32_t rxqd = (status >> 8) & 0xFF;
 
             REG_INFO(2, logger) << "[INFO] After Segment 3: READY=" << ready << ", ACTIVE=" << active
@@ -238,7 +238,7 @@ void testbench::test_func007_multi_segment_csaat()
             test2_passed = false;
         } else {
             REG_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
+            test->write_register_32(COMMAND_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
             wait(100, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -260,7 +260,7 @@ void testbench::test_func007_multi_segment_csaat()
             test2_passed = false;
         } else {
             REG_INFO(2, logger) << "[ACTION] Segment 2: Dummy 2 bytes, CSAAT=1..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(2, 0, 0, 1));  /// 2 bytes, Dummy, Std, CSAAT=1
+            test->write_register_32(COMMAND_OFFSET, make_command(2, 0, 0, 1));  /// 2 bytes, Dummy, Std, CSAAT=1
             wait(50, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -282,7 +282,7 @@ void testbench::test_func007_multi_segment_csaat()
             test2_passed = false;
         } else {
             REG_INFO(2, logger) << "[ACTION] Segment 3: RX 8 bytes, CSAAT=1..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(8, 1, 0, 1));  /// 8 bytes, RX, Std, CSAAT=1
+            test->write_register_32(COMMAND_OFFSET, make_command(8, 1, 0, 1));  /// 8 bytes, RX, Std, CSAAT=1
             wait(150, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -304,7 +304,7 @@ void testbench::test_func007_multi_segment_csaat()
             test2_passed = false;
         } else {
             REG_INFO(2, logger) << "[ACTION] Segment 4: Bidirectional 4 bytes, CSAAT=0..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(4, 3, 0, 0));  /// 4 bytes, Bidir, Std, CSAAT=0
+            test->write_register_32(COMMAND_OFFSET, make_command(4, 3, 0, 0));  /// 4 bytes, Bidir, Std, CSAAT=0
             wait(100, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -317,7 +317,7 @@ void testbench::test_func007_multi_segment_csaat()
 
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
-    active = (status >> 29) & 1;
+    active = (status >> 30) & 1;
     REG_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test2_passed && ready && !active) {
@@ -361,7 +361,7 @@ void testbench::test_func007_multi_segment_csaat()
         test3_passed = false;
     } else {
         REG_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
-        test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
+        test->write_register_32(COMMAND_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
         wait(100, SC_US);
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -378,7 +378,7 @@ void testbench::test_func007_multi_segment_csaat()
         test3_passed = false;
     } else {
         REG_INFO(2, logger) << "[ACTION] Segment 2: TX 4 bytes, CSAAT=0..." << std::endl;
-        test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
+        test->write_register_32(COMMAND_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
         wait(100, SC_US);
 
         test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -390,7 +390,7 @@ void testbench::test_func007_multi_segment_csaat()
 
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
-    active = (status >> 29) & 1;
+    active = (status >> 30) & 1;
     REG_INFO(2, logger) << "[INFO] After CSAAT=0: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test3_passed && ready && !active) {
@@ -426,7 +426,7 @@ void testbench::test_func007_multi_segment_csaat()
     // Configure Device 1 with different timing (for NumCS >= 2 systems)
     test->write_register_32(CSID_OFFSET, 0x1);
     wait(5, SC_US);
-    test->write_register_32(CFG_OFFSET, 0x04440020);  /// CLKDIV=32, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x04440020);  /// CLKDIV=32, CSNIDLE=4, CSNTRAIL=4, CSNLEAD=4
     wait(10, SC_US);
     REG_INFO(2, logger) << "  [INFO] Device 1 configured: CLKDIV=32" << std::endl;
 
@@ -451,7 +451,7 @@ void testbench::test_func007_multi_segment_csaat()
             test4_passed = false;
         } else {
             REG_INFO(2, logger) << "[ACTION] Segment 1: CSID=0, TX 4 bytes, CSAAT=1..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
+            test->write_register_32(COMMAND_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
             wait(100, SC_US);
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -472,7 +472,7 @@ void testbench::test_func007_multi_segment_csaat()
     if (error_status != 0) {
         REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after CSID change: 0x" << std::hex << error_status << std::dec << std::endl;
         // Note: CSID=1 might be invalid if NumCS=1, which would set CSIDINVAL
-        bool csidinval = (error_status >> 16) & 0x1;  /// CSIDINVAL at bit 16 per RDL spec
+        bool csidinval = (error_status >> 4) & 0x1;  /// CSIDINVAL at bit 4
         if (csidinval) {
             REG_INFO(2, logger) << "  [INFO] CSIDINVAL error - NumCS=1, CSID=1 is invalid (expected)" << std::endl;
             // Clear the error and switch back to CSID=0
@@ -502,7 +502,7 @@ void testbench::test_func007_multi_segment_csaat()
         } else {
             test->read_register_32(CSID_OFFSET, csid);
             REG_INFO(2, logger) << "[ACTION] Segment 2: CSID=" << csid << ", TX 4 bytes, CSAAT=0..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
+            test->write_register_32(COMMAND_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
             wait(150, SC_US);  /// Extra time for slower clock on Device 1
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -515,7 +515,7 @@ void testbench::test_func007_multi_segment_csaat()
 
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
-    active = (status >> 29) & 1;
+    active = (status >> 30) & 1;
     REG_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test4_passed && ready && !active) {
@@ -540,12 +540,12 @@ void testbench::test_func007_multi_segment_csaat()
         sub_tests_passed++;  /// Count as passed since this is a configuration limitation
     }
 
-    // Test 5: CFG Change Terminates CSAAT Transaction
+    // Test 5: CONFIGOPTS Change Terminates CSAAT Transaction
     // ==========================================================================
-    REG_INFO(1, logger) << "[FUNC-007] Test 5: CFG Change Terminates CSAAT" << std::endl
+    REG_INFO(1, logger) << "[FUNC-007] Test 5: CONFIGOPTS Change Terminates CSAAT" << std::endl
                          << "-----------------------------------------------------------" << std::endl;
     REG_INFO(2, logger) << "[INFO] Testing configuration change overrides CSAAT=1" << std::endl;
-    REG_INFO(2, logger) << "[INFO] Per datasheet: CFG change forces CSB idle before applying" << std::endl;
+    REG_INFO(2, logger) << "[INFO] Per datasheet: CONFIGOPTS change forces CSB idle before applying" << std::endl;
 
     // Clear any errors
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -557,7 +557,7 @@ void testbench::test_func007_multi_segment_csaat()
     // Ensure CSID=0 and restore original config
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(5, SC_US);
-    test->write_register_32(CFG_OFFSET, 0x04440010);  /// CLKDIV=16
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x04440010);  /// CLKDIV=16
     wait(10, SC_US);
 
     // Load TX data for Segment 1 only
@@ -577,7 +577,7 @@ void testbench::test_func007_multi_segment_csaat()
             test5_passed = false;
         } else {
             REG_INFO(2, logger) << "[ACTION] Segment 1: TX 4 bytes, CSAAT=1..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
+            test->write_register_32(COMMAND_OFFSET, make_command(4, 2, 0, 1));  /// 4 bytes, TX, Std, CSAAT=1
             wait(200, SC_US);  /// Allow transaction to complete
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -588,20 +588,20 @@ void testbench::test_func007_multi_segment_csaat()
         }
     }
 
-    // Wait for segment 1 to complete before changing CFG
+    // Wait for segment 1 to complete before changing CONFIGOPTS
     if (!wait_for_idle()) {
-        REG_ERROR(2, logger) << "  [FAIL] Segment 1 did not complete before CFG change" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Segment 1 did not complete before CONFIGOPTS change" << std::endl;
         test5_passed = false;
     }
 
-    // Change CFG (should force CSB idle before applying)
-    REG_INFO(2, logger) << "[ACTION] Changing CFG (CLKDIV=32) during CSAAT transaction..." << std::endl;
-    test->write_register_32(CFG_OFFSET, 0x04440020);  /// CLKDIV=32, others same
+    // Change CONFIGOPTS (should force CSB idle before applying)
+    REG_INFO(2, logger) << "[ACTION] Changing CONFIGOPTS (CLKDIV=32) during CSAAT transaction..." << std::endl;
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x04440020);  /// CLKDIV=32, others same
     wait(100, SC_US);  /// Allow time for CSB to go idle
 
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
     if (error_status != 0) {
-        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after CFG change: 0x" << std::hex << error_status << std::dec << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] ERROR_STATUS after CONFIGOPTS change: 0x" << std::hex << error_status << std::dec << std::endl;
         test5_passed = false;
     }
 
@@ -616,11 +616,11 @@ void testbench::test_func007_multi_segment_csaat()
     } else {
         test->read_register_32(STATUS_OFFSET, status);
         if (!((status >> 31) & 1)) {
-            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted after CFG change" << std::endl;
+            REG_ERROR(2, logger) << "  [FAIL] STATUS.READY not asserted after CONFIGOPTS change" << std::endl;
             test5_passed = false;
         } else {
             REG_INFO(2, logger) << "[ACTION] Segment 2: TX 4 bytes with new config (CLKDIV=32)..." << std::endl;
-            test->write_register_32(CMD_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
+            test->write_register_32(COMMAND_OFFSET, make_command(4, 2, 0, 0));  /// 4 bytes, TX, Std, CSAAT=0
             wait(300, SC_US);  /// Extra time due to slower clock
 
             test->read_register_32(ERROR_STATUS_OFFSET, error_status);
@@ -636,14 +636,14 @@ void testbench::test_func007_multi_segment_csaat()
 
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
-    active = (status >> 29) & 1;
+    active = (status >> 30) & 1;
     REG_INFO(2, logger) << "[INFO] Final status: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
     if (test5_passed && ready && !active) {
-        REG_INFO(2, logger) << "  [PASS] CFG change correctly terminated CSAAT transaction" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] CONFIGOPTS change correctly terminated CSAAT transaction" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] CFG change behavior test had errors" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] CONFIGOPTS change behavior test had errors" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -671,13 +671,13 @@ void testbench::test_func007_multi_segment_csaat()
     }
 
     // Re-enable after reset
-    test->write_register_32(CTRL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
     wait(10, SC_US);
 
     // Configure for test
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(5, SC_US);
-    test->write_register_32(CFG_OFFSET, 0x04440010);  /// CLKDIV=16
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x04440010);  /// CLKDIV=16
     wait(10, SC_US);
 
     bool test6_passed = true;
@@ -715,7 +715,7 @@ void testbench::test_func007_multi_segment_csaat()
         uint32_t txqd = (status >> 20) & 0xFF;  /// TX FIFO depth
         bool ready_flag = (status >> 31) & 1;
 
-        REG_INFO(2, logger) << "  [STATUS] Before CMD: READY=" << ready_flag
+        REG_INFO(2, logger) << "  [STATUS] Before COMMAND: READY=" << ready_flag
                              << ", TXQD=" << txqd << std::endl;
 
         if (!ready_flag) {
@@ -724,9 +724,9 @@ void testbench::test_func007_multi_segment_csaat()
             break;
         }
 
-        // Issue CMD: LEN=255 (256 bytes), TX-only, Standard, CSAAT per segment
+        // Issue COMMAND: LEN=255 (256 bytes), TX-only, Standard, CSAAT per segment
         uint32_t cmd = make_command(segment_bytes, 2, 0, csaat);
-        test->write_register_32(CMD_OFFSET, cmd);
+        test->write_register_32(COMMAND_OFFSET, cmd);
         wait(10, SC_US);
 
         // Wait for segment to complete with longer timeout for 256-byte transfer
@@ -735,7 +735,7 @@ void testbench::test_func007_multi_segment_csaat()
         // Check if transaction completed
         test->read_register_32(STATUS_OFFSET, status);
         ready_flag = (status >> 31) & 1;
-        bool active = (status >> 29) & 1;
+        bool active = (status >> 30) & 1;
 
         if (!ready_flag || active) {
             REG_ERROR(2, logger) << "  [FAIL] Segment " << (seg + 1) << " did not complete (READY="
@@ -778,7 +778,7 @@ void testbench::test_func007_multi_segment_csaat()
     // Verify final state
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
-    active = (status >> 29) & 1;
+    active = (status >> 30) & 1;
 
     if (test6_passed && ready && !active) {
         REG_INFO(2, logger) << "  [PASS] Test 6: 1 KB multi-segment TX transfer successful" << std::endl;
@@ -812,13 +812,13 @@ void testbench::test_func007_multi_segment_csaat()
     }
 
     // Re-enable after reset
-    test->write_register_32(CTRL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
     wait(10, SC_US);
 
     // Configure for test
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(5, SC_US);
-    test->write_register_32(CFG_OFFSET, 0x04440010);  /// CLKDIV=16
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x04440010);  /// CLKDIV=16
     wait(10, SC_US);
 
     bool test7_passed = true;
@@ -856,7 +856,7 @@ void testbench::test_func007_multi_segment_csaat()
         uint32_t rxqd = (status >> 16) & 0xFF;  /// RX FIFO depth
         bool ready_flag = (status >> 31) & 1;
 
-        REG_INFO(2, logger) << "  [STATUS] Before CMD: READY=" << ready_flag
+        REG_INFO(2, logger) << "  [STATUS] Before COMMAND: READY=" << ready_flag
                              << ", RXQD=" << rxqd << std::endl;
 
         if (!ready_flag) {
@@ -865,9 +865,9 @@ void testbench::test_func007_multi_segment_csaat()
             break;
         }
 
-        // Issue CMD: LEN=255 (256 bytes), RX-only, Standard, CSAAT per segment
+        // Issue COMMAND: LEN=255 (256 bytes), RX-only, Standard, CSAAT per segment
         uint32_t cmd = make_command(rx_segment_bytes, 1, 0, csaat);
-        test->write_register_32(CMD_OFFSET, cmd);
+        test->write_register_32(COMMAND_OFFSET, cmd);
         wait(10, SC_US);
 
         // Wait for segment to complete with longer timeout for 256-byte transfer
@@ -876,7 +876,7 @@ void testbench::test_func007_multi_segment_csaat()
         // Check if transaction completed
         test->read_register_32(STATUS_OFFSET, status);
         ready_flag = (status >> 31) & 1;
-        bool active = (status >> 29) & 1;
+        bool active = (status >> 30) & 1;
 
         if (!ready_flag || active) {
             REG_ERROR(2, logger) << "  [FAIL] Segment " << (seg + 1) << " did not complete (READY="
@@ -965,7 +965,7 @@ void testbench::test_func007_multi_segment_csaat()
     // Verify final state
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
-    active = (status >> 29) & 1;
+    active = (status >> 30) & 1;
 
     if (test7_passed && ready && !active) {
         REG_INFO(2, logger) << "  [PASS] Test 7: 2 KB multi-segment RX transfer successful" << std::endl;
@@ -990,7 +990,7 @@ void testbench::test_func007_multi_segment_csaat()
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
     test->read_register_32(STATUS_OFFSET, status);
     ready = (status >> 31) & 1;
-    active = (status >> 29) & 1;
+    active = (status >> 30) & 1;
 
     REG_INFO(2, logger) << "[VERIFY] Final CSID: " << csid << std::endl;
     REG_INFO(2, logger) << "[VERIFY] Final ERROR_STATUS: 0x" << std::hex << error_status << std::dec << std::endl;
@@ -1017,15 +1017,15 @@ void testbench::test_func007_multi_segment_csaat()
                          << "  3. Multi-direction segments (TX/Dummy/RX/Bidirectional)" << std::endl
                          << "  4. CSAAT=0 properly deasserts CSB" << std::endl
                          << "  5. CSID change terminates CSAAT transaction" << std::endl
-                         << "  6. CFG change terminates CSAAT transaction" << std::endl
+                         << "  6. CONFIGOPTS change terminates CSAAT transaction" << std::endl
                          << "  7. Large multi-segment TX transfer (1 KB / 4 segments)" << std::endl
                          << "  8. Large multi-segment RX transfer (2 KB / 8 segments)" << std::endl
                          << "  9. Final state verification" << std::endl
                          << "========================================" << std::endl
                          << "Key Features Validated:" << std::endl
-                         << "  - STATUS.READY checked before all CMD writes" << std::endl
+                         << "  - STATUS.READY checked before all COMMAND writes" << std::endl
                          << "  - ERROR_STATUS monitored after all operations" << std::endl
-                         << "  - CSID and CFG change handling" << std::endl
+                         << "  - CSID and CONFIGOPTS change handling" << std::endl
                          << "  - FIFO management for KB-sized transfers" << std::endl
                          << "  - TX FIFO refill between segments (256B × 4)" << std::endl
                          << "  - RX FIFO drain between segments (256B × 8)" << std::endl
@@ -1043,7 +1043,7 @@ void testbench::test_func007_multi_segment_csaat()
 //
 // Bug seen in the OpenTitan-SPI DMA boot end-to-end run (branch
 // cmccoy/spi_dma_fixups): after a flash read completes, the boot ROM issues
-// CTRL.SW_RST and then a SECOND read, framed as an opcode+address TX segment
+// CONTROL.SW_RST and then a SECOND read, framed as an opcode+address TX segment
 // (CSAAT held) followed by CSAAT-chained RX segments. In the VP the second
 // read's TX command is QUEUED but the transaction thread never processes it
 // (no "Pulling from TX FIFO"): the opcode+address is never driven, so the read
@@ -1083,7 +1083,7 @@ void testbench::test_repro_second_read_tx_drop()
     software_reset();
     wait(20, SC_NS);
     clear_errors();
-    test->write_register_32(CTRL_OFFSET, 0xA0000000);  // SPIEN(31)=1, OUTPUT_EN(29)=1
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  // SPIEN(31)=1, OUTPUT_EN(29)=1
     wait(10, SC_NS);
     test->clear_slave_state();
 
@@ -1100,14 +1100,14 @@ void testbench::test_repro_second_read_tx_drop()
         uint32_t hdr_word = (uint32_t)hdr[0] | ((uint32_t)hdr[1] << 8)
                           | ((uint32_t)hdr[2] << 16) | ((uint32_t)hdr[3] << 24);
         test->write_register_32(TXDATA_OFFSET, hdr_word);
-        test->write_register_32(CMD_OFFSET, BUILD_CMD(3u, 2u /*TX*/, 0u, 1u /*csaat*/));
+        test->write_register_32(COMMAND_OFFSET, BUILD_CMD(3u, 2u /*TX*/, 0u, 1u /*csaat*/));
 
         drained_bytes = 0;
         uint32_t issued = 0;
         while (issued < total_bytes) {
             uint32_t chunk = (total_bytes - issued) < 256u ? (total_bytes - issued) : 256u;
             bool last = (issued + chunk) >= total_bytes;
-            test->write_register_32(CMD_OFFSET, BUILD_CMD(chunk - 1u, 1u /*RX*/, 0u, last ? 0u : 1u));
+            test->write_register_32(COMMAND_OFFSET, BUILD_CMD(chunk - 1u, 1u /*RX*/, 0u, last ? 0u : 1u));
 
             uint32_t got = 0, guard = 0;
             while (got < chunk && guard < 200000u) {
@@ -1145,7 +1145,7 @@ void testbench::test_repro_second_read_tx_drop()
     // ---- SW_RST between reads, as the boot ROM does before each read ----
     software_reset();
     wait(20, SC_NS);
-    test->write_register_32(CTRL_OFFSET, 0xA0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // ---- Read 2 (the read the bug drops) ----
@@ -1170,7 +1170,7 @@ void testbench::test_repro_second_read_tx_drop()
         sub_tests_failed++; test_passed = false;
     }
     test->read_register_32(ERROR_STATUS_OFFSET, error_status);
-    if (((error_status >> 4) & 0x1u) == 0u) {
+    if (((error_status >> 1) & 0x1u) == 0u) {
         sub_tests_passed++;
     } else {
         REG_ERROR(2, logger) << "  [FAIL] Read 2: unexpected ERROR_STATUS.OVERFLOW" << std::endl;

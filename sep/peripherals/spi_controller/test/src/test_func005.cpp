@@ -24,17 +24,17 @@ void testbench::test_func005_error_recovery_flow()
     REG_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host and Error Interrupts" << std::endl;
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Enable error interrupts for all error classes
-    test->write_register_32(ERROR_ENABLE_OFFSET, 0x11111);  /// Sparse: bits 0,4,8,12,16 (5 error sources)
-    test->write_register_32(INTR_ENABLE_OFFSET, 0x11);      /// ERROR at bit 0, SPI_EVENT at bit 4
+    test->write_register_32(ERROR_ENABLE_OFFSET, 0x1F);  /// contiguous bits 0..4 (5 error sources)
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x3);      /// ERROR at bit 0, SPI_EVENT at bit 1
     wait(10, SC_NS);
 
     // Configure device 0
     test->write_register_32(CSID_OFFSET, 0);
-    test->write_register_32(CFG_OFFSET, 0x0000000A);  /// CLKDIV=10
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);  /// CLKDIV=10
     wait(10, SC_NS);
 
     REG_INFO(2, logger) << "  [PASS] SPI Host configured with error detection enabled\n" << std::endl;
@@ -73,7 +73,7 @@ void testbench::test_func005_error_recovery_flow()
     }
 
     uint32_t cmd1 = BUILD_CMD(255, 2, 0, 0);  /// 256 bytes, TX, Standard
-    test->write_register_32(CMD_OFFSET, cmd1);
+    test->write_register_32(COMMAND_OFFSET, cmd1);
     wait(SC_ZERO_TIME);  /// Give zero time for command to queue
 
     // Verify STATUS.READY=0 (command in progress)
@@ -86,7 +86,7 @@ void testbench::test_func005_error_recovery_flow()
 
         // Immediately issue second command without checking READY (should trigger CMDBUSY)
         uint32_t cmd2 = BUILD_CMD(7, 2, 0, 0);  /// 8 bytes, TX, Standard
-        test->write_register_32(CMD_OFFSET, cmd2);
+        test->write_register_32(COMMAND_OFFSET, cmd2);
         wait(10, SC_NS);
 
         // Check ERROR_STATUS for CMDBUSY (bit 0)
@@ -105,15 +105,15 @@ void testbench::test_func005_error_recovery_flow()
         }
 
         // Check error interrupt
-        test->read_register_32(INTR_STATUS_OFFSET, read_val);
+        test->read_register_32(INTR_STATE_OFFSET, read_val);
         bool error_intr = read_val & 0x1;
         bool error_irq = sig_error_irq.read();
 
         if (error_intr && error_irq) {
-            REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATUS.error=1, error_irq=1)" << std::endl;
+            REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATE.error=1, error_irq=1)" << std::endl;
             sub_tests_passed++;
         } else {
-            REG_ERROR(2, logger) << "  [FAIL] Error interrupt not properly asserted (INTR_STATUS.error="
+            REG_ERROR(2, logger) << "  [FAIL] Error interrupt not properly asserted (INTR_STATE.error="
                       << error_intr << ", error_irq=" << error_irq << ")" << std::endl;
             sub_tests_failed++;
             test_passed = false;
@@ -130,7 +130,7 @@ void testbench::test_func005_error_recovery_flow()
 
     // Clear error
     test->write_register_32(ERROR_STATUS_OFFSET, 0x01);  /// Clear CMDBUSY
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);     /// Clear interrupt
+    test->write_register_32(INTR_STATE_OFFSET, 0x1);     /// Clear interrupt
     wait(10, SC_NS);
 
     // Verify recovery
@@ -185,9 +185,9 @@ void testbench::test_func005_error_recovery_flow()
     test->write_register_32(TXDATA_OFFSET, 0xDEADBEEF);
     wait(10, SC_NS);
 
-    // Check OVERFLOW error (bit 4 per sparse RDL layout)
+    // Check OVERFLOW error (bit 1)
     test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-    bool overflow_err = (read_val >> 4) & 0x1;
+    bool overflow_err = (read_val >> 1) & 0x1;
 
     if (overflow_err) {
         REG_INFO(2, logger) << "  [PASS] OVERFLOW error detected (ERROR_STATUS=0x"
@@ -200,28 +200,28 @@ void testbench::test_func005_error_recovery_flow()
     }
 
     // Check error interrupt
-    test->read_register_32(INTR_STATUS_OFFSET, read_val);
+    test->read_register_32(INTR_STATE_OFFSET, read_val);
     error_intr = read_val & 0x1;
     error_irq = sig_error_irq.read();
 
     if (error_intr && error_irq) {
-        REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATUS.error=1, error_irq=1)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATE.error=1, error_irq=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Error interrupt not properly asserted (INTR_STATUS.error="
+        REG_ERROR(2, logger) << "  [FAIL] Error interrupt not properly asserted (INTR_STATE.error="
                   << error_intr << ", error_irq=" << error_irq << ")" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    // Clear error and reset FIFOs using SW_RST (OVERFLOW at bit 4 per sparse RDL layout)
-    test->write_register_32(ERROR_STATUS_OFFSET, 0x10);  /// Clear OVERFLOW (bit 4)
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);     /// Clear interrupt
+    // Clear error and reset FIFOs using SW_RST (OVERFLOW at bit 1)
+    test->write_register_32(ERROR_STATUS_OFFSET, 0x2);  /// Clear OVERFLOW (bit 4)
+    test->write_register_32(INTR_STATE_OFFSET, 0x1);     /// Clear interrupt
     wait(10, SC_NS);
 
-    test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// SW_RST
     wait(50, SC_US);
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);  /// Re-enable
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Re-enable
     wait(10, SC_NS);
 
     // Verify recovery
@@ -269,9 +269,9 @@ void testbench::test_func005_error_recovery_flow()
     test->read_register_32(RXDATA_OFFSET, read_val);
     wait(10, SC_NS);
 
-    // Check ERROR_STATUS for UNDERFLOW (bit 8 per sparse RDL layout)
+    // Check ERROR_STATUS for UNDERFLOW (bit 2)
     test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-    bool underflow_err = (read_val >> 8) & 0x1;
+    bool underflow_err = (read_val >> 2) & 0x1;
 
     if (underflow_err) {
         REG_INFO(2, logger) << "  [PASS] UNDERFLOW error detected (ERROR_STATUS=0x"
@@ -284,23 +284,23 @@ void testbench::test_func005_error_recovery_flow()
     }
 
     // Check error interrupt
-    test->read_register_32(INTR_STATUS_OFFSET, read_val);
+    test->read_register_32(INTR_STATE_OFFSET, read_val);
     error_intr = read_val & 0x1;
     error_irq = sig_error_irq.read();
 
     if (error_intr && error_irq) {
-        REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATUS.error=1, error_irq=1)" << std::endl;
+        REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATE.error=1, error_irq=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Error interrupt not properly asserted (INTR_STATUS.error="
+        REG_ERROR(2, logger) << "  [FAIL] Error interrupt not properly asserted (INTR_STATE.error="
                   << error_intr << ", error_irq=" << error_irq << ")" << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    // Clear error (UNDERFLOW at bit 8 per sparse RDL layout)
-    test->write_register_32(ERROR_STATUS_OFFSET, 0x100);  /// Clear UNDERFLOW (bit 8)
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);     /// Clear interrupt
+    // Clear error (UNDERFLOW at bit 2)
+    test->write_register_32(ERROR_STATUS_OFFSET, 0x4);  /// Clear UNDERFLOW (bit 8)
+    test->write_register_32(INTR_STATE_OFFSET, 0x1);     /// Clear interrupt
     wait(10, SC_NS);
 
     // Verify recovery
@@ -336,20 +336,20 @@ void testbench::test_func005_error_recovery_flow()
         // Test 4a: Invalid SPEED (SPEED=3, valid values are 0-2)
         REG_INFO(2, logger) << "[ACTION] Issuing command with invalid SPEED=3..." << std::endl;
         uint32_t cmd_invalid_speed = (7 << 5) | (3 << 1) | 0;  /// SPEED=3 (invalid)
-        test->write_register_32(CMD_OFFSET, cmd_invalid_speed);
+        test->write_register_32(COMMAND_OFFSET, cmd_invalid_speed);
         wait(10, SC_US);
 
-        // Check ERROR_STATUS for CMDINVAL (bit 12 per sparse RDL layout)
+        // Check ERROR_STATUS for CMDINVAL (bit 3)
         test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-        bool cmdinval_err = (read_val >> 12) & 0x1;
+        bool cmdinval_err = (read_val >> 3) & 0x1;
         REG_INFO(2, logger) << "[INFO] ERROR_STATUS: 0x" << std::hex << read_val << std::dec
                   << ", CMDINVAL=" << cmdinval_err << std::endl;
 
         // Check error interrupt
-        test->read_register_32(INTR_STATUS_OFFSET, read_val);
+        test->read_register_32(INTR_STATE_OFFSET, read_val);
         error_intr = read_val & 0x1;
         error_irq = sig_error_irq.read();
-        REG_INFO(2, logger) << "[INFO] INTR_STATUS.error=" << error_intr << ", error_irq=" << error_irq << std::endl;
+        REG_INFO(2, logger) << "[INFO] INTR_STATE.error=" << error_intr << ", error_irq=" << error_irq << std::endl;
 
         if (cmdinval_err) {
             REG_INFO(2, logger) << "[PASS] CMDINVAL error detected for invalid SPEED" << std::endl;
@@ -366,7 +366,7 @@ void testbench::test_func005_error_recovery_flow()
     clear_errors();
 
     // Clear interrupt
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);
+    test->write_register_32(INTR_STATE_OFFSET, 0x1);
     wait(10, SC_NS);
 
     // Verify recovery
@@ -397,9 +397,9 @@ void testbench::test_func005_error_recovery_flow()
 
     if (txqd > 0) {
         REG_INFO(2, logger) << "[INFO] TX FIFO not empty, performing SW_RST to clear..." << std::endl;
-        test->write_register_32(CTRL_OFFSET, 0x40000000);  /// SW_RST (bit 30)
+        test->write_register_32(CONTROL_OFFSET, 0x40000000);  /// SW_RST (bit 30)
         wait(50, SC_US);
-        test->write_register_32(CTRL_OFFSET, 0x80000000);  /// Re-enable SPIEN (bit 31)
+        test->write_register_32(CONTROL_OFFSET, 0x80000000);  /// Re-enable SPIEN (bit 31)
         wait(10, SC_NS);
 
         test->read_register_32(STATUS_OFFSET, read_val);
@@ -426,20 +426,20 @@ void testbench::test_func005_error_recovery_flow()
         // Issue command with invalid CSID
         REG_INFO(2, logger) << "[ACTION] Issuing command with CSID=5..." << std::endl;
         uint32_t cmd_valid = BUILD_CMD(7, 2, 0, 0);  /// Valid command format
-        test->write_register_32(CMD_OFFSET, cmd_valid);
+        test->write_register_32(COMMAND_OFFSET, cmd_valid);
         wait(10, SC_US);
 
-        // Check ERROR_STATUS for CSIDINVAL (bit 16 per sparse RDL layout)
+        // Check ERROR_STATUS for CSIDINVAL (bit 4)
         test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-        bool csidinval_err = (read_val >> 16) & 0x1;
+        bool csidinval_err = (read_val >> 4) & 0x1;
         REG_INFO(2, logger) << "[INFO] ERROR_STATUS: 0x" << std::hex << read_val << std::dec
                   << ", CSIDINVAL=" << csidinval_err << std::endl;
 
         // Check error interrupt
-        test->read_register_32(INTR_STATUS_OFFSET, read_val);
+        test->read_register_32(INTR_STATE_OFFSET, read_val);
         error_intr = read_val & 0x1;
         error_irq = sig_error_irq.read();
-        REG_INFO(2, logger) << "[INFO] INTR_STATUS.error=" << error_intr << ", error_irq=" << error_irq << std::endl;
+        REG_INFO(2, logger) << "[INFO] INTR_STATE.error=" << error_intr << ", error_irq=" << error_irq << std::endl;
 
         if (csidinval_err) {
             REG_INFO(2, logger) << "[PASS] CSIDINVAL error detected" << std::endl;
@@ -460,7 +460,7 @@ void testbench::test_func005_error_recovery_flow()
     wait(10, SC_NS);
 
     // Clear interrupt
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);
+    test->write_register_32(INTR_STATE_OFFSET, 0x1);
     wait(10, SC_NS);
 
     // Verify recovery
@@ -500,17 +500,17 @@ void testbench::test_func005_error_recovery_flow()
     test->write_register_32_with_byte_enable(TXDATA_OFFSET, 0xDEADBEEF, 0, 0, 0, 0);
     wait(10, SC_NS);
 
-    // Check ERROR_STATUS for ACCESSINVAL (bit 20 per sparse RDL layout)
+    // Check ERROR_STATUS for ACCESSINVAL (bit 5)
     test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-    bool accessinval_err = (read_val >> 20) & 0x1;
+    bool accessinval_err = (read_val >> 5) & 0x1;
     REG_INFO(2, logger) << "[INFO] ERROR_STATUS: 0x" << std::hex << read_val << std::dec
               << ", ACCESSINVAL=" << accessinval_err << std::endl;
 
     // Check error interrupt
-    test->read_register_32(INTR_STATUS_OFFSET, read_val);
+    test->read_register_32(INTR_STATE_OFFSET, read_val);
     error_intr = read_val & 0x1;
     error_irq = sig_error_irq.read();
-    REG_INFO(2, logger) << "[INFO] INTR_STATUS.error=" << error_intr << ", error_irq=" << error_irq << std::endl;
+    REG_INFO(2, logger) << "[INFO] INTR_STATE.error=" << error_intr << ", error_irq=" << error_irq << std::endl;
 
     if (accessinval_err) {
         REG_INFO(2, logger) << "[PASS] ACCESSINVAL error detected" << std::endl;
@@ -526,7 +526,7 @@ void testbench::test_func005_error_recovery_flow()
     clear_errors();
 
     // Clear interrupt
-    test->write_register_32(INTR_STATUS_OFFSET, 0x1);
+    test->write_register_32(INTR_STATE_OFFSET, 0x1);
     wait(10, SC_NS);
 
     // Verify recovery
@@ -555,8 +555,8 @@ void testbench::test_func005_error_recovery_flow()
     bool active = (read_val >> 30) & 0x1;
     REG_INFO(2, logger) << "[VERIFY] Final STATUS: READY=" << ready << ", ACTIVE=" << active << std::endl;
 
-    test->read_register_32(INTR_STATUS_OFFSET, read_val);
-    REG_INFO(2, logger) << "[VERIFY] Final INTR_STATUS: 0x" << std::hex << read_val << std::dec << std::endl;
+    test->read_register_32(INTR_STATE_OFFSET, read_val);
+    REG_INFO(2, logger) << "[VERIFY] Final INTR_STATE: 0x" << std::hex << read_val << std::dec << std::endl;
 
     bool final_error_irq = sig_error_irq.read();
     bool final_spi_event_irq = sig_spi_event_irq.read();

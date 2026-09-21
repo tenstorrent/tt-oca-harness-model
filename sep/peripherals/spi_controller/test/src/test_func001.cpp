@@ -24,12 +24,12 @@ void testbench::test_func001_flash_fast_read_sequence()
     // =======================================================================
     REG_INFO(1, logger) << "\n[Step 1] Initial Configuration" << std::endl;
 
-    // CTRL: SPIEN=1, OUTPUT_EN=1, SW_RST=0, RX_WATERMARK=0x00, TX_WATERMARK=0x00
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);
+    // CONTROL: SPIEN=1, OUTPUT_EN=1, SW_RST=0, RX_WATERMARK=0x00, TX_WATERMARK=0x00
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
-    // CFG: CLKDIV=10 (SCK = clk_i/22), CPOL=0, CPHA=0, FULLCYC=0, timing margins=0
-    test->write_register_32(CFG_OFFSET, 0x0000000A);
+    // CONFIGOPTS: CLKDIV=10 (SCK = clk_i/22), CPOL=0, CPHA=0, FULLCYC=0, timing margins=0
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);
     wait(10, SC_NS);
 
     // CSID: Select device 0
@@ -117,7 +117,7 @@ void testbench::test_func001_flash_fast_read_sequence()
     // =======================================================================
     REG_INFO(1, logger) << "\n[Step 4] Segment 1: TX 4 bytes, CSAAT=1" << std::endl;
 
-    // CMD: LEN=3 (4 bytes), DIRECTION=2 (TX-only), SPEED=0 (Standard), CSAAT=1
+    // COMMAND: LEN=3 (4 bytes), DIRECTION=2 (TX-only), SPEED=0 (Standard), CSAAT=1
     // Bit layout per RDL: LEN[8:0]=3, CSAAT[9]=1, SPEED[11:10]=0, DIRECTION[13:12]=2
     uint32_t cmd1 = BUILD_CMD(3, 2, 0, 1);
 
@@ -131,7 +131,7 @@ void testbench::test_func001_flash_fast_read_sequence()
         return;
     }
 
-    test->write_register_32(CMD_OFFSET, cmd1);
+    test->write_register_32(COMMAND_OFFSET, cmd1);
     wait(20, SC_US);
 
     // Verify segment completed
@@ -165,7 +165,7 @@ void testbench::test_func001_flash_fast_read_sequence()
     // =======================================================================
     REG_INFO(1, logger) << "\n[Step 5] Segment 2: Dummy 1 byte, CSAAT=1" << std::endl;
 
-    // CMD: LEN=0 (1 byte), DIRECTION=0 (Dummy), SPEED=0 (Standard), CSAAT=1
+    // COMMAND: LEN=0 (1 byte), DIRECTION=0 (Dummy), SPEED=0 (Standard), CSAAT=1
     uint32_t cmd2 = BUILD_CMD(0, 0, 0, 1);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -178,7 +178,7 @@ void testbench::test_func001_flash_fast_read_sequence()
         return;
     }
 
-    test->write_register_32(CMD_OFFSET, cmd2);
+    test->write_register_32(COMMAND_OFFSET, cmd2);
     wait(10, SC_US);
 
     // Verify segment completed
@@ -210,7 +210,7 @@ void testbench::test_func001_flash_fast_read_sequence()
     // =======================================================================
     REG_INFO(1, logger) << "\n[Step 6] Segment 3: RX 256 bytes, CSAAT=0" << std::endl;
 
-    // CMD: LEN=255 (256 bytes), DIRECTION=1 (RX-only), SPEED=0 (Standard), CSAAT=0
+    // COMMAND: LEN=255 (256 bytes), DIRECTION=1 (RX-only), SPEED=0 (Standard), CSAAT=0
     uint32_t cmd3 = BUILD_CMD(255, 1, 0, 0);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -223,7 +223,7 @@ void testbench::test_func001_flash_fast_read_sequence()
         return;
     }
 
-    test->write_register_32(CMD_OFFSET, cmd3);
+    test->write_register_32(COMMAND_OFFSET, cmd3);
     wait(1000, SC_US);
 
     // Verify segment completed

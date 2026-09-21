@@ -133,7 +133,7 @@ int main(void)
      *   6. Verify unrelated fields are unaffected
      * ================================================================== */
     int errors = 0;
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     uint32_t rb;
 
     printf("\n=== OCH SEP OpenTitan SPI CFG Register Test ===\n\n");
@@ -148,11 +148,11 @@ int main(void)
         WRITE_REG(SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_REG_ADDR, spi_mux.val);
     }
     {
-        SPI_CONTROLLER_CTRL_reg_u ctrl;
-        ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+        SPI_CONTROLLER_CONTROL_reg_u ctrl;
+        ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
         ctrl.f.spien = 1;
         ctrl.f.output_en = 1;
-        WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+        WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     }
     printf("SPI mux → OT, SPIEN=1\n\n");
 
@@ -163,8 +163,8 @@ int main(void)
     for (i = 0; i < 3; i++) {
         cfg.val = 0;
         cfg.f.clkdiv = clkdiv_vals[i];
-        WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-        rb = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+        WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+        rb = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
         cfg.val = rb;
         char name[64];
         /* Use a simple numeric label since snprintf may not be available */
@@ -186,8 +186,8 @@ int main(void)
         cfg.f.clkdiv  = 9;
         cfg.f.cpol    = cpol_vals[i];
         cfg.f.cpha    = cpha_vals[i];
-        WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-        rb = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+        WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+        rb = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
         cfg.val = rb;
         printf("  Mode %u (CPOL=%u CPHA=%u): readback CPOL=%u CPHA=%u %s\n",
                i, cpol_vals[i], cpha_vals[i], cfg.f.cpol, cfg.f.cpha,
@@ -201,15 +201,15 @@ int main(void)
     cfg.val = 0;
     cfg.f.clkdiv = 9;
     cfg.f.fullcyc = 1;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    rb = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    rb = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     cfg.val = rb;
     if (!check_reg_val("FULLCYC write=1 readback", cfg.f.fullcyc, 1)) errors++;
 
-    cfg.val = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    cfg.val = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     cfg.f.fullcyc = 0;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    rb = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    rb = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     cfg.val = rb;
     if (!check_reg_val("FULLCYC write=0 readback", cfg.f.fullcyc, 0)) errors++;
 
@@ -222,8 +222,8 @@ int main(void)
     cfg.f.csnidle  = 0;
     cfg.f.csnlead  = 0;
     cfg.f.csntrail = 0;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    rb = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    rb = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     cfg.val = rb;
     if (!check_reg_val("CSNIDLE=0  readback", cfg.f.csnidle,  0)) errors++;
     if (!check_reg_val("CSNLEAD=0  readback", cfg.f.csnlead,  0)) errors++;
@@ -235,8 +235,8 @@ int main(void)
     cfg.f.csnidle  = 15;
     cfg.f.csnlead  = 15;
     cfg.f.csntrail = 15;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    rb = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    rb = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     cfg.val = rb;
     if (!check_reg_val("CSNIDLE=15  readback", cfg.f.csnidle,  15)) errors++;
     if (!check_reg_val("CSNLEAD=15  readback", cfg.f.csnlead,  15)) errors++;
@@ -248,8 +248,8 @@ int main(void)
     cfg.f.csnidle  = 5;
     cfg.f.csnlead  = 3;
     cfg.f.csntrail = 7;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    rb = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    rb = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     cfg.val = rb;
     if (!check_reg_val("CSNIDLE=5  readback", cfg.f.csnidle,  5)) errors++;
     if (!check_reg_val("CSNLEAD=3  readback", cfg.f.csnlead,  3)) errors++;

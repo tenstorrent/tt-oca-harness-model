@@ -79,13 +79,13 @@ static void configure_spi_mux_ot(void)
 
 static void init_spi_controller(void)
 {
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     cfg.val = 0;
     cfg.f.clkdiv    = SPI_CLKDIV;
     cfg.f.cpol      = 0;
@@ -93,7 +93,7 @@ static void init_spi_controller(void)
     cfg.f.csnidle   = 2;
     cfg.f.csnlead   = 2;
     cfg.f.csntrail  = 2;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
@@ -127,7 +127,7 @@ static int wait_for_idle(int timeout)
  */
 static uint8_t flash_read_status(void)
 {
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
 
     if (wait_for_ready(TIMEOUT_LIMIT)) return 0xFF;
     WRITE_REG(SPI_CONTROLLER_TXDATA_REG_ADDR, 0x00000005);
@@ -137,7 +137,7 @@ static uint8_t flash_read_status(void)
     cmd.f.csaat     = 1;
     cmd.f.speed     = 0;
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_ready(TIMEOUT_LIMIT)) return 0xFF;
 
@@ -146,7 +146,7 @@ static uint8_t flash_read_status(void)
     cmd.f.csaat     = 0;
     cmd.f.speed     = 0;
     cmd.f.direction = 1;    /* RX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_idle(TIMEOUT_LIMIT)) return 0xFF;
 
@@ -170,7 +170,7 @@ int main(void)
 
     int pass = 1;
     uint32_t i;
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
 
     configure_spi_mux_ot();
     printf("SPI mux configured for OpenTitan\n");
@@ -192,7 +192,7 @@ int main(void)
     cmd.f.csaat     = 0;    /* release CS after */
     cmd.f.speed     = 0;
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_idle(TIMEOUT_LIMIT)) { pass = 0; goto done; }
     printf("  WREN issued\n");
@@ -239,7 +239,7 @@ int main(void)
     cmd.f.csaat     = 1;    /* keep CS# for data */
     cmd.f.speed     = 0;
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     /* Load data pattern and issue data segment */
     if (wait_for_ready(TIMEOUT_LIMIT)) { pass = 0; goto done; }
@@ -259,7 +259,7 @@ int main(void)
     cmd.f.csaat     = 0;                    /* release CS */
     cmd.f.speed     = 0;
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_idle(TIMEOUT_LIMIT)) { pass = 0; goto done; }
     printf("  Page Program command issued\n");
@@ -314,7 +314,7 @@ int main(void)
     cmd.f.csaat     = 1;
     cmd.f.speed     = 0;
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_ready(TIMEOUT_LIMIT)) { pass = 0; goto done; }
 
@@ -323,7 +323,7 @@ int main(void)
     cmd.f.csaat     = 0;
     cmd.f.speed     = 0;
     cmd.f.direction = 1;    /* RX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_idle(TIMEOUT_LIMIT)) { pass = 0; goto done; }
 

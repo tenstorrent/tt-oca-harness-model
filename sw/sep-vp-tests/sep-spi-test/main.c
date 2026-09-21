@@ -33,7 +33,7 @@ extern int printf(const char *format, ...);
 #define SPI_CTRL_SPIEN          (1 << 31)  // SPI Enable
 #define SPI_CTRL_SW_RST         (1 << 30)  // Software Reset
 #define SPI_CTRL_OUTPUT_EN      (1 << 29)  // Output Enable
-#define SPI_CTRL_TX_WATERMARK_POS  16      // TX FIFO watermark [23:16]
+#define SPI_CTRL_TX_WATERMARK_POS  8       // TX FIFO watermark [15:8]
 #define SPI_CTRL_RX_WATERMARK_POS  0       // RX FIFO watermark [7:0]
 
 // STATUS Register Bitfields (from spi_controller_register.h)
@@ -44,11 +44,11 @@ extern int printf(const char *format, ...);
 #define SPI_STATUS_RXFULL       (1 << 25)   // RX FIFO full
 #define SPI_STATUS_RXEMPTY      (1 << 24)   // RX FIFO empty
 
-// CMD Register Bitfields (from handle_write_CMD: [13:12] DIRECTION, [11:10] SPEED, [9] CSAAT, [8:0] LEN)
-#define SPI_CMD_LEN_POS         0          // Length [8:0]: bytes to transfer (0-based, so 0=1 byte)
-#define SPI_CMD_CSAAT           (1 << 9)   // Chip select active after transaction
-#define SPI_CMD_SPEED_POS       10         // Speed [11:10]: 0=Standard, 1=Dual, 2=Quad
-#define SPI_CMD_DIRECTION_POS   12         // Direction [13:12]: 0=Dummy, 1=RX, 2=TX, 3=Bidir
+// COMMAND: [24:5] LEN (bytes-1), [4:3] DIRECTION, [2:1] SPEED, [0] CSAAT
+#define SPI_CMD_LEN_POS         5
+#define SPI_CMD_CSAAT           (1u << 0)
+#define SPI_CMD_SPEED_POS       1          // Speed [2:1]: 0=Standard, 1=Dual, 2=Quad
+#define SPI_CMD_DIRECTION_POS   3          // Direction [4:3]: 0=Dummy, 1=RX, 2=TX, 3=Bidir
 
 // Helper macros
 #define REG_READ(addr)          (*((volatile uint32_t *)(addr)))
@@ -142,7 +142,7 @@ void test_tx_fifo() {
 
     // Check STATUS - TX FIFO should not be empty
     uint32_t status = REG_READ(SPI_STATUS);
-    uint32_t txempty = (status >> 3) & 0x1;
+    uint32_t txempty = (status >> 28) & 0x1;
     printf("  TX FIFO empty: %u\n", txempty);
 
     test_passed++;

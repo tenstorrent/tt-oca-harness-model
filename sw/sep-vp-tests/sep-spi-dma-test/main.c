@@ -66,13 +66,13 @@ extern int printf(const char *format, ...);
 #define SPI_STATUS_READY        (1u << 31)
 #define SPI_STATUS_ACTIVE       (1u << 30)
 
-#define SPI_CMD_LEN_POS         0u          /* LEN = bytes - 1 */
-#define SPI_CMD_CSAAT           (1u << 9)
-#define SPI_CMD_DIR_POS         12u         /* 1 = RX, 2 = TX */
+#define SPI_CMD_LEN_POS         5u          /* LEN = bytes - 1, COMMAND[24:5] */
+#define SPI_CMD_CSAAT           (1u << 0)
+#define SPI_CMD_DIR_POS         3u          /* 1 = RX, 2 = TX */
 #define SPI_CMD_DIR_RX          1u
 #define SPI_CMD_DIR_TX          2u
 
-#define SPI_EVENT_ENABLE_RXWM   (1u << 8)   /* drives the RX-watermark DMA trigger */
+#define SPI_EVENT_ENABLE_RXWM   (1u << 2)   /* EVENT_ENABLE.RXWM */
 
 /* secure_dma (OpenTitan DMA). */
 #define DMA_BASE                0x10800000u

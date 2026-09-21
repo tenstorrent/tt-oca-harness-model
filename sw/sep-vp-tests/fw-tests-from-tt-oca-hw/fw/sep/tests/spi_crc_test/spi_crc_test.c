@@ -263,11 +263,11 @@ int main(void)
         WRITE_REG(SEP_AXI_EXTENSION_OCH_SEP_SPI_MUX_CTRL_SPI_MUX_CTRL_REG_ADDR, spi_mux.val);
     }
     {
-        SPI_CONTROLLER_CTRL_reg_u ctrl;
-        ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+        SPI_CONTROLLER_CONTROL_reg_u ctrl;
+        ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
         ctrl.f.spien = 1;
         ctrl.f.output_en = 1;
-        WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+        WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     }
     printf("SPI mux → OT, SPIEN=1\n\n");
 
@@ -276,10 +276,10 @@ int main(void)
         uint32_t rb;
         rb = READ_REG(SPI_CONTROLLER_INTR_ENABLE_REG_ADDR);
         printf("  INTR_ENABLE default: 0x%08x\n", rb);
-        WRITE_REG(SPI_CONTROLLER_INTR_ENABLE_REG_ADDR, 0x11);
+        WRITE_REG(SPI_CONTROLLER_INTR_ENABLE_REG_ADDR, 0x3);
         rb = READ_REG(SPI_CONTROLLER_INTR_ENABLE_REG_ADDR);
-        printf("  write=0x11 readback=0x%08x %s\n", rb, (rb == 0x11) ? "PASS" : "FAIL");
-        if (rb != 0x11) errors++;
+        printf("  write=0x3 readback=0x%08x %s\n", rb, (rb == 0x3) ? "PASS" : "FAIL");
+        if (rb != 0x3) errors++;
         WRITE_REG(SPI_CONTROLLER_INTR_ENABLE_REG_ADDR, 0x0);
         rb = READ_REG(SPI_CONTROLLER_INTR_ENABLE_REG_ADDR);
         printf("  write=0x0 readback=0x%08x %s\n", rb, (rb == 0x0) ? "PASS" : "FAIL");
@@ -290,22 +290,22 @@ int main(void)
     {
         uint32_t rb;
         rb = READ_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR);
-        printf("  default: 0x%08x (expect 0x11111)\n", rb);
-        WRITE_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR, 0x11111);
+        printf("  default: 0x%08x (expect 0x1f)\n", rb);
+        WRITE_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR, 0x1f);
         rb = READ_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR);
-        printf("  write=0x11111 readback=0x%08x %s\n", rb, (rb == 0x11111) ? "PASS" : "FAIL");
-        if (rb != 0x11111) errors++;
+        printf("  write=0x1f readback=0x%08x %s\n", rb, (rb == 0x1f) ? "PASS" : "FAIL");
+        if (rb != 0x1f) errors++;
         WRITE_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR, 0x0);
         rb = READ_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR);
         printf("  write=0x0 readback=0x%08x %s\n", rb, (rb == 0x0) ? "PASS" : "FAIL");
         if (rb != 0x0) errors++;
-        WRITE_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR, 0x11111);
+        WRITE_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR, 0x1f);
     }
 
     printf("\n=== Step 4: EVENT_ENABLE R/W ===\n");
     {
         uint32_t rb;
-        uint32_t all_events = (1u<<0)|(1u<<4)|(1u<<8)|(1u<<12)|(1u<<16)|(1u<<20);
+        uint32_t all_events = 0x3f;
         rb = READ_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR);
         printf("  default: 0x%08x\n", rb);
         WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, all_events);

@@ -49,7 +49,7 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
     SPI_CONTROLLER_STATUS_reg_u status;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
 
@@ -57,11 +57,11 @@ int main(void)
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
     ctrl.f.tx_watermark = 4;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Step 1: Verify TX FIFO empty initially */
     printf("\nStep 1: TX FIFO initial state\n");
@@ -144,9 +144,9 @@ int main(void)
 
     /* Step 6: Software reset and verify drain */
     printf("\nStep 6: SW_RST drain test\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     volatile int delay;
     for (delay = 0; delay < 5000; delay++) {}
@@ -154,6 +154,8 @@ int main(void)
     status.val = READ_REG(SPI_CONTROLLER_STATUS_REG_ADDR);
     printf("  After SW_RST: TXEMPTY=%u, TXQD=%u\n",
            status.f.txempty, status.f.txqd);
+    ctrl.f.sw_rst = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     printf("\n========================================\n");
     if (pass) {

@@ -6,7 +6,7 @@
  * Verifies reset defaults, write-readback, and special behaviors for all
  * SPI controller registers:
  *   - INTR_STATE, INTR_ENABLE, INTR_TEST
- *   - CTRL (incl. SW_RST singlepulse), CFG, CSID
+ *   - CONTROL (incl. SW_RST hold/release), CONFIGOPTS, CSID
  *   - STATUS (TXEMPTY, RXEMPTY, BYTEORDER=1, READY=1 at reset)
  *   - ERROR_ENABLE, EVENT_ENABLE, ERROR_STATUS
  *
@@ -14,7 +14,7 @@
  *   1. Configure SPI mux for OpenTitan
  *   2. Verify reset defaults for all readable registers
  *   3. Write-readback for all RW registers
- *   4. Verify SW_RST singlepulse auto-clears to 0
+ *   4. Verify SW_RST drains the FIFOs while held, then releases
  *   5. Verify STATUS.BYTEORDER=1 (LITTLE_ENDIAN parameter)
  *
  * Execution:
@@ -57,10 +57,10 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     SPI_CONTROLLER_STATUS_reg_u status;
-    SPI_CONTROLLER_INTR_STATUS_reg_u intr_status;
+    SPI_CONTROLLER_INTR_STATE_reg_u intr_status;
     SPI_CONTROLLER_INTR_ENABLE_reg_u intr_enable;
     SPI_CONTROLLER_INTR_TEST_reg_u intr_test;
     SPI_CONTROLLER_EVENT_ENABLE_reg_u event_enable;
@@ -75,7 +75,7 @@ int main(void)
      * ------------------------------------------------------------------- */
     printf("\nStep 1: Reset default verification\n");
 
-    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATUS_REG_ADDR);
+    intr_status.val = READ_REG(SPI_CONTROLLER_INTR_STATE_REG_ADDR);
     if (!check_reg("INTR_STATUS default", intr_status.val, 0)) pass = 0;
 
     intr_enable.val = READ_REG(SPI_CONTROLLER_INTR_ENABLE_REG_ADDR);
@@ -84,11 +84,11 @@ int main(void)
     intr_test.val = READ_REG(SPI_CONTROLLER_INTR_TEST_REG_ADDR);
     if (!check_reg("INTR_TEST default", intr_test.val, 0)) pass = 0;
 
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
-    if (!check_reg("CTRL default", ctrl.val, SPI_CONTROLLER_CTRL_REG_DEFAULT)) pass = 0;
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
+    if (!check_reg("CTRL default", ctrl.val, SPI_CONTROLLER_CONTROL_REG_DEFAULT)) pass = 0;
 
-    cfg.val = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
-    if (!check_reg("CFG default", cfg.val, SPI_CONTROLLER_CFG_REG_DEFAULT)) pass = 0;
+    cfg.val = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
+    if (!check_reg("CFG default", cfg.val, SPI_CONTROLLER_CONFIGOPTS_REG_DEFAULT)) pass = 0;
 
     uint32_t csid_val = READ_REG(SPI_CONTROLLER_CSID_REG_ADDR);
     if (!check_reg("CSID default", csid_val, 0)) pass = 0;
@@ -150,11 +150,11 @@ int main(void)
     if (!check_reg("INTR_TEST cleared", intr_test.val, 0)) pass = 0;
 
     /* CTRL write-readback (enable controller) */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien     = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     if (!check_reg("CTRL.spien=1",     ctrl.f.spien,     1)) pass = 0;
     if (!check_reg("CTRL.output_en=1", ctrl.f.output_en, 1)) pass = 0;
 
@@ -166,15 +166,15 @@ int main(void)
     cfg.f.csnidle = 3;
     cfg.f.csnlead = 3;
     cfg.f.csntrail = 3;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    cfg.val = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    cfg.val = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     if (!check_reg("CFG.clkdiv=9",  cfg.f.clkdiv,   9)) pass = 0;
     if (!check_reg("CFG.cpol=1",    cfg.f.cpol,     1)) pass = 0;
     if (!check_reg("CFG.cpha=1",    cfg.f.cpha,     1)) pass = 0;
     /* Restore CFG to standard mode */
     cfg.val = 0;
     cfg.f.clkdiv = 9;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     /* CSID write-readback */
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 3);
@@ -208,16 +208,22 @@ int main(void)
     WRITE_REG(SPI_CONTROLLER_EVENT_ENABLE_REG_ADDR, 0);
 
     /* -------------------------------------------------------------------
-     * Step 4: SW_RST singlepulse behavior
-     * After writing sw_rst=1, reading CTRL.sw_rst should return 0
-     * (singlepulse auto-clears in hardware)
+     * Step 4: SW_RST drain proof. SW_RST holds the core, both data FIFOs and
+     * the command queue in reset until software clears it.
      * ------------------------------------------------------------------- */
-    printf("\nStep 4: SW_RST singlepulse auto-clear\n");
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
+    printf("\nStep 4: SW_RST drain (level hold/release)\n");
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
     ctrl.f.sw_rst = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
-    ctrl.val = READ_REG(SPI_CONTROLLER_CTRL_REG_ADDR);
-    if (!check_reg("SW_RST auto-cleared to 0", ctrl.f.sw_rst, 0)) pass = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
+    if (!check_reg("SW_RST reads 1 while held", ctrl.f.sw_rst, 1)) pass = 0;
+    status.val = READ_REG(SPI_CONTROLLER_STATUS_REG_ADDR);
+    if (!check_reg("TXEMPTY=1 while SW_RST held", status.f.txempty, 1)) pass = 0;
+    if (!check_reg("RXEMPTY=1 while SW_RST held", status.f.rxempty, 1)) pass = 0;
+    ctrl.f.sw_rst = 0;
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
+    ctrl.val = READ_REG(SPI_CONTROLLER_CONTROL_REG_ADDR);
+    if (!check_reg("SW_RST reads 0 after release", ctrl.f.sw_rst, 0)) pass = 0;
 
     /* -------------------------------------------------------------------
      * Step 5: Post-SW_RST STATUS sanity

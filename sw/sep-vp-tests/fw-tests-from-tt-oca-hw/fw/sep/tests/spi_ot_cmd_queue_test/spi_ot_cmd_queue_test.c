@@ -57,9 +57,9 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
     SPI_CONTROLLER_STATUS_reg_u status;
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
     SPI_CONTROLLER_ERROR_ENABLE_reg_u err_enable;
 
@@ -67,16 +67,16 @@ int main(void)
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     /* Configure clock */
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     cfg.val = 0;
     cfg.f.clkdiv = spi_clkdiv();
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     /* Step 1: Verify CMDQD initial state */
     printf("\nStep 1: Command queue initial state\n");
@@ -110,7 +110,7 @@ int main(void)
         cmd.f.csaat = 0;
         cmd.f.speed = 0;
         cmd.f.direction = 2;
-        WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+        WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
         printf("  CMD issued: LEN=%u, SPEED=%u, DIR=%u, CSAAT=%u\n",
                cmd.f.len, cmd.f.speed, cmd.f.direction, cmd.f.csaat);
 
@@ -137,7 +137,7 @@ int main(void)
         cmd.f.speed     = 3;    /* reserved speed → CMDINVAL */
         cmd.f.direction = 2;
         WRITE_REG(SPI_CONTROLLER_TXDATA_REG_ADDR, 0x00);
-        WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+        WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
         volatile int delay;
         for (delay = 0; delay < 100; delay++) {}
@@ -174,7 +174,7 @@ int main(void)
         cmd.f.speed = 0;
         cmd.f.direction = 2;
         WRITE_REG(SPI_CONTROLLER_TXDATA_REG_ADDR, 0x00);
-        WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+        WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
         volatile int delay;
         for (delay = 0; delay < 100; delay++) {}

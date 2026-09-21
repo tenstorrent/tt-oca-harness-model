@@ -63,13 +63,13 @@ static void configure_spi_mux_ot(void)
 
 static void init_spi_controller(void)
 {
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     cfg.val = 0;
     cfg.f.clkdiv    = SPI_CLKDIV;
     cfg.f.cpol      = 0;
@@ -77,7 +77,7 @@ static void init_spi_controller(void)
     cfg.f.csnidle   = 2;
     cfg.f.csnlead   = 2;
     cfg.f.csntrail  = 2;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
@@ -124,7 +124,7 @@ int main(void)
     printf("Flash address: 0x%06x, Read length: %u bytes\n\n",
            FLASH_READ_ADDR, READ_LEN_BYTES);
 
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
 
     /* ----------------------------------------------------------------
      * Segment 1: TX READ command + 24-bit address (4 bytes total)
@@ -152,7 +152,7 @@ int main(void)
     cmd.f.csaat     = 1;    /* keep CS# low for data phase */
     cmd.f.speed     = 0;    /* Standard SPI */
     cmd.f.direction = 2;    /* TX only */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     printf("  CMD: DIR=TX, SPEED=Std, LEN=3(4B), CSAAT=1\n");
 
     /* ----------------------------------------------------------------
@@ -166,7 +166,7 @@ int main(void)
     cmd.f.csaat     = 0;                    /* release CS# after */
     cmd.f.speed     = 0;                    /* Standard SPI */
     cmd.f.direction = 1;                    /* RX only */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     printf("  CMD: DIR=RX, SPEED=Std, LEN=%u(%uB), CSAAT=0\n",
            READ_LEN_BYTES - 1, READ_LEN_BYTES);
 

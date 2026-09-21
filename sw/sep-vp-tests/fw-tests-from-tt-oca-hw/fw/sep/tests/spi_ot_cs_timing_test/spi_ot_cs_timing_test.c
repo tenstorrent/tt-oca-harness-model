@@ -93,19 +93,19 @@ int main(void)
     printf("========================================\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    SPI_CONTROLLER_CFG_reg_u cfg;
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
 
     configure_spi_mux_ot();
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
 
     /* ------------------------------------------------------------------ */
@@ -119,8 +119,8 @@ int main(void)
     cfg.f.csnidle  = 0;
     cfg.f.csnlead  = 0;
     cfg.f.csntrail = 0;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    cfg.val = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    cfg.val = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     if (!check_timing("Min values", cfg.f.csnidle, cfg.f.csnlead, cfg.f.csntrail,
                       0, 0, 0))
         pass = 0;
@@ -134,8 +134,8 @@ int main(void)
     cfg.f.csnidle  = 15;
     cfg.f.csnlead  = 15;
     cfg.f.csntrail = 15;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    cfg.val = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    cfg.val = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     if (!check_timing("Max values", cfg.f.csnidle, cfg.f.csnlead, cfg.f.csntrail,
                       15, 15, 15))
         pass = 0;
@@ -149,8 +149,8 @@ int main(void)
     cfg.f.csnidle  = 5;
     cfg.f.csnlead  = 10;
     cfg.f.csntrail = 3;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    cfg.val = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    cfg.val = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     if (!check_timing("Mixed values", cfg.f.csnidle, cfg.f.csnlead, cfg.f.csntrail,
                       5, 10, 3))
         pass = 0;
@@ -166,8 +166,8 @@ int main(void)
     cfg.f.csnidle  = 2;
     cfg.f.csnlead  = 2;
     cfg.f.csntrail = 2;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
-    cfg.val = READ_REG(SPI_CONTROLLER_CFG_REG_ADDR);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
+    cfg.val = READ_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR);
     if (!check_timing("Restored values", cfg.f.csnidle, cfg.f.csnlead, cfg.f.csntrail,
                       2, 2, 2))
         pass = 0;
@@ -182,7 +182,7 @@ int main(void)
     cmd.f.csaat     = 0;
     cmd.f.speed     = 0;    /* Standard */
     cmd.f.direction = 2;    /* TX */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
 
     if (wait_for_ready(TIMEOUT_LIMIT)) { pass = 0; goto done; }
 

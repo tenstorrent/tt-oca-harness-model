@@ -22,8 +22,8 @@ void testbench::test_func003_fifo_stall_conditions()
     // =======================================================================
     REG_INFO(1, logger) << "\n[Initial Setup] Configure SPI Host" << std::endl;
 
-    test->write_register_32(CTRL_OFFSET, 0xE0000000);  /// SPIEN=1, OUTPUT_EN=1
-    test->write_register_32(CFG_OFFSET, 0x0000000A);  /// CLKDIV=10
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(CONFIGOPTS_OFFSET, 0x0000000A);  /// CLKDIV=10
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
@@ -62,7 +62,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
     // Issue TX command for 32 bytes
     uint32_t cmd1 = BUILD_CMD(31, 2, 0, 0);  /// LEN=31, TX_ONLY, STANDARD
-    test->write_register_32(CMD_OFFSET, cmd1);
+    test->write_register_32(COMMAND_OFFSET, cmd1);
     wait(200, SC_US);
 
     // Verify transaction completed and TX FIFO drained
@@ -110,7 +110,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
     // Issue RX command to fill FIFO
     uint32_t cmd2 = BUILD_CMD((m_rx_depth.get_param_value() * 4 - 1), 1, 0, 0);  /// RX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd2);
+    test->write_register_32(COMMAND_OFFSET, cmd2);
     wait(2, SC_MS);
 
     // Verify RX FIFO filled to capacity
@@ -180,7 +180,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
     // Issue TX command for 32 bytes (insufficient data)
     uint32_t cmd3 = BUILD_CMD(31, 2, 0, 0);
-    test->write_register_32(CMD_OFFSET, cmd3);
+    test->write_register_32(COMMAND_OFFSET, cmd3);
     wait(200, SC_US);
 
     // Check if transaction stalled or completed with available data
@@ -216,7 +216,7 @@ void testbench::test_func003_fifo_stall_conditions()
     wait(10, SC_NS);
 
     uint32_t cmd4 = BUILD_CMD(15, 2, 0, 0);  /// LEN=15, TX_ONLY
-    test->write_register_32(CMD_OFFSET, cmd4);
+    test->write_register_32(COMMAND_OFFSET, cmd4);
     wait(100, SC_US);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -267,7 +267,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
     // Issue RX command exceeding FIFO depth
     uint32_t cmd5 = BUILD_CMD(((m_rx_depth.get_param_value() + 16) * 4 - 1), 1, 0, 0);
-    test->write_register_32(CMD_OFFSET, cmd5);
+    test->write_register_32(COMMAND_OFFSET, cmd5);
     wait(2, SC_MS);
 
     test->read_register_32(STATUS_OFFSET, status_val);
@@ -323,12 +323,12 @@ void testbench::test_func003_fifo_stall_conditions()
     wait(10, SC_NS);
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Enable error interrupts
-    test->write_register_32(ERROR_ENABLE_OFFSET, 0x11111);
-    test->write_register_32(INTR_ENABLE_OFFSET, 0x11);
+    test->write_register_32(ERROR_ENABLE_OFFSET, 0x1F);
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x3);
     wait(10, SC_NS);
 
     // Load only 128 bytes (32 words) into TX FIFO
@@ -355,14 +355,14 @@ void testbench::test_func003_fifo_stall_conditions()
     ready = (status_val >> 31) & 0x1;
 
     if (ready) {
-        REG_INFO(2, logger) << "  [ACTION] Issuing CMD for 256 bytes with only 128 bytes in TX FIFO..." << std::endl;
+        REG_INFO(2, logger) << "  [ACTION] Issuing COMMAND for 256 bytes with only 128 bytes in TX FIFO..." << std::endl;
         uint32_t cmd_underflow = BUILD_CMD(255, 2, 0, 0);  // 256 bytes TX
-        test->write_register_32(CMD_OFFSET, cmd_underflow);
+        test->write_register_32(COMMAND_OFFSET, cmd_underflow);
         wait(500, SC_US);
 
         // Check for CMDINVAL error due to TX FIFO underflow
         test->read_register_32(ERROR_STATUS_OFFSET, status_val);
-        bool cmdinval_err = (status_val >> 12) & 0x1;
+        bool cmdinval_err = (status_val >> 3) & 0x1;
 
         if (cmdinval_err) {
             REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for TX FIFO underflow (ERROR_STATUS=0x"
@@ -375,7 +375,7 @@ void testbench::test_func003_fifo_stall_conditions()
         }
 
         // Check error interrupt
-        test->read_register_32(INTR_STATUS_OFFSET, status_val);
+        test->read_register_32(INTR_STATE_OFFSET, status_val);
         bool error_intr = status_val & 0x1;
 
         if (cmdinval_err && error_intr) {
@@ -397,9 +397,9 @@ void testbench::test_func003_fifo_stall_conditions()
     wait(10, SC_NS);
 
     // Enable SPIEN(31) and OUTPUT_EN(29) so the transaction engine actually runs
-    // (0xC0000000 sets SPIEN+SW_RST and leaves OUTPUT_EN=0, which keeps the core
+    // (0xA0000000 sets SPIEN+SW_RST and leaves OUTPUT_EN=0, which keeps the core
     // disabled — the streaming drain below requires OUTPUT_EN=1).
-    test->write_register_32(CTRL_OFFSET, 0xA0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Pre-load slave with 300 bytes (exceeds the 256-byte RX FIFO). With streaming
@@ -417,7 +417,7 @@ void testbench::test_func003_fifo_stall_conditions()
     REG_INFO(2, logger) << "  [EXPECT] Streams under back-pressure (no OVERFLOW); all 300 bytes drain via PIO" << std::endl;
 
     uint32_t cmd_rx_overflow = BUILD_CMD(299, 1, 0, 0);  // 300 bytes RX (75 words)
-    test->write_register_32(CMD_OFFSET, cmd_rx_overflow);
+    test->write_register_32(COMMAND_OFFSET, cmd_rx_overflow);
 
     // Drain all 75 words via PIO. Each RXDATA read frees a slot, letting the
     // controller stream the next word (via m_rx_space_available_event).
@@ -440,7 +440,7 @@ void testbench::test_func003_fifo_stall_conditions()
     // Core assertion: the over-FIFO segment was accepted and streamed, not rejected.
     uint32_t error_status_val = 0;
     test->read_register_32(ERROR_STATUS_OFFSET, error_status_val);
-    bool overflow_set = (error_status_val >> 4) & 0x1;
+    bool overflow_set = (error_status_val >> 1) & 0x1;
 
     if (!overflow_set) {
         REG_INFO(2, logger) << "  [PASS] No OVERFLOW: over-FIFO RX segment accepted (streamed, not rejected)" << std::endl;
@@ -498,7 +498,7 @@ void testbench::test_func003_fifo_stall_conditions()
     wait(10, SC_NS);
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Pre-load slave with 300 bytes
@@ -512,7 +512,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
     // Issue RX command for 300 bytes
     uint32_t cmd_rx_stall2 = BUILD_CMD(299, 1, 0, 0);
-    test->write_register_32(CMD_OFFSET, cmd_rx_stall2);
+    test->write_register_32(COMMAND_OFFSET, cmd_rx_stall2);
     wait(800, SC_US);  // Allow RX FIFO to fill and stall
 
     // Verify stall condition
@@ -526,7 +526,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
         // Disable SPIEN during stall
         REG_INFO(2, logger) << "  [ACTION] Disabling SPIEN during RX stall..." << std::endl;
-        test->write_register_32(CTRL_OFFSET, 0x00000000);  // SPIEN=0
+        test->write_register_32(CONTROL_OFFSET, 0x00000000);  // SPIEN=0
         wait(50, SC_US);
 
         // Check that transaction aborted
@@ -558,7 +558,7 @@ void testbench::test_func003_fifo_stall_conditions()
     wait(10, SC_NS);
 
     // Enable SPIEN and OUTPUT_EN
-    test->write_register_32(CTRL_OFFSET, 0xC0000000);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
     wait(10, SC_NS);
 
     // Pre-load slave with 300 bytes
@@ -572,7 +572,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
     // Issue RX command for 300 bytes
     uint32_t cmd_rx_stall3 = BUILD_CMD(299, 1, 0, 0);
-    test->write_register_32(CMD_OFFSET, cmd_rx_stall3);
+    test->write_register_32(COMMAND_OFFSET, cmd_rx_stall3);
     wait(800, SC_US);  // Allow RX FIFO to fill and stall
 
     // Verify stall condition
@@ -586,7 +586,7 @@ void testbench::test_func003_fifo_stall_conditions()
 
         // Assert SW_RST during stall
         REG_INFO(2, logger) << "  [ACTION] Asserting SW_RST during RX stall..." << std::endl;
-        test->write_register_32(CTRL_OFFSET, 0x40000000);  // SW_RST=1
+        test->write_register_32(CONTROL_OFFSET, 0x40000000);  // SW_RST=1
         wait(50, SC_US);
 
         // Check that FIFOs cleared
@@ -603,7 +603,7 @@ void testbench::test_func003_fifo_stall_conditions()
         }
 
         // Release SW_RST
-        test->write_register_32(CTRL_OFFSET, 0xC0000000);
+        test->write_register_32(CONTROL_OFFSET, 0xA0000000);
         wait(10, SC_NS);
     } else {
         REG_INFO(2, logger) << "  [INFO] RX FIFO state: RXQD=" << rxqd << ", ACTIVE=" << active

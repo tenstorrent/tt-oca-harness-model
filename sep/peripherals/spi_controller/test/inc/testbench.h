@@ -14,18 +14,19 @@
 /// =============================================================================
 namespace spi_controller_regs {
     /// Interrupt Registers
-    constexpr uint32_t INTR_STATUS_OFFSET    = 0x00;
+    constexpr uint32_t INTR_STATE_OFFSET    = 0x00;
     constexpr uint32_t INTR_ENABLE_OFFSET   = 0x04;
     constexpr uint32_t INTR_TEST_OFFSET     = 0x08;
+    constexpr uint32_t ALERT_TEST_OFFSET    = 0x0C;
 
     /// Control and Status Registers
-    constexpr uint32_t CTRL_OFFSET          = 0x10;
+    constexpr uint32_t CONTROL_OFFSET       = 0x10;
     constexpr uint32_t STATUS_OFFSET        = 0x14;
-    constexpr uint32_t CFG_OFFSET           = 0x18;
+    constexpr uint32_t CONFIGOPTS_OFFSET    = 0x18;
     constexpr uint32_t CSID_OFFSET          = 0x1C;
 
     /// Command and Data Registers
-    constexpr uint32_t CMD_OFFSET           = 0x20;
+    constexpr uint32_t COMMAND_OFFSET       = 0x20;
     constexpr uint32_t RXDATA_OFFSET        = 0x24;
     constexpr uint32_t TXDATA_OFFSET        = 0x28;
 
@@ -36,18 +37,15 @@ namespace spi_controller_regs {
 }
 
 /// =============================================================================
-/// CMD Register Helper Macro (RDL Specification Compliant)
+/// COMMAND Register Helper Macro (RDL Specification Compliant)
 /// =============================================================================
-/// Constructs CMD register value per RDL spec (spi_controller_ip.rdl):
-///   [13:12] DIRECTION (0=Dummy, 1=Rx, 2=Tx, 3=Bidir)
-///   [11:10] SPEED (0=Standard, 1=Dual, 2=Quad)
-///   [9]     CSAAT (Chip Select Active After Transfer)
-///   [8:0]   LEN (Segment length in bytes, 0-255)
-///
-/// Usage: BUILD_CMD(len, direction, speed, csaat)
-/// Example: BUILD_CMD(3, 2, 0, 1) = 4-byte TX, Standard SPI, CSB held low
+/// Constructs COMMAND per upstream spi_host:
+///   [24:5] LEN (bytes-1 / dummy-cycles-1)
+///   [4:3]  DIRECTION (0=Dummy, 1=Rx, 2=Tx, 3=Bidir)
+///   [2:1]  SPEED (0=Standard, 1=Dual, 2=Quad)
+///   [0]    CSAAT
 #define BUILD_CMD(len, direction, speed, csaat) \
-    (((direction) << 12) | ((speed) << 10) | ((csaat) << 9) | (len))
+    ((((len) & 0xFFFFF) << 5) | (((direction) & 0x3) << 3) | (((speed) & 0x3) << 1) | ((csaat) & 0x1))
 
 /// =============================================================================
 /// Testbench Module - Integrated Test Execution
@@ -275,7 +273,7 @@ public:
     void test_coverage_fifo_overflow_underflow();
 
     /// Regression reproduction: a second flash read (opcode+address TX + chained
-    /// RX) issued after a CTRL.SW_RST must still process its TX command. Models
+    /// RX) issued after a CONTROL.SW_RST must still process its TX command. Models
     /// the OT-SPI boot pattern where the payload read's opcode+address was
     /// silently dropped after the manifest-header read + SW_RST.
     void test_repro_second_read_tx_drop();

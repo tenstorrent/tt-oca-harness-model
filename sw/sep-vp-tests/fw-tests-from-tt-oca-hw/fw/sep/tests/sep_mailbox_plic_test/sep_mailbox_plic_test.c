@@ -6,9 +6,9 @@
  * Closes the check_meip / PIC->CPU delivery gap that the UVM-only IRQ
  * connectivity tests cannot reach (PIC registers live on the CPU internal bus,
  * not the AXI fabric). This is a CPU-run firmware test that proves the FULL
- * path for outbound mailbox 0:
+ * path for inbound mailbox 0:
  *
- *     axil_mailbox.outbound_interrupt_o[0]
+ *     axil_mailbox.inbound_interrupt_o[0]
  *       -> sep.sv sep_mailbox_interrupt[0]
  *       -> sep_internal_interrupts[0] -> sep_interrupts[0]
  *       -> VeeR EL2 PIC source -> mip.MEIP -> CPU trap -> ISR
@@ -18,7 +18,7 @@
  * broken, it FAILS.
  *
  * Mailbox -> PIC source mapping note:
- *   After the 8-slot mailbox reallocation (hw/sep/sep.sv), the outbound mailbox
+ *   After the inbound/outbound IRQ swap, the inbound mailbox
  *   vector occupies sep_internal_interrupts[0:7]; mailbox 0 is internal index 0.
  *   sep_interrupts[k] drives EL2 extintsrc_req[k+1] (bit 0 is the tied
  *   no-interrupt source), so mailbox 0 is expected at PIC source 1. To be robust
@@ -39,12 +39,12 @@
 #include "sep_outbound_filter.h"
 #include "test_completion.h"
 
-/* Outbound mailbox 0 registers (axil_mailbox, base 0x10A0_0000) */
-#define MBOX0_WRITE_DATA_ADDR   AXIL_MAILBOX_OUTBOUND_MAILBOX_0_WRITE_DATA_REG_ADDR
-#define MBOX0_STATUS_ADDR       AXIL_MAILBOX_OUTBOUND_MAILBOX_0_STATUS_REG_ADDR
-#define MBOX0_WIRQT_ADDR        AXIL_MAILBOX_OUTBOUND_MAILBOX_0_WIRQT_REG_ADDR
-#define MBOX0_IRQS_ADDR         AXIL_MAILBOX_OUTBOUND_MAILBOX_0_IRQS_REG_ADDR
-#define MBOX0_IRQEN_ADDR        AXIL_MAILBOX_OUTBOUND_MAILBOX_0_IRQEN_REG_ADDR
+/* Inbound mailbox 0 registers (axil_mailbox, base 0x10A0_0800) */
+#define MBOX0_WRITE_DATA_ADDR   AXIL_MAILBOX_INBOUND_MAILBOX_0_WRITE_DATA_REG_ADDR
+#define MBOX0_STATUS_ADDR       AXIL_MAILBOX_INBOUND_MAILBOX_0_STATUS_REG_ADDR
+#define MBOX0_WIRQT_ADDR        AXIL_MAILBOX_INBOUND_MAILBOX_0_WIRQT_REG_ADDR
+#define MBOX0_IRQS_ADDR         AXIL_MAILBOX_INBOUND_MAILBOX_0_IRQS_REG_ADDR
+#define MBOX0_IRQEN_ADDR        AXIL_MAILBOX_INBOUND_MAILBOX_0_IRQEN_REG_ADDR
 
 /* IRQS/IRQEN: 3 status bits (write-threshold / read-threshold / error).
  * Enable + clear all three. */
@@ -72,7 +72,7 @@ void mailbox_isr(void) {
     g_mbox_claimid = read_claimid();
     /* Single-shot: mask the IRQ first (the write-threshold status is level-held
      * by FIFO fill, so a W1C alone would immediately re-fire), then W1C status.
-     * Masking IRQEN deasserts outbound_interrupt_o regardless of FIFO fill. */
+     * Masking IRQEN deasserts inbound_interrupt_o regardless of FIFO fill. */
     WRITE_REG(MBOX0_IRQEN_ADDR, 0x0u);
     WRITE_REG(MBOX0_IRQS_ADDR, MBOX_IRQ_ALL);
 }
@@ -101,16 +101,16 @@ int main(void) {
     }
     pic_enable_interrupts();
 
-    /* Step 2: Arm the outbound mailbox IRQ: clear status, threshold=0, enable. */
-    printf("[STEP 2] Arming outbound mailbox 0 interrupt...\n");
+    /* Step 2: Arm the inbound mailbox IRQ: clear status, threshold=0, enable. */
+    printf("[STEP 2] Arming inbound mailbox 0 interrupt...\n");
     WRITE_REG(MBOX0_IRQS_ADDR, MBOX_IRQ_ALL);   /* clear any stale status */
     WRITE_REG(MBOX0_WIRQT_ADDR, 0x0u);          /* interrupt when >=1 word written */
     WRITE_REG(MBOX0_IRQEN_ADDR, MBOX_IRQ_ALL);  /* enable IRQ output */
     g_mbox_isr_fired = 0;
     g_mbox_isr_count = 0;
 
-    /* Step 3: Trigger - write a word into the outbound mailbox. */
-    printf("[STEP 3] Writing outbound mailbox to raise the interrupt...\n");
+    /* Step 3: Trigger - write a word into the inbound mailbox. */
+    printf("[STEP 3] Writing inbound mailbox to raise the interrupt...\n");
     WRITE_REG(MBOX0_WRITE_DATA_ADDR, 0x4700CAFEu);
 
     /* Step 4: Wait for the ISR (real delivery - no poll fallback). */
@@ -127,7 +127,7 @@ int main(void) {
            g_mbox_isr_count, g_mbox_claimid);
 
     /* Step 5: Confirm the interrupt stopped (deasserted) - no ongoing storm. The
-     * ISR masked IRQEN, so outbound_interrupt_o drops even though the IRQS
+     * ISR masked IRQEN, so inbound_interrupt_o drops even though the IRQS
      * write-threshold bit stays level-held by FIFO fill. A level interrupt can
      * legitimately double-take before the mask propagates, so we don't require
      * exactly one entry - only that the count has STOPPED growing. */

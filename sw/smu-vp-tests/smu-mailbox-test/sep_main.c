@@ -4,7 +4,7 @@
  *
  * Waits for the SMC to arm channel 0's inbound side, pushes a payload into the
  * outbound FIFO, and then waits for the SMC's reply on the reverse direction.
- * Writing outbound WRITE_DATA is what raises inbound_interrupt_o towards the
+ * Writing outbound WRITE_DATA is what raises outbound_interrupt_o towards the
  * SMC (sep.sv: smc_mailbox_interrupt_o).
  */
 #include <stdint.h>

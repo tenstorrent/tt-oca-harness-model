@@ -3,7 +3,7 @@
 /*
  * SPI OT ACCESSINVAL Test - TC_SPIOT_021 (P1)
  *
- * Verifies the ERROR_STATUS.ACCESSINVAL[20] register field behavior.
+ * Verifies the ERROR_STATUS.ACCESSINVAL[5] register field behavior.
  *
  * RTL Implementation Note:
  *   ACCESSINVAL fires when TXDATA is written with an INVALID byte-enable pattern
@@ -21,8 +21,8 @@
  *   enables, so ACCESSINVAL cannot be triggered from firmware. This test
  *   verifies:
  *     1. ACCESSINVAL=0 after valid TXDATA writes (happy path)
- *     2. ACCESSINVAL[20] bit position and mask are correct
- *     3. ERROR_STATUS W1C works (writing 1 to bit 20 when already 0 has no effect)
+ *     2. ACCESSINVAL[5] bit position and mask are correct
+ *     3. ERROR_STATUS W1C works (writing 1 to bit 5 when already 0 has no effect)
  *     4. ACCESSINVAL is NOT gated by ERROR_ENABLE (no corresponding bit in ERROR_ENABLE)
  *     5. Other ERROR_STATUS bits (e.g., UNDERFLOW) are unaffected by ACCESSINVAL W1C
  *
@@ -67,8 +67,8 @@ int main(void)
     printf("      This test verifies register field behavior (bit pos, W1C, no ERROR_ENABLE gate).\n\n");
 
     int pass = 1;
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     SPI_CONTROLLER_ERROR_STATUS_reg_u err_status;
     SPI_CONTROLLER_ERROR_ENABLE_reg_u err_enable;
     uint32_t dummy;
@@ -77,14 +77,14 @@ int main(void)
     printf("SPI mux configured for OpenTitan\n");
 
     /* Enable controller */
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
     cfg.val = 0;
     cfg.f.clkdiv = spi_clkdiv();
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
 
     /* ------------------------------------------------------------------ */
@@ -122,23 +122,23 @@ int main(void)
     }
 
     /* ------------------------------------------------------------------ */
-    /* Step 3: Verify bit mask/position: bit 20 = 0x100000                */
+    /* Step 3: Verify bit mask/position: bit 5 = 0x20 (packed OT map)     */
     /* ------------------------------------------------------------------ */
-    printf("\nStep 3: ACCESSINVAL bit position verification (bit 20 = 0x%08x)\n",
+    printf("\nStep 3: ACCESSINVAL bit position verification (bit 5 = 0x%08x)\n",
            SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_MASK);
-    if (SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_MASK != (1u << 20)) {
-        printf("  FAIL: Expected ACCESSINVAL mask = 0x100000, got 0x%08x\n",
+    if (SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_MASK != (1u << 5)) {
+        printf("  FAIL: Expected ACCESSINVAL mask = 0x00000020, got 0x%08x\n",
                SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_MASK);
         pass = 0;
     } else {
-        printf("  PASS: ACCESSINVAL at bit 20 = 0x100000 (correct)\n");
+        printf("  PASS: ACCESSINVAL at bit 5 = 0x00000020 (correct)\n");
     }
-    if (SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_SHIFT != 20) {
-        printf("  FAIL: Expected ACCESSINVAL shift = 20, got %u\n",
+    if (SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_SHIFT != 5) {
+        printf("  FAIL: Expected ACCESSINVAL shift = 5, got %u\n",
                SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_SHIFT);
         pass = 0;
     } else {
-        printf("  PASS: ACCESSINVAL shift = 20 (correct)\n");
+        printf("  PASS: ACCESSINVAL shift = 5 (correct)\n");
     }
 
     /* ------------------------------------------------------------------ */
@@ -147,7 +147,7 @@ int main(void)
     printf("\nStep 4: W1C write to ACCESSINVAL bit when already 0\n");
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_MASK);
     err_status.val = READ_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR);
-    printf("  After W1C (writing 1 to bit 20 when 0): ACCESSINVAL=%u (expected 0)\n",
+    printf("  After W1C (writing 1 to bit 5 when 0): ACCESSINVAL=%u (expected 0)\n",
            err_status.f.accessinval);
     if (err_status.f.accessinval != 0) {
         printf("  FAIL: W1C write to 0 bit must not set it\n");
@@ -158,17 +158,18 @@ int main(void)
 
     /* ------------------------------------------------------------------ */
     /* Step 5: ACCESSINVAL is NOT in ERROR_ENABLE (always reported)        */
-    /* ERROR_ENABLE has bits for: CMDBUSY[0], OVERFLOW[4], UNDERFLOW[8],  */
-    /* CMDINVAL[12], CSIDINVAL[16] — no bit for ACCESSINVAL[20]           */
+    /* ERROR_ENABLE packed: CMDBUSY[0] OVERFLOW[1] UNDERFLOW[2] CMDINVAL[3] */
+    /* CSIDINVAL[4] — no ACCESSINVAL bit (ERROR_ENABLE width is 5 bits).     */
     /* ------------------------------------------------------------------ */
-    printf("\nStep 5: ACCESSINVAL not gated by ERROR_ENABLE (no bit 20 in ERROR_ENABLE)\n");
+    printf("\nStep 5: ACCESSINVAL not gated by ERROR_ENABLE (no ACCESSINVAL field)\n");
     err_enable.val = READ_REG(SPI_CONTROLLER_ERROR_ENABLE_REG_ADDR);
-    printf("  ERROR_ENABLE=0x%08x (bit 20 expected 0 — not controllable)\n", err_enable.val);
-    if ((err_enable.val >> 20) & 1) {
-        printf("  FAIL: ERROR_ENABLE has bit 20 set (unexpected)\n");
+    printf("  ERROR_ENABLE=0x%08x (expected no bit 5 — ACCESSINVAL not controllable)\n",
+           err_enable.val);
+    if ((err_enable.val >> 5) & 1) {
+        printf("  FAIL: ERROR_ENABLE has bit 5 set (unexpected)\n");
         pass = 0;
     } else {
-        printf("  PASS: ERROR_ENABLE bit 20 = 0 (ACCESSINVAL not gated)\n");
+        printf("  PASS: ERROR_ENABLE bit 5 = 0 (ACCESSINVAL not gated)\n");
     }
 
     /* ------------------------------------------------------------------ */
@@ -186,7 +187,7 @@ int main(void)
         printf("  WARN: UNDERFLOW not set (unexpected but not critical for this step)\n");
     }
 
-    /* Write 1 only to bit 20 (ACCESSINVAL W1C) — should not clear UNDERFLOW */
+    /* Write 1 only to bit 5 (ACCESSINVAL W1C) — should not clear UNDERFLOW */
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, SPI_CONTROLLER_ERROR_STATUS_ACCESSINVAL_MASK);
     err_status.val = READ_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR);
     printf("  After ACCESSINVAL W1C: ERROR_STATUS=0x%08x, UNDERFLOW=%u (expected 1)\n",

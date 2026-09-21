@@ -45,7 +45,7 @@ spi_controller_ip::spi_controller_ip(sc_module_name n, int log_verbosity)
    logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
    logger.setFunctionTrace(false);
 
-   /// Initialize CFG shadow array (one entry per chip select)
+   /// Initialize CONFIGOPTS shadow array (one entry per chip select)
    /// Reset value = 0x0 per datasheet
    m_configopts_array.resize(get_num_cs(), 0x0);
 
@@ -102,11 +102,11 @@ void spi_controller_ip::register_callbacks()
 {
    // ===== Register Write Callbacks =====
 
-   // INTR_STATUS (0x0) - W1C for interrupt state
-   auto intr_status_mask = INTR_STATUS.write_bit_mask;
+   // INTR_STATE (0x0) - W1C for interrupt state
+   auto intr_status_mask = INTR_STATE.write_bit_mask;
    memory.register_write_callback(
-      [this, intr_status_mask](uint32_t value) { return handle_write_INTR_STATUS(value, intr_status_mask); },
-      INTR_STATUS.offset);
+      [this, intr_status_mask](uint32_t value) { return handle_write_INTR_STATE(value, intr_status_mask); },
+      INTR_STATE.offset);
 
    // INTR_ENABLE (0x4) - Interrupt enable control
    auto intr_enable_mask = INTR_ENABLE.write_bit_mask;
@@ -120,17 +120,17 @@ void spi_controller_ip::register_callbacks()
       [this, intr_test_mask](uint32_t value) { return handle_write_INTR_TEST(value, intr_test_mask); },
       INTR_TEST.offset);
 
-   // CTRL (0xC) - System control (SPIEN, SW_RST, OUTPUT_EN, watermarks)
-   auto ctrl_mask = CTRL.write_bit_mask;
+   // CONTROL (0xC) - System control (SPIEN, SW_RST, OUTPUT_EN, watermarks)
+   auto ctrl_mask = CONTROL.write_bit_mask;
    memory.register_write_callback(
-      [this, ctrl_mask](uint32_t value) { return handle_write_CTRL(value, ctrl_mask); },
-      CTRL.offset);
+      [this, ctrl_mask](uint32_t value) { return handle_write_CONTROL(value, ctrl_mask); },
+      CONTROL.offset);
 
-   // CMD (0x1C) - Command register (pre-write callback for validation)
-   auto cmd_mask = CMD.write_bit_mask;
+   // COMMAND (0x1C) - Command register (pre-write callback for validation)
+   auto cmd_mask = COMMAND.write_bit_mask;
    memory.register_write_callback(
-      [this, cmd_mask](uint32_t value) { return handle_write_CMD(value, cmd_mask); },
-      CMD.offset);
+      [this, cmd_mask](uint32_t value) { return handle_write_COMMAND(value, cmd_mask); },
+      COMMAND.offset);
 
    // TXDATA (0x24) - Transmit FIFO (byte-enable aware)
    auto txdata_mask = TXDATA.write_bit_mask;
@@ -156,11 +156,11 @@ void spi_controller_ip::register_callbacks()
       [this, event_enable_mask](uint32_t value) { return handle_write_EVENT_ENABLE(value, event_enable_mask); },
       EVENT_ENABLE.offset);
 
-   // CFG (0x14) - Per-device configuration with shadow array support
-   auto cfg_write_mask = CFG.write_bit_mask;
+   // CONFIGOPTS (0x14) - Per-device configuration with shadow array support
+   auto cfg_write_mask = CONFIGOPTS.write_bit_mask;
    memory.register_write_callback(
-      [this, cfg_write_mask](uint32_t value) { return handle_write_CFG(value, cfg_write_mask); },
-      CFG.offset);
+      [this, cfg_write_mask](uint32_t value) { return handle_write_CONFIGOPTS(value, cfg_write_mask); },
+      CONFIGOPTS.offset);
 
    // ===== Register Read Callbacks =====
 
@@ -170,11 +170,11 @@ void spi_controller_ip::register_callbacks()
       [this, status_read_mask](uint32_t& value) { return handle_read_STATUS(value, status_read_mask); },
       STATUS.offset);
 
-   // CFG (0x14) - Per-device configuration read from shadow array
-   auto cfg_read_mask = CFG.read_bit_mask;
+   // CONFIGOPTS (0x14) - Per-device configuration read from shadow array
+   auto cfg_read_mask = CONFIGOPTS.read_bit_mask;
    memory.register_read_callback(
-      [this, cfg_read_mask](uint32_t& value) { return handle_read_CFG(value, cfg_read_mask); },
-      CFG.offset);
+      [this, cfg_read_mask](uint32_t& value) { return handle_read_CONFIGOPTS(value, cfg_read_mask); },
+      CONFIGOPTS.offset);
 
    // RXDATA (0x20) - Receive FIFO
    auto rxdata_mask = RXDATA.read_bit_mask;
@@ -418,8 +418,8 @@ void spi_controller_ip::spi_transaction_thread()
         // Process all queued commands.
         // RTL: en = en_sw & ~enb_error — core is disabled when ERROR_STATUS has any set bit.
         // Commands stay queued until firmware clears errors; READY remains based on FIFO space.
-        while (!m_command_queue.empty() && CTRL.SPIEN && CTRL.OUTPUT_EN &&
-               (static_cast<uint32_t>(ERROR_STATUS) == 0)) {
+        while (!m_command_queue.empty() && CONTROL.SPIEN && CONTROL.OUTPUT_EN &&
+               !CONTROL.SW_RST && (static_cast<uint32_t>(ERROR_STATUS) == 0)) {
             set_fsm_state(fsm_state_e::ACTIVE);
             update_spi_event_intr_status();
 
@@ -450,7 +450,7 @@ void spi_controller_ip::spi_transaction_thread()
                 //  (b) a SW_RST aborted an in-flight blocked segment — ERROR_STATUS
                 //      is clear and the queue was flushed, possibly re-populated
                 //      with the next read's commands. We must re-evaluate the queue
-                //      rather than break: the CMD-write notifications that queued
+                //      rather than break: the COMMAND-write notifications that queued
                 //      those commands may have been lost (the thread was parked on
                 //      a FIFO wait, not m_transaction_event), so breaking to
                 //      wait(m_transaction_event) would strand them.
@@ -483,7 +483,7 @@ void spi_controller_ip::spi_transaction_thread()
 bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment, const spi_config_t& config)
 {
     // ===================================================================
-    // NOTE: RX FIFO pre-check now done synchronously in handle_write_CMD
+    // NOTE: RX FIFO pre-check now done synchronously in handle_write_COMMAND
     // for TLM LT compliance. No need for async check here since command
     // would have been rejected before reaching this point if insufficient space.
     // ===================================================================
@@ -523,7 +523,7 @@ bool spi_controller_ip::process_single_transaction(const spi_segment_t& segment,
                 update_spi_event_intr_status();
                 // When TX_WATERMARK=0 (no DMA), wake on any TX word pushed.
                 // When TX_WATERMARK>0 (DMA), wait for watermark chunk (HIGH→LOW on dma_trigger).
-                if (CTRL.TX_WATERMARK > 0) {
+                if (CONTROL.TX_WATERMARK > 0) {
                     wait(m_tx_fifo_at_watermark);
                 } else {
                     wait(m_tx_data_available);
@@ -643,11 +643,11 @@ void spi_controller_ip::update_output_signals_method()
     }
 
     // Update error_irq
-    bool error_irq_assert = (INTR_STATUS.error && INTR_ENABLE.error);
+    bool error_irq_assert = (INTR_STATE.error && INTR_ENABLE.error);
     error_irq.write(error_irq_assert);
 
     // Update spi_event_irq
-    bool spi_event_irq_assert = (INTR_STATUS.spi_event && INTR_ENABLE.spi_event);
+    bool spi_event_irq_assert = (INTR_STATE.spi_event && INTR_ENABLE.spi_event);
     spi_event_irq.write(spi_event_irq_assert);
 
     // The IP has a single interrupt pin: irq_o = error_intr || spi_event_intr.
@@ -657,8 +657,8 @@ void spi_controller_ip::update_output_signals_method()
     // Update dma_trigger
     uint32_t tx_depth = get_tx_fifo_depth();
     uint32_t rx_depth = get_rx_fifo_depth();
-    uint32_t tx_watermark = CTRL.TX_WATERMARK;
-    uint32_t rx_watermark = CTRL.RX_WATERMARK;
+    uint32_t tx_watermark = CONTROL.TX_WATERMARK;
+    uint32_t rx_watermark = CONTROL.RX_WATERMARK;
     bool tx_below_wm = (tx_depth < tx_watermark);
     // OT SPI Host RTL uses rx_qd >= rx_watermark for both lsio_trigger_o and
     // STATUS.RXWM. "At or above" allows DMA chunk_size == watermark to work:
@@ -668,7 +668,7 @@ void spi_controller_ip::update_output_signals_method()
     // RTL re-evaluates the comparison every clock, so a watermark of zero holding
     // rx_wm high over an empty FIFO is harmless there. Here the signal is refreshed
     // by a deferred method, so it only settles when the core yields at a quantum
-    // boundary — firmware that writes CTRL twice within one quantum (the usual
+    // boundary — firmware that writes CONTROL twice within one quantum (the usual
     // SW_RST-then-configure sequence momentarily leaves RX_WATERMARK at zero) would
     // otherwise leave a stale high for the secure DMA to sample at arm time and
     // drain a chunk from an empty FIFO. For every watermark of one or more the term
@@ -711,53 +711,52 @@ void spi_controller_ip::update_spi_event_irq()
 }
 
 /**
- * @brief Check if any enabled error is present and update INTR_STATUS.error
+ * @brief Check if any enabled error is present and update INTR_STATE.error
  */
 void spi_controller_ip::update_error_interrupt_state()
 {
     uint32_t error_status = ERROR_STATUS;
     uint32_t error_enable = ERROR_ENABLE;
 
-    // RTL: INTR_STATUS.error.next = (ERROR_STATUS.intr || INTR_TEST.error) && INTR_ENABLE.error
+    // RTL: INTR_STATE.error.next = (ERROR_STATUS.intr || INTR_TEST.error) && INTR_ENABLE.error
     // Level-sensitive: set OR clear based on current state, gated by INTR_ENABLE.
     //
     // ACCESSINVAL is a bus error with no ERROR_ENABLE bit — the RTL's error_mask
     // hardcodes that lane to 1, so it escalates whatever the enable register says.
     // Masking it against ERROR_ENABLE would silence it permanently.
-    constexpr uint32_t ACCESSINVAL_MASK = 1u << 20;
+    constexpr uint32_t ACCESSINVAL_MASK = 1u << 5;
     bool has_enabled_error =
         ((error_status & (error_enable | ACCESSINVAL_MASK)) != 0);
     bool error_intr = (has_enabled_error || m_intr_test_error_forced) && (bool)INTR_ENABLE.error;
-    INTR_STATUS.error = error_intr ? 1 : 0;
+    INTR_STATE.error = error_intr ? 1 : 0;
 
     update_error_irq();
 }
 
 /**
- * @brief Level-sensitive recompute of INTR_STATUS.spi_event per RTL equation:
+ * @brief Level-sensitive recompute of INTR_STATE.spi_event per RTL equation:
  *   spi_event_intr = (|(event_vector & event_mask) || INTR_TEST.spi_event) && INTR_ENABLE.spi_event
  */
 void spi_controller_ip::update_spi_event_intr_status()
 {
-    uint32_t event_enable = EVENT_ENABLE;
     bool any_event = false;
 
-    if ((event_enable & (1u << 0))  && is_rx_fifo_full())  any_event = true;
-    if ((event_enable & (1u << 4))  && is_tx_fifo_empty()) any_event = true;
-    if ((event_enable & (1u << 8))) {
-        if (get_rx_fifo_depth() >= (uint32_t)CTRL.RX_WATERMARK)
+    if (EVENT_ENABLE.RXFULL && is_rx_fifo_full())  any_event = true;
+    if (EVENT_ENABLE.TXEMPTY && is_tx_fifo_empty()) any_event = true;
+    if (EVENT_ENABLE.RXWM) {
+        if (get_rx_fifo_depth() >= (uint32_t)CONTROL.RX_WATERMARK)
             any_event = true;
     }
-    if ((event_enable & (1u << 12))) {
-        if (get_tx_fifo_depth() < (uint32_t)CTRL.TX_WATERMARK)
+    if (EVENT_ENABLE.TXWM) {
+        if (get_tx_fifo_depth() < (uint32_t)CONTROL.TX_WATERMARK)
             any_event = true;
     }
     // RTL: READY = ~command_busy, independent of error state
-    if ((event_enable & (1u << 16)) && (m_fsm_state == fsm_state_e::IDLE) && !is_cmd_queue_full()) any_event = true;
-    if ((event_enable & (1u << 20)) && (m_fsm_state != fsm_state_e::ACTIVE)) any_event = true;
+    if (EVENT_ENABLE.READY && (m_fsm_state == fsm_state_e::IDLE) && !is_cmd_queue_full()) any_event = true;
+    if (EVENT_ENABLE.IDLE && (m_fsm_state != fsm_state_e::ACTIVE)) any_event = true;
 
     bool spi_intr = (any_event || m_intr_test_spi_event_forced) && (bool)INTR_ENABLE.spi_event;
-    INTR_STATUS.spi_event = spi_intr ? 1 : 0;
+    INTR_STATE.spi_event = spi_intr ? 1 : 0;
     update_spi_event_irq();
 }
 
@@ -770,14 +769,14 @@ void spi_controller_ip::update_dma_trigger()
 }
 
 /**
- * @brief INTR_STATUS register write callback
+ * @brief INTR_STATE register write callback
  *
  * The RDL declares both fields sw=r, hw=w, and the RTL drives them as a live view
  * of the gated interrupt lines rather than a sticky latch. Software writes are
  * therefore accepted on the bus and discarded, as they are in silicon — the bits
  * only clear when the underlying condition does.
  */
-bool spi_controller_ip::handle_write_INTR_STATUS(uint32_t value, uint32_t mask)
+bool spi_controller_ip::handle_write_INTR_STATE(uint32_t value, uint32_t mask)
 {
     (void)value;
     (void)mask;
@@ -794,7 +793,7 @@ bool spi_controller_ip::handle_write_INTR_ENABLE(uint32_t value, uint32_t mask)
     uint32_t new_value = (value & mask) | (current & ~mask);
     INTR_ENABLE = new_value;
 
-    // RTL: INTR_STATUS.next = (source || INTR_TEST) && INTR_ENABLE — recompute both bits.
+    // RTL: INTR_STATE.next = (source || INTR_TEST) && INTR_ENABLE — recompute both bits.
     update_error_interrupt_state();
     update_spi_event_intr_status();
 
@@ -813,7 +812,7 @@ bool spi_controller_ip::handle_write_INTR_TEST(uint32_t value, uint32_t mask)
 
     // RTL: error_intr     = (ERROR_STATUS.intr || INTR_TEST.error)     && INTR_ENABLE.error
     //      spi_event_intr = (status_spi_event  || INTR_TEST.spi_event) && INTR_ENABLE.spi_event
-    // Update forced flags then recompute INTR_STATUS via level-sensitive helpers.
+    // Update forced flags then recompute INTR_STATE via level-sensitive helpers.
     // Helpers handle both set and clear, and gate by INTR_ENABLE — so INTR_TEST injection
     // is blocked when INTR_ENABLE is 0, matching RTL behaviour.
     m_intr_test_error_forced     = (bool)INTR_TEST.error;
@@ -848,7 +847,7 @@ bool spi_controller_ip::handle_write_ERROR_STATUS(uint32_t value, uint32_t mask)
     // RTL: en = en_sw & ~enb_error — core resumes when all errors are cleared.
     // The transaction thread exits its inner loop when ERROR_STATUS becomes non-zero.
     // Re-kick it here so it drains any commands that were queued before/during the error.
-    if (new_value == 0 && !m_command_queue.empty() && CTRL.SPIEN && CTRL.OUTPUT_EN) {
+    if (new_value == 0 && !m_command_queue.empty() && CONTROL.SPIEN && CONTROL.OUTPUT_EN) {
         m_transaction_event.notify();
     }
 
@@ -890,28 +889,28 @@ bool spi_controller_ip::handle_write_EVENT_ENABLE(uint32_t value, uint32_t mask)
 }
 
 /**
- * @brief CTRL register write callback
+ * @brief CONTROL register write callback
  */
-bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
+bool spi_controller_ip::handle_write_CONTROL(uint32_t value, uint32_t mask)
 {
     // Apply write bitmask and update register
-    uint32_t current = CTRL;
+    uint32_t current = CONTROL;
     uint32_t new_value = (value & mask) | (current & ~mask);
-    CTRL = new_value;
+    CONTROL = new_value;
 
     // Extract control fields
-    REG_INFO(2, logger) << "  SPIEN: " << (uint32_t)CTRL.SPIEN << std::endl
-                         << "  SW_RST: " << (uint32_t)CTRL.SW_RST << std::endl
-                         << "  OUTPUT_EN: " << (uint32_t)CTRL.OUTPUT_EN << std::endl
-                         << "  TX_WATERMARK: " << (int)CTRL.TX_WATERMARK << std::endl
-                         << "  RX_WATERMARK: " << (int)CTRL.RX_WATERMARK << std::endl;
+    REG_INFO(2, logger) << "  SPIEN: " << (uint32_t)CONTROL.SPIEN << std::endl
+                         << "  SW_RST: " << (uint32_t)CONTROL.SW_RST << std::endl
+                         << "  OUTPUT_EN: " << (uint32_t)CONTROL.OUTPUT_EN << std::endl
+                         << "  TX_WATERMARK: " << (int)CONTROL.TX_WATERMARK << std::endl
+                         << "  RX_WATERMARK: " << (int)CONTROL.RX_WATERMARK << std::endl;
 
     // Track previous SPIEN state to detect 0->1 transitions
     bool prev_spien = (current >> 31) & 0x1;
-    bool new_spien = CTRL.SPIEN;
+    bool new_spien = CONTROL.SPIEN;
 
     // Handle SW_RST first (highest priority)
-    if (CTRL.SW_RST) {
+    if (CONTROL.SW_RST) {
         REG_INFO(2, logger) << "  [RESET] Software reset triggered!" << std::endl;
 
         // Capture whether a transaction is in flight BEFORE we overwrite the FSM
@@ -943,7 +942,7 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
         ERROR_STATUS = 0;
 
         // Clear interrupt states
-        INTR_STATUS = 0;
+        INTR_STATE = 0;
 
         // Update interrupt ports
         update_error_irq();
@@ -968,21 +967,21 @@ bool spi_controller_ip::handle_write_CTRL(uint32_t value, uint32_t mask)
             m_tx_fifo_at_watermark.notify();
         }
 
-         // Auto-clear SW_RST
-        CTRL.SW_RST = 0;
+        // CONTROL.SW_RST is a level: the core, FIFOs and command queue stay held
+        // in reset until software clears the bit. Do not auto-clear.
 
-        REG_INFO(2, logger) << "  [RESET] Software reset complete" << std::endl;
+        REG_INFO(2, logger) << "  [RESET] Software reset held (release SW_RST to resume)" << std::endl;
     }
 
     // Handle SPIEN (enable/disable FSM operation)
     if (new_spien) {
-        REG_INFO(2, logger) << "  [CTRL] SPI Host enabled" << std::endl;
+        REG_INFO(2, logger) << "  [CONTROL] SPI Host enabled" << std::endl;
         // If SPIEN changed from 0 to 1, and there are commands queued, wake up transaction thread
         if (!prev_spien && !m_command_queue.empty()) {
             m_transaction_event.notify();
         }
         else {
-            REG_INFO(2, logger) << "  [CTRL] SPI Host disabled" << std::endl;
+            REG_INFO(2, logger) << "  [CONTROL] SPI Host disabled" << std::endl;
         }
         // FSM should not process new transactions
         // Ongoing transactions may continue or be aborted depending on implementation
@@ -1010,8 +1009,8 @@ bool spi_controller_ip::handle_read_STATUS(uint32_t& value, uint32_t mask)
 
     // Set ACTIVE bit - high while FSM is processing, or while commands are queued and
     // the controller is enabled (command queued but transaction thread not yet scheduled).
-    // This prevents wait_for_idle from returning before a freshly-written CMD is processed.
-    bool cmd_pending = (!m_command_queue.empty() && CTRL.SPIEN && CTRL.OUTPUT_EN);
+    // This prevents wait_for_idle from returning before a freshly-written COMMAND is processed.
+    bool cmd_pending = (!m_command_queue.empty() && CONTROL.SPIEN && CONTROL.OUTPUT_EN);
     if (m_fsm_state == fsm_state_e::ACTIVE || cmd_pending) {
         STATUS.ACTIVE = 1;
     } else {
@@ -1041,8 +1040,8 @@ bool spi_controller_ip::handle_read_STATUS(uint32_t& value, uint32_t mask)
     STATUS.CMDQD = get_cmd_queue_depth();
 
     // Set watermark flags
-    uint32_t tx_watermark = CTRL.TX_WATERMARK;
-    uint32_t rx_watermark = CTRL.RX_WATERMARK;
+    uint32_t tx_watermark = CONTROL.TX_WATERMARK;
+    uint32_t rx_watermark = CONTROL.RX_WATERMARK;
     // RTL compares unconditionally, so a zero RX watermark leaves RXWM permanently
     // asserted (rx_qd >= 0 is always true).
     STATUS.TXWM = (STATUS.TXQD < tx_watermark) ? 1 : 0;
@@ -1055,27 +1054,32 @@ bool spi_controller_ip::handle_read_STATUS(uint32_t& value, uint32_t mask)
 }
 
 /**
- * @brief CMD register write callback with validation and error detection
+ * @brief COMMAND register write callback with validation and error detection
  */
-bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
+bool spi_controller_ip::handle_write_COMMAND(uint32_t value, uint32_t mask)
 {
-   REG_INFO(1, logger) << "[SPI_HOST] CMD register pre-write callback triggered" << std::endl;
+   REG_INFO(1, logger) << "[SPI_HOST] COMMAND register pre-write callback triggered" << std::endl;
    REG_DEBUG(2, logger) << "  Value to write: 0x" << std::hex << value << std::dec << std::endl;
 
     // Apply write bitmask to get the actual value being written
     uint32_t masked_value = value & mask;
 
-    // Extract CMD fields per RDL spec (spi_controller.rdl):
-    // [13:12] DIRECTION, [11:10] SPEED, [9] CSAAT, [8:0] LEN
-    uint32_t cmd_len = (masked_value) & 0x1FF;
-    bool     cmd_csaat = (masked_value >> 9) & 0x1;
-    uint8_t  cmd_speed = (masked_value >> 10) & 0x3;
-    uint8_t  cmd_direction = (masked_value >> 12) & 0x3;
+    // Extract COMMAND fields per upstream spi_host:
+    // [24:5] LEN, [4:3] DIRECTION, [2:1] SPEED, [0] CSAAT
+    uint32_t cmd_len = (masked_value >> 5) & 0xFFFFF;
+    bool     cmd_csaat = masked_value & 0x1;
+    uint8_t  cmd_speed = (masked_value >> 1) & 0x3;
+    uint8_t  cmd_direction = (masked_value >> 3) & 0x3;
 
     REG_DEBUG(2, logger) << "  LEN: " << cmd_len << " (actual bytes: " << (cmd_len + 1) << ")" << std::endl;
     REG_DEBUG(2, logger) << "  CSAAT: " << cmd_csaat << std::endl;
     REG_DEBUG(2, logger) << "  SPEED: " << (int)cmd_speed << " (0=Std, 1=Dual, 2=Quad)" << std::endl;
     REG_DEBUG(2, logger) << "  DIRECTION: " << (int)cmd_direction << " (0=Dummy, 1=Rx, 2=Tx, 3=Bidir)" << std::endl;
+
+    if (CONTROL.SW_RST) {
+        // Command queue is held in reset while SW_RST is asserted.
+        return true;
+    }
 
     // ========================================================================
     // Validation 0: the command queue must have room.
@@ -1083,13 +1087,13 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // This is the only "busy" condition the RTL knows: command_busy_o is just
     // ~command_ready from the queue, STATUS.READY is ~command_busy, and
     // error_busy_o (CMDBUSY) is command_valid & command_busy. A latched error
-    // does not block a CMD write — it disables the core through
+    // does not block a COMMAND write — it disables the core through
     // en = en_sw & ~enb_error, so the command sits in the queue until software
     // clears ERROR_STATUS. process_single_transaction models that gate and
     // handle_write_ERROR_STATUS restarts the engine when the last error clears.
     // ========================================================================
     if (is_cmd_queue_full()) {
-        REG_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Command FIFO full (depth=" << get_cmd_queue_depth()
+        REG_ERROR(0, logger) << "[SPI_HOST/COMMAND ERROR] Command FIFO full (depth=" << get_cmd_queue_depth()
                   << "/" << get_cmd_depth() << "). Cannot accept new command segment. Setting ERROR_STATUS.CMDBUSY" << std::endl;
 
         ERROR_STATUS.CMDBUSY = 1;
@@ -1101,13 +1105,13 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // Validation 2: Check CSID < NumCS
     uint32_t csid_val = CSID;
 
-    if (!validate_csid(csid_val, "CMD")) {
+    if (!validate_csid(csid_val, "COMMAND")) {
         return false;
     }
 
     // Validation 3: Check valid SPEED (0-2 valid, 3 is reserved)
     if (cmd_speed > 2) {
-        REG_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Invalid SPEED value: " << (int)cmd_speed
+        REG_ERROR(0, logger) << "[SPI_HOST/COMMAND ERROR] Invalid SPEED value: " << (int)cmd_speed
                   << " (valid: 0-2). Setting ERROR_STATUS.CMDINVAL" << std::endl;
 
         // Set ERROR_STATUS.CMDINVAL
@@ -1123,7 +1127,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // DIRECTION=3 (Bidirectional) only valid with SPEED=0 (Standard)
     // Per datasheet: "Bidirectional data transfers are not applicable for Dual- or Quad-mode segments"
     if (cmd_direction == 3 && cmd_speed != 0) {
-        REG_ERROR(0, logger) << "[SPI_HOST/CMD ERROR] Bidirectional mode only supported with Standard SPI. "
+        REG_ERROR(0, logger) << "[SPI_HOST/COMMAND ERROR] Bidirectional mode only supported with Standard SPI. "
                   << "DIRECTION=3 (Bidir) with SPEED=" << (int)cmd_speed
                   << " (not Standard). Setting ERROR_STATUS.CMDINVAL" << std::endl;
 
@@ -1133,7 +1137,7 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
         // Update error interrupt state and port
         update_error_interrupt_state();
 
-        // DO NOT write to CMD register - reject invalid value
+        // DO NOT write to COMMAND register - reject invalid value
         return false;
     }
 
@@ -1144,30 +1148,30 @@ bool spi_controller_ip::handle_write_CMD(uint32_t value, uint32_t mask)
     // m_rx_space_available_event rather than setting OVERFLOW.
     if (cmd_direction == 1 || cmd_direction == 3) {  // RX_ONLY or BIDIR
         uint32_t bytes_to_receive = cmd_len + 1;  // LEN is 0-based, so add 1
-        REG_INFO(2, logger) << "[SPI_HOST/CMD] RX segment accepted: " << bytes_to_receive
+        REG_INFO(2, logger) << "[SPI_HOST/COMMAND] RX segment accepted: " << bytes_to_receive
             << " bytes (streams under back-pressure if it exceeds free FIFO space)" << std::endl;
     }
 
-    // TX FIFO pre-check removed: DMA hardware handshake fills the FIFO after CMD
+    // TX FIFO pre-check removed: DMA hardware handshake fills the FIFO after COMMAND
     // is issued. process_single_transaction waits on m_tx_data_available when
     // the FIFO is empty, allowing DMA to fill it before the SPI thread consumes.
 
-    // Write the validated value to CMD register
-    // This is the ONLY path that writes to CMD - validation failures above don't write
-    CMD = masked_value;
+    // Write the validated value to COMMAND register
+    // This is the ONLY path that writes to COMMAND - validation failures above don't write
+    COMMAND = masked_value;
 
-    // Build segment descriptor from validated CMD fields
+    // Build segment descriptor from validated COMMAND fields
     m_current_segment.len = cmd_len + 1;
     m_current_segment.direction = static_cast<spi_direction_e>(cmd_direction);
     m_current_segment.speed = static_cast<spi_speed_e>(cmd_speed);
     m_current_segment.csaat = cmd_csaat;
     m_current_segment.csid = static_cast<uint8_t>(csid_val);
 
-    // Capture current CFG into shadow array for this CSID
+    // Capture current CONFIGOPTS into shadow array for this CSID
     // This allows per-device timing configuration
     uint8_t csid = static_cast<uint8_t>(csid_val);
     if (csid < m_configopts_array.size()) {
-        m_configopts_array[csid] = CFG;
+        m_configopts_array[csid] = CONFIGOPTS;
     }
 
     // Build configuration from shadow array (indexed by CSID)
@@ -1290,9 +1294,9 @@ bool spi_controller_ip::handle_read_RXDATA(uint32_t& value, uint32_t mask)
 }
 
 /**
- * @brief CFG register write callback with per-device shadow array
+ * @brief CONFIGOPTS register write callback with per-device shadow array
  */
-bool spi_controller_ip::handle_write_CFG(uint32_t value, uint32_t mask)
+bool spi_controller_ip::handle_write_CONFIGOPTS(uint32_t value, uint32_t mask)
 {
     // Apply write bitmask
     uint32_t masked_value = value & mask;
@@ -1300,10 +1304,10 @@ bool spi_controller_ip::handle_write_CFG(uint32_t value, uint32_t mask)
     // Get current CSID value
     uint32_t csid = CSID;
 
-    // Check CSID range (without setting error - CFG access doesn't trigger CSIDINVAL)
-    // Per datasheet: CSIDINVAL only set on CMD write, not CFG access
+    // Check CSID range (without setting error - CONFIGOPTS access doesn't trigger CSIDINVAL)
+    // Per datasheet: CSIDINVAL only set on COMMAND write, not CONFIGOPTS access
     if (csid >= get_num_cs()) {
-        REG_WARN(1, logger) << "[SPI_HOST/CFG_WRITE] Invalid CSID (" << csid
+        REG_WARN(1, logger) << "[SPI_HOST/CONFIGOPTS_WRITE] Invalid CSID (" << csid
                   << ") >= NumCS (" << get_num_cs() << "). Ignoring write." << std::endl;
         return false;  // Silently reject, don't set error
     }
@@ -1312,23 +1316,23 @@ bool spi_controller_ip::handle_write_CFG(uint32_t value, uint32_t mask)
     m_configopts_array[csid] = masked_value;
 
     // Also update the actual register storage for readback consistency
-    CFG = masked_value;
+    CONFIGOPTS = masked_value;
 
     return true;
 }
 
 /**
- * @brief CFG register read callback from per-device shadow array
+ * @brief CONFIGOPTS register read callback from per-device shadow array
  */
-bool spi_controller_ip::handle_read_CFG(uint32_t& value, uint32_t mask)
+bool spi_controller_ip::handle_read_CONFIGOPTS(uint32_t& value, uint32_t mask)
 {
     // Get current CSID value
     uint32_t csid = CSID;
 
-    // Check CSID range (without setting error - CFG access doesn't trigger CSIDINVAL)
-    // Per datasheet: CSIDINVAL only set on CMD write, not CFG access
+    // Check CSID range (without setting error - CONFIGOPTS access doesn't trigger CSIDINVAL)
+    // Per datasheet: CSIDINVAL only set on COMMAND write, not CONFIGOPTS access
     if (csid >= get_num_cs()) {
-        REG_WARN(1, logger) << "[SPI_HOST/CFG_READ] Invalid CSID (" << csid
+        REG_WARN(1, logger) << "[SPI_HOST/CONFIGOPTS_READ] Invalid CSID (" << csid
                   << ") >= NumCS (" << get_num_cs() << "). Returning 0." << std::endl;
         value = 0;
         return true;  // Return 0, don't set error

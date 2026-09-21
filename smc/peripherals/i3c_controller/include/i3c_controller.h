@@ -163,17 +163,25 @@ enum class i3c_xfer_kind : uint8_t {
     CccRead      = 3  ///< Direct CCC read.
 };
 
-/// Response-descriptor error codes (memmap.adoc RESPONSE_PORT [31:28]).
+/// Response-descriptor error codes (TCRI 6.4.1 Table 1 / RESPONSE_PORT [31:28]).
 enum class i3c_err : uint8_t {
-    Success      = 0x0, ///< Completed without error.
-    CrcError     = 0x1, ///< CRC failure (HDR modes).
-    ParityError  = 0x2, ///< Parity error.
-    FrameError   = 0x3, ///< Framing error.
-    AddressNack  = 0x4, ///< Target did not ACK its address.
-    TransferAbort= 0x7, ///< Software abort (HC_CONTROL.ABORT).
-    I2cWNack     = 0x8, ///< I2C write data NACK.
-    I2cDataNack  = 0x9, ///< I2C read data NACK.
-    OverflowUnder= 0xF  ///< TX underflow / RX overflow.
+    Success                      = 0x0, ///< Completed without error.
+    CrcError                     = 0x1, ///< CRC failure (HDR modes).
+    ParityError                  = 0x2, ///< Parity error.
+    FrameError                   = 0x3, ///< Framing error.
+    AddrHeader                   = 0x4, ///< Address header error.
+    Nack                         = 0x5, ///< Address or DAA was NACK'ed.
+    AddressNack                  = Nack, ///< Alias of Nack (legacy name).
+    Ovl                          = 0x6, ///< RX overflow or TX underflow.
+    OverflowUnder                = Ovl, ///< Alias of Ovl (legacy name).
+    I3cShortReadErr              = 0x7, ///< Short read not permitted.
+    HcAborted                    = 0x8, ///< Terminated by host controller (Abort).
+    TransferAbort                = HcAborted, ///< Alias of HcAborted (legacy name).
+    I2cDataNackOrI3cBusAborted   = 0x9, ///< I2C write-data NACK or I3C bus abort.
+    I2cWNack                     = I2cDataNackOrI3cBusAborted, ///< Alias (legacy name).
+    I2cDataNack                  = I2cDataNackOrI3cBusAborted, ///< Alias (legacy name).
+    NotSupported                 = 0xA, ///< Command not supported by the HC.
+    AbortedWithCRC               = 0xB  ///< HDR-BT abort / default error status.
 };
 
 /**

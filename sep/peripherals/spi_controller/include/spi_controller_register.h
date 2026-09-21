@@ -4,20 +4,16 @@
  * @file spi_controller_register.h
  * @brief SPI Controller hardware register definitions
  * 
- * This header defines all hardware register types for the SPI Controller IP:
- * - INTR_STATUS - Interrupt status register (software read-only)
- * - INTR_ENABLE - Interrupt enable register
- * - INTR_TEST - Interrupt test register
- * - CTRL - Control register (SPIEN, SW_RST, OUTPUT_EN, watermarks)
- * - STATUS - Status register (READY, ACTIVE, FIFO depths)
- * - CFG - Configuration register (per-device timing, polarity, phase)
- * - CSID - Chip select ID register
- * - CMD - Command register (segment descriptor)
- * - RXDATA - Receive FIFO data register (read-only)
- * - TXDATA - Transmit FIFO data register (write-only)
- * - ERROR_ENABLE - Error interrupt enable register
- * - ERROR_STATUS - Error status register (W1C)
- * - EVENT_ENABLE - Event interrupt enable register
+ * Register map follows upstream OpenTitan spi_host (hw/ip/spi_host):
+ * - INTR_STATE - Interrupt status (error[0], spi_event[1], packed)
+ * - INTR_ENABLE / INTR_TEST
+ * - ALERT_TEST - fatal_fault (WO; bus-integrity alert is not modelled)
+ * - CONTROL - SPIEN, SW_RST (level, not singlepulse), OUTPUT_EN, watermarks
+ * - STATUS - READY, ACTIVE, FIFO depths
+ * - CONFIGOPTS - per-device timing, polarity, phase
+ * - CSID / COMMAND (CSAAT[0] SPEED[2:1] DIRECTION[4:3] LEN[24:5])
+ * - RXDATA / TXDATA windows
+ * - ERROR_ENABLE / ERROR_STATUS / EVENT_ENABLE (contiguous bit packing)
  * 
  * All registers are templated on bit width N (typically 32-bit).
  */
@@ -45,24 +41,23 @@
 namespace spi_controller {
 
 /**
- * @class INTR_STATUS_type
- * @brief Interrupt Status Register (W1C)
- * 
- * Provides interrupt status bits that are cleared by writing 1.
- * - Bit 4: spi_event - SPI event interrupt (READY, IDLE, FIFO watermarks)
- * - Bit 0: error - Error interrupt (programming violations)
+ * @class INTR_STATE_type
+ * @brief Interrupt Status Register (rw1c for error; spi_event is status)
+ *
+ * Upstream spi_host packs the two interrupt bits contiguously:
+ * - Bit 1: spi_event
+ * - Bit 0: error
  */
 template<unsigned int N>
-class INTR_STATUS_type : public regmodel::Reg<N>
+class INTR_STATE_type : public regmodel::Reg<N>
 {
   public:
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
-    INTR_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x11, 0x11, 0),
-      Reserved0(reg_name + ".Reserved0", *this, 5, 27),
-      spi_event(reg_name + ".spi_event", *this, 4, 1),
-      Reserved1(reg_name + ".Reserved1", *this, 1, 3),
+    INTR_STATE_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x3, 0x3, 0),
+      Reserved0(reg_name + ".Reserved0", *this, 2, 30),
+      spi_event(reg_name + ".spi_event", *this, 1, 1),
       error(reg_name + ".error", *this, 0, 1)
     {
       this->set_read_write_restrictions(memory);
@@ -81,7 +76,6 @@ class INTR_STATUS_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator<<=;
     regmodel::Bitfield<N> Reserved0;
     regmodel::Bitfield<N> spi_event;
-    regmodel::Bitfield<N> Reserved1;
     regmodel::Bitfield<N> error;
 };
 
@@ -92,10 +86,9 @@ class INTR_ENABLE_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     INTR_ENABLE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x11, 0x11, 0),
-      Reserved0(reg_name + ".Reserved0", *this, 5, 27),
-      spi_event(reg_name + ".spi_event", *this, 4, 1),
-      Reserved1(reg_name + ".Reserved1", *this, 1, 3),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x3, 0x3, 0),
+      Reserved0(reg_name + ".Reserved0", *this, 2, 30),
+      spi_event(reg_name + ".spi_event", *this, 1, 1),
       error(reg_name + ".error", *this, 0, 1)
     {
       this->set_read_write_restrictions(memory);
@@ -114,7 +107,6 @@ class INTR_ENABLE_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator<<=;
     regmodel::Bitfield<N> Reserved0;
     regmodel::Bitfield<N> spi_event;
-    regmodel::Bitfield<N> Reserved1;
     regmodel::Bitfield<N> error;
 };
 
@@ -125,10 +117,9 @@ class INTR_TEST_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     INTR_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x11, 0x11, 0),
-      Reserved0(reg_name + ".Reserved0", *this, 5, 27),
-      spi_event(reg_name + ".spi_event", *this, 4, 1),
-      Reserved1(reg_name + ".Reserved1", *this, 1, 3),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x3, 0x3, 0),
+      Reserved0(reg_name + ".Reserved0", *this, 2, 30),
+      spi_event(reg_name + ".spi_event", *this, 1, 1),
       error(reg_name + ".error", *this, 0, 1)
     {
       this->set_read_write_restrictions(memory);
@@ -147,17 +138,45 @@ class INTR_TEST_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator<<=;
     regmodel::Bitfield<N> Reserved0;
     regmodel::Bitfield<N> spi_event;
-    regmodel::Bitfield<N> Reserved1;
     regmodel::Bitfield<N> error;
 };
 
 template<unsigned int N>
-class CTRL_type : public regmodel::Reg<N>
+class ALERT_TEST_type : public regmodel::Reg<N>
 {
   public:
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
-    CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
+    ALERT_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0x1, 0),
+      Reserved0(reg_name + ".Reserved0", *this, 1, 31),
+      FATAL_FAULT(reg_name + ".FATAL_FAULT", *this, 0, 1)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> Reserved0;
+    regmodel::Bitfield<N> FATAL_FAULT;
+};
+
+template<unsigned int N>
+class CONTROL_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    CONTROL_type(std::string reg_name, memory_type &memory, unsigned int offset):
       regmodel::Reg<N>(reg_name, memory, offset, 0xe000ffff, 0xe000ffff, 127),
       SPIEN(reg_name + ".SPIEN", *this, 31, 1), 
       SW_RST(reg_name + ".SW_RST", *this, 30, 1), 
@@ -244,12 +263,12 @@ class STATUS_type : public regmodel::Reg<N>
 };
 
 template<unsigned int N>
-class CFG_type : public regmodel::Reg<N>
+class CONFIGOPTS_type : public regmodel::Reg<N>
 {
   public:
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
-    CFG_type(std::string reg_name, memory_type &memory, unsigned int offset):
+    CONFIGOPTS_type(std::string reg_name, memory_type &memory, unsigned int offset):
       regmodel::Reg<N>(reg_name, memory, offset, 0xefffffff, 0xefffffff, 0),
       CPOL(reg_name + ".CPOL", *this, 31, 1), 
       CPHA(reg_name + ".CPHA", *this, 30, 1), 
@@ -312,18 +331,18 @@ class CSID_type : public regmodel::Reg<N>
 };
 
 template<unsigned int N>
-class CMD_type : public regmodel::Reg<N>
+class COMMAND_type : public regmodel::Reg<N>
 {
   public:
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
-    CMD_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0x3fff, 0),
-      Reserved0(reg_name + ".Reserved0", *this, 14, 18),
-      DIRECTION(reg_name + ".DIRECTION", *this, 12, 2),
-      SPEED(reg_name + ".SPEED", *this, 10, 2),
-      CSAAT(reg_name + ".CSAAT", *this, 9, 1),
-      LEN(reg_name + ".LEN", *this, 0, 9)
+    COMMAND_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0, 0x1ffffff, 0),
+      Reserved0(reg_name + ".Reserved0", *this, 25, 7),
+      DIRECTION(reg_name + ".DIRECTION", *this, 3, 2),
+      SPEED(reg_name + ".SPEED", *this, 1, 2),
+      CSAAT(reg_name + ".CSAAT", *this, 0, 1),
+      LEN(reg_name + ".LEN", *this, 5, 20)
     {
       this->set_read_write_restrictions(memory);
     }
@@ -407,16 +426,12 @@ class ERROR_ENABLE_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     ERROR_ENABLE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x11111, 0x11111, 0x11111),
-      Reserved0(reg_name + ".Reserved0", *this, 17, 15),
-      CSIDINVAL(reg_name + ".CSIDINVAL", *this, 16, 1),
-      Reserved1(reg_name + ".Reserved1", *this, 13, 3),
-      CMDINVAL(reg_name + ".CMDINVAL", *this, 12, 1),
-      Reserved2(reg_name + ".Reserved2", *this, 9, 3),
-      underflow(reg_name + ".underflow", *this, 8, 1),
-      Reserved3(reg_name + ".Reserved3", *this, 5, 3),
-      overflow(reg_name + ".overflow", *this, 4, 1),
-      Reserved4(reg_name + ".Reserved4", *this, 1, 3),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x1f, 0x1f, 0x1f),
+      Reserved0(reg_name + ".Reserved0", *this, 5, 27),
+      CSIDINVAL(reg_name + ".CSIDINVAL", *this, 4, 1),
+      CMDINVAL(reg_name + ".CMDINVAL", *this, 3, 1),
+      underflow(reg_name + ".underflow", *this, 2, 1),
+      overflow(reg_name + ".overflow", *this, 1, 1),
       CMDBUSY(reg_name + ".CMDBUSY", *this, 0, 1)
     {
       this->set_read_write_restrictions(memory);
@@ -435,13 +450,9 @@ class ERROR_ENABLE_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator<<=;
     regmodel::Bitfield<N> Reserved0;
     regmodel::Bitfield<N> CSIDINVAL;
-    regmodel::Bitfield<N> Reserved1;
     regmodel::Bitfield<N> CMDINVAL;
-    regmodel::Bitfield<N> Reserved2;
     regmodel::Bitfield<N> underflow;
-    regmodel::Bitfield<N> Reserved3;
     regmodel::Bitfield<N> overflow;
-    regmodel::Bitfield<N> Reserved4;
     regmodel::Bitfield<N> CMDBUSY;
 };
 
@@ -452,18 +463,13 @@ class ERROR_STATUS_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     ERROR_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x111111, 0x111111, 0),
-      Reserved0(reg_name + ".Reserved0", *this, 21, 11),
-      ACCESSINVAL(reg_name + ".ACCESSINVAL", *this, 20, 1),
-      Reserved1(reg_name + ".Reserved1", *this, 17, 3),
-      CSIDINVAL(reg_name + ".CSIDINVAL", *this, 16, 1),
-      Reserved2(reg_name + ".Reserved2", *this, 13, 3),
-      CMDINVAL(reg_name + ".CMDINVAL", *this, 12, 1),
-      Reserved3(reg_name + ".Reserved3", *this, 9, 3),
-      underflow(reg_name + ".underflow", *this, 8, 1),
-      Reserved4(reg_name + ".Reserved4", *this, 5, 3),
-      overflow(reg_name + ".overflow", *this, 4, 1),
-      Reserved5(reg_name + ".Reserved5", *this, 1, 3),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x3f, 0x3f, 0),
+      Reserved0(reg_name + ".Reserved0", *this, 6, 26),
+      ACCESSINVAL(reg_name + ".ACCESSINVAL", *this, 5, 1),
+      CSIDINVAL(reg_name + ".CSIDINVAL", *this, 4, 1),
+      CMDINVAL(reg_name + ".CMDINVAL", *this, 3, 1),
+      underflow(reg_name + ".underflow", *this, 2, 1),
+      overflow(reg_name + ".overflow", *this, 1, 1),
       CMDBUSY(reg_name + ".CMDBUSY", *this, 0, 1)
     {
       this->set_read_write_restrictions(memory);
@@ -482,15 +488,10 @@ class ERROR_STATUS_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator<<=;
     regmodel::Bitfield<N> Reserved0;
     regmodel::Bitfield<N> ACCESSINVAL;
-    regmodel::Bitfield<N> Reserved1;
     regmodel::Bitfield<N> CSIDINVAL;
-    regmodel::Bitfield<N> Reserved2;
     regmodel::Bitfield<N> CMDINVAL;
-    regmodel::Bitfield<N> Reserved3;
     regmodel::Bitfield<N> underflow;
-    regmodel::Bitfield<N> Reserved4;
     regmodel::Bitfield<N> overflow;
-    regmodel::Bitfield<N> Reserved5;
     regmodel::Bitfield<N> CMDBUSY;
 };
 
@@ -501,18 +502,13 @@ class EVENT_ENABLE_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     EVENT_ENABLE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x111111, 0x111111, 0),
-      Reserved0(reg_name + ".Reserved0", *this, 21, 11),
-      IDLE(reg_name + ".IDLE", *this, 20, 1),
-      Reserved1(reg_name + ".Reserved1", *this, 17, 3),
-      READY(reg_name + ".READY", *this, 16, 1),
-      Reserved2(reg_name + ".Reserved2", *this, 13, 3),
-      TXWM(reg_name + ".TXWM", *this, 12, 1),
-      Reserved3(reg_name + ".Reserved3", *this, 9, 3),
-      RXWM(reg_name + ".RXWM", *this, 8, 1),
-      Reserved4(reg_name + ".Reserved4", *this, 5, 3),
-      TXEMPTY(reg_name + ".TXEMPTY", *this, 4, 1),
-      Reserved5(reg_name + ".Reserved5", *this, 1, 3),
+      regmodel::Reg<N>(reg_name, memory, offset, 0x3f, 0x3f, 0),
+      Reserved0(reg_name + ".Reserved0", *this, 6, 26),
+      IDLE(reg_name + ".IDLE", *this, 5, 1),
+      READY(reg_name + ".READY", *this, 4, 1),
+      TXWM(reg_name + ".TXWM", *this, 3, 1),
+      RXWM(reg_name + ".RXWM", *this, 2, 1),
+      TXEMPTY(reg_name + ".TXEMPTY", *this, 1, 1),
       RXFULL(reg_name + ".RXFULL", *this, 0, 1)
     {
       this->set_read_write_restrictions(memory);
@@ -531,15 +527,10 @@ class EVENT_ENABLE_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator<<=;
     regmodel::Bitfield<N> Reserved0;
     regmodel::Bitfield<N> IDLE;
-    regmodel::Bitfield<N> Reserved1;
     regmodel::Bitfield<N> READY;
-    regmodel::Bitfield<N> Reserved2;
     regmodel::Bitfield<N> TXWM;
-    regmodel::Bitfield<N> Reserved3;
     regmodel::Bitfield<N> RXWM;
-    regmodel::Bitfield<N> Reserved4;
     regmodel::Bitfield<N> TXEMPTY;
-    regmodel::Bitfield<N> Reserved5;
     regmodel::Bitfield<N> RXFULL;
 };
 

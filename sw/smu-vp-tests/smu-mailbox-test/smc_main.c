@@ -3,12 +3,13 @@
  * SMC half of the SEP->SMC mailbox interrupt test.
  *
  * Covers the path RTL builds as
- *   axil_mailbox.inbound_interrupt_o -> sep.sv smc_mailbox_interrupt_o
+ *   axil_mailbox.outbound_interrupt_o -> sep.sv smc_mailbox_interrupt_o
  *   -> smu.sv sep_mailbox_interrupts -> smc_peripherals.sv
  *      peripheral_interrupts_o[7:0] -> PLIC source 257 + channel.
  *
- * The SMC arms channel 0's inbound side, tells the SEP to push, then checks
- * that the interrupt becomes pending at the PLIC, that the payload reads back
+ * The SMC arms channel 0's outbound write-threshold (that pin is what now
+ * leaves the SEP towards the SMC), tells the SEP to push, then checks that
+ * the interrupt becomes pending at the PLIC, that the payload reads back
  * through inbound READ_DATA, and that acknowledging IRQS drops the line.
  */
 #include "smc_common.h"
@@ -34,11 +35,13 @@ extern int printf(const char *fmt, ...);
 #define MBOX_WRITE_DATA      0x00u
 #define MBOX_READ_DATA       0x08u
 #define MBOX_STATUS          0x10u
+#define MBOX_WIRQT           0x20u
 #define MBOX_RIRQT           0x28u
 #define MBOX_IRQS            0x30u
 #define MBOX_IRQEN           0x38u
 #define MBOX_IRQP            0x40u
 
+#define MBOX_IRQ_WRITE_THRESHOLD (1u << 0)
 #define MBOX_IRQ_READ_THRESHOLD  (1u << 1)
 
 #define NWORDS               4u
@@ -68,7 +71,8 @@ int main(void)
 {
     printf("\n=== SMU mailbox interrupt test (SMC side) ===\n");
 
-    const uint64_t inbound = MBOX_INBOUND(0);
+    const uint64_t inbound  = MBOX_INBOUND(0);
+    const uint64_t outbound = MBOX_OUTBOUND(0);
 
     uint32_t spins = 0;
     while (REG32(HS_READY) != READY_TOKEN) {
@@ -78,11 +82,12 @@ int main(void)
         }
     }
 
-    /* Arm channel 0's inbound side: any queued word raises the read-threshold
-     * source, and enable only that source so IRQP is unambiguous. */
-    REG32(inbound + MBOX_RIRQT) = 0u;
-    REG32(inbound + MBOX_IRQS)  = 0x7u;      /* W1C — start clean */
-    REG32(inbound + MBOX_IRQEN) = MBOX_IRQ_READ_THRESHOLD;
+    /* Arm channel 0's outbound write-threshold: SEP's outbound push raises
+     * outbound_interrupt_o, which sep.sv now routes to the SMC PLIC. Payload
+     * still pops from the inbound READ_DATA port. */
+    REG32(outbound + MBOX_WIRQT) = 0u;
+    REG32(outbound + MBOX_IRQS)  = 0x7u;      /* W1C — start clean */
+    REG32(outbound + MBOX_IRQEN) = MBOX_IRQ_WRITE_THRESHOLD;
 
     if (plic_pending(SEP_MAILBOX_0_INTERRUPT_ID)) {
         printf("FAIL: PLIC source %u pending before the SEP pushed anything\n",
@@ -91,19 +96,19 @@ int main(void)
     }
 
     REG32(HS_GO) = GO_TOKEN;
-    printf("SMC armed inbound channel 0 and released the SEP\n");
+    printf("SMC armed outbound channel 0 and released the SEP\n");
 
     if (!wait_plic_pending(SEP_MAILBOX_0_INTERRUPT_ID)) {
         printf("FAIL: PLIC source %u never went pending (IRQS=0x%x IRQP=0x%x)\n",
                SEP_MAILBOX_0_INTERRUPT_ID,
-               REG32(inbound + MBOX_IRQS), REG32(inbound + MBOX_IRQP));
+               REG32(outbound + MBOX_IRQS), REG32(outbound + MBOX_IRQP));
         return 1;
     }
     printf("PLIC source %u pending from mailbox channel 0\n",
            SEP_MAILBOX_0_INTERRUPT_ID);
 
-    if ((REG32(inbound + MBOX_IRQP) & MBOX_IRQ_READ_THRESHOLD) == 0u) {
-        printf("FAIL: IRQP read-threshold bit clear while the PLIC sees the line\n");
+    if ((REG32(outbound + MBOX_IRQP) & MBOX_IRQ_WRITE_THRESHOLD) == 0u) {
+        printf("FAIL: IRQP write-threshold bit clear while the PLIC sees the line\n");
         return 1;
     }
 
@@ -118,8 +123,8 @@ int main(void)
     printf("SMC drained %u words from inbound channel 0\n", NWORDS);
 
     /* Draining clears the threshold condition; acknowledge the latched status. */
-    REG32(inbound + MBOX_IRQS) = 0x7u;
-    if ((REG32(inbound + MBOX_IRQP) & MBOX_IRQ_READ_THRESHOLD) != 0u) {
+    REG32(outbound + MBOX_IRQS) = 0x7u;
+    if ((REG32(outbound + MBOX_IRQP) & MBOX_IRQ_WRITE_THRESHOLD) != 0u) {
         printf("FAIL: IRQP still asserted after drain and acknowledge\n");
         return 1;
     }

@@ -62,13 +62,13 @@ static void configure_spi_mux_ot(void)
 
 static void init_spi_controller(void)
 {
-    SPI_CONTROLLER_CTRL_reg_u ctrl;
-    ctrl.val = SPI_CONTROLLER_CTRL_REG_DEFAULT;
+    SPI_CONTROLLER_CONTROL_reg_u ctrl;
+    ctrl.val = SPI_CONTROLLER_CONTROL_REG_DEFAULT;
     ctrl.f.spien = 1;
     ctrl.f.output_en = 1;
-    WRITE_REG(SPI_CONTROLLER_CTRL_REG_ADDR, ctrl.val);
+    WRITE_REG(SPI_CONTROLLER_CONTROL_REG_ADDR, ctrl.val);
 
-    SPI_CONTROLLER_CFG_reg_u cfg;
+    SPI_CONTROLLER_CONFIGOPTS_reg_u cfg;
     cfg.val = 0;
     cfg.f.clkdiv    = SPI_CLKDIV;
     cfg.f.cpol      = 0;
@@ -76,7 +76,7 @@ static void init_spi_controller(void)
     cfg.f.csnidle   = 2;
     cfg.f.csnlead   = 2;
     cfg.f.csntrail  = 2;
-    WRITE_REG(SPI_CONTROLLER_CFG_REG_ADDR, cfg.val);
+    WRITE_REG(SPI_CONTROLLER_CONFIGOPTS_REG_ADDR, cfg.val);
 
     WRITE_REG(SPI_CONTROLLER_CSID_REG_ADDR, 0);
     WRITE_REG(SPI_CONTROLLER_ERROR_STATUS_REG_ADDR, 0xFFFFFFFF);
@@ -120,7 +120,7 @@ int main(void)
     init_spi_controller();
     printf("SPI controller enabled: CLKDIV=%d, CPOL=0, CPHA=0\n\n", SPI_CLKDIV);
 
-    SPI_CONTROLLER_CMD_reg_u cmd;
+    SPI_CONTROLLER_COMMAND_reg_u cmd;
 
     /* ----------------------------------------------------------------
      * Segment 1: TX JEDEC ID command (0x9F), keep CS low
@@ -136,7 +136,7 @@ int main(void)
     cmd.f.csaat     = 1;    /* keep CS# low */
     cmd.f.speed     = 0;    /* Standard SPI */
     cmd.f.direction = 2;    /* TX only */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     printf("  CMD: DIR=TX, SPEED=Std, LEN=0(1B), CSAAT=1\n");
 
     /* ----------------------------------------------------------------
@@ -150,7 +150,7 @@ int main(void)
     cmd.f.csaat     = 0;    /* release CS# after */
     cmd.f.speed     = 0;    /* Standard SPI */
     cmd.f.direction = 1;    /* RX only */
-    WRITE_REG(SPI_CONTROLLER_CMD_REG_ADDR, cmd.val);
+    WRITE_REG(SPI_CONTROLLER_COMMAND_REG_ADDR, cmd.val);
     printf("  CMD: DIR=RX, SPEED=Std, LEN=2(3B), CSAAT=0\n");
 
     if (wait_for_idle(TIMEOUT_LIMIT)) {
