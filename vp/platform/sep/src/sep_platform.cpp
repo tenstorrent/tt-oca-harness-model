@@ -485,6 +485,7 @@ void och_sep_ss::create_modules() {
 // -----------------------------------------------------------------------------
 void och_sep_ss::module_bind() {
     rsu_module->rst_ni(reset_signal);
+    rsu_module->cold_rst_ni(cold_reset_signal);
     rsu_module->reset_req_i(aon_rst_req_signal);
     stdout_dev->nmi_vec_o(nmi_vec_signal);
     cpu_ctrl->rst_ni(reset_signal);
@@ -907,6 +908,7 @@ void och_sep_ss::module_bind() {
     reset_ctrl->abr_rst_ni(abr_sw_rst_n_signal);
 
     // Remaining peripherals — reset
+    scratch_cold->cold_rst_ni(cold_reset_signal);
     scratch_warm->rst_ni(reset_signal);
     local_alias_remap->rst_ni(reset_signal);
     ap_output_remap->rst_ni(reset_signal);

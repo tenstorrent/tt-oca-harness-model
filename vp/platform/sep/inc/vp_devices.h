@@ -71,17 +71,26 @@ private:
 
 // Reset generation unit — drives the global reset signal at simulation start
 // and re-issues a reset pulse when the AON timer/watchdog requests one.
+//
+// Two outputs, because the SEP has two reset domains. `rst_ni` pulses for both
+// power-on and a watchdog bite; `cold_rst_ni` pulses for power-on only. In RTL
+// (sep_system_csr.sv) the cold scratch bank takes `arst_n(rst_ni)` while the warm
+// bank takes `arst_n(rst_ni && rst_warm_ni)`, so cold-domain state survives a
+// watchdog reset. vector.S depends on that: it reads the warm-handler slot out of
+// cold_scratch[7] after the reset that the handler is meant to service.
 class reset_generation_unit : public sc_module {
 public:
     sc_out<bool> rst_ni;
+    sc_out<bool> cold_rst_ni;
     sc_in<bool>  reset_req_i;
 
     SC_HAS_PROCESS(reset_generation_unit);
 
-    void end_of_elaboration() { rst_ni.write(true); }
+    void end_of_elaboration() { rst_ni.write(true); cold_rst_ni.write(true); }
 
     reset_generation_unit(sc_module_name name)
-        : sc_module(name), rst_ni("rst_ni"), reset_req_i("reset_req_i") {
+        : sc_module(name), rst_ni("rst_ni"), cold_rst_ni("cold_rst_ni"),
+          reset_req_i("reset_req_i") {
         SC_THREAD(por_thread);
         SC_THREAD(external_reset_thread);
         SC_METHOD(external_reset_method);
@@ -94,16 +103,21 @@ private:
     sc_event external_reset_ev_;
     bool     external_reset_in_progress_ = false;
 
-    void do_reset_pulse() {
+    void do_reset_pulse(bool cold) {
         std::cout << "[" << sc_core::sc_time_stamp()
-                  << "] reset_generation_unit: issuing reset pulse\n";
+                  << "] reset_generation_unit: issuing "
+                  << (cold ? "cold" : "warm") << " reset pulse\n";
         rst_ni->write(false);
+        if (cold)
+            cold_rst_ni->write(false);
         wait(10, SC_NS);
         rst_ni->write(true);
+        if (cold)
+            cold_rst_ni->write(true);
     }
 
     void por_thread() {
-        do_reset_pulse();
+        do_reset_pulse(true);
         if (reset_req_i.read())
             wait(reset_req_i.negedge_event());
         start_monitor_ev_.notify();
@@ -123,7 +137,7 @@ private:
             external_reset_in_progress_ = true;
             std::cout << "[" << sc_core::sc_time_stamp()
                       << "] reset_generation_unit: external reset request asserted\n";
-            do_reset_pulse();
+            do_reset_pulse(false);
             wait(reset_req_i.negedge_event());
             external_reset_in_progress_ = false;
         }

@@ -19,6 +19,14 @@ public:
 
     explicit sep_scratch_cold_ip(sc_module_name n);
 
+    /// Active-low cold (power-on) reset — clears all scratch registers when asserted.
+    /// Deliberately NOT the global reset: in RTL the cold bank takes
+    /// `arst_n(rst_ni)` while the warm bank takes `arst_n(rst_ni && rst_warm_ni)`
+    /// (sep_system_csr.sv), so this bank retains its contents across a watchdog
+    /// reset. The ROM's warm-handler slot lives here and is read after exactly
+    /// that reset.
+    sc_core::sc_in<bool> cold_rst_ni;
+
     // CCI parameters — controllable via accellera_config.ini
     regmodel::Param<bool> sim_out_enable;
     regmodel::Param<bool> sep_status_enable;
@@ -26,6 +34,8 @@ public:
     RegLogger             logger;
 
 private:
+    void cold_reset_handler();
+
     virt_console::VirtConsoleDecoder vconsole_decoder_;
     sep_status_report::StatusDecoder     status_decoder_;
 };

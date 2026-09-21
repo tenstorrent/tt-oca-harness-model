@@ -10,6 +10,7 @@
 
 sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     : sep_scratch_cold_base(n, "sep_scratch_cold", 8 * sizeof(unsigned long long))
+    , cold_rst_ni("cold_rst_ni")
     , sim_out_enable("sim_out.enable", true)
     , sep_status_enable("sep_status.enable", true)
     , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
@@ -17,6 +18,10 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
+
+    SC_METHOD(cold_reset_handler);
+    sensitive << cold_rst_ni;
+    dont_initialize();
 
     reset_all_registers();
 
@@ -108,4 +113,12 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
             return true;
         },
         SCRATCH[6].offset);
+}
+
+void sep_scratch_cold_ip::cold_reset_handler()
+{
+    if (!cold_rst_ni.read()) {
+        reset_all_registers();
+        REG_INFO(1, logger) << "cold reset asserted — scratch bank cleared" << std::endl;
+    }
 }
