@@ -86,7 +86,14 @@ public:
 
     SC_HAS_PROCESS(reset_generation_unit);
 
-    void end_of_elaboration() { rst_ni.write(true); cold_rst_ni.write(true); }
+    // Power-on reset is ASSERTED here, not deasserted. sc_signal writes are
+    // delta-delayed, so a thread asserting at t=0 is invisible to processes
+    // evaluated in that same phase -- the ISS run thread reads the stale value,
+    // starts executing, and the pulse then resets it, running the ROM twice.
+    // Asserted from elaboration there is no such window. Nothing sees a negedge
+    // at t=0 as a result, which is what silicon does too: reset is already low
+    // when power comes up, so peripherals must come up reset by construction.
+    void end_of_elaboration() { rst_ni.write(false); cold_rst_ni.write(false); }
 
     reset_generation_unit(sc_module_name name)
         : sc_module(name), rst_ni("rst_ni"), cold_rst_ni("cold_rst_ni"),
@@ -99,9 +106,21 @@ public:
     }
 
 private:
+    static constexpr int RESET_HOLD_NS = 10;
+    const sc_core::sc_time RESET_HOLD{RESET_HOLD_NS, sc_core::SC_NS};
+
     sc_event start_monitor_ev_;
     sc_event external_reset_ev_;
     bool     external_reset_in_progress_ = false;
+
+    // Hold the already-asserted power-on reset, then release both domains.
+    void release_power_on_reset() {
+        std::cout << "[" << sc_core::sc_time_stamp()
+                  << "] reset_generation_unit: releasing cold reset\n";
+        wait(RESET_HOLD);
+        rst_ni->write(true);
+        cold_rst_ni->write(true);
+    }
 
     void do_reset_pulse(bool cold) {
         std::cout << "[" << sc_core::sc_time_stamp()
@@ -110,14 +129,14 @@ private:
         rst_ni->write(false);
         if (cold)
             cold_rst_ni->write(false);
-        wait(10, SC_NS);
+        wait(RESET_HOLD);
         rst_ni->write(true);
         if (cold)
             cold_rst_ni->write(true);
     }
 
     void por_thread() {
-        do_reset_pulse(true);
+        release_power_on_reset();
         if (reset_req_i.read())
             wait(reset_req_i.negedge_event());
         start_monitor_ev_.notify();
