@@ -29,7 +29,7 @@ efuse_basetest::Register_Property_t reg_map[] = {
     {sep_efuse::SYS_UID_OFFSET,               efuse_basetest::SYS_UID_READ,               efuse_basetest::SYS_UID_WRITE,               efuse_basetest::SYS_UID_RESET,               "SYS_UID"},
     {sep_efuse::STATUS_RPT_OFFSET,            efuse_basetest::STATUS_RPT_READ,            efuse_basetest::STATUS_RPT_WRITE,            efuse_basetest::STATUS_RPT_RESET,            "STATUS_RPT"},
     {sep_efuse::SEP_ROM_CTRL_OFFSET,          efuse_basetest::SEP_ROM_CTRL_READ,          efuse_basetest::SEP_ROM_CTRL_WRITE,          efuse_basetest::SEP_ROM_CTRL_RESET,          "SEP_ROM_CTRL"},
-    {sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET, efuse_basetest::SEP_SPI_CTRL_FIELD_EN_READ, efuse_basetest::SEP_SPI_CTRL_FIELD_EN_WRITE, efuse_basetest::SEP_SPI_CTRL_FIELD_EN_RESET, "SEP_SPI_CTRL_FIELD_EN"},
+    {sep_efuse::SYSCLK_FREQ_MHZ_OFFSET, efuse_basetest::SYSCLK_FREQ_MHZ_READ, efuse_basetest::SYSCLK_FREQ_MHZ_WRITE, efuse_basetest::SYSCLK_FREQ_MHZ_RESET, "SYSCLK_FREQ_MHZ"},
     {sep_efuse::CHIPLET_PUBK_HASH0_OFFSET, efuse_basetest::CHIPLET_PUBK_HASH0_READ, efuse_basetest::CHIPLET_PUBK_HASH0_WRITE, efuse_basetest::CHIPLET_PUBK_HASH0_RESET, "CHIPLET_PUBK_HASH0"},
     {sep_efuse::CHIPLET_PUBK_HASH1_OFFSET, efuse_basetest::CHIPLET_PUBK_HASH1_READ, efuse_basetest::CHIPLET_PUBK_HASH1_WRITE, efuse_basetest::CHIPLET_PUBK_HASH1_RESET, "CHIPLET_PUBK_HASH1"},
     {sep_efuse::REQUIRED_SIGNERS_OFFSET, efuse_basetest::REQUIRED_SIGNERS_READ, efuse_basetest::REQUIRED_SIGNERS_WRITE, efuse_basetest::REQUIRED_SIGNERS_RESET, "REQUIRED_SIGNERS"},

@@ -235,7 +235,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     //
     // Offsets below are smc_global-local (the bus strips the 0x40000000 base).
     // Layout mirrors fw/sep/bootcode/include/sep_smc_interface.h:
-    //   scratch[i] @ SMC_SCRATCH_BASE_OFFSET(0x10100) + (i << 3)
+    //   scratch[i] @ SMC_SCRATCH_BASE_OFFSET(0x39080) + (i << 3)
     //   SMC SRAM   @ SMC_SRAM_OFFSET(0x60000), 1 MiB; scratch offsets are SRAM-relative
     //
     // In forward mode (SMU platform) the window is backed by the real SMC, and
@@ -245,7 +245,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         std::cout << "och_sep_ss: smc_global window forwards to the SMC (SMU mode); "
                      "boot-handshake seeding is owned by the SMC firmware" << std::endl;
     } else {
-        constexpr uint64_t SMC_SCRATCH_BASE = 0x10100;   // SMC_SCRATCH_BASE_OFFSET
+        constexpr uint64_t SMC_SCRATCH_BASE = 0x39080;   // SMC_SCRATCH_BASE_OFFSET
         auto scratch_local = [](unsigned idx) -> uint64_t {
             return SMC_SCRATCH_BASE + (static_cast<uint64_t>(idx) << 3);
         };
@@ -320,14 +320,20 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
             }
         }
 
-        // DFT_CTRL_STATUS_SMU (SMC reg @ 0xF800): memory-repair / MBIST status. The ROM's
-        // dft_mem_repair_gate() (rom_main.c) halts with ROM_ERR_DFT_GATE_BLOCKED unless
-        // MEM_REPAIR_SUCCESS (bit 1) is set. Present REPAIR_DONE|REPAIR_SUCCESS (0x3) — the
-        // (emulated) SMC reports a clean memory-repair pass.
-        constexpr uint64_t SMC_DFT_CTRL_STATUS = 0xF800;  // SMC_DFT_CTRL_STATUS_SMU_OFFSET
-        const uint32_t dft_status = 0x3u;  // MEM_REPAIR_DONE | MEM_REPAIR_SUCCESS
-        smc_global->load_data(reinterpret_cast<const char*>(&dft_status),
-                              SMC_DFT_CTRL_STATUS, sizeof(dft_status));
+        // DFX_CTRL_STATUS_SMU: memory-repair and MBIST status, reported by the
+        // (emulated) SMC. The pre-C boot gate in vector.S reads this register and
+        // fails closed, so every bit the gate tests has to be present or the ROM
+        // halts with ROM_ERR_DFT_GATE_BLOCKED before it reaches C. It checks both
+        // arms: mem_repair_success, then mbist_done followed by mbist_pass, with
+        // mbist_abort clear. Bit positions are dfx_ctrl_status.rdl; the offset is
+        // SMC_DFX_CTRL_STATUS_SMU_OFFSET in sep_smc_interface.h.
+        constexpr uint64_t SMC_DFX_CTRL_STATUS = 0xB800;
+        const uint32_t dfx_status = (1u << 0)    // mem_repair_done
+                                  | (1u << 1)    // mem_repair_success
+                                  | (1u << 4)    // mbist_done
+                                  | (1u << 8);   // mbist_pass
+        smc_global->load_data(reinterpret_cast<const char*>(&dfx_status),
+                              SMC_DFX_CTRL_STATUS, sizeof(dfx_status));
 
         // SMC_EXTERNAL straps (STRAPS_LO/HI @ +0x5800), composed from CCI params so
         // the ROM boot mode is invocation-selectable. init_straps() reads these

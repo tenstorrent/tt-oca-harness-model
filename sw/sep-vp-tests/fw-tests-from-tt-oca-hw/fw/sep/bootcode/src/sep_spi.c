@@ -50,10 +50,6 @@
 #include "sep_spi.h"
 #include "spi_tlv.h"
 
-#ifndef BIT
-#define BIT(n) (1u << (n))
-#endif
-
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #define pr_debug(...) ((void)0)
@@ -84,18 +80,18 @@ void spi_set_sysclk(uint16_t mhz) { sysclk_freq_mhz = mhz; }
 
 #if defined(TEST_BUILD)
 // DV-only frequency-robust SPI clocking. Returns the core frequency (MHz) from
-// the sensed eFuse smu_pll_sysclk field, or 0 when blank. In the SEP UVM model
+// the sensed eFuse sysclk_freq_mhz field, or 0 when blank. In the SEP UVM model
 // core_clk is plain-generated (e.g. 800 MHz) even when the bl0_pll_clk strap is
 // deasserted and ROM pll_init() selected refclk, so pll_init()'s 100 MHz value
 // does not match the active clock and the SPI divider would be wrong; directed
 // eFuse preloads carry the real core frequency here. Compiled only into
 // TEST_BUILD images: the release ROM keeps pll_init()'s result, where
-// smu_pll_sysclk is the *configured* PLL frequency and is not necessarily the
+// sysclk_freq_mhz is the *configured* PLL frequency and is not necessarily the
 // active SPI clock when refclk is selected.
 static uint16_t spi_fuse_sysclk_mhz(void) {
-    SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_reg_u spi_ctrl;
-    spi_ctrl.val = mmio_read32(SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR);
-    return (uint16_t)spi_ctrl.f.smu_pll_sysclk;
+    SEP_EFUSE_MAP_SYSCLK_FREQ_MHZ_reg_u sysclk_fuse;
+    sysclk_fuse.val = mmio_read32(SEP_EFUSE_MAP_SYSCLK_FREQ_MHZ_REG_ADDR);
+    return (uint16_t)sysclk_fuse.f.sysclk_freq_mhz;
 }
 #endif /* TEST_BUILD */
 
@@ -145,7 +141,7 @@ static const struct spi_param_tlv spi_initial_params[] = {
         .misc = 0x00000000u,
         .rb_valid_time = 0x00002710u,
     },
-    // Repeats (fallback when entries overridden by fuses).
+    // Repeats of the three sets above, retried after a failed discovery pass.
     [3] = {
         .discovery_ctrl = SPI_DISCOVERY_CTRL,
         .dq_timing = SPI_DQ_TIMING,
@@ -176,49 +172,6 @@ static const struct spi_param_tlv spi_initial_params[] = {
         .misc = 0x00000000u,
         .rb_valid_time = 0x00002710u,
     },
-};
-
-#define NUM_FUSE_BANKS 3
-struct fuse_map {
-    uint32_t fuse_base[NUM_FUSE_BANKS];
-    uint32_t fuse_offset;
-    uint32_t reg;
-};
-
-// Ordering must match bits in SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN.spi_control_field_en.
-static const struct fuse_map fuse_map[8] = {
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x00u,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_DISCOVERY_CTRL_REG_ADDR},
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x04u,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQ_TIMING_REG_ADDR},
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x08u,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DQS_TIMING_REG_ADDR},
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x0Cu,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_GATE_LPBK_CTRL_REG_ADDR},
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x10u,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_SLAVE_CTRL_REG_ADDR},
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x14u,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_DLL_MASTER_CTRL_REG_ADDR},
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x18u,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_PHY_MISC_REG_ADDR},
-    {.fuse_base = {SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR, SEP_EFUSE_MAP_RESERVED_0_REG_ADDR,
-                   SEP_EFUSE_MAP_RESERVED_1_REG_ADDR},
-     .fuse_offset = 0x1Cu,
-     .reg = SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_INIT_RB_VALID_TIME_REG_ADDR},
 };
 
 // Configure SPI mux: select Cadence xSPI controller and clear cs_force_high.
@@ -252,57 +205,6 @@ static void sep_spi_delay(unsigned int spi_cycles) {
     for (; spi_cycles > 0; spi_cycles--) {
         // Volatile read so should not be optimised away.
         dummy_spi_ctrl.val = mmio_read32(SEP_AXI_EXTENSION_OCH_SEP_CDNS_SPI_CTRL_SPI_CTRL_REG_ADDR);
-    }
-}
-
-static uint32_t spi_read_fuse_ctrl(int index) {
-    switch (index) {
-    case 0:
-        return mmio_read32(SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_REG_ADDR);
-    case 1:
-        return mmio_read32(SEP_EFUSE_MAP_RESERVED_0_REG_ADDR);
-    case 2:
-        return mmio_read32(SEP_EFUSE_MAP_RESERVED_1_REG_ADDR);
-    default:
-        return 0;
-    }
-}
-
-static bool spi_check_fuses(int index) {
-    SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_reg_u spi_fuse;
-
-    if (index >= NUM_FUSE_BANKS) {
-        return false;
-    }
-
-    spi_fuse.val = spi_read_fuse_ctrl(index);
-    simputshex32("FUSE INDEX: ", (uint32_t)index);
-    simputshex32("SPI_CTRL_FIELD_EN: ", (uint32_t)spi_fuse.f.spi_control_field_en);
-
-    if (!spi_fuse.f.spi_control_field_en) {
-        simputs("FUSE: No SPI config fuses enabled\n");
-        return false;
-    }
-
-    return true;
-}
-
-static void set_fuse_parameter(int index) {
-    SEP_EFUSE_MAP_SEP_SPI_CTRL_FIELD_EN_reg_u spi_fuse;
-
-    if (index >= NUM_FUSE_BANKS) {
-        return;
-    }
-    spi_fuse.val = spi_read_fuse_ctrl(index);
-
-    for (unsigned i = 0; i < ARRAY_SIZE(fuse_map); i++) {
-        const struct fuse_map *map = &fuse_map[i];
-        uint32_t val;
-
-        if (spi_fuse.f.spi_control_field_en & BIT(i)) {
-            val = mmio_read32(map->fuse_base[index] + map->fuse_offset);
-            mmio_write32(map->reg, val);
-        }
     }
 }
 
@@ -514,10 +416,6 @@ static uint32_t spi_init_phase1(enum side side, struct spi_param_tlv *params) {
         program_spi_clk_div(div);
 
         spi_param_apply(&spi_initial_params[i]);
-
-        if (spi_check_fuses((int)i)) {
-            set_fuse_parameter((int)i);
-        }
 
         spi_controller_enable();
 

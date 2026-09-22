@@ -82,6 +82,7 @@ SC_MODULE(Tb) {
         // must nevertheless carry the RTL reset value from elaboration.
         wait(sc_core::SC_ZERO_TIME);
         assert(nmi_vec_sig.read() == 0xC0000100u);
+        std::cout << "[PASS] T0: nmi_vec_o initialized before any reset edge\n";
 
         // Prime to high, then assert (falling edge fires reset_handler), then deassert
         rst_n_sig.write(true);

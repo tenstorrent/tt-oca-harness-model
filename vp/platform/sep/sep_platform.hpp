@@ -232,6 +232,10 @@ private:
     // Signals — reset + per-IP clocks, interrupts, alerts
     // =========================================================================
     sc_signal<bool, SC_MANY_WRITERS> reset_signal;
+
+    // Cold (power-on) reset. Pulses only at power-on, where reset_signal also
+    // pulses on a watchdog bite, so cold-domain state survives the latter.
+    // Only reset_generation_unit drives it.
     sc_signal<bool>                  cold_reset_signal;
 
     // Per-IP software reset signals driven by sep_reset_ctrl_ip

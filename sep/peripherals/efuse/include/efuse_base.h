@@ -58,7 +58,7 @@ public:
           SYS_UID          (std::string(name) + ".SYS_UID",             memory, sep_efuse::SYS_UID_OFFSET/4, 1),
           STATUS_RPT       (std::string(name) + ".STATUS_RPT",          memory, sep_efuse::STATUS_RPT_OFFSET/4),
           SEP_ROM_CTRL     (std::string(name) + ".SEP_ROM_CTRL",        memory, sep_efuse::SEP_ROM_CTRL_OFFSET/4),
-          SEP_SPI_CTRL_FIELD_EN(std::string(name) + ".SEP_SPI_CTRL_FIELD_EN", memory, sep_efuse::SEP_SPI_CTRL_FIELD_EN_OFFSET/4),
+          SYSCLK_FREQ_MHZ  (std::string(name) + ".SYSCLK_FREQ_MHZ",     memory, sep_efuse::SYSCLK_FREQ_MHZ_OFFSET/4),
           CHIPLET_PUBK_HASH0     (std::string(name) + ".CHIPLET_PUBK_HASH0", memory, sep_efuse::CHIPLET_PUBK_HASH0_OFFSET/4, 1),
           CHIPLET_PUBK_HASH1     (std::string(name) + ".CHIPLET_PUBK_HASH1", memory, sep_efuse::CHIPLET_PUBK_HASH1_OFFSET/4, 1),
           CHIPLET_PUBK_PQC_HASH0 (std::string(name) + ".CHIPLET_PUBK_PQC_HASH0", memory, sep_efuse::CHIPLET_PUBK_PQC_HASH0_OFFSET/4, 1),
@@ -136,7 +136,7 @@ public:
     regmodel::RegVector<sep_efuse::SYS_UID_type<32>,          8> SYS_UID;
     sep_efuse::STATUS_RPT_type<32>            STATUS_RPT;
     sep_efuse::SEP_ROM_CTRL_type<32>          SEP_ROM_CTRL;
-    sep_efuse::SEP_SPI_CTRL_FIELD_EN_type<32> SEP_SPI_CTRL_FIELD_EN;
+    sep_efuse::SYSCLK_FREQ_MHZ_type<32>       SYSCLK_FREQ_MHZ;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH0;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_HASH1;
     regmodel::RegVector<sep_efuse::ro_stub_type<32>, 8>  CHIPLET_PUBK_PQC_HASH0;

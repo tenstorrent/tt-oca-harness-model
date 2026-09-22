@@ -248,8 +248,12 @@ behavior, not a small fix. Full detail in
 ### 3.8 No CPU-only (WDT-gated) reset domain — `sep_reset_ctrl` is the real owner of this signal
 
 Real RTL (`sep_reset_ctrl.sv`) computes `sep_cpu_reset_no = sep_reset_n & wdt_rst_ni` — a WDT bite
-resets only the CPU core, leaving ICCM/DCCM, `sep_scratch_warm`, and every other peripheral
-untouched (only `sep_reset_n`, not `wdt_rst_ni`, drives them). This VP has a single flat
+resets the CPU core and the warm reset domain derived from it, leaving ICCM/DCCM and the
+peripherals driven by `sep_reset_n` alone untouched. `sep_scratch_warm` is *not* among them:
+`sep_system_csr.sv` wires `u_sep_scratch_reg_warm` to `.arst_n(rst_ni && rst_warm_ni)` with
+`rst_warm_ni = sep_cpu_reset_no`, so a WDT bite clears it, and
+`sep_warm_cold_reset_scratch_test.py`'s `CHK-WARM-CLEAR` asserts that it does. The cold bank
+takes `.arst_n(rst_ni)` and is the one that survives. This VP has a single flat
 `reset_generation_unit` producing one `reset_signal` fanned out identically to every peripheral,
 including the CPU — there is no second, CPU-only reset domain anywhere, and `sep_reset_ctrl_ip`
 (the VP model of the peripheral that actually generates this signal in real hardware) has no
@@ -257,8 +261,11 @@ including the CPU — there is no second, CPU-only reset domain anywhere, and `s
 
 **Impact:** dormant today — confirmed no current firmware test depends on WDT-bite reset-domain
 separation (see the `sep_scratch_warm`/`sep_scratch_cold` and `sep_cpu_ctrl` REFERENCE_COUNTER
-investigations earlier this session). The moment a test asserts that SRAM/DCCM/`scratch_warm`
-content survives a WDT-triggered reset, this VP will diverge from real hardware.
+investigations earlier this session). The moment a test asserts that SRAM/DCCM content survives
+a WDT-triggered reset, this VP will diverge from real hardware. `scratch_warm` is not such a
+test: it is cleared by a WDT bite on both sides, so the VP already agrees there. The cold bank
+also agrees, since `sep_scratch_cold` takes its own power-on-only `cold_rst_ni` rather than the
+global reset.
 
 **Why deferred:** fixing it means adding a second reset domain VP-wide (a `cpu_reset_signal`
 distinct from `reset_signal`, with the CPU/PIC on the narrow one and everything else on the

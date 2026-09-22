@@ -48,8 +48,7 @@ static constexpr unsigned int SYS_PUBK_HASH_OFFSET          = 0x12C; ///< [8] ×
 static constexpr unsigned int SYS_UID_OFFSET                = 0x14C; ///< [8] × 4 bytes each
 static constexpr unsigned int STATUS_RPT_OFFSET             = 0x16C;
 static constexpr unsigned int SEP_ROM_CTRL_OFFSET           = 0x170;
-// RTL SYSCLK_FREQ_MHZ @0x174. Kept under the existing software name.
-static constexpr unsigned int SEP_SPI_CTRL_FIELD_EN_OFFSET  = 0x174;
+static constexpr unsigned int SYSCLK_FREQ_MHZ_OFFSET        = 0x174;
 static constexpr unsigned int CHIPLET_PUBK_HASH0_OFFSET     = 0x178; ///< [8]
 static constexpr unsigned int CHIPLET_PUBK_HASH1_OFFSET     = 0x198; ///< [8]
 static constexpr unsigned int REQUIRED_SIGNERS_OFFSET       = 0x1B8;
@@ -253,8 +252,8 @@ public:
         STATUS_RPT_READ_LOCK         (reg_name + ".STATUS_RPT_READ_LOCK",          *this,  1, 1),
         SEP_ROM_CTRL_WRITE_LOCK      (reg_name + ".SEP_ROM_CTRL_WRITE_LOCK",       *this,  2, 1),
         SEP_ROM_CTRL_READ_LOCK       (reg_name + ".SEP_ROM_CTRL_READ_LOCK",        *this,  3, 1),
-        SEP_SPI_CTRL_WRITE_LOCK      (reg_name + ".SEP_SPI_CTRL_WRITE_LOCK",       *this,  4, 1),
-        SEP_SPI_CTRL_READ_LOCK       (reg_name + ".SEP_SPI_CTRL_READ_LOCK",        *this,  5, 1),
+        SYSCLK_FREQ_MHZ_WRITE_LOCK   (reg_name + ".SYSCLK_FREQ_MHZ_WRITE_LOCK",    *this,  4, 1),
+        SYSCLK_FREQ_MHZ_READ_LOCK    (reg_name + ".SYSCLK_FREQ_MHZ_READ_LOCK",     *this,  5, 1),
         SEP_PUBLIC_KEY_HASH_0_WRITE_LOCK(reg_name + ".SEP_PUBLIC_KEY_HASH_0_WRITE_LOCK", *this, 6, 1),
         SEP_PUBLIC_KEY_HASH_0_READ_LOCK (reg_name + ".SEP_PUBLIC_KEY_HASH_0_READ_LOCK",  *this, 7, 1),
         SEP_PUBLIC_KEY_HASH_1_WRITE_LOCK(reg_name + ".SEP_PUBLIC_KEY_HASH_1_WRITE_LOCK", *this, 8, 1),
@@ -301,8 +300,8 @@ public:
     regmodel::Bitfield<N> STATUS_RPT_READ_LOCK;           ///< [1]     Prevents reads of STATUS_RPT
     regmodel::Bitfield<N> SEP_ROM_CTRL_WRITE_LOCK;        ///< [2]     Prevents further writes to SEP_ROM_CTRL
     regmodel::Bitfield<N> SEP_ROM_CTRL_READ_LOCK;         ///< [3]     Prevents reads of SEP_ROM_CTRL
-    regmodel::Bitfield<N> SEP_SPI_CTRL_WRITE_LOCK;        ///< [4]     Prevents further writes to SEP_SPI_CTRL_FIELD_EN
-    regmodel::Bitfield<N> SEP_SPI_CTRL_READ_LOCK;         ///< [5]     Prevents reads of SEP_SPI_CTRL_FIELD_EN
+    regmodel::Bitfield<N> SYSCLK_FREQ_MHZ_WRITE_LOCK;     ///< [4]     Prevents further writes to SYSCLK_FREQ_MHZ
+    regmodel::Bitfield<N> SYSCLK_FREQ_MHZ_READ_LOCK;      ///< [5]     Prevents reads of SYSCLK_FREQ_MHZ
     regmodel::Bitfield<N> SEP_PUBLIC_KEY_HASH_0_WRITE_LOCK; ///< [6]   Prevents further writes to PUBLIC_KEY_0
     regmodel::Bitfield<N> SEP_PUBLIC_KEY_HASH_0_READ_LOCK;  ///< [7]   Prevents reads of PUBLIC_KEY_0
     regmodel::Bitfield<N> SEP_PUBLIC_KEY_HASH_1_WRITE_LOCK; ///< [8]   Prevents further writes to PUBLIC_KEY_1
@@ -1224,27 +1223,26 @@ public:
 };
 
 /**
- * SEP_SPI_CTRL_FIELD_EN_type — SPI Controller Field Enable fuse
+ * SYSCLK_FREQ_MHZ_type — Configured sysclk PLL frequency fuse
  *
- * Read-only shadow; enables individual SPI controller configuration fields
- * and sets the SMU PLL system clock value.
+ * Read-only shadow. A zero sysclk_freq_mhz means the fuse was never provisioned,
+ * and the boot ROM's clock math falls back to the reference clock.
  *
  * Access : Read-Only (shadow loaded via backdoor)
  * Reset  : 0x00000000
  */
 template<unsigned int N>
-class SEP_SPI_CTRL_FIELD_EN_type : public regmodel::Reg<N>
+class SYSCLK_FREQ_MHZ_type : public regmodel::Reg<N>
 {
 public:
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
 
     // read_mask=0xFFFFFFFF, write_mask=0x0, reset=0x0
-    SEP_SPI_CTRL_FIELD_EN_type(std::string reg_name, memory_type &memory, unsigned int offset)
+    SYSCLK_FREQ_MHZ_type(std::string reg_name, memory_type &memory, unsigned int offset)
       : regmodel::Reg<N>(reg_name, memory, offset, 0xffffffff, 0x0, 0x0),
-        spi_control_field_en    (reg_name + ".spi_control_field_en",     *this,  0,  8),
-        smu_pll_sysclk          (reg_name + ".smu_pll_sysclk",           *this,  8, 11),
-        spi_control_field_en_rsvd(reg_name + ".spi_control_field_en_rsvd",*this, 19, 13)
+        sysclk_freq_mhz(reg_name + ".sysclk_freq_mhz", *this,  0, 11),
+        rsvd           (reg_name + ".rsvd",            *this, 11, 21)
     {
         this->set_read_write_restrictions(memory);
     }
@@ -1261,9 +1259,8 @@ public:
     using regmodel::Reg<N>::operator>>=;
     using regmodel::Reg<N>::operator<<=;
 
-    regmodel::Bitfield<N> spi_control_field_en;     ///< [7:0]   SPI control field enable bitmap
-    regmodel::Bitfield<N> smu_pll_sysclk;           ///< [18:8]  SMU PLL system clock setting
-    regmodel::Bitfield<N> spi_control_field_en_rsvd;///< [31:19]
+    regmodel::Bitfield<N> sysclk_freq_mhz;          ///< [10:0]  Configured sysclk PLL frequency in MHz; ignored if 0
+    regmodel::Bitfield<N> rsvd;                     ///< [31:11]
 };
 
 /**

@@ -17,7 +17,10 @@ class sep_scratch_cold_ip : public sep_scratch_cold_base
 public:
     SC_HAS_PROCESS(sep_scratch_cold_ip);
 
-    /// Active-low cold/power-on reset. Watchdog warm reset does not drive it.
+    /// Active-low cold (power-on) reset. Watchdog warm reset does not drive it.
+    /// In RTL the cold bank takes `arst_n(rst_ni)` while the warm bank takes
+    /// `arst_n(rst_ni && rst_warm_ni)` (sep_system_csr.sv), so this bank retains
+    /// its contents across a watchdog reset.
     sc_core::sc_in<bool> cold_rst_ni{"cold_rst_ni"};
 
     explicit sep_scratch_cold_ip(sc_module_name n);

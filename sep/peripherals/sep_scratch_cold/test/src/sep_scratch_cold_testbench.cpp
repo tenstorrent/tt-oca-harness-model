@@ -175,6 +175,49 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     }
 
     // =========================================================================
+    // FUNC-SCRATCH-001b: a cold_rst_ni pulse clears programmed state
+    //
+    // Distinct from 001, which calls reset_all_registers() directly and so
+    // passes for a model whose port is not wired to anything. This drives the
+    // port, which is the half that matters: the ROM reads its warm-handler slot
+    // out of this bank, and a bank that never re-clears hands it stale content.
+    // =========================================================================
+    void test_cold_reset_clears_state()
+    {
+        const std::string TEST = "FUNC-SCRATCH-001b: cold_rst_ni clears state";
+        report_test_start(TEST);
+
+        for (unsigned i = 0u; i < 8u; ++i)
+            scratch_write(i, 0xDEADBEEFu);
+
+        for (unsigned i = 0u; i < 8u; ++i) {
+            if (scratch_read(i) != 0xDEADBEEFu) {
+                report_test_fail(TEST, "entries did not hold programmed values");
+                return;
+            }
+        }
+
+        // cold_reset_handler is an SC_METHOD on the port, so the scheduler has to
+        // run for the edge to be delivered — hence real time either side.
+        cold_rst_n.write(false);
+        wait(1, sc_core::SC_NS);
+        cold_rst_n.write(true);
+        wait(1, sc_core::SC_NS);
+
+        for (unsigned i = 0u; i < 8u; ++i) {
+            uint32_t v = scratch_read(i);
+            if (v != 0u) {
+                std::ostringstream oss;
+                oss << "SCRATCH[" << i << "] = 0x" << std::hex << v
+                    << " after cold reset, expected 0x0";
+                report_test_fail(TEST, oss.str());
+                return;
+            }
+        }
+        report_test_pass(TEST);
+    }
+
+    // =========================================================================
     // FUNC-SCRATCH-002: Basic read/write
     // =========================================================================
     void test_basic_rw()
@@ -873,6 +916,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
                   << std::string(72, '=') << std::endl;
 
         test_reset_values();
+        test_cold_reset_clears_state();
         test_basic_rw();
         test_register_independence();
         test_reserved_bits();
