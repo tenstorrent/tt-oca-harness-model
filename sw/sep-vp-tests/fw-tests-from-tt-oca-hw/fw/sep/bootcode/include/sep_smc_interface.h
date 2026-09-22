@@ -58,7 +58,7 @@ static inline uint32_t sep_get_smc_base(void) {
 #define SMC_SRAM_SIZE_BYTES         0x100000u   // 1 MiB
 
 // DFX_CTRL_STATUS_SMU register — memory repair + MBIST status (merged into single register).
-#define SMC_DFX_CTRL_STATUS_SMU_OFFSET  0xF800u
+#define SMC_DFX_CTRL_STATUS_SMU_OFFSET  0xB800u
 
 // DFX_CTRL_STATUS bitfield (same for SOC and SEP_SMC views).
 #define DFT_STATUS_MEM_REPAIR_DONE_BIT      0

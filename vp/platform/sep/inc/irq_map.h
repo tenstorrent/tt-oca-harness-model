@@ -43,9 +43,14 @@
 //   sep_internal_interrupts[35]     = intr_abr_notif;
 //   sep_internal_interrupts[36]     = entropy_pool_low;
 //   sep_internal_interrupts[37]     = entropy_pool_fill_stall;
+//   sep_internal_interrupts[38]     = entropy_pool_pointer_fault;
+//   sep_internal_interrupts[39]     = token_match_fault;
+//   sep_internal_interrupts[40]     = dma_reg_bridge_fault;
+//   sep_internal_interrupts[41]     = dma_host_integrity_or_fabric_fault;
+//   sep_internal_interrupts[42]     = peripheral_reg_bridge_fault;
 //
-// NUM_INTERNAL_IRQS = 38 (sep_pkg.sv), so the internal sources fill PIC sources
-// 1-38 and extintsrc_req takes 39-255. The external ones have no VP source yet:
+// NUM_INTERNAL_IRQS = 43 (sep_pkg.sv), so the internal sources fill PIC sources
+// 1-43 and extintsrc_req takes 44-255. The external ones have no VP source yet:
 // och_sep_ss drives no boundary port for them, so they stay tied low.
 // =============================================================================
 
@@ -97,3 +102,8 @@ const unsigned int ABR_ERROR_IRQ            = 35;  //   [34] intr_abr_error
 const unsigned int ABR_NOTIF_IRQ            = 36;  //   [35] intr_abr_notif
 const unsigned int ENTROPY_POOL_LOW_IRQ     = 37;  //   [36] entropy_pool_low (no VP model)
 const unsigned int ENTROPY_POOL_STALL_IRQ   = 38;  //   [37] entropy_pool_fill_stall (no VP model)
+const unsigned int ENTROPY_POOL_POINTER_FAULT_IRQ = 39; // [38] no VP source yet
+const unsigned int TOKEN_MATCH_FAULT_IRQ          = 40; // [39] no VP source yet
+const unsigned int DMA_REG_BRIDGE_FAULT_IRQ       = 41; // [40] no VP source yet
+const unsigned int DMA_HOST_FABRIC_FAULT_IRQ      = 42; // [41] no VP source yet
+const unsigned int PERIPH_REG_BRIDGE_FAULT_IRQ    = 43; // [42] no VP source yet

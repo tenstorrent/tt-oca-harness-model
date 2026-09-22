@@ -16,7 +16,7 @@
  * Resets all 10 registers to RDL-specified reset values:
  * - WRITE_DATA: 0x0
  * - READ_DATA: 0x0
- * - STATUS: 0x0
+ * - STATUS: 0x1 (empty)
  * - ERROR_FLAGS: 0x0
  * - WIRQT: 0x0
  * - RIRQT: 0x0

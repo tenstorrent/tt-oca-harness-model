@@ -104,10 +104,10 @@ public:
 
 /**
  * @class STATUS_type
- * @brief FIFO status flags register (Offset: 0x10, Access: RO, Reset: 0x0)
+ * @brief FIFO status flags register (Offset: 0x10, Access: RO, Reset: 0x1)
  *
  * FIFO status flags. Indicates empty/full conditions and threshold level
- * comparisons for interrupt generation.
+ * comparisons for interrupt generation. Empty resets to 1 (FIFO empty).
  */
 template <unsigned int N> class STATUS_type : public regmodel::Reg<N> {
 public:
@@ -120,7 +120,7 @@ public:
    * @param offset Memory offset for register location
    */
   STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset)
-      : regmodel::Reg<N>(reg_name, memory, offset, 0x000000000000000f, 0x0, 0x0),
+      : regmodel::Reg<N>(reg_name, memory, offset, 0x000000000000000f, 0x0, 0x1),
         empty(reg_name + ".empty", *this, 0, 1),
         full(reg_name + ".full", *this, 1, 1),
         write_level_above_thresh(reg_name + ".write_level_above_thresh", *this,

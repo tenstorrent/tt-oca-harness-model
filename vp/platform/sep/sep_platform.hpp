@@ -232,6 +232,7 @@ private:
     // Signals — reset + per-IP clocks, interrupts, alerts
     // =========================================================================
     sc_signal<bool, SC_MANY_WRITERS> reset_signal;
+    sc_signal<bool>                  cold_reset_signal;
 
     // Per-IP software reset signals driven by sep_reset_ctrl_ip
     // (AND of global reset_signal with SW_RESET_N register bits)

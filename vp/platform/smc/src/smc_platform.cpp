@@ -59,6 +59,8 @@ static constexpr uint64_t A_PERIPH_MAIN_LO = 0xC000'2000ULL;
 static constexpr uint64_t A_PERIPH_MAIN_HI = 0xC000'E800ULL;  // Phase 2 → 0xB800
 static constexpr uint64_t A_PERIPH_EXT_LO  = 0xC040'0000ULL;
 static constexpr uint64_t A_PERIPH_EXT_HI  = 0xC080'0000ULL;
+static constexpr uint64_t A_NDM_RESET      = 0xC000'2A00ULL;
+static constexpr uint64_t A_DFX_CTRL       = 0xC000'B800ULL;
 
 // Stub identity tokens at offset 0 (map-coherence / decode checks).
 static constexpr uint32_t STUB_MAGIC_GPIO      = 0x4750494Fu;
@@ -126,19 +128,22 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  NUM_EXT_INTERRUPTS + 4, NUM_EXT_INTERRUPTS + 5,
                  NUM_EXT_INTERRUPTS + 6, NUM_EXT_INTERRUPTS + 7,
                  // telemetry[0..2] -> peripheral bits 10:8
-                 8, 9, 10,
+                 NUM_EXT_INTERRUPTS + 8, NUM_EXT_INTERRUPTS + 9,
+                 NUM_EXT_INTERRUPTS + 10,
                  // i3c[0..5] -> peripheral bits 17:12
-                 12, 13, 14, 15, 16, 17,
+                 NUM_EXT_INTERRUPTS + 12, NUM_EXT_INTERRUPTS + 13,
+                 NUM_EXT_INTERRUPTS + 14, NUM_EXT_INTERRUPTS + 15,
+                 NUM_EXT_INTERRUPTS + 16, NUM_EXT_INTERRUPTS + 17,
                  // uart[0..3] -> peripheral bits 21:18
-                 18, 19, 20, 21,
+                 NUM_EXT_INTERRUPTS + 18, NUM_EXT_INTERRUPTS + 19,
+                 NUM_EXT_INTERRUPTS + 20, NUM_EXT_INTERRUPTS + 21,
                  // avsbus -> peripheral bit 22
-                 22,
+                 NUM_EXT_INTERRUPTS + 22,
                  // i2c[0..2] -> peripheral bits 25:23
-                 23, 24, 25,
+                 NUM_EXT_INTERRUPTS + 23, NUM_EXT_INTERRUPTS + 24,
+                 NUM_EXT_INTERRUPTS + 25,
                  // wdt[0..3] -> PLIC source IDs 329..332 (bits 328..331)
-                 328, 329, 330, 331,
-                // aou (local core only, not the peer stub) -> peripheral bit 26
-                26})
+                 328, 329, 330, 331})
     , octs_clk("octs_clk",
                sc_core::sc_time(octs_clk_period_ns_p_.get_value(),
                                 sc_core::SC_NS))
@@ -328,10 +333,12 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     // AOU CSRs: D1=A VP-only park at 0xC000_C000 (window 0x80).
     periph_router.add_route(14, A_AOU,      0x80,   "aou");
     periph_router.add_route(15, A_SYSTEM_TIMER_OCTS, 0x1000, "octs_system_timer");
+    periph_router.add_route(27, A_NDM_RESET, 0x0C, "ndm_reset_stub");
     periph_router.add_route(17, A_MISC_WRAP,  0x800,  "misc_wrap_stub");
     periph_router.add_route(18, A_EFUSE_MAP,  0x1000, "efuse_map_stub");
     periph_router.add_route(19, A_EFUSE_CTRL, 0x1000, "efuse_ctrl_stub");
     periph_router.add_route(20, A_DTP_CTRL,   0x800,  "dtp_ctrl_stub");
+    periph_router.add_route(28, A_DFX_CTRL,   0x18,   "dfx_ctrl_stub");
     // Catch-alls (largest windows, checked last) -> periph_misc stub.
     periph_router.add_route(16, A_PERIPH_MAIN_LO, A_PERIPH_MAIN_HI - A_PERIPH_MAIN_LO, "periph_main_misc");
     periph_router.add_route(16, A_PERIPH_EXT_LO,  A_PERIPH_EXT_HI  - A_PERIPH_EXT_LO,  "periph_ext_misc");
@@ -377,12 +384,15 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     periph_router.out[16].bind(stub_periph_misc.reg_socket);
     periph_router.out[17].bind(stub_misc_wrap.reg_socket);
     stub_misc_wrap.set_reset_value(0, STUB_MAGIC_MISC);
+    periph_router.out[27].bind(stub_ndm_reset.reg_socket);
     periph_router.out[18].bind(stub_efuse_map.reg_socket);
     stub_efuse_map.set_reset_value(0, STUB_MAGIC_EFUSE_MAP);
     periph_router.out[19].bind(stub_efuse_ctrl.reg_socket);
     stub_efuse_ctrl.set_reset_value(0, STUB_MAGIC_EFUSE_CTL);
     periph_router.out[20].bind(stub_dtp_ctrl.reg_socket);
     stub_dtp_ctrl.set_reset_value(0, STUB_MAGIC_DTP);
+    periph_router.out[28].bind(stub_dfx_ctrl.reg_socket);
+    stub_dfx_ctrl.set_reset_value(0, 0x00000113u);
 
     // AOU: CSRs on the SMC periph bus; AXI hop is the D2D data path
     // (tt-oca-hw: AoU on SMU smu_axi_in/out == xbar ext_in/ext_out).
@@ -548,6 +558,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     }
 
     // -- I3C port binding --------------------------------------------------
+    i3c.rst_n_i.bind(rst_n_sig);
     for (unsigned i = 0; i < NUM_I3C; ++i) {
         i3c.irq_o[i].bind(i3c_irq[i]);
         i3c.scl_o[i].bind(i3c_scl[i]);
@@ -633,9 +644,11 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         stub_periph_misc.irq_o.bind(stub_irq_sig[s++]);
         stub_gpio_intf.irq_o.bind(stub_irq_sig[s++]);
         stub_misc_wrap.irq_o.bind(stub_irq_sig[s++]);
+        stub_ndm_reset.irq_o.bind(stub_irq_sig[s++]);
         stub_efuse_map.irq_o.bind(stub_irq_sig[s++]);
         stub_efuse_ctrl.irq_o.bind(stub_irq_sig[s++]);
         stub_dtp_ctrl.irq_o.bind(stub_irq_sig[s++]);
+        stub_dfx_ctrl.irq_o.bind(stub_irq_sig[s++]);
         stub_cluster_ctrl.irq_o.bind(stub_irq_sig[s++]);
         stub_ifetch.irq_o.bind(stub_irq_sig[s++]);
         stub_data.irq_o.bind(stub_irq_sig[s++]);
@@ -661,7 +674,6 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
             intagg.src[s++].bind(i2c_irq[i]);
         for (unsigned i = 0; i < NUM_HARTS; ++i)
             intagg.src[s++].bind(wdt_irq[i]);
-        intagg.src[s++].bind(aou_irq);
     }
     for (unsigned i = 0; i < NUM_PLIC_SRC; ++i) {
         plic_.src_in[i].bind(plic_src_sig[i]);

@@ -154,6 +154,7 @@ struct tb : sc_core::sc_module {
 
     smc::i3c_controller dut;
     driver              drv;
+    sc_core::sc_signal<bool> rst_n{"rst_n"};
 
     sc_core::sc_vector<sc_core::sc_signal<bool>> irq{"irq", N};
     sc_core::sc_vector<sc_core::sc_signal<bool>> scl{"scl", N};
@@ -185,6 +186,8 @@ struct tb : sc_core::sc_module {
         , drv("drv")
     {
         drv.sock.bind(dut.reg_socket);
+        dut.rst_n_i(rst_n);
+        rst_n.write(true);
         for (unsigned i = 0; i < N; ++i) {
             dut.irq_o[i](irq[i]);
             dut.scl_o[i](scl[i]);
@@ -209,10 +212,10 @@ struct tb : sc_core::sc_module {
     static uint64_t make_cmd(uint8_t tid, bool rnw, uint8_t devidx,
                              bool cp, uint8_t ccc, uint16_t len) {
         return (uint64_t(tid  & 0xFu) <<  3) |
-               (uint64_t(rnw ? 1u : 0u) << 7) |
-               (uint64_t(devidx & 0x7Fu) << 8) |
+               (uint64_t(ccc)           << 7) |
                (uint64_t(cp  ? 1u : 0u) << 15) |
-               (uint64_t(ccc)           << 32) |
+               (uint64_t(devidx & 0x1Fu) << 16) |
+               (uint64_t(rnw ? 1u : 0u) << 29) |
                (uint64_t(len)           << 48);
     }
 

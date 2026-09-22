@@ -420,6 +420,7 @@ public:
 
     /// AXI4-Lite-style TLM-2.0 target socket (multi-instance, 32-bit access).
     tlm_utils::simple_target_socket<i3c_controller> reg_socket;
+    sc_core::sc_in<bool> rst_n_i{"rst_n_i"};
 
     // ---- Outputs (per instance) -----------------------------------------
     sc_core::sc_vector<sc_core::sc_out<bool>> irq_o;
@@ -521,6 +522,7 @@ private:
     // ------------------------------------------------------------------
     void output_method();
     void xfer_method();
+    void reset_method();
     void schedule_recompute();
     void schedule_xfer();
     void start_of_simulation() override;

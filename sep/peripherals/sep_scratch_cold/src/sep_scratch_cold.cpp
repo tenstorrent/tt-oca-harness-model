@@ -14,6 +14,10 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     , sep_status_enable("sep_status.enable", true)
     , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
 {
+    SC_METHOD(cold_reset_handler);
+    sensitive << cold_rst_ni.neg();
+    dont_initialize();
+
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
@@ -108,4 +112,9 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
             return true;
         },
         SCRATCH[6].offset);
+}
+
+void sep_scratch_cold_ip::cold_reset_handler()
+{
+    reset_all_registers();
 }

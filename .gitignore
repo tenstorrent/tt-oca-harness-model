@@ -357,6 +357,8 @@ doc/ai-systemc-generation.pptx
 # Other files stay on disk; they are not tracked.
 /doc/*
 !/doc/SystemC_Virtual_Platform_Customer_Guide.md
+!/doc/code-review/
+!/doc/code-review/*.md
 
 # Root docs/ (OCH GitHub Pages) and scripts/ (PDF helpers) are local-only.
 /docs/

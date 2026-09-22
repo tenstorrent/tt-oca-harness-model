@@ -353,18 +353,19 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
        );
    }
 
-   // TLM Note: Constructor initializes directly to IDLE state
-   // (internal secure wipe assumed to complete atomically at power-on)
-   // The reset_handler will handle explicit reset pulses during simulation
-
    // Initialize LOAD_CHECKSUM register to match internal CRC value
    // Internal CRC is 0xFFFFFFFF, register should contain inverted value (0x00000000)
    LOAD_CHECKSUM = ~load_checksum_crc;
 
-   // Register SC_METHOD for reset handler (sensitive to rst_n changes)
+   // Register SC_METHOD for reset handler (sensitive to rst_n changes).
+   // Deliberately NOT dont_initialize(): the constructor leaves current_state at
+   // BUSY_SEC_WIPE_INT and only this handler completes the wipe and reaches IDLE,
+   // so it has to run once at initialisation. A platform that holds reset
+   // asserted from elaboration produces no negedge to trigger it otherwise, and
+   // OTBN would stay busy forever. The body is guarded on rst_n, so running with
+   // reset deasserted is a no-op.
    SC_METHOD(reset_handler);
    sensitive << rst_n;
-   dont_initialize();
 
    // Register SC_METHOD to monitor lc_escalate_req / lc_rma_req and trigger event
    SC_METHOD(lc_escalate_monitor_method);

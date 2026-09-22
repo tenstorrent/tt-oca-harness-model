@@ -31,7 +31,12 @@ riscv-vp-plusplus
 VeeR ISS (Whisper)
   Location: sep/cpu/VeeR-ISS/
   License: Apache License 2.0
+  Copyright (c) 2019-2020 Western Digital Corporation or its affiliates
   License text: sep/cpu/VeeR-ISS/LICENSE
+  Bundled third-party notices: sep/cpu/VeeR-ISS/Third-Party_Notices.txt
+  Also used (dual-copyright with Tenstorrent) in:
+    sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/common/crt0.s
+    sw/sep-vp-tests/fw-tests-from-tt-oca-hw/dependencies/dv/sep/tests/common/crt0.s
 
 Berkeley SoftFloat Release 3e
   Location: sep/cpu/VeeR-ISS/softfloat/
@@ -39,13 +44,80 @@ Berkeley SoftFloat Release 3e
   Copyright 2011-2018 The Regents of the University of California
   License text: sep/cpu/VeeR-ISS/softfloat/COPYING.txt
 
+nlohmann json 3.1.1 (bundled with VeeR-ISS)
+  Location: sep/cpu/VeeR-ISS/nlohmann/
+  License: MIT
+  Copyright (c) 2013-2018 Niels Lohmann
+  License text: sep/cpu/VeeR-ISS/nlohmann/json.hpp
+                sep/cpu/VeeR-ISS/Third-Party_Notices.txt
+  Nested copyrights in that tree:
+    Florian Loitsch (2009) — Grisu2 / to_chars, MIT
+      sep/cpu/VeeR-ISS/nlohmann/detail/conversions/to_chars.hpp
+    Bjoern Hoehrmann (2008-2009) — UTF-8 decoder, MIT
+      sep/cpu/VeeR-ISS/nlohmann/detail/output/serializer.hpp
+
+ELFIO (bundled with VeeR-ISS)
+  Location: sep/cpu/VeeR-ISS/elfio/
+  License: MIT
+  Copyright (C) 2001-2015 Serge Lamikhov-Center
+  License text: sep/cpu/VeeR-ISS/elfio/elfio.hpp
+                sep/cpu/VeeR-ISS/Third-Party_Notices.txt
+
+linenoise (bundled with VeeR-ISS)
+  Location: sep/cpu/VeeR-ISS/linenoise.hpp
+  License: BSD-2-Clause (and component licenses in-file)
+  Copyright (c) 2015 yhirose
+  Copyright (c) 2010-2014 Salvatore Sanfilippo
+  Copyright (c) 2010-2013 Pieter Noordhuis
+  Copyright (C) 2005-2014 Jason Hood
+  Copyright (c) Microsoft Open Technologies, Inc.
+  License text: sep/cpu/VeeR-ISS/linenoise.hpp
+                sep/cpu/VeeR-ISS/Third-Party_Notices.txt
+
 PQClean (ML-DSA-87 and ML-KEM-1024)
   Location: sep/peripherals/adams_bridge/crypto/pqclean/
   License: CC0 1.0 Universal (public domain)
   License text: sep/peripherals/adams_bridge/crypto/pqclean/ml-dsa-87/LICENSE
                 sep/peripherals/adams_bridge/crypto/pqclean/ml-kem-1024/LICENSE
+  fips202.c is based on public-domain Keccak / TweetFips202 by
+  Ronny Van Keer, Gilles Van Assche, Daniel J. Bernstein, and Peter Schwabe.
 
 OpenTitan
   Location: sw/sep-vp-tests/fw-tests-from-tt-oca-hw/dependencies/vendor/opentitan/
+            and copies used by SEP firmware / DV tests:
+              sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/otbn_*/otbn_src/
+              sw/sep-vp-tests/otbn-dv-p256-verify-test/otbn_src/
+              sw/sep-vp-tests/otbn-dv-test/
+              sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/common_otbn/
+              sw/sep-vp-tests/fw-tests-from-tt-oca-hw/dependencies/dv/sep/tests/common_otbn/
   License: Apache License 2.0
   Copyright lowRISC contributors (OpenTitan project)
+
+Chromium OS (P-256 / Montgomery multiply, via OpenTitan)
+  Location: sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/otbn_p256_verify_test/otbn_src/p256_{base,sign,verify}.s
+            sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/tests/otbn_rsa_3072_verify_test/otbn_src/montmul.s
+            sw/sep-vp-tests/otbn-dv-p256-verify-test/otbn_src/p256_{base,sign,verify}.s
+  License: BSD-style notice in those files (Chromium OS)
+  Copyright 2016 The Chromium OS Authors
+
+Host libraries (source not vendored in this tree)
+
+  OpenSSL 3.x
+    Used by: SEP crypto models (aes, kmac, hmac, otbn, adams_bridge, csrng,
+             entropy_src, edn, key_manager, secure_dma, efuse) and
+             vp/platform/sep, vp/platform/smu (CMake: find_package(OpenSSL))
+    License: Apache License 2.0 (OpenSSL 3.0+)
+    Copyright (c) 1998-2024 The OpenSSL Project Authors
+    Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson (legacy SSLeay)
+    License text: not in this tree; see https://www.openssl.org/source/license.html
+
+  Boost
+    Used by: VeeR-ISS and vp/ platform infrastructure
+    License: Boost Software License 1.0
+    License text: sep/cpu/VeeR-ISS/Third-Party_Notices.txt
+
+  zlib
+    Used by: VeeR-ISS
+    License: zlib
+    Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler
+    License text: sep/cpu/VeeR-ISS/Third-Party_Notices.txt
