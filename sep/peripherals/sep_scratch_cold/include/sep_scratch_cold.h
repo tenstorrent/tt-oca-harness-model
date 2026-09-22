@@ -17,18 +17,13 @@ class sep_scratch_cold_ip : public sep_scratch_cold_base
 public:
     SC_HAS_PROCESS(sep_scratch_cold_ip);
 
-    /// Active-low cold/power-on reset. Watchdog warm reset does not drive it.
+    /// Active-low cold (power-on) reset. Watchdog warm reset does not drive it.
+    /// In RTL the cold bank takes `arst_n(rst_ni)` while the warm bank takes
+    /// `arst_n(rst_ni && rst_warm_ni)` (sep_system_csr.sv), so this bank retains
+    /// its contents across a watchdog reset.
     sc_core::sc_in<bool> cold_rst_ni{"cold_rst_ni"};
 
     explicit sep_scratch_cold_ip(sc_module_name n);
-
-    /// Active-low cold (power-on) reset — clears all scratch registers when asserted.
-    /// Deliberately NOT the global reset: in RTL the cold bank takes
-    /// `arst_n(rst_ni)` while the warm bank takes `arst_n(rst_ni && rst_warm_ni)`
-    /// (sep_system_csr.sv), so this bank retains its contents across a watchdog
-    /// reset. The ROM's warm-handler slot lives here and is read after exactly
-    /// that reset.
-    sc_core::sc_in<bool> cold_rst_ni;
 
     // CCI parameters — controllable via accellera_config.ini
     regmodel::Param<bool> sim_out_enable;
