@@ -78,6 +78,11 @@ SC_MODULE(Tb) {
     }
 
     void run() {
+        // POR may begin asserted without a falling edge. The exported vector
+        // must nevertheless carry the RTL reset value from elaboration.
+        wait(sc_core::SC_ZERO_TIME);
+        assert(nmi_vec_sig.read() == 0xC0000100u);
+
         // Prime to high, then assert (falling edge fires reset_handler), then deassert
         rst_n_sig.write(true);
         wait(1, sc_core::SC_NS);

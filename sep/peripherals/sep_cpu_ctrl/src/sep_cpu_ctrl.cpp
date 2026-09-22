@@ -30,6 +30,10 @@ sep_cpu_ctrl_ip::sep_cpu_ctrl_ip(sc_core::sc_module_name n)
 
 void sep_cpu_ctrl_ip::end_of_elaboration()
 {
+    // POR is already asserted at simulation start, so reset_handler() may not
+    // observe a falling edge. Publish the architectural reset vector directly.
+    nmi_vec_o.write(static_cast<uint32_t>(fs_nmi_vec_) << 1);
+
     hwif_in.smc_fuse_sense_done = bool(smc_fuse_sense_done.get_param_value());
     hwif_in.sep_fuse_sense_done = bool(sep_fuse_sense_done.get_param_value());
     hwif_in.sep_standalone      = bool(sep_standalone.get_param_value());

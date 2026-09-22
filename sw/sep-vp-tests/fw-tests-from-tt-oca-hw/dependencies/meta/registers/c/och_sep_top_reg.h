@@ -6052,7 +6052,7 @@ typedef union {
     AXIL_MAILBOX_STATUS_reg_t f;
 } AXIL_MAILBOX_STATUS_reg_u;
 
-#define AXIL_MAILBOX_STATUS_REG_DEFAULT (0x00000000)
+#define AXIL_MAILBOX_STATUS_REG_DEFAULT (0x00000001)
 
 
 typedef struct {

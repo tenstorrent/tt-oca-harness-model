@@ -69,19 +69,23 @@ private:
     }
 };
 
-// Reset generation unit — drives the global reset signal at simulation start
-// and re-issues a reset pulse when the AON timer/watchdog requests one.
+// Reset generation unit. rst_ni covers POR and watchdog reset; cold_rst_ni
+// covers POR only, matching sep_reset_n versus sep_cpu_reset_n in RTL.
 class reset_generation_unit : public sc_module {
 public:
     sc_out<bool> rst_ni;
+    sc_out<bool> cold_rst_ni;
     sc_in<bool>  reset_req_i;
 
     SC_HAS_PROCESS(reset_generation_unit);
 
-    void end_of_elaboration() { rst_ni.write(true); }
+    // Reset is already asserted when simulation starts. This avoids an ISS
+    // execution window before the first delta-delayed falling edge.
+    void end_of_elaboration() { rst_ni.write(false); cold_rst_ni.write(false); }
 
     reset_generation_unit(sc_module_name name)
-        : sc_module(name), rst_ni("rst_ni"), reset_req_i("reset_req_i") {
+        : sc_module(name), rst_ni("rst_ni"), cold_rst_ni("cold_rst_ni"),
+          reset_req_i("reset_req_i") {
         SC_THREAD(por_thread);
         SC_THREAD(external_reset_thread);
         SC_METHOD(external_reset_method);
@@ -90,20 +94,30 @@ public:
     }
 
 private:
+    static constexpr int RESET_HOLD_NS = 10;
+    const sc_core::sc_time RESET_HOLD{RESET_HOLD_NS, sc_core::SC_NS};
+
     sc_event start_monitor_ev_;
     sc_event external_reset_ev_;
     bool     external_reset_in_progress_ = false;
 
-    void do_reset_pulse() {
+    void do_reset_pulse(bool cold) {
         std::cout << "[" << sc_core::sc_time_stamp()
-                  << "] reset_generation_unit: issuing reset pulse\n";
+                  << "] reset_generation_unit: issuing "
+                  << (cold ? "cold" : "warm") << " reset pulse\n";
         rst_ni->write(false);
-        wait(10, SC_NS);
+        if (cold)
+            cold_rst_ni->write(false);
+        wait(RESET_HOLD);
         rst_ni->write(true);
+        if (cold)
+            cold_rst_ni->write(true);
     }
 
     void por_thread() {
-        do_reset_pulse();
+        wait(RESET_HOLD);
+        rst_ni->write(true);
+        cold_rst_ni->write(true);
         if (reset_req_i.read())
             wait(reset_req_i.negedge_event());
         start_monitor_ev_.notify();
@@ -123,7 +137,7 @@ private:
             external_reset_in_progress_ = true;
             std::cout << "[" << sc_core::sc_time_stamp()
                       << "] reset_generation_unit: external reset request asserted\n";
-            do_reset_pulse();
+            do_reset_pulse(false);
             wait(reset_req_i.negedge_event());
             external_reset_in_progress_ = false;
         }

@@ -16,12 +16,8 @@
 
 #include "och_sep_top_reg.h"
 
-/* SEP STDOUT mailbox (same as dv/sep/tb/tb_uvm/sv/sep_wrap_uvm_top.sv monitor) */
-.equ SEP_STDOUT_MBX, 0x80000000
-.equ SEP_FW_MAGIC0,  0xA5A55A5A
-.equ SEP_FW_PASS,    0xCAFEBABE
-.equ SEP_FW_FAIL,    0xDEADBEEF
-.equ SEP_STAT_TAG,   0x53544154      /* 'STAT' (legacy, kept for reference) */
+/* Early reset and halt paths report only through local cold scratch. External
+ * mailbox accesses can bus-fault before the outbound filter is configured. */
 .equ SEP_COLD_SCRATCH_1, SEP_SCRATCH_COLD_SCRATCH_1__REG_ADDR
 
 /* DCCM base from EL2 snapshot: sadr=0xC0040000, size=128KiB → top=0xC0060000.
@@ -41,30 +37,44 @@
 #define PMP_LOCK 0
 #endif
 
-/* SEP scratch registers (warm reset retention).
- * warm_scratch[0] survives warm reset (wdt_rst_ni only resets CPU).
- * cold_scratch[0] is cleared on any reset.
- */
-.equ SEP_WARM_SCRATCH_0, SEP_SCRATCH_WARM_SCRATCH_0__REG_ADDR
+/* The RTL resets the warm bank with sep_reset_n && wdt_rst_ni. The cold bank
+ * uses sep_reset_n only and therefore retains across a watchdog reset. */
+.equ SEP_COLD_SCRATCH_7, SEP_SCRATCH_COLD_SCRATCH_7__REG_ADDR
 .equ SEP_COLD_SCRATCH_0, SEP_SCRATCH_COLD_SCRATCH_0__REG_ADDR
 
-/* SRAM address range for warm handler jump validation.
- * BL1 executes from SRAM after handoff, so warm reset handler lives there. */
-.equ WARM_HANDLER_RANGE_BASE,  SEP_SRAM_MEM_BASE_ADDR
-.equ WARM_HANDLER_RANGE_END,   SEP_BOOT_ROM_MEM_BASE_ADDR
+/* Warm handlers may execute from ICCM, or SRAM when enabled, matching the
+ * current production ROM handoff contract. */
+.equ WARM_HANDLER_ICCM_BASE, SEP_ICCM_MEM_BASE_ADDR
+.equ WARM_HANDLER_ICCM_END,  SEP_ICCM_MEM_BASE_ADDR + SEP_ICCM_MEM_SIZE
+.equ WARM_HANDLER_SRAM_BASE, SEP_SRAM_MEM_BASE_ADDR
+.equ WARM_HANDLER_SRAM_END,  SEP_SRAM_MEM_BASE_ADDR + SEP_SRAM_MEM_SIZE
+
+/* Current SMC DFX/MBIST interface, relative to the SEP SMC window. */
+.equ SEP_SMC_GLOBAL_BASE,       0x40000000
+.equ SMC_DFX_CTRL_STATUS_SMU,   SEP_SMC_GLOBAL_BASE + 0xB800
+.equ SMC_SCRATCH_MBIST_FAIL,    SEP_SMC_GLOBAL_BASE + 0x39080 + (10 * 8)
+.equ DFT_MEM_REPAIR_SUCCESS,    (1 << 1)
+.equ DFT_MBIST_DONE,            (1 << 4)
+.equ DFT_MBIST_PASS,            (1 << 8)
+.equ DFT_MBIST_ABORT,           (1 << 12)
+.equ SMC_STRAPS_LO,             SEP_SMC_GLOBAL_BASE + 0x405800
+.equ SMC_STRAPS_HI,             SEP_SMC_GLOBAL_BASE + 0x405804
+.equ STRAP_BYPASS_SRAM_REPAIR,  (1 << 13)
+.equ STRAP_MBIST_BYPASS_HI,     (1 << 22)
+.equ SEP_EFUSE_STATUS_RPT,      SEP_EFUSE_MAP_STATUS_RPT_REG_ADDR
+.equ STATUS_RPT_SKIP_MEM_CHECK, (1 << 2)
+.equ MBIST_DONE_WAIT_ITERS,     10000
 
 _start:
     /* Multi-hart safety: only hart0 proceeds (others park). */
     csrr    t0, mhartid
     bnez    t0, secondary_hart
 
-    /* Set trap vector early (before any MMIO access, for safety). */
-    la      t0, trap_vector
+    /* Use a stack-free vector until cold_boot establishes sp. */
+    la      t0, trap_vector_early
     csrw    mtvec, t0
 
-    /* Configure VeeR EL2 MRAC before warm reset check so that the
-     * warm_scratch read at 0x1080xxxx (region 1) gets correct
-     * memory attributes (side-effect, non-cacheable). */
+    /* Configure VeeR EL2 MRAC before the retained cold-scratch read. */
     li      t0, 0xAAAAAAA8
     csrw    0x7C0, t0
 
@@ -73,34 +83,45 @@ _start:
      * On warm reset (WDT bark → wdt_rst_ni low):
      *   - CPU is reset (sep_cpu_reset_n = sep_reset_n & wdt_rst_ni)
      *   - ICCM/DCCM content preserved (not reset)
-     *   - sep_scratch_warm_scratch[] preserved (not reset)
+     *   - sep_scratch_cold_scratch[] preserved
+     *   - sep_scratch_warm_scratch[] cleared
      *   - All CPU CSRs reset to defaults
      *
-     * BL1 writes its re-entry address to warm_scratch[0] before enabling
+     * BL1 writes its re-entry address to cold_scratch[7] before enabling
      * the WDT.  On warm reset, ROM reads this and jumps back to BL1.
      *
      * Protocol:
-     *   1. Read warm_scratch[0]
+     *   1. Read cold_scratch[7]
      *   2. If zero → cold boot
-     *   3. If non-zero: range check (must be within ICCM)
-     *   4. If valid: poison scratch (write 0), jump to handler
+     *   3. If non-zero: validate against permitted BL1 execution regions
+     *   4. If valid: leave the retained slot intact and jump
      *   5. If invalid: hang
      *
      * This check happens BEFORE touching DCCM (sp/gp/scrub/.data/.bss)
      * to preserve BL1's runtime state across warm reset.
      */
-    li      t0, SEP_WARM_SCRATCH_0
+    li      t0, SEP_COLD_SCRATCH_7
     lw      t1, 0(t0)              /* t1 = warm handler address */
     beqz    t1, cold_boot          /* zero → cold boot */
 
-    /* Range check: WARM_HANDLER_RANGE_BASE <= handler < WARM_HANDLER_RANGE_END */
-    li      t2, WARM_HANDLER_RANGE_BASE
-    bltu    t1, t2, warm_reset_hang /* handler < range base → invalid → hang */
-    li      t2, WARM_HANDLER_RANGE_END
-    bgeu    t1, t2, warm_reset_hang /* handler >= range end → invalid → hang */
-
-    /* Valid warm handler found.  Poison scratch to prevent re-entry. */
-    sw      zero, 0(t0)
+    li      t2, WARM_HANDLER_ICCM_BASE
+    bltu    t1, t2, .Lwarm_try_sram
+    li      t2, WARM_HANDLER_ICCM_END
+    bltu    t1, t2, .Lwarm_range_ok
+    j       warm_reset_hang
+.Lwarm_try_sram:
+#if BL1_SRAM_EXEC_ENABLE
+    li      t2, WARM_HANDLER_SRAM_BASE
+    bltu    t1, t2, warm_reset_hang
+    li      t2, WARM_HANDLER_SRAM_END
+    bgeu    t1, t2, warm_reset_hang
+#else
+    j       warm_reset_hang
+#endif
+.Lwarm_range_ok:
+    li      t3, SEP_COLD_SCRATCH_1
+    li      t4, 0x01010068
+    sw      t4, 0(t3)
 
     /* Jump to warm reset handler.  BL1 is already in SRAM and will
      * set up its own sp/mtvec/PMP as needed. */
@@ -110,20 +131,27 @@ _start:
      * Do not fall through to cold boot; an invalid handler pointer
      * may indicate corruption or attack. */
 warm_reset_hang:
+    li      t0, SEP_COLD_SCRATCH_1
+    li      t1, 0x0f010069
+    sw      t1, 0(t0)
     wfi
     j       warm_reset_hang
     /* ── end warm reset ─────────────────────────────────────────── */
 
 cold_boot:
-    /* Clear warm_scratch[0] defensively (ensure clean state). */
-    li      t0, SEP_WARM_SCRATCH_0
-    sw      zero, 0(t0)
+    /* An unarmed subsequent warm reset must fail closed, not silently reboot. */
+    li      t0, SEP_COLD_SCRATCH_7
+    li      t1, -1
+    sw      t1, 0(t0)
 
     /* Set stack near top of DCCM (from linker script). */
     la      sp, __stack_top
 
     /* Set global pointer for small-data accesses (gp-relative). */
     la      gp, __global_pointer$
+
+    la      t0, trap_vector
+    csrw    mtvec, t0
 
     /* Configure outbound filter to allow mailbox writes at 0x8000_0000.
      *
@@ -241,6 +269,58 @@ cold_boot:
     sw      t1, 0(t0)
 #endif /* PMP_ENABLE */
 
+    /* Fail closed on memory-repair or MBIST failure. The SEP CPU can be
+     * released after repair while MBIST is still completing, so poll done
+     * before testing pass. The two documented bypass straps skip their own
+     * arms; STATUS_RPT[2] is the explicit failure override. */
+    li      t0, SMC_DFX_CTRL_STATUS_SMU
+    lw      t1, 0(t0)
+
+    li      t0, SMC_STRAPS_LO
+    lw      t5, 0(t0)
+    li      t4, STRAP_BYPASS_SRAM_REPAIR
+    and     t2, t5, t4
+    bnez    t2, 1f
+    andi    t2, t1, DFT_MEM_REPAIR_SUCCESS
+    beqz    t2, dft_gate_failed
+
+1:  li      t0, SMC_STRAPS_HI
+    lw      t5, 0(t0)
+    li      t4, STRAP_MBIST_BYPASS_HI
+    and     t2, t5, t4
+    bnez    t2, 4f
+
+    li      t0, SMC_DFX_CTRL_STATUS_SMU
+    li      t4, DFT_MBIST_ABORT
+    li      t3, MBIST_DONE_WAIT_ITERS
+2:  lw      t1, 0(t0)
+    and     t2, t1, t4
+    bnez    t2, dft_gate_failed
+    andi    t2, t1, DFT_MBIST_DONE
+    bnez    t2, 3f
+    addi    t3, t3, -1
+    bnez    t3, 2b
+    j       dft_gate_failed
+
+3:  andi    t2, t1, DFT_MBIST_PASS
+    bnez    t2, 4f
+
+dft_gate_failed:
+    li      t0, SMC_SCRATCH_MBIST_FAIL
+    sw      t1, 0(t0)
+    li      t0, SEP_COLD_SCRATCH_1
+    li      t2, 0x08010219
+    sw      t2, 0(t0)
+    li      t0, SEP_EFUSE_STATUS_RPT
+    lw      t3, 0(t0)
+    andi    t4, t3, STATUS_RPT_SKIP_MEM_CHECK
+    bnez    t4, 4f
+    li      t2, 0x0f01d001
+    sw      t2, 0(t0)
+5:  wfi
+    j       5b
+4:
+
     /* Memory scrub (DCCM):
      * Clear DCCM before initializing runtime sections.
      *
@@ -305,6 +385,19 @@ cold_boot:
     j       1b
 
     .align  4
+trap_vector_early:
+    /* No stack is available before cold_boot. Record a local, decodable
+     * failure without touching the external mailbox, then stop. */
+    li      t0, SEP_COLD_SCRATCH_1
+    li      t1, 0x0f010028
+    sw      t1, 0(t0)
+    li      t0, SEP_COLD_SCRATCH_0
+    li      t2, 0xDEADBEEF
+    sw      t2, 0(t0)
+3:  wfi
+    j       3b
+
+    .align  4
 trap_vector:
     /* On any trap, read key CSRs and call C handler for debug output.
      * Requires sp to be valid (set up during cold_boot). */
@@ -322,8 +415,8 @@ trap_vector:
     j       2b
 
 secondary_hart:
-    /* Secondary harts: set mtvec then park. */
-    la      t0, trap_vector
+    /* Secondary harts never establish a stack. */
+    la      t0, trap_vector_early
     csrw    mtvec, t0
 4:  wfi
     j       4b

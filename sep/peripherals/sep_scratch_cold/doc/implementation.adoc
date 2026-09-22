@@ -7,8 +7,8 @@
 `sep_scratch_cold_ip` is a loosely-timed TLM-2.0 model of the
 cold-retention scratch bank. The eight words are plain regmodel storage.
 Post-write callbacks on three of them implement the VP console, the
-status printer, and CocoTB-style handshake acks. There is no
-`rst_ni`: a platform reset does not wipe this bank.
+status printer, and CocoTB-style handshake acks. `cold_rst_ni` clears the
+bank on power-on/cold reset only; watchdog warm reset does not drive this port.
 
 [source,cpp]
 ----
@@ -32,6 +32,7 @@ those consoles live in this model.
 |===
 |Port |Type |Platform bind
 |`target_socket` |TLM 32-bit |`sep-vp` SimpleBus, cold-scratch window
+|`cold_rst_ni` |SystemC active-low reset |`sep-vp` cold-reset domain
 |===
 
 SCRATCH[2] feeds `VirtConsoleDecoder` (opcode/payload protocol,
@@ -61,5 +62,5 @@ does not hang on a standalone VP.
 * Console and status printers are VP-only; silicon has no stdout
   side-effect on these words.
 * Handshake acks are VP stand-ins for CocoTB, not RTL.
-* No `rst_ni`. Warm reset in the VP does not clear cold scratch;
-  a process restart does, because the model has no persistence.
+* Warm reset in the VP does not clear cold scratch, matching RTL.
+  A cold/power-on reset clears all eight words.
