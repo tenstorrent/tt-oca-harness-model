@@ -82,20 +82,14 @@ public:
     // SEP mailbox channels feeding peripheral_interrupts_o[7:0] (sep_pkg::NUM_MAILBOXES).
     static constexpr unsigned NUM_SEP_MAILBOX = 8;
     // Peripheral IRQ inputs: SEP mailbox[0..7], telemetry[0..2], i3c[0..5],
-    // uart[0..3], avsbus, i2c[0..2], wdt[0..3]
-    // (matches smc_peripherals.sv peripheral_interrupts_o composition), plus
-    // the local AOU core's irq_o (PLIC source bit 26 — a VP-only assignment;
-    // the real RTL's peripheral_interrupts_o composition does not yet include
-    // AOU, see sw/tt-oca-hw-main/doc/aou.placeholder.adoc).
+    // uart[0..3], avsbus, i2c[0..2], and wdt[0..3]. AOU is deliberately absent:
+    // RTL does not assign it a peripheral_interrupts_o slot.
     static constexpr unsigned NUM_PERIPH_IRQ =
         NUM_SEP_MAILBOX + NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C
-        + NUM_HARTS + 1;
+        + NUM_HARTS;
     // RTL packs peripheral_interrupts_i at cpu_interrupts_o[NUM_EXT_INTERRUPTS+:32]
     // and the PLIC's source ID is that bit index + 1, so peripheral bit b is
-    // source 256 + b + 1 in the 4-core config modeled here.  Only the SEP
-    // mailbox uses this offset today; the older entries in the aggregator's
-    // bit list omit it and so sit at the wrong source IDs (see
-    // md_files/MAILBOX_RTL_VS_VP.md).
+    // source 256 + b + 1 in the 4-core configuration.
     static constexpr unsigned NUM_EXT_INTERRUPTS = 256;
 
     // -----------------------------------------------------------------------
@@ -227,8 +221,8 @@ public:
     addr_router<64, 64>         beu_router{"beu_router", NUM_BEU};
     // periph_router outputs: reset, i2c[0..2], telemetry demux, uart[0..3],
     // gpio stub, i3c, pvt_wrap, pll_wrap, avsbus, aou, octs_system_timer,
-    // catch-all stub, misc/efuse/dtp stubs, i2c_ctrl, uart_wrap[4], straps (27).
-    addr_router<64, 32>         periph_router{"periph_router", 27};
+    // catch-all, misc/NDM/efuse/DTP/DFX stubs, i2c_ctrl, uart_wrap[4], straps.
+    addr_router<64, 32>         periph_router{"periph_router", 29};
     // Demux the 0x300 telemetry wrap into NUM_TELEMETRY 0x100 windows.
     // InBus=32: sits behind periph_router's 32-bit initiator outputs.
     addr_router<32, 32>         telemetry_router{"telemetry_router", NUM_TELEMETRY};
@@ -279,9 +273,11 @@ public:
     // Named stubs for unmodeled RTL periph slots (Phase-1 map realignment).
     stub_target<32> stub_gpio_intf{"stub_gpio_intf"};
     stub_target<32> stub_misc_wrap{"stub_misc_wrap"};
+    stub_target<32> stub_ndm_reset{"stub_ndm_reset", /*warn=*/true, /*store=*/true};
     stub_target<32> stub_efuse_map{"stub_efuse_map"};
     stub_target<32> stub_efuse_ctrl{"stub_efuse_ctrl"};
     stub_target<32> stub_dtp_ctrl{"stub_dtp_ctrl"};
+    stub_target<32> stub_dfx_ctrl{"stub_dfx_ctrl"};
     // stub_cluster_ctrl / stub_ifetch / stub_data accept multiple initiator
     // binds (multi_stub_target) so that an always-bound idle initiator and a
     // cluster-only initiator (out[1]/cluster.ifetch/cluster.data) can share

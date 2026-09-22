@@ -146,6 +146,9 @@ int sc_main(int, char**)
     // ---- TLM error / dbg paths against a valid DUT ----
     cfg_t cfg; cfg.num_instances = 2;
     smc::i3c_controller dut("i3c_controller", cfg);
+    sc_core::sc_signal<bool> rst_n("rst_n");
+    dut.rst_n_i(rst_n);
+    rst_n.write(true);
     probe               pr("probe");
     pr.sock.bind(dut.reg_socket);
 
