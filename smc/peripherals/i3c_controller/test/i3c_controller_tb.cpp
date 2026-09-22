@@ -126,6 +126,7 @@ struct tb : sc_core::sc_module {
 
     smc::i3c_controller dut;
     driver              drv;
+    sc_core::sc_signal<bool> rst_n{"rst_n"};
 
     static constexpr unsigned N = 3; // instances under test
 
@@ -150,6 +151,8 @@ struct tb : sc_core::sc_module {
         , drv("drv")
     {
         drv.sock.bind(dut.reg_socket);
+        dut.rst_n_i(rst_n);
+        rst_n.write(true);
         for (unsigned i = 0; i < N; ++i) {
             dut.irq_o[i](irq[i]);
             dut.scl_o[i](scl[i]);
@@ -171,14 +174,14 @@ struct tb : sc_core::sc_module {
         drv.write(A(inst, cfg_t::COMMAND_PORT), uint32_t(desc >> 32));
     }
 
-    // Build a model command descriptor (see spec §Command descriptor).
+    // Build an HCI regular-transfer DAT descriptor (TCRI 7.1.2.2).
     static uint64_t make_cmd(uint8_t tid, bool rnw, uint8_t devidx,
                              bool cp, uint8_t ccc, uint16_t len) {
         return (uint64_t(tid & 0xF) << 3) |
-               (uint64_t(rnw ? 1 : 0) << 7) |
-               (uint64_t(devidx & 0x7F) << 8) |
+               (uint64_t(ccc) << 7) |
                (uint64_t(cp ? 1 : 0) << 15) |
-               (uint64_t(ccc) << 32) |
+               (uint64_t(devidx & 0x1F) << 16) |
+               (uint64_t(rnw ? 1 : 0) << 29) |
                (uint64_t(len) << 48);
     }
 
@@ -359,7 +362,17 @@ void tb::run()
     // Instance 0 DAT not visible from instance 1.
     EXPECT_EQ(0u, drv.read(A(1, cfg_t::DAT_BASE + 0)));
 
-    // ===== 14. transport_dbg back-door (DAT) =====
+    // ===== 14. Architectural reset input =====
+    drv.write(A(1, cfg_t::HC_CONTROL), 0xFFFFFFFFu);
+    drv.write(A(1, cfg_t::DAT_BASE), 0xA5A55A5Au);
+    rst_n.write(false);
+    settle();
+    rst_n.write(true);
+    settle();
+    EXPECT_EQ(cfg_t::HC_CONTROL_RESET, drv.read(A(1, cfg_t::HC_CONTROL)));
+    EXPECT_EQ(0u, drv.read(A(1, cfg_t::DAT_BASE)));
+
+    // ===== 15. transport_dbg back-door (DAT) =====
     {
         uint32_t v = 0xA5A5A5A5u;
         tlm::tlm_generic_payload gp;
@@ -372,7 +385,7 @@ void tb::run()
         EXPECT_EQ(0xA5A5A5A5u, dut.dbg_read(A(2, cfg_t::DAT_BASE + 8)));
     }
 
-    // ===== 15. QUEUE_SIZE reflects configured depths =====
+    // ===== 16. QUEUE_SIZE reflects configured depths =====
     {
         const uint32_t qs = drv.read(A(0, cfg_t::QUEUE_SIZE));
         EXPECT_EQ(8u, qs & 0xFF);          // CR queue depth

@@ -353,10 +353,6 @@ otbn_ip::otbn_ip(sc_module_name n, unsigned int memory_size,
        );
    }
 
-   // TLM Note: Constructor initializes directly to IDLE state
-   // (internal secure wipe assumed to complete atomically at power-on)
-   // The reset_handler will handle explicit reset pulses during simulation
-
    // Initialize LOAD_CHECKSUM register to match internal CRC value
    // Internal CRC is 0xFFFFFFFF, register should contain inverted value (0x00000000)
    LOAD_CHECKSUM = ~load_checksum_crc;

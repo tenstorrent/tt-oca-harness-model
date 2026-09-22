@@ -27,25 +27,22 @@ namespace {
 using regmodel::bit;
 
 // ---------------------------------------------------------------------------
-// Model command-descriptor field accessors (64-bit; functional layout — see
-// 01_I3C_CONTROLLER_Specification.md §"Command descriptor").  This layout is a
-// firmware-facing abstraction and is NOT bit-compatible with the raw HCI
-// transfer descriptor; the spec documents the mapping.
+// HCI regular-transfer DAT descriptor field accessors (TCRI 7.1.2.2).
 //
 //   [2:0]   CMD_ATTR     (0 = regular transfer; only attr modelled)
 //   [6:3]   TID          transaction ID (echoed in the response)
-//   [7]     RNW          0 = write, 1 = read
-//   [14:8]  DEV_INDEX    DAT index (0..31)
+//   [14:7]  CCC_CODE
 //   [15]    CP           command present: 1 = CCC transfer
-//   [39:32] CCC_CODE     CCC command byte (when CP = 1)
+//   [20:16] DEV_INDEX    DAT index (0..31)
+//   [29]    RNW          0 = write, 1 = read
 //   [63:48] DATA_LENGTH  bytes to transfer
 // ---------------------------------------------------------------------------
 constexpr uint8_t  cmd_attr   (uint64_t d) { return  uint8_t(d & 0x7); }
 constexpr uint8_t  cmd_tid    (uint64_t d) { return  uint8_t((d >> 3) & 0xF); }
-constexpr bool     cmd_rnw    (uint64_t d) { return  ((d >> 7) & 0x1) != 0; }
-constexpr uint8_t  cmd_devidx (uint64_t d) { return  uint8_t((d >> 8) & 0x7F); }
+constexpr uint8_t  cmd_ccc    (uint64_t d) { return  uint8_t((d >> 7) & 0xFF); }
 constexpr bool     cmd_cp     (uint64_t d) { return  ((d >> 15) & 0x1) != 0; }
-constexpr uint8_t  cmd_ccc    (uint64_t d) { return  uint8_t((d >> 32) & 0xFF); }
+constexpr uint8_t  cmd_devidx (uint64_t d) { return  uint8_t((d >> 16) & 0x1F); }
+constexpr bool     cmd_rnw    (uint64_t d) { return  ((d >> 29) & 0x1) != 0; }
 constexpr uint16_t cmd_length (uint64_t d) { return  uint16_t((d >> 48) & 0xFFFF); }
 
 /// Build a 32-bit response descriptor (memmap.adoc RESPONSE_PORT).
@@ -150,12 +147,30 @@ i3c_controller::i3c_controller(sc_core::sc_module_name name, i3c_controller_cfg 
     sensitive << xfer_event_;
     dont_initialize();
 
+    SC_METHOD(reset_method);
+    sensitive << rst_n_i.neg();
+    dont_initialize();
+
     SIM_LOG_INFO(this,
         "i3c_controller instantiated: num_instances=" << cfg_.num_instances
         << ", cmd_fifo=" << cfg_.cmd_fifo_depth
         << ", tx_fifo=" << cfg_.tx_fifo_depth
         << ", rx_fifo=" << cfg_.rx_fifo_depth
         << ", ibi_fifo=" << cfg_.ibi_fifo_depth);
+}
+
+void i3c_controller::reset_method()
+{
+    xfer_event_.cancel();
+    for (auto& s : inst_) {
+        auto bus_model = std::move(s.bus_model);
+        s = inst_state{};
+        s.dat.assign(i3c_controller_cfg::DAT_WORDS, 0);
+        s.dct.assign(i3c_controller_cfg::DCT_WORDS, 0);
+        s.bus_model = std::move(bus_model);
+        s.valid = true;
+    }
+    schedule_recompute();
 }
 
 void i3c_controller::start_of_simulation()

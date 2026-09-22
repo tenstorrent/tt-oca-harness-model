@@ -20,7 +20,7 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     logger.setFunctionTrace(false);
 
     SC_METHOD(cold_reset_handler);
-    sensitive << cold_rst_ni;
+    sensitive << cold_rst_ni.neg();
     dont_initialize();
 
     reset_all_registers();
@@ -117,8 +117,6 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
 
 void sep_scratch_cold_ip::cold_reset_handler()
 {
-    if (!cold_rst_ni.read()) {
-        reset_all_registers();
-        REG_INFO(1, logger) << "cold reset asserted — scratch bank cleared" << std::endl;
-    }
+    reset_all_registers();
+    REG_INFO(1, logger) << "cold reset asserted — scratch bank cleared" << std::endl;
 }

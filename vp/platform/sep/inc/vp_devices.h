@@ -69,15 +69,8 @@ private:
     }
 };
 
-// Reset generation unit — drives the global reset signal at simulation start
-// and re-issues a reset pulse when the AON timer/watchdog requests one.
-//
-// Two outputs, because the SEP has two reset domains. `rst_ni` pulses for both
-// power-on and a watchdog bite; `cold_rst_ni` pulses for power-on only. In RTL
-// (sep_system_csr.sv) the cold scratch bank takes `arst_n(rst_ni)` while the warm
-// bank takes `arst_n(rst_ni && rst_warm_ni)`, so cold-domain state survives a
-// watchdog reset. vector.S depends on that: it reads the warm-handler slot out of
-// cold_scratch[7] after the reset that the handler is meant to service.
+// Reset generation unit. rst_ni covers POR and watchdog reset; cold_rst_ni
+// covers POR only, matching sep_reset_n versus sep_cpu_reset_n in RTL.
 class reset_generation_unit : public sc_module {
 public:
     sc_out<bool> rst_ni;
@@ -86,13 +79,8 @@ public:
 
     SC_HAS_PROCESS(reset_generation_unit);
 
-    // Power-on reset is ASSERTED here, not deasserted. sc_signal writes are
-    // delta-delayed, so a thread asserting at t=0 is invisible to processes
-    // evaluated in that same phase -- the ISS run thread reads the stale value,
-    // starts executing, and the pulse then resets it, running the ROM twice.
-    // Asserted from elaboration there is no such window. Nothing sees a negedge
-    // at t=0 as a result, which is what silicon does too: reset is already low
-    // when power comes up, so peripherals must come up reset by construction.
+    // Reset is already asserted when simulation starts. This avoids an ISS
+    // execution window before the first delta-delayed falling edge.
     void end_of_elaboration() { rst_ni.write(false); cold_rst_ni.write(false); }
 
     reset_generation_unit(sc_module_name name)
@@ -113,15 +101,6 @@ private:
     sc_event external_reset_ev_;
     bool     external_reset_in_progress_ = false;
 
-    // Hold the already-asserted power-on reset, then release both domains.
-    void release_power_on_reset() {
-        std::cout << "[" << sc_core::sc_time_stamp()
-                  << "] reset_generation_unit: releasing cold reset\n";
-        wait(RESET_HOLD);
-        rst_ni->write(true);
-        cold_rst_ni->write(true);
-    }
-
     void do_reset_pulse(bool cold) {
         std::cout << "[" << sc_core::sc_time_stamp()
                   << "] reset_generation_unit: issuing "
@@ -136,7 +115,9 @@ private:
     }
 
     void por_thread() {
-        release_power_on_reset();
+        wait(RESET_HOLD);
+        rst_ni->write(true);
+        cold_rst_ni->write(true);
         if (reset_req_i.read())
             wait(reset_req_i.negedge_event());
         start_monitor_ev_.notify();

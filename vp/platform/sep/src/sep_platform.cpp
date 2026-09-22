@@ -848,6 +848,9 @@ void och_sep_ss::module_bind() {
     pic_inputs[EDN_CMD_REQ_DONE]    = &edn_cmd_req_done_signal;
     pic_inputs[EDN_FATAL_ERR]       = &edn_fatal_err_signal;
     pic_inputs[CRYPTO_ALERT_IRQ]    = &crypto_alert_signal;
+    // RTL sources 39-43 are represented in irq_map.h. Their generating
+    // integrity bridges/pool monitor are not modeled, so the default
+    // unused_irq_signal tie-low is intentional rather than an omitted index.
 
     // CSRNG
     csrng->clk_i(csrng_clk_signal);

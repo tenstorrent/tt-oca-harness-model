@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
  * sw/smc-vp-tests/common/smc_common.h
  *
  * SMC platform peripheral base addresses (local alias aperture
@@ -94,10 +95,10 @@
 #define TEL_INTR_MISSING_LAST      (1u << 0)
 #define TEL_INTR_BUFFER_THRESHOLD  (1u << 4)
 
-/* Telemetry PLIC source IDs (peripheral bits 8:10 -> PLIC sources 9:11) */
-#define PLIC_SRC_TELEMETRY0  9u
-#define PLIC_SRC_TELEMETRY1  10u
-#define PLIC_SRC_TELEMETRY2  11u
+/* Telemetry PLIC source IDs (cpu_interrupts_o[256 + peripheral bit]). */
+#define PLIC_SRC_TELEMETRY0  265u
+#define PLIC_SRC_TELEMETRY1  266u
+#define PLIC_SRC_TELEMETRY2  267u
 
 /* SEP mailbox PLIC source IDs.  RTL packs peripheral_interrupts_i at
  * cpu_interrupts_o[NUM_EXT_INTERRUPTS+:32] with NUM_EXT_INTERRUPTS=256, so
@@ -252,10 +253,10 @@
 /* I3C command-descriptor field positions */
 #define I3C_CMD_ATTR_MASK        0x7u
 #define I3C_CMD_TID_SHIFT        3u
-#define I3C_CMD_RNW_SHIFT        7u
-#define I3C_CMD_DEVIDX_SHIFT     8u
+#define I3C_CMD_CCC_SHIFT        7u
 #define I3C_CMD_CP_SHIFT         15u
-#define I3C_CMD_CCC_SHIFT        32u
+#define I3C_CMD_DEVIDX_SHIFT     16u
+#define I3C_CMD_RNW_SHIFT        29u
 #define I3C_CMD_LENGTH_SHIFT     48u
 
 /* I3C HC_CONTROL / PIO_CONTROL bit fields */
@@ -268,14 +269,19 @@
 #define I3C_PIO_INTR_RESP_READY    (1u << 4u)
 #define I3C_PIO_INTR_TRANSFER_ERR  (1u << 9u)
 
-/* UART PLIC source IDs (peripheral bits 18:21 -> PLIC sources 19:22) */
-#define PLIC_SRC_UART0    19u
-#define PLIC_SRC_UART1    20u
-#define PLIC_SRC_UART2    21u
-#define PLIC_SRC_UART3    22u
+/* UART PLIC source IDs (peripheral bits 18:21). */
+#define PLIC_SRC_UART0    275u
+#define PLIC_SRC_UART1    276u
+#define PLIC_SRC_UART2    277u
+#define PLIC_SRC_UART3    278u
 
-/* AVSBus PLIC source ID (peripheral bit 22 -> PLIC source 23) */
-#define PLIC_SRC_AVSBUS   23u
+/* AVSBus PLIC source ID (peripheral bit 22). */
+#define PLIC_SRC_AVSBUS   279u
+
+/* I2C PLIC source IDs (peripheral bits 23:25). */
+#define PLIC_SRC_I2C0     280u
+#define PLIC_SRC_I2C1     281u
+#define PLIC_SRC_I2C2     282u
 
 /* AVSBus Controller — base 0xC000_4000, 4 KiB window, 32-bit registers.
  * Mirrors hw/ip/avsbus_controller RDL (AVSBus 1.3.1 single-target). */

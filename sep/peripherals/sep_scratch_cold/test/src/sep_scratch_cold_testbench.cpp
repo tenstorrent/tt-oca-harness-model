@@ -14,6 +14,7 @@
  *   FUNC-SCRATCH-007  VP ack: SCRATCH[6]=0xA1E50006 -> SCRATCH[7]=0x00100001
  *   FUNC-SCRATCH-008  No spurious acks — non-magic writes leave adjacent registers unchanged
  *   FUNC-SCRATCH-009  CCI parameter defaults — verbosity, sim_out_enable, sep_status_enable
+ *   FUNC-SCRATCH-010  Cold reset clears storage; warm-reset absence retains it
  *   FUNC-SCRATCH-012  Virtual console HEX16 opcode through SCRATCH[2]
  *   FUNC-SCRATCH-013  Decoder isolation — on_bytes, flush, disable, TSV parse edges
  */
@@ -49,8 +50,8 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     SC_HAS_PROCESS(sep_scratch_cold_testbench);
 
     sep_scratch_cold_ip dut;
-    sc_core::sc_signal<bool> cold_rst_n_sig;
     tlm_utils::simple_initiator_socket<sep_scratch_cold_testbench, 32> initiator_socket;
+    sc_core::sc_signal<bool> cold_rst_n{"cold_rst_n"};
     RegLogger logger;
 
     int m_tests_run    = 0;
@@ -60,12 +61,11 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     explicit sep_scratch_cold_testbench(sc_core::sc_module_name n)
         : sc_module(n)
         , dut("dut")
-        , cold_rst_n_sig("cold_rst_n_sig")
         , initiator_socket("initiator_socket")
     {
         initiator_socket.bind(dut.target_socket);
-        dut.cold_rst_ni(cold_rst_n_sig);
-        cold_rst_n_sig.write(true);
+        dut.cold_rst_ni(cold_rst_n);
+        cold_rst_n.write(true);
         logger.setMaxVerbosity(dut.verbosity.get_param_value());
         logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
         logger.setFunctionTrace(false);
@@ -199,9 +199,9 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
 
         // cold_reset_handler is an SC_METHOD on the port, so the scheduler has to
         // run for the edge to be delivered — hence real time either side.
-        cold_rst_n_sig.write(false);
+        cold_rst_n.write(false);
         wait(1, sc_core::SC_NS);
-        cold_rst_n_sig.write(true);
+        cold_rst_n.write(true);
         wait(1, sc_core::SC_NS);
 
         for (unsigned i = 0u; i < 8u; ++i) {
@@ -413,6 +413,36 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         }
 
         if (ok) report_test_pass(TEST);
+    }
+
+    void test_cold_reset()
+    {
+        const std::string TEST = "FUNC-SCRATCH-010: Cold reset domain";
+        report_test_start(TEST);
+        scratch_write(3u, 0xA5A55A5Au);
+        wait(sc_core::SC_ZERO_TIME);
+        if (scratch_read(3u) != 0xA5A55A5Au) {
+            report_test_fail(TEST, "pre-reset value did not store");
+            return;
+        }
+
+        // No warm-reset input exists by design, so ordinary time passage retains.
+        wait(1, sc_core::SC_NS);
+        if (scratch_read(3u) != 0xA5A55A5Au) {
+            report_test_fail(TEST, "cold scratch did not retain without cold reset");
+            return;
+        }
+
+        cold_rst_n.write(false);
+        wait(sc_core::SC_ZERO_TIME);
+        wait(sc_core::SC_ZERO_TIME);
+        const bool cleared = scratch_read(3u) == 0u;
+        cold_rst_n.write(true);
+        wait(sc_core::SC_ZERO_TIME);
+        if (!cleared)
+            report_test_fail(TEST, "cold reset did not clear scratch storage");
+        else
+            report_test_pass(TEST);
     }
 
     // =========================================================================
@@ -894,6 +924,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         test_vp_ack_scratch4();
         test_vp_ack_scratch6();
         test_no_spurious_ack();
+        test_cold_reset();
         test_virt_console_decode();
         test_virt_console_hex16();
         test_status_decoder_types();

@@ -17,6 +17,9 @@ class sep_scratch_cold_ip : public sep_scratch_cold_base
 public:
     SC_HAS_PROCESS(sep_scratch_cold_ip);
 
+    /// Active-low cold/power-on reset. Watchdog warm reset does not drive it.
+    sc_core::sc_in<bool> cold_rst_ni{"cold_rst_ni"};
+
     explicit sep_scratch_cold_ip(sc_module_name n);
 
     /// Active-low cold (power-on) reset — clears all scratch registers when asserted.

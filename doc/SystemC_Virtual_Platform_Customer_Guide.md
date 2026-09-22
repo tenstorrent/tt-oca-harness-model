@@ -1,6 +1,6 @@
 ---
 title: "SystemC Virtual Platform — Customer Guide"
-date: "2026-06-08"
+date: "2026-09-11"
 toc: true
 toc-depth: 3
 geometry: "left=1.4cm, right=1.4cm, top=2cm, bottom=2cm"
@@ -26,8 +26,11 @@ header-includes: |
 ---
 
 A high-level guide to building and running SystemC-based virtual platforms and integrating new IP models.
-This document covers two simulation flows and the interface standards that every IP must follow to plug into
-the platform.
+This document covers two simulation flows, the interface standards that every IP must follow to plug into
+the platform, and the concrete steps for adding a module to the Open Chiplet Atlas Harness (OCAH)
+virtual platforms in this repository (`sep-vp`, `smc-vp`, and `smu-vp`), connecting it to the overall
+system, and adding platform-level tests. Build commands, INI knobs, and host-package steps live in
+the repository [README](../README.md); this guide is the integration contract.
 
 # 1. Overview
 
@@ -40,7 +43,7 @@ Two simulation environments are supported. You choose one based on your project 
 |                     | Synopsys Virtualizer (VDK)                                          | Accellera SystemC                                            |
 |---------------------|---------------------------------------------------------------------|--------------------------------------------------------------|
 | License             | Commercial (Virtualizer Elite)                                      | Open-source / free                                           |
-| Best for            | Full-system prototypes with CPUs, buses, and pre-built DesignWare IPs| Standalone IP-level models and unit-test environments        |
+| Best for            | Full-system prototypes with CPUs, buses, and pre-built DesignWare IPs| This repository's `sep-vp` / `smc-vp` / `smu-vp` and IP unit tests |
 | Build system        | Virtualizer Studio (GUI / Python API)                               | CMake + standard C++ toolchain                               |
 | IP wiring           | Declarative JSON (`.vdksys` system descriptor)                      | Programmatic C++ (socket binding in `sc_module`)             |
 | Typical entry point | `.vpproject` opened in Virtualizer Studio                           | `sc_main()` in a C++ executable                              |
@@ -147,7 +150,10 @@ your `PATH`.
 ### Building
 
 1. **GUI:** Open the `.vpproject` file in Virtualizer Studio and build the active configuration.
-2. **Headless:** Use the embedded Python API via a build script (e.g. `scripts/build.py`).
+2. **Headless:** Use the embedded Python API via a build script shipped with that VDK project.
+
+This repository (`tt-oca-harness-model`) is an Accellera SystemC tree. It does not include a
+`.vdksys` / `.vpproject`. Use Section 2.2 and Section 6 to build and extend the platforms here.
 
 ### Running
 
@@ -184,18 +190,29 @@ without any commercial tooling.
 
 | Requirement      | Details                                      |
 |------------------|----------------------------------------------|
-| Accellera SystemC| 2.3.3 or later — accellera.org/downloads     |
-| CMake            | 3.10 or later                                |
-| C++ compiler     | C++20 capable (GCC 10+, Clang 10+)           |
-| Tested host OS   | Ubuntu 22.04 LTS (x86_64) and Red Hat Enterprise Linux 8.10 (Ootpa, kernel 4.18.0-553.el8_10.x86_64) |
+| Accellera SystemC| **3.0.2** (CI pin) — built with the same `-std=c++NN` as the VP |
+| Accellera CCI    | **1.0.2** — required; this is the only version CI installs |
+| CMake            | 3.20 or later (`vp/CMakeLists.txt`)          |
+| C++ compiler     | C++20 (GCC 11+ or Apple Clang). C++20 is required for `smc-vp` / `smu-vp`; SEP-only Accellera builds may still use C++17 if SystemC was built that way |
+| Boost            | ≥ 1.74 (`iostreams`, `program_options`)      |
+| OpenSSL          | 3.x (SEP crypto models)                      |
+| Tested host OS   | Ubuntu 22.04 LTS, Red Hat Enterprise Linux 8.10, and macOS (Apple Clang) |
 
 ### Environment Setup
 
-The CMake build system uses `SYSTEMC_HOME` to locate `systemc.h` and `libsystemc`.
+The CMake build system uses `SYSTEMC_HOME` to locate `systemc.h` and `libsystemc`, and `CCI_HOME` for
+`cci_configuration`. SystemC's ABI is keyed per language standard (`sc_api_version_*_cxx202002L`):
+point `SYSTEMC_HOME` at a tree built with the same `-std` you will use for the VP.
 
 ```bash
-export SYSTEMC_HOME=/path/to/systemc-2.3.3
+export SYSTEMC_HOME=/path/to/systemc-3.0.2
+export CCI_HOME=/path/to/cci-1.0.2
+export CMAKE_CXX_STANDARD=20
 ```
+
+This repository's platforms are configured with `vp/configure_vp.sh` (default C++20). Repo-root
+`make sep-vp` defaults to C++17 unless you pass `CMAKE_CXX_STANDARD=20`. See the README for
+Whisper (`WHISPER_HOME`, required to configure `smc-vp` / `smu-vp`) and RISC-V toolchain variables.
 
 ### Building and Running
 
@@ -209,18 +226,19 @@ make
 ./<output_binary>
 ```
 
-Common CMake options vary by project but may include build type (Debug, Release, Coverage), feature toggles,
-and test-vector capture flags.
+In this repository, prefer `vp/configure_vp.sh` then `make sep-vp` / `make smc-vp` (or
+`cmake --build … --target smu-vp`). Common CMake options include build type (Debug, Release) and
+`-DSMC_CXX_STANDARD=20` when configuring the SMC/SMU tree.
 
-### Key Files in an Accellera Project
+### Key Files in This Repository (Accellera)
 
 | File / Directory   | Purpose                                                  |
 |--------------------|----------------------------------------------------------|
-| `CMakeLists.txt`   | Build system entry point                                 |
-| `SystemC/include/` | IP model headers (module declarations, TLM socket ports) |
-| `SystemC/src/`     | IP model implementation                                  |
-| `Tests/`           | Testbench and test configuration                         |
-| `scripts/`         | Build helpers and CI/regression scripts                  |
+| `vp/CMakeLists.txt` / `vp/configure_vp.sh` | Platform CMake entry and host-prefix probe |
+| `vp/platform/{sep,smc,smu}/` | Platform wiring, `sc_main`, CCI INI |
+| `sep/peripherals/<ip>/`, `smc/peripherals/<ip>/` | IP headers, sources, unit tests, AsciiDoc triad |
+| `common/include/`  | Shared `regmodel` helpers and `sim_log.h`                |
+| `sw/*-vp-tests/`   | Bare-metal firmware suites for each platform             |
 
 # 3. Interface Standards
 
@@ -388,15 +406,17 @@ platform source.
 
 ## 4.4 Setting the Quantum in Accellera SystemC
 
-In a pure Accellera SystemC environment there is no `quantum_initializer` model. Instead, set the global
-quantum directly in `sc_main()` before calling `sc_start()`:
+In a pure Accellera SystemC environment there is no `quantum_initializer` model. Set the global
+quantum once in `sc_main()` (or the composing platform) **before** any ISS is constructed.
+This repository uses `common/include/tlm_quantum_policy.h` (`simtlm::set_global_quantum` /
+`ensure_global_quantum`) so a dual-ISS process (`smu-vp`) installs one value and subsystems do
+not overwrite it. The process-wide default is **1 µs** (`DEFAULT_GLOBAL_QUANTUM_NS = 1000`).
 
 ```cpp
-#include <tlm_utils/tlm_quantumkeeper.h>
+#include "tlm_quantum_policy.h"
 
 int sc_main(int argc, char *argv[]) {
-    // Set global quantum to 1 ms
-    tlm::tlm_global_quantum::instance().set(sc_core::sc_time(1, sc_core::SC_MS));
+    simtlm::set_global_quantum_ns(1000);  // 1 µs — do this before constructing either ISS
 
     // ... instantiate platform, bind sockets ...
 
@@ -780,7 +800,155 @@ ext->device_id = 0x1234;
 trans.set_extension(ext);
 ```
 
-# 6. TLM-2.0 Quick Reference
+# 6. Adding a Module to the OCAH Virtual Platforms
+
+This section describes, at a high level, how a new IP module is added to the Open Chiplet Atlas Harness
+(OCAH) virtual platforms in this repository, how it is connected to the overall system, and how
+platform-level tests are added. Section 5 covered the generic interface contract; this section maps that
+contract onto the concrete repository layout.
+
+## 6.1 Repository Layout
+
+The repository models two subsystems plus the on-die interconnect that joins them. Three executables
+ship from `vp/`:
+
+| Binary   | What it simulates |
+|----------|-------------------|
+| `sep-vp` | SEP only — VeeR EL2 firmware on the secure enclave |
+| `smc-vp` | SMC only — Whisper-backed CVA6 cluster + SMC fabric and peripherals |
+| `smu-vp` | SMC + SEP in one process, connected by the SMU interconnect and AoU stub |
+
+| Component                    | Location                | Contents                                                                 |
+|------------------------------|-------------------------|--------------------------------------------------------------------------|
+| Shared helpers               | `common/include/`       | `reg_access.h`, `reg_map.h`, `reg_file.h`, `reg_param.h`, `sim_log.h`, `tlm_quantum_policy.h` |
+| SMC IP models                | `smc/peripherals/<ip>/` | UART, I2C, I3C, PLIC, CLINT, DMA, WDT, BEU, reset unit, bootrom, scratchpad, PVT/PLL/AVSBus/telemetry, … |
+| SMC fabric / cluster         | `smc/smc_fabric/`, `smc/cpu_cluster/` | AXI fabric/router and Whisper-backed CVA6 cluster |
+| SEP IP models                | `sep/peripherals/<ip>/` | AES, HMAC, KMAC, OTBN, Adams Bridge, CSRNG, EDN, entropy_src, mailbox, SPI, … (no standalone GPIO IP) |
+| Always-On Unit               | `aou/`                  | AXI-over-UCIe loosely-timed model used by `smc-vp` / `smu-vp` |
+| SMC virtual platform         | `vp/platform/smc/`      | `smc_platform.hpp` / `src/smc_platform.cpp` — builds `smc-vp` |
+| SEP virtual platform         | `vp/platform/sep/`      | `sep_platform.hpp` / `src/sep_platform.cpp` — module type remains `och_sep_ss`; builds `sep-vp` |
+| SMU virtual platform         | `vp/platform/smu/`      | Combined SMC+SEP wiring; builds `smu-vp` |
+| Shared platform infrastructure | `vp/platform/infra/`  | Bus, memory, ELF loader, and IRQ plumbing used by the SEP/SMU platforms |
+| SMC platform tests           | `sw/smc-vp-tests/`      | Bare-metal RV64 firmware on `smc-vp`, plus `run_smc_vp_tests.sh` |
+| SEP platform tests           | `sw/sep-vp-tests/`      | Bare-metal RV32 firmware on `sep-vp`, plus `run_sep_vp_tests.sh` and `fw-tests-from-tt-oca-hw/` |
+| SMU platform tests           | `sw/smu-vp-tests/`      | Dual-firmware tests on `smu-vp`, plus `run_smu_vp_tests.sh` |
+
+Every modeled IP directory follows the same shape, regardless of subsystem:
+
+```
+<ip>/
+├── include/<ip>.h              # module declaration (ports, sockets, parameters)
+├── src/<ip>.cpp                # module implementation
+├── test/                       # standalone (unit) testbench
+├── doc/
+│   ├── index.adoc              # landing page
+│   ├── implementation.adoc     # SystemC/TLM-2.0 model (not a TRM copy)
+│   └── test_plan.adoc          # cases + how to run
+├── CMakeLists.txt              # builds the IP library and its unit test
+└── run_tests.sh                # release / ASan / coverage test driver
+```
+
+`smc/smc_fabric/`, `smc/cpu_cluster/`, and `aou/` use the same AsciiDoc triad under `doc/`.
+
+## 6.2 Step 1 — Create the IP Model
+
+Create a new directory under `smc/peripherals/<ip>/` (SMC) or `sep/peripherals/<ip>/` (SEP) following the
+shape above. The module must satisfy the interface standards from Section 3:
+
+1. **Inherit from `sc_core::sc_module`** and expose a `tlm_utils::simple_target_socket` for register
+   access (SEP register sockets are typically 32-bit; SMC fabric sockets are 64-bit), plus
+   `sc_in<bool>` clock/reset and `sc_out<bool>` interrupt ports as needed.
+2. **Implement `b_transport()`** to decode the register offset and service reads/writes. The platform
+   router rebases addresses to a 0-based offset within the IP's window, so the model decodes offsets
+   relative to its own base.
+3. **Use the shared register-access helpers** (`common/include/reg_access.h`, `reg_map.h`) for RO/WO/W1C
+   masking logic instead of hand-rolling mask arithmetic, and the shared logging macros
+   (`common/include/sim_log.h`) for transaction tracing.
+4. **Expose runtime configuration as CCI parameters** (`cci::cci_param<T>`) so platforms and testbenches
+   can preset or override them through the configuration broker (`.ini` files at platform level).
+5. **Carry the subsystem sideband extension.** SMC IPs attach and inspect the shared
+   `smc::smc_axi_extension` (`smc/common/include/smc_axi_extension.h`) on every transaction so the fabric
+   can make access-control decisions. This single canonical header is the contract — do not define a
+   per-IP copy.
+
+All models are built as C++20 against the Accellera SystemC/CCI reference implementations.
+
+## 6.3 Step 2 — Add Standalone (Unit) Tests
+
+Each IP ships a self-checking unit testbench in `test/<ip>_tb.cpp` that drives the model in isolation over
+its TLM socket: reset defaults, register read/write behavior, side effects, decode misses, and error paths.
+The `run_tests.sh` driver builds and runs the testbench in three separate modes — release, AddressSanitizer,
+and coverage — and the change bar is ≥ 95% line coverage on the touched sources with a clean ASan run.
+
+Register the IP in the subsystem's test orchestrator so it runs in CI:
+
+- SMC: add the IP to `smc/run_all_smc_tests.sh`.
+- SEP: add the IP to `sep/peripherals/run_all_peripherals.sh`.
+
+## 6.4 Step 3 — Connect the Module to the Overall System
+
+Connecting an IP means instantiating it in the platform top-level, mapping its register window into the
+system address map, and wiring its sideband signals (reset, interrupt, and any IP-specific I/O).
+
+### SMC platform (`vp/platform/smc/`)
+
+1. **Build:** add the IP's directory via `add_subdirectory()` in `vp/platform/smc/CMakeLists.txt` and link
+   the IP's library into the `smc-vp` executable.
+2. **Instantiate:** declare the module as a member of the platform class in `smc_platform.hpp`.
+3. **Address map:** in `smc_platform.cpp`, assign the IP a base address in the SMC peripheral window and
+   add a route to the platform's address router (`periph_router`), which demultiplexes incoming
+   transactions to each peripheral and rebases the address to a 0-based offset.
+4. **Sideband signals:** bind the IP's reset input to the platform reset, route its interrupt output to the
+   interrupt aggregator (which feeds the PLIC), and bind any IP-specific outputs to platform signals.
+5. **External visibility (if applicable):** if the IP must be reachable from outside the SMC (from the
+   system, JTAG, or SEP side), also add a route on the corresponding front-port router.
+
+### SEP platform (`vp/platform/sep/`)
+
+1. **Build:** add the IP's directory via `add_subdirectory()` in `vp/platform/sep/CMakeLists.txt` and link
+   the IP's library into the `sep-vp` executable.
+2. **Address map:** add the IP's base and end addresses to the platform options (`inc/Args.hpp`).
+3. **Instantiate and map:** in `sep_platform.hpp` / `src/sep_platform.cpp` (class `och_sep_ss`),
+   instantiate the module and register its address range on the platform bus
+   (`bus->ports[...] = new PortMapping(start, end, *ip)`), increasing the target count accordingly.
+   CCI instance names stay under `och_sep_ss1.*` so existing INI keys keep working.
+4. **Interrupt:** if the IP raises interrupts, assign it a source ID in `inc/irq_map.h` and wire the
+   interrupt signal to the EL2 PIC.
+
+### SMU platform (`vp/platform/smu/`)
+
+If the IP must be visible across the SMC↔SEP boundary, also hook it up in `smu_platform.hpp` /
+`src/smu_platform.cpp`: the SMU xbar and dedicated SEP→SMC window (`[0x4000_0000, +2 MiB)`) are
+what dual-firmware tests exercise. See `vp/platform/smu/docs/README.md`.
+
+## 6.5 Step 4 — Add Platform-Level Tests
+
+Unit tests exercise the IP in isolation; platform-level tests exercise it through the integrated system,
+running real firmware on the platform's RISC-V core.
+
+1. **Create a firmware test** under `sw/smc-vp-tests/smc-<ip>-test/` (SMC), `sw/sep-vp-tests/<ip>-test/`
+   (SEP), or `sw/smu-vp-tests/smu-<name>-test/` (cross-subsystem). Each test is a small bare-metal
+   program (`main.c` plus a `Makefile` that pulls in the shared startup code, linker script, and
+   `printf` from the suite's `common/` directory). The test typically enables the IP, programs its
+   registers, polls status, and prints a pass/fail result. Cross-boundary tests need an SMC ELF and a
+   SEP ELF.
+2. **Publish the register map** to firmware: add the IP's base address and register offsets to the suite's
+   common header (`sw/smc-vp-tests/common/smc_common.h` for SMC; SEP tests use the headers under
+   `sw/sep-vp-tests/` / `fw-tests-from-tt-oca-hw/dependencies/meta/registers/c`).
+3. **Run through the suite runner:** the runners discover and execute the tests on the platform binary —
+   `sw/smc-vp-tests/run_smc_vp_tests.sh` for `smc-vp`, `sw/sep-vp-tests/run_sep_vp_tests.sh` for
+   `sep-vp`, and `sw/smu-vp-tests/run_smu_vp_tests.sh` for `smu-vp`. They build the firmware with a
+   RISC-V cross-compiler, boot the platform, and check the test output. Pass the platform CCI INI
+   (`smc_platform_vp.ini`, `accellera_config.ini`, or the SMU pair under `vp/platform/smu/config/`).
+4. **Register in CI:** add the IP's unit tests and platform test to the GitHub Actions workflows
+   (`.github/workflows/ci.yml`, and `ci-rhel8.yml` where applicable) so every push exercises the new module
+   at both levels.
+
+The PVT wrapper (`smc/peripherals/pvt_wrap/`, platform test `sw/smc-vp-tests/smc-pvt-wrap-test/`) is a
+recent end-to-end example of this flow: model, unit tests, `smc_platform` hookup, firmware test, and CI
+registration.
+
+# 7. TLM-2.0 Quick Reference
 
 | Concept            | VDK (`.vdksys` JSON)                              | Accellera (C++)                                   |
 |--------------------|---------------------------------------------------|---------------------------------------------------|
@@ -791,12 +959,12 @@ trans.set_extension(ext);
 | Clock / Reset      | `"protocol_id": "CLOCK"` / `"RESET"` connections  | `sc_in<bool>` bound to `sc_signal<bool>`          |
 | Interrupt          | Signal connection in `.vdksys`                    | `sc_out<bool>` bound to `sc_signal<bool>`         |
 
-# 7. Integration Checklist
+# 8. Integration Checklist
 
 Use this checklist when adding any new IP to the platform, regardless of simulation flow:
 
 - [ ] IP inherits from `sc_core::sc_module`.
-- [ ] At least one `simple_target_socket<T, 64>` is exposed for register access.
+- [ ] At least one `simple_target_socket` is exposed for register access (bus width matches the subsystem).
 - [ ] `b_transport()` is registered on every target socket and handles `TLM_READ_COMMAND` / `TLM_WRITE_COMMAND`.
 - [ ] `trans.set_response_status()` is called before returning from `b_transport()`.
 - [ ] `sc_in<bool>` ports are provided for clock and reset.
@@ -805,3 +973,14 @@ Use this checklist when adding any new IP to the platform, regardless of simulat
 - [ ] IP is instantiated and sockets are bound in the platform top (Accellera) or declared in the `.vdksys` (VDK).
 - [ ] (Optional) A `tlm_extension<T>` is defined if the IP requires protocol-specific sideband data.
 - [ ] (Optional) `simple_initiator_socket<T, 64>` is exposed if the IP initiates transactions (DMA, memory access).
+
+Additional items for IPs integrated into the OCAH virtual platforms in this repository (Section 6):
+
+- [ ] Model lives under `smc/peripherals/<ip>/` or `sep/peripherals/<ip>/` with `include/`, `src/`, `test/`, `doc/{index,implementation,test_plan}.adoc`, `CMakeLists.txt`, and `run_tests.sh`.
+- [ ] Register masking uses the shared helpers (`reg_access.h` / `reg_map.h`); tracing uses `sim_log.h`; runtime knobs are CCI parameters.
+- [ ] SMC IPs use the canonical `smc_axi_extension.h` sideband type on all transactions.
+- [ ] Standalone testbench passes release, ASan, and ≥ 95% line-coverage runs via `run_tests.sh` (three separate builds; do not combine `--asan` and `--coverage`).
+- [ ] IP is registered in the subsystem orchestrator (`smc/run_all_smc_tests.sh` or `sep/peripherals/run_all_peripherals.sh`).
+- [ ] Platform hookup is complete: `add_subdirectory()` + link in the platform `CMakeLists.txt`, address route (SMC router / SEP bus `PortMapping`), reset and interrupt wiring, CCI INI if the model has knobs.
+- [ ] A platform-level firmware test exists under `sw/smc-vp-tests/`, `sw/sep-vp-tests/`, or `sw/smu-vp-tests/` (when the IP is visible across the SMU) and passes through the suite runner.
+- [ ] The IP's unit tests and platform test are registered in `.github/workflows/ci.yml` (and `ci-rhel8.yml` where applicable).

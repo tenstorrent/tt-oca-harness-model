@@ -2,7 +2,7 @@
 
 The tests under `sw/sep-vp-tests/` are written by the people who build the
 virtual platform. The tests in *this* directory are the firmware tests from the
-`tt-oca-harness` repo (`fw/sep/tests`), written by the RTL and firmware teams, and
+`tt-oca-harness` repo (`hw/sys/sep/dv/fw/tests`), written by the RTL and firmware teams, and
 run here against `sep-vp`. Running both suites means the VP is checked against
 software that was not written with the VP in mind.
 
@@ -55,7 +55,7 @@ located by walking up to the `tt-oca-harness-model` root. Override with `GCC_PRE
 
 ```
 fw-tests-from-tt-oca-hw/
-├── fw/sep/                     copy of tt-oca-harness fw/sep — the tests themselves
+├── fw/sep/                     VP-adapted copy of tt-oca-harness SEP firmware
 │   ├── tests/
 │   │   ├── run_all_tests.sh    build + run everything, print a summary
 │   │   ├── run_test.sh         build + run one test
@@ -107,6 +107,17 @@ everything from scratch.
 
 Kept to a minimum, and all of them are about running somewhere other than a TT
 machine. Every one is commented in place.
+
+The source-of-truth paths in the current harness are:
+
+- tests: `hw/sys/sep/dv/fw/tests`
+- shared firmware includes: `hw/sys/sep/dv/fw/include`
+- production ROM: `hw/sys/sep/bootrom/prod`
+- generated top-level addresses: `hw/sys/sep/regs/gen/c/sep_addr.h`
+
+The VP still exposes the legacy `och_sep_top_reg.h` macro namespace to avoid a
+tree-wide firmware churn. Refresh values from PeakRDL outputs, but do not replace
+that header blindly: the generated names are not source-compatible.
 
 - **`fw/sep/tests/vp_test_env.sh`** (new) — path, toolchain and `sep-vp`
   discovery, shared by both runner scripts. Also `vp_base_config`, which hands
