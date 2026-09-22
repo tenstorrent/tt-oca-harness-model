@@ -40,6 +40,7 @@ void sep_cpu_ctrl_ip::end_of_elaboration()
     hwif_in.fast_pka_en         = bool(fast_pka_en.get_param_value());
     hwif_in.test_en             = bool(test_en.get_param_value());
     hwif_in.bypass_mem_repair   = bool(bypass_mem_repair.get_param_value());
+    nmi_vec_o.write(static_cast<uint32_t>(fs_nmi_vec_) << 1);
 }
 
 void sep_cpu_ctrl_ip::reset_handler()

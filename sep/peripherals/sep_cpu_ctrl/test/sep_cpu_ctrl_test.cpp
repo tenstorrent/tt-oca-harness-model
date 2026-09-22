@@ -78,6 +78,9 @@ SC_MODULE(Tb) {
     }
 
     void run() {
+        assert(nmi_vec_sig.read() == 0xC0000100u); // 0x60000080 << 1
+        std::cout << "[PASS] T0: nmi_vec_o initialized before any reset edge\n";
+
         // Prime to high, then assert (falling edge fires reset_handler), then deassert
         rst_n_sig.write(true);
         wait(1, sc_core::SC_NS);
