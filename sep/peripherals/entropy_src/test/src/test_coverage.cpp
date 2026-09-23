@@ -28,7 +28,7 @@ bool testbench::tc_cov_boot_rst_n_with_startup_delay()
     for (int i = 0; i < 8; ++i)
         wait(sc_core::SC_ZERO_TIME);
 
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, delay_ns);
+    dut->m_startup_delay_ns = delay_ns;
     wait(sc_core::SC_ZERO_TIME);
 
     sig_rst_n.write(true);
@@ -61,7 +61,7 @@ bool testbench::tc_cov_fifo_reenable_startup_delay()
     uint32_t rd_val = 0u;
     const uint32_t delay_ns = 1200u;
 
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, delay_ns);
+    dut->m_startup_delay_ns = delay_ns;
     wait(sc_core::SC_ZERO_TIME);
 
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
@@ -102,7 +102,7 @@ bool testbench::tc_cov_fifo_reenable_startup_delay()
     COV_CHECK(fill_started,
         "TC-COV-002: FIFO did not fill after re-enable STARTUP_DELAY expired");
 
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0x00000000u);
+    dut->m_startup_delay_ns = 0x00000000u;
     wait(sc_core::SC_ZERO_TIME);
 
     return ok;
@@ -113,7 +113,7 @@ bool testbench::tc_cov_sw_reset_during_reenable_startup_delay()
 {
     const uint32_t delay_ns = 2000u;
 
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, delay_ns);
+    dut->m_startup_delay_ns = delay_ns;
     wait(sc_core::SC_ZERO_TIME);
 
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
@@ -129,7 +129,7 @@ bool testbench::tc_cov_sw_reset_during_reenable_startup_delay()
     dut->m_reset_event.notify(sc_core::SC_ZERO_TIME);
     wait(sc_core::sc_time(10.0, sc_core::SC_NS));
 
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0x00000000u);
+    dut->m_startup_delay_ns = 0x00000000u;
     wait(sc_core::SC_ZERO_TIME);
 
     return true;
@@ -141,7 +141,7 @@ bool testbench::tc_cov_hw_reset_rederive_state()
     bool ok = true;
     uint32_t rd_val = 0u;
 
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 300u);
+    dut->m_startup_delay_ns = 300u;
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000001u);
     wait(sc_core::SC_ZERO_TIME);
 
@@ -158,9 +158,8 @@ bool testbench::tc_cov_hw_reset_rederive_state()
     COV_CHECK(rd_val == entropy_src_basetest::CTRL_RESET,
         "TC-COV-004: CTRL not at reset after hw reset re-derive");
 
-    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, rd_val);
-    COV_CHECK(rd_val == entropy_src_basetest::STARTUP_CTRL_RESET,
-        "TC-COV-004: STARTUP_CTRL not cleared after hw reset");
+    COV_CHECK(dut->m_startup_delay_ns == 0u,
+        "TC-COV-004: startup delay not cleared after hw reset");
 
     return ok;
 }
@@ -209,6 +208,30 @@ bool testbench::tc_cov_fips_lock_w1s()
     COV_CHECK(rd_val == entropy_src_basetest::FIPS_LOCK_RESET,
         "TC-COV-006: FIPS_LOCK not clear after reset");
 
+    test->register_read_32(entropy_src_basetest::ALERT_THRESHOLD_OFFSET, rd_val);
+    COV_CHECK(rd_val == entropy_src_basetest::ALERT_THRESHOLD_RESET,
+        "TC-COV-006: ALERT_THRESHOLD not at reset");
+    test->register_write_32(entropy_src_basetest::ALERT_THRESHOLD_OFFSET, 0x00000010u);
+    test->register_read_32(entropy_src_basetest::ALERT_THRESHOLD_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000010u,
+        "TC-COV-006: ALERT_THRESHOLD write ignored before lock");
+
+    test->register_write_32(entropy_src_basetest::MIN_ENTROPY_H_OFFSET, 0x00000020u);
+    test->register_read_32(entropy_src_basetest::MIN_ENTROPY_H_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000020u,
+        "TC-COV-006: MIN_ENTROPY_H write ignored before lock");
+
+    test->register_write_32(entropy_src_basetest::BIW_OBS_CTRL_OFFSET, 0x1u);
+    test->register_read_32(entropy_src_basetest::BIW_OBS_CTRL_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x1u, "TC-COV-006: BIW_OBS_CTRL write failed");
+    test->register_write_32(entropy_src_basetest::NOISE_OBS_CTRL_OFFSET, 0x000000F3u);
+    test->register_read_32(entropy_src_basetest::NOISE_OBS_CTRL_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x000000F1u, "TC-COV-006: NOISE_OBS_CTRL FLUSH not self-clearing on read");
+    test->register_read_32(entropy_src_basetest::BIW_OBS_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0u, "TC-COV-006: BIW_OBS_STATUS not empty");
+    test->register_read_32(entropy_src_basetest::NOISE_OBS_RDATA_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0u, "TC-COV-006: NOISE_OBS_RDATA not empty");
+
     // Writing 0 to an already-clear lock leaves it clear.
     test->register_write_32(entropy_src_basetest::FIPS_LOCK_OFFSET, 0x00000000u);
     test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
@@ -232,6 +255,78 @@ bool testbench::tc_cov_fips_lock_w1s()
     test->register_read_32(entropy_src_basetest::FIPS_LOCK_OFFSET, rd_val);
     COV_CHECK(rd_val == 0x00000001u,
         "TC-COV-006: FIPS_LOCK reserved bits not masked");
+
+    const uint32_t ctrl_before = entropy_src_basetest::CTRL_RESET;
+    test->register_write_32(entropy_src_basetest::CTRL_OFFSET, 0x00000000u);
+    test->register_read_32(entropy_src_basetest::CTRL_OFFSET, rd_val);
+    COV_CHECK(rd_val == ctrl_before,
+        "TC-COV-006: CTRL changed while FIPS_LOCK set");
+    test->register_write_32(entropy_src_basetest::ALERT_THRESHOLD_OFFSET, 0x00000001u);
+    test->register_read_32(entropy_src_basetest::ALERT_THRESHOLD_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000010u,
+        "TC-COV-006: ALERT_THRESHOLD changed while FIPS_LOCK set");
+    test->register_write_32(entropy_src_basetest::MIN_ENTROPY_H_OFFSET, 0x00000001u);
+    test->register_read_32(entropy_src_basetest::MIN_ENTROPY_H_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x00000020u,
+        "TC-COV-006: MIN_ENTROPY_H changed while FIPS_LOCK set");
+
+    test->register_read_32(entropy_src_basetest::HEALTH_TEST_WINDOW_SIZE_OFFSET, rd_val);
+    const uint32_t window_before = rd_val;
+    const uint32_t window_attempt = (window_before == 0x1u) ? 0x2u : 0x1u;
+    test->register_write_32(entropy_src_basetest::HEALTH_TEST_WINDOW_SIZE_OFFSET, window_attempt);
+    test->register_read_32(entropy_src_basetest::HEALTH_TEST_WINDOW_SIZE_OFFSET, rd_val);
+    COV_CHECK(rd_val == window_before,
+        "TC-COV-006: HEALTH_TEST_WINDOW_SIZE changed while FIPS_LOCK set");
+
+    test->register_read_32(entropy_src_basetest::APT_PROPORTION_LO_OFFSET, rd_val);
+    const uint32_t lo_before = rd_val;
+    const uint32_t lo_attempt = (lo_before == 0x350u) ? 0x100u : 0x350u;
+    test->register_write_32(entropy_src_basetest::APT_PROPORTION_LO_OFFSET, lo_attempt);
+    test->register_read_32(entropy_src_basetest::APT_PROPORTION_LO_OFFSET, rd_val);
+    COV_CHECK(rd_val == lo_before,
+        "TC-COV-006: APT_PROPORTION_LO changed while FIPS_LOCK set");
+
+    test->register_read_32(entropy_src_basetest::GENERATOR_0_SAMPLE_CLK_CONFIG_OFFSET, rd_val);
+    const uint32_t clk_before = rd_val;
+    const uint32_t clk_attempt = (clk_before == 0u) ? 0x1Fu : 0u;
+    test->register_write_32(entropy_src_basetest::GENERATOR_0_SAMPLE_CLK_CONFIG_OFFSET, clk_attempt);
+    test->register_read_32(entropy_src_basetest::GENERATOR_0_SAMPLE_CLK_CONFIG_OFFSET, rd_val);
+    COV_CHECK(rd_val == clk_before,
+        "TC-COV-006: GENERATOR_0_SAMPLE_CLK_CONFIG changed while FIPS_LOCK set");
+
+    test->register_read_32(entropy_src_basetest::FIFO_CTRL_OFFSET, rd_val);
+    const uint32_t fifo_before = rd_val;
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, fifo_before ^ 0x11u);
+    test->register_read_32(entropy_src_basetest::FIFO_CTRL_OFFSET, rd_val);
+    const uint32_t fifo_expected =
+        (fifo_before & ~0x1u) | ((fifo_before ^ 0x11u) & 0x1u);
+    COV_CHECK(rd_val == fifo_expected,
+        "TC-COV-006: FIFO_CTRL lock did not keep ENABLE writable and churn frozen");
+
+    // Health status is woclr[7:0]: a 1 clears, a 0 leaves the bit, and software cannot set bits.
+    dut->HEALTH_TEST_STATUS = 0x21u;
+    test->register_write_32(entropy_src_basetest::HEALTH_TEST_STATUS_OFFSET, 0x01u);
+    test->register_read_32(entropy_src_basetest::HEALTH_TEST_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x20u,
+        "TC-COV-006: HEALTH_TEST_STATUS W1C did not clear only bit 0");
+    test->register_write_32(entropy_src_basetest::HEALTH_TEST_STATUS_OFFSET, 0x00u);
+    test->register_read_32(entropy_src_basetest::HEALTH_TEST_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0x20u,
+        "TC-COV-006: HEALTH_TEST_STATUS write of 0 cleared a sticky bit");
+    test->register_write_32(entropy_src_basetest::HEALTH_TEST_STATUS_OFFSET, 0xFFu);
+    test->register_read_32(entropy_src_basetest::HEALTH_TEST_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0u,
+        "TC-COV-006: HEALTH_TEST_STATUS W1C left bits set");
+
+    dut->GENERATOR_0_HEALTH_STATUS = 0x08u;
+    test->register_write_32(entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_OFFSET, 0xFFu);
+    test->register_read_32(entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0u,
+        "TC-COV-006: GENERATOR_0_HEALTH_STATUS is not W1C");
+    test->register_write_32(entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_OFFSET, 0xFFu);
+    test->register_read_32(entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_OFFSET, rd_val);
+    COV_CHECK(rd_val == 0u,
+        "TC-COV-006: software set GENERATOR_0_HEALTH_STATUS");
 
     // Only a reset returns it to 0.
     apply_reset();
@@ -281,6 +376,15 @@ bool testbench::tc_cov_boot_phase_done_gate()
     COV_CHECK((rd_val & BOOT_PHASE_DONE) != 0u && (rd_val & ~BOOT_PHASE_DONE) == 0u,
         "TC-COV-007: MAIN_SM_STATUS RO enforcement failed");
 
+    // Clearing MODULE_ENABLE holds the main SM idle and drops BOOT_PHASE_DONE.
+    test->register_write_32(entropy_src_basetest::CTRL_OFFSET, 0x10000000u);
+    wait(sc_core::SC_ZERO_TIME);
+    test->register_read_32(entropy_src_basetest::MAIN_SM_STATUS_OFFSET, rd_val);
+    COV_CHECK((rd_val & BOOT_PHASE_DONE) == 0u,
+        "TC-COV-007: BOOT_PHASE_DONE stuck after MODULE_ENABLE clear");
+    COV_CHECK((rd_val & IDLE) != 0u,
+        "TC-COV-007: IDLE not set after MODULE_ENABLE clear");
+
     return ok;
 }
 
@@ -292,10 +396,16 @@ bool testbench::tc_cov_irq_overflow_underflow()
 
     const uint32_t INTR_OVERFLOW  = (1u << 8);
     const uint32_t INTR_UNDERFLOW = (1u << 12);
-    const uint32_t INTR_ALL       = 0x00001111u;
+    const uint32_t INTR_NEW = (1u << 16) | (1u << 20) | (1u << 24) | (1u << 28);
+    const uint32_t INTR_ALL       = 0x11111111u;
 
     test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, INTR_ALL);
-    test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET, INTR_UNDERFLOW);
+    test->register_read_32(entropy_src_basetest::INTR_ENABLE_OFFSET, rd_val);
+    COV_CHECK(rd_val == INTR_ALL,
+        "TC-COV-008: INTR_ENABLE did not accept the eight RDL sources");
+
+    test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET,
+                            INTR_UNDERFLOW | INTR_NEW);
     wait(sc_core::SC_ZERO_TIME);
     wait(sc_core::SC_ZERO_TIME);
 
@@ -305,6 +415,8 @@ bool testbench::tc_cov_irq_overflow_underflow()
     test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, rd_val);
     COV_CHECK((rd_val & INTR_UNDERFLOW) != 0u,
         "TC-COV-008: INTR_TEST did not set FIFO_UNDERFLOW");
+    COV_CHECK((rd_val & INTR_NEW) == INTR_NEW,
+        "TC-COV-008: INTR_TEST did not set persistent/autotune/observer bits");
 
     test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET, INTR_ALL);
     wait(sc_core::SC_ZERO_TIME);
@@ -316,9 +428,13 @@ bool testbench::tc_cov_irq_overflow_underflow()
     // Let the background thread fill to FIFO_DEPTH so overflow is asserted.
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000001u);
     bool overflowed = false;
+    bool saw_wide_wptr = false;
     for (int i = 0; i < 512; ++i) {
         wait(sc_core::sc_time(100.0, sc_core::SC_NS));
         rd_val = 0u;
+        test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, rd_val);
+        if (((rd_val >> 8) & 0x3Fu) >= 32u)
+            saw_wide_wptr = true;
         test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, rd_val);
         if ((rd_val & INTR_OVERFLOW) != 0u) {
             overflowed = true;
@@ -326,13 +442,15 @@ bool testbench::tc_cov_irq_overflow_underflow()
         }
     }
     COV_CHECK(overflowed, "TC-COV-008: FIFO never overflowed");
+    COV_CHECK(saw_wide_wptr,
+        "TC-COV-008: WPTR stayed inside 5 bits; RDL WPTR is [13:8]");
 
     test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, rd_val);
-    COV_CHECK((rd_val & 0x7Fu) == 32u,
-        "TC-COV-008: FIFO_STATUS.LEVEL not 32 after overflow");
+    COV_CHECK((rd_val & 0x7Fu) == 64u,
+        "TC-COV-008: FIFO_STATUS.LEVEL not 64 after overflow");
 
     // Drain every word, then one extra read for underflow.
-    for (unsigned i = 0; i < 32u; ++i) {
+    for (unsigned i = 0; i < 64u; ++i) {
         rd_val = 0u;
         test->register_read_32(entropy_src_basetest::FIFO_RDATA_OFFSET, rd_val);
     }
@@ -352,7 +470,7 @@ bool testbench::tc_cov_reset_while_fifo_disabled()
     bool ok = true;
     uint32_t rd_val = 0u;
 
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 800u);
+    dut->m_startup_delay_ns = 800u;
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
     for (int i = 0; i < 16; ++i)
         wait(sc_core::SC_ZERO_TIME);
@@ -364,7 +482,7 @@ bool testbench::tc_cov_reset_while_fifo_disabled()
         "TC-COV-009: FIFO_CTRL.ENABLE not restored after hw reset");
 
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x00000000u);
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 600u);
+    dut->m_startup_delay_ns = 600u;
     for (int i = 0; i < 16; ++i)
         wait(sc_core::SC_ZERO_TIME);
 
@@ -395,8 +513,8 @@ bool testbench::tc_cov_verbose_callbacks_and_recovery()
 
     test->register_write_32(entropy_src_basetest::HEALTH_TEST_CTRL_OFFSET, 0x00000001u);
     test->register_write_32(entropy_src_basetest::HEALTH_TEST_CTRL_OFFSET, 0x00000000u);
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 250u);
-    test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0x00001111u);
+    dut->m_startup_delay_ns = 250u;
+    test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0x11111111u);
     test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET, 0x00000001u);
     wait(sc_core::SC_ZERO_TIME);
     test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET, 0x00000001u);

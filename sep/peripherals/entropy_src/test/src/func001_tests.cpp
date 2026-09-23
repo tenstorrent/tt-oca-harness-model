@@ -222,14 +222,14 @@ bool testbench::tc_f001_status_register_always_zero()
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate that the 0x00001111 write mask on INTR_ENABLE (0x14) is
+ * @brief Validate that the 0x11111111 write mask on INTR_ENABLE (0x14) is
  *        correctly enforced by regmodel for both all-ones and all-zeros patterns.
  *
  * INTR_ENABLE has four active bits at positions 0, 4, 8, 12 (one per
  * interrupt source).  All other bits are reserved and must always read as zero
  * regardless of what was written.
  *
- * Sub-test A: write 0xFFFFFFFF, expect readback == 0x00001111.
+ * Sub-test A: write 0xFFFFFFFF, expect readback == 0x11111111.
  * Sub-test B: write 0x00000000, expect readback == 0x00000000.
  *
  * @return true if both sub-tests pass
@@ -240,7 +240,7 @@ bool testbench::tc_f001_intr_enable_write_mask_validation()
     uint32_t read_val = 0xDEADBEEFu;
 
     const uint32_t mask =
-        static_cast<uint32_t>(entropy_src_basetest::INTR_ENABLE_WRITE);  // 0x00001111
+        static_cast<uint32_t>(entropy_src_basetest::INTR_ENABLE_WRITE);  // 0x11111111
 
     // Sub-test A: all-ones pattern — only bits within mask must be set.
     test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0xFFFFFFFFu);
@@ -281,7 +281,7 @@ bool testbench::tc_f001_intr_enable_write_mask_validation()
  * read_value to 0, the restriction callback leaves it at 0, and Memory copies
  * that value into the TLM payload.  Prior WO writes must not be readable.
  *
- * Pass criterion: read_val == 0 after writing 0x00001111.
+ * Pass criterion: read_val == 0 after writing 0x11111111.
  *
  * @return true if the WO read-restriction assertion passes
  ******************************************************************************/
@@ -291,7 +291,7 @@ bool testbench::tc_f001_intr_test_is_write_only_reads_zero()
     uint32_t read_val = 0xDEADBEEFu;
 
     // Write all four interrupt-inject bits via the valid WO write path.
-    test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET, 0x00001111u);
+    test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET, 0x11111111u);
 
     // Read INTR_TEST: read_mask=0 → handle_read_restriction_error → 0 in payload.
     test->register_read_32(entropy_src_basetest::INTR_TEST_OFFSET, read_val);
@@ -571,16 +571,16 @@ bool testbench::tc_f001_rw_pattern_test_debug_ctrl()
 }
 
 // =============================================================================
-// TC-F001-121 — RW pattern test: INTR_ENABLE write mask 0x00001111
+// TC-F001-121 — RW pattern test: INTR_ENABLE write mask 0x11111111
 // =============================================================================
 
 /******************************************************************************
- * @brief Validate INTR_ENABLE (0x14) write mask 0x00001111 with checkerboard
+ * @brief Validate INTR_ENABLE (0x14) write mask 0x11111111 with checkerboard
  *        patterns designed to hit and miss the four active bit positions.
  *
  * Bit positions: 0 (LSB), 4, 8, 12.  The all-A pattern (0xAAAAAAAA) has all
  * of these positions clear (even nibbles), so the expected readback is 0x0.
- * The all-5 pattern (0x55555555) has bits 0, 4, 8, 12 set, expected 0x00001111.
+ * The all-5 pattern (0x55555555) has bits 0, 4, 8, 12 set, expected 0x11111111.
  *
  * @return true if both pattern assertions pass
  ******************************************************************************/
@@ -589,9 +589,9 @@ bool testbench::tc_f001_rw_pattern_test_intr_enable()
     bool ok = true;
     uint32_t read_val = 0xDEADBEEFu;
 
-    const uint32_t mask = 0x00001111u;  // INTR_ENABLE write mask per detailed design §4.3
+    const uint32_t mask = 0x11111111u;  // INTR_ENABLE write mask per detailed design §4.3
 
-    // Pattern A: 0x55555555 → bits 0,4,8,12 are all 1 → expect 0x00001111.
+    // Pattern A: 0x55555555 → bits 0,4,8,12 are all 1 → expect 0x11111111.
     test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0x55555555u);
     test->register_read_32(entropy_src_basetest::INTR_ENABLE_OFFSET, read_val);
 
@@ -753,15 +753,9 @@ bool testbench::tc_f001_rw_pattern_test_apt_proportion_registers()
         { entropy_src_basetest::APT_PROPORTION_1BIT_OFFSET,
           static_cast<uint32_t>(entropy_src_basetest::APT_PROPORTION_1BIT_WRITE),
           "APT_PROPORTION_1BIT" },
-        { entropy_src_basetest::APT_PROPORTION_2BIT_OFFSET,
-          static_cast<uint32_t>(entropy_src_basetest::APT_PROPORTION_2BIT_WRITE),
-          "APT_PROPORTION_2BIT" },
-        { entropy_src_basetest::APT_PROPORTION_3BIT_OFFSET,
-          static_cast<uint32_t>(entropy_src_basetest::APT_PROPORTION_3BIT_WRITE),
-          "APT_PROPORTION_3BIT" },
-        { entropy_src_basetest::APT_PROPORTION_4BIT_OFFSET,
-          static_cast<uint32_t>(entropy_src_basetest::APT_PROPORTION_4BIT_WRITE),
-          "APT_PROPORTION_4BIT" }
+        { entropy_src_basetest::APT_PROPORTION_LO_OFFSET,
+          static_cast<uint32_t>(entropy_src_basetest::APT_PROPORTION_LO_WRITE),
+          "APT_PROPORTION_LO" }
     };
 
     for (const AptReg& r : regs)
@@ -1039,26 +1033,20 @@ bool testbench::tc_f001_rw_pattern_test_startup_ctrl()
     bool ok = true;
     uint32_t read_val = 0xDEADBEEFu;
 
-    const uint32_t wmask =
-        static_cast<uint32_t>(entropy_src_basetest::STARTUP_CTRL_WRITE);  // 0x0000FFFF
+    // RTL has no register at these offsets (sep_reg.svh). A write must not stick.
+    const uint32_t holes[] = {0x58u, 0x5Cu, 0x64u, 0x68u, 0x6Cu, 0x84u, 0x88u, 0xB0u};
+    for (uint32_t off : holes) {
+        test->register_write_32(off, 0xFFFFFFFFu);
+        test->register_read_32(off, read_val);
+        FUNC001_CHECK(read_val == 0u,
+            "TC-F001-128: offset 0x" << std::hex << off
+            << " is not in the RTL map but read 0x" << read_val);
+    }
 
-    // Sub-test A: all-ones pattern — only bits within the write mask must be set.
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0xFFFFFFFFu);
-    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, read_val);
-
-    FUNC001_CHECK(read_val == wmask,
-        "TC-F001-128A STARTUP_CTRL: write all-ones, expected readback 0x"
-        << std::hex << wmask
-        << " (STARTUP_CTRL_WRITE mask), got 0x" << read_val
-        << " — writable bits not retained or reserved bits contaminated");
-
-    // Sub-test B: all-zeros pattern — all bits must be cleared.
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0x00000000u);
-    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, read_val);
-
-    FUNC001_CHECK(read_val == 0x00000000u,
-        "TC-F001-128B STARTUP_CTRL: write all-zeros, expected readback "
-        "0x00000000, got 0x" << std::hex << read_val);
+    test->register_read_32(entropy_src_basetest::APT_PROPORTION_LO_OFFSET, read_val);
+    FUNC001_CHECK(read_val == entropy_src_basetest::APT_PROPORTION_LO_RESET,
+        "TC-F001-128: APT_PROPORTION_LO reset is 0x" << std::hex << read_val
+        << " expected 0x350");
 
     return ok;
 }
@@ -1091,13 +1079,7 @@ bool testbench::tc_f001_ro_write_has_no_effect_markov_counts()
     const MarkovReg regs[] = {
         { entropy_src_basetest::MARKOV_TEST_COUNTS_0_OFFSET,
           static_cast<uint32_t>(entropy_src_basetest::MARKOV_TEST_COUNTS_0_RESET),
-          "MARKOV_TEST_COUNTS_0" },
-        { entropy_src_basetest::MARKOV_TEST_COUNTS_1_OFFSET,
-          static_cast<uint32_t>(entropy_src_basetest::MARKOV_TEST_COUNTS_1_RESET),
-          "MARKOV_TEST_COUNTS_1" },
-        { entropy_src_basetest::MARKOV_TEST_PROBABILITIES_OFFSET,
-          static_cast<uint32_t>(entropy_src_basetest::MARKOV_TEST_PROBABILITIES_RESET),
-          "MARKOV_TEST_PROBABILITIES" }
+          "MARKOV_TEST_COUNTS_0" }
     };
 
     for (const MarkovReg& r : regs)

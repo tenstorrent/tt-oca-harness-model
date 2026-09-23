@@ -905,9 +905,9 @@ bool testbench::tc_f005_apt_pattern_count_3bit_reset_to_zero()
     uint32_t rd_val = 0u;
 
     test->register_read_32(
-        entropy_src_basetest::APT_PATTERN_COUNT_3BIT_OFFSET, rd_val);
+        0x58u, rd_val);
 
-    FUNC005_CHECK(rd_val == entropy_src_basetest::APT_PATTERN_COUNT_3BIT_RESET,
+    FUNC005_CHECK(rd_val == 0u,
         "TC-F005-071: APT_PATTERN_COUNT_3BIT expected 0x00000000 after reset, "
         "got 0x" << std::hex << rd_val);
 
@@ -938,9 +938,9 @@ bool testbench::tc_f005_apt_pattern_count_4bit_reset_to_zero()
     uint32_t rd_val = 0u;
 
     test->register_read_32(
-        entropy_src_basetest::APT_PATTERN_COUNT_4BIT_OFFSET, rd_val);
+        0x5Cu, rd_val);
 
-    FUNC005_CHECK(rd_val == entropy_src_basetest::APT_PATTERN_COUNT_4BIT_RESET,
+    FUNC005_CHECK(rd_val == 0u,
         "TC-F005-072: APT_PATTERN_COUNT_4BIT expected 0x00000000 after reset, "
         "got 0x" << std::hex << rd_val);
 
@@ -1009,10 +1009,10 @@ bool testbench::tc_f005_apt_proportion_2bit_reset_value()
     uint32_t rd_val = 0u;
 
     test->register_read_32(
-        entropy_src_basetest::APT_PROPORTION_2BIT_OFFSET, rd_val);
+        entropy_src_basetest::APT_PROPORTION_LO_OFFSET, rd_val);
 
     FUNC005_CHECK(
-        rd_val == F005_APT_PROPORTION_2BIT_RESET,
+        rd_val == entropy_src_basetest::APT_PROPORTION_LO_RESET,
         "TC-F005-076: APT_PROPORTION_2BIT reset value mismatch — "
         "expected 0x" << std::hex << F005_APT_PROPORTION_2BIT_RESET
         << " got 0x" << rd_val);
@@ -1045,10 +1045,10 @@ bool testbench::tc_f005_apt_proportion_3bit_reset_value()
     uint32_t rd_val = 0u;
 
     test->register_read_32(
-        entropy_src_basetest::APT_PROPORTION_3BIT_OFFSET, rd_val);
+        0x68u, rd_val);
 
     FUNC005_CHECK(
-        rd_val == F005_APT_PROPORTION_3BIT_RESET,
+        rd_val == 0u,
         "TC-F005-077: APT_PROPORTION_3BIT reset value mismatch — "
         "expected 0x" << std::hex << F005_APT_PROPORTION_3BIT_RESET
         << " got 0x" << rd_val);
@@ -1081,10 +1081,10 @@ bool testbench::tc_f005_apt_proportion_4bit_reset_value()
     uint32_t rd_val = 0u;
 
     test->register_read_32(
-        entropy_src_basetest::APT_PROPORTION_4BIT_OFFSET, rd_val);
+        0x6Cu, rd_val);
 
     FUNC005_CHECK(
-        rd_val == F005_APT_PROPORTION_4BIT_RESET,
+        rd_val == 0u,
         "TC-F005-078: APT_PROPORTION_4BIT reset value mismatch — "
         "expected 0x" << std::hex << F005_APT_PROPORTION_4BIT_RESET
         << " got 0x" << rd_val);
@@ -1229,9 +1229,9 @@ bool testbench::tc_f005_markov_test_counts_1_reset_to_zero()
     uint32_t rd_val = 0u;
 
     test->register_read_32(
-        entropy_src_basetest::MARKOV_TEST_COUNTS_1_OFFSET, rd_val);
+        0x84u, rd_val);
 
-    FUNC005_CHECK(rd_val == entropy_src_basetest::MARKOV_TEST_COUNTS_1_RESET,
+    FUNC005_CHECK(rd_val == 0u,
         "TC-F005-083: MARKOV_TEST_COUNTS_1 expected 0x00000000 after reset, "
         "got 0x" << std::hex << rd_val);
 
@@ -1265,9 +1265,9 @@ bool testbench::tc_f005_markov_test_probabilities_reset_to_zero()
     uint32_t rd_val = 0u;
 
     test->register_read_32(
-        entropy_src_basetest::MARKOV_TEST_PROBABILITIES_OFFSET, rd_val);
+        0x88u, rd_val);
 
-    FUNC005_CHECK(rd_val == entropy_src_basetest::MARKOV_TEST_PROBABILITIES_RESET,
+    FUNC005_CHECK(rd_val == 0u,
         "TC-F005-084: MARKOV_TEST_PROBABILITIES expected 0x00000000 after reset, "
         "got 0x" << std::hex << rd_val);
 

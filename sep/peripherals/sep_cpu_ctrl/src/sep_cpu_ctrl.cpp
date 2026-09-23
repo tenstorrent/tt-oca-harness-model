@@ -15,10 +15,13 @@ sep_cpu_ctrl_ip::sep_cpu_ctrl_ip(sc_core::sc_module_name n)
     , fast_pka_en("fast_pka_en", 0u)
     , test_en("test_en", 0u)
     , bypass_mem_repair("bypass_mem_repair", 0u)
+    , ref_clock_period_ns("ref_clock_period_ns", 10.0)
 {
     SC_METHOD(reset_handler);
     sensitive << rst_ni;
     dont_initialize();
+
+    SC_THREAD(reference_counter_thread);
 
     // Runs at time 0 so the exports carry the CSR reset values before any
     // traffic, then on every republish request.
@@ -45,6 +48,20 @@ void sep_cpu_ctrl_ip::end_of_elaboration()
     hwif_in.test_en             = bool(test_en.get_param_value());
     hwif_in.bypass_mem_repair   = bool(bypass_mem_repair.get_param_value());
     nmi_vec_o.write(static_cast<uint32_t>(fs_nmi_vec_) << 1);
+}
+
+void sep_cpu_ctrl_ip::reference_counter_thread()
+{
+    while (true) {
+        const double period = ref_clock_period_ns.get_param_value();
+        if (period <= 0.0) {
+            wait(rst_ni.posedge_event());
+            continue;
+        }
+        wait(period, sc_core::SC_NS);
+        if (rst_ni.read())
+            ++hwif_in.reference_counter_rc;
+    }
 }
 
 void sep_cpu_ctrl_ip::reset_handler()
@@ -254,7 +271,7 @@ bool sep_cpu_ctrl_ip::handle_write_PERIPH_BUS_ERR_CLEAR(DT value, DT write_bit_m
 
 bool sep_cpu_ctrl_ip::handle_read_REFERENCE_COUNTER(DT& value, DT /*read_bit_mask*/)
 {
-    value = ++hwif_in.reference_counter_rc;
+    value = hwif_in.reference_counter_rc;
     return true;
 }
 

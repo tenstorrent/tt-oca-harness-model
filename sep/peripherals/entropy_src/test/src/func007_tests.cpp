@@ -163,7 +163,7 @@ static constexpr int F007_SHORT_SETTLE = 32;
 /// Number of FIFO_RDATA reads used to unconditionally drain a full FIFO.
 /// Reading FIFO_DEPTH + 1 words guarantees all entries are consumed regardless
 /// of whether any individual word happens to be 0x00000000.
-static constexpr int F007_DRAIN_COUNT = 33;   // FIFO_DEPTH(32) + 1
+static constexpr int F007_DRAIN_COUNT = 65;   // FIFO_DEPTH(64) + 1
 
 /// INTR_STATUS bit [0]: HEALTH_TEST_FAILED
 static constexpr uint32_t F007_INTR_BIT_HTF    = 0x00000001u;
@@ -178,10 +178,10 @@ static constexpr uint32_t F007_INTR_BIT_FOVF   = 0x00000100u;
 static constexpr uint32_t F007_INTR_BIT_FUDF   = 0x00001000u;
 
 /// INTR_ENABLE mask that enables all four interrupt output ports simultaneously.
-static constexpr uint32_t F007_INTR_EN_ALL      = 0x00001111u;
+static constexpr uint32_t F007_INTR_EN_ALL      = 0x11111111u;
 
 /// All four INTR_STATUS / INTR_TEST bit positions combined.
-static constexpr uint32_t F007_INTR_ALL_BITS    = 0x00001111u;
+static constexpr uint32_t F007_INTR_ALL_BITS    = 0x11111111u;
 
 /// COMPONENT_ID reset value (build-time constant, NAME=0x0001, VERSION=0.1).
 static constexpr uint32_t F007_COMPONENT_ID_VAL = 0x01000001u;
@@ -189,9 +189,10 @@ static constexpr uint32_t F007_COMPONENT_ID_VAL = 0x01000001u;
 /// CTRL reset value: 0x00000000 (all fields cleared; RESET bit self-clears).
 static constexpr uint32_t F007_CTRL_RESET       = 0x00000000u;
 
-/// CTRL write mask: 0x13FF0110 (SHA256_WHITENING_ENABLE[28],
-/// DOWNSAMPLE_RATE[25:16], BYPASS_COMPRESSOR[8], AUTOTUNE_ENABLE[4]).
-static constexpr uint32_t F007_CTRL_WRITE_MASK  = 0x13FF0110u;
+/// CTRL write mask: 0x13FF0112 (SHA256_WHITENING_ENABLE[28],
+/// DOWNSAMPLE_RATE[25:16], BYPASS_COMPRESSOR[8], AUTOTUNE_ENABLE[4],
+/// MODULE_ENABLE[1]).
+static constexpr uint32_t F007_CTRL_WRITE_MASK  = 0x13FF0112u;
 
 /// FIFO_CTRL reset value: 0x00000001 (FIFO enabled by default).
 static constexpr uint32_t F007_FIFO_CTRL_RESET  = 0x00000001u;
@@ -467,10 +468,7 @@ bool testbench::tc_f007_software_reset_clears_all_health_test_counters()
         { entropy_src_basetest::REPETITION_TEST_COUNT_OFFSET,  "REPETITION_TEST_COUNT"   },
         { entropy_src_basetest::APT_PATTERN_COUNT_1BIT_OFFSET, "APT_PATTERN_COUNT_1BIT"  },
         { entropy_src_basetest::APT_PATTERN_COUNT_2BIT_OFFSET, "APT_PATTERN_COUNT_2BIT"  },
-        { entropy_src_basetest::APT_PATTERN_COUNT_3BIT_OFFSET, "APT_PATTERN_COUNT_3BIT"  },
-        { entropy_src_basetest::APT_PATTERN_COUNT_4BIT_OFFSET, "APT_PATTERN_COUNT_4BIT"  },
-        { entropy_src_basetest::MARKOV_TEST_COUNTS_0_OFFSET,   "MARKOV_TEST_COUNTS_0"    },
-        { entropy_src_basetest::MARKOV_TEST_COUNTS_1_OFFSET,   "MARKOV_TEST_COUNTS_1"    }
+        { entropy_src_basetest::MARKOV_TEST_COUNTS_0_OFFSET,   "MARKOV_TEST_COUNTS_0"    }
     };
 
     for (const auto& reg : counters)
@@ -756,7 +754,7 @@ bool testbench::tc_f007_software_reset_rw_registers_restored_to_defaults()
         << std::hex << rd_val);
 
     // -------------------------------------------------------------------------
-    // Sub-test 3: INTR_ENABLE (0x14) — write mask 0x00001111; reset default 0x00000000.
+    // Sub-test 3: INTR_ENABLE (0x14) — write mask 0x11111111; reset default 0x00000000.
     // -------------------------------------------------------------------------
     apply_reset();
     test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, F007_INTR_EN_ALL);

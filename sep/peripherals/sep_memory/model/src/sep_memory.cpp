@@ -74,9 +74,27 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
 			<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
 	}
 
+  if (ptr == nullptr && len != 0) {
+    trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+    return;
+  }
+
   if(cmd == tlm::TLM_WRITE_COMMAND) {
     if(!m_read_only) {
-      m_mem.writeBytes(addr, reinterpret_cast<const uint8_t*>(ptr), len);
+      const auto* be = trans.get_byte_enable_ptr();
+      const unsigned be_len = trans.get_byte_enable_length();
+      if (be != nullptr && be_len == 0) {
+        trans.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
+        return;
+      }
+      if (be == nullptr) {
+        m_mem.writeBytes(addr, reinterpret_cast<const uint8_t*>(ptr), len);
+      } else {
+        for (unsigned i = 0; i < len; ++i) {
+          if (be[i % be_len] == TLM_BYTE_ENABLED)
+            m_mem.write(addr + i, ptr[i]);
+        }
+      }
     } else {
         // ROM semantics: accept the bus transaction but ignore writes.
         // This matches expectations from firmware tests (e.g. rom_sanity_test)

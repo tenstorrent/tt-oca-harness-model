@@ -447,8 +447,7 @@ public:
         m_lc_escalate_active(false),
         m_sleep_mode_active(false),
         m_fatal_fault_pending(false),
-        m_racl_error_active(false),
-        m_wkup_hi_read_pending(false)
+        m_racl_error_active(false)
    {
       logger.setMaxVerbosity(verbosity.get_param_value());
       SC_THREAD(reset_process);
@@ -741,23 +740,6 @@ private:
     * a later functional increment.
     */
    bool m_racl_error_active;
-
-   /**
-    * @brief Non-atomic 64-bit counter HI-read pending flag (FUNC003).
-    *
-    * Set to true by handle_read_WKUP_COUNT_HI() when it returns the upper 32
-    * bits of the live wakeup counter. handle_read_WKUP_COUNT_LO() checks this
-    * flag: if true AND the timer is enabled AND escalation is inactive, the
-    * counter is advanced by one tick before returning the LO value. This models
-    * the hardware race condition where the counter may increment between the HI
-    * and LO register reads of a non-atomic 64-bit read sequence.
-    *
-    * Cleared by handle_read_WKUP_COUNT_LO() after the conditional advance, and
-    * also cleared on system reset (FUNC002).
-    *
-    * Architecture Map Reference: timing_constraints[non-atomic-64-bit-access].
-    */
-   bool m_wkup_hi_read_pending;
 
    // =========================================================================
    // Internal State: Temporal Decoupling
@@ -1240,6 +1222,12 @@ private:
     */
    void evaluate_wkup_threshold();
 
+   /** Clear the wakeup edge latch when the counter is below threshold. Does not assert. */
+   void rearm_wkup_edge();
+
+   /** Clear the bark edge latch when the watchdog is below its bark threshold. Does not assert. */
+   void rearm_bark_edge();
+
    /**
     * @brief Evaluate the watchdog bark threshold condition and update bark outputs.
     *
@@ -1562,9 +1550,6 @@ private:
             m_sleep_mode_active    = false;
             m_fatal_fault_pending  = false;
             m_racl_error_active    = false;
-
-            /* FUNC003: clear non-atomic HI-read pending flag on reset. */
-            m_wkup_hi_read_pending = false;
 
             /* --- AON-domain internal state reset (subsumed by full reset) --- */
             m_wkup_cause_active      = false;

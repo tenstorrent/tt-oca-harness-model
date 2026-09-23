@@ -1000,11 +1000,7 @@ void testbench::test_register_reset_values() {
     test_passed = false;
   }
 
-  if (test_passed) {
-    REG_INFO(1, logger) << "  Result: PASSED\n" << std::endl;
-  } else {
-    REG_INFO(1, logger) << "  Result: FAILED\n" << std::endl;
-  }
+  report_test_result("Register Reset Values", test_passed);
 }
 
 void testbench::test_reset_mechanisms() {
@@ -1403,11 +1399,7 @@ void testbench::test_read_only_register() {
     test_passed = false;
   }
 
-  if (test_passed) {
-    REG_INFO(1, logger) << "  Result: PASSED\n" << std::endl;
-  } else {
-    REG_INFO(1, logger) << "  Result: FAILED\n" << std::endl;
-  }
+  report_test_result("Read-only registers", test_passed);
 }
 
 void testbench::test_imem_access() {
@@ -1456,6 +1448,7 @@ void testbench::test_imem_access() {
   } else {
     REG_INFO(1, logger) << "  Result: FAILED\n" << std::endl;
   }
+  report_test_result("IMEM Window Access", test_passed);
 }
 
 void testbench::test_dmem_access() {
@@ -1504,6 +1497,7 @@ void testbench::test_dmem_access() {
   } else {
     REG_INFO(1, logger) << "  Result: FAILED\n" << std::endl;
   }
+  report_test_result("DMEM Window Access", test_passed);
 }
 
 void testbench::test_port_binding() {
@@ -1539,6 +1533,7 @@ void testbench::test_port_binding() {
   } else {
     REG_INFO(1, logger) << "  Result: FAILED\n" << std::endl;
   }
+  report_test_result("Port Binding", test_passed);
 }
 
 void testbench::test_interrupt_signals() {
@@ -1594,6 +1589,7 @@ void testbench::test_interrupt_signals() {
   } else {
     REG_INFO(1, logger) << "  Result: FAILED\n" << std::endl;
   }
+  report_test_result("Interrupt Signals", test_passed);
 }
 
 // ============================================================================

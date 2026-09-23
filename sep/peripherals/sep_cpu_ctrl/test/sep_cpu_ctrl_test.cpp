@@ -151,9 +151,14 @@ SC_MODULE(Tb) {
         // ------------------------------------------------------------------
         dut.hwif_in.reference_counter_rc = 0x123456789ABCULL;
         do_write(0x010, 0xDEADDEADDEADDEADULL); // reloads the counter
-        v = do_read(0x010); // pre-increments to 0xDEADDEADDEADDEAE
+        v = do_read(0x010);
+        assert(v == 0xDEADDEADDEADDEADULL);
+        const uint64_t again = do_read(0x010);
+        assert(again == v); // a read does not advance the counter
+        wait(10, sc_core::SC_NS); // one default reference-clock period
+        v = do_read(0x010);
         assert(v == 0xDEADDEADDEADDEAEULL);
-        std::cout << "[PASS] T3: REFERENCE_COUNTER reloads on SW write, then keeps counting\n";
+        std::cout << "[PASS] T3: REFERENCE_COUNTER reloads on SW write and counts on the reference clock\n";
 
         dut.hwif_in.sys_in_timeout_int = true;
         dut.hwif_in.alias_remap_timeout_int = true;

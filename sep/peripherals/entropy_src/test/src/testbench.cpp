@@ -416,7 +416,7 @@ bool testbench::test_reset()
     uint32_t read_val = 0xDEADBEEFu;
 
     // Step 1: Write non-reset values.
-    // INTR_ENABLE write mask is 0x00001111; 0x0F ANDs to 0x0000000F (bit 0 only).
+    // INTR_ENABLE write mask is 0x11111111; 0x0F ANDs to 0x0000000F (bit 0 only).
     const uint32_t intr_enable_pre_reset = 0x0000000Fu;
     test->register_write_32(entropy_src_basetest::CTRL_OFFSET,        0x10000110u);
     test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, intr_enable_pre_reset);
@@ -544,7 +544,7 @@ void testbench::run_tests()
         "TC-F001-009: status_register_always_zero",
         tc_f001_status_register_always_zero());
 
-    // TC-F001-018: INTR_ENABLE write mask 0x00001111 enforced by regmodel.
+    // TC-F001-018: INTR_ENABLE write mask 0x11111111 enforced by regmodel.
     apply_reset();
     record_result(
         "TC-F001-018: intr_enable_write_mask_validation",
@@ -592,7 +592,7 @@ void testbench::run_tests()
         "TC-F001-120: rw_register_pattern_test_debug_ctrl",
         tc_f001_rw_pattern_test_debug_ctrl());
 
-    // TC-F001-121: INTR_ENABLE write mask 0x00001111 checkerboard test.
+    // TC-F001-121: INTR_ENABLE write mask 0x11111111 checkerboard test.
     apply_reset();
     record_result(
         "TC-F001-121: rw_register_pattern_test_intr_enable",
@@ -1414,7 +1414,7 @@ bool testbench::tc_f004_hw_reset_returns_regs_to_defaults()
 
     // Step 1: Write non-default values.
     test->register_write_32(entropy_src_basetest::CTRL_OFFSET,        0x10000110u);
-    test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0x00001111u);
+    test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET, 0x11111111u);
     wait(sc_core::SC_ZERO_TIME);
 
     // Step 2: Hold rst_ni low and sample reset defaults.

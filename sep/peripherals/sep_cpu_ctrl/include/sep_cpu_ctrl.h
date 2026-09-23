@@ -87,6 +87,9 @@ public:
     regmodel::Param<uint32_t> test_en;
     regmodel::Param<uint32_t> bypass_mem_repair;
 
+    // Reference-clock period for REFERENCE_COUNTER, in nanoseconds.
+    regmodel::Param<double> ref_clock_period_ns;
+
     explicit sep_cpu_ctrl_ip(sc_core::sc_module_name n);
     void end_of_elaboration() override;
 
@@ -99,6 +102,7 @@ private:
 
     void register_callbacks();
     void reset_handler();
+    void reference_counter_thread();
 
     // Sole driver of sep_global_base_addr_o / sep_region_size_o.
     void publish_window_process();

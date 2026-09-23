@@ -608,6 +608,11 @@ void testbench::run_tests()
    test_func003_tc037_64bit_safe_read_double_read();
    wait(5, SC_NS);
 
+   /* Wakeup and watchdog outputs stay quiet across a CSR write and a counter
+    * read, then assert on the next AON increment. */
+   test_func003_events_follow_aon_tick();
+   wait(5, SC_NS);
+
    /* TC_AON_038: Safe 64-bit counter write: disable, write HI, write LO, re-enable.
     * Counter advances from the exact intended 64-bit value after re-enable. */
    test_func003_tc038_64bit_safe_write_disable_first();
@@ -4103,6 +4108,94 @@ void testbench::test_func003_tc037_64bit_safe_read_double_read()
       report_test_fail(TEST_NAME,
                        "64-bit double-read assembly inconsistency detected");
    }
+}
+
+void testbench::test_func003_events_follow_aon_tick()
+{
+   const std::string TEST_NAME =
+       "TC_AON_TICK: wakeup and watchdog events follow an AON increment";
+   report_test_start(TEST_NAME);
+   apply_reset();
+
+   bool all_pass = true;
+   const sc_time kOneTick(5000, SC_NS); // 200 kHz AON clock
+
+   /* Hold the AON clock stopped so a CSR write cannot be mistaken for a tick. */
+   test->clk_aon_freq_sig.write(0.0);
+   wait(1, SC_NS);
+
+   test->write_register_32(aon_timer_basetest::WKUP_THOLD_HI_OFFSET, 0);
+   test->write_register_32(aon_timer_basetest::WKUP_THOLD_LO_OFFSET, 5);
+   test->write_register_32(aon_timer_basetest::WKUP_COUNT_HI_OFFSET, 0);
+   test->write_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, 5);
+   test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, 0x1);
+   wait(1, SC_NS);
+
+   uint32_t intr = 0;
+   uint32_t hi = 0;
+   uint32_t lo = 0;
+   test->read_register_32(aon_timer_basetest::INTR_STATE_OFFSET, intr);
+   test->read_register_32(aon_timer_basetest::WKUP_COUNT_HI_OFFSET, hi);
+   test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, lo);
+   test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, lo);
+   if ((intr & 0x1u) != 0 || test->intr_wkup_timer_expired_sig.read() ||
+       hi != 0 || lo != 5) {
+      REG_ERROR(1, logger) << "TC_AON_TICK: enable write or counter read changed wakeup state"
+                           << " intr=0x" << std::hex << intr << " lo=" << lo;
+      all_pass = false;
+   }
+
+   test->clk_aon_freq_sig.write(200000.0);
+   test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, 0x1);
+   wait(1, SC_NS);
+   test->read_register_32(aon_timer_basetest::INTR_STATE_OFFSET, intr);
+   test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, lo);
+   if ((intr & 0x1u) != 0 || lo != 5) {
+      REG_ERROR(1, logger) << "TC_AON_TICK: wakeup fired before one AON period";
+      all_pass = false;
+   }
+
+   wait(kOneTick);
+   test->read_register_32(aon_timer_basetest::INTR_STATE_OFFSET, intr);
+   test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, lo);
+   if ((intr & 0x1u) == 0 || lo != 6) {
+      REG_ERROR(1, logger) << "TC_AON_TICK: wakeup did not follow the first increment"
+                           << " intr=0x" << std::hex << intr << " lo=" << lo;
+      all_pass = false;
+   }
+
+   apply_reset();
+   test->clk_aon_freq_sig.write(0.0);
+   wait(1, SC_NS);
+   test->write_register_32(aon_timer_basetest::WDOG_BARK_THOLD_OFFSET, 0);
+   test->write_register_32(aon_timer_basetest::WDOG_BITE_THOLD_OFFSET, 0);
+   test->write_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, 0);
+   test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET, 0x1);
+   wait(1, SC_NS);
+   if (test->intr_wdog_timer_bark_sig.read() || test->aon_timer_rst_req_sig.read()) {
+      REG_ERROR(1, logger) << "TC_AON_TICK: watchdog fired on enable write";
+      all_pass = false;
+   }
+
+   test->clk_aon_freq_sig.write(200000.0);
+   test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET, 0x1);
+   wait(3 * kOneTick);
+   uint32_t wdog_count = 0;
+   test->read_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, wdog_count);
+   if (wdog_count == 0 ||
+       !test->intr_wdog_timer_bark_sig.read() ||
+       !test->aon_timer_rst_req_sig.read()) {
+      REG_ERROR(1, logger) << "TC_AON_TICK: watchdog did not fire after AON increments"
+                           << " count=" << wdog_count;
+      all_pass = false;
+   }
+
+   test->clk_aon_freq_sig.write(200000.0);
+
+   if (all_pass)
+      report_test_pass(TEST_NAME);
+   else
+      report_test_fail(TEST_NAME, "AON events did not follow the increment");
 }
 
 // ---------------------------------------------------------------------------

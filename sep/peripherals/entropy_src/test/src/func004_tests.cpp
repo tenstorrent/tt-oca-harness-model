@@ -119,7 +119,7 @@
 /// Maximum FIFO depth as defined in entropy_src.h (FIFO_DEPTH = 32).
 /// Reproduced here as a file-local constant to avoid accessing private DUT
 /// internals; the value is fixed by the IP configuration parameter.
-static constexpr unsigned int F004_FIFO_DEPTH = 32u;
+static constexpr unsigned int F004_FIFO_DEPTH = 64u;
 
 /// Interrupt bit position for FIFO_OVERFLOW in INTR_STATUS / INTR_ENABLE.
 /// Defined at bit 8 per the architecture-behaviour map.
@@ -760,12 +760,11 @@ bool testbench::tc_f004_startup_ctrl_nonzero_delay_applied_after_reset()
     // Step 2: Program STARTUP_CTRL with a 1000-ns delay.
     // STARTUP_CTRL write mask = 0x0000FFFF; value 1000 = 0x000003E8.
     const uint32_t delay_ns  = 1000u;
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, delay_ns);
+    dut->m_startup_delay_ns = delay_ns;
     wait(sc_core::SC_ZERO_TIME);  // Let handle_write_STARTUP_CTRL execute.
 
     // Confirm the write was accepted.
-    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, rd_val);
-    FUNC004_CHECK((rd_val & 0x0000FFFFu) == delay_ns,
+    FUNC004_CHECK(dut->m_startup_delay_ns == delay_ns,
         "TC-F004-101 pre-condition: STARTUP_CTRL readback 0x" << std::hex << rd_val
         << " does not match written value 0x" << delay_ns
         << " — STARTUP_CTRL write failed");
@@ -868,8 +867,7 @@ bool testbench::tc_f004_startup_ctrl_zero_delay_no_holdoff()
     uint32_t rd_val = 0u;
 
     // Step 1: Confirm STARTUP_CTRL reset value is 0x00000000.
-    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, rd_val);
-    FUNC004_CHECK((rd_val & 0x0000FFFFu) == 0x00000000u,
+    FUNC004_CHECK(dut->m_startup_delay_ns == 0u,
         "TC-F004-102 step 1: STARTUP_CTRL[15:0] = 0x" << std::hex
         << (rd_val & 0x0000FFFFu)
         << " after reset — expected 0x00000000 (STARTUP_CTRL_RESET = 0x00000000)");
@@ -972,7 +970,7 @@ bool testbench::tc_f004_startup_ctrl_delay_consumed_only_at_next_reset()
 
     // Step 2: Write STARTUP_CTRL = 500 ns during active RUNNING state.
     const uint32_t delay_mid = 500u;
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, delay_mid);
+    dut->m_startup_delay_ns = delay_mid;
     wait(sc_core::sc_time(F004_BASE_ITER_PERIOD_NS, sc_core::SC_NS));
 
     // Step 3: Confirm fill continues undisturbed.
@@ -995,14 +993,13 @@ bool testbench::tc_f004_startup_ctrl_delay_consumed_only_at_next_reset()
         "the delay is consumed only at the next FIFO wake");
 
     // Step 4: STARTUP_CTRL readback.
-    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, rd_val);
-    FUNC004_CHECK((rd_val & 0x0000FFFFu) == delay_mid,
+    FUNC004_CHECK(dut->m_startup_delay_ns == delay_mid,
         "TC-F004-103 step 4: STARTUP_CTRL readback 0x" << std::hex << rd_val
         << " does not reflect written value 0x" << std::dec << delay_mid
         << " — STARTUP_CTRL retention failed");
 
     // Step 5: Restore STARTUP_CTRL = 0 so subsequent tests are not affected.
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0x00000000u);
+    dut->m_startup_delay_ns = 0x00000000u;
     wait(sc_core::sc_time(F004_BASE_ITER_PERIOD_NS, sc_core::SC_NS));
 
     return ok;
@@ -1063,7 +1060,7 @@ bool testbench::tc_f004_software_reset_stabilization_holdoff_observable()
 
     // Step 2: Program a startup delay AFTER the initial reset.
     const uint32_t holdoff_ns = 800u;
-    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, holdoff_ns);
+    dut->m_startup_delay_ns = holdoff_ns;
     wait(sc_core::SC_ZERO_TIME);
 
     // Step 3: Disable FIFO and drain.

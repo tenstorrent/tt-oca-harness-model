@@ -36,7 +36,11 @@
  *   bit  4 : FIFO_ERROR          (INTR_BIT_FIFO_ERROR         = 0x00000010)
  *   bit  8 : FIFO_OVERFLOW       (INTR_BIT_FIFO_OVERFLOW      = 0x00000100)
  *   bit 12 : FIFO_UNDERFLOW      (INTR_BIT_FIFO_UNDERFLOW     = 0x00001000)
- *   Combined mask                (INTR_ALL_BITS_MASK           = 0x00001111)
+ *   bit 16 : PERSISTENT_FAILURE  (INTR_BIT_PERSISTENT_FAILURE = 0x00010000)
+ *   bit 20 : AUTOTUNE_FAIL       (INTR_BIT_AUTOTUNE_FAIL      = 0x00100000)
+ *   bit 24 : BIW_OBS_OVERFLOW    (INTR_BIT_BIW_OBS_OVERFLOW   = 0x01000000)
+ *   bit 28 : NOISE_OBS_OVERFLOW  (INTR_BIT_NOISE_OBS_OVERFLOW = 0x10000000)
+ *   Combined mask                (INTR_ALL_BITS_MASK           = 0x11111111)
  *
  * ## Port Summary
  *
@@ -202,10 +206,6 @@ public:
             HEALTH_TEST_CTRL.offset);
 
         memory.register_write_callback(
-            [this](DT v) { return this->handle_write_STARTUP_CTRL(v); },
-            STARTUP_CTRL.offset);
-
-        memory.register_write_callback(
             [this](DT v) { return this->handle_write_RING_OSC_ENABLE(v); },
             RING_OSC_ENABLE.offset);
 
@@ -216,6 +216,9 @@ public:
         memory.register_write_callback(
             [this](DT v) { return this->handle_write_MIN_ENTROPY_H(v); },
             MIN_ENTROPY_H.offset);
+
+        register_certified_config_locks();
+        register_health_status_w1c();
 
         memory.register_read_callback(
             [this](DT &v) { return this->handle_read_FIFO_RDATA(v); },
@@ -310,16 +313,6 @@ public:
     bool handle_write_HEALTH_TEST_CTRL(uint32_t value) override;
 
     /**
-     * @brief Handle write to STARTUP_CTRL register
-     *
-     * Captures the STARTUP_DELAY field (bits [15:0]) into m_startup_delay_ns.
-     *
-     * @param value 32-bit value written to STARTUP_CTRL
-     * @return true always
-     */
-    bool handle_write_STARTUP_CTRL(uint32_t value) override;
-
-    /**
      * @brief Write callback for RING_OSC_ENABLE (offset 0x90)
      *
      * Not part of the interface's virtual set -- added for the MAIN_SM_STATUS
@@ -375,10 +368,10 @@ private:
      * regmodel write, preventing any intermediate state where LEVEL, WPTR, and
      * RPTR are inconsistent from software's perspective:
      *
-     *  - LEVEL  (bits [6:0])  : current m_fifo.size(), capped at FIFO_DEPTH (32)
-     *  - WPTR   (bits [12:8]) : current m_wptr (5-bit, wraps modulo 32)
-     *  - RPTR   (bits [20:16]): current m_rptr (5-bit, wraps modulo 32)
-     *  - Reserved bits [31:21]: always zero
+     *  - LEVEL  (bits [6:0])  : current m_fifo.size(), capped at FIFO_DEPTH (64)
+     *  - WPTR   (bits [13:8]) : current m_wptr (6-bit, wraps modulo 64)
+     *  - RPTR   (bits [21:16]): current m_rptr (6-bit, wraps modulo 64)
+     *  - Reserved bits [31:22], [15:14], and [7]: always zero
      *
      * Called immediately after each successful FIFO push (background thread)
      * and after each successful FIFO pop (handle_read_FIFO_RDATA) so that
@@ -577,28 +570,30 @@ private:
     // Constants
     // =========================================================================
 
-    /// Maximum FIFO depth (from entropy_src-config-parameters.md)
-    static constexpr unsigned int FIFO_DEPTH = 32u;
+    /// Maximum FIFO depth (entropy_source.rdl FIFO_CTRL: 64 entries).
+    static constexpr unsigned int FIFO_DEPTH = 64u;
 
-    /// INTR_STATUS / INTR_ENABLE / INTR_TEST bit positions.
-    ///
-    /// These values are derived from the architecture-behaviour map register
-    /// definition for INTR_STATUS (0x10), INTR_ENABLE (0x14), and INTR_TEST
-    /// (0x18).  All three registers share the same four active bit positions
-    /// (0, 4, 8, 12) as specified in the register type definitions in
-    /// entropy_src_register.h and confirmed by the architecture map entry for
-    /// each register's field list.
-    ///
-    /// The combined mask of all four valid interrupt bits is 0x00001111.
+    /// INTR_STATUS / INTR_ENABLE / INTR_TEST bit positions from entropy_source.rdl.
+    /// Active bits are 0, 4, 8, 12, 16, 20, 24, and 28 (mask 0x11111111).
     static constexpr uint32_t INTR_BIT_HEALTH_TEST_FAILED = (1u << 0u);
     static constexpr uint32_t INTR_BIT_FIFO_ERROR         = (1u << 4u);
     static constexpr uint32_t INTR_BIT_FIFO_OVERFLOW      = (1u << 8u);
     static constexpr uint32_t INTR_BIT_FIFO_UNDERFLOW     = (1u << 12u);
+    static constexpr uint32_t INTR_BIT_PERSISTENT_FAILURE = (1u << 16u);
+    static constexpr uint32_t INTR_BIT_AUTOTUNE_FAIL      = (1u << 20u);
+    static constexpr uint32_t INTR_BIT_BIW_OBS_OVERFLOW   = (1u << 24u);
+    static constexpr uint32_t INTR_BIT_NOISE_OBS_OVERFLOW = (1u << 28u);
 
-    /// Combined mask covering all four valid interrupt bit positions (0, 4, 8, 12).
-    /// Used to gate W1C clear operations and INTR_TEST injection to architecturally
-    /// defined bit positions only.
-    static constexpr uint32_t INTR_ALL_BITS_MASK          = 0x00001111u;
+    /// Combined mask of the eight RDL interrupt bits.
+    static constexpr uint32_t INTR_ALL_BITS_MASK          = 0x11111111u;
+
+    /// HEALTH_TEST_STATUS and GENERATOR_n_HEALTH_STATUS are woclr[7:0].
+    static constexpr uint32_t HEALTH_STATUS_W1C_MASK      = 0x000000FFu;
+
+    void register_certified_config_locks();
+    void register_health_status_w1c();
+    void register_fips_locked(regmodel::Reg<32>& reg);
+    void register_w1c(regmodel::Reg<32>& reg, uint32_t mask);
 
     /// Base iteration period for the background entropy generation thread (ns).
     ///

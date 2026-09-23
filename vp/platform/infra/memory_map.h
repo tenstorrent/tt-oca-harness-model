@@ -202,10 +202,10 @@ struct ArrayView {
 		return &ptr[0];
 	}
 	T *end() {
-		return &ptr[size - 1];
+		return ptr + size;
 	}
 	const T *end() const {
-		return &ptr[size - 1];
+		return ptr + size;
 	}
 };
 

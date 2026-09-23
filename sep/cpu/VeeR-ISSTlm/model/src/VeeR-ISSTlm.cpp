@@ -116,9 +116,7 @@ void VeeRISSTlm::end_of_elaboration()
 	REG_DEBUG(3, logger) << "mepc    = 0x" << std::hex << mepc << "\n";
 	REG_DEBUG(3, logger) << "mtvec   = 0x" << std::hex << mtvec << "\n";
 
-	// Also enable global interrupts
-	hart0->peekCsr(CsrNumber::MSTATUS, mstatus);	
-	hart0->pokeCsr(CsrNumber::MSTATUS, mstatus | (1 << 3)); // MIE
+	// Firmware owns mstatus.MIE. RTL resets it clear; do not force it here.
 	hart0->peekCsr(CsrNumber::MSTATUS, mstatus);
 	hart0->peekCsr(CsrNumber::MIE, mie);
 	hart0->peekCsr(CsrNumber::MCAUSE, mcause);
@@ -128,7 +126,7 @@ void VeeRISSTlm::end_of_elaboration()
 
 	hart0->enableNmi(enableNmi.get_param_value());
 
-	REG_DEBUG(3, logger) << "Register values after MIE enabled\n";
+	REG_DEBUG(3, logger) << "Register values after elaboration\n";
 	REG_DEBUG(3, logger) << "mstatus = 0x" << std::hex << mstatus << "\n";
 	REG_DEBUG(3, logger) << "mie     = 0x" << std::hex << mie << "\n";
 	REG_DEBUG(3, logger) << "mcause  = 0x" << std::hex << mcause << "\n";

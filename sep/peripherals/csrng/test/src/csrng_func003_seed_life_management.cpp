@@ -232,16 +232,16 @@ void testbench::test_101_reseed_interval_enforcement_exact_threshold()
 
         REG_INFO(2, logger) << "11th GENERATE correctly failed: CMD_STS=0x4 (RESEED_CNT_EXCEEDED)";
 
-        // Verify RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT sets (bit 7)
+        // Verify RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT sets (bit 15).
         uint32_t alert_sts = 0;
         m_test->register_read_32(csrng_basetest::RECOV_ALERT_STS_OFFSET, alert_sts);
         wait(1, SC_US);
 
-        if (!(alert_sts & (1 << 7))) {
-            REG_WARN(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT not set (expected bit 7)";
-        } else {
-            REG_INFO(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT correctly set";
+        constexpr uint32_t kReseedCountAlert = 1u << 15;
+        if ((alert_sts & kReseedCountAlert) == 0) {
+            throw std::runtime_error("CMD_STAGE_RESEED_CNT_ALERT[15] not set");
         }
+        REG_INFO(2, logger) << "RECOV_ALERT_STS.CMD_STAGE_RESEED_CNT_ALERT correctly set";
 
         report_test_pass("Test 101");
 

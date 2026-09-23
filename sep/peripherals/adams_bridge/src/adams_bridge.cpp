@@ -418,7 +418,11 @@ void abr_ip::finish_mlkem(bool valid, bool error)
 void abr_ip::raise_notif()
 {
     notif_internal_intr_r.sts = 1u;
-    notif_cmd_done_intr_count_r = static_cast<DT>(notif_cmd_done_intr_count_r) + 1u;
+    {
+        const auto count = static_cast<uint32_t>(notif_cmd_done_intr_count_r);
+        if (count != 0xffffffffu)
+            notif_cmd_done_intr_count_r = count + 1u;
+    }
     notif_cmd_done_intr_count_incr_r.pulse = 1u;
     request_interrupt_update();
 }
@@ -426,7 +430,11 @@ void abr_ip::raise_notif()
 void abr_ip::raise_error()
 {
     error_internal_intr_r.sts = 1u;
-    error_internal_intr_count_r = static_cast<DT>(error_internal_intr_count_r) + 1u;
+    {
+        const auto count = static_cast<uint32_t>(error_internal_intr_count_r);
+        if (count != 0xffffffffu)
+            error_internal_intr_count_r = count + 1u;
+    }
     error_internal_intr_count_incr_r.pulse = 1u;
     request_interrupt_update();
 }

@@ -10,8 +10,7 @@ class entropy_src_base : public sc_module
     typedef typename regmodel::Reg<32>::DT DT;
     entropy_src_base(sc_module_name name, unsigned int memory_size) : sc_module(name), memory(std::string(name) + ".Memory", memory_size/sizeof(unsigned int)),
        COMPONENT_ID(std::string(name) + ".COMPONENT_ID", memory, (0x00 + 0x00)/sizeof(unsigned int)), 
-       CTRL(std::string(name) + ".CTRL", memory, (0x04 + 0x00)/sizeof(unsigned int)), 
-       STATUS(std::string(name) + ".STATUS", memory, (0x08 + 0x00)/sizeof(unsigned int)), 
+       CTRL(std::string(name) + ".CTRL", memory, (0x04 + 0x00)/sizeof(unsigned int)),
        DEBUG_CTRL(std::string(name) + ".DEBUG_CTRL", memory, (0x0C + 0x00)/sizeof(unsigned int)), 
        INTR_STATUS(std::string(name) + ".INTR_STATUS", memory, (0x10 + 0x00)/sizeof(unsigned int)), 
        INTR_ENABLE(std::string(name) + ".INTR_ENABLE", memory, (0x14 + 0x00)/sizeof(unsigned int)), 
@@ -27,21 +26,14 @@ class entropy_src_base : public sc_module
        REPETITION_TEST_COUNT(std::string(name) + ".REPETITION_TEST_COUNT", memory, (0x44 + 0x00)/sizeof(unsigned int)), 
        APT_PATTERN_COUNT_1BIT(std::string(name) + ".APT_PATTERN_COUNT_1BIT", memory, (0x50 + 0x00)/sizeof(unsigned int)), 
        APT_PATTERN_COUNT_2BIT(std::string(name) + ".APT_PATTERN_COUNT_2BIT", memory, (0x54 + 0x00)/sizeof(unsigned int)), 
-       APT_PATTERN_COUNT_3BIT(std::string(name) + ".APT_PATTERN_COUNT_3BIT", memory, (0x58 + 0x00)/sizeof(unsigned int)), 
-       APT_PATTERN_COUNT_4BIT(std::string(name) + ".APT_PATTERN_COUNT_4BIT", memory, (0x5C + 0x00)/sizeof(unsigned int)), 
        APT_PROPORTION_1BIT(std::string(name) + ".APT_PROPORTION_1BIT", memory, (0x60 + 0x00)/sizeof(unsigned int)), 
-       APT_PROPORTION_2BIT(std::string(name) + ".APT_PROPORTION_2BIT", memory, (0x64 + 0x00)/sizeof(unsigned int)), 
-       APT_PROPORTION_3BIT(std::string(name) + ".APT_PROPORTION_3BIT", memory, (0x68 + 0x00)/sizeof(unsigned int)), 
-       APT_PROPORTION_4BIT(std::string(name) + ".APT_PROPORTION_4BIT", memory, (0x6C + 0x00)/sizeof(unsigned int)), 
+       APT_PROPORTION_LO(std::string(name) + ".APT_PROPORTION_LO", memory, (0x70 + 0x00)/sizeof(unsigned int)), 
        MARKOV_TEST_COUNTS_0(std::string(name) + ".MARKOV_TEST_COUNTS_0", memory, (0x80 + 0x00)/sizeof(unsigned int)), 
-       MARKOV_TEST_COUNTS_1(std::string(name) + ".MARKOV_TEST_COUNTS_1", memory, (0x84 + 0x00)/sizeof(unsigned int)), 
-       MARKOV_TEST_PROBABILITIES(std::string(name) + ".MARKOV_TEST_PROBABILITIES", memory, (0x88 + 0x00)/sizeof(unsigned int)), 
        RING_OSC_ENABLE(std::string(name) + ".RING_OSC_ENABLE", memory, (0x90 + 0x00)/sizeof(unsigned int)), 
        RING_OSC_TUNE(std::string(name) + ".RING_OSC_TUNE", memory, (0x94 + 0x00)/sizeof(unsigned int)), 
        RING_OSC_CTRL(std::string(name) + ".RING_OSC_CTRL", memory, (0x98 + 0x00)/sizeof(unsigned int)), 
        DECORRELATOR_CTRL(std::string(name) + ".DECORRELATOR_CTRL", memory, (0xA0 + 0x00)/sizeof(unsigned int)), 
        DECORRELATOR_MASK(std::string(name) + ".DECORRELATOR_MASK", memory, (0xA4 + 0x00)/sizeof(unsigned int)), 
-       STARTUP_CTRL(std::string(name) + ".STARTUP_CTRL", memory, (0xB0 + 0x00)/sizeof(unsigned int)), 
        MAIN_SM_STATUS(std::string(name) + ".MAIN_SM_STATUS", memory, (0xB4 + 0x00)/sizeof(unsigned int)), 
        FIPS_LOCK(std::string(name) + ".FIPS_LOCK", memory, (0x154 + 0x00)/sizeof(unsigned int)), 
        GENERATOR_0_HEALTH_STATUS(std::string(name) + ".GENERATOR_0_HEALTH_STATUS", memory, (0xC0 + 0x00)/sizeof(unsigned int)), 
@@ -75,8 +67,17 @@ class entropy_src_base : public sc_module
        APT_LO_TOTAL_FAILS(std::string(name) + ".APT_LO_TOTAL_FAILS", memory, (0x140 + 0x00)/sizeof(unsigned int)), 
        MARKOV_HI_TOTAL_FAILS(std::string(name) + ".MARKOV_HI_TOTAL_FAILS", memory, (0x144 + 0x00)/sizeof(unsigned int)), 
        MARKOV_LO_TOTAL_FAILS(std::string(name) + ".MARKOV_LO_TOTAL_FAILS", memory, (0x148 + 0x00)/sizeof(unsigned int)), 
-       ALERT_SUMMARY_FAIL_COUNTS(std::string(name) + ".ALERT_SUMMARY_FAIL_COUNTS", memory, (0x14C + 0x00)/sizeof(unsigned int)), 
-       ALERT_FAIL_COUNTS(std::string(name) + ".ALERT_FAIL_COUNTS", memory, (0x150 + 0x00)/sizeof(unsigned int))
+       ALERT_SUMMARY_FAIL_COUNTS(std::string(name) + ".ALERT_SUMMARY_FAIL_COUNTS", memory, (0x14C + 0x00)/sizeof(unsigned int)),
+       ALERT_FAIL_COUNTS(std::string(name) + ".ALERT_FAIL_COUNTS", memory, (0x150 + 0x00)/sizeof(unsigned int)),
+       ALERT_THRESHOLD(std::string(name) + ".ALERT_THRESHOLD", memory, (0x158 + 0x00)/sizeof(unsigned int)),
+       MIN_ENTROPY_H(std::string(name) + ".MIN_ENTROPY_H", memory, (0x15C + 0x00)/sizeof(unsigned int)),
+       RECOMMENDED_THRESHOLDS(std::string(name) + ".RECOMMENDED_THRESHOLDS", memory, (0x160 + 0x00)/sizeof(unsigned int)),
+       BIW_OBS_CTRL(std::string(name) + ".BIW_OBS_CTRL", memory, (0x164 + 0x00)/sizeof(unsigned int)),
+       BIW_OBS_STATUS(std::string(name) + ".BIW_OBS_STATUS", memory, (0x168 + 0x00)/sizeof(unsigned int)),
+       BIW_OBS_RDATA(std::string(name) + ".BIW_OBS_RDATA", memory, (0x16C + 0x00)/sizeof(unsigned int)),
+       NOISE_OBS_CTRL(std::string(name) + ".NOISE_OBS_CTRL", memory, (0x170 + 0x00)/sizeof(unsigned int)),
+       NOISE_OBS_STATUS(std::string(name) + ".NOISE_OBS_STATUS", memory, (0x174 + 0x00)/sizeof(unsigned int)),
+       NOISE_OBS_RDATA(std::string(name) + ".NOISE_OBS_RDATA", memory, (0x178 + 0x00)/sizeof(unsigned int))
        {
          memory.bind_to_socket(target_socket);
        }
@@ -88,9 +89,7 @@ class entropy_src_base : public sc_module
       entropy_src::COMPONENT_ID_type<32> COMPONENT_ID;
       
       entropy_src::CTRL_type<32> CTRL;
-      
-      entropy_src::STATUS_type<32> STATUS;
-      
+
       entropy_src::DEBUG_CTRL_type<32> DEBUG_CTRL;
       
       entropy_src::INTR_STATUS_type<32> INTR_STATUS;
@@ -121,23 +120,11 @@ class entropy_src_base : public sc_module
       
       entropy_src::APT_PATTERN_COUNT_2BIT_type<32> APT_PATTERN_COUNT_2BIT;
       
-      entropy_src::APT_PATTERN_COUNT_3BIT_type<32> APT_PATTERN_COUNT_3BIT;
-      
-      entropy_src::APT_PATTERN_COUNT_4BIT_type<32> APT_PATTERN_COUNT_4BIT;
-      
       entropy_src::APT_PROPORTION_1BIT_type<32> APT_PROPORTION_1BIT;
       
-      entropy_src::APT_PROPORTION_2BIT_type<32> APT_PROPORTION_2BIT;
-      
-      entropy_src::APT_PROPORTION_3BIT_type<32> APT_PROPORTION_3BIT;
-      
-      entropy_src::APT_PROPORTION_4BIT_type<32> APT_PROPORTION_4BIT;
+      entropy_src::APT_PROPORTION_LO_type<32> APT_PROPORTION_LO;
       
       entropy_src::MARKOV_TEST_COUNTS_0_type<32> MARKOV_TEST_COUNTS_0;
-      
-      entropy_src::MARKOV_TEST_COUNTS_1_type<32> MARKOV_TEST_COUNTS_1;
-      
-      entropy_src::MARKOV_TEST_PROBABILITIES_type<32> MARKOV_TEST_PROBABILITIES;
       
       entropy_src::RING_OSC_ENABLE_type<32> RING_OSC_ENABLE;
 
@@ -148,11 +135,7 @@ class entropy_src_base : public sc_module
       entropy_src::DECORRELATOR_CTRL_type<32> DECORRELATOR_CTRL;
       
       entropy_src::DECORRELATOR_MASK_type<32> DECORRELATOR_MASK;
-      
-      entropy_src::STARTUP_CTRL_type<32> STARTUP_CTRL;
 
-      // Declared in constructor-initialiser order (STARTUP_CTRL, MAIN_SM_STATUS,
-      // FIPS_LOCK) so the members are built in the order they are listed there.
       entropy_src::MAIN_SM_STATUS_type<32> MAIN_SM_STATUS;
 
       entropy_src::FIPS_LOCK_type<32> FIPS_LOCK;
@@ -222,6 +205,16 @@ class entropy_src_base : public sc_module
       entropy_src::ALERT_SUMMARY_FAIL_COUNTS_type<32> ALERT_SUMMARY_FAIL_COUNTS;
       
       entropy_src::ALERT_FAIL_COUNTS_type<32> ALERT_FAIL_COUNTS;
-      
+
+      entropy_src::ALERT_THRESHOLD_type<32> ALERT_THRESHOLD;
+      entropy_src::MIN_ENTROPY_H_type<32> MIN_ENTROPY_H;
+      entropy_src::RECOMMENDED_THRESHOLDS_type<32> RECOMMENDED_THRESHOLDS;
+      entropy_src::BIW_OBS_CTRL_type<32> BIW_OBS_CTRL;
+      entropy_src::BIW_OBS_STATUS_type<32> BIW_OBS_STATUS;
+      entropy_src::BIW_OBS_RDATA_type<32> BIW_OBS_RDATA;
+      entropy_src::NOISE_OBS_CTRL_type<32> NOISE_OBS_CTRL;
+      entropy_src::NOISE_OBS_STATUS_type<32> NOISE_OBS_STATUS;
+      entropy_src::NOISE_OBS_RDATA_type<32> NOISE_OBS_RDATA;
+
       void reset_all_registers();
 };
