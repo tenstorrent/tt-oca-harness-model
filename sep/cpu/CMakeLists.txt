@@ -248,14 +248,18 @@ if(BUILD_TESTS)
     find_program(LCOV_EXECUTABLE lcov)
     find_program(GENHTML_EXECUTABLE genhtml)
     if(LCOV_EXECUTABLE AND GENHTML_EXECUTABLE)
+      # --filter arrived in lcov 2. Ubuntu 22.04 and RHEL 8 ship lcov 1.x.
+      set(_lcov_capture_flags "")
+      if(LCOV_VERSION VERSION_GREATER_EQUAL "2.0")
+        set(_lcov_capture_flags --filter range)
+      endif()
       add_custom_target(coverage
         COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR}
                 -P ${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/PeripheralCoverageClean.cmake
         COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --zerocounters --directory ${CMAKE_BINARY_DIR}
         COMMAND ${CMAKE_BINARY_DIR}/bin/veeriss_tb
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
-        COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
-                --filter range
+        COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} ${_lcov_capture_flags}
                 --capture --directory ${CMAKE_BINARY_DIR}
                 --output-file ${CMAKE_BINARY_DIR}/coverage/coverage.info
         COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
