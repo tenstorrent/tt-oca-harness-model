@@ -136,6 +136,13 @@ void testbench::test_test_dev_state()
 {
     report_test_start("Test 3: TEST_DEV state — initial FEAT_CTRL");
 
+    uint32_t lc = m_dut->lc_state.get_param_value() & 0xF;
+    if (lc != lifecycle_ctrl_model::LC_STATE_TEST_DEV) {
+        REG_INFO(1, logger) << "Test 3 skipped — lc_state not TEST_DEV (set lc_state=0 in ini to run)"
+                             << std::endl;
+        return;
+    }
+
     uint32_t val_lo = 0, val_hi = 0;
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_LO_OFFSET, val_lo);
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_HI_OFFSET, val_hi);
@@ -171,7 +178,13 @@ void testbench::test_prod_state_no_demote()
 
     uint32_t lc = m_dut->lc_state.get_param_value() & 0xF;
     if (lc != lifecycle_ctrl_model::LC_STATE_PROD) {
-        report_test_pass("Test 4 skipped — lc_state not PROD (set lc_state=1 in ini to run)");
+        REG_INFO(1, logger) << "Test 4 skipped — lc_state not PROD (set lc_state=1 in ini to run)"
+                             << std::endl;
+        return;
+    }
+    if (m_dut->security_disable.get_param_value()) {
+        REG_INFO(1, logger) << "Test 4 skipped — security_disable forces all-ones (Test 12 covers that)"
+                             << std::endl;
         return;
     }
 
@@ -221,6 +234,12 @@ void testbench::test_demote_1_w1s()
     uint32_t val_lo = 0, val_hi = 0;
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_LO_OFFSET, val_lo);
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_HI_OFFSET, val_hi);
+    const uint32_t lc = m_dut->lc_state.get_param_value() & 0xF;
+    if (lc != lifecycle_ctrl_model::LC_STATE_TEST_DEV) {
+        REG_INFO(1, logger) << "FEAT_CTRL TEST_DEV+demote1 skipped — lc_state not TEST_DEV"
+                             << std::endl;
+        return;
+    }
     const uint32_t exp_hi = m_dut->secure_tm.get_param_value() ? 0xFFFFFFFFu : 0xFFFF0000u;
     if (val_lo == 0xFFFFFFFF && val_hi == exp_hi)
         report_test_pass("FEAT_CTRL: TEST_DEV+demote1 correct");
@@ -335,7 +354,8 @@ void testbench::test_invalid_state()
 
     uint32_t lc = m_dut->lc_state.get_param_value() & 0xF;
     if (lc != 0x4u && lc != 0x5u) {
-        report_test_pass("Test 8 skipped — lc_state not INVALID (set lc_state=4 or 5 in ini to run)");
+        REG_INFO(1, logger) << "Test 8 skipped — lc_state not INVALID (set lc_state=4 or 5 in ini to run)"
+                             << std::endl;
         return;
     }
 
@@ -362,7 +382,8 @@ void testbench::test_rma_chiplet_state()
 
     uint32_t lc = m_dut->lc_state.get_param_value() & 0xF;
     if ((lc & lifecycle_ctrl_model::LC_STATE_RANGE_MASK) != lifecycle_ctrl_model::LC_STATE_RMA_CHIPLET_BASE) {
-        report_test_pass("Test 9 skipped — lc_state not RMA_CHIPLET (set lc_state=6 in ini to run)");
+        REG_INFO(1, logger) << "Test 9 skipped — lc_state not RMA_CHIPLET (set lc_state=6 in ini to run)"
+                             << std::endl;
         return;
     }
 
@@ -385,6 +406,13 @@ void testbench::test_rma_chiplet_state()
 void testbench::test_secure_tm()
 {
     report_test_start("Test 10: secure_tm gates test bits [47:32]");
+
+    uint32_t lc = m_dut->lc_state.get_param_value() & 0xF;
+    if (lc != lifecycle_ctrl_model::LC_STATE_TEST_DEV) {
+        REG_INFO(1, logger) << "Test 10 skipped — lc_state not TEST_DEV (set lc_state=0 in ini to run)"
+                             << std::endl;
+        return;
+    }
 
     bool stm = m_dut->secure_tm.get_param_value();
 
@@ -415,7 +443,8 @@ void testbench::test_security_disable()
 
     bool sec_dis = m_dut->security_disable.get_param_value();
     if (!sec_dis) {
-        report_test_pass("Test 12 skipped — security_disable not true (set security_disable=true in ini to run)");
+        REG_INFO(1, logger) << "Test 12 skipped — security_disable not true (set security_disable=true in ini to run)"
+                             << std::endl;
         return;
     }
 

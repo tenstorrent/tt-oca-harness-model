@@ -1,0 +1,103 @@
+---
+description: When writing, generating, extending, or reviewing SystemC/TLM2.0 testbenches, close protocol/temporal gaps and forbid coverage shortcuts
+alwaysApply: true
+---
+
+# SystemC/TLM testbench quality (no coverage shortcuts)
+
+Apply whenever creating or editing a SystemC/TLM2.0 testbench, `*_tb.cpp`,
+`*_test*.cpp`, `run_tests.sh`, or coverage filler. Complements
+`test-coverage-asan` (95% + ASan) and `new-ip-ci-checklist` (CI wiring).
+**Line coverage is not evidence.** Do not add a case whose only job is to
+execute a branch.
+
+## Fail closed (harness)
+
+- Every compiled suite/binary must be **called** in Release, `--asan`, and
+  `--coverage`. Do not compile FUNC023 then skip it in `run_tests()`.
+- Propagate every child exit. Never `|| true`, ignore `RUN_EXIT`,
+  `quick_exit(0)`, or treat timeout as PASS.
+- `sc_stop()` / `SC_REPORT_*` failures must increment a fail counter and
+  fail `sc_main`. Do not demote ERROR to WARN to stay green.
+- Coverage must not continue after a failed semantic run.
+
+## Frontdoor first
+
+Drive production sockets, ports, and CSRs via `b_transport` / bound signals.
+Do **not** count as IP conformance:
+
+- `#define private public`, `friend` testbench, `const_cast` of `const` DUT state
+- Direct calls to private methods, register callbacks, or engine threads
+- `inject_*` / `dbg_*` / `load_*` / `force_*` as the **only** stimulus
+- Mock harness that implements the DUT port itself (e.g. fake EDN endpoint)
+
+Helpers/backdoors may exist as **labeled** unit tests; they do not replace a
+frontdoor case for the same path.
+
+## Independent oracle
+
+Every case has an expected value **not** copied from the DUT algorithm.
+
+```cpp
+// BAD — tautology / coverage-only
+tb.check(true, "backdoor did not crash");
+run_cmd(); /* no assertion */ PASS();
+if (status == A || status == B || true) PASS();
+
+// GOOD — independent, exact, fail-closed
+EXPECT_EQ(trans.get_response_status(), tlm::TLM_ADDRESS_ERROR_RESPONSE);
+EXPECT_EQ(rd(STATUS), ST_ERROR);          // not "timeout OR error"
+EXPECT_EQ(claimed, 7u);                   // not dbg_claim_top()
+```
+
+Timeouts, “nonzero output”, and “completed” are not enough for crypto, DMA,
+FIFO, or error paths. Use RDL/spec/NIST vectors or literal boundary tables.
+
+## Mandatory TLM2.0 matrix (every target socket)
+
+Issue raw `tlm_generic_payload` cases and assert **response + no mutation**
+on rejects:
+
+| Stimulus | Assert |
+|---|---|
+| READ/WRITE/IGNORE | exact status; IGNORE/reject leaves storage unchanged |
+| null `data_ptr`, len 0 / 1 / width-1 / width+1 | no crash; documented status |
+| unaligned addr, cross-window, hole, last byte | RAZ/WI vs `ADDRESS_ERROR` per contract |
+| byte-enable + streaming_width 0 / &lt;len / &gt;len | merge/reject policy |
+| incoming annotated delay | delay **observed** after transport (not only CCI set) |
+| `transport_dbg` R/W | byte count + documented side-effect policy |
+| DMI | `get_direct_mem_ptr` false or explicit grant; stale DMI flag cleared on error |
+
+SMC: attach/monitor `smc::smc_axi_extension` on **outgoing** and incoming
+filter/access decisions (`smc-axi-extension-canonical`). Do not fetch-and-ignore.
+
+Negative benches **must** `sc_start` so threads (`transfer_thread`, timers)
+actually run.
+
+## Time, reset, concurrency
+
+Do not `wait(long_time)` then sample. Assert at `T-ε`, `T`, `T+ε`, and
+delta-cycle edges.
+
+- Reset **asserted long enough** to cancel ticks, then deassert: prove the
+  process rearms (CLINT-style stuck-timer).
+- Reset during in-flight op: no stale VALID/IRQ/completion after release.
+- Same-delta events: two engines, claim vs complete, FEED vs KEY, CTRL write
+  during `wait(tick)`.
+- Legal subword lanes (+1/+2/+4), FIFO full+1, max LEN vs buffer size.
+
+If a test “expects” a surprising increment/completion, **stop and check the
+model** — do not gold-file a bug.
+
+## Coverage files
+
+`coverage_*.cpp` / `*_cov_tb.cpp` are held to the same assertion bar.
+No dummy backends whose outputs are then checked as “correct”. No offset
+loops that only prove decode. No `GCOV_EXCL_*` for reachable code.
+
+## Done
+
+A new/changed bench is done only when: frontdoor cases exist for every
+public socket/port/thread; TLM matrix is present; oracles are independent;
+Release + `--asan` + `--coverage` all run the **same** suite; sanitizer logs
+empty; ≥95% on touched model files from those genuine cases.

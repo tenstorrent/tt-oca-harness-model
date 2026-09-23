@@ -363,8 +363,10 @@ INIEOF
     GCOV_PREFIX="${WORK_DIR}" GCOV_PREFIX_STRIP="${GCOV_STRIP}" "${BINARY}" "${CFG}"
     local RUN_EXIT=$?
     set -e
-    [ "${RUN_EXIT}" -ne 0 ] && \
-      echo "[${COMBO}] WARNING: binary exited ${RUN_EXIT} — coverage still captured"
+    if [ "${RUN_EXIT}" -ne 0 ]; then
+      echo "[${COMBO}] ERROR: binary exited ${RUN_EXIT}; coverage rejected"
+      return "${RUN_EXIT}"
+    fi
 
     lcov ${LCOV_IGNORE} \
       --capture --directory "${WORK_DIR}" \
@@ -387,12 +389,15 @@ INIEOF
 
   PIDS=()
   RUNNING=0
+  WORKER_FAILED=0
   for COMBO in "${COMBOS[@]}"; do
     # Throttle to MAX_JOBS concurrent workers
     while [ "${RUNNING}" -ge "${MAX_JOBS}" ]; do
       for i in "${!PIDS[@]}"; do
         if ! kill -0 "${PIDS[$i]}" 2>/dev/null; then
-          wait "${PIDS[$i]}" 2>/dev/null || true
+          if ! wait "${PIDS[$i]}" 2>/dev/null; then
+            WORKER_FAILED=1
+          fi
           unset 'PIDS[$i]'
           RUNNING=$((RUNNING - 1))
         fi
@@ -407,7 +412,9 @@ INIEOF
 
   echo "  Waiting for all jobs to finish..."
   for PID in "${PIDS[@]+"${PIDS[@]}"}"; do
-    wait "${PID}" 2>/dev/null || true
+    if ! wait "${PID}" 2>/dev/null; then
+      WORKER_FAILED=1
+    fi
   done
 
   # Print per-combo summary lines
@@ -419,6 +426,10 @@ INIEOF
     [ -f "${INFO_DIR}/log_${COMBO}.txt" ] && \
       tail -2 "${INFO_DIR}/log_${COMBO}.txt" | sed "s/^/  /"
   done
+  if [ "${WORKER_FAILED}" -ne 0 ]; then
+    echo "ERROR: one or more lifecycle configurations failed; refusing to merge coverage" >&2
+    exit 1
+  fi
 
   # Merge all filtered .info files into one
   echo ""

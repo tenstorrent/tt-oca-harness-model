@@ -28,6 +28,7 @@ void testbench::run_tests() {
                        << std::endl;
 
   apply_reset();
+  const bool rsa2048 = uses_rsa2048_semantics();
   test_reset_mechanisms();
   test_read_only_register();
   test_read_write_register();
@@ -37,14 +38,14 @@ void testbench::run_tests() {
   test_secwipe_imem_command();
   test_command_ignored_when_not_idle();
   test_unrecognized_command_codes();
-  test_idle_state_operations();
-  test_state_transitions_on_success();
+  if (rsa2048) test_idle_state_operations();
+  if (rsa2048) test_state_transitions_on_success();
   // test_summation_algorithm_execution(); //enable summation instead of
   // rsa-2048
-  test_state_transitions_on_recoverable_error();
-  test_mock_instruction_counter();
-  test_done_interrupt_generation();
-  test_urnd_prng_seeding_from_edn();
+  if (rsa2048) test_state_transitions_on_recoverable_error();
+  if (rsa2048) test_mock_instruction_counter();
+  if (rsa2048) test_done_interrupt_generation();
+  if (rsa2048) test_urnd_prng_seeding_from_edn();
   test_state_transitions_on_fatal_error();
   test_memory_access_blocked_during_busy();
   test_load_checksum_updates();
@@ -52,7 +53,7 @@ void testbench::run_tests() {
   test_imem_window_access_when_idle();
   test_dmem_window_host_accessible_region();
   test_dmem_secure_wipe_key_rotation();
-  test_urnd_prng_seeding_from_edn();
+  if (rsa2048) test_urnd_prng_seeding_from_edn();
   test_insn_cnt_write_callback();
   test_imem_secure_wipe_key_rotation();
   test_intr_state_write_callback();
@@ -64,20 +65,22 @@ void testbench::run_tests() {
   test_imem_read_callback();
   test_imem_write_callback();
   test_imem_dmem_boundary_addresses();
-  test_rapid_command_sequence();
+  if (rsa2048) test_rapid_command_sequence();
   test_dmem_protected_region_enforcement();
   test_fatal_alert_continuous();
   test_busy_secwipe_states();
   test_memory_access_returns_zero_locked();
-  test_algorithm_returns_error_status();
-  test_recoverable_alert_pulse();
-  test_internal_state_secure_wipe();
-  test_insn_cnt_read_callback();
+  if (rsa2048) test_algorithm_returns_error_status();
+  if (rsa2048) test_recoverable_alert_pulse();
+  if (rsa2048) test_internal_state_secure_wipe();
+  if (rsa2048) test_insn_cnt_read_callback();
   test_alert_test_write_callback();
   test_fatal_alert_cause_read_callback();
   test_cmd_write_callback();
   test_status_read_callback();
-  test_rsa2048_algorithm_execution();
+  if (rsa2048) {
+    test_rsa2048_algorithm_execution();
+  }
   test_life_cycle_escalation();
   test_life_cycle_rma_request();
   test_secwipe_with_intr_enabled();
@@ -209,6 +212,12 @@ testbench::~testbench() {
 // =============================================================================
 // Test Statistics and Reporting Methods
 // =============================================================================
+
+bool testbench::uses_rsa2048_semantics() const {
+  const std::string algo = dut->algorithm_type.get_param_value();
+  return algo == "rsa_2048" || algo == "RSA-2048" || algo == "RSA_2048" ||
+         algo == "unknown_algo";
+}
 
 void testbench::report_test_result(const char *test_name, bool passed) {
   m_tests_run++;

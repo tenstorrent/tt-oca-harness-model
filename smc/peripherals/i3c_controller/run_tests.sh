@@ -181,9 +181,16 @@ if (( USE_ASAN )); then
     else
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
-    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
-    [[ -x "${NEG_TB_BIN}" ]] && ASAN_OPTIONS="${_ASAN_OPTS}" "${NEG_TB_BIN}" || true
-    [[ -x "${COV_TB_BIN}" ]] && ASAN_OPTIONS="${_ASAN_OPTS}" "${COV_TB_BIN}" || true
+    TB_EXIT=0
+    NEG_EXIT=0
+    COV_EXIT=0
+    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}" || TB_EXIT=$?
+    if [[ -x "${NEG_TB_BIN}" ]]; then
+        ASAN_OPTIONS="${_ASAN_OPTS}" "${NEG_TB_BIN}" || NEG_EXIT=$?
+    fi
+    if [[ -x "${COV_TB_BIN}" ]]; then
+        ASAN_OPTIONS="${_ASAN_OPTS}" "${COV_TB_BIN}" || COV_EXIT=$?
+    fi
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -214,7 +221,11 @@ if (( USE_ASAN )); then
         exit 1
     fi
     "${_asan_gate}" "${BUILD_DIR}" || exit 1
-    exit "${TB_EXIT}"
+    if (( TB_EXIT != 0 || NEG_EXIT != 0 || COV_EXIT != 0 )); then
+        echo "ERROR: ASan test binary failed (main=${TB_EXIT}, negative=${NEG_EXIT}, coverage=${COV_EXIT})" >&2
+        exit 1
+    fi
+    exit 0
 
 elif (( USE_COVERAGE )); then
     COVERAGE_TOOL="$(cat "${BUILD_DIR}/coverage_tool.txt" 2>/dev/null || echo "llvm")"

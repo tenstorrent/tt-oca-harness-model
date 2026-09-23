@@ -113,6 +113,7 @@ public:
     uint32_t m_tests_failed;
     std::vector<std::string> m_failed_test_names;
 
+    bool uses_rsa2048_semantics() const;
     void report_test_result(const char* test_name, bool passed);
     void print_test_summary();
 
