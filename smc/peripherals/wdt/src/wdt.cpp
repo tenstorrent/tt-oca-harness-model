@@ -459,14 +459,15 @@ void wdt::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
             uint32_t hi = 0;
             std::memcpy(&lo, ptr, 4);
             std::memcpy(&hi, ptr + 4, 4);
-            // Special case: FEED+KEY at 0x18 — KEY unlock must happen before FEED
-            // if both are written in one beat.  SiFive TileLink presents both in
-            // one cycle; KEY unlock and FEED in same cycle: unlocked for feed.
+            // FEED and KEY share one beat. Authorization uses the pre-write
+            // unlock state; the KEY half cannot unlock this same beat.
             if (addr == wdt_cfg::OFF_FEED) {
-                do_unlock_write_key(hi);
-                if (unlocked_) {
+                const bool was_unlocked = unlocked_;
+                if (was_unlocked && lo == wdt_cfg::FEED_MAGIC)
                     do_feed(lo);
-                }
+                // The KEY half is present in this beat, so it cannot unlock it.
+                unlocked_ = false;
+                (void)hi;
                 schedule_recompute();
             } else {
                 (void)reg_write(addr, 4, lo);

@@ -326,8 +326,14 @@ void el2_pic_model::register_all_callbacks()
         memory.register_write_callback(write_cb, MEIP[w].offset);
     }
 
-    // MPICCFG is plain R/W storage; no callback required. The default
-    // regmodel::Reg handle_write registered by the base ctor handles it.
+    // MPICCFG.priord changes the comparison order of interrupts that are
+    // already pending, so arbitration must be recomputed on every write.
+    memory.register_post_write_callback(
+        [this]() {
+            reevaluate_arbitration();
+            return true;
+        },
+        MPICCFG.offset);
 }
 
 } // namespace el2_pic

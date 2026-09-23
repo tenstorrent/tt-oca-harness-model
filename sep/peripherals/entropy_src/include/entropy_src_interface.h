@@ -121,18 +121,6 @@ public:
      */
     virtual bool handle_write_HEALTH_TEST_CTRL(uint32_t value) = 0;
 
-    /**
-     * @brief Write callback for STARTUP_CTRL register (offset 0xB0)
-     *
-     * Captures the STARTUP_DELAY field.  The delay value is used by the
-     * background SC_THREAD as the initial wait period before generating
-     * entropy words.
-     *
-     * @param value 32-bit value written to STARTUP_CTRL
-     * @return true on successful callback execution
-     */
-    virtual bool handle_write_STARTUP_CTRL(uint32_t value) = 0;
-
     // =========================================================================
     // Read Callbacks
     // =========================================================================

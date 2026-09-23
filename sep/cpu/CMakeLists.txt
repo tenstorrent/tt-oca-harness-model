@@ -255,6 +255,7 @@ if(BUILD_TESTS)
         COMMAND ${CMAKE_BINARY_DIR}/bin/veeriss_tb
         COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
         COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
+                --filter range
                 --capture --directory ${CMAKE_BINARY_DIR}
                 --output-file ${CMAKE_BINARY_DIR}/coverage/coverage.info
         COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}

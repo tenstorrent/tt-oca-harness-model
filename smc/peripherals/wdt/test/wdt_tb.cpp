@@ -448,11 +448,15 @@ struct tb : sc_core::sc_module {
             const uint64_t feed_key =
                 (static_cast<uint64_t>(smc::wdt_cfg::KEY_MAGIC) << 32) |
                 smc::wdt_cfg::FEED_MAGIC;
+            unlock();
+            drv.write32(smc::wdt_cfg::OFF_CMP, 0x1000);
+            unlock();
+            drv.write32(smc::wdt_cfg::OFF_CTRL, smc::wdt_cfg::CTRL_ALWAYS_BIT);
             dut.dbg_set_count(42);
             drv.write64(smc::wdt_cfg::OFF_FEED, feed_key);
             wait_delta();
-            EXPECT_EQ(0u, dut.dbg_count());
-            EXPECT_EQ(0u, drv.read32(smc::wdt_cfg::OFF_KEY));  // re-locked by feed
+            EXPECT_EQ(42u, dut.dbg_count());  // locked beat cannot feed
+            EXPECT_EQ(0u, drv.read32(smc::wdt_cfg::OFF_KEY));
             // Generic 64-bit write at COUNT (0x08): lo=COUNT, hi=hole @0x0C
             unlock();
             drv.write32(smc::wdt_cfg::OFF_CMP, 0x1000);  // avoid zerocmp clear

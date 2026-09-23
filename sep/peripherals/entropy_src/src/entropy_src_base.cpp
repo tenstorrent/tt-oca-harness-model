@@ -6,7 +6,6 @@ void entropy_src_base::reset_all_registers()
 {
   COMPONENT_ID.reset();
   CTRL.reset();
-  STATUS.reset();
   DEBUG_CTRL.reset();
   INTR_STATUS.reset();
   INTR_ENABLE.reset();
@@ -22,21 +21,14 @@ void entropy_src_base::reset_all_registers()
   REPETITION_TEST_COUNT.reset();
   APT_PATTERN_COUNT_1BIT.reset();
   APT_PATTERN_COUNT_2BIT.reset();
-  APT_PATTERN_COUNT_3BIT.reset();
-  APT_PATTERN_COUNT_4BIT.reset();
   APT_PROPORTION_1BIT.reset();
-  APT_PROPORTION_2BIT.reset();
-  APT_PROPORTION_3BIT.reset();
-  APT_PROPORTION_4BIT.reset();
+  APT_PROPORTION_LO.reset();
   MARKOV_TEST_COUNTS_0.reset();
-  MARKOV_TEST_COUNTS_1.reset();
-  MARKOV_TEST_PROBABILITIES.reset();
   RING_OSC_ENABLE.reset();
   RING_OSC_TUNE.reset();
   RING_OSC_CTRL.reset();
   DECORRELATOR_CTRL.reset();
   DECORRELATOR_MASK.reset();
-  STARTUP_CTRL.reset();
   MAIN_SM_STATUS.reset();
   FIPS_LOCK.reset();
   GENERATOR_0_HEALTH_STATUS.reset();
@@ -72,4 +64,13 @@ void entropy_src_base::reset_all_registers()
   MARKOV_LO_TOTAL_FAILS.reset();
   ALERT_SUMMARY_FAIL_COUNTS.reset();
   ALERT_FAIL_COUNTS.reset();
+  ALERT_THRESHOLD.reset();
+  MIN_ENTROPY_H.reset();
+  RECOMMENDED_THRESHOLDS.reset();
+  BIW_OBS_CTRL.reset();
+  BIW_OBS_STATUS.reset();
+  BIW_OBS_RDATA.reset();
+  NOISE_OBS_CTRL.reset();
+  NOISE_OBS_STATUS.reset();
+  NOISE_OBS_RDATA.reset();
 }

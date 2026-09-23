@@ -254,6 +254,10 @@ void reset_unit::clear_cold_regs(bool isolate_pin)
     if (!isolate_pin) {
         isolate_req_pinen_reg_ = 0;
     }
+    // A cold reset must not be followed by an FLR event scheduled earlier.
+    flr_assert_event_.cancel();
+    flr_deassert_event_.cancel();
+    flr_cool_n_ = true;
 }
 
 // ---------------------------------------------------------------------------

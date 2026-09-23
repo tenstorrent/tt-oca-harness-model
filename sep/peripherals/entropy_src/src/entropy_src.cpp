@@ -43,7 +43,7 @@
  *   bit  8 : FIFO_OVERFLOW
  *   bit 12 : FIFO_UNDERFLOW
  *
- * The combined mask 0x00001111 (INTR_ALL_BITS_MASK) equals the write_bit_mask
+ * The combined mask 0x11111111 (INTR_ALL_BITS_MASK) equals the write_bit_mask
  * defined in the generated register types (entropy_src_register.h).
  *
  * ## Design Notes
@@ -88,7 +88,7 @@
  *   bit 12 : FIFO_UNDERFLOW      (INTR_BIT_FIFO_UNDERFLOW     = 0x00001000)
  *
  * The combined mask of all active interrupt bits is INTR_ALL_BITS_MASK
- * (0x00001111), which equals the INTR_ENABLE write_bit_mask (0x1111) and the
+ * (0x11111111), which equals the INTR_ENABLE write_bit_mask (0x1111) and the
  * INTR_TEST write_bit_mask (0x1111) from entropy_src_register.h.
  ******************************************************************************/
 void entropy_src_ip::update_interrupt_outputs()
@@ -124,9 +124,9 @@ void entropy_src_ip::interrupt_output_method()
  * FIFO_STATUS fields simultaneously, preventing software from observing an
  * intermediate state where LEVEL is inconsistent with WPTR or RPTR.
  *
- *  - bits [6:0]   LEVEL : m_fifo.size() capped at FIFO_DEPTH (32)
- *  - bits [12:8]  WPTR  : m_wptr & 0x1F (5-bit write pointer, mod-32, shifted left by 8)
- *  - bits [20:16] RPTR  : m_rptr & 0x1F (5-bit read pointer, mod-32, shifted left by 16)
+ *  - bits [6:0]   LEVEL : m_fifo.size() capped at FIFO_DEPTH (64)
+ *  - bits [13:8]  WPTR  : m_wptr & 0x3F (6-bit write pointer, mod-64, shifted left by 8)
+ *  - bits [21:16] RPTR  : m_rptr & 0x3F (6-bit read pointer, mod-64, shifted left by 16)
  *  - bits [31:21] reserved : always zero
  *
  * The single-assignment (FIFO_STATUS = ...) uses the regmodel::Reg assignment
@@ -143,7 +143,7 @@ void entropy_src_ip::interrupt_output_method()
  *    m_fifo (RPTR has already been incremented).
  *
  * Functional reference:
- *   - registers.FIFO_STATUS (offset 0x24): LEVEL[6:0], WPTR[12:8], RPTR[20:16]
+ *   - registers.FIFO_STATUS (offset 0x24): LEVEL[6:0], WPTR[13:8], RPTR[21:16]
  *   - atomic FIFO_STATUS write invariant
  *   - push: LEVEL and WPTR updated
  *   - pop: LEVEL and RPTR updated
@@ -158,13 +158,13 @@ void entropy_src_ip::update_fifo_status()
 
     // Encode all three fields into a single 32-bit word:
     //   bits [6:0]   = LEVEL
-    //   bits [12:8]  = WPTR (5 bits, shifted left by 8)
-    //   bits [20:16] = RPTR (5 bits, shifted left by 16)
-    //   bits [31:21] = 0 (reserved, always zero)
+    //   bits [13:8]  = WPTR (6 bits)
+    //   bits [21:16] = RPTR (6 bits)
+    constexpr uint32_t kPtrMask = 0x3Fu;
     uint32_t fifo_status_val =
-          (level                       & 0x7Fu)          // bits [6:0]
-        | (static_cast<uint32_t>(m_wptr & 0x1Fu) << 8u)   // bits [12:8]
-        | (static_cast<uint32_t>(m_rptr & 0x1Fu) << 16u);  // bits [20:16]
+          (level                       & 0x7Fu)
+        | (static_cast<uint32_t>(m_wptr & kPtrMask) << 8u)
+        | (static_cast<uint32_t>(m_rptr & kPtrMask) << 16u);
 
     FIFO_STATUS = fifo_status_val;
 
@@ -276,7 +276,7 @@ bool entropy_src_ip::handle_write_INTR_TEST(uint32_t value)
     // at bit 8, FIFO_UNDERFLOW at bit 12.
     //
     // Mask the written value to the architecturally valid interrupt bit positions
-    // (INTR_ALL_BITS_MASK = 0x00001111) before OR-ing into INTR_STATUS.  This
+    // (INTR_ALL_BITS_MASK = 0x11111111) before OR-ing into INTR_STATUS.  This
     // prevents reserved-bit writes from polluting the status register.
     //
     // SIDE EFFECTS:
@@ -307,7 +307,8 @@ bool entropy_src_ip::handle_write_INTR_TEST(uint32_t value)
  ******************************************************************************/
 bool entropy_src_ip::handle_write_FIFO_CTRL(uint32_t value)
 {
-    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
+    // RDL: only ENTROPY_CHURN_ENABLE[4] is swwel. ENABLE[0] stays writable.
+    const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0x10u : 0u;
     const uint32_t next = regmodel::apply_lock_gated(
         static_cast<uint32_t>(FIFO_CTRL),
         value & static_cast<uint32_t>(FIFO_CTRL.write_bit_mask),
@@ -408,26 +409,6 @@ bool entropy_src_ip::handle_write_HEALTH_TEST_CTRL(uint32_t value)
         << " stored=0x" << static_cast<uint32_t>(HEALTH_TEST_CTRL)
         << " ENABLE_field=0x" << enable_field
         << " health_test_enabled=" << std::boolalpha << m_health_test_enabled;
-
-    return true;
-}
-
-/******************************************************************************
- * @brief Write callback for STARTUP_CTRL register (offset 0xB0)
- *
- * Captures STARTUP_DELAY from bits [15:0] of @p value into
- * m_startup_delay_ns.
- *
- * @param value 32-bit value written to STARTUP_CTRL
- * @return true always
- ******************************************************************************/
-bool entropy_src_ip::handle_write_STARTUP_CTRL(uint32_t value)
-{
-    m_startup_delay_ns = value & 0xFFFFu;
-    STARTUP_CTRL = value & static_cast<uint32_t>(STARTUP_CTRL.write_bit_mask);
-
-    REG_INFO(3, logger)
-        << "STARTUP_CTRL: startup_delay=" << m_startup_delay_ns << " ns";
 
     return true;
 }
@@ -542,7 +523,7 @@ bool entropy_src_ip::handle_read_FIFO_RDATA(uint32_t& value)
     //   - registers.FIFO_STATUS.fields.RPTR: bits [20:16], "updated on
     //     every successful pop"
     //   - "wptr and rptr are 5-bit counters that wrap modulo 32"
-    m_rptr = static_cast<uint8_t>((m_rptr + 1u) % 32);
+    m_rptr = static_cast<uint8_t>((m_rptr + 1u) % FIFO_DEPTH);
 
     update_fifo_status();
 
@@ -735,7 +716,7 @@ void entropy_src_ip::entropy_generation_thread()
             m_fifo_enabled = (static_cast<uint32_t>(FIFO_CTRL.ENABLE) != 0u);
             m_health_test_enabled =
                 (static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE) != 0u);
-            m_startup_delay_ns = static_cast<uint32_t>(STARTUP_CTRL.DELAY_CYCLES);
+            m_startup_delay_ns = 0u;
             m_reset_in_progress = false;
 
             continue;
@@ -822,7 +803,7 @@ void entropy_src_ip::entropy_generation_thread()
                 }
                 m_fifo.push(entropy_word);
 
-                m_wptr = static_cast<uint8_t>((m_wptr + 1u) % 32);
+                m_wptr = static_cast<uint8_t>((m_wptr + 1u) % FIFO_DEPTH);
                 update_fifo_status();
 
                 // REG_DEBUG(1, logger)
@@ -913,7 +894,7 @@ void entropy_src_ip::handle_reset_recovery()
     m_fifo_enabled = (static_cast<uint32_t>(FIFO_CTRL.ENABLE) != 0u);
     m_health_test_enabled =
         (static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE) != 0u);
-    m_startup_delay_ns = static_cast<uint32_t>(STARTUP_CTRL.DELAY_CYCLES);
+    m_startup_delay_ns = 0u;
 
     // Reset quantum keeper for clean post-reset timing
     m_qk.reset();
@@ -923,20 +904,6 @@ void entropy_src_ip::handle_reset_recovery()
         << "fifo_enabled=" << std::boolalpha << m_fifo_enabled
         << " health_test_enabled=" << m_health_test_enabled
         << " startup_delay_ns=" << std::dec << m_startup_delay_ns;
-
-    // Post-reset startup delay via quantum keeper
-    if (m_startup_delay_ns > 0u)
-    {
-        REG_INFO(2, logger)
-            << "handle_reset_recovery: post-reset STARTUP_DELAY ("
-            << m_startup_delay_ns << " ns)";
-        m_qk.inc(sc_core::sc_time(
-            static_cast<double>(m_startup_delay_ns), sc_core::SC_NS));
-        if (m_qk.need_sync())
-        {
-            qk_sync_interruptible();
-        }
-    }
 }
 
 /******************************************************************************
@@ -954,6 +921,83 @@ void entropy_src_ip::qk_sync_interruptible()
     if (local > sc_core::SC_ZERO_TIME)
     {
         wait(local, m_reset_event | rst_ni.value_changed_event());
+    }
+}
+
+void entropy_src_ip::register_fips_locked(regmodel::Reg<32>& reg)
+{
+    memory.register_write_callback(
+        [this, &reg](DT incoming) {
+            const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? ~0u : 0u;
+            reg = regmodel::apply_lock_gated(
+                static_cast<uint32_t>(reg),
+                incoming & static_cast<uint32_t>(reg.write_bit_mask),
+                lock);
+            return true;
+        },
+        reg.offset);
+}
+
+void entropy_src_ip::register_w1c(regmodel::Reg<32>& reg, uint32_t mask)
+{
+    memory.register_write_callback(
+        [&reg, mask](DT incoming) {
+            reg = regmodel::apply_w1c(static_cast<uint32_t>(reg), incoming, mask);
+            return true;
+        },
+        reg.offset);
+}
+
+void entropy_src_ip::register_certified_config_locks()
+{
+    // swwel fields that do not already have a side-effect write handler.
+    // FIFO_CTRL.ENABLE is not swwel; its handler locks only bit 4.
+    regmodel::Reg<32>* const locked[] = {
+        &HEALTH_TEST_WINDOW_SIZE,
+        &MARKOV_TEST_PROB_THRESHOLDS,
+        &APT_PROPORTION_1BIT,
+        &APT_PROPORTION_LO,
+        &RING_OSC_TUNE,
+        &RING_OSC_CTRL,
+        &DECORRELATOR_CTRL,
+        &DECORRELATOR_MASK,
+        &GENERATOR_0_SAMPLE_CLK_CONFIG,
+        &GENERATOR_1_SAMPLE_CLK_CONFIG,
+        &GENERATOR_2_SAMPLE_CLK_CONFIG,
+        &GENERATOR_3_SAMPLE_CLK_CONFIG,
+        &GENERATOR_4_SAMPLE_CLK_CONFIG,
+        &GENERATOR_5_SAMPLE_CLK_CONFIG,
+        &GENERATOR_6_SAMPLE_CLK_CONFIG,
+        &GENERATOR_7_SAMPLE_CLK_CONFIG,
+        &GENERATOR_8_SAMPLE_CLK_CONFIG,
+        &GENERATOR_9_SAMPLE_CLK_CONFIG,
+        &GENERATOR_10_SAMPLE_CLK_CONFIG,
+        &GENERATOR_11_SAMPLE_CLK_CONFIG,
+    };
+    for (regmodel::Reg<32>* reg : locked) {
+        register_fips_locked(*reg);
+    }
+}
+
+void entropy_src_ip::register_health_status_w1c()
+{
+    regmodel::Reg<32>* const status[] = {
+        &HEALTH_TEST_STATUS,
+        &GENERATOR_0_HEALTH_STATUS,
+        &GENERATOR_1_HEALTH_STATUS,
+        &GENERATOR_2_HEALTH_STATUS,
+        &GENERATOR_3_HEALTH_STATUS,
+        &GENERATOR_4_HEALTH_STATUS,
+        &GENERATOR_5_HEALTH_STATUS,
+        &GENERATOR_6_HEALTH_STATUS,
+        &GENERATOR_7_HEALTH_STATUS,
+        &GENERATOR_8_HEALTH_STATUS,
+        &GENERATOR_9_HEALTH_STATUS,
+        &GENERATOR_10_HEALTH_STATUS,
+        &GENERATOR_11_HEALTH_STATUS,
+    };
+    for (regmodel::Reg<32>* reg : status) {
+        register_w1c(*reg, HEALTH_STATUS_W1C_MASK);
     }
 }
 

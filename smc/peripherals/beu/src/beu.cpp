@@ -145,9 +145,8 @@ bool beu::reg_write(uint64_t off, uint64_t data)
         // Read-only to software (HW-written); writes are ignored (WI).
         return true;
     case beu_cfg::ACCRUED_ENABLE:
-        // SW clears (ack) per-source sticky bits by writing 0s; 1s preserve.
-        // Software must not be able to set accrued status bits.
-        accrued_ &= (data & beu_cfg::VALID_MASK);
+        // Ordinary RW replacement of the implemented accrued bits.
+        accrued_ = data & beu_cfg::VALID_MASK;
         schedule_recompute();
         return true;
     default: break;

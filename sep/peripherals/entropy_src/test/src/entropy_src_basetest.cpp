@@ -2,11 +2,10 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "entropy_src_basetest.h"
 
-entropy_src_basetest::Register_Property_t reg_map[43] = {
+entropy_src_basetest::Register_Property_t reg_map[44] = {
 {entropy_src_basetest::COMPONENT_ID_OFFSET, entropy_src_basetest::COMPONENT_ID_READ, entropy_src_basetest::COMPONENT_ID_WRITE, entropy_src_basetest::COMPONENT_ID_RESET, "COMPONENT_ID"}, 
-{entropy_src_basetest::CTRL_OFFSET, entropy_src_basetest::CTRL_READ, entropy_src_basetest::CTRL_WRITE, entropy_src_basetest::CTRL_RESET, "CTRL"}, 
-{entropy_src_basetest::STATUS_OFFSET, entropy_src_basetest::STATUS_READ, entropy_src_basetest::STATUS_WRITE, entropy_src_basetest::STATUS_RESET, "STATUS"}, 
-{entropy_src_basetest::DEBUG_CTRL_OFFSET, entropy_src_basetest::DEBUG_CTRL_READ, entropy_src_basetest::DEBUG_CTRL_WRITE, entropy_src_basetest::DEBUG_CTRL_RESET, "DEBUG_CTRL"}, 
+{entropy_src_basetest::CTRL_OFFSET, entropy_src_basetest::CTRL_READ, entropy_src_basetest::CTRL_WRITE, entropy_src_basetest::CTRL_RESET, "CTRL"},
+{entropy_src_basetest::DEBUG_CTRL_OFFSET, entropy_src_basetest::DEBUG_CTRL_READ, entropy_src_basetest::DEBUG_CTRL_WRITE, entropy_src_basetest::DEBUG_CTRL_RESET, "DEBUG_CTRL"},
 {entropy_src_basetest::INTR_STATUS_OFFSET, entropy_src_basetest::INTR_STATUS_READ, entropy_src_basetest::INTR_STATUS_WRITE, entropy_src_basetest::INTR_STATUS_RESET, "INTR_STATUS"}, 
 {entropy_src_basetest::INTR_ENABLE_OFFSET, entropy_src_basetest::INTR_ENABLE_READ, entropy_src_basetest::INTR_ENABLE_WRITE, entropy_src_basetest::INTR_ENABLE_RESET, "INTR_ENABLE"}, 
 {entropy_src_basetest::INTR_TEST_OFFSET, entropy_src_basetest::INTR_TEST_READ, entropy_src_basetest::INTR_TEST_WRITE, entropy_src_basetest::INTR_TEST_RESET, "INTR_TEST"}, 
@@ -19,21 +18,14 @@ entropy_src_basetest::Register_Property_t reg_map[43] = {
 {entropy_src_basetest::REPETITION_TEST_COUNT_OFFSET, entropy_src_basetest::REPETITION_TEST_COUNT_READ, entropy_src_basetest::REPETITION_TEST_COUNT_WRITE, entropy_src_basetest::REPETITION_TEST_COUNT_RESET, "REPETITION_TEST_COUNT"}, 
 {entropy_src_basetest::APT_PATTERN_COUNT_1BIT_OFFSET, entropy_src_basetest::APT_PATTERN_COUNT_1BIT_READ, entropy_src_basetest::APT_PATTERN_COUNT_1BIT_WRITE, entropy_src_basetest::APT_PATTERN_COUNT_1BIT_RESET, "APT_PATTERN_COUNT_1BIT"}, 
 {entropy_src_basetest::APT_PATTERN_COUNT_2BIT_OFFSET, entropy_src_basetest::APT_PATTERN_COUNT_2BIT_READ, entropy_src_basetest::APT_PATTERN_COUNT_2BIT_WRITE, entropy_src_basetest::APT_PATTERN_COUNT_2BIT_RESET, "APT_PATTERN_COUNT_2BIT"}, 
-{entropy_src_basetest::APT_PATTERN_COUNT_3BIT_OFFSET, entropy_src_basetest::APT_PATTERN_COUNT_3BIT_READ, entropy_src_basetest::APT_PATTERN_COUNT_3BIT_WRITE, entropy_src_basetest::APT_PATTERN_COUNT_3BIT_RESET, "APT_PATTERN_COUNT_3BIT"}, 
-{entropy_src_basetest::APT_PATTERN_COUNT_4BIT_OFFSET, entropy_src_basetest::APT_PATTERN_COUNT_4BIT_READ, entropy_src_basetest::APT_PATTERN_COUNT_4BIT_WRITE, entropy_src_basetest::APT_PATTERN_COUNT_4BIT_RESET, "APT_PATTERN_COUNT_4BIT"}, 
 {entropy_src_basetest::APT_PROPORTION_1BIT_OFFSET, entropy_src_basetest::APT_PROPORTION_1BIT_READ, entropy_src_basetest::APT_PROPORTION_1BIT_WRITE, entropy_src_basetest::APT_PROPORTION_1BIT_RESET, "APT_PROPORTION_1BIT"}, 
-{entropy_src_basetest::APT_PROPORTION_2BIT_OFFSET, entropy_src_basetest::APT_PROPORTION_2BIT_READ, entropy_src_basetest::APT_PROPORTION_2BIT_WRITE, entropy_src_basetest::APT_PROPORTION_2BIT_RESET, "APT_PROPORTION_2BIT"}, 
-{entropy_src_basetest::APT_PROPORTION_3BIT_OFFSET, entropy_src_basetest::APT_PROPORTION_3BIT_READ, entropy_src_basetest::APT_PROPORTION_3BIT_WRITE, entropy_src_basetest::APT_PROPORTION_3BIT_RESET, "APT_PROPORTION_3BIT"}, 
-{entropy_src_basetest::APT_PROPORTION_4BIT_OFFSET, entropy_src_basetest::APT_PROPORTION_4BIT_READ, entropy_src_basetest::APT_PROPORTION_4BIT_WRITE, entropy_src_basetest::APT_PROPORTION_4BIT_RESET, "APT_PROPORTION_4BIT"}, 
+{entropy_src_basetest::APT_PROPORTION_LO_OFFSET, entropy_src_basetest::APT_PROPORTION_LO_READ, entropy_src_basetest::APT_PROPORTION_LO_WRITE, entropy_src_basetest::APT_PROPORTION_LO_RESET, "APT_PROPORTION_LO"}, 
 {entropy_src_basetest::MARKOV_TEST_COUNTS_0_OFFSET, entropy_src_basetest::MARKOV_TEST_COUNTS_0_READ, entropy_src_basetest::MARKOV_TEST_COUNTS_0_WRITE, entropy_src_basetest::MARKOV_TEST_COUNTS_0_RESET, "MARKOV_TEST_COUNTS_0"}, 
-{entropy_src_basetest::MARKOV_TEST_COUNTS_1_OFFSET, entropy_src_basetest::MARKOV_TEST_COUNTS_1_READ, entropy_src_basetest::MARKOV_TEST_COUNTS_1_WRITE, entropy_src_basetest::MARKOV_TEST_COUNTS_1_RESET, "MARKOV_TEST_COUNTS_1"}, 
-{entropy_src_basetest::MARKOV_TEST_PROBABILITIES_OFFSET, entropy_src_basetest::MARKOV_TEST_PROBABILITIES_READ, entropy_src_basetest::MARKOV_TEST_PROBABILITIES_WRITE, entropy_src_basetest::MARKOV_TEST_PROBABILITIES_RESET, "MARKOV_TEST_PROBABILITIES"}, 
 {entropy_src_basetest::RING_OSC_ENABLE_OFFSET, entropy_src_basetest::RING_OSC_ENABLE_READ, entropy_src_basetest::RING_OSC_ENABLE_WRITE, entropy_src_basetest::RING_OSC_ENABLE_RESET, "RING_OSC_ENABLE"}, 
 {entropy_src_basetest::RING_OSC_TUNE_OFFSET, entropy_src_basetest::RING_OSC_TUNE_READ, entropy_src_basetest::RING_OSC_TUNE_WRITE, entropy_src_basetest::RING_OSC_TUNE_RESET, "RING_OSC_TUNE"}, 
 {entropy_src_basetest::RING_OSC_CTRL_OFFSET, entropy_src_basetest::RING_OSC_CTRL_READ, entropy_src_basetest::RING_OSC_CTRL_WRITE, entropy_src_basetest::RING_OSC_CTRL_RESET, "RING_OSC_CTRL"}, 
 {entropy_src_basetest::DECORRELATOR_CTRL_OFFSET, entropy_src_basetest::DECORRELATOR_CTRL_READ, entropy_src_basetest::DECORRELATOR_CTRL_WRITE, entropy_src_basetest::DECORRELATOR_CTRL_RESET, "DECORRELATOR_CTRL"}, 
 {entropy_src_basetest::DECORRELATOR_MASK_OFFSET, entropy_src_basetest::DECORRELATOR_MASK_READ, entropy_src_basetest::DECORRELATOR_MASK_WRITE, entropy_src_basetest::DECORRELATOR_MASK_RESET, "DECORRELATOR_MASK"}, 
-{entropy_src_basetest::STARTUP_CTRL_OFFSET, entropy_src_basetest::STARTUP_CTRL_READ, entropy_src_basetest::STARTUP_CTRL_WRITE, entropy_src_basetest::STARTUP_CTRL_RESET, "STARTUP_CTRL"}, 
 {entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_0_HEALTH_STATUS_RESET, "GENERATOR_0_HEALTH_STATUS"}, 
 {entropy_src_basetest::GENERATOR_1_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_1_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_1_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_1_HEALTH_STATUS_RESET, "GENERATOR_1_HEALTH_STATUS"}, 
 {entropy_src_basetest::GENERATOR_2_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_2_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_2_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_2_HEALTH_STATUS_RESET, "GENERATOR_2_HEALTH_STATUS"}, 
@@ -45,4 +37,13 @@ entropy_src_basetest::Register_Property_t reg_map[43] = {
 {entropy_src_basetest::GENERATOR_8_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_8_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_8_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_8_HEALTH_STATUS_RESET, "GENERATOR_8_HEALTH_STATUS"}, 
 {entropy_src_basetest::GENERATOR_9_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_9_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_9_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_9_HEALTH_STATUS_RESET, "GENERATOR_9_HEALTH_STATUS"}, 
 {entropy_src_basetest::GENERATOR_10_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_10_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_10_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_10_HEALTH_STATUS_RESET, "GENERATOR_10_HEALTH_STATUS"}, 
-{entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_RESET, "GENERATOR_11_HEALTH_STATUS"}};
+{entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_OFFSET, entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_READ, entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_WRITE, entropy_src_basetest::GENERATOR_11_HEALTH_STATUS_RESET, "GENERATOR_11_HEALTH_STATUS"},
+{entropy_src_basetest::ALERT_THRESHOLD_OFFSET, entropy_src_basetest::ALERT_THRESHOLD_READ, entropy_src_basetest::ALERT_THRESHOLD_WRITE, entropy_src_basetest::ALERT_THRESHOLD_RESET, "ALERT_THRESHOLD"},
+{entropy_src_basetest::MIN_ENTROPY_H_OFFSET, entropy_src_basetest::MIN_ENTROPY_H_READ, entropy_src_basetest::MIN_ENTROPY_H_WRITE, entropy_src_basetest::MIN_ENTROPY_H_RESET, "MIN_ENTROPY_H"},
+{entropy_src_basetest::RECOMMENDED_THRESHOLDS_OFFSET, entropy_src_basetest::RECOMMENDED_THRESHOLDS_READ, entropy_src_basetest::RECOMMENDED_THRESHOLDS_WRITE, entropy_src_basetest::RECOMMENDED_THRESHOLDS_RESET, "RECOMMENDED_THRESHOLDS"},
+{entropy_src_basetest::BIW_OBS_CTRL_OFFSET, entropy_src_basetest::BIW_OBS_CTRL_READ, entropy_src_basetest::BIW_OBS_CTRL_WRITE, entropy_src_basetest::BIW_OBS_CTRL_RESET, "BIW_OBS_CTRL"},
+{entropy_src_basetest::BIW_OBS_STATUS_OFFSET, entropy_src_basetest::BIW_OBS_STATUS_READ, entropy_src_basetest::BIW_OBS_STATUS_WRITE, entropy_src_basetest::BIW_OBS_STATUS_RESET, "BIW_OBS_STATUS"},
+{entropy_src_basetest::BIW_OBS_RDATA_OFFSET, entropy_src_basetest::BIW_OBS_RDATA_READ, entropy_src_basetest::BIW_OBS_RDATA_WRITE, entropy_src_basetest::BIW_OBS_RDATA_RESET, "BIW_OBS_RDATA"},
+{entropy_src_basetest::NOISE_OBS_CTRL_OFFSET, entropy_src_basetest::NOISE_OBS_CTRL_READ, entropy_src_basetest::NOISE_OBS_CTRL_WRITE, entropy_src_basetest::NOISE_OBS_CTRL_RESET, "NOISE_OBS_CTRL"},
+{entropy_src_basetest::NOISE_OBS_STATUS_OFFSET, entropy_src_basetest::NOISE_OBS_STATUS_READ, entropy_src_basetest::NOISE_OBS_STATUS_WRITE, entropy_src_basetest::NOISE_OBS_STATUS_RESET, "NOISE_OBS_STATUS"},
+{entropy_src_basetest::NOISE_OBS_RDATA_OFFSET, entropy_src_basetest::NOISE_OBS_RDATA_READ, entropy_src_basetest::NOISE_OBS_RDATA_WRITE, entropy_src_basetest::NOISE_OBS_RDATA_RESET, "NOISE_OBS_RDATA"}};

@@ -53,9 +53,10 @@ class CTRL_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x13FF0111, 0x13FF0110, 0x10000000),
-      RSVD0(reg_name + ".RSVD0", *this, 0, 1), 
-      reserved0(reg_name + ".reserved0", *this, 1, 3), 
+      regmodel::Reg<N>(reg_name, memory, offset, 0x13FF0113, 0x13FF0112, 0x10000002),
+      RSVD0(reg_name + ".RSVD0", *this, 0, 1),
+      MODULE_ENABLE(reg_name + ".MODULE_ENABLE", *this, 1, 1),
+      reserved0(reg_name + ".reserved0", *this, 2, 2),
       AUTOTUNE_ENABLE(reg_name + ".AUTOTUNE_ENABLE", *this, 4, 1), 
       reserved1(reg_name + ".reserved1", *this, 5, 3), 
       BYPASS_ENTROPY_COMPRESSOR(reg_name + ".BYPASS_ENTROPY_COMPRESSOR", *this, 8, 1), 
@@ -80,6 +81,7 @@ class CTRL_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator>>=;
     using regmodel::Reg<N>::operator<<=;
     regmodel::Bitfield<N> RSVD0;
+    regmodel::Bitfield<N> MODULE_ENABLE;
     regmodel::Bitfield<N> reserved0;
     regmodel::Bitfield<N> AUTOTUNE_ENABLE;
     regmodel::Bitfield<N> reserved1;
@@ -193,15 +195,23 @@ class INTR_STATUS_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     INTR_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x00000000, 0x00000000),
-      HEALTH_TEST_FAILED(reg_name + ".HEALTH_TEST_FAILED", *this, 0, 1), 
-      reserved0(reg_name + ".reserved0", *this, 1, 3), 
-      FIFO_ERROR(reg_name + ".FIFO_ERROR", *this, 4, 1), 
-      reserved1(reg_name + ".reserved1", *this, 5, 3), 
-      FIFO_OVERFLOW(reg_name + ".FIFO_OVERFLOW", *this, 8, 1), 
-      reserved2(reg_name + ".reserved2", *this, 9, 3), 
-      FIFO_UNDERFLOW(reg_name + ".FIFO_UNDERFLOW", *this, 12, 1), 
-      reserved3(reg_name + ".reserved3", *this, 13, 19)
+      regmodel::Reg<N>(reg_name, memory, offset, 0x11111111, 0x00000000, 0x00000000),
+      HEALTH_TEST_FAILED(reg_name + ".HEALTH_TEST_FAILED", *this, 0, 1),
+      reserved0(reg_name + ".reserved0", *this, 1, 3),
+      FIFO_ERROR(reg_name + ".FIFO_ERROR", *this, 4, 1),
+      reserved1(reg_name + ".reserved1", *this, 5, 3),
+      FIFO_OVERFLOW(reg_name + ".FIFO_OVERFLOW", *this, 8, 1),
+      reserved2(reg_name + ".reserved2", *this, 9, 3),
+      FIFO_UNDERFLOW(reg_name + ".FIFO_UNDERFLOW", *this, 12, 1),
+      reserved3(reg_name + ".reserved3", *this, 13, 3),
+      PERSISTENT_FAILURE(reg_name + ".PERSISTENT_FAILURE", *this, 16, 1),
+      reserved4(reg_name + ".reserved4", *this, 17, 3),
+      AUTOTUNE_FAIL(reg_name + ".AUTOTUNE_FAIL", *this, 20, 1),
+      reserved5(reg_name + ".reserved5", *this, 21, 3),
+      BIW_OBS_OVERFLOW(reg_name + ".BIW_OBS_OVERFLOW", *this, 24, 1),
+      reserved6(reg_name + ".reserved6", *this, 25, 3),
+      NOISE_OBS_OVERFLOW(reg_name + ".NOISE_OBS_OVERFLOW", *this, 28, 1),
+      reserved7(reg_name + ".reserved7", *this, 29, 3)
     {
       this->set_read_write_restrictions(memory);
     }
@@ -225,6 +235,14 @@ class INTR_STATUS_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> reserved2;
     regmodel::Bitfield<N> FIFO_UNDERFLOW;
     regmodel::Bitfield<N> reserved3;
+    regmodel::Bitfield<N> PERSISTENT_FAILURE;
+    regmodel::Bitfield<N> reserved4;
+    regmodel::Bitfield<N> AUTOTUNE_FAIL;
+    regmodel::Bitfield<N> reserved5;
+    regmodel::Bitfield<N> BIW_OBS_OVERFLOW;
+    regmodel::Bitfield<N> reserved6;
+    regmodel::Bitfield<N> NOISE_OBS_OVERFLOW;
+    regmodel::Bitfield<N> reserved7;
 };
 
 
@@ -235,15 +253,23 @@ class INTR_ENABLE_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     INTR_ENABLE_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x00001111, 0x00001111, 0x00000000),
-      HEALTH_TEST_FAILED(reg_name + ".HEALTH_TEST_FAILED", *this, 0, 1), 
-      reserved0(reg_name + ".reserved0", *this, 1, 3), 
-      FIFO_ERROR(reg_name + ".FIFO_ERROR", *this, 4, 1), 
-      reserved1(reg_name + ".reserved1", *this, 5, 3), 
-      FIFO_OVERFLOW(reg_name + ".FIFO_OVERFLOW", *this, 8, 1), 
-      reserved2(reg_name + ".reserved2", *this, 9, 3), 
-      FIFO_UNDERFLOW(reg_name + ".FIFO_UNDERFLOW", *this, 12, 1), 
-      reserved3(reg_name + ".reserved3", *this, 13, 19)
+      regmodel::Reg<N>(reg_name, memory, offset, 0x11111111, 0x11111111, 0x00000000),
+      HEALTH_TEST_FAILED(reg_name + ".HEALTH_TEST_FAILED", *this, 0, 1),
+      reserved0(reg_name + ".reserved0", *this, 1, 3),
+      FIFO_ERROR(reg_name + ".FIFO_ERROR", *this, 4, 1),
+      reserved1(reg_name + ".reserved1", *this, 5, 3),
+      FIFO_OVERFLOW(reg_name + ".FIFO_OVERFLOW", *this, 8, 1),
+      reserved2(reg_name + ".reserved2", *this, 9, 3),
+      FIFO_UNDERFLOW(reg_name + ".FIFO_UNDERFLOW", *this, 12, 1),
+      reserved3(reg_name + ".reserved3", *this, 13, 3),
+      PERSISTENT_FAILURE(reg_name + ".PERSISTENT_FAILURE", *this, 16, 1),
+      reserved4(reg_name + ".reserved4", *this, 17, 3),
+      AUTOTUNE_FAIL(reg_name + ".AUTOTUNE_FAIL", *this, 20, 1),
+      reserved5(reg_name + ".reserved5", *this, 21, 3),
+      BIW_OBS_OVERFLOW(reg_name + ".BIW_OBS_OVERFLOW", *this, 24, 1),
+      reserved6(reg_name + ".reserved6", *this, 25, 3),
+      NOISE_OBS_OVERFLOW(reg_name + ".NOISE_OBS_OVERFLOW", *this, 28, 1),
+      reserved7(reg_name + ".reserved7", *this, 29, 3)
     {
       this->set_read_write_restrictions(memory);
     }
@@ -267,6 +293,14 @@ class INTR_ENABLE_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> reserved2;
     regmodel::Bitfield<N> FIFO_UNDERFLOW;
     regmodel::Bitfield<N> reserved3;
+    regmodel::Bitfield<N> PERSISTENT_FAILURE;
+    regmodel::Bitfield<N> reserved4;
+    regmodel::Bitfield<N> AUTOTUNE_FAIL;
+    regmodel::Bitfield<N> reserved5;
+    regmodel::Bitfield<N> BIW_OBS_OVERFLOW;
+    regmodel::Bitfield<N> reserved6;
+    regmodel::Bitfield<N> NOISE_OBS_OVERFLOW;
+    regmodel::Bitfield<N> reserved7;
 };
 
 template<unsigned int N>
@@ -276,15 +310,23 @@ class INTR_TEST_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     INTR_TEST_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x00000000, 0x00001111, 0x00000000),
-      HEALTH_TEST_FAILED(reg_name + ".HEALTH_TEST_FAILED", *this, 0, 1), 
-      reserved0(reg_name + ".reserved0", *this, 1, 3), 
-      FIFO_ERROR(reg_name + ".FIFO_ERROR", *this, 4, 1), 
-      reserved1(reg_name + ".reserved1", *this, 5, 3), 
-      FIFO_OVERFLOW(reg_name + ".FIFO_OVERFLOW", *this, 8, 1), 
-      reserved2(reg_name + ".reserved2", *this, 9, 3), 
-      FIFO_UNDERFLOW(reg_name + ".FIFO_UNDERFLOW", *this, 12, 1), 
-      reserved3(reg_name + ".reserved3", *this, 13, 19)
+      regmodel::Reg<N>(reg_name, memory, offset, 0x00000000, 0x11111111, 0x00000000),
+      HEALTH_TEST_FAILED(reg_name + ".HEALTH_TEST_FAILED", *this, 0, 1),
+      reserved0(reg_name + ".reserved0", *this, 1, 3),
+      FIFO_ERROR(reg_name + ".FIFO_ERROR", *this, 4, 1),
+      reserved1(reg_name + ".reserved1", *this, 5, 3),
+      FIFO_OVERFLOW(reg_name + ".FIFO_OVERFLOW", *this, 8, 1),
+      reserved2(reg_name + ".reserved2", *this, 9, 3),
+      FIFO_UNDERFLOW(reg_name + ".FIFO_UNDERFLOW", *this, 12, 1),
+      reserved3(reg_name + ".reserved3", *this, 13, 3),
+      PERSISTENT_FAILURE(reg_name + ".PERSISTENT_FAILURE", *this, 16, 1),
+      reserved4(reg_name + ".reserved4", *this, 17, 3),
+      AUTOTUNE_FAIL(reg_name + ".AUTOTUNE_FAIL", *this, 20, 1),
+      reserved5(reg_name + ".reserved5", *this, 21, 3),
+      BIW_OBS_OVERFLOW(reg_name + ".BIW_OBS_OVERFLOW", *this, 24, 1),
+      reserved6(reg_name + ".reserved6", *this, 25, 3),
+      NOISE_OBS_OVERFLOW(reg_name + ".NOISE_OBS_OVERFLOW", *this, 28, 1),
+      reserved7(reg_name + ".reserved7", *this, 29, 3)
     {
       this->set_read_write_restrictions(memory);
     }
@@ -308,6 +350,14 @@ class INTR_TEST_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> reserved2;
     regmodel::Bitfield<N> FIFO_UNDERFLOW;
     regmodel::Bitfield<N> reserved3;
+    regmodel::Bitfield<N> PERSISTENT_FAILURE;
+    regmodel::Bitfield<N> reserved4;
+    regmodel::Bitfield<N> AUTOTUNE_FAIL;
+    regmodel::Bitfield<N> reserved5;
+    regmodel::Bitfield<N> BIW_OBS_OVERFLOW;
+    regmodel::Bitfield<N> reserved6;
+    regmodel::Bitfield<N> NOISE_OBS_OVERFLOW;
+    regmodel::Bitfield<N> reserved7;
 };
 
 template<unsigned int N>
@@ -456,13 +506,13 @@ class FIFO_STATUS_type : public regmodel::Reg<N>
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
     FIFO_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x001F1F7F, 0x00000000, 0x00000000),
-      LEVEL(reg_name + ".LEVEL", *this, 0, 7), 
-      reserved0(reg_name + ".reserved0", *this, 7, 1), 
-      WPTR(reg_name + ".WPTR", *this, 8, 5), 
-      reserved1(reg_name + ".reserved1", *this, 13, 3), 
-      RPTR(reg_name + ".RPTR", *this, 16, 5), 
-      reserved2(reg_name + ".reserved2", *this, 21, 11)
+      regmodel::Reg<N>(reg_name, memory, offset, 0x003F3F7F, 0x00000000, 0x00000000),
+      LEVEL(reg_name + ".LEVEL", *this, 0, 7),
+      reserved0(reg_name + ".reserved0", *this, 7, 1),
+      WPTR(reg_name + ".WPTR", *this, 8, 6),
+      reserved1(reg_name + ".reserved1", *this, 14, 2),
+      RPTR(reg_name + ".RPTR", *this, 16, 6),
+      reserved2(reg_name + ".reserved2", *this, 22, 10)
     {
       this->set_read_write_restrictions(memory);
     }
@@ -725,77 +775,6 @@ class APT_PATTERN_COUNT_2BIT_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> SAMPLES_PROCESSED;
     regmodel::Bitfield<N> reserved0;
 };
-
-template<unsigned int N>
-class APT_PATTERN_COUNT_3BIT_type : public regmodel::Reg<N>
-{
-  public:
-    using typename regmodel::Reg<N>::memory_type;
-    typedef typename regmodel::Word<N>::wordtype DT;
-    APT_PATTERN_COUNT_3BIT_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x3FFFFFFF, 0x00000000, 0x00000000),
-      PATTERN_COUNT(reg_name + ".PATTERN_COUNT", *this, 0, 10), 
-      TARGET_PATTERN(reg_name + ".TARGET_PATTERN", *this, 10, 4), 
-      reserved0(reg_name + ".reserved0", *this, 14, 6), 
-      SAMPLES_PROCESSED(reg_name + ".SAMPLES_PROCESSED", *this, 20, 10), 
-      reserved1(reg_name + ".reserved1", *this, 30, 2)
-    {
-      this->set_read_write_restrictions(memory);
-    }
-
-    using regmodel::Reg<N>::operator=;
-    using regmodel::Reg<N>::operator+=;
-    using regmodel::Reg<N>::operator-=;
-    using regmodel::Reg<N>::operator/=;
-    using regmodel::Reg<N>::operator*=;
-    using regmodel::Reg<N>::operator%=;
-    using regmodel::Reg<N>::operator^=;
-    using regmodel::Reg<N>::operator&=;
-    using regmodel::Reg<N>::operator|=;
-    using regmodel::Reg<N>::operator>>=;
-    using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> PATTERN_COUNT;
-    regmodel::Bitfield<N> TARGET_PATTERN;
-    regmodel::Bitfield<N> reserved0;
-    regmodel::Bitfield<N> SAMPLES_PROCESSED;
-    regmodel::Bitfield<N> reserved1;
-};
-
-template<unsigned int N>
-class APT_PATTERN_COUNT_4BIT_type : public regmodel::Reg<N>
-{
-  public:
-    using typename regmodel::Reg<N>::memory_type;
-    typedef typename regmodel::Word<N>::wordtype DT;
-    APT_PATTERN_COUNT_4BIT_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x3FFFFFFF, 0x00000000, 0x00000000),
-      PATTERN_COUNT(reg_name + ".PATTERN_COUNT", *this, 0, 10), 
-      TARGET_PATTERN(reg_name + ".TARGET_PATTERN", *this, 10, 4), 
-      reserved0(reg_name + ".reserved0", *this, 14, 6), 
-      SAMPLES_PROCESSED(reg_name + ".SAMPLES_PROCESSED", *this, 20, 10), 
-      reserved1(reg_name + ".reserved1", *this, 30, 2)
-    {
-      this->set_read_write_restrictions(memory);
-    }
-
-    using regmodel::Reg<N>::operator=;
-    using regmodel::Reg<N>::operator+=;
-    using regmodel::Reg<N>::operator-=;
-    using regmodel::Reg<N>::operator/=;
-    using regmodel::Reg<N>::operator*=;
-    using regmodel::Reg<N>::operator%=;
-    using regmodel::Reg<N>::operator^=;
-    using regmodel::Reg<N>::operator&=;
-    using regmodel::Reg<N>::operator|=;
-    using regmodel::Reg<N>::operator>>=;
-    using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> PATTERN_COUNT;
-    regmodel::Bitfield<N> TARGET_PATTERN;
-    regmodel::Bitfield<N> reserved0;
-    regmodel::Bitfield<N> SAMPLES_PROCESSED;
-    regmodel::Bitfield<N> reserved1;
-};
-
 template<unsigned int N>
 class APT_PROPORTION_1BIT_type : public regmodel::Reg<N>
 {
@@ -826,73 +805,15 @@ class APT_PROPORTION_1BIT_type : public regmodel::Reg<N>
 };
 
 template<unsigned int N>
-class APT_PROPORTION_2BIT_type : public regmodel::Reg<N>
+class APT_PROPORTION_LO_type : public regmodel::Reg<N>
 {
   public:
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
-    APT_PROPORTION_2BIT_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x000003FF, 0x000003FF, 0x00000080),
-      LIMIT(reg_name + ".LIMIT", *this, 0, 10), 
-      reserved0(reg_name + ".reserved0", *this, 10, 22)
-    {
-      this->set_read_write_restrictions(memory);
-    }
-
-    using regmodel::Reg<N>::operator=;
-    using regmodel::Reg<N>::operator+=;
-    using regmodel::Reg<N>::operator-=;
-    using regmodel::Reg<N>::operator/=;
-    using regmodel::Reg<N>::operator*=;
-    using regmodel::Reg<N>::operator%=;
-    using regmodel::Reg<N>::operator^=;
-    using regmodel::Reg<N>::operator&=;
-    using regmodel::Reg<N>::operator|=;
-    using regmodel::Reg<N>::operator>>=;
-    using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> LIMIT;
-    regmodel::Bitfield<N> reserved0;
-};
-
-template<unsigned int N>
-class APT_PROPORTION_3BIT_type : public regmodel::Reg<N>
-{
-  public:
-    using typename regmodel::Reg<N>::memory_type;
-    typedef typename regmodel::Word<N>::wordtype DT;
-    APT_PROPORTION_3BIT_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x000003FF, 0x000003FF, 0x00000040),
-      LIMIT(reg_name + ".LIMIT", *this, 0, 10), 
-      reserved0(reg_name + ".reserved0", *this, 10, 22)
-    {
-      this->set_read_write_restrictions(memory);
-    }
-
-    using regmodel::Reg<N>::operator=;
-    using regmodel::Reg<N>::operator+=;
-    using regmodel::Reg<N>::operator-=;
-    using regmodel::Reg<N>::operator/=;
-    using regmodel::Reg<N>::operator*=;
-    using regmodel::Reg<N>::operator%=;
-    using regmodel::Reg<N>::operator^=;
-    using regmodel::Reg<N>::operator&=;
-    using regmodel::Reg<N>::operator|=;
-    using regmodel::Reg<N>::operator>>=;
-    using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> LIMIT;
-    regmodel::Bitfield<N> reserved0;
-};
-
-template<unsigned int N>
-class APT_PROPORTION_4BIT_type : public regmodel::Reg<N>
-{
-  public:
-    using typename regmodel::Reg<N>::memory_type;
-    typedef typename regmodel::Word<N>::wordtype DT;
-    APT_PROPORTION_4BIT_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x000003FF, 0x000003FF, 0x00000020),
-      LIMIT(reg_name + ".LIMIT", *this, 0, 10), 
-      reserved0(reg_name + ".reserved0", *this, 10, 22)
+    APT_PROPORTION_LO_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0000FFFF, 0x0000FFFF, 0x00000350),
+      LIMIT(reg_name + ".LIMIT", *this, 0, 16), 
+      reserved0(reg_name + ".reserved0", *this, 16, 16)
     {
       this->set_read_write_restrictions(memory);
     }
@@ -940,69 +861,6 @@ class MARKOV_TEST_COUNTS_0_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> COUNT_01;
     regmodel::Bitfield<N> COUNT_10;
 };
-
-template<unsigned int N>
-class MARKOV_TEST_COUNTS_1_type : public regmodel::Reg<N>
-{
-  public:
-    using typename regmodel::Reg<N>::memory_type;
-    typedef typename regmodel::Word<N>::wordtype DT;
-    MARKOV_TEST_COUNTS_1_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x00000000, 0x00000000),
-      COUNT_00(reg_name + ".COUNT_00", *this, 0, 16), 
-      COUNT_11(reg_name + ".COUNT_11", *this, 16, 16)
-    {
-      this->set_read_write_restrictions(memory);
-    }
-
-    using regmodel::Reg<N>::operator=;
-    using regmodel::Reg<N>::operator+=;
-    using regmodel::Reg<N>::operator-=;
-    using regmodel::Reg<N>::operator/=;
-    using regmodel::Reg<N>::operator*=;
-    using regmodel::Reg<N>::operator%=;
-    using regmodel::Reg<N>::operator^=;
-    using regmodel::Reg<N>::operator&=;
-    using regmodel::Reg<N>::operator|=;
-    using regmodel::Reg<N>::operator>>=;
-    using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> COUNT_00;
-    regmodel::Bitfield<N> COUNT_11;
-};
-
-template<unsigned int N>
-class MARKOV_TEST_PROBABILITIES_type : public regmodel::Reg<N>
-{
-  public:
-    using typename regmodel::Reg<N>::memory_type;
-    typedef typename regmodel::Word<N>::wordtype DT;
-    MARKOV_TEST_PROBABILITIES_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x00000000, 0x00000000),
-      PROB_01(reg_name + ".PROB_01", *this, 0, 8), 
-      PROB_10(reg_name + ".PROB_10", *this, 8, 8), 
-      PROB_00(reg_name + ".PROB_00", *this, 16, 8), 
-      PROB_11(reg_name + ".PROB_11", *this, 24, 8)
-    {
-      this->set_read_write_restrictions(memory);
-    }
-
-    using regmodel::Reg<N>::operator=;
-    using regmodel::Reg<N>::operator+=;
-    using regmodel::Reg<N>::operator-=;
-    using regmodel::Reg<N>::operator/=;
-    using regmodel::Reg<N>::operator*=;
-    using regmodel::Reg<N>::operator%=;
-    using regmodel::Reg<N>::operator^=;
-    using regmodel::Reg<N>::operator&=;
-    using regmodel::Reg<N>::operator|=;
-    using regmodel::Reg<N>::operator>>=;
-    using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> PROB_01;
-    regmodel::Bitfield<N> PROB_10;
-    regmodel::Bitfield<N> PROB_00;
-    regmodel::Bitfield<N> PROB_11;
-};
-
 template<unsigned int N>
 class RING_OSC_ENABLE_type : public regmodel::Reg<N>
 {
@@ -1151,36 +1009,6 @@ class DECORRELATOR_MASK_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> ENTROPY_BYTE_MASK;
     regmodel::Bitfield<N> reserved0;
 };
-
-template<unsigned int N>
-class STARTUP_CTRL_type : public regmodel::Reg<N>
-{
-  public:
-    using typename regmodel::Reg<N>::memory_type;
-    typedef typename regmodel::Word<N>::wordtype DT;
-    STARTUP_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
-      regmodel::Reg<N>(reg_name, memory, offset, 0x0000FFFF, 0x0000FFFF, 0x00000000),
-      DELAY_CYCLES(reg_name + ".DELAY_CYCLES", *this, 0, 16), 
-      reserved0(reg_name + ".reserved0", *this, 16, 16)
-    {
-      this->set_read_write_restrictions(memory);
-    }
-
-    using regmodel::Reg<N>::operator=;
-    using regmodel::Reg<N>::operator+=;
-    using regmodel::Reg<N>::operator-=;
-    using regmodel::Reg<N>::operator/=;
-    using regmodel::Reg<N>::operator*=;
-    using regmodel::Reg<N>::operator%=;
-    using regmodel::Reg<N>::operator^=;
-    using regmodel::Reg<N>::operator&=;
-    using regmodel::Reg<N>::operator|=;
-    using regmodel::Reg<N>::operator>>=;
-    using regmodel::Reg<N>::operator<<=;
-    regmodel::Bitfield<N> DELAY_CYCLES;
-    regmodel::Bitfield<N> reserved0;
-};
-
 template<unsigned int N>
 class GENERATOR_0_HEALTH_STATUS_type : public regmodel::Reg<N>
 {
@@ -2134,6 +1962,276 @@ class ALERT_FAIL_COUNTS_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> MARKOV_HI_FAIL_COUNT;
     regmodel::Bitfield<N> REPCNT_FAIL_COUNT;
     regmodel::Bitfield<N> reserved0;
+};
+
+template<unsigned int N>
+class ALERT_THRESHOLD_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    ALERT_THRESHOLD_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0000FFFF, 0x0000FFFF, 0x00000004),
+      THRESHOLD(reg_name + ".THRESHOLD", *this, 0, 16),
+      reserved0(reg_name + ".reserved0", *this, 16, 16)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> THRESHOLD;
+    regmodel::Bitfield<N> reserved0;
+};
+
+template<unsigned int N>
+class MIN_ENTROPY_H_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    MIN_ENTROPY_H_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x000000FF, 0x000000FF, 0x0000000C),
+      H(reg_name + ".H", *this, 0, 8),
+      reserved0(reg_name + ".reserved0", *this, 8, 24)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> H;
+    regmodel::Bitfield<N> reserved0;
+};
+
+template<unsigned int N>
+class RECOMMENDED_THRESHOLDS_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    RECOMMENDED_THRESHOLDS_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x00000000, 0x00000000),
+      RCT_LIMIT(reg_name + ".RCT_LIMIT", *this, 0, 16),
+      APT_LIMIT(reg_name + ".APT_LIMIT", *this, 16, 16)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> RCT_LIMIT;
+    regmodel::Bitfield<N> APT_LIMIT;
+};
+
+template<unsigned int N>
+class BIW_OBS_CTRL_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    BIW_OBS_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x00000001, 0x00000001, 0x00000000),
+      RAW_ENABLE(reg_name + ".RAW_ENABLE", *this, 0, 1),
+      reserved0(reg_name + ".reserved0", *this, 1, 31)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> RAW_ENABLE;
+    regmodel::Bitfield<N> reserved0;
+};
+
+template<unsigned int N>
+class BIW_OBS_STATUS_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    BIW_OBS_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x003F3F7F, 0x00000000, 0x00000000),
+      LEVEL(reg_name + ".LEVEL", *this, 0, 7),
+      reserved0(reg_name + ".reserved0", *this, 7, 1),
+      WPTR(reg_name + ".WPTR", *this, 8, 6),
+      reserved1(reg_name + ".reserved1", *this, 14, 2),
+      RPTR(reg_name + ".RPTR", *this, 16, 6),
+      reserved2(reg_name + ".reserved2", *this, 22, 10)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> LEVEL;
+    regmodel::Bitfield<N> reserved0;
+    regmodel::Bitfield<N> WPTR;
+    regmodel::Bitfield<N> reserved1;
+    regmodel::Bitfield<N> RPTR;
+    regmodel::Bitfield<N> reserved2;
+};
+
+template<unsigned int N>
+class BIW_OBS_RDATA_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    BIW_OBS_RDATA_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x00000000, 0x00000000),
+      RDATA(reg_name + ".RDATA", *this, 0, 32)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> RDATA;
+};
+
+template<unsigned int N>
+class NOISE_OBS_CTRL_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    NOISE_OBS_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x000000F1, 0x000000F3, 0x00000000),
+      RAW_ENABLE(reg_name + ".RAW_ENABLE", *this, 0, 1),
+      FLUSH(reg_name + ".FLUSH", *this, 1, 1),
+      reserved0(reg_name + ".reserved0", *this, 2, 2),
+      LANE_SEL(reg_name + ".LANE_SEL", *this, 4, 4),
+      reserved1(reg_name + ".reserved1", *this, 8, 24)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> RAW_ENABLE;
+    regmodel::Bitfield<N> FLUSH;
+    regmodel::Bitfield<N> reserved0;
+    regmodel::Bitfield<N> LANE_SEL;
+    regmodel::Bitfield<N> reserved1;
+};
+
+template<unsigned int N>
+class NOISE_OBS_STATUS_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    NOISE_OBS_STATUS_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x003F3F7F, 0x00000000, 0x00000000),
+      LEVEL(reg_name + ".LEVEL", *this, 0, 7),
+      reserved0(reg_name + ".reserved0", *this, 7, 1),
+      WPTR(reg_name + ".WPTR", *this, 8, 6),
+      reserved1(reg_name + ".reserved1", *this, 14, 2),
+      RPTR(reg_name + ".RPTR", *this, 16, 6),
+      reserved2(reg_name + ".reserved2", *this, 22, 10)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> LEVEL;
+    regmodel::Bitfield<N> reserved0;
+    regmodel::Bitfield<N> WPTR;
+    regmodel::Bitfield<N> reserved1;
+    regmodel::Bitfield<N> RPTR;
+    regmodel::Bitfield<N> reserved2;
+};
+
+template<unsigned int N>
+class NOISE_OBS_RDATA_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    NOISE_OBS_RDATA_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0xFFFFFFFF, 0x00000000, 0x00000000),
+      RDATA(reg_name + ".RDATA", *this, 0, 32)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> RDATA;
 };
 
 

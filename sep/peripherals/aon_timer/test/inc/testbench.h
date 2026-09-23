@@ -785,6 +785,9 @@ public:
     */
    void test_func003_tc037_64bit_safe_read_double_read();
 
+   /** Count and alarms advance only on an AON tick, never on a CSR read or write. */
+   void test_func003_events_follow_aon_tick();
+
    /**
     * @brief TC_AON_038: WKUP_COUNT 64-bit Safe Write - Disable Timer Before Writing.
     *

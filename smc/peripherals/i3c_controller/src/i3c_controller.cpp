@@ -162,6 +162,7 @@ i3c_controller::i3c_controller(sc_core::sc_module_name name, i3c_controller_cfg 
 void i3c_controller::reset_method()
 {
     xfer_event_.cancel();
+    xfer_pending_.clear();
     for (auto& s : inst_) {
         auto bus_model = std::move(s.bus_model);
         s = inst_state{};

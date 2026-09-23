@@ -154,6 +154,8 @@ void avsbus_controller::reset_proc()
     master_is_retrying_ = false;
     bus_is_idle_        = true;
     slave_in_resync_    = false;
+    xfer_event_.cancel();
+    resync_done_event_.cancel();
     xfer_pending_       = false;
     retries_this_cmd_   = 0;
     current_cmd_        = 0;

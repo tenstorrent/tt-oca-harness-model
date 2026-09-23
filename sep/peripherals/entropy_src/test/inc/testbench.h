@@ -277,12 +277,12 @@ private:
     /**
      * @brief TC-F001-018: INTR_ENABLE write mask validation
      *
-     * Objective: validate that regmodel enforces the 0x00001111 write mask on
+     * Objective: validate that regmodel enforces the 0x11111111 write mask on
      * INTR_ENABLE (0x14), discarding bits outside that mask on every write.
      *
      * Procedure:
      *  - Write 0xFFFFFFFF (all-ones) to INTR_ENABLE.
-     *  - Read back INTR_ENABLE; assert read_value == 0x00001111.
+     *  - Read back INTR_ENABLE; assert read_value == 0x11111111.
      *  - Write 0x00000000 to INTR_ENABLE.
      *  - Read back INTR_ENABLE; assert read_value == 0x00000000.
      *
@@ -301,7 +301,7 @@ private:
      * return 0x00000000 on every read regardless of any prior write.
      *
      * Procedure:
-     *  - Write 0x00001111 to INTR_TEST.
+     *  - Write 0x11111111 to INTR_TEST.
      *  - Read INTR_TEST; assert read_value == 0x00000000.
      *
      * Pass criterion: read_value == 0x00000000.
@@ -429,16 +429,16 @@ private:
     bool tc_f001_rw_pattern_test_debug_ctrl();
 
     /**
-     * @brief TC-F001-121: RW pattern test — INTR_ENABLE write mask 0x00001111
+     * @brief TC-F001-121: RW pattern test — INTR_ENABLE write mask 0x11111111
      *
-     * Objective: validate that INTR_ENABLE (0x14) write mask 0x00001111 is
+     * Objective: validate that INTR_ENABLE (0x14) write mask 0x11111111 is
      * correctly enforced using checkerboard patterns.
      *
      * Procedure:
      *  - Write 0x55555555 to INTR_ENABLE; assert readback ==
-     *    (0x55555555 & 0x00001111) = 0x00001111.
+     *    (0x55555555 & 0x11111111) = 0x11111111.
      *  - Write 0xAAAAAAAA to INTR_ENABLE; assert readback ==
-     *    (0xAAAAAAAA & 0x00001111) = 0x00000000.
+     *    (0xAAAAAAAA & 0x11111111) = 0x00000000.
      *
      * Pass criterion: (read_value & ~mask) == 0 for all patterns.
      *
@@ -746,7 +746,7 @@ private:
     /**
      * @brief TC-F002-025: INTR_TEST all sources simultaneous
      *
-     * Objective: confirm INTR_TEST = 0x00001111 sets all four INTR_STATUS bits
+     * Objective: confirm INTR_TEST = 0x11111111 sets all four INTR_STATUS bits
      * simultaneously and all four ports assert when INTR_ENABLE = 0x1111.
      *
      * Pass criterion: all four interrupt ports are simultaneously asserted.

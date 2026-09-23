@@ -406,6 +406,24 @@ void aon_timer_ip::evaluate_wkup_threshold()
    }
 }
 
+void aon_timer_ip::rearm_wkup_edge()
+{
+   /* RTL compares the counter only on wkup_incr (aon_timer_core.sv). A CSR
+    * write may drop the counter back below the threshold and must re-arm the
+    * edge, but it must not raise the interrupt by itself. */
+   if (!m_wkup_enabled || (m_wkup_counter < m_wkup_threshold))
+      m_wkup_threshold_latched = false;
+}
+
+void aon_timer_ip::rearm_bark_edge()
+{
+   const bool counting = m_wdog_enabled &&
+                          !m_lc_escalate_active &&
+                          !(m_wdog_pause_in_sleep && sleep_mode.read());
+   if (!counting || (m_wdog_counter < m_wdog_bark_threshold))
+      m_wdog_bark_latched = false;
+}
+
 /**
  * @brief Evaluate watchdog bark threshold and assert bark outputs if condition is met.
  *
@@ -621,11 +639,11 @@ bool aon_timer_ip::handle_write_WKUP_CTRL(uint32_t value, uint32_t write_mask)
       REG_INFO(2, logger) << name()
          << ": WKUP_CTRL write: wakeup timer disabled";
    }
-   /* Notify unconditionally: prescaler accumulator reset changes next tick timing. */
+   /* Notify unconditionally: prescaler accumulator reset changes next tick timing.
+    * Wakeup, bark, and bite outputs change only on a real increment, matching
+    * wkup_incr / wdog_incr in aon_timer_core.sv. */
    m_ev_wkup_tick.notify(SC_ZERO_TIME);
-
-   /* Immediate threshold comparison (asserts interrupts if condition already met). */
-   evaluate_wkup_threshold();
+   rearm_wkup_edge();
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());
@@ -657,9 +675,7 @@ bool aon_timer_ip::handle_write_WKUP_THOLD_HI(uint32_t value, uint32_t write_mas
 
    /* Update register shadow. */
    WKUP_THOLD_HI.threshold_hi = value;
-
-   /* Immediate threshold comparison. */
-   evaluate_wkup_threshold();
+   rearm_wkup_edge();
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());
@@ -691,9 +707,7 @@ bool aon_timer_ip::handle_write_WKUP_THOLD_LO(uint32_t value, uint32_t write_mas
 
    /* Update register shadow. */
    WKUP_THOLD_LO.threshold_lo = value;
-
-   /* Immediate threshold comparison. */
-   evaluate_wkup_threshold();
+   rearm_wkup_edge();
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());
@@ -725,9 +739,7 @@ bool aon_timer_ip::handle_write_WKUP_COUNT_HI(uint32_t value, uint32_t write_mas
 
    /* Update register shadow. */
    WKUP_COUNT_HI.count_hi = value;
-
-   /* Immediate threshold comparison. */
-   evaluate_wkup_threshold();
+   rearm_wkup_edge();
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());
@@ -759,9 +771,7 @@ bool aon_timer_ip::handle_write_WKUP_COUNT_LO(uint32_t value, uint32_t write_mas
 
    /* Update register shadow. */
    WKUP_COUNT_LO.count_lo = value;
-
-   /* Immediate threshold comparison. */
-   evaluate_wkup_threshold();
+   rearm_wkup_edge();
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());
@@ -856,9 +866,9 @@ bool aon_timer_ip::handle_write_WDOG_CTRL(uint32_t value, uint32_t write_mask)
       REG_INFO(2, logger) << name() << ": WDOG_CTRL write: watchdog timer disabled";
    }
 
-   /* Immediate threshold comparisons. */
-   evaluate_bark_threshold();
-   evaluate_bite_threshold();
+   /* Outputs follow wdog_incr, not the CSR write. Re-arm bark if this write
+    * took the counter back below the threshold. */
+   rearm_bark_edge();
 
    /* FUNC004: Wake the watchdog tick thread to re-evaluate its state.
     * This handles enable/disable transitions, pause_in_sleep changes,
@@ -899,9 +909,7 @@ bool aon_timer_ip::handle_write_WDOG_BARK_THOLD(uint32_t value, uint32_t write_m
 
    /* Update register shadow. */
    WDOG_BARK_THOLD.threshold = value;
-
-   /* Immediate bark threshold comparison. */
-   evaluate_bark_threshold();
+   rearm_bark_edge();
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());
@@ -934,11 +942,8 @@ bool aon_timer_ip::handle_write_WDOG_BITE_THOLD(uint32_t value, uint32_t write_m
 
    m_wdog_bite_threshold = value;
 
-   /* Update register shadow. */
+   /* Update register shadow. Bite asserts only on a later wdog_incr cycle. */
    WDOG_BITE_THOLD.threshold = value;
-
-   /* Immediate bite threshold comparison. */
-   evaluate_bite_threshold();
 
    /* CDC annotation. */
    m_qk.inc(compute_cdc_delay());
@@ -999,9 +1004,8 @@ bool aon_timer_ip::handle_write_WDOG_COUNT(uint32_t value, uint32_t write_mask)
       m_wdog_bark_latched = false;
    }
 
-   /* Bite condition re-evaluation: counter is 0, so bite is false unless
-    * threshold is also 0. De-assert aon_timer_rst_req if no longer triggered. */
-   evaluate_bite_threshold();
+   /* Bite stays at its previous level until the next watchdog increment or reset.
+    * RTL asserts wdog_reset_req only when wdog_incr is true. */
 
    /* FUNC006: m_wkup_cause_active is deliberately NOT touched here. wkup_req
     * must persist through watchdog petting. Only handle_write_WKUP_CAUSE (RW0C
@@ -1259,11 +1263,6 @@ bool aon_timer_ip::handle_read_WKUP_COUNT_HI(uint32_t& value, uint32_t read_mask
       m_qk.sync();
    }
    value = static_cast<uint32_t>((m_wkup_counter >> 32U) & 0xFFFFFFFFULL);
-
-   /* FUNC003: Mark that HI was read; next LO read will model one counter advance
-    * if the timer is enabled and escalation is inactive (race condition modeling). */
-   m_wkup_hi_read_pending = true;
-
    return true;
 }
 
@@ -1292,22 +1291,6 @@ bool aon_timer_ip::handle_read_WKUP_COUNT_LO(uint32_t& value, uint32_t read_mask
 
    if (m_qk.need_sync()) {
       m_qk.sync();
-   }
-
-   /* FUNC003: Non-atomic race modeling.
-    * If the HI half was previously read and the timer is currently counting,
-    * advance the counter by 1 to model a single counter increment occurring
-    * between the HI and LO reads of the non-atomic 64-bit register pair.
-    * uint64_t overflow wraps naturally (0xFFFFFFFFFFFFFFFF -> 0).
-    * The flag is always cleared after inspection (one-shot semantics). */
-   if (m_wkup_hi_read_pending) {
-      m_wkup_hi_read_pending = false;
-      if (m_wkup_enabled && !m_lc_escalate_active) {
-         /* Advance counter by one tick: models race between HI and LO reads. */
-         m_wkup_counter += 1ULL;
-         /* Evaluate threshold in case this increment crosses it. */
-         evaluate_wkup_threshold();
-      }
    }
 
    value = static_cast<uint32_t>(m_wkup_counter & 0xFFFFFFFFULL);
@@ -1565,14 +1548,10 @@ void aon_timer_ip::wkup_timer_tick_thread()
       /* Tick period elapsed with timer still enabled and no escalation.
        * Increment the 64-bit wakeup counter with standard uint64 overflow wrap.
        * Architecture Map: side_effects[WKUP_COUNT_HI/LO].hardware-auto-increment. */
-      m_wkup_counter += 1ULL;   /* uint64_t overflow wraps: 0xFFFF...FFFF -> 0 */
-
-      REG_INFO(3, logger) << name()
-         << ": wakeup counter incremented to 0x" << std::hex << m_wkup_counter << std::dec;
-
-      /* Evaluate threshold: may assert intr_wkup_timer_expired and wkup_req.
-       * Architecture Map: state_machines[Wakeup Timer FSM].transitions[COUNTING->THRESHOLD_REACHED]. */
+      /* RTL compares the pre-increment count on wkup_incr, then stores count+1
+       * (aon_timer_core.sv wkup_intr_o / wkup_count_wr_data_o). */
       evaluate_wkup_threshold();
+      m_wkup_counter += 1ULL;
    }
 }
 
@@ -1743,25 +1722,15 @@ void aon_timer_ip::wdog_timer_tick_thread()
        * Increment the 32-bit watchdog counter with unsigned overflow wrap.
        * Architecture Map: side_effects[WDOG_COUNT].hardware-auto-increment:
        *   0xFFFFFFFF + 1 wraps to 0x00000000 (no saturation, no error). */
-      m_wdog_counter += 1U;   /* uint32_t overflow wraps: 0xFFFFFFFF -> 0 */
+      /* RTL compares the pre-increment count on wdog_incr, then stores count+1. */
+      evaluate_bark_threshold();
+      evaluate_bite_threshold();
+      m_wdog_counter += 1U;
 
-      /* Update WDOG_COUNT register shadow with the new counter value.
-       * Architecture Map: registers[WDOG_COUNT].fields[count].read_effects -
-       * volatile live value; shadow must reflect the current hardware state. */
       WDOG_COUNT.count = m_wdog_counter;
 
       REG_INFO(3, logger) << name()
          << ": watchdog counter incremented to 0x" << std::hex << m_wdog_counter << std::dec;
-
-      /* Evaluate bark threshold: may assert intr_wdog_timer_bark, nmi_wdog_timer_bark,
-       * and wkup_req if m_wdog_counter >= m_wdog_bark_threshold.
-       * Architecture Map: state_machines[WDOG_TIMER].transitions[COUNTING->BARK_REACHED]. */
-      evaluate_bark_threshold();
-
-      /* Evaluate bite threshold: may assert aon_timer_rst_req if
-       * m_wdog_counter >= m_wdog_bite_threshold.
-       * Architecture Map: state_machines[WDOG_TIMER].transitions[COUNTING->BITE_REACHED]. */
-      evaluate_bite_threshold();
    }
 }
 

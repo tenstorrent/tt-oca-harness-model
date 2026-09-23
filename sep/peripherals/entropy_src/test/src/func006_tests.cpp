@@ -149,7 +149,7 @@ static constexpr uint32_t F006_FIFO_CTRL_MASK = 0x00000001u;
 static constexpr uint32_t F006_FIFO_STATUS_RESET = 0x00000000u;
 
 /// Maximum FIFO depth (FIFO_DEPTH build-time parameter): 32 entries.
-static constexpr uint32_t F006_FIFO_DEPTH = 32u;
+static constexpr uint32_t F006_FIFO_DEPTH = 64u;
 
 /// INTR_STATUS bit position for FIFO_OVERFLOW (bit 8).
 static constexpr uint32_t F006_INTR_BIT_FIFO_OVERFLOW  = 0x00000100u;
@@ -170,7 +170,7 @@ static constexpr int F006_SHORT_SETTLE = 32;
 /// Number of FIFO_RDATA reads that unconditionally drains a full FIFO.
 /// FIFO_DEPTH = 127; reading 128 words guarantees all entries are consumed
 /// regardless of whether any individual word happened to be 0x00000000.
-static constexpr int F006_DRAIN_COUNT = static_cast<int>(32u + 1u);
+static constexpr int F006_DRAIN_COUNT = static_cast<int>(F006_FIFO_DEPTH + 1u);
 
 /// Base iteration period (nanoseconds) of the background entropy generation
 /// thread when DOWNSAMPLE_RATE is zero.  Matches BASE_ITERATION_PERIOD_NS
@@ -736,7 +736,7 @@ bool testbench::tc_f006_fifo_status_level_at_maximum_depth()
     // -------------------------------------------------------------------------
     // Step 4: Assert overflow was observed (LEVEL reached FIFO_DEPTH).
     // -------------------------------------------------------------------------
-    FUNC006_CHECK(overflow_observed && ((rd_val & 0x7f) == 32),
+    FUNC006_CHECK(overflow_observed && ((rd_val & 0x7f) == F006_FIFO_DEPTH),
         "TC-F006-043 step 4: intr_o did not assert within "
         << std::dec << F006_FILL_POLL_LIMIT
         << " SC_ZERO_TIME iterations — FIFO may not have reached FIFO_DEPTH=32");
@@ -1084,7 +1084,7 @@ bool testbench::tc_f006_fifo_underflow_interrupt_port_on_empty_read()
         entropy_src_basetest::INTR_ENABLE_OFFSET, F006_INTR_EN_FIFO_UNDERFLOW);
     // Clear ALL INTR_STATUS bits to avoid stale bits keeping the combined line asserted.
     test->register_write_32(
-        entropy_src_basetest::INTR_STATUS_OFFSET, 0x00001111u);
+        entropy_src_basetest::INTR_STATUS_OFFSET, 0x11111111u);
     wait(sc_core::SC_ZERO_TIME);
 
     // -------------------------------------------------------------------------
@@ -1663,7 +1663,7 @@ bool testbench::tc_f006_fifo_wptr_advances_with_background_push()
         wait(F006_BASE_ITER_PERIOD_NS, SC_NS);
         rd_val = 0u;
         test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, rd_val);
-        uint32_t current_wptr = (rd_val >> 8) & 0x1F;
+        uint32_t current_wptr = (rd_val >> 8) & 0x3F;
         
         if (prev_wptr != 0xFFFFFFFFu && current_wptr != prev_wptr)
         {
@@ -1721,7 +1721,7 @@ bool testbench::tc_f006_fifo_rptr_advances_with_read()
     }
 
     test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, rd_val);
-    uint32_t prev_rptr = (rd_val >> 16) & 0x1F;
+    uint32_t prev_rptr = (rd_val >> 16) & 0x3F;
 
     // Read multiple times from FIFO_RDATA and verify RPTR advances
     for (int i = 0; i < 3; ++i)
@@ -1732,7 +1732,7 @@ bool testbench::tc_f006_fifo_rptr_advances_with_read()
         wait(F006_BASE_ITER_PERIOD_NS, SC_NS);
         rd_val = 0u;
         test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, rd_val);
-        uint32_t current_rptr = (rd_val >> 16) & 0x1F;
+        uint32_t current_rptr = (rd_val >> 16) & 0x3F;
         REG_DEBUG(2, logger) << "TC-F006-137: RPTR advanced to " << std::hex << current_rptr;
         if (current_rptr != prev_rptr)
         {

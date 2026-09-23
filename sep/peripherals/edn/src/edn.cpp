@@ -491,6 +491,15 @@ bool edn_ip::ctrl_write_callback(uint32_t value)
     CTRL.AUTO_REQ_MODE = auto_req_mode_field;
     CTRL.CMD_FIFO_RST = cmd_fifo_rst_field;
 
+    // Multibit true (0x6) clears both command FIFOs. Storing the field alone
+    // leaves a later auto-mode command using stale entries.
+    if (cmd_fifo_rst_field == 0x6u) {
+        std::queue<uint32_t> empty_reseed;
+        std::queue<uint32_t> empty_generate;
+        m_reseed_cmd_fifo.swap(empty_reseed);
+        m_generate_cmd_fifo.swap(empty_generate);
+    }
+
     return true;
 }
 

@@ -46,11 +46,11 @@
  *    to the known INTR_ENABLE register contents.
  *
  *  - INTR_TEST (0x18) is write-only; reads always return 0x00000000.  Writing to
- *    INTR_TEST ORs the written value (masked to INTR_ALL_BITS_MASK = 0x00001111)
+ *    INTR_TEST ORs the written value (masked to INTR_ALL_BITS_MASK = 0x11111111)
  *    into INTR_STATUS via direct regmodel write, then calls update_interrupt_outputs().
  *    This is the primary inject mechanism used by these tests.
  *
- *  - INTR_ENABLE (0x14) is fully readable (read_bit_mask = 0x00001111).  Writing
+ *  - INTR_ENABLE (0x14) is fully readable (read_bit_mask = 0x11111111).  Writing
  *    INTR_ENABLE immediately re-evaluates interrupt output port.
  *
  *  - Port assertion rule (update_interrupt_outputs): each sc_out<bool> port equals
@@ -125,11 +125,15 @@ static constexpr uint32_t F002_INTR_BIT_HEALTH_TEST_FAILED = (1u << 0u);  ///< b
 static constexpr uint32_t F002_INTR_BIT_FIFO_ERROR         = (1u << 4u);  ///< bit 4
 static constexpr uint32_t F002_INTR_BIT_FIFO_OVERFLOW      = (1u << 8u);  ///< bit 8
 static constexpr uint32_t F002_INTR_BIT_FIFO_UNDERFLOW     = (1u << 12u); ///< bit 12
+static constexpr uint32_t F002_INTR_BIT_PERSISTENT_FAILURE = (1u << 16u);
+static constexpr uint32_t F002_INTR_BIT_AUTOTUNE_FAIL      = (1u << 20u);
+static constexpr uint32_t F002_INTR_BIT_BIW_OBS_OVERFLOW   = (1u << 24u);
+static constexpr uint32_t F002_INTR_BIT_NOISE_OBS_OVERFLOW = (1u << 28u);
 
 /// Base iteration period (nanoseconds) of the background entropy generation
 /// thread.  Matches BASE_ITERATION_PERIOD_NS in entropy_src.h.
 static constexpr double F002_BASE_ITER_PERIOD_NS = 100.0;
-static constexpr uint32_t F002_INTR_ALL_BITS_MASK          = 0x00001111u; ///< combined mask
+static constexpr uint32_t F002_INTR_ALL_BITS_MASK          = 0x11111111u; ///< combined mask
 /// @endcond
 
 // =============================================================================
@@ -313,21 +317,21 @@ bool testbench::tc_f002_intr_status_w1c_write_zero_does_not_clear()
  * before ORing.
  *
  * Strategy: inject all architecturally valid bits simultaneously
- * (F002_INTR_ALL_BITS_MASK = 0x00001111), enable all four sources, and confirm
+ * (F002_INTR_ALL_BITS_MASK = 0x11111111), enable all four sources, and confirm
  * exactly the four expected ports assert and no more.  Reserved bits by definition
  * cannot cause observable port assertions since the model only drives the four
  * defined sc_out<bool> ports.
  *
  * Procedure:
  *  1. Enable all four sources in INTR_ENABLE.
- *  2. Write INTR_TEST = 0x00001111 (all valid bits) and also try 0xFFFFFFFF
- *     to confirm injection is clamped to 0x00001111 by the model.
+ *  2. Write INTR_TEST = 0x11111111 (all valid bits) and also try 0xFFFFFFFF
+ *     to confirm injection is clamped to 0x11111111 by the model.
  *  3. Assert all four ports are true.
  *  4. Read INTR_STATUS via TLM; confirm returned value is 0x00000000
  *     (read restriction enforced regardless of stored content).
  *
  * Pass criterion:
- *  - All four ports assert after injecting 0x00001111 with INTR_ENABLE = 0x1111.
+ *  - All four ports assert after injecting 0x11111111 with INTR_ENABLE = 0x1111.
  *  - INTR_STATUS TLM read returns 0x00000000.
  *
  * Test plan reference: intr_status_reserved_bits_always_zero (FUNC-002 sl. 16)
@@ -356,9 +360,9 @@ bool testbench::tc_f002_intr_status_reserved_bits_always_zero()
 
     // TLM read of INTR_STATUS must return 0x00000000 due to read_bit_mask=0.
     test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, read_val);
-    FUNC002_CHECK(read_val == 0x1111u,
+    FUNC002_CHECK(read_val == F002_INTR_ALL_BITS_MASK,
         "TC-F002-016: INTR_STATUS TLM read returned 0x" << std::hex << read_val
-        << ", expected 0x1111");
+        << ", expected 0x" << F002_INTR_ALL_BITS_MASK);
 
     return ok;
 }
@@ -571,7 +575,7 @@ bool testbench::tc_f002_intr_test_injects_fifo_underflow()
 // =============================================================================
 
 /******************************************************************************
- * @brief Confirm that INTR_TEST = 0x00001111 sets all four INTR_STATUS bits
+ * @brief Confirm that INTR_TEST = 0x11111111 sets all four INTR_STATUS bits
  *        simultaneously and all four ports assert when INTR_ENABLE = 0x1111.
  *
  * Procedure:
@@ -1159,55 +1163,44 @@ bool testbench::tc_f002_intr_status_all_four_bits_independent_w1c()
 {
     bool ok = true;
 
-    // Enable all four sources.
+    // Enable and inject every RDL interrupt source.
     test->register_write_32(entropy_src_basetest::INTR_ENABLE_OFFSET,
                             F002_INTR_ALL_BITS_MASK);
     wait(sc_core::SC_ZERO_TIME);
 
-    // Inject all four simultaneously.
     test->register_write_32(entropy_src_basetest::INTR_TEST_OFFSET,
                             F002_INTR_ALL_BITS_MASK);
     wait(sc_core::SC_ZERO_TIME);
 
-    // Pre-condition: combined interrupt asserted (all four enabled bits set).
     FUNC002_CHECK(test->intr_i.read(),
         "TC-F002-138: pre-condition: intr_o not asserted after injecting all bits");
 
-    // Step 4: W1C bit 0 — combined line must stay true (bits 4,8,12 remain).
-    test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET,
-                            F002_INTR_BIT_HEALTH_TEST_FAILED);
-    wait(sc_core::SC_ZERO_TIME);
+    const uint32_t bits[] = {
+        F002_INTR_BIT_HEALTH_TEST_FAILED,
+        F002_INTR_BIT_FIFO_ERROR,
+        F002_INTR_BIT_FIFO_OVERFLOW,
+        F002_INTR_BIT_FIFO_UNDERFLOW,
+        F002_INTR_BIT_PERSISTENT_FAILURE,
+        F002_INTR_BIT_AUTOTUNE_FAIL,
+        F002_INTR_BIT_BIW_OBS_OVERFLOW,
+        F002_INTR_BIT_NOISE_OBS_OVERFLOW,
+    };
+    uint32_t remaining = F002_INTR_ALL_BITS_MASK;
+    for (uint32_t bit : bits) {
+        test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET, bit);
+        wait(sc_core::SC_ZERO_TIME);
+        remaining &= ~bit;
 
-    FUNC002_CHECK(test->intr_i.read(),
-        "TC-F002-138: intr_o deasserted after W1C of bit 0 only — "
-        "bits 4,8,12 still pending, combined line must stay true");
-
-    // Step 5: W1C bit 4 — combined line must stay true (bits 8,12 remain).
-    test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET,
-                            F002_INTR_BIT_FIFO_ERROR);
-    wait(sc_core::SC_ZERO_TIME);
-
-    FUNC002_CHECK(test->intr_i.read(),
-        "TC-F002-138: intr_o deasserted after W1C of bit 4 only — "
-        "bits 8,12 still pending, combined line must stay true");
-
-    // Step 6: W1C bit 8 — combined line must stay true (bit 12 remains).
-    test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET,
-                            F002_INTR_BIT_FIFO_OVERFLOW);
-    wait(sc_core::SC_ZERO_TIME);
-
-    FUNC002_CHECK(test->intr_i.read(),
-        "TC-F002-138: intr_o deasserted after W1C of bit 8 only — "
-        "bit 12 still pending, combined line must stay true");
-
-    // Step 7: W1C bit 12 — ALL bits now cleared, combined line must go false.
-    test->register_write_32(entropy_src_basetest::INTR_STATUS_OFFSET,
-                            F002_INTR_BIT_FIFO_UNDERFLOW);
-    wait(sc_core::SC_ZERO_TIME);
-
-    FUNC002_CHECK(!test->intr_i.read(),
-        "TC-F002-138: intr_o still asserted after W1C of all four bits — "
-        "combined line must deassert when (INTR_STATUS & INTR_ENABLE) == 0");
+        uint32_t status = 0u;
+        test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, status);
+        FUNC002_CHECK(status == remaining,
+            "TC-F002-138: W1C of 0x" << std::hex << bit
+            << " left INTR_STATUS=0x" << status
+            << " expected 0x" << remaining);
+        FUNC002_CHECK(test->intr_i.read() == (remaining != 0u),
+            "TC-F002-138: irq_o did not follow remaining status 0x"
+            << std::hex << remaining);
+    }
 
     return ok;
 }
