@@ -13,6 +13,7 @@
 #include "reg_access.h"
 #include "sim_log.h"
 
+#include <algorithm>
 #include <cstring>
 #include <iomanip>
 
@@ -104,6 +105,8 @@ telemetry_receiver::telemetry_receiver(sc_core::sc_module_name name,
     , irq_o("irq_o")
     , afvalid_o("afvalid_o")
     , atready_o("atready_o")
+    , atvalid_i("atvalid_i")
+    , atdata_i("atdata_i")
     , debug_o("debug_o")
     , cfg_(cfg)
 {
@@ -157,6 +160,9 @@ telemetry_receiver::telemetry_receiver(sc_core::sc_module_name name,
     SC_METHOD(af_handshake_method);
     sensitive << afready_i << af_event_;
     dont_initialize();
+
+    SC_METHOD(atb_method);
+    sensitive << atvalid_i;
 
     // recompute_method is the SOLE driver of every output port.
     SC_METHOD(recompute_method);
@@ -351,12 +357,20 @@ void telemetry_receiver::rx_flush()
     count_  = 0;
     dbg_missing_last_  = false;
     dbg_assembly_full_ = false;
+    std::fill(assembly_.begin(), assembly_.end(), uint8_t{0});
 }
 
 const telemetry_message& telemetry_receiver::visible_message() const
 {
     // RTL drives the CSR view from the buffer bottom, or zero when empty.
     return count_ == 0 ? empty_message_ : queue_[rd_idx_];
+}
+
+void telemetry_receiver::atb_method()
+{
+    if (!atvalid_i.read())
+        return;
+    (void)push_atb_beat(atdata_i.read());
 }
 
 bool telemetry_receiver::push_atb_beat(uint8_t beat)
@@ -371,13 +385,17 @@ bool telemetry_receiver::push_atb_beat(uint8_t beat)
     if (beats_ % telemetry_receiver_cfg::BEATS_PER_PACKET == 0) {
         const unsigned pkt = beats_ / telemetry_receiver_cfg::BEATS_PER_PACKET - 1;
         if (telemetry_packet_last(packet_word(pkt))) {
-            // End of message: decode, queue, restart the assembly buffer.
+            // Drop unread assembly bytes so an early last_packet cannot
+            // decode leftover counter blocks from a prior longer message.
+            std::fill(assembly_.begin() + beats_, assembly_.end(), uint8_t{0});
             queue_message(decode_message());
+            std::fill(assembly_.begin(), assembly_.end(), uint8_t{0});
             beats_ = 0;
         } else if (beats_ == assembly_.size()) {
             // Buffer filled without a last_packet marker anywhere.
             dbg_assembly_full_ = true;
             raise_missing_last();
+            std::fill(assembly_.begin(), assembly_.end(), uint8_t{0});
             beats_ = 0;
         }
     }

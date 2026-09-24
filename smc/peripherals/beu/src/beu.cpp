@@ -145,8 +145,9 @@ bool beu::reg_write(uint64_t off, uint64_t data)
         // Read-only to software (HW-written); writes are ignored (WI).
         return true;
     case beu_cfg::ACCRUED_ENABLE:
-        // Ordinary RW replacement of the implemented accrued bits.
-        accrued_ = data & beu_cfg::VALID_MASK;
+        // SW clears (ack) per-source sticky bits by writing 0s; 1s preserve.
+        // Software must not be able to set accrued status bits.
+        accrued_ &= (data & beu_cfg::VALID_MASK);
         schedule_recompute();
         return true;
     default: break;
@@ -166,6 +167,11 @@ void beu::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
     const uint64_t         adr = gp.get_address();
     const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
+
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
 
     if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
@@ -213,6 +219,9 @@ unsigned int beu::transport_dbg(tlm::tlm_generic_payload& gp)
     const uint64_t         adr = gp.get_address();
     const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
+
+    if (buf == nullptr)
+        return 0;
 
     if (len != beu_cfg::REG_WIDTH || (adr % beu_cfg::REG_WIDTH) != 0 ||
         adr >= beu_cfg::WINDOW_SIZE)

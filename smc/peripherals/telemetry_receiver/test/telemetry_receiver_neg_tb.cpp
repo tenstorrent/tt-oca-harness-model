@@ -111,10 +111,14 @@ struct tb : sc_core::sc_module {
 
     sc_core::sc_signal<bool>     rstn{"rstn"}, afready{"afready"};
     sc_core::sc_signal<bool>     irq{"irq"}, afvalid{"afvalid"}, atready{"atready"};
+    sc_core::sc_signal<bool>     atvalid{"atvalid"};
+    sc_core::sc_signal<uint8_t>  atdata{"atdata"};
     sc_core::sc_signal<uint32_t> debug{"debug"};
 
     sc_core::sc_signal<bool>     rstnB{"rstnB"}, afreadyB{"afreadyB"};
     sc_core::sc_signal<bool>     irqB{"irqB"}, afvalidB{"afvalidB"}, atreadyB{"atreadyB"};
+    sc_core::sc_signal<bool>     atvalidB{"atvalidB"};
+    sc_core::sc_signal<uint8_t>  atdataB{"atdataB"};
     sc_core::sc_signal<uint32_t> debugB{"debugB"};
 
     SC_HAS_PROCESS(tb);
@@ -128,6 +132,8 @@ struct tb : sc_core::sc_module {
         dut.irq_o(irq);
         dut.afvalid_o(afvalid);
         dut.atready_o(atready);
+        dut.atvalid_i(atvalid);
+        dut.atdata_i(atdata);
         dut.debug_o(debug);
 
         drvB.sock.bind(dutB.reg_socket);
@@ -136,6 +142,8 @@ struct tb : sc_core::sc_module {
         dutB.irq_o(irqB);
         dutB.afvalid_o(afvalidB);
         dutB.atready_o(atreadyB);
+        dutB.atvalid_i(atvalidB);
+        dutB.atdata_i(atdataB);
         dutB.debug_o(debugB);
 
         SC_THREAD(run);

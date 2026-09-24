@@ -169,8 +169,13 @@ fi
 # Locate test binary
 # ---------------------------------------------------------------------------
 TB_BIN="${BUILD_DIR}/test/plic_tb"
+WIDE_TB_BIN="${BUILD_DIR}/test/plic_wide_tb"
 if [[ ! -x "${TB_BIN}" ]]; then
     echo "ERROR: test binary not found at ${TB_BIN}" >&2
+    exit 1
+fi
+if [[ ! -x "${WIDE_TB_BIN}" ]]; then
+    echo "ERROR: test binary not found at ${WIDE_TB_BIN}" >&2
     exit 1
 fi
 
@@ -214,6 +219,10 @@ if (( USE_ASAN )); then
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
     ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
+    if (( TB_EXIT == 0 )); then
+        echo ">> Running with AddressSanitizer: ${WIDE_TB_BIN}"
+        ASAN_OPTIONS="${_ASAN_OPTS}" "${WIDE_TB_BIN}"; TB_EXIT=$?
+    fi
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -267,6 +276,7 @@ elif (( USE_COVERAGE )); then
         PROFDATA="${BUILD_DIR}/plic_tb.profdata"
 
         LLVM_PROFILE_FILE="${PROFRAW}" "${TB_BIN}"
+        LLVM_PROFILE_FILE="${BUILD_DIR}/plic_wide_tb.profraw" "${WIDE_TB_BIN}"
         echo ""
 
         PROFDATA_CMD="$(_find_llvm_tool llvm-profdata)"
@@ -307,6 +317,7 @@ elif (( USE_COVERAGE )); then
     # ---- gcov coverage (GCC) -----------------------------------------------
     else
         "${TB_BIN}"
+        "${WIDE_TB_BIN}"
         echo ""
 
         if command -v gcovr &>/dev/null; then
@@ -381,4 +392,6 @@ elif (( USE_CTEST )); then
 else
     echo ">> Running ${TB_BIN}"
     "${TB_BIN}"
+    echo ">> Running ${WIDE_TB_BIN}"
+    "${WIDE_TB_BIN}"
 fi

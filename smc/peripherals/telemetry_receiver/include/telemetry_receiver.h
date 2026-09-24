@@ -335,6 +335,8 @@ std::vector<uint8_t> telemetry_encode_message(
  * | `irq_o`      | out | Interrupt: `MISSING_LAST || BUFFER_THRESHOLD`. |
  * | `afvalid_o`  | out | Transmitter flush request (`CTRL.TELEMETRY_TX_FLUSH`). |
  * | `atready_o`  | out | ATB ready (deasserted only while in reset). |
+ * | `atvalid_i`  | in  | ATB valid. A rising edge while ready accepts `atdata_i`. |
+ * | `atdata_i`   | in  | ATB data byte sampled on an accepted valid edge. |
  * | `debug_o`    | out | 4-bit debug vector, see `DBG_*` in @ref telemetry_receiver_cfg. |
  *
  * `recompute_method` is the sole driver of every output (single-driver
@@ -359,6 +361,8 @@ public:
     sc_core::sc_out<bool> irq_o;     ///< Interrupt request (active high).
     sc_core::sc_out<bool> afvalid_o; ///< Transmitter flush request.
     sc_core::sc_out<bool> atready_o; ///< ATB ready.
+    sc_core::sc_in<bool>    atvalid_i; ///< ATB valid (rising edge = one beat).
+    sc_core::sc_in<uint8_t> atdata_i;  ///< ATB data byte.
     sc_core::sc_out<uint32_t> debug_o; ///< 4-bit debug vector.
 
     /**
@@ -409,6 +413,7 @@ private:
     // ------------------------------------------------------------------
     void reset_proc();          ///< SC_METHOD on rst_n_i: clear all state.
     void af_handshake_method(); ///< SC_METHOD on afready_i: retire TX flush.
+    void atb_method();          ///< SC_METHOD on atvalid_i: production ATB ingress.
     void recompute_method();    ///< SC_METHOD on recompute_event_: drive outputs.
     void start_of_simulation() override; ///< Force an initial output drive.
 

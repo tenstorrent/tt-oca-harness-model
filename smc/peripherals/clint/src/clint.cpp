@@ -144,7 +144,14 @@ clint::clint(sc_core::sc_module_name name, clint_cfg cfg)
 void clint::reset_proc()
 {
     if (rst_n_i.read()) {
-        return; // de-assertion edge: nothing to do
+        // Deassertion: re-arm the timer. A long hold can consume the tick
+        // scheduled at assertion without rearms, which would otherwise leave
+        // MTIME permanently stopped.
+        if (tick_period_ != sc_core::SC_ZERO_TIME) {
+            tick_event_.cancel();
+            tick_event_.notify(tick_period_);
+        }
+        return;
     }
 
     mtime_ = 0;
@@ -368,6 +375,11 @@ void clint::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
 
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
     // ---- Width validation --------------------------------------------------
     if (length != 4 && length != 8) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
@@ -438,6 +450,9 @@ unsigned int clint::transport_dbg(tlm::tlm_generic_payload& gp)
     const sc_dt::uint64 addr   = gp.get_address();
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
+
+    if (buf == nullptr)
+        return 0;
 
     if ((length != 4 && length != 8) ||
         (length == 4 && (addr & 0x3) != 0) ||

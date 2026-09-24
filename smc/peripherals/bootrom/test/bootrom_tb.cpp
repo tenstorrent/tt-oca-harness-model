@@ -428,6 +428,10 @@ struct tb : sc_core::sc_module {
             gp.set_address(dut.size_bytes() - 4); gp.set_data_length(8);
             EXPECT_EQ(0u, drv.sock->transport_dbg(gp));
 
+            gp.set_address(0); gp.set_data_length(4);
+            gp.set_data_ptr(nullptr);
+            EXPECT_EQ(0u, drv.sock->transport_dbg(gp));
+
             std::cout << "  [PASS] transport_dbg invalid-args paths return 0\n";
         }
 
@@ -519,6 +523,39 @@ struct tb : sc_core::sc_module {
             EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
             EXPECT_TRUE(t > SC_ZERO_TIME);
             std::cout << "  [PASS] annotated delay is non-zero (claim C2)\n";
+        }
+
+        {
+            const uint8_t oracle[8] = {0x01, 0x23, 0x45, 0x67,
+                                       0x89, 0xAB, 0xCD, 0xEF};
+            EXPECT_EQ(8u, dut.dbg_load_bytes(0, oracle, 8));
+            uint8_t bus[8] = {};
+            for (unsigned i = 0; i < 8; ++i) {
+                tlm::tlm_generic_payload gp;
+                sc_time t = SC_ZERO_TIME;
+                gp.set_command(tlm::TLM_READ_COMMAND);
+                gp.set_address(i);
+                gp.set_data_ptr(&bus[i]);
+                gp.set_data_length(1);
+                gp.set_streaming_width(1);
+                gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+                drv.sock->b_transport(gp, t);
+                EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
+            }
+            for (unsigned i = 0; i < 8; ++i)
+                EXPECT_EQ(oracle[i], bus[i]);
+
+            tlm::tlm_generic_payload gp;
+            sc_time t = SC_ZERO_TIME;
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_address(0);
+            gp.set_data_ptr(nullptr);
+            gp.set_data_length(4);
+            gp.set_streaming_width(4);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, t);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, gp.get_response_status());
+            std::cout << "  [PASS] independent byte oracle + null pointer\n";
         }
 
         if (g_failures == 0) {

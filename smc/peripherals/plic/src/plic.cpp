@@ -557,6 +557,11 @@ void plic::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
     const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
 
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
     if (len != 4 || (adr & 0x3u) != 0) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
         return;
@@ -620,6 +625,9 @@ unsigned int plic::transport_dbg(tlm::tlm_generic_payload& gp)
     const uint64_t         adr = gp.get_address();
     const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
+
+    if (buf == nullptr)
+        return 0;
 
     if (len != 4 || (adr & 0x3u) != 0 || adr >= cfg_.WINDOW_SIZE) return 0;
 

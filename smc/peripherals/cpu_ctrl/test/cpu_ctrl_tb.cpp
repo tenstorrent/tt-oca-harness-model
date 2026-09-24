@@ -562,6 +562,34 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] b_transport malformed-transaction error responses\n";
 
+        // 29. Nonzero-lane subword write on a real 64-bit register.
+        // SCRATCH is RW32 on an 8-byte stride (upper qword half is WI).
+        {
+            const uint64_t dr0 = BASE + smc::cpu_ctrl_cfg::OFF_DUMMY_ROM_0;
+            write64(dr0, 0x8877665544332211ULL);
+            write32(dr0 + 4, 0xAABBCCDDu);
+            EXPECT_EQ(0xAABBCCDD44332211ULL, read64(dr0));
+            uint8_t hi = 0xEE;
+            drv.access(dr0 + 7, tlm::TLM_WRITE_COMMAND, &hi, 1);
+            EXPECT_EQ(0xEEBBCCDD44332211ULL, read64(dr0));
+        }
+        std::cout << "  [PASS] nonzero-lane subword write oracle\n";
+
+        // 30. Null data pointer is rejected.
+        {
+            tlm::tlm_generic_payload gp;
+            sc_time delay = SC_ZERO_TIME;
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_address(BASE + smc::cpu_ctrl_cfg::OFF_SCRATCH);
+            gp.set_data_ptr(nullptr);
+            gp.set_data_length(8);
+            gp.set_streaming_width(8);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, delay);
+            EXPECT_TRUE(gp.get_response_status() == tlm::TLM_GENERIC_ERROR_RESPONSE);
+        }
+        std::cout << "  [PASS] null data pointer rejected\n";
+
         if (g_failures == 0)
             std::cout << "ALL TESTS PASSED\n";
         else

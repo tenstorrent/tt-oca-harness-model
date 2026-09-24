@@ -579,6 +579,20 @@ struct tb : sc_core::sc_module {
             std::cout << "  [PASS] CCI parameter introspection\n";
         }
 
+        {
+            tlm::tlm_generic_payload gp;
+            sc_time t = SC_ZERO_TIME;
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_address(prio_addr(1));
+            gp.set_data_ptr(nullptr);
+            gp.set_data_length(4);
+            gp.set_streaming_width(4);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, t);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, gp.get_response_status());
+        }
+        std::cout << "  [PASS] PLIC null data pointer rejected\n";
+
         if (g_failures == 0) {
             std::cout << "\nALL TESTS PASSED\n";
         } else {

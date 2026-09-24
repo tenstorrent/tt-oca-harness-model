@@ -169,8 +169,13 @@ fi
 # Locate test binary
 # ---------------------------------------------------------------------------
 TB_BIN="${BUILD_DIR}/test/clint_tb"
+TICK_BIN="${BUILD_DIR}/test/clint_tick_tb"
 if [[ ! -x "${TB_BIN}" ]]; then
     echo "ERROR: test binary not found at ${TB_BIN}" >&2
+    exit 1
+fi
+if [[ ! -x "${TICK_BIN}" ]]; then
+    echo "ERROR: test binary not found at ${TICK_BIN}" >&2
     exit 1
 fi
 
@@ -214,6 +219,10 @@ if (( USE_ASAN )); then
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
     ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
+    if (( TB_EXIT == 0 )); then
+        echo ">> Running with AddressSanitizer: ${TICK_BIN}"
+        ASAN_OPTIONS="${_ASAN_OPTS}" "${TICK_BIN}"; TB_EXIT=$?
+    fi
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -403,4 +412,6 @@ elif (( USE_CTEST )); then
 else
     echo ">> Running ${TB_BIN}"
     "${TB_BIN}"
+    echo ">> Running ${TICK_BIN}"
+    "${TICK_BIN}"
 fi

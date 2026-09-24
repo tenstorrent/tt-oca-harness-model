@@ -749,6 +749,41 @@ void tb::run() {
         std::cout << "  [PASS] uart_wrap CSRs\n";
     }
 
+    // ----------------------------------------------------------------------
+    // Bit-serial TX on tx_o and RX from rx_i (divisor=1 → 16 ns/bit).
+    // ----------------------------------------------------------------------
+    pulse_reset();
+    setup_basic();
+    drv.write32(MCR, 0); // no loopback
+    rx_sig.write(true);
+    sc_core::wait(2, SC_US); // drain leftover serial + quantum
+    // dbg_write avoids the TLM quantum keeper advancing through the frame.
+    EXPECT_EQ(4u, drv.dbg_write(THR, static_cast<uint32_t>('K')));
+    sc_core::wait(SC_ZERO_TIME);
+    sc_core::wait(8, SC_NS); // mid start bit
+    EXPECT_EQ(false, tx_sig.read());
+    sc_core::wait(12 * 16 - 8, SC_NS); // through stop + idle
+    settle();
+    EXPECT_EQ(true, tx_sig.read()); // idle high after stop
+    {
+        uint8_t ch = 0;
+        EXPECT_TRUE(dut.dbg_tx_pop(ch));
+        EXPECT_EQ(static_cast<uint8_t>('K'), ch);
+    }
+    // Drive 0xA5 LSB-first onto rx_i: start, 1,0,1,0,0,1,0,1, stop
+    rx_sig.write(false);
+    sc_core::wait(16, SC_NS);
+    for (int i = 0; i < 8; ++i) {
+        rx_sig.write(((0xA5 >> i) & 1) != 0);
+        sc_core::wait(16, SC_NS);
+    }
+    rx_sig.write(true);
+    sc_core::wait(16, SC_NS);
+    settle();
+    EXPECT_TRUE((drv.read32(LSR) & LSR_DR) != 0);
+    EXPECT_EQ(0xA5u, drv.read32(RBR) & 0xFFu);
+    std::cout << "  [PASS] bit-serial TX/RX timing\n";
+
     // dump_state for visual inspection / coverage of the dump path.
     dut.dump_state(std::cout);
 

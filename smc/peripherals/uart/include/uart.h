@@ -450,6 +450,12 @@ private:
     void recompute_method();
     /// SC_METHOD on rx_timeout_event_: raise the RX timeout interrupt.
     void rx_timeout_method();
+    /// SC_THREAD: shift THR bytes onto tx_o at the programmed baud.
+    void serial_tx_thread();
+    /// SC_THREAD: sample rx_i and assemble characters into the RX FIFO.
+    void serial_rx_thread();
+    /// One bit period: 16 × divisor nanoseconds (16× oversample, 1 ns clock).
+    sc_core::sc_time bit_time() const;
 
     /// Post recompute_event_ at SC_ZERO_TIME (after the current update).
     void schedule_recompute();
@@ -581,7 +587,12 @@ private:
 
     sc_core::sc_event recompute_event_;   ///< Triggers recompute_method().
     sc_core::sc_event rx_timeout_event_;  ///< Fires RX timeout.
+    sc_core::sc_event serial_tx_event_;   ///< Wakes serial_tx_thread().
     sc_core::sc_time  rx_timeout_delay_;  ///< Coarse functional timeout period.
+
+    std::deque<uint8_t> serial_tx_q_;     ///< Bytes waiting for bit-serial TX.
+    bool serial_tx_bit_ = true;           ///< Current tx_o bit (idle high).
+    bool serial_rx_busy_ = false;         ///< Mid-frame RX sampler.
 };
 
 // ---------------------------------------------------------------------------
