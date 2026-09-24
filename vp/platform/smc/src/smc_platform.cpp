@@ -357,8 +357,12 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         telemetry_[n].irq_o.bind(telemetry_irq[n]);
         telemetry_[n].afvalid_o.bind(telemetry_afvalid[n]);
         telemetry_[n].atready_o.bind(telemetry_atready[n]);
+        telemetry_[n].atvalid_i.bind(telemetry_atvalid[n]);
+        telemetry_[n].atdata_i.bind(telemetry_atdata[n]);
         telemetry_[n].debug_o.bind(telemetry_debug[n]);
         telemetry_afready[n].write(false);
+        telemetry_atvalid[n].write(false);
+        telemetry_atdata[n].write(0);
     }
     periph_router.out[5].bind(uart_[0].reg_socket);
     periph_router.out[6].bind(uart_[1].reg_socket);
