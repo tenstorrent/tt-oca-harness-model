@@ -57,6 +57,7 @@
 #include "lifecycle_ctrl.h"
 #include "entropy_src.h"
 #include "edn.h"
+#include "sep_entropy_pool.h"
 #include "rv32/elf_loader.h"
 #include "options.h"
 #include "bus.h"
@@ -108,7 +109,7 @@ public:
     // The key manager holds a single target: the new RTL exposes only the
     // mailbox to SEP, so there is no second KPVLP window. Adams Bridge adds
     // one target on top of that mailbox-only map.
-    static constexpr unsigned int TARG_COUNT = 36;
+    static constexpr unsigned int TARG_COUNT = 37;
 
     SC_HAS_PROCESS(och_sep_ss);
 
@@ -217,6 +218,7 @@ private:
     lifecycle_ctrl_model*             lc_ctrl            = nullptr;
     entropy_src_ip*                   entropy_src        = nullptr;
     edn_ip*                           edn                = nullptr;
+    sep_entropy_pool_ip*              entropy_pool       = nullptr;
     spi_flash*                        spi_device         = nullptr;
     spi_controller_ip*                spi_controller     = nullptr;
     key_manager_model*                keymgr             = nullptr;
@@ -358,6 +360,11 @@ private:
     sc_signal<bool, SC_MANY_WRITERS>   edn_fatal_err_signal;
     sc_signal<bool, SC_MANY_WRITERS>   edn_recov_alert_signal;
     sc_signal<bool, SC_MANY_WRITERS>   edn_fatal_alert_signal;
+
+    // Entropy Pool
+    sc_signal<bool, SC_MANY_WRITERS> entropy_pool_low_signal;
+    sc_signal<bool, SC_MANY_WRITERS> entropy_pool_stall_signal;
+    sc_signal<bool, SC_MANY_WRITERS> entropy_pool_error_signal;
 
     // PIC input table — unused slots tied to unused_irq_signal
     sc_signal<bool, SC_MANY_WRITERS>               unused_irq_signal;

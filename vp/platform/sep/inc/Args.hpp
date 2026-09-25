@@ -78,6 +78,8 @@ class BasicOptions : public Args {
         addr_t entropy_src_end_addr    = 0x10916FFF;  // ENTROPY_SOURCE size 0x1000
         addr_t edn_start_addr          = 0x10915800;  // DRBG_EDN_BASE (sep_crypto_pkg.sv)
         addr_t edn_end_addr            = 0x10915847;  // EDN register space (0x48 bytes)
+        addr_t entropy_pool_start_addr = 0x10950000;
+        addr_t entropy_pool_end_addr   = 0x1095FFFF;  // 64 KiB decoded aperture
 
         // Outbound filter CSR: 32 × 0x20 B = 0x400 B at 0x10A20000
         addr_t outbound_filter_csr_start_addr  = 0x10A20000;

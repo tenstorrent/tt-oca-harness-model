@@ -56,6 +56,7 @@
 #define SMC_CPU_CTRL_FP_BASE 0xC0039000ULL
 /* Live cpu_ctrl.rdl path is cluster.ctrl @ front-port; dual periph bind dropped. */
 #define SMC_CPU_CTRL_BASE    SMC_CPU_CTRL_FP_BASE
+#define SMC_BASE_CONFIG_BASE 0xC0010000ULL
 #define SMC_DMA_BASE         0xC0038000ULL
 #define SMC_I3C_BASE         0xC003A000ULL
 #define SMC_BOOTROM_BASE     0xC0040000ULL
@@ -282,6 +283,7 @@
 #define PLIC_SRC_I2C0     280u
 #define PLIC_SRC_I2C1     281u
 #define PLIC_SRC_I2C2     282u
+#define PLIC_SRC_AXI_HANG 287u
 
 /* AVSBus Controller — base 0xC000_4000, 4 KiB window, 32-bit registers.
  * Mirrors hw/ip/avsbus_controller RDL (AVSBus 1.3.1 single-target). */

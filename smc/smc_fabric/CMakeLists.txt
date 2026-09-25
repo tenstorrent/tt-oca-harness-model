@@ -76,9 +76,15 @@ if(NOT TARGET SystemC::systemc)
 endif()
 
 # Match the C++ standard the linked SystemC library was built with.
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
+list(APPEND CMAKE_MODULE_PATH
+    "${CMAKE_CURRENT_SOURCE_DIR}/../cmake"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
+include(FindCCI)
+if(NOT CCI_FOUND)
+    message(FATAL_ERROR "smc_fabric requires Accellera CCI")
+endif()
 
 # Canonical smc_axi_extension.h (shared across the SMC tree).
 # Not cached: a stale CACHE entry from before the header moved leaves
@@ -100,7 +106,7 @@ target_include_directories(smc_fabric
 )
 
 target_link_libraries(smc_fabric
-    PUBLIC SystemC::systemc
+    PUBLIC SystemC::systemc CCI::cci
 )
 
 target_compile_options(smc_fabric PRIVATE

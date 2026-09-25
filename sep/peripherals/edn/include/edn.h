@@ -28,6 +28,7 @@
 #pragma once
 #include "edn_base.h"
 #include "edn_csrng_interface.h"
+#include "edn_endpoint_if.h"
 #include <tlm_utils/tlm_quantumkeeper.h>
 #include "reg_logger.h"
 #include "reg_param.h"
@@ -78,12 +79,20 @@ enum class EdnMainSmState : uint32_t
  *
  * @note Implement behavioral logic in the constructor and callback methods.
  */
-class edn_ip : public edn_base
+class edn_ip : public edn_base, public edn_endpoint_if
 {
    SC_HAS_PROCESS(edn_ip);
 
   public:
    friend class edn_test;
+
+   /// Loosely-timed pull endpoint used by entropy consumers.
+   sc_core::sc_export<edn_endpoint_if> entropy_endpoint;
+
+   bool try_pop_entropy_word(unsigned endpoint_id,
+                             uint32_t& word,
+                             bool& fips) override;
+   const sc_core::sc_event& entropy_available_event() const override;
 
    // =========================================================================
    // =========================================================================
@@ -494,6 +503,9 @@ class edn_ip : public edn_base
 
    /// FIPS compliance status for buffered entropy
    bool m_entropy_fips;
+
+   /// Notifies LT endpoint consumers when one or more words become available.
+   sc_core::sc_event m_entropy_available_event;
 
    // === Interrupt and Alert State (Single-Writer Pattern) ===
    sc_event m_intr_update_event;

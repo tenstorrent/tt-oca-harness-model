@@ -815,16 +815,16 @@ ship from `vp/`:
 | Binary   | What it simulates |
 |----------|-------------------|
 | `sep-vp` | SEP only — VeeR EL2 firmware on the secure enclave |
-| `smc-vp` | SMC only — Whisper-backed CVA6 cluster + SMC fabric and peripherals |
+| `smc-vp` | SMC only — Whisper-backed Rocket cluster + SMC fabric and peripherals |
 | `smu-vp` | SMC + SEP in one process, connected by the SMU interconnect and AoU stub |
 
 | Component                    | Location                | Contents                                                                 |
 |------------------------------|-------------------------|--------------------------------------------------------------------------|
 | Shared helpers               | `common/include/`       | `reg_access.h`, `reg_map.h`, `reg_file.h`, `reg_param.h`, `sim_log.h`, `tlm_quantum_policy.h` |
 | SMC IP models                | `smc/peripherals/<ip>/` | UART, I2C, I3C, PLIC, CLINT, DMA, WDT, BEU, reset unit, bootrom, scratchpad, PVT/PLL/AVSBus/telemetry, … |
-| SMC fabric / cluster         | `smc/smc_fabric/`, `smc/cpu_cluster/` | AXI fabric/router and Whisper-backed CVA6 cluster |
+| SMC fabric / cluster         | `smc/smc_fabric/`, `smc/cpu_cluster/` | AXI fabric/router and Whisper-backed Rocket cluster |
 | SEP IP models                | `sep/peripherals/<ip>/` | AES, HMAC, KMAC, OTBN, Adams Bridge, CSRNG, EDN, entropy_src, mailbox, SPI, … (no standalone GPIO IP) |
-| Always-On Unit               | `aou/`                  | AXI-over-UCIe loosely-timed model used by `smc-vp` / `smu-vp` |
+| AXI-over-UCIe (AoU)          | `aou/`                  | AXI-over-UCIe loosely-timed model used by `smc-vp` / `smu-vp` |
 | SMC virtual platform         | `vp/platform/smc/`      | `smc_platform.hpp` / `src/smc_platform.cpp` — builds `smc-vp` |
 | SEP virtual platform         | `vp/platform/sep/`      | `sep_platform.hpp` / `src/sep_platform.cpp` — module type remains `och_sep_ss`; builds `sep-vp` |
 | SMU virtual platform         | `vp/platform/smu/`      | Combined SMC+SEP wiring; builds `smu-vp` |

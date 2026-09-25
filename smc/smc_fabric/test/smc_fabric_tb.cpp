@@ -38,9 +38,11 @@
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
+#include <cci/utils/consuming_broker.h>
 
 #include <array>
 #include <cstring>
+#include <deque>
 #include <iostream>
 #include <map>
 
@@ -88,6 +90,8 @@ struct probe : sc_core::sc_module {
     uint64_t last_addr = 0;
     uint32_t last_data = 0;
     std::map<uint64_t, uint32_t> mem;
+    sc_time block_for = SC_ZERO_TIME;
+    std::deque<sc_time> block_sequence;
 
     explicit probe(sc_module_name n) : sc_core::sc_module(n), sock("sock") {
         sock.register_b_transport(this, &probe::b_tr);
@@ -95,6 +99,13 @@ struct probe : sc_core::sc_module {
 
     void b_tr(tlm::tlm_generic_payload& gp, sc_time& /*delay*/) {
         ++hits;
+        sc_time delay = block_for;
+        if (!block_sequence.empty()) {
+            delay = block_sequence.front();
+            block_sequence.pop_front();
+        }
+        if (delay != SC_ZERO_TIME)
+            sc_core::wait(delay);
         last_addr = gp.get_address();
         const unsigned len = std::min(gp.get_data_length(), 4u);
         if (gp.is_write()) {
@@ -207,6 +218,13 @@ constexpr uint64_t A_OBF         = 0xC001'6000ULL;
 constexpr uint64_t A_GBASE       = 0xC001'0000ULL;
 constexpr uint64_t A_LBASE       = 0xC001'0008ULL;
 constexpr uint64_t A_RSIZE       = 0xC001'0010ULL;
+constexpr uint64_t A_CLOCK_GATE  = 0xC001'0018ULL;
+constexpr uint64_t A_HANG_SYS_CTRL = 0xC001'0020ULL;
+constexpr uint64_t A_HANG_SYS_THR  = 0xC001'0028ULL;
+constexpr uint64_t A_HANG_SEP_CTRL = 0xC001'0030ULL;
+constexpr uint64_t A_HANG_SEP_THR  = 0xC001'0038ULL;
+constexpr uint64_t A_HANG_DATA_CTRL = 0xC001'0040ULL;
+constexpr uint64_t A_HANG_DATA_THR  = 0xC001'0048ULL;
 constexpr uint64_t A_PERIPH_EXT  = 0xC040'0000ULL;
 constexpr uint64_t A_UNMAPPED    = 0xC000'1000ULL;  // gap between WDT and periph
 constexpr uint64_t A_OUTBOUND    = 0x8000'0000ULL;  // in neither aperture
@@ -256,6 +274,12 @@ struct tb : sc_core::sc_module {
 
     sc_core::sc_signal<bool> rst_n{"rst_n"};
     sc_core::sc_signal<bool> rst_n_nr{"rst_n_nr"};
+    sc_core::sc_signal<bool> hang_irq{"hang_irq"};
+    sc_core::sc_signal<bool> hang_irq_nr{"hang_irq_nr"};
+    sc_core::sc_event start_sys, start_sep, start_sep2, start_daccel;
+    bool sys_done = false;
+    bool sep_done = false;
+    bool daccel_done = false;
 
     static smc::smc_fabric::config no_remap_cfg() {
         smc::smc_fabric::config c{};
@@ -307,6 +331,7 @@ struct tb : sc_core::sc_module {
         dut.to_outbound_filter_ctrl.bind(p_obf   .sock);
 
         dut.rst_n_i(rst_n);
+        dut.axi_hang_irq_o(hang_irq);
 
         d_mmio_nr.sock.bind(dut_noremap.mmio_in);
         d_nr_jtag  .sock.bind(dut_noremap.jtag_axi_in);
@@ -328,8 +353,49 @@ struct tb : sc_core::sc_module {
         dut_noremap.to_inbound_filter_ctrl .bind(p_nr_ibf   .sock);
         dut_noremap.to_outbound_filter_ctrl.bind(p_nr_obf   .sock);
         dut_noremap.rst_n_i(rst_n_nr);
+        dut_noremap.axi_hang_irq_o(hang_irq_nr);
 
         SC_THREAD(run);
+        SC_THREAD(sys_worker);
+        SC_THREAD(sep_worker);
+        SC_THREAD(sep_worker2);
+        SC_THREAD(daccel_worker);
+    }
+
+    void sys_worker() {
+        while (true) {
+            sc_core::wait(start_sys);
+            uint32_t value = 0;
+            (void)d_sys.xfer(tlm::TLM_READ_COMMAND, A_SPM, &value,
+                             true, 0, true);
+            sys_done = true;
+        }
+    }
+
+    void sep_worker() {
+        while (true) {
+            sc_core::wait(start_sep);
+            uint32_t value = 0;
+            (void)d_sep.xfer(tlm::TLM_READ_COMMAND, A_SPM, &value);
+            sep_done = true;
+        }
+    }
+
+    void sep_worker2() {
+        while (true) {
+            sc_core::wait(start_sep2);
+            uint32_t value = 0;
+            (void)d_sep.xfer(tlm::TLM_READ_COMMAND, A_SPM, &value);
+        }
+    }
+
+    void daccel_worker() {
+        while (true) {
+            sc_core::wait(start_daccel);
+            uint32_t value = 0;
+            (void)d_daccel.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_MAIN, &value);
+            daccel_done = true;
+        }
     }
 
     void pulse_reset() {
@@ -761,7 +827,7 @@ struct tb : sc_core::sc_module {
         }
         EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
                   d_mmio.raw(tlm::TLM_READ_COMMAND, A_UNMAPPED, 4, nullptr));
-        EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+        EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
                   d_mmio.raw(tlm::TLM_READ_COMMAND, A_GBASE + 0x18, 4, nullptr));
         std::cout << "  [PASS] deny-read poison trailing bytes\n";
 
@@ -892,7 +958,160 @@ struct tb : sc_core::sc_module {
         std::cout << "  [PASS] DMI denied on all internal masters\n";
 
         // ----------------------------------------------------------------
-        // 24. no_addr_remap config bypasses output remap.
+        // 24. Dynamic REGION_SIZE controls membership and local mask.
+        // ----------------------------------------------------------------
+        pulse_reset();
+        d_mmio.write32(A_RSIZE, 0x0400'0000u);
+        {
+            const unsigned h = p_periph.hits;
+            d_mmio.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_EXT, &scratch);
+            EXPECT_EQ(h + 1u, p_periph.hits);
+            EXPECT_EQ(A_PERIPH_EXT, p_periph.last_addr);
+        }
+        d_mmio.write32(A_RSIZE, 0x1000u);
+        {
+            const unsigned h = p_out.hits;
+            d_mmio.xfer(tlm::TLM_READ_COMMAND, A_PERIPH_MAIN, &scratch);
+            EXPECT_EQ(h + 1u, p_out.hits);
+            EXPECT_EQ(A_PERIPH_MAIN, p_out.last_addr);
+        }
+        // A deliberately undersized aperture makes its own CSR unreachable;
+        // use the labeled test API to restore it before the next frontdoor case.
+        dut.write_region_size(0x0100'0000u);
+        d_mmio.write32(A_RSIZE, 0u);
+        {
+            const unsigned h = p_out.hits;
+            d_mmio.xfer(tlm::TLM_READ_COMMAND, A_SPM, &scratch);
+            EXPECT_EQ(h + 1u, p_out.hits);
+        }
+        dut.write_region_size(0x0100'0000u);
+        std::cout << "  [PASS] dynamic REGION_SIZE routing\n";
+
+        // ----------------------------------------------------------------
+        // 25. RDL-faithful base-config storage and irq_test gating.
+        // ----------------------------------------------------------------
+        pulse_reset();
+        EXPECT_EQ(0x1F00'0000u, d_mmio.read32(A_CLOCK_GATE));
+        d_mmio.write32(A_CLOCK_GATE, 0xFFFF'FFFFu);
+        EXPECT_EQ(0x3F00'3FFFu, d_mmio.read32(A_CLOCK_GATE));
+        EXPECT_EQ(0x1000u, d_mmio.read32(A_HANG_SYS_THR));
+        EXPECT_EQ(0x1000u, d_mmio.read32(A_HANG_SEP_THR));
+        EXPECT_EQ(0x1000u, d_mmio.read32(A_HANG_DATA_THR));
+        d_mmio.write32(A_HANG_SYS_CTRL, 0x111u);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(hang_irq.read());
+        d_mmio.write32(A_HANG_SYS_CTRL, 0x101u);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_EQ(false, hang_irq.read());
+        d_mmio.write32(A_HANG_SYS_CTRL, 0x110u);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_EQ(false, hang_irq.read());
+        std::cout << "  [PASS] hang CSR masks and irq_test gating\n";
+
+        // ----------------------------------------------------------------
+        // 26. Three event-driven detector legs, OR, and threshold edges.
+        // ----------------------------------------------------------------
+        pulse_reset();
+        program_filter(A_IBF, A_SPM, 0x1000u, CFG_RW_NS);
+        d_mmio.write32(A_HANG_SYS_THR, 2u);
+        d_mmio.write32(A_HANG_SEP_THR, 2u);
+        d_mmio.write32(A_HANG_DATA_THR, 2u);
+        d_mmio.write32(A_HANG_SYS_CTRL, 0x11u);
+        d_mmio.write32(A_HANG_SEP_CTRL, 0x11u);
+        d_mmio.write32(A_HANG_DATA_CTRL, 0x11u);
+        p_front.block_for = sc_time(5, SC_NS);
+        p_periph.block_for = sc_time(8, SC_NS);
+        sys_done = sep_done = daccel_done = false;
+        start_sys.notify(SC_ZERO_TIME);
+        start_sep.notify(SC_ZERO_TIME);
+        start_daccel.notify(SC_ZERO_TIME);
+        sc_core::wait(1, SC_NS);
+        EXPECT_EQ(false, hang_irq.read()); // T-epsilon
+        sc_core::wait(1, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(hang_irq.read());      // T
+        sc_core::wait(3, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(sys_done && sep_done);
+        EXPECT_TRUE(hang_irq.read());      // data-accelerator leg still hung
+        sc_core::wait(3, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(daccel_done);
+        EXPECT_EQ(false, hang_irq.read()); // T+completion
+        p_front.block_for = SC_ZERO_TIME;
+        p_periph.block_for = SC_ZERO_TIME;
+        std::cout << "  [PASS] three-leg timeout and combined OR\n";
+
+        // ----------------------------------------------------------------
+        // 27. Zero threshold, mid-window update, progress rearm, reset cancel.
+        // ----------------------------------------------------------------
+        d_mmio.write32(A_HANG_SEP_THR, 0u);
+        p_front.block_for = sc_time(4, SC_NS);
+        sep_done = false;
+        start_sep.notify(SC_ZERO_TIME);
+        sc_core::wait(4, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_EQ(false, hang_irq.read());
+        EXPECT_TRUE(sep_done);
+
+        d_mmio.write32(A_HANG_SEP_THR, 10u);
+        p_front.block_for = sc_time(12, SC_NS);
+        sep_done = false;
+        start_sep.notify(SC_ZERO_TIME);
+        sc_core::wait(1, SC_NS);
+        d_mmio.write32(A_HANG_SEP_THR, 1u); // applies to next window
+        sc_core::wait(8, SC_NS);
+        EXPECT_EQ(false, hang_irq.read());
+        sc_core::wait(1, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(hang_irq.read());
+        sc_core::wait(2, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(sep_done);
+        EXPECT_EQ(false, hang_irq.read());
+
+        d_mmio.write32(A_HANG_SEP_THR, 2u);
+        p_front.block_for = SC_ZERO_TIME;
+        p_front.block_sequence = {sc_time(3, SC_NS), sc_time(7, SC_NS)};
+        start_sep.notify(SC_ZERO_TIME);
+        start_sep2.notify(SC_ZERO_TIME);
+        sc_core::wait(2, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(hang_irq.read());
+        sc_core::wait(1, SC_NS); // first completion is progress and rearms
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_EQ(false, hang_irq.read());
+        sc_core::wait(2, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(hang_irq.read());
+        sc_core::wait(2, SC_NS);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_EQ(false, hang_irq.read());
+
+        p_front.block_for = sc_time(5, SC_NS);
+        start_sep.notify(SC_ZERO_TIME);
+        sc_core::wait(1, SC_NS);
+        rst_n.write(false);
+        sc_core::wait(2, SC_NS);
+        EXPECT_EQ(false, hang_irq.read());
+        rst_n.write(true);
+        sc_core::wait(2, SC_NS);
+        p_front.block_for = SC_ZERO_TIME;
+        std::cout << "  [PASS] hang zero/update/progress/reset semantics\n";
+
+        // ----------------------------------------------------------------
+        // 28. no_addr_remap config bypasses output remap.
         // ----------------------------------------------------------------
         rst_n_nr.write(true);
         sc_core::wait(1, SC_NS);
@@ -922,6 +1141,8 @@ struct tb : sc_core::sc_module {
 
 int sc_main(int, char**)
 {
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
     tb top("tb");
     sc_core::sc_start();
     return g_failures == 0 ? 0 : 1;

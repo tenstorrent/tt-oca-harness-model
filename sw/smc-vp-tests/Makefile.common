@@ -3,8 +3,8 @@
 #
 # Shared build/run rules for bare-metal RV64 firmware tests that run on the
 # `smc-vp` executable (vp/platform/smc).  Mirrors the shape of
-# sw/sep-vp-tests/Makefile.common, adapted for the SMC CVA6 cluster:
-#   - RV64 / lp64 (the SMC CPU is a 64-bit CVA6)
+# sw/sep-vp-tests/Makefile.common, adapted for the SMC Rocket cluster:
+#   - RV64 / lp64 (the SMC CPU is a 64-bit Rocket)
 #   - firmware linked at 0x80000000 (cluster fast-mem window)
 #   - `make sim` runs `smc-vp <ini> <elf>`
 #
@@ -17,24 +17,36 @@ CC      = $(RISCV_PREFIX)gcc
 OBJCOPY = $(RISCV_PREFIX)objcopy
 OBJDUMP = $(RISCV_PREFIX)objdump
 
-# Architecture — rv64imac. No FP needed for these bare-metal tests; the CVA6
+# Architecture — rv64imac. No FP needed for these bare-metal tests; the Rocket
 # cluster emulates the superset.
 #
-# NOTE: do NOT append "_zicsr_zifencei" here. These tests use CSR access
-# (mtvec/mret) but no fence.i, and both are accepted under plain "rv64imac"
-# by every toolchain we support:
-#   - Newer toolchains (binutils/gcc that split Zicsr/Zifencei out of the "I"
-#     base per ISA-manual 20191213+) still accept CSR instructions under
-#     "rv64imac" -- the extension is implied, only newer *-march spellings
-#     require it to be spelled out explicitly, they don't reject its absence.
-#   - Older toolchains -- notably Ubuntu's apt "gcc-riscv64-unknown-elf"
-#     package used by CI (.github/workflows/ci.yml) -- predate the
-#     multi-letter "_zicsr_zifencei" -march syntax entirely and fail with
-#     "cc1: error: unsupported ISA subset 'z'" if it is present.
-# Keeping the -march string to single-letter extensions is the portable
-# choice across both toolchain generations.
+# The -march string cannot be hard-coded: the two toolchain generations in CI
+# want opposite spellings, and common/start.S needs CSR access (mhartid/mtvec).
+#   - Toolchains implementing ISA-manual 20191213+ split Zicsr out of the "I"
+#     base, so plain "rv64imac" rejects csrr/csrw with
+#     "unrecognized opcode ... extension `zicsr' required".  The xpack
+#     riscv-none-elf GCC 13/14 used by the RHEL CI job behaves this way.
+#   - Older toolchains -- notably Ubuntu's apt "gcc-riscv64-unknown-elf" used
+#     by .github/workflows/ci.yml -- predate the multi-letter "_zicsr" -march
+#     syntax entirely and fail with "cc1: error: unsupported ISA subset 'z'",
+#     but accept csrr/csrw under plain "rv64imac" because Zicsr is implied.
+# Probe the toolchain instead of guessing: take the first candidate that both
+# is accepted as an -march string and actually assembles a CSR instruction.
+# Override with `make ARCH=...` if you need a specific string.
 ABI  = lp64
-ARCH = rv64imac
+
+ARCH_CANDIDATES ?= rv64imac_zicsr_zifencei rv64imac
+ifeq ($(origin ARCH),undefined)
+ARCH := $(shell for a in $(ARCH_CANDIDATES); do \
+                  printf 'csrr t0, mhartid\n' | \
+                    $(CC) -march=$$a -mabi=$(ABI) -x assembler-with-cpp - \
+                          -c -o /dev/null >/dev/null 2>&1 && { echo $$a; break; }; \
+                done)
+endif
+ifeq ($(strip $(ARCH)),)
+$(error No usable -march found for $(CC): none of "$(ARCH_CANDIDATES)" both \
+        compile and assemble a CSR instruction. Check the RISC-V toolchain.)
+endif
 
 # Common include paths — shared helpers + SMC peripheral base addresses.
 SMC_VP_TESTS_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))

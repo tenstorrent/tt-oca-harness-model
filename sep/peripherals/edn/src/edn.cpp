@@ -18,6 +18,7 @@
  */
 edn_ip::edn_ip(sc_module_name n)
     : edn_base(n, 0x48)
+    , entropy_endpoint("entropy_endpoint")
     , intr_edn_cmd_req_done("intr_edn_cmd_req_done")
     , intr_edn_fatal_err("intr_edn_fatal_err")
     , alert_recov_alert("alert_recov_alert")
@@ -38,6 +39,7 @@ edn_ip::edn_ip(sc_module_name n)
     , m_auto_dispatch_active(false)
     , m_auto_dispatch_epoch(0)
 {
+    entropy_endpoint.bind(*this);
 
     // Initialize previous genbits for consistency checking (EDN_FUNC_008)
     for (unsigned int i = 0; i < 4; i++) {
@@ -668,6 +670,8 @@ void edn_ip::process_sw_command_async()
                     m_entropy_buffer.push(rand_data[j]);
                 }
             }
+            if (glen != 0)
+                m_entropy_available_event.notify(SC_ZERO_TIME);
         }
 
         // Set interrupt status bit (architecture_map.events["edn_cmd_req_done"])
@@ -939,6 +943,24 @@ void edn_ip::receive_csrng_entropy(const uint32_t genbits[4], bool fips_complian
     {
         m_entropy_buffer.push(genbits[i]);
     }
+    m_entropy_available_event.notify(SC_ZERO_TIME);
+}
+
+bool edn_ip::try_pop_entropy_word(unsigned endpoint_id,
+                                  uint32_t& word,
+                                  bool& fips)
+{
+    if (endpoint_id >= 8 || !rst_ni.read() || m_entropy_buffer.empty())
+        return false;
+    word = m_entropy_buffer.front();
+    m_entropy_buffer.pop();
+    fips = m_entropy_fips;
+    return true;
+}
+
+const sc_core::sc_event& edn_ip::entropy_available_event() const
+{
+    return m_entropy_available_event;
 }
 
 
@@ -2258,9 +2280,15 @@ uint32_t edn_ip::auto_mode_issue_generate()
     // Simulate CSRNG Generate success and consume OpenSSL entropy
     uint32_t ack_status = m_forced_csrng_ack_status;
     m_forced_csrng_ack_status = 0;
-    for (uint32_t i = 0; i < glen; i++) {
-        uint32_t rand_data[4];
-        RAND_bytes(reinterpret_cast<unsigned char*>(rand_data), 16);
+    if (ack_status == 0) {
+        for (uint32_t i = 0; i < glen; i++) {
+            uint32_t rand_data[4];
+            RAND_bytes(reinterpret_cast<unsigned char*>(rand_data), 16);
+            for (uint32_t word : rand_data)
+                m_entropy_buffer.push(word);
+        }
+        if (glen != 0)
+            m_entropy_available_event.notify(SC_ZERO_TIME);
     }
 
     // Update HW_CMD_STS with CSRNG response

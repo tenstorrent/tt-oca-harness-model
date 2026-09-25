@@ -12,7 +12,7 @@ infrastructure in `vp/` is derived from
 [riscv-vp-plusplus](https://github.com/ics-jku/riscv-vp-plusplus) (MIT).
 The SEP hart uses in-tree
 [VeeR-ISS](https://github.com/chipsalliance/VeeR-ISS) (Apache 2.0). The
-SMC CVA6 cluster uses [Tenstorrent Whisper](https://github.com/tenstorrent/whisper)
+SMC Rocket cluster uses [Tenstorrent Whisper](https://github.com/tenstorrent/whisper)
 (Apache 2.0, built separately). Tenstorrent modifications and new models
 are Apache 2.0; see [License](#license).
 
@@ -39,7 +39,7 @@ Three runnable platforms ship from `vp/`:
 | Binary | What it simulates |
 |--------|-------------------|
 | `sep-vp` | SEP only — VeeR EL2 firmware on the secure enclave |
-| `smc-vp` | SMC only — Whisper-backed CVA6 cluster + SMC fabric and peripherals |
+| `smc-vp` | SMC only — Whisper-backed Rocket cluster + SMC fabric and peripherals |
 | `smu-vp` | SMC + SEP in one process, connected by the SMU on-die interconnect and AoU stub |
 
 **Contents**
@@ -137,7 +137,7 @@ OCAH subsystems:
 | Subsystem | What is provided |
 |-----------|-----------------|
 | **SEP** | Full, runnable Virtual Platform (`sep-vp`) — models all SEP peripherals, runs actual RISC-V VeeR EL2 firmware, used for pre-silicon DV and firmware development |
-| **SMC** | SystemC TLM-2.0 IP model library (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, DMA, PVT wrapper, I3C, …) with per-IP unit tests, **plus a full runnable Virtual Platform (`smc-vp`)** that wires the fabric + every peripheral + the Whisper-backed CVA6 cluster and can run bare-metal RV64 firmware and also boot Zephyr RTOS|
+| **SMC** | SystemC TLM-2.0 IP model library (PLIC, CLINT, CPU cluster, reset unit, bootrom, scratchpad, DMA, PVT wrapper, I3C, …) with per-IP unit tests, **plus a full runnable Virtual Platform (`smc-vp`)** that wires the fabric + every peripheral + the Whisper-backed Rocket cluster and can run bare-metal RV64 firmware and also boot Zephyr RTOS|
 
 ---
 
@@ -146,7 +146,7 @@ OCAH subsystems:
 ```
 tt-oca-harness-model/
 ├── cmake/                         ← shared CMake helpers (FindSystemC, FindCCI, PeripheralCommon, …)
-├── aou/                           ← Always-On Unit models (used by smc-vp / smu-vp)
+├── aou/                           ← AXI-over-UCIe (AoU) models (used by smc-vp / smu-vp)
 ├── common/include/                ← shared register + logging helpers
 │                                  (reg_file.h, reg_param.h, reg_logger.h,
 │                                   reg_access.h, reg_map.h, sim_log.h,
@@ -383,8 +383,8 @@ cd tt-oca-harness-model
 
 ### 5. Whisper (SMC and SMU only)
 
-`sep-vp` does not need Whisper. `smc-vp` and `smu-vp` use it as the CVA6
-ISS backend.
+`sep-vp` does not need Whisper. `smc-vp` and `smu-vp` use it as the Rocket
+cluster ISS backend.
 
 ```bash
 git clone https://github.com/tenstorrent/whisper.git
@@ -724,7 +724,7 @@ The CCI ini is **required**. Without it, DMA uses wrong defaults
 `../../../vp/platform/smc/config/…` paths only resolve when the working
 directory is inside the repo tree (not a copied test directory).
 
-`smc-vp` loads the ELF into the Whisper-backed CVA6 cluster fast-mem, sets
+`smc-vp` loads the ELF into the Whisper-backed Rocket cluster fast-mem, sets
 `reset_pc` to the ELF entry, runs the simulation, and drains UART0's TX
 debug buffer to stdout so firmware `printf` is visible. Same
 `LD_LIBRARY_PATH` rule as `sep-vp`.
@@ -734,7 +734,7 @@ debug buffer to stdout so firmware `printf` is visible. Same
 Tests under `sw/smc-vp-tests/` exercise SMC peripherals that have a
 checked-in firmware test (AOU, AVSbus, BEU, DMA, I2C/I3C loopback,
 memory zeroer, OCTS, PLL, PVT, telemetry, WDT, map coherence, …)
-from code running on the CVA6 cluster. Full guide:
+from code running on the Rocket cluster. Full guide:
 [`sw/smc-vp-tests/README.md`](sw/smc-vp-tests/README.md).
 
 ```bash
@@ -1033,7 +1033,7 @@ the OCAH hardware specification, plus the SMU that connects them.
 ### System Management Controller (SMC) — OCAH Ch. 6
 
 The **SMC** is the per-chiplet management engine: a small, firmware-driven
-RISC-V microcontroller cluster (1–4 Rocket / CVA6 RV64GC cores) that owns
+RISC-V microcontroller cluster (1–4 Rocket RV64GC cores) that owns
 chiplet bring-up and runtime management.
 
 | Function | Detail |
@@ -1088,7 +1088,7 @@ SMC is the trusted proxy through which the host interacts with the SEP.
 | Subsystem | What is provided |
 |-----------|------------------|
 | **SEP** | Full Virtual Platform (`sep-vp`) — all modeled SEP peripherals, VeeR EL2 firmware, pre-silicon DV |
-| **SMC** | SystemC TLM-2.0 IP library plus a full Virtual Platform (`smc-vp`) — fabric, peripherals, Whisper-backed CVA6 cluster, bare-metal RV64 firmware and Zephyr |
+| **SMC** | SystemC TLM-2.0 IP library plus a full Virtual Platform (`smc-vp`) — fabric, peripherals, Whisper-backed Rocket cluster, bare-metal RV64 firmware and Zephyr |
 | **SMU** | Combined platform (`smu-vp`) and dual-firmware tests that exercise the on-die link |
 | **AoU** | Standalone AXI-over-UCIe LT model used by `smc-vp` / `smu-vp` |
 
@@ -1403,7 +1403,7 @@ This repository includes a fork of
 under the MIT license; see [vp/LICENSE.riscv-vp-plusplus](vp/LICENSE.riscv-vp-plusplus).
 The SEP hart ISS is in-tree
 [VeeR-ISS](https://github.com/chipsalliance/VeeR-ISS) (Apache 2.0). The
-SMC CVA6 ISS is [Tenstorrent Whisper](https://github.com/tenstorrent/whisper)
+SMC Rocket ISS is [Tenstorrent Whisper](https://github.com/tenstorrent/whisper)
 (Apache 2.0), built from a separate checkout. Tenstorrent modifications
 and new models are Apache 2.0.
 

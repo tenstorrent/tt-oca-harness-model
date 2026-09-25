@@ -2,7 +2,7 @@
 
 Bare-metal RV64 firmware tests for the SMC Virtual Platform (`smc-vp`).
 Mirrors the shape of `sw/sep-vp-tests/` (which targets `sep-vp`), adapted for
-the SMC CVA6 CPU cluster.
+the SMC Rocket CPU cluster.
 
 This directory is the **system-test** entry point for the SMC platform: the
 firmware here runs on the full `smc-vp` (fabric + peripherals + CPU cluster).
@@ -23,7 +23,7 @@ to match your own install):
 | **RISC-V GNU toolchain** | `RISCV_PREFIX` | GCC 11+, RV64. Default prefix `riscv64-unknown-elf-`; on Homebrew use `riscv64-elf-`. Provides `gcc`, `objcopy`, `objdump`, `readelf`. |
 | **Accellera SystemC** | `SYSTEMC_HOME` | 3.0.2 built with **C++20** (`/path/to/systemc-3.0.2-cxx20`). The ABI is keyed to the C++ standard — consumers must also be C++20. |
 | **Accellera SystemC CCI** | `CCI_HOME` | CCI 1.0, C++20 (`/path/to/cci-cxx20`). Required for `cci_param` configuration. |
-| **Tenstorrent Whisper ISS** | `WHISPER_HOME` | The CVA6 instruction-set simulator. Must be built with `MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT="$BOOST_ROOT"` (Boost ≥ 1.74) and contain `build-<OS>/librvcore.a`. |
+| **Tenstorrent Whisper ISS** | `WHISPER_HOME` | RISC-V instruction-set simulator for the SMC Rocket cluster. Must be built with `MEM_CALLBACKS=1 CXX_STD=c++20 BOOST_ROOT="$BOOST_ROOT"` (Boost ≥ 1.74) and contain `build-<OS>/librvcore.a`. |
 | **Boost** | `BOOST_DIR` | ≥ 1.74, with `iostreams` and `program_options` (`/opt/homebrew/opt/boost` on macOS). Used by Whisper headers and `smc-vp`. |
 | **CMake** | — | ≥ 3.20. |
 | **Python 3** | — | Used by firmware/preload generators. |
@@ -106,7 +106,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 
 | Directory | Description |
 |-----------|-------------|
-| `smc-aou-test/` | Always-On Unit register smoke on `smc-vp` |
+| `smc-aou-test/` | AXI-over-UCIe (AoU) register smoke on `smc-vp` |
 | `smc-avsbus-test/` | AVSBus controller register smoke |
 | `smc-beu-test/` | BEU register smoke: ENABLE reset, PLIC/LOCAL enable masks, PHYS_ADDR RO, CAUSE re-arm, per-core windows |
 | `smc-beu-error-test/` | BEU error-injection + accrual + SW-ack + per-core isolation (own `.ini`) |
@@ -121,6 +121,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `smc-pvt-wrap-test/` | PVT wrapper process-clock, voltage droop, temperature status |
 | `smc-telemetry-test/` | Telemetry receiver STATUS/CTRL/INTR + optional ATB inject |
 | `smc-wdt-test/` | SiFive TLWDT stage-1 KEY/CMP/IP/FEED + stage-2 WDT_TIMEOUT / RESET |
+| `smc-hang-irq-test/` | Fabric AXI hang CSRs + PLIC source 287 (`irq_test` path) |
 
 ### Shared Support Code (`common/`)
 
@@ -135,7 +136,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 
 `smc-vp` (built from `vp/platform/smc/`) instantiates the full SMC
 platform — fabric, PLIC, CLINT, reset unit, boot ROM, scratchpad, cpu_ctrl,
-DMA, PVT wrapper, I3C, 3x I2C, 4x UART, and the Whisper-backed CVA6 cluster — and runs a
+DMA, PVT wrapper, I3C, 3x I2C, 4x UART, and the Whisper-backed Rocket cluster — and runs a
 bounded SystemC simulation:
 
 ```

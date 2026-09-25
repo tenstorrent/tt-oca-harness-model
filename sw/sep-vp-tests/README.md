@@ -45,6 +45,7 @@ BOOST_DIR=/opt/homebrew/opt/boost \
 | `opentitan-hmac-test/` | OpenTitan-compatible HMAC DIF test (SHA-256 + HMAC-SHA-256) |
 | `sep-crng-test/` | CSRNG peripheral test |
 | `sep-edn-test/` | EDN peripheral test |
+| `sep-entropy-pool-test/` | Entropy pool STATUS/DATA + PIC 37–39 via EDN endpoint 2 |
 | `sep-aon-timer-test/` | AON Timer peripheral test |
 | `sep-efuse-test/` | eFuse / OTP peripheral test |
 | `sep-mailbox-test/` | Mailbox peripheral test |

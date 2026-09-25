@@ -82,11 +82,11 @@ public:
     // SEP mailbox channels feeding peripheral_interrupts_o[7:0] (sep_pkg::NUM_MAILBOXES).
     static constexpr unsigned NUM_SEP_MAILBOX = 8;
     // Peripheral IRQ inputs: SEP mailbox[0..7], telemetry[0..2], i3c[0..5],
-    // uart[0..3], avsbus, i2c[0..2], and wdt[0..3]. AOU is deliberately absent:
+    // uart[0..3], avsbus, i2c[0..2], AXI hang, and wdt[0..3]. AOU is deliberately absent:
     // RTL does not assign it a peripheral_interrupts_o slot.
     static constexpr unsigned NUM_PERIPH_IRQ =
         NUM_SEP_MAILBOX + NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C
-        + NUM_HARTS;
+        + 1 + NUM_HARTS;
     // RTL packs peripheral_interrupts_i at cpu_interrupts_o[NUM_EXT_INTERRUPTS+:32]
     // and the PLIC's source ID is that bit index + 1, so peripheral bit b is
     // source 256 + b + 1 in the 4-core configuration.
@@ -388,6 +388,7 @@ public:
     sc_core::sc_vector<sc_core::sc_signal<bool>> beu_irq_plic{"beu_irq_plic", NUM_BEU};
     // AVSBus interrupt (peripheral bit 22) + unused GPIO-enable output sink.
     sc_core::sc_signal<bool> avsbus_irq{"avsbus_irq"};
+    sc_core::sc_signal<bool> axi_hang_irq{"axi_hang_irq"};
     sc_core::sc_signal<bool> avsbus_gpio_en{"avsbus_gpio_en"};
 // memory_zeroer completion IRQ (docs: internal interrupt 3). Bound to a
 // dummy sink for now; can later be routed into the PLIC/aggregator.

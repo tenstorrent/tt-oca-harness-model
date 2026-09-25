@@ -345,9 +345,16 @@ jobs:
           path: ${{ env.SYSTEMC_HOME }}
           key: systemc-${{ env.SYSTEMC_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}
 
+      - name: Restore CCI cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCI_HOME }}
+          key: cci-${{ env.CCI_VERSION }}-${{ runner.os }}-cxx${{ env.CXX_STD }}-libdir-lib
+
       - name: Run SMC Fabric tests
         env:
           SYSTEMC_HOME: ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:     ${{ env.CCI_HOME }}
         run: |
           smc/run_all_smc_tests.sh smc_fabric
 
