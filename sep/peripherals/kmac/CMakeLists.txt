@@ -202,11 +202,21 @@ if(BUILD_TESTS)
         # so the config never loaded and could not override the build verbosity.
         COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench
                 ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini
+        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench
+                ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini --unmasked
     )
   endif()
 
   enable_testing()
-  add_test(NAME kmac_testbench COMMAND kmac_testbench)
+  # Both builds of the DUT are registered: EnMasking is a const constructor
+  # argument, so the unmasked sideload path needs its own process and would
+  # otherwise be skipped by every ctest-driven phase.
+  add_test(NAME kmac_testbench
+           COMMAND kmac_testbench
+                   ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini)
+  add_test(NAME kmac_testbench_unmasked
+           COMMAND kmac_testbench
+                   ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini --unmasked)
 endif()
 
 # -----------------------------------------------------------------------------

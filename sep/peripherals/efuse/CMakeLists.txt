@@ -158,31 +158,34 @@ if(BUILD_TESTS)
   if(CCI_FOUND)
     target_link_libraries(efuse_test PRIVATE ${CCI_LIBRARIES})
   endif()
+  # Three runs of the same binary. secure_tm is a strap latched at reset and
+  # fuse_preload_file is consumed in end_of_elaboration, so neither mode can be
+  # entered from inside the default run — each needs its own process. The inis
+  # are checked in under config/ so run_tests.sh, ctest and the coverage target
+  # all drive identical configurations.
+  set(_efuse_cfg   "${CMAKE_CURRENT_SOURCE_DIR}/config")
+  set(_secure_ini  "${_efuse_cfg}/secure_tm.ini")
+  set(_image_ini   "${_efuse_cfg}/preload_image.ini")
+
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
-    # Match run_tests.sh: the default binary plus a second run with the
-    # secure_tm strap asserted. Coverage previously omitted that run, which
-    # left the strap-gated paths in src/efuse.cpp just under the 95% gate.
+    # Coverage previously omitted the strap and image runs, which left those
+    # paths in src/efuse.cpp just under the 95% gate.
     set(_efuse_exe "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/efuse_test")
-    set(_secure_ini "${CMAKE_BINARY_DIR}/accellera_config_secure_tm.ini")
-    file(WRITE "${_secure_ini}"
-"# Auto-generated: secure test mode strap asserted for coverage.
-[string]
-instance_prefix: testbench.efuse_dut
-chiplet_uid: [2684354560, 2684354561, 2684354562, 2684354563, 2684354564, 2684354565, 2684354566, 2684354567]
-[int]
-verbosity: 2
-[bool]
-secure_tm: true
-")
     peripheral_add_coverage_target(
       PRIMARY_TARGET efuse_test
       TEST_COMMANDS
         COMMAND "${_efuse_exe}"
-        COMMAND "${_efuse_exe}" "${_secure_ini}")
+        COMMAND "${_efuse_exe}" "${_secure_ini}"
+        COMMAND "${CMAKE_COMMAND}" -E env "SEP_VP_INI_DIR=${_efuse_cfg}"
+                "${_efuse_exe}" "${_image_ini}")
   endif()
 
   enable_testing()
   add_test(NAME efuse_test COMMAND efuse_test)
+  add_test(NAME efuse_test_secure_tm COMMAND efuse_test "${_secure_ini}")
+  add_test(NAME efuse_test_preload_image
+           COMMAND "${CMAKE_COMMAND}" -E env "SEP_VP_INI_DIR=${_efuse_cfg}"
+                   $<TARGET_FILE:efuse_test> "${_image_ini}")
 endif()
 
 # -----------------------------------------------------------------------------

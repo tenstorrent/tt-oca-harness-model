@@ -70,6 +70,12 @@ public:
     /// Apply a new input bundle and recompute FEAT_CTRL.
     void set_inputs(const lc_inputs &in);
 
+    /// The bundle end_of_elaboration() seeds from the CCI parameters. Exposed so a
+    /// standalone testbench that has clobbered the inputs can put the configured
+    /// ones back without re-deriving the mapping and drifting from this class.
+    /// Not const: regmodel::Param::get_param_value() is a non-const accessor.
+    lc_inputs inputs_from_params();
+
     /// True when the last LC_STATE code was not a legal differential pair. Mirrors
     /// `lc_sigint_err_o`; note that `security_disable` still overrides the vector it
     /// zeroes, exactly as it does in the RTL.

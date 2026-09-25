@@ -2,9 +2,12 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "efuse_basetest.h"
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <unistd.h>   // getpid(), for per-process scratch file names
 
 // Fuse-array word indices for the registers the .preload images below populate.
 // Derived from PeakRDL register offsets (LOCKS at 0x0, LOCKS_SPARE at 0x8, LC_STATE at 0xC = word 3)
@@ -26,6 +29,56 @@ constexpr unsigned int LC_STATE_BIT    = LC_STATE_WORD * 32u;
 constexpr unsigned int BL1_VERSION_BIT = word_of(sep_efuse::BL1_VERSION_OFFSET) * 32u;
 constexpr unsigned int CHIPLET_UID_BIT = word_of(sep_efuse::CHIPLET_UID_OFFSET) * 32u;
 constexpr unsigned int SPARE_TEST_BIT  = word_of(sep_efuse::SYS_PUBK_PQC_HASH_OFFSET) * 32u;
+
+// SHA-256 of a 256-bit all-zero token, as 8 little-endian words. Several images
+// below need the digest that the model computes for an erased token so that the
+// RMA transitions they drive actually match. One definition, so a change to the
+// reference cannot leave half the tests on the old value.
+constexpr uint32_t ZERO_TOKEN_DIGEST[TOKEN_WORDS] = {
+    0x0d5f2925u, 0x902a591du, 0x6ee233b3u, 0x08971485u,
+    0x8e9f8e20u, 0x6c8fc18bu, 0xf862bd77u, 0x66687aadu,
+};
+
+// Scratch .preload images are written per test rather than shipped as fixtures,
+// so the malformed cases can be constructed too. Each goes to a uniquely named
+// file under the platform temp directory and is deleted when the object leaves
+// scope, so a run leaves nothing behind and two concurrent runs — ctest -j, or
+// the three efuse invocations — cannot clobber each other's images.
+class scratch_file {
+public:
+    explicit scratch_file(const std::string &stem)
+        : m_path(std::filesystem::temp_directory_path() /
+                 (stem + "_" + std::to_string(static_cast<long>(::getpid())) +
+                  ".preload"))
+        , m_str(m_path.string())
+    {}
+
+    ~scratch_file()
+    {
+        std::error_code ec;
+        std::filesystem::remove(m_path, ec);
+    }
+
+    scratch_file(const scratch_file &) = delete;
+    scratch_file &operator=(const scratch_file &) = delete;
+
+    const std::string &path() const { return m_str; }
+
+    /// Open for writing. A silently unwritten image would make every assertion
+    /// that follows it vacuous, so an unusable temp directory stops the run.
+    std::ofstream open() const
+    {
+        std::ofstream out(m_path);
+        if (!out)
+            SC_REPORT_FATAL("efuse_tb",
+                            ("cannot create scratch image " + m_str).c_str());
+        return out;
+    }
+
+private:
+    std::filesystem::path m_path;
+    std::string           m_str;
+};
 }  // namespace
 
 // ============================================================================
@@ -467,9 +520,9 @@ void testbench::test_fuse_preload_file()
     // Written here rather than shipped as a fixture so the test is independent of
     // where it runs from, and so the malformed cases below can be constructed too.
     // Format is the RTL's: one ASCII bit per line, LSB first.
-    const std::string good = "/tmp/efuse_test_good.preload";
+    const scratch_file good("good");
     {
-        std::ofstream out(good);
+        std::ofstream out = good.open();
         for (unsigned int bit = 0; bit < 8192; bit++) {
             // Write 0xF0 into LC_STATE's low byte -- the differential encoding
             // of TEST_DEV that the RTL default image carries. The window is
@@ -479,7 +532,7 @@ void testbench::test_fuse_preload_file()
         }
     }
 
-    if (m_dut->preload_fuses_from_file(good))
+    if (m_dut->preload_fuses_from_file(good.path()))
         report_test_pass("preload image accepted");
     else
         report_test_fail("preload accept", "a well-formed image was rejected");
@@ -502,12 +555,12 @@ void testbench::test_fuse_preload_file()
 
     // A malformed image must be refused outright and leave the array as it was,
     // rather than committing a half-parsed load.
-    const std::string bad = "/tmp/efuse_test_bad.preload";
+    const scratch_file bad("bad");
     {
-        std::ofstream out(bad);
+        std::ofstream out = bad.open();
         out << "0\n1\n0\nX\n0\n";
     }
-    if (!m_dut->preload_fuses_from_file(bad))
+    if (!m_dut->preload_fuses_from_file(bad.path()))
         report_test_pass("malformed image refused");
     else
         report_test_fail("preload reject", "a bad character was accepted");
@@ -518,18 +571,20 @@ void testbench::test_fuse_preload_file()
     else
         report_test_fail("preload atomicity", "array changed, LC_STATE now 0x" + std::to_string(val));
 
-    if (!m_dut->preload_fuses_from_file("/tmp/efuse_no_such_file.preload"))
+    // Deliberately never created: scratch_file only names the path.
+    const scratch_file missing("no_such_file");
+    if (!m_dut->preload_fuses_from_file(missing.path()))
         report_test_pass("missing image refused");
     else
         report_test_fail("preload missing", "a nonexistent path was accepted");
 
     // Blank and whitespace-only lines are skipped rather than counted as bits.
-    const std::string spaced = "/tmp/efuse_test_spaced.preload";
+    const scratch_file spaced("spaced");
     {
-        std::ofstream out(spaced);
+        std::ofstream out = spaced.open();
         out << "1\n\n  \n1\n";   // two bits, at positions 0 and 1
     }
-    if (m_dut->preload_fuses_from_file(spaced))
+    if (m_dut->preload_fuses_from_file(spaced.path()))
         report_test_pass("whitespace-tolerant image accepted");
     else
         report_test_fail("preload whitespace", "blank lines were treated as an error");
@@ -604,13 +659,13 @@ void testbench::test_lock_enforcement()
     // software clear, and earlier tests have set bits in it. Sensing an all-zero array
     // reloads the lock flops along with everything else, which is the only way back to
     // an unlocked model short of a reset.
-    const std::string erased = "/tmp/efuse_test_erased.preload";
+    const scratch_file erased("erased");
     {
-        std::ofstream out(erased);
+        std::ofstream out = erased.open();
         for (unsigned int bit = 0; bit < 8192; bit++)
             out << "0\n";
     }
-    if (m_dut->preload_fuses_from_file(erased))
+    if (m_dut->preload_fuses_from_file(erased.path()))
         report_test_pass("erased image sensed: locks back to zero");
     else
         report_test_fail("lock test setup", "erased image was rejected");
@@ -754,27 +809,23 @@ void testbench::test_token_matching()
     // were wrong, the digest of the all-zero token would not be this value.
     //   66687aad f862bd77 6c8fc18b 8e9f8e20 08971485 6ee233b3 902a591d 0d5f2925
     // Word 0 is digest bits [31:0], so the words run opposite to that byte order.
-    const uint32_t zero_token_digest[8] = {
-        0x0d5f2925u, 0x902a591du, 0x6ee233b3u, 0x08971485u,
-        0x8e9f8e20u, 0x6c8fc18bu, 0xf862bd77u, 0x66687aadu,
-    };
 
     // The RMA SIP reference is a fuse field, so it is set the way hardware sets it:
     // through the array. RMA_SIP_TOKEN_DIGEST sits at shadow byte 0x24, i.e. array
     // word 9, i.e. bit 288.
-    const std::string image = "/tmp/efuse_test_token.preload";
+    const scratch_file image("token");
     {
-        std::ofstream out(image);
+        std::ofstream out = image.open();
         for (unsigned int bit = 0; bit < 8192; bit++) {
             const unsigned int word = bit / 32;
             bool set = false;
             if (word >= RMA_SIP_TOKEN_WORD0
                 && word < RMA_SIP_TOKEN_WORD0 + TOKEN_WORDS)
-                set = (zero_token_digest[word - RMA_SIP_TOKEN_WORD0] >> (bit % 32)) & 1u;
+                set = (ZERO_TOKEN_DIGEST[word - RMA_SIP_TOKEN_WORD0] >> (bit % 32)) & 1u;
             out << (set ? '1' : '0') << "\n";
         }
     }
-    if (m_dut->preload_fuses_from_file(image))
+    if (m_dut->preload_fuses_from_file(image.path()))
         report_test_pass("digest image sensed into RMA_SIP_TOKEN_DIGEST");
     else
         report_test_fail("token test setup", "digest image was rejected");
@@ -911,16 +962,12 @@ void testbench::test_lc_state_transitions()
 {
     report_test_start("Test 24: LC_STATE transition machine — token-gated path");
 
-    const uint32_t zero_token_digest[8] = {
-        0x0d5f2925u, 0x902a591du, 0x6ee233b3u, 0x08971485u,
-        0x8e9f8e20u, 0x6c8fc18bu, 0xf862bd77u, 0x66687aadu,
-    };
 
     // RMA_SIP_TOKEN_DIGEST is shadow byte 0x24 (words 9-16), RMA_CHIPLET_TOKEN_DIGEST
     // 0x44 (words 17-24), LC_STATE 0x0C (word 3), starting at TEST_DEV.
-    const std::string image = "/tmp/efuse_test_lc_walk.preload";
+    const scratch_file image("lc_walk");
     {
-        std::ofstream out(image);
+        std::ofstream out = image.open();
         for (unsigned int bit = 0; bit < 8192; bit++) {
             const unsigned int word = bit / 32;
             uint32_t word_val = 0;
@@ -928,14 +975,14 @@ void testbench::test_lc_state_transitions()
                 word_val = efuse_model::lc_state_encode(efuse_model::LC_RAW_TEST_DEV);
             else if (word >= RMA_SIP_TOKEN_WORD0
                      && word < RMA_SIP_TOKEN_WORD0 + TOKEN_WORDS)
-                word_val = zero_token_digest[word - RMA_SIP_TOKEN_WORD0];
+                word_val = ZERO_TOKEN_DIGEST[word - RMA_SIP_TOKEN_WORD0];
             else if (word >= RMA_CHIPLET_TOKEN_WORD0
                      && word < RMA_CHIPLET_TOKEN_WORD0 + TOKEN_WORDS)
-                word_val = zero_token_digest[word - RMA_CHIPLET_TOKEN_WORD0];
+                word_val = ZERO_TOKEN_DIGEST[word - RMA_CHIPLET_TOKEN_WORD0];
             out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
         }
     }
-    if (!m_dut->preload_fuses_from_file(image)) {
+    if (!m_dut->preload_fuses_from_file(image.path())) {
         report_test_fail("LC walk setup", "digest image was rejected");
         return;
     }
@@ -1055,14 +1102,10 @@ void testbench::test_transient_rma()
 {
     report_test_start("Test 26: TRANSIENT_RMA_EN — token-driven auto-transition");
 
-    const uint32_t zero_token_digest[8] = {
-        0x0d5f2925u, 0x902a591du, 0x6ee233b3u, 0x08971485u,
-        0x8e9f8e20u, 0x6c8fc18bu, 0xf862bd77u, 0x66687aadu,
-    };
 
     // TRANSIENT_RMA_EN is shadow byte 0x010, i.e. word 4.
-    auto write_image = [&](const std::string &path, bool transient) {
-        std::ofstream out(path);
+    auto write_image = [&](const scratch_file &file, bool transient) {
+        std::ofstream out = file.open();
         for (unsigned int bit = 0; bit < 8192; bit++) {
             const unsigned int word = bit / 32;
             uint32_t word_val = 0;
@@ -1072,10 +1115,10 @@ void testbench::test_transient_rma()
                 word_val = 0x1u;
             else if (word >= RMA_SIP_TOKEN_WORD0
                      && word < RMA_SIP_TOKEN_WORD0 + TOKEN_WORDS)
-                word_val = zero_token_digest[word - RMA_SIP_TOKEN_WORD0];
+                word_val = ZERO_TOKEN_DIGEST[word - RMA_SIP_TOKEN_WORD0];
             else if (word >= RMA_CHIPLET_TOKEN_WORD0
                      && word < RMA_CHIPLET_TOKEN_WORD0 + TOKEN_WORDS)
-                word_val = zero_token_digest[word - RMA_CHIPLET_TOKEN_WORD0];
+                word_val = ZERO_TOKEN_DIGEST[word - RMA_CHIPLET_TOKEN_WORD0];
             out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
         }
     };
@@ -1111,12 +1154,12 @@ void testbench::test_transient_rma()
     wait(1, SC_NS);
 
     // Without the fuse, a match authorises a transition but does not perform one.
-    const std::string off_image = "/tmp/efuse_test_transient_off.preload";
-    const std::string on_image  = "/tmp/efuse_test_transient_on.preload";
+    const scratch_file off_image("transient_off");
+    const scratch_file on_image("transient_on");
     write_image(off_image, false);
     write_image(on_image,  true);
 
-    if (!m_dut->preload_fuses_from_file(off_image)) {
+    if (!m_dut->preload_fuses_from_file(off_image.path())) {
         report_test_fail("transient RMA setup", "image was rejected");
         return;
     }
@@ -1124,7 +1167,7 @@ void testbench::test_transient_rma()
     match_token(1u << 0);
     check(efuse_model::LC_RAW_TEST_DEV, "no transient fuse: SiP match leaves LC_STATE alone");
 
-    if (!m_dut->preload_fuses_from_file(on_image)) {
+    if (!m_dut->preload_fuses_from_file(on_image.path())) {
         report_test_fail("transient RMA setup", "image was rejected");
         return;
     }
@@ -1158,7 +1201,7 @@ void testbench::test_transient_rma()
     // chiplet match is still latched from above, so a fresh image at TEST_DEV is stuck:
     // clearing the chiplet match is the only way out, which is worth pinning down since
     // an if/else chain written the obvious way would quietly do the SiP transition.
-    if (!m_dut->preload_fuses_from_file(on_image)) {
+    if (!m_dut->preload_fuses_from_file(on_image.path())) {
         report_test_fail("transient RMA setup", "image was rejected");
         return;
     }
@@ -1190,9 +1233,19 @@ void testbench::test_consumer_accessors()
     else
         report_test_fail("get_sys_dis()", "mismatch with shadow registers");
 
-    (void)m_dut->get_security_disable();
-    (void)m_dut->get_secure_tm();
-    report_test_pass("get_security_disable / get_secure_tm readable");
+    uint32_t sec_match = 0;
+    m_test->register_read_32(sep_efuse::SEC_DISABLE_TOKEN_MATCH_OFFSET, sec_match);
+    const bool sec_want = m_dut->sec_disable_rev_enable.get_param_value()
+                          && sec_match == efuse_model::TOKEN_MATCH;
+    if (m_dut->get_security_disable() == sec_want && !sec_want)
+        report_test_pass("get_security_disable() is false without a token match");
+    else
+        report_test_fail("get_security_disable()",
+                         "expected false while SEC_DISABLE_TOKEN_MATCH is 0x" + hex32(sec_match));
+    if (!m_dut->get_secure_tm())
+        report_test_pass("get_secure_tm() is false in the default run");
+    else
+        report_test_fail("get_secure_tm()", "default run observed the strap asserted");
 
     bool saw_cb = false;
     m_dut->set_shadow_change_callback([&]{ saw_cb = true; });
@@ -1205,9 +1258,9 @@ void testbench::test_consumer_accessors()
     m_dut->set_shadow_change_callback(nullptr);
 
     // Sense PROD so the demote pin can freeze a state the walk above left in RMA.
-    const std::string prod_img = "/tmp/efuse_test_prod_dbg.preload";
+    const scratch_file prod_img("prod_dbg");
     {
-        std::ofstream out(prod_img);
+        std::ofstream out = prod_img.open();
         for (unsigned int bit = 0; bit < 8192; bit++) {
             const unsigned int word = bit / 32;
             uint32_t word_val = 0;
@@ -1216,7 +1269,7 @@ void testbench::test_consumer_accessors()
             out << ((word_val >> (bit % 32)) & 1u ? '1' : '0') << "\n";
         }
     }
-    if (!m_dut->preload_fuses_from_file(prod_img)) {
+    if (!m_dut->preload_fuses_from_file(prod_img.path())) {
         report_test_fail("prod_dbg setup", "PROD image was rejected");
         return;
     }
@@ -1234,6 +1287,377 @@ void testbench::test_consumer_accessors()
     else
         report_test_fail("prod_dbg freeze", "expected 0x" + hex32(before) +
             " got 0x" + hex32(after));
+}
+
+void testbench::test_image_overrides_params()
+{
+    report_test_start("Test: elaboration image replaces per-field parameters");
+
+    // The companion ini sets lc_state raw 0 (encoded 0xF0) and status_rpt 7.
+    // The image carries PROD (0xE1) and status 0x11. An OR of the two would be
+    // neither of those pairs.
+    uint32_t lc = 0, status = 0;
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc);
+    m_test->register_read_32(sep_efuse::STATUS_RPT_OFFSET, status);
+    if (lc == 0xE1u && status == 0x11u)
+        report_test_pass("image LC_STATE=0xE1 and STATUS_RPT=0x11; parameters were not applied");
+    else
+        report_test_fail("elaboration image",
+                         "expected LC_STATE 0xE1 and STATUS_RPT 0x11, got 0x"
+                         + hex32(lc) + " and 0x" + hex32(status));
+}
+
+void testbench::test_preload_parser_and_lock_banks()
+{
+    report_test_start("Test 28: hex preload, relative path, and LOCKS_HI/SPARE");
+
+    // This case flips two pieces of DUT state that outlive it, and it bails out
+    // early on a setup failure in several places. Restore both on the way out so
+    // a failure here cannot cascade into whatever runs next.
+    struct dut_state_guard {
+        efuse_model *dut;
+        ~dut_state_guard()
+        {
+            dut->set_prod_dbg_active(false);
+            dut->sec_disable_rev_enable.Set_param(
+                dut->sec_disable_rev_enable.get_Name(), true);
+        }
+    } restore{m_dut.get()};
+
+    uint32_t val = 0;
+    const uint32_t enable_prog = (1u << 27) | (1u << 16);
+    const uint32_t enable_read = (1u << 28);
+    auto program = [&](uint32_t bit, bool read_back) {
+        m_test->register_write_32(sep_efuse::EFUSE_INTERFACE_CTRL_STATUS_OFFSET,
+                                  (1u << 8) | (1u << 9) | (1u << 10));
+        wait(1, SC_NS);
+        uint32_t cmd = enable_prog | (1u << 17) | bit;
+        if (read_back)
+            cmd |= (1u << 18);
+        m_test->register_write_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, cmd);
+        wait(1, SC_NS);
+    };
+    auto otp_read = [&](uint32_t bit, uint32_t &data) {
+        m_test->register_write_32(sep_efuse::EFUSE_READ_CTRL_OFFSET,
+                                  enable_read | (1u << 16) | bit);
+        wait(1, SC_NS);
+        m_test->register_read_32(sep_efuse::EFUSE_READ_INTERFACE_RD_DATA_OFFSET, data);
+    };
+
+    const scratch_file hex_img("hex");
+    {
+        std::ofstream out = hex_img.open();
+        // Word 0 stays 0 so the image does not burn a read-lock. @3 and @4
+        // place the two markers; @100 is the first word past the 256-word array.
+        out << "// header comment\n";
+        out << "@0\n";
+        out << "00000000\n";
+        out << "@3\n";
+        out << "A5A5A5A5 // LC_STATE word\n";
+        out << "@4\n";
+        out << "DEADBEEF\n";
+        out << "@100\n";
+        out << "FFFFFFFF\n";
+    }
+    if (!m_dut->preload_fuses_from_file(hex_img.path())) {
+        report_test_fail("hex preload", "well-formed $readmemh image was rejected");
+        return;
+    }
+    m_test->register_read_32(sep_efuse::LOCKS_LO_OFFSET, val);
+    uint32_t lc = 0, marker = 0, past = 0xFFFFFFFFu;
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc);
+    m_test->register_read_32(sep_efuse::SBOOT_DIS_OFFSET, marker);
+    // Word 256 is outside the array and cannot be read back, so what is checked
+    // is that the loader neither failed nor clamped it into the last real word:
+    // the image leaves word 255 untouched, so it must still read as zero.
+    otp_read((efuse_model::NUM_FUSE_WORDS - 1u) * 32u, past);
+    if (val == 0u && lc == 0xA5A5A5A5u && marker == 0xDEADBEEFu && past == 0u)
+        report_test_pass("hex image: @origin placed the words, one past the array "
+                         "was dropped rather than clamped");
+    else
+        report_test_fail("hex image",
+                         "LOCKS_LO 0x" + hex32(val) + " LC_STATE 0x" + hex32(lc)
+                         + " SBOOT_DIS 0x" + hex32(marker) + " last word 0x" + hex32(past));
+
+    const scratch_file bad_hex("bad_hex");
+    {
+        std::ofstream out = bad_hex.open();
+        out << "BEEF\nZZZZ\n";
+    }
+    if (m_dut->preload_fuses_from_file(bad_hex.path()))
+        report_test_fail("bad hex token", "ZZZZ was accepted as a word");
+    else
+        report_test_pass("bad hex token refused");
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc);
+    if (lc == 0xA5A5A5A5u)
+        report_test_pass("refused hex image left the array untouched");
+    else
+        report_test_fail("hex atomicity", "LC_STATE became 0x" + hex32(lc));
+
+    const scratch_file long_bits("long_bits");
+    {
+        std::ofstream out = long_bits.open();
+        for (unsigned int bit = 0; bit < efuse_model::NUM_FUSE_BITS; bit++) {
+            const bool set = (bit >= LC_STATE_BIT + 4u && bit <= LC_STATE_BIT + 7u);
+            out << (set ? '1' : '0') << "\n";
+        }
+        out << "X\n";
+    }
+    if (!m_dut->preload_fuses_from_file(long_bits.path()))
+        report_test_fail("long bit image", "a bit past 8192 was parsed instead of truncated");
+    else {
+        m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc);
+        if (lc == 0xF0u)
+            report_test_pass("bit image longer than 8192 is truncated and still accepted");
+        else
+            report_test_fail("long bit image", "expected LC_STATE 0xF0 got 0x" + hex32(lc));
+    }
+
+    // A relative fuse_preload_file resolves against SEP_VP_INI_DIR. The directory
+    // is per-process for the same reason the scratch images are, and both it and
+    // the environment variable are put back on every exit path.
+    const std::filesystem::path ini_dir =
+        std::filesystem::temp_directory_path() /
+        ("efuse_ini_dir_" + std::to_string(static_cast<long>(::getpid())));
+    std::filesystem::create_directories(ini_dir);
+    {
+        std::ofstream out(ini_dir / "rel.preload");
+        if (!out)
+            SC_REPORT_FATAL("efuse_tb", "cannot create the SEP_VP_INI_DIR fixture");
+        out << "@3\nA5A5A5A5\n";
+    }
+
+    struct ini_dir_guard {
+        std::filesystem::path dir;
+        bool                  had_var;   // setenv may invalidate getenv's pointer,
+        std::string           saved;     // so keep a copy, not the pointer.
+        ~ini_dir_guard()
+        {
+            if (had_var)
+                setenv("SEP_VP_INI_DIR", saved.c_str(), 1);
+            else
+                unsetenv("SEP_VP_INI_DIR");
+            std::error_code ec;
+            std::filesystem::remove_all(dir, ec);
+        }
+    };
+    const char *prev_ini = std::getenv("SEP_VP_INI_DIR");
+    const ini_dir_guard guard{ini_dir, prev_ini != nullptr,
+                              prev_ini ? prev_ini : ""};
+
+    setenv("SEP_VP_INI_DIR", ini_dir.c_str(), 1);
+    const bool rel_ok = m_dut->preload_fuses_from_file("rel.preload");
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc);
+    if (rel_ok && lc == 0xA5A5A5A5u)
+        report_test_pass("relative preload resolved under SEP_VP_INI_DIR");
+    else
+        report_test_fail("SEP_VP_INI_DIR", "relative image did not load, LC_STATE 0x" + hex32(lc));
+
+    const scratch_file erased("lock_banks");
+    {
+        std::ofstream out = erased.open();
+        for (unsigned int bit = 0; bit < efuse_model::NUM_FUSE_BITS; bit++)
+            out << "0\n";
+    }
+    if (!m_dut->preload_fuses_from_file(erased.path())) {
+        report_test_fail("lock-bank setup", "erased image was rejected");
+        return;
+    }
+
+    program(0u, true);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    uint32_t rb = 0;
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_INTERFACE_RD_DATA_OFFSET, rb);
+    if ((val & (1u << 25)) && !(val & (1u << 26)) && rb == 0x1u)
+        report_test_pass("word 0 is not lockable: program of bit 0 completes");
+    else
+        report_test_fail("unlocked word 0",
+                         "ctrl 0x" + hex32(val) + " readback 0x" + hex32(rb));
+
+    m_test->register_write_32(sep_efuse::SIP_DIS_LO_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::SIP_DIS_HI_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::SYS_DIS_LO_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::SYS_DIS_HI_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, 0x1);
+    m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x1);
+    wait(1, SC_NS);
+
+    // LC_STATE bit 0, SiP bit 6, SYS bit 8, revoke bit 16, BL2 bit 20.
+    m_test->register_write_32(sep_efuse::LOCKS_LO_OFFSET,
+                              (1u << 0) | (1u << 6) | (1u << 8) | (1u << 16) | (1u << 20));
+    wait(1, SC_NS);
+
+    bool saw_cb = false;
+    m_dut->set_shadow_change_callback([&]{ saw_cb = true; });
+    (void)take_locked_field_pulses();
+    m_test->register_write_32(sep_efuse::SIP_DIS_LO_OFFSET, 0x2);
+    m_test->register_write_32(sep_efuse::SIP_DIS_HI_OFFSET, 0x2);
+    m_test->register_write_32(sep_efuse::SYS_DIS_LO_OFFSET, 0x2);
+    m_test->register_write_32(sep_efuse::SYS_DIS_HI_OFFSET, 0x2);
+    m_test->register_write_32(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, 0x2);
+    m_test->register_write_32(sep_efuse::BL2_VERSION_OFFSET, 0x2);
+    m_test->register_write_32(sep_efuse::LC_STATE_OFFSET, efuse_model::LC_RAW_PROD);
+    wait(1, SC_NS);
+    m_dut->set_shadow_change_callback(nullptr);
+
+    auto stayed = [&](unsigned int off, uint32_t expect, const char *what) {
+        uint32_t got = 0;
+        m_test->register_read_32(off, got);
+        if (got == expect)
+            report_test_pass(std::string(what) + " write dropped while locked");
+        else
+            report_test_fail(what, "expected 0x" + hex32(expect) + " got 0x" + hex32(got));
+    };
+    stayed(sep_efuse::SIP_DIS_LO_OFFSET, 0x1u, "SIP_DIS_LO");
+    stayed(sep_efuse::SIP_DIS_HI_OFFSET, 0x1u, "SIP_DIS_HI");
+    stayed(sep_efuse::SYS_DIS_LO_OFFSET, 0x1u, "SYS_DIS_LO");
+    stayed(sep_efuse::SYS_DIS_HI_OFFSET, 0x1u, "SYS_DIS_HI");
+    stayed(sep_efuse::CHIPLET_PUBK_REVOKE_OFFSET, 0x1u, "CHIPLET_PUBK_REVOKE");
+    stayed(sep_efuse::BL2_VERSION_OFFSET, 0x1u, "BL2_VERSION");
+    stayed(sep_efuse::LC_STATE_OFFSET, 0x0u, "LC_STATE");
+    if (!saw_cb)
+        report_test_pass("shadow-change callback stays quiet on a refused write");
+    else
+        report_test_fail("refused-write callback", "callback ran for a dropped write");
+    if (take_locked_field_pulses() >= 1u)
+        report_test_pass("locked shadow writes raise locked_field_access_irq");
+    else
+        report_test_fail("lock irq", "no pulse was counted");
+
+    const uint32_t status_bit = word_of(sep_efuse::STATUS_RPT_OFFSET) * 32u;
+    const uint32_t spare_bit  = word_of(sep_efuse::SPARE0_OFFSET) * 32u;
+
+    program(status_bit, true);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_INTERFACE_RD_DATA_OFFSET, rb);
+    m_test->register_write_32(sep_efuse::LOCKS_HI_OFFSET, 0x1u);
+    wait(1, SC_NS);
+    program(status_bit + 1u, true);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    uint32_t status_word = 0;
+    otp_read(status_bit, status_word);
+    if ((val & (1u << 25)) && (val & (1u << 26)) && rb == 0x1u && status_word == 0x1u)
+        report_test_pass("LOCKS_HI write-lock refuses a STATUS_RPT program and burns nothing");
+    else
+        report_test_fail("LOCKS_HI program gate",
+                         "ctrl 0x" + hex32(val) + " first 0x" + hex32(rb)
+                         + " word 0x" + hex32(status_word));
+
+    m_test->register_write_32(sep_efuse::LOCKS_HI_OFFSET, 0x2u);
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::STATUS_RPT_OFFSET, val);
+    if (val == 0xBADCAB1Eu)
+        report_test_pass("LOCKS_HI read-lock returns the sentinel for STATUS_RPT");
+    else
+        report_test_fail("LOCKS_HI read gate", "expected 0xBADCAB1E got 0x" + hex32(val));
+
+    program(spare_bit, true);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_INTERFACE_RD_DATA_OFFSET, rb);
+    m_test->register_write_32(sep_efuse::LOCKS_SPARE_OFFSET, 0x1u);
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::LOCKS_SPARE_OFFSET, val);
+    m_test->register_write_32(sep_efuse::LOCKS_SPARE_OFFSET, 0x0u);
+    wait(1, SC_NS);
+    uint32_t spare_locks = 0;
+    m_test->register_read_32(sep_efuse::LOCKS_SPARE_OFFSET, spare_locks);
+    program(spare_bit + 1u, true);
+    m_test->register_read_32(sep_efuse::EFUSE_PROGRAM_CTRL_OFFSET, val);
+    uint32_t spare_word = 0;
+    otp_read(spare_bit, spare_word);
+    if (spare_locks == 0x1u && (val & (1u << 25)) && (val & (1u << 26))
+        && rb == 0x1u && spare_word == 0x1u)
+        report_test_pass("LOCKS_SPARE is WOSET and its write-lock burns nothing");
+    else
+        report_test_fail("LOCKS_SPARE",
+                         "locks 0x" + hex32(spare_locks) + " ctrl 0x" + hex32(val)
+                         + " word 0x" + hex32(spare_word));
+
+    m_test->register_write_32(sep_efuse::LOCKS_SPARE_OFFSET, 0x2u);
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::SPARE0_OFFSET, val);
+    uint32_t spare1 = 0;
+    m_test->register_read_32(sep_efuse::SPARE1_OFFSET, spare1);
+    if (val == 0xBADCAB1Eu && spare1 == 0u)
+        report_test_pass("LOCKS_SPARE read-lock denies SPARE0 and leaves SPARE1 alone");
+    else
+        report_test_fail("LOCKS_SPARE read gate",
+                         "SPARE0 0x" + hex32(val) + " SPARE1 0x" + hex32(spare1));
+
+    const scratch_file prod_img("prod_dbg_transient");
+    {
+        std::ofstream out = prod_img.open();
+        for (unsigned int bit = 0; bit < efuse_model::NUM_FUSE_BITS; bit++) {
+            const unsigned int word = bit / 32u;
+            uint32_t word_val = 0;
+            if (word == LC_STATE_WORD)
+                word_val = efuse_model::lc_state_encode(efuse_model::LC_RAW_PROD);
+            else if (word == TRANSIENT_RMA_EN_WORD)
+                word_val = 0x1u;
+            else if (word >= RMA_SIP_TOKEN_WORD0 && word < RMA_SIP_TOKEN_WORD0 + TOKEN_WORDS)
+                word_val = ZERO_TOKEN_DIGEST[word - RMA_SIP_TOKEN_WORD0];
+            out << ((word_val >> (bit % 32u)) & 1u ? '1' : '0') << "\n";
+        }
+    }
+    if (!m_dut->preload_fuses_from_file(prod_img.path())) {
+        report_test_fail("prod_dbg transient setup", "image was rejected");
+        return;
+    }
+    for (int i = 0; i < 8; i++)
+        m_test->register_write_32(sep_efuse::RMA_SIP_TOKEN_I_OFFSET + i * 4, 0u);
+    wait(1, SC_NS);
+    m_dut->set_prod_dbg_active(true);
+    // Bit 8 forces the chiplet result to mismatch (its digest is zero, and no
+    // SHA-256 digest is zero) so a match latched by an earlier test cannot
+    // take the chiplet branch and hide the SiP advance.
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x1u | (1u << 8));
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc);
+    uint32_t sip_match = 0;
+    m_test->register_read_32(sep_efuse::RMA_SIP_TOKEN_MATCH_OFFSET, sip_match);
+    const uint32_t prod_code = efuse_model::lc_state_encode(efuse_model::LC_RAW_PROD);
+    if (lc == prod_code && sip_match == efuse_model::TOKEN_MATCH)
+        report_test_pass("demoted PROD does not advance on a transient SiP match");
+    else
+        report_test_fail("prod_dbg transient",
+                         "LC_STATE 0x" + hex32(lc) + " SiP match 0x" + hex32(sip_match));
+
+    m_dut->set_prod_dbg_active(false);
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 0x1u | (1u << 8));
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::LC_STATE_OFFSET, lc);
+    const uint32_t advanced = efuse_model::lc_state_encode(efuse_model::LC_RAW_RMA_SIP_1);
+    if (lc == advanced)
+        report_test_pass("the same SiP match advances PROD once prod_dbg is clear");
+    else
+        report_test_fail("prod transient advance",
+                         "expected 0x" + hex32(advanced) + " got 0x" + hex32(lc));
+
+
+    for (int i = 0; i < 8; i++)
+        m_test->register_write_32(sep_efuse::SEC_DISABLE_TOKEN_I_OFFSET + i * 4, 0u);
+    wait(1, SC_NS);
+    m_dut->sec_disable_token_digest.Set_param(
+        m_dut->sec_disable_token_digest.get_Name(),
+        std::vector<uint32_t>(ZERO_TOKEN_DIGEST, ZERO_TOKEN_DIGEST + 8));
+    m_test->register_write_32(sep_efuse::TOKEN_EOP_OFFSET, 1u << 16);
+    wait(1, SC_NS);
+    m_test->register_read_32(sep_efuse::SEC_DISABLE_TOKEN_MATCH_OFFSET, val);
+    if (val == efuse_model::TOKEN_MATCH && m_dut->get_security_disable())
+        report_test_pass("matching security-disable digest with revision enabled");
+    else
+        report_test_fail("security disable match",
+                         "match 0x" + hex32(val) + " accessor "
+                         + (m_dut->get_security_disable() ? "true" : "false"));
+
+    m_dut->sec_disable_rev_enable.Set_param(
+        m_dut->sec_disable_rev_enable.get_Name(), false);
+    m_test->register_read_32(sep_efuse::SEC_DISABLE_TOKEN_MATCH_OFFSET, val);
+    if (val == efuse_model::TOKEN_MATCH && !m_dut->get_security_disable())
+        report_test_pass("revision disable clears get_security_disable() while the match stands");
+    else
+        report_test_fail("security disable revision",
+                         "match 0x" + hex32(val) + " accessor "
+                         + (m_dut->get_security_disable() ? "true" : "false"));
+    // sec_disable_rev_enable and prod_dbg_active are restored by dut_state_guard.
 }
 
 void testbench::run_coverage_tests()
@@ -1260,4 +1684,5 @@ void testbench::run_coverage_tests()
     test_lc_state_transitions();
     test_transient_rma();
     test_consumer_accessors();
+    test_preload_parser_and_lock_banks();
 }

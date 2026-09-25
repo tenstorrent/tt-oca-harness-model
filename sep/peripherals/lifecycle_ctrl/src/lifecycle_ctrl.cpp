@@ -45,19 +45,25 @@ lifecycle_ctrl_model::lifecycle_ctrl_model(sc_module_name n, int log_verbosity)
     );
 }
 
+lifecycle_ctrl_model::lc_inputs lifecycle_ctrl_model::inputs_from_params()
+{
+    lc_inputs in;
+    in.lc_state_code    = lc_state_encode(lc_state.get_param_value());
+    in.sip_dis          = (static_cast<uint64_t>(sip_dis_hi.get_param_value()) << 32)
+                        |  sip_dis_lo.get_param_value();
+    in.sys_dis          = (static_cast<uint64_t>(sys_dis_hi.get_param_value()) << 32)
+                        |  sys_dis_lo.get_param_value();
+    in.security_disable = security_disable.get_param_value();
+    in.secure_tm        = secure_tm.get_param_value();
+    return in;
+}
+
 void lifecycle_ctrl_model::end_of_elaboration()
 {
     // Seed the input bundle from the parameters. On a platform the eFuse model overrides
     // it via set_inputs() before simulation starts, because the shadow registers are the
     // real source; the parameters are what a standalone testbench configures.
-    m_in.lc_state_code    = lc_state_encode(lc_state.get_param_value());
-    m_in.sip_dis          = (static_cast<uint64_t>(sip_dis_hi.get_param_value()) << 32)
-                          |  sip_dis_lo.get_param_value();
-    m_in.sys_dis          = (static_cast<uint64_t>(sys_dis_hi.get_param_value()) << 32)
-                          |  sys_dis_lo.get_param_value();
-    m_in.security_disable = security_disable.get_param_value();
-    m_in.secure_tm        = secure_tm.get_param_value();
-    compute_feat_ctrl();
+    set_inputs(inputs_from_params());
 }
 
 void lifecycle_ctrl_model::set_inputs(const lc_inputs &in)

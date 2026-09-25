@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[aon-timer-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`aon_timer_testbench` (`test/inc/testbench.h`) is a TLM
+initiator into `target_socket`, with `sc_signal` ties for both
+clocks, both resets, sleep, escalation, and every output pin.
+`clk_aon_freq` is 200 kHz.
+
+Success: every `TC_AON_*` check in `test/src/testbench.cpp`
+passes; `--asan` produces no `asan.log.*`; line coverage on the
+touched model sources meets the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/aon_timer`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --docs
+./run_tests.sh --cppcheck
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean aon_timer
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in
+`vp/configure_vp.sh` or export them first.
+
+====== Standalone cases
+
+Source: `test/src/testbench.cpp`. Names are the `TC_AON_*`
+titles. The suite is large; rows below group it.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|BIND/RST/RW/RO |Elaboration smoke |Socket bind, reset values, RW/WO |Positive
+|001–009 |Register access |W1C, RW0C, REGWEN, reserved, CDC read-back |Mixed
+|010–016, 023, 037–040, 048, 052, 055–060 |Wakeup engine |Prescaler, 64-bit race, wrap, independence |Mixed
+|017–022, 048b–053, 059 |Watchdog engine |Bark, bite, pet, pause-in-sleep |Mixed
+|013–014, 024–028, 054, 057 |Interrupts |INTR_TEST, W1C, NMI copy, WKUP_CAUSE split |Mixed
+|029–031 |Power manager |Sticky `wkup_req`, independent bite |Positive
+|032–036 |Lock / RACL / alert |REGWEN gate, `EnableRacl=0`, ALERT_TEST |Mixed
+|041–043 |Dual reset |SYS full vs AON partial; bite self-clear |Positive
+|044–047 |Escalation |Both timers freeze; MMIO still works |Positive
+|EDGE_01 |Zero AON clock |Both timers hold at 0 Hz and resume on restore, without a CTRL rewrite |Mixed
+|===
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build
+the VP first (`make sep-vp` from the repo root after
+`vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh wdt_sanity_test
+./run_test.sh wdt_intr_test
+./run_test.sh wdt_cfg_lock_test
+./run_test.sh wdt_pet_reset_test
+./run_test.sh wdt_wkup_timer_test
+./run_test.sh wdt_pause_sleep_test
+./run_test.sh wdt_bark_bite_order_test
+./run_all_tests.sh            # full firmware suite, includes the above
+----
+
+`wdt_lc_escalate_test` notes that silicon ties
+`lc_escalate_en_i` off in the wrapper; the standalone bench is
+what exercises the pin.

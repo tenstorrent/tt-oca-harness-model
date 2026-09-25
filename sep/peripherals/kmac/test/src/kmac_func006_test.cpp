@@ -51,6 +51,8 @@
 #include <cstring>
 #include <openssl/evp.h>
 
+using kmac_ref::compute_kmac_reference;
+
 // Logger for test output
 static RegLogger test_logger;
 
@@ -929,5 +931,115 @@ void testbench::test_key_sideload_back_to_back_operations()
     } catch (const std::exception& e) {
         REG_ERROR(1, test_logger) << "Test exception: " << e.what();
         report_test_fail("Additional", "Exception occurred");
+    }
+}
+
+/**
+ * Runs only on a DUT constructed with EnMasking=false. The sideloaded key is
+ * the XOR of the two KeyMgr shares, and STATE share1 is zero.
+ */
+void testbench::test_sideload_unmasked_kmac()
+{
+    test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
+    report_test_start("TC-UNMASKED: sideload key with EnMasking=0");
+
+    if (dut->EnMasking) {
+        report_test_fail("TC-UNMASKED", "DUT was constructed with EnMasking=1");
+        return;
+    }
+
+    try {
+        const char* test_msg = "unmasked sideload";
+        const size_t msg_len = strlen(test_msg);
+
+        // Sideload is fixed at Key256. The upper half stays zero so the XOR key
+        // the model absorbs is 32 bytes, not the 16 bytes written below.
+        uint32_t keymgr_share0[8] = {0xA0A1A2A3, 0xA4A5A6A7, 0xA8A9AAAB, 0xACADAEAF,
+                                     0, 0, 0, 0};
+        uint32_t keymgr_share1[8] = {0x01020304, 0x05060708, 0x090A0B0C, 0x0D0E0F10,
+                                     0, 0, 0, 0};
+        uint8_t unmasked_key[32];
+        for (size_t i = 0; i < 32; i++) {
+            const size_t word = i / 4;
+            const size_t byte = i % 4;
+            const uint8_t s0 = static_cast<uint8_t>((keymgr_share0[word] >> (byte * 8)) & 0xFF);
+            const uint8_t s1 = static_cast<uint8_t>((keymgr_share1[word] >> (byte * 8)) & 0xFF);
+            unmasked_key[i] = static_cast<uint8_t>(s0 ^ s1);
+        }
+
+        uint8_t expected[32];
+        if (!compute_kmac_reference(unmasked_key, 32, nullptr, 0,
+                                    reinterpret_cast<const uint8_t*>(test_msg), msg_len,
+                                    256, expected, 32, false)) {
+            report_test_fail("TC-UNMASKED", "KMAC reference computation failed");
+            return;
+        }
+
+        test->set_keymgr_key(keymgr_share0, keymgr_share1, 32);
+
+        // Software key registers must be ignored while sideload is selected.
+        const uint32_t dummy_key[4] = {0xDEADBEEF, 0xCAFEBABE, 0xFEEDFACE, 0xBADDCAFE};
+        for (size_t i = 0; i < 4; i++) {
+            test->register_write_32(test->KEY_SHARE0_OFFSET + i * 4, dummy_key[i]);
+            wait(2, SC_NS);
+        }
+
+        configure_kmac_with_sideload(test, 0x0, true, false);
+        write_minimal_kmac_prefix(test);
+
+        // Byte writes so a short message is not zero-padded to a word, and so
+        // right_encode(256) is the three NIST bytes 0x01 0x00 0x02.
+        test->register_write_32(test->CMD_OFFSET, 0x1D);
+        wait(10, SC_NS);
+        for (size_t i = 0; i < msg_len; i++) {
+            test->register_write_8(test->MSG_FIFO_OFFSET, static_cast<uint8_t>(test_msg[i]));
+            wait(1, SC_NS);
+        }
+        const uint8_t right_enc[3] = {0x01, 0x00, 0x02};
+        for (uint8_t b : right_enc) {
+            test->register_write_8(test->MSG_FIFO_OFFSET, b);
+            wait(1, SC_NS);
+        }
+        test->register_write_32(test->CMD_OFFSET, 0x2E);
+        wait(10, SC_NS);
+
+        uint32_t err_code = 0;
+        test->register_read_32(test->ERR_CODE_OFFSET, err_code);
+        uint32_t status_val = 0;
+        test->register_read_32(test->STATUS_OFFSET, status_val);
+        if (err_code != 0 || (status_val & 0x4) == 0) {
+            cleanup_test(test);
+            report_test_fail("TC-UNMASKED", "KMAC operation failed");
+            return;
+        }
+
+        uint8_t digest[32];
+        read_digest_from_state(test, digest, 32);
+        if (std::memcmp(digest, expected, 32) != 0) {
+            cleanup_test(test);
+            report_test_fail("TC-UNMASKED", "Digest does not match KMAC of the XOR'd sideload key");
+            return;
+        }
+
+        // With EnMasking=0 the model must not split the digest, so the whole
+        // share1 half of the STATE window reads back as zero, not just word 0.
+        // share1 starts one 256-byte half-window after share0.
+        const unsigned int STATE_SHARE1_OFFSET = test->STATE_OFFSET + 0x100;
+        for (unsigned int w = 0; w < 8; w++) {
+            uint32_t share1_word = 0xFFFFFFFFu;
+            test->register_read_32(STATE_SHARE1_OFFSET + w * 4, share1_word);
+            if (share1_word != 0) {
+                cleanup_test(test);
+                report_test_fail("TC-UNMASKED",
+                                 "STATE share1 word " + std::to_string(w) + " was not zero");
+                return;
+            }
+        }
+
+        cleanup_test(test);
+        report_test_pass("TC-UNMASKED");
+    } catch (const std::exception& e) {
+        REG_ERROR(1, test_logger) << "Test exception: " << e.what();
+        report_test_fail("TC-UNMASKED", "Exception occurred");
     }
 }

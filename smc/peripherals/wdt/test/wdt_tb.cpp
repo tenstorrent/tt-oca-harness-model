@@ -457,6 +457,28 @@ struct tb : sc_core::sc_module {
             wait_delta();
             EXPECT_EQ(42u, dut.dbg_count());  // locked beat cannot feed
             EXPECT_EQ(0u, drv.read32(smc::wdt_cfg::OFF_KEY));
+            // Already unlocked: the low half feeds and the KEY half of the
+            // same beat cannot leave the lock set.
+            unlock();
+            drv.write32(smc::wdt_cfg::OFF_CMP, 1);
+            unlock();
+            drv.write32(smc::wdt_cfg::OFF_CTRL,
+                        smc::wdt_cfg::CTRL_ALWAYS_BIT | smc::wdt_cfg::CTRL_RSTEN_BIT);
+            dut.dbg_set_count(1);
+            wait_delta();
+            EXPECT_TRUE(sticky.read());
+            EXPECT_EQ(1u, dut.dbg_count());
+            unlock();
+            drv.write64(smc::wdt_cfg::OFF_FEED, feed_key);
+            wait_delta();
+            EXPECT_EQ(0u, dut.dbg_count());
+            EXPECT_EQ(0u, drv.read32(smc::wdt_cfg::OFF_KEY));
+            EXPECT_FALSE(sticky.read());
+            // IP survives the feed, on the debug flag and on the pin.
+            EXPECT_TRUE(dut.dbg_ip());
+            EXPECT_TRUE(irq.read());
+            EXPECT_EQ(smc::wdt_cfg::CTRL_IP_BIT,
+                      drv.read32(smc::wdt_cfg::OFF_CTRL) & smc::wdt_cfg::CTRL_IP_BIT);
             // Generic 64-bit write at COUNT (0x08): lo=COUNT, hi=hole @0x0C
             unlock();
             drv.write32(smc::wdt_cfg::OFF_CMP, 0x1000);  // avoid zerocmp clear
@@ -517,22 +539,13 @@ struct tb : sc_core::sc_module {
             EXPECT_EQ(0u, drv.dbg_xfer(tlm::TLM_IGNORE_COMMAND, 0x0, 4, &d32));
             // Failed debug write (OOB) returns 0
             EXPECT_EQ(0u, drv.dbg_xfer(tlm::TLM_WRITE_COMMAND, 0x400, 4, &d32));
+            // Misaligned, and a 64-bit access whose high half leaves the window.
+            EXPECT_EQ(0u, drv.dbg_xfer(tlm::TLM_READ_COMMAND, 0x2, 4, &d32));
+            EXPECT_EQ(0u, drv.dbg_xfer(tlm::TLM_READ_COMMAND, 0x3FC, 8, &d64));
+            // Last legal 64-bit beat: both halves are inside the window.
+            EXPECT_EQ(8u, drv.dbg_xfer(tlm::TLM_READ_COMMAND, 0x3F8, 8, &d64));
         }
         std::cout << "  [PASS] transport_dbg paths\n";
-
-        // 21. Direct reg_read/reg_write edge cases (defensive paths)
-        {
-            uint32_t data = 0;
-            EXPECT_FALSE(dut.dbg_reg_read(0x400, 4, data));
-            EXPECT_FALSE(dut.dbg_reg_read(0x0, 2, data));
-            EXPECT_TRUE(dut.dbg_reg_read(smc::wdt_cfg::OFF_CTRL, 8, data));
-            EXPECT_EQ(drv.read32(smc::wdt_cfg::OFF_CTRL), data);
-            // Near end of window: 64-bit read still returns lo
-            EXPECT_TRUE(dut.dbg_reg_read(0x3FC, 8, data));
-            EXPECT_FALSE(dut.dbg_reg_write(0x400, 4, 0));
-            EXPECT_FALSE(dut.dbg_reg_write(0x0, 8, 0));
-        }
-        std::cout << "  [PASS] direct reg_read/reg_write edges\n";
 
         dut.dump_state(std::cout);
 
@@ -555,6 +568,38 @@ int sc_main(int, char**)
     static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
 
     cci::cci_register_broker(cci_global_broker);
+
+    // tick_period_ns < 0 is fatal. Throw on SC_FATAL so the guard can be
+    // observed, then put the previous action back before the rest of the bench.
+    //
+    // Only the rejecting values can be probed this way. wdt's guard fires ahead
+    // of its socket and SC_METHOD registrations, so an aborted construction
+    // leaves nothing behind; a module that constructs successfully and is then
+    // destroyed would leave the kernel holding processes and a scheduled
+    // tick_event_ on freed memory. The accepting side of the contract is
+    // covered by tb itself, which builds the DUT with tick_period_ns = 0.0.
+    {
+        const sc_core::sc_actions prev_fatal =
+            sc_core::sc_report_handler::set_actions(
+                sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
+
+        auto rejects = [](const char* probe_name, double tick_period_ns) {
+            smc::wdt_cfg cfg;
+            cfg.tick_period_ns = tick_period_ns;
+            try {
+                smc::wdt probe(probe_name, cfg);
+            } catch (const sc_core::sc_report&) {
+                return true;
+            }
+            return false;
+        };
+
+        EXPECT_TRUE(rejects("bad_tick_negative", -1.0));
+        EXPECT_TRUE(rejects("bad_tick_tiny_negative", -0.001));
+
+        sc_core::sc_report_handler::set_actions(sc_core::SC_FATAL, prev_fatal);
+    }
+    std::cout << "  [PASS] tick_period_ns construction guard\n";
 
     tb top("tb");
     sc_core::sc_start();

@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[wdt-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`wdt_tb` (`test/wdt_tb.cpp`) is a TLM initiator into `reg_socket` plus
+`rst_n_i` / `core_rst_i` and a `dbg_tick` helper. Every register access
+goes through the socket; there is no register backdoor. Set
+`tick_period_ns = 0` so the bench owns time.
+
+Success: every check in the bench passes; `--asan` produces no
+`asan.log.*`.
+
+How to run (from `smc/peripherals/wdt`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --ctest
+./run_tests.sh --asan       # ASan (+ LSan on Linux)
+./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --clean
+
+# All SMC IPs, this one included:
+cd smc
+./run_all_smc_tests.sh wdt
+----
+
+`run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME`. Set those in
+`vp/configure_vp.sh` or export them first.
+
+====== Standalone cases
+
+Source: `test/wdt_tb.cpp`. Names match the case titles in the table below.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1 |Reset defaults |CTRL/COUNT=0, CMP reset, KEY locked, outputs low |Positive
+|2 |KEY unlock/lock |Magic unlocks; next write re-locks |Positive
+|3 |Locked writes |CMP unchanged when locked |Positive
+|4 |Compare / IRQ |Always-on + tick to CMP raises `irq_o` |Positive
+|5 |IP clear |Unlocked CTRL write clears IP when not elapsed |Positive
+|6 |Sticky rst |`wdogrsten` + elapsed raises `rst_sticky_o` |Positive
+|7 |Feed |Magic feed clears count and sticky |Positive
+|8 |Scale |`count >> scale` compared to CMP |Positive
+|9 |zerocmp |Count clears on elapsed |Positive
+|10 |awake vs always |Awake gated by `core_rst_i`; always overrides |Positive
+|11 |SCALED_COUNT write |Locks without changing count |Positive
+|12 |Negative TLM |OOW / bad size → error response |Negative
+|13 |Module reset |Clears sticky, IP, count; CMP restore |Positive
+|14 |CTRL readback |Programmed fields and IP read back through the socket |Positive
+|15 |SCALED_COUNT / FEED reads |Register holes inside the window are RAZ/WI |Mixed
+|16 |Locked accesses |FEED/CTRL/COUNT/CMP ignored; a bad FEED magic re-locks |Negative
+|17 |Feed while elapsed |`zerocmp` path taken on a feed that lands on elapsed |Positive
+|18 |64-bit MMIO |Paired-register read, FEED+KEY write, generic 64-bit write |Positive
+|19 |Negative TLM matrix |Misaligned, byte-enables, streaming width, OOB, null pointer |Negative
+|20 |`transport_dbg` |Debug R/W byte counts; same window and alignment contract as `b_transport` |Mixed
+|21 |Construction guard |`tick_period_ns < 0` reports `SC_FATAL` before any process is registered |Negative
+|===
+
+====== Platform firmware tests
+
+These run on `smc-vp` with a RISC-V bare-metal toolchain. Build the VP
+first (`make smc-vp` from the repo root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/smc-vp-tests
+./run_smc_vp_tests.sh smc-wdt-test
+----
+
+`smc-wdt-test` covers stage-1 KEY/CMP/IP/FEED and stage-2
+`WDT_TIMEOUT` / `RESET` on the front port.

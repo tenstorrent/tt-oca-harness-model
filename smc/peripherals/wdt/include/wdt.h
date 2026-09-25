@@ -135,16 +135,6 @@ public:
     void     dbg_set_count(uint32_t v);
     void     dump_state(std::ostream& os = std::cout) const;
 
-    /// Direct register access for unit tests (bypasses TLM size/window checks).
-    bool dbg_reg_read(uint64_t off, unsigned access_size, uint32_t& data) const
-    {
-        return reg_read(off, access_size, data);
-    }
-    bool dbg_reg_write(uint64_t off, unsigned access_size, uint32_t data)
-    {
-        return reg_write(off, access_size, data);
-    }
-
 private:
     void         b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
     unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
@@ -154,8 +144,10 @@ private:
     void output_method();
     void schedule_recompute();
 
-    bool reg_read(uint64_t off, unsigned access_size, uint32_t& data) const;
-    bool reg_write(uint64_t off, unsigned access_size, uint32_t data);
+    // Callers must have validated off/len against WINDOW_SIZE first; holes
+    // inside the window are RAZ/WI, so there is no failure to report.
+    void reg_read(uint64_t off, uint32_t& data) const;
+    void reg_write(uint64_t off, uint32_t data);
 
     void do_unlock_write_key(uint32_t data);
     void do_feed(uint32_t data);

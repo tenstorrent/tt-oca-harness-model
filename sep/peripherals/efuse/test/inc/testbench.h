@@ -79,6 +79,8 @@ public:
     void test_locked_field_interrupt();
     void test_transient_rma();
     void test_consumer_accessors();
+    void test_preload_parser_and_lock_banks();
+    void test_image_overrides_params();
 
     /// The whole of the secure_tm run — see the comment on its definition.
     void test_secure_tm_mode();

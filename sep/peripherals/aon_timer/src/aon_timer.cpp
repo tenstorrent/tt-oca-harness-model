@@ -570,19 +570,38 @@ bool aon_timer_ip::handle_write_ALERT_TEST(uint32_t value, uint32_t write_mask)
 {
    (void)write_mask;
 
-   /* Bit[0] = fatal_fault test: set pending flag; port is driven by drive_outputs()
-    * SC_METHOD to avoid sc_out::write() inside b_transport (SystemC 3.0 constraint). */
-   if (value & 0x1U) {
-      m_fatal_fault_pending = true;
-      m_ev_output_update.notify(SC_ZERO_TIME);
-   }
    /* ALERT_TEST has no storage; register shadow remains cleared (0x0).
     * The regmodel framework has read_bit_mask=0x0 so reads already return 0x0. */
 
-   /* CDC annotation: advance quantum keeper by SYS->AON synchronizer delay. */
+   /* CDC annotation is not the pulse handshake. sync() waits only the keeper's
+    * local time, and only when need_sync() says the quantum is due: a stopped
+    * AON clock makes that delay SC_ZERO_TIME, and a quantum still larger than
+    * the synchronizer delay skips the wait entirely. Done first so a timed
+    * wait here cannot run the falling edge before the initiator samples. */
    m_qk.inc(compute_cdc_delay());
    if (m_qk.need_sync()) {
       m_qk.sync();
+   }
+
+   /* Bit[0] = fatal_fault test. The port is driven by drive_outputs() so
+    * sc_out::write() stays out of b_transport (SystemC 3.0 constraint).
+    *
+    * The pulse is two scheduler-visible deltas, split by an explicit yield.
+    * Two notify(SC_ZERO_TIME) calls on one event with no yield between them
+    * coalesce — an sc_event keeps a single pending notification — and
+    * drive_outputs() would run once, leaving fatal_fault never sampled high.
+    * The fall is also its own event, so a rise that is still pending cannot
+    * swallow it. */
+   if ((value & 0x1U) != 0U) {
+      m_fatal_fault_pending = true;
+      m_ev_output_update.notify(SC_ZERO_TIME);
+      /* Resumes in the delta that takes the rising edge. The sc_signal update
+       * is posted for the end of this delta; the fall, notified from here, is
+       * the following one. No wait after this notify: a further yield would
+       * run the falling edge before b_transport returned, and the initiator
+       * would only ever sample the pin low. */
+      sc_core::wait(SC_ZERO_TIME);
+      m_ev_fatal_fault_fall.notify(SC_ZERO_TIME);
    }
 
    return true;
@@ -1529,8 +1548,12 @@ void aon_timer_ip::wkup_timer_tick_thread()
       sc_time tick_delay = sc_time((1.0 / aon_freq) * static_cast<double>(prescaler_val + 1U),
                                    SC_SEC);
 
-      /* Timed wait: unblocks on tick expiry, WKUP_CTRL write, escalation, or reset. */
+      /* Timed wait: unblocks on tick expiry, WKUP_CTRL write, escalation, or reset.
+       * An early wake (same-value CTRL write, escalation, reset) must restart
+       * the period without a count. sc_time_stamp distinguishes the two. */
+      const sc_time wkup_wait_start = sc_time_stamp();
       wait(tick_delay, m_ev_wkup_tick | m_ev_counter_cancel);
+      const bool wkup_period_elapsed = (sc_time_stamp() - wkup_wait_start) >= tick_delay;
 
       /* -----------------------------------------------------------------
        * Post-wait evaluation: determine whether the tick period elapsed or
@@ -1539,8 +1562,10 @@ void aon_timer_ip::wkup_timer_tick_thread()
 
       /* Check for reset cancellation or disable: if m_wkup_enabled was cleared
        * (by reset or WKUP_CTRL write) or m_lc_escalate_active was set, do NOT
-       * increment. The outer while loop will handle the new state. */
-      if (!m_wkup_enabled || m_lc_escalate_active)
+       * increment. The outer while loop will handle the new state. A control
+       * event that leaves the timer enabled also must not increment: the
+       * prescaler period restarts from this wake. */
+      if (!m_wkup_enabled || m_lc_escalate_active || !wkup_period_elapsed)
       {
          continue;
       }
@@ -1700,8 +1725,11 @@ void aon_timer_ip::wdog_timer_tick_thread()
       sc_time tick_delay = sc_time(1.0 / aon_freq, SC_SEC);
 
       /* Timed wait: unblocks on tick expiry, WDOG_CTRL write, pet,
-       * sleep_mode change, escalation change, or reset. */
+       * sleep_mode change, escalation change, or reset. An early wake
+       * restarts the tick and must not count. */
+      const sc_time wdog_wait_start = sc_time_stamp();
       wait(tick_delay, m_ev_wdog_tick | m_ev_counter_cancel);
+      const bool wdog_period_elapsed = (sc_time_stamp() - wdog_wait_start) >= tick_delay;
 
       /* -----------------------------------------------------------------
        * Post-wait evaluation: determine whether the tick period elapsed or
@@ -1710,10 +1738,13 @@ void aon_timer_ip::wdog_timer_tick_thread()
 
       /* Re-check all halt conditions. If any halt condition became true
        * while waiting (enable cleared, escalation asserted, pause asserted),
-       * do NOT increment. The outer while loop will handle the new state. */
+       * do NOT increment. The outer while loop will handle the new state.
+       * A control event that leaves the watchdog counting also must not
+       * increment: the tick restarts from this wake. */
       if (!m_wdog_enabled ||
           m_lc_escalate_active ||
-          (m_wdog_pause_in_sleep && sleep_mode.read()))
+          (m_wdog_pause_in_sleep && sleep_mode.read()) ||
+          !wdog_period_elapsed)
       {
          continue;
       }
@@ -1786,6 +1817,21 @@ void aon_timer_ip::wdog_sleep_mode_handler()
    m_ev_wdog_tick.notify(SC_ZERO_TIME);
 }
 
+void aon_timer_ip::aon_clock_changed()
+{
+   /* Both tick threads sample clk_aon_freq only when they wake. A frequency
+    * write, including the 0 Hz guard and a later restore, has to kick them
+    * or they stay blocked on the previous wait.
+    *
+    * Notified unconditionally rather than only for an enabled timer: a disabled
+    * thread is parked on this same event, re-checks its enable on wake and parks
+    * again, so the extra notify costs a delta and keeps the two cases identical.
+    * An enabled thread restarts its period at the new frequency without counting
+    * the partial one, which is what a clock change means. */
+   m_ev_wkup_tick.notify(SC_ZERO_TIME);
+   m_ev_wdog_tick.notify(SC_ZERO_TIME);
+}
+
 // =============================================================================
 // FUNC001 Fix: Deferred Output Driver SC_METHOD
 // =============================================================================
@@ -1841,8 +1887,11 @@ void aon_timer_ip::drive_outputs()
       REG_INFO(1, logger) << name() << ": driving aon_timer_rst_req=1";
    }
 
-   /* Drive fatal_fault as a transient pulse when pending; clear flag after drive.
-    * When not pending, drive false to ensure drive_outputs() is the sole writer. */
+   /* Drive fatal_fault high while the ALERT_TEST pulse is pending, then low on
+    * the following evaluation. handle_write_ALERT_TEST owns the falling-edge
+    * notify (m_ev_fatal_fault_fall), issued only after it has yielded the
+    * rising delta. Notifying the fall from here would schedule it inside that
+    * same yield and the pin would already be low when the initiator sampled. */
    if (m_fatal_fault_pending) {
       fatal_fault.write(true);
       m_fatal_fault_pending = false;

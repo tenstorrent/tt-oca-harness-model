@@ -454,10 +454,35 @@ void testbench::run_tests()
                          << "\nSEP_EFUSE IP TESTBENCH"
                          << "\n========================================" << std::endl;
 
-    // secure_tm is a strap: it cannot be flipped once the run has started, so the
-    // secure-mode behaviour gets a run of its own rather than a test in this list.
-    // run_tests.sh launches the binary a second time with the config that sets it.
-    if (m_dut->get_secure_tm()) {
+    // Two of the modes cannot be entered from inside a normal run: secure_tm is a
+    // strap latched at reset, and fuse_preload_file is applied in
+    // end_of_elaboration before any bus write. Each therefore gets a run of its
+    // own, launched by run_tests.sh / ctest with the matching config/*.ini.
+    const bool image_mode  = !m_dut->fuse_preload_file.get_param_value().empty();
+    const bool secure_mode = m_dut->get_secure_tm();
+
+    // The two are checked in order below, so a config that sets both would
+    // silently skip the secure-mode checks. Reject it instead of reporting a pass
+    // for a suite that never ran.
+    if (image_mode && secure_mode) {
+        report_test_fail("configuration",
+            "fuse_preload_file and secure_tm cannot be combined — each selects a "
+            "single-purpose run; use one ini per mode");
+        report_test_summary();
+        wait(100, SC_NS);
+        sc_stop();
+        return;
+    }
+
+    if (image_mode) {
+        test_image_overrides_params();
+        report_test_summary();
+        wait(100, SC_NS);
+        sc_stop();
+        return;
+    }
+
+    if (secure_mode) {
         test_secure_tm_mode();
         report_test_summary();
         wait(100, SC_NS);
