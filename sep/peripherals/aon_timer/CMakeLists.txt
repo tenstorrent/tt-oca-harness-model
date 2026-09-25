@@ -93,8 +93,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  # Verbosity 3 so suppressed multi-line logs are not counted as missed lines.
-  add_compile_definitions(REG_DEFAULT_VERBOSITY=3 __COVERAGE__)
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=1 __COVERAGE__)
   message(STATUS "aon_timer: Coverage build enabled")
 endif()
 

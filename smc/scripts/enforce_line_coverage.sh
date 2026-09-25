@@ -94,7 +94,17 @@ else
             echo "ERROR: ${INFO} missing; cannot enforce the coverage gate." >&2
             exit 1
         fi
-        PCT="$(lcov --list "${INFO}" | _extract_line_pct)"
+        # The raw tracefile also carries SystemC, CCI and libstdc++ headers, so
+        # its total says nothing about the model. Narrow it to src/ first, then
+        # read the one-line summary --list does not emit in a parseable form.
+        SRC_INFO="${BUILD_DIR}/coverage_src.info"
+        if ! lcov --extract "${INFO}" "${SRC_DIR}/*" \
+                  --output-file "${SRC_INFO}" &>/dev/null; then
+            echo "ERROR: lcov could not extract ${SRC_DIR} from ${INFO}." >&2
+            exit 1
+        fi
+        PCT="$(lcov --summary "${SRC_INFO}" 2>&1 |
+               sed -n 's/^ *lines\.*: *\([0-9.]*\)%.*/\1/p' | tail -1)"
     else
         echo "ERROR: neither gcovr nor lcov found; cannot enforce the coverage gate." >&2
         exit 1

@@ -72,6 +72,14 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else
-  "${BUILD_DIR}/bin/kmac_testbench"
-  "${BUILD_DIR}/bin/kmac_testbench" --unmasked
+  # Same ini as the CMake coverage and ctest invocations, so all three phases
+  # run the DUT at the same verbosity and configuration.
+  KMAC_INI="${SCRIPT_DIR}/config/accellera_config.ini"
+
+  "${BUILD_DIR}/bin/kmac_testbench" "${KMAC_INI}"
+
+  # EnMasking is a const constructor argument, so the unmasked sideload path
+  # needs a second process rather than a test inside the first.
+  echo ""
+  "${BUILD_DIR}/bin/kmac_testbench" "${KMAC_INI}" --unmasked
 fi

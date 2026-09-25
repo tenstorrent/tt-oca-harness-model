@@ -23,13 +23,6 @@ extern "C" void __gcov_dump(void);
 #endif
 #endif
 
-namespace {
-// Set from sc_main before the testbench is constructed. The model stores
-// EnMasking as a const constructor argument, so a second process is the
-// way to exercise the unmasked sideload path.
-bool g_unmasked_dut = false;
-}
-
 // =============================================================================
 // Test function implementations are now member functions defined in separate test files
 // Declarations are in testbench.h
@@ -39,18 +32,19 @@ bool g_unmasked_dut = false;
  *
  * Instantiates KMAC model and test harness, then binds all ports.
  ******************************************************************************/
-testbench::testbench(sc_module_name name)
+testbench::testbench(sc_module_name name, bool en_masking)
     : sc_module(name)
     , m_tests_run(0)
     , m_tests_passed(0)
     , m_tests_failed(0)
+    , m_en_masking(en_masking)
 {
     // Configure logger
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
     // Instantiate KMAC model (DUT). The default build is masked.
-    dut = new kmac_ip("kmac_dut", 0x1000, 3, !g_unmasked_dut);
+    dut = new kmac_ip("kmac_dut", 0x1000, 3, m_en_masking);
 
     // Sync testbench logger verbosity with DUT (CCI ini may override build default)
     logger.setMaxVerbosity(dut->verbosity.get_param_value());
@@ -205,7 +199,9 @@ void testbench::run_tests()
     // Apply reset to DUT
     apply_reset();
 
-    if (g_unmasked_dut) {
+    // An unmasked DUT cannot run the masked suite: every entropy-gated case
+    // below assumes EnMasking=1. That build gets the sideload case instead.
+    if (!m_en_masking) {
         test_sideload_unmasked_kmac();
         report_test_summary();
         wait(100, SC_NS);
@@ -1166,15 +1162,27 @@ int sc_main(int argc, char* argv[])
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    // Initialize CCI broker and optionally load INI config file.
-    // --unmasked selects a DUT constructed with EnMasking=false and must be
-    // seen before that construction.
+    // usage: kmac_testbench [config.ini] [--unmasked]
+    //
+    // --unmasked builds the DUT with EnMasking=false and runs the unmasked
+    // sideload case instead of the masked suite. EnMasking is a const
+    // constructor argument on the model, so it has to be decided out here.
     const char* config_path = nullptr;
+    bool en_masking = true;
     for (int i = 1; i < argc; ++i) {
-        if (std::string(argv[i]) == "--unmasked") {
-            g_unmasked_dut = true;
+        const std::string arg = argv[i];
+        if (arg == "--unmasked") {
+            en_masking = false;
+        } else if (arg.rfind("-", 0) == 0) {
+            std::cerr << "kmac_testbench: unknown option '" << arg << "'\n"
+                      << "usage: kmac_testbench [config.ini] [--unmasked]\n";
+            return 1;
         } else if (config_path == nullptr) {
             config_path = argv[i];
+        } else {
+            std::cerr << "kmac_testbench: unexpected extra argument '" << arg
+                      << "' (config file already set to '" << config_path << "')\n";
+            return 1;
         }
     }
     regmodel::load_config_file(config_path);
@@ -1184,7 +1192,7 @@ int sc_main(int argc, char* argv[])
     REG_INFO(2, logger) << "====================================================" << std::endl;
 
     // Heap-allocated so the teardown path can be run explicitly below.
-    testbench* tb = new testbench("kmac_testbench");
+    testbench* tb = new testbench("kmac_testbench", en_masking);
 
     REG_INFO(2, logger) << "Starting simulation..." << std::endl;
 

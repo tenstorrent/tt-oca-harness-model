@@ -23,6 +23,22 @@
 #include <openssl/params.h>
 #include <openssl/sha.h>
 
+namespace {
+
+/// Keccak rate in bytes for the two strengths the XOF modes accept.
+/// kstrength 0x0 (L128) -> 1344-bit rate; 0x2 (L256) -> 1088-bit rate.
+/// START rejects every other encoding for SHAKE/cSHAKE/KMAC (see the
+/// per-mode validation in handle_write_CMD), so by the time PROCESS or RUN
+/// reads it there are only these two cases.
+constexpr unsigned int KECCAK_RATE_L128 = 168u; // 1344 / 8
+constexpr unsigned int KECCAK_RATE_L256 = 136u; // 1088 / 8
+
+constexpr unsigned int keccak_rate_bytes(uint32_t kstrength) {
+  return (kstrength == 0x0u) ? KECCAK_RATE_L128 : KECCAK_RATE_L256;
+}
+
+} // namespace
+
 /******************************************************************************
  * @class kmac_ip::kmac_app_handler
  * @brief Internal handler class implementing kmac_app_if for application
@@ -36,10 +52,10 @@ class kmac_ip::kmac_app_handler : public kmac_app_if {
 public:
   /**
    * @brief Constructor
-   * @param parent Pointer to parent kmac_ip model instance
+   * @param parent Parent kmac_ip model instance
    * @param index Application interface index (0=KeyMgr, 1=LC_CTRL, 2=ROM_CTRL)
    */
-  kmac_app_handler(kmac_ip *parent, unsigned int index)
+  kmac_app_handler(kmac_ip &parent, unsigned int index)
       : parent_model(parent), app_index(index) {}
 
   /**
@@ -49,9 +65,7 @@ public:
    * @param last True if this is the final data beat
    */
   virtual void app_request(uint64_t data, uint8_t strobe, bool last) override {
-    if (parent_model) {
-      parent_model->handle_app_request(app_index, data, strobe, last);
-    }
+    parent_model.handle_app_request(app_index, data, strobe, last);
   }
 
   /**
@@ -59,7 +73,7 @@ public:
    * @return true if digest is ready, false if still processing
    */
   virtual bool is_done() const override {
-    return parent_model->app_operation_done;
+    return parent_model.app_operation_done;
   }
 
   /**
@@ -73,13 +87,13 @@ public:
    * digest, allowing software MMIO access to resume.
    */
   virtual void get_digest(uint32_t *share0, uint32_t *share1) const override {
-    if (parent_model && share0 && share1) {
-      std::memcpy(share0, parent_model->app_digest_share0,
-                  sizeof(parent_model->app_digest_share0));
-      std::memcpy(share1, parent_model->app_digest_share1,
-                  sizeof(parent_model->app_digest_share1));
+    if (share0 && share1) {
+      std::memcpy(share0, parent_model.app_digest_share0,
+                  sizeof(parent_model.app_digest_share0));
+      std::memcpy(share1, parent_model.app_digest_share1,
+                  sizeof(parent_model.app_digest_share1));
       // Clear application interface state - operation complete
-      parent_model->clear_app_state();
+      parent_model.clear_app_state();
     }
   }
 
@@ -88,12 +102,15 @@ public:
    * @return true if error detected, false otherwise
    */
   virtual bool has_error() const override {
-    return parent_model->app_operation_error;
+    return parent_model.app_operation_error;
   }
 
 private:
-  mutable kmac_ip
-      *parent_model; ///< Parent KMAC model instance (mutable for state cleanup)
+  /// Owning model. A handler is only ever built by kmac_ip for itself, so this
+  /// is a reference rather than a pointer every accessor has to re-check.
+  /// Binding to non-const also lets the const get_digest() clear app state,
+  /// which the old pointer member needed `mutable` for.
+  kmac_ip &parent_model;
   unsigned int app_index; ///< Application interface index
 };
 
@@ -181,7 +198,7 @@ kmac_ip::kmac_ip(sc_module_name n,
     // Allocate and bind application interface handlers
     app_handlers = new kmac_app_handler *[NumAppIntf];
     for (unsigned int i = 0; i < NumAppIntf; i++) {
-      app_handlers[i] = new kmac_app_handler(this, i);
+      app_handlers[i] = new kmac_app_handler(*this, i);
       app_export[i](*app_handlers[i]);
       REG_INFO(2, logger) << "Application interface [" << i
                            << "] handler created and bound (algorithm="
@@ -2049,19 +2066,12 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
         // Step 4: Initialize SHAKE context (SHAKE128 for KMAC128, SHAKE256 for
         // KMAC256)
-        const EVP_MD *md = nullptr;
-        size_t rate = 0;
-        if (kstrength == 0x0) {
-          md = EVP_shake128();
-          rate = 168; // SHAKE128 rate
-          REG_INFO(2, logger)
-              << "Using SHAKE128 for KMAC128 construction (rate=168)";
-        } else {
-          md = EVP_shake256();
-          rate = 136; // SHAKE256 rate
-          REG_INFO(2, logger)
-              << "Using SHAKE256 for KMAC256 construction (rate=136)";
-        }
+        const size_t rate = keccak_rate_bytes(kstrength);
+        const EVP_MD *md =
+            (kstrength == 0x0) ? EVP_shake128() : EVP_shake256();
+        REG_INFO(2, logger) << "Using SHAKE"
+                             << (kstrength == 0x0 ? "128" : "256")
+                             << " for KMAC construction (rate=" << rate << ")";
 
         // Reset existing EVP_MD context (don't create new one to avoid memory
         // leak)
@@ -2263,11 +2273,10 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
             // Apply bytepad encoding per NIST SP 800-185
             // bytepad(X, w) = left_encode(w) || X || 0x00... (padded to w
             // bytes) Determine rate based on kstrength
-            size_t rate =
-                (kstrength == 0x0) ? 168 : 136; // 168 for L128, 136 for L256
+            const size_t rate = keccak_rate_bytes(kstrength);
 
             // Allocate bytepad buffer
-            uint8_t bytepadded[168]; // Max rate is 168
+            uint8_t bytepadded[KECCAK_RATE_L128]; // Max rate is L128's
             size_t offset = 0;
 
             // Add left_encode(rate) at the beginning
@@ -2412,13 +2421,7 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // Per NIST SP 800-185: KMAC128 uses rate=168, KMAC256 uses rate=136
     if (kmac_en) {
       // Use rate as output length (XOF can output up to rate bytes per block)
-      // kstrength=0 => 128-bit security => SHAKE128 rate = 168 bytes
-      // kstrength=1 => 256-bit security => SHAKE256 rate = 136 bytes
-      if (kstrength == 0) {
-        kmac_output_bytes = 168;  // KMAC128: SHAKE128 rate
-      } else {
-        kmac_output_bytes = 136;  // KMAC256: SHAKE256 rate
-      }
+      kmac_output_bytes = keccak_rate_bytes(kstrength);
       REG_INFO(2, logger) << "KMAC mode: using output length "
                            << kmac_output_bytes * 8 << " bits ("
                            << kmac_output_bytes << " bytes) based on kstrength="
@@ -2462,8 +2465,10 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // kmac_en already declared above for right_encode parsing
     unsigned int md_len = 0;
 
-    // KMAC mode: Finalize with XOF. kmac_output_bytes is the rate, 136 or 168,
-    // which fits in xof_full_output.
+    // KMAC mode: Finalize with XOF. kmac_output_bytes is the Keccak rate, so
+    // the largest write into xof_full_output is KECCAK_RATE_L128 bytes.
+    static_assert(KECCAK_RATE_L128 <= sizeof(xof_full_output),
+                  "xof_full_output must hold a full Keccak rate block");
     if (kmac_en) {
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
 
@@ -2507,19 +2512,8 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
                            << " bytes";
     } else {
       // SHAKE/cSHAKE mode: Extendable output (XOF)
-      // For initial PROCESS, extract up to rate size
-      // Calculate rate based on kstrength
-      unsigned int rate_bytes = 0;
-
-      switch (kstrength) {
-      case 0x0:           // L128 (SHAKE128/cSHAKE128)
-        rate_bytes = 168; // 1344 bits / 8
-        break;
-
-      case 0x2:           // L256 (SHAKE256/cSHAKE256)
-        rate_bytes = 136; // 1088 bits / 8
-        break;
-      }
+      // For initial PROCESS, expose one rate-sized block.
+      const unsigned int rate_bytes = keccak_rate_bytes(kstrength);
 
       // EVP_DigestFinalXOF may only be called ONCE per context, and SHAKE/cSHAKE
       // output is a single continuous, deterministic byte stream.  Generate a
@@ -2659,24 +2653,11 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       return false;
     }
 
-    // Calculate rate size based on kstrength (XOF output block size)
-    // kstrength=0x0 (L128): 1344-bit rate = 168 bytes
-    // kstrength=0x2 (L256): 1088-bit rate = 136 bytes
-    unsigned int rate_bytes = 0;
-
-    switch (kstrength) {
-    case 0x0:           // L128 (SHAKE128/cSHAKE128/KMAC128)
-      rate_bytes = 168; // 1344 bits / 8
-      REG_INFO(2, logger) << "SHAKE/cSHAKE/KMAC128: rate = " << rate_bytes
-                           << " bytes";
-      break;
-
-    case 0x2:           // L256 (SHAKE256/cSHAKE256/KMAC256)
-      rate_bytes = 136; // 1088 bits / 8
-      REG_INFO(2, logger) << "SHAKE/cSHAKE/KMAC256: rate = " << rate_bytes
-                           << " bytes";
-      break;
-    }
+    // XOF output block size. Never zero, so the window always advances.
+    const unsigned int rate_bytes = keccak_rate_bytes(kstrength);
+    REG_INFO(2, logger) << "SHAKE/cSHAKE/KMAC"
+                         << (kstrength == 0x0u ? "128" : "256")
+                         << ": rate = " << rate_bytes << " bytes";
 
     // Read kmac_en to determine if this is KMAC mode
     uint32_t kmac_en = CFG_SHADOWED.kmac_en;

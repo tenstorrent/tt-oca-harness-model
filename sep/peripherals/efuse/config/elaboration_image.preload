@@ -1,7 +1,19 @@
-// Elaboration image. LC_STATE is the differential code for PROD (0xE1).
-// STATUS_RPT is 0x11. The companion ini sets different parameter values so a
-// read of these words shows the image replaced them rather than being ORed in.
+// $readmemh-style elaboration image for preload_image.ini.
+//
+// Format: `@<index>` sets the destination word, hex words follow one per line
+// and advance it. Both the index and the words are hexadecimal, so @5B is word
+// 91. Words are written zero-padded to 8 digits: the loader tells a hex-word
+// image apart from a bit-per-line image by finding a token longer than one
+// character, so a single-digit word could otherwise make the whole file parse
+// as bits.
+//
+// LC_STATE (word 0x03) is the differential code for PROD, 0xE1.
+// STATUS_RPT (word 0x5B) is 0x11.
+//
+// preload_image.ini deliberately sets different values for the same two fields,
+// so a read-back showing these proves the image replaced the parameters rather
+// than being merged with them.
 @3
-E1
+000000E1
 @5B
-11
+00000011

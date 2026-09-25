@@ -10296,9 +10296,11 @@ void testbench::test_func008_tc033_wdog_regwen_lock_count_remains_writable()
  *   clears the flag. The assertion is therefore transient (one evaluation cycle).
  *
  * Timing note:
- *   After the write, one delta runs drive_outputs() and asserts fatal_fault.
- *   That evaluation schedules one more delta, which deasserts the pulse.
- *   No second register write is involved.
+ *   The write callback flushes the quantum, so drive_outputs() has already
+ *   asserted fatal_fault by the time write_register_32() returns; one delta is
+ *   still needed for the sc_signal update to reach this process. The callback
+ *   also schedules the deassert, which lands one delta later. No second
+ *   register write is involved.
  *
  * Pass criteria:
  *   - fatal_fault = 0 before the test.
@@ -10366,7 +10368,8 @@ void testbench::test_func008_tc034_alert_test_fatal_fault_connectivity()
       passed = false;
    }
 
-   /* The asserting evaluation schedules one more delta that drops the pulse. */
+   /* The write callback scheduled a second drive_outputs() that drops the
+    * pulse; this delta is where its signal update becomes visible. */
    wait(SC_ZERO_TIME);
 
    bool ff_deasserted = test->fatal_fault_sig.read();
@@ -11410,10 +11413,18 @@ void testbench::test_func008_tc047_escalation_no_effect_on_register_access()
 // =========================================================================
 
 /**
- * @brief TC_AON_EDGE_01: Invalid Clock Period fallback path
+ * @brief TC_AON_EDGE_01: clk_aon_freq == 0.0 stops both timers and is recoverable
  *
- * Verifies that the model correctly handles clk_aon_freq == 0.0 without asserting
- * or crashing, resolving to SC_ZERO_TIME.
+ * Both tick threads divide by clk_aon_freq to derive their period, so 0 Hz has to
+ * be handled as "clock stopped" rather than producing an infinite or zero-length
+ * period. This case drives 0 Hz with both timers enabled, checks that neither
+ * counter advances over an interval that would otherwise carry several ticks, then
+ * restores the clock and checks that both threads resume — without rewriting
+ * WKUP_CTRL / WDOG_CTRL, so the resumption comes from the frequency change alone.
+ *
+ * Pass criteria:
+ *   - Both counters read 0 after ten tick periods' worth of time at 0 Hz.
+ *   - Both counters read exactly 1 one tick period after the clock is restored.
  */
 void testbench::test_edge01_invalid_clock_period()
 {
@@ -11422,6 +11433,11 @@ void testbench::test_edge01_invalid_clock_period()
 
    apply_reset();
    bool passed = true;
+
+   /* One AON tick at this frequency, with prescaler 0. Every delay below is
+    * derived from it so the case still reads correctly if the rate changes. */
+   const double  AON_FREQ_HZ = 200000.0;            /* 200 kHz */
+   const sc_time AON_TICK(1.0 / AON_FREQ_HZ, SC_SEC); /* 5 µs */
 
    test->clk_aon_freq_sig.write(0.0);
    wait(SC_ZERO_TIME);
@@ -11433,8 +11449,8 @@ void testbench::test_edge01_invalid_clock_period()
    test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, 0x00000001U);
    test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET, 0x00000001U);
 
-   /* 50 µs would be ten AON ticks at 200 kHz. At 0 Hz neither counter may move. */
-   wait(50000, SC_NS);
+   /* Ten ticks' worth of time. At 0 Hz neither counter may move. */
+   wait(10 * AON_TICK);
 
    uint32_t wkup_lo = 0xDEADBEEFU;
    uint32_t wdog = 0xDEADBEEFU;
@@ -11452,9 +11468,9 @@ void testbench::test_edge01_invalid_clock_period()
    }
 
    /* Restoring the clock, without rewriting CTRL, must start both timers. */
-   test->clk_aon_freq_sig.write(200000.0);
+   test->clk_aon_freq_sig.write(AON_FREQ_HZ);
    wait(SC_ZERO_TIME);
-   wait(6000, SC_NS); /* one 5 µs AON tick, plus margin for the wake delta */
+   wait(AON_TICK + sc_time(1000, SC_NS)); /* one tick, plus margin for the wake delta */
 
    test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, wkup_lo);
    test->read_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, wdog);
@@ -11472,6 +11488,11 @@ void testbench::test_edge01_invalid_clock_period()
    test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, 0x00000000U);
    test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET, 0x00000000U);
    wait(SC_ZERO_TIME);
+
+   /* Both thresholds are still 0 from apply_reset(), and the comparison is
+    * counter >= threshold, so the two counts above latched the wakeup and bark
+    * interrupts. Reset rather than leave that state for whatever runs next. */
+   apply_reset();
 
    if (passed)
    {

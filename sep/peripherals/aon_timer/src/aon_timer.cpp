@@ -580,20 +580,24 @@ bool aon_timer_ip::handle_write_ALERT_TEST(uint32_t value, uint32_t write_mask)
    /* ALERT_TEST has no storage; register shadow remains cleared (0x0).
     * The regmodel framework has read_bit_mask=0x0 so reads already return 0x0. */
 
-   /* CDC annotation: advance quantum keeper by SYS->AON synchronizer delay.
-    * A pulse always syncs, even inside a larger quantum, so drive_outputs()
-    * asserts fatal_fault before this call returns and the fall notify below
-    * is a separate delta. */
+   /* CDC annotation: advance the quantum keeper by the SYS->AON synchronizer
+    * delay. */
    m_qk.inc(compute_cdc_delay());
-   if (pulse || m_qk.need_sync()) {
-      m_qk.sync();
-   }
 
-   /* Falling edge is the next delta after this return. A zero-time notify
-    * from inside the asserting drive_outputs() would run during sync() and
-    * the pulse would already be low when the initiator samples it. */
    if (pulse) {
+      /* A pulse has to reach the wire before this transport returns, so the
+       * quantum is flushed whether or not it was due. sync() yields to the
+       * scheduler, which runs the drive_outputs() notified above; that is what
+       * makes fatal_fault=1 observable to the initiator.
+       *
+       * The falling edge is then a second notify, issued only after sync() has
+       * consumed the first. Notifying from inside the asserting drive_outputs()
+       * instead would land that delta inside this same sync(), and the pulse
+       * would already be low by the time the initiator samples it. */
+      m_qk.sync();
       m_ev_output_update.notify(SC_ZERO_TIME);
+   } else if (m_qk.need_sync()) {
+      m_qk.sync();
    }
 
    return true;
@@ -1813,7 +1817,13 @@ void aon_timer_ip::aon_clock_changed()
 {
    /* Both tick threads sample clk_aon_freq only when they wake. A frequency
     * write, including the 0 Hz guard and a later restore, has to kick them
-    * or they stay blocked on the previous wait. */
+    * or they stay blocked on the previous wait.
+    *
+    * Notified unconditionally rather than only for an enabled timer: a disabled
+    * thread is parked on this same event, re-checks its enable on wake and parks
+    * again, so the extra notify costs a delta and keeps the two cases identical.
+    * An enabled thread restarts its period at the new frequency without counting
+    * the partial one, which is what a clock change means. */
    m_ev_wkup_tick.notify(SC_ZERO_TIME);
    m_ev_wdog_tick.notify(SC_ZERO_TIME);
 }
@@ -1873,10 +1883,10 @@ void aon_timer_ip::drive_outputs()
       REG_INFO(1, logger) << name() << ": driving aon_timer_rst_req=1";
    }
 
-   /* Drive fatal_fault high while the ALERT_TEST pulse is pending, then low
-    * on the following evaluation. The falling-edge notify is issued by
-    * handle_write_ALERT_TEST after the CDC sync, so this method does not
-    * re-notify (that would collapse the pulse inside the same wait). */
+   /* Drive fatal_fault high while the ALERT_TEST pulse is pending, then low on
+    * the following evaluation. handle_write_ALERT_TEST owns the falling-edge
+    * notify, issued after its CDC sync; re-notifying here would collapse the
+    * pulse inside that same sync. */
    if (m_fatal_fault_pending) {
       fatal_fault.write(true);
       m_fatal_fault_pending = false;

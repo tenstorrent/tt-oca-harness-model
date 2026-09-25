@@ -38,8 +38,11 @@ public:
     /**
      * @brief Testbench constructor
      * @param name Module name
+     * @param en_masking Value passed to the DUT's EnMasking constructor
+     *        argument. The model stores it as const, so the unmasked sideload
+     *        path needs a DUT built with false, i.e. a separate invocation.
      */
-    testbench(sc_module_name name);
+    testbench(sc_module_name name, bool en_masking = true);
 
     /// @brief Destructor
     ~testbench();
@@ -518,12 +521,22 @@ public:
 
     /// @brief Logger instance for structured logging
     mutable RegLogger logger;
+
+    /// @brief EnMasking the DUT was built with; selects which suite run_tests()
+    ///        executes. Set from the constructor, never changed afterwards.
+    bool m_en_masking;
 };
 
-// NIST SP 800-185 KMAC reference used by the software-key and sideload tests.
+namespace kmac_ref {
+
+/// NIST SP 800-185 KMAC reference used by the software-key and sideload tests.
+/// Namespaced so the symbol cannot collide with another peripheral's testbench
+/// when several are linked into one binary.
 bool compute_kmac_reference(const uint8_t* key_data, size_t key_len_bytes,
                             const char* customization_string, size_t customization_len,
                             const uint8_t* message, size_t message_len,
                             uint32_t output_bits,
                             uint8_t* output_digest, size_t output_bytes,
                             bool is_kmac256);
+
+}  // namespace kmac_ref

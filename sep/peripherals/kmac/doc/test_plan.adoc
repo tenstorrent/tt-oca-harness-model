@@ -11,15 +11,21 @@ register aperture, a KM initiator into `keymgr_tl_socket`, app-interface
 drivers on `app_export[]`, plus `clk_i` / `rst_ni` / `lc_escalate_en_i`.
 The DUT is `kmac_ip`.
 
-Success: every check in the FUNC-KMAC suites passes; `--asan` produces
-no `asan.log.*`; line coverage on the touched model sources meets the
-repository ≥ 95% gate.
+`EnMasking` is a `const` constructor argument, so the unmasked sideload
+path needs a process of its own. `run_tests.sh`, the coverage target and
+`ctest` therefore each launch the binary twice: once for the masked suite
+and once with `--unmasked`.
+
+Current results: every check passes (237 masked cases plus the unmasked
+sideload case); `--asan` produces no `asan.log.*`; line coverage is 97.4%,
+above the repository ≥ 95% gate, the residue being OpenSSL failure
+branches.
 
 How to run (from `sep/peripherals/kmac`):
 
 [source,bash]
 ----
-./run_tests.sh              # Release build + run
+./run_tests.sh              # Release build + both runs (masked, then --unmasked)
 ./run_tests.sh --debug
 ./run_tests.sh --asan       # ASan + UBSan
 ./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
@@ -38,7 +44,7 @@ or export them first.
 
 ====== Standalone cases
 
-Sources: `test/src/kmac_func001_test.cpp` … `kmac_func025_test.cpp`.
+Sources: `test/src/kmac_func001_test.cpp` … `kmac_func026_test.cpp`.
 Group by FUNC-KMAC suite; do not paste the full plan.
 
 [cols="12%,28%,44%,16%",options="header"]
@@ -58,6 +64,8 @@ Group by FUNC-KMAC suite; do not paste the full plan.
 |FUNC-KMAC-016–018 |CFG lock / STATE window |Shadow, REGWEN, squeeze-only |Mixed
 |FUNC-KMAC-019–022 |Errors, reset, escalate, idle |ERR_CODE, `idle_o` |Mixed
 |FUNC-KMAC-023–024 |OpenSSL seam / LT delay |EVP path, quantum keeper |Positive
+|FUNC-KMAC-026 |Rejection and boundary paths |Wrong-state commands, XOF output-window bounds |Negative
+|Unmasked sideload |`EnMasking = 0` |Digest is not split: the whole share1 half of the STATE window reads zero (own `--unmasked` run) |Positive
 |===
 
 ====== Platform firmware tests

@@ -52,6 +52,10 @@ wdt::wdt(sc_core::sc_module_name name, wdt_cfg cfg)
     access_delay_ns_p_.add_metadata("tlm_phase",
                                     cci::cci_value(std::string("annotated_delay")));
 
+    // Keep this guard ahead of the socket and SC_METHOD registrations below.
+    // test/wdt_tb.cpp builds a module with a bad config under SC_THROW and
+    // catches the report; a process registered before the throw would outlive
+    // the unwound object and fire at sc_start().
     if (cfg_.tick_period_ns < 0.0) {
         SC_REPORT_FATAL(name, "WDT tick_period_ns must be >= 0");
     }
@@ -267,86 +271,58 @@ void wdt::do_feed(uint32_t data)
     unlocked_ = false;
 }
 
-bool wdt::reg_read(uint64_t off, unsigned access_size, uint32_t& data) const
+void wdt::reg_read(uint64_t off, uint32_t& data) const
 {
-    data = 0;
-    if (off >= wdt_cfg::WINDOW_SIZE) {
-        return false;
-    }
-    if (access_size != 4 && access_size != 8) {
-        return false;
-    }
-
-    // 64-bit access at naturally aligned bases that span two 32-bit regs.
-    if (access_size == 8) {
-        uint32_t lo = 0;
-        uint32_t hi = 0;
-        (void)reg_read(off, 4, lo);
-        if (off + 4 < wdt_cfg::WINDOW_SIZE) {
-            (void)reg_read(off + 4, 4, hi);
-        }
-        // Caller of 64-bit path uses data as low word; b_transport packs both.
-        data = lo;
-        (void)hi;
-        return true;
-    }
-
     switch (off) {
     case wdt_cfg::OFF_CTRL:
         data = ctrl_read_value();
-        return true;
+        return;
     case wdt_cfg::OFF_COUNT:
         data = count_ & COUNT_MASK;
-        return true;
+        return;
     case wdt_cfg::OFF_SCALED_COUNT:
         data = dbg_scaled();
-        return true;
+        return;
     case wdt_cfg::OFF_FEED:
         data = 0;
-        return true;
+        return;
     case wdt_cfg::OFF_KEY:
         data = unlocked_ ? 1u : 0u;
-        return true;
+        return;
     case wdt_cfg::OFF_CMP:
         data = cmp_;
-        return true;
+        return;
     default:
         // Hole inside window: RAZ
-        return true;
+        data = 0;
+        return;
     }
 }
 
-bool wdt::reg_write(uint64_t off, unsigned access_size, uint32_t data)
+void wdt::reg_write(uint64_t off, uint32_t data)
 {
-    if (off >= wdt_cfg::WINDOW_SIZE) {
-        return false;
-    }
-    if (access_size != 4) {
-        return false;  // 64-bit writes handled in b_transport as two halves
-    }
-
     switch (off) {
     case wdt_cfg::OFF_KEY:
         do_unlock_write_key(data);
         schedule_recompute();
-        return true;
+        return;
 
     case wdt_cfg::OFF_FEED:
         if (!unlocked_) {
-            return true;  // locked: ignore write, no unlock change for FEED path
+            return;  // locked: ignore write, no unlock change for FEED path
         }
         do_feed(data);
         schedule_recompute();
-        return true;
+        return;
 
     case wdt_cfg::OFF_SCALED_COUNT:
         // Write has no effect on value but locks (SiFive semantics).
         unlocked_ = false;
-        return true;
+        return;
 
     case wdt_cfg::OFF_CTRL:
         if (!unlocked_) {
-            return true;
+            return;
         }
         scale_   = static_cast<uint8_t>(data & wdt_cfg::CTRL_SCALE_MASK);
         rsten_   = (data & wdt_cfg::CTRL_RSTEN_BIT) != 0;
@@ -362,21 +338,21 @@ bool wdt::reg_write(uint64_t off, unsigned access_size, uint32_t data)
         unlocked_ = false;
         apply_elapsed_side_effects(/*fed_this_cycle=*/false);
         schedule_recompute();
-        return true;
+        return;
 
     case wdt_cfg::OFF_COUNT:
         if (!unlocked_) {
-            return true;
+            return;
         }
         count_ = regmodel::apply_write_mask(count_, data, COUNT_MASK) & COUNT_MASK;
         unlocked_ = false;
         apply_elapsed_side_effects(/*fed_this_cycle=*/false);
         schedule_recompute();
-        return true;
+        return;
 
     case wdt_cfg::OFF_CMP:
         if (!unlocked_) {
-            return true;
+            return;
         }
         cmp_ = static_cast<uint16_t>(
             regmodel::apply_write_mask(static_cast<uint32_t>(cmp_), data, 0xFFFFu) &
@@ -384,11 +360,11 @@ bool wdt::reg_write(uint64_t off, unsigned access_size, uint32_t data)
         unlocked_ = false;
         apply_elapsed_side_effects(/*fed_this_cycle=*/false);
         schedule_recompute();
-        return true;
+        return;
 
     default:
         // Hole: WI, but still lock if unlocked? SiFive only locks on known regs.
-        return true;
+        return;
     }
 }
 
@@ -426,13 +402,13 @@ void wdt::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
     if (gp.is_read()) {
         if (len == 4) {
             uint32_t data = 0;
-            (void)reg_read(addr, 4, data);
+            reg_read(addr, data);
             std::memcpy(ptr, &data, 4);
         } else {
             uint32_t lo = 0;
             uint32_t hi = 0;
-            (void)reg_read(addr, 4, lo);
-            (void)reg_read(addr + 4, 4, hi);
+            reg_read(addr, lo);
+            reg_read(addr + 4, hi);
             std::memcpy(ptr, &lo, 4);
             std::memcpy(ptr + 4, &hi, 4);
         }
@@ -444,7 +420,7 @@ void wdt::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
         if (len == 4) {
             uint32_t data = 0;
             std::memcpy(&data, ptr, 4);
-            (void)reg_write(addr, 4, data);
+            reg_write(addr, data);
         } else {
             // 64-bit: write low then high (KEY often in high half at 0x18).
             uint32_t lo = 0;
@@ -462,8 +438,8 @@ void wdt::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
                 (void)hi;
                 schedule_recompute();
             } else {
-                (void)reg_write(addr, 4, lo);
-                (void)reg_write(addr + 4, 4, hi);
+                reg_write(addr, lo);
+                reg_write(addr + 4, hi);
             }
         }
         gp.set_response_status(tlm::TLM_OK_RESPONSE);
@@ -478,20 +454,25 @@ unsigned int wdt::transport_dbg(tlm::tlm_generic_payload& gp)
     const uint64_t addr = gp.get_address();
     const unsigned len  = gp.get_data_length();
     uint8_t* const ptr  = gp.get_data_ptr();
-    if (ptr == nullptr || (len != 4 && len != 8) || addr >= wdt_cfg::WINDOW_SIZE) {
+    if (ptr == nullptr || (len != 4 && len != 8)) {
+        return 0;
+    }
+    // Same window and alignment contract as b_transport: a debug access must
+    // not read past the last register just because only the base was checked.
+    if ((addr % len) != 0 || (addr + len) > wdt_cfg::WINDOW_SIZE) {
         return 0;
     }
     if (gp.is_read()) {
         if (len == 4) {
             uint32_t data = 0;
-            (void)reg_read(addr, 4, data);
+            reg_read(addr, data);
             std::memcpy(ptr, &data, 4);
             return 4;
         }
         uint32_t lo = 0;
         uint32_t hi = 0;
-        (void)reg_read(addr, 4, lo);
-        (void)reg_read(addr + 4, 4, hi);
+        reg_read(addr, lo);
+        reg_read(addr + 4, hi);
         std::memcpy(ptr, &lo, 4);
         std::memcpy(ptr + 4, &hi, 4);
         return 8;

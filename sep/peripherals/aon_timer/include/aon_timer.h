@@ -1633,6 +1633,12 @@ private:
     *   - m_fatal_fault_pending -> fatal_fault (transient pulse; cleared after drive)
     *   - m_racl_error_active  -> racl_error
     *
+    * fatal_fault is the one output that is not a straight mirror of its flag: the
+    * flag is consumed here, so a pending pulse drives the port high on this
+    * invocation and low on the next. handle_write_ALERT_TEST schedules that second
+    * invocation; see the comment there for why the falling edge is not scheduled
+    * from inside this method.
+    *
     * FUNC002: aon_timer_rst_req is now driven from m_wdog_bite_active instead of
     * an inline counter/threshold evaluation. This allows the AON-domain reset path
     * (rst_aon_n) to independently de-assert aon_timer_rst_req by clearing

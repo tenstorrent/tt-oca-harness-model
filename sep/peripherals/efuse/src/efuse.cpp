@@ -823,8 +823,10 @@ bool efuse_model::handle_write_LOCKS_SPARE(uint32_t value)
  *   - Per bit: [0] PROD is ungated; [1] RMA_SIP needs the SiP token; [2] RMA_CHIPLET
  *     needs the chiplet token, and RMA_SIP already established, and not PROD; [3]
  *     PROD_END is unreachable from PROD.
- *   - What gating produced is checked again, since dropping a gated bit can leave an
- *     invalid state; if so the write is dropped.
+ *
+ * Gating only ever drops bits from an already-validated destination, and for every
+ * non-terminal state (TEST_DEV, PROD, both RMA_SIP encodings) each subset the gates
+ * can produce is itself a valid state, so the gated result needs no second check.
  *
  * The RTL leaves the upper three bytes of the shadow word writable, but there they
  * carry neighbouring fuse fields; this model gives every field its own register, so
@@ -855,16 +857,10 @@ bool efuse_model::handle_write_LC_STATE(uint32_t value)
         const bool     chip_match= static_cast<uint32_t>(RMA_CHIPLET_TOKEN_MATCH) == TOKEN_MATCH;
         const bool     sip_done  = (cur & 0x2u) != 0;
 
-        uint32_t cand = cur;
-        cand |= w & 0x1u;
-        if (sip_match)                            cand |= w & 0x2u;
-        if (!is_prod && sip_done && chip_match)   cand |= w & 0x4u;
-        if (!is_prod)                             cand |= w & 0x8u;
-
-        // Every valid cur|write stays inside the legal set after these gates, so a
-        // candidate that failed the check would already have been rejected above.
-        if (lc_state_raw_valid(cand))
-            next = cand;
+        next |= w & 0x1u;
+        if (sip_match)                            next |= w & 0x2u;
+        if (!is_prod && sip_done && chip_match)   next |= w & 0x4u;
+        if (!is_prod)                             next |= w & 0x8u;
     }
 
     m_lc_state_val = lc_state_encode(next);

@@ -11,6 +11,22 @@ extern "C" void __gcov_dump(void);
 #endif
 #endif
 
+// Failure messages carry register values, so format them the way the RDL and the
+// waveforms do. std::to_string() would print decimal after an "0x" prefix.
+static std::string hex64(uint64_t v)
+{
+    char buf[19];
+    std::snprintf(buf, sizeof(buf), "0x%016llx", static_cast<unsigned long long>(v));
+    return buf;
+}
+
+static std::string hex32(uint32_t v)
+{
+    char buf[11];
+    std::snprintf(buf, sizeof(buf), "0x%x", v);
+    return buf;
+}
+
 // =============================================================================
 // Constructor
 // =============================================================================
@@ -257,9 +273,10 @@ void testbench::test_demote_1_lock()
 {
     report_test_start("Test 6: DEMOTE_1 lock semantics");
 
-    // Test 5 has already set the demote bit, and a W1S bit that is already 1
-    // cannot show that the lock refused a later write. Start from a clear
-    // register, then put FEAT_CTRL back so the config-selected cases still match.
+    // Precondition: DEMOTE_1 must start clear. The register is W1S, so a demote
+    // bit that is already 1 cannot tell a refused write apart from an accepted
+    // one. clear_demote() resets it; restore_configured_inputs() at the end puts
+    // FEAT_CTRL back for the config-selected cases that follow.
     clear_demote();
 
     uint32_t val = 0;
@@ -271,7 +288,7 @@ void testbench::test_demote_1_lock()
         report_test_pass("DEMOTE_1: lock bit set");
     else
         report_test_fail("DEMOTE_1 lock set",
-            "expected lock bit set, got 0x" + std::to_string(val));
+            "expected lock bit set, got " + hex32(val));
 
     // Writing the demote bit must be refused. A write of zero would leave a W1S
     // register unchanged even with the lock removed.
@@ -282,7 +299,7 @@ void testbench::test_demote_1_lock()
         report_test_pass("DEMOTE_1: demote bit refused while locked");
     else
         report_test_fail("DEMOTE_1 post-lock write",
-            "expected 0x2 (lock only) got 0x" + std::to_string(val));
+            "expected 0x2 (lock only) got " + hex32(val));
 
     restore_configured_inputs();
 }
@@ -324,8 +341,7 @@ void testbench::test_demote_2_lock()
 {
     report_test_start("Test 11: DEMOTE_2 lock semantics");
 
-    // Test 7 leaves the demote bit set. Clear it so a write-1 is a real refusal,
-    // then restore the config-selected FEAT_CTRL for the cases that follow.
+    // Precondition: DEMOTE_2 must start clear, for the same W1S reason as test 6.
     clear_demote();
 
     uint32_t val = 0;
@@ -337,7 +353,7 @@ void testbench::test_demote_2_lock()
         report_test_pass("DEMOTE_2: lock bit set");
     else
         report_test_fail("DEMOTE_2 lock set",
-            "expected lock bit set, got 0x" + std::to_string(val));
+            "expected lock bit set, got " + hex32(val));
 
     m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x00000001);
     wait(1, SC_NS);
@@ -346,7 +362,7 @@ void testbench::test_demote_2_lock()
         report_test_pass("DEMOTE_2: demote bit refused while locked");
     else
         report_test_fail("DEMOTE_2 post-lock write",
-            "expected 0x2 (lock only) got 0x" + std::to_string(val));
+            "expected 0x2 (lock only) got " + hex32(val));
 
     restore_configured_inputs();
 }
@@ -494,17 +510,10 @@ void testbench::clear_demote()
 void testbench::restore_configured_inputs()
 {
     // clear_demote() zeroes FEAT_CTRL and does not recompute it. The cases that
-    // follow read the vector the CCI config produced at elaboration.
-    lifecycle_ctrl_model::lc_inputs in;
-    in.lc_state_code = lifecycle_ctrl_model::lc_state_encode(
-        m_dut->lc_state.get_param_value());
-    in.sip_dis = (static_cast<uint64_t>(m_dut->sip_dis_hi.get_param_value()) << 32)
-               | m_dut->sip_dis_lo.get_param_value();
-    in.sys_dis = (static_cast<uint64_t>(m_dut->sys_dis_hi.get_param_value()) << 32)
-               | m_dut->sys_dis_lo.get_param_value();
-    in.security_disable = m_dut->security_disable.get_param_value();
-    in.secure_tm        = m_dut->secure_tm.get_param_value();
-    m_dut->set_inputs(in);
+    // follow read the vector the CCI config produced at elaboration, so ask the
+    // model for the same bundle end_of_elaboration() used rather than rebuilding
+    // it here — a parameter added to the model would otherwise be dropped.
+    m_dut->set_inputs(m_dut->inputs_from_params());
 }
 
 uint64_t testbench::read_feat_ctrl()
@@ -513,20 +522,6 @@ uint64_t testbench::read_feat_ctrl()
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_LO_OFFSET, lo);
     m_test->register_read_32(lifecycle_ctrl_basetest::FEAT_CTRL_HI_OFFSET, hi);
     return (static_cast<uint64_t>(hi) << 32) | lo;
-}
-
-static std::string hex64(uint64_t v)
-{
-    char buf[19];
-    std::snprintf(buf, sizeof(buf), "0x%016llx", static_cast<unsigned long long>(v));
-    return buf;
-}
-
-static std::string hex32(uint32_t v)
-{
-    char buf[11];
-    std::snprintf(buf, sizeof(buf), "0x%x", v);
-    return buf;
 }
 
 void testbench::check_feat_ctrl(const std::string &name, uint64_t expected)
@@ -871,6 +866,15 @@ void testbench::test_feat_ctrl_callback()
 
     int calls = 0;
     uint64_t seen = 0;
+
+    // The callbacks below capture locals by reference and live inside the DUT,
+    // so the DUT must not keep one past the end of this function. The guard
+    // clears it on every exit path, including an early return added later.
+    struct callback_guard {
+        lifecycle_ctrl_model *dut;
+        ~callback_guard() { dut->set_feat_ctrl_change_callback(nullptr); }
+    } guard{m_dut.get()};
+
     m_dut->set_feat_ctrl_change_callback([&] {
         calls++;
         seen = m_dut->get_feat_ctrl();
@@ -879,64 +883,74 @@ void testbench::test_feat_ctrl_callback()
     const uint32_t test_dev = lifecycle_ctrl_model::lc_state_encode(0x0);
     constexpr uint64_t ALL = 0xFFFF'FFFF'FFFF'FFFFULL;
 
+    // Assert on the change in call count across each stimulus rather than on a
+    // running total, so one extra recompute in the model fails the one case it
+    // belongs to instead of every case after it.
+    int before = calls;
+    auto called_once = [&] {
+        const bool once = (calls - before) == 1;
+        before = calls;
+        return once;
+    };
+    auto not_called = [&] {
+        const bool none = (calls - before) == 0;
+        before = calls;
+        return none;
+    };
+
     drive_inputs(test_dev, 0, 0);
-    if (calls == 1 && seen == ALL && seen == read_feat_ctrl())
+    if (called_once() && seen == ALL && seen == read_feat_ctrl())
         report_test_pass("callback runs on set_inputs and sees the new vector");
     else
         report_test_fail("callback on set_inputs",
-            "calls=" + std::to_string(calls) + " seen=" + hex64(seen) +
-            " reg=" + hex64(read_feat_ctrl()));
+            "seen=" + hex64(seen) + " reg=" + hex64(read_feat_ctrl()));
 
     // Same bundle again. The callback is tied to recomputation, not to a diff.
     drive_inputs(test_dev, 0, 0);
-    if (calls == 2 && seen == ALL)
+    if (called_once() && seen == ALL)
         report_test_pass("callback runs again when FEAT_CTRL does not change");
     else
-        report_test_fail("callback on unchanged recompute",
-            "calls=" + std::to_string(calls) + " seen=" + hex64(seen));
+        report_test_fail("callback on unchanged recompute", "seen=" + hex64(seen));
 
     drive_inputs(test_dev, 0x1, 0);
-    if (calls == 3 && seen == (ALL & ~0x1ull) && seen == read_feat_ctrl())
+    if (called_once() && seen == (ALL & ~0x1ull) && seen == read_feat_ctrl())
         report_test_pass("callback sees FEAT_CTRL after SiP_DIS bit 0");
     else
         report_test_fail("callback on SiP_DIS",
-            "calls=" + std::to_string(calls) + " seen=" + hex64(seen) +
-            " reg=" + hex64(read_feat_ctrl()));
+            "seen=" + hex64(seen) + " reg=" + hex64(read_feat_ctrl()));
 
     // TEST_DEV re-enables the debug section on demote, which puts bit 0 back.
     m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x1);
     wait(1, SC_NS);
-    if (calls == 4 && seen == ALL && seen == read_feat_ctrl())
+    if (called_once() && seen == ALL && seen == read_feat_ctrl())
         report_test_pass("demote write notifies the callback with the updated vector");
     else
         report_test_fail("callback on demote",
-            "calls=" + std::to_string(calls) + " seen=" + hex64(seen) +
-            " reg=" + hex64(read_feat_ctrl()));
+            "seen=" + hex64(seen) + " reg=" + hex64(read_feat_ctrl()));
 
     m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_HI_OFFSET, 0x1);
     wait(1, SC_NS);
-    if (calls == 4)
+    if (not_called())
         report_test_pass("DEMOTE_1_HI write does not recompute FEAT_CTRL");
     else
-        report_test_fail("callback on DEMOTE_1_HI",
-            "expected no new call, calls=" + std::to_string(calls));
+        report_test_fail("callback on DEMOTE_1_HI", "expected no new call");
 
     int calls2 = 0;
     m_dut->set_feat_ctrl_change_callback([&] { calls2++; });
     drive_inputs(test_dev, 0, 0);
-    if (calls == 4 && calls2 == 1)
+    if (not_called() && calls2 == 1)
         report_test_pass("replacing the callback retires the previous one");
     else
         report_test_fail("callback replacement",
-            "old calls=" + std::to_string(calls) + " new calls=" + std::to_string(calls2));
+            "new calls=" + std::to_string(calls2));
 
-    m_dut->set_feat_ctrl_change_callback({});
+    m_dut->set_feat_ctrl_change_callback(nullptr);
     drive_inputs(test_dev, 0x1, 0);
-    if (calls == 4 && calls2 == 1)
+    if (not_called() && calls2 == 1)
         report_test_pass("clearing the callback stops further notification");
     else
         report_test_fail("callback removal",
-            "old calls=" + std::to_string(calls) + " new calls=" + std::to_string(calls2));
+            "new calls=" + std::to_string(calls2));
 }
 
 // =============================================================================

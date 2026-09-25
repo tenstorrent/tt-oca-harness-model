@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[efuse-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`efuse_testbench` (`test/inc/testbench.h`) is a TLM initiator
+into `target_socket` and a second initiator into
+`shim_target_socket`. Helpers cover shadow WOSET, OTP
+program/read, preload files, and token `TOKEN_EOP`.
+
+Success: every check in `test/src/testbench.cpp` and
+`test/src/test_coverage.cpp` passes; `--asan` produces no
+`asan.log.*`; line coverage on the touched model sources meets
+the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/efuse`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --docs
+./run_tests.sh --cppcheck
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean efuse
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in
+`vp/configure_vp.sh` or export them first.
+
+====== Standalone cases
+
+Sources: `test/src/testbench.cpp`, `test_coverage.cpp`. Names
+are the `test_*` methods.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|1–3 |Fuse load / RO protect |CCI scalars and arrays; RO ignore writes |Positive
+|4–6 |WOSET LO |LOCKS / SIP_DIS / SYS_DIS accumulate |Positive
+|7–8 |Interface CTRL |`sense_done`; `EFUSE_READ_CTRL` RW |Positive
+|9–13 |WOSET remainder |LOCKS_HI, LC_STATE, DIS_HI, revoke, BL versions |Positive
+|14–15 |OTP go bits |Write-ctrl / read-ctrl complete in the write |Positive
+|16 |OTP accessors |`get_lc_state` / `get_chiplet_uid` |Positive
+|17 |Shim window |`shim_target_socket` CSRs |Positive
+|18–20 |Array program |OR program, preload file, out-of-range sticky |Mixed
+|21 |Lock enforcement |Shadow deny word vs OTP `req_error` |Negative
+|22 |Token matching |SHA-256 vs digest; `0x15` / `0x2A` |Mixed
+|23 |LC transitions |RMA bits gated by token match |Mixed
+|24 |Locked-field interrupt |A denied shadow write raises the interrupt |Negative
+|25 |Secure test mode |`secure_tm` strap gating (own run, `config/secure_tm.ini`) |Positive
+|26 |Transient RMA |`TRANSIENT_RMA_EN` auto-transition on a token match |Mixed
+|27 |Consumer accessors |`prod_dbg_active` freeze; `security_disable` revision gate |Mixed
+|28 |Preload parser / lock banks |`$readmemh` images, `@origin`, `SEP_VP_INI_DIR`, LOCKS_HI / LOCKS_SPARE |Mixed
+|29 |Elaboration image |Image applied at elaboration overrides the per-field parameters (own run, `config/preload_image.ini`) |Positive
+|===
+
+`secure_tm` is a strap latched at reset and `fuse_preload_file` is
+consumed in `end_of_elaboration`, so neither can be entered from inside
+the default run. Each gets its own process, registered as a separate
+`ctest` case and driven by `run_tests.sh` and the coverage target from
+the checked-in `config/*.ini`.
+
+====== Platform firmware tests
+
+These run on `sep-vp` with a RISC-V bare-metal toolchain. Build
+the VP first (`make sep-vp` from the repo root after
+`vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh efuse_sanity_csr_test
+./run_test.sh sep_efuse_fw_otp_rw_test
+./run_test.sh sep_efuse_fw_shadow_rw_test
+./run_test.sh sep_efuse_fw_token_match_test
+./run_all_tests.sh            # full firmware suite, includes the above
+
+# Standalone shadow-map smoke (not the fw-tests tree):
+cd sw/sep-vp-tests/sep-efuse-test
+make
+----
+
+The three `sep_efuse_fw_*` tests override preload with
+`+SEP_EFUSE_NO_PRELOAD` so they run on a blank array.

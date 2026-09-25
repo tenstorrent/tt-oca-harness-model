@@ -51,6 +51,8 @@
 #include <cstring>
 #include <openssl/evp.h>
 
+using kmac_ref::compute_kmac_reference;
+
 // Logger for test output
 static RegLogger test_logger;
 
@@ -990,12 +992,12 @@ void testbench::test_sideload_unmasked_kmac()
         test->register_write_32(test->CMD_OFFSET, 0x1D);
         wait(10, SC_NS);
         for (size_t i = 0; i < msg_len; i++) {
-            test->register_write_8(0x800, static_cast<uint8_t>(test_msg[i]));
+            test->register_write_8(test->MSG_FIFO_OFFSET, static_cast<uint8_t>(test_msg[i]));
             wait(1, SC_NS);
         }
         const uint8_t right_enc[3] = {0x01, 0x00, 0x02};
         for (uint8_t b : right_enc) {
-            test->register_write_8(0x800, b);
+            test->register_write_8(test->MSG_FIFO_OFFSET, b);
             wait(1, SC_NS);
         }
         test->register_write_32(test->CMD_OFFSET, 0x2E);
@@ -1019,12 +1021,19 @@ void testbench::test_sideload_unmasked_kmac()
             return;
         }
 
-        uint32_t share1_word = 0xFFFFFFFFu;
-        test->register_read_32(0x500, share1_word);
-        if (share1_word != 0) {
-            cleanup_test(test);
-            report_test_fail("TC-UNMASKED", "STATE share1 was not zero");
-            return;
+        // With EnMasking=0 the model must not split the digest, so the whole
+        // share1 half of the STATE window reads back as zero, not just word 0.
+        // share1 starts one 256-byte half-window after share0.
+        const unsigned int STATE_SHARE1_OFFSET = test->STATE_OFFSET + 0x100;
+        for (unsigned int w = 0; w < 8; w++) {
+            uint32_t share1_word = 0xFFFFFFFFu;
+            test->register_read_32(STATE_SHARE1_OFFSET + w * 4, share1_word);
+            if (share1_word != 0) {
+                cleanup_test(test);
+                report_test_fail("TC-UNMASKED",
+                                 "STATE share1 word " + std::to_string(w) + " was not zero");
+                return;
+            }
         }
 
         cleanup_test(test);
