@@ -315,6 +315,12 @@ public:
    ///        safe SystemC process context, avoiding sc_out::write() inside b_transport.
    sc_event m_ev_output_update;
 
+   /// @brief Falling edge of an ALERT_TEST fatal_fault pulse.
+   ///        Notified only after drive_outputs() has taken the rising edge, and
+   ///        kept off m_ev_output_update so the two notifies cannot coalesce into
+   ///        the one pending notification an sc_event retains.
+   sc_event m_ev_fatal_fault_fall;
+
    /// @brief Counter tick cancellation event (FUNC002 reset readiness / FUNC003+FUNC004 hook).
    ///        Notified by reset_process() when rst_n is asserted (active-low) to signal
    ///        any running counter increment SC_THREAD/SC_EVENT (wakeup tick, watchdog tick)
@@ -460,7 +466,7 @@ public:
        * dont_initialize() prevents a spurious firing at time zero.
        * --------------------------------------------------------------------- */
       SC_METHOD(drive_outputs);
-      sensitive << m_ev_output_update;
+      sensitive << m_ev_output_update << m_ev_fatal_fault_fall;
       dont_initialize();
 
       /* -----------------------------------------------------------------------
@@ -1635,9 +1641,10 @@ private:
     *
     * fatal_fault is the one output that is not a straight mirror of its flag: the
     * flag is consumed here, so a pending pulse drives the port high on this
-    * invocation and low on the next. handle_write_ALERT_TEST schedules that second
-    * invocation; see the comment there for why the falling edge is not scheduled
-    * from inside this method.
+    * invocation and low on the next. The falling invocation is
+    * m_ev_fatal_fault_fall, scheduled by handle_write_ALERT_TEST only after it
+    * has yielded the rising delta — scheduling it from inside this method would
+    * put both edges on one evaluation whenever the method runs inside a wait.
     *
     * FUNC002: aon_timer_rst_req is now driven from m_wdog_bite_active instead of
     * an inline counter/threshold evaluation. This allows the AON-domain reset path

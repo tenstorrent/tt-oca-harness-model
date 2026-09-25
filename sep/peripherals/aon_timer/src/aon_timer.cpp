@@ -570,34 +570,38 @@ bool aon_timer_ip::handle_write_ALERT_TEST(uint32_t value, uint32_t write_mask)
 {
    (void)write_mask;
 
-   /* Bit[0] = fatal_fault test: set pending flag; port is driven by drive_outputs()
-    * SC_METHOD to avoid sc_out::write() inside b_transport (SystemC 3.0 constraint). */
-   const bool pulse = (value & 0x1U) != 0U;
-   if (pulse) {
-      m_fatal_fault_pending = true;
-      m_ev_output_update.notify(SC_ZERO_TIME);
-   }
    /* ALERT_TEST has no storage; register shadow remains cleared (0x0).
     * The regmodel framework has read_bit_mask=0x0 so reads already return 0x0. */
 
-   /* CDC annotation: advance the quantum keeper by the SYS->AON synchronizer
-    * delay. */
+   /* CDC annotation is not the pulse handshake. sync() waits only the keeper's
+    * local time, and only when need_sync() says the quantum is due: a stopped
+    * AON clock makes that delay SC_ZERO_TIME, and a quantum still larger than
+    * the synchronizer delay skips the wait entirely. Done first so a timed
+    * wait here cannot run the falling edge before the initiator samples. */
    m_qk.inc(compute_cdc_delay());
+   if (m_qk.need_sync()) {
+      m_qk.sync();
+   }
 
-   if (pulse) {
-      /* A pulse has to reach the wire before this transport returns, so the
-       * quantum is flushed whether or not it was due. sync() yields to the
-       * scheduler, which runs the drive_outputs() notified above; that is what
-       * makes fatal_fault=1 observable to the initiator.
-       *
-       * The falling edge is then a second notify, issued only after sync() has
-       * consumed the first. Notifying from inside the asserting drive_outputs()
-       * instead would land that delta inside this same sync(), and the pulse
-       * would already be low by the time the initiator samples it. */
-      m_qk.sync();
+   /* Bit[0] = fatal_fault test. The port is driven by drive_outputs() so
+    * sc_out::write() stays out of b_transport (SystemC 3.0 constraint).
+    *
+    * The pulse is two scheduler-visible deltas, split by an explicit yield.
+    * Two notify(SC_ZERO_TIME) calls on one event with no yield between them
+    * coalesce — an sc_event keeps a single pending notification — and
+    * drive_outputs() would run once, leaving fatal_fault never sampled high.
+    * The fall is also its own event, so a rise that is still pending cannot
+    * swallow it. */
+   if ((value & 0x1U) != 0U) {
+      m_fatal_fault_pending = true;
       m_ev_output_update.notify(SC_ZERO_TIME);
-   } else if (m_qk.need_sync()) {
-      m_qk.sync();
+      /* Resumes in the delta that takes the rising edge. The sc_signal update
+       * is posted for the end of this delta; the fall, notified from here, is
+       * the following one. No wait after this notify: a further yield would
+       * run the falling edge before b_transport returned, and the initiator
+       * would only ever sample the pin low. */
+      sc_core::wait(SC_ZERO_TIME);
+      m_ev_fatal_fault_fall.notify(SC_ZERO_TIME);
    }
 
    return true;
@@ -1885,8 +1889,9 @@ void aon_timer_ip::drive_outputs()
 
    /* Drive fatal_fault high while the ALERT_TEST pulse is pending, then low on
     * the following evaluation. handle_write_ALERT_TEST owns the falling-edge
-    * notify, issued after its CDC sync; re-notifying here would collapse the
-    * pulse inside that same sync. */
+    * notify (m_ev_fatal_fault_fall), issued only after it has yielded the
+    * rising delta. Notifying the fall from here would schedule it inside that
+    * same yield and the pin would already be low when the initiator sampled. */
    if (m_fatal_fault_pending) {
       fatal_fault.write(true);
       m_fatal_fault_pending = false;

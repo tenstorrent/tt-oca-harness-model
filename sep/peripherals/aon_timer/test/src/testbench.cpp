@@ -10296,11 +10296,11 @@ void testbench::test_func008_tc033_wdog_regwen_lock_count_remains_writable()
  *   clears the flag. The assertion is therefore transient (one evaluation cycle).
  *
  * Timing note:
- *   The write callback flushes the quantum, so drive_outputs() has already
- *   asserted fatal_fault by the time write_register_32() returns; one delta is
- *   still needed for the sc_signal update to reach this process. The callback
- *   also schedules the deassert, which lands one delta later. No second
- *   register write is involved.
+ *   The write callback yields one delta so drive_outputs() posts fatal_fault=1,
+ *   then schedules the fall and returns without waiting again. The sc_signal
+ *   update commits at the end of that delta, so one wait here samples the pin
+ *   high and the wait after that samples it low. No second register write is
+ *   involved.
  *
  * Pass criteria:
  *   - fatal_fault = 0 before the test.
@@ -10368,8 +10368,8 @@ void testbench::test_func008_tc034_alert_test_fatal_fault_connectivity()
       passed = false;
    }
 
-   /* The write callback scheduled a second drive_outputs() that drops the
-    * pulse; this delta is where its signal update becomes visible. */
+   /* The write callback scheduled the falling edge for the delta after the
+    * one that posted fatal_fault=1. This wait is where that update is visible. */
    wait(SC_ZERO_TIME);
 
    bool ff_deasserted = test->fatal_fault_sig.read();
