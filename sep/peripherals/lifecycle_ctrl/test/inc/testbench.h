@@ -60,6 +60,7 @@ public:
     void test_lock_scope();
     void test_prod_dbg_priority();
     void test_outputs_to_sep();
+    void test_feat_ctrl_callback();
 
 private:
     /// Apply an input bundle, as the eFuse model does through set_inputs().
@@ -69,6 +70,9 @@ private:
     /// Clear the W1S demote registers so a test can start un-demoted. Stands in for a
     /// reset, which is the only thing that clears them in hardware either.
     void clear_demote();
+
+    /// Recompute FEAT_CTRL from the CCI parameters after clear_demote().
+    void restore_configured_inputs();
 
     /// Read FEAT_CTRL as one 64-bit value.
     uint64_t read_feat_ctrl();

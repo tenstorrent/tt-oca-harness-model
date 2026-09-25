@@ -257,9 +257,13 @@ void testbench::test_demote_1_lock()
 {
     report_test_start("Test 6: DEMOTE_1 lock semantics");
 
+    // Test 5 has already set the demote bit, and a W1S bit that is already 1
+    // cannot show that the lock refused a later write. Start from a clear
+    // register, then put FEAT_CTRL back so the config-selected cases still match.
+    clear_demote();
+
     uint32_t val = 0;
 
-    // Set lock bit
     m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x00000002);
     wait(1, SC_NS);
     m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, val);
@@ -269,17 +273,18 @@ void testbench::test_demote_1_lock()
         report_test_fail("DEMOTE_1 lock set",
             "expected lock bit set, got 0x" + std::to_string(val));
 
-    uint32_t before = val;
-
-    // Write after lock — must be silently ignored
-    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x00000000);
+    // Writing the demote bit must be refused. A write of zero would leave a W1S
+    // register unchanged even with the lock removed.
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x00000001);
     wait(1, SC_NS);
     m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, val);
-    if (val == before)
-        report_test_pass("DEMOTE_1: write ignored after lock");
+    if (val == 0x2u)
+        report_test_pass("DEMOTE_1: demote bit refused while locked");
     else
         report_test_fail("DEMOTE_1 post-lock write",
-            "DEMOTE_1 changed after lock, got 0x" + std::to_string(val));
+            "expected 0x2 (lock only) got 0x" + std::to_string(val));
+
+    restore_configured_inputs();
 }
 
 // =============================================================================
@@ -319,9 +324,12 @@ void testbench::test_demote_2_lock()
 {
     report_test_start("Test 11: DEMOTE_2 lock semantics");
 
+    // Test 7 leaves the demote bit set. Clear it so a write-1 is a real refusal,
+    // then restore the config-selected FEAT_CTRL for the cases that follow.
+    clear_demote();
+
     uint32_t val = 0;
 
-    // Set lock bit
     m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x00000002);
     wait(1, SC_NS);
     m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, val);
@@ -331,17 +339,16 @@ void testbench::test_demote_2_lock()
         report_test_fail("DEMOTE_2 lock set",
             "expected lock bit set, got 0x" + std::to_string(val));
 
-    uint32_t before = val;
-
-    // Write after lock — must be silently ignored and a REG WARNING logged
-    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x00000000);
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, 0x00000001);
     wait(1, SC_NS);
     m_test->register_read_32(lifecycle_ctrl_basetest::DEMOTE_2_OFFSET, val);
-    if (val == before)
-        report_test_pass("DEMOTE_2: write ignored after lock");
+    if (val == 0x2u)
+        report_test_pass("DEMOTE_2: demote bit refused while locked");
     else
         report_test_fail("DEMOTE_2 post-lock write",
-            "DEMOTE_2 changed after lock, got 0x" + std::to_string(val));
+            "expected 0x2 (lock only) got 0x" + std::to_string(val));
+
+    restore_configured_inputs();
 }
 
 // =============================================================================
@@ -482,6 +489,22 @@ void testbench::drive_inputs(uint32_t lc_code, uint64_t sip_dis, uint64_t sys_di
 void testbench::clear_demote()
 {
     m_dut->reset_all_registers();
+}
+
+void testbench::restore_configured_inputs()
+{
+    // clear_demote() zeroes FEAT_CTRL and does not recompute it. The cases that
+    // follow read the vector the CCI config produced at elaboration.
+    lifecycle_ctrl_model::lc_inputs in;
+    in.lc_state_code = lifecycle_ctrl_model::lc_state_encode(
+        m_dut->lc_state.get_param_value());
+    in.sip_dis = (static_cast<uint64_t>(m_dut->sip_dis_hi.get_param_value()) << 32)
+               | m_dut->sip_dis_lo.get_param_value();
+    in.sys_dis = (static_cast<uint64_t>(m_dut->sys_dis_hi.get_param_value()) << 32)
+               | m_dut->sys_dis_lo.get_param_value();
+    in.security_disable = m_dut->security_disable.get_param_value();
+    in.secure_tm        = m_dut->secure_tm.get_param_value();
+    m_dut->set_inputs(in);
 }
 
 uint64_t testbench::read_feat_ctrl()
@@ -832,6 +855,91 @@ void testbench::test_outputs_to_sep()
 }
 
 // =============================================================================
+// Test 21: feat_ctrl change callback
+//
+// compute_feat_ctrl() invokes the callback on every recompute, including one
+// that leaves the vector unchanged. set_inputs() and a low-word demote write
+// recompute; an upper-word write does not. Replacing or clearing the callback
+// retires the previous one.
+// =============================================================================
+
+void testbench::test_feat_ctrl_callback()
+{
+    report_test_start("Test 21: FEAT_CTRL change callback");
+
+    clear_demote();
+
+    int calls = 0;
+    uint64_t seen = 0;
+    m_dut->set_feat_ctrl_change_callback([&] {
+        calls++;
+        seen = m_dut->get_feat_ctrl();
+    });
+
+    const uint32_t test_dev = lifecycle_ctrl_model::lc_state_encode(0x0);
+    constexpr uint64_t ALL = 0xFFFF'FFFF'FFFF'FFFFULL;
+
+    drive_inputs(test_dev, 0, 0);
+    if (calls == 1 && seen == ALL && seen == read_feat_ctrl())
+        report_test_pass("callback runs on set_inputs and sees the new vector");
+    else
+        report_test_fail("callback on set_inputs",
+            "calls=" + std::to_string(calls) + " seen=" + hex64(seen) +
+            " reg=" + hex64(read_feat_ctrl()));
+
+    // Same bundle again. The callback is tied to recomputation, not to a diff.
+    drive_inputs(test_dev, 0, 0);
+    if (calls == 2 && seen == ALL)
+        report_test_pass("callback runs again when FEAT_CTRL does not change");
+    else
+        report_test_fail("callback on unchanged recompute",
+            "calls=" + std::to_string(calls) + " seen=" + hex64(seen));
+
+    drive_inputs(test_dev, 0x1, 0);
+    if (calls == 3 && seen == (ALL & ~0x1ull) && seen == read_feat_ctrl())
+        report_test_pass("callback sees FEAT_CTRL after SiP_DIS bit 0");
+    else
+        report_test_fail("callback on SiP_DIS",
+            "calls=" + std::to_string(calls) + " seen=" + hex64(seen) +
+            " reg=" + hex64(read_feat_ctrl()));
+
+    // TEST_DEV re-enables the debug section on demote, which puts bit 0 back.
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_OFFSET, 0x1);
+    wait(1, SC_NS);
+    if (calls == 4 && seen == ALL && seen == read_feat_ctrl())
+        report_test_pass("demote write notifies the callback with the updated vector");
+    else
+        report_test_fail("callback on demote",
+            "calls=" + std::to_string(calls) + " seen=" + hex64(seen) +
+            " reg=" + hex64(read_feat_ctrl()));
+
+    m_test->register_write_32(lifecycle_ctrl_basetest::DEMOTE_1_HI_OFFSET, 0x1);
+    wait(1, SC_NS);
+    if (calls == 4)
+        report_test_pass("DEMOTE_1_HI write does not recompute FEAT_CTRL");
+    else
+        report_test_fail("callback on DEMOTE_1_HI",
+            "expected no new call, calls=" + std::to_string(calls));
+
+    int calls2 = 0;
+    m_dut->set_feat_ctrl_change_callback([&] { calls2++; });
+    drive_inputs(test_dev, 0, 0);
+    if (calls == 4 && calls2 == 1)
+        report_test_pass("replacing the callback retires the previous one");
+    else
+        report_test_fail("callback replacement",
+            "old calls=" + std::to_string(calls) + " new calls=" + std::to_string(calls2));
+
+    m_dut->set_feat_ctrl_change_callback({});
+    drive_inputs(test_dev, 0x1, 0);
+    if (calls == 4 && calls2 == 1)
+        report_test_pass("clearing the callback stops further notification");
+    else
+        report_test_fail("callback removal",
+            "old calls=" + std::to_string(calls) + " new calls=" + std::to_string(calls2));
+}
+
+// =============================================================================
 // Main test sequence
 // =============================================================================
 
@@ -867,6 +975,7 @@ void testbench::run_tests()
     test_lock_scope();
     test_prod_dbg_priority();
     test_outputs_to_sep();
+    test_feat_ctrl_callback();
 
     report_test_summary();
 
