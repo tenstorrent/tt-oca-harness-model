@@ -87,7 +87,7 @@ if(DEFINED ENV{SYSTEMC_HOME} AND EXISTS "$ENV{SYSTEMC_HOME}/include/systemc.h")
                   $ENV{SYSTEMC_HOME}/lib-linux64
                   $ENV{SYSTEMC_HOME}/lib-macosx
                   $ENV{SYSTEMC_HOME}/lib-macosarm64
-            REQUIRED)
+            NO_DEFAULT_PATH REQUIRED
         set_target_properties(SystemC::systemc PROPERTIES
             IMPORTED_LOCATION             "${SC_LIB}"
             INTERFACE_INCLUDE_DIRECTORIES "$ENV{SYSTEMC_HOME}/include")
