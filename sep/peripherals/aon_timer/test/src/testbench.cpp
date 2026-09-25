@@ -5025,32 +5025,26 @@ void testbench::test_func003_tc055_both_timers_concurrent_independent()
 /**
  * @brief TC_AON_056: Verify same-value WKUP_CTRL write unconditionally resets prescaler.
  *
- * In this model, every WKUP_CTRL write (regardless of value) interrupts the tick
- * thread's current wait(tick_delay, m_ev_wkup_tick | ...) and, since the timer
- * remains enabled, causes an immediate counter increment followed by a fresh
- * prescaler period. The "prescaler accumulator reset" means: the pending time
- * toward the NEXT count is discarded; a full (prescaler+1) tick period must elapse
- * from the re-write before the NEXT increment.
+ * Every WKUP_CTRL write interrupts the tick thread's current wait and restarts
+ * the prescaler period. The interrupt is not a timeout, so the counter must not
+ * increment on the write itself. A full (prescaler+1) tick period must elapse
+ * from the re-write before the next increment.
  *
  * Verification strategy using prescaler=9 (period = 10 AON ticks = 50 µs):
  *
  *   Step 1: Enable timer (CTRL write). Let 3 full periods pass (150 µs = 30 ticks).
  *           Record baseline count B (should be ~3).
  *
- *   Step 2: Record the count C_before. Write same WKUP_CTRL value. This interrupt
- *           causes one immediate increment (C_before -> C_before+1) and starts a
- *           fresh 50 µs period.
+ *   Step 2: Record the count C_before. Write the same WKUP_CTRL value.
+ *           The count immediately after must still be C_before.
  *
- *   Step 3: Read count immediately after re-write = C_immed.
- *           Must equal C_before + 1 (the re-write triggered an immediate increment).
+ *   Step 3: Advance 25 µs (5 ticks) = half the prescaler period from re-write.
+ *           Count must still equal C_before.
  *
- *   Step 4: Advance 25 µs (5 ticks) = half the prescaler period from re-write.
- *           Read count = C_half. Must equal C_immed (no additional count in half period).
+ *   Step 4: Advance 35 µs more (12 ticks from the re-write, past one period).
+ *           Count must be C_before + 1.
  *
- *   Step 5: Advance 35 µs more (7 ticks total = 12 ticks from re-write > 1 period).
- *           Read count = C_full. Must be C_immed + 1 (one full period from re-write).
- *
- * Pass criteria: same-value write causes immediate +1 then starts fresh period.
+ * Pass criteria: same-value write does not count, then one count after a full period.
  * Reference: TC_AON_056 in aon_timer-test-plan.md, FUNC003.
  */
 void testbench::test_func003_tc056_wkup_ctrl_same_value_resets_prescaler()
@@ -5095,31 +5089,29 @@ void testbench::test_func003_tc056_wkup_ctrl_same_value_resets_prescaler()
    }
 
    /* ------------------------------------------------------------------ *
-    * Step 2: Write same WKUP_CTRL value (same-value prescaler reset).  *
-    * Model behavior: tick thread wakes from current wait, increments   *
-    * counter (immediate +1), then starts a fresh tick_delay period.   *
+    * Step 2: Write the same WKUP_CTRL value. The tick thread wakes,   *
+    * but the period has not elapsed, so the count must not change.    *
     * ------------------------------------------------------------------ */
    uint32_t c_before = 0xDEADBEEFU;
    test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, c_before);
    REG_INFO(1, logger) << "TC_AON_056: Step 2 - count before re-write = " << c_before;
 
    test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, CTRL_P9); /* Same-value re-write */
+   wait(SC_ZERO_TIME);
 
    uint32_t c_immed = 0xDEADBEEFU;
    test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, c_immed);
    REG_INFO(1, logger) << "TC_AON_056: Step 2 - count after re-write = " << c_immed
-                        << " (expected " << (c_before + 1U) << " = before+1, immediate increment)";
+                        << " (expected " << c_before << ", no increment on the wake)";
 
-   /* The re-write must trigger an immediate increment. */
-   if (c_immed == c_before + 1U)
+   if (c_immed == c_before)
    {
-      REG_INFO(1, logger) << "TC_AON_056: PASS  Step 2 - re-write caused immediate +1: "
-                           << c_before << " -> " << c_immed
-                           << " (prescaler accumulator reset confirmed)";
+      REG_INFO(1, logger) << "TC_AON_056: PASS  Step 2 - re-write left count at "
+                           << c_immed << " (period restarted, no ghost count)";
    }
    else
    {
-      REG_ERROR(1, logger) << "TC_AON_056: FAIL  Step 2 - expected " << (c_before + 1U)
+      REG_ERROR(1, logger) << "TC_AON_056: FAIL  Step 2 - expected " << c_before
                             << " after re-write, got " << c_immed;
       all_pass = false;
    }
@@ -10304,22 +10296,16 @@ void testbench::test_func008_tc033_wdog_regwen_lock_count_remains_writable()
  *   clears the flag. The assertion is therefore transient (one evaluation cycle).
  *
  * Timing note:
- *   write_register_32() includes the 10 µs CDC quantum advancement. After the
- *   write completes, wait(SC_ZERO_TIME) is needed to let drive_outputs()
- *   (an SC_METHOD) evaluate before checking the fatal_fault signal.
- *
- *   The model's drive_outputs() SC_METHOD only runs when m_ev_output_update is
- *   notified. After ALERT_TEST[0]=1 write, drive_outputs() runs once (sets
- *   fatal_fault=true, clears m_fatal_fault_pending). To observe the de-assertion,
- *   a second drive_outputs() trigger is needed. This test uses INTR_TEST[0]=1
- *   write (which unconditionally notifies m_ev_output_update) as the trigger.
+ *   After the write, one delta runs drive_outputs() and asserts fatal_fault.
+ *   That evaluation schedules one more delta, which deasserts the pulse.
+ *   No second register write is involved.
  *
  * Pass criteria:
  *   - fatal_fault = 0 before the test.
- *   - fatal_fault = 1 after write(bit[0]=1) + SC_ZERO_TIME delta.
- *   - fatal_fault = 0 after INTR_TEST write triggers second drive_outputs() run.
+ *   - fatal_fault = 1 after write(bit[0]=1) + one delta.
+ *   - fatal_fault = 0 after one further delta.
  *   - ALERT_TEST reads 0x00000000 (WO register, no storage).
- *   - INTR_STATE restored to baseline after INTR_TEST-forced interrupt is W1C-cleared.
+ *   - INTR_STATE is unchanged by ALERT_TEST.
  *   - Writing bit[0]=0 to ALERT_TEST does not assert fatal_fault.
  */
 void testbench::test_func008_tc034_alert_test_fatal_fault_connectivity()
@@ -10380,45 +10366,22 @@ void testbench::test_func008_tc034_alert_test_fatal_fault_connectivity()
       passed = false;
    }
 
-   /* --------------------------------------------------------------------- *
-    * Step 4: Verify fatal_fault de-asserts by triggering drive_outputs()   *
-    * a second time. The model's drive_outputs() SC_METHOD is only called    *
-    * when m_ev_output_update is notified. After the ALERT_TEST write,       *
-    * m_fatal_fault_pending was set to true, drive_outputs() ran once         *
-    * (fatal_fault=true, cleared pending). To verify de-assertion we must    *
-    * trigger a second drive_outputs() evaluation.                           *
-    *                                                                        *
-    * Approach: write 0x1 to INTR_TEST to force-assert the wakeup interrupt. *
-    * handle_write_INTR_TEST unconditionally notifies m_ev_output_update      *
-    * when bit[0]=1. The subsequent SC_ZERO_TIME wait lets drive_outputs()    *
-    * run again. At this point m_fatal_fault_pending=false, so drive_outputs() *
-    * writes fatal_fault=false (de-asserting the signal).                    *
-    *                                                                        *
-    * Note: INTR_TEST write sets intr_wkup_timer_expired=1 as a side effect. *
-    * This is expected; INTR_STATE is documented as CHANGED by INTR_TEST,    *
-    * not by ALERT_TEST. We W1C-clear INTR_STATE after this step.            *
-    * --------------------------------------------------------------------- */
-   test->write_register_32(aon_timer_basetest::INTR_TEST_OFFSET, 0x00000001U);
+   /* The asserting evaluation schedules one more delta that drops the pulse. */
    wait(SC_ZERO_TIME);
 
    bool ff_deasserted = test->fatal_fault_sig.read();
 
    if (!ff_deasserted)
    {
-      REG_INFO(1, logger) << "TC_AON_034: PASS  Step 4 - fatal_fault=0 after INTR_TEST trigger "
-                           << "(second drive_outputs() with pending=false; fatal_fault de-asserted)";
+      REG_INFO(1, logger) << "TC_AON_034: PASS  Step 4 - fatal_fault=0 one delta after the pulse "
+                           << "(no second register write)";
    }
    else
    {
       REG_ERROR(1, logger) << "TC_AON_034: FAIL  Step 4 - fatal_fault=1 persists "
-                            << "(drive_outputs() should have cleared fatal_fault when "
-                            << "m_fatal_fault_pending=false; verify one-shot pending flag logic)";
+                            << "(pulse must drop on the following delta)";
       passed = false;
    }
-
-   /* W1C-clear the forced interrupt from the INTR_TEST write above. */
-   test->write_register_32(aon_timer_basetest::INTR_STATE_OFFSET, 0x00000001U);
-   wait(SC_ZERO_TIME);
 
    /* --------------------------------------------------------------------- *
     * Step 5: Read ALERT_TEST; verify = 0x00000000 (WO register, no storage).*
@@ -11457,47 +11420,67 @@ void testbench::test_edge01_invalid_clock_period()
    const std::string TEST_NAME = "TC_AON_EDGE_01: Invalid Clock Period (clk_aon_freq == 0.0)";
    report_test_start(TEST_NAME);
 
-   /* 1. Set AON clock frequency to 0.0 */
+   apply_reset();
+   bool passed = true;
+
    test->clk_aon_freq_sig.write(0.0);
-   wait(10, SC_NS);
+   wait(SC_ZERO_TIME);
 
-   REG_INFO(1, logger) << "TC_AON_EDGE_01: Set clk_aon_freq = 0.0 Hz";
-
-   /* 2. Issue a write to trigger compute_cdc_delay() which will return SC_ZERO_TIME */
+   test->write_register_32(aon_timer_basetest::WKUP_COUNT_HI_OFFSET, 0x00000000U);
+   test->write_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, 0x00000000U);
+   test->write_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, 0x00000000U);
+   /* Enable both timers. Prescaler 0: one wakeup count per AON tick when the clock runs. */
    test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, 0x00000001U);
-   wait(10, SC_NS);
-
-   REG_INFO(1, logger) << "TC_AON_EDGE_01: Wrote WKUP_CTRL, compute_cdc_delay() hit 0.0 Hz path";
-
-   /* 3. The write above enabled the wakeup timer, waking up wkup_timer_tick_thread.
-    * Wait for the thread to evaluate the 0.0 frequency and fall back to its wait. */
-   wait(10, SC_NS);
-
-   REG_INFO(1, logger) << "TC_AON_EDGE_01: wkup_timer_tick_thread hit 0.0 Hz path";
-
-   /* 4. Issue a write to WDOG_CTRL to enable the watchdog, waking up wdog_timer_tick_thread. */
    test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET, 0x00000001U);
-   wait(10, SC_NS);
 
-   REG_INFO(1, logger) << "TC_AON_EDGE_01: Wrote WDOG_CTRL, enabling watchdog timer";
+   /* 50 µs would be ten AON ticks at 200 kHz. At 0 Hz neither counter may move. */
+   wait(50000, SC_NS);
 
-   /* 5. Wait for wdog_timer_tick_thread to evaluate the 0.0 frequency. */
-   wait(10, SC_NS);
+   uint32_t wkup_lo = 0xDEADBEEFU;
+   uint32_t wdog = 0xDEADBEEFU;
+   test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, wkup_lo);
+   test->read_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, wdog);
+   if (wkup_lo == 0U && wdog == 0U)
+   {
+      REG_INFO(1, logger) << "TC_AON_EDGE_01: PASS  counters stayed 0 while clk_aon_freq=0";
+   }
+   else
+   {
+      REG_ERROR(1, logger) << "TC_AON_EDGE_01: FAIL  count while stopped, wkup="
+                            << wkup_lo << " wdog=" << wdog;
+      passed = false;
+   }
 
-   REG_INFO(1, logger) << "TC_AON_EDGE_01: wdog_timer_tick_thread hit 0.0 Hz path";
-
-   /* 6. Restore clock frequency to nominal so other operations can continue if needed. */
+   /* Restoring the clock, without rewriting CTRL, must start both timers. */
    test->clk_aon_freq_sig.write(200000.0);
-   
-   /* Disable timers to clean up and avoid spurious interrupts for subsequent code. */
+   wait(SC_ZERO_TIME);
+   wait(6000, SC_NS); /* one 5 µs AON tick, plus margin for the wake delta */
+
+   test->read_register_32(aon_timer_basetest::WKUP_COUNT_LO_OFFSET, wkup_lo);
+   test->read_register_32(aon_timer_basetest::WDOG_COUNT_OFFSET, wdog);
+   if (wkup_lo == 1U && wdog == 1U)
+   {
+      REG_INFO(1, logger) << "TC_AON_EDGE_01: PASS  one count on each timer after clock restore";
+   }
+   else
+   {
+      REG_ERROR(1, logger) << "TC_AON_EDGE_01: FAIL  after restore wkup=" << wkup_lo
+                            << " wdog=" << wdog << " (expected 1 and 1)";
+      passed = false;
+   }
+
    test->write_register_32(aon_timer_basetest::WKUP_CTRL_OFFSET, 0x00000000U);
    test->write_register_32(aon_timer_basetest::WDOG_CTRL_OFFSET, 0x00000000U);
-   wait(10, SC_NS);
+   wait(SC_ZERO_TIME);
 
-   REG_INFO(1, logger) << "TC_AON_EDGE_01: Restored clk_aon_freq = 200 kHz and disabled timers";
-
-   /* If we reach here without a SystemC fatal error or infinite loop, the test passes. */
-   report_test_pass(TEST_NAME);
+   if (passed)
+   {
+      report_test_pass(TEST_NAME);
+   }
+   else
+   {
+      report_test_fail(TEST_NAME, "zero-frequency hold or clock restore did not match");
+   }
 }
 
 // =========================================================================

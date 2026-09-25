@@ -506,6 +506,13 @@ public:
       sensitive << sleep_mode;
       dont_initialize();
 
+      /* A frequency change has to wake both tick threads. They sample
+       * clk_aon_freq only after a wait returns, so a 0 Hz hold and a later
+       * restore would otherwise leave them blocked. */
+      SC_METHOD(aon_clock_changed);
+      sensitive << clk_aon_freq;
+      dont_initialize();
+
       /* -----------------------------------------------------------------------
        * FUNC001: Register all functional callbacks for the 14 AON Timer
        * registers. These are registered after base-class construction so they
@@ -1431,6 +1438,9 @@ private:
     * notifies m_ev_wdog_tick. It does NOT write any sc_out<bool> port directly.
     */
    void wdog_sleep_mode_handler();
+
+   /// Wake both tick threads when clk_aon_freq changes.
+   void aon_clock_changed();
 
    // =========================================================================
    // Reset Process
