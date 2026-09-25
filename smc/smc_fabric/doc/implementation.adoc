@@ -1,0 +1,126 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[smc-fabric-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::smc_fabric` is a loosely-timed TLM-2.0 router for the SMC dual
+aperture (local alias + global alias). It is a Bucket D pure target:
+no quantum keeper and no cycle-stepped process. CSR accesses add
+`reg_access_ns` to the incoming `delay`. Routing and filter decisions
+are synchronous.
+
+[source,cpp]
+----
+class smc_fabric : public sc_core::sc_module
+----
+
+Shared AXI sideband is `smc::smc_axi_extension` from
+`smc/common/include/smc_axi_extension.h`.
+
+====== Threads and sockets
+
+There is no periodic `SC_THREAD`. `reset_proc` (`SC_METHOD` on `rst_n_i`)
+clears alias, output-remap, filter, and hang-detector state. Three
+event-driven timeout methods monitor blocking transports without sampling a
+clock. DMI is never granted.
+
+Internal masters (`jtag_axi_in`, `mmio_in`, `data_accel_in`, `log_in`)
+run alias remap, then the `REGION_SIZE`-programmed local/outbound split.
+`sys_axi_in` is inbound-filter then local
+only. `sep_axi_in` is local only (no alias remap, no inbound filter).
+`data_accel_in` is a `multi_passthrough_target_socket` so DMA and
+memory_zeroer can both bind.
+
+Remap and filter initiator sockets exist so a bench can bind stubs;
+writes to those windows update tables inside the fabric and are not
+forwarded.
+
+[cols="36%,28%,36%",options="header"]
+|===
+|Port |Type |Platform bind (`smc-vp`)
+|`jtag_axi_in` |TLM 64-bit target |`fwd_jtag_` from `jtag_axi_in`
+|`mmio_in` |TLM 64-bit target |`cluster.mmio` (or idle initiator)
+|`data_accel_in` |TLM 64-bit multi-target |`dma_.mst_socket`, `zeroer.dma_socket`
+|`log_in` |TLM 64-bit target |idle initiator
+|`sys_axi_in` |TLM 64-bit target |`fwd_sys_` from `sys_axi_in`
+|`sep_axi_in` |TLM 64-bit target |`fwd_sep_` from `sep_axi_in`
+|`to_front_port` |TLM 64-bit initiator |`front_port_router` (WDT, bootrom, SPM, PLIC, CLINT, BEU)
+|`to_data_accel_ctrl` |TLM 64-bit initiator |`daccel_router` (DMA + zeroer CSRs)
+|`to_periph` |TLM 64-bit initiator |`periph_router`
+|`to_dfd_apb` |TLM 64-bit initiator |DFD stub
+|`to_cpu_ctrl` |TLM 64-bit initiator |CPU-control stub (base-config subset is internal)
+|`to_aR_ctrl` / `to_mR_ctrl` / `to_xR_ctrl` |TLM 64-bit initiator |stubs; tables handled internally
+|`to_inbound_filter_ctrl` / `to_outbound_filter_ctrl` |TLM 64-bit initiator |stubs; tables handled internally
+|`to_mailbox` |TLM 64-bit initiator |mailbox stub
+|`to_dft_csr` |TLM 64-bit initiator |DFT stub
+|`output_axi` |TLM 64-bit initiator |re-exported at the platform boundary
+|`rst_n_i` |`sc_in<bool>` |platform `rst_n_sig`
+|`axi_hang_irq_o` |`sc_out<bool>` |combined PLIC source ID 287
+|===
+
+----
+  jtag/mmio/data_accel/log ──► alias remap ──► is_local()?
+           │                        │ yes → to_local_addr → route_local
+           │                        └ no  → output remap → outbound filter → output_axi
+
+  sys_axi_in ──► inbound filter ──► to_local_addr → route_local
+  sep_axi_in ──► to_local_addr ──► route_local
+----
+
+`route_local` intercepts remap/filter/base-config windows internally,
+then `local_decode` picks `to_front_port`, `to_periph`,
+`to_data_accel_ctrl`, `to_dfd_apb`, `to_mailbox`, or `to_dft_csr`.
+PLIC/CLINT/BEU windows sit above the 16 MB demux; internal masters
+reach them only via the global alias (or not at all — `smc-vp` binds
+`cluster.data` straight to `front_port_router`). Absolute ranges live
+in `smc_fabric.h`; do not treat this page as a second TRM map.
+
+====== Construction parameters
+
+Defaults come from the constructor `config`. Runtime timing uses CCI so an
+integrating platform can preset the LT cycle duration.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Field |Default |Use
+|`local_base_addr` |`0xC000_0000` |Local-alias base; `LOCAL_BASE` CSR (RO)
+|`global_base_addr` |`0x4000_0000` |Global-alias base; `GLOBAL_BASE` CSR
+|`region_size` |`0x0100_0000` |Sizes both alias apertures and derives the local-address mask
+|`no_addr_remap` |`false` |Bypass M-mode / Xvisor output remap
+|`num_inbound_filters` |16 |Informational; table is always 16-deep
+|`num_outbound_filters` |16 |Informational
+|`max_write_txns` / `max_read_txns` |4 |Informational in LT
+|`reg_access_ns` |1.0 |Annotated delay on CSR access
+|`hang_det_cycle_ns` |1.0 |Default for CCI parameter `hang_det_cycle_ns`
+|===
+
+The base-config image also implements `CLOCK_GATE_CONTROL` and all three
+hang-detector control/threshold pairs through offset `0x48`. Clock-gate bits
+are stored for firmware parity; LT routing is not power gated. A detector
+snapshots its threshold when an outstanding window starts. A downstream
+completion is progress: it clears the level and rearms any remaining
+outstanding traffic. Annotated delay alone is never a hang. Threshold zero
+disables real timeout, while `irq_test` remains gated by `enable && irq_en`.
+
+====== Error semantics and sideband
+
+Filter deny, outbound deny, and local decode miss return
+`TLM_ADDRESS_ERROR_RESPONSE`. Denied reads fill `0xBADCAB1E`. Success
+is `TLM_OK_RESPONSE` from the downstream target.
+
+On the outbound path the fabric overwrites `source_id`
+(`SMC_SRC_ID` / `MMODE_SRC_ID` / `OTHERS_SRC_ID`). Filters read
+`source_id` and `prot[1]` (NS). Other extension fields pass through.
+
+====== Modeling gaps versus RTL
+
+* No cycle-accurate crossbar arbitration, ID-width conversion, or clock
+  gating. Four internal masters serialize in the SystemC scheduler.
+* AXI channel-level outstanding counters are collapsed to one LT transaction
+  count per ingress leg; channel arbitration and CDC latency are not modeled.
+* Clock-gate controls retain CSR state but do not stop LT model execution.
+* Unmodelled offsets in the `smc_base_config` window are RAZ/WI rather
+  than forwarded to `to_cpu_ctrl` (the platform splits that window).
+* Mailbox, DFD, and DFT are stubs on `smc-vp`.
+* AOU park decode (`to_periph`) is a VP-only window.

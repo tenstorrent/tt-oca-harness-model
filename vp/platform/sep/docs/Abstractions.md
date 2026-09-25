@@ -121,6 +121,18 @@ into `smu_tgt` instead of terminating in a standalone stub. (Previously this was
 dead-end `smu_global_stub` that silently swallowed SMU-bound traffic before it ever reached the
 Outbound Filter — a real functional bug, not just a structural simplification. Corrected.)
 
+### 2.5 Entropy pool and EDN endpoint timing
+The entropy pool at `0x1095_0000` preserves the firmware-visible RTL contract:
+32-to-64 packing, a 32-entry destructive-read FIFO, live low/stall/error causes,
+TRNG-reset scrubbing, and PIC sources 37–39. EDN endpoint 2 is represented by an
+event-driven nonblocking pull interface rather than the pin-level request/ack and
+CDC state machines. Successful EDN Generate commands enqueue OpenSSL-generated
+surrogate words; exact DRBG bytes, CDC flop latency, and cycle-level round-robin
+arbitration remain abstracted. The 4096-cycle stall limit is represented as a
+20.48 us LT timer. External TRNG passthrough and AES/KMAC/OTBN endpoint
+arbitration remain deferred; EDN enable, command completion, reset ordering, pool
+occupancy, and interrupt levels are observable.
+
 ---
 
 ## 3. Deferred / open gaps (documented, not yet fixed)

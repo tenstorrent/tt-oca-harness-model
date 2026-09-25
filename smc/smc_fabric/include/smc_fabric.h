@@ -32,6 +32,8 @@
 #include <tlm_utils/multi_passthrough_target_socket.h>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
+#include "reg_access.h"
+#include <cci_configuration>
 
 #include <array>
 #include <cstdint>
@@ -50,7 +52,7 @@ public:
     struct config {
         uint64_t local_base_addr      = 0xC000'0000ULL;
         uint64_t global_base_addr     = 0x4000'0000ULL;
-        uint64_t region_size          = 0x0100'0000ULL;  // REGION_SIZE CSR image only
+        uint64_t region_size          = 0x0100'0000ULL;  // live alias-aperture size
 
         bool     no_addr_remap        = false;  // smc_config_pkg::NO_ADDR_REMAP (=0 → remap on)
 
@@ -60,7 +62,10 @@ public:
         unsigned max_read_txns        = 4;
 
         double   reg_access_ns        = 1.0;    // ns added to delay per CSR access
+        double   hang_det_cycle_ns    = 1.0;    // LT detector cycle duration
     };
+
+    cci::cci_param<double> hang_det_cycle_ns_p_;
 
     // -----------------------------------------------------------------------
     // Target sockets — inbound masters → fabric
@@ -114,6 +119,7 @@ public:
     // Signals
     // -----------------------------------------------------------------------
     sc_core::sc_in<bool> rst_n_i{"rst_n_i"};
+    sc_core::sc_out<bool> axi_hang_irq_o{"axi_hang_irq_o"};
 
     // -----------------------------------------------------------------------
     // Construction
@@ -275,6 +281,23 @@ private:
     // -----------------------------------------------------------------------
     void reset_proc();
 
+    enum class hang_leg : unsigned { sys = 0, sep = 1, data_accel = 2 };
+    struct hang_state {
+        unsigned outstanding_count = 0;
+        bool timed_out = false;
+        uint32_t threshold_snapshot = 0;
+    };
+    void hang_begin(hang_leg leg);
+    void hang_complete(hang_leg leg);
+    void hang_timeout(hang_leg leg);
+    void hang_timeout_sys();
+    void hang_timeout_sep();
+    void hang_timeout_data_accel();
+    void update_hang_irq();
+    void request_hang_irq_update();
+    regmodel::Register64& hang_ctrl(hang_leg leg);
+    regmodel::Register64& hang_threshold(hang_leg leg);
+
     // -----------------------------------------------------------------------
     // Source-ID constants (AXI USER field) — smc_pkg.sv:277-280
     // -----------------------------------------------------------------------
@@ -361,12 +384,6 @@ private:
     static constexpr uint32_t MAILBOX_BASE   = 0xC001'8000u;
     static constexpr uint32_t MAILBOX_END    = 0xC003'8000u;
 
-    // Input-fabric local/global demux — smc_pkg.sv LOCAL_ALIAS_REGION_SIZE.
-    // Internal masters (jtag/mmio/dma/log) use this fixed 16 MB window for the
-    // local vs outbound split.  cfg_.region_size mirrors the REGION_SIZE CSR but
-    // does not participate in routing.
-    static constexpr uint64_t LOCAL_ALIAS_REGION_SIZE = 0x0100'0000ULL;
-
     // smc_base_config.rdl offsets within SMC_BASE_CONFIG_BASE.
     //   GLOBAL_BASE  0xC001_0000 (RW, default 0x4000_0000)
     //   LOCAL_BASE   0xC001_0008 (RO, default 0xC000_0000)
@@ -374,6 +391,13 @@ private:
     static constexpr uint32_t GCSR_GLOBAL_BASE = 0x00u;
     static constexpr uint32_t GCSR_LOCAL_BASE  = 0x08u;
     static constexpr uint32_t GCSR_REGION_SIZE = 0x10u;
+    static constexpr uint32_t GCSR_CLOCK_GATE_CONTROL = 0x18u;
+    static constexpr uint32_t GCSR_HANG_SYS_CTRL      = 0x20u;
+    static constexpr uint32_t GCSR_HANG_SYS_THRESHOLD = 0x28u;
+    static constexpr uint32_t GCSR_HANG_SEP_CTRL      = 0x30u;
+    static constexpr uint32_t GCSR_HANG_SEP_THRESHOLD = 0x38u;
+    static constexpr uint32_t GCSR_HANG_DATA_CTRL      = 0x40u;
+    static constexpr uint32_t GCSR_HANG_DATA_THRESHOLD = 0x48u;
 
     // M-mode/Xvisor remap windows — smc_pkg.sv:283-286 (relative to local/global base)
     //   MMODE_REGION_MEM_BASE_ADDR  0xC100_0000 → START 0x0100_0000, SIZE 0x0080_0000
@@ -394,6 +418,21 @@ private:
     // State
     // -----------------------------------------------------------------------
     config cfg_;
+
+    regmodel::Register64 clock_gate_control_{
+        0x0000'0000'3F00'3FFFULL, 0x0000'0000'3F00'3FFFULL,
+        0x0000'0000'1F00'0000ULL};
+    regmodel::Register64 hang_sys_ctrl_{0x111ULL, 0x111ULL, 0};
+    regmodel::Register64 hang_sys_threshold_{0xF'FFFFULL, 0xF'FFFFULL, 0x1000};
+    regmodel::Register64 hang_sep_ctrl_{0x111ULL, 0x111ULL, 0};
+    regmodel::Register64 hang_sep_threshold_{0xF'FFFFULL, 0xF'FFFFULL, 0x1000};
+    regmodel::Register64 hang_data_accel_ctrl_{0x111ULL, 0x111ULL, 0};
+    regmodel::Register64 hang_data_accel_threshold_{0xF'FFFFULL, 0xF'FFFFULL, 0x1000};
+    std::array<hang_state, 3> hang_states_{};
+    sc_core::sc_event hang_sys_timeout_event_;
+    sc_core::sc_event hang_sep_timeout_event_;
+    sc_core::sc_event hang_data_accel_timeout_event_;
+    sc_core::sc_event hang_irq_update_event_;
 
     std::array<alias_region, 8> alias_regions_{};   // ALIAS_REMAP[0..7]
     std::array<alias_region, 8> mmode_regions_{};   // MMODE_REMAP[0..7]

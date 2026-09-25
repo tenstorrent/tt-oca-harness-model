@@ -39,6 +39,7 @@ find_package(OpenSSL REQUIRED)
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/efuse/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/entropy_src/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/edn/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_entropy_pool/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_scratch_cold/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_scratch_warm/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../sep/peripherals/sep_output_remap_ctrl/include
@@ -96,6 +97,7 @@ find_package(OpenSSL REQUIRED)
     lifecycle_ctrl_model
     entropy_src_model
     edn_model
+    sep_entropy_pool_model
     veeriss_model
     z
   )

@@ -3,7 +3,7 @@
 Bare-metal firmware tests for the SMU Virtual Platform (`smu-vp`), which
 integrates the SMC and SEP platforms over the SMU on-die interconnect
 (see `vp/platform/smu/docs/README.md`). Each test builds **two** firmware
-halves — an RV64 image for the SMC CVA6 cluster and an RV32 image for the
+halves — an RV64 image for the SMC Rocket cluster and an RV32 image for the
 SEP VeeR core — reusing the `sw/smc-vp-tests/` and `sw/sep-vp-tests/`
 startup/printf/linker infrastructure, and runs them concurrently on
 `smu-vp`.

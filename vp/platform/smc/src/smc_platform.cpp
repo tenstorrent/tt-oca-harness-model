@@ -142,6 +142,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  // i2c[0..2] -> peripheral bits 25:23
                  NUM_EXT_INTERRUPTS + 23, NUM_EXT_INTERRUPTS + 24,
                  NUM_EXT_INTERRUPTS + 25,
+                 // combined AXI hang detector -> PLIC source ID 287 (bit 286)
+                 286,
                  // wdt[0..3] -> PLIC source IDs 329..332 (bits 328..331)
                  328, 329, 330, 331})
     , octs_clk("octs_clk",
@@ -196,6 +198,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
 
     // -- Fabric reset -------------------------------------------------------
     fabric.rst_n_i.bind(rst_n_sig);
+    fabric.axi_hang_irq_o.bind(axi_hang_irq);
 
     // Idle initiator satisfies the fabric's log_in BW port (nothing drives
     // log_in in this platform).
@@ -656,7 +659,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
 
     // -- Interrupt aggregator -> PLIC -------------------------------------
     // Inputs: sep_mailbox[0..7], telemetry[0..2], i3c[0..5], uart[0..3],
-    // avsbus, i2c[0..2], wdt[0..3], aou (local core only — the peer stub
+    // avsbus, i2c[0..2], AXI hang, wdt[0..3], aou (local core only — the peer stub
     // models the remote die and its irq_o is not observable by local
     // firmware).  Order must match the plic_bits list passed above.
     {
@@ -672,6 +675,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         intagg.src[s++].bind(avsbus_irq);
         for (unsigned i = 0; i < NUM_I2C; ++i)
             intagg.src[s++].bind(i2c_irq[i]);
+        intagg.src[s++].bind(axi_hang_irq);
         for (unsigned i = 0; i < NUM_HARTS; ++i)
             intagg.src[s++].bind(wdt_irq[i]);
     }

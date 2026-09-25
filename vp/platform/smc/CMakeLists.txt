@@ -1,9 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # =============================================================================
 # vp/platform/smc/CMakeLists.txt
 #
 # SMC platform VP target — mirrors vp/platform/sep/.
 # Builds the `smc-vp` executable: a SystemC/TLM-2.0 platform that instantiates
-# the SMC fabric + every modeled peripheral + the Whisper-backed CVA6 CPU
+# the SMC fabric + every modeled peripheral + the Whisper-backed Rocket CPU
 # cluster, and runs bare-metal RV64 firmware loaded from an ELF (the same
 # invocation shape as `sep-vp <ini> <elf>`).
 #
@@ -85,7 +87,7 @@ target_include_directories(smc-vp
         ${CMAKE_CURRENT_SOURCE_DIR}/../../../aou/include)
 
 # The platform module is always built with the CPU cluster wired in — the VP
-# exists to run firmware on the CVA6 cores, so SMC_PLATFORM_WITH_CLUSTER is
+# exists to run firmware on the Rocket cores, so SMC_PLATFORM_WITH_CLUSTER is
 # mandatory here.
 target_compile_definitions(smc-vp PRIVATE SMC_PLATFORM_WITH_CLUSTER=1)
 

@@ -60,6 +60,7 @@ set(_SEP_PERIPHERALS
   lifecycle_ctrl
   entropy_src
   edn
+  sep_entropy_pool
   adams_bridge
 )
 

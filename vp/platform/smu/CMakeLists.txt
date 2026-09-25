@@ -243,6 +243,7 @@ target_include_directories(smu-vp
         ${_sep_root}/peripherals/efuse/include
         ${_sep_root}/peripherals/entropy_src/include
         ${_sep_root}/peripherals/edn/include
+        ${_sep_root}/peripherals/sep_entropy_pool/include
         ${_sep_root}/peripherals/sep_scratch_cold/include
         ${_sep_root}/peripherals/sep_scratch_warm/include
         ${_sep_root}/peripherals/sep_output_remap_ctrl/include
@@ -316,6 +317,7 @@ target_link_libraries(smu-vp
         lifecycle_ctrl_model
         entropy_src_model
         edn_model
+        sep_entropy_pool_model
         veeriss_model
         # Common
         SystemC::systemc

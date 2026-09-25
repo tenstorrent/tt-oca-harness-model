@@ -54,6 +54,7 @@ och_sep_ss::~och_sep_ss() {
     delete lc_ctrl;
     delete entropy_src;
     delete edn;
+    delete entropy_pool;
     delete scratch_cold;
     delete scratch_warm;
     delete ap_output_remap;
@@ -477,6 +478,7 @@ void och_sep_ss::create_modules() {
     lc_ctrl         = new lifecycle_ctrl_model("lc_ctrl");
     entropy_src     = new entropy_src_ip("entropy_src");
     edn             = new edn_ip("edn");
+    entropy_pool    = new sep_entropy_pool_ip("entropy_pool");
     spi_device      = new spi_flash("spi_flash");
     spi_controller  = new spi_controller_ip("spi_controller");
     keymgr          = new key_manager_model("keymgr_tt");
@@ -524,6 +526,7 @@ void och_sep_ss::module_bind() {
         bus->ports[it++] = new PortMapping(opt.lc_ctrl_start_addr,     opt.lc_ctrl_end_addr,     *lc_ctrl);
         bus->ports[it++] = new PortMapping(opt.entropy_src_start_addr, opt.entropy_src_end_addr, *entropy_src);
         bus->ports[it++] = new PortMapping(opt.edn_start_addr,         opt.edn_end_addr,         *edn);
+        bus->ports[it++] = new PortMapping(opt.entropy_pool_start_addr, opt.entropy_pool_end_addr, *entropy_pool);
         // Scratch cold (0x10802000–0x1080203F)
         bus->ports[it++] = new PortMapping(opt.scratch_cold_start_addr, opt.scratch_cold_end_addr, *scratch_cold);
         // Scratch warm (0x10802080–0x108020BF)
@@ -666,6 +669,7 @@ void och_sep_ss::module_bind() {
         bus->isocks[it++].bind(lc_ctrl->target_socket);
         bus->isocks[it++].bind(entropy_src->target_socket);
         bus->isocks[it++].bind(edn->target_socket);
+        bus->isocks[it++].bind(entropy_pool->reg_socket);
         bus->isocks[it++].bind(scratch_cold->target_socket);
         bus->isocks[it++].bind(scratch_warm->target_socket);
         bus->isocks[it++].bind(local_alias_remap->target_socket);
@@ -847,10 +851,12 @@ void och_sep_ss::module_bind() {
     pic_inputs[ENTROPY_SRC_IRQ]     = &entropy_src_irq_signal;
     pic_inputs[EDN_CMD_REQ_DONE]    = &edn_cmd_req_done_signal;
     pic_inputs[EDN_FATAL_ERR]       = &edn_fatal_err_signal;
+    pic_inputs[ENTROPY_POOL_LOW_IRQ] = &entropy_pool_low_signal;
+    pic_inputs[ENTROPY_POOL_STALL_IRQ] = &entropy_pool_stall_signal;
+    pic_inputs[ENTROPY_POOL_POINTER_FAULT_IRQ] = &entropy_pool_error_signal;
     pic_inputs[CRYPTO_ALERT_IRQ]    = &crypto_alert_signal;
-    // RTL sources 39-43 are represented in irq_map.h. Their generating
-    // integrity bridges/pool monitor are not modeled, so the default
-    // unused_irq_signal tie-low is intentional rather than an omitted index.
+    // RTL sources 40-43 are represented in irq_map.h. Their generating
+    // integrity bridges are not modeled, so the default tie-low is intentional.
 
     // CSRNG
     csrng->clk_i(csrng_clk_signal);
@@ -888,6 +894,13 @@ void och_sep_ss::module_bind() {
     edn->alert_recov_alert(edn_recov_alert_signal);
     edn->alert_fatal_alert(edn_fatal_alert_signal);
     edn_clk_signal.write(100.0);  // 100 MHz
+
+    // LT endpoint 2 models the pool's pull request without pin-level EDN FSMs.
+    entropy_pool->entropy_source.bind(edn->entropy_endpoint);
+    entropy_pool->rst_ni(trng_sw_rst_n_signal);
+    entropy_pool->pool_low_o(entropy_pool_low_signal);
+    entropy_pool->fill_stall_o(entropy_pool_stall_signal);
+    entropy_pool->pool_error_o(entropy_pool_error_signal);
 
     // Collapse the crypto blocks' alerts onto the single PIC line sep.sv gives
     // them. All eleven of sep_crypto.sv's channels are represented.
