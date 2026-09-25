@@ -457,6 +457,24 @@ struct tb : sc_core::sc_module {
             wait_delta();
             EXPECT_EQ(42u, dut.dbg_count());  // locked beat cannot feed
             EXPECT_EQ(0u, drv.read32(smc::wdt_cfg::OFF_KEY));
+            // Already unlocked: the low half feeds and the KEY half of the
+            // same beat cannot leave the lock set.
+            unlock();
+            drv.write32(smc::wdt_cfg::OFF_CMP, 1);
+            unlock();
+            drv.write32(smc::wdt_cfg::OFF_CTRL,
+                        smc::wdt_cfg::CTRL_ALWAYS_BIT | smc::wdt_cfg::CTRL_RSTEN_BIT);
+            dut.dbg_set_count(1);
+            wait_delta();
+            EXPECT_TRUE(sticky.read());
+            EXPECT_EQ(1u, dut.dbg_count());
+            unlock();
+            drv.write64(smc::wdt_cfg::OFF_FEED, feed_key);
+            wait_delta();
+            EXPECT_EQ(0u, dut.dbg_count());
+            EXPECT_EQ(0u, drv.read32(smc::wdt_cfg::OFF_KEY));
+            EXPECT_FALSE(sticky.read());
+            EXPECT_TRUE(dut.dbg_ip());
             // Generic 64-bit write at COUNT (0x08): lo=COUNT, hi=hole @0x0C
             unlock();
             drv.write32(smc::wdt_cfg::OFF_CMP, 0x1000);  // avoid zerocmp clear
@@ -555,6 +573,29 @@ int sc_main(int, char**)
     static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
 
     cci::cci_register_broker(cci_global_broker);
+
+    // Negative tick period is fatal. Throw so the guard can be observed,
+    // then restore the default fatal action before the rest of the bench.
+    const sc_core::sc_actions prev_fatal =
+        sc_core::sc_report_handler::set_actions(
+            sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
+    {
+        smc::wdt_cfg bad_cfg;
+        bad_cfg.tick_period_ns = -1.0;
+        bool threw = false;
+        try {
+            smc::wdt bad("bad_tick", bad_cfg);
+        } catch (const sc_core::sc_report&) {
+            threw = true;
+        }
+        if (!threw) {
+            std::cerr << "FAIL negative tick_period_ns did not abort\n";
+            ++g_failures;
+        } else {
+            std::cout << "  [PASS] negative tick_period_ns\n";
+        }
+    }
+    sc_core::sc_report_handler::set_actions(sc_core::SC_FATAL, prev_fatal);
 
     tb top("tb");
     sc_core::sc_start();

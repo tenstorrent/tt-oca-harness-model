@@ -281,9 +281,7 @@ bool wdt::reg_read(uint64_t off, unsigned access_size, uint32_t& data) const
     if (access_size == 8) {
         uint32_t lo = 0;
         uint32_t hi = 0;
-        if (!reg_read(off, 4, lo)) {
-            return false;
-        }
+        (void)reg_read(off, 4, lo);
         if (off + 4 < wdt_cfg::WINDOW_SIZE) {
             (void)reg_read(off + 4, 4, hi);
         }
@@ -428,10 +426,7 @@ void wdt::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
     if (gp.is_read()) {
         if (len == 4) {
             uint32_t data = 0;
-            if (!reg_read(addr, 4, data)) {
-                gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-                return;
-            }
+            (void)reg_read(addr, 4, data);
             std::memcpy(ptr, &data, 4);
         } else {
             uint32_t lo = 0;
@@ -449,10 +444,7 @@ void wdt::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
         if (len == 4) {
             uint32_t data = 0;
             std::memcpy(&data, ptr, 4);
-            if (!reg_write(addr, 4, data)) {
-                gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-                return;
-            }
+            (void)reg_write(addr, 4, data);
         } else {
             // 64-bit: write low then high (KEY often in high half at 0x18).
             uint32_t lo = 0;
@@ -492,9 +484,7 @@ unsigned int wdt::transport_dbg(tlm::tlm_generic_payload& gp)
     if (gp.is_read()) {
         if (len == 4) {
             uint32_t data = 0;
-            if (!reg_read(addr, 4, data)) {
-                return 0;
-            }
+            (void)reg_read(addr, 4, data);
             std::memcpy(ptr, &data, 4);
             return 4;
         }
