@@ -1141,7 +1141,8 @@ struct tb : sc_core::sc_module {
 
 int sc_main(int, char**)
 {
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
     tb top("tb");
     sc_core::sc_start();
     return g_failures == 0 ? 0 : 1;

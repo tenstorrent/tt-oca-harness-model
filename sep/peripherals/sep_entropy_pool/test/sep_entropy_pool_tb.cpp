@@ -303,7 +303,8 @@ private:
 
 int sc_main(int, char**)
 {
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
     entropy_pool_tb tb{"tb"};
     sc_core::sc_start();
     return tb.failures() == 0 ? 0 : 1;
