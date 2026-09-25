@@ -457,6 +457,16 @@ void testbench::run_tests()
     // secure_tm is a strap: it cannot be flipped once the run has started, so the
     // secure-mode behaviour gets a run of its own rather than a test in this list.
     // run_tests.sh launches the binary a second time with the config that sets it.
+    // fuse_preload_file is applied in end_of_elaboration, before any bus write, so
+    // it needs a run of its own the way the secure strap does.
+    if (!m_dut->fuse_preload_file.get_param_value().empty()) {
+        test_image_defines_array();
+        report_test_summary();
+        wait(100, SC_NS);
+        sc_stop();
+        return;
+    }
+
     if (m_dut->get_secure_tm()) {
         test_secure_tm_mode();
         report_test_summary();

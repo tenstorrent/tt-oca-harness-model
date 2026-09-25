@@ -174,11 +174,24 @@ verbosity: 2
 [bool]
 secure_tm: true
 ")
+    set(_image_ini "${CMAKE_BINARY_DIR}/accellera_config_preload_image.ini")
+    file(WRITE "${_image_ini}"
+"# Auto-generated: fuse_preload_file is applied at elaboration.
+[string]
+instance_prefix: testbench.efuse_dut
+fuse_preload_file: ${CMAKE_CURRENT_SOURCE_DIR}/config/elaboration_image.preload
+[int]
+verbosity: 2
+[uint]
+lc_state: 0
+status_rpt: 7
+")
     peripheral_add_coverage_target(
       PRIMARY_TARGET efuse_test
       TEST_COMMANDS
         COMMAND "${_efuse_exe}"
-        COMMAND "${_efuse_exe}" "${_secure_ini}")
+        COMMAND "${_efuse_exe}" "${_secure_ini}"
+        COMMAND "${_efuse_exe}" "${_image_ini}")
   endif()
 
   enable_testing()

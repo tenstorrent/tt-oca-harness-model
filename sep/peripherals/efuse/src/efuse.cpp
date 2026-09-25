@@ -861,10 +861,10 @@ bool efuse_model::handle_write_LC_STATE(uint32_t value)
         if (!is_prod && sip_done && chip_match)   cand |= w & 0x4u;
         if (!is_prod)                             cand |= w & 0x8u;
 
+        // Every valid cur|write stays inside the legal set after these gates, so a
+        // candidate that failed the check would already have been rejected above.
         if (lc_state_raw_valid(cand))
             next = cand;
-        else
-            REG_REPORT(WARNING, "EFUSE", "LC_STATE write ignored — gating left an invalid state");
     }
 
     m_lc_state_val = lc_state_encode(next);

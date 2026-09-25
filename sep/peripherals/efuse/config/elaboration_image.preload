@@ -1,0 +1,7 @@
+// Elaboration image. LC_STATE is the differential code for PROD (0xE1).
+// STATUS_RPT is 0x11. The companion ini sets different parameter values so a
+// read of these words shows the image replaced them rather than being ORed in.
+@3
+E1
+@5B
+11
