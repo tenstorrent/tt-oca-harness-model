@@ -499,8 +499,9 @@ struct tb : sc_core::sc_module {
         drv.read32(dma_cfg::OFF_NEXT_ID_0);
         sc_core::wait(10, sc_core::SC_NS);
 
-        // The model reports the error and still marks the transfer done.
-        EXPECT_EQ(drv.read32(dma_cfg::OFF_DONE_0), 5u);
+        // A failed transfer must not be reported as completed.
+        EXPECT_EQ(drv.read32(dma_cfg::OFF_DONE_0), 4u);
+        EXPECT_EQ(drv.read32(dma_cfg::OFF_STATUS_0), 0u);
     }
 
     void test_decode_miss()

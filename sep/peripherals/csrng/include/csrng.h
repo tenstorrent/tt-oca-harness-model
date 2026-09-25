@@ -14,10 +14,13 @@
 
 #pragma once
 #include "csrng_base.h"
+#include "csrng_hw_interface.h"
+#include "entropy_provider_if.h"
 #include <tlm_utils/tlm_quantumkeeper.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <array>
+#include <memory>
 #include <queue>
 #include "reg_logger.h"
 #include "reg_param.h"
@@ -78,6 +81,34 @@ public:
    sc_out<bool> recov_alert_o;       ///< Recoverable alert output
    sc_out<bool> fatal_alert_o;       ///< Fatal alert output
    /// @}
+
+   class hw_app_handler : public csrng_app_if {
+   public:
+      hw_app_handler(csrng_model& owner, unsigned instance);
+      void send_command(const uint32_t* words, uint32_t count,
+                        uint32_t& ack_status) override;
+      bool is_ready() override;
+      uint32_t get_ack_status() override;
+   private:
+      csrng_model& owner_;
+      unsigned instance_;
+      uint32_t last_ack_{0};
+   };
+
+   class genbits_handler : public csrng_genbits_if {
+   public:
+      explicit genbits_handler(csrng_model& owner);
+      void receive_genbits(uint32_t words[4], bool& fips_compliant) override;
+      bool has_data() override;
+      void provide_genbits(const uint32_t words[4], bool fips_compliant) override;
+   private:
+      csrng_model& owner_;
+   };
+
+   sc_core::sc_vector<sc_core::sc_export<csrng_app_if>> hw_app_export;
+   sc_core::sc_export<csrng_genbits_if> genbits_export;
+   sc_core::sc_port<entropy_provider_if, 1, sc_core::SC_ZERO_OR_MORE_BOUND>
+      entropy_port;
    /// @name RegLogger
    /// @{
    RegLogger logger;  ///< Logger instance for diagnostic output
@@ -86,6 +117,8 @@ public:
    friend class testbench;
 
 protected:
+   std::array<std::unique_ptr<hw_app_handler>, 2> hw_app_handlers_;
+   std::unique_ptr<genbits_handler> genbits_handler_;
    // =============================================================================
    // Internal Enumerations
    // =============================================================================

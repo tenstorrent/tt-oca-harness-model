@@ -358,9 +358,13 @@ struct tb : sc_core::sc_module {
             tlm::tlm_response_status rsp =
                 drv.raw_xfer(tlm::TLM_WRITE_COMMAND, pvt_wrap_cfg::PROCESS_CTRL_OFF,
                              2, &value);
-            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE, rsp);
+            EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE, rsp);
+
+            rsp = drv.raw_xfer(tlm::TLM_READ_COMMAND,
+                               pvt_wrap_cfg::PROCESS_CTRL_OFF, 4, nullptr);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, rsp);
         }
-        std::cout << "  [PASS] malformed write length rejected\n";
+        std::cout << "  [PASS] malformed length/null pointer rejected\n";
 
         // ------------------------------------------------------------------
         // 13. Unknown TLM command is rejected.
@@ -370,7 +374,7 @@ struct tb : sc_core::sc_module {
             tlm::tlm_response_status rsp =
                 drv.raw_xfer(static_cast<tlm::tlm_command>(2),
                              pvt_wrap_cfg::PROCESS_CTRL_OFF, 4, &value);
-            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE, rsp);
+            EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE, rsp);
         }
         std::cout << "  [PASS] unknown TLM command rejected\n";
 

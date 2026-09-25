@@ -165,7 +165,15 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes)
         trans.set_byte_enable_length(0);
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
+        smc::smc_axi_extension ext;
+        ext.source_id = smc::SMC_ID;
+        ext.set_priv(true);
+        ext.set_secure(false);
+        ext.set_fetch(false);
+        ext.set_locked(false);
+        trans.set_extension(&ext);
         dma_socket->b_transport(trans, delay);
+        trans.clear_extension<smc::smc_axi_extension>();
 
         if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
             SIM_LOG_WARN(this,

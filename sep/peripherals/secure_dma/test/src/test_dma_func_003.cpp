@@ -40,7 +40,7 @@
  * - Error code validation for all error conditions
  */
 void testbench::run_func003_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-003: Transfer Granularity Control Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -48,44 +48,44 @@ void testbench::run_func003_tests() {
   wait(20, SC_NS);
 
   // Transfer Width Decoding Tests (4 tests)
-  // test_func003_transfer_width_1byte();
-  // test_func003_transfer_width_2byte();
-  // test_func003_transfer_width_4byte();
-  // test_func003_transfer_width_invalid();
+  test_func003_transfer_width_1byte();
+  test_func003_transfer_width_2byte();
+  test_func003_transfer_width_4byte();
+  test_func003_transfer_width_invalid();
 
   // Alignment Validation Tests (5 tests)
-  // test_func003_1byte_no_alignment();
-  // test_func003_2byte_aligned();
+  test_func003_1byte_no_alignment();
+  test_func003_2byte_aligned();
   test_error_2byte_misaligned();
-  // test_func003_4byte_aligned();
+  test_func003_4byte_aligned();
   test_error_4byte_misaligned();
 
   // Byte Enable Generation Tests (3 tests)
-  // test_func003_byte_enable_1byte_lanes();
-  // test_func003_byte_enable_2byte_halfwords();
-  // test_func003_byte_enable_4byte_fullword();
+  test_func003_byte_enable_1byte_lanes();
+  test_func003_byte_enable_2byte_halfwords();
+  test_func003_byte_enable_4byte_fullword();
 
   // Sub-word Read Extraction Tests (3 tests)
-  // test_func003_extract_byte_lanes();
-  // test_func003_extract_halfword_positions();
-  // test_func003_extract_fullword();
+  test_func003_extract_byte_lanes();
+  test_func003_extract_halfword_positions();
+  test_func003_extract_fullword();
 
   // Sub-word Write Replication Tests (3 tests)
-  // test_func003_replicate_byte_to_lanes();
-  // test_func003_replicate_halfword_positions();
-  // test_func003_replicate_fullword();
+  test_func003_replicate_byte_to_lanes();
+  test_func003_replicate_halfword_positions();
+  test_func003_replicate_fullword();
 
   // SHA-2 Constraint Tests (3 tests)
-  // test_func003_sha2_valid_4byte_width();
-  // test_func003_sha2_invalid_1byte_width();
-  // test_func003_sha2_invalid_2byte_width();
+  test_func003_sha2_valid_4byte_width();
+  test_func003_sha2_invalid_1byte_width();
+  test_func003_sha2_invalid_2byte_width();
 
   // Error Code Validation Tests (3 tests)
-  // test_func003_alignment_error_src_addr();
-  // test_func003_alignment_error_dst_addr();
-  // test_func003_invalid_width_error();
+  test_func003_alignment_error_src_addr();
+  test_func003_alignment_error_dst_addr();
+  test_func003_invalid_width_error();
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-003 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -110,7 +110,7 @@ void testbench::run_func003_tests() {
  */
 void testbench::test_func003_transfer_width_1byte() {
   std::string test_name = "FUNC-003 TC001: Transfer Width 1-Byte Decode";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -158,7 +158,7 @@ void testbench::test_func003_transfer_width_1byte() {
  */
 void testbench::test_func003_transfer_width_2byte() {
   std::string test_name = "FUNC-003 TC002: Transfer Width 2-Byte Decode";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -207,7 +207,7 @@ void testbench::test_func003_transfer_width_2byte() {
  */
 void testbench::test_func003_transfer_width_4byte() {
   std::string test_name = "FUNC-003 TC003: Transfer Width 4-Byte Decode";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -265,7 +265,7 @@ void testbench::test_func003_transfer_width_4byte() {
  */
 void testbench::test_func003_transfer_width_invalid() {
   std::string test_name = "FUNC-003 TC004: Transfer Width Invalid Encoding (0x3)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -319,7 +319,7 @@ void testbench::test_func003_transfer_width_invalid() {
  */
 void testbench::test_func003_1byte_no_alignment() {
   std::string test_name = "FUNC-003 TC005: 1-Byte No Alignment Requirement";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -380,7 +380,7 @@ void testbench::test_func003_1byte_no_alignment() {
  */
 void testbench::test_func003_2byte_aligned() {
   std::string test_name = "FUNC-003 TC006: 2-Byte Halfword-Aligned Addresses";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -441,7 +441,7 @@ void testbench::test_func003_2byte_aligned() {
  */
 void testbench::test_error_2byte_misaligned() {
   std::string test_name = "2-Byte Misaligned Addresses Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -546,7 +546,7 @@ void testbench::test_error_2byte_misaligned() {
  */
 void testbench::test_func003_4byte_aligned() {
   std::string test_name = "FUNC-003 TC008: 4-Byte Word-Aligned Addresses";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -605,7 +605,7 @@ void testbench::test_func003_4byte_aligned() {
  */
 void testbench::test_error_4byte_misaligned() {
   std::string test_name = " 4-Byte Misaligned Addresses Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -712,7 +712,7 @@ void testbench::test_error_4byte_misaligned() {
  */
 void testbench::test_func003_byte_enable_1byte_lanes() {
   std::string test_name = "FUNC-003 TC010: Byte Enable 1-Byte All Lanes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -764,7 +764,7 @@ void testbench::test_func003_byte_enable_1byte_lanes() {
  */
 void testbench::test_func003_byte_enable_2byte_halfwords() {
   std::string test_name = "FUNC-003 TC011: Byte Enable 2-Byte Halfwords";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -813,7 +813,7 @@ void testbench::test_func003_byte_enable_2byte_halfwords() {
  */
 void testbench::test_func003_byte_enable_4byte_fullword() {
   std::string test_name = "FUNC-003 TC012: Byte Enable 4-Byte Full Word";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -864,7 +864,7 @@ void testbench::test_func003_byte_enable_4byte_fullword() {
  */
 void testbench::test_func003_extract_byte_lanes() {
   std::string test_name = "FUNC-003 TC013: Extract Byte from Different Lanes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -918,7 +918,7 @@ void testbench::test_func003_extract_byte_lanes() {
  */
 void testbench::test_func003_extract_halfword_positions() {
   std::string test_name = "FUNC-003 TC014: Extract Halfword from Different Positions";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -966,7 +966,7 @@ void testbench::test_func003_extract_halfword_positions() {
  */
 void testbench::test_func003_extract_fullword() {
   std::string test_name = "FUNC-003 TC015: Extract Full Word (No Extraction)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1016,7 +1016,7 @@ void testbench::test_func003_extract_fullword() {
  */
 void testbench::test_func003_replicate_byte_to_lanes() {
   std::string test_name = "FUNC-003 TC016: Replicate Byte to All Lanes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1068,7 +1068,7 @@ void testbench::test_func003_replicate_byte_to_lanes() {
  */
 void testbench::test_func003_replicate_halfword_positions() {
   std::string test_name = "FUNC-003 TC017: Replicate Halfword to Positions";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1116,7 +1116,7 @@ void testbench::test_func003_replicate_halfword_positions() {
  */
 void testbench::test_func003_replicate_fullword() {
   std::string test_name = "FUNC-003 TC018: Replicate Full Word (No Replication)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1170,7 +1170,7 @@ void testbench::test_func003_replicate_fullword() {
  */
 void testbench::test_func003_sha2_valid_4byte_width() {
   std::string test_name = "FUNC-003 TC019: SHA-2 Valid with 4-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1233,7 +1233,7 @@ void testbench::test_func003_sha2_valid_4byte_width() {
  */
 void testbench::test_func003_sha2_invalid_1byte_width() {
   std::string test_name = "FUNC-003 TC020: SHA-2 Invalid with 1-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1287,7 +1287,7 @@ void testbench::test_func003_sha2_invalid_1byte_width() {
  */
 void testbench::test_func003_sha2_invalid_2byte_width() {
   std::string test_name = "FUNC-003 TC021: SHA-2 Invalid with 2-Byte Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1337,7 +1337,7 @@ void testbench::test_func003_sha2_invalid_2byte_width() {
  */
 void testbench::test_func003_alignment_error_src_addr() {
   std::string test_name = "FUNC-003 TC022: ERROR_CODE.src_addr_error on Misalignment";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1397,7 +1397,7 @@ void testbench::test_func003_alignment_error_src_addr() {
  */
 void testbench::test_func003_alignment_error_dst_addr() {
   std::string test_name = "FUNC-003 TC023: ERROR_CODE.dst_addr_error on Misalignment";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1457,7 +1457,7 @@ void testbench::test_func003_alignment_error_dst_addr() {
  */
 void testbench::test_func003_invalid_width_error() {
   std::string test_name = "FUNC-003 TC024: ERROR_CODE.size_error on Invalid Width";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;

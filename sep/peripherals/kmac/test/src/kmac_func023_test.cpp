@@ -36,6 +36,12 @@
 
 // Logger for test output
 static RegLogger test_logger;
+static bool last_result = false;
+
+bool kmac_func023_last_result()
+{
+    return last_result;
+}
 
 /******************************************************************************
  * Helper Functions
@@ -125,14 +131,19 @@ static void write_message_to_fifo(kmac_test* test, const uint8_t* data, size_t l
     // MSG_FIFO address window: 0x800-0xFFC
     const uint32_t MSG_FIFO_BASE = 0x800;
 
-    // Write in 32-bit words (MSG_FIFO packs internally)
-    size_t word_count = (length_bytes + 3) / 4;
-    for (size_t i = 0; i < word_count; i++) {
+    // Use full-word writes only for complete words. A padded final word would
+    // append zero bytes to the message and invalidate the known-answer vector.
+    const size_t full_words = length_bytes / 4;
+    for (size_t i = 0; i < full_words; i++) {
         uint32_t word = 0;
-        for (size_t j = 0; j < 4 && (i*4 + j) < length_bytes; j++) {
+        for (size_t j = 0; j < 4; j++) {
             word |= (data[i*4 + j] << (j*8));
         }
         test->register_write_32(MSG_FIFO_BASE, word);
+        wait(2, SC_NS);
+    }
+    for (size_t i = full_words * 4; i < length_bytes; ++i) {
+        test->register_write_8(MSG_FIFO_BASE + (i % 4), data[i]);
         wait(2, SC_NS);
     }
 }
@@ -145,14 +156,19 @@ static void write_message_to_fifo(kmac_test* test, const uint8_t* data, size_t l
  */
 static void read_digest_from_state(kmac_test* test, uint8_t* digest, size_t length_bytes)
 {
-    // STATE window address: 0x400-0x4C7 (state share)
-    const uint32_t STATE_BASE = 0x400;
+    // The main suite constructs EnMasking=true, so reconstruct the digest from
+    // the two independently randomized STATE shares.
+    const uint32_t STATE_SHARE0_BASE = 0x400;
+    const uint32_t STATE_SHARE1_BASE = 0x500;
 
     // Read in 32-bit words
     size_t word_count = (length_bytes + 3) / 4;
     for (size_t i = 0; i < word_count; i++) {
-        uint32_t word = 0;
-        test->register_read_32(STATE_BASE + (i * 4), word);
+        uint32_t share0 = 0;
+        uint32_t share1 = 0;
+        test->register_read_32(STATE_SHARE0_BASE + (i * 4), share0);
+        test->register_read_32(STATE_SHARE1_BASE + (i * 4), share1);
+        const uint32_t word = share0 ^ share1;
 
         for (size_t j = 0; j < 4 && (i*4 + j) < length_bytes; j++) {
             digest[i*4 + j] = (word >> (j*8)) & 0xFF;
@@ -242,6 +258,7 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void test_sha3_224_openssl_delegation(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-016: test_sha3_224_openssl_delegation";
@@ -343,6 +360,7 @@ void test_sha3_224_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE command
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: SHA3-224 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
@@ -356,6 +374,7 @@ void test_sha3_224_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_sha3_256_openssl_delegation(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-017: test_sha3_256_openssl_delegation";
@@ -445,6 +464,7 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE command
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: SHA3-256 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
@@ -458,6 +478,7 @@ void test_sha3_256_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_sha3_384_openssl_delegation(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-018: test_sha3_384_openssl_delegation";
@@ -535,6 +556,7 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: SHA3-384 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
@@ -548,6 +570,7 @@ void test_sha3_384_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_sha3_512_openssl_delegation(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-019: test_sha3_512_openssl_delegation";
@@ -627,6 +650,7 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: SHA3-512 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
@@ -640,6 +664,7 @@ void test_sha3_512_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_shake128_openssl_delegation(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-029: test_shake128_openssl_delegation";
@@ -716,6 +741,7 @@ void test_shake128_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: SHAKE128 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {
@@ -729,6 +755,7 @@ void test_shake128_openssl_delegation(kmac_test* test)
  ******************************************************************************/
 void test_shake256_openssl_delegation(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-030: test_shake256_openssl_delegation";
@@ -809,6 +836,7 @@ void test_shake256_openssl_delegation(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: SHAKE256 OpenSSL delegation verified";
 
     } catch (const std::exception& e) {

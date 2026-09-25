@@ -72,5 +72,9 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else
-  "${BUILD_DIR}/bin/edn_testbench"
+  for suite_id in $(seq 1 14); do
+    echo ">> Running EDN FUNC suite ${suite_id}"
+    "${BUILD_DIR}/bin/edn_testbench" \
+      "${SCRIPT_DIR}/config/accellera_config.ini" "${suite_id}"
+  done
 fi

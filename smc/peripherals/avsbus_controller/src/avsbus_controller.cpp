@@ -531,6 +531,10 @@ void avsbus_controller::b_transport(tlm::tlm_generic_payload& gp,
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
         return;
     }
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
     if (adr >= avsbus_controller_cfg::WINDOW_SIZE ||
         (adr % avsbus_controller_cfg::REG_WIDTH) != 0) {
         gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
@@ -569,7 +573,8 @@ unsigned int avsbus_controller::transport_dbg(tlm::tlm_generic_payload& gp)
     const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
 
-    if (len != avsbus_controller_cfg::REG_WIDTH ||
+    if (buf == nullptr ||
+        len != avsbus_controller_cfg::REG_WIDTH ||
         (adr % avsbus_controller_cfg::REG_WIDTH) != 0 ||
         adr >= avsbus_controller_cfg::WINDOW_SIZE)
         return 0;

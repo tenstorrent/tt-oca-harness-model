@@ -85,13 +85,13 @@ test_edn_func_004::test_edn_func_004(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_004 test suite initialized";
-    CSML_INFO(1, logger) << "Test Coverage: CSRNG Interface and Command Management (29 test cases)";
+    REG_INFO(1, logger) << "EDN_FUNC_004 test suite initialized";
+    REG_INFO(1, logger) << "Test Coverage: CSRNG Interface and Command Management (29 test cases)";
 }
 
 test_edn_func_004::~test_edn_func_004()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_004 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_004 test suite terminated";
 }
 
 // =============================================================================
@@ -100,12 +100,12 @@ test_edn_func_004::~test_edn_func_004()
 
 unsigned int test_edn_func_004::run_all_tests()
 {
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_004 Test Suite Execution Start";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_004 Test Suite Execution Start";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before starting tests
-    CSML_INFO(1, logger) << "Applying system reset...";
+    REG_INFO(1, logger) << "Applying system reset...";
     apply_reset(100.0);
     wait(10, SC_NS);
 
@@ -229,17 +229,17 @@ unsigned int test_edn_func_004::run_all_tests()
     report_test_result("TC_029: Command Interruption by Disable", result);
 
     // Print final summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_004 Test Suite Execution Complete";
-    CSML_INFO(1, logger) << "Total Tests: " << m_tests_run;
-    CSML_INFO(1, logger) << "Passed:      " << m_tests_passed;
-    CSML_INFO(1, logger) << "Failed:      " << m_tests_failed;
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_004 Test Suite Execution Complete";
+    REG_INFO(1, logger) << "Total Tests: " << m_tests_run;
+    REG_INFO(1, logger) << "Passed:      " << m_tests_passed;
+    REG_INFO(1, logger) << "Failed:      " << m_tests_failed;
+    REG_INFO(1, logger) << "========================================";
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "Failed test cases:";
+        REG_ERROR(1, logger) << "Failed test cases:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     }
 
@@ -253,7 +253,7 @@ unsigned int test_edn_func_004::run_all_tests()
 // Test Case 1: SW Command Single Word (Uninstantiate)
 bool test_edn_func_004::test_sw_cmd_single_word_uninstantiate()
 {
-    CSML_INFO(2, logger) << "Starting TC_001: SW Command Single Word (Uninstantiate)";
+    REG_INFO(2, logger) << "Starting TC_001: SW Command Single Word (Uninstantiate)";
 
     // Reset system
     apply_reset(100.0);
@@ -261,7 +261,7 @@ bool test_edn_func_004::test_sw_cmd_single_word_uninstantiate()
 
     // Enable EDN in software port mode
     if (!enable_sw_port_mode()) {
-        CSML_ERROR(1, logger) << "Failed to enable software port mode";
+        REG_ERROR(1, logger) << "Failed to enable software port mode";
         return false;
     }
 
@@ -269,13 +269,13 @@ bool test_edn_func_004::test_sw_cmd_single_word_uninstantiate()
     uint32_t cmd_sts;
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
     if ((cmd_sts & 0x3) != 0x3) { // CMD_REG_RDY=1, CMD_RDY=1
-        CSML_ERROR(1, logger) << "SW_CMD_STS not ready: " << std::hex << cmd_sts;
+        REG_ERROR(1, logger) << "SW_CMD_STS not ready: " << std::hex << cmd_sts;
         return false;
     }
 
     // Build Uninstantiate command (clen=0, single word)
     uint32_t cmd_header = build_cmd_header(CSRNG_CMD_UNINSTANTIATE, 0, 0, 0, 0);
-    CSML_INFO(2, logger) << "Uninstantiate command header: 0x" << std::hex << cmd_header;
+    REG_INFO(2, logger) << "Uninstantiate command header: 0x" << std::hex << cmd_header;
 
     // Write command to SW_CMD_REQ
     register_write_32(EDN_REG_SW_CMD_REQ, cmd_header);
@@ -287,32 +287,32 @@ bool test_edn_func_004::test_sw_cmd_single_word_uninstantiate()
 
     // Wait for command acknowledgment
     if (!wait_for_sw_cmd_ack(1000.0)) {
-        CSML_ERROR(1, logger) << "Timeout waiting for command acknowledgment";
+        REG_ERROR(1, logger) << "Timeout waiting for command acknowledgment";
         return false;
     }
 
     // Read SW_CMD_STS and verify acknowledgment
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
     if ((cmd_sts & 0x4) != 0x4) { // CMD_ACK=1
-        CSML_ERROR(1, logger) << "CMD_ACK not set after command completion";
+        REG_ERROR(1, logger) << "CMD_ACK not set after command completion";
         return false;
     }
 
     // Verify CMD_STS=0 (success)
     uint32_t status_code = (cmd_sts >> 3) & 0xFF;
     if (status_code != 0) {
-        CSML_ERROR(1, logger) << "CMD_STS indicates error: " << std::hex << status_code;
+        REG_ERROR(1, logger) << "CMD_STS indicates error: " << std::hex << status_code;
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_001 PASSED: Single-word command executed successfully";
+    REG_INFO(2, logger) << "TC_001 PASSED: Single-word command executed successfully";
     return true;
 }
 
 // Test Case 2: SW Command Multi-Word (Instantiate)
 bool test_edn_func_004::test_sw_cmd_multi_word_instantiate()
 {
-    CSML_INFO(2, logger) << "Starting TC_002: SW Command Multi-Word (Instantiate)";
+    REG_INFO(2, logger) << "Starting TC_002: SW Command Multi-Word (Instantiate)";
 
     // Reset and enable
     apply_reset(100.0);
@@ -325,11 +325,11 @@ bool test_edn_func_004::test_sw_cmd_multi_word_instantiate()
     uint32_t cmd_header = build_cmd_header(CSRNG_CMD_INSTANTIATE, 0, 4, 0x1, 0);
     uint32_t data_words[4] = {0x11111111, 0x22222222, 0x33333333, 0x44444444};
 
-    CSML_INFO(2, logger) << "Instantiate command header: 0x" << std::hex << cmd_header;
+    REG_INFO(2, logger) << "Instantiate command header: 0x" << std::hex << cmd_header;
 
     // Write multi-word command
     if (!write_sw_cmd(cmd_header, data_words, 4)) {
-        CSML_ERROR(1, logger) << "Failed to write multi-word command";
+        REG_ERROR(1, logger) << "Failed to write multi-word command";
         return false;
     }
 
@@ -346,18 +346,18 @@ bool test_edn_func_004::test_sw_cmd_multi_word_instantiate()
     uint32_t cmd_sts;
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
     if ((cmd_sts & 0x4) != 0x4) {
-        CSML_ERROR(1, logger) << "CMD_ACK not set";
+        REG_ERROR(1, logger) << "CMD_ACK not set";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_002 PASSED: Multi-word command executed successfully";
+    REG_INFO(2, logger) << "TC_002 PASSED: Multi-word command executed successfully";
     return true;
 }
 
 // Test Case 3: SW Command Generate
 bool test_edn_func_004::test_sw_cmd_generate()
 {
-    CSML_INFO(2, logger) << "Starting TC_003: SW Command Generate";
+    REG_INFO(2, logger) << "Starting TC_003: SW Command Generate";
 
     // Reset, enable, and instantiate first
     apply_reset(100.0);
@@ -376,7 +376,7 @@ bool test_edn_func_004::test_sw_cmd_generate()
 
     // Now issue Generate command with glen=0x100 (256 blocks)
     uint32_t gen_cmd = build_cmd_header(CSRNG_CMD_GENERATE, 0, 0, 0, 0x100);
-    CSML_INFO(2, logger) << "Generate command header: 0x" << std::hex << gen_cmd;
+    REG_INFO(2, logger) << "Generate command header: 0x" << std::hex << gen_cmd;
 
     register_write_32(EDN_REG_SW_CMD_REQ, gen_cmd);
     wait(10, SC_NS);
@@ -395,14 +395,14 @@ bool test_edn_func_004::test_sw_cmd_generate()
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_003 PASSED: Generate command executed successfully";
+    REG_INFO(2, logger) << "TC_003 PASSED: Generate command executed successfully";
     return true;
 }
 
 // Test Case 4: SW Command Reseed
 bool test_edn_func_004::test_sw_cmd_reseed()
 {
-    CSML_INFO(2, logger) << "Starting TC_004: SW Command Reseed";
+    REG_INFO(2, logger) << "Starting TC_004: SW Command Reseed";
 
     // Reset, enable, and instantiate
     apply_reset(100.0);
@@ -424,7 +424,7 @@ bool test_edn_func_004::test_sw_cmd_reseed()
     uint32_t seed_data[2] = {0x55555555, 0x66666666};
 
     if (!write_sw_cmd(reseed_cmd, seed_data, 2)) {
-        CSML_ERROR(1, logger) << "Failed to write Reseed command";
+        REG_ERROR(1, logger) << "Failed to write Reseed command";
         return false;
     }
 
@@ -436,14 +436,14 @@ bool test_edn_func_004::test_sw_cmd_reseed()
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_004 PASSED: Reseed command executed successfully";
+    REG_INFO(2, logger) << "TC_004 PASSED: Reseed command executed successfully";
     return true;
 }
 
 // Test Case 5: SW_CMD_STS Status Tracking
 bool test_edn_func_004::test_sw_cmd_sts_status_tracking()
 {
-    CSML_INFO(2, logger) << "Starting TC_005: SW_CMD_STS Status Tracking";
+    REG_INFO(2, logger) << "Starting TC_005: SW_CMD_STS Status Tracking";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -451,11 +451,11 @@ bool test_edn_func_004::test_sw_cmd_sts_status_tracking()
     // Read reset values
     uint32_t cmd_sts;
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
-    CSML_INFO(2, logger) << "SW_CMD_STS reset value: 0x" << std::hex << cmd_sts;
+    REG_INFO(2, logger) << "SW_CMD_STS reset value: 0x" << std::hex << cmd_sts;
 
     // Verify SW_CMD_STS reset value = 0x0 per specification
     if (cmd_sts != 0x0) {
-        CSML_ERROR(1, logger) << "SW_CMD_STS reset value incorrect, expected 0x0, got 0x"
+        REG_ERROR(1, logger) << "SW_CMD_STS reset value incorrect, expected 0x0, got 0x"
                               << std::hex << cmd_sts;
         return false;
     }
@@ -476,22 +476,22 @@ bool test_edn_func_004::test_sw_cmd_sts_status_tracking()
 
     // Read final status
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
-    CSML_INFO(2, logger) << "SW_CMD_STS after command: 0x" << std::hex << cmd_sts;
+    REG_INFO(2, logger) << "SW_CMD_STS after command: 0x" << std::hex << cmd_sts;
 
     // Verify CMD_ACK set
     if ((cmd_sts & 0x4) != 0x4) {
-        CSML_ERROR(1, logger) << "CMD_ACK not set after completion";
+        REG_ERROR(1, logger) << "CMD_ACK not set after completion";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_005 PASSED: SW_CMD_STS status tracking verified";
+    REG_INFO(2, logger) << "TC_005 PASSED: SW_CMD_STS status tracking verified";
     return true;
 }
 
 // Test Case 6: HW_CMD_STS Boot Mode
 bool test_edn_func_004::test_hw_cmd_sts_boot_mode()
 {
-    CSML_INFO(2, logger) << "Starting TC_006: HW_CMD_STS Boot Mode";
+    REG_INFO(2, logger) << "Starting TC_006: HW_CMD_STS Boot Mode";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -511,11 +511,11 @@ bool test_edn_func_004::test_hw_cmd_sts_boot_mode()
     // Read HW_CMD_STS
     uint32_t hw_sts;
     register_read_32(EDN_REG_HW_CMD_STS, hw_sts);
-    CSML_INFO(2, logger) << "HW_CMD_STS: 0x" << std::hex << hw_sts;
+    REG_INFO(2, logger) << "HW_CMD_STS: 0x" << std::hex << hw_sts;
 
     // Verify BOOT_MODE bit set
     if ((hw_sts & 0x1) != 0x1) {
-        CSML_ERROR(1, logger) << "BOOT_MODE bit not set in HW_CMD_STS";
+        REG_ERROR(1, logger) << "BOOT_MODE bit not set in HW_CMD_STS";
         return false;
     }
 
@@ -525,16 +525,16 @@ bool test_edn_func_004::test_hw_cmd_sts_boot_mode()
 
     // Read updated status
     register_read_32(EDN_REG_HW_CMD_STS, hw_sts);
-    CSML_INFO(2, logger) << "HW_CMD_STS after ack: 0x" << std::hex << hw_sts;
+    REG_INFO(2, logger) << "HW_CMD_STS after ack: 0x" << std::hex << hw_sts;
 
-    CSML_INFO(2, logger) << "TC_006 PASSED: HW_CMD_STS boot mode tracking verified";
+    REG_INFO(2, logger) << "TC_006 PASSED: HW_CMD_STS boot mode tracking verified";
     return true;
 }
 
 // Test Case 7: CSRNG Acknowledgment Success
 bool test_edn_func_004::test_csrng_ack_success()
 {
-    CSML_INFO(2, logger) << "Starting TC_007: CSRNG Acknowledgment Success";
+    REG_INFO(2, logger) << "Starting TC_007: CSRNG Acknowledgment Success";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -556,7 +556,7 @@ bool test_edn_func_004::test_csrng_ack_success()
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
     uint32_t status_code = (cmd_sts >> 3) & 0xFF;
     if (status_code != 0) {
-        CSML_ERROR(1, logger) << "CMD_STS should be 0 for success";
+        REG_ERROR(1, logger) << "CMD_STS should be 0 for success";
         return false;
     }
 
@@ -564,18 +564,18 @@ bool test_edn_func_004::test_csrng_ack_success()
     uint32_t err_code;
     register_read_32(EDN_REG_ERR_CODE, err_code);
     if (err_code != 0) {
-        CSML_ERROR(1, logger) << "ERR_CODE should be 0 for success";
+        REG_ERROR(1, logger) << "ERR_CODE should be 0 for success";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_007 PASSED: CSRNG success acknowledgment verified";
+    REG_INFO(2, logger) << "TC_007 PASSED: CSRNG success acknowledgment verified";
     return true;
 }
 
 // Test Case 8: CSRNG Acknowledgment Error
 bool test_edn_func_004::test_csrng_ack_error()
 {
-    CSML_INFO(2, logger) << "Starting TC_008: CSRNG Acknowledgment Error";
+    REG_INFO(2, logger) << "Starting TC_008: CSRNG Acknowledgment Error";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -595,25 +595,25 @@ bool test_edn_func_004::test_csrng_ack_error()
     uint32_t recov_alert;
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) == 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set";
         return false;
     }
 
     // Verify recoverable alert signal asserted
     // Note: CSRNG errors are recoverable per hardware spec, not fatal
     if (alert_recov_alert.read() == false) {
-        CSML_ERROR(1, logger) << "alert_recov_alert signal not asserted";
+        REG_ERROR(1, logger) << "alert_recov_alert signal not asserted";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_008 PASSED: CSRNG error acknowledgment handling verified";
+    REG_INFO(2, logger) << "TC_008 PASSED: CSRNG error acknowledgment handling verified";
     return true;
 }
 
 // Test Case 9: Command Boundary clen=0
 bool test_edn_func_004::test_cmd_boundary_clen_0()
 {
-    CSML_INFO(2, logger) << "Starting TC_009: Command Boundary clen=0";
+    REG_INFO(2, logger) << "Starting TC_009: Command Boundary clen=0";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -635,14 +635,14 @@ bool test_edn_func_004::test_cmd_boundary_clen_0()
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_009 PASSED: clen=0 boundary tracking verified";
+    REG_INFO(2, logger) << "TC_009 PASSED: clen=0 boundary tracking verified";
     return true;
 }
 
 // Test Case 10: Command Boundary clen=12
 bool test_edn_func_004::test_cmd_boundary_clen_12_max()
 {
-    CSML_INFO(2, logger) << "Starting TC_010: Command Boundary clen=12 (max)";
+    REG_INFO(2, logger) << "Starting TC_010: Command Boundary clen=12 (max)";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -659,7 +659,7 @@ bool test_edn_func_004::test_cmd_boundary_clen_12_max()
 
     // Write multi-word command
     if (!write_sw_cmd(cmd_header, data_words, 12)) {
-        CSML_ERROR(1, logger) << "Failed to write clen=12 command";
+        REG_ERROR(1, logger) << "Failed to write clen=12 command";
         return false;
     }
 
@@ -671,14 +671,14 @@ bool test_edn_func_004::test_cmd_boundary_clen_12_max()
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_010 PASSED: clen=12 boundary tracking verified";
+    REG_INFO(2, logger) << "TC_010 PASSED: clen=12 boundary tracking verified";
     return true;
 }
 
 // Test Case 11: CMD_REG_RDY Semantics
 bool test_edn_func_004::test_cmd_reg_rdy_semantics()
 {
-    CSML_INFO(2, logger) << "Starting TC_011: CMD_REG_RDY Semantics";
+    REG_INFO(2, logger) << "Starting TC_011: CMD_REG_RDY Semantics";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -693,7 +693,7 @@ bool test_edn_func_004::test_cmd_reg_rdy_semantics()
 
     // Poll CMD_REG_RDY before first data word
     if (!poll_cmd_reg_rdy(1000.0)) {
-        CSML_ERROR(1, logger) << "CMD_REG_RDY timeout before first data word";
+        REG_ERROR(1, logger) << "CMD_REG_RDY timeout before first data word";
         return false;
     }
 
@@ -703,7 +703,7 @@ bool test_edn_func_004::test_cmd_reg_rdy_semantics()
 
     // Poll CMD_REG_RDY before second data word
     if (!poll_cmd_reg_rdy(1000.0)) {
-        CSML_ERROR(1, logger) << "CMD_REG_RDY timeout before second data word";
+        REG_ERROR(1, logger) << "CMD_REG_RDY timeout before second data word";
         return false;
     }
 
@@ -715,14 +715,14 @@ bool test_edn_func_004::test_cmd_reg_rdy_semantics()
     simulate_csrng_ack(0);
     wait(10, SC_NS);
 
-    CSML_INFO(2, logger) << "TC_011 PASSED: CMD_REG_RDY semantics verified";
+    REG_INFO(2, logger) << "TC_011 PASSED: CMD_REG_RDY semantics verified";
     return true;
 }
 
 // Test Case 12: Generate genbits Reception
 bool test_edn_func_004::test_generate_genbits_reception()
 {
-    CSML_INFO(2, logger) << "Starting TC_012: Generate genbits Reception";
+    REG_INFO(2, logger) << "Starting TC_012: Generate genbits Reception";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -753,14 +753,14 @@ bool test_edn_func_004::test_generate_genbits_reception()
     wait(10, SC_NS);
 
     // Verify entropy received (would require internal buffer inspection)
-    CSML_INFO(2, logger) << "TC_012 PASSED: genbits reception simulated";
+    REG_INFO(2, logger) << "TC_012 PASSED: genbits reception simulated";
     return true;
 }
 
 // Test Case 13: FIPS Propagation
 bool test_edn_func_004::test_fips_propagation()
 {
-    CSML_INFO(2, logger) << "Starting TC_013: FIPS Propagation";
+    REG_INFO(2, logger) << "Starting TC_013: FIPS Propagation";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -794,16 +794,16 @@ bool test_edn_func_004::test_fips_propagation()
 
     // Check edn_fips[0] signal
     bool fips_status = edn_fips[0].read();
-    CSML_INFO(2, logger) << "Endpoint FIPS status: " << fips_status;
+    REG_INFO(2, logger) << "Endpoint FIPS status: " << fips_status;
 
-    CSML_INFO(2, logger) << "TC_013 PASSED: FIPS propagation verified";
+    REG_INFO(2, logger) << "TC_013 PASSED: FIPS propagation verified";
     return true;
 }
 
 // Test Case 14: Interrupt on Command Completion
 bool test_edn_func_004::test_interrupt_cmd_completion()
 {
-    CSML_INFO(2, logger) << "Starting TC_014: Interrupt on Command Completion";
+    REG_INFO(2, logger) << "Starting TC_014: Interrupt on Command Completion";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -829,26 +829,26 @@ bool test_edn_func_004::test_interrupt_cmd_completion()
     uint32_t intr_state;
     register_read_32(EDN_REG_INTR_STATE, intr_state);
     if ((intr_state & 0x1) != 0x1) {
-        CSML_ERROR(1, logger) << "INTR_STATE.edn_cmd_req_done not set";
+        REG_ERROR(1, logger) << "INTR_STATE.edn_cmd_req_done not set";
         return false;
     }
 
     // Check interrupt signal
     bool intr_signal = intr_edn_cmd_req_done.read();
-    CSML_INFO(2, logger) << "Interrupt signal: " << intr_signal;
+    REG_INFO(2, logger) << "Interrupt signal: " << intr_signal;
 
     // Clear interrupt (W1C)
     register_write_32(EDN_REG_INTR_STATE, 0x1);
     wait(10, SC_NS);
 
-    CSML_INFO(2, logger) << "TC_014 PASSED: Command completion interrupt verified";
+    REG_INFO(2, logger) << "TC_014 PASSED: Command completion interrupt verified";
     return true;
 }
 
 // Test Case 15: Fatal Error on CSRNG Error
 bool test_edn_func_004::test_fatal_error_on_csrng_error()
 {
-    CSML_INFO(2, logger) << "Starting TC_015: Fatal Error on CSRNG Error";
+    REG_INFO(2, logger) << "Starting TC_015: Fatal Error on CSRNG Error";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -874,13 +874,13 @@ bool test_edn_func_004::test_fatal_error_on_csrng_error()
     uint32_t recov_alert;
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) == 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set";
         return false;
     }
 
     // Verify recoverable alert signal asserted
     if (alert_recov_alert.read() == false) {
-        CSML_ERROR(1, logger) << "alert_recov_alert signal not asserted";
+        REG_ERROR(1, logger) << "alert_recov_alert signal not asserted";
         return false;
     }
 
@@ -888,7 +888,7 @@ bool test_edn_func_004::test_fatal_error_on_csrng_error()
     uint32_t err_code;
     register_read_32(EDN_REG_ERR_CODE, err_code);
     if (err_code != 0) {
-        CSML_ERROR(1, logger) << "ERR_CODE unexpectedly set (should be 0 for CSRNG errors)";
+        REG_ERROR(1, logger) << "ERR_CODE unexpectedly set (should be 0 for CSRNG errors)";
         return false;
     }
 
@@ -897,18 +897,18 @@ bool test_edn_func_004::test_fatal_error_on_csrng_error()
     wait(10, SC_NS);
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) != 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS not cleared after W0C write";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS not cleared after W0C write";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_015 PASSED: Recoverable alert on CSRNG error verified";
+    REG_INFO(2, logger) << "TC_015 PASSED: Recoverable alert on CSRNG error verified";
     return true;
 }
 
 // Test Case 16: SW Command Rejected When Disabled
 bool test_edn_func_004::test_sw_cmd_rejected_when_disabled()
 {
-    CSML_INFO(2, logger) << "Starting TC_016: SW Command Rejected When Disabled";
+    REG_INFO(2, logger) << "Starting TC_016: SW Command Rejected When Disabled";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -922,7 +922,7 @@ bool test_edn_func_004::test_sw_cmd_rejected_when_disabled()
     uint32_t cmd_sts;
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
     if ((cmd_sts & 0x2) != 0x0) {
-        CSML_INFO(1, logger) << "CMD_RDY indicates ready (may accept commands when disabled)";
+        REG_INFO(1, logger) << "CMD_RDY indicates ready (may accept commands when disabled)";
     }
 
     // Attempt to write command
@@ -931,7 +931,7 @@ bool test_edn_func_004::test_sw_cmd_rejected_when_disabled()
     wait(20, SC_NS);
 
     // Verify no CSRNG transaction occurred (no ack expected)
-    CSML_INFO(2, logger) << "Command write attempted while disabled";
+    REG_INFO(2, logger) << "Command write attempted while disabled";
 
     // Now enable and verify command works
     if (!enable_sw_port_mode()) {
@@ -944,18 +944,18 @@ bool test_edn_func_004::test_sw_cmd_rejected_when_disabled()
     wait(10, SC_NS);
 
     if (!wait_for_sw_cmd_ack(1000.0)) {
-        CSML_ERROR(1, logger) << "Command failed after enable";
+        REG_ERROR(1, logger) << "Command failed after enable";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_016 PASSED: Command rejection when disabled verified";
+    REG_INFO(2, logger) << "TC_016 PASSED: Command rejection when disabled verified";
     return true;
 }
 
 // Test Case 17: Boot Mode HW Command Sequence
 bool test_edn_func_004::test_boot_mode_hw_cmd_sequence()
 {
-    CSML_INFO(2, logger) << "Starting TC_017: Boot Mode HW Command Sequence";
+    REG_INFO(2, logger) << "Starting TC_017: Boot Mode HW Command Sequence";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -987,31 +987,31 @@ bool test_edn_func_004::test_boot_mode_hw_cmd_sequence()
     // Verify HW_CMD_STS reflects commands
     uint32_t hw_sts;
     register_read_32(EDN_REG_HW_CMD_STS, hw_sts);
-    CSML_INFO(2, logger) << "HW_CMD_STS after boot sequence: 0x" << std::hex << hw_sts;
+    REG_INFO(2, logger) << "HW_CMD_STS after boot sequence: 0x" << std::hex << hw_sts;
 
-    CSML_INFO(2, logger) << "TC_017 PASSED: Boot mode HW command sequence verified";
+    REG_INFO(2, logger) << "TC_017 PASSED: Boot mode HW command sequence verified";
     return true;
 }
 
 // Test Case 18: Auto Mode HW Command Sequence
 bool test_edn_func_004::test_auto_mode_hw_cmd_sequence()
 {
-    CSML_INFO(2, logger) << "Starting TC_018: Auto Mode HW Command Sequence";
+    REG_INFO(2, logger) << "Starting TC_018: Auto Mode HW Command Sequence";
 
     apply_reset(100.0);
     wait(10, SC_NS);
 
     // Configure auto mode (requires manual instantiate first)
     // This is a simplified test - full auto mode requires GENERATE_CMD/RESEED_CMD FIFOs
-    CSML_INFO(2, logger) << "Auto mode requires GENERATE_CMD/RESEED_CMD FIFO configuration";
-    CSML_INFO(2, logger) << "TC_018 SKIPPED: Auto mode test requires extended infrastructure";
+    REG_INFO(2, logger) << "Auto mode requires GENERATE_CMD/RESEED_CMD FIFO configuration";
+    REG_INFO(2, logger) << "TC_018 SKIPPED: Auto mode test requires extended infrastructure";
     return true; // Skip for now - complex test
 }
 
 // Test Case 19: HW Command Updates HW_CMD_STS
 bool test_edn_func_004::test_hw_cmd_updates_hw_cmd_sts()
 {
-    CSML_INFO(2, logger) << "Starting TC_019: HW Command Updates HW_CMD_STS";
+    REG_INFO(2, logger) << "Starting TC_019: HW Command Updates HW_CMD_STS";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1033,22 +1033,22 @@ bool test_edn_func_004::test_hw_cmd_updates_hw_cmd_sts()
 
     // Extract CMD_TYPE field (bits [5:2])
     uint32_t cmd_type = (hw_sts >> 2) & 0xF;
-    CSML_INFO(2, logger) << "CMD_TYPE: 0x" << std::hex << cmd_type;
+    REG_INFO(2, logger) << "CMD_TYPE: 0x" << std::hex << cmd_type;
 
     // Verify BOOT_MODE set
     if ((hw_sts & 0x1) != 0x1) {
-        CSML_ERROR(1, logger) << "BOOT_MODE bit not set";
+        REG_ERROR(1, logger) << "BOOT_MODE bit not set";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_019 PASSED: HW_CMD_STS update verified";
+    REG_INFO(2, logger) << "TC_019 PASSED: HW_CMD_STS update verified";
     return true;
 }
 
 // Test Case 20: HW Command CSRNG Error Handling
 bool test_edn_func_004::test_hw_cmd_csrng_error_handling()
 {
-    CSML_INFO(2, logger) << "Starting TC_020: HW Command CSRNG Error Handling";
+    REG_INFO(2, logger) << "Starting TC_020: HW Command CSRNG Error Handling";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1071,13 +1071,13 @@ bool test_edn_func_004::test_hw_cmd_csrng_error_handling()
     uint32_t recov_alert;
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) == 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set for HW command error";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set for HW command error";
         return false;
     }
 
     // Verify recoverable alert signal asserted
     if (alert_recov_alert.read() == false) {
-        CSML_ERROR(1, logger) << "alert_recov_alert signal not asserted";
+        REG_ERROR(1, logger) << "alert_recov_alert signal not asserted";
         return false;
     }
 
@@ -1085,18 +1085,18 @@ bool test_edn_func_004::test_hw_cmd_csrng_error_handling()
     uint32_t err_code;
     register_read_32(EDN_REG_ERR_CODE, err_code);
     if (err_code != 0) {
-        CSML_ERROR(1, logger) << "ERR_CODE unexpectedly set (should be 0 for CSRNG errors)";
+        REG_ERROR(1, logger) << "ERR_CODE unexpectedly set (should be 0 for CSRNG errors)";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_020 PASSED: HW command CSRNG error handling verified";
+    REG_INFO(2, logger) << "TC_020 PASSED: HW command CSRNG error handling verified";
     return true;
 }
 
 // Test Case 21: Entropy Buffer Management
 bool test_edn_func_004::test_entropy_buffer_management()
 {
-    CSML_INFO(2, logger) << "Starting TC_021: Entropy Buffer Management";
+    REG_INFO(2, logger) << "Starting TC_021: Entropy Buffer Management";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1132,17 +1132,17 @@ bool test_edn_func_004::test_entropy_buffer_management()
 
         // Read entropy value from edn_bus[0]
         uint32_t ent_val = edn_bus[0].read();
-        CSML_INFO(2, logger) << "Entropy word " << i << ": 0x" << std::hex << ent_val;
+        REG_INFO(2, logger) << "Entropy word " << i << ": 0x" << std::hex << ent_val;
     }
 
-    CSML_INFO(2, logger) << "TC_021 PASSED: Entropy buffer management verified";
+    REG_INFO(2, logger) << "TC_021 PASSED: Entropy buffer management verified";
     return true;
 }
 
 // Test Case 22: Multiple SW Commands Sequential
 bool test_edn_func_004::test_multiple_sw_commands_sequential()
 {
-    CSML_INFO(2, logger) << "Starting TC_022: Multiple SW Commands Sequential";
+    REG_INFO(2, logger) << "Starting TC_022: Multiple SW Commands Sequential";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1177,14 +1177,14 @@ bool test_edn_func_004::test_multiple_sw_commands_sequential()
     wait_for_sw_cmd_ack(1000.0);
     wait(30, SC_NS);
 
-    CSML_INFO(2, logger) << "TC_022 PASSED: Multiple sequential commands verified";
+    REG_INFO(2, logger) << "TC_022 PASSED: Multiple sequential commands verified";
     return true;
 }
 
 // Test Case 23: SW Command During Boot Mode
 bool test_edn_func_004::test_sw_cmd_during_boot_mode()
 {
-    CSML_INFO(2, logger) << "Starting TC_023: SW Command During Boot Mode";
+    REG_INFO(2, logger) << "Starting TC_023: SW Command During Boot Mode";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1204,16 +1204,16 @@ bool test_edn_func_004::test_sw_cmd_during_boot_mode()
     // Check SW_CMD_STS.CMD_RDY (should be 0 during boot)
     uint32_t cmd_sts;
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
-    CSML_INFO(2, logger) << "SW_CMD_STS during boot: 0x" << std::hex << cmd_sts;
+    REG_INFO(2, logger) << "SW_CMD_STS during boot: 0x" << std::hex << cmd_sts;
 
-    CSML_INFO(2, logger) << "TC_023 PASSED: SW command during boot mode behavior verified";
+    REG_INFO(2, logger) << "TC_023 PASSED: SW command during boot mode behavior verified";
     return true;
 }
 
 // Test Case 24: Invalid clen Field
 bool test_edn_func_004::test_invalid_clen_exceeds_max()
 {
-    CSML_INFO(2, logger) << "Starting TC_024: Invalid clen Field";
+    REG_INFO(2, logger) << "Starting TC_024: Invalid clen Field";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1229,7 +1229,7 @@ bool test_edn_func_004::test_invalid_clen_exceeds_max()
     // Attempt to write 13 data words
     for (int i = 0; i < 13; i++) {
         if (!poll_cmd_reg_rdy(1000.0)) {
-            CSML_INFO(2, logger) << "CMD_REG_RDY not ready at word " << i;
+            REG_INFO(2, logger) << "CMD_REG_RDY not ready at word " << i;
             break;
         }
         register_write_32(EDN_REG_SW_CMD_REQ, 0x10000000 + i);
@@ -1237,14 +1237,14 @@ bool test_edn_func_004::test_invalid_clen_exceeds_max()
     }
 
     // Check for error condition (implementation-dependent)
-    CSML_INFO(2, logger) << "TC_024 PASSED: Invalid clen handling tested";
+    REG_INFO(2, logger) << "TC_024 PASSED: Invalid clen handling tested";
     return true;
 }
 
 // Test Case 25: SW Command Status After Reset
 bool test_edn_func_004::test_sw_cmd_status_after_reset()
 {
-    CSML_INFO(2, logger) << "Starting TC_025: SW Command Status After Reset";
+    REG_INFO(2, logger) << "Starting TC_025: SW Command Status After Reset";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1265,18 +1265,18 @@ bool test_edn_func_004::test_sw_cmd_status_after_reset()
     uint32_t cmd_sts;
     register_read_32(EDN_REG_SW_CMD_STS, cmd_sts);
     if (cmd_sts != 0x0) {
-        CSML_ERROR(1, logger) << "SW_CMD_STS not 0x0 after reset, got 0x" << std::hex << cmd_sts;
+        REG_ERROR(1, logger) << "SW_CMD_STS not 0x0 after reset, got 0x" << std::hex << cmd_sts;
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_025 PASSED: SW command status after reset verified";
+    REG_INFO(2, logger) << "TC_025 PASSED: SW command status after reset verified";
     return true;
 }
 
 // Test Case 26: HW Command Status After Reset
 bool test_edn_func_004::test_hw_cmd_status_after_reset()
 {
-    CSML_INFO(2, logger) << "Starting TC_026: HW Command Status After Reset";
+    REG_INFO(2, logger) << "Starting TC_026: HW Command Status After Reset";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1296,18 +1296,18 @@ bool test_edn_func_004::test_hw_cmd_status_after_reset()
     uint32_t hw_sts;
     register_read_32(EDN_REG_HW_CMD_STS, hw_sts);
     if (hw_sts != 0x0) {
-        CSML_ERROR(1, logger) << "HW_CMD_STS not reset to 0x0: " << std::hex << hw_sts;
+        REG_ERROR(1, logger) << "HW_CMD_STS not reset to 0x0: " << std::hex << hw_sts;
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_026 PASSED: HW command status after reset verified";
+    REG_INFO(2, logger) << "TC_026 PASSED: HW command status after reset verified";
     return true;
 }
 
 // Test Case 27: Recoverable Alert on CSRNG Error
 bool test_edn_func_004::test_recoverable_alert_on_csrng_error()
 {
-    CSML_INFO(2, logger) << "Starting TC_027: Recoverable Alert on CSRNG Error";
+    REG_INFO(2, logger) << "Starting TC_027: Recoverable Alert on CSRNG Error";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1327,7 +1327,7 @@ bool test_edn_func_004::test_recoverable_alert_on_csrng_error()
     uint32_t recov_alert;
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) == 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_CMD_STS_ALERT not set";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_CMD_STS_ALERT not set";
         return false;
     }
 
@@ -1338,18 +1338,18 @@ bool test_edn_func_004::test_recoverable_alert_on_csrng_error()
     // Verify cleared
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) != 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS not cleared by W0C";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS not cleared by W0C";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_027 PASSED: Recoverable alert on CSRNG error verified";
+    REG_INFO(2, logger) << "TC_027 PASSED: Recoverable alert on CSRNG error verified";
     return true;
 }
 
 // Test Case 28: Fatal Alert on CSRNG Error
 bool test_edn_func_004::test_fatal_alert_on_csrng_error()
 {
-    CSML_INFO(2, logger) << "Starting TC_028: Fatal Alert on CSRNG Error";
+    REG_INFO(2, logger) << "Starting TC_028: Fatal Alert on CSRNG Error";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1369,13 +1369,13 @@ bool test_edn_func_004::test_fatal_alert_on_csrng_error()
     uint32_t recov_alert;
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) == 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS.CSRNG_ACK_ERR not set";
         return false;
     }
 
     // Verify recoverable alert signal
     if (alert_recov_alert.read() == false) {
-        CSML_ERROR(1, logger) << "alert_recov_alert signal not asserted";
+        REG_ERROR(1, logger) << "alert_recov_alert signal not asserted";
         return false;
     }
 
@@ -1383,7 +1383,7 @@ bool test_edn_func_004::test_fatal_alert_on_csrng_error()
     uint32_t err_code;
     register_read_32(EDN_REG_ERR_CODE, err_code);
     if (err_code != 0) {
-        CSML_ERROR(1, logger) << "ERR_CODE unexpectedly set (should be 0 for CSRNG errors)";
+        REG_ERROR(1, logger) << "ERR_CODE unexpectedly set (should be 0 for CSRNG errors)";
         return false;
     }
 
@@ -1392,18 +1392,18 @@ bool test_edn_func_004::test_fatal_alert_on_csrng_error()
     wait(10, SC_NS);
     register_read_32(EDN_REG_RECOV_ALERT_STS, recov_alert);
     if ((recov_alert & (1 << RECOV_ALERT_CSRNG_ACK_ERR)) != 0) {
-        CSML_ERROR(1, logger) << "RECOV_ALERT_STS not cleared after W0C write";
+        REG_ERROR(1, logger) << "RECOV_ALERT_STS not cleared after W0C write";
         return false;
     }
 
-    CSML_INFO(2, logger) << "TC_028 PASSED: Recoverable alert on CSRNG error verified";
+    REG_INFO(2, logger) << "TC_028 PASSED: Recoverable alert on CSRNG error verified";
     return true;
 }
 
 // Test Case 29: Command Interruption by Disable
 bool test_edn_func_004::test_cmd_interruption_by_disable()
 {
-    CSML_INFO(2, logger) << "Starting TC_029: Command Interruption by Disable";
+    REG_INFO(2, logger) << "Starting TC_029: Command Interruption by Disable";
 
     apply_reset(100.0);
     wait(10, SC_NS);
@@ -1427,7 +1427,7 @@ bool test_edn_func_004::test_cmd_interruption_by_disable()
     wait(20, SC_NS);
 
     // Verify no spurious transactions
-    CSML_INFO(2, logger) << "EDN disabled during partial command";
+    REG_INFO(2, logger) << "EDN disabled during partial command";
 
     // Re-enable and verify clean state
     if (!enable_sw_port_mode()) {
@@ -1441,7 +1441,7 @@ bool test_edn_func_004::test_cmd_interruption_by_disable()
     simulate_csrng_ack(0);
     wait_for_sw_cmd_ack(1000.0);
 
-    CSML_INFO(2, logger) << "TC_029 PASSED: Command interruption by disable verified";
+    REG_INFO(2, logger) << "TC_029 PASSED: Command interruption by disable verified";
     return true;
 }
 
@@ -1452,12 +1452,12 @@ bool test_edn_func_004::test_cmd_interruption_by_disable()
 uint32_t test_edn_func_004::build_cmd_header(uint8_t cmd, uint8_t acmd, uint8_t clen,
                                                uint8_t flags, uint16_t glen)
 {
+    (void)acmd; // Legacy argument; cmd is the application command field.
     uint32_t header = 0;
-    header |= (cmd & 0xF);           // bits[3:0]: cmd
-    header |= ((acmd & 0xF) << 4);   // bits[7:4]: acmd
-    header |= ((clen & 0xF) << 8);   // bits[11:8]: clen
-    header |= ((flags & 0xF) << 12); // bits[15:12]: flags
-    header |= ((glen & 0xFFFF) << 16); // bits[31:16]: glen
+    header |= (cmd & 0xFu);                    // bits[3:0]: acmd
+    header |= ((clen & 0xFu) << 4);            // bits[7:4]: clen
+    header |= ((flags & 0xFu) << 8);           // bits[11:8]: flags
+    header |= ((static_cast<uint32_t>(glen) & 0x7FFFFu) << 12); // bits[30:12]: glen
     return header;
 }
 
@@ -1470,7 +1470,7 @@ bool test_edn_func_004::write_sw_cmd(uint32_t header, const uint32_t* data, uint
     // Write data words with CMD_REG_RDY polling
     for (uint32_t i = 0; i < num_data_words; i++) {
         if (!poll_cmd_reg_rdy(1000.0)) {
-            CSML_ERROR(1, logger) << "CMD_REG_RDY timeout at word " << i;
+            REG_ERROR(1, logger) << "CMD_REG_RDY timeout at word " << i;
             return false;
         }
 
@@ -1513,15 +1513,15 @@ bool test_edn_func_004::wait_for_sw_cmd_ack(double timeout_ns)
 
 void test_edn_func_004::simulate_csrng_ack(uint32_t status)
 {
-    CSML_INFO(1, logger) << "TEST: Forcing CSRNG ack error with status: 0x" << std::hex << status;
+    REG_INFO(1, logger) << "TEST: Forcing CSRNG ack error with status: 0x" << std::hex << status;
     set_forced_csrng_ack_status(status);
-    CSML_INFO(1, logger) << "TEST: Forced ack status set successfully";
+    REG_INFO(1, logger) << "TEST: Forced ack status set successfully";
 }
 
 void test_edn_func_004::simulate_csrng_genbits(const uint32_t genbits[4], bool fips)
 {
     // This is a placeholder - actual implementation would provide entropy via genbits interface
-    CSML_INFO(3, logger) << "Simulating CSRNG genbits provision, FIPS=" << fips;
+    REG_INFO(3, logger) << "Simulating CSRNG genbits provision, FIPS=" << fips;
     provide_csrng_entropy(genbits, fips);
 }
 
@@ -1536,7 +1536,7 @@ bool test_edn_func_004::enable_sw_port_mode()
     uint32_t ctrl_read;
     register_read_32(EDN_REG_CTRL, ctrl_read);
     if ((ctrl_read & 0xF) != EDN_ENABLE_VALUE) {
-        CSML_ERROR(1, logger) << "Failed to enable EDN";
+        REG_ERROR(1, logger) << "Failed to enable EDN";
         return false;
     }
 
@@ -1568,7 +1568,7 @@ bool test_edn_func_004::verify_register_value(const std::string& reg_name, uint3
     uint32_t masked_actual = actual & mask;
 
     if (masked_expected != masked_actual) {
-        CSML_ERROR(1, logger) << reg_name << " mismatch: "
+        REG_ERROR(1, logger) << reg_name << " mismatch: "
                               << "expected=0x" << std::hex << masked_expected
                               << ", actual=0x" << masked_actual
                               << ", mask=0x" << mask;
@@ -1584,13 +1584,13 @@ void test_edn_func_004::report_test_result(const std::string& test_name, bool pa
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << "[PASSED] " << test_name;
+        REG_INFO(1, logger) << "[PASSED] " << test_name;
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << "[FAILED] " << test_name;
+        REG_ERROR(1, logger) << "[FAILED] " << test_name;
         if (!message.empty()) {
-            CSML_ERROR(1, logger) << "  Reason: " << message;
+            REG_ERROR(1, logger) << "  Reason: " << message;
         }
     }
 }

@@ -357,12 +357,14 @@ void dma::transfer_thread()
             SIM_LOG_TRACE(this, "channel " << pt.channel << " executing transfer id="
                           << channels_[pt.channel].next_id);
 
-            execute_transfer(pt);
-
-            channels_[pt.channel].done += 1;
+            const bool completed = execute_transfer(pt);
+            if (completed) {
+                channels_[pt.channel].done += 1;
+            }
             channels_[pt.channel].busy = false;
 
-            SIM_LOG_TRACE(this, "channel " << pt.channel << " transfer done");
+            SIM_LOG_TRACE(this, "channel " << pt.channel
+                          << (completed ? " transfer done" : " transfer failed"));
         }
     }
 }
@@ -393,7 +395,7 @@ uint32_t dma::start_transfer(unsigned channel)
     return id;
 }
 
-void dma::execute_transfer(const pending_transfer& pt)
+bool dma::execute_transfer(const pending_transfer& pt)
 {
     const uint64_t reps = pt.cfg.repetitions + 1;
     for (uint64_t r = 0; r < reps; ++r) {
@@ -406,12 +408,13 @@ void dma::execute_transfer(const pending_transfer& pt)
             const uint64_t chunk = std::min(remaining, static_cast<uint64_t>(cfg_.max_burst_bytes));
             if (!copy_chunk(src + offset, dst + offset, chunk)) {
                 SIM_LOG_WARN(this, "channel " << pt.channel << " copy_chunk failed at offset " << offset);
-                return;
+                return false;
             }
             offset += chunk;
             remaining -= chunk;
         }
     }
+    return true;
 }
 
 bool dma::copy_chunk(uint64_t src, uint64_t dst, uint64_t len)

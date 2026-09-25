@@ -1081,6 +1081,18 @@ bool spi_controller_ip::handle_write_COMMAND(uint32_t value, uint32_t mask)
         return true;
     }
 
+    // The transaction engine uses fixed 512-byte segment buffers.  LEN is
+    // zero-based, so reject any command representing more than 512 bytes
+    // before narrowing into spi_segment_t::len or queueing work.
+    if (cmd_len >= 512u) {
+        REG_ERROR(0, logger) << "[SPI_HOST/COMMAND] segment length "
+                             << (cmd_len + 1u)
+                             << " exceeds the 512-byte model limit" << std::endl;
+        ERROR_STATUS.CMDINVAL = 1;
+        update_error_interrupt_state();
+        return false;
+    }
+
     // ========================================================================
     // Validation 0: the command queue must have room.
     //
@@ -1141,9 +1153,8 @@ bool spi_controller_ip::handle_write_COMMAND(uint32_t value, uint32_t mask)
         return false;
     }
 
-    // Validation 5: RX segment length is accepted. LEN is a 9-bit field
-    // (max 512 bytes), which already fits the per-transaction buffer, so a
-    // larger-than-512 rejection is unreachable. Hardware streams an RX
+    // Validation 5: RX segment length is accepted after the common 512-byte
+    // bound above. Hardware streams an RX
     // segment that exceeds free FIFO space by stalling on
     // m_rx_space_available_event rather than setting OVERFLOW.
     if (cmd_direction == 1 || cmd_direction == 3) {  // RX_ONLY or BIDIR

@@ -196,13 +196,13 @@ void testbench::run_tests() {
   m_test->apply_reset(sc_time(100, SC_NS));
   wait(sc_time(50, SC_NS));
 
-  // // Run basic test cases
-  // test_reset_values();
-  // test_register_rw();
-  // test_register_ro();
-  // test_port_binding();
-  // test_interrupts();
-  // test_hardware_handshake();
+  // Run basic test cases
+  test_reset_values();
+  test_register_rw();
+  test_register_ro();
+  test_port_binding();
+  test_interrupts();
+  test_hardware_handshake();
 
   // Run FUNC-001 comprehensive tests
   run_func001_tests();
@@ -213,11 +213,11 @@ void testbench::run_tests() {
   // // Run FUNC-003 comprehensive tests
   run_func003_tests();
 
-  // // Run FUNC-004 comprehensive tests
-  // run_func004_tests();
+  // Run FUNC-004 comprehensive tests
+  run_func004_tests();
 
-  // // Run FUNC-005 comprehensive tests
-  // run_func005_tests();
+  // Run FUNC-005 comprehensive tests
+  run_func005_tests();
 
   // // Run FUNC-006 comprehensive tests
    run_func006_tests();

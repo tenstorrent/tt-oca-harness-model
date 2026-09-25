@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
-# Build-only check for the sep_memory model.
-# No standalone unit tests exist; functional testing is done at VP level.
+# Build and run the standalone sep_memory tests.
 #
 # Usage:
 #   ./run_tests.sh              # Release build
 #   ./run_tests.sh --debug      # Debug build
+#   ./run_tests.sh --asan       # AddressSanitizer/UBSan build
+#   ./run_tests.sh --coverage   # Coverage build and >=95% gate
 #   ./run_tests.sh --docs       # Build Doxygen documentation
 #   ./run_tests.sh --cppcheck  # Run cppcheck static analysis
 #   ./run_tests.sh --clean      # Remove build directory first
@@ -22,6 +23,8 @@ CLEAN=false
 for arg in "$@"; do
   case "$arg" in
     --debug)  BUILD_TYPE="Debug" ;;
+    --asan)   BUILD_TYPE="ASAN" ;;
+    --coverage) BUILD_TYPE="Coverage" ;;
     --docs)   RUN_DOCS=true ;;
     --cppcheck) RUN_CPPCHECK=true ;;
     --clean)  CLEAN=true ;;
@@ -48,6 +51,7 @@ fi
 mkdir -p "${BUILD_DIR}"
 cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+  -DBUILD_TESTS=ON \
   "${CMAKE_EXTRA_ARGS[@]}"
 cmake --build "${BUILD_DIR}" --parallel "$(peripheral_parallel_jobs)"
 
@@ -56,6 +60,9 @@ if ${RUN_DOCS}; then
   cmake --build "${BUILD_DIR}" --target sep_memory_docs
 elif ${RUN_CPPCHECK}; then
   cmake --build "${BUILD_DIR}" --target sep_memory_cppcheck
+elif [ "${BUILD_TYPE}" = "Coverage" ]; then
+  cmake --build "${BUILD_DIR}" --target coverage
+  peripheral_enforce_coverage_gate "${BUILD_DIR}"
 else
-  echo "Build complete (${BUILD_TYPE}): ${BUILD_DIR}/libsep_memory_model.a"
+  "${BUILD_DIR}/bin/sep_memory_tb"
 fi

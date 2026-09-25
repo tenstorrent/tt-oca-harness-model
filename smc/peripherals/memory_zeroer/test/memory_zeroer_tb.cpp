@@ -82,6 +82,8 @@ bool expect_fatal(F&& body)
 struct simple_mem : sc_core::sc_module {
     tlm_utils::simple_target_socket<simple_mem> sock;
     std::vector<uint8_t>                        mem;
+    bool                                        saw_axi_extension = false;
+    bool                                        axi_extension_valid = true;
 
     explicit simple_mem(sc_module_name n, std::size_t bytes)
         : sc_module(n), sock("sock"), mem(bytes, 0xA5)
@@ -96,6 +98,12 @@ struct simple_mem : sc_core::sc_module {
         const uint64_t adr = gp.get_address();
         const unsigned len = gp.get_data_length();
         unsigned char* ptr = gp.get_data_ptr();
+        auto* ext = gp.get_extension<smc::smc_axi_extension>();
+        saw_axi_extension |= ext != nullptr;
+        if (ext == nullptr || ext->source_id != smc::SMC_ID ||
+            ext->is_user || ext->is_secure || ext->is_fetch || ext->is_locked) {
+            axi_extension_valid = false;
+        }
         if (ptr == nullptr || len == 0 || adr + len > mem.size()) {
             gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
             return;
@@ -273,6 +281,8 @@ struct tb : sc_core::sc_module {
         EXPECT_EQ(cfg::CTRL_INT_EN_MASK, ctrl & cfg::CTRL_INT_EN_MASK);
         EXPECT_EQ(UINT64_C(0), ctrl & cfg::CTRL_STATUS_MASK);
         EXPECT_TRUE(irq.read());
+        EXPECT_TRUE(mem.saw_axi_extension);
+        EXPECT_TRUE(mem.axi_extension_valid);
 
         bool zeros_ok = true;
         for (uint64_t i = 0x80; i < 0x180; ++i) {

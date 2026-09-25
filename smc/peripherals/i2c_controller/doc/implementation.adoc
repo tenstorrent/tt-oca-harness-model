@@ -1,0 +1,87 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[i2c-controller-implementation]]
+===== SystemC/TLM-2.0 Implementation
+
+`smc::i2c_controller` is a loosely-timed TLM-2.0 model of one OCA I2C
+core. Timing is annotated `access_delay_ns` plus `xfer_delay_ns` for
+FMT drain. SCL/SDA waveform, TIMING0..4, and timeouts are firmware-
+visible storage only. `b_transport` never calls `wait()`. DMI is never
+granted.
+
+[source,cpp]
+----
+class i2c_controller : public sc_core::sc_module
+----
+
+Storage CSRs live in `regmodel::RegisterMap32`. Side-effect registers
+(`INTR_STATE`, FIFO ports, events) stay in `reg_read` / `reg_write`.
+
+====== Threads and sockets
+
+`reset_proc` clears registers, FIFOs, and the pending xfer. `xfer_method`
+drains the FMT FIFO into address segments and calls the test-supplied
+`i2c_bus_model_fn`. `recompute_method` is the sole writer of `irq_o`.
+`schedule_xfer()` notifies at `xfer_delay_ns`.
+
+Controller mode: firmware pushes FDATA entries; with `CTRL.ENABLEHOST`
+the engine presents each segment to the bus model. Read data lands in
+the RX FIFO. Address NACK without NAKOK sets `CONTROLLER_EVENTS.NACK`
+and `CONTROLLER_HALT`. Each STOP raises `CMD_COMPLETE`.
+
+Target mode: `target_write` / `target_read` are the production
+loosely-timed bus-adapter entry points used by an external controller model.
+A `TARGET_ID` match fills ACQ or drains Target TX; a miss NACKs and bumps
+`TARGET_NACK_COUNT`. They are not pin-level SCL/SDA APIs.
+
+`smc-vp` instantiates `NUM_I2C` (3) copies and binds each `reg_socket`
+on the peripheral router. `irq_o` enters the interrupt aggregator.
+I2C0's bus model forwards segments to I2C1's target adapter for
+`smc-i2c-loopback-test`.
+
+[cols="32%,28%,40%",options="header"]
+|===
+|Port |Type |Platform bind
+|`reg_socket` |TLM target |`periph_router` I2C0..2 windows
+|`rst_n_i` |`sc_in<bool>` |Platform reset
+|`irq_o` |`sc_out<bool>` |PLIC via interrupt aggregator
+|===
+
+----
+  TLM MMIO ──► reg_socket ──► FDATA / RDATA / ACQDATA
+                                    │
+                         xfer_method ──► bus_model_fn
+                                    │
+  target_write / target_read ──► ACQ / TX FIFOs
+                                    │
+                         recompute_method ──► irq_o
+----
+
+====== CCI parameters
+
+FIFO depths are immutable. Delays are mutable and re-read when used.
+
+[cols="36%,20%,44%",options="header"]
+|===
+|Parameter |Default |Use
+|`fmt_fifo_depth` |64 |Controller TX (FMT) entries
+|`rx_fifo_depth` |64 |Controller RX bytes
+|`tx_fifo_depth` |64 |Target TX bytes
+|`acq_fifo_depth` |64 |Target RX (ACQ) entries
+|`access_delay_ns` |2.0 |Annotated TLM access delay
+|`xfer_delay_ns` |100.0 |FMT-drain latency
+|===
+
+A zero FIFO depth is `SC_REPORT_FATAL`.
+
+====== Modeling gaps versus RTL
+
+* No SCL/SDA waveform, clock stretch, arbitration, or glitch filter.
+  `SCL_INTERFERENCE`, `SDA_INTERFERENCE`, `STRETCH_TIMEOUT`,
+  `SDA_UNSTABLE`, `UNEXP_STOP`, `HOST_TIMEOUT`, and `ACQ_STRETCH` are
+  reachable only through `INTR_TEST`.
+* SMBus alert/suspend and multi-controller monitor are storage-only.
+* `RCONT` is accepted but not separately modelled.
+* Timeouts do not fire.
+* The wrapper enable register (`i2c_ctrl`) is out of this module.

@@ -967,9 +967,9 @@ void testbench::test_func002_speed_mode_validation()
     wait(10, SC_NS);
 
     // =======================================================================
-    // Test 12: Invalid LEN Values (Boundary Testing)
+    // Test 12: Invalid LEN Value (Model Buffer Boundary)
     // =======================================================================
-    REG_INFO(1, logger) << "\n[Test 12] Invalid LEN Values (>255)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 12] Invalid LEN Value (>512 bytes)" << std::endl;
 
     software_reset();
     wait(10, SC_NS);
@@ -989,50 +989,26 @@ void testbench::test_func002_speed_mode_validation()
     }
     wait(10, SC_NS);
 
-    // Test 12a: LEN=256 (encoded as 255, but spec restricts to 255 max)
-    REG_INFO(2, logger) << "  [Sub-test 12a] Testing LEN=256 (invalid)..." << std::endl;
+    // LEN is at [24:5] and is zero-based.  512 bytes (LEN=511) fits the
+    // engine buffers; 513 bytes (LEN=512) must be rejected before queueing.
+    REG_INFO(2, logger) << "  [Sub-test 12a] Testing LEN=513 (invalid)..." << std::endl;
 
-    // Build command with LEN field = 255 (means 256 bytes, which exceeds spec)
-    uint32_t cmd_invalid_len256 = (255 << 0) | (0 << 9) | (0 << 10) | (2 << 12);
-    test->write_register_32(COMMAND_OFFSET, cmd_invalid_len256);
-    wait(10, SC_US);
-
-    // Check for CMDINVAL error (bit 12)
-    uint32_t error_status256 = 0;
-    test->read_register_32(ERROR_STATUS_OFFSET, error_status256);
-    bool cmdinval_len256 = (error_status256 >> 3) & 0x1;
-
-    if (cmdinval_len256) {
-        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=256 (ERROR_STATUS=0x"
-                  << std::hex << error_status256 << std::dec << ")" << std::endl;
-        sub_tests_passed++;
-    } else {
-        REG_INFO(2, logger) << "  [INFO] CMDINVAL not detected for LEN=256 (ERROR_STATUS=0x"
-                  << std::hex << error_status256 << std::dec << ") - may be allowed by implementation" << std::endl;
-        // Don't fail test - this boundary case may be implementation-dependent
-    }
-
-    clear_errors();
+    const uint32_t cmd_invalid_len513 = BUILD_CMD(512, 2, 0, 0);
+    test->write_register_32(COMMAND_OFFSET, cmd_invalid_len513);
     wait(10, SC_NS);
 
-    // Test 12b: LEN=300 (well beyond valid range)
-    REG_INFO(2, logger) << "  [Sub-test 12b] Testing LEN=300 (invalid)..." << std::endl;
+    uint32_t error_status513 = 0;
+    test->read_register_32(ERROR_STATUS_OFFSET, error_status513);
+    const bool cmdinval_len513 = (error_status513 >> 3) & 0x1;
 
-    // Build command with LEN field = 299 (9 bits can hold up to 511)
-    uint32_t cmd_invalid_len300 = (299 << 0) | (0 << 9) | (0 << 10) | (2 << 12);
-    test->write_register_32(COMMAND_OFFSET, cmd_invalid_len300);
-    wait(10, SC_US);
-
-    // Check for CMDINVAL error
-    uint32_t error_status300 = 0;
-    test->read_register_32(ERROR_STATUS_OFFSET, error_status300);
-    bool cmdinval_len300 = (error_status300 >> 3) & 0x1;
-
-    if (cmdinval_len300) {
-        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=300" << std::endl;
+    if (cmdinval_len513) {
+        REG_INFO(2, logger) << "  [PASS] CMDINVAL error detected for LEN=513 (ERROR_STATUS=0x"
+                  << std::hex << error_status513 << std::dec << ")" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_INFO(2, logger) << "  [INFO] CMDINVAL not detected for LEN=300" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] LEN=513 was not rejected" << std::endl;
+        sub_tests_failed++;
+        test_passed = false;
     }
 
     clear_errors();
