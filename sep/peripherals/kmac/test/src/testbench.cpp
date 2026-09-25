@@ -23,6 +23,13 @@ extern "C" void __gcov_dump(void);
 #endif
 #endif
 
+namespace {
+// Set from sc_main before the testbench is constructed. The model stores
+// EnMasking as a const constructor argument, so a second process is the
+// way to exercise the unmasked sideload path.
+bool g_unmasked_dut = false;
+}
+
 // =============================================================================
 // Test function implementations are now member functions defined in separate test files
 // Declarations are in testbench.h
@@ -42,8 +49,8 @@ testbench::testbench(sc_module_name name)
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
     logger.setFunctionTrace(false);
 
-    // Instantiate KMAC model (DUT)
-    dut = new kmac_ip("kmac_dut");
+    // Instantiate KMAC model (DUT). The default build is masked.
+    dut = new kmac_ip("kmac_dut", 0x1000, 3, !g_unmasked_dut);
 
     // Sync testbench logger verbosity with DUT (CCI ini may override build default)
     logger.setMaxVerbosity(dut->verbosity.get_param_value());
@@ -197,6 +204,14 @@ void testbench::run_tests()
 
     // Apply reset to DUT
     apply_reset();
+
+    if (g_unmasked_dut) {
+        test_sideload_unmasked_kmac();
+        report_test_summary();
+        wait(100, SC_NS);
+        sc_stop();
+        return;
+    }
 
     // =========================================================================
     // Configure entropy subsystem for EnMasking=true
@@ -1152,7 +1167,17 @@ int sc_main(int argc, char* argv[])
     logger.setFunctionTrace(false);
 
     // Initialize CCI broker and optionally load INI config file.
-    regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
+    // --unmasked selects a DUT constructed with EnMasking=false and must be
+    // seen before that construction.
+    const char* config_path = nullptr;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--unmasked") {
+            g_unmasked_dut = true;
+        } else if (config_path == nullptr) {
+            config_path = argv[i];
+        }
+    }
+    regmodel::load_config_file(config_path);
 
     REG_INFO(2, logger) << "====================================================" << std::endl;
     REG_INFO(2, logger) << "  KMAC SystemC TLM Testbench" << std::endl;

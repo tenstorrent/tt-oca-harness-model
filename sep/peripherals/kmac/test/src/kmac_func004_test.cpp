@@ -416,7 +416,7 @@ static void cleanup_test(kmac_test* test)
  * Per NIST SP 800-185:
  * KMAC(K, X, L, S) = cSHAKE(bytepad(encode_string(K), rate) || X || right_encode(L), rate, "KMAC", S)
  */
-static bool compute_kmac_reference(const uint8_t* key_data, size_t key_len_bytes,
+bool compute_kmac_reference(const uint8_t* key_data, size_t key_len_bytes,
                                     const char* customization_string, size_t customization_len,
                                     const uint8_t* message, size_t message_len,
                                     uint32_t output_bits,

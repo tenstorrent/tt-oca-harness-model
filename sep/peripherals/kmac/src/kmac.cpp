@@ -59,10 +59,7 @@ public:
    * @return true if digest is ready, false if still processing
    */
   virtual bool is_done() const override {
-    if (parent_model) {
-      return parent_model->app_operation_done;
-    }
-    return false;
+    return parent_model->app_operation_done;
   }
 
   /**
@@ -91,10 +88,7 @@ public:
    * @return true if error detected, false otherwise
    */
   virtual bool has_error() const override {
-    if (parent_model) {
-      return parent_model->app_operation_error;
-    }
-    return false;
+    return parent_model->app_operation_error;
   }
 
 private:
@@ -2468,26 +2462,13 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
     // kmac_en already declared above for right_encode parsing
     unsigned int md_len = 0;
 
-    // KMAC mode: Finalize with XOF
+    // KMAC mode: Finalize with XOF. kmac_output_bytes is the rate, 136 or 168,
+    // which fits in xof_full_output.
     if (kmac_en) {
       EVP_MD_CTX *ctx = static_cast<EVP_MD_CTX *>(evp_md_ctx);
 
-      if (kmac_output_bytes == 0) {
-        REG_ERROR(1, logger) << "KMAC output length not set";
-        return false;
-      }
-
       // Note: right_encode(L) is already absorbed as part of the message
       // during MSG_FIFO writes, so we just finalize here.
-
-      // For KMAC: Always extract FULL output in one call for correct XOF
-      // semantics Buffer it and slice for STATE window access
-      if (kmac_output_bytes > sizeof(xof_full_output)) {
-        REG_ERROR(1, logger)
-            << "KMAC output length " << kmac_output_bytes
-            << " exceeds buffer size " << sizeof(xof_full_output);
-        return false;
-      }
 
       if (EVP_DigestFinalXOF(ctx, xof_full_output, kmac_output_bytes) != 1) {
         REG_ERROR(1, logger) << "OpenSSL EVP_DigestFinalXOF failed for KMAC";
@@ -2538,11 +2519,6 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       case 0x2:           // L256 (SHAKE256/cSHAKE256)
         rate_bytes = 136; // 1088 bits / 8
         break;
-
-      default:
-        // Invalid kstrength (should have been caught in START)
-        REG_ERROR(1, logger) << "PROCESS: invalid kstrength for XOF mode";
-        return false;
       }
 
       // EVP_DigestFinalXOF may only be called ONCE per context, and SHAKE/cSHAKE
@@ -2700,16 +2676,6 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
       REG_INFO(2, logger) << "SHAKE/cSHAKE/KMAC256: rate = " << rate_bytes
                            << " bytes";
       break;
-
-    default:
-      // Invalid kstrength for XOF modes (should have been caught in START)
-      REG_ERROR(1, logger) << "RUN command: invalid kstrength=0x" << std::hex
-                            << kstrength << std::dec;
-
-      ERR_CODE = 0x06000000 | ((mode & 0xFF) << 8) | (kstrength & 0xFF);
-      INTR_STATE.kmac_err = 1;
-
-      return false;
     }
 
     // Read kmac_en to determine if this is KMAC mode
@@ -2912,8 +2878,6 @@ bool kmac_ip::handle_write_CMD(uint32_t value, uint32_t write_mask) {
 
     REG_INFO(2, logger) << "FUNC-KMAC-024: DONE command delay=" << done_delay
                          << " (local_time=" << m_qk.get_local_time() << ")";
-
-    return true;
   }
 
   // CMD register bits are R0W1C - they self-clear after action

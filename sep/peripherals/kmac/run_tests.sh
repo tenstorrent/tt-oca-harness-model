@@ -73,4 +73,5 @@ elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else
   "${BUILD_DIR}/bin/kmac_testbench"
+  "${BUILD_DIR}/bin/kmac_testbench" --unmasked
 fi

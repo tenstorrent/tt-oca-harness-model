@@ -229,6 +229,7 @@ public:
     void test_key_sideload_maximum_length_256bit();
     void test_key_sideload_empty_message();
     void test_key_sideload_back_to_back_operations();
+    void test_sideload_unmasked_kmac();
 
     // =========================================================================
     // Test Case Methods - FUNC-KMAC-011
@@ -518,3 +519,11 @@ public:
     /// @brief Logger instance for structured logging
     mutable RegLogger logger;
 };
+
+// NIST SP 800-185 KMAC reference used by the software-key and sideload tests.
+bool compute_kmac_reference(const uint8_t* key_data, size_t key_len_bytes,
+                            const char* customization_string, size_t customization_len,
+                            const uint8_t* message, size_t message_len,
+                            uint32_t output_bits,
+                            uint8_t* output_digest, size_t output_bytes,
+                            bool is_kmac256);

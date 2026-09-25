@@ -202,6 +202,8 @@ if(BUILD_TESTS)
         # so the config never loaded and could not override the build verbosity.
         COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench
                 ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini
+        COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/kmac_testbench
+                ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini --unmasked
     )
   endif()
 
