@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 # SMC SEP Boot ROM -- SystemC/TLM-2.0 LT model with SystemC CCI support.
 #
 # Builds a static library libsmc_bootrom.a plus a self-checking test bench.
@@ -5,7 +7,7 @@
 # documented in 02_SMC_IP_LowLevel_Design.md "Build & packaging".
 #
 # CCI support: set CCI_HOME or the environment variable CCI_HOME to point
-# at an Accellera SystemC CCI installation (default: /Users/pdroy/cci).
+# at an Accellera SystemC CCI installation (default: /usr/local/cci).
 
 cmake_minimum_required(VERSION 3.16)
 project(smc_bootrom CXX)
@@ -71,7 +73,26 @@ endif()
 #   (a) a CMake-installed SystemC providing SystemC::systemc (>= 2.3.4)
 #   (b) the SYSTEMC_HOME environment variable pointing at a manual install
 # ---------------------------------------------------------------------------
-find_package(SystemCLanguage QUIET CONFIG)
+# Prefer SYSTEMC_HOME so a host SystemC 2.3.4 CMake package cannot pair
+# with CCI 1.0.2 (needs sc_time::from_string).
+if(DEFINED ENV{SYSTEMC_HOME} AND EXISTS "$ENV{SYSTEMC_HOME}/include/systemc.h")
+    if(NOT TARGET SystemC::systemc)
+        message(STATUS "Using SystemC from SYSTEMC_HOME=$ENV{SYSTEMC_HOME}")
+        add_library(SystemC::systemc UNKNOWN IMPORTED)
+        find_library(SC_LIB NAMES systemc
+            HINTS $ENV{SYSTEMC_HOME}/lib
+                  $ENV{SYSTEMC_HOME}/lib64
+                  $ENV{SYSTEMC_HOME}/lib-linux64
+                  $ENV{SYSTEMC_HOME}/lib-macosx
+                  $ENV{SYSTEMC_HOME}/lib-macosarm64
+            NO_DEFAULT_PATH REQUIRED)
+        set_target_properties(SystemC::systemc PROPERTIES
+            IMPORTED_LOCATION             "${SC_LIB}"
+            INTERFACE_INCLUDE_DIRECTORIES "$ENV{SYSTEMC_HOME}/include")
+    endif()
+else()
+    find_package(SystemCLanguage QUIET CONFIG)
+endif()
 
 # ---------------------------------------------------------------------------
 # CCI (SystemC Configuration, Control and Inspection) discovery.
@@ -79,13 +100,13 @@ find_package(SystemCLanguage QUIET CONFIG)
 # Priority:
 #   1. -DCCI_HOME=<path> on the cmake command line
 #   2. CCI_HOME environment variable
-#   3. Hard-coded default (/Users/pdroy/cci)
+#   3. Hard-coded default (/usr/local/cci)
 # ---------------------------------------------------------------------------
 if(DEFINED ENV{CCI_HOME})
     set(CCI_HOME "$ENV{CCI_HOME}" CACHE PATH "Path to SystemC CCI installation")
 endif()
 if(NOT DEFINED CCI_HOME)
-    set(CCI_HOME "/Users/pdroy/cci" CACHE PATH "Path to SystemC CCI installation")
+    set(CCI_HOME "/usr/local/cci" CACHE PATH "Path to SystemC CCI installation")
 endif()
 message(STATUS "Using CCI from CCI_HOME=${CCI_HOME}")
 if(NOT EXISTS "${CCI_HOME}/include/cci_configuration")

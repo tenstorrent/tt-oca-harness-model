@@ -256,12 +256,12 @@ void tb::run()
     EXPECT_TRUE(!irq_local.read());
     EXPECT_TRUE(!irq_plic.read());
 
-    // Software can replace accrued bits, including setting a previously clear bit.
+    // SW must not be able to set accrued status bits (HW-set / SW-clear only).
     drv.write64(ACCRUED_ENABLE, M_DEU);
     settle();
-    EXPECT_EQ(M_DEU, drv.read64(ACCRUED_ENABLE));
-    EXPECT_TRUE(irq_local.read());
-    EXPECT_TRUE(irq_plic.read());
+    EXPECT_EQ(0u, drv.read64(ACCRUED_ENABLE));
+    EXPECT_TRUE(!irq_local.read());
+    EXPECT_TRUE(!irq_plic.read());
     std::cout << "  [PASS] local + PLIC interrupt aggregation\n";
 
     // ----------------------------------------------------------------------
@@ -319,6 +319,69 @@ void tb::run()
         }
         std::cout << "  [PASS] CCI introspection\n";
     }
+
+    // Accrued W-clear truth table (HW-set, write-0 clears, write-1 preserves)
+    do_reset();
+    dut.inject_error(smc::beu_src::ICACHE_TLBUS, 0x10);
+    dut.inject_error(smc::beu_src::DCACHE_CORRECTABLE, 0x20);
+    settle();
+    EXPECT_EQ(M_ITL | M_DEC, drv.read64(ACCRUED_ENABLE));
+    drv.write64(ACCRUED_ENABLE, M_ITL | M_DEC); // ones preserve
+    EXPECT_EQ(M_ITL | M_DEC, drv.read64(ACCRUED_ENABLE));
+    drv.write64(ACCRUED_ENABLE, M_ITL);         // zero DEC clears only DEC
+    EXPECT_EQ(M_ITL, drv.read64(ACCRUED_ENABLE));
+    drv.write64(ACCRUED_ENABLE, M_DEU);         // ones cannot set a new bit
+    EXPECT_EQ(0u, drv.read64(ACCRUED_ENABLE));
+    std::cout << "  [PASS] accrued W-clear truth table\n";
+
+    // Post-mutation reset: real high-to-low edge after latched state
+    rstn.write(true);
+    settle();
+    dut.inject_error(smc::beu_src::DCACHE_UNCORRECTABLE, 0x55);
+    drv.write64(LOCAL_ENABLE, M_DEU);
+    drv.write64(PLIC_ENABLE, M_DEU);
+    settle();
+    EXPECT_TRUE(irq_local.read());
+    EXPECT_TRUE(irq_plic.read());
+    rstn.write(false);
+    settle();
+    rstn.write(true);
+    settle();
+    EXPECT_EQ(0u, drv.read64(CAUSE));
+    EXPECT_EQ(0u, drv.read64(PHYS_ADDR));
+    EXPECT_EQ(0u, drv.read64(ACCRUED_ENABLE));
+    EXPECT_EQ(VALID_MASK, drv.read64(ENABLE));
+    EXPECT_EQ(0u, drv.read64(LOCAL_ENABLE));
+    EXPECT_EQ(0u, drv.read64(PLIC_ENABLE));
+    EXPECT_TRUE(!irq_local.read());
+    EXPECT_TRUE(!irq_plic.read());
+    std::cout << "  [PASS] post-mutation reset\n";
+
+    {
+        tlm::tlm_generic_payload gp;
+        sc_time t = sc_time(5, SC_NS);
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(CAUSE);
+        gp.set_data_ptr(nullptr);
+        gp.set_data_length(8);
+        gp.set_streaming_width(8);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        drv.sock->b_transport(gp, t);
+        EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, gp.get_response_status());
+        EXPECT_EQ(5.0, t / sc_time(1.0, SC_NS));
+
+        uint64_t data = 0;
+        t = sc_time(4, SC_NS);
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(&data));
+        gp.set_dmi_allowed(true);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        drv.sock->b_transport(gp, t);
+        EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
+        EXPECT_TRUE(!gp.is_dmi_allowed());
+        const double delay_ns = t / sc_time(1.0, SC_NS);
+        EXPECT_TRUE(delay_ns >= 6.9 && delay_ns <= 7.1); // 4 + CCI 3
+    }
+    std::cout << "  [PASS] null pointer / DMI / exact delay\n";
 
     dut.dump_state(std::cout);
 

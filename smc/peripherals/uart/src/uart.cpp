@@ -168,6 +168,9 @@ uart::uart(sc_core::sc_module_name name, uart_cfg cfg)
     SC_METHOD(rx_timeout_method);
     sensitive << rx_timeout_event_;
     dont_initialize();
+
+    SC_THREAD(serial_tx_thread);
+    SC_THREAD(serial_rx_thread);
 }
 
 // ===========================================================================
@@ -190,6 +193,10 @@ void uart::reset_proc()
     rx_fifo_.clear();
     tx_fifo_.clear();
     tx_history_.clear();
+    serial_tx_q_.clear();
+    serial_tx_bit_ = true;
+    serial_rx_busy_ = false;
+    serial_tx_event_.cancel();
 
     fifo_en_   = false;
     dma_mode_  = 0;
@@ -300,6 +307,10 @@ void uart::drain_tx()
             deliver_rx_char(b, false, false, false);
         } else {
             tx_history_.push_back(b);
+            if (!line_loop) {
+                serial_tx_q_.push_back(b);
+                serial_tx_event_.notify(sc_core::SC_ZERO_TIME);
+            }
         }
     }
     regs_.lsr |= (LSR_THRE | LSR_TEMT);
@@ -476,11 +487,19 @@ bool uart::reg_write(uint64_t off, uint32_t data)
     const bool    dlab = (regs_.lcr & LCR_DLAB) != 0;
     //get the byte from the data that represents the register value
     const uint8_t b    = static_cast<uint8_t>(data & 0xFFu);
+    const auto maybe_wake_serial_tx = [this]() {
+        if (!serial_tx_q_.empty() && tx_enabled()
+            && (regs_.mcr & MCR_LINE_LOOP) == 0
+            && (regs_.lcr & LCR_BREAK) == 0) {
+            serial_tx_event_.notify(sc_core::SC_ZERO_TIME);
+        }
+    };
     switch (off) {
     case uart_cfg::OFF_RBR_THR:
         if (dlab) { //if the DLAB bit is set, write the byte to the DLL register
             regs_.dll = b;
             if (tx_enabled() && !tx_fifo_.empty()) drain_tx();
+            maybe_wake_serial_tx();
             schedule_recompute();
         } else {
             //if the DLAB bit is not set, write the byte to the THR register
@@ -491,6 +510,7 @@ bool uart::reg_write(uint64_t off, uint32_t data)
         if (dlab) {
             regs_.dlm = b;
             if (tx_enabled() && !tx_fifo_.empty()) drain_tx();
+            maybe_wake_serial_tx();
             schedule_recompute();
         } else {
             const uint8_t old = regs_.ier;
@@ -507,11 +527,16 @@ bool uart::reg_write(uint64_t off, uint32_t data)
         }
         break;
     case uart_cfg::OFF_IIR_FCR: fcr_write(b);                      break;
-    case uart_cfg::OFF_LCR:     regs_.lcr = b; schedule_recompute(); break;
+    case uart_cfg::OFF_LCR:
+        regs_.lcr = b;
+        maybe_wake_serial_tx();
+        schedule_recompute();
+        break;
     case uart_cfg::OFF_MCR:
         // Reserved MCR bits [7:6] are RAZ/WI (shared masking helper).
         regs_.mcr = regmodel::apply_write_mask<uint8_t>(regs_.mcr, b, MCR_MASK);
         detect_modem_deltas();   // loopback changes can move MSR levels
+        maybe_wake_serial_tx();
         schedule_recompute();
         break;
     case uart_cfg::OFF_LSR:     /* read-only: ignore */            break;
@@ -668,7 +693,7 @@ void uart::update_outputs()
     bool tx;
     if (line_loop)                      tx = rx_i.read();
     else if (regs_.lcr & LCR_BREAK)     tx = false; // break forces low
-    else                                tx = true;  // idle high
+    else                                tx = serial_tx_bit_;
 
     // ---- Interrupt -------------------------------------------------------
     const bool irq = (interrupt_id() != uart_intr_id::NONE);
@@ -788,6 +813,63 @@ unsigned int uart::transport_dbg(tlm::tlm_generic_payload& gp)
 // ===========================================================================
 // Test-bench back door
 // ===========================================================================
+
+sc_core::sc_time uart::bit_time() const
+{
+    const unsigned div = (static_cast<unsigned>(regs_.dlm) << 8) | regs_.dll;
+    const unsigned ticks = (div == 0) ? 16u : 16u * div;
+    return sc_core::sc_time(static_cast<double>(ticks), sc_core::SC_NS);
+}
+
+void uart::serial_tx_thread()
+{
+    while (true) {
+        wait(serial_tx_event_);
+        while (!serial_tx_q_.empty() && tx_enabled()
+               && (regs_.mcr & MCR_LINE_LOOP) == 0
+               && (regs_.lcr & LCR_BREAK) == 0) {
+            uint8_t b = serial_tx_q_.front();
+            serial_tx_q_.pop_front();
+            serial_tx_bit_ = false; // start bit
+            schedule_recompute();
+            wait(bit_time());
+            for (int i = 0; i < 8; ++i) {
+                serial_tx_bit_ = ((b >> i) & 1u) != 0;
+                schedule_recompute();
+                wait(bit_time());
+            }
+            serial_tx_bit_ = true; // stop bit
+            schedule_recompute();
+            wait(bit_time());
+        }
+        serial_tx_bit_ = true;
+        schedule_recompute();
+    }
+}
+
+void uart::serial_rx_thread()
+{
+    while (true) {
+        wait(rx_i.negedge_event());
+        if ((regs_.mcr & (MCR_LOOP | MCR_LINE_LOOP)) != 0)
+            continue;
+        if (!rx_enabled())
+            continue;
+        serial_rx_busy_ = true;
+        wait(bit_time() * 1.5); // mid first data bit
+        uint8_t b = 0;
+        for (int i = 0; i < 8; ++i) {
+            if (rx_i.read())
+                b |= static_cast<uint8_t>(1u << i);
+            if (i < 7)
+                wait(bit_time());
+        }
+        wait(bit_time()); // stop bit
+        serial_rx_busy_ = false;
+        if (rx_enabled() && (regs_.mcr & (MCR_LOOP | MCR_LINE_LOOP)) == 0)
+            deliver_rx_char(b, false, false, false);
+    }
+}
 
 void uart::inject_rx_char(uint8_t ch, bool parity_err, bool framing_err,
                           bool break_err)

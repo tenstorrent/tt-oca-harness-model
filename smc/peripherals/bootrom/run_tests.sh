@@ -147,8 +147,18 @@ echo ">> Building with -j${JOBS}"
 cmake --build "${BUILD_DIR}" -j "${JOBS}"
 
 TB_BIN="${BUILD_DIR}/test/bootrom_tb"
+BIN_TB_BIN="${BUILD_DIR}/test/bootrom_bin_tb"
+NEG_TB_BIN="${BUILD_DIR}/test/bootrom_neg_tb"
 if [[ ! -x "${TB_BIN}" ]]; then
     echo "ERROR: test binary not found at ${TB_BIN}" >&2
+    exit 1
+fi
+if [[ ! -x "${BIN_TB_BIN}" ]]; then
+    echo "ERROR: test binary not found at ${BIN_TB_BIN}" >&2
+    exit 1
+fi
+if [[ ! -x "${NEG_TB_BIN}" ]]; then
+    echo "ERROR: test binary not found at ${NEG_TB_BIN}" >&2
     exit 1
 fi
 
@@ -187,6 +197,14 @@ if (( USE_ASAN )); then
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
     ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
+    if (( TB_EXIT == 0 )); then
+        echo ">> Running with AddressSanitizer: ${BIN_TB_BIN}"
+        ASAN_OPTIONS="${_ASAN_OPTS}" "${BIN_TB_BIN}"; TB_EXIT=$?
+    fi
+    if (( TB_EXIT == 0 )); then
+        echo ">> Running with AddressSanitizer: ${NEG_TB_BIN}"
+        ASAN_OPTIONS="${_ASAN_OPTS}" "${NEG_TB_BIN}"; TB_EXIT=$?
+    fi
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -307,15 +325,13 @@ elif (( USE_COVERAGE )); then
             gcovr \
                 --root "${SCRIPT_DIR}/src" \
                 --object-directory "${BUILD_DIR}" \
-                --filter "${SCRIPT_DIR}/src/" \
-                --filter "${SCRIPT_DIR}/test/"
+                --filter "${SCRIPT_DIR}/src/"
 
             mkdir -p "${HTML_DIR}"
             gcovr \
                 --root "${SCRIPT_DIR}/src" \
                 --object-directory "${BUILD_DIR}" \
                 --filter "${SCRIPT_DIR}/src/" \
-                --filter "${SCRIPT_DIR}/test/" \
                 --html --html-details \
                 -o "${HTML_DIR}/index.html" 2>/dev/null || true
         elif command -v lcov &>/dev/null && command -v genhtml &>/dev/null; then
@@ -358,4 +374,8 @@ elif (( USE_CTEST )); then
 else
     echo ">> Running ${TB_BIN}"
     "${TB_BIN}"
+    echo ">> Running ${BIN_TB_BIN}"
+    "${BIN_TB_BIN}"
+    echo ">> Running ${NEG_TB_BIN}"
+    "${NEG_TB_BIN}"
 fi

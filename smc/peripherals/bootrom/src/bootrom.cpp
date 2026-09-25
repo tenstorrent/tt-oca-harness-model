@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file bootrom.cpp
  * @brief SEP Boot ROM — SystemC/TLM-2.0 LT implementation.
@@ -194,6 +195,11 @@ void bootrom::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
 
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
     // ---- Width / alignment / streaming-width validation -------------------
     if (!is_supported_width(length)) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
@@ -254,6 +260,9 @@ unsigned int bootrom::transport_dbg(tlm::tlm_generic_payload& gp)
     const sc_dt::uint64 addr   = gp.get_address();
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
+
+    if (buf == nullptr)
+        return 0;
 
     if (!is_supported_width(length)) return 0;
     if (!is_aligned(addr, length))   return 0;

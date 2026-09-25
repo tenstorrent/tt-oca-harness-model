@@ -599,7 +599,28 @@ void tb::run() {
     std::cout << "  [PASS] divisor=0 disables TX\n";
 
     // ----------------------------------------------------------------------
-    // 23. Bus error responses.
+    // 23. Clearing BREAK resumes queued serial TX.
+    // ----------------------------------------------------------------------
+    pulse_reset();
+    setup_basic();
+    drv.write32(MCR, 0x00);
+    rx_sig.write(true);
+    sc_core::wait(2, SC_US);             // drain leftover serial + quantum
+    EXPECT_EQ(4u, drv.dbg_write(THR, static_cast<uint32_t>('B')));
+    EXPECT_EQ(4u, drv.dbg_write(LCR, 0x43u)); // 8N1 + BREAK before TX thread runs
+    settle();
+    EXPECT_EQ(false, tx_sig.read());     // break drives the line low
+    EXPECT_EQ(4u, drv.dbg_write(LCR, 0x03u)); // clearing BREAK should restart TX
+    sc_core::wait(SC_ZERO_TIME);
+    sc_core::wait(8, SC_NS);             // mid start bit
+    EXPECT_EQ(false, tx_sig.read());
+    sc_core::wait(12 * 16 - 8, SC_NS);   // through stop + idle
+    settle();
+    EXPECT_EQ(true, tx_sig.read());
+    std::cout << "  [PASS] clearing BREAK resumes queued TX\n";
+
+    // ----------------------------------------------------------------------
+    // 24. Bus error responses.
     // ----------------------------------------------------------------------
     {
         uint32_t d = 0;
@@ -619,7 +640,7 @@ void tb::run() {
     std::cout << "  [PASS] bus error responses\n";
 
     // ----------------------------------------------------------------------
-    // 24. transport_dbg + dbg_reg (side-effect-free).
+    // 25. transport_dbg + dbg_reg (side-effect-free).
     // ----------------------------------------------------------------------
     pulse_reset();
     setup_basic();
@@ -637,7 +658,7 @@ void tb::run() {
     std::cout << "  [PASS] transport_dbg + dbg_reg\n";
 
     // ----------------------------------------------------------------------
-    // 25. Register-access + dbg_reg + transport_dbg-write coverage.
+    // 26. Register-access + dbg_reg + transport_dbg-write coverage.
     // ----------------------------------------------------------------------
     pulse_reset();
     setup_basic();
@@ -669,7 +690,7 @@ void tb::run() {
     std::cout << "  [PASS] register-access + dbg coverage\n";
 
     // ----------------------------------------------------------------------
-    // 26. DMA Mode 1 TX FSM (full -> deassert until empty).
+    // 27. DMA Mode 1 TX FSM (full -> deassert until empty).
     // ----------------------------------------------------------------------
     pulse_reset();                         // divisor 0 -> TX cannot drain
     drv.write32(ECR, 0x00);
@@ -688,7 +709,7 @@ void tb::run() {
     std::cout << "  [PASS] DMA mode 1 TX FSM\n";
 
     // ----------------------------------------------------------------------
-    // 27. CCI parameter introspection.
+    // 28. CCI parameter introspection.
     // ----------------------------------------------------------------------
     {
         auto broker = cci::cci_get_broker();
@@ -748,6 +769,41 @@ void tb::run() {
         EXPECT_EQ(0u, wrap_drv.read32(C::OFF_WRAP_CTRL));
         std::cout << "  [PASS] uart_wrap CSRs\n";
     }
+
+    // ----------------------------------------------------------------------
+    // Bit-serial TX on tx_o and RX from rx_i (divisor=1 → 16 ns/bit).
+    // ----------------------------------------------------------------------
+    pulse_reset();
+    setup_basic();
+    drv.write32(MCR, 0); // no loopback
+    rx_sig.write(true);
+    sc_core::wait(2, SC_US); // drain leftover serial + quantum
+    // dbg_write avoids the TLM quantum keeper advancing through the frame.
+    EXPECT_EQ(4u, drv.dbg_write(THR, static_cast<uint32_t>('K')));
+    sc_core::wait(SC_ZERO_TIME);
+    sc_core::wait(8, SC_NS); // mid start bit
+    EXPECT_EQ(false, tx_sig.read());
+    sc_core::wait(12 * 16 - 8, SC_NS); // through stop + idle
+    settle();
+    EXPECT_EQ(true, tx_sig.read()); // idle high after stop
+    {
+        uint8_t ch = 0;
+        EXPECT_TRUE(dut.dbg_tx_pop(ch));
+        EXPECT_EQ(static_cast<uint8_t>('K'), ch);
+    }
+    // Drive 0xA5 LSB-first onto rx_i: start, 1,0,1,0,0,1,0,1, stop
+    rx_sig.write(false);
+    sc_core::wait(16, SC_NS);
+    for (int i = 0; i < 8; ++i) {
+        rx_sig.write(((0xA5 >> i) & 1) != 0);
+        sc_core::wait(16, SC_NS);
+    }
+    rx_sig.write(true);
+    sc_core::wait(16, SC_NS);
+    settle();
+    EXPECT_TRUE((drv.read32(LSR) & LSR_DR) != 0);
+    EXPECT_EQ(0xA5u, drv.read32(RBR) & 0xFFu);
+    std::cout << "  [PASS] bit-serial TX/RX timing\n";
 
     // dump_state for visual inspection / coverage of the dump path.
     dut.dump_state(std::cout);

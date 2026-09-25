@@ -75,7 +75,26 @@ endif()
 #   (a) a CMake-installed SystemC providing SystemC::systemc (>= 2.3.4)
 #   (b) the SYSTEMC_HOME environment variable pointing at a manual install
 # ---------------------------------------------------------------------------
-find_package(SystemCLanguage QUIET CONFIG)
+# Prefer SYSTEMC_HOME so a host SystemC 2.3.4 CMake package cannot pair
+# with CCI 1.0.2 (needs sc_time::from_string).
+if(DEFINED ENV{SYSTEMC_HOME} AND EXISTS "$ENV{SYSTEMC_HOME}/include/systemc.h")
+    if(NOT TARGET SystemC::systemc)
+        message(STATUS "Using SystemC from SYSTEMC_HOME=$ENV{SYSTEMC_HOME}")
+        add_library(SystemC::systemc UNKNOWN IMPORTED)
+        find_library(SC_LIB NAMES systemc
+            HINTS $ENV{SYSTEMC_HOME}/lib
+                  $ENV{SYSTEMC_HOME}/lib64
+                  $ENV{SYSTEMC_HOME}/lib-linux64
+                  $ENV{SYSTEMC_HOME}/lib-macosx
+                  $ENV{SYSTEMC_HOME}/lib-macosarm64
+            NO_DEFAULT_PATH REQUIRED)
+        set_target_properties(SystemC::systemc PROPERTIES
+            IMPORTED_LOCATION             "${SC_LIB}"
+            INTERFACE_INCLUDE_DIRECTORIES "$ENV{SYSTEMC_HOME}/include")
+    endif()
+else()
+    find_package(SystemCLanguage QUIET CONFIG)
+endif()
 
 # ---------------------------------------------------------------------------
 # CCI (SystemC Configuration, Control and Inspection) discovery.

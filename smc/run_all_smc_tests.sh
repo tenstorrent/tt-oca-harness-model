@@ -264,6 +264,15 @@ extract_coverage() {
     local log="$1"
     local pct
 
+    # Prefer the src/-only gate line printed by enforce_line_coverage.sh.
+    pct=$(perl -ne '
+        if (/Line coverage \(src\/\):\s*([0-9]+(?:\.[0-9]+)?)/) { print "$1\n"; }
+    ' "$log" 2>/dev/null | tail -1)
+    if [[ -n "$pct" ]]; then
+        echo "$pct"
+        return
+    fi
+
     # llvm-cov: third float percentage on the TOTAL line = line coverage.
     pct=$(perl -ne '
         if (/^TOTAL\b/) {

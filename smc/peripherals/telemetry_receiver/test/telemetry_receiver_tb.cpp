@@ -143,10 +143,14 @@ struct tb : sc_core::sc_module {
 
     sc_core::sc_signal<bool>     rstn{"rstn"}, afready{"afready"};
     sc_core::sc_signal<bool>     irq{"irq"}, afvalid{"afvalid"}, atready{"atready"};
+    sc_core::sc_signal<bool>     atvalid{"atvalid"};
+    sc_core::sc_signal<uint8_t>  atdata{"atdata"};
     sc_core::sc_signal<uint32_t> debug{"debug"};
 
     sc_core::sc_signal<bool>     rstn1{"rstn1"}, afready1{"afready1"};
     sc_core::sc_signal<bool>     irq1{"irq1"}, afvalid1{"afvalid1"}, atready1{"atready1"};
+    sc_core::sc_signal<bool>     atvalid1{"atvalid1"};
+    sc_core::sc_signal<uint8_t>  atdata1{"atdata1"};
     sc_core::sc_signal<uint32_t> debug1{"debug1"};
 
     SC_HAS_PROCESS(tb);
@@ -160,6 +164,8 @@ struct tb : sc_core::sc_module {
         dut.irq_o(irq);
         dut.afvalid_o(afvalid);
         dut.atready_o(atready);
+        dut.atvalid_i(atvalid);
+        dut.atdata_i(atdata);
         dut.debug_o(debug);
 
         drv1.sock.bind(dut1.reg_socket);
@@ -168,6 +174,8 @@ struct tb : sc_core::sc_module {
         dut1.irq_o(irq1);
         dut1.afvalid_o(afvalid1);
         dut1.atready_o(atready1);
+        dut1.atvalid_i(atvalid1);
+        dut1.atdata_i(atdata1);
         dut1.debug_o(debug1);
 
         SC_THREAD(run);
@@ -574,6 +582,97 @@ void tb::run()
         }
         std::cout << "  [PASS] CCI introspection\n";
     }
+
+    // ----------------------------------------------------------------------
+    // Production ATB frontdoor: drive atvalid_i / atdata_i (not push_atb_beat)
+    // ----------------------------------------------------------------------
+    do_reset();
+    atvalid1.write(false);
+    settle();
+    for (uint8_t b : oracle_beats) {
+        atdata1.write(b);
+        settle();
+        atvalid1.write(true);
+        settle();
+        atvalid1.write(false);
+        settle();
+    }
+    EXPECT_EQ(0x15u, drv1.read32(PROBE_ID));
+    EXPECT_EQ(0xDEADBEEFu, drv1.read32(counter_reg(0)));
+    std::cout << "  [PASS] production ATB valid/data frontdoor\n";
+
+    // ----------------------------------------------------------------------
+    // Early last_packet after a prior long message: unread counters stay 0
+    // ----------------------------------------------------------------------
+    do_reset();
+    send(0x01, {0x11111111u, 0x22222222u, 0x33333333u, 0x44444444u});
+    EXPECT_EQ(0x22222222u, drv.read32(counter_reg(1)));
+    drv.write32(CTRL, cfg::CTRL_BUFFER_POP);
+    settle();
+    {
+        std::vector<smc::telemetry_counter_value> c{{true, 0xA1A1A1A1u}};
+        auto beats = smc::telemetry_encode_message(0x02, c, MAX_COUNTERS, false);
+        std::vector<uint8_t> early(beats.begin(), beats.begin() + 8);
+        early[7] |= 0x80; // last_packet on packet 0; unread counters must be 0
+        EXPECT_EQ(8u, dut.push_atb_beats(early));
+        settle();
+    }
+    EXPECT_EQ(0x02u, drv.read32(PROBE_ID));
+    EXPECT_EQ(0xA1A1A1A1u, drv.read32(counter_reg(0)));
+    EXPECT_EQ(0u, drv.read32(counter_reg(1)));
+    EXPECT_EQ(0u, drv.read32(counter_reg(2)));
+    EXPECT_EQ(0u, drv.read32(counter_reg(3)));
+    std::cout << "  [PASS] early-last does not leak stale counters\n";
+
+    // ----------------------------------------------------------------------
+    // ATB ready/valid backpressure matrix (production pins, not push_atb_beat)
+    // ----------------------------------------------------------------------
+    do_reset();
+    atvalid.write(false);
+    settle();
+    rstn.write(false);
+    settle();
+    EXPECT_TRUE(!atready.read());
+    atdata.write(0xA5);
+    atvalid.write(true);
+    settle();
+    atvalid.write(false);
+    settle();
+    EXPECT_EQ(0u, dut.fill_level());          // beat dropped while !ready
+    rstn.write(true);
+    settle();
+    EXPECT_TRUE(atready.read());
+    EXPECT_EQ(0u, dut.fill_level());
+    // Mid-message reset wipes assembly; a later full message must be clean.
+    for (unsigned i = 0; i < 4; ++i) {
+        atdata.write(static_cast<uint8_t>(0x10 + i));
+        atvalid.write(true);
+        settle();
+        atvalid.write(false);
+        settle();
+    }
+    rstn.write(false);
+    settle();
+    EXPECT_TRUE(!atready.read());
+    rstn.write(true);
+    settle();
+    EXPECT_TRUE(atready.read());
+    EXPECT_EQ(0u, dut.fill_level());
+    for (uint8_t b : oracle_beats) {
+        atdata.write(b);
+        settle();
+        atvalid.write(true);
+        settle();
+        atvalid.write(false);
+        settle();
+    }
+    EXPECT_EQ(0x15u, drv.read32(PROBE_ID));
+    EXPECT_EQ(0xDEADBEEFu, drv.read32(counter_reg(0)));
+    // ready without valid is a no-op
+    const unsigned fill = dut.fill_level();
+    settle();
+    EXPECT_EQ(fill, dut.fill_level());
+    std::cout << "  [PASS] ATB backpressure / reset matrix\n";
 
     dut.dump_state(std::cout);
 

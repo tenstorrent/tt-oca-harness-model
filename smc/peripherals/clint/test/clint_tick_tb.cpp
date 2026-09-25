@@ -191,6 +191,21 @@ struct tb : sc_core::sc_module {
         EXPECT_TRUE(mtip_sig[0].read());
         std::cout << "  [PASS] MTIP asserted automatically once MTIME >= MTIMECMP\n";
 
+        // TA-4. Hold reset for 3.5 periods. MTIME stays 0; after release
+        // the first tick lands one period later (exact, not a lower bound).
+        rst_n.write(false);
+        sc_core::wait(sc_time(period_ns * 3.5, SC_NS));
+        EXPECT_EQ(uint64_t(0), dut.dbg_mtime());
+        EXPECT_TRUE(!mtip_sig[0].read());
+        rst_n.write(true);
+        sc_core::wait(sc_time(period_ns * 0.4, SC_NS));
+        EXPECT_EQ(uint64_t(0), dut.dbg_mtime());
+        sc_core::wait(sc_time(period_ns * 0.7, SC_NS));
+        EXPECT_EQ(uint64_t(1), dut.dbg_mtime());
+        sc_core::wait(sc_time(period_ns, SC_NS));
+        EXPECT_EQ(uint64_t(2), dut.dbg_mtime());
+        std::cout << "  [PASS] held-reset restarts tick with exact MTIME\n";
+
         if (g_failures == 0) {
             std::cout << "\nALL TESTS PASSED\n";
         } else {

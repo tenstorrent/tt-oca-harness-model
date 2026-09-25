@@ -368,6 +368,8 @@ public:
     sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_afready{"telemetry_afready", NUM_TELEMETRY};
     sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_afvalid{"telemetry_afvalid", NUM_TELEMETRY};
     sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_atready{"telemetry_atready", NUM_TELEMETRY};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> telemetry_atvalid{"telemetry_atvalid", NUM_TELEMETRY};
+    sc_core::sc_vector<sc_core::sc_signal<uint8_t>> telemetry_atdata{"telemetry_atdata", NUM_TELEMETRY};
     sc_core::sc_vector<sc_core::sc_signal<uint32_t>> telemetry_debug{"telemetry_debug", NUM_TELEMETRY};
     sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_irq{"wdt_irq", NUM_HARTS};
     sc_core::sc_vector<sc_core::sc_signal<bool>> wdt_sticky{"wdt_sticky", NUM_HARTS};

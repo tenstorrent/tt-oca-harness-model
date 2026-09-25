@@ -372,10 +372,9 @@ bool cpu_ctrl::reg_write(uint64_t off, unsigned len, const uint8_t* buf)
     const uint64_t aligned = off & ~7ULL;
     const unsigned sub     = static_cast<unsigned>(off & 7u);
 
-    uint64_t cur = read_qword(aligned);
-    std::memcpy(reinterpret_cast<uint8_t*>(&cur) + sub, buf, len);
-
-    return write_qword(aligned, cur, sub, len);
+    uint64_t raw = 0;
+    std::memcpy(&raw, buf, len);
+    return write_qword(aligned, raw, sub, len);
 }
 
 // ---------------------------------------------------------------------------
@@ -437,6 +436,11 @@ void cpu_ctrl::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay
     const uint64_t         adr = normalize_addr(gp.get_address());
     const unsigned         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
+
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
 
     if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
