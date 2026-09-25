@@ -25,13 +25,15 @@ entropy_src_interface.h   register-callback contract
 ====== Threads and sockets
 
 `entropy_generation_thread` fills the FIFO while enabled. Reset is an
-`SC_METHOD` on `rst_ni`. `irq_o` is driven from
+`SC_METHOD` on `rst_ni`. Quantum-keeper pacing waits are interruptible
+by `rst_ni` and `m_reset_event` so a TRNG-domain reset is not stuck
+behind an in-flight timed wait. `irq_o` is driven from
 `interrupt_output_method` so callbacks are not a second SystemC writer.
 
 `sep-vp` binds the TLM register target at the TRM entropy-source
-aperture, `rst_ni`, and `irq_o`. There is no `clk_i` pin. The model is
-not TLM-wired to `edn` or `csrng`; other blocks that need randomness
-call OpenSSL themselves.
+aperture, `rst_ni`, and `irq_o`. There is no `clk_i` pin. Its
+`entropy_export` is bound to CSRNG and supplies 384-bit seeds by
+destructively consuming 12 words from the modeled entropy FIFO.
 
 [cols="32%,28%,40%",options="header"]
 |===
@@ -39,9 +41,10 @@ call OpenSSL themselves.
 |`entropy_src_base` memory target |TLM 32-bit |`sep-vp` SimpleBus, ENTROPY_SOURCE window
 |`rst_ni` |`sc_in<bool>` |Active-low; falling edge clears state
 |`irq_o` |`sc_out<bool>` |SEP PIC (`INTR_STATUS & INTR_ENABLE`)
+|`entropy_export` |`sc_export<entropy_provider_if>` |CSRNG 384-bit seed input
 |===
 
-CTRL.RESET runs the software reset sequence. FIFO_RDATA pops the queue
+rst_ni (TRNG SW_RESET_N bit) resets the model. FIFO_RDATA pops the queue
 (underflow if empty). FIFO_CTRL gates the filler thread. Health-test
 enable is captured; the running tests are a stub.
 
@@ -68,7 +71,10 @@ CCI.
 ====== Modeling gaps versus RTL
 
 * No ring oscillators, decorrelator datapath, or conditioner.
-* Health tests are register-visible stubs; they do not score samples.
-* No EDN / CSRNG output sockets; FIFO is MMIO-only.
+* The production `entropy_export` pops 12 FIFO words per CSRNG seed. When
+  the repetition test is enabled, those bytes are scored against the
+  programmed repetition limit and update failure/interrupt state.
+* The full adaptive-proportion and Markov tests remain register-visible
+  abstractions; this is not a cycle-accurate conditioner.
 * No `clk_i`; iteration period is a constant nanosecond scale.
 * Firmware-visible health counters are not a NIST SP 800-90B lab.

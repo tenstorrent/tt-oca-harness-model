@@ -318,8 +318,6 @@ public:
     void test_fifo_write_before_start_error();
     void test_fifo_write_after_process_error();
     void test_fifo_write_during_app_active_error();
-    void test_callback_msg_fifo_write_packing();
-    void test_callback_msg_fifo_write_backpressure();
     void test_fifo_alternating_read_write();
     void test_fifo_maximum_throughput();
 

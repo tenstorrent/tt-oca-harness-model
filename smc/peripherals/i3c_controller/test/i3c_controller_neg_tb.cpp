@@ -96,6 +96,22 @@ struct probe : sc_core::sc_module {
         return gp.get_response_status();
     }
 
+    tlm::tlm_response_status raw_with_axi(tlm::tlm_command cmd, uint64_t addr,
+                                          uint32_t& data,
+                                          smc::smc_axi_extension& ext) {
+        tlm::tlm_generic_payload gp;
+        sc_time t = SC_ZERO_TIME;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(&data));
+        gp.set_data_length(sizeof(data));
+        gp.set_streaming_width(sizeof(data));
+        gp.set_extension(&ext);
+        sock->b_transport(gp, t);
+        gp.clear_extension<smc::smc_axi_extension>();
+        return gp.get_response_status();
+    }
+
     unsigned dbg(tlm::tlm_command cmd, uint64_t addr, uint32_t len, void* data) {
         tlm::tlm_generic_payload gp;
         gp.set_command(cmd);
@@ -180,6 +196,15 @@ int sc_main(int, char**)
     // Bad command.
     EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
               pr.raw(tlm::TLM_IGNORE_COMMAND, cfg_t::HC_CONTROL, 4, &scratch));
+    EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+              pr.raw(tlm::TLM_READ_COMMAND, cfg_t::HC_CONTROL, 4, nullptr));
+    smc::smc_axi_extension axi;
+    axi.source_id = smc::SMC_ID;
+    axi.axi_id = 0x5A;
+    axi.set_priv(true);
+    EXPECT_EQ(tlm::TLM_OK_RESPONSE,
+              pr.raw_with_axi(tlm::TLM_READ_COMMAND, cfg_t::HC_CONTROL,
+                              scratch, axi));
     std::cout << "  [PASS] TLM error responses (width/align/sw/be/aperture/cmd)\n";
 
     // Hole inside the window: RAZ/WI (0x18 is unmapped).
@@ -192,6 +217,7 @@ int sc_main(int, char**)
     EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND, cfg_t::DAT_BASE + 2, 4, &scratch)); // misaligned
     EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND, cfg_t::DAT_BASE, 2, &scratch));      // bad width
     EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND, aperture, 4, &scratch));            // OOB
+    EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND, cfg_t::DAT_BASE, 4, nullptr));      // null
     EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND, cfg_t::HC_CONTROL, 4, &scratch));    // CSR not backed
     // Valid dbg write/read round-trip through the DAT window.
     scratch = 0x0F0F0F0Fu;

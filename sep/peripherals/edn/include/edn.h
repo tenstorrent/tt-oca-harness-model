@@ -88,6 +88,10 @@ class edn_ip : public edn_base, public edn_endpoint_if
 
    /// Loosely-timed pull endpoint used by entropy consumers.
    sc_core::sc_export<edn_endpoint_if> entropy_endpoint;
+   sc_core::sc_port<csrng_app_if, 1, sc_core::SC_ZERO_OR_MORE_BOUND>
+      csrng_app_port;
+   sc_core::sc_port<csrng_genbits_if, 1, sc_core::SC_ZERO_OR_MORE_BOUND>
+      csrng_genbits_port;
 
    bool try_pop_entropy_word(unsigned endpoint_id,
                              uint32_t& word,
@@ -495,9 +499,6 @@ class edn_ip : public edn_base, public edn_endpoint_if
    /// Used to differentiate reset value (0x0) from operational dynamic values
    bool m_sw_cmd_sts_initialized;
 
-   /// HW command buffer (for boot-time and auto-request mode commands)
-   std::vector<uint32_t> m_hw_cmd_buffer;
-
    /// Entropy buffer (32-bit chunks from 128-bit CSRNG blocks)
    std::queue<uint32_t> m_entropy_buffer;
 
@@ -580,25 +581,14 @@ class edn_ip : public edn_base, public edn_endpoint_if
    void process_sw_command_async();
 
    /**
-    * @brief Send hardware-generated CSRNG command (async thread wrapper)
-    * @param cmd_header Command header word (cmd type, clen, flags)
-    * @param cmd_data Pointer to additional command data words (may be nullptr if clen=0)
-    * @param num_data_words Number of data words (must match clen in header)
+    * @brief Forward one complete command and collect all generated blocks.
     *
-    * Used by boot-time and auto-request mode state machines to issue
-    * hardware-controlled CSRNG commands. Updates HW_CMD_STS register
-    * and handles acknowledgment/errors.
+    * Uses the bound CSRNG application/genbits ports in an integrated platform.
+    * An OpenSSL-backed fallback is retained only for an unbound standalone EDN.
     */
-   void send_hw_csrng_command(uint32_t cmd_header, const uint32_t* cmd_data, uint32_t num_data_words);
-
-   /**
-    * @brief Asynchronous HW command processing thread
-    *
-    * Spawned via sc_spawn() to process hardware commands asynchronously.
-    * Uses m_hw_cmd_buffer member variable to access command data.
-    * This allows modeling timing delays without blocking the caller.
-    */
-   void process_hw_command_async();
+   uint32_t forward_csrng_command(const uint32_t* words,
+                                  uint32_t count,
+                                  uint32_t generated_blocks);
 
    /**
     * @brief Receive entropy block from CSRNG

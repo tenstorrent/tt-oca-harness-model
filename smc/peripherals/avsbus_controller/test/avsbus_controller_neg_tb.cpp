@@ -161,6 +161,9 @@ void tb::run()
                       reinterpret_cast<uint8_t*>(&d), 4);
         EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE, st);
 
+        st = drv.xfer(tlm::TLM_READ_COMMAND, 0x50, nullptr, 4);
+        EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, st);
+
         // Decode miss inside window (gap between 0x0C and 0x20)
         st = drv.xfer(tlm::TLM_READ_COMMAND, 0x10,
                       reinterpret_cast<uint8_t*>(&d), 4);
@@ -206,8 +209,12 @@ void tb::run()
         gp.set_data_length(2);
         EXPECT_EQ(0u, drv.sock->transport_dbg(gp));
 
-        // IGNORE via transport_dbg → 0
         gp.set_data_length(4);
+        gp.set_data_ptr(nullptr);
+        EXPECT_EQ(0u, drv.sock->transport_dbg(gp));
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(&out));
+
+        // IGNORE via transport_dbg → 0
         gp.set_command(tlm::TLM_IGNORE_COMMAND);
         EXPECT_EQ(0u, drv.sock->transport_dbg(gp));
 

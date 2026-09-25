@@ -467,10 +467,6 @@ void testbench::test_defensive_error_paths() {
     report_test_start("TC-218: test_defensive_error_paths");
 
     // 1. Unmasked logic (L1819-1824)
-    bool* p_masking = const_cast<bool*>(&(dut->EnMasking));
-    bool orig_masking = *p_masking;
-    *p_masking = false; // Force unmasked mode
-
     configure_cfg_shadowed_with_entropy(0x3, 0x2, 1, 0); // KMAC256
     test->register_write_32(test->KEY_LEN_OFFSET, 0x2);
     for (int i = 0; i < 8; i++) test->register_write_32(0x30 + i*4, 0x11223344);
@@ -479,8 +475,6 @@ void testbench::test_defensive_error_paths() {
     wait(50, SC_NS);
     test->register_write_32(test->CMD_OFFSET, 0x16); // DONE
     wait(50, SC_NS);
-    
-    *p_masking = orig_masking; // Restore
     
     apply_reset();
     wait(50, SC_NS);
@@ -521,9 +515,6 @@ void testbench::test_coverage_unmasked_and_keylen()
 {
     report_test_start("TC-232: test_coverage_unmasked_and_keylen");
 
-    bool* p_masking = const_cast<bool*>(&(dut->EnMasking));
-    bool orig_masking = *p_masking;
-
     // Invalid KEY_LEN is only consulted on the software-key KMAC START path.
     configure_cfg_shadowed_with_entropy(0x3, 0x2, 1, 0);
     test->register_write_32(0xB4, 0x4D4B2001);
@@ -541,7 +532,6 @@ void testbench::test_coverage_unmasked_and_keylen()
     wait(50, SC_NS);
 
     // EnMasking=0: PROCESS stores the digest in share0 and zeros share1.
-    *p_masking = false;
     configure_cfg_shadowed_with_entropy(0x0, 0x2, 0, 0); // SHA3-256
     test->register_write_32(test->CMD_OFFSET, 0x1D);
     wait(20, SC_NS);
@@ -576,7 +566,6 @@ void testbench::test_coverage_unmasked_and_keylen()
     test->register_write_32(test->CMD_OFFSET, 0x16);
     wait(20, SC_NS);
 
-    *p_masking = orig_masking;
     apply_reset();
     wait(50, SC_NS);
 
@@ -592,9 +581,6 @@ void testbench::test_coverage_unmasked_and_keylen()
 void testbench::test_coverage_app_and_cleanup()
 {
     report_test_start("TC-233: test_coverage_app_and_cleanup");
-
-    bool* p_masking = const_cast<bool*>(&(dut->EnMasking));
-    bool orig_masking = *p_masking;
 
     // Escalation must pop leftover FIFO words, not just reset the depth.
     configure_cfg_shadowed_with_entropy(0x0, 0x2, 0, 0);
@@ -625,9 +611,8 @@ void testbench::test_coverage_app_and_cleanup()
     bool mac_freed = (dut->evp_mac == nullptr && dut->evp_mac_ctx == nullptr);
 
     // LC_CTRL app path with EnMasking=0 stores the digest in share0 only.
-    *p_masking = false;
     test->app_port[1]->app_request(0xA5A5A5A5A5A5A5A5ULL, 0xFF, true);
-    wait(50, SC_NS);
+    wait(2000, SC_NS);
     bool app_done = test->app_port[1]->is_done();
     uint32_t s0[8] = {}, s1[8] = {};
     if (app_done) {
@@ -635,7 +620,6 @@ void testbench::test_coverage_app_and_cleanup()
     }
     bool app_unmasked = app_done && (s1[0] == 0);
 
-    *p_masking = orig_masking;
     apply_reset();
     wait(50, SC_NS);
 

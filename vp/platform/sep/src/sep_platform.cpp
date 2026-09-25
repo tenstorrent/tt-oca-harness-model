@@ -477,7 +477,10 @@ void och_sep_ss::create_modules() {
     efuse_locked_field_irq_sig.write(false);
     lc_ctrl         = new lifecycle_ctrl_model("lc_ctrl");
     entropy_src     = new entropy_src_ip("entropy_src");
+    csrng->entropy_port.bind(entropy_src->entropy_export);
     edn             = new edn_ip("edn");
+    edn->csrng_app_port.bind(csrng->hw_app_export[0]);
+    edn->csrng_genbits_port.bind(csrng->genbits_export);
     entropy_pool    = new sep_entropy_pool_ip("entropy_pool");
     spi_device      = new spi_flash("spi_flash");
     spi_controller  = new spi_controller_ip("spi_controller");

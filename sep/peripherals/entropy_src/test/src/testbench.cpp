@@ -1370,6 +1370,21 @@ void testbench::run_tests()
     record_result("TC-COV-010: verbose_callbacks_and_recovery",
         tc_cov_verbose_callbacks_and_recovery());
 
+    apply_reset();
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x1u);
+    wait(2, SC_US);
+    uint8_t seed[48] = {};
+    bool fips = true;
+    bool provider_ok = dut->entropy_export->get_seed_384(seed, fips);
+    bool nonzero = false;
+    for (uint8_t byte : seed) {
+        nonzero = nonzero || (byte != 0);
+    }
+    provider_ok = provider_ok && nonzero;
+    provider_ok = provider_ok &&
+                  !dut->entropy_export->get_seed_384(nullptr, fips);
+    record_result("TC-P0: production entropy client export", provider_ok);
+
     // =========================================================================
     // Summary
     // =========================================================================
