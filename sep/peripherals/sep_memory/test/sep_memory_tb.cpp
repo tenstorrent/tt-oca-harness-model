@@ -63,7 +63,8 @@ public:
 
 int sc_main(int, char**)
 {
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
     bench tb{"tb"};
     tb.ram.logger.setMaxVerbosity(5);
     tb.rom.logger.setMaxVerbosity(5);
