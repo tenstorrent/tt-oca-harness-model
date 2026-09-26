@@ -146,6 +146,30 @@ struct probe : sc_core::sc_module {
         sock->b_transport(gp, t);
         return gp.get_response_status();
     }
+
+    tlm::tlm_response_status read64_null(uint64_t addr) {
+        tlm::tlm_generic_payload gp;
+        sc_core::sc_time t = sc_core::SC_ZERO_TIME;
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(addr);
+        gp.set_data_ptr(nullptr);
+        gp.set_data_length(8);
+        gp.set_streaming_width(8);
+        gp.set_byte_enable_ptr(nullptr);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, t);
+        return gp.get_response_status();
+    }
+
+    unsigned read64_null_dbg(uint64_t addr) {
+        tlm::tlm_generic_payload gp;
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(addr);
+        gp.set_data_ptr(nullptr);
+        gp.set_data_length(8);
+        gp.set_streaming_width(8);
+        return sock->transport_dbg(gp);
+    }
 };
 
 } // namespace
@@ -337,6 +361,8 @@ int sc_main(int, char**)
         pr.sock.bind(r.reg_socket);
 
         EXPECT_TRUE(!r.ecc_enabled());
+        EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE, pr.read64_null(0));
+        EXPECT_EQ(0u, pr.read64_null_dbg(0));
         r.dbg_inject_ecc_error(0, /*correctable=*/false); // ignored
         uint64_t v = 0;
         EXPECT_EQ(tlm::TLM_OK_RESPONSE, pr.read64(0, v));

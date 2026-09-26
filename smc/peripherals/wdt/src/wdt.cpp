@@ -459,7 +459,10 @@ unsigned int wdt::transport_dbg(tlm::tlm_generic_payload& gp)
     }
     // Same window and alignment contract as b_transport: a debug access must
     // not read past the last register just because only the base was checked.
-if (addr >= wdt_cfg::WINDOW_SIZE || (addr + len) > wdt_cfg::WINDOW_SIZE) {
+    if ((addr % len) != 0) {
+        return 0;
+    }
+    if (addr >= wdt_cfg::WINDOW_SIZE || (addr + len) > wdt_cfg::WINDOW_SIZE) {
         return 0;
     }
     if (gp.is_read()) {

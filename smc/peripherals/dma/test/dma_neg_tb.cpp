@@ -11,10 +11,9 @@
  *   - write to read-only / trigger registers is accepted (returns true) but ignored
  *   - start_transfer returns 0 for zero-length / invalid channels
  *
- * The test exercises the model entirely during elaboration (b_transport and
- * transport_dbg are plain function calls through the bound socket) and never
- * calls sc_start.  That keeps the constructor-throw probes from perturbing
- * a running simulation kernel.
+ * Constructor and malformed-payload checks run during elaboration.  The final
+ * source/destination failure cases call sc_start so the production transfer
+ * thread actually consumes the queued descriptors.
  */
 
 #include <systemc>
@@ -249,6 +248,10 @@ int sc_main(int, char**)
     // path is not reachable from a decoded register offset; the out-of-range
     // NEXT_ID offsets above return ADDRESS_ERROR before start_transfer.
 
+    // Initialize SC_THREADs before issuing zero-time transfer notifications.
+    // Otherwise a notification sent before the first evaluation phase is lost.
+    sc_core::sc_start(sc_core::SC_ZERO_TIME);
+
     // copy_chunk error path: source read fails.
     {
         uint32_t len = 8;
@@ -278,6 +281,23 @@ int sc_main(int, char**)
         p.raw(tlm::TLM_WRITE_COMMAND, dma_cfg::OFF_LENGTH_LO, 4, &len);
         EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, dma_cfg::next_id_offset(1), 4, &data), tlm::TLM_OK_RESPONSE);
     }
+
+    // Run the production transfer thread.  Neither failed operation may
+    // increment DONE, and both channels must leave BUSY.
+    sc_core::sc_start(sc_core::sc_time(1, sc_core::SC_NS));
+    uint32_t value = 0;
+    EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, dma_cfg::done_offset(0), 4, &value),
+              tlm::TLM_OK_RESPONSE);
+    EXPECT_EQ(value, 0u);
+    EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, dma_cfg::status_offset(0), 4, &value),
+              tlm::TLM_OK_RESPONSE);
+    EXPECT_EQ(value, 0u);
+    EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, dma_cfg::done_offset(1), 4, &value),
+              tlm::TLM_OK_RESPONSE);
+    EXPECT_EQ(value, 0u);
+    EXPECT_EQ(p.raw(tlm::TLM_READ_COMMAND, dma_cfg::status_offset(1), 4, &value),
+              tlm::TLM_OK_RESPONSE);
+    EXPECT_EQ(value, 0u);
 
     if (g_failures == 0) {
         std::cout << "\nALL TESTS PASSED\n";

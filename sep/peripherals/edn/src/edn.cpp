@@ -19,6 +19,8 @@
 edn_ip::edn_ip(sc_module_name n)
     : edn_base(n, 0x48)
     , entropy_endpoint("entropy_endpoint")
+    , csrng_app_port("csrng_app_port")
+    , csrng_genbits_port("csrng_genbits_port")
     , intr_edn_cmd_req_done("intr_edn_cmd_req_done")
     , intr_edn_fatal_err("intr_edn_fatal_err")
     , alert_recov_alert("alert_recov_alert")
@@ -620,10 +622,10 @@ bool edn_ip::handle_write_SW_CMD_REQ(uint32_t value)
         // Mark as processing (prevents concurrent commands)
         m_sw_cmd_processing = true;
 
-        // Forward complete command to CSRNG
-        // Call directly (not sc_spawn) because this function has no wait() calls
-        // and sc_spawn defers to next delta cycle which breaks temporal decoupling
-        process_sw_command_async();
+        // Leave the register callback before invoking CSRNG. A bound CSRNG may
+        // synchronize its quantum keeper while generating blocks, and wait()
+        // is illegal in the b_transport call stack.
+        sc_spawn(sc_bind(&edn_ip::process_sw_command_async, this));
     }
 
     return true;  // Accept write (does not store, write-only FIFO)
@@ -642,11 +644,52 @@ bool edn_ip::handle_write_SW_CMD_REQ(uint32_t value)
  * - architecture_map.side_effects["csrng_command_forward"]: Timing model
  * - architecture_map.events["edn_cmd_req_done"]: Interrupt on completion
  */
+uint32_t edn_ip::forward_csrng_command(const uint32_t* words,
+                                       uint32_t count,
+                                       uint32_t generated_blocks)
+{
+    uint32_t ack_status = 0;
+    if (csrng_app_port.size() != 0) {
+        csrng_app_port->send_command(words, count, ack_status);
+        if (ack_status != 0) return ack_status;
+        for (uint32_t block = 0; block < generated_blocks; ++block) {
+            if (csrng_genbits_port.size() == 0 ||
+                !csrng_genbits_port->has_data()) {
+                return 1;
+            }
+            uint32_t genbits[4] = {};
+            bool fips = false;
+            csrng_genbits_port->receive_genbits(genbits, fips);
+            receive_csrng_entropy(genbits, fips);
+        }
+        return 0;
+    }
+
+    // Standalone fallback for an isolated EDN with no CSRNG bound.
+    ack_status = m_forced_csrng_ack_status;
+    m_forced_csrng_ack_status = 0;
+    if (ack_status == 0) {
+        for (uint32_t block = 0; block < generated_blocks; ++block) {
+            uint32_t genbits[4] = {};
+            if (RAND_bytes(reinterpret_cast<unsigned char*>(genbits),
+                           sizeof(genbits)) != 1) {
+                return 1;
+            }
+            receive_csrng_entropy(genbits, false);
+        }
+    }
+    return ack_status;
+}
+
 void edn_ip::process_sw_command_async()
 {
-    // Simulate CSRNG acknowledgment
-    uint32_t ack_status = m_forced_csrng_ack_status;
-    m_forced_csrng_ack_status = 0;
+    const uint32_t cmd_type = m_sw_cmd_buffer[0] & 0xFu;
+    const uint32_t generated_blocks =
+        (cmd_type == 0x3u) ? ((m_sw_cmd_buffer[0] >> 12) & 0x7FFFFu) : 0u;
+    uint32_t ack_status =
+        forward_csrng_command(m_sw_cmd_buffer.data(),
+                              static_cast<uint32_t>(m_sw_cmd_buffer.size()),
+                              generated_blocks);
 
     // Check CSRNG acknowledgment status
     if (ack_status == 0)
@@ -657,23 +700,6 @@ void edn_ip::process_sw_command_async()
 
         // EDN_FUNC_014: For Generate commands, trigger endpoint distribution
         // Extract command type from header word (bits [3:0])
-        uint32_t cmd_type = m_sw_cmd_buffer[0] & 0xF;
-        if (cmd_type == 0x3 || cmd_type == 0x4)  // Generate or Reseed command
-        {
-            uint32_t glen = (m_sw_cmd_buffer[0] >> 12) & 0x7FFFF;
-            if (cmd_type == 0x4) glen = 1; // Reseed is 1 block
-            
-            for (uint32_t i = 0; i < glen; i++) {
-                uint32_t rand_data[4];
-                RAND_bytes(reinterpret_cast<unsigned char*>(rand_data), 16);
-                for (int j = 0; j < 4; j++) {
-                    m_entropy_buffer.push(rand_data[j]);
-                }
-            }
-            if (glen != 0)
-                m_entropy_available_event.notify(SC_ZERO_TIME);
-        }
-
         // Set interrupt status bit (architecture_map.events["edn_cmd_req_done"])
         // Status bit is ALWAYS set when event occurs, regardless of INTR_ENABLE
         // INTR_ENABLE controls whether interrupt SIGNAL is asserted
@@ -779,7 +805,7 @@ bool edn_ip::handle_read_SW_CMD_STS(uint32_t& value)
  *
  * Implementation Note:
  * - BOOT_MODE and AUTO_MODE derived from CTRL register and state machine state
- * - CMD_TYPE, CMD_ACK, CMD_STS updated by send_hw_csrng_command()
+ * - CMD_TYPE, CMD_ACK, CMD_STS updated by the boot/auto command paths
  * - This callback provides real-time status (not stored, dynamically computed)
  */
 bool edn_ip::handle_read_HW_CMD_STS(uint32_t& value)
@@ -793,7 +819,7 @@ bool edn_ip::handle_read_HW_CMD_STS(uint32_t& value)
     HW_CMD_STS.BOOT_MODE = (boot_req_mode == 0x6) ? 1 : 0;
     HW_CMD_STS.AUTO_MODE = (auto_req_mode == 0x6) ? 1 : 0;
 
-    // CMD_TYPE, CMD_ACK, CMD_STS are updated by send_hw_csrng_command()
+    // CMD_TYPE, CMD_ACK, CMD_STS are updated by the boot/auto command paths
     // and stored in the HW_CMD_STS register
     // Update output value with complete register contents
     value = static_cast<uint32_t>(HW_CMD_STS);
@@ -831,78 +857,6 @@ void edn_ip::handle_csrng_error(uint32_t ack_status)
     // Note: CSRNG errors are recoverable, not fatal. Module remains operational.
     // No ERR_CODE, no fatal interrupt, no Error state transition per hardware spec.
 }
-
-/**
- * @brief Send hardware-generated CSRNG command (async thread wrapper)
- * @param cmd_header Command header word (cmd type, clen, flags)
- * @param cmd_data Pointer to additional command data words (may be nullptr if clen=0)
- * @param num_data_words Number of data words (must match clen in header)
- *
- * Used by boot-time and auto-request mode state machines to issue
- * hardware-controlled CSRNG commands. Copies command to internal buffer
- * and spawns async processing thread. Updates HW_CMD_STS register.
- */
-// LCOV_EXCL_START
-/**
- * @brief Send hardware-generated CSRNG command (async thread wrapper)
- * @param cmd_header Command header word (cmd type, clen, flags)
- * @param cmd_data Pointer to additional command data words (may be nullptr if clen=0)
- * @param num_data_words Number of data words (must match clen in header)
- *
- * Used by boot-time and auto-request mode state machines to issue
- * hardware-controlled CSRNG commands. Copies command to internal buffer
- * and spawns async processing thread. Updates HW_CMD_STS register.
- */
-void edn_ip::send_hw_csrng_command(uint32_t cmd_header, const uint32_t* cmd_data, uint32_t num_data_words)
-{
-    // Clear HW command buffer
-    m_hw_cmd_buffer.clear();
-
-    // Add header
-    m_hw_cmd_buffer.push_back(cmd_header);
-
-    // Add data words
-    for (uint32_t i = 0; i < num_data_words; i++)
-    {
-        m_hw_cmd_buffer.push_back(cmd_data[i]);
-    }
-
-    // Extract command type for HW_CMD_STS
-    uint32_t cmd_type = cmd_header & 0xF;
-    HW_CMD_STS.CMD_TYPE = cmd_type;
-    HW_CMD_STS.CMD_ACK = 0;  // Clear ack until response received
-
-    // Spawn async processing thread
-    sc_spawn(sc_bind(&edn_ip::process_hw_command_async, this));
-}
-
-/**
- * @brief Asynchronous HW command processing thread
- *
- * Processes hardware commands (boot-time, auto mode) asynchronously.
- * Forwards command to CSRNG and updates HW_CMD_STS register.
- */
-void edn_ip::process_hw_command_async()
-{
-    // Simulate CSRNG acknowledgment
-    uint32_t ack_status = m_forced_csrng_ack_status;
-    m_forced_csrng_ack_status = 0;
-
-    // Update HW_CMD_STS
-    HW_CMD_STS.CMD_ACK = 1;
-    HW_CMD_STS.CMD_STS = ack_status & 0x7;
-
-    // Handle errors if needed
-    if (ack_status != 0)
-    {
-        handle_csrng_error(ack_status);
-    }
-
-    // Note: State machine transitions for boot/auto modes are handled by
-    // the state machine logic in those respective functionalities (FUNC_012, FUNC_013),
-    // not here. This function only updates HW_CMD_STS and handles errors.
-}
-// LCOV_EXCL_STOP
 
 /**
  * @brief Receive entropy block from CSRNG
@@ -1664,7 +1618,7 @@ void edn_ip::boot_mode_instantiate()
     uint32_t boot_ins_cmd = static_cast<uint32_t>(BOOT_INS_CMD);
 
     // Extract clen from header to validate hardware constraint (must be 0)
-    uint32_t clen = (boot_ins_cmd >> 8) & 0xF;
+    uint32_t clen = (boot_ins_cmd >> 4) & 0xF;
     if (clen != 0)
     {
         REG_WARN(1, logger) << "BOOT_INS_CMD has non-zero clen=" << clen
@@ -1678,9 +1632,7 @@ void edn_ip::boot_mode_instantiate()
     HW_CMD_STS.CMD_ACK = 0;     // Clear ack until CSRNG responds
     HW_CMD_STS.CMD_STS = 0;
 
-    // Simulate CSRNG Instantiate success
-    uint32_t ack_status = m_forced_csrng_ack_status;
-    m_forced_csrng_ack_status = 0;
+    uint32_t ack_status = forward_csrng_command(&boot_ins_cmd, 1, 0);
 
     // Update HW_CMD_STS with CSRNG response
     HW_CMD_STS.CMD_ACK = 1;
@@ -1764,7 +1716,7 @@ void edn_ip::boot_mode_generate()
 
     // Extract glen and clen for logging
     uint32_t glen = (boot_gen_cmd >> 12) & 0x7FFFF;  // glen is 19 bits at [30:12]
-    uint32_t clen = (boot_gen_cmd >> 8) & 0xF;
+    uint32_t clen = (boot_gen_cmd >> 4) & 0xF;
 
     REG_INFO(1, logger) << "EDN_FUNC_012: Boot Generate glen=0x" << std::hex << glen
                          << " (blocks), clen=" << std::dec << clen;
@@ -1780,14 +1732,7 @@ void edn_ip::boot_mode_generate()
     HW_CMD_STS.CMD_ACK = 0;
     HW_CMD_STS.CMD_STS = 0;
 
-    // Simulate CSRNG Generate success and consume OpenSSL entropy
-    uint32_t ack_status = m_forced_csrng_ack_status;
-    m_forced_csrng_ack_status = 0;
-    for (uint32_t i = 0; i < glen; i++) {
-        uint32_t rand_data[4];
-        RAND_bytes(reinterpret_cast<unsigned char*>(rand_data), 16);
-        // Data generated but intentionally not buffered as endpoints are removed
-    }
+    uint32_t ack_status = forward_csrng_command(&boot_gen_cmd, 1, glen);
 
     // Update HW_CMD_STS with CSRNG response
     HW_CMD_STS.CMD_ACK = 1;
@@ -1870,9 +1815,9 @@ void edn_ip::boot_mode_uninstantiate()
     HW_CMD_STS.CMD_ACK = 0;
     HW_CMD_STS.CMD_STS = 0;
 
-    // Simulate CSRNG Uninstantiate success
-    uint32_t ack_status = m_forced_csrng_ack_status;
-    m_forced_csrng_ack_status = 0;
+    const uint32_t uninstantiate_cmd = 0x5u;
+    uint32_t ack_status =
+        forward_csrng_command(&uninstantiate_cmd, 1, 0);
 
     // Update HW_CMD_STS with CSRNG response
     HW_CMD_STS.CMD_ACK = 1;
@@ -2242,7 +2187,7 @@ uint32_t edn_ip::auto_mode_issue_generate()
     fifo_copy.pop();
 
     // Parse command header
-    uint32_t clen = (header >> 8) & 0xF;
+    uint32_t clen = (header >> 4) & 0xF;
     uint32_t glen = (header >> 12) & 0x7FFFF;
 
     REG_INFO(1, logger) << "EDN_FUNC_013: Generate command - clen=" << std::dec << clen
@@ -2266,8 +2211,6 @@ uint32_t edn_ip::auto_mode_issue_generate()
             return 0xFFFF;
         }
     }
-    (void)cmd_array; // Silence unused-but-set-variable warning
-
     // Update HW_CMD_STS before sending command
     HW_CMD_STS.CMD_TYPE = 3;  // Generate command type
     HW_CMD_STS.CMD_ACK = 0;   // Clear ack (waiting for response)
@@ -2277,19 +2220,8 @@ uint32_t edn_ip::auto_mode_issue_generate()
     uint64_t generate_delay_us = 10 + (glen * 1);  // Linear approximation
     wait(generate_delay_us, SC_US);
 
-    // Simulate CSRNG Generate success and consume OpenSSL entropy
-    uint32_t ack_status = m_forced_csrng_ack_status;
-    m_forced_csrng_ack_status = 0;
-    if (ack_status == 0) {
-        for (uint32_t i = 0; i < glen; i++) {
-            uint32_t rand_data[4];
-            RAND_bytes(reinterpret_cast<unsigned char*>(rand_data), 16);
-            for (uint32_t word : rand_data)
-                m_entropy_buffer.push(word);
-        }
-        if (glen != 0)
-            m_entropy_available_event.notify(SC_ZERO_TIME);
-    }
+    uint32_t ack_status =
+        forward_csrng_command(cmd_array, clen + 1u, glen);
 
     // Update HW_CMD_STS with CSRNG response
     HW_CMD_STS.CMD_ACK = 1;
@@ -2367,7 +2299,7 @@ uint32_t edn_ip::auto_mode_issue_reseed()
     fifo_copy.pop();
 
     // Parse command header
-    uint32_t clen = (header >> 8) & 0xF;
+    uint32_t clen = (header >> 4) & 0xF;
 
     REG_INFO(1, logger) << "EDN_FUNC_013: Reseed command - clen=" << std::dec << clen;
 
@@ -2389,8 +2321,6 @@ uint32_t edn_ip::auto_mode_issue_reseed()
             return 0xFFFF;
         }
     }
-    (void)cmd_array; // Silence unused-but-set-variable warning
-
     // Update HW_CMD_STS before sending command
     HW_CMD_STS.CMD_TYPE = 4;  // Reseed command type
     HW_CMD_STS.CMD_ACK = 0;   // Clear ack (waiting for response)
@@ -2399,11 +2329,8 @@ uint32_t edn_ip::auto_mode_issue_reseed()
     // Reseed requires entropy source interaction and is significantly longer than generate
     wait(5, SC_MS);
 
-    // Simulate CSRNG Reseed success and consume OpenSSL entropy
-    uint32_t ack_status = m_forced_csrng_ack_status;
-    m_forced_csrng_ack_status = 0;
-    uint32_t rand_data[4];
-    RAND_bytes(reinterpret_cast<unsigned char*>(rand_data), 16);
+    uint32_t ack_status =
+        forward_csrng_command(cmd_array, clen + 1u, 0);
 
     // Update HW_CMD_STS with CSRNG response
     HW_CMD_STS.CMD_ACK = 1;

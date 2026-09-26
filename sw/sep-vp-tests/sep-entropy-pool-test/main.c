@@ -7,6 +7,8 @@ extern int printf(const char*, ...);
 
 #define REG32(a) (*(volatile uint32_t*)(uintptr_t)(a))
 
+#define CSRNG_BASE           0x10915000u
+#define CSRNG_CTRL           (CSRNG_BASE + 0x14u)
 #define EDN_BASE             0x10915800u
 #define EDN_CTRL             (EDN_BASE + 0x14u)
 #define EDN_SW_CMD_REQ       (EDN_BASE + 0x20u)
@@ -61,6 +63,8 @@ int main(void)
     check((REG32(POOL_IRQ_CAUSE) & 7u) == 1u,
           "pool-low IRQ cause is live");
 
+    /* CSRNG ENABLE must be set before EDN can instantiate over the HW app port. */
+    REG32(CSRNG_CTRL) = 0x66u;
     REG32(EDN_CTRL) = EDN_ENABLE_SW_MODE;
     check(REG32(EDN_CTRL) == EDN_ENABLE_SW_MODE, "EDN software mode enabled");
     check(issue_edn_command(0x1u), "EDN instantiate accepted");

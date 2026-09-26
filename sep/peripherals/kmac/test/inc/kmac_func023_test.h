@@ -29,6 +29,8 @@
 #include <openssl/evp.h>
 #include <openssl/sha.h>
 
+bool kmac_func023_last_result();
+
 // =============================================================================
 // FUNC-KMAC-023 Test Function Declarations
 // =============================================================================

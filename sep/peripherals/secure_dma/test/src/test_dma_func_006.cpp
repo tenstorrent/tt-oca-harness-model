@@ -48,7 +48,7 @@
  * - Multiple simultaneous error detection and accumulation
  */
 void testbench::run_func006_tests() {
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-006: Error Detection and Reporting Tests\n"
                        << "========================================\n"
                        << std::endl;
@@ -56,36 +56,36 @@ void testbench::run_func006_tests() {
   wait(20, SC_NS);
 
   // Opcode Validation Tests (5 tests)
-  // test_func006_valid_opcode_0x0_copy();
-  // test_func006_valid_opcode_0x1_sha256();
-  // test_func006_valid_opcode_0x2_sha384();
-  // test_func006_valid_opcode_0x3_sha512();
-  // test_func006_invalid_opcode_0x4_to_0xF();
+  test_func006_valid_opcode_0x0_copy();
+  test_func006_valid_opcode_0x1_sha256();
+  test_func006_valid_opcode_0x2_sha384();
+  test_func006_valid_opcode_0x3_sha512();
+  test_func006_invalid_opcode_0x4_to_0xF();
 
   // // Transfer Size Validation Tests (4 tests)
-  // test_func006_valid_transfer_sizes();
-  // test_func006_zero_total_data_size();
-  // test_func006_zero_chunk_data_size();
-  // test_func006_chunk_greater_than_total();
+  test_func006_valid_transfer_sizes();
+  test_func006_zero_total_data_size();
+  test_func006_zero_chunk_data_size();
+  test_func006_chunk_greater_than_total();
 
   // // Pre-Transfer Validation Tests (10 tests)
-  // test_func006_validation_all_pass();
-  // test_func006_validation_opcode_failure();
-  // test_func006_validation_transfer_width_failure();
-  // test_func006_validation_transfer_size_failure();
-  // test_func006_validation_src_alignment_failure();
-  // test_func006_validation_dst_alignment_failure();
-  // test_func006_validation_src_asid_failure();
-  // test_func006_validation_dst_asid_failure();
-  // test_func006_validation_src_addr_width_failure();
-  // test_func006_validation_dst_addr_width_failure();
+  test_func006_validation_all_pass();
+  test_func006_validation_opcode_failure();
+  test_func006_validation_transfer_width_failure();
+  test_func006_validation_transfer_size_failure();
+  test_func006_validation_src_alignment_failure();
+  test_func006_validation_dst_alignment_failure();
+  test_func006_validation_src_asid_failure();
+  test_func006_validation_dst_asid_failure();
+  test_func006_validation_src_addr_width_failure();
+  test_func006_validation_dst_addr_width_failure();
 
   // // Bus Error Handling Tests (5 tests)
-  // test_func006_bus_error_tlm_ok_response();
-  // test_func006_bus_error_address_error();
-  // test_func006_bus_error_command_error();
-  // test_func006_bus_error_generic_error();
-  // test_func006_bus_error_incomplete_response();
+  test_func006_bus_error_tlm_ok_response();
+  test_func006_bus_error_address_error();
+  test_func006_bus_error_command_error();
+  test_func006_bus_error_generic_error();
+  test_func006_bus_error_incomplete_response();
 
   // ERROR_CODE Register Tests (8 tests)
   test_error_code_bit0_src_addr_error();
@@ -98,13 +98,13 @@ void testbench::run_func006_tests() {
   test_error_code_bit7_asid_error();
 
   // STATUS.error Integration Tests (3 tests)
-  // test_func006_status_error_on_validation_failure();
-  // test_func006_status_error_on_bus_error();
-  // test_func006_dma_error_interrupt_triggered();
+  test_func006_status_error_on_validation_failure();
+  test_func006_status_error_on_bus_error();
+  test_func006_dma_error_interrupt_triggered();
 
   // // Error Recovery Tests (2 tests)
   test_error_recovery_sequence();
-  // test_func006_multiple_errors_accumulate();
+  test_func006_multiple_errors_accumulate();
   test_error_src_addr_upper32_ot_asid();
   test_error_dst_addr_upper32_ot_asid();
   test_error_invalid_asid_src();
@@ -117,7 +117,7 @@ void testbench::run_func006_tests() {
   test_error_base_greater_than_limit();
 
 
-  CSML_INFO(1, logger) << "\n========================================\n"
+  REG_INFO(1, logger) << "\n========================================\n"
                        << "FUNC-006 Test Suite Complete\n"
                        << "========================================\n"
                        << std::endl;
@@ -143,7 +143,7 @@ void testbench::run_func006_tests() {
  */
 void testbench::test_func006_valid_opcode_0x0_copy() {
   std::string test_name = "FUNC-006 TC001: Valid Opcode 0x0 (COPY)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -202,7 +202,7 @@ void testbench::test_func006_valid_opcode_0x0_copy() {
  */
 void testbench::test_func006_valid_opcode_0x1_sha256() {
   std::string test_name = "FUNC-006 TC002: Valid Opcode 0x1 (SHA256)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -261,7 +261,7 @@ void testbench::test_func006_valid_opcode_0x1_sha256() {
  */
 void testbench::test_func006_valid_opcode_0x2_sha384() {
   std::string test_name = "FUNC-006 TC003: Valid Opcode 0x2 (SHA384)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -320,7 +320,7 @@ void testbench::test_func006_valid_opcode_0x2_sha384() {
  */
 void testbench::test_func006_valid_opcode_0x3_sha512() {
   std::string test_name = "FUNC-006 TC004: Valid Opcode 0x3 (SHA512)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -380,7 +380,7 @@ void testbench::test_func006_valid_opcode_0x3_sha512() {
  */
 void testbench::test_func006_invalid_opcode_0x4_to_0xF() {
   std::string test_name = "FUNC-006 TC005: Invalid Opcode 0x4-0xF";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -436,7 +436,7 @@ void testbench::test_func006_invalid_opcode_0x4_to_0xF() {
  */
 void testbench::test_func006_valid_transfer_sizes() {
   std::string test_name = "FUNC-006 TC006: Valid Transfer Sizes";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -506,7 +506,7 @@ void testbench::test_func006_valid_transfer_sizes() {
  */
 void testbench::test_func006_zero_total_data_size() {
   std::string test_name = "FUNC-006 TC007: Zero TOTAL_DATA_SIZE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -559,7 +559,7 @@ void testbench::test_func006_zero_total_data_size() {
  */
 void testbench::test_func006_zero_chunk_data_size() {
   std::string test_name = "FUNC-006 TC008: Zero CHUNK_DATA_SIZE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -611,7 +611,7 @@ void testbench::test_func006_zero_chunk_data_size() {
  */
 void testbench::test_func006_chunk_greater_than_total() {
   std::string test_name = "FUNC-006 TC009: CHUNK_DATA_SIZE > TOTAL_DATA_SIZE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -669,7 +669,7 @@ void testbench::test_func006_chunk_greater_than_total() {
  */
 void testbench::test_func006_validation_all_pass() {
   std::string test_name = "FUNC-006 TC010: Pre-Transfer Validation All Pass";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -736,7 +736,7 @@ void testbench::test_func006_validation_all_pass() {
  */
 void testbench::test_func006_validation_opcode_failure() {
   std::string test_name = "FUNC-006 TC011: Pre-Transfer Validation Opcode Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -788,7 +788,7 @@ void testbench::test_func006_validation_opcode_failure() {
  */
 void testbench::test_func006_validation_transfer_width_failure() {
   std::string test_name = "FUNC-006 TC012: Pre-Transfer Validation Transfer Width Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -838,7 +838,7 @@ void testbench::test_func006_validation_transfer_width_failure() {
  */
 void testbench::test_func006_validation_transfer_size_failure() {
   std::string test_name = "FUNC-006 TC013: Pre-Transfer Validation Transfer Size Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -888,7 +888,7 @@ void testbench::test_func006_validation_transfer_size_failure() {
  */
 void testbench::test_func006_validation_src_alignment_failure() {
   std::string test_name = "FUNC-006 TC014: Pre-Transfer Validation Source Alignment Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -942,7 +942,7 @@ void testbench::test_func006_validation_src_alignment_failure() {
  */
 void testbench::test_func006_validation_dst_alignment_failure() {
   std::string test_name = "FUNC-006 TC015: Pre-Transfer Validation Destination Alignment Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -996,7 +996,7 @@ void testbench::test_func006_validation_dst_alignment_failure() {
  */
 void testbench::test_func006_validation_src_asid_failure() {
   std::string test_name = "FUNC-006 TC016: Pre-Transfer Validation Source ASID Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1047,7 +1047,7 @@ void testbench::test_func006_validation_src_asid_failure() {
  */
 void testbench::test_func006_validation_dst_asid_failure() {
   std::string test_name = "FUNC-006 TC017: Pre-Transfer Validation Destination ASID Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1098,7 +1098,7 @@ void testbench::test_func006_validation_dst_asid_failure() {
  */
 void testbench::test_func006_validation_src_addr_width_failure() {
   std::string test_name = "FUNC-006 TC018: Pre-Transfer Validation Source Address Width Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1153,7 +1153,7 @@ void testbench::test_func006_validation_src_addr_width_failure() {
  */
 void testbench::test_func006_validation_dst_addr_width_failure() {
   std::string test_name = "FUNC-006 TC019: Pre-Transfer Validation Destination Address Width Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1209,7 +1209,7 @@ void testbench::test_func006_validation_dst_addr_width_failure() {
  */
 void testbench::test_func006_bus_error_tlm_ok_response() {
   std::string test_name = "FUNC-006 TC020: Bus Error Handling TLM_OK_RESPONSE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1256,7 +1256,7 @@ void testbench::test_func006_bus_error_tlm_ok_response() {
  */
 void testbench::test_func006_bus_error_address_error() {
   std::string test_name = "FUNC-006 TC021: Bus Error Handling TLM_ADDRESS_ERROR_RESPONSE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1297,7 +1297,7 @@ void testbench::test_func006_bus_error_address_error() {
  */
 void testbench::test_func006_bus_error_command_error() {
   std::string test_name = "FUNC-006 TC022: Bus Error Handling TLM_COMMAND_ERROR_RESPONSE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1334,7 +1334,7 @@ void testbench::test_func006_bus_error_command_error() {
  */
 void testbench::test_func006_bus_error_generic_error() {
   std::string test_name = "FUNC-006 TC023: Bus Error Handling TLM_GENERIC_ERROR_RESPONSE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1371,7 +1371,7 @@ void testbench::test_func006_bus_error_generic_error() {
  */
 void testbench::test_func006_bus_error_incomplete_response() {
   std::string test_name = "FUNC-006 TC024: Bus Error Handling TLM_INCOMPLETE_RESPONSE";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1407,7 +1407,7 @@ void testbench::test_func006_bus_error_incomplete_response() {
  */
 void testbench::test_error_code_bit0_src_addr_error() {
   std::string test_name = "FUNC-006 TC025: ERROR_CODE Bit 0 src_addr_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1479,7 +1479,7 @@ void testbench::test_error_code_bit0_src_addr_error() {
  */
 void testbench::test_error_code_bit1_dst_addr_error() {
   std::string test_name = "FUNC-006 TC026: ERROR_CODE Bit 1 dst_addr_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1553,7 +1553,7 @@ void testbench::test_error_code_bit1_dst_addr_error() {
  */
 void testbench::test_error_code_bit2_opcode_error() {
   std::string test_name = "FUNC-006 TC027: ERROR_CODE Bit 2 opcode_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1621,7 +1621,7 @@ void testbench::test_error_code_bit2_opcode_error() {
  */
 void testbench::test_error_code_bit3_size_error() {
   std::string test_name = "FUNC-006 TC028: ERROR_CODE Bit 3 size_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1689,7 +1689,7 @@ void testbench::test_error_code_bit3_size_error() {
  */
 void testbench::test_error_code_bit4_bus_error() {
   std::string test_name = "FUNC-006 TC029: ERROR_CODE Bit 4 bus_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1789,7 +1789,7 @@ void testbench::test_error_code_bit4_bus_error() {
  */
 void testbench::test_error_code_bit5_base_limit_error() {
   std::string test_name = "FUNC-006 TC030: ERROR_CODE Bit 5 base_limit_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1872,7 +1872,7 @@ void testbench::test_error_code_bit5_base_limit_error() {
  */
 void testbench::test_error_code_bit6_range_valid_error() {
   std::string test_name = "FUNC-006 TC031: ERROR_CODE Bit 6 range_valid_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -1955,7 +1955,7 @@ void testbench::test_error_code_bit6_range_valid_error() {
  */
 void testbench::test_error_code_bit7_asid_error() {
   std::string test_name = "FUNC-006 TC032: ERROR_CODE Bit 7 asid_error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2047,7 +2047,7 @@ void testbench::test_error_code_bit7_asid_error() {
  */
 void testbench::test_func006_status_error_on_validation_failure() {
   std::string test_name = "FUNC-006 TC033: STATUS.error on Validation Failure";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2092,7 +2092,7 @@ void testbench::test_func006_status_error_on_validation_failure() {
  */
 void testbench::test_func006_status_error_on_bus_error() {
   std::string test_name = "FUNC-006 TC034: STATUS.error on Bus Error";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2138,7 +2138,7 @@ void testbench::test_func006_status_error_on_bus_error() {
  */
 void testbench::test_func006_dma_error_interrupt_triggered() {
   std::string test_name = "FUNC-006 TC035: dma_error Interrupt Triggered";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2188,7 +2188,7 @@ void testbench::test_func006_dma_error_interrupt_triggered() {
  */
 void testbench::test_error_recovery_sequence() {
   std::string test_name = "test_error_recovery_sequence";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2313,7 +2313,7 @@ void testbench::test_error_recovery_sequence() {
  */
 void testbench::test_func006_multiple_errors_accumulate() {
   std::string test_name = "FUNC-006 TC037: Multiple Errors Accumulate";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2372,7 +2372,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_src_addr_upper32_ot_asid() {
   std::string test_name = "test_error_src_addr_upper32_ot_asid (Source upper 32 non-zero for OT_ADDR)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2457,7 +2457,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_dst_addr_upper32_ot_asid() {
   std::string test_name = "test_error_dst_addr_upper32_ot_asid (Destination upper 32 non-zero for OT_ADDR)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2543,7 +2543,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_invalid_asid_src() {
   std::string test_name = "test_error_invalid_asid_src (Invalid source ASID)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2626,7 +2626,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_invalid_asid_dst() {
   std::string test_name = "TC082: test_error_invalid_asid_dst (Invalid destination ASID)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2709,7 +2709,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_zero_total_data_size() {
   std::string test_name = "test_error_zero_total_data_size (TOTAL_DATA_SIZE=0)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2788,7 +2788,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_zero_chunk_data_size() {
   std::string test_name = "Zero CHUNK_DATA_SIZE (Test Plan 84)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2880,7 +2880,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_invalid_transfer_width() {
   std::string test_name = "Invalid TRANSFER_WIDTH 0x3 (Test Plan 85)";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -2981,7 +2981,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_hash_width_mismatch() {
   std::string test_name = "Hash Width Mismatch";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
@@ -3086,7 +3086,7 @@ void testbench::test_func006_multiple_errors_accumulate() {
  */
  void testbench::test_error_base_greater_than_limit() {
   std::string test_name = "Base > Limit Memory Range ";
-  CSML_INFO(1, logger) << "Running: " << test_name << std::endl;
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
