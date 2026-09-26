@@ -417,7 +417,11 @@ public:
 
 inline int load_config_file(const char* filename) {
     std::map<std::string, std::string> cci_parameters;
-    cci::cci_register_broker(new cci_utils::broker("Global Broker"));
+    // Static storage: the global broker outlives the test and is not a leak.
+    // A heap allocation here is reported by LeakSanitizer once sc_main returns.
+    static cci_utils::broker global_broker("Global Broker");
+    static const bool registered = (cci::cci_register_broker(global_broker), true);
+    (void)registered;
     if (filename != nullptr) {
         cci_parameters = parse_config_file(filename);
         std::ifstream f(filename);
