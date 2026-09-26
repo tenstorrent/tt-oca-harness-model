@@ -5243,6 +5243,7 @@ void testbench::test_context_save_basic()
         REG_INFO(1, logger) << "\nOverall Test Result: FAIL" << std::endl;
         REG_INFO(1, logger) << "  - One or more validation points failed" << std::endl;
         REG_INFO(1, logger) << "  - See details above for specific failures" << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
     
@@ -5357,6 +5358,7 @@ void testbench::test_hash_stop_sync_fifo_drain()
         REG_INFO(1, logger) << "Overall Test Result: PASS" << std::endl;
     } else {
         REG_INFO(1, logger) << "Overall Test Result: FAIL" << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 }
@@ -5745,6 +5747,7 @@ void testbench::test_block_boundary_message()
         REG_INFO(1, logger) << "\nOverall Test Result: FAIL" << std::endl;
         REG_INFO(1, logger) << "  - Error count: " << err_val << std::endl;
         REG_INFO(1, logger) << "  - See details above for specific failures" << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
     
@@ -6225,6 +6228,7 @@ void testbench::test_context_sha_en_disable_clear()
         REG_INFO(1, logger) << "\nOverall Test Result: FAIL" << std::endl;
         REG_INFO(1, logger) << "  - Error count: " << err_count << std::endl;
         REG_INFO(1, logger) << "  - See details above for specific failures" << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 

@@ -17,6 +17,7 @@
 
 #include "csrng.h"
 #include <cstring>
+#include <algorithm>
 #include <random>
 #include <iostream>
 #include <openssl/evp.h>
@@ -51,9 +52,19 @@ csrng_model::csrng_model(sc_module_name n)
     , cs_fatal_err("cs_fatal_err")
     , recov_alert_o("recov_alert_o")
     , fatal_alert_o("fatal_alert_o")
+    , hw_app_export("hw_app_export", 2)
+    , genbits_export("genbits_export")
+    , entropy_port("entropy_port")
     , m_qk()
     , m_cmd_fsm_state(CommandFSMState::IDLE)
 {
+    for (unsigned i = 0; i < hw_app_handlers_.size(); ++i) {
+        hw_app_handlers_[i] = std::make_unique<hw_app_handler>(*this, i + 1);
+        hw_app_export[i].bind(*hw_app_handlers_[i]);
+    }
+    genbits_handler_ = std::make_unique<genbits_handler>(*this);
+    genbits_export.bind(*genbits_handler_);
+
     // Initialize temporal decoupling quantum keeper
     m_qk.reset();
 
@@ -132,6 +143,93 @@ csrng_model::csrng_model(sc_module_name n)
 
     // Register all callbacks
     register_all_callbacks();
+}
+
+csrng_model::hw_app_handler::hw_app_handler(csrng_model& owner, unsigned instance)
+    : owner_(owner), instance_(instance)
+{}
+
+bool csrng_model::hw_app_handler::is_ready()
+{
+    return owner_.m_cmd_ready && !owner_.m_command_in_progress;
+}
+
+uint32_t csrng_model::hw_app_handler::get_ack_status()
+{
+    return last_ack_;
+}
+
+void csrng_model::hw_app_handler::send_command(const uint32_t* words,
+                                               uint32_t count,
+                                               uint32_t& ack_status)
+{
+    if (words == nullptr || count == 0 || count > 13 || !is_ready()) {
+        last_ack_ = CMD_INVALID_CMD_SEQ;
+        ack_status = last_ack_;
+        owner_.m_intr_hw_inst_exc = true;
+        owner_.intr_update_event.notify(SC_ZERO_TIME);
+        return;
+    }
+    const uint8_t clen = static_cast<uint8_t>((words[0] >> 4) & 0xFu);
+    if (count != static_cast<uint32_t>(clen) + 1u) {
+        last_ack_ = CMD_INVALID_ACMD;
+        ack_status = last_ack_;
+        owner_.m_intr_hw_inst_exc = true;
+        owner_.intr_update_event.notify(SC_ZERO_TIME);
+        return;
+    }
+
+    owner_.m_current_instance = static_cast<int>(instance_);
+    owner_.m_current_command = words[0];
+    owner_.m_additional_data.fill(0);
+    for (uint32_t i = 0; i < clen; ++i) {
+        owner_.m_additional_data[i] = words[i + 1];
+    }
+    owner_.m_additional_data_count = clen;
+    owner_.m_command_in_progress = true;
+    owner_.m_cmd_ready = false;
+    owner_.m_cmd_status = CMD_SUCCESS;
+    owner_.process_command();
+    last_ack_ = static_cast<uint32_t>(owner_.m_cmd_status);
+    ack_status = last_ack_;
+    if (last_ack_ != CMD_SUCCESS) {
+        owner_.m_intr_hw_inst_exc = true;
+        owner_.intr_update_event.notify(SC_ZERO_TIME);
+    }
+}
+
+csrng_model::genbits_handler::genbits_handler(csrng_model& owner)
+    : owner_(owner)
+{}
+
+bool csrng_model::genbits_handler::has_data()
+{
+    return owner_.m_genbits_valid;
+}
+
+void csrng_model::genbits_handler::receive_genbits(uint32_t words[4],
+                                                  bool& fips_compliant)
+{
+    if (words == nullptr || !owner_.m_genbits_valid) {
+        if (words != nullptr) {
+            std::fill_n(words, 4, 0u);
+        }
+        fips_compliant = false;
+        return;
+    }
+    std::copy(owner_.m_genbits_buffer.begin(), owner_.m_genbits_buffer.end(), words);
+    fips_compliant = owner_.m_genbits_fips;
+    if (!owner_.m_genbits_block_queue.empty()) {
+        owner_.m_genbits_buffer = owner_.m_genbits_block_queue.front();
+        owner_.m_genbits_block_queue.pop();
+    } else {
+        owner_.m_genbits_valid = false;
+    }
+}
+
+void csrng_model::genbits_handler::provide_genbits(const uint32_t[4], bool)
+{
+    // CSRNG is the producer on this interface.
 }
 
 /**
@@ -470,7 +568,19 @@ bool csrng_model::request_entropy(unsigned char* seed_buffer, bool& fips_complia
     m_qk.inc(entropy_delay);
     // Sync will happen automatically at quantum boundaries, not forced here
 
-    // Generate 384-bit seed material
+    if (entropy_port.size() != 0) {
+        if (!entropy_port->get_seed_384(seed_buffer, fips_compliant)) {
+            REG_ERROR(0, logger) << "[CRNG] Bound entropy provider rejected request"
+                                 << std::endl;
+            m_cmd_fsm_state = CommandFSMState::ERROR;
+            return false;
+        }
+        REG_INFO(2, logger) << "[CRNG] Bound entropy request complete (FIPS="
+                            << fips_compliant << ")" << std::endl;
+        return true;
+    }
+
+    // Standalone fallback when no entropy-source module is bound.
     if (RAND_bytes(seed_buffer, 48) != 1) {
         REG_ERROR(0, logger) << "[CRNG] Failed to generate entropy seed" << std::endl;
         m_cmd_fsm_state = CommandFSMState::ERROR;
@@ -1080,9 +1190,12 @@ void csrng_model::process_command()
     m_command_in_progress = false;
     m_cmd_ack = true;
 
-    // Fire command completion interrupt for SW instance
-    m_intr_cmd_req_done = true;
-    intr_update_event.notify(SC_ZERO_TIME);
+    // The command-done interrupt belongs to the software application only.
+    // Hardware application completions are reported through their ack status.
+    if (m_current_instance == 0) {
+        m_intr_cmd_req_done = true;
+        intr_update_event.notify(SC_ZERO_TIME);
+    }
 
     m_cmd_ready = true;
     m_cmd_fsm_state = CommandFSMState::IDLE;

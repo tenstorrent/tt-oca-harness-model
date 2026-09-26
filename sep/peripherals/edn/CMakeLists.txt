@@ -165,7 +165,14 @@ if(BUILD_TESTS)
   endif()
 
   enable_testing()
-  add_test(NAME edn_testbench COMMAND edn_testbench)
+  foreach(_suite RANGE 1 14)
+    add_test(
+      NAME edn_func_${_suite}
+      COMMAND edn_testbench
+              ${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini
+              ${_suite}
+    )
+  endforeach()
 
   # -----------------------------------------------------------------------------
   # Coverage target

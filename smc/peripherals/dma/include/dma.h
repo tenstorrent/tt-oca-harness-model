@@ -205,7 +205,7 @@ private:
 
     void transfer_thread();
     uint32_t start_transfer(unsigned channel);
-    void execute_transfer(const pending_transfer& pt);
+    bool execute_transfer(const pending_transfer& pt);
     bool copy_chunk(uint64_t src, uint64_t dst, uint64_t len);
 
     dma_cfg                    cfg_;

@@ -53,9 +53,14 @@ void SEPMemory::load_binary_file(const std::string &filename, uint64_t addr) {
 
 void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) { 
   tlm::tlm_command cmd = trans.get_command();
-  unsigned addr = trans.get_address();
+  uint64_t addr = trans.get_address();
   auto *ptr = trans.get_data_ptr();
   auto len = trans.get_data_length();
+
+  if (ptr == nullptr && len != 0) {
+    trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+    return;
+  }
 
 	// Guard the hex-dump string building behind the verbosity threshold. Without this,
 	// the ostringstream construction and format loop run on EVERY transaction
@@ -73,11 +78,6 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
 			<< " addr=0x" << std::hex << addr << " len=" << std::dec << len
 			<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
 	}
-
-  if (ptr == nullptr && len != 0) {
-    trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
-    return;
-  }
 
   if(cmd == tlm::TLM_WRITE_COMMAND) {
     if(!m_read_only) {
@@ -117,7 +117,8 @@ void SEPMemory::b_transport(TRANS& trans, sc_core::sc_time& delay) {
 				<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
 		}
   } else {
-      sc_assert(false && "unsupported tlm command");
+      trans.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
+      return;
   }
 
   delay += sc_core::sc_time(10, sc_core::SC_NS);
@@ -153,9 +154,14 @@ bool SEPMemory::get_direct_mem_ptr(TRANS& trans, tlm::tlm_dmi& dmi) {
 
 unsigned SEPMemory::transport_dbg(TRANS& trans) { 
   tlm::tlm_command cmd = trans.get_command();
-  unsigned addr = trans.get_address();
+  uint64_t addr = trans.get_address();
   auto *ptr = trans.get_data_ptr();
   auto len = trans.get_data_length();
+
+  if (ptr == nullptr && len != 0) {
+    trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+    return 0;
+  }
 
 	{
 		std::ostringstream oss;
@@ -171,7 +177,9 @@ unsigned SEPMemory::transport_dbg(TRANS& trans) {
 	}
 
   if(cmd == tlm::TLM_WRITE_COMMAND) {
-    m_mem.writeBytes(addr, reinterpret_cast<const uint8_t*>(ptr), len);
+    if (!m_read_only) {
+      m_mem.writeBytes(addr, reinterpret_cast<const uint8_t*>(ptr), len);
+    }
   } else if(cmd == tlm::TLM_READ_COMMAND) {
       m_mem.readBytes(addr, ptr, len);
 		{
@@ -186,7 +194,8 @@ unsigned SEPMemory::transport_dbg(TRANS& trans) {
 				<< " data[0.." << (dump_len ? (dump_len - 1) : 0) << "]=" << oss.str() << std::endl;
 		}
   } else {
-      sc_assert(false && "unsupported tlm command");
+      trans.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
+      return 0;
   }
 
   trans.set_response_status(tlm::TLM_OK_RESPONSE);

@@ -174,7 +174,9 @@ int sc_main(int, char**)
     // Bad command.
     EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
               pr.raw(tlm::TLM_IGNORE_COMMAND, 0x44, 4, &scratch));
-    std::cout << "  [PASS] TLM error responses (width/align/sw/be/window/cmd)\n";
+    EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+              pr.raw(tlm::TLM_READ_COMMAND, 0x44, 4, nullptr));
+    std::cout << "  [PASS] TLM error responses (width/align/sw/be/window/cmd/null)\n";
 
     // Hole inside the window: RAZ/WI (0x00 is unmapped).
     EXPECT_EQ(tlm::TLM_OK_RESPONSE, pr.raw(tlm::TLM_READ_COMMAND, 0x00, 4, &scratch));
@@ -187,6 +189,7 @@ int sc_main(int, char**)
     EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND, 0x44, 2, &scratch));  // bad width
     EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND,
                          reset_unit_cfg::WINDOW_SIZE, 4, &scratch));   // OOB
+    EXPECT_EQ(0u, pr.dbg(tlm::TLM_READ_COMMAND, 0x44, 4, nullptr));    // null
     // Valid dbg write/read round-trip.
     scratch = 0x0F0F0F0Fu;
     EXPECT_EQ(4u, pr.dbg(tlm::TLM_WRITE_COMMAND, 0x44, 4, &scratch));

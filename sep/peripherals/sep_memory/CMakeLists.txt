@@ -5,6 +5,21 @@ cmake_minimum_required(VERSION 3.14)
 project(sep_memory LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake")
+include(PeripheralCommon)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+if(CMAKE_BUILD_TYPE STREQUAL "ASAN")
+  add_compile_options(-g -O0 -fsanitize=address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+elseif(CMAKE_BUILD_TYPE STREQUAL "Coverage")
+  add_compile_options(-g --coverage)
+  include(PeripheralCoverage)
+  peripheral_coverage_link_flags()
+endif()
 
 # Doxygen documentation
 find_package(Doxygen)
@@ -64,6 +79,25 @@ target_include_directories(sep_memory_model PUBLIC ${SRAM_ROM_INCLUDES})
 target_link_libraries(sep_memory_model PUBLIC SystemC::systemc Boost::iostreams)
 if(CCI_FOUND)
   target_link_libraries(sep_memory_model PUBLIC ${CCI_LIBRARIES})
+endif()
+
+option(BUILD_TESTS "Build standalone tests" ON)
+if(BUILD_TESTS)
+  add_executable(sep_memory_tb test/sep_memory_tb.cpp)
+  target_link_libraries(sep_memory_tb PRIVATE sep_memory_model SystemC::systemc)
+  if(CCI_FOUND)
+    target_link_libraries(sep_memory_tb PRIVATE ${CCI_LIBRARIES})
+  endif()
+  enable_testing()
+  add_test(NAME sep_memory_tb COMMAND sep_memory_tb)
+  if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET sep_memory_tb
+      SOURCE_GLOBS
+        "${CMAKE_CURRENT_SOURCE_DIR}/model/src/*"
+        "${CMAKE_CURRENT_SOURCE_DIR}/model/inc/*"
+    )
+  endif()
 endif()
 
 # -----------------------------------------------------------------------------

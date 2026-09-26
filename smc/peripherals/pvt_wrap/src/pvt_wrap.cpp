@@ -221,6 +221,19 @@ void pvt_wrap::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay
     // within this peripheral's window, so use it directly.
     const uint64_t off = gp.get_address();
 
+    if (!gp.is_read() && !gp.is_write()) {
+        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
+        return;
+    }
+    if (gp.get_data_length() != 4) {
+        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+    if (gp.get_data_ptr() == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
     delay += access_delay_;
 
     bool ok = false;
@@ -232,18 +245,11 @@ void pvt_wrap::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay
         }
         SIM_LOG_TRACE(this, "read off=0x" << std::hex << off
                       << " data=0x" << data << (ok ? "" : " (decode miss)"));
-    } else if (gp.is_write()) {
-        if (gp.get_data_length() == 4) {
-            std::memcpy(&data, gp.get_data_ptr(), 4);
-            ok = reg_write(off, data);
-            SIM_LOG_TRACE(this, "write off=0x" << std::hex << off
-                          << " data=0x" << data << (ok ? "" : " (decode miss)"));
-        } else {
-            SIM_LOG_DEBUG(this, "write off=0x" << std::hex << off
-                          << " rejected: length=" << gp.get_data_length());
-        }
     } else {
-        SIM_LOG_DEBUG(this, "neither read nor write at off=0x" << std::hex << off);
+        std::memcpy(&data, gp.get_data_ptr(), 4);
+        ok = reg_write(off, data);
+        SIM_LOG_TRACE(this, "write off=0x" << std::hex << off
+                      << " data=0x" << data << (ok ? "" : " (decode miss)"));
     }
 
     if (!ok) {
@@ -257,6 +263,9 @@ unsigned int pvt_wrap::transport_dbg(tlm::tlm_generic_payload& gp)
 {
     const uint64_t off = gp.get_address();
 
+    if (gp.get_data_ptr() == nullptr || gp.get_data_length() != 4)
+        return 0;
+
     uint32_t data = 0;
     if (gp.is_read()) {
         if (reg_read(off, data)) {
@@ -264,7 +273,9 @@ unsigned int pvt_wrap::transport_dbg(tlm::tlm_generic_payload& gp)
             return 4;
         }
     } else if (gp.is_write()) {
-        if (gp.get_data_length() == 4 && reg_write(off, *reinterpret_cast<uint32_t*>(gp.get_data_ptr()))) {
+        uint32_t value = 0;
+        std::memcpy(&value, gp.get_data_ptr(), 4);
+        if (reg_write(off, value)) {
             return 4;
         }
     }

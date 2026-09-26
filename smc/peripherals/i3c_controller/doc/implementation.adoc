@@ -29,8 +29,10 @@ are held idle.
 With `HC_CONTROL.BUS_ENABLE`, a completed 64-bit COMMAND_PORT
 descriptor schedules a transfer. The engine resolves the dynamic
 address from DAT, calls `bus_model_fn`, drains/fills TX/RX, and pushes
-a response. No bus model means address NACK. `inject_ibi` enqueues an
-IBI status + payload.
+a response. No bus model means address NACK. Because this LT model has no
+pin-level SDA event interface, `inject_ibi` is the production external-target
+adapter for an in-band interrupt; it enqueues the IBI status and payload that
+firmware consumes through `IBI_PORT`.
 
 `smc-vp` binds the one `reg_socket` on the peripheral router for the
 whole I3C aperture (`NUM_I3C` = 6). Per-instance `irq_o[i]` enters the

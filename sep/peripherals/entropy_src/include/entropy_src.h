@@ -59,6 +59,7 @@
 
 #include "entropy_src_base.h"
 #include "entropy_src_interface.h"
+#include "entropy_provider_if.h"
 #include "reg_logger.h"
 #include "reg_param.h"
 
@@ -68,6 +69,7 @@
 
 #include <queue>
 #include <cstdint>
+#include <memory>
 
 /******************************************************************************
  * @class entropy_src_ip
@@ -123,6 +125,16 @@ public:
      */
     sc_core::sc_out<bool> irq_o;
 
+    class entropy_provider_handler : public entropy_provider_if {
+    public:
+        explicit entropy_provider_handler(entropy_src_ip& owner);
+        bool get_seed_384(uint8_t seed[48], bool& fips_compliant) override;
+    private:
+        entropy_src_ip& owner_;
+    };
+
+    sc_core::sc_export<entropy_provider_if> entropy_export;
+
     /**
      * @brief Logging verbosity (runtime-overridable via ini file)
      */
@@ -149,6 +161,7 @@ public:
         , entropy_src_if()
         , rst_ni("rst_ni")
         , irq_o("irq_o")
+        , entropy_export("entropy_export")
         , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
         , m_wptr(0u)
         , m_rptr(0u)
@@ -162,6 +175,8 @@ public:
         , m_qk()
         , logger()
     {
+        m_entropy_provider = std::make_unique<entropy_provider_handler>(*this);
+        entropy_export.bind(*m_entropy_provider);
         // Initialize temporal decoupling quantum keeper
         m_qk.reset();
 
@@ -340,6 +355,7 @@ public:
     bool handle_read_FIFO_RDATA(uint32_t& value) override;
 
 private:
+    std::unique_ptr<entropy_provider_handler> m_entropy_provider;
     // =========================================================================
     // Internal helpers
     // =========================================================================

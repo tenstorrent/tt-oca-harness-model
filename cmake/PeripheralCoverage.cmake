@@ -51,8 +51,11 @@ include(PeripheralCommon)
 #   TEST_COMMANDS   - optional list of COMMAND ... steps (default: run PRIMARY_TARGET)
 #   EXTRA_DEPENDS   - optional extra build dependencies
 #   EXCLUDE_SRC     - optional lcov --remove patterns after --extract (e.g. optional modules)
+#   SOURCE_GLOBS    - optional lcov extract globs for nonstandard source layouts
 function(peripheral_add_coverage_target)
-  cmake_parse_arguments(PCOV "" "PRIMARY_TARGET" "TEST_COMMANDS;EXTRA_DEPENDS;EXCLUDE_SRC" ${ARGN})
+  cmake_parse_arguments(
+    PCOV "" "PRIMARY_TARGET"
+    "TEST_COMMANDS;EXTRA_DEPENDS;EXCLUDE_SRC;SOURCE_GLOBS" ${ARGN})
 
   if(NOT PCOV_PRIMARY_TARGET)
     message(FATAL_ERROR "peripheral_add_coverage_target: PRIMARY_TARGET is required")
@@ -71,6 +74,11 @@ function(peripheral_add_coverage_target)
     endif()
     set(PCOV_TEST_COMMANDS COMMAND "${_exe}")
   endif()
+  if(NOT PCOV_SOURCE_GLOBS)
+    set(PCOV_SOURCE_GLOBS
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/*"
+      "${CMAKE_CURRENT_SOURCE_DIR}/include/*")
+  endif()
 
   set(_cov_cmds
     COMMAND ${CMAKE_COMMAND} -DBUILD_DIR=${CMAKE_BINARY_DIR}
@@ -79,7 +87,9 @@ function(peripheral_add_coverage_target)
     ${PCOV_TEST_COMMANDS}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/coverage
     COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --capture --directory . --output-file coverage/coverage.info
-    COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS} --extract coverage/coverage.info '${CMAKE_CURRENT_SOURCE_DIR}/src/*' '${CMAKE_CURRENT_SOURCE_DIR}/include/*' --output-file=coverage/coverage_filtered.info
+    COMMAND ${LCOV_EXECUTABLE} ${LCOV_IGNORE_FLAGS}
+            --extract coverage/coverage.info ${PCOV_SOURCE_GLOBS}
+            --output-file=coverage/coverage_filtered.info
   )
   if(PCOV_EXCLUDE_SRC)
     list(APPEND _cov_cmds

@@ -16,7 +16,7 @@ class csrng_model : public csrng_base
 
 ----
 csrng_model          CMD FSM, DRBG instances, interrupts, alerts   (csrng.*)
-  └─ csrng_base      csml_memory + software-visible words          (csrng_base.*)
+  └─ csrng_base      regmodel::Memory + software-visible words          (csrng_base.*)
        └─ csrng_register.h   RO/WO/RW types
 ----
 
@@ -29,8 +29,9 @@ SystemC writer.
 
 `sep-vp` binds the TLM register target at the TRM CSRNG aperture, clock
 and reset, the OTP SW-app-read enable, and the four interrupt plus two
-alert pins. There is no TLM connection to `entropy_src` or `edn`.
-Entropy requests call OpenSSL inside the model.
+alert pins. `entropy_port` consumes 384-bit FIFO-backed seeds from
+`entropy_src`; EDN uses one hardware-application command export and the
+generated-block export.
 
 [cols="32%,28%,40%",options="header"]
 |===
@@ -45,6 +46,9 @@ Entropy requests call OpenSSL inside the model.
 |`cs_fatal_err` |`sc_out<bool>` |SEP PIC fatal
 |`recov_alert_o` |`sc_out<bool>` |Recoverable alert
 |`fatal_alert_o` |`sc_out<bool>` |Fatal alert
+|`entropy_port` |`sc_port<entropy_provider_if>` |Entropy-source seed provider
+|`hw_app_export[0..1]` |`sc_export<csrng_app_if>` |Hardware application commands
+|`genbits_export` |`sc_export<csrng_genbits_if>` |Generated blocks for EDN
 |===
 
 CMD_REQ writes collect a header plus additional data, then notify the
@@ -56,27 +60,29 @@ per-instance V/Key. GENBITS is a sequential read of the output queue.
                                  └► sc_spawn execute_command_async
                                            │
                                            ▼
-                                    OpenSSL DRBG
+                         entropy_src ──► seed / OpenSSL DRBG
+                         EDN ◄── hw_app + genbits interfaces
                       interrupt_update_process ──► cs_*
                       alert_update_process     ──► *_alert_o
 ----
 
 ====== CCI parameters
 
-Knobs are `csml_param`.
+Knobs are `regmodel::Param`.
 
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use
-|`verbosity` |2 (Release: 1) |CSML log level
+|`verbosity` |2 (Release: 1) |regmodel log level
 |===
 
 ====== Modeling gaps versus RTL
 
 * No cycle-accurate AES-CTR or hardware DRBG.
-* No `entropy_src` / EDN sockets; seed material is OpenSSL.
-* No hardware application command sockets; SW instance is the path
-  `sep-vp` exercises.
+* `entropy_port` consumes 384-bit seeds from `entropy_src` when bound;
+  standalone models retain an OpenSSL fallback.
+* `hw_app_export[0..1]` serves hardware instances 1 and 2, and
+  `genbits_export` provides generated 128-bit blocks to EDN.
 * `clk_i` is a boolean; delays are LT annotations.
 * Multi-bit enable checks are functional, not the RTL sparse FSM
   hardening.

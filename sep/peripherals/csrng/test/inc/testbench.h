@@ -19,6 +19,19 @@
 #include "csrng_test.h"
 #include "reg_logger.h"
 
+class deterministic_entropy_provider : public entropy_provider_if {
+public:
+    bool get_seed_384(uint8_t seed[48], bool& fips) override
+    {
+        if (seed == nullptr) return false;
+        for (unsigned i = 0; i < 48; ++i) {
+            seed[i] = static_cast<uint8_t>(i + 1);
+        }
+        fips = true;
+        return true;
+    }
+};
+
 class testbench : public sc_module
 {
 public:
@@ -403,6 +416,7 @@ public:
 
 private:
     // DUT and test module instances
+    deterministic_entropy_provider m_entropy_provider;
     std::unique_ptr<csrng_model> m_crng;
     std::unique_ptr<csrng_test> m_test;
 

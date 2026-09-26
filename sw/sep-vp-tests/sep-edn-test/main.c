@@ -28,6 +28,9 @@ extern int printf(const char *format, ...);
 /* ================================================================== */
 /* EDN Base Address (DRBG_EDN_BASE from sep_crypto_pkg.sv)             */
 /* ================================================================== */
+#define CSRNG_BASE                      0x10915000
+#define CSRNG_CTRL                      (CSRNG_BASE + 0x14)
+
 #define EDN_BASE                        0x10915800
 
 /* ================================================================== */
@@ -138,6 +141,10 @@ static void test_edn_module(void)
 
     val = REG_READ(EDN_ERR_CODE);
     check("ERR_CODE reset", val, 0x00000000);
+
+    /* CSRNG ENABLE must be set before EDN can instantiate over the HW app port. */
+    REG_WRITE(CSRNG_CTRL, (MUBI4_TRUE) | (MUBI4_TRUE << 4));
+    delay(200);
 
     /* ---- Step 2: Enable EDN in SW Port Mode ---- */
     printf("\nStep 2: Enable EDN in SW Port Mode\n");

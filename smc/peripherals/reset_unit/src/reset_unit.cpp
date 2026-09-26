@@ -491,6 +491,10 @@ void reset_unit::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& del
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
 
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
     if (length != 4) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
         return;
@@ -549,7 +553,7 @@ unsigned int reset_unit::transport_dbg(tlm::tlm_generic_payload& gp)
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
 
-    if (length != 4 || (addr & 0x3u) != 0 ||
+    if (buf == nullptr || length != 4 || (addr & 0x3u) != 0 ||
         addr >= reset_unit_cfg::WINDOW_SIZE) {
         return 0;
     }
@@ -678,6 +682,10 @@ void straps::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
                                         : tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
         return;
     }
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
     if (adr >= straps_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
         gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
@@ -702,7 +710,8 @@ unsigned int straps::transport_dbg(tlm::tlm_generic_payload& gp)
 {
     const uint64_t adr = gp.get_address();
     const uint32_t len = gp.get_data_length();
-    if (len != 4 || adr >= straps_cfg::WINDOW_SIZE || (adr & 0x3u) != 0)
+    if (gp.get_data_ptr() == nullptr || len != 4 ||
+        adr >= straps_cfg::WINDOW_SIZE || (adr & 0x3u) != 0)
         return 0;
     if (gp.is_read()) {
         uint32_t v = 0;
