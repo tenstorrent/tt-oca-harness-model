@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 #include "key_manager_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
+#include "tlm_probe.h"
 #include <tlm_utils/simple_target_socket.h>
 #include <cstring>
+#include <string>
 #include <vector>
 #include <cstdint>
 
@@ -59,7 +61,7 @@ class key_manager_test : public key_manager_basetest
 public:
     SC_HAS_PROCESS(key_manager_test);
 
-    CsmlLogger logger;
+    RegLogger logger;
 
     // Test drives reset; test monitors IRQ
     sc_out<bool> rst_no;
@@ -72,6 +74,17 @@ public:
     // -----------------------------------------------------------------------
     void register_read_32 (unsigned int offset, uint32_t &value);
     void register_write_32(unsigned int offset, uint32_t  value);
+
+    /// Drive a deliberately malformed payload; the status is returned rather
+    /// than recorded, because a rejection is the expected outcome.
+    simtlm::access_result probe(simtlm::defect d, const simtlm::target_geometry &geo,
+                                tlm::tlm_command cmd);
+
+    /// Transport-failure bookkeeping. A refused register access is recorded
+    /// here and fails the enclosing FUNC test in testbench::run_tests().
+    unsigned           transport_failures() const { return m_transport_failures; }
+    const std::string &last_transport_error() const { return m_last_transport_error; }
+    void               clear_transport_failures();
 
     // -----------------------------------------------------------------------
     // Test utilities
@@ -143,4 +156,9 @@ public:
 
 private:
     void initialize_signals();
+    void note_transport(const simtlm::access_result &r, const char *op,
+                        unsigned int offset);
+
+    unsigned    m_transport_failures = 0;
+    std::string m_last_transport_error;
 };

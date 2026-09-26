@@ -82,9 +82,85 @@ void testbench::apply_reset()
 // =============================================================================
 // Test Result Reporting Helpers
 // =============================================================================
+// =============================================================================
+// Malformed generic payloads
+//
+// INT_STATE_NUM (0x40) is the target: a plain read/write selector with no
+// command side effects, unlike CTRL or the CMD_REQ path. CTRL (0x14) is the
+// witness, well clear of the 0x40..0x49 range the widest and unaligned defects
+// can reach. What each defect should *return* is decode policy; this asserts
+// only that a decision is made, nothing crashes, and nothing else moves.
+// =============================================================================
+void testbench::test_malformed_payloads()
+{
+    const char* test_name = "Malformed generic payloads";
+    report_test_start(test_name);
+
+    constexpr unsigned APERTURE      = 0x60;
+    constexpr unsigned OFF_CTRL      = 0x14;
+    constexpr unsigned OFF_STATE_NUM = 0x40;
+
+    bool passed = true;
+
+    uint32_t witness_before = 0;
+    m_test->register_read_32(OFF_CTRL, witness_before);
+    m_test->clear_transport_failures();
+
+    simtlm::target_geometry geo;
+    geo.valid_address  = OFF_STATE_NUM;
+    geo.word_bytes     = 4;
+    geo.aperture_bytes = APERTURE;
+
+    for (simtlm::defect d : simtlm::all_defects()) {
+        for (tlm::tlm_command cmd : {tlm::TLM_READ_COMMAND, tlm::TLM_WRITE_COMMAND}) {
+            const auto r = m_test->probe(d, geo, cmd);
+            if (r.status == tlm::TLM_INCOMPLETE_RESPONSE) {
+                REG_ERROR(0, logger) << simtlm::defect_name(d) << " ("
+                                      << (cmd == tlm::TLM_READ_COMMAND ? "read" : "write")
+                                      << ") left the payload INCOMPLETE";
+                passed = false;
+            }
+        }
+    }
+
+    uint32_t witness_after = 0;
+    m_test->register_read_32(OFF_CTRL, witness_after);
+    if (witness_after != witness_before) {
+        REG_ERROR(0, logger) << "CTRL corrupted by malformed traffic: was 0x"
+                              << std::hex << witness_before << ", now 0x" << witness_after;
+        passed = false;
+    }
+
+    // Still usable afterwards.
+    m_test->register_write_32(OFF_STATE_NUM, 0x1u);
+    uint32_t back = 0xFFFFFFFFu;
+    m_test->register_read_32(OFF_STATE_NUM, back);
+
+    report_test_result(test_name, passed);
+}
+
+// A test cannot pass on the strength of transactions the CSRNG refused. Both
+// reporting entry points consult the recorded transport failures, so every
+// existing scenario became transport-sensitive without being edited.
+bool testbench::transport_clean(const char* test_name)
+{
+    const unsigned tf = m_test ? m_test->transport_failures() : 0u;
+    if (tf == 0)
+        return true;
+
+    REG_ERROR(0, logger) << test_name << ": " << tf
+                          << " transport error(s); last: "
+                          << m_test->last_transport_error();
+    m_test->clear_transport_failures();
+    return false;
+}
+
 void testbench::report_test_result(const char* test_name, bool passed)
 {
     m_tests_run++;
+
+    if (!transport_clean(test_name))
+        passed = false;
 
     if (passed) {
         m_tests_passed++;
@@ -109,6 +185,10 @@ void testbench::report_test_start(const std::string& test_name)
 
 void testbench::report_test_pass(const std::string& test_name)
 {
+    if (!transport_clean(test_name.c_str())) {
+        report_test_fail(test_name, "transport error(s) during the test");
+        return;
+    }
     m_tests_passed++;
     m_tests_run++;
     REG_INFO(1, logger) << test_name << ": PASS";
@@ -2031,6 +2111,7 @@ void testbench::run_tests()
     test_coverage_int_state_num_out_of_range();
     wait(20, SC_NS);
     test_coverage_reseed_interval_locked_and_fsm_states();
+    test_malformed_payloads();
     wait(20, SC_NS);
 
     // Print final test summary

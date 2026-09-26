@@ -24,9 +24,16 @@ if(ENABLE_ASAN AND ENABLE_COVERAGE)
 endif()
 
 if(ENABLE_ASAN)
-    message(STATUS "AddressSanitizer enabled")
-    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
-    add_link_options   (-fsanitize=address)
+    message(STATUS "AddressSanitizer + UndefinedBehaviorSanitizer enabled")
+    # -fno-sanitize-recover=all turns a UBSan diagnosis into an abort, so the
+    # runner sees a non-zero exit rather than a message it would have to grep
+    # for and could silently miss.
+    add_compile_options(-fsanitize=address -fsanitize=undefined
+                        -fno-sanitize-recover=all
+                        -fsanitize=float-divide-by-zero
+                        -fsanitize=float-cast-overflow
+                        -fno-omit-frame-pointer -g)
+    add_link_options   (-fsanitize=address -fsanitize=undefined)
 endif()
 
 if(ENABLE_COVERAGE)

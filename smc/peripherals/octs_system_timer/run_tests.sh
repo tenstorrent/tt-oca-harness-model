@@ -199,6 +199,9 @@ if (( USE_ASAN )); then
     echo ""
 
     ASAN_LOG="${BUILD_DIR}/asan.log"
+    # Sanitizers append .<pid>, so logs pile up across runs and the gate below
+    # would keep re-counting an old failure long after it was fixed.
+    rm -f "${ASAN_LOG}" "${ASAN_LOG}".*
     if [[ "${OS}" == "Linux" ]]; then
         _ASAN_OPTS="halt_on_error=0:detect_leaks=1:log_path=${ASAN_LOG}"
     else
@@ -214,7 +217,9 @@ echo ""
         echo "===== AddressSanitizer report ====="
         cat "${ASAN_LOG}".*
         echo "==================================="
-        LEAK_COUNT=$(grep -c "ERROR: AddressSanitizer" "${ASAN_LOG}".* 2>/dev/null || true)
+        # Concatenate first: grep -c over several files prints one count per file.
+        LEAK_COUNT=$(cat "${ASAN_LOG}".* 2>/dev/null |
+                     grep -cE 'ERROR: (Address|Leak|Memory)Sanitizer|ERROR: UndefinedBehaviorSanitizer|runtime error:' || true)
         echo ""
         if [[ "${LEAK_COUNT}" -eq 0 ]]; then
             echo ">> ASan: NO memory errors detected."

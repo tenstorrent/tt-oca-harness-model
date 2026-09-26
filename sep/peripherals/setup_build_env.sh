@@ -37,6 +37,22 @@ peripheral_setup_build_env() {
   export CMAKE_EXTRA_ARGS
 }
 
+# --debug / --asan / --coverage select one build type. The caller initialises
+# BUILD_TYPE (default Release) and BUILD_TYPE_SET (empty) before parsing argv.
+# A second, different selector is an error: last-flag-wins used to build ASAN
+# and then skip the sanitizer gate because the type was no longer ASAN.
+peripheral_set_build_type() {
+  local flag="$1"
+  local chosen="$2"
+  if [ -n "${BUILD_TYPE_SET}" ] && [ "${BUILD_TYPE_SET}" != "${chosen}" ]; then
+    echo "Error: ${flag} conflicts with --$(echo "${BUILD_TYPE_SET}" | tr '[:upper:]' '[:lower:]');" \
+         "build types are mutually exclusive." >&2
+    exit 1
+  fi
+  BUILD_TYPE="${chosen}"
+  BUILD_TYPE_SET="${chosen}"
+}
+
 # Drop stale cmake cache when install paths or C++ standard change.
 peripheral_cache_stale() {
   local cache="$1/CMakeCache.txt"
@@ -86,6 +102,55 @@ peripheral_enforce_coverage_gate() {
   fi
   echo "ERROR: line coverage ${pct}% is below the ${min}% gate." >&2
   return 1
+}
+
+# Run an ASan/UBSan binary and fail on any sanitizer diagnosis.
+#
+# Sanitizers report on stderr and, by default, do not change the process exit
+# code for leaks or for recoverable UBSan findings. A runner that only checks
+# the exit status therefore reports PASS on a dirty run. This routes the
+# diagnostics to a log and greps it, which is the same contract
+# smc/scripts/enforce_asan_clean.sh enforces on the SMC side.
+peripheral_enforce_asan_clean() {
+  local binary="$1"
+  local build_dir="$2"
+  local log="${build_dir}/asan.log"
+
+  # Sanitizers append .<pid>, so logs accumulate across runs and a stale failure
+  # would keep failing the gate long after it was fixed.
+  rm -f "${log}" "${log}".*
+
+  # detect_leaks=1 is LeakSanitizer, which exists on Linux only; Apple Clang's
+  # ASan aborts at startup if it is set. Same split the SMC runners use.
+  local opts="halt_on_error=0:log_path=${log}"
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    opts="halt_on_error=0:detect_leaks=1:log_path=${log}"
+  fi
+
+  local rc=0
+  ASAN_OPTIONS="${opts}" \
+  UBSAN_OPTIONS="log_path=${log}:print_stacktrace=1" \
+    "${binary}" || rc=$?
+
+  # Concatenate first: grep -c over several files prints one count per file.
+  # A leak-only report says "ERROR: LeakSanitizer", and a recoverable UBSan
+  # finding says only "runtime error:", so neither can be found by looking for
+  # AddressSanitizer alone.
+  local findings
+  findings=$(cat "${log}" "${log}".* 2>/dev/null |
+             grep -cE 'ERROR: (Address|Leak|Memory)Sanitizer|ERROR: UndefinedBehaviorSanitizer|runtime error:' || true)
+
+  if [[ "${findings}" -gt 0 ]]; then
+    echo ">> Sanitizer gate FAIL (${findings} finding(s))" >&2
+    cat "${log}" "${log}".* 2>/dev/null >&2
+    return 1
+  fi
+  if [[ "${rc}" -ne 0 ]]; then
+    echo ">> Sanitizer gate FAIL (binary exited ${rc})" >&2
+    return "${rc}"
+  fi
+  echo ">> Sanitizer gate: clean (no ASan/UBSan findings)"
+  return 0
 }
 
 peripheral_parallel_jobs() {

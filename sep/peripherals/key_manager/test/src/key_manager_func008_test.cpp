@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_func008_test.cpp
  * @brief CMD_KEY_TRANSFER — moving KPV key data to crypto engine key registers
@@ -94,17 +96,26 @@ int key_manager_func008_test(key_manager_test* test, key_manager_model* /*dut*/,
     CHECK_EQ((uint32_t)tb->hmac_stub.writes.size(), 17u,
              "008a: HMAC stub received 17 writes (8 SHARE0 + 8 SHARE1 + KEY_CTRL)");
 
-    // Dual XOR share: SHARE0[w] at writes[w*2], SHARE1[w] at writes[w*2+1].
-    // Verify key[w] = SHARE0[w] XOR SHARE1[w] matches known_key[w].
-    bool key_match = true;
-    if (tb->hmac_stub.writes.size() >= 16) {
-        for (size_t w = 0; w < 8 && w < known_key.size(); w++) {
-            uint32_t reconstructed = tb->hmac_stub.writes[w*2].data
-                                   ^ tb->hmac_stub.writes[w*2+1].data;
+    // Address order is part of the oracle: SHARE0[w] at w*4, then SHARE1[w]
+    // at 0x20+w*4. Index pairing alone would still reconstruct a key if the
+    // model wrote the two shares of each word back to back, but a run of all
+    // SHARE0 followed by all SHARE1 lands the words at different addresses.
+    bool key_match = tb->hmac_stub.writes.size() == 17
+                  && tb->hmac_stub.writes[16].addr == 0x40u
+                  && tb->hmac_stub.writes[16].data == 1u;
+    if (key_match) {
+        for (size_t w = 0; w < known_key.size(); w++) {
+            if (tb->hmac_stub.writes[w * 2].addr != w * 4u ||
+                tb->hmac_stub.writes[w * 2 + 1].addr != 0x20u + w * 4u) {
+                key_match = false;
+                break;
+            }
+            uint32_t reconstructed = tb->hmac_stub.writes[w * 2].data
+                                   ^ tb->hmac_stub.writes[w * 2 + 1].data;
             if (reconstructed != known_key[w]) { key_match = false; break; }
         }
     }
-    CHECK(key_match, "008a: reconstructed key (SHARE0 XOR SHARE1) matches registered key");
+    CHECK(key_match, "008a: address-ordered SHARE0 XOR SHARE1 matches the registered key");
 
     // ------------------------------------------------------------------
     // 008b: Transfer to KMAC (not in DEST_VALID) → RET_FAILURE

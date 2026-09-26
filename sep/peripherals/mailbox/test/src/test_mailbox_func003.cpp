@@ -15,8 +15,8 @@
  * - TC018: test_callback_read_data_dequeue        (READ_DATA callback)
  * - TC019: test_crossport_data_integrity          (Data integrity patterns)
  * - TC020: test_crossport_status_coherence        (Cross-port STATUS flags)
- * - TC021: test_boundary_fifo_depth_min           (Minimum depth=2)
- * - TC022: test_boundary_fifo_depth_max           (Maximum depth operation)
+ * - TC021: test_boundary_fifo_occupancy_min       (Empty/one-entry occupancy boundary)
+ * - TC022: test_boundary_fifo_depth_probe         (Measured depth vs documented MailboxDepth)
  *
  * Verification Objectives:
  * - Cross-port data transfer (Port 0 WRITE_DATA → Port 1 READ_DATA)
@@ -1047,31 +1047,37 @@ void testbench::test_crossport_status_coherence() {
 }
 
 /**
- * @brief TC021: test_boundary_fifo_depth_min
+ * @brief TC021: test_boundary_fifo_occupancy_min
  *
  * Verification Objective:
- * Verify minimum FIFO depth operation (MailboxDepth=2).
- * Tests full cycle: write 2 entries (FIFO full), peer reads 2 entries (FIFO empty).
+ * Verify the minimum non-trivial occupancy boundary: the empty/not-empty edge
+ * at a fill level of one entry.
+ *
+ * Scope note: the production constructor hardcodes MailboxDepth=8 and exposes
+ * no way to reconfigure it (m_mailbox_depth is a private static constexpr), so
+ * no test driving mailbox_ip through its sockets can exercise a smaller depth.
+ * This case therefore asserts the occupancy boundary it can actually reach and
+ * makes no claim about depth configurability.
  *
  * Test Procedure:
- * 1. Reset DUT (assuming MailboxDepth>=2)
- * 2. Write 2 entries to Port 0
- * 3. Verify STATUS flags reflect correct state
- * 4. Read 2 entries from Port 1
- * 5. Verify FIFO empties correctly
+ * 1. Reset DUT
+ * 2. Verify both ports report empty
+ * 3. Write one entry from Port 0, verify Port 1 leaves the empty state
+ * 4. Read the single entry back from Port 1 and compare it
+ * 5. Verify Port 1 returns to the empty state
  *
  * Pass Criteria:
- * - Minimum buffering works correctly
- * - STATUS transitions accurate
+ * - STATUS[0] tracks the 0 -> 1 -> 0 occupancy transition exactly
+ * - The single word round-trips unchanged
  *
  * Related Registers: WRITE_DATA (0x00), READ_DATA (0x08), STATUS (0x10)
  * Test Type: Boundary
  */
-void testbench::test_boundary_fifo_depth_min() {
-  std::string test_name = "TC021: test_boundary_fifo_depth_min";
+void testbench::test_boundary_fifo_occupancy_min() {
+  std::string test_name = "TC021: test_boundary_fifo_occupancy_min";
   REG_INFO(2, logger) << "========================================";
   REG_INFO(2, logger) << "Running: " << test_name;
-  REG_INFO(2, logger) << "Description: Minimum FIFO depth operation (depth=2)";
+  REG_INFO(2, logger) << "Description: Minimum occupancy boundary (empty <-> one entry)";
   REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
@@ -1080,43 +1086,51 @@ void testbench::test_boundary_fifo_depth_min() {
 
   apply_reset();
 
-  // Test with minimum 2 entries
-  std::vector<uint64_t> test_data = {
-    0x0000000000000001ULL,
-    0x0000000000000002ULL
-  };
+  const uint64_t single_entry = 0x00000000DEADBEEFULL;
 
-  REG_INFO(2, logger) << "Writing 2 entries (minimum depth)";
-  for (const auto& data : test_data) {
-    test_port0->register_write_64(mailbox_basetest::WRITE_DATA_OFFSET, data);
-  }
-  wait(3, SC_NS);
-
-  // Check that data is available
-  test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
-  if ((status_value & 0x1) != 0) {
-    REG_ERROR(0, logger) << "FAIL: FIFO empty after writes";
-    test_passed = false;
-  } else {
-    REG_INFO(2, logger) << "PASS: FIFO has data";
-  }
-
-  REG_INFO(2, logger) << "Reading 2 entries";
-  for (size_t i = 0; i < test_data.size(); i++) {
-    test_port1->register_read_64(mailbox_basetest::READ_DATA_OFFSET, read_value);
-    if (read_value != test_data[i]) {
-      REG_ERROR(0, logger) << "FAIL: Data mismatch";
-      test_passed = false;
-    }
-  }
-
-  // Verify empty
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    REG_ERROR(0, logger) << "FAIL: FIFO not empty after consuming all data";
+    REG_ERROR(0, logger) << "FAIL: Port 1 not empty after reset";
+    test_passed = false;
+  }
+
+  REG_INFO(2, logger) << "Writing one entry (minimum non-empty occupancy)";
+  test_port0->register_write_64(mailbox_basetest::WRITE_DATA_OFFSET, single_entry);
+  wait(3, SC_NS);
+
+  test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
+  if ((status_value & 0x1) != 0) {
+    REG_ERROR(0, logger) << "FAIL: Port 1 still reports empty with one entry queued";
     test_passed = false;
   } else {
-    REG_INFO(2, logger) << "PASS: FIFO empty after reads";
+    REG_INFO(2, logger) << "PASS: STATUS[0] cleared at occupancy 1";
+  }
+
+  // One entry can never fill a FIFO deeper than one, so the full flag must be
+  // clear on the writing port at this occupancy.
+  test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
+  if ((status_value & 0x2) != 0) {
+    REG_ERROR(0, logger) << "FAIL: Port 0 reports full at occupancy 1";
+    test_passed = false;
+  }
+
+  test_port1->register_read_64(mailbox_basetest::READ_DATA_OFFSET, read_value);
+  if (read_value != single_entry) {
+    std::ostringstream msg;
+    msg << "FAIL: Data mismatch, expected 0x" << std::hex << single_entry
+        << ", got 0x" << read_value;
+    REG_ERROR(0, logger) << msg.str();
+    test_passed = false;
+  } else {
+    REG_INFO(2, logger) << "PASS: Single entry round-tripped unchanged";
+  }
+
+  test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
+  if ((status_value & 0x1) == 0) {
+    REG_ERROR(0, logger) << "FAIL: Port 1 not empty after consuming the single entry";
+    test_passed = false;
+  } else {
+    REG_INFO(2, logger) << "PASS: STATUS[0] set again at occupancy 0";
   }
 
   REG_INFO(2, logger) << "========================================";
@@ -1124,33 +1138,39 @@ void testbench::test_boundary_fifo_depth_min() {
 }
 
 /**
- * @brief TC022: test_boundary_fifo_depth_max
+ * @brief TC022: test_boundary_fifo_depth_probe
  *
  * Verification Objective:
- * Verify maximum configured FIFO depth operation (e.g., MailboxDepth=256).
- * Write MailboxDepth entries to fill FIFO, peer reads all entries.
- * Tests no data loss at maximum capacity.
+ * Measure the FIFO depth the DUT actually implements and confirm it matches the
+ * documented MailboxDepth, instead of writing a pre-assumed count of entries.
+ *
+ * The depth is derived from the bus responses rather than assumed: entries are
+ * pushed until the model refuses one, the accepted count is the depth, and that
+ * count is compared with the documented value. Writing a pre-assumed number of
+ * entries would pass against any depth greater than or equal to that number.
  *
  * Test Procedure:
  * 1. Reset DUT
- * 2. Write MailboxDepth entries (assume 8 for default config)
- * 3. Verify full flag sets
- * 4. Read all entries and verify
- * 5. Verify empty flag sets
+ * 2. Push entries from Port 0 until a write is refused, recording each one
+ * 3. On every attempt, require the accept/refuse decision to agree with
+ *    STATUS[1] sampled immediately beforehand
+ * 4. Compare the measured depth against the documented MailboxDepth
+ * 5. Drain from Port 1 and verify every accepted entry comes back in order
+ * 6. Verify the refused entry was never stored
  *
  * Pass Criteria:
- * - Maximum capacity reached
- * - All data retrieved correctly
- * - No data loss
+ * - Measured depth equals the documented MailboxDepth (8)
+ * - STATUS[1] predicts the accept/refuse decision on every attempt
+ * - No data loss or reordering at full occupancy, and no phantom ninth entry
  *
  * Related Registers: WRITE_DATA (0x00), READ_DATA (0x08), STATUS (0x10)
  * Test Type: Boundary
  */
-void testbench::test_boundary_fifo_depth_max() {
-  std::string test_name = "TC022: test_boundary_fifo_depth_max";
+void testbench::test_boundary_fifo_depth_probe() {
+  std::string test_name = "TC022: test_boundary_fifo_depth_probe";
   REG_INFO(2, logger) << "========================================";
   REG_INFO(2, logger) << "Running: " << test_name;
-  REG_INFO(2, logger) << "Description: Maximum FIFO depth operation";
+  REG_INFO(2, logger) << "Description: Measured FIFO depth matches documented MailboxDepth";
   REG_INFO(2, logger) << "========================================";
 
   bool test_passed = true;
@@ -1159,46 +1179,93 @@ void testbench::test_boundary_fifo_depth_max() {
 
   apply_reset();
 
-  // Use default MailboxDepth=8
-  const unsigned int mailbox_depth = 8;
-  std::vector<uint64_t> test_data;
+  // mailbox_ip::m_mailbox_depth. Hardcoded in the model, so this is the
+  // configuration contract the probe below is checking, not a test parameter.
+  const unsigned int documented_depth = 8;
 
-  for (unsigned int i = 0; i < mailbox_depth; i++) {
-    test_data.push_back(0xFFFF000000000000ULL | i);
-  }
+  // Enough headroom to see the refusal even if the model were deeper than
+  // documented, which is the failure this probe is meant to expose.
+  const unsigned int max_attempts = documented_depth * 4;
 
-  REG_INFO(2, logger) << "Writing " << mailbox_depth << " entries to max capacity";
-  for (const auto& data : test_data) {
-    test_port0->register_write_64(mailbox_basetest::WRITE_DATA_OFFSET, data);
+  std::vector<uint64_t> accepted;
+  bool refused = false;
+
+  for (unsigned int i = 0; i < max_attempts && !refused; i++) {
+    const uint64_t data = 0xFFFF000000000000ULL | i;
+
+    mailbox_read(0, mailbox_basetest::STATUS_OFFSET, status_value);
+    const bool full_before = (status_value & 0x2) != 0;
+
+    const tlm::tlm_response_status st =
+        mailbox_write(0, mailbox_basetest::WRITE_DATA_OFFSET, data);
+    const bool accepted_now = (st == tlm::TLM_OK_RESPONSE);
+
+    // Depth-independent oracle: a write succeeds exactly when STATUS[1] said
+    // there was room.
+    if (accepted_now == full_before) {
+      std::ostringstream msg;
+      msg << "FAIL: STATUS[1]=" << full_before << " disagrees with write "
+          << i << " which was " << (accepted_now ? "accepted" : "refused");
+      REG_ERROR(0, logger) << msg.str();
+      test_passed = false;
+    }
+
+    if (accepted_now) {
+      accepted.push_back(data);
+    } else {
+      refused = true;
+    }
   }
   wait(5, SC_NS);
 
-  // Verify full
-  test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
-  if ((status_value & 0x2) == 0) {
-    REG_ERROR(0, logger) << "FAIL: Full flag not set at max capacity";
+  if (!refused) {
+    REG_ERROR(0, logger) << "FAIL: FIFO accepted " << max_attempts
+                          << " entries without ever reporting full";
     test_passed = false;
-  } else {
-    REG_INFO(2, logger) << "PASS: Full flag set at max capacity";
   }
 
-  REG_INFO(2, logger) << "Reading all entries and verifying";
-  for (size_t i = 0; i < test_data.size(); i++) {
+  if (accepted.size() != documented_depth) {
+    std::ostringstream msg;
+    msg << "FAIL: measured FIFO depth " << accepted.size()
+        << " does not match documented MailboxDepth " << documented_depth;
+    REG_ERROR(0, logger) << msg.str();
+    test_passed = false;
+  } else {
+    REG_INFO(2, logger) << "PASS: measured FIFO depth = " << accepted.size();
+  }
+
+  test_port0->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
+  if ((status_value & 0x2) == 0) {
+    REG_ERROR(0, logger) << "FAIL: Full flag not set at measured capacity";
+    test_passed = false;
+  } else {
+    REG_INFO(2, logger) << "PASS: Full flag set at measured capacity";
+  }
+
+  REG_INFO(2, logger) << "Draining " << accepted.size() << " entries and verifying order";
+  for (size_t i = 0; i < accepted.size(); i++) {
     test_port1->register_read_64(mailbox_basetest::READ_DATA_OFFSET, read_value);
-    if (read_value != test_data[i]) {
-      REG_ERROR(0, logger) << "FAIL: Data loss at max capacity";
+    if (read_value != accepted[i]) {
+      std::ostringstream msg;
+      msg << "FAIL: entry " << i << " expected 0x" << std::hex << accepted[i]
+          << ", got 0x" << read_value;
+      REG_ERROR(0, logger) << msg.str();
       test_passed = false;
     }
   }
 
-  // Verify empty
+  // The refused word must not have been stored behind the accepted ones.
   test_port1->register_read_64(mailbox_basetest::STATUS_OFFSET, status_value);
   if ((status_value & 0x1) == 0) {
-    REG_ERROR(0, logger) << "FAIL: Empty flag not set after draining";
+    REG_ERROR(0, logger) << "FAIL: FIFO not empty after draining every accepted entry";
     test_passed = false;
   } else {
-    REG_INFO(2, logger) << "PASS: No data loss at maximum capacity";
+    REG_INFO(2, logger) << "PASS: No data loss and no phantom entry at full occupancy";
   }
+
+  // The deliberate overflow left ERROR_FLAGS[1] and IRQS[2] set; clear them so
+  // the next suite starts from the reset state it expects.
+  apply_reset();
 
   REG_INFO(2, logger) << "========================================";
   report_test_result(test_name.c_str(), test_passed);
@@ -1221,7 +1288,7 @@ void testbench::test_boundary_fifo_depth_max() {
  * - Register callbacks (WRITE_DATA enqueue, READ_DATA dequeue)
  * - Cross-port data integrity and STATUS coherence
  * - Independent FIFO paths
- * - Boundary cases (min/max depth, all-zeros/all-ones patterns)
+ * - Boundary cases (occupancy edges, measured depth, all-zeros/all-ones patterns)
  * - Configuration parameter validation (MailboxDepth)
  */
 void testbench::run_func003_tests() {
@@ -1249,8 +1316,8 @@ void testbench::run_func003_tests() {
   test_crossport_status_coherence();           // TC020
 
   // Boundary Cases (Test IDs: 51-52)
-  test_boundary_fifo_depth_min();              // TC021
-  test_boundary_fifo_depth_max();              // TC022
+  test_boundary_fifo_occupancy_min();          // TC021
+  test_boundary_fifo_depth_probe();            // TC022
 
   REG_INFO(2, logger) << "\n";
   REG_INFO(2, logger) << "========================================";

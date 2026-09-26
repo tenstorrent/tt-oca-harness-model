@@ -97,6 +97,27 @@ struct probe : sc_core::sc_module {
         return gp.get_response_status();
     }
 
+    // raw() always sends a well-shaped payload (streaming width == length, no
+    // byte enables). This one lets a caller bend those two independently.
+    tlm::tlm_response_status shaped(tlm::tlm_command cmd, uint64_t addr,
+                                    uint32_t len, void* data,
+                                    uint32_t streaming_width,
+                                    unsigned char* be = nullptr,
+                                    uint32_t be_len = 0) {
+        tlm::tlm_generic_payload gp;
+        sc_time t = SC_ZERO_TIME;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(streaming_width);
+        gp.set_byte_enable_ptr(be);
+        gp.set_byte_enable_length(be_len);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        sock->b_transport(gp, t);
+        return gp.get_response_status();
+    }
+
     uint32_t read_ok(uint64_t addr) {
         uint32_t v = 0;
         EXPECT_EQ(tlm::TLM_OK_RESPONSE, raw(tlm::TLM_READ_COMMAND, addr, 4, &v));
@@ -122,10 +143,10 @@ struct probe : sc_core::sc_module {
 
 int sc_main(int, char**)
 {
-    // Make SC_REPORT_FATAL throw so we can probe the constructor guard rail.
+    // Finding 13: demote SC_ERROR only around the probes that expect it; keep
+    // unrelated errors fatal. SC_FATAL throws for the constructor guard rail.
     sc_core::sc_report_handler::set_actions(
         sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
-    sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR, sc_core::SC_DISPLAY);
 
     static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
 
@@ -171,6 +192,27 @@ int sc_main(int, char**)
               pr.raw(tlm::TLM_IGNORE_COMMAND, cfg_t::CTRL, 4, &scratch));    // bad command
     std::cout << "  [PASS] TLM error responses (width/align/window/miss/cmd)\n";
 
+    // ---- Payload shape: must be refused before the register dispatch ----
+    // A null pointer with a legal length and address previously reached the
+    // memcpy in b_transport and segfaulted; the other two are legal TLM this
+    // full-word CSR port does not implement.
+    EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+              pr.raw(tlm::TLM_READ_COMMAND,  cfg_t::CTRL, 4, nullptr));
+    EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+              pr.raw(tlm::TLM_WRITE_COMMAND, cfg_t::CTRL, 4, nullptr));
+    {
+        unsigned char be[4] = {TLM_BYTE_ENABLED, TLM_BYTE_DISABLED,
+                               TLM_BYTE_ENABLED, TLM_BYTE_DISABLED};
+        EXPECT_EQ(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
+                  pr.shaped(tlm::TLM_WRITE_COMMAND, cfg_t::CTRL, 4, &scratch,
+                            4, be, sizeof(be)));
+    }
+    EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,   // streaming width < length
+              pr.shaped(tlm::TLM_READ_COMMAND, cfg_t::CTRL, 4, &scratch, 2));
+    EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,   // streaming width 0 is illegal
+              pr.shaped(tlm::TLM_READ_COMMAND, cfg_t::CTRL, 4, &scratch, 0));
+    std::cout << "  [PASS] TLM payload shape (null ptr / byte enable / width)\n";
+
     // ---- Read-only registers ignore writes; write-only read as 0 ----
     pr.write_ok(cfg_t::STATUS, 0xFFFFFFFF);            // RO -> ignored
     EXPECT_TRUE((pr.read_ok(cfg_t::STATUS) & (1u << 2)) != 0); // still FMTEMPTY
@@ -196,19 +238,20 @@ int sc_main(int, char**)
     std::cout << "  [PASS] TX FIFO overflow error\n";
 
     // ---- ACQ FIFO overflow -> TARGET_RX_FIFO_ERROR (via target back door) ----
+    // Finding 3: target_write is an external-I2C stimulus adapter (not TLM ingress).
     pr.write_ok(cfg_t::CTRL, 1u << 1);                 // ENABLETARGET
     pr.write_ok(cfg_t::TARGET_ID, 0x50u | (0x7Fu << 7));
     // Start + 1 data + Stop = 3 entries into a depth-2 ACQ FIFO -> overflow.
     EXPECT_TRUE(dut.target_write(0x50, {0xAA}));
     EXPECT_TRUE((pr.read_ok(cfg_t::INTR_STATE) & (1u << 19)) != 0);
-    std::cout << "  [PASS] ACQ FIFO overflow error\n";
+    std::cout << "  [PASS] ACQ FIFO overflow error (adapter)\n";
 
-    // ---- Back door on a disabled target is NACKed ----
+    // ---- Back door on a disabled target is NACKed (Finding 3: adapter) ----
     pr.write_ok(cfg_t::CTRL, 0);                       // ENABLETARGET = 0
     std::vector<uint8_t> out;
     EXPECT_TRUE(!dut.target_write(0x50, {0x01}));
     EXPECT_TRUE(!dut.target_read(0x50, 1, out));
-    std::cout << "  [PASS] disabled-target back door NACK\n";
+    std::cout << "  [PASS] disabled-target back door NACK (adapter)\n";
 
     // ---- Direct TARGET_NACK_COUNT write path ----
     pr.write_ok(cfg_t::TARGET_NACK_COUNT, 0x7);
@@ -249,7 +292,11 @@ int sc_main(int, char**)
     std::cout << "  [PASS] transport_dbg malformed reject + round-trip\n";
 
     // ---- CCI parameter immutability ----
+    // Finding 13: CCI may raise SC_ERROR on an immutable write; demote only here.
     {
+        const sc_core::sc_actions prev_err =
+            sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR,
+                                                    sc_core::SC_DISPLAY);
         cci::cci_originator orig("neg_tb");
         auto broker = cci::cci_get_global_broker(orig);
         auto h = broker.get_param_handle("i2c_controller.fmt_fifo_depth");
@@ -257,6 +304,7 @@ int sc_main(int, char**)
         const bool threw = expect_fatal([&]{ h.set_cci_value(cci::cci_value(99u)); });
         // Immutable params reject post-construction writes (throw or no-op).
         EXPECT_TRUE(threw || h.get_cci_value().to_json() == std::string("2"));
+        sc_core::sc_report_handler::set_actions(sc_core::SC_ERROR, prev_err);
         std::cout << "  [PASS] CCI immutability\n";
     }
 

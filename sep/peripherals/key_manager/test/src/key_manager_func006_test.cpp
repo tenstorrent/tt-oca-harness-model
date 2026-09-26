@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_func006_test.cpp
  * @brief CMD_KEY_LOAD — host-supplied keys into the KPV over the mailbox
@@ -21,7 +23,10 @@
  *   006h - A one-word key is accepted (minimum legal size)
  *   006i - Successive loads return distinct handles
  *   006j - A 16-word key fills exactly one slot
- *   006k - A 17-word key spans two slots and reads back intact
+ *   006k - A 17-word key spans two slots. OTBN's sideload file is 12 words,
+ *          the widest target, so words 0..11 are reconstructed from the
+ *          transfer. Word 16 sits in the second slot and no engine register
+ *          file is wide enough to observe it.
  */
 
 #include "testbench.h"
@@ -45,7 +50,7 @@
         } else { std::cout << "[PASS] " << msg << std::endl; } \
     } while(0)
 
-int key_manager_func006_test(key_manager_test* test, key_manager_model* /*dut*/, testbench* /*tb*/)
+int key_manager_func006_test(key_manager_test* test, key_manager_model* /*dut*/, testbench* tb)
 {
     int failures = 0;
     std::cout << "\n--- FUNC006: CMD_KEY_LOAD ---\n";
@@ -135,9 +140,41 @@ int key_manager_func006_test(key_manager_test* test, key_manager_model* /*dut*/,
         std::vector<uint32_t> key17;
         for (uint32_t w = 0; w < 17u; w++) key17.push_back(0xD0000000u | w);
         uint8_t h17 = 0;
-        ret_code = test->mb_load_key(seq, key17, fw::DEST_HMAC, h17);
+        ret_code = test->mb_load_key(seq, key17, fw::DEST_OTBN, h17);
         CHECK_EQ(ret_code, 0, "006k: CMD_KEY_LOAD (17 words, spans two slots) → RET_SUCCESS");
         CHECK(h17 >= 1u,      "006k: 17-word key returns a usable handle");
+
+        // OTBN takes 12 words per share (SHARE1 base 0x30, KEY_CTRL at 0x60):
+        // 12 SHARE0 + 12 SHARE1 + KEY_CTRL = 25 writes. Words 12..16 are past
+        // that width, so this proves the prefix the firmware read back out of
+        // the vault, including words that a one-slot truncation to 8 would drop.
+        tb->otbn_stub.clear();
+        test->mb_send_command(seq++, fw::CMD_KEY_TRANSFER,
+                              {h17, static_cast<uint32_t>(fw::DEST_OTBN)});
+        std::vector<uint32_t> xfer;
+        const bool got = test->mb_receive_frame(xfer);
+        CHECK(got, "006k: CMD_KEY_TRANSFER response received");
+        int32_t xfer_rc = -1;
+        uint32_t xfer_arg = 0;
+        const bool parsed = key_manager_test::parse_resp_cmd(
+            xfer, resp_id, src_seq, echoed_cmd, xfer_rc, xfer_arg);
+        CHECK(parsed, "006k: transfer parses as RESP_CMD");
+        CHECK_EQ(xfer_rc, 0, "006k: transfer of the 17-word key → RET_SUCCESS");
+
+        const auto& wr = tb->otbn_stub.writes;
+        bool rebuilt = parsed && xfer_rc == 0 && wr.size() == 25u
+                    && wr[24].addr == 0x60u && wr[24].data == 1u;
+        if (rebuilt) {
+            for (int w = 0; w < 12; w++) {
+                if (wr[w * 2].addr != static_cast<uint64_t>(w) * 4u ||
+                    wr[w * 2 + 1].addr != 0x30u + static_cast<uint64_t>(w) * 4u ||
+                    (wr[w * 2].data ^ wr[w * 2 + 1].data) != key17[w]) {
+                    rebuilt = false;
+                    break;
+                }
+            }
+        }
+        CHECK(rebuilt, "006k: OTBN SHARE0 XOR SHARE1 reconstructs key words 0..11");
     }
 
     std::cout << "\n--- FUNC006 complete: " << failures << " failure(s) ---\n\n";

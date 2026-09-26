@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file key_manager_func013_test.cpp
  * @brief CMD_KEY_GENERATE — structural key delivery verification
@@ -8,9 +10,11 @@
  * dual XOR shares without checking exact values.
  *
  * Tests covered:
- *   013a - CMD_KEY_GENERATE; CMD_KEY_TRANSFER to HMAC; verify 17 writes
- *          (8 SHARE0 + 8 SHARE1 + KEY_CTRL=1) and SHARE0[w] XOR SHARE1[w]
- *          is non-trivial overall — proving dual XOR share protocol is intact.
+ *   013a - CMD_KEY_GENERATE; CMD_KEY_TRANSFER to HMAC; verify 17 writes in
+ *          address order (SHARE0[w] at w*4, SHARE1[w] at 0x20+w*4, KEY_CTRL
+ *          at 0x40). The key itself comes from RAND_bytes, so the oracle is
+ *          the address sequence: writing every SHARE0 before any SHARE1 still
+ *          produces a nonzero XOR and must not pass.
  */
 
 #include "testbench.h"
@@ -49,10 +53,10 @@ int key_manager_func013_test(key_manager_test* test, key_manager_model* /*dut*/,
     //       Key material comes from OpenSSL RAND_bytes — exact values
     //       are not checked, only structural correctness.
     //
-    // Dual XOR share delivery (17 writes to stub):
-    //   writes[w*2]   = SHARE0[w] = random mask
-    //   writes[w*2+1] = SHARE1[w] = key[w] XOR mask
-    //   writes[16]    = KEY_CTRL  = 1
+    // Dual XOR share delivery (17 writes to stub), interleaved per word:
+    //   writes[w*2]   addr w*4        = SHARE0[w]
+    //   writes[w*2+1] addr 0x20+w*4   = SHARE1[w]
+    //   writes[16]    addr 0x40       = KEY_CTRL = 1
     // ------------------------------------------------------------------
     test->trigger_reset();
     tb->hmac_stub.clear();
@@ -97,20 +101,16 @@ int key_manager_func013_test(key_manager_test* test, key_manager_model* /*dut*/,
              "013a: HMAC stub received 17 writes (8 SHARE0 + 8 SHARE1 + KEY_CTRL)");
 
     if (tb->hmac_stub.writes.size() == 17) {
-        // Verify KEY_CTRL word at writes[16]
-        CHECK_EQ(tb->hmac_stub.writes[16].data, 1u, "013a: writes[16] = KEY_CTRL=1");
-
-        // Verify dual XOR share structure: SHARE0[w] XOR SHARE1[w] must be
-        // consistent per word (non-zero overall, shares are paired correctly).
-        // Exact key values are not checked — key material comes from RAND_bytes.
-        uint32_t xor_sum = 0;
+        bool addrs_ok = tb->hmac_stub.writes[16].addr == 0x40u
+                     && tb->hmac_stub.writes[16].data == 1u;
         for (int w = 0; w < 8; w++) {
-            uint32_t share0 = tb->hmac_stub.writes[w*2].data;
-            uint32_t share1 = tb->hmac_stub.writes[w*2+1].data;
-            xor_sum |= (share0 ^ share1);
+            if (tb->hmac_stub.writes[w * 2].addr != static_cast<uint64_t>(w) * 4u)
+                addrs_ok = false;
+            if (tb->hmac_stub.writes[w * 2 + 1].addr != 0x20u + static_cast<uint64_t>(w) * 4u)
+                addrs_ok = false;
         }
-        CHECK(xor_sum != 0u, "013a: at least one SHARE0 XOR SHARE1 word is non-zero (key is non-trivial)");
-        std::cout << "[PASS] 013a: dual XOR share structure correct (17 writes, KEY_CTRL=1)\n";
+        CHECK(addrs_ok,
+              "013a: SHARE0[w] at w*4, SHARE1[w] at 0x20+w*4, KEY_CTRL=1 at 0x40");
     }
 
     std::cout << "\n--- FUNC013 complete: " << failures << " failure(s) ---\n\n";

@@ -34,6 +34,14 @@ public:
     // Test helper methods
     void apply_reset();
 
+    /// True when no register access was refused since the last check. Consulted
+    /// by both reporting entry points; clears the count as a side effect so
+    /// failures are attributed to the test that caused them.
+    bool transport_clean(const char* test_name);
+
+    /// Malformed generic payloads against the CSRNG register window.
+    void test_malformed_payloads();
+
     // Test result reporting
     void report_test_result(const char* test_name, bool passed);
     void report_test_start(const std::string& test_name);
