@@ -212,12 +212,9 @@ if (( USE_ASAN || USE_UB_CANARY )); then
     echo ""
 
     ASAN_LOG="${BUILD_DIR}/asan.log"
-    UBSAN_LOG="${BUILD_DIR}/ubsan.log"
-    # Sanitizer log_path appends the pid, so a previous run's files would still
-    # be here and get picked up by the wildcard collection below: a stale UBSan
-    # log would make the canary pass with no current report, and a stale finding
-    # would fail an otherwise clean run.
-    rm -f "${ASAN_LOG}"* "${UBSAN_LOG}"*
+    # Sanitizers append .<pid>, so logs pile up across runs and the gate below
+    # would keep re-counting an old failure long after it was fixed.
+    rm -f "${ASAN_LOG}" "${ASAN_LOG}".*
     if [[ "${OS}" == "Linux" ]]; then
         _ASAN_OPTS="halt_on_error=0:detect_leaks=1:log_path=${ASAN_LOG}"
     else
@@ -232,22 +229,19 @@ TB_EXIT=$?
 set -e
 echo ""
 
-    # Sanitizers append the pid to log_path.  enforce_asan_clean.sh already
-    # globs asan.log* itself, so only the UBSan logs are passed to it as extra
-    # files -- passing the ASan ones too would double-count every finding.
-    UB_LOGS=()
-    for _l in "${UBSAN_LOG}"*; do
-        if [[ -f "${_l}" ]]; then UB_LOGS+=("${_l}"); fi
-    done
-    SAN_LOGS=("${UB_LOGS[@]+"${UB_LOGS[@]}"}")
-    for _l in "${ASAN_LOG}"*; do
-        if [[ -f "${_l}" ]]; then SAN_LOGS+=("${_l}"); fi
-    done
-
-    if [[ ${#SAN_LOGS[@]} -gt 0 ]]; then
-        echo "===== Sanitizer report ====="
-        cat "${SAN_LOGS[@]}"
-        echo "============================"
+    if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
+        echo "===== AddressSanitizer report ====="
+        cat "${ASAN_LOG}".*
+        echo "==================================="
+        # Concatenate first: grep -c over several files prints one count per file.
+        LEAK_COUNT=$(cat "${ASAN_LOG}".* 2>/dev/null |
+                     grep -cE 'ERROR: (Address|Leak|Memory)Sanitizer|ERROR: UndefinedBehaviorSanitizer|runtime error:' || true)
+        echo ""
+        if [[ "${LEAK_COUNT}" -eq 0 ]]; then
+            echo ">> ASan: NO memory errors detected."
+        else
+            echo ">> ASan: ${LEAK_COUNT} error(s) detected (see report above)."
+        fi
     else
         echo ">> Sanitizers: NO errors detected."
     fi

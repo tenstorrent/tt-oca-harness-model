@@ -24,6 +24,7 @@
 #include "virt_console_decoder.h"
 #include "reg_param.h"
 #include "reg_logger.h"
+#include "tlm_probe.h"
 
 #include <systemc.h>
 #include <tlm.h>
@@ -50,8 +51,12 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     SC_HAS_PROCESS(sep_scratch_cold_testbench);
 
     sep_scratch_cold_ip dut;
+    /// Second instance whose decoder CCI presets are false (COLD-004).
+    sep_scratch_cold_ip quiet;
     tlm_utils::simple_initiator_socket<sep_scratch_cold_testbench, 32> initiator_socket;
+    tlm_utils::simple_initiator_socket<sep_scratch_cold_testbench, 32> quiet_socket;
     sc_core::sc_signal<bool> cold_rst_n{"cold_rst_n"};
+    sc_core::sc_signal<bool> quiet_rst_n{"quiet_rst_n"};
     RegLogger logger;
 
     int m_tests_run    = 0;
@@ -61,11 +66,16 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     explicit sep_scratch_cold_testbench(sc_core::sc_module_name n)
         : sc_module(n)
         , dut("dut")
+        , quiet("quiet")
         , initiator_socket("initiator_socket")
+        , quiet_socket("quiet_socket")
     {
         initiator_socket.bind(dut.target_socket);
         dut.cold_rst_ni(cold_rst_n);
         cold_rst_n.write(true);
+        quiet_socket.bind(quiet.target_socket);
+        quiet.cold_rst_ni(quiet_rst_n);
+        quiet_rst_n.write(true);
         logger.setMaxVerbosity(dut.verbosity.get_param_value());
         logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
         logger.setFunctionTrace(false);
@@ -76,33 +86,36 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     // TLM helpers — 32-bit socket, byte-addressed
     // Each SCRATCH[n] occupies 8 bytes (64-bit register); lower 32 bits are r/w.
     // -------------------------------------------------------------------------
+    // Signatures are unchanged so the scenarios read the same, but the response
+    // status is recorded rather than discarded. report_test_pass() refuses to
+    // pass any test that accumulated a transport failure.
+    unsigned    m_transport_failures = 0;
+    std::string m_last_transport_error;
+
+    void note_transport(const simtlm::access_result& r, const char* op,
+                        sc_dt::uint64 byte_addr)
+    {
+        if (r.ok())
+            return;
+        ++m_transport_failures;
+        std::ostringstream oss;
+        oss << op << " at 0x" << std::hex << byte_addr
+            << " returned " << simtlm::response_name(r.status);
+        m_last_transport_error = oss.str();
+        std::cout << "[ TRANS ] " << m_last_transport_error << std::endl;
+    }
+
     void b_write(sc_dt::uint64 byte_addr, uint32_t value)
     {
-        tlm::tlm_generic_payload trans;
-        sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
-        trans.set_command(tlm::TLM_WRITE_COMMAND);
-        trans.set_address(byte_addr);
-        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&value));
-        trans.set_data_length(4u);
-        trans.set_streaming_width(4u);
-        trans.set_byte_enable_ptr(nullptr);
-        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-        initiator_socket->b_transport(trans, delay);
+        const auto r = simtlm::write_word<uint32_t>(initiator_socket, byte_addr, value);
+        note_transport(r, "b_write", byte_addr);
     }
 
     uint32_t b_read(sc_dt::uint64 byte_addr)
     {
-        tlm::tlm_generic_payload trans;
-        sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
         uint32_t data = 0u;
-        trans.set_command(tlm::TLM_READ_COMMAND);
-        trans.set_address(byte_addr);
-        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&data));
-        trans.set_data_length(4u);
-        trans.set_streaming_width(4u);
-        trans.set_byte_enable_ptr(nullptr);
-        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-        initiator_socket->b_transport(trans, delay);
+        const auto r = simtlm::read_word<uint32_t>(initiator_socket, byte_addr, data);
+        note_transport(r, "b_read", byte_addr);
         return data;
     }
 
@@ -133,13 +146,73 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     // -------------------------------------------------------------------------
     // Reporting helpers
     // -------------------------------------------------------------------------
+    // Clear the bank the way hardware does. The scenarios below used to call
+    // dut.reset_all_registers() directly, which passes even for a model whose
+    // cold_rst_ni is wired to nothing; going through the port means every test
+    // that needs a clean bank also re-proves the reset path.
+    void pin_reset()
+    {
+        cold_rst_n.write(false);
+        wait(1, sc_core::SC_NS);
+        cold_rst_n.write(true);
+        wait(1, sc_core::SC_NS);
+    }
+
+    // Captures everything the decoders print for as long as it is in scope.
+    //
+    // The console and status callbacks emit to std::cout directly, so the only
+    // way to assert what they produced is to take the stream buffer. Restoring
+    // in the destructor matters: a scenario that fails early must not leave the
+    // rest of the run writing into a dead stringstream.
+    class cout_capture
+    {
+      public:
+        cout_capture() : m_saved(std::cout.rdbuf(m_buf.rdbuf())) {}
+        // Only restore if release() has not already done so: after release()
+        // m_saved is null, and rdbuf(nullptr) would leave std::cout with no
+        // stream buffer at all, silently discarding the rest of the run.
+        ~cout_capture()
+        {
+            if (m_saved) std::cout.rdbuf(m_saved);
+        }
+        cout_capture(const cout_capture&)            = delete;
+        cout_capture& operator=(const cout_capture&) = delete;
+
+        /// Stop capturing early, so the caller can print its own diagnosis.
+        std::string release()
+        {
+            if (m_saved) {
+                std::cout.rdbuf(m_saved);
+                m_saved = nullptr;
+            }
+            return m_buf.str();
+        }
+
+      private:
+        std::ostringstream m_buf;
+        std::streambuf*    m_saved;
+    };
+
     void report_test_start(const std::string& name)
     {
+        // Transport errors are attributed to the test that caused them.
+        m_transport_failures = 0;
+        m_last_transport_error.clear();
         std::cout << "\n[ RUN   ] " << name << std::endl;
     }
 
     void report_test_pass(const std::string& name)
     {
+        // A scenario cannot pass on the strength of transactions the bank
+        // refused. Gating here makes every existing test transport-sensitive
+        // without restating the condition in any of them.
+        if (m_transport_failures != 0) {
+            std::ostringstream oss;
+            oss << m_transport_failures << " transport error(s); last: "
+                << m_last_transport_error;
+            report_test_fail(name, oss.str());
+            return;
+        }
         m_tests_passed++;
         m_tests_run++;
         std::cout << "[ PASS  ] " << name << std::endl;
@@ -159,7 +232,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-001: Reset values";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
         bool ok = true;
         for (unsigned i = 0u; i < 8u && ok; ++i) {
             uint32_t v = scratch_read(i);
@@ -224,7 +297,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-002: Basic read/write";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
         // Patterns chosen to avoid triggering VP-ack side-effects
         const uint32_t patterns[8] = {
             0x00000001u,  // SCRATCH[0]: non-magic (magic = 0x12345678)
@@ -258,7 +331,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-003: Register independence";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
         // Avoid magic values for idx 0, 4, 6
         const uint32_t vals[8] = {
             0x00000011u, 0x00000022u, 0x00000000u, 0x00000044u,
@@ -291,7 +364,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-004: Reserved bits masked out";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
 
         // Use SCRATCH[3] (no VP-ack callbacks, plain storage)
         scratch_write_upper(3u, 0xFFFFFFFFu);
@@ -316,7 +389,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         const std::string TEST =
             "FUNC-SCRATCH-005: VP ack SCRATCH[0]=0x12345678 -> SCRATCH[1]=0x87654321";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
         scratch_write(0u, 0x12345678u);
         uint32_t v = scratch_read(1u);
         if (v != 0x87654321u) {
@@ -336,7 +409,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         const std::string TEST =
             "FUNC-SCRATCH-006: VP ack SCRATCH[4]=0x815 -> SCRATCH[5]=0x777";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
         scratch_write(4u, 0x00000815u);
         uint32_t v = scratch_read(5u);
         if (v != 0x00000777u) {
@@ -356,7 +429,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         const std::string TEST =
             "FUNC-SCRATCH-007: VP ack SCRATCH[6]=0xA1E50006 -> SCRATCH[7]=0x00100001";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
         scratch_write(6u, 0xA1E50006u);
         uint32_t v = scratch_read(7u);
         if (v != 0x00100001u) {
@@ -375,7 +448,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-008: No spurious acks on non-magic writes";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
         bool ok = true;
 
         // Non-magic to SCRATCH[0] (one off) — SCRATCH[1] must stay 0
@@ -463,7 +536,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-010: Virtual console decoder paths";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
 
         // OP_ASCII: 'A' at [15:8], '\n' at [23:16], NUL at [31:24]
         // bits[3:1]=0 → opcode=0; word = 0x000A4100
@@ -490,9 +563,31 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
             std::ostringstream oss;
             oss << "SCRATCH[2] = 0x" << std::hex << v << " expected 0x00000006";
             report_test_fail(TEST, oss.str());
-        } else {
-            report_test_pass(TEST);
+            return;
         }
+
+        // The point of the console is the text it prints, which the checks
+        // above cannot see at all: a decoder emitting nothing, the wrong
+        // characters, or the same line twice would still leave 0x00000006 in
+        // the register. Replay the same sequence with stdout captured.
+        {
+            pin_reset();
+            cout_capture cap;
+            scratch_write(2u, 0x000A4100u);   // 'A' then '\n' -> emits "A"
+            scratch_write(2u, 0x00002A04u);   // DEC24 42, buffered
+            scratch_write(2u, 0x00000A00u);   // '\n' -> emits "42"
+            scratch_write(2u, 0x00000006u);   // unknown opcode -> emits nothing
+            const std::string out = cap.release();
+
+            if (out != "A\n42\n") {
+                std::ostringstream oss;
+                oss << "console emitted " << std::quoted(out)
+                    << ", expected \"A\\n42\\n\"";
+                report_test_fail(TEST, oss.str());
+                return;
+            }
+        }
+        report_test_pass(TEST);
     }
 
     // =========================================================================
@@ -507,7 +602,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-011: Status decoder type and stage labels";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
 
         // All writes go to SCRATCH[1] and trigger the status decoder callback.
         // These just produce stdout output; the register stores the last value.
@@ -534,9 +629,67 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
             std::ostringstream oss;
             oss << "SCRATCH[1] = 0x" << std::hex << v << " expected 0x07010001";
             report_test_fail(TEST, oss.str());
-        } else {
-            report_test_pass(TEST);
+            return;
         }
+
+        // The labels are the behaviour: every write above leaves the same
+        // register value shape, so only the emitted line distinguishes INFO
+        // from ERROR or BL0 from an unknown stage. Format is
+        // "%-3s %-8s 0x%04x %s" over stage, type, value, name.
+        {
+            pin_reset();
+            cout_capture cap;
+            scratch_write(1u, (0x01u << 24) | (0x01u << 16) | 0x0001u);
+            scratch_write(1u, (0x08u << 24) | (0x01u << 16) | 0x0001u);
+            scratch_write(1u, (0x0fu << 24) | (0x01u << 16) | 0x0001u);
+            scratch_write(1u, (0x01u << 24) | (0x03u << 16) | 0x0001u);
+            scratch_write(1u, (0x07u << 24) | (0x01u << 16) | 0x0001u);
+            const std::string out = cap.release();
+
+            std::vector<std::string> lines;
+            for (std::size_t b = 0; b < out.size();) {
+                const std::size_t e = out.find('\n', b);
+                if (e == std::string::npos) break;
+                lines.push_back(out.substr(b, e - b));
+                b = e + 1;
+            }
+
+            if (lines.size() != 5u) {
+                std::ostringstream oss;
+                oss << "status decoder emitted " << lines.size()
+                    << " line(s), expected 5: " << std::quoted(out);
+                report_test_fail(TEST, oss.str());
+                return;
+            }
+
+            // Each write differs from the previous one only in the type or the
+            // fw_id field, so checking the corresponding label is what proves
+            // the decode rather than the storage.
+            const std::pair<std::size_t, std::string> expect[] = {
+                {0u, "INFO"}, {1u, "WARN"}, {2u, "ERROR"},
+                {3u, "ID3"},                  // unknown fw_id -> synthesised stage
+                {4u, "T0x07"},                // unknown type  -> synthesised label
+            };
+            for (const auto& [idx, token] : expect) {
+                if (lines[idx].find(token) == std::string::npos) {
+                    std::ostringstream oss;
+                    oss << "line " << idx << " " << std::quoted(lines[idx])
+                        << " does not contain " << std::quoted(token);
+                    report_test_fail(TEST, oss.str());
+                    return;
+                }
+            }
+
+            // Value field is fixed-width lower-case hex; a %d or %x slip here
+            // would still contain every label token checked above.
+            if (lines[0].find("0x0001") == std::string::npos) {
+                std::ostringstream oss;
+                oss << "value not formatted as 0x0001 in " << std::quoted(lines[0]);
+                report_test_fail(TEST, oss.str());
+                return;
+            }
+        }
+        report_test_pass(TEST);
     }
 
     // =========================================================================
@@ -550,21 +703,35 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     {
         const std::string TEST = "FUNC-SCRATCH-012: Virtual console HEX16 opcode";
         report_test_start(TEST);
-        dut.reset_all_registers();
+        pin_reset();
 
-        // 0x00ABCD02: opcode=(0x02>>1)&7=1 (HEX16); val=(0xABCD02>>8)=0xABCD
-        scratch_write(2u, 0x00ABCD02u);
-        // Flush the buffered "abcd" with an ASCII newline
-        scratch_write(2u, 0x00000A00u);
+        std::string out;
+        {
+            cout_capture cap;
+            // 0x00ABCD02: opcode=(0x02>>1)&7=1 (HEX16); val=(0xABCD02>>8)=0xABCD
+            scratch_write(2u, 0x00ABCD02u);
+            // Flush the buffered "abcd" with an ASCII newline
+            scratch_write(2u, 0x00000A00u);
+            out = cap.release();
+        }
 
         uint32_t v = scratch_read(2u);
         if (v != 0x00000A00u) {
             std::ostringstream oss;
             oss << "SCRATCH[2] = 0x" << std::hex << v << " expected 0x00000A00";
             report_test_fail(TEST, oss.str());
-        } else {
-            report_test_pass(TEST);
+            return;
         }
+
+        // Lower case and exactly four digits: the hex formatting is the whole
+        // behaviour under test, and the register readback cannot see it.
+        if (out != "abcd\n") {
+            std::ostringstream oss;
+            oss << "HEX16 emitted " << std::quoted(out) << ", expected \"abcd\\n\"";
+            report_test_fail(TEST, oss.str());
+            return;
+        }
+        report_test_pass(TEST);
     }
 
     // =========================================================================
@@ -740,6 +907,57 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     }
 
     // =========================================================================
+    // COLD-004: both decoder enables preset false
+    //
+    // The instance is constructed with sim_out.enable and sep_status.enable
+    // preset to false. Scratch storage must still read back, and neither
+    // decoder may print.
+    // =========================================================================
+    void test_decoders_disabled()
+    {
+        const std::string TEST = "COLD-004: both decoders disabled";
+        report_test_start(TEST);
+
+        if (quiet.sim_out_enable.get_param_value() ||
+            quiet.sep_status_enable.get_param_value()) {
+            report_test_fail(TEST, "CCI presets did not disable both decoders");
+            return;
+        }
+
+        quiet_rst_n.write(false);
+        wait(1, sc_core::SC_NS);
+        quiet_rst_n.write(true);
+        wait(1, sc_core::SC_NS);
+
+        cout_capture cap;
+        // SCRATCH[2] is the virtual-console tap; SCRATCH[1] is the status tap.
+        // Neither value is a VP-ack sentinel.
+        const auto w_con = simtlm::write_word<uint32_t>(quiet_socket, 16, 0x00004102u);
+        const auto w_sts = simtlm::write_word<uint32_t>(quiet_socket, 8, 0x01010001u);
+        uint32_t con = 0;
+        uint32_t sts = 0;
+        const auto r_con = simtlm::read_word<uint32_t>(quiet_socket, 16, con);
+        const auto r_sts = simtlm::read_word<uint32_t>(quiet_socket, 8, sts);
+        const std::string emitted = cap.release();
+
+        if (!w_con.ok() || !w_sts.ok() || !r_con.ok() || !r_sts.ok()) {
+            report_test_fail(TEST, "scratch access failed with decoders disabled");
+            return;
+        }
+        if (con != 0x00004102u || sts != 0x01010001u) {
+            std::ostringstream oss;
+            oss << "readback con=0x" << std::hex << con << " sts=0x" << sts;
+            report_test_fail(TEST, oss.str());
+            return;
+        }
+        if (!emitted.empty()) {
+            report_test_fail(TEST, "decoder emitted: " + emitted);
+            return;
+        }
+        report_test_pass(TEST);
+    }
+
+    // =========================================================================
     // FUNC-SCRATCH-012: StatusDecoder unit paths not reached via SCRATCH[1]
     //
     // Construction of the DUT only parse_tsv()'s the vendored C header, so
@@ -907,6 +1125,68 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     }
 
     // =========================================================================
+    // FUNC-SCRATCH-014: Malformed generic payloads
+    //
+    // SCRATCH[3] is the only slot with no ack or console side effect, so it is
+    // the one slot the matrix can hammer without triggering unrelated model
+    // behaviour. SCRATCH[5] is the witness: it sits at byte 40, clear of the
+    // 24..33 range the widest and unaligned defects can reach.
+    // =========================================================================
+    void test_malformed_payloads()
+    {
+        const std::string name = "FUNC-SCRATCH-014: Malformed generic payloads";
+        report_test_start(name);
+
+        constexpr unsigned SLOT_BYTES   = 8;
+        constexpr unsigned NUM_SLOTS    = 8;
+        constexpr uint32_t WITNESS_VAL  = 0x5EED5EEDu;
+
+        scratch_write(3, 0x11112222u);
+        scratch_write(5, WITNESS_VAL);
+
+        simtlm::target_geometry geo;
+        geo.valid_address  = 3u * SLOT_BYTES;
+        geo.word_bytes     = SLOT_BYTES;
+        geo.aperture_bytes = NUM_SLOTS * SLOT_BYTES;
+
+        for (simtlm::defect d : simtlm::all_defects()) {
+            for (tlm::tlm_command cmd : {tlm::TLM_READ_COMMAND, tlm::TLM_WRITE_COMMAND}) {
+                const auto r = simtlm::probe_defect(initiator_socket, d, geo, cmd);
+                if (r.status == tlm::TLM_INCOMPLETE_RESPONSE) {
+                    std::ostringstream oss;
+                    oss << simtlm::defect_name(d) << " ("
+                        << (cmd == tlm::TLM_READ_COMMAND ? "read" : "write")
+                        << ") left the payload INCOMPLETE";
+                    report_test_fail(name, oss.str());
+                    return;
+                }
+            }
+        }
+
+        const uint32_t witness = scratch_read(5);
+        if (witness != WITNESS_VAL) {
+            std::ostringstream oss;
+            oss << "SCRATCH[5] corrupted: expected 0x" << std::hex << WITNESS_VAL
+                << ", read 0x" << witness;
+            report_test_fail(name, oss.str());
+            return;
+        }
+
+        // The bank must still be usable after being fed bad payloads.
+        scratch_write(3, 0x33334444u);
+        const uint32_t after = scratch_read(3);
+        if (after != 0x33334444u) {
+            std::ostringstream oss;
+            oss << "SCRATCH[3] unusable after malformed traffic: read 0x"
+                << std::hex << after;
+            report_test_fail(name, oss.str());
+            return;
+        }
+
+        report_test_pass(name);
+    }
+
+    // =========================================================================
     // SC_THREAD entry point
     // =========================================================================
     void run_tests()
@@ -930,8 +1210,10 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         test_status_decoder_types();
         test_decoder_isolation();
         test_cci_param_defaults();
+        test_decoders_disabled();
         test_status_decoder_unit();
         test_virt_console_unit();
+        test_malformed_payloads();
 
         std::cout << "\n=== Summary: " << m_tests_passed << "/" << m_tests_run
                   << " passed";
@@ -949,6 +1231,12 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
 int sc_main(int argc, char* argv[])
 {
     regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
+    cci::cci_originator platform_cfg("platform_cfg");
+    auto broker = cci::cci_get_global_broker(platform_cfg);
+    broker.set_preset_cci_value("testbench.quiet.sim_out.enable",
+                                cci::cci_value(false));
+    broker.set_preset_cci_value("testbench.quiet.sep_status.enable",
+                                cci::cci_value(false));
     sep_scratch_cold_testbench testbench("testbench");
     sc_core::sc_start();
 #ifdef __COVERAGE__

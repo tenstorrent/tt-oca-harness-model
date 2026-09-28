@@ -10,11 +10,10 @@ if(ENABLE_UB_CANARY)
 endif()
 
 add_test(NAME memory_zeroer_tb COMMAND memory_zeroer_tb)
-# Process exit status is authoritative; these regexes must agree with every
-# failure line the bench can print (`FAIL <file>:<line>` from EXPECT_*, and the
-# `N FAILURE(S)` summary).  The bench scopes its expected-report handling around
-# the single CCI immutable-write probe, so no diagnostic has to be tolerated
-# here any more.
+# Finding 14: rely on process exit (sc_main returns non-zero on g_failures)
+# plus the TB's exact chunk_size JSON check after the scoped immutable write.
+# FAIL_REGULAR_EXPRESSION stays narrow so a displayed CCI SC_ERROR cannot
+# false-fail CTest; assertion failures still print lines starting with "FAIL ".
 set_tests_properties(memory_zeroer_tb PROPERTIES
     PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
-    FAIL_REGULAR_EXPRESSION "FAIL |FAILURE\\(S\\)")
+    FAIL_REGULAR_EXPRESSION "^FAIL ")

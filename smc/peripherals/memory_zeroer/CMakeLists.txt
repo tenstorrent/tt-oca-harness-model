@@ -26,19 +26,15 @@ endif()
 
 if(ENABLE_ASAN)
     message(STATUS "AddressSanitizer + UndefinedBehaviorSanitizer enabled")
-    # UBSan stays recoverable so a single finding does not abort the run; the
-    # bench keeps going and enforce_asan_clean.sh fails the build from the log.
-    add_compile_options(-fsanitize=address,undefined
+    # -fno-sanitize-recover=all turns a UBSan diagnosis into an abort, so the
+    # runner sees a non-zero exit rather than a message it would have to grep
+    # for and could silently miss.
+    add_compile_options(-fsanitize=address -fsanitize=undefined
+                        -fno-sanitize-recover=all
                         -fsanitize=float-divide-by-zero
+                        -fsanitize=float-cast-overflow
                         -fno-omit-frame-pointer -g)
-    add_link_options   (-fsanitize=address,undefined
-                        -fsanitize=float-divide-by-zero)
-endif()
-
-if(ENABLE_UB_CANARY AND NOT ENABLE_ASAN)
-    message(FATAL_ERROR
-        "ENABLE_UB_CANARY only makes sense with ENABLE_ASAN=ON (it exists to "
-        "prove the UBSan instrumentation actually reports).")
+    add_link_options   (-fsanitize=address -fsanitize=undefined)
 endif()
 
 if(ENABLE_COVERAGE)

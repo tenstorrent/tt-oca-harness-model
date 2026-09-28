@@ -3,12 +3,15 @@
 
 #pragma once
 #include "csrng_basetest.h"
-#include "csml_logger.h"
+#include "reg_logger.h"
+#include "tlm_probe.h"
+
+#include <string>
 
 class csrng_test : public csrng_basetest
 {
 public:
-   CsmlLogger logger;
+   RegLogger logger;
 
    csrng_test(sc_module_name name);
 
@@ -23,8 +26,24 @@ public:
    // These will be utilized when the full CRNG class with ports is implemented
    // =============================================================================
 
+   /// Drive a deliberately malformed payload; the status is returned rather
+   /// than recorded, because a rejection is the expected outcome.
+   simtlm::access_result probe(simtlm::defect d, const simtlm::target_geometry &geo,
+                               tlm::tlm_command cmd);
+
+   /// Transport-failure bookkeeping. A refused register access is recorded here
+   /// and fails the enclosing test via testbench's reporting helpers.
+   unsigned           transport_failures() const { return m_transport_failures; }
+   const std::string &last_transport_error() const { return m_last_transport_error; }
+   void               clear_transport_failures();
+
    ~csrng_test() {}
 
 private:
    void initialize_signals();
+   void note_transport(const simtlm::access_result &r, const char *op,
+                       unsigned int offset);
+
+   unsigned    m_transport_failures = 0;
+   std::string m_last_transport_error;
 };

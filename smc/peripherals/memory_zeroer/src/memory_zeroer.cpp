@@ -165,13 +165,13 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes,
 {
     if (nbytes == 0u) return true;
 
-    // Reject a span that would wrap the 64-bit address space rather than let
-    // `addr + offset` fold back into low memory and zero an unrelated region.
-    if (nbytes - 1u > UINT64_MAX - addr) {
+    // Reject jobs whose span wraps the 64-bit address space. Unsigned
+    // `addr + offset` would otherwise issue a DMA write into low memory.
+    if (addr + nbytes < addr) {
         SIM_LOG_WARN(this,
-                     "zero job rejected: dest=0x"
+                     "DMA zero rejected: dest=0x"
                          << std::hex << addr << " size=0x" << nbytes
-                         << std::dec << " wraps the 64-bit address space");
+                         << std::dec << " wraps past 2^64");
         return false;
     }
 
@@ -186,6 +186,12 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes,
         const std::size_t chunk = static_cast<std::size_t>(
             std::min(remaining, static_cast<uint64_t>(chunk_cap)));
 
+        // Declared before the payload so the extension outlives it. Same
+        // lifetime as dma.cpp copy_chunk: set_extension does not take
+        // ownership, and clear_extension runs before either destructor.
+        smc::smc_axi_extension ext;
+        ext.source_id = smc::SMC_ID;
+
         tlm::tlm_generic_payload trans;
         trans.set_command(tlm::TLM_WRITE_COMMAND);
         trans.set_address(addr + offset);
@@ -194,13 +200,12 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes,
         trans.set_streaming_width(static_cast<unsigned int>(chunk));
         trans.set_byte_enable_ptr(nullptr);
         trans.set_byte_enable_length(0);
+        trans.set_dmi_allowed(false);
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
-        // Canonical SMC sideband on every outbound chunk, final short chunk
-        // included: trusted internal master, privileged, non-secure, data,
-        // non-exclusive.
-        smc::smc_axi_extension ext;
-        ext.source_id = smc::SMC_ID;
+        // source_id_t has no dedicated zeroer ID; SMC_ID is the fabric's
+        // "internal masters" value (smc_axi_extension.h), the same one
+        // dma.cpp stamps. Other fields stay at the extension defaults.
         ext.set_priv(true);
         ext.set_secure(false);
         ext.set_fetch(false);
@@ -234,15 +239,41 @@ bool memory_zeroer::check_access(const tlm::tlm_generic_payload& gp,
     const uint64_t adr = gp.get_address();
     const unsigned len = gp.get_data_length();
 
-    if (gp.get_data_ptr() == nullptr || len == 0) {
-        status = tlm::TLM_GENERIC_ERROR_RESPONSE;
-        return false;
+bool memory_zeroer::reg_write(uint64_t offset, uint64_t data)
+{
+    return regmap_.write(offset, data);
+}
+
+void memory_zeroer::b_transport(tlm::tlm_generic_payload& gp,
+                                sc_core::sc_time& delay)
+{
+    gp.set_dmi_allowed(false);
+
+    const tlm::tlm_command cmd = gp.get_command();
+    const uint64_t         adr = gp.get_address();
+    const unsigned         len = gp.get_data_length();
+    unsigned char* const   ptr = gp.get_data_ptr();
+
+    if (ptr == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
     }
 
     // 64-bit register file — require naturally aligned 8-byte accesses.
-    if (len != 8 || (adr & 0x7u) != 0) {
-        status = tlm::TLM_BURST_ERROR_RESPONSE;
-        return false;
+    // A zero length is a burst error, same as a short or unaligned beat.
+    if (len == 0 || len != 8 || (adr & 0x7u) != 0) {
+        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+
+    // Subtraction form: `adr + len` wraps near UINT64_MAX and would otherwise
+    // accept an address that is outside the aperture.
+    if (adr >= memory_zeroer_cfg::WINDOW_SIZE ||
+        len > memory_zeroer_cfg::WINDOW_SIZE - adr) {
+        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        SIM_LOG_DEBUG(this,
+                      "TLM decode miss at off=0x" << std::hex << adr);
+        return;
     }
 
     if (gp.get_byte_enable_ptr() != nullptr) {

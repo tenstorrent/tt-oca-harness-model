@@ -10,6 +10,8 @@
  * status monitoring.
  */
 
+#pragma once
+
 #include "mailbox_base.h"
 #include "reg_logger.h"
 #include "reg_param.h"

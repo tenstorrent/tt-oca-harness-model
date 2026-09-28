@@ -560,24 +560,56 @@ bool i2c_controller::reg_write(uint64_t off, uint32_t data)
 // TLM-2.0 callbacks
 // ===========================================================================
 
+namespace {
+
+// Shared by both CSR targets below. Everything here has to be rejected before
+// the register dispatch dereferences the data pointer: a payload carrying a
+// null pointer with a legal length and address used to reach the memcpy and
+// segfault. Both ports are full-word 32-bit only, so explicit byte enables are
+// refused rather than partially honoured.
+tlm::tlm_response_status validate_csr_payload(const tlm::tlm_generic_payload& gp,
+                                              uint64_t window_size)
+{
+    const tlm::tlm_command cmd = gp.get_command();
+    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND)
+        return tlm::TLM_COMMAND_ERROR_RESPONSE;
+
+    if (gp.get_data_length() != 4)
+        return tlm::TLM_BURST_ERROR_RESPONSE;
+
+    if (gp.get_data_ptr() == nullptr)
+        return tlm::TLM_GENERIC_ERROR_RESPONSE;
+
+    if (gp.get_byte_enable_ptr() != nullptr)
+        return tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE;
+
+    // streaming_width < length is a legal streaming burst this CSR port does
+    // not implement; 0 is illegal outright.
+    if (gp.get_streaming_width() < gp.get_data_length())
+        return tlm::TLM_BURST_ERROR_RESPONSE;
+
+    const uint64_t adr = gp.get_address();
+    if (adr >= window_size || (adr & 0x3u) != 0)
+        return tlm::TLM_ADDRESS_ERROR_RESPONSE;
+
+    return tlm::TLM_OK_RESPONSE;
+}
+
+} // namespace
+
 void i2c_controller::b_transport(tlm::tlm_generic_payload& gp,
                                  sc_core::sc_time& delay)
 {
+    gp.set_dmi_allowed(false);
+
     const tlm::tlm_command cmd = gp.get_command();
     const uint64_t         adr = gp.get_address();
-    const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
 
-    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
-        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
-        return;
-    }
-    if (len != 4) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
-    if (adr >= i2c_controller_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    const tlm::tlm_response_status vs =
+        validate_csr_payload(gp, i2c_controller_cfg::WINDOW_SIZE);
+    if (vs != tlm::TLM_OK_RESPONSE) {
+        gp.set_response_status(vs);
         return;
     }
 
@@ -604,7 +636,6 @@ void i2c_controller::b_transport(tlm::tlm_generic_payload& gp,
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
     gp.set_response_status(ok ? tlm::TLM_OK_RESPONSE
                               : tlm::TLM_ADDRESS_ERROR_RESPONSE);
-    gp.set_dmi_allowed(false); // RDATA/ACQDATA reads have side effects
 }
 
 unsigned int i2c_controller::transport_dbg(tlm::tlm_generic_payload& gp)
@@ -615,6 +646,8 @@ unsigned int i2c_controller::transport_dbg(tlm::tlm_generic_payload& gp)
     uint8_t* const         buf = gp.get_data_ptr();
 
     if (len != 4 || (adr & 0x3u) != 0 || adr >= i2c_controller_cfg::WINDOW_SIZE)
+        return 0;
+    if (buf == nullptr)
         return 0;
 
     if (cmd == tlm::TLM_READ_COMMAND) {
@@ -782,21 +815,16 @@ void i2c_wrap_ctrl::reset_proc()
 void i2c_wrap_ctrl::b_transport(tlm::tlm_generic_payload& gp,
                                 sc_core::sc_time& delay)
 {
+    gp.set_dmi_allowed(false);
+
     const auto cmd = gp.get_command();
     const uint64_t adr = gp.get_address();
-    const uint32_t len = gp.get_data_length();
     uint8_t* const buf = gp.get_data_ptr();
 
-    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
-        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
-        return;
-    }
-    if (len != 4) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
-    if (adr >= i2c_wrap_ctrl_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    const tlm::tlm_response_status vs =
+        validate_csr_payload(gp, i2c_wrap_ctrl_cfg::WINDOW_SIZE);
+    if (vs != tlm::TLM_OK_RESPONSE) {
+        gp.set_response_status(vs);
         return;
     }
 
@@ -826,6 +854,8 @@ unsigned int i2c_wrap_ctrl::transport_dbg(tlm::tlm_generic_payload& gp)
     const uint64_t adr = gp.get_address();
     const uint32_t len = gp.get_data_length();
     if (len != 4 || adr >= i2c_wrap_ctrl_cfg::WINDOW_SIZE || (adr & 0x3u) != 0)
+        return 0;
+    if (gp.get_data_ptr() == nullptr)
         return 0;
     uint32_t v = 0;
     if (gp.is_read()) {

@@ -600,10 +600,10 @@ void testbench::test_interrupt_eirq_port0() {
   status = mailbox_read(0, mailbox_basetest::ERROR_FLAGS_OFFSET, error_flags);
   if (error_flags != 0x0) {
     std::ostringstream msg;
-    msg << "WARN: ERROR_FLAGS not cleared by first read (got 0x" << std::hex << error_flags
-        << ", expected 0x0). Clear-on-read may not be working";
-    REG_INFO(2, logger) << msg.str();
-    // Don't fail — clear-on-read is tested exhaustively in TC028
+    msg << "FAIL: ERROR_FLAGS not cleared by first read (got 0x" << std::hex << error_flags
+        << ", expected 0x0). Clear-on-read is broken";
+    REG_ERROR(0, logger) << msg.str();
+    test_passed = false;
   } else {
     REG_INFO(2, logger) << "PASS: ERROR_FLAGS=0x0 (clear-on-read confirmed)";
   }
@@ -960,9 +960,10 @@ void testbench::test_error_flag_clear_on_read() {
 
   if ((error_flags_1st & 0x3) != 0x3) {
     std::ostringstream msg;
-    msg << "WARN: Both error flags not set (got 0x" << std::hex << error_flags_1st
-        << ", expected 0x3). Error accumulation may have issues";
-    REG_INFO(2, logger) << msg.str();
+    msg << "FAIL: Both error flags not set (got 0x" << std::hex << error_flags_1st
+        << ", expected 0x3). Error accumulation is broken";
+    REG_ERROR(0, logger) << msg.str();
+    test_passed = false;
   } else {
     REG_INFO(2, logger) << "PASS: ERROR_FLAGS[1:0]=0b11 (both errors recorded)";
   }
@@ -993,8 +994,9 @@ void testbench::test_error_flag_clear_on_read() {
   bool eirq_status = (irqs_value & 0x4) != 0;
 
   if (!eirq_status) {
-    REG_ERROR(0, logger) << "WARN: IRQS[2] cleared (should remain set independently)";
-    // Don't fail test - this verifies independent clearing behavior
+    REG_ERROR(0, logger) << "FAIL: IRQS[2] cleared by the ERROR_FLAGS read; the two "
+                             "must clear independently";
+    test_passed = false;
   } else {
     REG_INFO(2, logger) << "PASS: IRQS[2] remains set (ERROR_FLAGS clear doesn't affect IRQS)";
   }
