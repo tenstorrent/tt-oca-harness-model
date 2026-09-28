@@ -68,6 +68,57 @@
 #include "entropy_src.h"
 #include "reg_access.h"
 #include <openssl/rand.h>
+#include <algorithm>
+entropy_src_ip::entropy_provider_handler::entropy_provider_handler(
+    entropy_src_ip& owner)
+    : owner_(owner)
+{}
+
+bool entropy_src_ip::entropy_provider_handler::get_seed_384(
+    uint8_t seed[48], bool& fips_compliant)
+{
+    fips_compliant = false;
+    if (seed == nullptr || owner_.m_reset_in_progress ||
+        owner_.m_hw_reset_in_progress || !owner_.m_fifo_enabled) {
+        return false;
+    }
+    if (owner_.m_fifo.size() < 12u) {
+        return false;
+    }
+    for (unsigned i = 0; i < 12; ++i) {
+        uint32_t word = 0;
+        if (!owner_.handle_read_FIFO_RDATA(word)) {
+            return false;
+        }
+        seed[i * 4 + 0] = static_cast<uint8_t>(word);
+        seed[i * 4 + 1] = static_cast<uint8_t>(word >> 8);
+        seed[i * 4 + 2] = static_cast<uint8_t>(word >> 16);
+        seed[i * 4 + 3] = static_cast<uint8_t>(word >> 24);
+    }
+    if (owner_.m_health_test_enabled) {
+        const uint32_t limit =
+            static_cast<uint32_t>(owner_.HEALTH_TEST_CTRL.REPETITION_LIMIT);
+        uint32_t run = 1;
+        uint32_t max_run = 1;
+        for (unsigned i = 1; i < 48; ++i) {
+            run = (seed[i] == seed[i - 1]) ? run + 1 : 1;
+            max_run = std::max(max_run, run);
+        }
+        owner_.REPETITION_TEST_COUNT.REPETITION_COUNT = max_run;
+        if (limit != 0 && max_run > limit) {
+            owner_.REPCNT_TOTAL_FAILS =
+                static_cast<uint32_t>(owner_.REPCNT_TOTAL_FAILS) + 1u;
+            owner_.INTR_STATUS =
+                static_cast<uint32_t>(owner_.INTR_STATUS) |
+                entropy_src_ip::INTR_BIT_HEALTH_TEST_FAILED;
+            owner_.m_interrupt_update_event.notify(sc_core::SC_ZERO_TIME);
+            return false;
+        }
+    }
+    fips_compliant = owner_.m_health_test_enabled;
+    return true;
+}
+
 
 // =============================================================================
 // Internal helpers

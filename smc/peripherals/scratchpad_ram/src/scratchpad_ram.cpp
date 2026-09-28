@@ -245,6 +245,11 @@ void scratchpad_ram::b_transport(tlm::tlm_generic_payload& gp,
     const unsigned char* const be = gp.get_byte_enable_ptr();
     const unsigned      be_len = gp.get_byte_enable_length();
 
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+
     // ---- Width / alignment / streaming-width validation -------------------
     if (!is_supported_width(length)) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
@@ -327,6 +332,7 @@ unsigned int scratchpad_ram::transport_dbg(tlm::tlm_generic_payload& gp)
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
 
+    if (buf == nullptr)              return 0;
     if (!is_supported_width(length)) return 0;
     if (!is_aligned(addr, length))   return 0;
     if (addr >= cfg_.size_bytes || addr + length > cfg_.size_bytes) return 0;

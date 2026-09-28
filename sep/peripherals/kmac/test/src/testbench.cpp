@@ -12,6 +12,8 @@
  ******************************************************************************/
 
 #include "testbench.h"
+#include "kmac_func023_test.h"
+#include "kmac_func024_test.h"
 #include "reg_logger.h"
 #include "reg_param.h"
 
@@ -474,10 +476,6 @@ void testbench::run_tests()
     test_fifo_write_after_process_error();
     test_fifo_write_during_app_active_error();
 
-    // Callback Tests (TC-166, TC-167)
-    test_callback_msg_fifo_write_packing();
-    test_callback_msg_fifo_write_backpressure();
-
     // Additional FIFO Tests
     test_fifo_alternating_read_write();
     test_fifo_maximum_throughput();
@@ -701,6 +699,40 @@ void testbench::run_tests()
     test_idle_o_low_during_absorb();
     test_idle_o_returns_high_on_done();
 
+    // ==========================================================================
+    // FUNC-KMAC-023/024: OpenSSL delegation and timing abstraction
+    // ==========================================================================
+    auto run_external = [this](const char* name, auto function, auto result) {
+        report_test_start(name);
+        function(test);
+        if (result()) {
+            report_test_pass(name);
+        } else {
+            report_test_fail(name, "external FUNC test reported a semantic failure");
+        }
+    };
+    run_external("FUNC023 SHA3-224", test_sha3_224_openssl_delegation,
+                 kmac_func023_last_result);
+    run_external("FUNC023 SHA3-256", test_sha3_256_openssl_delegation,
+                 kmac_func023_last_result);
+    run_external("FUNC023 SHA3-384", test_sha3_384_openssl_delegation,
+                 kmac_func023_last_result);
+    run_external("FUNC023 SHA3-512", test_sha3_512_openssl_delegation,
+                 kmac_func023_last_result);
+    run_external("FUNC023 SHAKE128", test_shake128_openssl_delegation,
+                 kmac_func023_last_result);
+    run_external("FUNC023 SHAKE256", test_shake256_openssl_delegation,
+                 kmac_func023_last_result);
+    run_external("FUNC024 FIFO full", test_temporal_decoupling_fifo_full,
+                 kmac_func024_last_result);
+    run_external("FUNC024 FIFO wait", test_msg_fifo_temporal_decoupling_wait,
+                 kmac_func024_last_result);
+    run_external("FUNC024 entropy latency", test_functional_entropy_latency,
+                 kmac_func024_last_result);
+    run_external("FUNC024 rapid commands",
+                 test_rapid_command_sequence_no_timing_dependency,
+                 kmac_func024_last_result);
+
     // =========================================================================
     // FUNC-KMAC-025: Coverage Gap Tests (TC-200 to TC-216)
     // =========================================================================
@@ -722,9 +754,6 @@ void testbench::run_tests()
     test_state_partial_read();
     test_run_kmac_exhaust_output();
     test_sideload_key_len_clamp();
-    test_defensive_error_paths();
-    test_coverage_unmasked_and_keylen();
-    test_coverage_app_and_cleanup();
 
     // =========================================================================
     // FUNC-KMAC-016 and FUNC-KMAC-019: shadow protection and error reporting

@@ -17,6 +17,7 @@ testbench::testbench(sc_module_name name)
     // Instantiate DUT and test module
     // Using csrng_model which includes full FSM, callbacks, and command processing
     m_crng = std::make_unique<csrng_model>("csrng_dut");
+    m_crng->entropy_port.bind(m_entropy_provider);
 
     // Sync testbench logger verbosity with DUT (CCI ini may override build default)
     logger.setMaxVerbosity(m_crng->verbosity.get_param_value());
@@ -2112,6 +2113,51 @@ void testbench::run_tests()
     wait(20, SC_NS);
     test_coverage_reseed_interval_locked_and_fsm_states();
     test_malformed_payloads();
+    wait(20, SC_NS);
+
+    report_test_start("HW app/genbits production interfaces");
+    apply_reset();
+    uint32_t ack = 0;
+    const uint32_t instantiate = 0x1;
+    m_crng->hw_app_export[0]->send_command(&instantiate, 1, ack);
+    bool interface_ok = (ack != 0);
+    m_test->register_write_32(csrng_basetest::CTRL_OFFSET, 0x9996);
+    wait(20, SC_NS);
+    m_crng->hw_app_export[0]->send_command(nullptr, 0, ack);
+    interface_ok = interface_ok && (ack != 0);
+    const uint32_t bad_clen = 0x11;
+    m_crng->hw_app_export[0]->send_command(&bad_clen, 1, ack);
+    interface_ok = interface_ok && (ack != 0);
+    const uint32_t update_words[2] = {0x14, 0xA5A5A5A5};
+    m_crng->hw_app_export[0]->send_command(update_words, 2, ack);
+    interface_ok = interface_ok && (ack != 0) &&
+                   (m_crng->hw_app_export[0]->get_ack_status() == ack);
+    m_crng->hw_app_export[0]->send_command(&instantiate, 1, ack);
+    interface_ok = interface_ok && (ack == 0) &&
+                   m_crng->hw_app_export[0]->is_ready();
+    const uint32_t generate = (2u << 12) | 0x3u;
+    m_crng->hw_app_export[0]->send_command(&generate, 1, ack);
+    interface_ok = interface_ok && (ack == 0) && m_crng->genbits_export->has_data();
+    uint32_t intr_state = 0;
+    m_test->register_read_32(csrng_basetest::INTR_STATE_OFFSET, intr_state);
+    interface_ok = interface_ok && ((intr_state & 0x1u) == 0);
+    uint32_t words[4] = {};
+    bool fips = false;
+    m_crng->genbits_export->receive_genbits(words, fips);
+    interface_ok = interface_ok &&
+                   ((words[0] | words[1] | words[2] | words[3]) != 0);
+    m_crng->genbits_export->receive_genbits(words, fips);
+    m_crng->genbits_export->receive_genbits(nullptr, fips);
+    words[0] = 0xFFFFFFFFu;
+    m_crng->genbits_export->receive_genbits(words, fips);
+    interface_ok = interface_ok && (words[0] == 0) && !fips;
+    m_crng->genbits_export->provide_genbits(words, false);
+    if (interface_ok) {
+        report_test_pass("HW app/genbits production interfaces");
+    } else {
+        report_test_fail("HW app/genbits production interfaces",
+                         "command acknowledgment or generated block was invalid");
+    }
     wait(20, SC_NS);
 
     // Print final test summary

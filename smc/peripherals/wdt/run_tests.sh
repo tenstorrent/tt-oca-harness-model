@@ -188,8 +188,13 @@ fi
 # Locate test binary
 # ---------------------------------------------------------------------------
 TB_BIN="${BUILD_DIR}/test/wdt_tb"
+TICK_BIN="${BUILD_DIR}/test/wdt_tick_tb"
 if [[ ! -x "${TB_BIN}" ]]; then
     echo "ERROR: test binary not found at ${TB_BIN}" >&2
+    exit 1
+fi
+if [[ ! -x "${TICK_BIN}" ]]; then
+    echo "ERROR: test binary not found at ${TICK_BIN}" >&2
     exit 1
 fi
 
@@ -232,7 +237,10 @@ if (( USE_ASAN )); then
     else
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
-    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
+    TB_EXIT=0
+    TICK_EXIT=0
+    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}" || TB_EXIT=$?
+    ASAN_OPTIONS="${_ASAN_OPTS}" "${TICK_BIN}" || TICK_EXIT=$?
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -263,7 +271,11 @@ if (( USE_ASAN )); then
         exit 1
     fi
     "${_asan_gate}" "${BUILD_DIR}" || exit 1
-    exit "${TB_EXIT}"
+    if (( TB_EXIT != 0 || TICK_EXIT != 0 )); then
+        echo "ERROR: ASan test binary failed (main=${TB_EXIT}, tick=${TICK_EXIT})" >&2
+        exit 1
+    fi
+    exit 0
 
 elif (( USE_COVERAGE )); then
     # Read the coverage tool written by CMake at configure time.
@@ -418,4 +430,6 @@ elif (( USE_CTEST )); then
 else
     echo ">> Running ${TB_BIN}"
     "${TB_BIN}"
+    echo ">> Running ${TICK_BIN}"
+    "${TICK_BIN}"
 fi

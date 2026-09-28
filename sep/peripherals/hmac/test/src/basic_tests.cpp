@@ -391,6 +391,7 @@ void testbench::test_reset_functionality()
     } else {
         REG_INFO(1, logger) << "FAIL: INTR_ENABLE = 0x" << std::hex << read_val
                   << " (expected 0x" << hmac_basetest::INTR_ENABLE_RESET << ")" << std::dec << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 
@@ -403,6 +404,7 @@ void testbench::test_reset_functionality()
     } else {
         REG_INFO(1, logger) << "FAIL: CFG = 0x" << std::hex << read_val
                   << " (expected 0x" << hmac_basetest::CFG_RESET << ")" << std::dec << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 
@@ -415,6 +417,7 @@ void testbench::test_reset_functionality()
     } else {
         REG_INFO(1, logger) << "FAIL: DIGEST[0] = 0x" << std::hex << read_val
                   << " (expected 0x" << hmac_basetest::DIGEST_RESET << ")" << std::dec << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 
@@ -427,6 +430,7 @@ void testbench::test_reset_functionality()
     } else {
         REG_INFO(1, logger) << "FAIL: MSG_LENGTH_LOWER = 0x" << std::hex << read_val
                   << " (expected 0x" << hmac_basetest::MSG_LENGTH_LOWER_RESET << ")" << std::dec << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 
@@ -439,6 +443,7 @@ void testbench::test_reset_functionality()
     } else {
         REG_INFO(1, logger) << "FAIL: STATUS = 0x" << std::hex << read_val
                   << " (expected 0x" << hmac_basetest::STATUS_RESET << ")" << std::dec << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 
@@ -518,6 +523,7 @@ void testbench::test_reset_mechanisms()
         REG_INFO(1, logger) << "PASS: intr_hmac_done deasserted after reset" << std::endl;
     } else {
         REG_INFO(1, logger) << "FAIL: intr_hmac_done not deasserted" << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 
@@ -526,6 +532,7 @@ void testbench::test_reset_mechanisms()
         REG_INFO(1, logger) << "PASS: intr_fifo_empty deasserted after reset" << std::endl;
     } else {
         REG_INFO(1, logger) << "FAIL: intr_fifo_empty not deasserted" << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 
@@ -534,6 +541,7 @@ void testbench::test_reset_mechanisms()
         REG_INFO(1, logger) << "PASS: intr_hmac_err deasserted after reset" << std::endl;
     } else {
         REG_INFO(1, logger) << "FAIL: intr_hmac_err not deasserted" << std::endl;
+        m_tests_failed++;
         sc_stop();
     }
 

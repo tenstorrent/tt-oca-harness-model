@@ -704,6 +704,10 @@ void i3c_controller::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time&
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
 
+    if (buf == nullptr) {
+        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
     if (length != 4 || (addr & 0x3u) != 0 || gp.get_streaming_width() != length) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
         return;
@@ -722,6 +726,12 @@ void i3c_controller::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time&
 
     const unsigned inst = unsigned(addr / i3c_controller_cfg::INSTANCE_SPACING);
     const uint64_t loff = addr % i3c_controller_cfg::INSTANCE_SPACING;
+    const auto* axi = gp.get_extension<smc::smc_axi_extension>();
+    if (axi != nullptr) {
+        SIM_LOG_TRACE(this, "AXI sideband source=0x" << std::hex << axi->source_id
+                            << " id=0x" << axi->axi_id
+                            << " prot=0x" << unsigned(axi->prot));
+    }
 
     bool ok = true;
     if (gp.is_read()) {
@@ -765,7 +775,7 @@ unsigned int i3c_controller::transport_dbg(tlm::tlm_generic_payload& gp)
 
     const uint64_t aperture = uint64_t(cfg_.num_instances) *
                               i3c_controller_cfg::INSTANCE_SPACING;
-    if (length != 4 || (addr & 0x3u) != 0 || addr >= aperture) return 0;
+    if (buf == nullptr || length != 4 || (addr & 0x3u) != 0 || addr >= aperture) return 0;
 
     const unsigned inst = unsigned(addr / i3c_controller_cfg::INSTANCE_SPACING);
     const uint64_t loff = addr % i3c_controller_cfg::INSTANCE_SPACING;
