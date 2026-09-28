@@ -458,7 +458,8 @@ unsigned int wdt::transport_dbg(tlm::tlm_generic_payload& gp)
         return 0;
     }
     // Same window and alignment contract as b_transport: a debug access must
-    // not read past the last register just because only the base was checked.
+    // not read past the last register just because only the base was checked,
+    // and a misaligned beat must not be serviced.
     if ((addr % len) != 0) {
         return 0;
     }

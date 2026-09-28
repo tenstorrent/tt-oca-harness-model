@@ -2,6 +2,9 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "testbench.h"
 #include "reg_param.h"
+#include "tlm_probe.h"
+
+#include <iostream>
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -24,6 +27,7 @@ extern int key_manager_func011_test(key_manager_test*, key_manager_model*, testb
 extern int key_manager_func012_test(key_manager_test*, key_manager_model*, testbench*);
 extern int key_manager_func013_test(key_manager_test*, key_manager_model*, testbench*);
 extern int key_manager_func014_test(key_manager_test*, key_manager_model*, testbench*);
+extern int key_manager_crc_anchor_test();
 
 testbench::testbench(sc_module_name name)
   : sc_module(name),
@@ -67,6 +71,57 @@ testbench::testbench(sc_module_name name)
 }
 
 
+namespace {
+
+// Malformed generic payloads against the key manager's mailbox CSR window.
+//
+// MB_IRQEN (0x14) is the target: it is plain read/write, unlike WDATA/WSEP/CTRL
+// which push data or commands into the firmware handler. What each defect
+// should return is decode policy, so this only asserts the invariant part —
+// every defect gets a decided response, nothing crashes, and the window is
+// still usable afterwards.
+int run_malformed_payload_test(key_manager_test* test)
+{
+    constexpr unsigned APERTURE  = 0x1C;  // seven 32-bit mailbox registers
+    constexpr unsigned OFF_IRQEN = key_manager_basetest::MB_IRQEN_OFFSET;
+
+    int failures = 0;
+
+    simtlm::target_geometry geo;
+    geo.valid_address  = OFF_IRQEN;
+    geo.word_bytes     = 4;
+    geo.aperture_bytes = APERTURE;
+
+    for (simtlm::defect d : simtlm::all_defects()) {
+        for (tlm::tlm_command cmd : {tlm::TLM_READ_COMMAND, tlm::TLM_WRITE_COMMAND}) {
+            const auto r = test->probe(d, geo, cmd);
+            if (r.status == tlm::TLM_INCOMPLETE_RESPONSE) {
+                std::cout << "[FAIL] MALFORMED: " << simtlm::defect_name(d) << " ("
+                          << (cmd == tlm::TLM_READ_COMMAND ? "read" : "write")
+                          << ") left the payload INCOMPLETE" << std::endl;
+                ++failures;
+            }
+        }
+    }
+
+    // The mailbox window must still work after being fed bad payloads.
+    test->clear_transport_failures();
+    test->register_write_32(OFF_IRQEN, 0x3u);
+    uint32_t back = 0xFFFFFFFFu;
+    test->register_read_32(OFF_IRQEN, back);
+    if (test->transport_failures() != 0) {
+        std::cout << "[FAIL] MALFORMED: mailbox window unusable afterwards: "
+                  << test->last_transport_error() << std::endl;
+        ++failures;
+    }
+
+    if (failures == 0)
+        std::cout << "[PASS] MALFORMED: all generic-payload defects handled" << std::endl;
+    return failures;
+}
+
+}  // namespace
+
 void testbench::run_tests()
 {
     int pass = 0, fail = 0;
@@ -79,21 +134,41 @@ void testbench::run_tests()
 
     // Apply reset before first test; each subsequent FUNC test resets itself.
     test->trigger_reset();
+    test->clear_transport_failures();
 
-    (key_manager_func001_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func002_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func003_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func004_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func005_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func006_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func007_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func008_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func009_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func010_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func011_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func012_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func013_test(test, dut, this) == 0) ? pass++ : fail++;
-    (key_manager_func014_test(test, dut, this) == 0) ? pass++ : fail++;
+    // A FUNC test only counts as a pass if it both returned 0 and completed
+    // without a refused register access. Gating here means each existing test
+    // becomes transport-sensitive without being edited.
+    auto graded = [&](int rc, const char* which) {
+        const unsigned tf = test->transport_failures();
+        if (tf != 0) {
+            REG_WARN(1, logger) << which << ": " << tf
+                                 << " transport error(s); last: "
+                                 << test->last_transport_error();
+            test->clear_transport_failures();
+            return false;
+        }
+        return rc == 0;
+    };
+
+    graded(key_manager_crc_anchor_test(), "CRC-ANCHOR") ? pass++ : fail++;
+    graded(key_manager_func001_test(test, dut, this), "FUNC001") ? pass++ : fail++;
+    graded(key_manager_func002_test(test, dut, this), "FUNC002") ? pass++ : fail++;
+    graded(key_manager_func003_test(test, dut, this), "FUNC003") ? pass++ : fail++;
+    graded(key_manager_func004_test(test, dut, this), "FUNC004") ? pass++ : fail++;
+    graded(key_manager_func005_test(test, dut, this), "FUNC005") ? pass++ : fail++;
+    graded(key_manager_func006_test(test, dut, this), "FUNC006") ? pass++ : fail++;
+    graded(key_manager_func007_test(test, dut, this), "FUNC007") ? pass++ : fail++;
+    graded(key_manager_func008_test(test, dut, this), "FUNC008") ? pass++ : fail++;
+    graded(key_manager_func009_test(test, dut, this), "FUNC009") ? pass++ : fail++;
+    graded(key_manager_func010_test(test, dut, this), "FUNC010") ? pass++ : fail++;
+    graded(key_manager_func011_test(test, dut, this), "FUNC011") ? pass++ : fail++;
+    graded(key_manager_func012_test(test, dut, this), "FUNC012") ? pass++ : fail++;
+    graded(key_manager_func013_test(test, dut, this), "FUNC013") ? pass++ : fail++;
+    graded(key_manager_func014_test(test, dut, this), "FUNC014") ? pass++ : fail++;
+
+    // Malformed generic payloads on the mailbox CSR window.
+    graded(run_malformed_payload_test(test), "MALFORMED") ? pass++ : fail++;
 
     // Summary
     REG_INFO(1, logger) << "========================================";

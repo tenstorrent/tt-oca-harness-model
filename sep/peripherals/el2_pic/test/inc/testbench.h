@@ -38,6 +38,9 @@ public:
     tlm_utils::simple_initiator_socket<testbench> unbound_isock;
     uint32_t unbound_read_32(unsigned byte_offset);
     void     unbound_write_32(unsigned byte_offset, uint32_t value);
+    void     note_unbound_transport(const simtlm::access_result& r, const char* op,
+                                    unsigned byte_offset);
+    unsigned m_unbound_transport_failures = 0;
 
     // Test counters
     int m_tests_run    = 0;
@@ -149,7 +152,52 @@ public:
     void test_source0_and_null_hart();
 
     // -------------------------------------------------------------------------
-    // FUNC-EL2PIC-015: Threshold CSRs, reserved source 0, null-hart arbiter
+    // FUNC-EL2PIC-018: Malformed generic payloads
+    // -------------------------------------------------------------------------
+    void test_malformed_payloads();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-019: Threshold CSRs, reserved source 0, null-hart arbiter
     // -------------------------------------------------------------------------
     void test_threshold_and_reserved_source();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-020 (PIC-F-01): Equal-priority tie break
+    // -------------------------------------------------------------------------
+    void test_equal_priority_tie_break();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-021 (PIC-F-02): Winner fallback without an EIP glitch
+    // -------------------------------------------------------------------------
+    void test_winner_fallback_no_eip_glitch();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-022 (PIC-F-03): Active-low edge gateway
+    // -------------------------------------------------------------------------
+    void test_edge_gateway_active_low();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-023 (PIC-F-04): Polarity/type reconfigured while asserted
+    // -------------------------------------------------------------------------
+    void test_gateway_reconfig_while_asserted();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-024: Threshold boundaries in both priority-order modes
+    // -------------------------------------------------------------------------
+    void test_threshold_boundaries_both_modes();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-025: MEIP writes ignored on every word; reserved source 0
+    // -------------------------------------------------------------------------
+    void test_meip_write_ignored_and_reserved_source0();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-026 (PIC-F-05): Reset with several edge latches pending
+    // -------------------------------------------------------------------------
+    void test_reset_with_pending_edge_latches();
+
+    // -------------------------------------------------------------------------
+    // FUNC-EL2PIC-027 (PIC-T-05): transport_dbg and DMI policy
+    // -------------------------------------------------------------------------
+    void test_debug_transport_and_dmi();
 };

@@ -223,6 +223,22 @@ void testbench::test_reset_fifo_interrupt_state() {
   ss << "After reset: irq_o[0]=" << irq0_state << ", irq_o[1]=" << irq1_state;
   REG_INFO(2, logger) << ss.str();
 
+  // The physical outputs, not just IRQP: reset notifies the irq driver, so the
+  // pins themselves must sit at the inactive level (false for active-high).
+  if (irq0_state) {
+    REG_ERROR(0, logger) << "irq_o[0] still asserted after reset (expected inactive/low)";
+    test_passed = false;
+  } else {
+    REG_INFO(2, logger) << "irq_o[0] deasserted after reset (PASS)";
+  }
+
+  if (irq1_state) {
+    REG_ERROR(0, logger) << "irq_o[1] still asserted after reset (expected inactive/low)";
+    test_passed = false;
+  } else {
+    REG_INFO(2, logger) << "irq_o[1] deasserted after reset (PASS)";
+  }
+
   // Verify IRQP=0 which should result in inactive interrupt outputs
   test_port0->register_read_64(mailbox_basetest::IRQP_OFFSET, read_value);
   if (read_value != 0x0) {

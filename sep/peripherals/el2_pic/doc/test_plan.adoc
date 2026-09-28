@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
+
+[[el2-pic-test-plan]]
+===== Test Plan
+
+====== Standalone bench
+
+`testbench` (`test/inc/testbench.h`) is a TLM initiator into the PIC
+MMIO, a `mock_hart` that records claim-id and EIP, plus `clk_i` /
+`rst_ni` and a full `irq_in` vector. A second DUT is left with most
+`irq_in` unbound to prove the tie-low path.
+
+Success: every `report_test_pass` in the suite holds; `--asan`
+produces no `asan.log.*`; line coverage on the touched model sources
+meets the repository ≥ 95% gate.
+
+How to run (from `sep/peripherals/el2_pic`):
+
+[source,bash]
+----
+./run_tests.sh              # Release build + run
+./run_tests.sh --debug
+./run_tests.sh --asan       # ASan + UBSan
+./run_tests.sh --coverage   # isolated build/coverage; do not combine with --asan
+./run_tests.sh --ctest
+./run_tests.sh --clean
+
+# All SEP peripherals, this IP included:
+cd sep/peripherals
+./run_all_peripherals.sh
+./run_all_peripherals.sh --clean el2_pic
+----
+
+`run_tests.sh` loads `SYSTEMC_HOME` / `CCI_HOME` through
+`sep/peripherals/setup_build_env.sh`. Set those in `vp/configure_vp.sh`
+or export them first.
+
+====== Standalone cases
+
+Source: `test/src/testbench.cpp`. Names are the `FUNC-EL2PIC-*`
+titles. IDs 015 and higher were implemented without being listed here;
+they are documented below, and the two different scenarios that both
+carried the ID 015 are now 015 and 019.
+
+[cols="8%,36%,40%,16%",options="header"]
+|===
+|ID |Name |What the model test proves |Type
+|001 |Register reset values |MEIPL / MEIE / MEIGW* / MPICCFG / MEIP |Positive
+|002 |RW masks |RO MEIP; WO MEIGWCLR; field masks |Positive
+|003 |Level gateway active-high |Pending tracks the pin |Positive
+|004 |Level gateway active-low |Polarity invert |Positive
+|005 |Edge gateway + MEIGWCLR |Latch until clear |Positive
+|006 |Priority arbitration |Highest enabled pending wins |Positive
+|007 |Enable gate |Disabled source never wins |Positive
+|008 |priord inversion |MPICCFG.priord flips order |Positive
+|009 |Reset clears state |EIP deasserted; pending gone |Positive
+|010 |Source 255 |Top ID is a full gateway |Positive
+|011 |meip word mapping |All eight pending words |Positive
+|012 |Unbound sources tied low |Open `irq_in` does not fire |Positive
+|013 |Edge clear while asserted |Clear with live level re-pends |Positive
+|014 |priord=1 raw 0 is highest |Invert makes 0 beat 15 |Positive
+|015 |Threshold blocks and notify |meipt / meicurpl drop and re-raise EIP |Positive
+|016 |Winner change while asserted |Claim retargets under a live EIP |Positive
+|017 |Source 0 and null hart |Reserved source inert; no hart is safe |Negative
+|018 |Malformed generic payloads |Every `simtlm` defect gets a decided response |Negative
+|019 |Threshold / reserved source / null hart |Same-winner reeval; null-hart arbiter |Positive
+|020 |Equal-priority tie break |Lowest source ID wins in either order |Positive
+|021 |Winner fallback |Claim falls back with no EIP glitch |Positive
+|022 |Edge gateway active-low |Latch follows the polarity-adjusted level |Positive
+|023 |Gateway reconfig while asserted |MEIGWCTRL recomputes pending immediately |Positive
+|024 |Threshold boundaries |0 / W-1 / W / W+1 / 15, both priord modes, both CSRs |Positive
+|025 |MEIP writes / reserved source 0 |Writes ignored on all 8 words; source 0 masked |Negative
+|026 |Reset with pending edge latches |Latches and claim reset deterministically |Positive
+|027 |Debug transport and DMI |`transport_dbg` policy; DMI refused |Negative
+|===
+
+====== Known gaps
+
+`PIC-I-01` of the audit plan — the threshold sweep driven through the
+production VeeR post-CSR callback rather than through
+`notify_threshold_changed()` — is not covered. The test model compiles
+the real `src/el2_pic.cpp` against `test/inc/VeeR-ISSTlm.hpp`
+(`CMakeLists.txt:144-193`), so no real ISS CSR write path is linked in
+and there is nothing to drive. Closing it needs a fixture that links the
+production wrapper, not another standalone case. 024 covers the PIC-side
+arithmetic the callback would exercise.
+
+`transport_dbg` in `common/include/reg_file.h` shares
+`read_registers()` / `write_registers()` with `b_transport`, so a debug
+*write* runs post-write side effects. 027 asserts that as the current
+policy rather than the stricter side-effect-free reading of TLM-2.0; it
+is shared-infrastructure behaviour, not PIC behaviour.
+
+====== Platform firmware tests
+
+The PIC is inside the hart. Any `sep-vp` test that takes an external
+IRQ exercises it. Build the VP first (`make sep-vp` from the repo
+root after `vp/configure_vp.sh`).
+
+[source,bash]
+----
+cd sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep
+./run_test.sh sep_mailbox_plic_test
+./run_test.sh otbn_plic_test
+./run_test.sh spi_ot_interrupt_test
+./run_all_tests.sh            # full firmware suite
+----

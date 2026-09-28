@@ -1,8 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "sep_filter_ctrl_test.h"
+#include "tlm_probe.h"
 #include <cassert>
 #include <tlm.h>
 #include <iostream>
 #include <iomanip>
+#include <sstream>
 
 using namespace tlm;
 using namespace sc_core;
@@ -13,66 +17,55 @@ static constexpr uint32_t CSR_STRIDE = 0x20;
 // Raw register access
 // =============================================================================
 
+void sep_filter_ctrl_test::note_transport(const simtlm::access_result& r,
+                                          const char* op, uint64_t offset)
+{
+    if (r.ok()) return;
+
+    ++m_transport_failures;
+
+    std::ostringstream oss;
+    oss << op << " at offset 0x" << std::hex << offset
+        << " returned " << simtlm::response_name(r.status);
+    m_last_transport_error = oss.str();
+    std::cout << "  [TRANSPORT] " << m_last_transport_error << std::endl;
+}
+
+void sep_filter_ctrl_test::clear_transport_failures()
+{
+    m_transport_failures = 0;
+    m_last_transport_error.clear();
+}
+
+simtlm::access_result sep_filter_ctrl_test::probe(simtlm::defect d,
+                                                  const simtlm::target_geometry& geo,
+                                                  tlm::tlm_command cmd)
+{
+    return simtlm::probe_defect(initiator_socket, d, geo, cmd);
+}
+
 void sep_filter_ctrl_test::register_read_64(unsigned int offset, uint64_t& read_value)
 {
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-    trans.set_command(tlm::TLM_READ_COMMAND);
-    trans.set_address(offset);
-    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&read_value));
-    trans.set_data_length(8);
-    trans.set_streaming_width(8);
-    trans.set_byte_enable_ptr(0);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-    initiator_socket->b_transport(trans, delay);
-    if (trans.is_response_error()) read_value = 0;
+    const auto r = simtlm::read_word<uint64_t>(initiator_socket, offset, read_value);
+    note_transport(r, "register_read_64", offset);
 }
 
 void sep_filter_ctrl_test::register_write_64(unsigned int offset, uint64_t write_value)
 {
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-    trans.set_command(tlm::TLM_WRITE_COMMAND);
-    trans.set_address(offset);
-    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&write_value));
-    trans.set_data_length(8);
-    trans.set_streaming_width(8);
-    trans.set_byte_enable_ptr(0);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-    initiator_socket->b_transport(trans, delay);
+    const auto r = simtlm::write_word<uint64_t>(initiator_socket, offset, write_value);
+    note_transport(r, "register_write_64", offset);
 }
 
 void sep_filter_ctrl_test::register_read_8(unsigned int offset, uint8_t& read_value)
 {
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-    trans.set_command(tlm::TLM_READ_COMMAND);
-    trans.set_address(offset);
-    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&read_value));
-    trans.set_data_length(1);
-    trans.set_streaming_width(1);
-    trans.set_byte_enable_ptr(0);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-    initiator_socket->b_transport(trans, delay);
-    if (trans.is_response_error()) read_value = 0;
+    const auto r = simtlm::read_word<uint8_t>(initiator_socket, offset, read_value);
+    note_transport(r, "register_read_8", offset);
 }
 
 void sep_filter_ctrl_test::register_write_8(unsigned int offset, uint8_t write_value)
 {
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-    trans.set_command(tlm::TLM_WRITE_COMMAND);
-    trans.set_address(offset);
-    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&write_value));
-    trans.set_data_length(1);
-    trans.set_streaming_width(1);
-    trans.set_byte_enable_ptr(0);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-    initiator_socket->b_transport(trans, delay);
+    const auto r = simtlm::write_word<uint8_t>(initiator_socket, offset, write_value);
+    note_transport(r, "register_write_8", offset);
 }
 
 // =============================================================================
@@ -81,57 +74,29 @@ void sep_filter_ctrl_test::register_write_8(unsigned int offset, uint8_t write_v
 
 void sep_filter_ctrl_test::csr_write_64(uint32_t instance, uint32_t reg_offset, uint64_t value)
 {
-    uint64_t addr = (instance * CSR_STRIDE) + reg_offset;
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-    trans.set_command(tlm::TLM_WRITE_COMMAND);
-    trans.set_address(addr);
-    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&value));
-    trans.set_data_length(8);
-    trans.set_streaming_width(8);
-    trans.set_byte_enable_ptr(0);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-    initiator_socket->b_transport(trans, delay);
+    const uint64_t addr = (instance * CSR_STRIDE) + reg_offset;
+    const auto r = simtlm::write_word<uint64_t>(initiator_socket, addr, value);
+    note_transport(r, "csr_write_64", addr);
 }
 
 uint64_t sep_filter_ctrl_test::csr_read_64(uint32_t instance, uint32_t reg_offset)
 {
-    uint64_t addr = (instance * CSR_STRIDE) + reg_offset;
+    const uint64_t addr = (instance * CSR_STRIDE) + reg_offset;
     uint64_t read_value = 0;
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-    trans.set_command(tlm::TLM_READ_COMMAND);
-    trans.set_address(addr);
-    trans.set_data_ptr(reinterpret_cast<unsigned char*>(&read_value));
-    trans.set_data_length(8);
-    trans.set_streaming_width(8);
-    trans.set_byte_enable_ptr(0);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-    initiator_socket->b_transport(trans, delay);
-    if (trans.is_response_error()) return 0;
+    const auto r = simtlm::read_word<uint64_t>(initiator_socket, addr, read_value);
+    note_transport(r, "csr_read_64", addr);
     return read_value;
 }
 
 void sep_filter_ctrl_test::csr_write_32_pair(uint32_t instance, uint32_t reg_offset, uint64_t value)
 {
     const uint32_t addr = (instance * CSR_STRIDE) + reg_offset;
-    uint32_t lo = static_cast<uint32_t>(value);
-    uint32_t hi = static_cast<uint32_t>(value >> 32);
+    const uint32_t lo = static_cast<uint32_t>(value);
+    const uint32_t hi = static_cast<uint32_t>(value >> 32);
 
     auto beat32 = [this](uint32_t byte_addr, uint32_t word) {
-        tlm::tlm_generic_payload trans;
-        sc_time delay = SC_ZERO_TIME;
-        trans.set_command(tlm::TLM_WRITE_COMMAND);
-        trans.set_address(byte_addr);
-        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&word));
-        trans.set_data_length(4);
-        trans.set_streaming_width(4);
-        trans.set_byte_enable_ptr(0);
-        trans.set_dmi_allowed(false);
-        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-        initiator_socket->b_transport(trans, delay);
+        const auto r = simtlm::write_word<uint32_t>(initiator_socket, byte_addr, word);
+        note_transport(r, "csr_write_32_pair", byte_addr);
     };
 
     beat32(addr, lo);
@@ -277,4 +242,56 @@ void sep_filter_ctrl_test::test_comprehensive_filter_scenarios()
     csr_write_64(2, 0x00, 0x00000012ULL); // read_allowed=0, write_allowed=1, entry_enabled=1
 
     std::cout << "Comprehensive filter scenarios test PASSED" << std::endl;
+}
+
+// Malformed generic payloads on the CSR path. The filter must give every defect
+// a decided response, must not crash, and must leave a neighbouring entry's
+// registers alone. What each defect should *return* is decode policy, so only
+// the "decided, non-destructive" part is asserted here.
+void sep_filter_ctrl_test::test_malformed_payloads(uint32_t num_instances)
+{
+    std::cout << "\n=== Testing Malformed Generic Payloads ===" << std::endl;
+
+    // Entry 3 is the target; entry 5 is the witness, far enough away that the
+    // widest (9-byte) and unaligned defects cannot reach it.
+    const uint32_t target_inst  = 3;
+    const uint32_t witness_inst = (num_instances > 5) ? 5 : (num_instances - 1);
+    assert((witness_inst != target_inst) && "need a distinct witness entry");
+
+    const uint64_t witness_start = 0xABCD0000ULL;
+    csr_write_64(witness_inst, 0x08, witness_start);
+
+    const unsigned before = transport_failures();
+
+    simtlm::target_geometry geo;
+    geo.valid_address  = (target_inst * CSR_STRIDE) + 0x08;  // START_ADDR
+    geo.word_bytes     = 8;
+    geo.aperture_bytes = static_cast<uint64_t>(num_instances) * CSR_STRIDE;
+
+    for (simtlm::defect d : simtlm::all_defects()) {
+        for (tlm::tlm_command cmd : {tlm::TLM_READ_COMMAND, tlm::TLM_WRITE_COMMAND}) {
+            const auto r = probe(d, geo, cmd);
+            if (r.status == tlm::TLM_INCOMPLETE_RESPONSE) {
+                std::cout << "  [FAIL] " << simtlm::defect_name(d) << " ("
+                          << (cmd == tlm::TLM_READ_COMMAND ? "read" : "write")
+                          << ") left the payload INCOMPLETE" << std::endl;
+            }
+            assert((r.status != tlm::TLM_INCOMPLETE_RESPONSE) &&
+                   "malformed payload left unhandled by sep_filter_ctrl");
+        }
+    }
+
+    // probe() does not record, so the count must not have moved.
+    assert((transport_failures() == before) &&
+           "probe() must not record deliberate rejections");
+
+    assert((csr_read_64(witness_inst, 0x08) == witness_start) &&
+           "malformed traffic corrupted a neighbouring entry");
+
+    // Still usable afterwards.
+    csr_write_64(target_inst, 0x08, 0x77770000ULL);
+    assert((csr_read_64(target_inst, 0x08) == 0x77770000ULL) &&
+           "CSR path unusable after malformed traffic");
+
+    std::cout << "Malformed generic payloads test PASSED" << std::endl;
 }

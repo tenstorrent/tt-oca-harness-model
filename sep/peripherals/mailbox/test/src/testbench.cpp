@@ -51,6 +51,10 @@ testbench::testbench(sc_module_name name, int log_verbosity)
   test_port0 = new mailbox_test("mailbox_test_port0");
   test_port1 = new mailbox_test("mailbox_test_port1");
 
+  // Second DUT: the multi-channel wrapper, exercised through its own socket.
+  unit_dut = new mailbox_unit_t<UNIT_CHANNELS>("mailbox_unit_dut", log_verbosity);
+  unit_port = new mailbox_test("mailbox_unit_port");
+
   // Perform port binding
   bind_ports();
 
@@ -60,6 +64,9 @@ testbench::testbench(sc_module_name name, int log_verbosity)
   // Initialize clock and reset signals
   clk_sig.write(100000000.0); // 100 MHz abstract clock frequency
   rst_ni_sig.write(true);     // Reset inactive (active-low)
+
+  unit_clk_sig.write(100000000.0);
+  unit_rst_ni_sig.write(true);
 
   // Register test execution thread
   SC_THREAD(run_tests);
@@ -76,6 +83,8 @@ testbench::~testbench() {
   delete dut;
   delete test_port0;
   delete test_port1;
+  delete unit_dut;
+  delete unit_port;
 }
 
 /**
@@ -119,6 +128,21 @@ void testbench::bind_ports() {
   dut->rst_ni.bind(rst_ni_sig);
   REG_INFO(2, logger)
       << "  [BOUND] rst_ni_sig → mailbox_dut rst_ni (active-low)";
+
+  // =========================================================================
+  // 4. Unit Wrapper DUT
+  // =========================================================================
+  unit_port->initiator_socket.bind(unit_dut->target_socket);
+
+  for (unsigned int m = 0; m < UNIT_CHANNELS; m++) {
+    unit_dut->outbound_irq_o[m].bind(unit_outbound_irq_sig[m]);
+    unit_dut->inbound_irq_o[m].bind(unit_inbound_irq_sig[m]);
+  }
+
+  unit_dut->clk_i.bind(unit_clk_sig);
+  unit_dut->rst_ni.bind(unit_rst_ni_sig);
+  REG_INFO(2, logger) << "  [BOUND] mailbox_unit_dut (" << UNIT_CHANNELS
+                       << " channels)";
 
   // =========================================================================
   // Port Binding Complete
@@ -175,25 +199,14 @@ tlm::tlm_response_status testbench::mailbox_read(unsigned int port,
 
   mailbox_test *test_port = (port == 0) ? test_port0 : test_port1;
 
-  // Create TLM transaction
-  tlm::tlm_generic_payload trans;
-  sc_time delay = SC_ZERO_TIME;
-
-  // Setup transaction parameters
-  trans.set_command(tlm::TLM_READ_COMMAND);
-  trans.set_address(offset);
-  trans.set_data_ptr(reinterpret_cast<unsigned char *>(&read_value));
-  trans.set_data_length(8); // 64-bit register
-  trans.set_streaming_width(8);
-  trans.set_byte_enable_ptr(0);
-  trans.set_dmi_allowed(false);
-  trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-
-  // Execute blocking transport
-  test_port->initiator_socket->b_transport(trans, delay);
-
-  // Return response status
-  return trans.get_response_status();
+  // Returns the status to the caller rather than recording it: this entry point
+  // exists precisely so tests can assert on the response. It uses the
+  // "observed" read so those tests can also check what the model left in the
+  // buffer on an error path (CTRL, for instance, is specified to return zero
+  // data alongside its error response).
+  return simtlm::read_word_observed<uint64_t>(test_port->initiator_socket, offset,
+                                              read_value)
+      .status;
 }
 
 /**
@@ -214,25 +227,8 @@ tlm::tlm_response_status testbench::mailbox_write(unsigned int port,
 
   mailbox_test *test_port = (port == 0) ? test_port0 : test_port1;
 
-  // Create TLM transaction
-  tlm::tlm_generic_payload trans;
-  sc_time delay = SC_ZERO_TIME;
-
-  // Setup transaction parameters
-  trans.set_command(tlm::TLM_WRITE_COMMAND);
-  trans.set_address(offset);
-  trans.set_data_ptr(reinterpret_cast<unsigned char *>(&write_value));
-  trans.set_data_length(8); // 64-bit register
-  trans.set_streaming_width(8);
-  trans.set_byte_enable_ptr(0);
-  trans.set_dmi_allowed(false);
-  trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-
-  // Execute blocking transport
-  test_port->initiator_socket->b_transport(trans, delay);
-
-  // Return response status
-  return trans.get_response_status();
+  return simtlm::write_word<uint64_t>(test_port->initiator_socket, offset, write_value)
+      .status;
 }
 
 /**
@@ -279,6 +275,12 @@ void testbench::run_tests() {
   // Run FUNC-007 comprehensive tests
   run_func007_tests();
 
+  // Generic-payload robustness
+  test_malformed_payloads();
+
+  // Multi-channel unit wrapper
+  run_unit_tests();
+
   // Print final summary
   report_test_summary();
 
@@ -292,11 +294,100 @@ void testbench::run_tests() {
 }
 
 // =============================================================================
+// TC-MB-MALFORMED: Malformed generic payloads
+//
+// RIRQT (0x28) is a plain read/write threshold, so the matrix can hammer it
+// without tripping FIFO or interrupt side effects. WIRQT (0x20) is the witness:
+// it sits below the target, clear of the 0x28..0x31 range the widest and
+// unaligned defects can reach.
+//
+// Both target sockets are swept: the two ports have independent register sets
+// and independent access-error state, so socket1 is a separate decode path
+// rather than a second view of the one already covered.
+// =============================================================================
+void testbench::test_malformed_payloads() {
+  constexpr unsigned REG_BYTES   = 8;
+  constexpr unsigned APERTURE    = 0x50;  // 10 registers
+  constexpr unsigned OFF_WIRQT   = 0x20;
+  constexpr unsigned OFF_RIRQT   = 0x28;
+  constexpr uint64_t WITNESS_VAL = 0x5;
+
+  bool passed = true;
+
+  simtlm::target_geometry geo;
+  geo.valid_address  = OFF_RIRQT;
+  geo.word_bytes     = REG_BYTES;
+  geo.aperture_bytes = APERTURE;
+
+  mailbox_test *const ports[2] = {test_port0, test_port1};
+
+  // Both witnesses are planted before either sweep starts, so each port's
+  // witness also proves the *other* port's malformed traffic stayed local.
+  for (mailbox_test *port : ports) {
+    port->register_write_64(OFF_WIRQT, WITNESS_VAL);
+    port->clear_transport_failures();
+  }
+
+  for (unsigned p = 0; p < 2; ++p) {
+    mailbox_test *const port = ports[p];
+
+    for (simtlm::defect d : simtlm::all_defects()) {
+      for (tlm::tlm_command cmd : {tlm::TLM_READ_COMMAND, tlm::TLM_WRITE_COMMAND}) {
+        const auto r = port->probe(d, geo, cmd);
+        if (r.status == tlm::TLM_INCOMPLETE_RESPONSE) {
+          REG_ERROR(0, logger) << "port " << p << ": " << simtlm::defect_name(d) << " ("
+                                << (cmd == tlm::TLM_READ_COMMAND ? "read" : "write")
+                                << ") left the payload INCOMPLETE\n";
+          passed = false;
+        }
+      }
+    }
+
+    port->register_write_64(OFF_RIRQT, 0x3);
+    uint64_t after = 0;
+    port->register_read_64(OFF_RIRQT, after);
+    if (after != 0x3) {
+      REG_ERROR(0, logger) << "port " << p << ": RIRQT unusable after malformed traffic: "
+                            << "read 0x" << std::hex << after << std::dec << "\n";
+      passed = false;
+    }
+  }
+
+  for (unsigned p = 0; p < 2; ++p) {
+    uint64_t witness = 0;
+    ports[p]->register_read_64(OFF_WIRQT, witness);
+    if (witness != WITNESS_VAL) {
+      REG_ERROR(0, logger) << "port " << p << ": WIRQT corrupted by malformed traffic: "
+                            << "expected 0x" << std::hex << WITNESS_VAL << ", read 0x"
+                            << witness << std::dec << "\n";
+      passed = false;
+    }
+  }
+
+  report_test_result("TC-MB-MALFORMED: Malformed generic payloads", passed);
+}
+
+// =============================================================================
 // Test Result Reporting Functions
 // =============================================================================
 
 void testbench::report_test_result(const char *test_name, bool passed) {
   m_tests_run++;
+
+  // A test cannot pass on the strength of transactions the mailbox refused.
+  // Gating here makes every existing scenario transport-sensitive without
+  // restating the condition in any of them. Counters are cleared afterwards so
+  // failures are attributed to the test that caused them.
+  const unsigned tf =
+      test_port0->transport_failures() + test_port1->transport_failures();
+  if (tf != 0 && passed) {
+    passed = false;
+    REG_ERROR(0, logger) << tf << " transport error(s) during " << test_name
+                          << "; last: " << test_port0->last_transport_error()
+                          << test_port1->last_transport_error() << "\n";
+  }
+  test_port0->clear_transport_failures();
+  test_port1->clear_transport_failures();
 
   if (passed) {
     m_tests_passed++;
@@ -385,6 +476,25 @@ void testbench::test_register_reset_values() {
       continue;
     }
 
+    // CTRL is write-only too, and reading it is refused. This used to be
+    // checked as "reads back 0", which only held because the old helper zeroed
+    // the buffer on an error response — the register was never actually read.
+    // Assert the refusal instead, which is the real contract.
+    if (reg.offset == mailbox_basetest::CTRL_OFFSET) {
+      uint64_t ctrl_val = 0xDEADBEEFCAFEBABEULL;
+      const tlm::tlm_response_status st =
+          mailbox_read(0, mailbox_basetest::CTRL_OFFSET, ctrl_val);
+      if (st != tlm::TLM_OK_RESPONSE && ctrl_val == 0) {
+        REG_INFO(2, logger) << "  CTRL: read refused with error response - PASS";
+      } else {
+        REG_ERROR(0, logger)
+            << "  CTRL: expected refusal with zero data, got 0x" << std::hex
+            << ctrl_val << std::dec << " status=" << st << " - FAIL";
+        all_pass = false;
+      }
+      continue;
+    }
+
     test_port0->register_read_64(reg.offset, read_val);
 
     if (read_val == reg.expected_reset) {
@@ -421,21 +531,37 @@ void testbench::test_read_only_register_protection() {
   const char *ro_names[] = {"STATUS", "ERROR_FLAGS", "IRQP", "READ_DATA"};
 
   for (size_t i = 0; i < sizeof(ro_registers) / sizeof(ro_registers[0]); i++) {
-    // Read original value
-    test_port0->register_read_64(ro_registers[i], read_before);
+    // Status-returning reads: READ_DATA legitimately answers with an error while
+    // the FIFO is empty, so the comparison has to cover the response as well as
+    // the data. Comparing only the data left this test passing on two
+    // error-zeroed buffers.
+    read_before = 0;
+    read_after  = 0;
+    const tlm::tlm_response_status st_before =
+        mailbox_read(0, ro_registers[i], read_before);
 
-    // Attempt write (should be rejected)
-    test_port0->register_write_64(ro_registers[i], 0xDEADBEEFCAFEBABE);
+    // Attempt write. A read-only register answers with an error response, so
+    // that refusal is now asserted rather than merely tolerated.
+    const tlm::tlm_response_status st_write =
+        mailbox_write(0, ro_registers[i], 0xDEADBEEFCAFEBABE);
+    if (st_write == tlm::TLM_OK_RESPONSE) {
+      REG_ERROR(0, logger) << "  " << ro_names[i]
+                            << ": write to a read-only register was accepted - FAIL";
+      all_pass = false;
+    }
 
-    // Read again
-    test_port0->register_read_64(ro_registers[i], read_after);
+    const tlm::tlm_response_status st_after =
+        mailbox_read(0, ro_registers[i], read_after);
 
-    if (read_before == read_after) {
+    if (read_before == read_after && st_before == st_after) {
       REG_INFO(2, logger) << "  " << ro_names[i]
-                           << ": Write rejected (value unchanged) - PASS";
+                           << ": Write rejected (value and response unchanged) - PASS";
     } else {
       REG_ERROR(0, logger)
-          << "  " << ro_names[i] << ": Write accepted (value changed) - FAIL\n read_before: " << read_before << " read_after: " << read_after;
+          << "  " << ro_names[i]
+          << ": Write accepted (state changed) - FAIL\n read_before: " << read_before
+          << " read_after: " << read_after << " status_before: " << st_before
+          << " status_after: " << st_after;
       all_pass = false;
     }
   }

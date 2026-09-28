@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file mailbox_test.h
  * @brief Extended test harness with register access helper methods
@@ -8,6 +10,9 @@
 
 #pragma once
 #include "mailbox_basetest.h"
+#include "tlm_probe.h"
+
+#include <string>
 
 /**
  * @class mailbox_test
@@ -66,7 +71,35 @@ public:
    void register_write_32(unsigned int offset, uint32_t write_value);
 
    /**
+    * @brief Drive a deliberately malformed payload and hand back the outcome.
+    *
+    * Deliberately not recorded as a transport failure: the caller is asking for
+    * a rejection, so a non-OK status is the expected result here.
+    */
+   simtlm::access_result probe(simtlm::defect d, const simtlm::target_geometry &geo,
+                               tlm::tlm_command cmd);
+
+   /**
+    * @brief Transport-failure bookkeeping.
+    *
+    * The helpers above no longer rewrite the caller's buffer when a transaction
+    * fails — zeroing it turned an error into a plausible register value that
+    * satisfied read expectations. Failures are counted here instead and
+    * testbench::report_test_result() refuses to pass a test that saw any.
+    */
+   unsigned           transport_failures() const { return m_transport_failures; }
+   const std::string &last_transport_error() const { return m_last_transport_error; }
+   void               clear_transport_failures();
+
+   /**
     * @brief Destructor
     */
    ~mailbox_test() {}
+
+private:
+   void note_transport(const simtlm::access_result &r, const char *op,
+                       unsigned int offset);
+
+   unsigned    m_transport_failures = 0;
+   std::string m_last_transport_error;
 };

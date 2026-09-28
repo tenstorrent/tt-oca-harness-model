@@ -66,39 +66,29 @@ testbench::testbench(sc_module_name name)
 // ---------------------------------------------------------------------------
 uint32_t testbench::unbound_read_32(unsigned byte_offset)
 {
-    tlm::tlm_generic_payload trans;
     uint32_t data = 0;
-    sc_time delay = SC_ZERO_TIME;
-
-    trans.set_command(tlm::TLM_READ_COMMAND);
-    trans.set_address(byte_offset);
-    trans.set_data_ptr(reinterpret_cast<uint8_t*>(&data));
-    trans.set_data_length(4);
-    trans.set_streaming_width(4);
-    trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-
-    unbound_isock->b_transport(trans, delay);
+    const auto r = simtlm::read_word<uint32_t>(unbound_isock, byte_offset, data);
+    note_unbound_transport(r, "unbound_read_32", byte_offset);
     return data;
 }
 
 void testbench::unbound_write_32(unsigned byte_offset, uint32_t value)
 {
-    tlm::tlm_generic_payload trans;
-    uint32_t data = value;
-    sc_time delay = SC_ZERO_TIME;
+    const auto r = simtlm::write_word<uint32_t>(unbound_isock, byte_offset, value);
+    note_unbound_transport(r, "unbound_write_32", byte_offset);
+}
 
-    trans.set_command(tlm::TLM_WRITE_COMMAND);
-    trans.set_address(byte_offset);
-    trans.set_data_ptr(reinterpret_cast<uint8_t*>(&data));
-    trans.set_data_length(4);
-    trans.set_streaming_width(4);
-    trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+void testbench::note_unbound_transport(const simtlm::access_result& r, const char* op,
+                                       unsigned byte_offset)
+{
+    if (r.ok())
+        return;
 
-    unbound_isock->b_transport(trans, delay);
+    ++m_unbound_transport_failures;
+    std::stringstream ss;
+    ss << op << " at byte offset 0x" << std::hex << byte_offset
+       << " returned " << simtlm::response_name(r.status);
+    REG_WARN(1, logger) << "TRANSPORT: " << ss.str() << std::endl;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +96,10 @@ void testbench::unbound_write_32(unsigned byte_offset, uint32_t value)
 // ---------------------------------------------------------------------------
 void testbench::report_test_start(const std::string& test_name)
 {
+    // Transport errors are attributed to the test that caused them.
+    m_test->clear_transport_failures();
+    m_unbound_transport_failures = 0;
+
     REG_INFO(1, logger) << "========================================\n"
                          << test_name << "\n"
                          << "========================================" << std::endl;
@@ -113,6 +107,20 @@ void testbench::report_test_start(const std::string& test_name)
 
 void testbench::report_test_pass(const std::string& test_name)
 {
+    // A scenario cannot pass on the strength of transactions the PIC refused.
+    // Checking here rather than at each call site makes every existing test
+    // sensitive to transport failures without restating the condition in any of
+    // them. This is the single gate that finding #1 of the audit asks for.
+    const unsigned tf = m_test->transport_failures() + m_unbound_transport_failures;
+    if (tf != 0) {
+        std::stringstream ss;
+        ss << tf << " transport error(s) during the test; last: "
+           << (m_test->last_transport_error().empty() ? "see TRANSPORT log above"
+                                                      : m_test->last_transport_error());
+        report_test_fail(test_name, ss.str());
+        return;
+    }
+
     m_tests_passed++;
     m_tests_run++;
     REG_INFO(1, logger) << test_name << ": PASS" << std::endl;
@@ -257,11 +265,65 @@ void testbench::run_tests()
     report_test_start("FUNC-EL2PIC-012: Unbound Sources Tied Low");
     test_unbound_sources_tied_low();
 
-    // FUNC-EL2PIC-015: Threshold CSRs, reserved source 0, null-hart arbiter
-    report_test_start("FUNC-EL2PIC-015: Threshold / Reserved Source / Null Hart");
+    // FUNC-EL2PIC-018: Malformed generic payloads
+    report_test_start("FUNC-EL2PIC-018: Malformed Generic Payloads");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_malformed_payloads();
+
+    // FUNC-EL2PIC-019: Threshold CSRs, reserved source 0, null-hart arbiter
+    report_test_start("FUNC-EL2PIC-019: Threshold / Reserved Source / Null Hart");
     do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
     mock_hart.reset();
     test_threshold_and_reserved_source();
+
+    // FUNC-EL2PIC-020: Equal-priority tie break in both assertion orders
+    report_test_start("FUNC-EL2PIC-020: Equal-Priority Tie Break");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_equal_priority_tie_break();
+
+    // FUNC-EL2PIC-021: Winner deasserts, claim falls back, EIP never drops
+    report_test_start("FUNC-EL2PIC-021: Winner Fallback Without EIP Glitch");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_winner_fallback_no_eip_glitch();
+
+    // FUNC-EL2PIC-022: Active-low edge gateway
+    report_test_start("FUNC-EL2PIC-022: Edge Gateway Active-Low");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_edge_gateway_active_low();
+
+    // FUNC-EL2PIC-023: MEIGWCTRL polarity/type changed under a live input
+    report_test_start("FUNC-EL2PIC-023: Gateway Reconfig While Asserted");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_gateway_reconfig_while_asserted();
+
+    // FUNC-EL2PIC-024: Threshold boundaries, both priord modes, both CSRs
+    report_test_start("FUNC-EL2PIC-024: Threshold Boundaries Both Modes");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_threshold_boundaries_both_modes();
+
+    // FUNC-EL2PIC-025: MEIP writes ignored on every word; reserved source 0
+    report_test_start("FUNC-EL2PIC-025: MEIP Writes / Reserved Source 0");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_meip_write_ignored_and_reserved_source0();
+
+    // FUNC-EL2PIC-026: Reset asserted with several edge latches pending
+    report_test_start("FUNC-EL2PIC-026: Reset With Pending Edge Latches");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_reset_with_pending_edge_latches();
+
+    // FUNC-EL2PIC-027: transport_dbg and DMI policy
+    report_test_start("FUNC-EL2PIC-027: Debug Transport and DMI Policy");
+    do_reset(*m_test, el2_pic::NUM_INTERRUPTS);
+    mock_hart.reset();
+    test_debug_transport_and_dmi();
 
     // ------------------------------------------------------------------
     // Final summary
@@ -1311,7 +1373,11 @@ void testbench::test_source0_and_null_hart()
 }
 
 // ===========================================================================
-// FUNC-EL2PIC-015: meipt/meicurpl threshold, reserved source 0, null hart
+// FUNC-EL2PIC-019: meipt/meicurpl threshold, reserved source 0, null hart
+//
+// Distinct from FUNC-EL2PIC-015, which this used to share an ID with. 015
+// sweeps the threshold against a fixed winner; this one covers the
+// same-winner-reevaluated and null-hart-instance paths.
 // ===========================================================================
 void testbench::test_threshold_and_reserved_source()
 {
@@ -1384,13 +1450,990 @@ void testbench::test_threshold_and_reserved_source()
     }
 
     if (pass)
-        report_test_pass("FUNC-EL2PIC-015: test_threshold_and_reserved_source");
+        report_test_pass("FUNC-EL2PIC-019: test_threshold_and_reserved_source");
     else
-        report_test_fail("FUNC-EL2PIC-015: test_threshold_and_reserved_source", reason);
+        report_test_fail("FUNC-EL2PIC-019: test_threshold_and_reserved_source", reason);
 }
 
 // ===========================================================================
 // sc_main
+// ---------------------------------------------------------------------------
+// FUNC-EL2PIC-018: Malformed generic payloads
+//
+// The PIC inherits its blocking transport from regmodel::Memory, so this is as
+// much a check on the shared register file as on the PIC. What it asserts is
+// the part that holds regardless of decode policy: every defect gets a decided
+// response, none of them crash the model, and none of them disturb a register
+// they were not aimed at.
+// ---------------------------------------------------------------------------
+void testbench::test_malformed_payloads()
+{
+    const std::string test_name = "FUNC-EL2PIC-018: Malformed Generic Payloads";
+
+    // MEIPL[1] is writable (4-bit priority) and is the target of the matrix.
+    // MEIE[2] is the untouched neighbour used as a corruption witness.
+    const unsigned meipl1 = el2_pic::OFFS_MEIPL_BASE + 1 * sizeof(uint32_t);
+    const unsigned meie2  = el2_pic::OFFS_MEIE_BASE  + 2 * sizeof(uint32_t);
+
+    m_test->reg_write_32(meipl1, 0xF);
+    m_test->reg_write_32(meie2, 0x1);
+
+    simtlm::target_geometry geo;
+    geo.valid_address  = meipl1;
+    geo.word_bytes     = sizeof(uint32_t);
+    geo.aperture_bytes = el2_pic::MEM_SIZE_BYTES;
+
+    for (simtlm::defect d : simtlm::all_defects()) {
+        for (tlm::tlm_command cmd : {tlm::TLM_READ_COMMAND, tlm::TLM_WRITE_COMMAND}) {
+            const auto r = m_test->probe(d, geo, cmd);
+            if (r.status == tlm::TLM_INCOMPLETE_RESPONSE) {
+                std::stringstream ss;
+                ss << simtlm::defect_name(d) << " ("
+                   << (cmd == tlm::TLM_READ_COMMAND ? "read" : "write")
+                   << ") left the payload INCOMPLETE";
+                report_test_fail(test_name, ss.str());
+                return;
+            }
+        }
+    }
+
+    // The witness must be untouched: none of the defects addressed it.
+    const uint32_t witness = m_test->reg_read_32(meie2);
+    if (witness != 0x1) {
+        std::stringstream ss;
+        ss << "MEIE[2] corrupted by malformed traffic: expected 0x1, read 0x"
+           << std::hex << witness;
+        report_test_fail(test_name, ss.str());
+        return;
+    }
+
+    // Well-formed access must still work afterwards: a rejected payload must not
+    // leave the register file wedged.
+    m_test->reg_write_32(meipl1, 0x7);
+    const uint32_t after = m_test->reg_read_32(meipl1);
+    if (after != 0x7) {
+        std::stringstream ss;
+        ss << "MEIPL[1] unusable after malformed traffic: expected 0x7, read 0x"
+           << std::hex << after;
+        report_test_fail(test_name, ss.str());
+        return;
+    }
+
+    report_test_pass(test_name);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-020 (PIC-F-01): Equal-priority tie break
+//
+// reevaluate_arbitration() scans sources 1..255 ascending and keeps the
+// incumbent on a tie (`eff_prio > best_eff_prio`, strictly), so at equal
+// nonzero priority the lower source ID wins no matter which pin moved first.
+// FUNC-EL2PIC-006 and -016 both use unequal priorities, so a descending scan
+// or a `>=` comparison passes them and only shows up here.
+// ===========================================================================
+void testbench::test_equal_priority_tie_break()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned lo   = 20;
+    const unsigned hi   = 21;
+    const unsigned prio = 5;
+
+    for (unsigned s : {lo, hi}) {
+        m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(s), 0x0u);  // level, active-high
+        m_test->reg_write_32(el2_pic_basetest::meipl_offset(s), prio);
+        m_test->reg_write_32(el2_pic_basetest::meie_offset(s), 0x1u);
+    }
+    wait(1, sc_core::SC_NS);
+
+    auto check_winner = [&](const char* order) {
+        if (!mock_hart.eip_asserted) {
+            pass = false; reason += std::string(order) + ": no EIP; ";
+            return;
+        }
+        if (mock_hart.claim_id != lo) {
+            pass = false;
+            reason += std::string(order) + ": claim=" + std::to_string(mock_hart.claim_id) +
+                      " expected " + std::to_string(lo) + "; ";
+        }
+        if (mock_hart.meicidpl != prio) {
+            pass = false;
+            reason += std::string(order) + ": meicidpl=" + std::to_string(mock_hart.meicidpl) +
+                      " expected " + std::to_string(prio) + "; ";
+        }
+        const uint32_t meip = m_test->reg_read_32(el2_pic_basetest::meip_offset(0));
+        if (meip != ((1u << lo) | (1u << hi))) {
+            std::ostringstream oss;
+            oss << order << ": meip[0]=0x" << std::hex << meip << " both sources not pending; ";
+            pass = false; reason += oss.str();
+        }
+    };
+
+    auto both_low = [&]() {
+        m_test->drive_irq(lo, false);
+        m_test->drive_irq(hi, false);
+        wait(1, sc_core::SC_NS);
+    };
+
+    m_test->drive_irq(lo, true);
+    wait(1, sc_core::SC_NS);
+    m_test->drive_irq(hi, true);
+    wait(1, sc_core::SC_NS);
+    check_winner("lo-then-hi");
+
+    both_low();
+
+    // The interesting order: hi already owns the claim when lo arrives, so the
+    // tie has to be re-decided in lo's favour rather than left alone.
+    m_test->drive_irq(hi, true);
+    wait(1, sc_core::SC_NS);
+    if (mock_hart.claim_id != hi) {
+        pass = false;
+        reason += "hi did not claim while alone (claim=" +
+                  std::to_string(mock_hart.claim_id) + "); ";
+    }
+    m_test->drive_irq(lo, true);
+    wait(1, sc_core::SC_NS);
+    check_winner("hi-then-lo");
+
+    both_low();
+
+    m_test->drive_irq(lo, true);
+    m_test->drive_irq(hi, true);
+    wait(1, sc_core::SC_NS);
+    check_winner("same-delta");
+
+    both_low();
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-020: test_equal_priority_tie_break");
+    else
+        report_test_fail("FUNC-EL2PIC-020: test_equal_priority_tie_break", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-021 (PIC-F-02): Winner deasserts, claim falls back, EIP holds
+//
+// The retarget branch only calls set_pic_claim_id()/trigger_external_interrupt()
+// and leaves eip_asserted_ alone, so the hart must never see the line drop
+// between two back-to-back interrupts. Final state cannot show that, hence the
+// clear_count tally: a clear-then-retrigger implementation ends in the same
+// place but glitches the line.
+// ===========================================================================
+void testbench::test_winner_fallback_no_eip_glitch()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned lo = 22;   // priority 3
+    const unsigned hi = 23;   // priority 9
+
+    for (unsigned s : {lo, hi}) {
+        m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(s), 0x0u);
+        m_test->reg_write_32(el2_pic_basetest::meie_offset(s), 0x1u);
+    }
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(lo), 3u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(hi), 9u);
+    wait(1, sc_core::SC_NS);
+
+    m_test->drive_irq(lo, true);
+    wait(1, sc_core::SC_NS);
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != lo) {
+        pass = false;
+        reason += "low-priority source did not claim first (claim=" +
+                  std::to_string(mock_hart.claim_id) + "); ";
+    }
+
+    m_test->drive_irq(hi, true);
+    wait(1, sc_core::SC_NS);
+    if (mock_hart.claim_id != hi || mock_hart.meicidpl != 9u) {
+        pass = false;
+        reason += "high-priority source did not take the claim (claim=" +
+                  std::to_string(mock_hart.claim_id) + " meicidpl=" +
+                  std::to_string(mock_hart.meicidpl) + "); ";
+    }
+
+    const unsigned clears_before = mock_hart.clear_count;
+
+    // Drop the winner. lo is still pending and enabled, so the claim retargets
+    // downwards and the line stays up throughout.
+    m_test->drive_irq(hi, false);
+    wait(1, sc_core::SC_NS);
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "EIP dropped on fallback to the remaining source; ";
+    }
+    if (mock_hart.claim_id != lo) {
+        pass = false;
+        reason += "claim did not fall back to " + std::to_string(lo) + " (claim=" +
+                  std::to_string(mock_hart.claim_id) + "); ";
+    }
+    if (mock_hart.meicidpl != 3u) {
+        pass = false;
+        reason += "meicidpl=" + std::to_string(mock_hart.meicidpl) +
+                  " did not follow the fallback winner; ";
+    }
+    if (mock_hart.clear_count != clears_before) {
+        pass = false;
+        reason += "EIP was cleared " + std::to_string(mock_hart.clear_count - clears_before) +
+                  " time(s) during the retarget; ";
+    }
+    if ((m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) & (1u << hi)) != 0) {
+        pass = false; reason += "deasserted winner still pending; ";
+    }
+
+    // Only when the last source goes away may the line drop, exactly once.
+    m_test->drive_irq(lo, false);
+    wait(1, sc_core::SC_NS);
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "EIP still asserted with nothing pending; ";
+    }
+    if (mock_hart.clear_count != clears_before + 1) {
+        pass = false;
+        reason += "expected exactly one clear at the end, saw " +
+                  std::to_string(mock_hart.clear_count - clears_before) + "; ";
+    }
+    if (mock_hart.claim_id != 0) {
+        pass = false; reason += "claim_id not released; ";
+    }
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-021: test_winner_fallback_no_eip_glitch");
+    else
+        report_test_fail("FUNC-EL2PIC-021: test_winner_fallback_no_eip_glitch", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-022 (PIC-F-03): Active-low edge gateway
+//
+// Polarity and latching interact: the latch must set on the polarity-adjusted
+// level, not on the raw pin, and a clear must stick only while that adjusted
+// level is inactive. FUNC-EL2PIC-005/013 cover edge mode active-high only, so
+// a gateway that latches the raw pin passes both of them and fails here.
+// ===========================================================================
+void testbench::test_edge_gateway_active_low()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src = 24;
+    const uint32_t bit = 1u << src;
+
+    auto meip0 = [&]() { return m_test->reg_read_32(el2_pic_basetest::meip_offset(0)); };
+
+    auto check = [&](const char* step, bool want_eip, bool want_pending) {
+        if (mock_hart.eip_asserted != want_eip) {
+            pass = false;
+            reason += std::string(step) + ": EIP=" + (mock_hart.eip_asserted ? "1" : "0") +
+                      " expected " + (want_eip ? "1" : "0") + "; ";
+        }
+        const bool pending = (meip0() & bit) != 0;
+        if (pending != want_pending) {
+            pass = false;
+            reason += std::string(step) + ": pending=" + (pending ? "1" : "0") +
+                      " expected " + (want_pending ? "1" : "0") + "; ";
+        }
+    };
+
+    // Under active-low polarity the inactive level is a high pin. Reaching that
+    // state through level mode first leaves the latch provably clear, so the
+    // sequence below starts from a known-empty gateway.
+    m_test->drive_irq(src, true);
+    wait(1, sc_core::SC_NS);
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), 0x1u);  // level, active-low
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), 0x3u);  // edge,  active-low
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), 6u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(src), 0x1u);
+    wait(1, sc_core::SC_NS);
+    check("armed", false, false);
+
+    // Pin low is the asserted level here: the latch sets.
+    m_test->drive_irq(src, false);
+    wait(1, sc_core::SC_NS);
+    check("asserted", true, true);
+    if (mock_hart.claim_id != src) {
+        pass = false;
+        reason += "claim=" + std::to_string(mock_hart.claim_id) + " expected " +
+                  std::to_string(src) + "; ";
+    }
+
+    // Pin back high: inactive, but the latch is sticky.
+    m_test->drive_irq(src, true);
+    wait(1, sc_core::SC_NS);
+    check("deasserted-sticky", true, true);
+
+    // Any write clears; the value carries no meaning (write_MEIGWCLR ignores it).
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x0u);
+    wait(1, sc_core::SC_NS);
+    check("cleared-with-zero", false, false);
+
+    // Reassert, then clear while still active: the clear cannot stick.
+    m_test->drive_irq(src, false);
+    wait(1, sc_core::SC_NS);
+    check("reasserted", true, true);
+
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0xFFFFFFFFu);
+    wait(1, sc_core::SC_NS);
+    check("clear-while-active", true, true);
+
+    // Return the source to its inactive level; the latch survives, as in 013.
+    m_test->drive_irq(src, true);
+    wait(1, sc_core::SC_NS);
+    check("inactive-latch-held", true, true);
+
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x2u);
+    wait(1, sc_core::SC_NS);
+    check("cleared-with-two", false, false);
+
+    // Repeated clears of an already-clear gateway are idempotent.
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x1u);
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x1u);
+    wait(1, sc_core::SC_NS);
+    check("repeated-clear", false, false);
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-022: test_edge_gateway_active_low");
+    else
+        report_test_fail("FUNC-EL2PIC-022: test_edge_gateway_active_low", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-023 (PIC-F-04): MEIGWCTRL polarity/type changed under a live pin
+//
+// post_write_MEIGWCTRL recomputes the source against the current input rather
+// than waiting for the next pin event, so every write below has an exact
+// MEIP/EIP consequence in the same delta. The level→edge transitions also pin
+// down that a reconfigure does not clear an already-set latch.
+// ===========================================================================
+void testbench::test_gateway_reconfig_while_asserted()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src = 25;
+    const uint32_t bit = 1u << src;
+
+    auto reconfigure = [&](uint32_t ctrl, const char* step, bool want_eip, bool want_pending) {
+        m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), ctrl);
+        wait(1, sc_core::SC_NS);
+
+        const uint32_t readback = m_test->reg_read_32(el2_pic_basetest::meigwctrl_offset(src));
+        if ((readback & el2_pic_basetest::MEIGWCTRL_READ_MASK) != ctrl) {
+            std::ostringstream oss;
+            oss << step << ": MEIGWCTRL read back 0x" << std::hex << readback
+                << " after writing 0x" << ctrl << "; ";
+            pass = false; reason += oss.str();
+        }
+        if (mock_hart.eip_asserted != want_eip) {
+            pass = false;
+            reason += std::string(step) + ": EIP=" + (mock_hart.eip_asserted ? "1" : "0") +
+                      " expected " + (want_eip ? "1" : "0") + "; ";
+        }
+        const bool pending =
+            (m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) & bit) != 0;
+        if (pending != want_pending) {
+            pass = false;
+            reason += std::string(step) + ": pending=" + (pending ? "1" : "0") +
+                      " expected " + (want_pending ? "1" : "0") + "; ";
+        }
+    };
+
+    m_test->drive_irq(src, true);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), 9u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(src), 0x1u);
+    wait(1, sc_core::SC_NS);
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != src || mock_hart.meicidpl != 9u) {
+        pass = false;
+        reason += "precondition: level active-high source did not claim (claim=" +
+                  std::to_string(mock_hart.claim_id) + "); ";
+    }
+
+    // Polarity flip against a high pin makes the effective level inactive, so
+    // level mode must drop the interrupt on the spot.
+    reconfigure(0x1u, "level-active-low", false, false);
+    if (mock_hart.claim_id != 0) {
+        pass = false; reason += "claim not released when polarity masked the source; ";
+    }
+
+    reconfigure(0x0u, "level-active-high", true, true);
+    if (mock_hart.claim_id != src || mock_hart.meicidpl != 9u) {
+        pass = false;
+        reason += "claim/meicidpl not restored on the polarity flip back; ";
+    }
+
+    // Level → edge with the pin still asserted latches immediately.
+    reconfigure(0x2u, "edge-active-high", true, true);
+
+    // Edge + polarity flip: the effective level goes inactive, but a set latch
+    // is cleared only by MEIGWCLR, so the source stays pending.
+    reconfigure(0x3u, "edge-active-low", true, true);
+
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x1u);
+    wait(1, sc_core::SC_NS);
+    if (mock_hart.eip_asserted ||
+        (m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) & bit) != 0) {
+        pass = false; reason += "MEIGWCLR did not clear the inactive edge latch; ";
+    }
+
+    // Back to edge active-high with the pin unchanged: the latch resets.
+    reconfigure(0x2u, "edge-active-high-relatch", true, true);
+
+    // Edge → level while asserted keeps pending; dropping the pin now clears it
+    // without a MEIGWCLR, which is the whole difference between the two modes.
+    reconfigure(0x0u, "edge-to-level", true, true);
+    m_test->drive_irq(src, false);
+    wait(1, sc_core::SC_NS);
+    if (mock_hart.eip_asserted ||
+        (m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) & bit) != 0) {
+        pass = false; reason += "level mode did not follow the pin down; ";
+    }
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-023: test_gateway_reconfig_while_asserted");
+    else
+        report_test_fail("FUNC-EL2PIC-023: test_gateway_reconfig_while_asserted", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-024: Threshold boundaries in both priority-order modes
+//
+// The compare is strict on both CSRs (`prio > meipt_eff && prio > meicurpl_eff`),
+// and meipt/meicurpl are inverted by the same ~x&0xF as intpriority when
+// priord=1. Sweeping effective thresholds 0 / W-1 / W / W+1 / 15 against a
+// fixed effective winner W in both modes and on both CSRs pins down the
+// off-by-one and the inversion together: a `>=` compare flips the W case, and a
+// missing threshold inversion flips every priord=1 case.
+//
+// Driven through notify_threshold_changed() and the mock hart's CSR fields.
+// PIC-I-01 — the same sweep through the production VeeR post-CSR callback —
+// stays open: this build substitutes test/inc/VeeR-ISSTlm.hpp for the real ISS
+// wrapper (CMakeLists.txt:144-193), so there is no CSR write path to drive.
+// ===========================================================================
+void testbench::test_threshold_boundaries_both_modes()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src = 26;
+    const unsigned W   = 8;   // effective winner priority, same in both modes
+
+    struct Boundary { unsigned eff_thresh; bool expect_eip; };
+    const Boundary boundaries[] = {
+        { 0,     true  },
+        { W - 1, true  },
+        { W,     false },   // strict compare: equal does not interrupt
+        { W + 1, false },
+        { 15,    false },
+    };
+
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), 0x0u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(src), 0x1u);
+
+    for (unsigned priord = 0; priord <= 1; ++priord) {
+        // Hardware inverts priorities and thresholds with the same operation,
+        // so a raw value is derived from the effective one the sweep names.
+        auto raw_of = [priord](unsigned eff) { return priord ? ((~eff) & 0xFu) : eff; };
+
+        m_test->reg_write_32(el2_pic_basetest::mpiccfg_offset(), priord);
+        m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), raw_of(W));
+        mock_hart.meipt        = raw_of(0);
+        mock_hart.meicurpl_csr = raw_of(0);
+        m_test->drive_irq(src, true);
+        wait(1, sc_core::SC_NS);
+
+        for (unsigned csr = 0; csr < 2; ++csr) {
+            const char* csr_name = (csr == 0) ? "meipt" : "meicurpl";
+
+            for (const Boundary& b : boundaries) {
+                // The CSR not under test is parked at effective 0, the lowest
+                // threshold in either mode, so it never masks the result.
+                mock_hart.meipt        = raw_of(csr == 0 ? b.eff_thresh : 0);
+                mock_hart.meicurpl_csr = raw_of(csr == 1 ? b.eff_thresh : 0);
+                m_dut->notify_threshold_changed();
+                wait(1, sc_core::SC_NS);
+
+                std::ostringstream tag;
+                tag << "priord=" << priord << " " << csr_name
+                    << " eff=" << b.eff_thresh;
+
+                if (mock_hart.eip_asserted != b.expect_eip) {
+                    pass = false;
+                    reason += tag.str() + ": EIP=" +
+                              (mock_hart.eip_asserted ? "1" : "0") + " expected " +
+                              (b.expect_eip ? "1" : "0") + "; ";
+                    continue;
+                }
+                if (b.expect_eip) {
+                    if (mock_hart.claim_id != src) {
+                        pass = false;
+                        reason += tag.str() + ": claim=" +
+                                  std::to_string(mock_hart.claim_id) + "; ";
+                    }
+                    if (mock_hart.meicidpl != W) {
+                        pass = false;
+                        reason += tag.str() + ": meicidpl=" +
+                                  std::to_string(mock_hart.meicidpl) + " expected " +
+                                  std::to_string(W) + "; ";
+                    }
+                } else if (mock_hart.claim_id != 0) {
+                    pass = false;
+                    reason += tag.str() + ": claim_id held at " +
+                              std::to_string(mock_hart.claim_id) + " while blocked; ";
+                }
+
+                // Thresholding gates delivery, never the pending bit itself.
+                if ((m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) & (1u << src)) == 0) {
+                    pass = false;
+                    reason += tag.str() + ": threshold cleared the pending bit; ";
+                }
+            }
+        }
+
+        m_test->drive_irq(src, false);
+        wait(1, sc_core::SC_NS);
+    }
+
+    m_test->reg_write_32(el2_pic_basetest::mpiccfg_offset(), 0x0u);
+    mock_hart.meipt        = 0u;
+    mock_hart.meicurpl_csr = 0u;
+    wait(1, sc_core::SC_NS);
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-024: test_threshold_boundaries_both_modes");
+    else
+        report_test_fail("FUNC-EL2PIC-024: test_threshold_boundaries_both_modes", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-025: MEIP writes ignored on every word; reserved source 0
+//
+// FUNC-EL2PIC-002 attempts one MEIP write, at word 0, against an all-zero
+// bitmap — a write that landed in storage would be indistinguishable from the
+// value that was already there. Here every word carries a live pending bit
+// first, so both an all-ones and an all-zeros write have something to corrupt.
+//
+// Source 0 is reserved: its registers are inside the aperture and store
+// field-masked values, but register_all_callbacks() skips index 0 and
+// gateway_changed() returns early for it, so it can never pend or claim.
+// ===========================================================================
+void testbench::test_meip_write_ignored_and_reserved_source0()
+{
+    bool pass = true;
+    std::string reason;
+
+    // One source per pending word at a different bit each time, so a stored
+    // write cannot coincidentally match the live bitmap.
+    struct Case { unsigned src, word, bit; };
+    const Case cases[] = {
+        {  2, 0,  2 }, {  33, 1,  1 }, {  70, 2,  6 }, { 100, 3,  4 },
+        { 130, 4,  2 }, { 170, 5, 10 }, { 210, 6, 18 }, { 255, 7, 31 },
+    };
+
+    for (const Case& c : cases) {
+        m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(c.src), 0x0u);
+        m_test->reg_write_32(el2_pic_basetest::meipl_offset(c.src), 1u);
+        m_test->reg_write_32(el2_pic_basetest::meie_offset(c.src), 0x1u);
+        m_test->drive_irq(c.src, true);
+    }
+    wait(1, sc_core::SC_NS);
+
+    auto expected_word = [&](unsigned w) {
+        uint32_t e = 0;
+        for (const Case& c : cases)
+            if (c.word == w) e |= (1u << c.bit);
+        return e;
+    };
+
+    for (unsigned w = 0; w < el2_pic::NUM_PEND_WORDS; ++w) {
+        if (m_test->reg_read_32(el2_pic_basetest::meip_offset(w)) != expected_word(w)) {
+            pass = false;
+            reason += "precondition: meip[" + std::to_string(w) + "] not primed; ";
+        }
+    }
+
+    // All-ones would show up as extra set bits; all-zeros would erase live ones.
+    for (uint32_t payload : {0xFFFFFFFFu, 0x00000000u, 0xA5A5A5A5u}) {
+        for (unsigned w = 0; w < el2_pic::NUM_PEND_WORDS; ++w) {
+            m_test->reg_write_32(el2_pic_basetest::meip_offset(w), payload);
+            wait(SC_ZERO_TIME);
+
+            const uint32_t got = m_test->reg_read_32(el2_pic_basetest::meip_offset(w));
+            if (got != expected_word(w)) {
+                std::ostringstream oss;
+                oss << "meip[" << w << "] became 0x" << std::hex << got
+                    << " after writing 0x" << payload
+                    << " (expected 0x" << expected_word(w) << "); ";
+                pass = false; reason += oss.str();
+            }
+        }
+    }
+
+    // All eight sources share priority 1, so the ascending scan hands the claim
+    // to the lowest ID; an MEIP write must not have disturbed that either.
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != cases[0].src) {
+        pass = false;
+        reason += "MEIP writes disturbed the claim (claim=" +
+                  std::to_string(mock_hart.claim_id) + "); ";
+    }
+
+    for (const Case& c : cases)
+        m_test->drive_irq(c.src, false);
+    wait(1, sc_core::SC_NS);
+
+    // Reserved source 0: writes are accepted and field-masked on readback.
+    struct Reserved { unsigned offset; uint32_t expect; const char* name; };
+    const Reserved reserved[] = {
+        { el2_pic_basetest::meipl_offset(0),     0x0000000Fu, "MEIPL[0]"     },
+        { el2_pic_basetest::meie_offset(0),      0x00000001u, "MEIE[0]"      },
+        { el2_pic_basetest::meigwctrl_offset(0), 0x00000003u, "MEIGWCTRL[0]" },
+    };
+    for (const Reserved& r : reserved) {
+        m_test->reg_write_32(r.offset, 0xFFFFFFFFu);
+        const uint32_t got = m_test->reg_read_32(r.offset);
+        if (got != r.expect) {
+            std::ostringstream oss;
+            oss << r.name << " read back 0x" << std::hex << got
+                << " expected 0x" << r.expect << "; ";
+            pass = false; reason += oss.str();
+        }
+    }
+
+    // MEIGWCLR[0] keeps the write-only contract of the rest of the array: the
+    // write is accepted, the readback is zero.
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(0), 0x1u);
+    const uint32_t clr0 = m_test->reg_read_32(el2_pic_basetest::meigwclr_offset(0));
+    if (clr0 != 0) {
+        pass = false;
+        reason += "MEIGWCLR[0] read back 0x" + std::to_string(clr0) + "; ";
+    }
+
+    // Now give source 0 the configuration that would make it the top
+    // arbitration candidate if it were real: level, active-high, priority 15,
+    // enabled. The mask writes above left it edge/active-low, which is inert on
+    // a rising pin for reasons that have nothing to do with source 0 being
+    // reserved, so the negative result would not have meant anything.
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(0), 0x0u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(0), 0xFu);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(0), 0x1u);
+    m_test->drive_irq(0, true);
+    wait(1, sc_core::SC_NS);
+    if ((m_test->reg_read_32(el2_pic_basetest::meip_offset(0)) & 1u) != 0) {
+        pass = false; reason += "reserved source 0 set meip[0] bit 0; ";
+    }
+    // Source 0 is guarded twice over, and only the pending check above can
+    // actually fail today: reevaluate_arbitration() uses best_id == 0 as its
+    // "no winner" sentinel, so source 0 winning is already indistinguishable
+    // from nothing winning. Kept as a guard for the day that sentinel is
+    // replaced by an explicit flag.
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "reserved source 0 asserted EIP; ";
+    }
+    m_test->drive_irq(0, false);
+
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(0), 0x0u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(0), 0x0u);
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(0), 0x0u);
+    wait(1, sc_core::SC_NS);
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-025: test_meip_write_ignored_and_reserved_source0");
+    else
+        report_test_fail("FUNC-EL2PIC-025: test_meip_write_ignored_and_reserved_source0", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-026 (PIC-F-05): Reset with several edge latches pending
+//
+// FUNC-EL2PIC-009 resets one source whose pin is still high, so the post-reset
+// zero is also what recomputing from the pin would give. Edge latches are the
+// harder case: they are pending with every pin already low, so only
+// source_pending_.fill(false) in reset_process() can clear them, and a reset
+// that only reset the register block would leave four sources pending across
+// four different words.
+// ===========================================================================
+void testbench::test_reset_with_pending_edge_latches()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned srcs[]  = {  27,  60, 130, 240 };
+    const unsigned prios[] = {   4,   9,   6,   2 };
+    const unsigned winner  = 60;   // priority 9 is the highest of the four
+
+    auto arm_edge_sources = [&]() {
+        for (unsigned i = 0; i < 4; ++i) {
+            m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(srcs[i]), 0x2u);
+            m_test->reg_write_32(el2_pic_basetest::meipl_offset(srcs[i]), prios[i]);
+            m_test->reg_write_32(el2_pic_basetest::meie_offset(srcs[i]), 0x1u);
+        }
+        wait(1, sc_core::SC_NS);
+    };
+
+    auto count_pending_words = [&]() {
+        unsigned n = 0;
+        for (unsigned w = 0; w < el2_pic::NUM_PEND_WORDS; ++w)
+            if (m_test->reg_read_32(el2_pic_basetest::meip_offset(w)) != 0) ++n;
+        return n;
+    };
+
+    arm_edge_sources();
+
+    // Pulse every source, then release every pin: the latches hold the pending
+    // state with nothing driving it.
+    for (unsigned s : srcs) m_test->drive_irq(s, true);
+    wait(1, sc_core::SC_NS);
+    for (unsigned s : srcs) m_test->drive_irq(s, false);
+    wait(1, sc_core::SC_NS);
+
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != winner) {
+        pass = false;
+        reason += "precondition: latched winner not claimed (claim=" +
+                  std::to_string(mock_hart.claim_id) + "); ";
+    }
+    if (count_pending_words() != 4) {
+        pass = false;
+        reason += "precondition: expected 4 pending words, saw " +
+                  std::to_string(count_pending_words()) + "; ";
+    }
+
+    const unsigned clears_before = mock_hart.clear_count;
+
+    m_test->assert_reset();
+    wait(10, SC_NS);
+
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "EIP survived reset; ";
+    }
+    if (mock_hart.claim_id != 0) {
+        pass = false; reason += "claim_id survived reset; ";
+    }
+    if (mock_hart.clear_count != clears_before + 1) {
+        pass = false;
+        reason += "expected exactly one clear from reset, saw " +
+                  std::to_string(mock_hart.clear_count - clears_before) + "; ";
+    }
+    if (count_pending_words() != 0) {
+        pass = false;
+        reason += std::to_string(count_pending_words()) +
+                  " pending word(s) survived reset; ";
+    }
+    for (unsigned i = 0; i < 4; ++i) {
+        const unsigned s = srcs[i];
+        if (m_test->reg_read_32(el2_pic_basetest::meipl_offset(s)) != 0 ||
+            m_test->reg_read_32(el2_pic_basetest::meie_offset(s)) != 0 ||
+            m_test->reg_read_32(el2_pic_basetest::meigwctrl_offset(s)) != 0) {
+            pass = false;
+            reason += "source " + std::to_string(s) + " config survived reset; ";
+        }
+    }
+
+    m_test->deassert_reset();
+    wait(10, SC_NS);
+    if (mock_hart.eip_asserted || count_pending_words() != 0) {
+        pass = false; reason += "state came back on reset release; ";
+    }
+
+    // Second half: a pin edge and the reset land in the same delta, so
+    // gateway_changed() and reset_process() are both runnable with no defined
+    // order between them. MEIP is deliberately not asserted at that instant —
+    // a gateway running after reset_process legitimately re-pends off a pin
+    // that is still high, matching the RTL's combinational intpend. What must
+    // hold either way is that nothing reaches the hart, because reset also
+    // cleared MEIE.
+    arm_edge_sources();
+    for (unsigned s : srcs) m_test->drive_irq(s, true);
+    wait(1, sc_core::SC_NS);
+    if (!mock_hart.eip_asserted) {
+        pass = false; reason += "precondition: no EIP before the same-delta reset; ";
+    }
+
+    const unsigned race_src = 28;   // arrives in the same delta as the reset
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(race_src), 0x0u);
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(race_src), 15u);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(race_src), 0x1u);
+    wait(1, sc_core::SC_NS);
+
+    m_test->drive_irq(race_src, true);
+    m_test->assert_reset();
+    wait(10, SC_NS);
+
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "same-delta reset left EIP asserted; ";
+    }
+    if (mock_hart.claim_id != 0) {
+        pass = false; reason += "same-delta reset left a claim_id; ";
+    }
+    if (m_test->reg_read_32(el2_pic_basetest::meipl_offset(race_src)) != 0 ||
+        m_test->reg_read_32(el2_pic_basetest::meie_offset(race_src)) != 0) {
+        pass = false; reason += "same-delta reset did not clear the racing source's config; ";
+    }
+
+    m_test->deassert_reset();
+    wait(10, SC_NS);
+
+    // With every pin back low the pending map must be empty regardless of how
+    // the race resolved.
+    for (unsigned s : srcs) m_test->drive_irq(s, false);
+    m_test->drive_irq(race_src, false);
+    wait(1, sc_core::SC_NS);
+    if (count_pending_words() != 0 || mock_hart.eip_asserted) {
+        pass = false; reason += "pending map not empty after the race settled; ";
+    }
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-026: test_reset_with_pending_edge_latches");
+    else
+        report_test_fail("FUNC-EL2PIC-026: test_reset_with_pending_edge_latches", reason);
+}
+
+// ===========================================================================
+// FUNC-EL2PIC-027 (PIC-T-05): transport_dbg and DMI policy
+//
+// Both are asserted rather than assumed. Two policies are being recorded here,
+// and they belong to the shared register file (common/include/reg_file.h),
+// not to the PIC:
+//
+//   - transport_dbg() routes through the same read_registers()/write_registers()
+//     as b_transport, so a debug *read* is side-effect free only because the
+//     read callbacks are, while a debug *write* does run post-write side
+//     effects. That is not the "no side effects" a strict reading of TLM-2.0
+//     would expect from a debug transaction, so it is asserted explicitly and
+//     flagged rather than left implied.
+//   - The PIC registers no DMI callback, so get_direct_mem_ptr must refuse.
+//     A register file backed by callbacks has no window it could hand out.
+// ===========================================================================
+void testbench::test_debug_transport_and_dmi()
+{
+    bool pass = true;
+    std::string reason;
+    const unsigned src  = 29;
+    const unsigned word = src / 32;
+    const uint32_t bit  = 1u << (src % 32);
+
+    m_test->reg_write_32(el2_pic_basetest::meigwctrl_offset(src), 0x2u);  // edge, active-high
+    m_test->reg_write_32(el2_pic_basetest::meipl_offset(src), 0xAu);
+    m_test->reg_write_32(el2_pic_basetest::meie_offset(src), 0x1u);
+    wait(1, sc_core::SC_NS);
+
+    // Pulse the source so the pending bit is held by the latch, not the pin.
+    m_test->drive_irq(src, true);
+    wait(1, sc_core::SC_NS);
+    m_test->drive_irq(src, false);
+    wait(1, sc_core::SC_NS);
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != src) {
+        pass = false; reason += "precondition: latched source did not claim; ";
+    }
+
+    auto dbg_read = [&](unsigned offset, uint32_t& out) {
+        out = 0;
+        return simtlm::debug_read(m_test->initiator_socket, offset,
+                                  reinterpret_cast<unsigned char*>(&out), sizeof(out));
+    };
+
+    uint32_t v = 0;
+    unsigned n = dbg_read(el2_pic_basetest::meipl_offset(src), v);
+    if (n != sizeof(uint32_t)) {
+        pass = false;
+        reason += "debug read of MEIPL returned " + std::to_string(n) + " bytes; ";
+    }
+    if ((v & el2_pic_basetest::MEIPL_READ_MASK) != 0xAu) {
+        std::ostringstream oss;
+        oss << "debug read of MEIPL gave 0x" << std::hex << v << "; ";
+        pass = false; reason += oss.str();
+    }
+
+    // MEIP has no backing storage — pending_word() computes it per read — so a
+    // debug read that bypassed the read callbacks would return a stale zero.
+    n = dbg_read(el2_pic_basetest::meip_offset(word), v);
+    if (n != sizeof(uint32_t) || v != bit) {
+        std::ostringstream oss;
+        oss << "debug read of meip[" << word << "] returned " << n << " bytes, 0x"
+            << std::hex << v << " (expected 0x" << bit << "); ";
+        pass = false; reason += oss.str();
+    }
+
+    // Write-only register on the debug path too, and reading it must not clear
+    // the latch it controls.
+    n = dbg_read(el2_pic_basetest::meigwclr_offset(src), v);
+    if (n != sizeof(uint32_t) || v != 0) {
+        std::ostringstream oss;
+        oss << "debug read of MEIGWCLR returned " << n << " bytes, 0x"
+            << std::hex << v << " (expected 0); ";
+        pass = false; reason += oss.str();
+    }
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != src) {
+        pass = false; reason += "debug reads disturbed the interrupt state; ";
+    }
+
+    // A debug access the register file refuses must report zero bytes moved,
+    // not the length it was handed.
+    uint32_t sink = 0;
+    n = simtlm::debug_read(m_test->initiator_socket, el2_pic_basetest::meipl_offset(src),
+                           reinterpret_cast<unsigned char*>(&sink), 0);
+    if (n != 0) {
+        pass = false;
+        reason += "zero-length debug read claimed " + std::to_string(n) + " bytes; ";
+    }
+
+    // Debug writes share the b_transport side-effect path: disabling the source
+    // through transport_dbg has to drop the interrupt.
+    uint32_t off = 0x0u;
+    n = simtlm::debug_write(m_test->initiator_socket, el2_pic_basetest::meie_offset(src),
+                            reinterpret_cast<unsigned char*>(&off), sizeof(off));
+    wait(1, sc_core::SC_NS);
+    if (n != sizeof(uint32_t)) {
+        pass = false;
+        reason += "debug write returned " + std::to_string(n) + " bytes; ";
+    }
+    if (mock_hart.eip_asserted) {
+        pass = false; reason += "debug write of MEIE=0 did not run the post-write side effect; ";
+    }
+
+    uint32_t on = 0x1u;
+    simtlm::debug_write(m_test->initiator_socket, el2_pic_basetest::meie_offset(src),
+                        reinterpret_cast<unsigned char*>(&on), sizeof(on));
+    wait(1, sc_core::SC_NS);
+    if (!mock_hart.eip_asserted || mock_hart.claim_id != src) {
+        pass = false; reason += "debug write of MEIE=1 did not restore the claim; ";
+    }
+
+    // DMI must be refused, for both commands and on both DUT instances.
+    struct DmiProbe { const char* who; simtlm::dmi_result r; };
+    const DmiProbe probes[] = {
+        { "dut read",  simtlm::dmi_request(m_test->initiator_socket,
+                                           el2_pic_basetest::meipl_offset(src),
+                                           tlm::TLM_READ_COMMAND) },
+        { "dut write", simtlm::dmi_request(m_test->initiator_socket,
+                                           el2_pic_basetest::meipl_offset(src),
+                                           tlm::TLM_WRITE_COMMAND) },
+        { "unbound read", simtlm::dmi_request(unbound_isock,
+                                              el2_pic_basetest::meipl_offset(1),
+                                              tlm::TLM_READ_COMMAND) },
+    };
+    for (const DmiProbe& p : probes) {
+        if (p.r.granted) {
+            pass = false;
+            reason += std::string("DMI granted to ") + p.who + "; ";
+        }
+    }
+
+    // A normal blocking access must also clear any stale dmi_allowed hint it
+    // was handed, which is what b_transport's set_dmi_allowed(false) is for.
+    uint32_t probe_val = 0;
+    const auto rd = simtlm::read_word<uint32_t>(m_test->initiator_socket,
+                                                el2_pic_basetest::meipl_offset(src),
+                                                probe_val);
+    if (!rd.ok()) {
+        pass = false;
+        reason += std::string("post-DMI read failed: ") + simtlm::response_name(rd.status) + "; ";
+    }
+    if (rd.dmi_allowed) {
+        pass = false; reason += "b_transport left dmi_allowed set; ";
+    }
+
+    m_test->reg_write_32(el2_pic_basetest::meigwclr_offset(src), 0x1u);
+    wait(1, sc_core::SC_NS);
+
+    if (pass)
+        report_test_pass("FUNC-EL2PIC-027: test_debug_transport_and_dmi");
+    else
+        report_test_fail("FUNC-EL2PIC-027: test_debug_transport_and_dmi", reason);
+}
+
 // ===========================================================================
 int sc_main(int argc, char* argv[])
 {
