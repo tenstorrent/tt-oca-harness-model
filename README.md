@@ -610,11 +610,19 @@ make BOOT_SPI_CONTROLLER_OT=1 all
 will never get past SPI init. Output: `build/boot_rom.elf`, linked at ROM
 base (`0x10040000`).
 
-The `non_secure_boot_spi` / `secure_boot_spi` Make targets need the private
-`tt-boot-manifest` submodule and are **not** required for the steps below —
-the checked-in `prebuilt/non_secure_boot.spi_preload` /
-`prebuilt/secure_boot.spi_preload` already contain a manifest +
-`bl1_pass_test` payload.
+The `non_secure_boot_spi` / `secure_boot_ephemeral` Make targets need the
+`tt-boot-manifest` dependency. The non-secure flow below can use the checked-in
+`prebuilt/non_secure_boot.spi_preload`. Secure boot intentionally has no
+checked-in signed image or fixed key: `make secure_boot_ephemeral` generates a
+fresh RSA-3072 key, matching Boot ROM, and signed SPI image together under
+`build/secure/`.
+
+To run that secure pair:
+
+```bash
+make -C sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode secure_boot_ephemeral
+vp/build/bin/sep-vp vp/platform/sep/config/accellera_config_secure_boot.ini
+```
 
 Stage the SPI flash image and select the boot strap in
 `accellera_config.ini`:
