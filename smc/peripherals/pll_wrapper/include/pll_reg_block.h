@@ -29,6 +29,31 @@
  * therefore accepts naturally aligned 1/2/4-byte accesses that fall within a
  * single 32-bit register, performing a read-modify-write on the containing
  * word.  16-bit RDL registers (cgm/awm) live in the low half of their word.
+ *
+ * Because every accepted access is naturally aligned and at most 4 bytes, and
+ * every window size is a multiple of 4, an access can never start inside the
+ * window and end outside it — the start-address check alone is sufficient once
+ * size/alignment have been validated.  The bound is nevertheless expressed in
+ * an overflow-safe form (`len > window_size_ - adr`) so that a wild address
+ * near `UINT64_MAX` cannot wrap into the window.
+ *
+ * Byte enables: rejected outright (`TLM_BYTE_ENABLE_ERROR_RESPONSE`) whenever
+ * `get_byte_enable_ptr()` is non-null, independent of the byte-enable length.
+ * The block models register lanes through the address/length pair only, so
+ * honouring a partially-enabled pattern would need a second, redundant lane
+ * merge; refusing is the TLM-2.0 sanctioned response for a target that does
+ * not implement byte enables.
+ *
+ * Streaming width: a register access is a single beat, so TLM-2.0 requires
+ * `streaming_width >= data_length`.  Anything smaller (including the
+ * frequently mis-set 0) is a burst error; anything larger is accepted and
+ * ignored, as the standard prescribes for non-streaming targets.
+ *
+ * Debug and DMI: `transport_dbg` is a raw back door with `peek`/`poke`
+ * semantics — no read/write masks, no self-clearing strobes, no write
+ * observers, and no annotated delay.  DMI is always denied: register reads and
+ * writes have side effects (strobes and lock observers) that a direct memory
+ * pointer would bypass.
  */
 
 #ifndef SMC_PLL_REG_BLOCK_H_
@@ -136,6 +161,26 @@ public:
 
 protected:
     void b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
+    /// Raw back-door debug access (see the file header): naturally aligned
+    /// 1/2/4-byte reads/writes of the backing store, no masks, no strobes, no
+    /// observers, no delay.  @return bytes transferred, 0 if refused.
+    unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    /// Always denies DMI — register accesses have side effects.
+    bool get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                            tlm::tlm_dmi& dmi_data);
+    /// Shared bus-contract check for b_transport / transport_dbg.  On failure
+    /// sets @p status to the TLM response the caller should report.
+    bool check_access(const tlm::tlm_generic_payload& gp,
+                      tlm::tlm_response_status& status) const;
+
+    /// A validated access mapped onto its containing 32-bit register.
+    struct lane_view {
+        uint64_t reg_off;    ///< 4-byte-aligned offset of the register
+        unsigned lane_bits;  ///< bit position of the addressed lane
+        uint32_t lane_mask;  ///< bits of the register the access covers
+    };
+    /// Decode a bus address/length pair that has already passed check_access().
+    static lane_view lane_of(uint64_t adr, unsigned len);
     void reset_proc();
     void do_reset();
     void build(const reg_spec* specs, std::size_t n);

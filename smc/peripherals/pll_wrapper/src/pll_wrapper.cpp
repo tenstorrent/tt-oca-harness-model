@@ -49,6 +49,9 @@ pll_wrapper::pll_wrapper(sc_core::sc_module_name name, pll_wrapper_cfg cfg)
     , init_awm1_("init_awm1")
 {
     reg_socket.register_b_transport(this, &pll_wrapper::b_transport);
+    reg_socket.register_transport_dbg(this, &pll_wrapper::transport_dbg);
+    reg_socket.register_get_direct_mem_ptr(this,
+                                           &pll_wrapper::get_direct_mem_ptr);
 
     // Internal fabric: rebased forwards to each sub-block's register target.
     init_cntl_.bind(cntl_.reg_socket);
@@ -93,28 +96,30 @@ pll_wrapper::pll_wrapper(sc_core::sc_module_name name, pll_wrapper_cfg cfg)
 
 void pll_wrapper::commit_cgm_lock(unsigned idx, uint32_t written)
 {
-    // Only a reg_update strobe (bit 0) commits shadow config + re-locks.
-    if ((written & 0x1u) == 0u) return;
+    // Only the commit strobe commits shadow config + re-locks; the observer
+    // sees the post-lane-merge value, so a write that leaves this bit at its
+    // (self-cleared) stored 0 correctly does nothing.
+    if ((written & REG_UPDATE_COMMIT) == 0u) return;
 
     cgm& c = (idx == 0) ? cgm0_ : cgm1_;
 
-    // Lock follows cgm_enable (ENABLES[0]); a disable + REG_UPDATE drops lock.
+    // Lock follows cgm_enable; a disable + REG_UPDATE drops lock.
     uint32_t enables = 0;
     c.peek(cgm::OFF_ENABLES, enables);
-    const bool locked = (enables & 0x1u) != 0u;
+    const bool locked = (enables & CGM_ENABLE) != 0u;
 
     // pll_cntl.CGM_x_STATUS.lock_detect[0] — the bit firmware polls.
     const uint64_t st_off =
         (idx == 0) ? pll_cntl::OFF_CGM_0_STATUS : pll_cntl::OFF_CGM_1_STATUS;
     uint32_t st = 0;
     cntl_.peek(st_off, st);
-    st = locked ? (st | 0x1u) : (st & ~0x1u);
+    st = locked ? (st | CGM_LOCK_DETECT_MASK) : (st & ~CGM_LOCK_DETECT_MASK);
     cntl_.poke(st_off, st);
 
     // Mirror the sub-block's own CGM_STATUS.lock_detect[0] for read accuracy.
     uint32_t cst = 0;
     c.peek(cgm::OFF_CGM_STATUS, cst);
-    cst = locked ? (cst | 0x1u) : (cst & ~0x1u);
+    cst = locked ? (cst | CGM_LOCK_DETECT_MASK) : (cst & ~CGM_LOCK_DETECT_MASK);
     c.poke(cgm::OFF_CGM_STATUS, cst);
 
     SIM_LOG_INFO(this, "CGM" << idx << " REG_UPDATE: lock_detect="
@@ -123,28 +128,39 @@ void pll_wrapper::commit_cgm_lock(unsigned idx, uint32_t written)
 
 void pll_wrapper::commit_awm_lock(unsigned idx, uint32_t written)
 {
-    if ((written & 0x1u) == 0u) return;  // reg_update strobe
+    if ((written & REG_UPDATE_COMMIT) == 0u) return;
 
     // Firmware exit conditions: AWM_0 lock_detect == 7 (all three CGMs used
     // and locked), AWM_1 lock_detect == 1.
-    const uint32_t lockval = (idx == 0) ? 0x7u : 0x1u;
+    const uint32_t lockval = (idx == 0) ? AWM0_LOCK_DETECT : AWM1_LOCK_DETECT;
 
     const uint64_t st_off =
         (idx == 0) ? pll_cntl::OFF_AWM_0_STATUS : pll_cntl::OFF_AWM_1_STATUS;
     uint32_t st = 0;
     cntl_.peek(st_off, st);
-    st = (st & ~0x7u) | lockval;  // lock_detect[2:0]
+    st = (st & ~AWM_LOCK_DETECT_MASK) | lockval;
     cntl_.poke(st_off, st);
 
     // Mirror awm GLOBAL LOCK_STATUS.lock_detect[5:3] for read accuracy.
     awm& a = (idx == 0) ? awm0_ : awm1_;
     uint32_t gls = 0;
     a.peek(awm::GLOBAL_LOCK_STATUS, gls);
-    gls = (gls & ~(0x7u << 3)) | (lockval << 3);
+    gls = (gls & ~(AWM_LOCK_DETECT_MASK << AWM_LOCK_DETECT_SHIFT)) |
+          (lockval << AWM_LOCK_DETECT_SHIFT);
     a.poke(awm::GLOBAL_LOCK_STATUS, gls);
 
     SIM_LOG_INFO(this, "AWM" << idx << " REG_UPDATE: lock_detect=0x"
                              << std::hex << lockval << std::dec);
+}
+
+const pll_wrapper::sub* pll_wrapper::route(uint64_t adr) const
+{
+    for (const sub& s : subs_) {
+        // Subtract rather than compare against `s.base + s.size` so a wild
+        // address near UINT64_MAX cannot wrap into a child window.
+        if (adr >= s.base && (adr - s.base) < s.size) return &s;
+    }
+    return nullptr;
 }
 
 void pll_wrapper::b_transport(tlm::tlm_generic_payload& gp,
@@ -152,24 +168,60 @@ void pll_wrapper::b_transport(tlm::tlm_generic_payload& gp,
 {
     const uint64_t adr = gp.get_address();
 
-    for (const sub& s : subs_) {
-        if (adr >= s.base && adr < s.base + s.size) {
-            // Rebase to the block-local offset, forward, then restore address.
-            gp.set_address(adr - s.base);
-            (*s.init)->b_transport(gp, delay);
-            gp.set_address(adr);
-            SIM_LOG_TRACE(this,
-                          "route off=0x" << std::hex << adr << " -> " << s.name
-                                         << " local=0x" << (adr - s.base)
-                                         << std::dec);
-            return;
-        }
+    // Canonical SMC AXI sideband.  The wrapper is a pure decoder: it inspects
+    // the extension for tracing only and forwards the original payload, so
+    // every field reaches the child untouched.  Access control lives in the
+    // fabric's axi_filter, not here.
+    const smc::smc_axi_extension* ext =
+        gp.get_extension<smc::smc_axi_extension>();
+    (void)ext;
+
+    const sub* s = route(adr);
+    if (s == nullptr) {
+        // Reserved gap between sub-blocks (or past the window).  No delay is
+        // annotated for a decode miss.
+        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        gp.set_dmi_allowed(false);
+        SIM_LOG_DEBUG(this,
+                      "decode miss at off=0x" << std::hex << adr << std::dec);
+        return;
     }
 
-    // Reserved gap between sub-blocks (or past the window).
-    gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-    SIM_LOG_DEBUG(this,
-                  "decode miss at off=0x" << std::hex << adr << std::dec);
+    // Rebase to the block-local offset, forward, then restore the address so
+    // the initiator's payload is unchanged on both success and error paths.
+    gp.set_address(adr - s->base);
+    (*s->init)->b_transport(gp, delay);
+    gp.set_address(adr);
+
+    SIM_LOG_TRACE(this,
+                  "route off=0x" << std::hex << adr << " -> " << s->name
+                                 << " local=0x" << (adr - s->base)
+                                 << " src_id=0x"
+                                 << (ext != nullptr ? ext->source_id : 0)
+                                 << std::dec);
+}
+
+unsigned int pll_wrapper::transport_dbg(tlm::tlm_generic_payload& gp)
+{
+    const uint64_t adr = gp.get_address();
+
+    const sub* s = route(adr);
+    if (s == nullptr) return 0;
+
+    gp.set_address(adr - s->base);
+    const unsigned int n = (*s->init)->transport_dbg(gp);
+    gp.set_address(adr);
+    return n;
+}
+
+bool pll_wrapper::get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                                     tlm::tlm_dmi& dmi_data)
+{
+    (void)gp;
+    dmi_data.allow_none();
+    dmi_data.set_start_address(0);
+    dmi_data.set_end_address(cfg_.WINDOW_SIZE - 1);
+    return false;
 }
 
 void pll_wrapper::dump_state(std::ostream& os) const

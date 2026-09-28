@@ -37,9 +37,83 @@ and `rst_n_i`. Firmware uses mixed 16-bit and 32-bit MMIO;
 `reg_block` accepts naturally aligned 1/2/4-byte accesses within one
 32-bit word (RMW).
 
+====== Bus contract
+
+`reg_block` enforces the same contract at every child, so no route is
+more permissive than another.
+
+[cols="28%,72%",options="header"]
+|===
+|Aspect |Contract
+|Size / alignment
+|Naturally aligned 1, 2 or 4 bytes; anything else is
+ `TLM_BURST_ERROR_RESPONSE`.
+|Window bound
+|Expressed as `len > window_size_ - adr`, never `adr + len >
+ window_size_`: the sum wraps for an address near `UINT64_MAX` and
+ would alias a wild access into the window. Because every accepted
+ access is naturally aligned, at most 4 bytes, and every window size is
+ a multiple of 4, an access can never start inside a window and end
+ outside it.
+|Byte enables
+|Any non-null `byte_enable_ptr` is refused with
+ `TLM_BYTE_ENABLE_ERROR_RESPONSE`, whatever the byte-enable length and
+ even for an all-lanes-enabled pattern. The block models lanes through
+ the address/length pair only.
+|Streaming width
+|A register access is a single beat, so TLM-2.0 requires
+ `streaming_width >= data_length`. Smaller (including 0) is a burst
+ error; larger is accepted and ignored.
+|Delay
+|Exactly one child `access_delay_ns` per successful access. The wrapper
+ adds none, and no error or decode-miss path annotates any delay.
+|===
+
+====== Sideband, debug and DMI
+
+The wrapper is the SMC-facing target, so it is where the canonical
+`smc::smc_axi_extension` (from `smc/common/include`) is inspected. The
+wrapper is a pure decoder: it reads the sideband for tracing only and
+forwards the original payload, rebasing and then restoring the address,
+so every field reaches the child untouched on both success and error
+paths. Access control belongs to the fabric's `axi_filter`, not here.
+
+`transport_dbg` is a raw back door with `peek`/`poke` semantics — no
+read/write masks, no self-clearing strobes, no write observers and no
+annotated delay — rebased through the same decode as `b_transport`. A
+debug write to a `REG_UPDATE` strobe therefore does not commit lock.
+
+DMI is always denied: `get_direct_mem_ptr` returns false at both the
+wrapper and every child, and `b_transport` clears `dmi_allowed`. A
+direct pointer would bypass the strobe and lock-observer side effects
+that give this register map its behaviour.
+
+====== Modelled lock policy
+
 A CGM or AWM `REG_UPDATE` strobe is the lock model: the wrapper sets
 the firmware-polled `pll_cntl` lock_detect bits immediately so
-busy-wait programming sequences complete. Reset clears lock.
+busy-wait programming sequences complete. Reset clears lock. The
+policy is stated exactly, as named constants on `pll_wrapper`, and the
+bench checks every combination of it:
+
+[cols="34%,66%",options="header"]
+|===
+|Constant |Meaning
+|`REG_UPDATE_COMMIT` (bit 0)
+|The only `REG_UPDATE` bit that commits shadow config. The second awm
+ bit does not move lock.
+|`CGM_ENABLE` (bit 0 of `cgm.ENABLES`)
+|CGM lock follows this bit at commit time, so a disable plus commit
+ drops lock.
+|`AWM0_LOCK_DETECT` = 7, `AWM1_LOCK_DETECT` = 1
+|`lock_detect[2:0]` each AWM reports once committed — awm_0 drives all
+ three of its CGM sub-blocks, awm_1 drives one.
+|===
+
+Observers receive the post-lane-merge, pre-self-clear word, which is
+what makes a strobe observable at all. A write to a lane that does not
+contain the commit bit therefore sees the bit at its stored (already
+self-cleared) 0 and correctly does nothing.
 
 `smc-vp` binds `pll_wrap.reg_socket` on `periph_router` and
 `rst_n_i` to the platform reset.
@@ -77,6 +151,14 @@ param.
 * No PLL analog, VCO, SSC, or clock datapath. Monitor/counter
   status stays at reset unless `poke()`d.
 * Lock asserts on the `REG_UPDATE` strobe with no settle time.
+* `AWM0_LOCK_DETECT` / `AWM1_LOCK_DETECT` are per-instance constants.
+  The model has no AWM datapath, so it cannot derive lock from the
+  per-CGM enable and configuration state the way the RTL does; the
+  values are the ones the firmware polls for. The bench proves the
+  stated policy exhaustively, but the policy itself still needs
+  confirming against RTL.
 * AWM droop-detector companion in `awm_wrap` is not instantiated.
 * Firmware polls `pll_cntl` aggregated status, not the child's own
   lock register — the wrapper is what makes that poll succeed.
+* The register manifest in the bench is hand-transcribed. It should be
+  generated from the RDL once the RDL sources are available in-tree.

@@ -7,21 +7,41 @@
 ====== Standalone bench
 
 `test/pll_wrapper_tb.cpp` is a TLM initiator into the composed
-wrapper. It covers child independence, strobes, reserved-gap faults,
-sub-word RMW, firmware-style CGM/AWM lock polls, and CCI on the
-children.
+wrapper, plus standalone `pll_cntl` / `cgm` / `awm` instances used for
+the exhaustive per-register sweeps (a standalone child has no
+`REG_UPDATE` lock observer, so a sweep cannot perturb a status
+register mid-pass).
+
+The bench separates two kinds of case, and the separation is load
+bearing:
+
+* *Architectural* cases drive the model only through its TLM sockets
+  and check it against the independent register manifest. Only these
+  may be cited as evidence the model matches the hardware contract.
+* *Structural* cases exercise the model's own back doors (`peek`,
+  `poke`, callback replacement, `dump_state`). They keep the debug
+  infrastructure working and they raise coverage, but they prove
+  nothing about PLL architecture.
+
+The manifest (`kExp*` in the bench) is a second, independent
+transcription of every register's offset, reset, read mask, write mask
+and self-clearing mask. It is deliberately not derived from the
+model's tables in `src/`, so a transcription slip on either side fails
+the bench. The awm tiling is also re-implemented bench-side so a
+stride or base error in `awm.cpp` cannot hide behind identical code.
 
 Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
-`asan.log.*`; line coverage on the touched model sources meets the
-repository ≥ 95% gate.
+sanitizer log; every touched model source *and header* meets the
+repository ≥ 95% gate individually, not just in aggregate.
 
 How to run (from `smc/peripherals/pll_wrapper`):
 
 [source,bash]
 ----
 ./run_tests.sh
-./run_tests.sh --asan
-./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --asan           # AddressSanitizer + UndefinedBehaviorSanitizer
+./run_tests.sh --coverage       # do not combine with --asan
+./run_tests.sh --ubsan-canary   # proves the UBSan gate can actually fail
 ./run_tests.sh --ctest
 ./run_tests.sh --clean
 
@@ -31,27 +51,202 @@ cd smc
 
 `run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
 
-====== Standalone cases
+====== Architectural cases
 
 Source: `test/pll_wrapper_tb.cpp`. Names are the `[PASS]` titles.
 
-[cols="8%,36%,40%,16%",options="header"]
+[cols="30%,52%,18%",options="header"]
 |===
-|ID |Name |What the model test proves |Type
-|1 |reset defaults across pll_cntl / cgm / awm |Child windows at RDL reset |Positive
-|2 |RW write-back honours per-field write masks |`reg_block` wmask |Positive
-|3 |RO status registers are software read-only |Status poke vs software write |Positive
-|4 |single-pulse + self-clearing strobes |REG_UPDATE / SAMPLE_STROBE / postdiv |Positive
-|5 |sub-block instances are independent |cgm_0 vs cgm_1 |Positive
-|6 |reserved-gap accesses fault |Decode holes between children |Negative
-|7 |size / alignment errors |Bus contract |Negative
-|8 |HW-driven status readback via back door |`poke()` |Positive
-|9 |reset restores RDL defaults |Second reset |Positive
-|10 |CCI discovery / mutation per sub-block |Child `access_delay_ns` |Positive
-|11 |firmware CGM program + lock poll (16-bit) |Wrapper lock observe |Positive
-|12 |CGM disable + REG_UPDATE clears lock |Disable path |Positive
-|13 |AWM REG_UPDATE drives pll_cntl lock status |AWM0/AWM1 lock_detect |Positive
-|14 |16-bit RMW preserves 32-bit register high half |Sub-word merge |Positive
+|Name |What the model test proves |Type
+
+3+^s|Register model vs independent manifest
+
+|register counts and window sizes match the manifest
+|Exactly 22 + 23 + 122 registers exist; a missing or extra table entry
+ is caught rather than sampled around
+|Positive
+
+|reset value of every register
+|All 167 registers read their RDL reset through the read mask
+|Positive
+
+|read/write/self-clear mask of every register
+|All-ones and all-zeros writes to every register, checked against the
+ manifest's own expectation of the stored word and of the software view
+|Positive
+
+|every reserved hole is RAZ/WI and non-aliasing
+|Every 4-byte offset in each child window that the manifest does not
+ name reads zero, ignores writes, and leaves the register image intact
+|Negative
+
+|1/2/4-byte lane matrix on RW / RO / WO / self-clear
+|Every byte lane and halfword of a representative register from each
+ access class, read and write, against an independent lane model
+|Positive
+
+|every self-clearing field at 8/16/32-bit
+|All four self-clearing fields (`GPIO_CLK_OBS_CTRL.postdiv_update_div`,
+ `cgm.REG_UPDATE`, `cgm.SAMPLE_STROBE`, `awm.GLOBAL.REG_UPDATE`) at
+ every width whose lane reaches the bit
+|Positive
+
+3+^s|Composed address map
+
+|every register reachable at its composed address
+|Routing to all five children for the whole map
+|Positive
+
+|unique pattern per register: no aliasing or cross-child leakage
+|Address-derived pattern written to every writable register in all five
+ children, then the whole map read back
+|Positive
+
+|byte-exact child boundaries and reserved gaps
+|First/last byte, last word and halfword of each child, first access
+ past each end, and the `0x300` / `0x900` / `0xF00` / `0xFFC` / `0x1000`
+ gaps
+|Negative
+
+|address-overflow-safe window bound
+|`UINT64_MAX` and `UINT64_MAX-3` at the wrapper and straight at a child
+ target; a target checking `adr + len` wraps and wrongly accepts these
+|Negative
+
+3+^s|TLM-2.0 bus contract
+
+|malformed-payload matrix on every route and a gap
+|Null pointer, zero length, widths 3/5/6/7/8, `TLM_IGNORE_COMMAND` and
+ every misalignment, applied to all five routes and a decode gap, with
+ the address asserted restored each time
+|Negative
+
+|byte enables refused at every byte-enable length
+|Lengths 0/1/2/4/8 on read and write; a null pointer with a stale
+ non-zero length stays legal
+|Negative
+
+|streaming-width relations
+|0, `<`, `==` and `>` `data_length` for each of the three widths
+|Negative
+
+3+^s|Canonical AXI sideband
+
+|sideband preserved through every route, gap and error shape
+|`smc::smc_axi_extension` with non-default `source_id` / `axi_id` /
+ `prot` / `axi_user` survives all five routes, a decode gap and an
+ in-child error, with the address restored
+|Positive
+
+|absent sideband is accepted unchanged
+|The wrapper inspects but never requires the extension
+|Positive
+
+3+^s|Debug and DMI policy
+
+|transport_dbg raw back door and its refusals
+|Raw reads/writes bypass the masks, sub-word lanes work, a debug write
+ to a strobe fires no lock observer and does not self-clear; gap, out
+ of window, overflow, bad width, misalignment, null pointer, zero
+ length, byte enables, short streaming width and bad command all
+ return 0
+|Both
+
+|DMI denied at wrapper and child, on hit and miss
+|`get_direct_mem_ptr` returns false everywhere and `dmi_allowed` is
+ cleared on every completed transaction
+|Negative
+
+3+^s|Lock policy
+
+|CGM lock matrix: enable x commit strobe, both mirrors
+|Each CGM over `ENABLES` 0/1/2/3 x `REG_UPDATE` 0/1, starting from a
+ locked state, checking both the polled `pll_cntl` status and the
+ child's own mirror, plus strobe self-clear
+|Both
+
+|AWM lock matrix: both REG_UPDATE bits, both mirrors
+|Each AWM over `REG_UPDATE` 0/1/2/3; only the commit bit moves
+ `lock_detect`, to the per-instance constant
+|Both
+
+|AWM instances commit independently
+|Committing awm_0 does not move awm_1's status, and vice versa
+|Positive
+
+|observers cannot commit from a stale or untouched lane
+|Writes to the upper half and upper byte of the `REG_UPDATE` word must
+ not assert lock; a byte write containing the commit bit still does
+|Negative
+
+|firmware CGM program + lock poll terminates immediately
+|16-bit firmware-shaped sequence; the poll exits on the first read
+|Positive
+
+3+^s|Annotated delay and CCI
+
+|incoming delay preserved, exactly one child delay added
+|Non-zero incoming delay plus exactly one child `access_delay_ns`; the
+ wrapper itself adds none and does not double-count
+|Positive
+
+|per-child access_delay_ns mutates live and in isolation
+|Each child mutated in turn; the others keep their own annotation
+|Positive
+
+|error, decode-miss and debug paths annotate no delay
+|Gap, past-window, misaligned and bad-width accesses add zero delay
+|Negative
+
+3+^s|Reset
+
+|dirty-all then reset restores the complete reset image
+|Every writable register dirtied and lock committed, then the full
+ 167-register reset image required back
+|Positive
+
+|reset concurrent with a commit strobe leaves no stale lock
+|Reset asserted in the same delta as `REG_UPDATE` writes
+|Negative
+
+|repeated reset and reprogram cycles
+|Three reset/reprogram rounds with traffic in flight
+|Positive
+|===
+
+====== Structural cases
+
+These cover the model's debug surface only.
+
+[cols="40%,60%",options="header"]
+|===
+|Name |What it covers
+|peek/poke and callback replacement (structural)
+|`peek` / `poke` round trip and miss paths, per-register
+ `set_read_callback` / `set_write_callback` on hit and miss
+|dump_state renders every child (structural)
+|The composed dump names registers from `pll_cntl`, the tiled awm
+ `GLOBAL` block and `FREQUENCY5`
+|===
+
+====== Build and sanitizer gates
+
+[cols="30%,70%",options="header"]
+|===
+|Gate |Requirement
+|Per-file coverage
+|`run_tests.sh --coverage` sets `COVERAGE_PER_FILE=1`, so every file in
+ `src/` and every instrumented header in `include/` must reach ≥ 95%
+ on its own. The aggregate alone would let the large declarative
+ register tables — which execute in full during construction — mask a
+ weakly covered decode or routing source.
+|Sanitizers
+|`--asan` builds with AddressSanitizer *and* UndefinedBehaviorSanitizer
+ and fails on any report.
+|UBSan canary
+|`--ubsan-canary` compiles a deliberate shift overflow into the bench
+ and fails unless UBSan reports it, so a clean `--asan` run means the
+ instrumentation is actually live.
 |===
 
 ====== Platform firmware tests

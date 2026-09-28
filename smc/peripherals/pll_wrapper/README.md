@@ -49,6 +49,12 @@ The wrapper presents one 32-bit target, decodes each access to the owning
 sub-block window, rebases to the block-local offset, and forwards over an
 internal initiator socket (same pattern as the SMC platform fabric).
 
+Being the SMC-facing target, the wrapper is where the canonical
+`smc::smc_axi_extension` sideband is inspected. It is a pure decoder: the
+sideband is read for tracing only and the original payload is forwarded, so
+every field reaches the child untouched and the caller's address is restored on
+both success and error paths.
+
 ### Firmware-driven lock behaviour
 
 The SMC firmware (`sw/tt-oca-harness-main/fw/smc`) programs a PLL and then busy-polls
@@ -79,15 +85,31 @@ comments.
   registers. Sub-word writes perform a read-modify-write on the containing word.
 - `rst_n_i`    — active-low reset (restores every register to its RDL default).
 
+Byte enables are refused outright (the model does not implement them) and a
+single-beat access must carry `streaming_width >= data_length`. The window
+bound is written overflow-safe, so a wild address near `UINT64_MAX` cannot wrap
+into a child window.
+
+`transport_dbg` is a raw back door with `peek`/`poke` semantics: no masks, no
+self-clearing strobes, no write observers, no annotated delay. DMI is always
+denied, because strobes and lock observers mean a direct pointer would bypass
+real side effects.
+
 ## Build & test
 
 ```sh
 cp deps.env.example deps.env     # point SYSTEMC_HOME / CCI_HOME at your installs
 ./run_tests.sh                   # incremental build + run the test bench
 ./run_tests.sh --clean           # fresh configure/build/run
-./run_tests.sh --asan            # AddressSanitizer build
-./run_tests.sh --coverage        # line-coverage report
+./run_tests.sh --asan            # AddressSanitizer + UndefinedBehaviorSanitizer
+./run_tests.sh --coverage        # line-coverage report, gated per file
+./run_tests.sh --ubsan-canary    # proves the UBSan gate can actually fail
 ```
+
+`--coverage` gates every file in `src/` **and** every instrumented header in
+`include/` at ≥ 95% individually. An aggregate-only gate is misleading here:
+the large declarative register tables execute in full during construction, so
+they can mask a weakly covered decode or routing source.
 
 When built standalone the CMake project builds `libsmc_pll_wrapper.a` plus the
 `pll_wrapper_tb` test bench (covering the composed map). When added as a

@@ -9,11 +9,21 @@
 #
 # Environment:
 #   COVERAGE_MIN_LINE_PCT   Minimum accepted line coverage (default: 95)
+#   COVERAGE_PER_FILE       1 => additionally require EVERY model source (and
+#                           every instrumented header under include/) to reach
+#                           the gate on its own.  Default 0.
+#
+# Why per-file matters: an aggregate src/ percentage lets a weakly covered file
+# hide behind heavily executed neighbours.  Large declarative register tables
+# execute in full during construction, so a model can report a high aggregate
+# while a routing or decode source sits well below the gate.  IPs opt in as
+# they are remediated; once every IP sets it, the default should flip to 1.
 # =============================================================================
 
 set -euo pipefail
 
 MIN="${COVERAGE_MIN_LINE_PCT:-95}"
+PER_FILE="${COVERAGE_PER_FILE:-0}"
 IP_ROOT="${1:?usage: enforce_line_coverage.sh <ip_root> <build_dir>}"
 BUILD_DIR="${2:?usage: enforce_line_coverage.sh <ip_root> <build_dir>}"
 
@@ -43,6 +53,43 @@ _extract_line_pct() {
     ' | tail -1
 }
 
+# Print "<file> <line_pct>" for every per-file data row of a coverage report.
+# $1 selects which percentage on the row carries LINE coverage:
+#   llvm-cov report -> region, function, LINE, branch  (index 2)
+#   gcovr / lcov    -> LINE first                      (index 0)
+_extract_per_file() {
+    LINE_PCT_INDEX="$1" perl -ne '
+        my $i = $ENV{LINE_PCT_INDEX};
+        next if /^\s*$/ || /^-+$/ || /^=+$/;
+        next if /^(Filename|File|TOTAL|Total|Directory|Message|\s+GCC)\b/;
+        my ($f) = /^(\S+)/;
+        next unless defined $f && $f =~ /\.(c|cc|cpp|h|hh|hpp)$/;
+        my @p = /([0-9]+(?:\.[0-9]+)?)%/g;
+        next unless defined $p[$i];
+        print "$f $p[$i]\n";
+    '
+}
+
+# Fail the build if any row of "<file> <pct>" on stdin is below ${MIN}.
+_enforce_per_file() {
+    local failed=0 file pct
+    echo ">> Per-file line coverage (gate: ≥ ${MIN}% each):"
+    while read -r file pct; do
+        [[ -z "${file}" ]] && continue
+        if awk -v p="${pct}" -v m="${MIN}" 'BEGIN { exit (p+0 < m+0) }'; then
+            printf '   PASS  %7s%%  %s\n' "${pct}" "${file}"
+        else
+            printf '   FAIL  %7s%%  %s\n' "${pct}" "${file}"
+            failed=1
+        fi
+    done
+    if [[ "${failed}" -ne 0 ]]; then
+        echo "ERROR: at least one file is below the ${MIN}% per-file gate." >&2
+        return 1
+    fi
+    return 0
+}
+
 COVERAGE_TOOL="$(cat "${BUILD_DIR}/coverage_tool.txt" 2>/dev/null || echo "llvm")"
 SRC_DIR="${IP_ROOT}/src"
 if [[ ! -d "${SRC_DIR}" ]]; then
@@ -59,6 +106,18 @@ EOF
 if [[ ${#SRC_FILES[@]} -eq 0 ]]; then
     echo "ERROR: no source files under ${SRC_DIR}; cannot enforce coverage." >&2
     exit 1
+fi
+
+# Headers carrying inline model code count as touched model files under the
+# per-file gate; they are left out of the aggregate so its meaning is unchanged.
+HDR_FILES=()
+INC_DIR="${IP_ROOT}/include"
+if [[ "${PER_FILE}" == "1" && -d "${INC_DIR}" ]]; then
+    while IFS= read -r _f; do
+        if [[ -n "${_f}" ]]; then HDR_FILES+=("${_f}"); fi
+    done <<EOF
+$(find "${INC_DIR}" -type f \( -name '*.h' -o -name '*.hh' -o -name '*.hpp' \) | sort)
+EOF
 fi
 
 PCT=""
@@ -81,13 +140,25 @@ if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
     PCT="$(${COV_CMD} report "${TB_BIN}" \
         -instr-profile="${PROFDATA}" \
         "${SRC_FILES[@]}" | _extract_line_pct)"
+
+    if [[ "${PER_FILE}" == "1" ]]; then
+        PER_FILE_ROWS="$(${COV_CMD} report "${TB_BIN}" \
+            -instr-profile="${PROFDATA}" \
+            "${SRC_FILES[@]}" "${HDR_FILES[@]+"${HDR_FILES[@]}"}" \
+            | _extract_per_file 2)"
+    fi
 else
     if command -v gcovr &>/dev/null; then
-        PCT="$(gcovr \
-            --root "${SRC_DIR}" \
-            --object-directory "${BUILD_DIR}" \
-            --filter "${SRC_DIR}/" \
-            | _extract_line_pct)"
+        GCOVR_ARGS=(--root "${SRC_DIR}"
+                    --object-directory "${BUILD_DIR}"
+                    --filter "${SRC_DIR}/")
+        if [[ "${PER_FILE}" == "1" && -d "${INC_DIR}" ]]; then
+            GCOVR_ARGS+=(--filter "${INC_DIR}/")
+        fi
+        PCT="$(gcovr "${GCOVR_ARGS[@]}" | _extract_line_pct)"
+        if [[ "${PER_FILE}" == "1" ]]; then
+            PER_FILE_ROWS="$(gcovr "${GCOVR_ARGS[@]}" | _extract_per_file 0)"
+        fi
     elif command -v lcov &>/dev/null; then
         INFO="${BUILD_DIR}/coverage.info"
         if [[ ! -f "${INFO}" ]]; then
@@ -105,6 +176,11 @@ else
         fi
         PCT="$(lcov --summary "${SRC_INFO}" 2>&1 |
                sed -n 's/^ *lines\.*: *\([0-9.]*\)%.*/\1/p' | tail -1)"
+        if [[ "${PER_FILE}" == "1" ]]; then
+            # --list prints "path | <line%> <lines> | ..." per file.
+            PER_FILE_ROWS="$(lcov --list "${SRC_INFO}" 2>/dev/null |
+                             sed 's/|/ /g' | _extract_per_file 0)"
+        fi
     else
         echo "ERROR: neither gcovr nor lcov found; cannot enforce the coverage gate." >&2
         exit 1
@@ -118,10 +194,22 @@ fi
 
 echo ">> Line coverage (src/): ${PCT}%  (gate: ≥ ${MIN}%)"
 
-if awk -v p="${PCT}" -v m="${MIN}" 'BEGIN { exit (p+0 < m+0) }'; then
-    echo ">> Coverage gate PASS"
-    exit 0
+RC=0
+if ! awk -v p="${PCT}" -v m="${MIN}" 'BEGIN { exit (p+0 < m+0) }'; then
+    echo "ERROR: line coverage ${PCT}% is below the ${MIN}% gate." >&2
+    RC=1
 fi
 
-echo "ERROR: line coverage ${PCT}% is below the ${MIN}% gate." >&2
-exit 1
+if [[ "${PER_FILE}" == "1" ]]; then
+    if [[ -z "${PER_FILE_ROWS:-}" ]]; then
+        echo "ERROR: per-file coverage requested but no per-file rows parsed." >&2
+        RC=1
+    elif ! printf '%s\n' "${PER_FILE_ROWS}" | _enforce_per_file; then
+        RC=1
+    fi
+fi
+
+if [[ "${RC}" -eq 0 ]]; then
+    echo ">> Coverage gate PASS"
+fi
+exit "${RC}"

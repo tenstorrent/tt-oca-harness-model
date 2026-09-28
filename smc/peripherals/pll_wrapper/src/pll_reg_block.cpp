@@ -35,6 +35,8 @@ reg_block::reg_block(sc_core::sc_module_name name,
     build(specs, n);
 
     reg_socket.register_b_transport(this, &reg_block::b_transport);
+    reg_socket.register_transport_dbg(this, &reg_block::transport_dbg);
+    reg_socket.register_get_direct_mem_ptr(this, &reg_block::get_direct_mem_ptr);
 
     SC_METHOD(reset_proc);
     sensitive << rst_n_i;
@@ -130,6 +132,61 @@ bool reg_block::poke(uint64_t offset, uint32_t value)
     return true;
 }
 
+bool reg_block::check_access(const tlm::tlm_generic_payload& gp,
+                             tlm::tlm_response_status& status) const
+{
+    const uint64_t adr = gp.get_address();
+    const unsigned len = gp.get_data_length();
+
+    if (gp.get_data_ptr() == nullptr || len == 0) {
+        status = tlm::TLM_GENERIC_ERROR_RESPONSE;
+        return false;
+    }
+
+    // The PLL firmware uses 16-bit and 32-bit accesses (and could use 8-bit).
+    // Accept naturally aligned 1/2/4-byte accesses only.
+    if ((len != 1 && len != 2 && len != 4) ||
+        (adr & (static_cast<uint64_t>(len) - 1)) != 0) {
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
+    }
+
+    // Overflow-safe window bound: `adr + len` would wrap for addresses close
+    // to UINT64_MAX and let a wild access alias into the window.
+    if (adr >= window_size_ || len > window_size_ - adr) {
+        status = tlm::TLM_ADDRESS_ERROR_RESPONSE;
+        return false;
+    }
+
+    // Byte enables are not modelled; any non-null pointer is refused whatever
+    // its length, including an all-lanes-enabled pattern.
+    if (gp.get_byte_enable_ptr() != nullptr) {
+        status = tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE;
+        return false;
+    }
+
+    // Single-beat access: TLM-2.0 requires streaming_width >= data_length.
+    if (gp.get_streaming_width() < len) {
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
+    }
+
+    status = tlm::TLM_OK_RESPONSE;
+    return true;
+}
+
+reg_block::lane_view reg_block::lane_of(uint64_t adr, unsigned len)
+{
+    // Naturally-aligned 1/2/4-byte accesses cannot straddle a 32-bit word, so
+    // the containing register is simply the address rounded down.
+    const unsigned lane_bits = static_cast<unsigned>(adr & 0x3u) * 8u;
+    return lane_view{
+        adr & ~UINT64_C(0x3),
+        lane_bits,
+        (len == 4) ? 0xFFFFFFFFu
+                   : ((((uint32_t{1} << (len * 8u)) - 1u)) << lane_bits)};
+}
+
 void reg_block::b_transport(tlm::tlm_generic_payload& gp,
                             sc_core::sc_time& delay)
 {
@@ -138,46 +195,25 @@ void reg_block::b_transport(tlm::tlm_generic_payload& gp,
     const unsigned         len = gp.get_data_length();
     unsigned char* const   ptr = gp.get_data_ptr();
 
-    if (ptr == nullptr || len == 0) {
-        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
-        return;
-    }
+    // Strobes and lock observers make register accesses side-effecting, so a
+    // direct memory pointer must never be handed out for this window.
+    gp.set_dmi_allowed(false);
 
-    // The PLL firmware uses 16-bit and 32-bit accesses (and could use 8-bit).
-    // Accept naturally aligned 1/2/4-byte accesses only.
-    if ((len != 1 && len != 2 && len != 4) ||
-        (adr & (static_cast<uint64_t>(len) - 1)) != 0) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
-
-    if (adr + len > window_size_) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-        SIM_LOG_DEBUG(this,
-                      "TLM decode miss at off=0x" << std::hex << adr);
-        return;
-    }
-
-    if (gp.get_byte_enable_ptr() != nullptr) {
-        gp.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
-        return;
-    }
-
-    if (gp.get_streaming_width() < len) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    if (!check_access(gp, status)) {
+        gp.set_response_status(status);
+        if (status == tlm::TLM_ADDRESS_ERROR_RESPONSE) {
+            SIM_LOG_DEBUG(this,
+                          "TLM decode miss at off=0x" << std::hex << adr);
+        }
         return;
     }
 
     // Map the (possibly sub-word) access onto its containing 32-bit register.
-    const uint64_t reg_off   = adr & ~UINT64_C(0x3);
-    const unsigned lane      = static_cast<unsigned>(adr & 0x3u);   // 0..3
-    const unsigned lane_bits = lane * 8u;
-    const uint32_t lane_mask =
-        (len == 4) ? 0xFFFFFFFFu
-                   : ((((uint32_t{1} << (len * 8u)) - 1u)) << lane_bits);
-
-    // Naturally-aligned 1/2/4-byte accesses cannot straddle a 32-bit word
-    // (the size/alignment check above already rejects every straddling case).
+    const lane_view v         = lane_of(adr, len);
+    const uint64_t  reg_off   = v.reg_off;
+    const unsigned  lane_bits = v.lane_bits;
+    const uint32_t  lane_mask = v.lane_mask;
 
     if (cmd == tlm::TLM_READ_COMMAND) {
         uint32_t word = 0;
@@ -215,6 +251,46 @@ void reg_block::b_transport(tlm::tlm_generic_payload& gp,
 
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
     gp.set_response_status(tlm::TLM_OK_RESPONSE);
+}
+
+unsigned int reg_block::transport_dbg(tlm::tlm_generic_payload& gp)
+{
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    if (!check_access(gp, status)) return 0;
+
+    const unsigned len       = gp.get_data_length();
+    unsigned char* const ptr = gp.get_data_ptr();
+    const lane_view v        = lane_of(gp.get_address(), len);
+
+    // Raw back door: the register's masks, self-clearing bits and write
+    // observers are all bypassed so a debug access cannot perturb the model.
+    regmodel::Register32* r = map_.find(v.reg_off);
+
+    if (gp.get_command() == tlm::TLM_READ_COMMAND) {
+        const uint32_t word     = (r != nullptr) ? r->raw() : 0u;
+        const uint32_t lane_val = (word & v.lane_mask) >> v.lane_bits;
+        std::memcpy(ptr, &lane_val, len);
+        return len;
+    }
+    if (gp.get_command() == tlm::TLM_WRITE_COMMAND) {
+        if (r == nullptr) return len;  // reserved hole: write ignored
+        uint32_t incoming = 0;
+        std::memcpy(&incoming, ptr, len);
+        r->set_raw((r->raw() & ~v.lane_mask) |
+                   ((incoming << v.lane_bits) & v.lane_mask));
+        return len;
+    }
+    return 0;
+}
+
+bool reg_block::get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                                   tlm::tlm_dmi& dmi_data)
+{
+    (void)gp;
+    dmi_data.allow_none();
+    dmi_data.set_start_address(0);
+    dmi_data.set_end_address(window_size_ - 1);
+    return false;
 }
 
 void reg_block::observe_write(uint64_t offset, WriteObserver fn)
