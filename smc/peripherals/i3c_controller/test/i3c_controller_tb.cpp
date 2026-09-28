@@ -602,6 +602,41 @@ void tb::t_timing()
     }
     hx.set_cci_value(cci::cci_value(100.0));
 
+    // A command already scheduled keeps the due time it was enqueued with, even
+    // if xfer_delay_ns is shortened afterwards.  One shared sc_event serialises
+    // the engine and a timed notify() keeps whichever notification lands
+    // earliest, so re-notifying on a later enqueue would pull the queued
+    // command forward and complete it sooner than its own delay allowed.
+    {
+        drv.write(A(0, cfg_t::RESET_CONTROL),
+                    (1u << smc::reset_control::RESP_QUEUE_RST));
+        hx.set_cci_value(cci::cci_value(200.0));
+        read_payload = {0x09};
+        push_command(0, make_cmd(5, true, 0, false, 0, 1));   // due at +200 ns
+
+        sc_core::wait(20, SC_NS);
+        hx.set_cci_value(cci::cci_value(20.0));               // shorten mid-flight
+        push_command(0, make_cmd(6, true, 0, false, 0, 1));   // second command
+
+        // At +60 ns the shortened delay would already have fired the first
+        // command had the pending notification been moved.
+        sc_core::wait(40, SC_NS);
+        EXPECT_TRUE_CTX(!resp_pending(0),
+                        "queued command keeps its original due time");
+
+        // It completes on its own schedule, and the next one picks up the new
+        // delay from the chaining tick.
+        sc_core::wait(150, SC_NS);
+        EXPECT_TRUE_CTX(resp_pending(0), "queued command completes at +200 ns");
+        drv.read(A(0, cfg_t::RESPONSE_PORT));
+        drv.read(A(0, cfg_t::XFER_DATA_PORT));
+        sc_core::wait(40, SC_NS);
+        EXPECT_TRUE_CTX(resp_pending(0), "next command uses the new delay");
+        drv.read(A(0, cfg_t::RESPONSE_PORT));
+        drv.read(A(0, cfg_t::XFER_DATA_PORT));
+        hx.set_cci_value(cci::cci_value(100.0));
+    }
+
     hard_reset();
     std::cout << "  [PASS] exact access delay; xfer_delay_ns is really mutable\n";
 }

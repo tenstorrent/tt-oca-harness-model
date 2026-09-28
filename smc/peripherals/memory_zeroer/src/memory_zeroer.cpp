@@ -140,7 +140,15 @@ void memory_zeroer::trigger_job()
     SIM_LOG_TRACE(this,
                   "zero start dest=0x" << std::hex << addr
                                        << " size=0x" << nbytes << std::dec);
-    const bool ok = perform_write_zeros(addr, nbytes, job_delay_);
+    // A transaction-local accumulator, deliberately NOT job_delay_ itself: a
+    // chunk that loops back into this CSR window re-enters b_transport, which
+    // saves/clears/restores job_delay_.  Passing the member as the downstream
+    // delay would alias the two, so the nested access would wipe the outer
+    // job's accumulation and `delay += job_delay_` would add the object to
+    // itself.  The local is folded into the member once the job is done.
+    sc_core::sc_time job_delay = sc_core::SC_ZERO_TIME;
+    const bool ok = perform_write_zeros(addr, nbytes, job_delay);
+    job_delay_ += job_delay;
 
     const uint64_t idle =
         ctrl_status_.raw() & ~memory_zeroer_cfg::CTRL_STATUS_MASK;

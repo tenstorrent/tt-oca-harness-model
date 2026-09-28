@@ -185,8 +185,22 @@ else
         PCT="$(lcov --summary "${SRC_INFO}" 2>&1 |
                sed -n 's/^ *lines\.*: *\([0-9.]*\)%.*/\1/p' | tail -1)"
         if [[ "${PER_FILE}" == "1" ]]; then
+            # SRC_INFO was extracted with src/ only, so listing it would never
+            # show an include/ row and the header half of the per-file gate
+            # would silently do nothing on a GCC+lcov host.  Extract a second
+            # trace covering both trees for the per-file listing.
+            PER_FILE_INFO="${BUILD_DIR}/coverage_per_file.info"
+            PER_FILE_PATTERNS=("${SRC_DIR}/*")
+            if [[ -d "${INC_DIR}" ]]; then
+                PER_FILE_PATTERNS+=("${INC_DIR}/*")
+            fi
+            if ! lcov --extract "${INFO}" "${PER_FILE_PATTERNS[@]}" \
+                      --output-file "${PER_FILE_INFO}" &>/dev/null; then
+                echo "ERROR: lcov could not extract per-file coverage from ${INFO}." >&2
+                exit 1
+            fi
             # --list prints "path | <line%> <lines> | ..." per file.
-            PER_FILE_ROWS="$(lcov --list "${SRC_INFO}" 2>/dev/null |
+            PER_FILE_ROWS="$(lcov --list "${PER_FILE_INFO}" 2>/dev/null |
                              sed 's/|/ /g' | _extract_per_file 0)"
         fi
     else

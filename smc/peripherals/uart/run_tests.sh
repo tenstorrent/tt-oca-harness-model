@@ -205,6 +205,11 @@ if (( USE_ASAN || USE_UB_CANARY )); then
 
     ASAN_LOG="${BUILD_DIR}/asan.log"
     UBSAN_LOG="${BUILD_DIR}/ubsan.log"
+    # Sanitizer log_path appends the pid, so a previous run's files would still
+    # be here and get picked up by the wildcard collection below: a stale UBSan
+    # log would make the canary pass with no current report, and a stale finding
+    # would fail an otherwise clean run.
+    rm -f "${ASAN_LOG}"* "${UBSAN_LOG}"*
     if [[ "${OS}" == "Linux" ]]; then
         _ASAN_OPTS="halt_on_error=0:detect_leaks=1:log_path=${ASAN_LOG}"
     else
@@ -259,6 +264,12 @@ if (( USE_ASAN || USE_UB_CANARY )); then
         if [[ ${#UB_LOGS[@]} -eq 0 ]] ||
            ! grep -qE 'runtime error:|UndefinedBehaviorSanitizer' "${UB_LOGS[@]}"; then
             echo "ERROR: UB canary was NOT reported — UBSan is not active." >&2
+            exit 1
+        fi
+        # A UBSan report is necessary but not sufficient: an unrelated
+        # bench failure must still fail the canary run.
+        if (( TB_EXIT != 0 )); then
+            echo "ERROR: test binary failed (exit ${TB_EXIT})" >&2
             exit 1
         fi
         echo ">> UB canary PASS: UBSan reported the deliberate UB."

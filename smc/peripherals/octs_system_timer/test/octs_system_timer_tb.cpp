@@ -803,19 +803,30 @@ void tb::test_ctrl_boundaries()
     is_primary_p.write(true);
     advance();
 
-    // PULSE_WIDTH = 0 is the RTL's "rounds up to 1" case; 1 and 255 are the
-    // other ends.  Measure the emitted sync pulse width directly.
-    for (unsigned pw : {0u, 1u, 5u}) {
+    // PULSE_WIDTH 0 is the RTL's "rounds up to 1" case; 255 is the maximum the
+    // 8-bit field can hold.  Measure the emitted sync pulse width directly.
+    //
+    // CREDIT_VAL must exceed PULSE_WIDTH, which is impossible at PW = 255 for an
+    // 8-bit CREDIT_VAL, so that iteration deliberately violates the constraint.
+    // Only *credit* pulses are affected by it; the sync pulse measured here is
+    // driven by START, so the boundary is still meaningful.  The expected
+    // warning is scoped to the CTRL write that provokes it.
+    for (unsigned pw : {0u, 1u, 5u, 255u}) {
         apply_reset();
         is_primary_p.write(true);
         advance();
         const unsigned expect_w = (pw == 0) ? 1u : pw;
-        drv_p.write32(cfg_t::OFF_CTRL, (1u << 16) | (pw << 8) | 200u);
+        const unsigned cv = (pw >= 255u) ? 255u : 200u;
+        {
+            const scoped_report_actions quiet(SC_WARNING, SC_DO_NOTHING);
+            drv_p.write32(cfg_t::OFF_CTRL, (1u << 16) | (pw << 8) | cv);
+        }
         drv_p.write32(cfg_t::OFF_TIMER_PRESET_LO, 0);
         drv_p.write32(cfg_t::OFF_TIMER_START, 1);
 
+        // The guard must outlast the widest pulse the field can request.
         unsigned width = 0;
-        for (unsigned i = 0; i < 64; ++i) {
+        for (unsigned i = 0; i < 512; ++i) {
             advance();
             if (sl_p2s.read()) ++width;
             else if (width > 0) break;
@@ -825,17 +836,31 @@ void tb::test_ctrl_boundaries()
 
     // STEP boundary values on a SECONDARY: the count advances by STEP per
     // cycle while credits last.  STEP = 0 means the counter never moves.
-    for (unsigned st : {0u, 1u, 7u}) {
+    // STEP 255 is also the "STEP greater than CREDIT_VAL" case: a single step
+    // exhausts the budget, so the counter advances once and then halts.  The
+    // expectation is computed from the documented rule -- advance by STEP while
+    // cur_credits < CREDIT_VAL, accumulating cur_credits by STEP -- rather than
+    // assuming an unconditional STEP per cycle.
+    constexpr unsigned kCv = 200u;
+    for (unsigned st : {0u, 1u, 7u, 255u}) {
         apply_reset();
-        drv_x.write32(cfg_t::OFF_CTRL, (st << 16) | (2u << 8) | 200u);
+        drv_x.write32(cfg_t::OFF_CTRL, (st << 16) | (2u << 8) | kCv);
         drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x100u);
         pulse(sl_drv, 2);
         advance(octs_system_timer::SYNC_LATENCY_CYCLES - 2);
-        const uint64_t at_load = count_x.read();
-        CHECK_EQ("SECONDARY loads the preset", at_load, 0x100u);
-        advance(3);
-        CHECK_EQ("SECONDARY advances by STEP per cycle", count_x.read(),
-                 0x100u + 3ull * st);
+        CHECK_EQ("SECONDARY loads the preset", count_x.read(), 0x100u);
+
+        constexpr unsigned kCycles = 3;
+        uint64_t expect  = 0x100u;
+        unsigned credits = 0;
+        for (unsigned c = 0; c < kCycles; ++c) {
+            if (credits >= kCv) break;          // budget exhausted -> hold
+            expect  += st;
+            credits  = ((credits & 0xFFu) + st) & 0x1FFu;
+        }
+        advance(kCycles);
+        CHECK_EQ("SECONDARY advances by STEP while credits last",
+                 count_x.read(), expect);
     }
 
     drv_p.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);

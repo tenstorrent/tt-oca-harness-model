@@ -174,9 +174,12 @@ struct simple_mem : sc_core::sc_module {
     int  fault_index = -1;
     int  seen_since_arm = 0;
 
-    /// Invoked while servicing each chunk, before it completes.  Used to
-    /// re-enter the zeroer's CSR port from inside its own job.
-    std::function<void()> on_chunk;
+    /// Invoked while servicing each chunk, before it completes, with the
+    /// chunk's OWN delay object.  Used to re-enter the zeroer's CSR port from
+    /// inside its own job while sharing that delay -- which is what a real
+    /// fabric loopback does, and the only way to reproduce the aliasing
+    /// between the downstream delay and the model's job accumulator.
+    std::function<void(sc_core::sc_time&)> on_chunk;
 
     explicit simple_mem(sc_module_name n, std::size_t bytes)
         : sc_module(n), sock("sock"), mem(bytes, 0xA5)
@@ -208,7 +211,7 @@ struct simple_mem : sc_core::sc_module {
                      std::all_of(ptr, ptr + len,
                                  [](unsigned char c) { return c == 0; });
 
-        if (on_chunk) on_chunk();
+        if (on_chunk) on_chunk(delay);
 
         const auto* ext = gp.get_extension<smc::smc_axi_extension>();
         r.had_extension = ext != nullptr;
@@ -1037,9 +1040,22 @@ void tb::t_timing()
         drv.write64(cfg::OFF_SIZE, 0);
         mem.access_delay = sc_time(3, SC_NS);
         unsigned nested = 0;
-        mem.on_chunk = [&] {
+        mem.on_chunk = [&](sc_core::sc_time& chunk_delay) {
             ++nested;
-            drv.read64(cfg::OFF_SIZE);  // re-entrant MMIO during the job
+            // Re-enter the CSR port sharing the chunk's delay object, exactly
+            // as a fabric loopback would.  The nested access must add its own
+            // access_delay_ns to that object and leave the outer job's
+            // accumulation intact.
+            tlm::tlm_generic_payload gp;
+            uint64_t scratch = 0;
+            gp.set_command(tlm::TLM_READ_COMMAND);
+            gp.set_address(cfg::OFF_SIZE);
+            gp.set_data_ptr(reinterpret_cast<unsigned char*>(&scratch));
+            gp.set_data_length(8);
+            gp.set_streaming_width(8);
+            gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+            drv.sock->b_transport(gp, chunk_delay);
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE, gp.get_response_status());
         };
         const uint64_t size = 2 * kChunk + 1;  // 3 chunks
         const rsp s = start_job(0x100, size, cfg::CTRL_INT_EN_MASK, in);
@@ -1048,8 +1064,10 @@ void tb::t_timing()
 
         EXPECT_EQ(tlm::TLM_OK_RESPONSE, s.status);
         EXPECT_EQ(3u, nested);
-        EXPECT_TIME_EQ_CTX(sc_time(kAccessDelayNs + 3 * 3.0, SC_NS),
-                           s.delay_delta, "re-entrant MMIO during a job");
+        // trigger access + 3 chunks x (downstream 3 ns + one nested CSR access)
+        EXPECT_TIME_EQ_CTX(
+            sc_time(kAccessDelayNs + 3 * (3.0 + kAccessDelayNs), SC_NS),
+            s.delay_delta, "re-entrant MMIO during a job");
     }
     mem.access_delay = sc_time(1, SC_NS);
     std::cout << "  [PASS] job cost is annotated onto the triggering write, "

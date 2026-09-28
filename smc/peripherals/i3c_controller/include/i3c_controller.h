@@ -570,6 +570,11 @@ private:
     /// Instances with a pending transaction to process (FIFO order).
     std::deque<unsigned> xfer_pending_;
 
+    /// True while `xfer_event_` carries an outstanding timed notification.
+    /// Guards against re-notifying, which would move an already-scheduled
+    /// command's due time (see schedule_xfer()).
+    bool xfer_scheduled_ = false;
+
     sc_core::sc_time access_delay_;
     sc_core::sc_time xfer_delay_;
 };

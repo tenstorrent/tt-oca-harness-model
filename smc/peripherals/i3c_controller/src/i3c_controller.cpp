@@ -171,6 +171,7 @@ i3c_controller::i3c_controller(sc_core::sc_module_name name, i3c_controller_cfg 
 void i3c_controller::reset_method()
 {
     xfer_event_.cancel();
+    xfer_scheduled_ = false;
     xfer_pending_.clear();
     for (auto& s : inst_) {
         auto bus_model = std::move(s.bus_model);
@@ -195,12 +196,22 @@ void i3c_controller::schedule_recompute()
 
 void i3c_controller::schedule_xfer()
 {
-    // Re-read the CCI value on every scheduling decision: xfer_delay_ns is
+    // One shared event serialises the transaction engine, and a timed
+    // sc_event::notify() keeps whichever notification lands EARLIEST.  So a
+    // second enqueue must not re-notify: with a shortened xfer_delay_ns it
+    // would pull the already-scheduled command forward, completing it sooner
+    // than the delay in force when it was enqueued.  The tick that is already
+    // pending chains to the next one in xfer_method(), which is where the new
+    // delay legitimately takes effect.
+    if (xfer_scheduled_) return;
+
+    // Re-read the CCI value on each fresh scheduling decision: xfer_delay_ns is
     // documented mutable, so caching it at construction would silently make
     // run-time changes ineffective.  access_delay_ns is re-read the same way
     // in b_transport.
     xfer_delay_ = sc_core::sc_time(xfer_delay_ns_p_.get_value(), sc_core::SC_NS);
     xfer_event_.notify(xfer_delay_);
+    xfer_scheduled_ = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +389,7 @@ void i3c_controller::enqueue_command(inst_state& s, uint64_t desc)
 
 void i3c_controller::xfer_method()
 {
+    xfer_scheduled_ = false;  // this tick has been consumed
     if (xfer_pending_.empty()) return;
     const unsigned inst = xfer_pending_.front();
     xfer_pending_.pop_front();

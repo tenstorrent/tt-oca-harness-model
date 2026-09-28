@@ -70,6 +70,19 @@ constexpr uint64_t SCR = 0x1C, ECR = 0x20, ITR = 0x24;
 constexpr uint32_t LSR_DR = 0x01, LSR_OE = 0x02, LSR_PE = 0x04, LSR_FE = 0x08,
                    LSR_BI = 0x10, LSR_THRE = 0x20, LSR_TEMT = 0x40, LSR_ERRF = 0x80;
 
+/// Changes the report actions for one message ID and restores them on scope
+/// exit.  Scoping by ID (not by severity) keeps every unrelated diagnostic of
+/// the same severity live.
+struct scoped_report_actions_id {
+    const char*         id;
+    sc_core::sc_actions saved;
+    scoped_report_actions_id(const char* msg_id, sc_core::sc_actions a)
+        : id(msg_id), saved(sc_core::sc_report_handler::set_actions(msg_id, a)) {}
+    ~scoped_report_actions_id() {
+        sc_core::sc_report_handler::set_actions(id, saved);
+    }
+};
+
 /// Changes the report actions for one severity and restores them on scope
 /// exit, so an expected diagnostic cannot silence an unrelated one later.
 struct scoped_report_actions {
@@ -863,6 +876,13 @@ void tb::run() {
     drv.write32(MCR, 0); // no loopback
     rx_sig.write(true);
     sc_core::wait(2, SC_US); // drain leftover serial + quantum
+    // Driving a bit pattern onto an sc_signal<bool> transiently converts an X,
+    // which SystemC reports under SC_ID_LOGIC_X_TO_BOOL_.  Scope that one
+    // report ID to this block: suppressing by severity instead would silence
+    // every unrelated diagnostic of the same severity for the whole run.
+    const scoped_report_actions_id quiet_logic_x(sc_core::SC_ID_LOGIC_X_TO_BOOL_,
+                                                 sc_core::SC_DO_NOTHING);
+
     // dbg_write avoids the TLM quantum keeper advancing through the frame.
     EXPECT_EQ(4u, drv.dbg_write(THR, static_cast<uint32_t>('K')));
     sc_core::wait(SC_ZERO_TIME);
@@ -1375,11 +1395,6 @@ int sc_main(int, char**)
         EXPECT_TRUE(expect_fatal([&] { smc::uart u("bad_tx4097", bad); }));
         std::cout << "  [PASS] constructor guard rails (FIFO depth 0 / 4097)\n";
     }
-
-    // The bit-serial sections drive X on an sc_signal<bool> only transiently;
-    // scope the conversion report rather than silencing it for the whole run.
-    const scoped_report_actions quiet_logic_x(sc_core::SC_INFO,
-                                              sc_core::SC_DO_NOTHING);
 
     tb top("tb");
     sc_core::sc_start();
