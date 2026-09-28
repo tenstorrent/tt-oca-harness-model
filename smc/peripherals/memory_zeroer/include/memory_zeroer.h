@@ -19,6 +19,24 @@
  *
  * System window (docs): `0xC003_8200`, size `0x18`.  Fabric routes control
  * through `smc_fabric.to_data_accel_ctrl`; IRQ feeds internal interrupt 3.
+ *
+ * ### Job atomicity (deliberate, and load bearing for firmware)
+ *
+ * A CTRL_STATUS write runs the whole zero-fill synchronously, inside the
+ * originating `b_transport`.  The triggering master therefore cannot observe
+ * `status[32]` (busy) high: the bit is set and cleared before its store
+ * returns.  That is the documented LT contract this model is written to, and
+ * `sw/smc-vp-tests/smc-memory-zeroer-test` depends on it — the CPU reads the
+ * zeroed region straight after the trigger store, with no polling.
+ *
+ * The time the job takes is *not* discarded: every chunk's downstream delay is
+ * accumulated and annotated onto the triggering MMIO access, so the store
+ * costs `access_delay_ns` plus the whole DMA cost under temporal decoupling.
+ *
+ * Consequence to be aware of: because no `wait()` happens inside the job, a
+ * reset cannot interrupt one, and busy is not visible to any other master.
+ * Making busy architecturally observable would require moving the job to its
+ * own process and changing the firmware to poll — see doc/implementation.adoc.
  */
 
 #ifndef SMC_MEMORY_ZEROER_H_
@@ -37,7 +55,8 @@
 
 #include "reg_access.h"
 #include "reg_map.h"
-#include "smc_tlm_extensions.h"
+// Canonical SMC sideband type; this peripheral must not redefine it.
+#include "smc_axi_extension.h"
 
 namespace smc {
 
@@ -124,10 +143,21 @@ public:
 
 private:
     void b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
+    /// Raw back-door register access: bypasses read/write masks and the
+    /// CTRL_STATUS trigger callback, so a debug write never starts a job.
+    /// @return bytes transferred, 0 if refused.
+    unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    /// Always denies DMI — a CTRL_STATUS write has DMA side effects.
+    bool get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                            tlm::tlm_dmi& dmi_data);
+    /// Shared MMIO bus-contract check for b_transport / transport_dbg.  On
+    /// success @p reg is the addressed register; on failure @p status is the
+    /// TLM response the caller should report.  The register map is the single
+    /// decode authority, so a passing check guarantees @p reg is non-null.
+    bool check_access(const tlm::tlm_generic_payload& gp,
+                      tlm::tlm_response_status& status,
+                      regmodel::Register64*& reg);
     void reset_proc();
-
-    bool reg_read(uint64_t offset, uint64_t& data);
-    bool reg_write(uint64_t offset, uint64_t data);
 
     /// Apply hard reset to registers and irq.
     void do_reset();
@@ -135,8 +165,10 @@ private:
     void end_of_elaboration() override;
 
     /// Write zeros via dma_socket from DEST_ADDR for SIZE bytes (LT, blocking).
+    /// Each chunk's downstream delay is accumulated into @p delay.
     /// @return true if every chunk completed with TLM_OK_RESPONSE.
-    bool perform_write_zeros(uint64_t addr, uint64_t nbytes);
+    bool perform_write_zeros(uint64_t addr, uint64_t nbytes,
+                             sc_core::sc_time& delay);
 
     /// Start a job if SIZE != 0 (called on any CTRL_STATUS write).
     void trigger_job();
@@ -156,6 +188,11 @@ private:
 
     bool outputs_valid_{false};
     bool out_irq_{false};
+
+    /// Downstream delay accumulated by the job that the in-flight MMIO write
+    /// triggered.  Collected here because the register write callback has no
+    /// access to the initiator's delay argument; b_transport adds it on.
+    sc_core::sc_time job_delay_{sc_core::SC_ZERO_TIME};
 };
 
 }  // namespace smc

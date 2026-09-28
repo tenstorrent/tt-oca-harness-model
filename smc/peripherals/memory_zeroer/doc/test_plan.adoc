@@ -6,22 +6,36 @@
 
 ====== Standalone bench
 
-`test/memory_zeroer_tb.cpp` is a TLM register initiator plus a
-simple memory target on `dma_socket`. It programs DEST/SIZE, starts
-jobs, checks zero-fill and IRQ gating, and injects a failing DMA
-target.
+`test/memory_zeroer_tb.cpp` is a TLM register initiator plus a memory
+target on `dma_socket`. The target is also a full *transaction
+monitor*: it records the command, address, length, streaming width,
+byte-enable pointer, arrival response status, payload contents and AXI
+sideband of every outbound chunk. Cases assert the exact chunk
+sequence a job must emit, not just the memory image afterwards. The
+same target can be armed to fail the Nth write, which is how
+partial-failure behaviour is tested.
+
+The bench separates two kinds of case, and the separation is load
+bearing:
+
+* *Architectural* cases drive the model only through its sockets and
+  signals. Only these may be cited as evidence about zeroer behaviour.
+* *Structural* cases exercise the model's own debug getters and
+  `dump_state`. They keep the debug surface working but prove nothing
+  architectural.
 
 Success: the bench prints `ALL TESTS PASSED`; `--asan` produces no
-`asan.log.*`; line coverage on the touched model sources meets the
-repository ≥ 95% gate.
+sanitizer log; the model source *and* header each meet the repository
+≥ 95% line gate individually.
 
 How to run (from `smc/peripherals/memory_zeroer`):
 
 [source,bash]
 ----
 ./run_tests.sh
-./run_tests.sh --asan
-./run_tests.sh --coverage   # do not combine with --asan
+./run_tests.sh --asan           # AddressSanitizer + UndefinedBehaviorSanitizer
+./run_tests.sh --coverage       # do not combine with --asan
+./run_tests.sh --ubsan-canary   # proves the UBSan gate can actually fail
 ./run_tests.sh --ctest
 ./run_tests.sh --clean
 
@@ -31,25 +45,212 @@ cd smc
 
 `run_tests.sh` probes `SYSTEMC_HOME` / `CCI_HOME` or reads `deps.env`.
 
-====== Standalone cases
+====== Architectural cases
 
 Source: `test/memory_zeroer_tb.cpp`. Names are the `[PASS]` titles.
 
-[cols="8%,36%,40%,16%",options="header"]
+[cols="34%,48%,18%",options="header"]
 |===
-|ID |Name |What the model test proves |Type
-|1 |reset clears registers and irq |DEST/SIZE/CTRL idle |Positive
-|2 |DEST_ADDR / SIZE R/W |Storage |Positive
-|3 |SIZE=0 does not start a job |No DMA when SIZE is 0 |Positive
-|4 |zero-fill + completion irq (int_en=1) |DMA zeros + IRQ |Positive
-|5 |multi-chunk zero-fill |`chunk_size` splitting |Positive
-|6 |completion with int_en=0 leaves irq low |IRQ gate |Positive
-|7 |status bit is software-RO |Busy bit write-ignored |Positive
-|8 |clearing int_en deasserts irq |Live mask |Positive
-|9 |bus error responses |Size / window / align |Negative
-|10 |failed DMA does not raise irq |Error path |Negative
-|11 |CCI discovery / mutation / immutability |`chunk_size` immutable |Positive
+|Name |What the model test proves |Type
+
+3+^s|Registers and reset
+
+|reset clears registers and irq
+|DEST/SIZE/CTRL and `irq_o` all idle out of reset
+|Positive
+
+|DEST_ADDR / SIZE are full-width RW
+|Full 64-bit patterns survive, including all-ones
+|Positive
+
+|CTRL_STATUS int_en RW, busy RO, reserved RAZ
+|Writing all-ones leaves only `int_en`; the busy bit cannot be set by
+ software; reserved bits read zero
+|Both
+
+|SIZE=0 starts no job and emits no DMA
+|Asserted on the transaction log, not just on memory contents
+|Negative
+
+|reset after a completed job, repeated reset
+|Full register image and `irq_o` restored; reset is idempotent
+|Positive
+
+3+^s|Chunk boundaries
+
+|sizes 1, C-1, C, C+1, 2C-1, 2C and 500: exact chunk spans
+|For each size: exact chunk count, and per chunk the command, address,
+ length, streaming width, absent byte enables, initialised response and
+ all-zero payload.  The byte before and after the span stay untouched
+|Positive
+
+|destination ending exactly at the memory end
+|The last writable byte is covered
+|Positive
+
+|64-bit wrapping span is refused, no DMA issued
+|A span that would wrap `UINT64_MAX` emits zero transactions and leaves
+ memory untouched, instead of folding back into low memory
+|Negative
+
+3+^s|Outbound sideband
+
+|canonical sideband on every chunk incl. the short final one
+|`source_id == SMC_ID`, privileged, non-secure, data, non-exclusive,
+ `prot == 0b0111` on all three chunks of a job with a short tail
+|Positive
+
+3+^s|DMA failure handling
+
+|first / middle / final chunk failure: exact stop point, no irq
+|The job stops at the failing chunk, earlier chunks are written, the
+ failing chunk and everything after it are not, busy is clear and no
+ completion interrupt is raised
+|Negative
+
+|failure leaves only int_en (no error CSR today)
+|Pins the current behaviour -- see the open spec question below
+|Negative
+
+3+^s|MMIO bus contract
+
+|only naturally aligned 8-byte accesses are served
+|Lengths 1-7, 9 and 16, and offsets +1/+2/+4/+7
+|Negative
+
+|window, interior holes and 64-bit wrap addresses
+|The three registers resolve; `0x04`/`0x0c`/`0x14` and the first
+ address past the window do not; `UINT64_MAX-7` and `UINT64_MAX` are
+ rejected rather than wrapping into the register file
+|Negative
+
+|null pointer, zero length, unsupported command
+|Exact TLM response for each
+|Negative
+
+|byte enables refused at every byte-enable length
+|Lengths 0/1/2/4/8 on read and write, including a fully enabled mask; a
+ null pointer with a stale length stays legal
+|Negative
+
+|streaming-width relations (0, <, ==, >)
+|Sweeps `streaming_width` 0..16 against `data_length` 8
+|Negative
+
+|a rejected access mutates nothing
+|A malformed write leaves register state unchanged and starts no job
+|Negative
+
+|incoming sideband preserved; absent sideband OK
+|Fields are unchanged after the access, and the model never requires
+ the extension -- authorization belongs to the fabric filter
+|Positive
+
+3+^s|Debug and DMI policy
+
+|transport_dbg raw back door and its refusals
+|Raw access bypasses the masks; a debug write to CTRL_STATUS starts no
+ job and a debug read has no side effects; window, wrap, width,
+ alignment, null pointer, zero length, byte enables, short streaming
+ width and bad command all return 0
+|Both
+
+|DMI denied on hit and miss
+|`get_direct_mem_ptr` returns false and `dmi_allowed` is cleared on both
+ the success and the error path
+|Negative
+
+3+^s|Annotated delay and CCI
+
+|incoming delay preserved, one access delay added
+|A plain register access costs exactly `access_delay_ns`
+|Positive
+
+|job cost is annotated onto the triggering write
+|A 3-chunk job costs `access_delay_ns` plus all three downstream
+ delays, and each chunk sees its predecessors' accumulated delay.  A
+ write that starts no job carries no job delay
+|Positive
+
+|live CCI mutation; error paths annotate no delay
+|Mutating `access_delay_ns` takes effect on the next access; a decode
+ miss annotates nothing
+|Both
+
+|chunk_size is immutable (scoped expected error)
+|The expected `SC_ERROR` is demoted for that one statement only, so an
+ unrelated error later in the run still fails the bench
+|Negative
+
+3+^s|Interrupt and retrigger
+
+|completion with int_en=0 leaves irq low
+|Interrupt gating
+|Positive
+
+|enabling int_en alone does not assert irq
+|No retroactive interrupt from an earlier completion
+|Negative
+
+|completion asserts irq; clearing int_en drops it
+|Live interrupt mask
+|Positive
+
+|every CTRL write retriggers while SIZE != 0
+|Level, not edge, behaviour: the same value again, and an int_en-only
+ change, each re-run the job.  Clearing SIZE is the only way to stop it
+|Both
+
+|DEST/SIZE writes alone start no job
+|Only CTRL_STATUS triggers
+|Negative
 |===
+
+====== Structural cases
+
+These cover the model's debug surface only.
+
+[cols="40%,60%",options="header"]
+|===
+|Name |What it covers
+|debug getters and dump_state (structural)
+|`dbg_dest_addr` / `dbg_size` / `dbg_ctrl_status` / `dbg_int_en` agree
+ with the bus, and `dump_state` renders the register image
+|===
+
+====== Build and sanitizer gates
+
+[cols="30%,70%",options="header"]
+|===
+|Gate |Requirement
+|Per-file coverage
+|`run_tests.sh --coverage` sets `COVERAGE_PER_FILE=1`, so `src/` and the
+ inline behaviour in `include/` are each gated at ≥ 95% on their own.
+|Sanitizers
+|`--asan` builds with AddressSanitizer *and* UndefinedBehaviorSanitizer
+ and fails on any report.
+|UBSan canary
+|`--ubsan-canary` compiles a deliberate shift overflow into the bench
+ and fails unless UBSan reports it, so a clean `--asan` run means the
+ instrumentation is actually live.
+|===
+
+====== Open spec questions
+
+Two behaviours are pinned by the bench but still need confirming
+against the RDL / Virtualizer reference. They are tested as-is so that
+changing them is a deliberate, reviewed decision:
+
+* *No software-visible failure status.* A failed job clears busy and
+  suppresses the completion interrupt, but leaves no error bit, so
+  firmware cannot distinguish a failed job from one that never ran.
+* *Retrigger is level-sensitive.* Any CTRL_STATUS write re-runs the job
+  while SIZE is non-zero -- including a write whose only intent was to
+  change `int_en`, and a write of the same value.
+
+A third, `status[32]` never being observable to the triggering master,
+is a consequence of the deliberate atomic-job design; see
+<<memory-zeroer-implementation>>.
 
 ====== Platform firmware tests
 

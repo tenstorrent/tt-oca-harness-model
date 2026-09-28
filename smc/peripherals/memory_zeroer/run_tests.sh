@@ -7,14 +7,18 @@
 #   ./run_tests.sh                # incremental build + run  (Release)
 #   ./run_tests.sh --clean        # wipe build/ first, then configure/build/run
 #   ./run_tests.sh --ctest        # run via ctest instead of executing the binary
-#   ./run_tests.sh --asan         # build with AddressSanitizer; run and report errors
+#   ./run_tests.sh --asan         # build with AddressSanitizer + UBSan; run and report
 #                                 #   Linux: also enables LeakSanitizer (detect_leaks=1)
 #   ./run_tests.sh --coverage     # build with coverage; run and print line report
 #                                 #   Clang/AppleClang: LLVM instrumented coverage
 #                                 #   GCC: gcov  (requires gcovr or lcov+genhtml)
+#   ./run_tests.sh --ubsan-canary # build the bench with a deliberate UB statement
+#                                 #   and FAIL unless UBSan reports it (proves the
+#                                 #   sanitizer gate can actually fail)
 #
-# The --asan and --coverage modes use isolated build directories
-# (build_asan/ and build_cov/) so they never clobber a plain Release build.
+# The --asan, --coverage and --ubsan-canary modes use isolated build
+# directories (build_asan/, build_cov/, build_ubcanary/) so they never clobber
+# a plain Release build.
 #
 # Environment (optionally provided via a local deps.env in this directory):
 #   SYSTEMC_HOME  Path to an Accellera SystemC install.
@@ -42,15 +46,17 @@ USE_CTEST=0
 CLEAN=0
 USE_ASAN=0
 USE_COVERAGE=0
+USE_UB_CANARY=0
 
 for arg in "$@"; do
     case "$arg" in
-        --clean)    CLEAN=1 ;;
-        --ctest)    USE_CTEST=1 ;;
-        --asan)     USE_ASAN=1 ;;
-        --coverage) USE_COVERAGE=1 ;;
+        --clean)        CLEAN=1 ;;
+        --ctest)        USE_CTEST=1 ;;
+        --asan)         USE_ASAN=1 ;;
+        --coverage)     USE_COVERAGE=1 ;;
+        --ubsan-canary) USE_UB_CANARY=1 ;;
         -h|--help)
-            sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
@@ -64,9 +70,16 @@ if (( USE_ASAN && USE_COVERAGE )); then
     echo "ERROR: --asan and --coverage are mutually exclusive." >&2
     exit 2
 fi
+if (( USE_UB_CANARY && (USE_ASAN || USE_COVERAGE) )); then
+    echo "ERROR: --ubsan-canary cannot be combined with --asan/--coverage." >&2
+    exit 2
+fi
 
 # Choose an isolated build directory for each instrumented mode.
-if (( USE_ASAN )); then
+if (( USE_UB_CANARY )); then
+    BUILD_DIR="${SCRIPT_DIR}/build_ubcanary"
+    CMAKE_EXTRA="-DENABLE_ASAN=ON -DENABLE_UB_CANARY=ON"
+elif (( USE_ASAN )); then
     BUILD_DIR="${SCRIPT_DIR}/build_asan"
     CMAKE_EXTRA="-DENABLE_ASAN=ON"
 elif (( USE_COVERAGE )); then
@@ -190,39 +203,51 @@ _find_llvm_tool() {
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-if (( USE_ASAN )); then
+if (( USE_ASAN || USE_UB_CANARY )); then
     echo ""
-    echo ">> Running with AddressSanitizer: ${TB_BIN}"
+    echo ">> Running with AddressSanitizer + UndefinedBehaviorSanitizer: ${TB_BIN}"
     if [[ "${OS}" == "Linux" ]]; then
         echo "   Linux: LeakSanitizer (detect_leaks=1) also active"
+    fi
+    if (( USE_UB_CANARY )); then
+        echo "   UB canary build: the run MUST produce a UBSan report"
     fi
     echo ""
 
     ASAN_LOG="${BUILD_DIR}/asan.log"
+    UBSAN_LOG="${BUILD_DIR}/ubsan.log"
     if [[ "${OS}" == "Linux" ]]; then
         _ASAN_OPTS="halt_on_error=0:detect_leaks=1:log_path=${ASAN_LOG}"
     else
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
+    # UBSan writes to its own log so a finding survives even when the bench
+    # itself exits 0 (halt_on_error=0 keeps the run going).
+    _UBSAN_OPTS="halt_on_error=0:print_stacktrace=1:log_path=${UBSAN_LOG}"
 set +e
-ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"
+ASAN_OPTIONS="${_ASAN_OPTS}" UBSAN_OPTIONS="${_UBSAN_OPTS}" "${TB_BIN}"
 TB_EXIT=$?
 set -e
 echo ""
 
-    if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
-        echo "===== AddressSanitizer report ====="
-        cat "${ASAN_LOG}".*
-        echo "==================================="
-        LEAK_COUNT=$(grep -c "ERROR: AddressSanitizer" "${ASAN_LOG}".* 2>/dev/null || true)
-        echo ""
-        if [[ "${LEAK_COUNT}" -eq 0 ]]; then
-            echo ">> ASan: NO memory errors detected."
-        else
-            echo ">> ASan: ${LEAK_COUNT} error(s) detected (see report above)."
-        fi
+    # Sanitizers append the pid to log_path.  enforce_asan_clean.sh already
+    # globs asan.log* itself, so only the UBSan logs are passed to it as extra
+    # files -- passing the ASan ones too would double-count every finding.
+    UB_LOGS=()
+    for _l in "${UBSAN_LOG}"*; do
+        if [[ -f "${_l}" ]]; then UB_LOGS+=("${_l}"); fi
+    done
+    SAN_LOGS=("${UB_LOGS[@]+"${UB_LOGS[@]}"}")
+    for _l in "${ASAN_LOG}"*; do
+        if [[ -f "${_l}" ]]; then SAN_LOGS+=("${_l}"); fi
+    done
+
+    if [[ ${#SAN_LOGS[@]} -gt 0 ]]; then
+        echo "===== Sanitizer report ====="
+        cat "${SAN_LOGS[@]}"
+        echo "============================"
     else
-        echo ">> ASan: NO memory errors detected."
+        echo ">> Sanitizers: NO errors detected."
     fi
     _asan_gate=""
     _d="${SCRIPT_DIR}"
@@ -237,7 +262,23 @@ echo ""
         echo "ERROR: enforce_asan_clean.sh not found" >&2
         exit 1
     fi
-    "${_asan_gate}" "${BUILD_DIR}" || exit 1
+    if (( USE_UB_CANARY )); then
+        # Inverted gate: the canary exists to prove UBSan is really wired in,
+        # so a clean run here means the instrumentation is not working.
+        if [[ ${#UB_LOGS[@]} -eq 0 ]]; then
+            echo "ERROR: UB canary was NOT reported — UBSan is not active." >&2
+            exit 1
+        fi
+        if ! grep -qE 'runtime error:|UndefinedBehaviorSanitizer' \
+                  "${UB_LOGS[@]}"; then
+            echo "ERROR: UBSan log exists but holds no UB report." >&2
+            exit 1
+        fi
+        echo ">> UB canary PASS: UBSan reported the deliberate UB."
+        exit 0
+    fi
+
+    "${_asan_gate}" "${BUILD_DIR}" "${UB_LOGS[@]+"${UB_LOGS[@]}"}" || exit 1
     exit "${TB_EXIT}"
 
 elif (( USE_COVERAGE )); then
@@ -248,8 +289,11 @@ elif (( USE_COVERAGE )); then
     echo ""
 
     HTML_DIR="${BUILD_DIR}/coverage-report"
+    # The model header carries inline behaviour (debug getters, cfg masks), so
+    # it is listed alongside the source and gated per file.
     SOURCES=(
         "${SCRIPT_DIR}/src/memory_zeroer.cpp"
+        "${SCRIPT_DIR}/include/memory_zeroer.h"
         "${SCRIPT_DIR}/test/memory_zeroer_tb.cpp"
     )
 
@@ -359,7 +403,10 @@ elif (( USE_COVERAGE )); then
         echo "ERROR: enforce_line_coverage.sh not found" >&2
         exit 1
     fi
-    "${_gate}" "${SCRIPT_DIR}" "${BUILD_DIR}"
+    # Gate the model source and its header individually, not just the src/
+    # total, so inline header behaviour cannot ride on the .cpp percentage.
+    COVERAGE_PER_FILE="${COVERAGE_PER_FILE:-1}" \
+        "${_gate}" "${SCRIPT_DIR}" "${BUILD_DIR}"
 
 elif (( USE_CTEST )); then
     echo ">> Running via ctest"

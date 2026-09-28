@@ -21,6 +21,16 @@
 
 namespace smc {
 
+namespace {
+
+/// Detaches a stack-allocated extension before the payload is destroyed.
+struct ext_detacher {
+    tlm::tlm_generic_payload& gp;
+    ~ext_detacher() { gp.clear_extension<smc::smc_axi_extension>(); }
+};
+
+}  // namespace
+
 memory_zeroer::memory_zeroer(sc_core::sc_module_name name, memory_zeroer_cfg cfg)
     : sc_core::sc_module(name)
     , chunk_size_p_("chunk_size", cfg.chunk_size,
@@ -66,6 +76,9 @@ memory_zeroer::memory_zeroer(sc_core::sc_module_name name, memory_zeroer_cfg cfg
            .add(memory_zeroer_cfg::OFF_CTRL_STATUS, "CTRL_STATUS", ctrl_status_);
 
     reg_socket.register_b_transport(this, &memory_zeroer::b_transport);
+    reg_socket.register_transport_dbg(this, &memory_zeroer::transport_dbg);
+    reg_socket.register_get_direct_mem_ptr(this,
+                                           &memory_zeroer::get_direct_mem_ptr);
 
     SC_METHOD(reset_proc);
     sensitive << rst_n_i;
@@ -127,7 +140,7 @@ void memory_zeroer::trigger_job()
     SIM_LOG_TRACE(this,
                   "zero start dest=0x" << std::hex << addr
                                        << " size=0x" << nbytes << std::dec);
-    const bool ok = perform_write_zeros(addr, nbytes);
+    const bool ok = perform_write_zeros(addr, nbytes, job_delay_);
 
     const uint64_t idle =
         ctrl_status_.raw() & ~memory_zeroer_cfg::CTRL_STATUS_MASK;
@@ -139,15 +152,25 @@ void memory_zeroer::trigger_job()
     }
 }
 
-bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes)
+bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes,
+                                        sc_core::sc_time& delay)
 {
     if (nbytes == 0u) return true;
+
+    // Reject a span that would wrap the 64-bit address space rather than let
+    // `addr + offset` fold back into low memory and zero an unrelated region.
+    if (nbytes - 1u > UINT64_MAX - addr) {
+        SIM_LOG_WARN(this,
+                     "zero job rejected: dest=0x"
+                         << std::hex << addr << " size=0x" << nbytes
+                         << std::dec << " wraps the 64-bit address space");
+        return false;
+    }
 
     const std::size_t chunk_cap =
         static_cast<std::size_t>(chunk_size_p_.get_value());
     std::vector<unsigned char> zero_buf(chunk_cap, 0);
 
-    sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
     uint64_t remaining = nbytes;
     uint64_t offset    = 0u;
 
@@ -165,6 +188,9 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes)
         trans.set_byte_enable_length(0);
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
+        // Canonical SMC sideband on every outbound chunk, final short chunk
+        // included: trusted internal master, privileged, non-secure, data,
+        // non-exclusive.
         smc::smc_axi_extension ext;
         ext.source_id = smc::SMC_ID;
         ext.set_priv(true);
@@ -172,8 +198,11 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes)
         ext.set_fetch(false);
         ext.set_locked(false);
         trans.set_extension(&ext);
+        // `~tlm_generic_payload` calls free() -- i.e. delete -- on every
+        // extension slot, so this stack object must be detached even if the
+        // downstream b_transport unwinds.
+        const ext_detacher detach{trans};
         dma_socket->b_transport(trans, delay);
-        trans.clear_extension<smc::smc_axi_extension>();
 
         if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
             SIM_LOG_WARN(this,
@@ -189,14 +218,53 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes)
     return true;
 }
 
-bool memory_zeroer::reg_read(uint64_t offset, uint64_t& data)
+bool memory_zeroer::check_access(const tlm::tlm_generic_payload& gp,
+                                 tlm::tlm_response_status& status,
+                                 regmodel::Register64*& reg)
 {
-    return regmap_.read(offset, data);
-}
+    reg = nullptr;
+    const uint64_t adr = gp.get_address();
+    const unsigned len = gp.get_data_length();
 
-bool memory_zeroer::reg_write(uint64_t offset, uint64_t data)
-{
-    return regmap_.write(offset, data);
+    if (gp.get_data_ptr() == nullptr || len == 0) {
+        status = tlm::TLM_GENERIC_ERROR_RESPONSE;
+        return false;
+    }
+
+    // 64-bit register file — require naturally aligned 8-byte accesses.
+    if (len != 8 || (adr & 0x7u) != 0) {
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
+    }
+
+    if (gp.get_byte_enable_ptr() != nullptr) {
+        // Virtualizer honours byte enables on CTRL_STATUS int_en; for a
+        // simple LT model we reject explicit BE (full-word SW writes only),
+        // whatever the byte-enable length.
+        status = tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE;
+        return false;
+    }
+
+    // Single-beat access: TLM-2.0 requires streaming_width >= data_length.
+    if (gp.get_streaming_width() < len) {
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
+    }
+
+    // Decode is a plain map lookup against the exact register offsets -- no
+    // address arithmetic at all.  That is deliberate: a bound written as
+    // `adr + len > WINDOW_SIZE` wraps for an address near UINT64_MAX and would
+    // alias a wild access into the register file.  Anything the map does not
+    // hold (past the window, or an in-window hole) is an address error, and a
+    // passing check guarantees @p reg is non-null.
+    reg = regmap_.find(adr);
+    if (reg == nullptr) {
+        status = tlm::TLM_ADDRESS_ERROR_RESPONSE;
+        return false;
+    }
+
+    status = tlm::TLM_OK_RESPONSE;
+    return true;
 }
 
 void memory_zeroer::b_transport(tlm::tlm_generic_payload& gp,
@@ -204,71 +272,96 @@ void memory_zeroer::b_transport(tlm::tlm_generic_payload& gp,
 {
     const tlm::tlm_command cmd = gp.get_command();
     const uint64_t         adr = gp.get_address();
-    const unsigned         len = gp.get_data_length();
     unsigned char* const   ptr = gp.get_data_ptr();
 
-    if (ptr == nullptr || len == 0) {
-        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
-        return;
-    }
+    // A CTRL_STATUS write runs a DMA job, so this window can never be DMI'd.
+    gp.set_dmi_allowed(false);
 
-    // 64-bit register file — require naturally aligned 8-byte accesses.
-    if (len != 8 || (adr & 0x7u) != 0) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
+    // Optional canonical sideband.  Authorization for this CSR port is owned
+    // by the fabric's axi_filter upstream, so the fields are inspected for
+    // tracing only and the payload is left untouched.
+    const smc::smc_axi_extension* ext =
+        gp.get_extension<smc::smc_axi_extension>();
+    (void)ext;
 
-    if (adr + len > memory_zeroer_cfg::WINDOW_SIZE) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-        SIM_LOG_DEBUG(this,
-                      "TLM decode miss at off=0x" << std::hex << adr);
-        return;
-    }
-
-    if (gp.get_byte_enable_ptr() != nullptr) {
-        // Virtualizer honours byte enables on CTRL_STATUS int_en; for a
-        // simple LT model we reject explicit BE (full-word SW writes only).
-        // Partial BE is uncommon on this CSR port in SMC firmware.
-        gp.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
-        return;
-    }
-
-    if (gp.get_streaming_width() < len) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
-
-    bool ok = false;
-    if (cmd == tlm::TLM_READ_COMMAND) {
-        uint64_t data = 0;
-        ok = reg_read(adr, data);
-        if (ok) {
-            std::memcpy(ptr, &data, sizeof(data));
-            SIM_LOG_TRACE(this,
-                          "read off=0x" << std::hex << adr << " data=0x"
-                                        << data << std::dec);
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    regmodel::Register64*    reg    = nullptr;
+    if (!check_access(gp, status, reg)) {
+        gp.set_response_status(status);
+        if (status == tlm::TLM_ADDRESS_ERROR_RESPONSE) {
+            SIM_LOG_DEBUG(this,
+                          "TLM decode miss at off=0x" << std::hex << adr);
         }
+        return;
+    }
+
+    // Any job the write below triggers accumulates its downstream cost here.
+    // Saved and restored rather than simply zeroed: a DMA chunk that loops
+    // back into this CSR window re-enters b_transport, and a bare reset would
+    // discard the outer job's accumulated delay.
+    const sc_core::sc_time outer_job_delay = job_delay_;
+    job_delay_ = sc_core::SC_ZERO_TIME;
+
+    if (cmd == tlm::TLM_READ_COMMAND) {
+        const uint64_t data = reg->read();
+        std::memcpy(ptr, &data, sizeof(data));
+        SIM_LOG_TRACE(this,
+                      "read off=0x" << std::hex << adr << " data=0x"
+                                    << data << std::dec);
     } else if (cmd == tlm::TLM_WRITE_COMMAND) {
         uint64_t data = 0;
         std::memcpy(&data, ptr, sizeof(data));
-        ok = reg_write(adr, data);
-        if (ok) {
-            SIM_LOG_TRACE(this,
-                          "write off=0x" << std::hex << adr << " data=0x"
-                                         << data << std::dec);
-        }
+        reg->write(data);
+        SIM_LOG_TRACE(this,
+                      "write off=0x" << std::hex << adr << " data=0x"
+                                     << data << std::dec);
     } else {
+        job_delay_ = outer_job_delay;
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
 
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
-    gp.set_response_status(ok ? tlm::TLM_OK_RESPONSE
-                              : tlm::TLM_ADDRESS_ERROR_RESPONSE);
-    if (!ok) {
-        SIM_LOG_DEBUG(this,
-                      "TLM decode miss at off=0x" << std::hex << adr);
+    // The job runs inside this access, so its downstream cost belongs to the
+    // triggering initiator rather than being dropped on the floor.
+    delay += job_delay_;
+    job_delay_ = outer_job_delay;
+
+    gp.set_response_status(tlm::TLM_OK_RESPONSE);
+}
+
+unsigned int memory_zeroer::transport_dbg(tlm::tlm_generic_payload& gp)
+{
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    regmodel::Register64*    reg    = nullptr;
+    if (!check_access(gp, status, reg)) return 0;
+
+    // Raw back door: go straight at the register storage so the read mask,
+    // the write mask and the CTRL_STATUS trigger callback are all bypassed.
+    // A debug write therefore never starts a zero-fill job.
+    const unsigned len = gp.get_data_length();
+    if (gp.get_command() == tlm::TLM_READ_COMMAND) {
+        const uint64_t raw = reg->raw();
+        std::memcpy(gp.get_data_ptr(), &raw, sizeof(raw));
+        return len;
     }
+    if (gp.get_command() == tlm::TLM_WRITE_COMMAND) {
+        uint64_t raw = 0;
+        std::memcpy(&raw, gp.get_data_ptr(), sizeof(raw));
+        reg->set_raw(raw);
+        return len;
+    }
+    return 0;
+}
+
+bool memory_zeroer::get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                                       tlm::tlm_dmi& dmi_data)
+{
+    (void)gp;
+    dmi_data.allow_none();
+    dmi_data.set_start_address(0);
+    dmi_data.set_end_address(memory_zeroer_cfg::WINDOW_SIZE - 1);
+    return false;
 }
 
 void memory_zeroer::dump_state(std::ostream& os) const

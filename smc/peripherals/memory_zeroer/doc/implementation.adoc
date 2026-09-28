@@ -24,7 +24,59 @@ memory_zeroer   CSR target + DMA zero-fill initiator   (memory_zeroer.*)
 thread: `trigger_job()` calls `perform_write_zeros()` from
 `b_transport`. Chunks are `chunk_size` bytes (default 4096).
 `irq_o` asserts on successful completion when `int_en` is set.
-A failed DMA chunk leaves IRQ low.
+A failed DMA chunk leaves IRQ low and stops the job at that chunk.
+
+====== Job atomicity (deliberate)
+
+The whole zero-fill runs inside the originating `b_transport`, so the
+triggering master cannot observe `status[32]` (busy) high: the bit is
+set and cleared before its store returns. This is the documented LT
+contract, and `sw/smc-vp-tests/smc-memory-zeroer-test` depends on it --
+the CPU reads the zeroed region straight after the trigger store, with
+no polling.
+
+The job's *cost* is not discarded: each chunk's downstream delay is
+accumulated and annotated onto the triggering MMIO access, so the store
+costs `access_delay_ns` plus the whole DMA cost under temporal
+decoupling.
+
+Two consequences follow from there being no `wait()` inside the job:
+a reset cannot interrupt one, and busy is invisible to every master.
+Making busy architecturally meaningful would mean moving the job to its
+own process and changing the firmware to poll it -- a behavioural change
+that needs the RDL owner's agreement, so it has not been made here.
+
+====== Bus contract
+
+[cols="28%,72%",options="header"]
+|===
+|Aspect |Contract
+|Size / alignment
+|Naturally aligned 8-byte accesses only; anything else is
+ `TLM_BURST_ERROR_RESPONSE`.
+|Decode
+|A plain lookup in the register map -- deliberately no address
+ arithmetic. A bound written `adr + len > WINDOW_SIZE` wraps for an
+ address near `UINT64_MAX` and would alias a wild access into the
+ register file. Anything the map does not hold is an address error.
+|Byte enables
+|Any non-null `byte_enable_ptr` is refused whatever its length. The
+ Virtualizer reference honours byte enables on `CTRL_STATUS.int_en`;
+ this LT model accepts full-word software accesses only.
+|Streaming width
+|Single beat, so TLM-2.0 requires `streaming_width >= data_length`.
+|DMA span
+|A job whose `DEST_ADDR + SIZE` would wrap the 64-bit space is refused
+ before any transaction is issued.
+|Debug / DMI
+|`transport_dbg` is a raw back door (no masks, no trigger callback, no
+ delay), so a debug write never starts a job. DMI is always denied.
+|Sideband
+|Every outbound chunk carries `smc::smc_axi_extension` with
+ `source_id = SMC_ID`, privileged, non-secure, data, non-exclusive. The
+ incoming CSR-side extension is inspected only; authorization belongs to
+ the fabric's `axi_filter`.
+|===
 
 `smc-vp` routes CSRs through `daccel_router` on
 `fabric.to_data_accel_ctrl` (shared with DMA). `dma_socket` goes
@@ -65,7 +117,18 @@ through `wa_zeroer_dma` (32-to-64) into `fabric.data_accel_in`
 ====== Modeling gaps versus RTL
 
 * The zero job is blocking LT inside `b_transport`, not an AXI
-  outstanding burst with a later completion writeback.
+  outstanding burst with a later completion writeback, so `status[32]`
+  is never observable and reset cannot cancel a job.
 * Completion IRQ is not wired into the PLIC aggregator on `smc-vp`.
 * No AXI ID/burst-length modelling beyond chunked `b_transport`
   writes of zeros.
+* A failed job has no software-visible error status, so firmware cannot
+  tell a failure from a job that never ran. Needs RDL confirmation.
+* Any CTRL_STATUS write re-runs the job while SIZE is non-zero, including
+  an `int_en`-only write. Needs RDL confirmation.
+* Because the job is synchronous, pointing `DEST_ADDR` at the zeroer's own
+  CSR window makes a DMA chunk re-enter `b_transport`. Delay accounting is
+  re-entrancy safe (`job_delay_` is saved and restored, and the bench covers
+  it), but a loopback that lands on CTRL_STATUS with SIZE ≠ 0 would recurse
+  without bound. That is a programming error rather than a modelled case,
+  and it would disappear if the job ever moved to its own process.

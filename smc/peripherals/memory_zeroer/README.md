@@ -37,8 +37,7 @@ memory_zeroer/
 │   ├── implementation.adoc
 │   └── test_plan.adoc
 ├── include/
-│   ├── memory_zeroer.h
-│   └── smc_tlm_extensions.h
+│   └── memory_zeroer.h          (includes the canonical smc_axi_extension.h)
 ├── src/
 │   └── memory_zeroer.cpp
 └── test/
@@ -55,6 +54,19 @@ memory_zeroer/
 | 0x00   | DEST_ADDR   | RW     | Byte address to write zeros to |
 | 0x08   | SIZE        | RW     | Size in bytes |
 | 0x10   | CTRL_STATUS | RW/RO  | `int_en[0]` (RW); `status[32]` busy (RO). Any write starts a job when `SIZE != 0`. |
+
+A CTRL_STATUS write runs the whole job synchronously, so `status[32]` is set
+and cleared before the store returns — the triggering master can never see it
+high. That is deliberate: `sw/smc-vp-tests/smc-memory-zeroer-test` reads the
+zeroed region straight after the trigger with no polling. The job's downstream
+cost is annotated onto that store rather than discarded. See
+`doc/implementation.adoc`.
+
+Decode is a plain register-map lookup with no address arithmetic, so an access
+near `UINT64_MAX` cannot wrap into the register file; a job whose
+`DEST_ADDR + SIZE` would wrap is refused before any DMA is issued.
+`transport_dbg` is a raw back door that never starts a job, and DMI is always
+denied.
 
 ---
 
@@ -84,7 +96,13 @@ memory_zeroer/
 cp deps.env.example deps.env
 # edit SYSTEMC_HOME and CCI_HOME
 ./run_tests.sh
+./run_tests.sh --asan            # AddressSanitizer + UndefinedBehaviorSanitizer
+./run_tests.sh --coverage        # line-coverage report, gated per file
+./run_tests.sh --ubsan-canary    # proves the UBSan gate can actually fail
 ```
+
+`--coverage` gates `src/` **and** the inline behaviour in `include/` at ≥ 95%
+each, not just the aggregate.
 
 Or with the shared SMC env:
 
