@@ -29,8 +29,9 @@ endif()
 #   -DENABLE_ASAN=ON      AddressSanitizer
 #   -DENABLE_COVERAGE=ON  source-level coverage (LLVM on Clang, gcov on GCC)
 # ---------------------------------------------------------------------------
-option(ENABLE_ASAN     "Build with AddressSanitizer"      OFF)
-option(ENABLE_COVERAGE "Build with source-level coverage" OFF)
+option(ENABLE_ASAN      "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+option(ENABLE_COVERAGE  "Build with source-level coverage" OFF)
+option(ENABLE_UB_CANARY "Compile a deliberate UB statement into the test bench"  OFF)
 
 if(ENABLE_ASAN AND ENABLE_COVERAGE)
     message(FATAL_ERROR
@@ -39,9 +40,20 @@ if(ENABLE_ASAN AND ENABLE_COVERAGE)
 endif()
 
 if(ENABLE_ASAN)
-    message(STATUS "AddressSanitizer enabled")
-    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
-    add_link_options   (-fsanitize=address)
+    message(STATUS "AddressSanitizer + UndefinedBehaviorSanitizer enabled")
+    # UBSan stays recoverable so a single finding does not abort the run; the
+    # benches keep going and enforce_asan_clean.sh fails the build from the log.
+    add_compile_options(-fsanitize=address,undefined
+                        -fsanitize=float-divide-by-zero
+                        -fno-omit-frame-pointer -g)
+    add_link_options   (-fsanitize=address,undefined
+                        -fsanitize=float-divide-by-zero)
+endif()
+
+if(ENABLE_UB_CANARY AND NOT ENABLE_ASAN)
+    message(FATAL_ERROR
+        "ENABLE_UB_CANARY only makes sense with ENABLE_ASAN=ON (it exists to "
+        "prove the UBSan instrumentation actually reports).")
 endif()
 
 if(ENABLE_COVERAGE)

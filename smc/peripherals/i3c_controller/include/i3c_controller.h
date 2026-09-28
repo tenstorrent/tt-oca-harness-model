@@ -516,6 +516,10 @@ private:
     // ------------------------------------------------------------------
     void         b_transport (tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
     unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    /// Always denies DMI — FIFO ports pop on read and a CSR write can start a
+    /// transfer, so a direct memory pointer would bypass real side effects.
+    bool         get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                                    tlm::tlm_dmi& dmi_data);
 
     // ------------------------------------------------------------------
     // SC_METHOD processes
@@ -530,8 +534,10 @@ private:
     // ------------------------------------------------------------------
     // Register decode helpers (operate on a resolved instance index)
     // ------------------------------------------------------------------
-    bool reg_read (unsigned inst, uint64_t loff, uint32_t& data);
-    bool reg_write(unsigned inst, uint64_t loff, uint32_t data);
+    // Unimplemented offsets inside an instance window are RAZ/WI, so these
+    // always resolve; they return void rather than an ignorable bool.
+    void reg_read (unsigned inst, uint64_t loff, uint32_t& data);
+    void reg_write(unsigned inst, uint64_t loff, uint32_t data);
 
     // ------------------------------------------------------------------
     // HCI behaviour helpers

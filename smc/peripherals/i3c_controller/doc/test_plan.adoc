@@ -6,22 +6,39 @@
 
 ====== Standalone bench
 
-`i3c_controller_tb` and `i3c_controller_neg_tb` (`test/`). The primary
-bench uses a 3-instance DUT and a bus model for one target at dynamic
-address `0x42`. The negative bench probes constructor fatals without
-`sc_start`.
+Three benches in `test/`, and the split between them is load bearing:
 
-Success: both benches print `ALL TESTS PASSED`; CTest reports 2/2;
-`--asan` produces no `asan.log.*`.
+* `i3c_controller_tb` — *architectural*. A 3-instance DUT with a bus
+  model for one target at dynamic address `0x42`. Drives the model only
+  through its TLM socket and its output signals. Only these cases may be
+  cited as evidence of HCI/TLM behaviour.
+* `i3c_controller_neg_tb` — *architectural, negative*. Constructor
+  fatals, the malformed-payload matrix, `transport_dbg` refusals and DMI
+  policy, all without `sc_start`.
+* `i3c_controller_cov_tb` — *structural*. Coverage-completion cases that
+  reach debug entry points (`dbg_read`, `dump_state`, out-of-range
+  `set_bus_model`/`inject_ibi`) and internal branches with no externally
+  observable HCI meaning. Useful, but not conformance evidence.
+
+The architectural register cases check the model against an independent
+CSR manifest (`kCsrs` in the primary bench) — a second transcription of
+the I3CCSR map giving each register's reset value and its read-back
+after an all-ones write. It is deliberately not derived from the model's
+switch statements, so a slip on either side fails the sweep.
+
+Success: all three benches print `ALL TESTS PASSED`; CTest reports 3/3;
+`--asan` produces no sanitizer log; the model source and header each meet
+the repository >= 95% line gate individually.
 
 How to run (from `smc/peripherals/i3c_controller`):
 
 [source,bash]
 ----
-./run_tests.sh              # Release build + run both benches
+./run_tests.sh                # Release build + run all three benches
 ./run_tests.sh --ctest
-./run_tests.sh --asan
-./run_tests.sh --coverage   # isolated build_cov/; do not combine with --asan
+./run_tests.sh --asan         # AddressSanitizer + UndefinedBehaviorSanitizer
+./run_tests.sh --coverage     # isolated build_cov/; do not combine with --asan
+./run_tests.sh --ubsan-canary # proves the UBSan gate can actually fail
 ./run_tests.sh --clean
 
 cd smc
@@ -59,6 +76,124 @@ Names follow the cases in `test/i3c_controller_tb.cpp`.
 |N3 |RAZ/WI hole |Unmapped in-window offset |Negative
 |N4 |transport_dbg reject |Non-table / malformed return 0 |Negative
 |===
+
+====== Architectural cases added by the internal-review remediation
+
+[cols="36%,46%,18%",options="header"]
+|===
+|Name |What the model test proves |Type
+
+|every CSR: reset, write-mask, RO and W1C contract
+|All 18 manifest registers checked for reset value and for read-back
+ after an all-ones write; computed read-only registers ignore writes;
+ `DCT_SECTION_OFFSET` exposes only the ENTDAA index as RW; every
+ `INTR_STATUS` bit is force-set and W1C-cleared individually and
+ reserved bits can never be forced; `dbg_read` agrees with the bus for
+ every register it serves
+|Both
+
+|reserved words are RAZ/WI and non-disturbing
+|All 867 unmapped words of an instance window read zero, ignore writes,
+ and leave every real register untouched
+|Negative
+
+|DAT/DCT bounds, table aliasing, instance decode
+|First and last word of each table, the word past each table, the two
+ tables not aliasing, and per-instance storage separation
+|Both
+
+|CMD_ATTR: 0 runs, 1..7 report NotSupported
+|Only the regular-transfer attribute executes; every other attribute is
+ reported `NotSupported` with zero length, latches `TRANSFER_ERR_STAT`,
+ and leaves the TX payload for the next valid command
+|Both
+
+|length/packing matrix for reads and writes
+|Lengths 1/3/4/5/8 write exactly that many bytes with little-endian
+ DWORD packing; reads fill ceil(len/4) DWORDs and report the actual
+ byte count; a zero-length command responds and touches no FIFO
+|Positive
+
+|short / overlong / errored read-data contract
+|A short reply succeeds with the actual length; an overlong reply is
+ truncated with no surplus DWORD; an ACK-with-error propagates the
+ error code; no bus model at all NACKs
+|Both
+
+|IBI address/payload/queue/isolation matrix
+|Payload sizes 0/1/3/4/5, 7-bit address masking, refusal of a payload
+ that cannot fit, out-of-range instance, and per-instance isolation
+|Both
+
+|AXI sideband preserved on every route and a fault
+|A non-default `smc_axi_extension` survives reads and writes to every
+ instance and an out-of-aperture fault; an absent extension is accepted
+|Positive
+
+|exact access delay; xfer_delay_ns is really mutable
+|`access_delay_ns` annotated exactly from a non-zero incoming delay; a
+ command enqueued after `xfer_delay_ns` changes completes at the new
+ delay, checked either side of the boundary
+|Positive
+
+|interrupt enable matrix and per-instance isolation
+|All four status-enable x signal-enable combinations, enable-after-
+ pending, and a quiet neighbouring instance
+|Both
+
+|bus and recovery outputs hold their idle contract
+|SCL/SDA idle high, output-enables and recovery outputs low, after
+ reset, a transfer, an abort and a mode-control write
+|Positive
+
+|transport_dbg table boundaries and aperture edge
+|First/last word of each table window, the word past the DCT window, the
+ last instance's last table word, the first word past the aperture, and
+ an unsupported debug command
+|Negative
+
+|DMI denied on hit and miss; no stale dmi_allowed
+|`get_direct_mem_ptr` returns false everywhere and `dmi_allowed` is
+ cleared on both the success and the error path
+|Negative
+|===
+
+====== Build and sanitizer gates
+
+[cols="30%,70%",options="header"]
+|===
+|Gate |Requirement
+|Auxiliary bench exits
+|The runner records the exit status of all three benches and fails if any
+ is non-zero, in the plain and sanitizer paths alike.
+|Per-file coverage
+|`--coverage` sets `COVERAGE_PER_FILE=1`, so `src/` and the inline
+ behaviour in `include/` are each gated at >= 95% on their own.
+|Sanitizers
+|`--asan` builds with AddressSanitizer *and* UndefinedBehaviorSanitizer
+ and fails on any report.
+|UBSan canary
+|`--ubsan-canary` compiles a deliberate shift overflow into the
+ *negative* bench, so the mode proves both that UBSan reports and that
+ the runner propagates an auxiliary bench's failure.
+|===
+
+====== Open spec questions
+
+Pinned by test so that changing them is a deliberate, reviewed decision,
+but each needs confirming against the RDL / HCI specification:
+
+* *INTR_STATUS_ENABLE does not gate anything.* `irq_o` is driven by
+  signal-enable alone and the status bit latches regardless of either
+  enable. HCI implementations differ on whether status-enable gates
+  latching.
+* *Short reads always succeed.* `i3c_err::I3cShortReadErr` exists for
+  "short read not permitted", but no modelled command-descriptor flag
+  selects that policy.
+* *Response DATA_LENGTH truncates to 12 bits.* The command descriptor's
+  length field is 16 bits, so a transfer of 0x1000 bytes or more cannot
+  report its true length. Whether the HC should instead reject such a
+  command is unresolved.
 
 ====== Platform firmware tests
 

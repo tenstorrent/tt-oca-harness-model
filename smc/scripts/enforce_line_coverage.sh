@@ -123,7 +123,15 @@ fi
 PCT=""
 if [[ "${COVERAGE_TOOL}" == "llvm" ]]; then
     PROFDATA="$(find "${BUILD_DIR}" -maxdepth 2 -name '*.profdata' | head -1)"
-    TB_BIN="$(find "${BUILD_DIR}" -type f -perm -111 \( -name '*_tb' -o -name '*_test' \) | head -1)"
+    # Prefer the bench named after the IP (the primary one).  An IP with
+    # several benches would otherwise be measured against whichever binary
+    # `find` happened to return first, which is filesystem-order dependent and
+    # made the reported percentage differ between machines.
+    _ip_name="$(basename "${IP_ROOT}")"
+    TB_BIN="$(find "${BUILD_DIR}" -type f -perm -111 -name "${_ip_name}_tb" | head -1)"
+    if [[ -z "${TB_BIN}" ]]; then
+        TB_BIN="$(find "${BUILD_DIR}" -type f -perm -111 \( -name '*_tb' -o -name '*_test' \) | sort | head -1)"
+    fi
     if [[ -z "${PROFDATA}" || -z "${TB_BIN}" ]]; then
         echo "ERROR: llvm coverage artifacts not found in ${BUILD_DIR}." >&2
         exit 1

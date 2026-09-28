@@ -79,6 +79,49 @@ Instance count and FIFO depths are immutable. Delays are mutable.
 `num_instances` outside 1..6, a negative delay, or a zero FIFO depth is
 `SC_REPORT_FATAL`.
 
+Both delays are re-read from CCI at the point of use — `access_delay_ns`
+in `b_transport`, `xfer_delay_ns` in `schedule_xfer()` — so a run-time
+change takes effect on the next access or the next enqueued command.
+Caching either at construction would make the documented mutability a
+lie.
+
+====== Bus contract
+
+[cols="28%,72%",options="header"]
+|===
+|Aspect |Contract
+|Size / alignment
+|Naturally aligned 32-bit accesses only; anything else is
+ `TLM_BURST_ERROR_RESPONSE`.
+|Decode
+|Instance from `addr / INSTANCE_SPACING`, offset from the remainder.
+ Out of aperture is an address error; an unimplemented offset *inside*
+ an instance window is RAZ/WI, not a fault, so decode cannot miss once
+ the aperture check has passed.
+|Byte enables
+|Any non-null `byte_enable_ptr` is refused whatever its length,
+ including the zero-length and all-lanes-enabled forms.
+|Streaming width
+|Single beat, so TLM-2.0 requires `streaming_width >= data_length`.
+ Larger is accepted and ignored, matching the sibling SMC models.
+|Debug / DMI
+|`transport_dbg` serves the DAT/DCT windows only — never a FIFO port —
+ and refuses anything that is neither a read nor a write. DMI is always
+ denied and `dmi_allowed` is cleared on every transaction.
+|Sideband
+|The canonical `smc::smc_axi_extension` is inspected for tracing and
+ left untouched; authorization belongs to the fabric's `axi_filter`.
+|===
+
+====== Command attribute legality
+
+Only `CMD_ATTR = 0` (regular transfer) is executed. HCI also defines
+immediate-data, address-assignment, combo and internal-control
+attributes; the model reports `NotSupported` for those rather than
+running them as a regular transfer, and rejects them before the TX FIFO
+is touched so a malformed descriptor cannot consume a later command's
+payload.
+
 ====== Modeling gaps versus RTL
 
 * SCL/SDA and OD/PP pins stay idle; data movement is the bus-model
@@ -88,3 +131,11 @@ Instance count and FIFO depths are immutable. Delays are mutable.
   The RTL external 128-entry `dat_mem` / `dct_mem` tables are not.
 * HDR modes, TCRI recovery datapath, and scan/DFT are not modelled.
   Recovery outputs stay idle.
+* `INTR_STATUS_ENABLE` gates nothing: `irq_o` follows signal-enable
+  alone and status bits latch regardless. Needs HCI confirmation.
+* A short read always completes with `Success` and the actual length;
+  `i3c_err::I3cShortReadErr` is never produced because no modelled
+  command-descriptor flag selects that policy. Needs confirmation.
+* The response descriptor's DATA_LENGTH is 12 bits while the command's
+  is 16, so a transfer of 0x1000 bytes or more cannot report its true
+  length. Whether the HC should reject such a command is unresolved.

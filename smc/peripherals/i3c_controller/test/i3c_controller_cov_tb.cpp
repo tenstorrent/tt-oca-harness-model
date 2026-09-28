@@ -1,9 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 //
-// i3c_controller_cov_tb.cpp — coverage-completion testbench for the OCA I3C
-// Controller model.  Targets the ~15 % of branches left uncovered by the
-// primary bench, bringing overall line coverage above 95 %.
+// i3c_controller_cov_tb.cpp — STRUCTURAL coverage-completion testbench for the
+// OCA I3C Controller model.  Targets branches left uncovered by the primary
+// bench.
+//
+// These cases are deliberately classified STRUCTURAL: several of them reach
+// into debug entry points (dbg_read, dump_state, set_bus_model/inject_ibi
+// out-of-range) or drive internal branches that have no externally observable
+// HCI meaning.  They keep the implementation exercised and the debug surface
+// working, but they must NOT be cited as evidence of HCI/TLM conformance.
+// The architectural claims live in i3c_controller_tb.cpp (register manifest,
+// command-attribute legality, length/packing, IBI, sideband, timing,
+// interrupt enables, output contract) and i3c_controller_neg_tb.cpp.
 //
 // New sections (continuing the numbering from i3c_controller_tb.cpp):
 //
@@ -85,6 +94,21 @@ unsigned g_failures = 0;
     } while (0)
 
 using cfg_t = smc::i3c_controller_cfg;
+
+/// Changes the report actions for one severity and restores them on scope
+/// exit, so an expected diagnostic cannot silence an unrelated one later.
+struct scoped_report_actions {
+    sc_core::sc_severity sev;
+    sc_core::sc_actions  saved;
+    scoped_report_actions(sc_core::sc_severity s, sc_core::sc_actions a)
+        : sev(s), saved(sc_core::sc_report_handler::set_actions(s, a))
+    {
+    }
+    ~scoped_report_actions()
+    {
+        sc_core::sc_report_handler::set_actions(sev, saved);
+    }
+};
 
 // ---------------------------------------------------------------------------
 // Tiny TLM driver — 32-bit AXI-Lite-style register access.
@@ -599,6 +623,11 @@ void tb::run()
 
     // ===== 35. set_bus_model OOR: SC_REPORT_WARNING — must not crash =====
     {
+        // Scope the expected warning to this one call: suppressing
+        // SC_WARNING for the whole run would hide any unrelated warning the
+        // model raises later.
+        const scoped_report_actions quiet(sc_core::SC_WARNING,
+                                          sc_core::SC_DO_NOTHING);
         dut.set_bus_model(N, [](smc::i3c_xfer&) {}); // N >= num_instances
     }
 
@@ -706,11 +735,6 @@ void tb::run()
 
 int sc_main(int, char*[])
 {
-    // Suppress SC_REPORT_WARNING output to keep test logs clean while still
-    // executing the warning path (set_bus_model OOR, section 35).
-    sc_core::sc_report_handler::set_actions(
-        sc_core::SC_WARNING, sc_core::SC_DO_NOTHING);
-
     static cci_utils::consuming_broker cci_global_broker("global_broker");
 
     cci::cci_register_broker(cci_global_broker);

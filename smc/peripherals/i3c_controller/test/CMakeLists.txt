@@ -25,6 +25,11 @@ add_executable(i3c_controller_neg_tb i3c_controller_neg_tb.cpp)
 target_link_libraries(i3c_controller_neg_tb PRIVATE smc_i3c_controller SystemC::cci)
 target_compile_options(i3c_controller_neg_tb PRIVATE -Wall -Wextra -Wpedantic
                                                      -Wno-deprecated-declarations)
+if(ENABLE_UB_CANARY)
+    # The canary lives in the negative bench so `--ubsan-canary` also proves
+    # the runner honours an auxiliary bench's exit status.
+    target_compile_definitions(i3c_controller_neg_tb PRIVATE I3C_UB_CANARY=1)
+endif()
 add_test(NAME i3c_controller_neg_tb COMMAND i3c_controller_neg_tb)
 set_tests_properties(i3c_controller_neg_tb PROPERTIES
     PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"

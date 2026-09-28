@@ -47,6 +47,13 @@ constexpr uint16_t cmd_length (uint64_t d) { return  uint16_t((d >> 48) & 0xFFFF
 
 /// Build a 32-bit response descriptor (memmap.adoc RESPONSE_PORT).
 ///   [3:0] TID, [27:16] DATA_LENGTH, [31:28] ERROR
+///
+/// The command descriptor's DATA_LENGTH is 16 bits but the response field is
+/// only 12, so a transfer of 0x1000 bytes or more cannot report its true
+/// length and wraps modulo 0x1000.  That asymmetry comes straight from the
+/// register map; whether the HC is supposed to reject such a command instead
+/// is an open question for the RDL owner (see doc/test_plan.adoc).  The
+/// truncation is pinned by test so a change here is deliberate.
 constexpr uint32_t make_response(uint8_t tid, uint16_t data_len, i3c_err err)
 {
     return (uint32_t(tid) & 0xF) |
@@ -138,6 +145,8 @@ i3c_controller::i3c_controller(sc_core::sc_module_name name, i3c_controller_cfg 
 
     reg_socket.register_b_transport  (this, &i3c_controller::b_transport);
     reg_socket.register_transport_dbg(this, &i3c_controller::transport_dbg);
+    reg_socket.register_get_direct_mem_ptr(this,
+                                           &i3c_controller::get_direct_mem_ptr);
 
     SC_METHOD(output_method);
     sensitive << recompute_event_;
@@ -186,6 +195,11 @@ void i3c_controller::schedule_recompute()
 
 void i3c_controller::schedule_xfer()
 {
+    // Re-read the CCI value on every scheduling decision: xfer_delay_ns is
+    // documented mutable, so caching it at construction would silently make
+    // run-time changes ineffective.  access_delay_ns is re-read the same way
+    // in b_transport.
+    xfer_delay_ = sc_core::sc_time(xfer_delay_ns_p_.get_value(), sc_core::SC_NS);
     xfer_event_.notify(xfer_delay_);
 }
 
@@ -372,7 +386,7 @@ void i3c_controller::xfer_method()
 
     // Continue draining any remaining work.
     if (!xfer_pending_.empty()) {
-        xfer_event_.notify(xfer_delay_);
+        schedule_xfer();
     }
 }
 
@@ -390,7 +404,12 @@ void i3c_controller::process_command(unsigned inst)
     const uint8_t  devidx  = cmd_devidx(desc);
     const bool     is_ccc  = cmd_cp(desc);
     const uint16_t length  = cmd_length(desc);
-    (void)cmd_attr(desc);
+
+    // Only CMD_ATTR = 0 (regular transfer) is modelled.  HCI also defines
+    // immediate-data, address-assignment, combo and internal-control
+    // attributes; running those as a regular transfer made malformed firmware
+    // descriptors look successful, so they are reported NotSupported instead.
+    const bool unsupported_attr = (cmd_attr(desc) != 0);
 
     // Resolve dynamic address from the DAT window (DWORD0 [22:16]).
     uint8_t dyn_addr = 0;
@@ -408,10 +427,12 @@ void i3c_controller::process_command(unsigned inst)
 
     const bool is_write = !rnw;
 
-    // For writes, drain payload from the TX FIFO.
+    // For writes, drain payload from the TX FIFO.  An unsupported attribute is
+    // rejected before the FIFO is touched, so a bad descriptor cannot consume
+    // payload that a later, valid command still needs.
     uint16_t actual_len = 0;
     bool underflow = false;
-    if (is_write) {
+    if (is_write && !unsupported_attr) {
         const unsigned dwords_needed = (length + 3u) / 4u;
         if (s.tx_q.size() < dwords_needed) {
             underflow = true;
@@ -428,7 +449,10 @@ void i3c_controller::process_command(unsigned inst)
 
     i3c_err err = i3c_err::Success;
 
-    if (underflow) {
+    if (unsupported_attr) {
+        err = i3c_err::NotSupported;
+        s.pio_intr_status |= (1u << pio_intr::TRANSFER_ERR_STAT);
+    } else if (underflow) {
         err = i3c_err::OverflowUnder;
         s.pio_intr_status |= (1u << pio_intr::TRANSFER_ERR_STAT);
     } else if (!s.bus_model) {
@@ -483,7 +507,7 @@ void i3c_controller::process_command(unsigned inst)
 // Register read (has side effects: FIFO ports pop)
 // ---------------------------------------------------------------------------
 
-bool i3c_controller::reg_read(unsigned inst, uint64_t loff, uint32_t& data)
+void i3c_controller::reg_read(unsigned inst, uint64_t loff, uint32_t& data)
 {
     inst_state& s = inst_[inst];
     data = 0;
@@ -491,11 +515,11 @@ bool i3c_controller::reg_read(unsigned inst, uint64_t loff, uint32_t& data)
     // DAT / DCT direct-access windows.
     if (loff >= i3c_controller_cfg::DAT_BASE && loff < i3c_controller_cfg::DAT_END) {
         data = s.dat[(loff - i3c_controller_cfg::DAT_BASE) / 4];
-        return true;
+        return;
     }
     if (loff >= i3c_controller_cfg::DCT_BASE && loff < i3c_controller_cfg::DCT_END) {
         data = s.dct[(loff - i3c_controller_cfg::DCT_BASE) / 4];
-        return true;
+        return;
     }
 
     switch (loff) {
@@ -581,25 +605,24 @@ bool i3c_controller::reg_read(unsigned inst, uint64_t loff, uint32_t& data)
         // Hole inside the window: RAZ.
         break;
     }
-    return true;
 }
 
 // ---------------------------------------------------------------------------
 // Register write
 // ---------------------------------------------------------------------------
 
-bool i3c_controller::reg_write(unsigned inst, uint64_t loff, uint32_t data)
+void i3c_controller::reg_write(unsigned inst, uint64_t loff, uint32_t data)
 {
     inst_state& s = inst_[inst];
 
     // DAT / DCT direct-access windows.
     if (loff >= i3c_controller_cfg::DAT_BASE && loff < i3c_controller_cfg::DAT_END) {
         s.dat[(loff - i3c_controller_cfg::DAT_BASE) / 4] = data;
-        return true;
+        return;
     }
     if (loff >= i3c_controller_cfg::DCT_BASE && loff < i3c_controller_cfg::DCT_END) {
         s.dct[(loff - i3c_controller_cfg::DCT_BASE) / 4] = data;
-        return true;
+        return;
     }
 
     switch (loff) {
@@ -691,7 +714,6 @@ bool i3c_controller::reg_write(unsigned inst, uint64_t loff, uint32_t data)
     }
 
     schedule_recompute();
-    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -704,15 +726,24 @@ void i3c_controller::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time&
     const unsigned      length = gp.get_data_length();
     unsigned char* const buf   = gp.get_data_ptr();
 
-    if (buf == nullptr) {
+    // A CSR write can start a transfer and pop FIFOs, so this window is never
+    // DMI-able.  Cleared before any early return so no stale hint survives.
+    gp.set_dmi_allowed(false);
+
+    if (buf == nullptr || length == 0) {
         gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
         return;
     }
-    if (length != 4 || (addr & 0x3u) != 0 || gp.get_streaming_width() != length) {
+    // Single-beat 32-bit AXI-Lite access.  TLM-2.0 requires
+    // streaming_width >= data_length for a non-streaming target; a larger
+    // value is accepted and ignored, matching the sibling SMC models.
+    if (length != 4 || (addr & 0x3u) != 0 || gp.get_streaming_width() < length) {
         gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
         return;
     }
-    if (gp.get_byte_enable_ptr() != nullptr && gp.get_byte_enable_length() != 0) {
+    // Byte enables are not modelled; any non-null pointer is refused whatever
+    // its length, including the zero-length and all-lanes-enabled forms.
+    if (gp.get_byte_enable_ptr() != nullptr) {
         gp.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
         return;
     }
@@ -733,28 +764,24 @@ void i3c_controller::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time&
                             << " prot=0x" << unsigned(axi->prot));
     }
 
-    bool ok = true;
+    // Any aligned 32-bit access inside the aperture resolves: an unimplemented
+    // offset within an instance window is RAZ/WI by contract, not a fault, so
+    // the decode helpers below cannot miss.  Out-of-aperture was already
+    // rejected above.
     if (gp.is_read()) {
         uint32_t data = 0;
-        ok = reg_read(inst, loff, data);
-        if (ok) std::memcpy(buf, &data, 4);
+        reg_read(inst, loff, data);
+        std::memcpy(buf, &data, 4);
         SIM_LOG_TRACE(this, "read  inst=" << inst << " off=0x" << std::hex << loff
                             << " data=0x" << data);
     } else if (gp.is_write()) {
         uint32_t data = 0;
         std::memcpy(&data, buf, 4);
-        ok = reg_write(inst, loff, data);
+        reg_write(inst, loff, data);
         SIM_LOG_TRACE(this, "write inst=" << inst << " off=0x" << std::hex << loff
                             << " data=0x" << data);
     } else {
         gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
-        return;
-    }
-
-    if (!ok) {
-        SIM_LOG_DEBUG(this, "TLM decode miss inst=" << inst << " off=0x"
-                            << std::hex << loff);
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
         return;
     }
 
@@ -782,6 +809,10 @@ unsigned int i3c_controller::transport_dbg(tlm::tlm_generic_payload& gp)
     inst_state& s = inst_[inst];
 
     // Side-effect-free back door: only CSR/table storage, never FIFO ports.
+    // Anything that is neither a read nor a write is refused outright -- an
+    // `else` here would let TLM_IGNORE_COMMAND fall through and write.
+    if (!gp.is_read() && !gp.is_write()) return 0;
+
     if (gp.is_read()) {
         uint32_t data = 0;
         if (loff >= i3c_controller_cfg::DAT_BASE && loff < i3c_controller_cfg::DAT_END)
@@ -802,6 +833,19 @@ unsigned int i3c_controller::transport_dbg(tlm::tlm_generic_payload& gp)
             return 0;
     }
     return length;
+}
+
+bool i3c_controller::get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                                        tlm::tlm_dmi& dmi_data)
+{
+    (void)gp;
+    // FIFO ports pop on read and a CSR write can start a transfer, so a direct
+    // memory pointer would bypass real side effects.
+    dmi_data.allow_none();
+    dmi_data.set_start_address(0);
+    dmi_data.set_end_address(uint64_t(cfg_.num_instances) *
+                                 i3c_controller_cfg::INSTANCE_SPACING - 1);
+    return false;
 }
 
 // ---------------------------------------------------------------------------
