@@ -1,5 +1,5 @@
-SHELL := /usr/bin/env
-.SHELLFLAGS := bash -c
+SHELL := /bin/bash
+.SHELLFLAGS := -c
 
 # OSEP SEP Boot ROM
 #
@@ -68,6 +68,7 @@ SRAM_SCRUB_BYTES ?= 0
 # - PMP_LOCK=0: do not set L bit; PMP_LOCK=1 sets L bit for programmed entries
 PMP_ENABLE ?= 1
 PMP_LOCK   ?= 0
+BL1_SRAM_EXEC_ENABLE ?= 1
 
 # SPI boot controller select (build-time). 0 = Cadence xSPI (default, unchanged);
 # 1 = OpenTitan SPI host. Exactly one controller is used per ROM image; the
@@ -95,15 +96,31 @@ else ifeq ($(BUILD_TYPE),test)
 	DEBUG ?= 1
 endif
 
-BUILD_DIR := build
+BUILD_DIR ?= build
+SECURE_BUILD_DIR ?= build/secure
 LINK_DIR  := link
 SRC_DIR   := src
 TOOLS_DIR := tools
 SCRIPTS_DIR := scripts
 INCLUDE_DIR := include
 PREBUILT_DIR := prebuilt
+KEY_MODE ?= null
+KEY_DIGESTS_C := $(BUILD_DIR)/key_digests.c
+EPHEMERAL_KEY := $(BUILD_DIR)/keys/rsa_private_key.rom_key0.pem
+GENERATE_KEY_DIGESTS := $(TOOLS_DIR)/generate_key_digests.py
+MISMATCH_KEY := $(SECURE_BUILD_DIR)/keys/rsa_private_key.mismatch.pem
+MISMATCH_DIGESTS_C := $(SECURE_BUILD_DIR)/mismatch_key_digests.c
+MISMATCH_BOOT_SPI := $(SECURE_BUILD_DIR)/secure_boot_mismatch.spi_preload
 BL0_VERSION := $(shell $(PYTHON3) $(SCRIPTS_DIR)/bl0-version.py --build-type $(BUILD_TYPE) 2>/dev/null || echo "unknown")
 OCH_REGS_INCLUDE_DIR := ../../../meta/registers/c
+
+ifeq ($(KEY_MODE),ephemeral)
+KEY_DIGESTS_ARGS := --generate-key "$(EPHEMERAL_KEY)"
+else ifeq ($(KEY_MODE),null)
+KEY_DIGESTS_ARGS := --keys=-,-,-,-,-,-
+else
+$(error Unsupported KEY_MODE="$(KEY_MODE)"; expected "null" or "ephemeral")
+endif
 
 ELF      := $(BUILD_DIR)/boot_rom.elf
 VMEM     := $(BUILD_DIR)/boot_rom.vmem
@@ -168,6 +185,7 @@ CFLAGS   := -std=c11 -Os -ffreestanding -fno-builtin -fdata-sections -ffunction-
 	-DDCCM_SCRUB_BYTES=$(DCCM_SCRUB_BYTES) \
 	-DSRAM_SCRUB_BYTES=$(SRAM_SCRUB_BYTES) \
 	-DPMP_ENABLE=$(PMP_ENABLE) -DPMP_LOCK=$(PMP_LOCK) \
+	-DBL1_SRAM_EXEC_ENABLE=$(BL1_SRAM_EXEC_ENABLE) \
 	-DBOOT_SPI_CONTROLLER_OT=$(BOOT_SPI_CONTROLLER_OT) \
 	-DBOOT_OT_SPI_USE_PIO=$(BOOT_OT_SPI_USE_PIO) \
 	-DBOOT_OT_SPI_PROFILE=$(BOOT_OT_SPI_PROFILE) \
@@ -178,6 +196,7 @@ ASFLAGS  := -x assembler-with-cpp -mno-relax \
 	-I$(INCLUDE_DIR) \
 	-DDCCM_SCRUB_BYTES=$(DCCM_SCRUB_BYTES) \
 	-DPMP_ENABLE=$(PMP_ENABLE) -DPMP_LOCK=$(PMP_LOCK) \
+	-DBL1_SRAM_EXEC_ENABLE=$(BL1_SRAM_EXEC_ENABLE) \
 	$(CC_ABI)
 LDFLAGS  := -nostdlib -Wl,--gc-sections -Wl,--no-relax -T $(LINK_DIR)/rom.ld $(CC_ABI)
 
@@ -195,6 +214,7 @@ endif
 # make every object depend on it so a flag change forces a full rebuild.
 BUILD_FLAGS := CTRL_OT=$(BOOT_SPI_CONTROLLER_OT) USE_PIO=$(BOOT_OT_SPI_USE_PIO) \
 	PROFILE=$(BOOT_OT_SPI_PROFILE) BUILD_TYPE=$(BUILD_TYPE) DEBUG=$(DEBUG) \
+	KEY_MODE=$(KEY_MODE) \
 	PMP_ENABLE=$(PMP_ENABLE) PMP_LOCK=$(PMP_LOCK) \
 	DCCM_SCRUB=$(DCCM_SCRUB_BYTES) SRAM_SCRUB=$(SRAM_SCRUB_BYTES)
 FLAGS_STAMP := $(BUILD_DIR)/.build_flags
@@ -219,7 +239,8 @@ FORCE:
 ROM_ELF_SECTIONS := --only-section=.text --only-section=.text.* --only-section=.metadata --only-section=.metadata.* \
 	--only-section=.rodata --only-section=.rodata.* --only-section=.srodata --only-section=.srodata.*
 
-.PHONY: all clean non_secure_boot_spi secure_boot_spi
+.PHONY: all clean non_secure_boot_spi secure_boot_spi secure_boot_ephemeral \
+	secure_boot_mismatch test-key-generation
 
 all: $(ELF) $(VMEM) $(ITCM_HEX) $(DTCM_HEX)
 
@@ -229,6 +250,31 @@ non_secure_boot_spi: $(NON_SECURE_BOOT_SPI)
 
 # Build the secure SPI flash image used by the secure-boot test.
 secure_boot_spi: $(SECURE_BOOT_SPI)
+
+# Generate a fresh RSA-3072 key, compile its public digest into a dedicated
+# Boot ROM, and sign the matching SPI image. The private key remains under the
+# ignored build directory and is replaced on every invocation.
+secure_boot_ephemeral:
+	rm -rf "$(SECURE_BUILD_DIR)"
+	$(MAKE) BUILD_DIR="$(SECURE_BUILD_DIR)" KEY_MODE=ephemeral \
+		BOOT_SPI_CONTROLLER_OT=1 secure_boot_spi
+
+# Negative fixture: keep the ROM built with key A, but sign a second SPI image
+# with fresh key B. A front-door secure-boot run must reject it at the public
+# key digest check before RSA verification.
+secure_boot_mismatch: secure_boot_ephemeral
+	$(PYTHON3) "$(GENERATE_KEY_DIGESTS)" --generate-key "$(MISMATCH_KEY)" \
+		--output "$(MISMATCH_DIGESTS_C)"
+	ROOT=$(TT_BOOT_MANIFEST_DIR) OCH_ROOT=$(OCH_ROOT_ABS) \
+		TEST_SIGNING_KEY=$(abspath $(MISMATCH_KEY)) \
+		$(PYTHON3) -m tt_boot_manifest.pack_images \
+		--config "$(CONFIGS_DIR)/secure_boot_test.yaml" \
+		--out "$(MISMATCH_BOOT_SPI).bin" -v
+	$(PYTHON3) $(TOOLS_DIR)/bin_to_spi_preload.py \
+		"$(MISMATCH_BOOT_SPI).bin" "$(MISMATCH_BOOT_SPI)"
+
+test-key-generation:
+	$(PYTHON3) -m unittest discover -s "$(TOOLS_DIR)" -p 'test_generate_key_digests.py' -v
 
 $(BUILD_DIR):
 	mkdir -p "$(BUILD_DIR)"
@@ -326,7 +372,10 @@ $(BUILD_DIR)/aes_driver.o: $(SRC_DIR)/aes_driver.c | $(BUILD_DIR)
 $(BUILD_DIR)/kdf.o: $(SRC_DIR)/kdf.c | $(BUILD_DIR)
 	$(GCC_PREFIX)-gcc $(CFLAGS) -c "$<" -o "$@"
 
-$(BUILD_DIR)/key_digests.o: $(SRC_DIR)/key_digests.c | $(BUILD_DIR)
+$(KEY_DIGESTS_C): $(GENERATE_KEY_DIGESTS) | $(BUILD_DIR)
+	$(PYTHON3) "$(GENERATE_KEY_DIGESTS)" $(KEY_DIGESTS_ARGS) --output "$@"
+
+$(BUILD_DIR)/key_digests.o: $(KEY_DIGESTS_C) | $(BUILD_DIR)
 	$(GCC_PREFIX)-gcc $(CFLAGS) -c "$<" -o "$@"
 
 $(ELF): $(OBJS) $(LINK_DIR)/rom.ld $(INSERT_SHA256)
@@ -356,7 +405,7 @@ $(DTCM_HEX): $(ELF)
 # (bl1_pass_test.c → .o → .elf → .bin).
 .PHONY: bl1_test_build
 bl1_test_build:
-	$(MAKE) -C "$(BL1_TEST_DIR)" GCC_PREFIX=$(GCC_PREFIX)
+	$(MAKE) -C "$(BL1_TEST_DIR)" GCC_PREFIX=$(GCC_PREFIX) BUILD_DIR=build
 
 # --- SPI images via tt-boot-manifest ---
 # All SPI images are now generated from YAML configs.
@@ -374,6 +423,7 @@ ensure-python-deps:
 # Usage: $(call build_spi,<config_yaml>,<output_spi_preload>)
 define build_spi
 	ROOT=$(TT_BOOT_MANIFEST_DIR) OCH_ROOT=$(OCH_ROOT_ABS) \
+		TEST_SIGNING_KEY=$(abspath $(EPHEMERAL_KEY)) \
 		$(PYTHON3) -m tt_boot_manifest.pack_images \
 		--config "$(1)" --out "$(2).bin" -v
 	$(PYTHON3) $(TOOLS_DIR)/bin_to_spi_preload.py "$(2).bin" "$(2)"
@@ -386,7 +436,11 @@ $(NON_SECURE_BOOT_SPI): bl1_test_build ensure-python-deps | $(BUILD_DIR)
 
 # Secure boot SPI image.
 # Used by sep_rom_secure_boot_test.
-$(SECURE_BOOT_SPI): bl1_test_build ensure-python-deps | $(BUILD_DIR)
+$(SECURE_BOOT_SPI): $(ELF) bl1_test_build ensure-python-deps | $(BUILD_DIR)
+	@test "$(KEY_MODE)" = "ephemeral" || \
+		(echo "secure_boot_spi requires KEY_MODE=ephemeral; use make secure_boot_ephemeral" >&2; exit 1)
+	@test -f "$(EPHEMERAL_KEY)" || \
+		(echo "ephemeral signing key was not generated: $(EPHEMERAL_KEY)" >&2; exit 1)
 	$(call build_spi,$(CONFIGS_DIR)/secure_boot_test.yaml,$(SECURE_BOOT_SPI))
 
 clean:

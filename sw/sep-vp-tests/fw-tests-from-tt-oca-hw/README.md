@@ -210,6 +210,21 @@ A good run walks `BOOT_SPI` → `SPI_INIT_OK` → `MANIFEST_OK` → `BL1_FOUND` 
 `BL1_COPIED` → `BL1_JUMP=0x10020000` → BL1's `GO!` → `SIMULATION OF THE TEST
 PASSED`. The ROM then parks the core in `wfi`, so the run needs a `Ctrl-C`.
 
+Secure boot uses no repository-carried private key or fixed signed fixture.
+Generate a fresh key and the two artifacts that must agree:
+
+```bash
+make -C fw/sep/bootcode GCC_PREFIX=riscv64-elf secure_boot_ephemeral
+
+cd ../../../../../..            # tt-oca-harness-model
+vp/build/bin/sep-vp vp/platform/sep/config/accellera_config_secure_boot.ini
+```
+
+The target replaces `build/secure/` on every invocation, writes the temporary
+PEM with mode `0600`, compiles its modulus digest into ROM slot 0, and signs the
+SPI image with the same key. The secure VP configuration selects OTBN's
+`rsa_3072` algorithm and those generated artifacts.
+
 ## Current results
 
 The tree now mirrors all 181 test directories in `tt-oca-harness/fw/sep/tests`.
