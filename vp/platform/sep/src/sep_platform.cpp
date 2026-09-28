@@ -337,23 +337,25 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
                               SMC_DFX_CTRL_STATUS, sizeof(dfx_status));
 
         // SMC_EXTERNAL straps (STRAPS_LO/HI @ +0x5800), composed from CCI params so
-        // the ROM boot mode is invocation-selectable. init_straps() reads these
-        // (fw/sep/bootcode/src/boot_straps.c): STRAPS_LO[25]=primary_chiplet selects
-        // Primary (SPI boot) vs Secondary (wait for SMC manifest). Bit positions per
-        // sep_smc_interface.h; HI bits are relative to the STRAPS_HI word.
+        // the ROM boot mode is invocation-selectable. init_straps() reads these:
+        // STRAPS_LO[25]=primary_chiplet selects Primary (SPI boot) vs Secondary (wait
+        // for SMC manifest). Bit index is the GPIO index; STRAPS_HI[N] is GPIO N+32.
+        // Bit positions must match SMC_STRAP_*_BIT in the ROM's sep_smc_interface.h
+        // (tt-oca-harness: hw/sys/sep/bootrom/prod/include/).
         constexpr uint64_t SMC_STRAPS_LO = 0x405800;  // SMC_STRAPS_LO_OFFSET
         constexpr uint64_t SMC_STRAPS_HI = 0x405804;  // SMC_STRAPS_HI_OFFSET
+        constexpr unsigned STRAP_LO_BOOT_RECOVERY_BIT      = 19;
+        constexpr unsigned STRAP_LO_BL0_PLLCLK_BIT         = 20;
+        constexpr unsigned STRAP_LO_STATUS_RPT_DISABLE_BIT = 21;
+        constexpr unsigned STRAP_LO_PRIMARY_CHIPLET_BIT    = 25;
+        constexpr unsigned STRAP_HI_ROTATE_UPDATE_BIT      = 26;  // GPIO 58
         uint32_t straps_lo = 0u;
         uint32_t straps_hi = 0u;
-        // Bit positions per the open-tree SEP↔SMC interface contract:
-        // sw/sep-vp-tests/fw-tests-from-tt-oca-hw/fw/sep/bootcode/include/sep_smc_interface.h.
-        // NOTE: If running under tt-oca-harness with a different ROM/contract, keep these
-        // bit positions in lockstep with that ROM’s sep_smc_interface.h.
-        if (strap_primary_chiplet.get_param_value())       straps_lo |= (1u << 25);
-        if (strap_status_report_disable.get_param_value()) straps_lo |= (1u << 21);
-        if (strap_boot_recovery.get_param_value())         straps_hi |= (1u << 23);
-        if (strap_bl0_pll_clk.get_param_value())           straps_hi |= (1u << 24);
-        if (strap_rotate_update.get_param_value())         straps_hi |= (1u << 29);
+        if (strap_primary_chiplet.get_param_value())       straps_lo |= (1u << STRAP_LO_PRIMARY_CHIPLET_BIT);
+        if (strap_status_report_disable.get_param_value()) straps_lo |= (1u << STRAP_LO_STATUS_RPT_DISABLE_BIT);
+        if (strap_boot_recovery.get_param_value())         straps_lo |= (1u << STRAP_LO_BOOT_RECOVERY_BIT);
+        if (strap_bl0_pll_clk.get_param_value())           straps_lo |= (1u << STRAP_LO_BL0_PLLCLK_BIT);
+        if (strap_rotate_update.get_param_value())         straps_hi |= (1u << STRAP_HI_ROTATE_UPDATE_BIT);
         smc_global->load_data(reinterpret_cast<const char*>(&straps_lo),
                               SMC_STRAPS_LO, sizeof(straps_lo));
         smc_global->load_data(reinterpret_cast<const char*>(&straps_hi),
