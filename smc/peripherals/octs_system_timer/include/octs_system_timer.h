@@ -102,7 +102,20 @@
  *
  * `CREDIT_VAL` must be greater than `PULSE_WIDTH` (otherwise credit pulses are
  * missed) and non-zero; the model warns once if software violates either, in
- * lieu of the RTL's `CreditValGreaterThanPulseWidth_A` assertion.
+ * lieu of the RTL's `CreditValGreaterThanPulseWidth_A` assertion.  The warning
+ * is deliberately once per model lifetime (it is a modelling aid standing in
+ * for an RTL assertion, and re-warning every cycle would drown the log); reset
+ * does not re-arm it.
+ *
+ * ### CREDIT_VAL = 0
+ *
+ * `CREDIT_VAL = 0` violates the IP constraint.  The RTL compares the credit
+ * generator against `CREDIT_VAL - 1`, which underflows to 255 and yields a
+ * 256-cycle period rather than anything meaningful.  Rather than reproduce an
+ * accident, this model defines `CREDIT_VAL = 0` as **credit generation
+ * disabled**: a PRIMARY emits no credit pulses and holds its generator at 0,
+ * and a SECONDARY (whose budget `cur_credits < CREDIT_VAL` can never be
+ * satisfied) is starved from the outset.  Both are tested.
  *
  * ---
  * ## CCI configuration parameters
@@ -123,6 +136,9 @@
 
 #include <cstdint>
 #include <iostream>
+
+// Canonical SMC sideband type; this peripheral must not redefine it.
+#include "smc_axi_extension.h"
 
 namespace smc {
 
@@ -244,6 +260,9 @@ public:
     uint8_t  credit_val()   const { return static_cast<uint8_t>(ctrl_ & 0xFFu); }
     uint8_t  pulse_width()  const { return static_cast<uint8_t>((ctrl_ >> 8) & 0xFFu); }
     uint8_t  step()         const { return static_cast<uint8_t>((ctrl_ >> 16) & 0xFFu); }
+    /// True when CREDIT_VAL is 0, i.e. credit generation is disabled.
+    bool credit_disabled() const { return credit_val() == 0; }
+
     /// PULSE_WIDTH with the RTL's "0 rounds up to 1" rule applied.
     uint8_t  eff_pulse_width() const {
         const uint8_t pw = pulse_width();
@@ -258,6 +277,17 @@ private:
 
     // ---- TLM ------------------------------------------------------------
     void b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
+    /// Side-effect-free back door: reads CSR state without the START
+    /// singlepulse, the CREDIT_EXPIRED write-to-clear, or an annotated delay.
+    unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    /// Always denies DMI — reads are live counter samples and writes trigger
+    /// the START pulse and the CREDIT_EXPIRED clear.
+    bool get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                            tlm::tlm_dmi& dmi_data);
+    /// Shared bus-contract check.  On failure sets @p status to the TLM
+    /// response the caller should report.
+    bool check_access(const tlm::tlm_generic_payload& gp,
+                      tlm::tlm_response_status& status) const;
     bool reg_read (uint64_t off, uint32_t& data) const;
     bool reg_write(uint64_t off, uint32_t data);
 

@@ -49,6 +49,9 @@ octs_system_timer::octs_system_timer(sc_core::sc_module_name name,
                                     cci::cci_value(std::string("nanoseconds")));
 
     reg_socket.register_b_transport(this, &octs_system_timer::b_transport);
+    reg_socket.register_transport_dbg(this, &octs_system_timer::transport_dbg);
+    reg_socket.register_get_direct_mem_ptr(
+        this, &octs_system_timer::get_direct_mem_ptr);
 
     SC_METHOD(tick_method);
     sensitive << clk_i.pos();
@@ -133,9 +136,16 @@ void octs_system_timer::tick_method()
     const bool sl_pulse = !primary && (sl_sync1_ && !sl_last_);
     const bool cc_pulse = !primary && (cc_sync1_ && !cc_last_);
 
+    // CREDIT_VAL = 0 violates the IP constraint and would underflow the
+    // CREDIT_VAL-1 terminal count to 255; the model defines it as "credit
+    // generation disabled" instead (see the header).  One named condition,
+    // used both to hold the generator and to gate the pulse, so the two
+    // cannot drift apart.
+    const bool credit_enabled = primary && (cv != 0);
+
     // PRIMARY emits a credit pulse when the generator reaches CREDIT_VAL-1.
     const bool credit_gen_pulse =
-        primary && enable_ &&
+        credit_enabled && enable_ &&
         (credit_counter_ == static_cast<uint8_t>(cv - 1));
 
     // ---- Next state ------------------------------------------------------
@@ -163,7 +173,7 @@ void octs_system_timer::tick_method()
 
     // PRIMARY credit generator (held at 0 in SECONDARY mode).
     uint8_t credit_counter_d = 0;
-    if (primary) {
+    if (credit_enabled) {
         if (!enable_ || start) {
             credit_counter_d = 0;
         } else if (credit_counter_ >= static_cast<uint8_t>(cv - 1)) {
@@ -316,7 +326,10 @@ bool octs_system_timer::reg_read(uint64_t off, uint32_t& data) const
             return true;
 
         default:
-            // Reserved holes inside the window read as zero.
+            // Defensive only: the 0x24 window is exactly nine 32-bit words and
+            // all nine are mapped, so an aligned in-window access can never
+            // land here.  Kept so that growing the window cannot silently
+            // return uninitialised data.
             data = 0;
             return true;
     }
@@ -358,6 +371,7 @@ bool octs_system_timer::reg_write(uint64_t off, uint32_t data)
             return true;
 
         default:
+            // Defensive only -- see reg_read(); the window has no holes today.
             return true;  // reserved hole: write-ignored
     }
 }
@@ -381,39 +395,72 @@ void octs_system_timer::check_ctrl_constraints()
 // TLM
 // ---------------------------------------------------------------------------
 
-void octs_system_timer::b_transport(tlm::tlm_generic_payload& gp,
-                                    sc_core::sc_time& delay)
+bool octs_system_timer::check_access(const tlm::tlm_generic_payload& gp,
+                                     tlm::tlm_response_status& status) const
 {
-    const tlm::tlm_command cmd = gp.get_command();
-    const uint64_t         adr = gp.get_address();
-    const unsigned         len = gp.get_data_length();
-    unsigned char* const   ptr = gp.get_data_ptr();
+    const uint64_t adr = gp.get_address();
+    const unsigned len = gp.get_data_length();
 
-    if (ptr == nullptr || len == 0) {
-        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
-        return;
+    if (gp.get_data_ptr() == nullptr || len == 0) {
+        status = tlm::TLM_GENERIC_ERROR_RESPONSE;
+        return false;
     }
 
     // memmap.adoc: "Only 32-bit accesses are supported; byte or halfword
     // accesses are not allowed and may cause errors."
     if (len != 4 || (adr & 0x3u) != 0) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
     }
 
-    if (adr + len > cfg_t::WINDOW_SIZE) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-        SIM_LOG_DEBUG(this, "decode miss at off=0x" << std::hex << adr);
-        return;
+    // Overflow-safe window bound: `adr + len` wraps for an address near
+    // UINT64_MAX and would alias a wild access into the register window.
+    if (adr >= cfg_t::WINDOW_SIZE || len > cfg_t::WINDOW_SIZE - adr) {
+        status = tlm::TLM_ADDRESS_ERROR_RESPONSE;
+        return false;
     }
 
+    // Byte enables are not modelled; any non-null pointer is refused whatever
+    // its length, including the zero-length and all-lanes-enabled forms.
     if (gp.get_byte_enable_ptr() != nullptr) {
-        gp.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
-        return;
+        status = tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE;
+        return false;
     }
 
+    // Single-beat access: TLM-2.0 requires streaming_width >= data_length.
     if (gp.get_streaming_width() < len) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
+    }
+
+    status = tlm::TLM_OK_RESPONSE;
+    return true;
+}
+
+void octs_system_timer::b_transport(tlm::tlm_generic_payload& gp,
+                                    sc_core::sc_time& delay)
+{
+    const tlm::tlm_command cmd = gp.get_command();
+    const uint64_t         adr = gp.get_address();
+    unsigned char* const   ptr = gp.get_data_ptr();
+
+    // Reads sample a live counter and writes fire the START singlepulse and
+    // the CREDIT_EXPIRED clear, so this window can never be DMI'd.
+    gp.set_dmi_allowed(false);
+
+    // Optional canonical sideband.  Authorization for this CSR port belongs to
+    // the fabric's axi_filter upstream, so the fields are inspected for tracing
+    // only and the payload is left untouched.
+    const smc::smc_axi_extension* axi =
+        gp.get_extension<smc::smc_axi_extension>();
+    (void)axi;
+
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    if (!check_access(gp, status)) {
+        gp.set_response_status(status);
+        if (status == tlm::TLM_ADDRESS_ERROR_RESPONSE) {
+            SIM_LOG_DEBUG(this, "decode miss at off=0x" << std::hex << adr);
+        }
         return;
     }
 
@@ -436,6 +483,32 @@ void octs_system_timer::b_transport(tlm::tlm_generic_payload& gp,
 
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
     gp.set_response_status(tlm::TLM_OK_RESPONSE);
+}
+
+unsigned int octs_system_timer::transport_dbg(tlm::tlm_generic_payload& gp)
+{
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    if (!check_access(gp, status)) return 0;
+
+    // Side-effect-free: a debug read goes through the same decode as a
+    // software read (the CSRs have no read side effects), but a debug write is
+    // refused outright rather than arming START or clearing CREDIT_EXPIRED.
+    if (gp.get_command() != tlm::TLM_READ_COMMAND) return 0;
+
+    uint32_t data = 0;
+    reg_read(gp.get_address(), data);
+    std::memcpy(gp.get_data_ptr(), &data, sizeof(data));
+    return gp.get_data_length();
+}
+
+bool octs_system_timer::get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                                           tlm::tlm_dmi& dmi_data)
+{
+    (void)gp;
+    dmi_data.allow_none();
+    dmi_data.set_start_address(0);
+    dmi_data.set_end_address(cfg_t::WINDOW_SIZE - 1);
+    return false;
 }
 
 // ---------------------------------------------------------------------------

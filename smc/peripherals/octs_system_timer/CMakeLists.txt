@@ -15,7 +15,8 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-option(ENABLE_ASAN     "Build with AddressSanitizer"    OFF)
+option(ENABLE_ASAN      "Build with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+option(ENABLE_UB_CANARY "Compile a deliberate UB statement into the test bench"  OFF)
 option(ENABLE_COVERAGE "Build with source-level coverage" OFF)
 
 if(ENABLE_ASAN AND ENABLE_COVERAGE)
@@ -25,9 +26,21 @@ if(ENABLE_ASAN AND ENABLE_COVERAGE)
 endif()
 
 if(ENABLE_ASAN)
-    message(STATUS "AddressSanitizer enabled")
-    add_compile_options(-fsanitize=address -fno-omit-frame-pointer -g)
-    add_link_options   (-fsanitize=address)
+    message(STATUS "AddressSanitizer + UndefinedBehaviorSanitizer enabled")
+    # Cycle arithmetic and narrowing conversions make the undefined-behaviour
+    # gate especially relevant here.  UBSan stays recoverable so a single
+    # finding does not abort the run; enforce_asan_clean.sh fails from the log.
+    add_compile_options(-fsanitize=address,undefined
+                        -fsanitize=float-divide-by-zero
+                        -fno-omit-frame-pointer -g)
+    add_link_options   (-fsanitize=address,undefined
+                        -fsanitize=float-divide-by-zero)
+endif()
+
+if(ENABLE_UB_CANARY AND NOT ENABLE_ASAN)
+    message(FATAL_ERROR
+        "ENABLE_UB_CANARY only makes sense with ENABLE_ASAN=ON (it exists to "
+        "prove the UBSan instrumentation actually reports).")
 endif()
 
 if(ENABLE_COVERAGE)
@@ -103,13 +116,18 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake")
 include(SmcSystemCStd)
 smc_detect_systemc_cxx_std()
 
+# Canonical smc::smc_axi_extension (smc/common/include) -- the timer's CSR port
+# is an SMC-facing target, so it inspects the sideband rather than redefining it.
+include(SmcAxiExtension)
+
 add_library(smc_octs_system_timer STATIC
     src/octs_system_timer.cpp)
 
 target_include_directories(smc_octs_system_timer
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../../common/include
+        ${SMC_AXI_EXTENSION_DIR})
 
 target_link_libraries(smc_octs_system_timer PUBLIC SystemC::systemc SystemC::cci)
 

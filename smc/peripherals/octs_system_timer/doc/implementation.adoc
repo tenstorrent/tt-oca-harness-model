@@ -75,6 +75,42 @@ Only naturally aligned 32-bit accesses are accepted.
 Platform knobs `octs_clk_period_ns` (immutable) and `octs_is_primary`
 live on `smc_platform`.
 
+====== Bus contract
+
+[cols="28%,72%",options="header"]
+|===
+|Aspect |Contract
+|Size / alignment
+|Naturally aligned 32-bit accesses only (`memmap.adoc`); anything else is
+ `TLM_BURST_ERROR_RESPONSE`.
+|Decode
+|Overflow-safe window bound (`len > WINDOW_SIZE - adr`), never
+ `adr + len > WINDOW_SIZE`, which wraps for an address near `UINT64_MAX`.
+ The 0x24 window is exactly nine words and all nine are mapped, so there
+ are no reserved holes inside it.
+|Byte enables
+|Any non-null `byte_enable_ptr` is refused whatever its length.
+|Streaming width
+|Single beat, so TLM-2.0 requires `streaming_width >= data_length`.
+|Debug / DMI
+|`transport_dbg` serves reads only -- a debug write is refused so it can
+ neither arm the START singlepulse nor clear CREDIT_EXPIRED. DMI is
+ always denied and `dmi_allowed` is cleared on every transaction.
+|Sideband
+|The canonical `smc::smc_axi_extension` is inspected for tracing and left
+ untouched; authorization belongs to the fabric's `axi_filter`.
+|===
+
+====== CREDIT_VAL = 0
+
+`CREDIT_VAL = 0` violates the IP constraint. The RTL's `CREDIT_VAL - 1`
+terminal count would underflow to 255 and give a 256-cycle period. The
+model defines it instead as *credit generation disabled*: a single
+`credit_enabled` condition both holds the PRIMARY generator at 0 and
+gates the pulse, so the two cannot drift apart. A SECONDARY, whose
+budget test `cur_credits < CREDIT_VAL` can never pass, is starved from
+its first cycle.
+
 ====== Modeling gaps versus RTL
 
 * The model reproduces two RTL quirks rather than “fixing” them: an

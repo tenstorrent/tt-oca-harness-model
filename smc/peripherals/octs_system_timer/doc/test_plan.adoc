@@ -52,6 +52,130 @@ titles.
 |12 |CCI parameter discovery + mutation |`access_delay_ns` |Positive
 |===
 
+====== Architectural cases added by the internal-review remediation
+
+[cols="36%,46%,18%",options="header"]
+|===
+|Name |What the model test proves |Type
+
+|CSR manifest: reset, write-mask, RO and reserved contracts
+|Every register checked against an independent manifest for its reset
+ value and its read-back after an all-ones write; CTRL [31:24] reserved
+ is RAZ/WI; read-only registers ignore writes; START ignores writes
+ with bit 0 clear and fires on bit 0 set
+|Both
+
+|TLM payload and boundary matrix
+|Widths 1/2/3/5/8, all three misalignments, the last valid word, the
+ first word past the window, and `UINT64_MAX-3` / `UINT64_MAX` (whose
+ `addr + len` would wrap); null pointer, zero length, bad command; byte
+ enables at lengths 0/1/2/4 plus the legal null-pointer-with-stale-
+ length form; streaming widths 0..8; exact delay from a non-zero
+ incoming value and no delay on an error; a rejected access mutates
+ nothing
+|Negative
+
+|Canonical AXI sideband
+|A non-default `smc_axi_extension` survives reads and writes to a CSR, a
+ preset register and an out-of-window fault with every field unchanged;
+ an absent extension is accepted
+|Positive
+
+|transport_dbg and DMI policy
+|Debug reads match the software view; a debug *write* is refused so it
+ can neither arm START nor clear CREDIT_EXPIRED; window, wrap, width,
+ alignment, null pointer, byte-enable, streaming-width and bad-command
+ refusals; DMI denied and `dmi_allowed` cleared on hit and miss
+|Both
+
+|CREDIT_VAL = 0 is credit generation disabled
+|A PRIMARY emits no credit pulse in 300 cycles and holds its generator
+ at 0 (rather than running a 256-cycle period from an underflowed
+ CREDIT_VAL-1); a SECONDARY loads its preset then halts immediately and
+ accumulates starvation
+|Both
+
+|CTRL field boundary values
+|PULSE_WIDTH 0/1/5 measured directly on the emitted sync pulse (0 rounds
+ up to 1); STEP 0/1/7 on a SECONDARY, including STEP=0 holding the count
+|Positive
+
+|Input synchronizer latency measured independently
+|The expected four cycles are derived in the test from the RTL path
+ (one input flop + two synchronizer flops + one edge-detect flop), not
+ from the model's own `SYNC_LATENCY_CYCLES`; the constant is then
+ checked against the measurement
+|Positive
+
+|Input pulse shape and edge-detector behaviour
+|A level held high for many cycles produces exactly one edge; two pulses
+ separated by one low cycle produce two; a credit pulse before any sync
+ does not start a SECONDARY; simultaneous sync+credit resolves to sync;
+ a PRIMARY ignores its sync inputs
+|Both
+
+|Repeated START in each pulse-FSM state
+|START during an active sync pulse still reloads the preset; START while
+ idle restarts cleanly; START in SECONDARY mode never drives `sync_load_o`
+|Both
+
+|Live PRIMARY <-> SECONDARY switching
+|STATUS.MODE follows the live input; sync and credit outputs gate off in
+ SECONDARY whatever the pulse FSM is doing; switching back produces no
+ illegal output combination
+|Both
+
+|Reset asserted during each active phase
+|Reset mid sync-pulse, with an edge still inside the input synchronizer,
+ and while starved: count, CREDIT_EXPIRED, both pulse outputs and
+ STATUS.RUNNING all clear, and the in-flight edge is discarded rather
+ than consumed after release
+|Negative
+
+|64-bit rollover and split LO/HI read coherency
+|A preset at `UINT64_MAX` wraps to zero and continues; LO and HI read
+ either side of a 32-bit carry tear, while a same-cycle pair is
+ coherent -- pinning the "no latch-on-LO-read" contract
+|Both
+
+|Debug getters paired with architectural observables
+|Every debug getter is checked against a port or register rather than
+ used as an oracle: `dbg_count()` against `timer_count_o` and the LO/HI
+ pair, `dbg_credit_expired_max()` against CREDIT_EXPIRED,
+ `dbg_cur_credits()` against `cur_credits_debug_o`; the CTRL field
+ decoders against what software programmed; `dump_state` during a real
+ credit pulse
+|Both
+|===
+
+====== Build and sanitizer gates
+
+[cols="30%,70%",options="header"]
+|===
+|Gate |Requirement
+|Per-file coverage
+|`--coverage` sets `COVERAGE_PER_FILE=1`, so `src/` and the inline
+ behaviour in `include/` are each gated at >= 95% on their own.
+|Sanitizers
+|`--asan` builds with AddressSanitizer *and* UndefinedBehaviorSanitizer.
+ Cycle arithmetic and narrowing conversions make the undefined-behaviour
+ gate especially relevant for this IP.
+|UBSan canary
+|`--ubsan-canary` compiles a deliberate shift overflow into the bench and
+ fails unless UBSan reports it.
+|===
+
+====== Notes and open items
+
+* *No interrupt exists.* CREDIT_EXPIRED is polled; there is no IRQ port,
+  so no interrupt scenario applies to this IP.
+* *The CTRL constraint warning fires once per model lifetime* and reset
+  does not re-arm it. It is a modelling aid standing in for an RTL
+  assertion; re-warning every cycle would drown the log.
+* *Split LO/HI reads are not latched.* Firmware must re-read if a carry
+  can fall between the two accesses; the bench pins that contract rather
+  than inventing a latch policy.
+
 ====== Platform firmware tests
 
 Build `smc-vp` first. The secondary test uses its own `.ini` to

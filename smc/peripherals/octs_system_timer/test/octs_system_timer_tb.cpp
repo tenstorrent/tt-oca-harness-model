@@ -171,6 +171,87 @@ public:
                       << " returned status " << std::dec << st << "\n";
         }
     }
+
+    /// Fully general payload, for the malformed-access matrix: explicit
+    /// streaming width, byte enables, incoming delay and AXI sideband.
+    struct raw_result {
+        tlm::tlm_response_status status;
+        sc_time                  delay_delta;
+        bool                     dmi_allowed;
+    };
+    raw_result raw(tlm::tlm_command cmd, uint64_t addr, void* data,
+                   unsigned len, int streaming_width = -1,
+                   unsigned char* be = nullptr, unsigned be_len = 0,
+                   sc_time delay_in = SC_ZERO_TIME,
+                   smc::smc_axi_extension* ext = nullptr)
+    {
+        tlm::tlm_generic_payload gp;
+        sc_time                  d = delay_in;
+
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(static_cast<unsigned char*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(streaming_width < 0
+                                   ? len
+                                   : static_cast<unsigned>(streaming_width));
+        gp.set_byte_enable_ptr(be);
+        gp.set_byte_enable_length(be_len);
+        gp.set_dmi_allowed(true);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        if (ext != nullptr) gp.set_extension(ext);
+
+        sock->b_transport(gp, d);
+
+        if (ext != nullptr) gp.clear_extension<smc::smc_axi_extension>();
+        return {gp.get_response_status(), d - delay_in, gp.is_dmi_allowed()};
+    }
+
+    /// Raw back-door access over transport_dbg.  Returns bytes transferred.
+    unsigned dbg(tlm::tlm_command cmd, uint64_t addr, void* data, unsigned len,
+                 int streaming_width = -1, unsigned char* be = nullptr,
+                 unsigned be_len = 0)
+    {
+        tlm::tlm_generic_payload gp;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(static_cast<unsigned char*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(streaming_width < 0
+                                   ? len
+                                   : static_cast<unsigned>(streaming_width));
+        gp.set_byte_enable_ptr(be);
+        gp.set_byte_enable_length(be_len);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        return sock->transport_dbg(gp);
+    }
+
+    bool dmi(uint64_t addr, tlm::tlm_dmi& dmi_data)
+    {
+        tlm::tlm_generic_payload gp;
+        uint32_t scratch = 0;
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<unsigned char*>(&scratch));
+        gp.set_data_length(4);
+        gp.set_streaming_width(4);
+        return sock->get_direct_mem_ptr(gp, dmi_data);
+    }
+};
+
+/// Changes the report actions for one severity and restores them on scope
+/// exit, so an expected diagnostic cannot silence an unrelated one later.
+struct scoped_report_actions {
+    sc_core::sc_severity sev;
+    sc_core::sc_actions  saved;
+    scoped_report_actions(sc_core::sc_severity s, sc_core::sc_actions a)
+        : sev(s), saved(sc_core::sc_report_handler::set_actions(s, a))
+    {
+    }
+    ~scoped_report_actions()
+    {
+        sc_core::sc_report_handler::set_actions(sev, saved);
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -306,9 +387,815 @@ private:
     void test_ctrl_constraint_warning();
     void test_cci_parameter();
     void test_tlm_error_paths();
+
+    // Architectural sections added for the internal-review remediation.
+    void test_csr_manifest();
+    void test_tlm_matrix();
+    void test_sideband();
+    void test_debug_and_dmi();
+    void test_credit_val_zero();
+    void test_ctrl_boundaries();
+    void test_sync_latency_independent();
+    void test_pulse_shapes();
+    void test_start_retrigger();
+    void test_mode_switching();
+    void test_reset_during_activity();
+    void test_overflow_and_coherency();
+    void test_debug_getters();
 };
 
 // ---------------------------------------------------------------------------
+
+// ===========================================================================
+// Architectural sections added for the internal-review remediation.
+//
+// Independent CSR manifest: a second transcription of the register table in
+// include/octs_system_timer.h and memmap.adoc, giving each register's reset
+// value and its read-back after software writes all-ones.  It is deliberately
+// not derived from the model's switch statements, so a slip on either side
+// fails the sweep.  Registers whose value is live hardware state (STATUS,
+// TIMER_COUNT_*) are excluded and covered by the cycle-level sections.
+// ===========================================================================
+namespace {
+
+struct csr_spec {
+    uint64_t    off;
+    const char* name;
+    uint32_t    reset;
+    uint32_t    after_ones;
+};
+
+constexpr csr_spec kCsrs[] = {
+    // START is a singlepulse: it always reads back 0.
+    {cfg_t::OFF_TIMER_START,       "TIMER_START",       0x00000000u, 0x00000000u},
+    // CTRL [31:24] is reserved (RAZ/WI).
+    {cfg_t::OFF_CTRL,              "CTRL",              0x0001020Au, 0x00FFFFFFu},
+    {cfg_t::OFF_TIMER_PRESET_LO,   "TIMER_PRESET_LO",   0x00000000u, 0xFFFFFFFFu},
+    {cfg_t::OFF_TIMER_PRESET_HI,   "TIMER_PRESET_HI",   0x00000000u, 0xFFFFFFFFu},
+    // CREDIT_EXPIRED: writing anything clears it.
+    {cfg_t::OFF_CREDIT_EXPIRED,    "CREDIT_EXPIRED",    0x00000000u, 0x00000000u},
+    {cfg_t::OFF_TIMER_GPIO_ENABLE, "TIMER_GPIO_ENABLE", 0x00000000u, 0x00000001u},
+};
+
+/// Read-only registers: writes must not change what they report.
+constexpr uint64_t kRoRegs[] = {
+    cfg_t::OFF_STATUS, cfg_t::OFF_TIMER_COUNT_LO, cfg_t::OFF_TIMER_COUNT_HI,
+};
+
+}  // namespace
+
+void tb::test_csr_manifest()
+{
+    banner("CSR manifest: reset, write-mask, RO and reserved contracts");
+    apply_reset();
+
+    for (const csr_spec& r : kCsrs) {
+        CHECK_EQ(r.name, drv_x.read32(r.off), r.reset);
+    }
+    for (const csr_spec& r : kCsrs) {
+        drv_x.write32(r.off, 0xFFFFFFFFu);
+        CHECK_EQ(r.name, drv_x.read32(r.off), r.after_ones);
+    }
+    // The all-ones CTRL write above armed nothing else; restore the default so
+    // later sections start from a known program.
+    drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+
+    // Read-only registers ignore writes, including while the timer is running.
+    apply_reset();
+    for (uint64_t off : kRoRegs) {
+        const uint32_t before = drv_x.read32(off);
+        drv_x.write32(off, 0xFFFFFFFFu);
+        CHECK_EQ("RO register ignores write", drv_x.read32(off), before);
+    }
+
+    // Reserved words inside the window are RAZ/WI and do not disturb a
+    // neighbouring register.  0x24 is the first address past the window.
+    for (uint64_t off = 0; off < cfg_t::WINDOW_SIZE; off += 4) {
+        bool mapped = false;
+        for (const csr_spec& r : kCsrs) mapped = mapped || r.off == off;
+        for (uint64_t ro : kRoRegs)     mapped = mapped || ro == off;
+        if (mapped) continue;
+        CHECK_EQ("reserved word reads zero", drv_x.read32(off), 0u);
+        drv_x.write32(off, 0xFFFFFFFFu);
+        CHECK_EQ("reserved word ignores write", drv_x.read32(off), 0u);
+    }
+    CHECK_EQ("CTRL survived the hole sweep", drv_x.read32(cfg_t::OFF_CTRL),
+             cfg_t::CTRL_RESET);
+
+    // START writes of 0 must not arm the pulse; only bit 0 matters.
+    apply_reset();
+    is_primary_x.write(true);
+    advance();
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x1000u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 0x0u);
+    advance(2);
+    CHECK_EQ("START=0 does not start the timer", count_x.read(), 0u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 0xFFFFFFFEu);  // bit0 clear
+    advance(2);
+    CHECK_EQ("START with bit0 clear does not start", count_x.read(), 0u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 0xFFFFFFFFu);  // bit0 set
+    advance();
+    CHECK_EQ("START with bit0 set loads the preset", count_x.read(), 0x1000u);
+
+    is_primary_x.write(false);
+    apply_reset();
+}
+
+void tb::test_tlm_matrix()
+{
+    banner("TLM payload and boundary matrix");
+    apply_reset();
+
+    uint32_t scratch = 0;
+
+    // Width and alignment: only naturally aligned 32-bit accesses.
+    for (unsigned len : {1u, 2u, 3u, 5u, 8u}) {
+        uint8_t buf[8] = {0};
+        CHECK_EQ("bad width rejected",
+                 drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, buf, len)
+                     .status,
+                 tlm::TLM_BURST_ERROR_RESPONSE);
+    }
+    for (uint64_t off : {1u, 2u, 3u}) {
+        CHECK_EQ("misaligned rejected",
+                 drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL + off,
+                           &scratch, 4)
+                     .status,
+                 tlm::TLM_BURST_ERROR_RESPONSE);
+    }
+
+    // Window boundary, and 64-bit addresses whose `addr + len` would wrap.
+    CHECK_EQ("last valid word accepted",
+             drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::WINDOW_SIZE - 4, &scratch, 4)
+                 .status,
+             tlm::TLM_OK_RESPONSE);
+    CHECK_EQ("first word past window rejected",
+             drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::WINDOW_SIZE, &scratch, 4)
+                 .status,
+             tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    CHECK_EQ("UINT64_MAX-3 rejected (would wrap)",
+             drv_x.raw(tlm::TLM_READ_COMMAND, UINT64_MAX - 3, &scratch, 4)
+                 .status,
+             tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    CHECK_EQ("UINT64_MAX rejected",
+             drv_x.raw(tlm::TLM_READ_COMMAND, UINT64_MAX, &scratch, 4).status,
+             tlm::TLM_BURST_ERROR_RESPONSE);  // misaligned first
+
+    // Null pointer, zero length, unsupported command.
+    CHECK_EQ("null pointer rejected",
+             drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, nullptr, 4).status,
+             tlm::TLM_GENERIC_ERROR_RESPONSE);
+    CHECK_EQ("zero length rejected",
+             drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, &scratch, 0, 0)
+                 .status,
+             tlm::TLM_GENERIC_ERROR_RESPONSE);
+    CHECK_EQ("unsupported command rejected",
+             drv_x.raw(tlm::TLM_IGNORE_COMMAND, cfg_t::OFF_CTRL, &scratch, 4)
+                 .status,
+             tlm::TLM_COMMAND_ERROR_RESPONSE);
+
+    // Byte enables refused at every byte-enable length, including the
+    // zero-length and all-lanes-enabled forms.
+    {
+        unsigned char be[4] = {0xFF, 0xFF, 0xFF, 0xFF};
+        for (unsigned be_len : {0u, 1u, 2u, 4u}) {
+            CHECK_EQ("byte enables refused",
+                     drv_x.raw(tlm::TLM_WRITE_COMMAND, cfg_t::OFF_CTRL,
+                               &scratch, 4, -1, be, be_len)
+                         .status,
+                     tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
+        }
+        // A null pointer with a stale non-zero length stays legal.
+        CHECK_EQ("null BE pointer with stale length is legal",
+                 drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, &scratch, 4,
+                           -1, nullptr, 4)
+                     .status,
+                 tlm::TLM_OK_RESPONSE);
+    }
+
+    // Streaming width: single beat, so TLM-2.0 requires sw >= data_length.
+    for (unsigned sw = 0; sw <= 8; ++sw) {
+        const auto exp = (sw < 4) ? tlm::TLM_BURST_ERROR_RESPONSE
+                                  : tlm::TLM_OK_RESPONSE;
+        CHECK_EQ("streaming-width relation",
+                 drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, &scratch, 4,
+                           static_cast<int>(sw))
+                     .status,
+                 exp);
+    }
+
+    // Exact annotated delay from a non-zero incoming value, and no delay at
+    // all on an error path.
+    {
+        // Pin the delay explicitly rather than assuming the sc_main preset:
+        // test_cci_parameter() mutates access_delay_ns live before this runs.
+        const double d_ns = 4.0;
+        cci::cci_get_broker()
+            .get_param_handle(std::string(dut_x.name()) + ".access_delay_ns")
+            .set_cci_value(cci::cci_value(d_ns));
+        const auto ok = drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL,
+                                  &scratch, 4, -1, nullptr, 0,
+                                  sc_time(7, SC_NS));
+        CHECK_TRUE("incoming delay preserved, one access delay added",
+                   ok.delay_delta == sc_time(d_ns, SC_NS));
+        const auto bad = drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::WINDOW_SIZE,
+                                   &scratch, 4, -1, nullptr, 0,
+                                   sc_time(7, SC_NS));
+        CHECK_TRUE("error path annotates no delay",
+                   bad.delay_delta == SC_ZERO_TIME);
+    }
+
+    // A rejected access must not mutate register state.
+    {
+        drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0xA5A5A5A5u);
+        uint8_t buf[8] = {0};
+        drv_x.raw(tlm::TLM_WRITE_COMMAND, cfg_t::OFF_TIMER_PRESET_LO, buf, 2);
+        CHECK_EQ("rejected access mutates nothing",
+                 drv_x.read32(cfg_t::OFF_TIMER_PRESET_LO), 0xA5A5A5A5u);
+    }
+    apply_reset();
+}
+
+void tb::test_sideband()
+{
+    banner("Canonical AXI sideband");
+    apply_reset();
+
+    smc::smc_axi_extension golden;
+    golden.source_id = smc::JTAG_ID;
+    golden.axi_id    = 0x2468u;
+    golden.axi_user  = 0x13u;
+    golden.set_priv(false);
+    golden.set_secure(true);
+    golden.set_fetch(true);
+    golden.set_locked(true);
+
+    // The sideband is inspected but never consumed: every field survives a
+    // register access unchanged, on a hit and on a decode fault.
+    for (uint64_t addr : {uint64_t(cfg_t::OFF_CTRL),
+                          uint64_t(cfg_t::OFF_TIMER_PRESET_LO),
+                          uint64_t(cfg_t::WINDOW_SIZE)}) {
+        for (tlm::tlm_command cmd :
+             {tlm::TLM_READ_COMMAND, tlm::TLM_WRITE_COMMAND}) {
+            smc::smc_axi_extension ext = golden;
+            uint32_t data = 0x5A5A5A5Au;
+            drv_x.raw(cmd, addr, &data, 4, -1, nullptr, 0, SC_ZERO_TIME, &ext);
+            CHECK_EQ("sideband source_id preserved", ext.source_id,
+                     golden.source_id);
+            CHECK_EQ("sideband axi_id preserved", ext.axi_id, golden.axi_id);
+            CHECK_EQ("sideband prot preserved", ext.prot, golden.prot);
+            CHECK_EQ("sideband axi_user preserved", ext.axi_user,
+                     golden.axi_user);
+            CHECK_EQ("sideband is_secure preserved", ext.is_secure ? 1 : 0,
+                     golden.is_secure ? 1 : 0);
+            CHECK_EQ("sideband is_user preserved", ext.is_user ? 1 : 0,
+                     golden.is_user ? 1 : 0);
+        }
+    }
+    // An absent extension is equally acceptable: the model inspects but never
+    // requires the sideband (authorization belongs to the fabric filter).
+    // Reset first, because the write sweep above deliberately scribbled on
+    // CTRL through one of the targeted offsets.
+    apply_reset();
+    CHECK_EQ("absent sideband accepted", drv_x.read32(cfg_t::OFF_CTRL),
+             cfg_t::CTRL_RESET);
+}
+
+void tb::test_debug_and_dmi()
+{
+    banner("transport_dbg and DMI policy");
+    apply_reset();
+
+    // A debug read matches the software view without side effects.
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x1234ABCDu);
+    {
+        uint32_t v = 0;
+        CHECK_EQ("debug read returns 4 bytes",
+                 drv_x.dbg(tlm::TLM_READ_COMMAND, cfg_t::OFF_TIMER_PRESET_LO,
+                           &v, 4),
+                 4u);
+        CHECK_EQ("debug read matches the bus", v, 0x1234ABCDu);
+    }
+
+    // A debug WRITE is refused, so it can neither arm the START singlepulse
+    // nor clear CREDIT_EXPIRED behind the model's back.
+    {
+        is_primary_x.write(true);
+        advance();
+        uint32_t one = 1;
+        CHECK_EQ("debug write refused",
+                 drv_x.dbg(tlm::TLM_WRITE_COMMAND, cfg_t::OFF_TIMER_START,
+                           &one, 4),
+                 0u);
+        advance(2);
+        CHECK_EQ("debug write did not start the timer", count_x.read(), 0u);
+        is_primary_x.write(false);
+        advance();
+    }
+
+    // Refusals mirror the b_transport contract.
+    {
+        uint32_t v = 0;
+        unsigned char be = 0xFF;
+        CHECK_EQ("debug past window", drv_x.dbg(tlm::TLM_READ_COMMAND,
+                                                cfg_t::WINDOW_SIZE, &v, 4), 0u);
+        CHECK_EQ("debug wrap address",
+                 drv_x.dbg(tlm::TLM_READ_COMMAND, UINT64_MAX - 3, &v, 4), 0u);
+        CHECK_EQ("debug bad width",
+                 drv_x.dbg(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, &v, 2), 0u);
+        CHECK_EQ("debug misaligned",
+                 drv_x.dbg(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL + 1, &v, 4), 0u);
+        CHECK_EQ("debug null pointer",
+                 drv_x.dbg(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, nullptr, 4), 0u);
+        CHECK_EQ("debug byte enables",
+                 drv_x.dbg(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, &v, 4, -1,
+                           &be, 1),
+                 0u);
+        CHECK_EQ("debug short streaming width",
+                 drv_x.dbg(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, &v, 4, 1), 0u);
+        CHECK_EQ("debug unsupported command",
+                 drv_x.dbg(tlm::TLM_IGNORE_COMMAND, cfg_t::OFF_CTRL, &v, 4), 0u);
+    }
+
+    // DMI is denied: reads sample a live counter and writes have side effects.
+    {
+        for (uint64_t off : {uint64_t(cfg_t::OFF_CTRL),
+                             uint64_t(cfg_t::OFF_TIMER_COUNT_LO),
+                             cfg_t::WINDOW_SIZE - 4}) {
+            tlm::tlm_dmi d;
+            d.allow_read_write();
+            CHECK_TRUE("DMI denied", !drv_x.dmi(off, d));
+            CHECK_TRUE("DMI read not allowed", !d.is_read_allowed());
+            CHECK_TRUE("DMI write not allowed", !d.is_write_allowed());
+        }
+        uint32_t v = 0;
+        CHECK_TRUE("dmi_allowed cleared on hit",
+                   !drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::OFF_CTRL, &v, 4)
+                        .dmi_allowed);
+        CHECK_TRUE("dmi_allowed cleared on miss",
+                   !drv_x.raw(tlm::TLM_READ_COMMAND, cfg_t::WINDOW_SIZE, &v, 4)
+                        .dmi_allowed);
+    }
+    apply_reset();
+}
+
+void tb::test_credit_val_zero()
+{
+    banner("CREDIT_VAL = 0 is defined as credit generation disabled");
+    apply_reset();
+
+    // PRIMARY with CREDIT_VAL = 0 must emit no credit pulses at all -- not a
+    // 256-cycle period from an underflowed CREDIT_VAL-1 comparison.
+    {
+        const scoped_report_actions quiet(SC_WARNING, SC_DO_NOTHING);
+        drv_p.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 0u);  // CV=0
+    }
+    is_primary_p.write(true);
+    advance();
+    drv_p.write32(cfg_t::OFF_TIMER_PRESET_LO, 0);
+    drv_p.write32(cfg_t::OFF_TIMER_PRESET_HI, 0);
+    drv_p.write32(cfg_t::OFF_TIMER_START, 1);
+    advance();
+
+    bool saw_credit = false;
+    for (unsigned i = 0; i < 300; ++i) {
+        advance();
+        if (cc_p2s.read()) saw_credit = true;
+    }
+    CHECK_TRUE("CV=0: PRIMARY emits no credit pulse in 300 cycles",
+               !saw_credit);
+    CHECK_TRUE("CV=0: the counter still advances", count_p.read() > 0);
+    // White-box, deliberately: with credit generation disabled the generator
+    // must be *held* at 0 rather than churning 0..255 under the underflowed
+    // comparison.  No register or port exposes it, so there is no
+    // architectural observable for this invariant -- and without this check
+    // the "hold" and "no pulse" guards are individually redundant and neither
+    // is provable on its own.
+    CHECK_EQ("CV=0: the credit generator is held at 0",
+             dut_p.dbg_credit_counter(), 0u);
+
+    // SECONDARY with CREDIT_VAL = 0 can never satisfy `cur_credits < CV`, so
+    // it is starved from the first cycle after its sync load.
+    apply_reset();
+    {
+        const scoped_report_actions quiet(SC_WARNING, SC_DO_NOTHING);
+        drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 0u);
+    }
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x40u);
+    pulse(sl_drv, 2);
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES + 4);
+    CHECK_EQ("CV=0: SECONDARY loads the preset then halts", count_x.read(),
+             0x40u);
+    CHECK_TRUE("CV=0: SECONDARY reports no credits left", !credleft_x.read());
+    CHECK_TRUE("CV=0: starvation is being counted",
+               drv_x.read32(cfg_t::OFF_CREDIT_EXPIRED) > 0);
+
+    drv_p.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    is_primary_p.write(false);
+    apply_reset();
+}
+
+void tb::test_ctrl_boundaries()
+{
+    banner("CTRL field boundary values");
+    apply_reset();
+    is_primary_p.write(true);
+    advance();
+
+    // PULSE_WIDTH = 0 is the RTL's "rounds up to 1" case; 1 and 255 are the
+    // other ends.  Measure the emitted sync pulse width directly.
+    for (unsigned pw : {0u, 1u, 5u}) {
+        apply_reset();
+        is_primary_p.write(true);
+        advance();
+        const unsigned expect_w = (pw == 0) ? 1u : pw;
+        drv_p.write32(cfg_t::OFF_CTRL, (1u << 16) | (pw << 8) | 200u);
+        drv_p.write32(cfg_t::OFF_TIMER_PRESET_LO, 0);
+        drv_p.write32(cfg_t::OFF_TIMER_START, 1);
+
+        unsigned width = 0;
+        for (unsigned i = 0; i < 64; ++i) {
+            advance();
+            if (sl_p2s.read()) ++width;
+            else if (width > 0) break;
+        }
+        CHECK_EQ("sync pulse width follows PULSE_WIDTH", width, expect_w);
+    }
+
+    // STEP boundary values on a SECONDARY: the count advances by STEP per
+    // cycle while credits last.  STEP = 0 means the counter never moves.
+    for (unsigned st : {0u, 1u, 7u}) {
+        apply_reset();
+        drv_x.write32(cfg_t::OFF_CTRL, (st << 16) | (2u << 8) | 200u);
+        drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x100u);
+        pulse(sl_drv, 2);
+        advance(octs_system_timer::SYNC_LATENCY_CYCLES - 2);
+        const uint64_t at_load = count_x.read();
+        CHECK_EQ("SECONDARY loads the preset", at_load, 0x100u);
+        advance(3);
+        CHECK_EQ("SECONDARY advances by STEP per cycle", count_x.read(),
+                 0x100u + 3ull * st);
+    }
+
+    drv_p.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    is_primary_p.write(false);
+    apply_reset();
+}
+
+void tb::test_sync_latency_independent()
+{
+    banner("Input synchronizer latency measured independently");
+    apply_reset();
+
+    // The expected value is derived from the RTL path described in
+    // prim_edge_detector.sv -- one input flop, a two-flop synchronizer, and
+    // one edge-detect flop -- NOT from the model's own SYNC_LATENCY_CYCLES
+    // constant.  If the model and that constant ever drift together, this
+    // still fails.
+    constexpr unsigned kInputFlop = 1, kSyncFlops = 2, kEdgeFlop = 1;
+    constexpr unsigned kExpectedLatency = kInputFlop + kSyncFlops + kEdgeFlop;
+
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x2000u);
+    CHECK_EQ("SECONDARY idle before any sync", count_x.read(), 0u);
+
+    // Raise sync for exactly one cycle and count rising edges until the
+    // datapath consumes it.
+    sl_drv.write(true);
+    advance(1);
+    sl_drv.write(false);
+
+    unsigned edges = 1;  // the edge during which the input was high
+    while (count_x.read() == 0 && edges < 16) {
+        advance(1);
+        ++edges;
+    }
+    CHECK_EQ("edge consumed after the modelled synchronizer depth", edges,
+             kExpectedLatency);
+    CHECK_EQ("preset loaded on the consumed edge", count_x.read(), 0x2000u);
+    // And the model's published constant agrees with the measurement.
+    CHECK_EQ("SYNC_LATENCY_CYCLES matches the measurement",
+             octs_system_timer::SYNC_LATENCY_CYCLES, kExpectedLatency);
+    apply_reset();
+}
+
+void tb::test_pulse_shapes()
+{
+    banner("Input pulse shape and edge-detector behaviour");
+
+    // A level held high for many cycles must produce exactly ONE edge: the
+    // detector is rising-edge, not level, sensitive.
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 200u);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x10u);
+    sl_drv.write(true);
+    advance(12);
+    const uint64_t held = count_x.read();
+    sl_drv.write(false);
+    advance(2);
+    // One load at 0x10 then free-running by STEP: the count must be 0x10 plus
+    // the elapsed cycles, i.e. no repeated reload back to 0x10.
+    CHECK_TRUE("held-high input loads exactly once", held > 0x10u);
+
+    // Two pulses separated by a single low cycle must produce two edges: the
+    // second reload pulls the count back to the preset.
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 200u);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x80u);
+    pulse(sl_drv, 1);
+    advance(1);           // one low cycle
+    pulse(sl_drv, 1);
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES + 2);
+    CHECK_TRUE("back-to-back pulses both reload",
+               count_x.read() >= 0x80u && count_x.read() < 0x90u);
+
+    // A credit pulse arriving before any sync must not start the timer: the
+    // SECONDARY is enabled by sync_load only.
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x55u);
+    pulse(cc_drv, 2);
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES + 3);
+    CHECK_EQ("credit before sync does not start the SECONDARY",
+             count_x.read(), 0u);
+
+    // Simultaneous sync + credit: sync has priority, so the count loads the
+    // preset rather than re-anchoring.
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 200u);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x300u);
+    sl_drv.write(true);
+    cc_drv.write(true);
+    advance(2);
+    sl_drv.write(false);
+    cc_drv.write(false);
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES - 2);
+    CHECK_EQ("simultaneous sync+credit: sync wins", count_x.read(), 0x300u);
+
+    // A PRIMARY ignores its sync inputs entirely.
+    apply_reset();
+    is_primary_x.write(true);
+    advance();
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x99u);
+    pulse(sl_drv, 2);
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES + 3);
+    CHECK_EQ("PRIMARY ignores sync inputs", count_x.read(), 0u);
+    is_primary_x.write(false);
+
+    drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    apply_reset();
+}
+
+void tb::test_start_retrigger()
+{
+    banner("Repeated START in each pulse-FSM state");
+    apply_reset();
+    is_primary_p.write(true);
+    advance();
+
+    // A long pulse width gives a wide window in which to retrigger.
+    drv_p.write32(cfg_t::OFF_CTRL, (1u << 16) | (6u << 8) | 200u);
+    drv_p.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x1000u);
+    drv_p.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(2);
+    CHECK_TRUE("sync pulse is active", sl_p2s.read());
+    const uint64_t before = count_p.read();
+    CHECK_TRUE("counter is running", before >= 0x1000u);
+
+    // START again while the sync pulse is still active: the preset reloads
+    // (the datapath sees the singlepulse) even though the pulse FSM is busy.
+    drv_p.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x2000u);
+    drv_p.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(1);
+    CHECK_EQ("START during an active pulse still reloads the preset",
+             count_p.read(), 0x2000u);
+
+    // START while idle restarts cleanly.
+    advance(10);
+    drv_p.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x3000u);
+    drv_p.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(1);
+    CHECK_EQ("START while idle reloads the preset", count_p.read(), 0x3000u);
+
+    // START in SECONDARY mode enables the timer but loads through the normal
+    // secondary path; it must not emit a sync pulse.
+    apply_reset();
+    is_primary_p.write(false);
+    advance();
+    drv_p.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x77u);
+    drv_p.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(2);
+    CHECK_TRUE("SECONDARY never drives sync_load_o", !sl_p2s.read());
+
+    drv_p.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    apply_reset();
+}
+
+void tb::test_mode_switching()
+{
+    banner("Live PRIMARY <-> SECONDARY switching");
+    apply_reset();
+
+    // Run as PRIMARY, then flip to SECONDARY mid-flight.
+    is_primary_x.write(true);
+    advance();
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x500u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(4);
+    CHECK_TRUE("PRIMARY is counting", count_x.read() > 0x500u);
+    CHECK_EQ("STATUS.MODE reads PRIMARY",
+             drv_x.read32(cfg_t::OFF_STATUS) & cfg_t::STATUS_MODE, 0u);
+
+    is_primary_x.write(false);
+    advance(2);
+    CHECK_EQ("STATUS.MODE follows the live input",
+             drv_x.read32(cfg_t::OFF_STATUS) & cfg_t::STATUS_MODE,
+             cfg_t::STATUS_MODE);
+    // Sync/credit outputs are gated off in SECONDARY mode whatever the pulse
+    // FSM is doing internally.
+    CHECK_TRUE("sync_load_o gated off in SECONDARY", !sl_x_o.read());
+    CHECK_TRUE("cnt_credit_o gated off in SECONDARY", !cc_x_o.read());
+
+    // Switching back must not produce an illegal output combination.
+    is_primary_x.write(true);
+    advance(2);
+    CHECK_EQ("STATUS.MODE back to PRIMARY",
+             drv_x.read32(cfg_t::OFF_STATUS) & cfg_t::STATUS_MODE, 0u);
+
+    is_primary_x.write(false);
+    apply_reset();
+}
+
+void tb::test_reset_during_activity()
+{
+    banner("Reset asserted during each active phase");
+
+    auto check_all_clear = [&](const char* ctx) {
+        CHECK_EQ(ctx, count_x.read(), 0u);
+        CHECK_EQ(ctx, drv_x.read32(cfg_t::OFF_CREDIT_EXPIRED), 0u);
+        CHECK_TRUE(ctx, !sl_x_o.read());
+        CHECK_TRUE(ctx, !cc_x_o.read());
+        CHECK_EQ(ctx, drv_x.read32(cfg_t::OFF_STATUS) & cfg_t::STATUS_RUNNING,
+                 0u);
+    };
+
+    // Reset while a PRIMARY sync pulse is mid-flight.
+    apply_reset();
+    is_primary_x.write(true);
+    advance();
+    drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (8u << 8) | 200u);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x600u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(3);
+    CHECK_TRUE("sync pulse active before reset", sl_x_o.read());
+    apply_reset();
+    check_all_clear("reset during sync pulse");
+
+    // Reset while the input synchronizer pipeline is in flight -- the pending
+    // edge must be discarded, not consumed after release.
+    is_primary_x.write(false);
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x700u);
+    pulse(sl_drv, 1);
+    advance(1);                       // edge still inside the synchronizer
+    apply_reset();
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES + 2);
+    CHECK_EQ("reset discards an in-flight synchronizer edge", count_x.read(),
+             0u);
+
+    // Reset while starved: the starvation counter and its peak both clear.
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 3u);  // small budget
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x800u);
+    pulse(sl_drv, 2);
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES + 8);
+    CHECK_TRUE("starvation is accumulating",
+               drv_x.read32(cfg_t::OFF_CREDIT_EXPIRED) > 0);
+    apply_reset();
+    check_all_clear("reset during starvation");
+
+    drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    apply_reset();
+}
+
+void tb::test_overflow_and_coherency()
+{
+    banner("64-bit rollover and split LO/HI read coherency");
+    apply_reset();
+    is_primary_x.write(true);
+    advance();
+
+    // Preset a PRIMARY just below the 64-bit rollover and let it wrap.
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0xFFFFFFFFu);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_HI, 0xFFFFFFFFu);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(1);
+    CHECK_EQ("preset loaded at the 64-bit limit", count_x.read(), UINT64_MAX);
+    advance(1);
+    CHECK_EQ("counter wraps to zero", count_x.read(), 0u);
+    advance(1);
+    CHECK_EQ("counter continues after the wrap", count_x.read(), 1u);
+
+    // Split LO/HI reads are independent samples of a live counter.  Reading
+    // them either side of a 32-bit rollover therefore tears: LO is from before
+    // the carry and HI from after.  The model has no latch-on-LO-read policy,
+    // so firmware must re-read; this pins that contract.
+    apply_reset();
+    is_primary_x.write(true);
+    advance();
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0xFFFFFFFFu);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_HI, 0x00000000u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(1);
+    const uint32_t lo_before = drv_x.read32(cfg_t::OFF_TIMER_COUNT_LO);
+    advance(1);                       // the carry into HI happens here
+    const uint32_t hi_after = drv_x.read32(cfg_t::OFF_TIMER_COUNT_HI);
+    CHECK_EQ("LO sampled before the carry", lo_before, 0xFFFFFFFFu);
+    CHECK_EQ("HI sampled after the carry", hi_after, 1u);
+    // Read together in one half-cycle the pair is consistent again.
+    const uint32_t lo_now = drv_x.read32(cfg_t::OFF_TIMER_COUNT_LO);
+    const uint32_t hi_now = drv_x.read32(cfg_t::OFF_TIMER_COUNT_HI);
+    CHECK_EQ("a same-cycle LO/HI pair is coherent",
+             (uint64_t(hi_now) << 32) | lo_now, count_x.read());
+
+    is_primary_x.write(false);
+    apply_reset();
+}
+
+void tb::test_debug_getters()
+{
+    banner("Debug getters paired with architectural observables");
+    apply_reset();
+
+    // CTRL field decoders agree with what software programmed.
+    const uint32_t ctrl = (3u << 16) | (2u << 8) | 40u;  // STEP=3 PW=2 CV=40
+    drv_x.write32(cfg_t::OFF_CTRL, ctrl);
+    CHECK_EQ("credit_val() decodes CTRL", dut_x.credit_val(), 40u);
+    CHECK_EQ("pulse_width() decodes CTRL", dut_x.pulse_width(), 2u);
+    CHECK_EQ("step() decodes CTRL", dut_x.step(), 3u);
+    CHECK_TRUE("credit_disabled() false for CV != 0", !dut_x.credit_disabled());
+    CHECK_EQ("eff_pulse_width() passes a non-zero width through",
+             dut_x.eff_pulse_width(), 2u);
+
+    // PULSE_WIDTH = 0 rounds up to 1, and CV = 0 reports disabled.
+    {
+        const scoped_report_actions quiet(SC_WARNING, SC_DO_NOTHING);
+        drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (0u << 8) | 0u);
+    }
+    CHECK_EQ("eff_pulse_width() rounds 0 up to 1", dut_x.eff_pulse_width(), 1u);
+    CHECK_TRUE("credit_disabled() true for CV == 0", dut_x.credit_disabled());
+    drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+
+    // Run a PRIMARY and pair every state getter with a port or register.
+    apply_reset();
+    is_primary_x.write(true);
+    advance();
+    CHECK_TRUE("dbg_enabled() false before START", !dut_x.dbg_enabled());
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x1234u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 1);
+    advance(3);
+    CHECK_TRUE("dbg_enabled() true once started", dut_x.dbg_enabled());
+    CHECK_EQ("dbg_count() matches timer_count_o", dut_x.dbg_count(),
+             count_x.read());
+    CHECK_EQ("dbg_count() matches the LO/HI register pair", dut_x.dbg_count(),
+             (uint64_t(drv_x.read32(cfg_t::OFF_TIMER_COUNT_HI)) << 32) |
+                 drv_x.read32(cfg_t::OFF_TIMER_COUNT_LO));
+
+    // dump_state during an active credit pulse renders the CREDIT branch.
+    {
+        drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (4u << 8) | 6u);
+        drv_x.write32(cfg_t::OFF_TIMER_START, 1);
+        unsigned guard = 0;
+        while (!cc_x_o.read() && guard < 64) { advance(); ++guard; }
+        CHECK_TRUE("credit pulse observed on the port", cc_x_o.read());
+        std::ostringstream os;
+        dut_x.dump_state(os);
+        CHECK_TRUE("dump_state names the CREDIT pulse state",
+                   os.str().find("CREDIT") != std::string::npos);
+        CHECK_TRUE("dump_state names the mode",
+                   os.str().find("PRIMARY") != std::string::npos);
+    }
+
+    // On a starved SECONDARY the expiry getters agree with the register.
+    is_primary_x.write(false);
+    apply_reset();
+    drv_x.write32(cfg_t::OFF_CTRL, (1u << 16) | (2u << 8) | 3u);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x90u);
+    pulse(sl_drv, 2);
+    advance(octs_system_timer::SYNC_LATENCY_CYCLES + 8);
+    CHECK_EQ("dbg_credit_expired_max() matches CREDIT_EXPIRED",
+             dut_x.dbg_credit_expired_max(),
+             drv_x.read32(cfg_t::OFF_CREDIT_EXPIRED));
+    CHECK_TRUE("dbg_credit_expired() is counting",
+               dut_x.dbg_credit_expired() > 0);
+    CHECK_EQ("dbg_cur_credits() matches cur_credits_debug_o",
+             dut_x.dbg_cur_credits(), cred_x.read());
+    CHECK_EQ("dbg_expected_count() anchors the secondary timeline",
+             dut_x.dbg_expected_count(), 0x90u);
+
+    drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);
+    apply_reset();
+}
 
 void tb::run()
 {
@@ -335,6 +1222,34 @@ void tb::run()
     test_ctrl_constraint_warning();
     test_cci_parameter();
     test_tlm_error_paths();
+
+    // Architectural sections added for the internal-review remediation.  Each
+    // resets the DUTs on entry and exit, so they are independent of the
+    // sections above and of each other.
+    test_csr_manifest();
+    test_tlm_matrix();
+    test_sideband();
+    test_debug_and_dmi();
+    test_credit_val_zero();
+    test_ctrl_boundaries();
+    test_sync_latency_independent();
+    test_pulse_shapes();
+    test_start_retrigger();
+    test_mode_switching();
+    test_reset_during_activity();
+    test_overflow_and_coherency();
+    test_debug_getters();
+
+#ifdef OCTS_UB_CANARY
+    // Built only by `run_tests.sh --ubsan-canary`.  Proves the UBSan build
+    // really does report undefined behaviour, so a clean --asan run means
+    // something.  volatile keeps the shift out of the optimiser's hands.
+    {
+        volatile int shift = 33;
+        volatile int value = 1;
+        std::cout << "  [UB CANARY] " << (value << shift) << "\n";
+    }
+#endif
 
     std::cout << "\n=== " << (g_failures == 0 ? "ALL TESTS PASSED" : "TESTS FAILED")
               << ": " << (g_checks - g_failures) << "/" << g_checks
