@@ -199,8 +199,9 @@ class testbench : public sc_module
         // All lanes disabled is legal TLM and must be a no-op, not a zero fill.
         {
             const unsigned char be[8] = {DIS, DIS, DIS, DIS, DIS, DIS, DIS, DIS};
-            simtlm::write_word_be<uint64_t>(m_test.initiator_socket, off,
-                                            0xFFFFFFFFULL, be, sizeof(be));
+            expect_ok(simtlm::write_word_be<uint64_t>(m_test.initiator_socket, off,
+                                                      0xFFFFFFFFULL, be, sizeof(be)),
+                      "write_word_be all-disabled", off);
             const uint64_t got = read64(off);
             std::ostringstream oss;
             oss << "FUNC-SCRATCHWARM-005b: all-disabled BE leaves the word unchanged (read 0x"
@@ -240,8 +241,9 @@ class testbench : public sc_module
         write64(off, 0x00000000ULL);
         {
             const unsigned char be[8] = {DIS, DIS, DIS, DIS, EN, EN, EN, EN};
-            simtlm::write_word_be<uint64_t>(m_test.initiator_socket, off,
-                                            0xFFFFFFFFFFFFFFFFULL, be, sizeof(be));
+            expect_ok(simtlm::write_word_be<uint64_t>(m_test.initiator_socket, off,
+                                                      0xFFFFFFFFFFFFFFFFULL, be, sizeof(be)),
+                      "write_word_be reserved lanes", off);
             const uint64_t got = read64(off);
             std::ostringstream oss;
             oss << "FUNC-SCRATCHWARM-005e: BE cannot defeat the Reserved0 mask (read 0x"

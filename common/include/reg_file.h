@@ -162,6 +162,9 @@ struct Memory {
     }
 
     void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& /*delay*/) {
+        // Clear a reused DMI hint before any early return. An invalid payload
+        // must not leave dmi_allowed set from a previous transaction.
+        trans.set_dmi_allowed(false);
         const tlm::tlm_response_status vs = validate(trans);
         if (vs != tlm::TLM_OK_RESPONSE) {
             trans.set_response_status(vs);
@@ -172,7 +175,6 @@ struct Memory {
         } else {
             write_registers(trans, false);
         }
-        trans.set_dmi_allowed(false);
         // An in-window hole stays TLM_OK and reads as zero. Whether a reserved
         // offset should instead be TLM_ADDRESS_ERROR is an open RDL question
         // (INTERNAL_REVIEW_OPEN_QUESTIONS A1), not something this path decides.
