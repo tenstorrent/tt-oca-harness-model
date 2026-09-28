@@ -56,6 +56,101 @@ Source: `test/uart_tb.cpp`.
 |17 |Debug transport |Peek does not pop or clear sticky |Positive
 |===
 
+
+====== Architectural cases added by the internal-review remediation
+
+[cols="36%,46%,18%",options="header"]
+|===
+|Name |What the model test proves |Type
+
+|RX timeout restarts on RBR read, disarms when empty
+|With two characters queued, reading one restarts the idle window from that
+ read rather than from the earlier arrival, and draining the last character
+ disarms the timeout entirely
+|Both
+
+|TLM matrix on both targets: null/BE/SW/wrap/DMI/sideband
+|Null pointer and zero length, widths 1/2/3/5/8, all three misalignments,
+ byte-enable lengths 0/1/2/4, streaming widths 0..8, addresses whose
+ `addr + len` would wrap, unsupported command, DMI denied with
+ `dmi_allowed` cleared on hit and miss, and a non-default
+ `smc_axi_extension` surviving unchanged. Also pins the deliberate
+ difference between the two targets on an unmapped in-window offset:
+ `uart` faults, `uart_wrap` is RAZ/WI
+|Negative
+
+|exact annotated delay tracks live CCI mutation
+|`access_delay_ns` measured from a non-zero incoming delay at 5/11/2 ns, and
+ no delay at all on an error path
+|Positive
+
+|debug contract: read side-effect-free, write is the SW path
+|A debug read of RBR does not pop the FIFO; a debug write deliberately uses
+ the software path; malformed debug requests are refused on both targets,
+ including `TLM_IGNORE_COMMAND`, which used to fall through the wrapper's
+ `else` and write a CSR
+|Both
+
+|interrupt priority chain with simultaneous real sources
+|Sources stacked from modem status upward with every IER enable set
+ (EFEI included); IIR always reports the highest active source, then falls
+ back through the chain as each is cleared in turn
+|Both
+
+|RX FIFO capacity, drop policy, trigger selectors, reset
+|Exactly `rx_fifo_depth` characters fit; one more sets OE and is dropped with
+ the original contents intact; non-FIFO mode holds one byte and overwrites;
+ all four trigger selectors program and FIFO reset flushes
+|Both
+
+|RX error persistence across LSR and RBR sequences
+|An error on a middle FIFO entry leaves the front status clean while the
+ error output is already asserted; the status appears when that entry
+ reaches the front; reading LSR clears the sticky bits but the error output
+ stays up until the entry is popped
+|Both
+
+|uart_wrap CSR contract: masks, 16 entries, holes, reset
+|Reset image, per-register field masks, all 16 log entries as independent
+ storage, W1C interrupt status with the write-only test register, in-window
+ holes RAZ/WI, log-engine reset on disable, and architectural reset
+|Both
+
+|THRE/TEMT across divisor gating and TX FIFO reset
+|Both empty indications out of reset; a character queued with the divisor
+ cleared cannot drain so neither is set; TX FIFO reset discards it and
+ restores them; re-enabling the divisor lets traffic flow
+|Both
+
+|constructor guard rails (FIFO depth 0 / 4097)
+|Both RX and TX depths outside 1..4096 are fatal
+|Negative
+|===
+
+====== Build and sanitizer gates
+
+[cols="30%,70%",options="header"]
+|===
+|Gate |Requirement
+|Per-file coverage
+|`--coverage` sets `COVERAGE_PER_FILE=1`, so `src/` and the inline behaviour
+ in `include/` are each gated at >= 95% on their own.
+|Sanitizers
+|`--asan` builds with AddressSanitizer *and* UndefinedBehaviorSanitizer.
+|UBSan canary
+|`--ubsan-canary` compiles a deliberate shift overflow into the bench and
+ fails unless UBSan reports it.
+|===
+
+====== Known modelling gap
+
+`uart_wrap` is a CSR shell: the log-region, write-address and 16 entry
+registers have no logging datapath behind them, and the log interrupt
+status/enable pair drives no output port. The bench proves the CSR
+contract exhaustively and nothing more. Implementing the log engine
+(audit finding 4 / UART-WRAP-002) needs the RDL owner to define the
+datapath; it is deliberately not invented here.
+
 ====== Platform firmware tests
 
 There is no `smc-uart-test` in `sw/smc-vp-tests/`. UART0 is the firmware

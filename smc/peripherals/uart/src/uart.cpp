@@ -151,6 +151,7 @@ uart::uart(sc_core::sc_module_name name, uart_cfg cfg)
 
     reg_socket.register_b_transport  (this, &uart::b_transport);
     reg_socket.register_transport_dbg(this, &uart::transport_dbg);
+    reg_socket.register_get_direct_mem_ptr(this, &uart::get_direct_mem_ptr);
 
     SC_METHOD(reset_proc);
     sensitive << rst_n_i;
@@ -337,6 +338,54 @@ void uart::deliver_rx_char(uint8_t ch, bool perr, bool ferr, bool berr)
     schedule_recompute();
 }
 
+namespace {
+
+/// Shared 32-bit CSR bus-contract check for the `uart` and `uart_wrap`
+/// targets.  Both present an APB-style register window: naturally aligned
+/// 32-bit accesses only, no byte enables, single beat.  On failure @p status
+/// is the TLM response the caller should report.
+bool check_csr_access(const tlm::tlm_generic_payload& gp, uint64_t window,
+                      tlm::tlm_response_status& status)
+{
+    const uint64_t adr = gp.get_address();
+    const uint32_t len = gp.get_data_length();
+    const auto     cmd = gp.get_command();
+
+    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
+        status = tlm::TLM_COMMAND_ERROR_RESPONSE;
+        return false;
+    }
+    if (gp.get_data_ptr() == nullptr || len == 0) {
+        status = tlm::TLM_GENERIC_ERROR_RESPONSE;
+        return false;
+    }
+    if (len != 4) {
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
+    }
+    // Overflow-safe window bound: `adr + len` wraps for an address near
+    // UINT64_MAX and would alias a wild access into the register window.
+    if ((adr & 0x3u) != 0 || adr >= window || len > window - adr) {
+        status = tlm::TLM_ADDRESS_ERROR_RESPONSE;
+        return false;
+    }
+    // Byte enables are not modelled; any non-null pointer is refused whatever
+    // its length, including the zero-length and all-lanes-enabled forms.
+    if (gp.get_byte_enable_ptr() != nullptr) {
+        status = tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE;
+        return false;
+    }
+    // Single-beat access: TLM-2.0 requires streaming_width >= data_length.
+    if (gp.get_streaming_width() < len) {
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
+    }
+    status = tlm::TLM_OK_RESPONSE;
+    return true;
+}
+
+}  // namespace
+
 // ===========================================================================
 // Per-register read accessors (read side effects)
 // ===========================================================================
@@ -348,7 +397,17 @@ uint8_t uart::rbr_read()
         ch = rx_fifo_.front().character;
         rx_fifo_.pop_front();
     }
-    rx_timeout_pending_ = false; // reading RBR clears the timeout
+    // 16550 contract: the character timeout restarts on the most recent of
+    // "character received" and "RBR read".  Clearing the pending flag without
+    // touching the armed event left the timer running from the *previous*
+    // arrival, so a multi-character read could time out almost immediately
+    // after a read instead of one idle period later.
+    rx_timeout_pending_ = false;
+    if (rx_fifo_.empty()) {
+        rx_timeout_event_.cancel();  // no timeout with an empty FIFO
+    } else {
+        rearm_rx_timeout();
+    }
     update_rx_front_status();    // reveal the next character's status
     schedule_recompute();
     return ch;
@@ -744,23 +803,21 @@ void uart::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
 {
     const tlm::tlm_command cmd = gp.get_command();
     const uint64_t         adr = gp.get_address();
-    const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
 
-    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
-        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
-        return;
-    }
-    if (len != 4) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
-    if (adr >= uart_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    // RBR/IIR/MSR reads and THR writes have side effects, so this window is
+    // never DMI-able.  Cleared before any early return so no stale hint
+    // survives a rejected access.
+    gp.set_dmi_allowed(false);
+
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    if (!check_csr_access(gp, uart_cfg::WINDOW_SIZE, status)) {
+        gp.set_response_status(status);
         return;
     }
 
-    // Optional AXI sideband extension is forwarded but not enforced here.
+    // Optional AXI sideband extension is inspected for tracing and left
+    // untouched; authorization belongs to the fabric's axi_filter upstream.
     smc::smc_axi_extension* ext = nullptr;
     gp.get_extension(ext);
     (void)ext;
@@ -784,17 +841,21 @@ void uart::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay)
     delay += sc_core::sc_time(access_delay_ns_p_.get_value(), sc_core::SC_NS);
     gp.set_response_status(ok ? tlm::TLM_OK_RESPONSE
                               : tlm::TLM_ADDRESS_ERROR_RESPONSE);
-    gp.set_dmi_allowed(false); // RBR/IIR/MSR reads have side effects
 }
 
+// Debug contract: a debug READ is side-effect-free (it goes through dbg_reg,
+// so it never pops RBR, clears IIR/LSR/MSR status or rearms the timeout).  A
+// debug WRITE deliberately uses the same path as a software write, so a
+// debugger can program the device; that asymmetry is the documented contract,
+// not an oversight.  Both validate the payload exactly like b_transport.
 unsigned int uart::transport_dbg(tlm::tlm_generic_payload& gp)
 {
     const tlm::tlm_command cmd = gp.get_command();
     const uint64_t         adr = gp.get_address();
-    const uint32_t         len = gp.get_data_length();
     uint8_t* const         buf = gp.get_data_ptr();
 
-    if (len != 4 || (adr & 0x3u) != 0 || adr >= uart_cfg::WINDOW_SIZE) return 0;
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    if (!check_csr_access(gp, uart_cfg::WINDOW_SIZE, status)) return 0;
 
     if (cmd == tlm::TLM_READ_COMMAND) {
         uint32_t v = dbg_reg(adr); // side-effect-free peek
@@ -964,6 +1025,18 @@ void uart::dump_state(std::ostream& os) const
     os << std::dec << std::setfill(' ');
 }
 
+bool uart::get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                              tlm::tlm_dmi& dmi_data)
+{
+    (void)gp;
+    // RBR pops the FIFO, IIR/LSR/MSR reads clear status, THR transmits: a
+    // direct memory pointer would bypass every one of those side effects.
+    dmi_data.allow_none();
+    dmi_data.set_start_address(0);
+    dmi_data.set_end_address(uart_cfg::WINDOW_SIZE - 1);
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // uart_wrap
 // ---------------------------------------------------------------------------
@@ -1014,6 +1087,8 @@ uart_wrap::uart_wrap(sc_core::sc_module_name name)
 
     reg_socket.register_b_transport(this, &uart_wrap::b_transport);
     reg_socket.register_transport_dbg(this, &uart_wrap::transport_dbg);
+    reg_socket.register_get_direct_mem_ptr(this,
+                                           &uart_wrap::get_direct_mem_ptr);
     SC_METHOD(reset_proc);
     sensitive << rst_n_i;
     dont_initialize();
@@ -1045,19 +1120,14 @@ void uart_wrap::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& dela
 {
     const auto cmd = gp.get_command();
     const uint64_t adr = gp.get_address();
-    const uint32_t len = gp.get_data_length();
     uint8_t* const buf = gp.get_data_ptr();
 
-    if (cmd != tlm::TLM_READ_COMMAND && cmd != tlm::TLM_WRITE_COMMAND) {
-        gp.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
-        return;
-    }
-    if (len != 4) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
-    if (adr >= uart_wrap_cfg::WINDOW_SIZE || (adr & 0x3u) != 0) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+    // Writing LOG_EN can reset the log engine, so this window is not DMI-able.
+    gp.set_dmi_allowed(false);
+
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    if (!check_csr_access(gp, uart_wrap_cfg::WINDOW_SIZE, status)) {
+        gp.set_response_status(status);
         return;
     }
 
@@ -1079,9 +1149,11 @@ void uart_wrap::b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& dela
 unsigned int uart_wrap::transport_dbg(tlm::tlm_generic_payload& gp)
 {
     const uint64_t adr = gp.get_address();
-    const uint32_t len = gp.get_data_length();
-    if (len != 4 || adr >= uart_wrap_cfg::WINDOW_SIZE || (adr & 0x3u) != 0)
-        return 0;
+    tlm::tlm_response_status status = tlm::TLM_OK_RESPONSE;
+    // The check also rejects anything that is neither a read nor a write: the
+    // `else` below would otherwise let TLM_IGNORE_COMMAND fall through and
+    // write to a CSR.
+    if (!check_csr_access(gp, uart_wrap_cfg::WINDOW_SIZE, status)) return 0;
     uint32_t v = 0;
     if (gp.is_read()) {
         (void)regmap_.read(adr, v);
@@ -1092,6 +1164,17 @@ unsigned int uart_wrap::transport_dbg(tlm::tlm_generic_payload& gp)
     }
     gp.set_response_status(tlm::TLM_OK_RESPONSE);
     return 4;
+}
+
+bool uart_wrap::get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                                   tlm::tlm_dmi& dmi_data)
+{
+    (void)gp;
+    // Writing LOG_EN can reset the log engine, and LOG_INTR_STATUS is W1C.
+    dmi_data.allow_none();
+    dmi_data.set_start_address(0);
+    dmi_data.set_end_address(uart_wrap_cfg::WINDOW_SIZE - 1);
+    return false;
 }
 
 } // namespace smc

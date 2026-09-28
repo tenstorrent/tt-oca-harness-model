@@ -70,6 +70,25 @@ constexpr uint64_t SCR = 0x1C, ECR = 0x20, ITR = 0x24;
 constexpr uint32_t LSR_DR = 0x01, LSR_OE = 0x02, LSR_PE = 0x04, LSR_FE = 0x08,
                    LSR_BI = 0x10, LSR_THRE = 0x20, LSR_TEMT = 0x40, LSR_ERRF = 0x80;
 
+/// Changes the report actions for one severity and restores them on scope
+/// exit, so an expected diagnostic cannot silence an unrelated one later.
+struct scoped_report_actions {
+    sc_core::sc_severity sev;
+    sc_core::sc_actions  saved;
+    scoped_report_actions(sc_core::sc_severity s, sc_core::sc_actions a)
+        : sev(s), saved(sc_core::sc_report_handler::set_actions(s, a)) {}
+    ~scoped_report_actions() {
+        sc_core::sc_report_handler::set_actions(sev, saved);
+    }
+};
+
+/// Result of a fully general payload sent by driver::raw().
+struct raw_result {
+    tlm::tlm_response_status status;
+    sc_time                  delay_delta;
+    bool                     dmi_allowed;
+};
+
 // Tiny TLM driver exercising the LT path through a quantum keeper.
 struct driver : sc_core::sc_module {
     tlm_utils::simple_initiator_socket<driver> sock;
@@ -99,6 +118,62 @@ struct driver : sc_core::sc_module {
             ++g_failures;
         }
         return data;
+    }
+
+    /// Fully general payload: explicit streaming width, byte enables,
+    /// incoming delay and AXI sideband.  Bypasses the quantum keeper so the
+    /// annotated delay can be measured exactly.
+    raw_result raw(tlm::tlm_command cmd, uint64_t addr, void* data,
+                   unsigned len, int streaming_width = -1,
+                   uint8_t* be = nullptr, unsigned be_len = 0,
+                   sc_time delay_in = SC_ZERO_TIME,
+                   smc::smc_axi_extension* ext = nullptr) {
+        tlm::tlm_generic_payload gp;
+        sc_time t = delay_in;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(static_cast<uint8_t*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(streaming_width < 0
+                                   ? len
+                                   : static_cast<unsigned>(streaming_width));
+        gp.set_byte_enable_ptr(be);
+        gp.set_byte_enable_length(be_len);
+        gp.set_dmi_allowed(true);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        if (ext != nullptr) gp.set_extension(ext);
+        sock->b_transport(gp, t);
+        if (ext != nullptr) gp.clear_extension<smc::smc_axi_extension>();
+        return {gp.get_response_status(), t - delay_in, gp.is_dmi_allowed()};
+    }
+
+    /// Raw back-door access over transport_dbg.  Returns bytes transferred.
+    unsigned dbg(tlm::tlm_command cmd, uint64_t addr, void* data, unsigned len,
+                 int streaming_width = -1, uint8_t* be = nullptr,
+                 unsigned be_len = 0) {
+        tlm::tlm_generic_payload gp;
+        gp.set_command(cmd);
+        gp.set_address(addr);
+        gp.set_data_ptr(static_cast<uint8_t*>(data));
+        gp.set_data_length(len);
+        gp.set_streaming_width(streaming_width < 0
+                                   ? len
+                                   : static_cast<unsigned>(streaming_width));
+        gp.set_byte_enable_ptr(be);
+        gp.set_byte_enable_length(be_len);
+        gp.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        return sock->transport_dbg(gp);
+    }
+
+    bool dmi(uint64_t addr, tlm::tlm_dmi& dmi_data) {
+        tlm::tlm_generic_payload gp;
+        uint32_t scratch = 0;
+        gp.set_command(tlm::TLM_READ_COMMAND);
+        gp.set_address(addr);
+        gp.set_data_ptr(reinterpret_cast<uint8_t*>(&scratch));
+        gp.set_data_length(4);
+        gp.set_streaming_width(4);
+        return sock->get_direct_mem_ptr(gp, dmi_data);
     }
 
     void write32(uint64_t addr, uint32_t value) {
@@ -213,6 +288,16 @@ struct tb : sc_core::sc_module {
         rst_n.write(true);
         sc_core::wait(20, SC_NS);
         settle();
+    }
+
+    /// Architectural interrupt-id oracle: IIR[3:1], or 0xFF when IIR reports
+    /// no interrupt pending (INT_PEND, bit 0, is active low).  Note that
+    /// reading IIR is itself a 16550 side effect -- it clears THRE -- which is
+    /// exactly the stepwise-clearing behaviour the priority case exercises.
+    uint8_t iir_id() {
+        const uint32_t iir = drv.read32(IIR);
+        if ((iir & 0x1u) != 0) return 0xFF;      // no interrupt pending
+        return static_cast<uint8_t>((iir >> 1) & 0x7u);
     }
 
     // Program divisor = 1 and 8N1 so TX/RX are enabled.
@@ -808,6 +893,441 @@ void tb::run() {
     // dump_state for visual inspection / coverage of the dump path.
     dut.dump_state(std::cout);
 
+
+    // ==================================================================
+    // Architectural sections added for the internal-review remediation.
+    // ==================================================================
+
+    // ---- RX character timeout restarts on an RBR read (audit finding 2) --
+    pulse_reset();
+    setup_basic();
+    drv.write32(FCR, 0x01);                       // FIFO enable
+    drv.write32(IER, 0x01);                       // ERBFI: data-ready + timeout
+    settle();
+    {
+        // Two characters queued: the timeout was armed by the second arrival.
+        dut.inject_rx_char('A');
+        dut.inject_rx_char('B');
+        settle();
+        // Sit just short of one idle period, then read one character.  A
+        // correct 16550 restarts the timeout from that read, so no timeout may
+        // fire for another full period.
+        sc_core::wait(900, SC_NS);
+        EXPECT_EQ(uint32_t('A'), drv.read32(RBR) & 0xFFu);
+        settle();
+        sc_core::wait(700, SC_NS);               // 1.6 us since the arrival
+        settle();
+        EXPECT_TRUE(iir_id() != uint8_t(smc::uart_intr_id::RECEPTION_TIMEOUT));
+        // ... and one full idle period after the read it does fire.
+        sc_core::wait(500, SC_NS);
+        settle();
+        EXPECT_EQ(uint8_t(smc::uart_intr_id::RECEPTION_TIMEOUT), iir_id());
+        // Draining the last character disarms the timeout entirely.
+        EXPECT_EQ(uint32_t('B'), drv.read32(RBR) & 0xFFu);
+        settle();
+        sc_core::wait(2, SC_US);
+        settle();
+        EXPECT_TRUE(iir_id() != uint8_t(smc::uart_intr_id::RECEPTION_TIMEOUT));
+    }
+    std::cout << "  [PASS] RX timeout restarts on RBR read, disarms when empty\n";
+
+    // ---- TLM payload matrix, both targets (audit findings 3 and 11) ------
+    pulse_reset();
+    {
+        struct target { driver* d; uint64_t window; const char* name; };
+        const target targets[] = {
+            {&drv,      smc::uart_cfg::WINDOW_SIZE,      "uart"},
+            {&wrap_drv, smc::uart_wrap_cfg::WINDOW_SIZE, "uart_wrap"},
+        };
+        for (const target& t : targets) {
+            uint32_t scratch = 0;
+            uint8_t  buf8[8] = {0};
+
+            // A null data pointer used to be dereferenced straight into memcpy.
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+                      t.d->raw(tlm::TLM_READ_COMMAND, 0, nullptr, 4).status);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+                      t.d->raw(tlm::TLM_WRITE_COMMAND, 0, nullptr, 4).status);
+            EXPECT_EQ(tlm::TLM_GENERIC_ERROR_RESPONSE,
+                      t.d->raw(tlm::TLM_READ_COMMAND, 0, &scratch, 0, 0).status);
+            // Width and alignment.
+            for (unsigned len : {1u, 2u, 3u, 5u, 8u})
+                EXPECT_EQ(tlm::TLM_BURST_ERROR_RESPONSE,
+                          t.d->raw(tlm::TLM_READ_COMMAND, 0, buf8, len).status);
+            for (uint64_t off : {1u, 2u, 3u})
+                EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                          t.d->raw(tlm::TLM_READ_COMMAND, off, &scratch, 4).status);
+            // Window edge and 64-bit addresses whose addr+len would wrap.
+            // The two targets deliberately differ on an unmapped offset that
+            // is still inside the window: `uart` reports a decode miss, while
+            // `uart_wrap` is RAZ/WI.
+            EXPECT_EQ(t.d == &drv ? tlm::TLM_ADDRESS_ERROR_RESPONSE
+                                  : tlm::TLM_OK_RESPONSE,
+                      t.d->raw(tlm::TLM_READ_COMMAND, t.window - 4, &scratch, 4).status);
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      t.d->raw(tlm::TLM_READ_COMMAND, t.window, &scratch, 4).status);
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      t.d->raw(tlm::TLM_READ_COMMAND, UINT64_MAX - 3, &scratch, 4).status);
+            // Byte enables refused at every byte-enable length.
+            {
+                uint8_t be[4] = {0xFF, 0xFF, 0xFF, 0xFF};
+                for (unsigned be_len : {0u, 1u, 2u, 4u})
+                    EXPECT_EQ(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE,
+                              t.d->raw(tlm::TLM_WRITE_COMMAND, 0, &scratch, 4,
+                                       -1, be, be_len).status);
+            }
+            // Streaming width: single beat, so sw >= len is required.
+            for (unsigned sw = 0; sw <= 8; ++sw)
+                EXPECT_EQ(sw < 4 ? tlm::TLM_BURST_ERROR_RESPONSE
+                                 : tlm::TLM_OK_RESPONSE,
+                          t.d->raw(tlm::TLM_READ_COMMAND, 0, &scratch, 4,
+                                   static_cast<int>(sw)).status);
+            // Unsupported command.
+            EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
+                      t.d->raw(tlm::TLM_IGNORE_COMMAND, 0, &scratch, 4).status);
+
+            // DMI is denied and dmi_allowed cleared on hit and miss.
+            tlm::tlm_dmi d;
+            d.allow_read_write();
+            EXPECT_TRUE(!t.d->dmi(0, d));
+            EXPECT_TRUE(!d.is_read_allowed());
+            EXPECT_TRUE(!d.is_write_allowed());
+            EXPECT_TRUE(!t.d->raw(tlm::TLM_READ_COMMAND, 0, &scratch, 4).dmi_allowed);
+            EXPECT_TRUE(!t.d->raw(tlm::TLM_READ_COMMAND, t.window, &scratch, 4)
+                             .dmi_allowed);
+
+            // The canonical sideband is inspected but never consumed.
+            smc::smc_axi_extension ext;
+            ext.source_id = smc::JTAG_ID;
+            ext.axi_id    = 0x1234u;
+            ext.axi_user  = 0x0Fu;
+            ext.set_priv(false);
+            ext.set_secure(true);
+            const smc::smc_axi_extension golden = ext;
+            t.d->raw(tlm::TLM_READ_COMMAND, 0, &scratch, 4, -1, nullptr, 0,
+                     SC_ZERO_TIME, &ext);
+            EXPECT_EQ(golden.source_id, ext.source_id);
+            EXPECT_EQ(golden.axi_id, ext.axi_id);
+            EXPECT_EQ(golden.prot, ext.prot);
+            EXPECT_EQ(golden.axi_user, ext.axi_user);
+        }
+    }
+    std::cout << "  [PASS] TLM matrix on both targets: null/BE/SW/wrap/DMI/sideband\n";
+
+    // ---- Exact annotated delay, before and after CCI mutation (finding 9) -
+    {
+        auto broker = cci::cci_get_broker();
+        auto h = broker.get_param_handle("tb.uart.access_delay_ns");
+        EXPECT_TRUE(h.is_valid());
+        uint32_t scratch = 0;
+        for (double d_ns : {5.0, 11.0, 2.0}) {
+            h.set_cci_value(cci::cci_value(d_ns));
+            const auto r = drv.raw(tlm::TLM_READ_COMMAND, SCR, &scratch, 4, -1,
+                                   nullptr, 0, sc_time(7, SC_NS));
+            EXPECT_EQ(tlm::TLM_OK_RESPONSE, r.status);
+            EXPECT_TRUE(r.delay_delta == sc_time(d_ns, SC_NS));
+        }
+        // An error path annotates nothing at all.
+        const auto bad = drv.raw(tlm::TLM_READ_COMMAND,
+                                 smc::uart_cfg::WINDOW_SIZE, &scratch, 4, -1,
+                                 nullptr, 0, sc_time(7, SC_NS));
+        EXPECT_TRUE(bad.delay_delta == SC_ZERO_TIME);
+        h.set_cci_value(cci::cci_value(5.0));
+    }
+    std::cout << "  [PASS] exact annotated delay tracks live CCI mutation\n";
+
+    // ---- Debug transport contract (audit finding 8) ----------------------
+    pulse_reset();
+    setup_basic();
+    drv.write32(FCR, 0x01);
+    settle();
+    {
+        // A debug READ must be side-effect-free: it may not pop RBR.
+        dut.inject_rx_char('Z');
+        settle();
+        uint32_t v = 0;
+        EXPECT_EQ(4u, drv.dbg(tlm::TLM_READ_COMMAND, RBR, &v, 4));
+        EXPECT_EQ(uint32_t('Z'), v & 0xFFu);
+        EXPECT_TRUE((drv.read32(LSR) & LSR_DR) != 0);   // still pending
+        EXPECT_EQ(uint32_t('Z'), drv.read32(RBR) & 0xFFu);  // the real pop
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_DR) == 0);
+
+        // A debug WRITE deliberately uses the software path, so a debugger can
+        // program the device.  SCR is the harmless witness.
+        uint32_t w = 0x5Au;
+        EXPECT_EQ(4u, drv.dbg(tlm::TLM_WRITE_COMMAND, SCR, &w, 4));
+        EXPECT_EQ(0x5Au, drv.read32(SCR) & 0xFFu);
+
+        // Malformed debug requests are refused on both targets.
+        uint8_t be = 0xFF;
+        for (driver* d : {&drv, &wrap_drv}) {
+            EXPECT_EQ(0u, d->dbg(tlm::TLM_READ_COMMAND, 0, nullptr, 4));
+            EXPECT_EQ(0u, d->dbg(tlm::TLM_READ_COMMAND, 0, &v, 2));
+            EXPECT_EQ(0u, d->dbg(tlm::TLM_READ_COMMAND, 1, &v, 4));
+            EXPECT_EQ(0u, d->dbg(tlm::TLM_READ_COMMAND, 0, &v, 4, -1, &be, 1));
+            EXPECT_EQ(0u, d->dbg(tlm::TLM_READ_COMMAND, 0, &v, 4, 1));
+            // TLM_IGNORE_COMMAND used to fall through the wrapper's `else`
+            // and write a CSR.
+            EXPECT_EQ(0u, d->dbg(tlm::TLM_IGNORE_COMMAND, 0, &v, 4));
+        }
+        // Prove the ignored debug command really did not write the wrapper.
+        wrap_drv.write32(smc::uart_wrap_cfg::OFF_LOG_REGION_SIZE, 0x1234u);
+        uint32_t poison = 0xFFFFFFFFu;
+        EXPECT_EQ(0u, wrap_drv.dbg(tlm::TLM_IGNORE_COMMAND,
+                                   smc::uart_wrap_cfg::OFF_LOG_REGION_SIZE,
+                                   &poison, 4));
+        EXPECT_EQ(0x1234u,
+                  wrap_drv.read32(smc::uart_wrap_cfg::OFF_LOG_REGION_SIZE));
+    }
+    std::cout << "  [PASS] debug contract: read side-effect-free, write is the SW path\n";
+
+    // ---- Interrupt priority with real sources (audit finding 5) ----------
+    pulse_reset();
+    setup_basic();
+    drv.write32(FCR, 0x01);
+    drv.write32(IER, 0x1F);            // every real source enabled, EFEI included
+    settle();
+    {
+        using ID = smc::uart_intr_id;
+        // THRE is already active out of reset (the transmitter is empty) and
+        // outranks modem status, so clear it first: reading IIR is the 16550's
+        // documented THRE acknowledge.
+        EXPECT_EQ(uint8_t(ID::TRANSMITTER_HOLDING_REGISTER_EMPTY), iir_id());
+        settle();
+
+        // Raise the modem source, then stack higher-priority sources on top;
+        // IIR must always report the highest active one.
+        dcd_n.write(false); settle();
+        EXPECT_EQ(uint8_t(ID::MODEM_STATUS), iir_id());
+
+        dut.inject_rx_char('a');       // data ready outranks modem status
+        settle();
+        EXPECT_EQ(uint8_t(ID::RECEIVED_DATA_READY), iir_id());
+
+        dut.inject_rx_char('b', false, true, false);  // framing error
+        settle();
+        // In FIFO mode a queued error raises the FIFO-error source, which
+        // outranks both data-ready and modem status.
+        EXPECT_EQ(uint8_t(ID::FIFO_ERROR), iir_id());
+        EXPECT_TRUE(irq.read());
+
+        // Clear from the top down and watch the id fall through the chain.
+        drv.read32(RBR); drv.read32(RBR);   // drain both characters
+        drv.read32(LSR);                    // clear sticky line status
+        settle();
+        EXPECT_TRUE(iir_id() != uint8_t(ID::FIFO_ERROR));
+        // Modem status is the last source standing.
+        EXPECT_EQ(uint8_t(ID::MODEM_STATUS), iir_id());
+        drv.read32(MSR);                    // clear modem deltas
+        settle();
+        EXPECT_EQ(uint8_t(0xFF), iir_id());  // nothing pending
+        EXPECT_TRUE(!irq.read());
+        dcd_n.write(true); settle();
+        drv.read32(MSR); settle();
+    }
+    std::cout << "  [PASS] interrupt priority chain with simultaneous real sources\n";
+
+    // ---- RX FIFO capacity and drop policy (audit finding 6) --------------
+    pulse_reset();
+    setup_basic();
+    drv.write32(FCR, 0x01);
+    settle();
+    {
+        constexpr unsigned kDepth = 8;   // rx_fifo_depth preset in sc_main
+        for (unsigned i = 0; i < kDepth; ++i)
+            dut.inject_rx_char(static_cast<uint8_t>('0' + i));
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_OE) == 0);
+        // One extra character overruns: OE sets and the new byte is dropped,
+        // leaving the original contents intact.
+        dut.inject_rx_char('X');
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_OE) != 0);
+        for (unsigned i = 0; i < kDepth; ++i)
+            EXPECT_EQ(uint32_t('0' + i), drv.read32(RBR) & 0xFFu);
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_DR) == 0);
+
+        // Non-FIFO mode holds exactly one byte and overwrites on overrun.
+        drv.write32(FCR, 0x00);
+        settle();
+        dut.inject_rx_char('m');
+        dut.inject_rx_char('n');
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_OE) != 0);
+        EXPECT_EQ(uint32_t('n'), drv.read32(RBR) & 0xFFu);
+
+        // Every FIFO trigger selector programs a level, and FIFO reset flushes.
+        drv.write32(FCR, 0x01);
+        for (uint32_t sel = 0; sel < 4; ++sel) {
+            drv.write32(FCR, 0x01 | (sel << 6));
+            settle();
+            dut.inject_rx_char('t');
+            settle();
+            drv.write32(FCR, 0x01 | 0x02);     // RX FIFO reset
+            settle();
+            EXPECT_TRUE((drv.read32(LSR) & LSR_DR) == 0);
+        }
+    }
+    std::cout << "  [PASS] RX FIFO capacity, drop policy, trigger selectors, reset\n";
+
+    // ---- Persistent RX error semantics (audit finding 7) -----------------
+    pulse_reset();
+    setup_basic();
+    drv.write32(FCR, 0x01);
+    drv.write32(IER, 0x0F);
+    settle();
+    {
+        // Error on the MIDDLE entry: the front is clean, so LSR shows no error
+        // yet, but the FIFO-level error output is already asserted.
+        dut.inject_rx_char('a');
+        dut.inject_rx_char('b', true, false, false);   // parity error
+        dut.inject_rx_char('c');
+        settle();
+        EXPECT_TRUE(err.read());
+        EXPECT_TRUE((drv.read32(LSR) & LSR_PE) == 0);  // front is clean
+
+        EXPECT_EQ(uint32_t('a'), drv.read32(RBR) & 0xFFu);
+        settle();
+        // Now the errored character is at the front: its status is revealed.
+        EXPECT_TRUE((drv.read32(LSR) & LSR_PE) != 0);
+        // Reading LSR clears the sticky bits, but the error output stays up
+        // while the errored entry is still queued.
+        EXPECT_TRUE((drv.read32(LSR) & LSR_PE) == 0);
+        EXPECT_TRUE(err.read());
+        EXPECT_EQ(uint32_t('b'), drv.read32(RBR) & 0xFFu);
+        settle();
+        // Popped: no errored entry remains, so the error output drops.
+        EXPECT_TRUE(!err.read());
+        EXPECT_EQ(uint32_t('c'), drv.read32(RBR) & 0xFFu);
+        settle();
+
+        // A break on the last entry behaves the same way.
+        dut.inject_rx_char('d');
+        dut.inject_rx_char('e', false, false, true);   // break
+        settle();
+        EXPECT_TRUE(err.read());
+        drv.read32(RBR);
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_BI) != 0);
+        drv.read32(RBR);
+        settle();
+        EXPECT_TRUE(!err.read());
+    }
+    std::cout << "  [PASS] RX error persistence across LSR and RBR sequences\n";
+
+    // ---- uart_wrap CSR contract (UART-WRAP-001) --------------------------
+    pulse_reset();
+    {
+        using wcfg = smc::uart_wrap_cfg;
+        // Reset image.
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_WRAP_CTRL));
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_LOG_CTRL));
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_LOG_WRITE_ADDR));
+
+        // Field masks: each register keeps only its documented bits.
+        wrap_drv.write32(wcfg::OFF_WRAP_CTRL, 0xFFFFFFFFu);
+        EXPECT_EQ(wcfg::WRAP_CTRL_MASK, wrap_drv.read32(wcfg::OFF_WRAP_CTRL));
+        wrap_drv.write32(wcfg::OFF_LOG_REGION_SIZE, 0xFFFFFFFFu);
+        EXPECT_EQ(wcfg::LOG_REGION_SIZE_MASK,
+                  wrap_drv.read32(wcfg::OFF_LOG_REGION_SIZE));
+        wrap_drv.write32(wcfg::OFF_LOG_REGION_HI, 0xFFFFFFFFu);
+        EXPECT_EQ(wcfg::LOG_REGION_HI_MASK,
+                  wrap_drv.read32(wcfg::OFF_LOG_REGION_HI));
+
+        // All 16 log entries are independent storage, first and last included.
+        for (unsigned i = 0; i < wcfg::NUM_LOG_ENTRIES; ++i)
+            wrap_drv.write32(wcfg::OFF_LOG_ENTRY + 4 * i, 0xFFFF0000u | (i + 1));
+        for (unsigned i = 0; i < wcfg::NUM_LOG_ENTRIES; ++i)
+            EXPECT_EQ(wcfg::LOG_LEN_MASK & (0xFFFF0000u | (i + 1)),
+                      wrap_drv.read32(wcfg::OFF_LOG_ENTRY + 4 * i));
+
+        // W1C interrupt status, and the test register that sets it.
+        wrap_drv.write32(wcfg::OFF_LOG_INTR_TEST, wcfg::LOG_INTR_MASK);
+        EXPECT_EQ(wcfg::LOG_INTR_MASK, wrap_drv.read32(wcfg::OFF_LOG_INTR_STATUS));
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_LOG_INTR_TEST));  // WO reads 0
+        wrap_drv.write32(wcfg::OFF_LOG_INTR_STATUS, 0x01u);
+        EXPECT_EQ(wcfg::LOG_INTR_MASK & ~0x01u,
+                  wrap_drv.read32(wcfg::OFF_LOG_INTR_STATUS));
+        wrap_drv.write32(wcfg::OFF_LOG_INTR_STATUS, wcfg::LOG_INTR_MASK);
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_LOG_INTR_STATUS));
+
+        // Holes inside the window are RAZ/WI and do not disturb a neighbour.
+        for (uint64_t off : {uint64_t(0x04), uint64_t(0x100), uint64_t(0x1FC),
+                             uint64_t(0x20), uint64_t(0x3FC)}) {
+            EXPECT_EQ(0u, wrap_drv.read32(off));
+            wrap_drv.write32(off, 0xFFFFFFFFu);
+            EXPECT_EQ(0u, wrap_drv.read32(off));
+        }
+        EXPECT_EQ(wcfg::WRAP_CTRL_MASK, wrap_drv.read32(wcfg::OFF_WRAP_CTRL));
+
+        // Disabling the log engine resets its CSRs but not WRAP_CTRL.
+        wrap_drv.write32(wcfg::OFF_LOG_CTRL, 0x1u);
+        wrap_drv.write32(wcfg::OFF_LOG_REGION_SIZE, 0x2222u);
+        wrap_drv.write32(wcfg::OFF_LOG_CTRL, 0x0u);
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_LOG_REGION_SIZE));
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_LOG_ENTRY));
+        EXPECT_EQ(wcfg::WRAP_CTRL_MASK, wrap_drv.read32(wcfg::OFF_WRAP_CTRL));
+
+        // Architectural reset clears everything.
+        wrap_drv.write32(wcfg::OFF_WRAP_CTRL, 0x1u);
+        pulse_reset();
+        EXPECT_EQ(0u, wrap_drv.read32(wcfg::OFF_WRAP_CTRL));
+    }
+    std::cout << "  [PASS] uart_wrap CSR contract: masks, 16 entries, holes, reset\n";
+
+    // ---- THRE / TEMT transitions around divisor and FIFO reset -----------
+    pulse_reset();
+    setup_basic();
+    drv.write32(FCR, 0x01);
+    settle();
+    {
+        // Out of reset the transmitter is empty: both THRE and TEMT are set.
+        EXPECT_TRUE((drv.read32(LSR) & LSR_THRE) != 0);
+        EXPECT_TRUE((drv.read32(LSR) & LSR_TEMT) != 0);
+
+        // With the divisor cleared the transmitter is disabled, so a queued
+        // character cannot drain and the holding register stops reporting
+        // empty.
+        drv.write32(LCR, 0x80);
+        drv.write32(DLL, 0x00);
+        drv.write32(DLM, 0x00);
+        drv.write32(LCR, 0x03);
+        settle();
+        drv.write32(THR, 'p');
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_THRE) == 0);
+        EXPECT_TRUE((drv.read32(LSR) & LSR_TEMT) == 0);
+        EXPECT_EQ(1u, dut.dbg_tx_count());
+
+        // A TX FIFO reset discards it and restores the empty indication.
+        drv.write32(FCR, 0x01 | 0x04);
+        settle();
+        EXPECT_EQ(0u, dut.dbg_tx_count());
+        EXPECT_TRUE((drv.read32(LSR) & LSR_THRE) != 0);
+        EXPECT_TRUE((drv.read32(LSR) & LSR_TEMT) != 0);
+
+        // Re-enabling the divisor lets traffic flow again.
+        setup_basic();
+        drv.write32(THR, 'r');
+        settle();
+        EXPECT_TRUE((drv.read32(LSR) & LSR_THRE) != 0);
+    }
+    std::cout << "  [PASS] THRE/TEMT across divisor gating and TX FIFO reset\n";
+
+
+#ifdef UART_UB_CANARY
+    // Built only by `run_tests.sh --ubsan-canary`.  Proves the UBSan build
+    // really does report undefined behaviour, so a clean --asan run means
+    // something.  volatile keeps the shift out of the optimiser's hands.
+    {
+        volatile int shift = 33;
+        volatile int value = 1;
+        std::cout << "  [UB CANARY] " << (value << shift) << "\n";
+    }
+#endif
+
     if (g_failures == 0) std::cout << "\nALL TESTS PASSED\n";
     else                 std::cout << "\n" << g_failures << " FAILURE(S)\n";
     sc_core::sc_stop();
@@ -817,8 +1337,10 @@ void tb::run() {
 
 int sc_main(int, char**)
 {
-    sc_core::sc_report_handler::set_actions(sc_core::SC_ID_LOGIC_X_TO_BOOL_,
-                                            sc_core::SC_DO_NOTHING);
+    // SC_REPORT_FATAL must throw so the constructor guard rails can be probed
+    // below without aborting the run.
+    sc_core::sc_report_handler::set_actions(
+        sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
 
     // CCI: register global broker before any cci_param is constructed.
     static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
@@ -831,6 +1353,33 @@ int sc_main(int, char**)
                                        cci::cci_value(8u));
     global_broker.set_preset_cci_value("tb.uart.access_delay_ns",
                                        cci::cci_value(5.0));
+
+    // Constructor guard rails: FIFO depths outside 1..4096 are fatal.  Probed
+    // before the real DUT is elaborated, as in the sister IPs' negative benches.
+    {
+        auto expect_fatal = [](auto&& body) {
+            try { body(); } catch (...) { return true; }
+            return false;
+        };
+        smc::uart_cfg bad;
+        bad.rx_fifo_depth = 0;
+        EXPECT_TRUE(expect_fatal([&] { smc::uart u("bad_rx0", bad); }));
+        bad = smc::uart_cfg{};
+        bad.rx_fifo_depth = 4097;
+        EXPECT_TRUE(expect_fatal([&] { smc::uart u("bad_rx4097", bad); }));
+        bad = smc::uart_cfg{};
+        bad.tx_fifo_depth = 0;
+        EXPECT_TRUE(expect_fatal([&] { smc::uart u("bad_tx0", bad); }));
+        bad = smc::uart_cfg{};
+        bad.tx_fifo_depth = 4097;
+        EXPECT_TRUE(expect_fatal([&] { smc::uart u("bad_tx4097", bad); }));
+        std::cout << "  [PASS] constructor guard rails (FIFO depth 0 / 4097)\n";
+    }
+
+    // The bit-serial sections drive X on an sc_signal<bool> only transiently;
+    // scope the conversion report rather than silencing it for the whole run.
+    const scoped_report_actions quiet_logic_x(sc_core::SC_INFO,
+                                              sc_core::SC_DO_NOTHING);
 
     tb top("tb");
     sc_core::sc_start();

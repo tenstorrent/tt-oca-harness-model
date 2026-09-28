@@ -437,6 +437,9 @@ private:
 
     /// TLM-2.0 debug transport — back-door register access, no side effects.
     unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    /// Always denies DMI — CSR reads and writes have side effects.
+    bool get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                            tlm::tlm_dmi& dmi_data);
 
     // ------------------------------------------------------------------
     // SC_METHOD processes
@@ -637,6 +640,9 @@ public:
 private:
     void         b_transport(tlm::tlm_generic_payload& gp, sc_core::sc_time& delay);
     unsigned int transport_dbg(tlm::tlm_generic_payload& gp);
+    /// Always denies DMI — CSR reads and writes have side effects.
+    bool get_direct_mem_ptr(tlm::tlm_generic_payload& gp,
+                            tlm::tlm_dmi& dmi_data);
     void         reset_proc();
     void         reset_log_engine();
 

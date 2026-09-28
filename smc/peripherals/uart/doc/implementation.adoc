@@ -73,6 +73,59 @@ re-read on every transaction.
 |`access_delay_ns` |2.0 |Annotated TLM access delay
 |===
 
+
+====== Bus contract (both targets)
+
+`uart` and `uart_wrap` share one `check_csr_access()` helper, so neither can
+drift from the other.
+
+[cols="28%,72%",options="header"]
+|===
+|Aspect |Contract
+|Command
+|Only read and write; anything else is `TLM_COMMAND_ERROR_RESPONSE`.
+|Pointer / length
+|A null `data_ptr` or zero length is `TLM_GENERIC_ERROR_RESPONSE`. This is
+ load bearing: both targets `memcpy` through the pointer, so without the
+ check a null-pointer transaction segfaults the simulator.
+|Size / alignment
+|Naturally aligned 32-bit accesses only.
+|Decode
+|Overflow-safe window bound (`len > window - adr`), never
+ `adr + len > window`, which wraps near `UINT64_MAX`. An unmapped offset
+ *inside* the window differs by target: `uart` reports a decode miss,
+ `uart_wrap` is RAZ/WI.
+|Byte enables
+|Any non-null `byte_enable_ptr` is refused whatever its length.
+|Streaming width
+|Single beat, so TLM-2.0 requires `streaming_width >= data_length`.
+|DMI
+|Always denied, and `dmi_allowed` is cleared before any early return: RBR
+ pops the FIFO, IIR/LSR/MSR reads clear status, THR transmits, and writing
+ LOG_EN resets the wrapper's log engine.
+|Sideband
+|The canonical `smc::smc_axi_extension` is inspected for tracing and left
+ untouched; authorization belongs to the fabric's `axi_filter`.
+|===
+
+====== Debug transfer contract
+
+Deliberately asymmetric, and tested as such:
+
+* A debug *read* is side-effect-free. It goes through `dbg_reg()`, so it
+  never pops RBR, clears IIR/LSR/MSR status, or rearms the RX timeout.
+* A debug *write* uses the same path as a software write, so a debugger can
+  program the device.
+
+====== RX character timeout
+
+The timeout restarts on the most recent of "character received" and "RBR
+read", per the 16550 contract, and is disarmed when the FIFO drains.
+Clearing only the pending flag on an RBR read (as an earlier revision did)
+left the timer running from the previous arrival, so a multi-character read
+could time out almost immediately after a read rather than one idle period
+later.
+
 ====== Modeling gaps versus RTL
 
 * No bit-level serialisation. Baud rate only disables TX/RX when the
@@ -81,3 +134,7 @@ re-read on every transaction.
 * No noise/glitch filter or input synchronisers.
 * TX FIFO drains in one recompute (LT: software always sees consistent
   THRE/TEMT after its write).
+
+* `uart_wrap` is a CSR shell: the log region/write-address/entry registers
+  have no log-engine datapath behind them and the log interrupt pair drives
+  no output port. Needs the RDL owner to define the datapath.

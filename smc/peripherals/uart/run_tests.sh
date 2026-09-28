@@ -42,6 +42,7 @@ USE_CTEST=0
 CLEAN=0
 USE_ASAN=0
 USE_COVERAGE=0
+USE_UB_CANARY=0
 
 for arg in "$@"; do
     case "$arg" in
@@ -49,6 +50,7 @@ for arg in "$@"; do
         --ctest)    USE_CTEST=1 ;;
         --asan)     USE_ASAN=1 ;;
         --coverage) USE_COVERAGE=1 ;;
+        --ubsan-canary) USE_UB_CANARY=1 ;;
         -h|--help)
             sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -66,7 +68,10 @@ if (( USE_ASAN && USE_COVERAGE )); then
 fi
 
 # Choose an isolated build directory for each instrumented mode.
-if (( USE_ASAN )); then
+if (( USE_UB_CANARY )); then
+    BUILD_DIR="${SCRIPT_DIR}/build_ubcanary"
+    CMAKE_EXTRA="-DENABLE_ASAN=ON -DENABLE_UB_CANARY=ON"
+elif (( USE_ASAN )); then
     BUILD_DIR="${SCRIPT_DIR}/build_asan"
     CMAKE_EXTRA="-DENABLE_ASAN=ON"
 elif (( USE_COVERAGE )); then
@@ -190,7 +195,7 @@ _find_llvm_tool() {
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
-if (( USE_ASAN )); then
+if (( USE_ASAN || USE_UB_CANARY )); then
     echo ""
     echo ">> Running with AddressSanitizer: ${TB_BIN}"
     if [[ "${OS}" == "Linux" ]]; then
@@ -199,12 +204,16 @@ if (( USE_ASAN )); then
     echo ""
 
     ASAN_LOG="${BUILD_DIR}/asan.log"
+    UBSAN_LOG="${BUILD_DIR}/ubsan.log"
     if [[ "${OS}" == "Linux" ]]; then
         _ASAN_OPTS="halt_on_error=0:detect_leaks=1:log_path=${ASAN_LOG}"
     else
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
-    ASAN_OPTIONS="${_ASAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
+    # UBSan writes to its own log so a finding survives even when the bench
+    # itself exits 0 (halt_on_error=0 keeps the run going).
+    _UBSAN_OPTS="halt_on_error=0:print_stacktrace=1:log_path=${UBSAN_LOG}"
+    ASAN_OPTIONS="${_ASAN_OPTS}" UBSAN_OPTIONS="${_UBSAN_OPTS}" "${TB_BIN}"; TB_EXIT=$?
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -234,7 +243,29 @@ if (( USE_ASAN )); then
         echo "ERROR: enforce_asan_clean.sh not found" >&2
         exit 1
     fi
-    "${_asan_gate}" "${BUILD_DIR}" || exit 1
+        UB_LOGS=()
+    for _l in "${UBSAN_LOG}"*; do
+        if [[ -f "${_l}" ]]; then UB_LOGS+=("${_l}"); fi
+    done
+    if [[ ${#UB_LOGS[@]} -gt 0 ]]; then
+        echo "===== UndefinedBehaviorSanitizer report ====="
+        cat "${UB_LOGS[@]}"
+        echo "============================================"
+    fi
+    # enforce_asan_clean.sh globs asan.log* itself, so only the UBSan logs are
+    # passed as extras -- passing the ASan ones too would double-count.
+    if (( USE_UB_CANARY )); then
+        # Inverted gate: a clean run means the instrumentation is not working.
+        if [[ ${#UB_LOGS[@]} -eq 0 ]] ||
+           ! grep -qE 'runtime error:|UndefinedBehaviorSanitizer' "${UB_LOGS[@]}"; then
+            echo "ERROR: UB canary was NOT reported — UBSan is not active." >&2
+            exit 1
+        fi
+        echo ">> UB canary PASS: UBSan reported the deliberate UB."
+        exit 0
+    fi
+
+    "${_asan_gate}" "${BUILD_DIR}" "${UB_LOGS[@]+"${UB_LOGS[@]}"}" || exit 1
     exit "${TB_EXIT}"
 
 elif (( USE_COVERAGE )); then
@@ -247,6 +278,7 @@ elif (( USE_COVERAGE )); then
     HTML_DIR="${BUILD_DIR}/coverage-report"
     SOURCES=(
         "${SCRIPT_DIR}/src/uart.cpp"
+        "${SCRIPT_DIR}/include/uart.h"
         "${SCRIPT_DIR}/test/uart_tb.cpp"
     )
 
@@ -356,7 +388,10 @@ elif (( USE_COVERAGE )); then
         echo "ERROR: enforce_line_coverage.sh not found" >&2
         exit 1
     fi
-    "${_gate}" "${SCRIPT_DIR}" "${BUILD_DIR}"
+    # Gate the model source and its header individually, not just the src/
+    # total, so inline header behaviour cannot ride on the .cpp percentage.
+    COVERAGE_PER_FILE="${COVERAGE_PER_FILE:-1}" \
+        "${_gate}" "${SCRIPT_DIR}" "${BUILD_DIR}"
 
 elif (( USE_CTEST )); then
     echo ">> Running via ctest"
