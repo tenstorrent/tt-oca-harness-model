@@ -421,7 +421,9 @@ done
   echo "  - sep_filter_ctrl covers both the inbound and outbound filter control instances."
   echo "  - sep_output_remap_ctrl covers both the AP and STEE output remap instances."
   echo "  - sep_scratch_warm is store-only (no behavioral logic); its suite checks"
-  echo "    reset values, read/write and reserved-bit masking."
+  echo "    reset values, read/write and reserved-bit masking, explicit byte-enable"
+  echo "    merging, transport_dbg/DMI policy, reset sensitivity, and the shared"
+  echo "    malformed-payload matrix."
 } >> "${TOP_SUMMARY}"
 
 echo ""

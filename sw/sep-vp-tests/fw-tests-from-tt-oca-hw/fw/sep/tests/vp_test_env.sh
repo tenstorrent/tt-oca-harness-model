@@ -104,7 +104,9 @@ vp_find_sep_vp() {
     local dir="${VP_TESTS_DIR}" cand mtime newest="" newest_mtime=0
 
     if [ -n "${SEP_VP:-}" ] && [ -x "${SEP_VP}" ]; then
-        VP_ROOT="${VP_ROOT:-$(cd "$(dirname "${SEP_VP}")/../.." && pwd)}"
+        # bin -> build -> vp -> repo root, matching the VP_ROOT the search
+        # branch below records (the directory that contains vp/).
+        VP_ROOT="${VP_ROOT:-$(cd "$(dirname "${SEP_VP}")/../../.." && pwd)}"
     else
         # Prefer the newest built sep-vp. vp/build/bin/sep-vp is often months
         # stale and lacks peripherals (sep_reset_ctrl at 0x10803000, ABR, …)

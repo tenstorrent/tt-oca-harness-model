@@ -15,6 +15,7 @@
 
 #include <systemc.h>
 #include "../../include/mailbox.h"
+#include "../../include/mailbox_unit.h"
 #include "mailbox_test.h"
 #include "reg_logger.h"
 #include <iostream>
@@ -91,6 +92,23 @@ private:
     mailbox_test* test_port1;
 
     // =========================================================================
+    // Multi-channel unit wrapper (second DUT)
+    // =========================================================================
+
+    /// @brief Channel count of the unit DUT
+    ///
+    /// Two channels is the smallest instance that can distinguish a routing bug
+    /// from a decode bug: one channel would pass any decode that ignores the
+    /// channel index entirely.
+    static constexpr unsigned int UNIT_CHANNELS = 2;
+
+    /// @brief Multi-channel mailbox unit under test
+    mailbox_unit_t<UNIT_CHANNELS>* unit_dut;
+
+    /// @brief Test harness driving the unit's single target socket
+    mailbox_test* unit_port;
+
+    // =========================================================================
     // Interconnect Signals
     // =========================================================================
 
@@ -105,6 +123,18 @@ private:
 
     /// @brief Active-low asynchronous reset signal
     sc_signal<bool> rst_ni_sig;
+
+    /// @brief Per-channel outbound (port 0) interrupt outputs of the unit DUT
+    sc_signal<bool> unit_outbound_irq_sig[UNIT_CHANNELS];
+
+    /// @brief Per-channel inbound (port 1) interrupt outputs of the unit DUT
+    sc_signal<bool> unit_inbound_irq_sig[UNIT_CHANNELS];
+
+    /// @brief Abstract clock frequency signal for the unit DUT (Hz)
+    sc_signal<double> unit_clk_sig;
+
+    /// @brief Active-low asynchronous reset signal for the unit DUT
+    sc_signal<bool> unit_rst_ni_sig;
 
     // =========================================================================
     // Test Statistics
@@ -131,6 +161,9 @@ private:
      * Validates that all registers return correct reset values after power-on
      * and after asynchronous reset assertion.
      */
+    /// TC-MB-MALFORMED: every generic-payload defect gets a decided response.
+    void test_malformed_payloads();
+
     void test_register_reset_values();
 
     /**
@@ -226,8 +259,9 @@ private:
      * - Cross-port data integrity with known patterns
      * - Independent FIFO paths
      * - Cross-port STATUS flag coherence
-     * - Boundary cases (min/max FIFO depth, all-zeros/all-ones patterns)
-     * - Configuration parameter validation (MailboxDepth variation)
+     * - Boundary cases (occupancy edges, all-zeros/all-ones patterns)
+     * - Configuration check: measured FIFO depth vs the hardcoded MailboxDepth
+     *   (the model exposes no way to vary it, so variation is not tested)
      */
     void run_func003_tests();
 
@@ -242,8 +276,8 @@ private:
     void test_callback_read_data_dequeue();         ///< TC018: READ_DATA callback
     void test_crossport_data_integrity();           ///< TC019: Data integrity patterns
     void test_crossport_status_coherence();         ///< TC020: Cross-port STATUS flags
-    void test_boundary_fifo_depth_min();            ///< TC021: Minimum depth operation
-    void test_boundary_fifo_depth_max();            ///< TC022: Maximum depth operation
+    void test_boundary_fifo_occupancy_min();        ///< TC021: Empty/one-entry occupancy boundary
+    void test_boundary_fifo_depth_probe();          ///< TC022: Measured depth vs documented MailboxDepth
 
     // =========================================================================
     // FUNC-004 Comprehensive Test Suite Entry Point
@@ -397,6 +431,34 @@ private:
     void test_ctrl_flush_write_fifo();              ///< TC046: Verify write FIFO flush operation
     void test_ctrl_flush_read_fifo();               ///< TC047: Verify read FIFO flush operation
     void test_ctrl_flush_dual_port_or();            ///< TC048: Verify dual-port flush OR coordination
+
+    // =========================================================================
+    // Unit Wrapper Test Suite Entry Point (mailbox_unit_t)
+    // =========================================================================
+
+    /**
+     * @brief Run the mailbox_unit_t decode/routing suite
+     *
+     * Covers the wrapper surface the channel tests cannot reach: address
+     * decode into 2 * NUM_MAILBOXES blocks, per-channel and per-port routing,
+     * restoration of the caller's address after the access, the unmapped holes
+     * inside each block, the end of the aperture, independence of channel
+     * state, reset fan-out, and the two interrupt vectors.
+     */
+    void run_unit_tests();
+
+    void test_unit_decode_routing();        ///< TC-MBU-001: block decode, routing, address restoration
+    void test_unit_aperture_and_holes();    ///< TC-MBU-002: holes, aperture end, error responses
+    void test_unit_channel_independence();  ///< TC-MBU-003: per-channel FIFO and register isolation
+    void test_unit_reset_fanout();          ///< TC-MBU-004: one reset clears every channel
+    void test_unit_interrupt_vectors();     ///< TC-MBU-005: irq_o[p] of channel m reaches vector[m]
+
+    /// @brief Access helpers for the unit's single target socket
+    simtlm::access_result unit_write(uint64_t address, uint64_t value);
+    simtlm::access_result unit_read(uint64_t address, uint64_t& value);
+
+    /// @brief Assert and release the unit DUT's active-low reset
+    void apply_unit_reset();
 
     // =========================================================================
     // Helper Methods

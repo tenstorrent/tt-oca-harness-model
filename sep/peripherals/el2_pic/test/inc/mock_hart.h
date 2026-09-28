@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #pragma once
 #include <cstdint>
 
@@ -21,14 +23,25 @@ struct MockHart {
     uint32_t meipt          = 0;  // el2_pic_ctrl.sv's Priority Threshold input, CSR 0xBC9
     uint32_t meicurpl_csr   = 0;  // el2_pic_ctrl.sv's Current Priority Level input, CSR 0xBCC
 
-    void trigger_external_interrupt(PrivilegeLevel /*level*/) { eip_asserted = true; }
-    void clear_external_interrupt(PrivilegeLevel /*level*/)   { eip_asserted = false; claim_id = 0; }
-    void set_pic_claim_id(uint32_t id)                        { claim_id = id; }
+    // Call tallies, not just final state. A claim that retargets from one
+    // source to another must not pass through a deasserted EIP on the way, and
+    // the end state alone cannot distinguish "never dropped" from
+    // "dropped and raised again inside the same delta".
+    unsigned trigger_count = 0;
+    unsigned clear_count   = 0;
+    unsigned claim_writes  = 0;
+
+    void trigger_external_interrupt(PrivilegeLevel /*level*/) { eip_asserted = true; ++trigger_count; }
+    void clear_external_interrupt(PrivilegeLevel /*level*/)   { eip_asserted = false; claim_id = 0; ++clear_count; }
+    void set_pic_claim_id(uint32_t id)                        { claim_id = id; ++claim_writes; }
     bool peek_csr(uint32_t csr_num, uint32_t &val) {
         val = (csr_num == 0xBC9) ? meipt : (csr_num == 0xBCC) ? meicurpl_csr : 0;
         return true;
     }
     bool poke_csr(uint32_t /*csr_num*/, uint32_t val)         { meicidpl = val; return true; }
 
-    void reset() { eip_asserted = false; claim_id = 0; meicidpl = 0; meipt = 0; meicurpl_csr = 0; }
+    void reset() {
+        eip_asserted = false; claim_id = 0; meicidpl = 0; meipt = 0; meicurpl_csr = 0;
+        trigger_count = 0; clear_count = 0; claim_writes = 0;
+    }
 };

@@ -1,11 +1,32 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 
 #pragma once
 #include "sep_filter_ctrl_basetest.h"
+#include "tlm_probe.h"
+
+#include <string>
 
 class sep_filter_ctrl_test : public sep_filter_ctrl_basetest
 {
 public:
     sep_filter_ctrl_test(sc_module_name name) : sep_filter_ctrl_basetest(name) {}
+
+    // Transport-failure bookkeeping.
+    //
+    // The CSR helpers below used to answer a failed transaction with 0 — which
+    // is a legal reset value for most of these fields, so a refused access was
+    // indistinguishable from a correct one. They now leave the caller's value
+    // alone and record the failure here; the testbench refuses to print
+    // "ALL TESTS PASSED" while the count is non-zero.
+    unsigned           transport_failures() const { return m_transport_failures; }
+    const std::string& last_transport_error() const { return m_last_transport_error; }
+    void               clear_transport_failures();
+
+    /// Drive a deliberately malformed payload; the status is returned, not
+    /// recorded, because a rejection is the expected outcome here.
+    simtlm::access_result probe(simtlm::defect d, const simtlm::target_geometry& geo,
+                                tlm::tlm_command cmd);
 
     // Raw register access
     void register_read_8(unsigned int offset, uint8_t& read_value);
@@ -26,6 +47,13 @@ public:
     void test_hw_readonly_data_bus_width();
     void test_passthrough_when_unconfigured(uint32_t num_instances);
     void test_comprehensive_filter_scenarios();
+    void test_malformed_payloads(uint32_t num_instances);
 
     ~sep_filter_ctrl_test() {}
+
+private:
+    void note_transport(const simtlm::access_result& r, const char* op, uint64_t offset);
+
+    unsigned    m_transport_failures = 0;
+    std::string m_last_transport_error;
 };

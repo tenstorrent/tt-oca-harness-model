@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 #include "key_manager_test.h"
 #include "km_firmware_handler.h"
+#include <iostream>
 
 key_manager_test::key_manager_test(sc_module_name name)
   : key_manager_basetest(name),
@@ -20,44 +21,50 @@ void key_manager_test::initialize_signals()
 // Register access
 // =============================================================================
 
+// A bad response used to be logged as a warning and then forgotten, so a
+// refused mailbox access could not fail the run — it just left the caller's
+// value at whatever it already held. The warning is kept for diagnosis, but the
+// failure is now recorded and testbench::run_tests() fails the enclosing FUNC
+// test on it.
+void key_manager_test::note_transport(const simtlm::access_result &r,
+                                      const char *op, unsigned int offset)
+{
+    if (r.ok()) return;
+
+    ++m_transport_failures;
+
+    std::ostringstream oss;
+    oss << op << " at offset 0x" << std::hex << offset
+        << " returned " << simtlm::response_name(r.status);
+    m_last_transport_error = oss.str();
+
+    REG_WARN(1, logger) << m_last_transport_error;
+}
+
+void key_manager_test::clear_transport_failures()
+{
+    m_transport_failures = 0;
+    m_last_transport_error.clear();
+}
+
+simtlm::access_result key_manager_test::probe(simtlm::defect d,
+                                              const simtlm::target_geometry &geo,
+                                              tlm::tlm_command cmd)
+{
+    // Deliberate rejections are the expected outcome; not recorded.
+    return simtlm::probe_defect(initiator_socket, d, geo, cmd);
+}
+
 void key_manager_test::register_read_32(unsigned int offset, uint32_t &value)
 {
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-
-    trans.set_command        (tlm::TLM_READ_COMMAND);
-    trans.set_address        (offset);
-    trans.set_data_ptr       (reinterpret_cast<unsigned char*>(&value));
-    trans.set_data_length    (4);
-    trans.set_streaming_width(4);
-    trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed    (false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-
-    initiator_socket->b_transport(trans, delay);
-
-    if (trans.get_response_status() != tlm::TLM_OK_RESPONSE)
-        CSML_WARN(1, logger) << "register_read_32: bad response at offset 0x" << std::hex << offset;
+    const auto r = simtlm::read_word<uint32_t>(initiator_socket, offset, value);
+    note_transport(r, "register_read_32", offset);
 }
 
 void key_manager_test::register_write_32(unsigned int offset, uint32_t value)
 {
-    tlm::tlm_generic_payload trans;
-    sc_time delay = SC_ZERO_TIME;
-
-    trans.set_command        (tlm::TLM_WRITE_COMMAND);
-    trans.set_address        (offset);
-    trans.set_data_ptr       (reinterpret_cast<unsigned char*>(&value));
-    trans.set_data_length    (4);
-    trans.set_streaming_width(4);
-    trans.set_byte_enable_ptr(nullptr);
-    trans.set_dmi_allowed    (false);
-    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
-
-    initiator_socket->b_transport(trans, delay);
-
-    if (trans.get_response_status() != tlm::TLM_OK_RESPONSE)
-        CSML_WARN(1, logger) << "register_write_32: bad response at offset 0x" << std::hex << offset;
+    const auto r = simtlm::write_word<uint32_t>(initiator_socket, offset, value);
+    note_transport(r, "register_write_32", offset);
 }
 
 void key_manager_test::trigger_reset(unsigned int cycles)
@@ -140,6 +147,83 @@ uint32_t key_manager_test::crc32_payload(const uint32_t* words, size_t count)
         }
     }
     return crc ^ 0xFFFFFFFFu;
+}
+
+// Published check values for the ASCII string "123456789":
+//   CRC-8/ROHC  -> 0xD0      (rom_crc.c: rom_picorv32_crc8_rohc_update)
+//   CRC-32C     -> 0xE3069283 (rom_crc.c: rom_picorv32_crc32c_byte_update)
+//
+// The helpers above are the same algorithm the firmware handler uses, so they
+// cannot anchor themselves. These two walk the bytes directly from the
+// published parameters and are what the anchor test compares the helpers to.
+static uint8_t crc8_rohc_bytes(const uint8_t* data, size_t n)
+{
+    uint8_t crc = 0xFFu;
+    for (size_t i = 0; i < n; ++i) {
+        crc ^= data[i];
+        for (int b = 0; b < 8; ++b)
+            crc = (crc & 1u) ? static_cast<uint8_t>((crc >> 1) ^ 0xE0u)
+                             : static_cast<uint8_t>(crc >> 1);
+    }
+    return crc;
+}
+
+static uint32_t crc32c_bytes(const uint8_t* data, size_t n)
+{
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < n; ++i) {
+        crc ^= data[i];
+        for (int b = 0; b < 8; ++b)
+            crc = (crc & 1u) ? (crc >> 1) ^ 0x82F63B78u : (crc >> 1);
+    }
+    return crc ^ 0xFFFFFFFFu;
+}
+
+int key_manager_crc_anchor_test()
+{
+    int failures = 0;
+    std::cout << "\n--- CRC anchor: published check values ---\n";
+
+    const uint8_t check[] = {'1','2','3','4','5','6','7','8','9'};
+    const uint8_t crc8 = crc8_rohc_bytes(check, sizeof(check));
+    const uint32_t crc32 = crc32c_bytes(check, sizeof(check));
+    if (crc8 != 0xD0u) {
+        std::cout << "[FAIL] CRC-8/ROHC(\"123456789\") = 0x" << std::hex
+                  << static_cast<unsigned>(crc8) << " expected 0xD0\n";
+        ++failures;
+    } else {
+        std::cout << "[PASS] CRC-8/ROHC(\"123456789\") = 0xD0\n";
+    }
+    if (crc32 != 0xE3069283u) {
+        std::cout << "[FAIL] CRC-32C(\"123456789\") = 0x" << std::hex << crc32
+                  << " expected 0xE3069283\n" << std::dec;
+        ++failures;
+    } else {
+        std::cout << "[PASS] CRC-32C(\"123456789\") = 0xE3069283\n";
+    }
+
+    // The mailbox helpers must agree with that anchored byte function, on the
+    // same bytes they will later be asked to check in a response.
+    const uint32_t header_24 = 0x31u | (0x32u << 8) | (0x33u << 16);
+    const uint8_t hdr_bytes[] = {0x31, 0x32, 0x33};
+    if (key_manager_test::crc8_header(header_24) != crc8_rohc_bytes(hdr_bytes, 3)) {
+        std::cout << "[FAIL] crc8_header disagrees with the anchored CRC-8/ROHC\n";
+        ++failures;
+    } else {
+        std::cout << "[PASS] crc8_header matches anchored CRC-8/ROHC\n";
+    }
+
+    const uint32_t words[] = {0x34333231u, 0x38373635u};  // "12345678" little-endian
+    const uint8_t raw[] = {'1','2','3','4','5','6','7','8'};
+    if (key_manager_test::crc32_payload(words, 2) != crc32c_bytes(raw, sizeof(raw))) {
+        std::cout << "[FAIL] crc32_payload disagrees with the anchored CRC-32C\n";
+        ++failures;
+    } else {
+        std::cout << "[PASS] crc32_payload matches anchored CRC-32C\n";
+    }
+
+    std::cout << "--- CRC anchor complete: " << failures << " failure(s) ---\n\n";
+    return failures;
 }
 
 // =============================================================================
@@ -252,6 +336,16 @@ bool key_manager_test::parse_resp_cmd(const std::vector<uint32_t>& frame,
     // Expected frame size: 1 header + pay_len payload + (pay_len>0 ? 1 CRC32 : 0)
     size_t expected_size = 1u + pay_len + (pay_len > 0 ? 1u : 0u);
     if (frame.size() != expected_size) return false;
+
+    // A frame that parses is a frame whose integrity fields match. Without this,
+    // a response with a corrupt header CRC-8 or payload CRC-32C is accepted by
+    // every caller, which is the gap the audit called out.
+    const uint8_t hdr_crc = static_cast<uint8_t>((header >> 24) & 0xFFu);
+    if (crc8_header(header & 0x00FFFFFFu) != hdr_crc) return false;
+    if (pay_len > 0u) {
+        const uint32_t expect = crc32_payload(&frame[1], pay_len);
+        if (frame[1u + pay_len] != expect) return false;
+    }
 
     // RESP_CMD has resp_id == 0x00 and at least 3 payload words.
     if (resp_id_out != 0x00u) return false;
