@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2026 Tenstorrent USA, Inc.
 /**
  * @file edn_csrng_interface.h
  * @brief CSRNG interface definitions for EDN SystemC TLM model
@@ -18,7 +20,9 @@
 #pragma once
 #include <systemc.h>
 #include <cstdint>
+#include "csrng_hw_interface.h"
 
+#ifndef CSRNG_HW_INTERFACE_TYPES_DEFINED
 /**
  * @class csrng_app_if
  * @brief Abstract interface for CSRNG application commands
@@ -120,3 +124,4 @@ class csrng_genbits_if : public sc_interface
      */
     virtual void provide_genbits(const uint32_t genbits[4], bool fips_compliance) = 0;
 };
+#endif

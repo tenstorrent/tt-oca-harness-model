@@ -33,6 +33,12 @@
 
 // Logger for test output
 static RegLogger test_logger;
+static bool last_result = false;
+
+bool kmac_func024_last_result()
+{
+    return last_result;
+}
 
 /******************************************************************************
  * Helper Functions
@@ -154,6 +160,7 @@ static void cleanup_test(kmac_test* test)
  ******************************************************************************/
 void test_temporal_decoupling_fifo_full(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-125: test_temporal_decoupling_fifo_full";
@@ -251,6 +258,7 @@ void test_temporal_decoupling_fifo_full(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: Temporal decoupling FIFO full backpressure verified";
 
     } catch (const std::exception& e) {
@@ -267,6 +275,7 @@ void test_temporal_decoupling_fifo_full(kmac_test* test)
  ******************************************************************************/
 void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-167: test_msg_fifo_temporal_decoupling_wait";
@@ -339,6 +348,7 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: MSG_FIFO temporal decoupling wait verified";
 
     } catch (const std::exception& e) {
@@ -355,6 +365,7 @@ void test_msg_fifo_temporal_decoupling_wait(kmac_test* test)
  ******************************************************************************/
 void test_functional_entropy_latency(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-106: test_functional_entropy_latency";
@@ -439,6 +450,7 @@ void test_functional_entropy_latency(kmac_test* test)
         write_cmd(test, 0x16); // DONE
         wait(10, SC_NS);
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: Functional entropy latency verified (non-cycle-accurate)";
 
     } catch (const std::exception& e) {
@@ -455,6 +467,7 @@ void test_functional_entropy_latency(kmac_test* test)
  ******************************************************************************/
 void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
 {
+    last_result = false;
     test_logger.setMaxVerbosity(REG_DEFAULT_VERBOSITY);
     REG_INFO(1, test_logger) << "========================================";
     REG_INFO(1, test_logger) << "TC-186: test_rapid_command_sequence_no_timing_dependency";
@@ -545,6 +558,7 @@ void test_rapid_command_sequence_no_timing_dependency(kmac_test* test)
             REG_INFO(1, test_logger) << "WARNING: Operations took longer than expected (may indicate cycle-accurate modeling)";
         }
 
+        last_result = true;
         REG_INFO(1, test_logger) << "PASS: Rapid command sequence verified (no cycle-level timing dependencies)";
 
     } catch (const std::exception& e) {

@@ -117,6 +117,8 @@ struct simple_mem : sc_core::sc_module {
     unsigned                                    expect_chunk = 64;
     bool                                        meta_ok      = true;
     std::string                                 meta_fail;
+    bool                                        saw_axi_extension = false;
+    bool                                        axi_extension_valid = true;
 
     explicit simple_mem(sc_module_name n, std::size_t bytes)
         : sc_module(n), sock("sock"), mem(bytes, 0xA5)
@@ -203,6 +205,11 @@ struct simple_mem : sc_core::sc_module {
             x.data.assign(ptr, ptr + x.len);
         const unsigned idx = static_cast<unsigned>(log.size());
         log.push_back(x);
+        saw_axi_extension |= x.has_ext;
+        if (!x.has_ext || x.source_id != smc::SMC_ID || x.is_user ||
+            x.is_secure || x.is_fetch || x.is_locked) {
+            axi_extension_valid = false;
+        }
 
         if (enforce_meta) {
             auto fail = [&](const char* why) {
@@ -512,6 +519,8 @@ struct tb : sc_core::sc_module {
         EXPECT_EQ(cfg::CTRL_INT_EN_MASK, ctrl & cfg::CTRL_INT_EN_MASK);
         EXPECT_EQ(UINT64_C(0), ctrl & cfg::CTRL_STATUS_MASK);
         EXPECT_TRUE(irq.read());
+        EXPECT_TRUE(mem.saw_axi_extension);
+        EXPECT_TRUE(mem.axi_extension_valid);
 
         bool zeros_ok = true;
         for (uint64_t i = 0x80; i < 0x180; ++i) {

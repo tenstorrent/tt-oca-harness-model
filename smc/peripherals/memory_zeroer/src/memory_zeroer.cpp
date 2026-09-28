@@ -185,8 +185,11 @@ bool memory_zeroer::perform_write_zeros(uint64_t addr, uint64_t nbytes)
         // source_id_t has no dedicated zeroer ID; SMC_ID is the fabric's
         // "internal masters" value (smc_axi_extension.h), the same one
         // dma.cpp stamps. Other fields stay at the extension defaults.
+        ext.set_priv(true);
+        ext.set_secure(false);
+        ext.set_fetch(false);
+        ext.set_locked(false);
         trans.set_extension(&ext);
-
         dma_socket->b_transport(trans, delay);
         trans.clear_extension<smc::smc_axi_extension>();
 

@@ -12,13 +12,20 @@
 #include <cassert>
 #include <cstring>
 
-// gcov coverage data flushing (GCC 11+)
-// Required when using std::quick_exit() to ensure .gcda files are written
-#ifdef __GNUC__
-#ifdef __COVERAGE__
-extern "C" void __gcov_dump(void);
-#endif
-#endif
+namespace {
+unsigned g_failures = 0;
+}
+
+// Keep the existing assertion-rich test body active in Release builds and
+// accumulate failures so sc_main can propagate a non-zero verdict.
+#undef assert
+#define assert(expr) do { \
+    if (!(expr)) { \
+        std::cerr << "CHECK failed at " << __FILE__ << ':' << __LINE__ \
+                  << ": " #expr "\n"; \
+        ++g_failures; \
+    } \
+} while (false)
 
 // ---------------------------------------------------------------------------
 // Testbench — owns an initiator socket bound to dut.target_socket
@@ -383,11 +390,5 @@ int sc_main(int argc, char** argv) {
     regmodel::load_config_file(argc > 1 ? argv[1] : nullptr);
     Tb tb("tb");
     sc_core::sc_start();
-
-#ifdef __COVERAGE__
-    __gcov_dump();  // Flush coverage data before quick_exit
-#endif
-    // quick_exit bypasses CCI broker destructor, which crashes on cleanup
-    std::quick_exit(0);
-    return 0;
+    return g_failures == 0 ? 0 : 1;
 }

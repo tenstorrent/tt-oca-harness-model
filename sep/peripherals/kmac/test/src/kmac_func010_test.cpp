@@ -1100,26 +1100,6 @@ void testbench::test_fifo_write_during_app_active_error()
 }
 
 /******************************************************************************
- * TC-166 & TC-167: Combined callback test (packing and backpressure)
- * Covered by previous tests
- ******************************************************************************/
-void testbench::test_callback_msg_fifo_write_packing()
-{
-    // This functionality is covered by TC-128, TC-129, TC-130
-    report_test_start("TC-166: test_callback_msg_fifo_write_packing");
-    REG_INFO(2, test_logger) << "Packing functionality tested in TC-128/129/130";
-    report_test_pass("TC-166: test_callback_msg_fifo_write_packing");
-}
-
-void testbench::test_callback_msg_fifo_write_backpressure()
-{
-    // This functionality is covered by TC-125
-    report_test_start("TC-167: test_callback_msg_fifo_write_backpressure");
-    REG_INFO(2, test_logger) << "Backpressure functionality tested in TC-125";
-    report_test_pass("TC-167: test_callback_msg_fifo_write_backpressure");
-}
-
-/******************************************************************************
  * Additional Test: FIFO Alternating Read/Write
  ******************************************************************************/
 void testbench::test_fifo_alternating_read_write()

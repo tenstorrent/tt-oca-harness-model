@@ -72,5 +72,12 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else
-  "${BUILD_DIR}/bin/spi_flash_test"
+  CORE_TEST="${BUILD_DIR}/bin/spi_flash_test"
+  SC_TEST="${BUILD_DIR}/bin/spi_flash_sc_test"
+  if [[ ! -x "${CORE_TEST}" || ! -x "${SC_TEST}" ]]; then
+    echo "ERROR: expected both SPI flash test binaries" >&2
+    exit 1
+  fi
+  "${CORE_TEST}"
+  "${SC_TEST}"
 fi

@@ -32,13 +32,13 @@ test_edn_func_012::test_edn_func_012(sc_module_name name)
     , m_tests_passed(0)
     , m_tests_failed(0)
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_012 test suite initialized";
-    CSML_INFO(1, logger) << "Test Coverage: Boot-Time Request Mode Operation (7 test cases)";
+    REG_INFO(1, logger) << "EDN_FUNC_012 test suite initialized";
+    REG_INFO(1, logger) << "Test Coverage: Boot-Time Request Mode Operation (7 test cases)";
 }
 
 test_edn_func_012::~test_edn_func_012()
 {
-    CSML_INFO(1, logger) << "EDN_FUNC_012 test suite terminated";
+    REG_INFO(1, logger) << "EDN_FUNC_012 test suite terminated";
 }
 
 // =============================================================================
@@ -47,12 +47,12 @@ test_edn_func_012::~test_edn_func_012()
 
 unsigned int test_edn_func_012::run_all_tests()
 {
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_012 Test Suite Execution Start";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_012 Test Suite Execution Start";
+    REG_INFO(1, logger) << "========================================";
 
     // Apply reset before starting tests
-    CSML_INFO(1, logger) << "Applying system reset...";
+    REG_INFO(1, logger) << "Applying system reset...";
     apply_reset(100.0); // 100ns reset pulse
     wait(10, SC_NS);    // Wait for reset propagation
 
@@ -92,30 +92,30 @@ unsigned int test_edn_func_012::run_all_tests()
     report_test_result("TC_EDN_BOOT_008: Boot Mode Invalid CLEN", result);
 
     // Print summary
-    CSML_INFO(1, logger) << "========================================";
-    CSML_INFO(1, logger) << "EDN_FUNC_012 Test Suite Summary";
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "EDN_FUNC_012 Test Suite Summary";
+    REG_INFO(1, logger) << "========================================";
 
     std::ostringstream oss;
     oss << "Tests Run:    " << m_tests_run;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Passed: " << m_tests_passed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
     oss.str("");
 
     oss << "Tests Failed: " << m_tests_failed;
-    CSML_INFO(1, logger) << oss.str();
+    REG_INFO(1, logger) << oss.str();
 
     if (m_tests_failed > 0) {
-        CSML_ERROR(1, logger) << "Failed Tests:";
+        REG_ERROR(1, logger) << "Failed Tests:";
         for (const auto& test_name : m_failed_tests) {
-            CSML_ERROR(1, logger) << "  - " << test_name;
+            REG_ERROR(1, logger) << "  - " << test_name;
         }
     }
 
-    CSML_INFO(1, logger) << "========================================";
+    REG_INFO(1, logger) << "========================================";
 
     return m_tests_failed;
 }
@@ -126,7 +126,7 @@ unsigned int test_edn_func_012::run_all_tests()
 
 bool test_edn_func_012::test_boot_mode_enable_sequence()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_001: Boot Mode Enable Sequence...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_001: Boot Mode Enable Sequence...";
 
     bool all_passed = true;
 
@@ -146,13 +146,13 @@ bool test_edn_func_012::test_boot_mode_enable_sequence()
     uint32_t boot_req_mode = (ctrl_value >> 4) & 0xF;
 
     if (edn_enable != 0x9) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_001: EDN_ENABLE should be 0x9 after reset, got 0x"
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_001: EDN_ENABLE should be 0x9 after reset, got 0x"
                               << std::hex << edn_enable;
         all_passed = false;
     }
 
     if (boot_req_mode != 0x9) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_001: BOOT_REQ_MODE should be 0x9 after reset, got 0x"
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_001: BOOT_REQ_MODE should be 0x9 after reset, got 0x"
                               << std::hex << boot_req_mode;
         all_passed = false;
     }
@@ -168,11 +168,11 @@ bool test_edn_func_012::test_boot_mode_enable_sequence()
     current_state &= 0x1FF;
 
     if (current_state != STATE_BOOT_INS_ACK_WAIT && current_state != STATE_BOOT_GEN_ACK_WAIT) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_001: State should be BootInsAckWait (0x36) or BootGenAckWait (0x9c), got 0x"
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_001: State should be BootInsAckWait (0x36) or BootGenAckWait (0x9c), got 0x"
                               << std::hex << current_state;
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_001: State correctly in boot mode: 0x" << std::hex << current_state;
+        REG_INFO(1, logger) << "TC_EDN_BOOT_001: State correctly in boot mode: 0x" << std::hex << current_state;
     }
 
     // Verify HW_CMD_STS.BOOT_MODE = 1 (accept either Instantiate or Generate command)
@@ -182,12 +182,12 @@ bool test_edn_func_012::test_boot_mode_enable_sequence()
     uint32_t cmd_type = (hw_cmd_sts >> 2) & 0xF;
 
     if (!boot_mode) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_001: HW_CMD_STS.BOOT_MODE should be 1, got " << boot_mode;
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_001: HW_CMD_STS.BOOT_MODE should be 1, got " << boot_mode;
         all_passed = false;
     }
 
     if (cmd_type != CSRNG_CMD_INSTANTIATE && cmd_type != CSRNG_CMD_GENERATE) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_001: CMD_TYPE should be Instantiate (0x1) or Generate (0x3), got 0x"
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_001: CMD_TYPE should be Instantiate (0x1) or Generate (0x3), got 0x"
                               << std::hex << cmd_type;
         all_passed = false;
     }
@@ -195,14 +195,14 @@ bool test_edn_func_012::test_boot_mode_enable_sequence()
     // Check AUTO_MODE = 0
     bool auto_mode = (hw_cmd_sts >> 1) & 0x1;
     if (auto_mode != 0) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_001: AUTO_MODE should be 0, got " << auto_mode;
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_001: AUTO_MODE should be 0, got " << auto_mode;
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_001: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_001: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_001: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_001: FAILED";
     }
 
     return all_passed;
@@ -214,7 +214,7 @@ bool test_edn_func_012::test_boot_mode_enable_sequence()
 
 bool test_edn_func_012::test_boot_mode_instantiate_command()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_002: Boot Mode Instantiate Command...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_002: Boot Mode Instantiate Command...";
 
     bool all_passed = true;
 
@@ -227,14 +227,14 @@ bool test_edn_func_012::test_boot_mode_instantiate_command()
 
     register_read_32(BOOT_INS_CMD_OFFSET, boot_ins_cmd);
     if (boot_ins_cmd != 0x00000001) {
-        CSML_WARN(1, logger) << "TC_EDN_BOOT_002: BOOT_INS_CMD default is 0x"
+        REG_WARN(1, logger) << "TC_EDN_BOOT_002: BOOT_INS_CMD default is 0x"
                              << std::hex << boot_ins_cmd << ", expected 0x001";
         // Not a failure, just log for awareness
     }
 
     uint32_t clen = (boot_ins_cmd >> 8) & 0xF;
     if (clen != 9) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_002: BOOT_INS_CMD clen should be 9, got " << clen;
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_002: BOOT_INS_CMD clen should be 9, got " << clen;
         all_passed = false;
     }
 
@@ -252,34 +252,34 @@ bool test_edn_func_012::test_boot_mode_instantiate_command()
     uint32_t cmd_sts = (hw_cmd_sts >> 7) & 0x7;
 
     if (cmd_type != CSRNG_CMD_INSTANTIATE && cmd_type != CSRNG_CMD_GENERATE) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_002: CMD_TYPE should be Instantiate (0x1) or Generate (0x3), got 0x"
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_002: CMD_TYPE should be Instantiate (0x1) or Generate (0x3), got 0x"
                               << std::hex << cmd_type;
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_002: CMD_TYPE correctly showing boot command: 0x" << std::hex << cmd_type;
+        REG_INFO(1, logger) << "TC_EDN_BOOT_002: CMD_TYPE correctly showing boot command: 0x" << std::hex << cmd_type;
     }
 
     if (cmd_ack != 1) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_002: CMD_ACK should be 1, got " << cmd_ack;
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_002: CMD_ACK should be 1, got " << cmd_ack;
         all_passed = false;
     }
 
     if (cmd_sts != 0) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_002: CMD_STS should be 0 (success), got 0x"
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_002: CMD_STS should be 0 (success), got 0x"
                               << std::hex << cmd_sts;
         all_passed = false;
     }
 
     // Wait for state transition to BootGenAckWait
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_002: Timeout waiting for BootGenAckWait state";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_002: Timeout waiting for BootGenAckWait state";
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_002: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_002: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_002: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_002: FAILED";
     }
 
     return all_passed;
@@ -291,7 +291,7 @@ bool test_edn_func_012::test_boot_mode_instantiate_command()
 
 bool test_edn_func_012::test_boot_mode_generate_command()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_003: Boot Mode Generate Command...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_003: Boot Mode Generate Command...";
 
     bool all_passed = true;
 
@@ -304,7 +304,7 @@ bool test_edn_func_012::test_boot_mode_generate_command()
 
     register_read_32(BOOT_GEN_CMD_OFFSET, boot_gen_cmd);
     if (boot_gen_cmd != 0x00FFF003) {
-        CSML_WARN(1, logger) << "TC_EDN_BOOT_003: BOOT_GEN_CMD default is 0x"
+        REG_WARN(1, logger) << "TC_EDN_BOOT_003: BOOT_GEN_CMD default is 0x"
                              << std::hex << boot_gen_cmd << ", expected 0xFFF003";
     }
 
@@ -312,7 +312,7 @@ bool test_edn_func_012::test_boot_mode_generate_command()
     uint32_t glen = (boot_gen_cmd >> 12) & 0x7FFFF;
     uint32_t clen = (boot_gen_cmd >> 8) & 0xF;
 
-    CSML_INFO(1, logger) << "TC_EDN_BOOT_003: BOOT_GEN_CMD glen=0x" << std::hex << glen
+    REG_INFO(1, logger) << "TC_EDN_BOOT_003: BOOT_GEN_CMD glen=0x" << std::hex << glen
                          << ", clen=" << std::dec << clen;
 
     // Enable boot mode
@@ -321,7 +321,7 @@ bool test_edn_func_012::test_boot_mode_generate_command()
 
     // Wait for BootGenAckWait state
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_003: Timeout waiting for BootGenAckWait";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_003: Timeout waiting for BootGenAckWait";
         all_passed = false;
     } else {
         // Verify HW_CMD_STS shows Generate command
@@ -337,12 +337,12 @@ bool test_edn_func_012::test_boot_mode_generate_command()
         }
 
         if (cmd_ack != 1) {
-            CSML_ERROR(1, logger) << "TC_EDN_BOOT_003: CMD_ACK should be 1, got " << cmd_ack;
+            REG_ERROR(1, logger) << "TC_EDN_BOOT_003: CMD_ACK should be 1, got " << cmd_ack;
             all_passed = false;
         }
 
         if (cmd_sts != 0) {
-            CSML_ERROR(1, logger) << "TC_EDN_BOOT_003: CMD_STS should be 0 (success), got 0x"
+            REG_ERROR(1, logger) << "TC_EDN_BOOT_003: CMD_STS should be 0 (success), got 0x"
                                   << std::hex << cmd_sts;
             all_passed = false;
         }
@@ -353,9 +353,9 @@ bool test_edn_func_012::test_boot_mode_generate_command()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_003: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_003: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_003: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_003: FAILED";
     }
 
     return all_passed;
@@ -367,7 +367,7 @@ bool test_edn_func_012::test_boot_mode_generate_command()
 
 bool test_edn_func_012::test_boot_mode_entropy_distribution()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_004: Boot Mode Entropy Distribution...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_004: Boot Mode Entropy Distribution...";
 
     bool all_passed = true;
 
@@ -381,7 +381,7 @@ bool test_edn_func_012::test_boot_mode_entropy_distribution()
 
     // Wait for BootGenAckWait state
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_004: Failed to reach BootGenAckWait";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_004: Failed to reach BootGenAckWait";
         all_passed = false;
     }
 
@@ -394,7 +394,7 @@ bool test_edn_func_012::test_boot_mode_entropy_distribution()
     wait(5, SC_NS);
 
     if (!wait_for_endpoint_ack(0, 500.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_004: Timeout waiting for edn_ack[0]";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_004: Timeout waiting for edn_ack[0]";
         all_passed = false;
     } else {
         uint32_t data = read_endpoint_data(0);
@@ -411,7 +411,7 @@ bool test_edn_func_012::test_boot_mode_entropy_distribution()
     wait(5, SC_NS);
 
     if (!wait_for_endpoint_ack(3, 500.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_004: Timeout waiting for edn_ack[3]";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_004: Timeout waiting for edn_ack[3]";
         all_passed = false;
     } else {
         uint32_t data = read_endpoint_data(3);
@@ -438,7 +438,7 @@ bool test_edn_func_012::test_boot_mode_entropy_distribution()
     bool ep7_acked = wait_for_endpoint_ack(7, 500.0);
 
     if (!ep2_acked || !ep5_acked || !ep7_acked) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_004: Not all concurrent endpoints acknowledged";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_004: Not all concurrent endpoints acknowledged";
         all_passed = false;
     }
 
@@ -448,9 +448,9 @@ bool test_edn_func_012::test_boot_mode_entropy_distribution()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_004: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_004: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_004: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_004: FAILED";
     }
 
     return all_passed;
@@ -462,7 +462,7 @@ bool test_edn_func_012::test_boot_mode_entropy_distribution()
 
 bool test_edn_func_012::test_boot_mode_pre_fips_indicator()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_005: Boot Mode Pre-FIPS Indicator...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_005: Boot Mode Pre-FIPS Indicator...";
 
     bool all_passed = true;
 
@@ -476,7 +476,7 @@ bool test_edn_func_012::test_boot_mode_pre_fips_indicator()
 
     // Wait for BootGenAckWait
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: Failed to reach BootGenAckWait";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_005: Failed to reach BootGenAckWait";
         all_passed = false;
     }
 
@@ -491,18 +491,18 @@ bool test_edn_func_012::test_boot_mode_pre_fips_indicator()
     if (wait_for_endpoint_ack(0, 500.0)) {
         bool fips0 = read_endpoint_fips(0);
         if (fips0 != false) {
-            CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_fips[0] should be 0, got " << fips0;
+            REG_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_fips[0] should be 0, got " << fips0;
             all_passed = false;
         }
 
         // Verify data is valid despite FIPS=0
         uint32_t data0 = read_endpoint_data(0);
         if (data0 == 0) {
-            CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_bus[0] should contain valid data";
+            REG_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_bus[0] should contain valid data";
             all_passed = false;
         }
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: Timeout waiting for edn_ack[0]";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_005: Timeout waiting for edn_ack[0]";
         all_passed = false;
     }
 
@@ -516,11 +516,11 @@ bool test_edn_func_012::test_boot_mode_pre_fips_indicator()
     if (wait_for_endpoint_ack(3, 500.0)) {
         bool fips3 = read_endpoint_fips(3);
         if (fips3 != false) {
-            CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_fips[3] should be 0, got " << fips3;
+            REG_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_fips[3] should be 0, got " << fips3;
             all_passed = false;
         }
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: Timeout waiting for edn_ack[3]";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_005: Timeout waiting for edn_ack[3]";
         all_passed = false;
     }
 
@@ -534,11 +534,11 @@ bool test_edn_func_012::test_boot_mode_pre_fips_indicator()
     if (wait_for_endpoint_ack(7, 500.0)) {
         bool fips7 = read_endpoint_fips(7);
         if (fips7 != false) {
-            CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_fips[7] should be 0, got " << fips7;
+            REG_ERROR(1, logger) << "TC_EDN_BOOT_005: edn_fips[7] should be 0, got " << fips7;
             all_passed = false;
         }
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: Timeout waiting for edn_ack[7]";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_005: Timeout waiting for edn_ack[7]";
         all_passed = false;
     }
 
@@ -546,9 +546,9 @@ bool test_edn_func_012::test_boot_mode_pre_fips_indicator()
     wait(10, SC_NS);
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_005: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_005: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_005: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_005: FAILED";
     }
 
     return all_passed;
@@ -560,7 +560,7 @@ bool test_edn_func_012::test_boot_mode_pre_fips_indicator()
 
 bool test_edn_func_012::test_boot_mode_exit_sequence()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_006: Boot Mode Exit Sequence...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_006: Boot Mode Exit Sequence...";
 
     bool all_passed = true;
 
@@ -574,7 +574,7 @@ bool test_edn_func_012::test_boot_mode_exit_sequence()
 
     // Wait for stable boot operation
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_006: Failed to reach BootGenAckWait";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_006: Failed to reach BootGenAckWait";
         all_passed = false;
     }
 
@@ -584,7 +584,7 @@ bool test_edn_func_012::test_boot_mode_exit_sequence()
     register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_before);
     bool boot_mode_before = hw_cmd_sts_before & 0x1;
     if (!boot_mode_before) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_006: BOOT_MODE should be 1 before exit";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_006: BOOT_MODE should be 1 before exit";
         all_passed = false;
     }
 
@@ -603,7 +603,7 @@ bool test_edn_func_012::test_boot_mode_exit_sequence()
     register_read_32(HW_CMD_STS_OFFSET, hw_cmd_sts_after);
     bool boot_mode_after = hw_cmd_sts_after & 0x1;
     if (boot_mode_after) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_006: BOOT_MODE should be 0 after exit";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_006: BOOT_MODE should be 0 after exit";
         all_passed = false;
     }
 
@@ -618,20 +618,20 @@ bool test_edn_func_012::test_boot_mode_exit_sequence()
     uint32_t cmd_sts = (hw_cmd_sts_after >> 7) & 0x7;
 
     if (cmd_ack != 1) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_006: CMD_ACK should be 1, got " << cmd_ack;
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_006: CMD_ACK should be 1, got " << cmd_ack;
         all_passed = false;
     }
 
     if (cmd_sts != 0) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_006: CMD_STS should be 0, got 0x"
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_006: CMD_STS should be 0, got 0x"
                               << std::hex << cmd_sts;
         all_passed = false;
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_006: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_006: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_006: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_006: FAILED";
     }
 
     return all_passed;
@@ -643,7 +643,7 @@ bool test_edn_func_012::test_boot_mode_exit_sequence()
 
 bool test_edn_func_012::test_boot_mode_state_transitions()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_007: Boot Mode State Transitions...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_007: Boot Mode State Transitions...";
 
     bool all_passed = true;
 
@@ -663,10 +663,10 @@ bool test_edn_func_012::test_boot_mode_state_transitions()
     // Verify transition to boot mode operational state (BootGenAckWait)
     // Note: BootInsAckWait is transient; boot mode auto-progresses to BootGenAckWait
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_007: Timeout waiting for BootGenAckWait transition";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_007: Timeout waiting for BootGenAckWait transition";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_007: State transitioned to BootGenAckWait";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_007: State transitioned to BootGenAckWait";
     }
 
     // Verify state remains stable
@@ -705,16 +705,16 @@ bool test_edn_func_012::test_boot_mode_state_transitions()
 
     // Verify state transitions correctly on second cycle
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_007: Second boot cycle transition failed";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_007: Second boot cycle transition failed";
         all_passed = false;
     } else {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_007: Second boot cycle successful";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_007: Second boot cycle successful";
     }
 
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_007: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_007: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_007: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_007: FAILED";
     }
 
     return all_passed;
@@ -726,7 +726,7 @@ bool test_edn_func_012::test_boot_mode_state_transitions()
 
 bool test_edn_func_012::test_boot_mode_invalid_clen()
 {
-    CSML_INFO(1, logger) << "Starting TC_EDN_BOOT_008: Boot Mode Invalid CLEN...";
+    REG_INFO(1, logger) << "Starting TC_EDN_BOOT_008: Boot Mode Invalid CLEN...";
 
     bool all_passed = true;
 
@@ -734,12 +734,13 @@ bool test_edn_func_012::test_boot_mode_invalid_clen()
     apply_reset(100.0);
     wait(10, SC_NS);
 
-    // Write invalid BOOT_INS_CMD with clen = 1 (bits 11:8 = 1, so 0x100)
-    uint32_t invalid_boot_ins_cmd = 0x00000101; // clen=1, cmd=1
+    // Write invalid BOOT_INS_CMD with clen = 1 (bits [11:8])
+    uint32_t invalid_boot_ins_cmd = 0x00000011; // clen=1, cmd=1
     register_write_32(BOOT_INS_CMD_OFFSET, invalid_boot_ins_cmd);
 
-    // Write invalid BOOT_GEN_CMD with clen = 2 (bits 7:4 = 2, so 0x20)
-    uint32_t invalid_boot_gen_cmd = 0x00FFF023; // clen=2, cmd=3, glen=0xFFF
+    // BOOT_GEN_CMD clen lives in bits [11:8] (same as BOOT_INS_CMD). glen=0 so
+    // the generate loop does not spin 0xFFF RAND_bytes iterations.
+    uint32_t invalid_boot_gen_cmd = 0x00000203; // clen=2, cmd=3, glen=0
     register_write_32(BOOT_GEN_CMD_OFFSET, invalid_boot_gen_cmd);
 
     wait(10, SC_NS);
@@ -753,14 +754,20 @@ bool test_edn_func_012::test_boot_mode_invalid_clen()
     // As long as it doesn't crash and completes the state transitions, the test passes
     // The warnings should be logged by the model
     if (!wait_for_state(STATE_BOOT_GEN_ACK_WAIT, 1000.0)) {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_008: Timeout waiting for BootGenAckWait state";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_008: Timeout waiting for BootGenAckWait state";
         all_passed = false;
     }
 
+    // Force a non-zero CSRNG ack on the automatic Uninstantiate so
+    // boot_mode_uninstantiate() takes the error / handle_csrng_error path.
+    set_forced_csrng_ack_status(0x1);
+    exit_boot_mode();
+    wait(200, SC_NS);
+
     if (all_passed) {
-        CSML_INFO(1, logger) << "TC_EDN_BOOT_008: PASSED";
+        REG_INFO(1, logger) << "TC_EDN_BOOT_008: PASSED";
     } else {
-        CSML_ERROR(1, logger) << "TC_EDN_BOOT_008: FAILED";
+        REG_ERROR(1, logger) << "TC_EDN_BOOT_008: FAILED";
     }
 
     return all_passed;
@@ -777,7 +784,7 @@ void test_edn_func_012::enable_boot_mode()
     //                       [7:4]=BOOT_REQ_MODE, [3:0]=EDN_ENABLE
     uint32_t ctrl_value = 0x00009966; // EDN_ENABLE=0x6, BOOT_REQ_MODE=0x6, others=0x9
     register_write_32(CTRL_OFFSET, ctrl_value);
-    CSML_INFO(1, logger) << "Boot mode enabled (CTRL=0x" << std::hex << ctrl_value << ")";
+    REG_INFO(1, logger) << "Boot mode enabled (CTRL=0x" << std::hex << ctrl_value << ")";
 }
 
 void test_edn_func_012::exit_boot_mode()
@@ -785,7 +792,7 @@ void test_edn_func_012::exit_boot_mode()
     // Clear BOOT_REQ_MODE while keeping EDN_ENABLE
     uint32_t ctrl_value = 0x00009996; // EDN_ENABLE=0x6, BOOT_REQ_MODE=0x9
     register_write_32(CTRL_OFFSET, ctrl_value);
-    CSML_INFO(1, logger) << "Boot mode exit initiated (CTRL=0x" << std::hex << ctrl_value << ")";
+    REG_INFO(1, logger) << "Boot mode exit initiated (CTRL=0x" << std::hex << ctrl_value << ")";
 }
 
 bool test_edn_func_012::verify_state(uint32_t expected_state, const std::string& context)
@@ -797,12 +804,12 @@ bool test_edn_func_012::verify_state(uint32_t expected_state, const std::string&
     actual_state &= 0x1FF; // 9-bit state
 
     if (actual_state != expected_state) {
-        CSML_ERROR(1, logger) << "State verification failed (" << context << "): expected 0x"
+        REG_ERROR(1, logger) << "State verification failed (" << context << "): expected 0x"
                               << std::hex << expected_state << ", got 0x" << actual_state;
         return false;
     }
 
-    CSML_INFO(1, logger) << "State verified (" << context << "): 0x"
+    REG_INFO(1, logger) << "State verified (" << context << "): 0x"
                          << std::hex << actual_state;
     return true;
 }
@@ -820,13 +827,13 @@ bool test_edn_func_012::verify_hw_cmd_status(bool boot_mode_expected,
     bool passed = true;
 
     if (boot_mode != boot_mode_expected) {
-        CSML_ERROR(1, logger) << "HW_CMD_STS.BOOT_MODE verification failed (" << context
+        REG_ERROR(1, logger) << "HW_CMD_STS.BOOT_MODE verification failed (" << context
                               << "): expected " << boot_mode_expected << ", got " << boot_mode;
         passed = false;
     }
 
     if (cmd_type != cmd_type_expected) {
-        CSML_ERROR(1, logger) << "HW_CMD_STS.CMD_TYPE verification failed (" << context
+        REG_ERROR(1, logger) << "HW_CMD_STS.CMD_TYPE verification failed (" << context
                               << "): expected 0x" << std::hex << cmd_type_expected
                               << ", got 0x" << cmd_type;
         passed = false;
@@ -904,7 +911,7 @@ bool test_edn_func_012::verify_value(const std::string& context,
                                       uint32_t expected, uint32_t actual)
 {
     if (expected != actual) {
-        CSML_ERROR(1, logger) << "Value verification failed (" << context << "): expected 0x"
+        REG_ERROR(1, logger) << "Value verification failed (" << context << "): expected 0x"
                               << std::hex << expected << ", got 0x" << actual;
         return false;
     }
@@ -918,14 +925,14 @@ void test_edn_func_012::report_test_result(const std::string& test_name, bool pa
 
     if (passed) {
         m_tests_passed++;
-        CSML_INFO(1, logger) << test_name << ": PASSED";
+        REG_INFO(1, logger) << test_name << ": PASSED";
     } else {
         m_tests_failed++;
         m_failed_tests.push_back(test_name);
-        CSML_ERROR(1, logger) << test_name << ": FAILED";
+        REG_ERROR(1, logger) << test_name << ": FAILED";
     }
 
     if (!message.empty()) {
-        CSML_INFO(1, logger) << "  " << message;
+        REG_INFO(1, logger) << "  " << message;
     }
 }

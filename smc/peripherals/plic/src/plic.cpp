@@ -341,6 +341,7 @@ void plic::complete(unsigned ctx, uint32_t src)
 {
     (void)ctx;
     if (src == 0 || src > cfg_.num_sources) return;
+    if (!claim_in_flight_[src]) return;
 
     claim_in_flight_[src] = false;
 

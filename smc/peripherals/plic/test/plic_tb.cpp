@@ -243,6 +243,17 @@ struct tb : sc_core::sc_module {
         }
         std::cout << "  [PASS] reset clears state\n";
 
+        // Completion is valid only after a claim. Hold a source high across
+        // reset so pending and in-flight are clear, then issue a spurious
+        // completion and prove it cannot manufacture a pending interrupt.
+        raise(3, true);
+        pulse_reset();
+        EXPECT_EQ(false, dut.dbg_pending(3));
+        drv.write32(cc_addr(0), 3);
+        EXPECT_EQ(false, dut.dbg_pending(3));
+        raise(3, false);
+        std::cout << "  [PASS] unclaimed completion is ignored\n";
+
         // ------------------------------------------------------------------
         // 2. Priority R/W with 3-bit truncation.
         // ------------------------------------------------------------------
