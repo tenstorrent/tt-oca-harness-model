@@ -239,41 +239,15 @@ bool memory_zeroer::check_access(const tlm::tlm_generic_payload& gp,
     const uint64_t adr = gp.get_address();
     const unsigned len = gp.get_data_length();
 
-bool memory_zeroer::reg_write(uint64_t offset, uint64_t data)
-{
-    return regmap_.write(offset, data);
-}
-
-void memory_zeroer::b_transport(tlm::tlm_generic_payload& gp,
-                                sc_core::sc_time& delay)
-{
-    gp.set_dmi_allowed(false);
-
-    const tlm::tlm_command cmd = gp.get_command();
-    const uint64_t         adr = gp.get_address();
-    const unsigned         len = gp.get_data_length();
-    unsigned char* const   ptr = gp.get_data_ptr();
-
-    if (ptr == nullptr) {
-        gp.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
-        return;
+    if (gp.get_data_ptr() == nullptr || len == 0) {
+        status = tlm::TLM_GENERIC_ERROR_RESPONSE;
+        return false;
     }
 
     // 64-bit register file — require naturally aligned 8-byte accesses.
-    // A zero length is a burst error, same as a short or unaligned beat.
-    if (len == 0 || len != 8 || (adr & 0x7u) != 0) {
-        gp.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
-        return;
-    }
-
-    // Subtraction form: `adr + len` wraps near UINT64_MAX and would otherwise
-    // accept an address that is outside the aperture.
-    if (adr >= memory_zeroer_cfg::WINDOW_SIZE ||
-        len > memory_zeroer_cfg::WINDOW_SIZE - adr) {
-        gp.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
-        SIM_LOG_DEBUG(this,
-                      "TLM decode miss at off=0x" << std::hex << adr);
-        return;
+    if (len != 8 || (adr & 0x7u) != 0) {
+        status = tlm::TLM_BURST_ERROR_RESPONSE;
+        return false;
     }
 
     if (gp.get_byte_enable_ptr() != nullptr) {
