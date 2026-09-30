@@ -23,9 +23,10 @@ local_alias_remap_ip     match, additive offset, cacheable override
 ====== Threads and sockets
 
 `SC_METHOD(reset_handler)` on `rst_ni`. `data_b_transport` /
-`data_transport_dbg` translate [55:12], keep [11:0], apply
-`cacheable` on `sep_axi_extension`, forward, then restore the
-caller's payload.
+`data_transport_dbg` translate [55:12], keep [11:0], replace the
+4-bit AxCACHE (`sep_axi_extension::axi_cache`) with
+`REGION_ATTRS.cacheable[59:56]` (tt-oca-hw #2464), forward, then
+restore the caller's payload.
 
 `sep-vp` maps the CSR window onto `target_socket`. The data window
 goes through `local_alias_fixed_adapter` (live

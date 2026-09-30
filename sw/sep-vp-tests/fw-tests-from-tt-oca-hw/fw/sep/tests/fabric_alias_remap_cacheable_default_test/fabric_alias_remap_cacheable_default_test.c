@@ -95,9 +95,10 @@ int main(void)
         pass = 0;
     }
 
-    attrs = (1ULL << 63) | (1ULL << 62);
+    /* cacheable is the 4-bit field at [59:56] (tt-oca-hw #2464); bit 62 is reserved. */
+    attrs = (1ULL << 63) | REMAP_REGION_REGION_ATTRS_CACHEABLE_MASK;
     write64_split(LOCAL_MASTER_ALIAS_REMAP_CTRL_15__REGION_REGION_ATTRS_REG_ADDR, attrs);
-    if (!check_eq32("Alias cacheable=1 attrs hi",
+    if (!check_eq32("Alias cacheable=0xf attrs hi",
                     READ_REG(LOCAL_MASTER_ALIAS_REMAP_CTRL_15__REGION_REGION_ATTRS_REG_ADDR + 4),
                     (uint32_t)(attrs >> 32))) {
         pass = 0;

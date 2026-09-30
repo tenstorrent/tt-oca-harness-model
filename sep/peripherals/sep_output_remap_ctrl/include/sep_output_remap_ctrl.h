@@ -21,17 +21,22 @@
  *
  *   sep_output_remap_ctrl_base
  *       regmodel::Memory<64>  memory
- *       target_socket    ──► SW reads/writes REGION_ATTRS[0..15] offsets
- *       REGION_ATTRS[16] ──► 16-entry 56-bit offset table
+ *       target_socket    ──► SW reads/writes REGION_ATTRS[0..15]
+ *       REGION_ATTRS[16] ──► 16-entry table: offset[55:0] + valid[63]
  *
  *   sep_output_remap_ctrl_ip  (this class)
  *       data_socket      ──► incoming AXI transactions (AP or STEE window)
  *       remapped_socket  ──► translated AXI to fabric
  *
- * Remap algorithm (from output_remap.sv):
+ * Remap algorithm (from output_remap.sv, tt-oca-hw #2572):
  *   adjusted = addr - REGION_BASE
  *   idx      = adjusted[IDX_START + log2(NUM_REGIONS) - 1 : IDX_START]
- *   remapped = { REGION_ATTRS[idx][55:IDX_START], adjusted[IDX_START-1:0] }
+ *   remapped = REGION_ATTRS[idx].valid
+ *              ? { REGION_ATTRS[idx].offset[55:IDX_START], adjusted[IDX_START-1:0] }
+ *              : addr                         // valid clear: pass through unchanged
+ *
+ * REGION_ATTRS.valid resets to 0, so an unprogrammed entry is an identity
+ * mapping. The source-ID re-tag (UserOverride) applies regardless of valid.
  */
 
 #pragma once

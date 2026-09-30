@@ -44,16 +44,19 @@ Source: `test/src/sep_output_remap_ctrl_testbench.cpp`.
 |ID |Name |What the model test proves |Type
 |T1 |Reset |All REGION_ATTRS 0 |Positive
 |T2 |Region 0 RW |Write / readback |Positive
+|T2b |valid[63] RW |Set / clear independent of offset |Positive
 |T3 |All 16 regions |Independent slots |Positive
-|T4 |56-bit mask |offset field |Positive
-|T5 |Datapath remap READ |Region 0 |Positive
-|T6 |Datapath remap WRITE |Region 3 |Positive
+|T4 |Field mask |offset[55:0] + valid[63]; [62:56] dropped |Positive
+|T5a |valid=0 passthrough |Programmed offset not applied (READ) |Negative
+|T5 |Datapath remap READ |Region 0, valid=1 |Positive
+|T6 / T6b |Datapath remap WRITE |Region 3, valid=1; clearing valid restores identity |Positive
 |T7 |Address restored |Caller payload unchanged |Positive
 |T8 |Byte-enable / mask |regmodel 64-bit store |Positive
-|T9 |transport_dbg |Same remap |Positive
-|T10 |rst_ni |Clears programmed regions |Positive
+|T9 / T9b |transport_dbg |Same remap; same valid gate |Positive
+|T10 / T10b |rst_ni |Clears programmed regions; data path identity after reset |Positive
 |T11–T13 |source-id re-tag |OTHERS downstream; restore; no-extension |Positive
-|B1–B3 |STEE instance |Independent of AP |Positive
+|T14 |re-tag vs valid |valid=0 still re-tags, address untouched |Positive
+|B1–B3 |STEE instance |Independent of AP; reset-state passthrough |Positive
 |===
 
 ====== Platform firmware tests

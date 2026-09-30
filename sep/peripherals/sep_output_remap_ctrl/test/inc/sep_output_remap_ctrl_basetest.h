@@ -19,12 +19,12 @@ public:
 
     enum Register_Read_Access
     {
-        REGION_ATTRS_READ = 0xffffffffffffff
+        REGION_ATTRS_READ = 0x80ffffffffffffffULL
     };
 
     enum Register_Write_Access
     {
-        REGION_ATTRS_WRITE = 0xffffffffffffff
+        REGION_ATTRS_WRITE = 0x80ffffffffffffffULL
     };
 
     enum Register_Reset_Val

@@ -82,14 +82,18 @@ void sep_output_remap_ctrl_ip::reset()
 // =============================================================================
 // remap_address()
 //
-// Implements the output_remap.sv algorithm exactly:
+// Implements the output_remap.sv algorithm exactly (tt-oca-hw #2572):
 //
 //   adjusted = addr - REGION_BASE
 //   idx      = adjusted[IDX_START + log2(N) - 1 : IDX_START]
-//   remapped = { REGION_ATTRS[idx][55:IDX_START],
-//                adjusted[IDX_START-1:0] }
+//   remapped = REGION_ATTRS[idx].valid
+//              ? { REGION_ATTRS[idx].offset[55:IDX_START],
+//                  adjusted[IDX_START-1:0] }
+//              : addr                       // entry not valid: pass through
 //
 // For SEP: IDX_START=19, N=16  →  idx = adjusted[22:19], lower 19 bits kept.
+// An unprogrammed entry (reset: valid=0) is an identity mapping, not a remap
+// to offset 0. The UserOverride source-ID re-tag is independent of valid.
 // =============================================================================
 uint64_t sep_output_remap_ctrl_ip::remap_address(uint64_t addr) const
 {
@@ -99,8 +103,10 @@ uint64_t sep_output_remap_ctrl_ip::remap_address(uint64_t addr) const
         (adjusted & idx_mask_) >> IDX_START
     ) % NUM_REGIONS;
 
-    const uint64_t offset = static_cast<uint64_t>(REGION_ATTRS[idx])
-                            & 0x00FFFFFFFFFFFFFFULL;
+    if (static_cast<uint64_t>(REGION_ATTRS[idx].valid) == 0ULL)
+        return addr;
+
+    const uint64_t offset = static_cast<uint64_t>(REGION_ATTRS[idx].offset);
 
     const uint64_t upper_bits = offset   & ~lower_mask_;
     const uint64_t lower_bits = adjusted &  lower_mask_;

@@ -95,8 +95,12 @@ inline slave classify(uint64_t addr) {
     if (in_window(addr, 0x10B00000ULL, 0xFFFFFULL))    return slave::sep_io;
     if (in_window(addr, 0x20000000ULL, 0x20000000ULL)) return slave::sep_external;
     // sep_system_peripherals claims five disjoint ranges.
+    // csr_region ends at 0x10A50000 (mailbox 0x10A00000 + system_csr
+    // 0x10A10000..0x10A4FFFF); the yaml used to extend it to 0x10A60000, but
+    // tt-oca-hw #2587 trimmed the rule so 0x10A50000..0x10A5FFFF now belongs to
+    // no subordinate and is a crossbar DECERR in RTL.
     if (in_window(addr, 0x10802000ULL, 0x100ULL)       // scratch_region
-     || in_window(addr, 0x10A00000ULL, 0x60000ULL)     // csr_region
+     || in_window(addr, 0x10A00000ULL, 0x50000ULL)     // csr_region
      || in_window(addr, 0x11000000ULL, 0x1000000ULL)   // remap_region (AP + STEE)
      || in_window(addr, 0x00000000ULL, 0x10000000ULL)  // external_chiplet
      || in_window(addr, 0x40000000ULL, 0x80000000ULL)) // external_smu
