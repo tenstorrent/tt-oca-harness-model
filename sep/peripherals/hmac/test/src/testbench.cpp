@@ -434,14 +434,35 @@ void testbench::test_sha256_endian_swap()
     //REG_INFO(1, logger) << "\n--- Step 5: Read Digest Output ---" << std::endl;
     //REG_INFO(1, logger) << "Reading DIGEST registers (SHA-2 256 uses DIGEST_0 to DIGEST_7):" << std::endl;
 
+    // endian_swap byte-reverses the packed word, so these three words hash the
+    // same 12-byte stream as an unswapped write of 0x48656C6C, 0x6F20576F,
+    // 0x726C6421. SHA-256 of 6c6c6548 6f57206f 21646c72.
+    const uint32_t expected_digest[8] = {
+        0xd533634f, 0xef637c79, 0xceaa4f57, 0x59a43bc2,
+        0x822701a7, 0x7acb3e18, 0xcfe400f8, 0xeee10c28
+    };
+    uint32_t err_val = 0;
     for (int i = 0; i < 8; i++) {
         uint32_t digest_val = 0;
         test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), digest_val);
         wait(5, SC_NS);
-        REG_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val << std::dec << std::endl;
+        if (digest_val != expected_digest[i]) {
+            err_val++;
+            REG_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val
+                                  << " (expected 0x" << expected_digest[i] << ")" << std::dec << std::endl;
+        } else {
+            REG_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val
+                                 << " (EXPECTED)" << std::dec << std::endl;
+        }
+    }
+    if (err_val > 0) {
+        m_tests_failed++;
+        REG_ERROR(0, logger) << "TEST FAILED : SHA-256 endian_swap" << std::endl;
+    } else {
+        REG_INFO(1, logger) << "TEST PASSED : SHA-256 endian_swap" << std::endl;
     }
 
-    REG_INFO(1, logger) << "\n--- Test Complete: SHA-256 Hash (Short Message) ---" << std::endl;
+    REG_INFO(1, logger) << "\n--- Test Complete: SHA-256 endian_swap ---" << std::endl;
 }
 
 /**
@@ -531,16 +552,34 @@ void testbench::test_sha256_digest_swap()
     //REG_INFO(1, logger) << "\n--- Step 5: Read Digest Output ---" << std::endl;
     //REG_INFO(1, logger) << "Reading DIGEST registers (SHA-2 256 uses DIGEST_0 to DIGEST_7):" << std::endl;
 
+    // Same 12-byte message as the endian_swap case. digest_swap byte-reverses
+    // each stored SHA-256 word on read.
+    const uint32_t expected_digest[8] = {
+        0x4f6333d5, 0x797c63ef, 0x574faace, 0xc23ba459,
+        0xa7012782, 0x183ecb7a, 0xf800e4cf, 0x280ce1ee
+    };
+    uint32_t err_val = 0;
     for (int i = 0; i < 8; i++) {
         uint32_t digest_val = 0;
         test->read_register_32(hmac_basetest::DIGEST_OFFSET + (i * 4), digest_val);
         wait(5, SC_NS);
-        REG_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val << std::dec << std::endl;
+        if (digest_val != expected_digest[i]) {
+            err_val++;
+            REG_ERROR(0, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val
+                                  << " (expected 0x" << expected_digest[i] << ")" << std::dec << std::endl;
+        } else {
+            REG_INFO(1, logger) << "  DIGEST[" << i << "] = 0x" << std::hex << digest_val
+                                 << " (EXPECTED)" << std::dec << std::endl;
+        }
+    }
+    if (err_val > 0) {
+        m_tests_failed++;
+        REG_ERROR(0, logger) << "TEST FAILED : SHA-256 digest_swap" << std::endl;
+    } else {
+        REG_INFO(1, logger) << "TEST PASSED : SHA-256 digest_swap" << std::endl;
     }
 
-    REG_INFO(1, logger) << "\n--- Test Complete: SHA-256 Hash (Short Message) ---" << std::endl;
-    REG_INFO(1, logger) << "NOTE: Digest validation requires Botan library integration" << std::endl;
-    REG_INFO(1, logger) << "Current stub implementation returns placeholder values" << std::endl;
+    REG_INFO(1, logger) << "\n--- Test Complete: SHA-256 digest_swap ---" << std::endl;
 }
 
 
@@ -603,7 +642,8 @@ void testbench::test_hmac_done_interrupt()
     if (intr_done) {
         REG_INFO(1, logger) << "PASS: intr_hmac_done port asserted" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: intr_hmac_done not asserted (expected with stub implementation)" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: intr_hmac_done not asserted" << std::endl;
+        m_tests_failed++;
     }
 
     // Step 7: Clear interrupt via W1C
@@ -622,7 +662,8 @@ void testbench::test_hmac_done_interrupt()
     if (cleared) {
         REG_INFO(1, logger) << "PASS: INTR_STATE.hmac_done cleared via W1C" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: INTR_STATE.hmac_done not cleared (may require full implementation)" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: INTR_STATE.hmac_done not cleared" << std::endl;
+        m_tests_failed++;
     }
 
     // Verify interrupt port deasserts
@@ -632,7 +673,8 @@ void testbench::test_hmac_done_interrupt()
     if (!intr_done) {
         REG_INFO(1, logger) << "PASS: intr_hmac_done deasserted after clear" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: intr_hmac_done still asserted (may require full implementation)" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: intr_hmac_done still asserted after clear" << std::endl;
+        m_tests_failed++;
     }
 
     REG_INFO(1, logger) << "\n--- Test Complete: HMAC Done Interrupt ---" << std::endl;
@@ -692,15 +734,22 @@ void testbench::test_interrupt_masking()
 
     wait_for_hmac_done();
 
-    REG_INFO(1, logger) << "PASS: INTR_STATE.hmac_done flag is set" << std::endl;
-
+    test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+    wait(5, SC_NS);
+    if ((read_val & 0x1) != 0) {
+        REG_INFO(1, logger) << "PASS: INTR_STATE.hmac_done flag is set" << std::endl;
+    } else {
+        REG_ERROR(0, logger) << "FAIL: INTR_STATE.hmac_done flag is clear" << std::endl;
+        m_tests_failed++;
+    }
 
     bool intr_port = test->intr_hmac_done.read();
     //REG_INFO(1, logger) << "intr_hmac_done port (while masked) = " << intr_port << std::endl;
     if (!intr_port) {
         REG_INFO(1, logger) << "PASS: intr_hmac_done port not asserted while masked" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: intr_hmac_done port asserted despite mask (unexpected)" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: intr_hmac_done port asserted despite mask" << std::endl;
+        m_tests_failed++;
     }
 
     // Step 4: Enable the hmac_done interrupt and verify port responds while INTR_STATE persists
@@ -719,7 +768,8 @@ void testbench::test_interrupt_masking()
     if (intr_port) {
         REG_INFO(1, logger) << "PASS: intr_hmac_done port asserted after enabling interrupt (INTR_STATE persisted)" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: intr_hmac_done did not assert after enabling - implementation may only edge-trigger" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: intr_hmac_done did not assert after enabling" << std::endl;
+        m_tests_failed++;
     }
 
     // Step 5: Clear INTR_STATE via W1C and verify port deasserts
@@ -736,7 +786,8 @@ void testbench::test_interrupt_masking()
     if (cleared) {
         REG_INFO(1, logger) << "PASS: INTR_STATE.hmac_done cleared via W1C" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: INTR_STATE.hmac_done not cleared" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: INTR_STATE.hmac_done not cleared" << std::endl;
+        m_tests_failed++;
     }
 
     intr_port = test->intr_hmac_done.read();
@@ -744,7 +795,8 @@ void testbench::test_interrupt_masking()
     if (!intr_port) {
         REG_INFO(1, logger) << "PASS: intr_hmac_done deasserted after clearing INTR_STATE" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: intr_hmac_done still asserted after clearing INTR_STATE" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: intr_hmac_done still asserted after clearing INTR_STATE" << std::endl;
+        m_tests_failed++;
     }
 
     REG_INFO(1, logger) << "\n--- Test Complete: interrupt_masking ---" << std::endl;
@@ -2597,11 +2649,16 @@ void testbench::test_fifo_empty_interrupt()
     wait(5, SC_NS);
     REG_INFO(1, logger) << "INTR_STATE = 0x" << std::hex << read_val << std::dec << std::endl;
 
-    if (intr_fifo_empty || (read_val & 0x2)) {
-        REG_INFO(1, logger) << "PASS: fifo_empty interrupt detected" << std::endl;
+    // hash_process closes the FIFO and clears the was-full gate, so the
+    // fifo_empty interrupt stays clear. STATUS.fifo_empty is the ungated bit.
+    wait_for_hmac_done();
+    test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, read_val);
+    wait(5, SC_NS);
+    if ((read_val & 0x2) == 0 && !test->intr_fifo_empty.read()) {
+        REG_INFO(1, logger) << "PASS: fifo_empty interrupt stays gated off across hash_process" << std::endl;
     } else {
-        REG_INFO(1, logger) << "INFO: fifo_empty interrupt not asserted (depends on implementation)" << std::endl;
-        REG_INFO(1, logger) << "NOTE: Interrupt should assert when FIFO empties during message processing" << std::endl;
+        REG_ERROR(0, logger) << "FAIL: fifo_empty interrupt asserted across hash_process" << std::endl;
+        m_tests_failed++;
     }
 
     // Step 8: Verify FIFO is actually empty
@@ -2609,6 +2666,13 @@ void testbench::test_fifo_empty_interrupt()
     wait(5, SC_NS);
     fifo_empty_flag = (read_val >> 1) & 0x1;
     fifo_depth = (read_val >> 4) & 0x3F;
+    if (fifo_empty_flag && fifo_depth == 0) {
+        REG_INFO(1, logger) << "PASS: STATUS.fifo_empty after hash_process" << std::endl;
+    } else {
+        REG_ERROR(0, logger) << "FAIL: STATUS.fifo_empty=" << fifo_empty_flag
+                             << " depth=" << fifo_depth << " after hash_process" << std::endl;
+        m_tests_failed++;
+    }
 
     REG_INFO(1, logger) << "\nFinal FIFO status: depth=" << fifo_depth;
     REG_INFO(1, logger) << ", empty=" << fifo_empty_flag << std::endl;
@@ -6262,7 +6326,8 @@ int sc_main(int argc, char* argv[])
     // Two independent failure paths: checks written inline in the tests bump
     // m_tests_failed, while assert_equal/assert_not_equal stop the simulation and
     // record separately. Both must be consulted or a failing run exits zero.
-    const uint32_t failures = tb.m_tests_failed + (tb.test ? tb.test->m_assert_failures : 0);
+    const uint32_t failures = tb.m_tests_failed
+        + (tb.test ? tb.test->m_assert_failures + tb.test->m_transport_failures : 0);
     if (failures > 0) {
         REG_ERROR(0, logger) << "\nTESTBENCH FAILED: " << failures << " failure(s)" << std::endl;
     } else {
@@ -6277,21 +6342,31 @@ void testbench::wait_for_hmac_idle()
 {
     REG_INFO(1, logger) << "\n--- Waiting for HMAC to be IDLE ---" << std::endl;
     uint32_t status_val = 0;
-    do {
+    for (int spins = 0; spins < 100000; ++spins) {
         test->read_register_32(hmac_basetest::STATUS_OFFSET, status_val);
-        wait(5, SC_NS); // Wait a short period before re-checking
-    } while (!(status_val & 0x1)); // Assuming bit 0 of STATUS_OFFSET indicates IDLE
-    REG_INFO(1, logger) << "HMAC is IDLE." << std::endl;
+        if (status_val & 0x1) {
+            REG_INFO(1, logger) << "HMAC is IDLE." << std::endl;
+            return;
+        }
+        wait(5, SC_NS);
+    }
+    REG_ERROR(0, logger) << "HMAC idle wait timed out" << std::endl;
+    m_tests_failed++;
 }
 
 void testbench::wait_for_hmac_done()
 {
     uint32_t intr_state = 0;
-    do {
+    for (int spins = 0; spins < 5000; ++spins) {
         wait(100, SC_NS);
         test->read_register_32(hmac_basetest::INTR_STATE_OFFSET, intr_state);
-    } while ((intr_state & 0x1) == 0);
-    REG_INFO(1, logger) << "HMAC operation completed" << std::endl;
+        if (intr_state & 0x1) {
+            REG_INFO(1, logger) << "HMAC operation completed" << std::endl;
+            return;
+        }
+    }
+    REG_ERROR(0, logger) << "HMAC done wait timed out" << std::endl;
+    m_tests_failed++;
 }
 
 // ========================================
@@ -7081,18 +7156,39 @@ void testbench::test_coverage_reject_paths()
     wait(20, SC_NS);
     wait_for_hmac_idle();
 
-    // hash_process / hash_continue while IDLE with sha_en clear.
-    test->write_register_32(hmac_basetest::CFG_OFFSET, 0);
+    uint32_t read_val = 0;
+
+    // Valid SHA-256 digest with sha_en clear. Digest 0 is SwInvalidConfig and
+    // outranks the sha-disabled code, so this uses a legal digest size.
+    test->write_register_32(hmac_basetest::CFG_OFFSET, (0x1u << 5));
     wait(5, SC_NS);
     test->write_register_32(hmac_basetest::CMD_OFFSET, 0x2); // hash_process
     wait(5, SC_NS);
     test->write_register_32(hmac_basetest::CMD_OFFSET, 0x8); // hash_continue
+    wait(5, SC_NS);
+    test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
+    wait(5, SC_NS);
+    if (read_val != 0x2) {
+        REG_ERROR(0, logger) << "FAIL: hash_continue with sha_en clear, ERR_CODE=0x"
+                             << std::hex << read_val << std::dec << std::endl;
+        m_tests_failed++;
+    }
+    test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x4); // W1C hmac_err
     wait(5, SC_NS);
 
     // hash_continue with digest_size=SHA2_None (0x8) — SwInvalidConfig.
     test->write_register_32(hmac_basetest::CFG_OFFSET, (1u << 1) | (0x8u << 5));
     wait(5, SC_NS);
     test->write_register_32(hmac_basetest::CMD_OFFSET, 0x8);
+    wait(5, SC_NS);
+    test->read_register_32(hmac_basetest::ERR_CODE_OFFSET, read_val);
+    wait(5, SC_NS);
+    if (read_val != 0x6) {
+        REG_ERROR(0, logger) << "FAIL: hash_continue with digest_size 0x8, ERR_CODE=0x"
+                             << std::hex << read_val << std::dec << std::endl;
+        m_tests_failed++;
+    }
+    test->write_register_32(hmac_basetest::INTR_STATE_OFFSET, 0x4);
     wait(5, SC_NS);
 
     // hash_continue with a reserved digest_size (0x3) — import_state rejects.
@@ -7156,6 +7252,11 @@ void testbench::test_coverage_reject_paths()
     // Sideload bus is write-only; a read must be rejected.
     uint32_t ignored = 0;
     test->keymgr_read_word(hmac_test::KEYMGR_CTRL_OFFSET, ignored);
+    if (test->m_last_response != tlm::TLM_COMMAND_ERROR_RESPONSE) {
+        REG_ERROR(0, logger) << "FAIL: keymgr read status "
+                             << static_cast<int>(test->m_last_response) << std::endl;
+        m_tests_failed++;
+    }
 
     REG_INFO(1, logger) << "PASS: coverage reject / SHA-384 stop paths exercised" << std::endl;
 }

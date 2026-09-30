@@ -24,6 +24,7 @@ void hmac_test::read_register_32(unsigned int offset, uint32_t &read_value)
     if (payload.get_response_status() != tlm::TLM_OK_RESPONSE) {
         REG_ERROR(0, logger) << "ERROR: Read transaction failed at offset 0x"
                   << std::hex << offset << std::dec << std::endl;
+        m_transport_failures++;
     }
 }
 
@@ -47,6 +48,7 @@ void hmac_test::write_register_32(unsigned int offset, uint32_t write_value)
     if (payload.get_response_status() != tlm::TLM_OK_RESPONSE) {
         REG_ERROR(0, logger) << "ERROR: Write transaction failed at offset 0x"
                   << std::hex << offset << std::dec << std::endl;
+        m_transport_failures++;
     }
 }
 
@@ -71,6 +73,7 @@ void hmac_test::write_register_8(unsigned int offset, uint8_t write_value)
     if (payload.get_response_status() != tlm::TLM_OK_RESPONSE) {
         REG_ERROR(0, logger) << "ERROR: Byte write transaction failed at offset 0x"
                   << std::hex << offset << std::dec << std::endl;
+        m_transport_failures++;
     }
 }
 
@@ -94,6 +97,7 @@ void hmac_test::write_register_16(unsigned int offset, uint16_t write_value)
     if (payload.get_response_status() != tlm::TLM_OK_RESPONSE) {
         REG_ERROR(0, logger) << "ERROR: Halfword write transaction failed at offset 0x"
                   << std::hex << offset << std::dec << std::endl;
+        m_transport_failures++;
     }
 }
 
@@ -119,6 +123,7 @@ void hmac_test::keymgr_write_word(uint64_t offset, uint32_t value)
     if (payload.get_response_status() != tlm::TLM_OK_RESPONSE) {
         REG_ERROR(0, logger) << "ERROR: keymgr write failed at offset 0x"
                   << std::hex << offset << std::dec << std::endl;
+        m_transport_failures++;
     }
 }
 
@@ -137,6 +142,7 @@ void hmac_test::keymgr_read_word(uint64_t offset, uint32_t &value)
     payload.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
     keymgr_initiator_socket->b_transport(payload, delay);
+    m_last_response = payload.get_response_status();
 }
 
 // Assert function to validate expected vs actual values

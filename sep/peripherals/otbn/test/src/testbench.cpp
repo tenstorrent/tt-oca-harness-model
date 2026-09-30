@@ -2810,60 +2810,15 @@ void testbench::test_load_checksum_updates() {
   apply_reset();
   wait_for_idle("checksum");
 
-  // ---------------- Software CRC (same as model) ----------------
-  auto crc32_model_exact = [&](uint32_t crc, uint32_t data_word, uint16_t idx) {
-    // Matches Python binascii.crc32() algorithm which processes bytes
-    uint64_t input = 0;
-    input |= (1ull << 47);          // is_imem=1
-    input |= ((uint64_t)idx << 32); // IMEM word index
-    input |= data_word;             // RAW 32-bit word (NO SWAP!)
-
-    // Convert 48-bit value to 6 bytes in little-endian format (matching Python
-    // to_bytes(6, 'little')) Python's to_bytes(6, 'little') gives bytes in
-    // order: [bits 0-7, bits 8-15, ..., bits 40-47] The hex string
-    // "370100000080" shows these bytes in the order they appear: 0x37, 0x01,
-    // 0x00, 0x00, 0x00, 0x80
-    uint8_t bytes[6];
-    bytes[0] = (input >> 0) & 0xFF;  // bits 0-7 (LSB byte)
-    bytes[1] = (input >> 8) & 0xFF;  // bits 8-15
-    bytes[2] = (input >> 16) & 0xFF; // bits 16-23
-    bytes[3] = (input >> 24) & 0xFF; // bits 24-31
-    bytes[4] = (input >> 32) & 0xFF; // bits 32-39
-    bytes[5] = (input >> 40) & 0xFF; // bits 40-47 (MSB byte)
-
-    // Process bytes using reflected CRC-32-IEEE (matching Python
-    // binascii.crc32) binascii.crc32 uses reflected polynomial 0xEDB88320 and
-    // processes bits LSB-first
-    const uint32_t poly_reflected = 0xEDB88320; // Reflected polynomial
-    for (int byte_idx = 0; byte_idx < 6; byte_idx++) {
-      crc ^= bytes[byte_idx];
-      // Process 8 bits, LSB-first (reflected algorithm)
-      for (int bit_idx = 0; bit_idx < 8; bit_idx++) {
-        if (crc & 1) {
-          crc = (crc >> 1) ^ poly_reflected;
-        } else {
-          crc >>= 1;
-        }
-      }
-    }
-    return crc;
-  };
-
-  // Model CRC initial value (correct IEEE init)
-  uint32_t crc_sw = 0xFFFFFFFF;
-
-  // ---------------- IMEM write sequence ----------------
+  // Independent CRC-32/ISO-HDLC of the three IMEM words below.
+  // Each word is packed as a 48-bit little-endian value
+  // {data[31:0], index[14:0], is_imem=1} and fed to binascii.crc32.
+  // The constant is 0x489e5550. It is not computed by the model's loop.
   const uint32_t seq[] = {0x12345678, 0xAABBCCDD, 0xCAFEBABE};
 
   for (int i = 0; i < 3; i++) {
-    uint32_t data = seq[i];
-
-    // Hardware write
-    test_model->register_write_32(otbn_basetest::IMEM_OFFSET + i * 4, data);
+    test_model->register_write_32(otbn_basetest::IMEM_OFFSET + i * 4, seq[i]);
     wait(2, SC_NS);
-
-    // Software CRC - NO byte swapping!
-    crc_sw = crc32_model_exact(crc_sw, data, i);
   }
 
   // ---------------- Read HW CRC ----------------
@@ -2871,9 +2826,7 @@ void testbench::test_load_checksum_updates() {
   test_model->register_read_32(otbn_basetest::LOAD_CHECKSUM_OFFSET,
                                actual_hw_crc);
 
-  // Apply final XOR with 0xFFFFFFFF to match Python's binascii.crc32 (which
-  // applies final XOR internally)
-  uint32_t expected_hw_crc = crc_sw ^ 0xFFFFFFFF;
+  const uint32_t expected_hw_crc = 0x489e5550;
   REG_INFO(1, logger) << "  Expected HW CRC = 0x" << std::hex
                        << expected_hw_crc << std::endl;
   if (actual_hw_crc != expected_hw_crc) {

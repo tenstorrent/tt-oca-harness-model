@@ -370,10 +370,6 @@ void testbench::test_reset_functionality()
     test->rst_ni.write(false);
     wait(10, SC_NS);
 
-    // Call reset function explicitly
-    dut->reset_all_registers();
-    wait(10, SC_NS);
-
     // Step 4: Deassert reset signal
     REG_INFO(1, logger) << "--- Step 4: Deasserting reset (rst_ni = 1) ---" << std::endl;
     test->rst_ni.write(true);
@@ -483,13 +479,7 @@ void testbench::test_reset_mechanisms()
     // CFG (reset value = 0x4100)
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    if (read_val == hmac_basetest::CFG_RESET) {
-        test->assert_equal(hmac_basetest::CFG_RESET, read_val, "CFG power-on reset");
-    } else {
-        REG_INFO(1, logger) << "INFO: CFG reset value is 0x" << std::hex << read_val
-                  << " (expected 0x" << hmac_basetest::CFG_RESET << ")" << std::dec << std::endl;
-        REG_INFO(1, logger) << "This is acceptable - CFG reset value will be validated separately" << std::endl;
-    }
+    test->assert_equal(hmac_basetest::CFG_RESET, read_val, "CFG power-on reset");
 
     // STATUS (reset value = 0x3)
     test->read_register_32(hmac_basetest::STATUS_OFFSET, read_val);
@@ -567,10 +557,6 @@ void testbench::test_reset_mechanisms()
     test->rst_ni.write(false);
     wait(10, SC_NS);
 
-    // Call reset function explicitly
-    dut->reset_all_registers();
-    wait(10, SC_NS);
-
     // Deassert reset
     REG_INFO(1, logger) << "Deasserting reset signal (rst_ni = 1)..." << std::endl;
     test->rst_ni.write(true);
@@ -585,11 +571,7 @@ void testbench::test_reset_mechanisms()
 
     test->read_register_32(hmac_basetest::CFG_OFFSET, read_val);
     wait(5, SC_NS);
-    if (read_val == hmac_basetest::CFG_RESET) {
-        test->assert_equal(hmac_basetest::CFG_RESET, read_val, "CFG runtime reset");
-    } else {
-        REG_INFO(1, logger) << "INFO: CFG after reset is 0x" << std::hex << read_val << std::dec << std::endl;
-    }
+    test->assert_equal(hmac_basetest::CFG_RESET, read_val, "CFG runtime reset");
 
     test->read_register_32(hmac_basetest::DIGEST_OFFSET, read_val);
     wait(5, SC_NS);

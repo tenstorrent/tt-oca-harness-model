@@ -54,6 +54,7 @@
 #include <systemc.h>
 #include <iostream>
 #include <iomanip>
+#include <cstring>
 #include <vector>
 
 #ifdef __GNUC__
@@ -606,6 +607,108 @@ private:
         SC_TEST_ASSERT(ok == false, "spi_transaction with unknown opcode returns false");
     }
 
+    void test_multi_rx_segments()
+    {
+        SC_TEST_SECTION("SC.12: chained RX segments return contiguous bytes");
+
+        const uint32_t addr = 0x61000;
+        const uint8_t data[6] = {0x10, 0x21, 0x32, 0x43, 0x54, 0x65};
+        cmd_no_addr(spi_flash_opcodes::WRITE_ENABLE);
+        bool ok = cmd_program_1seg(spi_flash_opcodes::PROGRAM, addr, data, 6);
+        SC_TEST_ASSERT(ok == true, "program 6 bytes before multi-RX");
+
+        uint8_t hdr[4] = { spi_flash_opcodes::READ,
+                           static_cast<uint8_t>(addr >> 16),
+                           static_cast<uint8_t>(addr >> 8),
+                           static_cast<uint8_t>(addr) };
+        spi_segment_t seg_hdr{4, spi_direction_e::TX_ONLY,
+                              spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        SC_TEST_ASSERT(spi_port->spi_transaction(seg_hdr, m_cfg, hdr, nullptr),
+                       "read header stays asserted");
+
+        uint8_t rx[6] = {};
+        spi_segment_t seg_a{2, spi_direction_e::RX_ONLY,
+                            spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        spi_segment_t seg_b{1, spi_direction_e::RX_ONLY,
+                            spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        spi_segment_t seg_c{3, spi_direction_e::RX_ONLY,
+                            spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        SC_TEST_ASSERT(spi_port->spi_transaction(seg_a, m_cfg, nullptr, rx),
+                       "first RX segment");
+        SC_TEST_ASSERT(spi_port->spi_transaction(seg_b, m_cfg, nullptr, rx + 2),
+                       "second RX segment");
+        SC_TEST_ASSERT(spi_port->spi_transaction(seg_c, m_cfg, nullptr, rx + 3),
+                       "final RX segment releases CS");
+        SC_TEST_ASSERT(std::memcmp(rx, data, 6) == 0,
+                       "three RX segments reconstruct the programmed bytes");
+
+        uint8_t again[1] = {};
+        cmd_read(spi_flash_opcodes::READ, addr, again, 1);
+        SC_TEST_ASSERT(again[0] == data[0],
+                       "next command starts at its own address");
+    }
+
+    void test_reset_mid_command()
+    {
+        SC_TEST_SECTION("SC.13: reset mid-command drops the accumulator");
+
+        const uint32_t addr = 0x62000;
+        const uint8_t data[4] = {0xA1, 0xA2, 0xA3, 0xA4};
+        cmd_no_addr(spi_flash_opcodes::WRITE_ENABLE);
+        bool ok = cmd_program_1seg(spi_flash_opcodes::PROGRAM, addr, data, 4);
+        SC_TEST_ASSERT(ok == true, "program before mid-command reset");
+
+        uint8_t hdr[4] = { spi_flash_opcodes::READ,
+                           static_cast<uint8_t>(addr >> 16),
+                           static_cast<uint8_t>(addr >> 8),
+                           static_cast<uint8_t>(addr) };
+        spi_segment_t seg_hdr{4, spi_direction_e::TX_ONLY,
+                              spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        spi_port->spi_transaction(seg_hdr, m_cfg, hdr, nullptr);
+
+        uint8_t partial[1] = {};
+        spi_segment_t seg_rx{1, spi_direction_e::RX_ONLY,
+                             spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        SC_TEST_ASSERT(spi_port->spi_transaction(seg_rx, m_cfg, nullptr, partial),
+                       "first byte of an open read");
+        SC_TEST_ASSERT(partial[0] == data[0], "open read returns the first byte");
+
+        rst_ni.write(false);
+        wait(SC_ZERO_TIME);
+        rst_ni.write(true);
+        wait(SC_ZERO_TIME);
+
+        uint8_t rx[4] = {};
+        cmd_read(spi_flash_opcodes::READ, addr, rx, 4);
+        SC_TEST_ASSERT(std::memcmp(rx, data, 4) == 0,
+                       "read after mid-command reset starts at the new address");
+    }
+
+    void test_truncated_header_address()
+    {
+        SC_TEST_SECTION("SC.14: a short header uses only the address bytes present");
+
+        const uint8_t at_low = 0x5A;
+        const uint8_t at_shifted = 0xC3;
+        cmd_no_addr(spi_flash_opcodes::WRITE_ENABLE);
+        cmd_program_1seg(spi_flash_opcodes::PROGRAM, 0x12, &at_low, 1);
+        cmd_no_addr(spi_flash_opcodes::WRITE_ENABLE);
+        cmd_program_1seg(spi_flash_opcodes::PROGRAM, 0x120000, &at_shifted, 1);
+
+        uint8_t hdr[2] = { spi_flash_opcodes::READ, 0x12 };
+        spi_segment_t seg_hdr{2, spi_direction_e::TX_ONLY,
+                              spi_speed_e::STANDARD, /*csaat=*/true, 0};
+        spi_port->spi_transaction(seg_hdr, m_cfg, hdr, nullptr);
+
+        uint8_t rx = 0;
+        spi_segment_t seg_rx{1, spi_direction_e::RX_ONLY,
+                             spi_speed_e::STANDARD, /*csaat=*/false, 0};
+        SC_TEST_ASSERT(spi_port->spi_transaction(seg_rx, m_cfg, nullptr, &rx),
+                       "read after a two-byte header");
+        SC_TEST_ASSERT(rx == at_low,
+                       "missing address bytes are not shifted in");
+    }
+
     // -----------------------------------------------------------------------
     // SC_THREAD: entry point
     // -----------------------------------------------------------------------
@@ -631,6 +734,9 @@ private:
         test_pure_rx_only();
         test_unknown_opcode_sc();
         test_jedec_id();
+        test_multi_rx_segments();
+        test_reset_mid_command();
+        test_truncated_header_address();
 
         std::cout << "\n========================================\n";
         std::cout << "Results: " << s_tests_passed << "/"

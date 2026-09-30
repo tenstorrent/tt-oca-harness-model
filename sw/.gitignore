@@ -17,3 +17,4 @@ sep-vp-tests/sep-hmac-test/sep-hmac-test
 sep-vp-tests/sep-kmac-dv-test/kmac-dv-test
 sep-vp-tests/sep-mailbox-test/main
 sep-vp-tests/sep-spi-test/main
+sep-vp-tests/sep-entropy-pool-test/sep-entropy-pool-test
