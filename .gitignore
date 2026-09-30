@@ -363,6 +363,9 @@ doc/ai-systemc-generation.pptx
 /docs/
 /scripts/
 
+# Internal review notes (status + per-IP test plans) are local-only; never publish.
+/internal-review/
+
 # Documentation PDFs are local-only (rebuild locally with scripts/build_docs.sh).
 # Repeated after directory un-ignore rules (!smc/cpu_cluster/doc/** etc.)
 # so those exceptions cannot re-track PDFs.
