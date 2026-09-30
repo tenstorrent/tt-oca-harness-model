@@ -9,8 +9,31 @@
  */
 
 #include "secure_dma_test.h"
+#include "sep_axi_extension.h"
 #include <cstring>
 #include <iomanip>
+
+namespace {
+
+// The DMA packs the beat at data_ptr[0 .. length) and puts the word-lane
+// mask in the byte-enable array (lane = address[1:0]). A packed byte i is
+// lane (address[1:0] + i), not index i.
+void copy_lanes(uint8_t* dst, const uint8_t* src, unsigned len,
+                unsigned char* enables, unsigned enable_len, uint64_t addr)
+{
+  if (enables == nullptr || enable_len == 0) {
+    std::memcpy(dst, src, len);
+    return;
+  }
+  const unsigned lane0 = static_cast<unsigned>(addr & 0x3u);
+  for (unsigned i = 0; i < len; ++i) {
+    const unsigned lane = lane0 + i;
+    if (lane >= enable_len || enables[lane] == TLM_BYTE_ENABLED)
+      dst[i] = src[i];
+  }
+}
+
+}
 
 // ============================================================================
 // Memory Address Windowing Constants
@@ -287,14 +310,20 @@ void secure_dma_test::ot_b_transport(tlm::tlm_generic_payload &trans, sc_time &d
     return;
   }
 
+  auto* ext = trans.get_extension<sep::sep_axi_extension>();
+  if (ext == nullptr || ext->source_id != sep::OTHERS_SOURCE_ID)
+    ++m_sideband_errors;
+  unsigned char* enables = trans.get_byte_enable_ptr();
+  unsigned enable_len = trans.get_byte_enable_length();
+
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated OT read memory.
-    std::memcpy(ptr, &m_ot_memory_r[offset], len);
+    copy_lanes(ptr, &m_ot_memory_r[offset], len, enables, enable_len, addr);
     REG_INFO(3, logger) << "OT memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated OT write memory.
-    std::memcpy(&m_ot_memory_w[offset], ptr, len);
+    copy_lanes(&m_ot_memory_w[offset], ptr, len, enables, enable_len, addr);
     REG_INFO(3, logger) << "OT memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
@@ -322,14 +351,20 @@ void secure_dma_test::ctn_b_transport(tlm::tlm_generic_payload &trans, sc_time &
     return;
   }
 
+  auto* ext = trans.get_extension<sep::sep_axi_extension>();
+  if (ext == nullptr || ext->source_id != sep::OTHERS_SOURCE_ID)
+    ++m_sideband_errors;
+  unsigned char* enables = trans.get_byte_enable_ptr();
+  unsigned enable_len = trans.get_byte_enable_length();
+
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated CTN read memory.
-    std::memcpy(ptr, &m_ctn_memory_r[offset], len);
+    copy_lanes(ptr, &m_ctn_memory_r[offset], len, enables, enable_len, addr);
     REG_INFO(3, logger) << "CTN memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated CTN write memory.
-    std::memcpy(&m_ctn_memory_w[offset], ptr, len);
+    copy_lanes(&m_ctn_memory_w[offset], ptr, len, enables, enable_len, addr);
     REG_INFO(3, logger) << "CTN memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }
@@ -357,14 +392,20 @@ void secure_dma_test::sys_b_transport(tlm::tlm_generic_payload &trans, sc_time &
     return;
   }
 
+  auto* ext = trans.get_extension<sep::sep_axi_extension>();
+  if (ext == nullptr || ext->source_id != sep::OTHERS_SOURCE_ID)
+    ++m_sideband_errors;
+  unsigned char* enables = trans.get_byte_enable_ptr();
+  unsigned enable_len = trans.get_byte_enable_length();
+
   if (cmd == tlm::TLM_READ_COMMAND) {
     // DMA source reads come from dedicated SYS read memory.
-    std::memcpy(ptr, &m_sys_memory_r[offset], len);
+    copy_lanes(ptr, &m_sys_memory_r[offset], len, enables, enable_len, addr);
     REG_INFO(3, logger) << "SYS memory read: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   } else if (cmd == tlm::TLM_WRITE_COMMAND) {
     // DMA destination writes go to dedicated SYS write memory.
-    std::memcpy(&m_sys_memory_w[offset], ptr, len);
+    copy_lanes(&m_sys_memory_w[offset], ptr, len, enables, enable_len, addr);
     REG_INFO(3, logger) << "SYS memory write: addr=0x" << std::hex << addr
                          << " len=" << std::dec << len << std::endl;
   }

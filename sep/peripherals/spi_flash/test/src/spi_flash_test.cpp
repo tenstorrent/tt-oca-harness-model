@@ -1417,13 +1417,14 @@ static void test_model_chip_erase_guards()
     // Test 1: chip erase without WEL fails
     std::vector<uint8_t> rx;
     bool ok = m.process_command(spi_flash_opcodes::CHIP_ERASE, 0, rx);
-    TEST_ASSERT(ok == true, "CHIP_ERASE returns true");
+    TEST_ASSERT(ok == false, "CHIP_ERASE without WEL returns false");
     TEST_ASSERT(m.read_byte(0) == 0x55, "Memory not erased without WEL");
 
     // Test 2: chip erase while suspended fails
     m.process_command(spi_flash_opcodes::WRITE_ENABLE, 0, rx);
     m.process_command(spi_flash_opcodes::SUSPEND_75, 0, rx);
-    m.process_command(spi_flash_opcodes::CHIP_ERASE, 0, rx);
+    ok = m.process_command(spi_flash_opcodes::CHIP_ERASE, 0, rx);
+    TEST_ASSERT(ok == false, "CHIP_ERASE while suspended returns false");
     TEST_ASSERT(m.read_byte(0) == 0x55, "Memory not erased when suspended");
 
     // Test 3: resume then chip erase works

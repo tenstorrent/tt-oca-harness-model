@@ -1990,11 +1990,9 @@ void secure_dma_model::create_tlm_transaction(tlm::tlm_generic_payload &trans,
   // with .TlUserRsvd('0), so its traffic reaches the filters as
   // OTHERS_SOURCE_ID.
   auto* axi_ext = trans.get_extension<sep::sep_axi_extension>();
-  if (!axi_ext) {
-    axi_ext = new sep::sep_axi_extension();
-    trans.set_extension(axi_ext);
+  if (axi_ext) {
+    axi_ext->source_id = sep::OTHERS_SOURCE_ID;
   }
-  axi_ext->source_id = sep::OTHERS_SOURCE_ID;
 
   REG_INFO(3, logger) << "TLM transaction created - " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "WRITE") << " addr=0x" << std::hex << addr << " length=" << std::dec << length << " byte_enable=0x" << std::hex << static_cast<uint32_t>(byte_enable_mask) << std::dec << std::endl;
 }
@@ -2925,8 +2923,20 @@ bool secure_dma_model::execute_single_transaction() {
   uint8_t byte_enable_mask = generate_byte_enable_mask(
       static_cast<uint32_t>(m_current_src_addr), width_bytes);
 
-  // Create TLM payload for read transaction
+  // Extension is declared first so it outlives the payload. The guard clears
+  // it before the payload destructor. set_extension does not take ownership,
+  // and set_auto_extension requires a payload memory manager this path does
+  // not have.
+  sep::sep_axi_extension axi_ext;
+  axi_ext.source_id = sep::OTHERS_SOURCE_ID;
   tlm::tlm_generic_payload trans;
+  trans.set_extension(&axi_ext);
+  struct extension_detach {
+    tlm::tlm_generic_payload& payload;
+    ~extension_detach() { payload.clear_extension<sep::sep_axi_extension>(); }
+  } detach{trans};
+
+  // Create TLM payload for read transaction
   create_tlm_transaction(trans, tlm::TLM_READ_COMMAND, m_current_src_addr,
                          m_transfer_data_buffer, width_bytes, byte_enable_mask);
 
@@ -3430,6 +3440,12 @@ bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
 
   REG_INFO(2, logger) << "Clearing write - addr=0x" << std::hex << clearing_addr << ", data=0x" << clearing_data << std::dec << ", bus=" << (use_ot_bus ? "OT-internal" : "CTN/System") << std::endl;
 
+  // Stack extension outlives the payload (declared first) and is detached
+  // before either destructor. set_extension does not take ownership, so a
+  // heap extension here would leak on every clearing write.
+  sep::sep_axi_extension axi_ext;
+  axi_ext.source_id = sep::OTHERS_SOURCE_ID;
+
   // Create TLM generic payload for clearing write transaction
   tlm::tlm_generic_payload trans;
   trans.set_command(tlm::TLM_WRITE_COMMAND);
@@ -3452,9 +3468,7 @@ bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
 
   // This payload is built by hand rather than through create_tlm_transaction,
   // so it needs the same OTHERS_SOURCE_ID stamp applied there.
-  auto* axi_ext      = new sep::sep_axi_extension();
-  axi_ext->source_id = sep::OTHERS_SOURCE_ID;
-  trans.set_extension(axi_ext);
+  trans.set_extension(&axi_ext);
 
   // Annotate timing delay for clearing write transaction
   sc_time delay = SC_ZERO_TIME;
@@ -3473,6 +3487,7 @@ bool secure_dma_model::perform_interrupt_clearing_write(int trigger_index) {
   }
 
   // Check transaction response status
+  trans.clear_extension<sep::sep_axi_extension>();
   if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
     REG_INFO(1, logger) << "Interrupt clearing write failed - bus error for trigger " << trigger_index << " (address 0x" << std::hex << clearing_addr << std::dec << ")" << std::endl;
     return false;
