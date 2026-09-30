@@ -33,7 +33,8 @@ class entropy_src_base : public sc_module
        RING_OSC_TUNE(std::string(name) + ".RING_OSC_TUNE", memory, (0x94 + 0x00)/sizeof(unsigned int)), 
        RING_OSC_CTRL(std::string(name) + ".RING_OSC_CTRL", memory, (0x98 + 0x00)/sizeof(unsigned int)), 
        DECORRELATOR_CTRL(std::string(name) + ".DECORRELATOR_CTRL", memory, (0xA0 + 0x00)/sizeof(unsigned int)), 
-       DECORRELATOR_MASK(std::string(name) + ".DECORRELATOR_MASK", memory, (0xA4 + 0x00)/sizeof(unsigned int)), 
+       DECORRELATOR_MASK(std::string(name) + ".DECORRELATOR_MASK", memory, (0xA4 + 0x00)/sizeof(unsigned int)),
+       STARTUP_CTRL(std::string(name) + ".STARTUP_CTRL", memory, (0xB0 + 0x00)/sizeof(unsigned int)),
        MAIN_SM_STATUS(std::string(name) + ".MAIN_SM_STATUS", memory, (0xB4 + 0x00)/sizeof(unsigned int)), 
        FIPS_LOCK(std::string(name) + ".FIPS_LOCK", memory, (0x154 + 0x00)/sizeof(unsigned int)), 
        GENERATOR_0_HEALTH_STATUS(std::string(name) + ".GENERATOR_0_HEALTH_STATUS", memory, (0xC0 + 0x00)/sizeof(unsigned int)), 
@@ -135,6 +136,8 @@ class entropy_src_base : public sc_module
       entropy_src::DECORRELATOR_CTRL_type<32> DECORRELATOR_CTRL;
       
       entropy_src::DECORRELATOR_MASK_type<32> DECORRELATOR_MASK;
+
+      entropy_src::STARTUP_CTRL_type<32> STARTUP_CTRL;
 
       entropy_src::MAIN_SM_STATUS_type<32> MAIN_SM_STATUS;
 

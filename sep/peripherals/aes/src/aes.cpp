@@ -13,6 +13,7 @@
  */
 
 #include "aes.h"
+#include "reg_access.h"
 #include <cstring>
 #include <random>
 
@@ -215,8 +216,12 @@ aes_model::aes_model(sc_module_name n)
     // Initialize OpenSSL cipher context
     m_cipher_ctx = EVP_CIPHER_CTX_new();
     if (!m_cipher_ctx) {
-        REG_ERROR(0, logger) << "[AES] Failed to create OpenSSL cipher context" << std::endl;
-        sc_stop();  // Equivalent to FATAL - stop simulation
+        // Elaboration-time failure: SC_REPORT_FATAL, not sc_stop(). sc_stop()
+        // before sc_start() does not abort construction, so every later
+        // EVP_* call would run on a null context. An OpenSSL allocation
+        // failure cannot be forced from a testbench.
+        SC_REPORT_FATAL(name(), // LCOV_EXCL_LINE
+                        "Failed to create OpenSSL cipher context"); // LCOV_EXCL_LINE
     }
 
     // Initialize alert outputs to inactive state
@@ -270,39 +275,72 @@ aes_model::aes_model(sc_module_name n)
  * OpenSSL EVP_CIPHER_CTX allocated during construction to prevent
  * memory leaks.
  */
+// LCOV_EXCL_START — sc_main exits via quick_exit(), so this never runs.
 aes_model::~aes_model()
 {
     if (m_cipher_ctx) {
         EVP_CIPHER_CTX_free(m_cipher_ctx);
     }
 }
+// LCOV_EXCL_STOP
 
 /**
  * @brief TLM b_transport handler for KeyMgr push sideload socket
  *
  * KM writes 8 key words at offsets 0x00–0x1C (KEY_SHARE0), 8 words at
  * 0x20–0x3C (KEY_SHARE1), then KEY_CTRL=1 at 0x40 to commit the key.
+ *
+ * Modelled as zero latency: the push is a register-file write with no datapath
+ * behind it, and this model's register socket does not annotate an access
+ * delay either. `delay` is therefore passed through untouched rather than
+ * cleared, so a temporally decoupled key manager keeps the local-time offset
+ * it arrived with.
  */
 void aes_model::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay)
 {
+    (void)delay; // zero-latency sideload; see the note above
+
     tlm::tlm_command cmd = trans.get_command();
     if (cmd != tlm::TLM_WRITE_COMMAND) {
         trans.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
 
-    uint64_t offset = trans.get_address();
-    uint32_t* data  = reinterpret_cast<uint32_t*>(trans.get_data_ptr());
+    // Same well-formedness gate as regmodel::Memory::validate, in the same
+    // order: never dereference a null pointer, and this socket is word-only so
+    // any other length is a burst error (that covers length 0).
+    if (trans.get_data_ptr() == nullptr) {
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+    if (trans.get_data_length() != 4) {
+        trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
 
-    if (offset <= 0x1C && (offset % 4) == 0) {
-        // KEY_SHARE0 words: offsets 0x00-0x1C
-        m_keymgr_share0[offset / 4] = *data;
-    } else if (offset >= 0x20 && offset <= 0x3C && (offset % 4) == 0) {
-        // KEY_SHARE1 words: offsets 0x20-0x3C
-        m_keymgr_share1[(offset - 0x20) / 4] = *data;
+    const uint64_t offset = trans.get_address();
+    if ((offset % 4) != 0) {
+        trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        return;
+    }
+
+    // TLM makes no alignment promise about data_ptr, so copy the word out
+    // instead of reinterpreting the buffer (a misaligned load is UB and would
+    // be reported by UBSan on the --asan run).
+    uint32_t data = 0;
+    std::memcpy(&data, trans.get_data_ptr(), sizeof(data));
+
+    if (offset <= 0x1C) {
+        m_keymgr_share0[offset / 4] = data;
+    } else if (offset >= 0x20 && offset <= 0x3C) {
+        m_keymgr_share1[(offset - 0x20) / 4] = data;
     } else if (offset == 0x40) {
-        // KEY_CTRL: bit[0]=1 commits key valid, bit[0]=0 clears it
-        m_keymgr_key_valid = (*data & 0x1u) != 0;
+        // KEY_CTRL: bit[0]=1 commits; bit[0]=0 invalidates the push.
+        // Shares are left intact (software may re-commit without re-pushing).
+        m_keymgr_key_valid = (data & 0x1u) != 0;
+    } else {
+        trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+        return;
     }
 
     trans.set_response_status(tlm::TLM_OK_RESPONSE);
@@ -611,7 +649,10 @@ void aes_model::compute_full_key(std::array<uint8_t, 32>& full_key)
  */
 const EVP_CIPHER* aes_model::get_openssl_cipher()
 {
-    // Determine cipher based on mode and key length
+    // Both switches are left exhaustive over their enum so that adding a mode
+    // or a key length is a -Wswitch build failure here rather than a silent
+    // fallthrough to AES-256. The unreachable arms are excluded from coverage,
+    // not deleted.
     switch (m_current_mode) {
         case AESMode::AES_ECB:
             switch (m_current_key_len) {
@@ -619,7 +660,7 @@ const EVP_CIPHER* aes_model::get_openssl_cipher()
                 case AESKeyLen::AES_192: return EVP_aes_192_ecb();
                 case AESKeyLen::AES_256: return EVP_aes_256_ecb();
             }
-            break;
+            break; // LCOV_EXCL_LINE — key length is sanitised by CTRL_SHADOWED
 
         case AESMode::AES_CBC:
             switch (m_current_key_len) {
@@ -627,7 +668,7 @@ const EVP_CIPHER* aes_model::get_openssl_cipher()
                 case AESKeyLen::AES_192: return EVP_aes_192_cbc();
                 case AESKeyLen::AES_256: return EVP_aes_256_cbc();
             }
-            break;
+            break; // LCOV_EXCL_LINE — key length is sanitised by CTRL_SHADOWED
 
         case AESMode::AES_CFB:
             switch (m_current_key_len) {
@@ -635,7 +676,7 @@ const EVP_CIPHER* aes_model::get_openssl_cipher()
                 case AESKeyLen::AES_192: return EVP_aes_192_cfb128();
                 case AESKeyLen::AES_256: return EVP_aes_256_cfb128();
             }
-            break;
+            break; // LCOV_EXCL_LINE — key length is sanitised by CTRL_SHADOWED
 
         case AESMode::AES_OFB:
             switch (m_current_key_len) {
@@ -643,7 +684,7 @@ const EVP_CIPHER* aes_model::get_openssl_cipher()
                 case AESKeyLen::AES_192: return EVP_aes_192_ofb();
                 case AESKeyLen::AES_256: return EVP_aes_256_ofb();
             }
-            break;
+            break; // LCOV_EXCL_LINE — key length is sanitised by CTRL_SHADOWED
 
         case AESMode::AES_CTR:
             switch (m_current_key_len) {
@@ -651,13 +692,16 @@ const EVP_CIPHER* aes_model::get_openssl_cipher()
                 case AESKeyLen::AES_192: return EVP_aes_192_ctr();
                 case AESKeyLen::AES_256: return EVP_aes_256_ctr();
             }
-            break;
+            break; // LCOV_EXCL_LINE — key length is sanitised by CTRL_SHADOWED
 
-        default:
-            return nullptr;
+        // GCM runs on its own EVP datapath and AES_NONE is rejected by
+        // handle_write_TRIGGER / check_auto_start_conditions before a cipher is
+        // ever spawned, so neither arm is reachable from here.
+        case AESMode::AES_GCM:  // LCOV_EXCL_LINE
+        case AESMode::AES_NONE: // LCOV_EXCL_LINE
+            break;              // LCOV_EXCL_LINE
     }
-
-    return nullptr;
+    return nullptr; // LCOV_EXCL_LINE — every reachable mode returned above
 }
 
 /** 
@@ -729,32 +773,17 @@ void aes_model::clear_registers_with_prng()
  */
 sc_time aes_model::calculate_cipher_delay()
 {
-    // Calculate functional delay based on key length and masking
-    // Using unmasked timing for functional model
-    int cycles;
-
+    // Unmasked functional timing: 12/14/16 cycles for AES-128/192/256.
+    // Exhaustive over AESKeyLen so a new key length is a -Wswitch error.
+    int cycles = 16;
     switch (m_current_key_len) {
-        case AESKeyLen::AES_128:
-            cycles = 12;
-            break;
-        case AESKeyLen::AES_192:
-            cycles = 14;
-            break;
-        case AESKeyLen::AES_256:
-            cycles = 16;
-            break;
-        default:
-            cycles = 16;
-            break;
+        case AESKeyLen::AES_128: cycles = 12; break;
+        case AESKeyLen::AES_192: cycles = 14; break;
+        case AESKeyLen::AES_256: cycles = 16; break;
     }
 
-    // Convert cycles to time based on clock frequency from CCI parameter
-    //double clk_freq = m_clk_freq_hz.get_value();
-    double clk_freq = m_clk_freq_hz;
-    double period_sec = 1.0 / clk_freq;
-    double delay_sec = cycles * period_sec;
-
-    return sc_time(delay_sec, SC_SEC);
+    double period_sec = 1.0 / m_clk_freq_hz;
+    return sc_time(cycles * period_sec, SC_SEC);
 }
 
 /**
@@ -803,12 +832,15 @@ sc_time aes_model::calculate_clearing_delay(bool is_key_iv_clear)
  */
 uint32_t aes_model::get_prng_reseed_threshold()
 {
-    // Return block count threshold based on PRNG_RESEED_RATE
+    // m_prng_reseed_rate comes from sanitise_ctrl_shadowed(), which already
+    // maps every illegal 3-bit encoding to PER_1, so only 1/2/4 reach here.
+    // The default arm is kept as a defensive fallback to the most conservative
+    // rate and excluded from coverage rather than deleted.
     switch (m_prng_reseed_rate) {
-        case 1: return 1;      // PER_1: reseed every block
-        case 2: return 64;     // PER_64: reseed every 64 blocks
-        case 4: return 8192;   // PER_8K: reseed every 8192 blocks
-        default: return 1;    // Default to PER_1
+        case 1:  return 1;     // PER_1: reseed every block
+        case 2:  return 64;    // PER_64
+        case 4:  return 8192;  // PER_8K
+        default: return 1;     // LCOV_EXCL_LINE — unreachable, see above
     }
 }
 
@@ -834,7 +866,7 @@ void aes_model::perform_prng_reseed()
     unsigned char rand_buf[48]; // 384 bits
     if (RAND_bytes(rand_buf, sizeof(rand_buf)) != 1) {
         // RAND_bytes failed - log warning but continue
-        REG_WARN(1, logger) << "[AES] RAND_bytes failed - continuing without reseed" << std::endl;
+        REG_WARN(1, logger) << "[AES] RAND_bytes failed - continuing without reseed" << std::endl; // LCOV_EXCL_LINE
     }
 
     // Apply functional delay for PRNG reseed operation
@@ -876,22 +908,21 @@ bool aes_model::aes_encrypt_block(const uint8_t* in, uint8_t* out)
     std::array<uint8_t, 32> full_key;
     compute_full_key(full_key);
 
-    const EVP_CIPHER* cipher = nullptr;
-    switch (m_current_key_len) {
-        case AESKeyLen::AES_128: cipher = EVP_aes_128_ecb(); break;
-        case AESKeyLen::AES_192: cipher = EVP_aes_192_ecb(); break;
-        case AESKeyLen::AES_256: cipher = EVP_aes_256_ecb(); break;
-        default: return false;
+    const EVP_CIPHER* cipher = EVP_aes_256_ecb();
+    if (m_current_key_len == AESKeyLen::AES_128) {
+        cipher = EVP_aes_128_ecb();
+    } else if (m_current_key_len == AESKeyLen::AES_192) {
+        cipher = EVP_aes_192_ecb();
     }
 
     if (!EVP_CipherInit_ex(m_cipher_ctx, cipher, nullptr, full_key.data(), nullptr, 1)) {
-        return false;
+        return false; // LCOV_EXCL_LINE — OpenSSL init failure
     }
     EVP_CIPHER_CTX_set_padding(m_cipher_ctx, 0);
 
     int outlen = 0;
     if (!EVP_CipherUpdate(m_cipher_ctx, out, &outlen, in, 16)) {
-        return false;
+        return false; // LCOV_EXCL_LINE — OpenSSL update failure
     }
 
     int final_len = 0;
@@ -976,9 +1007,9 @@ bool aes_model::ensure_gcm_init()
 
     const std::array<uint8_t, 16> zero_block{};
     if (!aes_encrypt_block(zero_block.data(), m_gcm_hash_subkey.data())) {
-        REG_ERROR(0, logger) << "[AES] GCM hash subkey derivation failed" << std::endl;
-        trigger_fatal_alert();
-        return false;
+        REG_ERROR(0, logger) << "[AES] GCM hash subkey derivation failed" << std::endl; // LCOV_EXCL_LINE
+        trigger_fatal_alert(); // LCOV_EXCL_LINE
+        return false;          // LCOV_EXCL_LINE
     }
 
     uint8_t j0[16];
@@ -991,9 +1022,9 @@ bool aes_model::ensure_gcm_init()
     }
 
     if (!aes_encrypt_block(j0, m_gcm_s.data())) {
-        REG_ERROR(0, logger) << "[AES] GCM S derivation failed" << std::endl;
-        trigger_fatal_alert();
-        return false;
+        REG_ERROR(0, logger) << "[AES] GCM S derivation failed" << std::endl; // LCOV_EXCL_LINE
+        trigger_fatal_alert(); // LCOV_EXCL_LINE
+        return false;          // LCOV_EXCL_LINE
     }
 
     m_gcm_ghash.fill(0);
@@ -1060,9 +1091,9 @@ void aes_model::perform_gcm_block()
 
             uint8_t keystream[16];
             if (!aes_encrypt_block(counter, keystream)) {
-                REG_ERROR(0, logger) << "[AES] GCM keystream generation failed" << std::endl;
-                trigger_fatal_alert();
-                return;
+                REG_ERROR(0, logger) << "[AES] GCM keystream generation failed" << std::endl; // LCOV_EXCL_LINE
+                trigger_fatal_alert(); // LCOV_EXCL_LINE
+                return;                // LCOV_EXCL_LINE
             }
 
             // Bytes past NUM_VALID_BYTES are not part of the message and must not
@@ -1303,9 +1334,14 @@ bool aes_model::check_auto_start_conditions()
         return false;
     }
 
-    // Must be idle
-    if (!m_is_idle) {
-        return false;
+    // Must be idle. Both current callers already enforce this -- handle_write_IV
+    // rejects when !m_is_idle, and handle_write_DATA_IN rejects when
+    // !m_input_ready, which is (idle AND no unread output) -- so this is
+    // unreachable today. It stays because this predicate is the single gate in
+    // front of sc_spawn(perform_cipher_operation): it must not depend on its
+    // callers to decide that starting a cipher mid-operation is unsafe.
+    if (!m_is_idle) { // LCOV_EXCL_BR_LINE
+        return false; // LCOV_EXCL_LINE
     }
 
     // Output must have been consumed (OUTPUT_VALID == 0)
@@ -1416,9 +1452,9 @@ void aes_model::execute_encryption_decryption()
     // Get OpenSSL cipher
     const EVP_CIPHER* cipher = get_openssl_cipher();
     if (!cipher) {
-        REG_ERROR(0, logger) << "[AES] Invalid cipher mode configuration" << std::endl;
-        trigger_fatal_alert();
-        return;
+        REG_ERROR(0, logger) << "[AES] Invalid cipher mode configuration" << std::endl; // LCOV_EXCL_LINE
+        trigger_fatal_alert(); // LCOV_EXCL_LINE
+        return;                // LCOV_EXCL_LINE
     }
 
     // Initialize cipher context
@@ -1426,15 +1462,15 @@ void aes_model::execute_encryption_decryption()
 
     if (m_current_mode == AESMode::AES_ECB) {
         if (!EVP_CipherInit_ex(m_cipher_ctx, cipher, nullptr, full_key.data(), nullptr, encrypt)) {
-            REG_ERROR(0, logger) << "[AES] Failed to initialize cipher" << std::endl;
-            trigger_fatal_alert();
-            return;
+            REG_ERROR(0, logger) << "[AES] Failed to initialize cipher" << std::endl; // LCOV_EXCL_LINE
+            trigger_fatal_alert(); // LCOV_EXCL_LINE
+            return;                // LCOV_EXCL_LINE
         }
     } else {
         if (!EVP_CipherInit_ex(m_cipher_ctx, cipher, nullptr, full_key.data(), iv_data, encrypt)) {
-            REG_ERROR(0, logger) << "[AES] Failed to initialize cipher with IV" << std::endl;
-            trigger_fatal_alert();
-            return;
+            REG_ERROR(0, logger) << "[AES] Failed to initialize cipher with IV" << std::endl; // LCOV_EXCL_LINE
+            trigger_fatal_alert(); // LCOV_EXCL_LINE
+            return;                // LCOV_EXCL_LINE
         }
     }
 
@@ -1446,16 +1482,16 @@ void aes_model::execute_encryption_decryption()
     int outlen;
 
     if (!EVP_CipherUpdate(m_cipher_ctx, output_data, &outlen, input_data, 16)) {
-        REG_ERROR(0, logger) << "[AES] Cipher operation failed" << std::endl;
-        trigger_fatal_alert();
-        return;
+        REG_ERROR(0, logger) << "[AES] Cipher operation failed" << std::endl; // LCOV_EXCL_LINE
+        trigger_fatal_alert(); // LCOV_EXCL_LINE
+        return;                // LCOV_EXCL_LINE
     }
 
     int final_len;
     if (!EVP_CipherFinal_ex(m_cipher_ctx, output_data + outlen, &final_len)) {
-        REG_ERROR(0, logger) << "[AES] Cipher finalization failed" << std::endl;
-        trigger_fatal_alert();
-        return;
+        REG_ERROR(0, logger) << "[AES] Cipher finalization failed" << std::endl; // LCOV_EXCL_LINE
+        trigger_fatal_alert(); // LCOV_EXCL_LINE
+        return;                // LCOV_EXCL_LINE
     }
 
     // Store output data (little-endian)
@@ -1615,12 +1651,13 @@ void aes_model::perform_cipher_operation()
                                     m_gcm_phase == GCMPhase::GCM_AAD));
 
     if (produces_output) {
-        // Check for output overwrite in manual mode
-        if (m_manual_operation && m_output_valid) {
-            m_output_lost = true;
-        }
-
-        // Set output valid
+        // OUTPUT_LOST is not set here. Manual mode can only start via
+        // TRIGGER.START, and handle_write_TRIGGER already raises the flag when
+        // START arrives while OUTPUT_VALID is set; automatic mode cannot
+        // overwrite an unread output because m_input_ready back-pressures
+        // DATA_IN until DATA_OUT is read. Setting it again here would be
+        // redundant. Proven by FUNC-AES-005
+        // test_output_lost_flag_on_overwrite (manual START, START, no read).
         m_output_valid = true;
         m_data_out_read_mask = 0;
     }
@@ -1958,10 +1995,18 @@ bool aes_model::handle_write_CTRL_SHADOWED(uint32_t value, uint32_t write_mask)
     const uint32_t prng_reseed_rate = (committed >> 12) & 0x7;
     const uint32_t manual_op = (committed >> 15) & 0x1;
 
+    // `committed` is built from sanitise_ctrl_shadowed() output, which is the
+    // single point where illegal encodings are mapped (OPERATION -> AES_ENC,
+    // KEY_LEN -> AES_256, PRNG_RESEED_RATE -> PER_1, MODE -> 0x3F/AES_NONE).
+    // The default arms below are therefore unreachable defensive fallbacks and
+    // are excluded from coverage rather than deleted, so that adding a field
+    // encoding stays a -Wswitch build failure here.
+    // Sanitisation itself is covered by FUNC-AES-002
+    // test_openssl_invalid_key_length_defaults_to_aes256.
     switch (operation) {
-        case 0x1: m_current_operation = AESOperation::AES_ENC; break;
         case 0x2: m_current_operation = AESOperation::AES_DEC; break;
-        default: m_current_operation = AESOperation::AES_ENC; break;
+        case 0x1: m_current_operation = AESOperation::AES_ENC; break;
+        default:  m_current_operation = AESOperation::AES_ENC; break; // LCOV_EXCL_LINE
     }
 
     switch (mode) {
@@ -1978,7 +2023,7 @@ bool aes_model::handle_write_CTRL_SHADOWED(uint32_t value, uint32_t write_mask)
         case 0x1: m_current_key_len = AESKeyLen::AES_128; break;
         case 0x2: m_current_key_len = AESKeyLen::AES_192; break;
         case 0x4: m_current_key_len = AESKeyLen::AES_256; break;
-        default: m_current_key_len = AESKeyLen::AES_256; break;
+        default:  m_current_key_len = AESKeyLen::AES_256; break; // LCOV_EXCL_LINE
     }
 
     m_sideload_enabled = (sideload != 0);
@@ -2127,10 +2172,11 @@ uint32_t aes_model::resolve_gcm_phase(uint32_t requested) const
         case 0x10:  // GCM_SAVE
         case 0x20:  // GCM_TAG
             return (requested == INIT) ? requested : current;
-
-        default:
-            return current;
     }
+    // Unreachable: m_gcm_phase is only ever assigned from the output of
+    // legalise_gcm_phase(), which maps every illegal encoding to GCM_INIT, so
+    // `current` is always one of the six one-hot values handled above.
+    return current; // LCOV_EXCL_LINE
 }
 
 /**
@@ -2409,12 +2455,15 @@ void aes_model::register_all_callbacks()
         memory.register_read_callback(read_cb, IV[i].offset);
     }
 
-    // DATA_IN
+    // DATA_IN — honor TLM byte-enables so disabled lanes keep prior bytes.
     for (unsigned int i = 0; i < 4; i++) {
-        std::function<bool(uint32_t)> write_cb = [this, i](uint32_t value) {
-            return this->handle_write_DATA_IN(i, value, DATA_IN[i].write_bit_mask);
-        };
-        memory.register_write_callback(write_cb, DATA_IN[i].offset);
+        std::function<bool(uint32_t, uint8_t)> write_cb =
+            [this, i](uint32_t value, uint8_t byte_enable) {
+                const uint32_t merged =
+                    regmodel::apply_byte_enable(m_data_in[i], value, byte_enable);
+                return this->handle_write_DATA_IN(i, merged, DATA_IN[i].write_bit_mask);
+            };
+        memory.register_write_callback_with_be(write_cb, DATA_IN[i].offset);
     }
 
     // DATA_OUT
@@ -2425,12 +2474,15 @@ void aes_model::register_all_callbacks()
         memory.register_read_callback(read_cb, DATA_OUT[i].offset);
     }
 
-    // CTRL_SHADOWED
+    // CTRL_SHADOWED — merge disabled lanes with the committed register value.
     {
-        std::function<bool(uint32_t)> write_cb = [this](uint32_t value) {
-            return this->handle_write_CTRL_SHADOWED(value, CTRL_SHADOWED.write_bit_mask);
-        };
-        memory.register_write_callback(write_cb, CTRL_SHADOWED.offset);
+        std::function<bool(uint32_t, uint8_t)> write_cb =
+            [this](uint32_t value, uint8_t byte_enable) {
+                const uint32_t merged = regmodel::apply_byte_enable(
+                    static_cast<uint32_t>(CTRL_SHADOWED), value, byte_enable);
+                return this->handle_write_CTRL_SHADOWED(merged, CTRL_SHADOWED.write_bit_mask);
+            };
+        memory.register_write_callback_with_be(write_cb, CTRL_SHADOWED.offset);
 
         std::function<bool(uint32_t&)> read_cb = [this](uint32_t& value) {
             return this->handle_read_CTRL_SHADOWED(value, CTRL_SHADOWED.read_bit_mask);
@@ -2459,12 +2511,18 @@ void aes_model::register_all_callbacks()
         memory.register_write_callback(write_cb, CTRL_AUX_REGWEN.offset);
     }
 
-    // TRIGGER
+    // TRIGGER — only enabled byte lanes may assert self-clearing trigger bits.
     {
-        std::function<bool(uint32_t)> write_cb = [this](uint32_t value) {
-            return this->handle_write_TRIGGER(value, TRIGGER.write_bit_mask);
-        };
-        memory.register_write_callback(write_cb, TRIGGER.offset);
+        std::function<bool(uint32_t, uint8_t)> write_cb =
+            [this](uint32_t value, uint8_t byte_enable) {
+                // Merge against 0, not against the stored word: TRIGGER bits
+                // are self-clearing, so a lane the master disabled must read
+                // as "not requested" rather than replaying the last write.
+                const uint32_t masked =
+                    regmodel::apply_byte_enable(uint32_t{0}, value, byte_enable);
+                return this->handle_write_TRIGGER(masked, TRIGGER.write_bit_mask);
+            };
+        memory.register_write_callback_with_be(write_cb, TRIGGER.offset);
 
         // TRIGGER is write-only with self-clearing bits - read always returns 0
         std::function<bool(uint32_t&)> read_cb = [](uint32_t& value) {

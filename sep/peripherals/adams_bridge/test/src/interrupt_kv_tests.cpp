@@ -7,6 +7,7 @@
 
 #include "abr_testbench.h"
 
+#include <algorithm>
 #include <memory>
 
 namespace {
@@ -251,9 +252,20 @@ void interrupt_kv_tests(abr_testbench &tb)
     tb.check_eq(tb.rd(abr::OFF_KV_MLDSA_SEED_RD_CTRL) & KV_READ_EN, 0u,
                 "writing read_en=0 is a no-op");
 
-    // Back-door loader rejects an out-of-range entry without crashing.
+    // Back-door loader rejects an out-of-range entry without mutating state.
+    const std::vector<uint8_t> kv0_before = tb.kv_read(0u, abr::KV_ENTRY_BYTES);
+    const std::vector<uint8_t> kv31_before = tb.kv_read(31u, abr::KV_ENTRY_BYTES);
+    const uint32_t seed_rd_status_before = tb.rd(abr::OFF_KV_MLDSA_SEED_RD_STATUS);
+    const uint32_t mldsa_status_before = tb.rd(abr::OFF_MLDSA_STATUS);
     tb.dut.load_kv_entry(abr::KV_NUM_ENTRIES + 1u, material);
-    tb.check(true, "load_kv_entry ignores an out-of-range entry");
+    tb.check(tb.kv_read(0u, abr::KV_ENTRY_BYTES) == kv0_before,
+             "OOR load_kv_entry leaves KV entry 0 unchanged");
+    tb.check(tb.kv_read(31u, abr::KV_ENTRY_BYTES) == kv31_before,
+             "OOR load_kv_entry leaves KV entry 31 unchanged");
+    tb.check_eq(tb.rd(abr::OFF_KV_MLDSA_SEED_RD_STATUS), seed_rd_status_before,
+                "OOR load_kv_entry leaves KV seed RD status unchanged");
+    tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS), mldsa_status_before,
+                "OOR load_kv_entry leaves MLDSA_STATUS unchanged");
 
     tb.section("Key Vault: ML-KEM lanes");
 
@@ -369,12 +381,23 @@ void interrupt_kv_tests(abr_testbench &tb)
     const std::vector<uint32_t> pk_seq =
         tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY);
 
+    // Independently reverse the dword order (matches abr_ip::reverse_le_dwords).
+    std::vector<uint32_t> rev_seed = seq_seed;
+    std::reverse(rev_seed.begin(), rev_seed.end());
+
+    tb.check(tb.zeroize_mldsa(), "zeroize before independently-reversed KEYGEN");
+    tb.wr_n(abr::OFF_MLDSA_SEED, rev_seed);
+    tb.check(tb.run_mldsa(CMD_KEYGEN), "KEYGEN from independently reversed seed");
+    const std::vector<uint32_t> pk_rev =
+        tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY);
+    tb.check(pk_rev != pk_seq, "dword-reversed seed diverges from sequential seed");
+
     tb.check(tb.zeroize_mldsa(), "zeroize before KM sequential KEYGEN");
     tb.km_share_commit(0u, seq_seed);
     tb.wr(abr::OFF_KV_MLDSA_SEED_RD_CTRL, KV_READ_EN);
     tb.check(tb.run_mldsa(CMD_KEYGEN), "KEYGEN from KM sequential seed");
-    tb.check(tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY) != pk_seq,
-             "non-palindromic KM seed is dword-reversed vs a software write");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY) == pk_rev,
+             "non-palindromic KM seed matches the independently dword-reversed oracle");
 
     const std::vector<uint32_t> lane_key(8, 0x11223344u);
     tb.km_share_commit(1u, lane_key);

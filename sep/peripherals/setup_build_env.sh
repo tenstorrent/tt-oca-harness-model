@@ -47,7 +47,9 @@ peripheral_set_build_type() {
   if [ -n "${BUILD_TYPE_SET}" ] && [ "${BUILD_TYPE_SET}" != "${chosen}" ]; then
     echo "Error: ${flag} conflicts with --$(echo "${BUILD_TYPE_SET}" | tr '[:upper:]' '[:lower:]');" \
          "build types are mutually exclusive." >&2
-    exit 1
+    # Exit 2 for a usage error, matching every SMC run_tests.sh and the
+    # "exits 2 if both are passed" contract in test-coverage-asan.mdc.
+    exit 2
   fi
   BUILD_TYPE="${chosen}"
   BUILD_TYPE_SET="${chosen}"
@@ -106,6 +108,11 @@ peripheral_enforce_coverage_gate() {
 
 # Run an ASan/UBSan binary and fail on any sanitizer diagnosis.
 #
+# Usage: peripheral_enforce_asan_clean <binary> <build_dir> [binary_args...]
+# Any argument after <build_dir> is forwarded to the testbench, so a target
+# whose binary takes a CCI config path (spi_controller) uses this helper
+# rather than reimplementing the gate.
+#
 # Sanitizers report on stderr and, by default, do not change the process exit
 # code for leaks or for recoverable UBSan findings. A runner that only checks
 # the exit status therefore reports PASS on a dirty run. This routes the
@@ -114,6 +121,7 @@ peripheral_enforce_coverage_gate() {
 peripheral_enforce_asan_clean() {
   local binary="$1"
   local build_dir="$2"
+  shift 2
   local log="${build_dir}/asan.log"
 
   # Sanitizers append .<pid>, so logs accumulate across runs and a stale failure
@@ -130,7 +138,7 @@ peripheral_enforce_asan_clean() {
   local rc=0
   ASAN_OPTIONS="${opts}" \
   UBSAN_OPTIONS="log_path=${log}:print_stacktrace=1" \
-    "${binary}" || rc=$?
+    "${binary}" "$@" || rc=$?
 
   # Concatenate first: grep -c over several files prints one count per file.
   # A leak-only report says "ERROR: LeakSanitizer", and a recoverable UBSan

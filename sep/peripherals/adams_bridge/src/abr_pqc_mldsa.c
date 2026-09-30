@@ -22,8 +22,8 @@ static int compute_mu_from_tr(const uint8_t *tr, const uint8_t *ctx, size_t ctxl
     uint8_t pre[2];
     shake256incctx state;
 
-    if (ctxlen > 255u) { // GCOV_EXCL_LINE
-        return -1;       // GCOV_EXCL_LINE
+    if (ctxlen > 255u) { // LCOV_EXCL_BR_LINE — FIPS 204 context is at most 255 bytes
+        return -1;       // LCOV_EXCL_LINE
     }
 
     pre[0] = 0;

@@ -536,8 +536,10 @@ void testbench::test_func007_multi_segment_csaat()
 
     // ==========================================================================
     } else {
-        REG_INFO(2, logger) << "  [SKIP] Test 4 requires NumCS >= 2 (current: " << dut->get_num_cs() << ")" << std::endl;
-        sub_tests_passed++;  /// Count as passed since this is a configuration limitation
+        REG_ERROR(2, logger) << "  [FAIL] Test 4 requires NumCS >= 2 (current: " << dut->get_num_cs()
+                  << "). Load config/accellera_config.ini (NumCS=2)." << std::endl;
+        sub_tests_failed++;
+        test_passed = false;
     }
 
     // Test 5: CONFIGOPTS Change Terminates CSAAT Transaction

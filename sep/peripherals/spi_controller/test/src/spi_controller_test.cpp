@@ -3,6 +3,16 @@
 #include "spi_controller_test.h"
 #include <iomanip>
 
+namespace {
+
+void fail_tlm(RegLogger& logger, const char* what, tlm::tlm_response_status st)
+{
+    REG_ERROR(0, logger) << "[TLM-2] " << what
+                         << " response_status=" << static_cast<int>(st) << std::endl;
+}
+
+} // namespace
+
 void spi_controller_test::register_read_8(unsigned int offset, uint8_t &read_value)
 {
     tlm::tlm_generic_payload trans;
@@ -19,9 +29,9 @@ void spi_controller_test::register_read_8(unsigned int offset, uint8_t &read_val
 
     initiator_socket->b_transport(trans, delay);
 
-    if (trans.is_response_error())
-    {
-        REG_ERROR(1, logger) << "[TLM-2] Response error from b_transport" << std::endl;
+    if (trans.is_response_error()) {
+        fail_tlm(logger, "register_read_8", trans.get_response_status());
+        ++m_assert_failures;
     }
 }
 
@@ -41,9 +51,9 @@ void spi_controller_test::register_write_8(unsigned int offset, uint8_t write_va
 
     initiator_socket->b_transport(trans, delay);
 
-    if (trans.is_response_error())
-    {
-        REG_ERROR(1, logger) << "[TLM-2] Response error from b_transport" << std::endl;
+    if (trans.is_response_error()) {
+        fail_tlm(logger, "register_write_8", trans.get_response_status());
+        ++m_assert_failures;
     }
 }
 
@@ -62,11 +72,14 @@ void spi_controller_test::read_register_32(unsigned int offset, uint32_t &read_v
     trans.set_streaming_width(4);
     trans.set_byte_enable_ptr(0);
     trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_OK_RESPONSE);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
     initiator_socket->b_transport(trans, delay);
 
-    // Note: regmodel framework doesn't set response status, so we don't check for errors
+    if (trans.is_response_error()) {
+        fail_tlm(logger, "read_register_32", trans.get_response_status());
+        ++m_assert_failures;
+    }
 }
 
 /**
@@ -84,11 +97,14 @@ void spi_controller_test::write_register_32(unsigned int offset, uint32_t write_
     trans.set_streaming_width(4);
     trans.set_byte_enable_ptr(0);
     trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_OK_RESPONSE);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
     initiator_socket->b_transport(trans, delay);
 
-    // Note: regmodel framework doesn't set response status, so we don't check for errors
+    if (trans.is_response_error()) {
+        fail_tlm(logger, "write_register_32", trans.get_response_status());
+        ++m_assert_failures;
+    }
 }
 
 /**
@@ -107,14 +123,17 @@ void spi_controller_test::write_register_32_with_byte_enable(unsigned int offset
     trans.set_data_ptr(reinterpret_cast<unsigned char*>(&write_value));
     trans.set_data_length(4);
     trans.set_streaming_width(4);
-    trans.set_byte_enable_ptr(byte_enable);  /// Use custom byte enables
+    trans.set_byte_enable_ptr(byte_enable);
     trans.set_byte_enable_length(4);
     trans.set_dmi_allowed(false);
-    trans.set_response_status(tlm::TLM_OK_RESPONSE);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
     initiator_socket->b_transport(trans, delay);
 
-    // Note: regmodel framework doesn't set response status, so we don't check for errors
+    if (trans.is_response_error()) {
+        fail_tlm(logger, "write_register_32_with_byte_enable", trans.get_response_status());
+        ++m_assert_failures;
+    }
 }
 
 /**
@@ -131,11 +150,11 @@ void spi_controller_test::assert_register_value(const char* test_name, uint32_t 
     }
     else
     {
-        REG_ERROR(2, logger) << "[FAIL] " << test_name
+        REG_ERROR(0, logger) << "[FAIL] " << test_name
                   << " - Expected: 0x" << std::hex << std::setw(8) << std::setfill('0') << expected
                   << ", Actual: 0x" << std::hex << std::setw(8) << std::setfill('0') << actual
                   << std::dec << std::endl;
-        REG_ERROR(1, logger) << "[ASSERTION] " << test_name << std::endl;
+        ++m_assert_failures;
     }
 }
 

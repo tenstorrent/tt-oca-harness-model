@@ -48,6 +48,19 @@ feed key-manager, OTBN, AES, HMAC, KMAC, the TRNG complex
 
 AND of `global_rst_ni` and the matching SW_RESET_N bit. KM's bit
 resets to 0 (held in reset); the crypto, TRNG, and ABR bits reset to 1.
+`update_rst_outputs` reads those bits through SW_RESET_N's named
+bitfields, so the wiring is checked against the register description
+rather than a separate table of bit positions.
+
+The SW_RESET_N register word is the model's only copy of the software
+reset state — there is no separate shadow variable. Because the IP
+registers its own write callback on that offset, it *replaces* the one
+`regmodel::Reg` bound to `Reg::handle_write`, so `handle_sw_reset_n_write`
+has to store the masked value into SW_RESET_N itself; otherwise reads and
+subsequent byte-enable merges would combine against the stale power-on
+value. Byte-lane merging goes through `regmodel::apply_byte_enable` rather
+than hand-rolled mask arithmetic, and `reset()` relies on
+`reset_all_registers()` alone instead of restating the 0x7e default.
 
 ----
   TLM MMIO ──► SW_RESET_N write ──► sw_reset_changed_

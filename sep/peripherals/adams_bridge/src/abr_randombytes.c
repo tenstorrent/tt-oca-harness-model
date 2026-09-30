@@ -15,12 +15,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-int randombytes(uint8_t *output, size_t n) // GCOV_EXCL_LINE
+/* LCOV_EXCL_START — PQClean's randomized entry point is never called: the ABR
+ * backend uses only the derandomized (seeded) APIs, so this stub exists purely
+ * to satisfy the link. */
+int randombytes(uint8_t *output, size_t n)
 {
     /* Never reached by the FIPS backend. Fill so a stray call is obvious. */
-    if (output != NULL && n > 0u) { // GCOV_EXCL_LINE
-        memset(output, 0xA5, n);    // GCOV_EXCL_LINE
-    }                               // GCOV_EXCL_LINE
-    fputs("abr: PQClean randombytes() stub invoked; use derand APIs\n", stderr); // GCOV_EXCL_LINE
-    return -1; // GCOV_EXCL_LINE
+    if (output != NULL && n > 0u) {
+        memset(output, 0xA5, n);
+    }
+    fputs("abr: PQClean randombytes() stub invoked; use derand APIs\n", stderr);
+    return -1;
 }
+/* LCOV_EXCL_STOP */

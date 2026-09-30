@@ -41,92 +41,79 @@ void testbench::test_func005_error_recovery_flow()
     sub_tests_passed++;
 
     // =======================================================================
-    // Test 1: CMDBUSY - Command When Not READY
+    // Test 1: CMDBUSY - Command FIFO full (architectural busy condition)
     // =======================================================================
-    REG_INFO(1, logger) << "\n[Test 1] CMDBUSY Error (Command When Not READY)" << std::endl;
+    REG_INFO(1, logger) << "\n[Test 1] CMDBUSY Error (Command FIFO Full)" << std::endl;
 
     uint32_t status_val = 0;
     uint32_t read_val = 0;
     bool error_intr = false;
     bool error_irq = false;
 
-    // Clear any existing errors
     clear_errors();
 
-    // Load TX FIFO with data for long transaction
-    for (int i = 0; i < 64; i++) {
-        test->write_register_32(TXDATA_OFFSET, 0xAA000000 + i);
-    }
+    // Hold the engine idle so segments stay queued: SPIEN=0, OUTPUT_EN=1.
+    test->write_register_32(CONTROL_OFFSET, 0x20000000);
     wait(10, SC_NS);
 
-    // Issue first command (256-byte transfer will take time)
+    const uint32_t cmd_depth = dut->get_cmd_depth();
+    for (uint32_t i = 0; i < cmd_depth; ++i) {
+        test->write_register_32(COMMAND_OFFSET, BUILD_CMD(3, 2, 0, 0));
+        wait(SC_ZERO_TIME);
+    }
+
     test->read_register_32(STATUS_OFFSET, status_val);
     bool ready = (status_val >> 31) & 0x1;
-
-    if (ready) {
-        REG_INFO(2, logger) << "  [PASS] Initial STATUS.READY=1" << std::endl;
+    uint32_t cmdqd = (status_val >> 16) & 0xF;
+    if (!ready && cmdqd == cmd_depth) {
+        REG_INFO(2, logger) << "  [PASS] Command FIFO full: READY=0 CMDQD=" << cmdqd << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Initial STATUS.READY=0" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Expected full command FIFO, READY=" << ready
+                  << " CMDQD=" << cmdqd << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
 
-    uint32_t cmd1 = BUILD_CMD(255, 2, 0, 0);  /// 256 bytes, TX, Standard
-    test->write_register_32(COMMAND_OFFSET, cmd1);
-    wait(SC_ZERO_TIME);  /// Give zero time for command to queue
+    // One more COMMAND write must set CMDBUSY and must not enqueue.
+    test->write_register_32(COMMAND_OFFSET, BUILD_CMD(3, 2, 0, 0));
+    wait(10, SC_NS);
 
-    // Verify STATUS.READY=0 (command in progress)
+    test->read_register_32(ERROR_STATUS_OFFSET, read_val);
+    bool cmdbusy_err = (read_val & 0x1) != 0;
     test->read_register_32(STATUS_OFFSET, status_val);
-    ready = (status_val >> 31) & 0x1;
-
-    if (!ready) {
-        REG_INFO(2, logger) << "  [PASS] STATUS.READY=0 after command issued" << std::endl;
+    cmdqd = (status_val >> 16) & 0xF;
+    if (cmdbusy_err && cmdqd == cmd_depth) {
+        REG_INFO(2, logger) << "  [PASS] CMDBUSY set and queue depth unchanged (" << cmdqd << ")" << std::endl;
         sub_tests_passed++;
-
-        // Immediately issue second command without checking READY (should trigger CMDBUSY)
-        uint32_t cmd2 = BUILD_CMD(7, 2, 0, 0);  /// 8 bytes, TX, Standard
-        test->write_register_32(COMMAND_OFFSET, cmd2);
-        wait(10, SC_NS);
-
-        // Check ERROR_STATUS for CMDBUSY (bit 0)
-        test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-        bool cmdbusy_err = read_val & 0x1;
-
-        if (cmdbusy_err) {
-            REG_INFO(2, logger) << "  [PASS] CMDBUSY error detected (ERROR_STATUS=0x"
-                      << std::hex << read_val << std::dec << ")" << std::endl;
-            sub_tests_passed++;
-        } else {
-            REG_ERROR(2, logger) << "  [FAIL] CMDBUSY error not detected (ERROR_STATUS=0x"
-                      << std::hex << read_val << std::dec << ")" << std::endl;
-            sub_tests_failed++;
-            test_passed = false;
-        }
-
-        // Check error interrupt
-        test->read_register_32(INTR_STATE_OFFSET, read_val);
-        bool error_intr = read_val & 0x1;
-        bool error_irq = sig_error_irq.read();
-
-        if (error_intr && error_irq) {
-            REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATE.error=1, error_irq=1)" << std::endl;
-            sub_tests_passed++;
-        } else {
-            REG_ERROR(2, logger) << "  [FAIL] Error interrupt not properly asserted (INTR_STATE.error="
-                      << error_intr << ", error_irq=" << error_irq << ")" << std::endl;
-            sub_tests_failed++;
-            test_passed = false;
-        }
     } else {
-        REG_WARN(1, logger) << "  [WARN] STATUS.READY still=1 (command completed too fast)" << std::endl;
-        REG_INFO(2, logger) << "  [SKIP] Skipping CMDBUSY test - cannot reliably test in TLM model" << std::endl;
-        REG_INFO(2, logger) << "  [INFO] This is a TLM timing limitation, not a model bug" << std::endl;
-        // Don't fail the test for this timing issue
+        REG_ERROR(2, logger) << "  [FAIL] CMDBUSY path: ERROR_STATUS=0x" << std::hex << read_val
+                  << std::dec << " CMDQD=" << cmdqd << std::endl;
+        sub_tests_failed++;
+        test_passed = false;
     }
 
-    // Wait for first command to complete
-    wait(1000, SC_US);
+    test->read_register_32(INTR_STATE_OFFSET, read_val);
+    error_intr = read_val & 0x1;
+    error_irq = sig_error_irq.read();
+    bool irq_combined = sig_irq.read();
+    if (error_intr && error_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] CMDBUSY interrupt: INTR_STATE.error, error_irq, irq_o all 1" << std::endl;
+        sub_tests_passed++;
+    } else {
+        REG_ERROR(2, logger) << "  [FAIL] CMDBUSY interrupt incomplete"
+                  << " INTR_STATE.error=" << error_intr
+                  << " error_irq=" << error_irq
+                  << " irq_o=" << irq_combined << std::endl;
+        sub_tests_failed++;
+        test_passed = false;
+    }
+
+    // Drain via SW_RST then recover.
+    test->write_register_32(CONTROL_OFFSET, 0x40000000);
+    wait(50, SC_NS);
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
+    wait(10, SC_NS);
 
     // Clear error
     test->write_register_32(ERROR_STATUS_OFFSET, 0x01);  /// Clear CMDBUSY
@@ -353,11 +340,22 @@ void testbench::test_func005_error_recovery_flow()
 
         if (cmdinval_err) {
             REG_INFO(2, logger) << "[PASS] CMDINVAL error detected for invalid SPEED" << std::endl;
-            if (error_intr || error_irq) {
-                REG_INFO(2, logger) << "[PASS] Error interrupt asserted for CMDINVAL" << std::endl;
-            }
+            bool irq_combined = sig_irq.read();
+                if (error_intr && error_irq && irq_combined) {
+                    REG_INFO(2, logger) << "[PASS] Error interrupt asserted for CMDINVAL"
+                              << " (INTR_STATE/error_irq/irq_o)" << std::endl;
+                } else {
+                    REG_ERROR(2, logger) << "[FAIL] Error interrupt incomplete"
+                              << " INTR_STATE.error=" << error_intr
+                              << " error_irq=" << error_irq
+                              << " irq_o=" << irq_combined << std::endl;
+                    sub_tests_failed++;
+                    test_passed = false;
+                }
         } else {
-            REG_WARN(1, logger) << "[WARN] CMDINVAL error not detected" << std::endl;
+            REG_ERROR(2, logger) << "[FAIL] CMDINVAL error not detected" << std::endl;
+            sub_tests_failed++;
+            test_passed = false;
         }
     }
 
@@ -443,9 +441,18 @@ void testbench::test_func005_error_recovery_flow()
 
         if (csidinval_err) {
             REG_INFO(2, logger) << "[PASS] CSIDINVAL error detected" << std::endl;
-            if (error_intr || error_irq) {
-                REG_INFO(2, logger) << "[PASS] Error interrupt asserted for CSIDINVAL" << std::endl;
-            }
+            bool irq_combined = sig_irq.read();
+                if (error_intr && error_irq && irq_combined) {
+                    REG_INFO(2, logger) << "[PASS] Error interrupt asserted for CSIDINVAL"
+                              << " (INTR_STATE/error_irq/irq_o)" << std::endl;
+                } else {
+                    REG_ERROR(2, logger) << "[FAIL] Error interrupt incomplete"
+                              << " INTR_STATE.error=" << error_intr
+                              << " error_irq=" << error_irq
+                              << " irq_o=" << irq_combined << std::endl;
+                    sub_tests_failed++;
+                    test_passed = false;
+                }
         } else {
             REG_WARN(1, logger) << "[WARN] CSIDINVAL error not detected" << std::endl;
         }
@@ -514,9 +521,18 @@ void testbench::test_func005_error_recovery_flow()
 
     if (accessinval_err) {
         REG_INFO(2, logger) << "[PASS] ACCESSINVAL error detected" << std::endl;
-        if (error_intr || error_irq) {
-            REG_INFO(2, logger) << "[PASS] Error interrupt asserted for ACCESSINVAL" << std::endl;
-        }
+        bool irq_combined = sig_irq.read();
+            if (error_intr && error_irq && irq_combined) {
+                REG_INFO(2, logger) << "[PASS] Error interrupt asserted for ACCESSINVAL"
+                          << " (INTR_STATE/error_irq/irq_o)" << std::endl;
+            } else {
+                REG_ERROR(2, logger) << "[FAIL] Error interrupt incomplete"
+                          << " INTR_STATE.error=" << error_intr
+                          << " error_irq=" << error_irq
+                          << " irq_o=" << irq_combined << std::endl;
+                sub_tests_failed++;
+                test_passed = false;
+            }
     } else {
         REG_INFO(2, logger) << "[INFO] ACCESSINVAL error not detected (may require specific TLM implementation)" << std::endl;
     }

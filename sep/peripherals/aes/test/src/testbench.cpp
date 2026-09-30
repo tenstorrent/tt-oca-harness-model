@@ -435,26 +435,27 @@ void testbench::run_tests()
     test_func009_timing_across_modes();
 
     REG_INFO(1, logger) << "\n========================================"
-                         << "Coverage: uncovered model paths"
+                         << "Coverage: protocol / oracle edge paths"
                          << "========================================" << std::endl;
 
     m_test->trigger_reset();
     wait(20, SC_NS);
 
-    test_coverage_prng_reseed_trigger_and_rates();
-    test_coverage_keymgr_read_rejected();
-    test_coverage_escalation_aborts_cipher();
+    test_coverage_prng_reseed_busy_interval();
     test_coverage_error_state_writes_rejected();
-    test_coverage_gcm_shadow_and_busy();
-    test_coverage_sideload_and_gcm_init_guards();
     test_coverage_gcm_aes192_aes256_init();
-    test_coverage_auto_start_gcm_and_output_valid();
-    test_coverage_keymgr_rejects_non_write();
+    test_coverage_gcm_output_valid_iv_guard();
+    test_coverage_gcm_manual_init_no_iv();
+    test_coverage_aes_none_rejects_cipher();
     test_coverage_escalation_aborts_in_flight_cipher();
-    test_coverage_sideload_missing_key_and_manual_start();
-    test_coverage_error_state_and_busy_gcm_writes();
+    test_coverage_sideload_manual_openssl();
+    test_coverage_busy_gcm_write_ignored();
     test_coverage_gcm_shadow_mismatch_and_init_gates();
-    test_coverage_trigger_readback_and_gcm_manual_init();
+    test_coverage_register_tlm_matrix();
+    test_coverage_keymgr_tlm_matrix();
+    test_coverage_byte_enable_data_in();
+    test_coverage_transport_dbg_and_dmi();
+    test_coverage_clk_i_no_effect_on_latency();
     
     // Run FUNC-AES-006 REGWEN locking tests LAST (these lock CTRL_AUX_REGWEN permanently)
     REG_INFO(1, logger) << "\n========================================" 

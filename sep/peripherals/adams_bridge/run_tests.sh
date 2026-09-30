@@ -26,14 +26,19 @@ RUN_CTEST=false
 RUN_DOCS=false
 RUN_CPPCHECK=false
 CLEAN=false
-WANT_ASAN=false
-WANT_COV=false
 
+BUILD_TYPE_SET=""
+
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../setup_build_env.sh"
+
+# peripheral_set_build_type rejects --asan with --coverage (exit 2): ASan and
+# coverage instrumentation conflict and would produce a misleading report.
 for arg in "$@"; do
   case "$arg" in
-    --debug)    BUILD_TYPE="Debug" ;;
-    --asan)     BUILD_TYPE="ASAN"; WANT_ASAN=true ;;
-    --coverage) BUILD_TYPE="Coverage"; WANT_COV=true ;;
+    --debug)    peripheral_set_build_type "$arg" "Debug" ;;
+    --asan)     peripheral_set_build_type "$arg" "ASAN" ;;
+    --coverage) peripheral_set_build_type "$arg" "Coverage" ;;
     --ctest)    RUN_CTEST=true ;;
     --docs)     RUN_DOCS=true ;;
     --cppcheck) RUN_CPPCHECK=true ;;
@@ -42,11 +47,6 @@ for arg in "$@"; do
   esac
 done
 
-if ${WANT_ASAN} && ${WANT_COV}; then
-  echo "ERROR: --asan and --coverage are mutually exclusive (conflicting instrumentation)." >&2
-  exit 2
-fi
-
 BUILD_DIR="${SCRIPT_DIR}/build/$(echo "${BUILD_TYPE}" | tr '[:upper:]' '[:lower:]')"
 
 if ${CLEAN}; then
@@ -54,8 +54,6 @@ if ${CLEAN}; then
   rm -rf "${BUILD_DIR}"
 fi
 
-# shellcheck disable=SC1091
-source "${SCRIPT_DIR}/../setup_build_env.sh"
 peripheral_setup_build_env || exit 1
 
 if ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
@@ -82,22 +80,7 @@ elif [ "${BUILD_TYPE}" = "Coverage" ]; then
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 elif [ "${BUILD_TYPE}" = "ASAN" ]; then
-  # LeakSanitizer is not packaged on Darwin; keep it on for Linux CI.
-  ASAN_LEAKS=1
-  if [ "$(uname -s)" = "Darwin" ]; then
-    ASAN_LEAKS=0
-  fi
-  ASAN_OPTIONS="halt_on_error=0:detect_leaks=${ASAN_LEAKS}:log_path=${BUILD_DIR}/asan.log" \
-    "${BUILD_DIR}/bin/adams_bridge_test"
-  # halt_on_error=0 keeps the run going, so a clean exit code is not proof of a
-  # clean run: the log files are the gate.
-  if compgen -G "${BUILD_DIR}/asan.log.*" > /dev/null; then
-    echo ""
-    echo "ASAN/UBSAN reports found:"
-    cat "${BUILD_DIR}"/asan.log.*
-    exit 1
-  fi
-  echo "ASan/UBSan: clean (no ${BUILD_DIR}/asan.log.* produced)"
+  peripheral_enforce_asan_clean "${BUILD_DIR}/bin/adams_bridge_test" "${BUILD_DIR}"
 else
   "${BUILD_DIR}/bin/adams_bridge_test"
 fi

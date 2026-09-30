@@ -112,12 +112,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 1) & 0x1;  /// SPI_EVENT at bit 1
     spi_event_irq = sig_spi_event_irq.read();
 
-    if (spi_event_bit || spi_event_irq) {
-        REG_INFO(2, logger) << "  [PASS] TXWM interrupt asserted (INTR_STATE.spi_event=" << spi_event_bit
-                  << ", spi_event_irq=" << spi_event_irq << ")" << std::endl;
+    bool irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] TXWM interrupt asserted"
+                  << " (INTR_STATE.spi_event=1, spi_event_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] TXWM interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TXWM interrupt asserted (INTR_STATE.spi_event incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -186,11 +190,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 1) & 0x1;  /// SPI_EVENT at bit 1
     spi_event_irq = sig_spi_event_irq.read();
 
-    if (spi_event_bit || spi_event_irq) {
-        REG_INFO(2, logger) << "  [PASS] RXWM interrupt asserted" << std::endl;
+    irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] RXWM interrupt asserted"
+                  << " (INTR_STATE.spi_event=1, spi_event_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] RXWM interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RXWM interrupt asserted incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -296,11 +305,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 1) & 0x1;  /// SPI_EVENT at bit 1
     spi_event_irq = sig_spi_event_irq.read();
 
-    if (spi_event_bit || spi_event_irq) {
-        REG_INFO(2, logger) << "  [PASS] IDLE event interrupt asserted" << std::endl;
+    irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] IDLE event interrupt asserted"
+                  << " (INTR_STATE.spi_event=1, spi_event_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] IDLE event interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] IDLE event interrupt asserted incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -347,12 +361,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     error_bit = status_val & 0x1;
     error_irq = sig_error_irq.read();
 
-    if (error_bit || error_irq) {
-        REG_INFO(2, logger) << "  [PASS] Error interrupt asserted (INTR_STATE.error="
-                  << error_bit << ", error_irq=" << error_irq << ")" << std::endl;
+    irq_combined = sig_irq.read();
+    if (error_bit && error_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] Error interrupt asserted"
+                  << " (INTR_STATE.error=1, error_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Error interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Error interrupt asserted (INTR_STATE.error incomplete"
+                  << " INTR_STATE.error=" << error_bit
+                  << " error_irq=" << error_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -449,11 +467,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 1) & 0x1;  /// SPI_EVENT at bit 1
     spi_event_irq = sig_spi_event_irq.read();
 
-    if (spi_event_bit || spi_event_irq) {
-        REG_INFO(2, logger) << "  [PASS] TXEMPTY event interrupt asserted" << std::endl;
+    irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] TXEMPTY event interrupt asserted"
+                  << " (INTR_STATE.spi_event=1, spi_event_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] TXEMPTY event interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] TXEMPTY event interrupt asserted incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -504,11 +527,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 1) & 0x1;  /// SPI_EVENT at bit 1
     spi_event_irq = sig_spi_event_irq.read();
 
-    if (spi_event_bit || spi_event_irq) {
-        REG_INFO(2, logger) << "  [PASS] RXFULL event interrupt asserted" << std::endl;
+    irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] RXFULL event interrupt asserted"
+                  << " (INTR_STATE.spi_event=1, spi_event_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] RXFULL event interrupt not asserted" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] RXFULL event interrupt asserted incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -562,12 +590,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     error_bit = status_val & 0x1;  // Reuse error_bit from Test 4
     error_irq = sig_error_irq.read();
 
-    if (error_bit || error_irq) {
-        REG_INFO(2, logger) << "  [PASS] INTR_TEST forced ERROR interrupt (INTR_STATE.error="
-                  << error_bit << ", error_irq=" << error_irq << ")" << std::endl;
+    irq_combined = sig_irq.read();
+    if (error_bit && error_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] INTR_TEST forced ERROR interrupt"
+                  << " (INTR_STATE.error=1, error_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] INTR_TEST did not force ERROR interrupt" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] INTR_TEST forced ERROR interrupt (INTR_STATE.error incomplete"
+                  << " INTR_STATE.error=" << error_bit
+                  << " error_irq=" << error_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -585,12 +617,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 1) & 0x1;
     spi_event_irq = sig_spi_event_irq.read();
 
-    if (spi_event_bit || spi_event_irq) {
-        REG_INFO(2, logger) << "  [PASS] INTR_TEST forced SPI_EVENT interrupt (INTR_STATE.spi_event="
-                  << spi_event_bit << ", spi_event_irq=" << spi_event_irq << ")" << std::endl;
+    irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] INTR_TEST forced SPI_EVENT interrupt"
+                  << " (INTR_STATE.spi_event=1, spi_event_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] INTR_TEST did not force SPI_EVENT interrupt" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] INTR_TEST forced SPI_EVENT interrupt (INTR_STATE.spi_event incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -721,11 +757,16 @@ void testbench::test_func004_interrupt_driven_txrx()
     spi_event_bit = (status_val >> 1) & 0x1;
     spi_event_irq = sig_spi_event_irq.read();
 
-    if (spi_event_bit || spi_event_irq) {
-        REG_INFO(2, logger) << "  [PASS] EVENT_ENABLE unmasked TXEMPTY event (interrupt triggered)" << std::endl;
+    irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_irq && irq_combined) {
+        REG_INFO(2, logger) << "  [PASS] EVENT_ENABLE unmasked TXEMPTY event (interrupt triggered)"
+                  << " (INTR_STATE.spi_event=1, spi_event_irq=1, irq_o=1)" << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Event interrupt not triggered despite unmask" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] EVENT_ENABLE unmasked TXEMPTY event (interrupt triggered) incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_irq
+                  << " irq_o=" << irq_combined << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }

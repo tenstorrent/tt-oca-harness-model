@@ -48,6 +48,19 @@ rst_ni (TRNG SW_RESET_N bit) resets the model. FIFO_RDATA pops the queue
 (underflow if empty). FIFO_CTRL gates the filler thread. Health-test
 enable is captured; the running tests are a stub.
 
+`STARTUP_CTRL` (offset `0xB0`, RW) holds the startup hold-off in
+`DELAY_CYCLES[15:0]`; bits `[31:16]` are reserved RAZ/WI. The model caches
+it in `m_startup_delay_ns`, and `reset_process()` re-derives that cache —
+along with the FIFO and health-test enables — from the register values
+restored by `reset_all_registers()`, so the CSRs stay the single source of
+truth for every reset default.
+
+`FIFO_CTRL.ENABLE` gates entropy *generation*, not draining: disabling the
+FIFO stops the filler thread but leaves the queued words readable. Both the
+software path (`FIFO_RDATA`) and the `entropy_export` seed path pop
+regardless of the enable, so CSRNG and firmware see one FIFO with one set
+of rules.
+
 ----
   TLM MMIO ──► entropy_src_base::memory
                          │

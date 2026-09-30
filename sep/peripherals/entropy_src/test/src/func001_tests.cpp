@@ -1034,7 +1034,7 @@ bool testbench::tc_f001_rw_pattern_test_startup_ctrl()
     uint32_t read_val = 0xDEADBEEFu;
 
     // RTL has no register at these offsets (sep_reg.svh). A write must not stick.
-    const uint32_t holes[] = {0x58u, 0x5Cu, 0x64u, 0x68u, 0x6Cu, 0x84u, 0x88u, 0xB0u};
+    const uint32_t holes[] = {0x58u, 0x5Cu, 0x64u, 0x68u, 0x6Cu, 0x84u, 0x88u, 0xA8u};
     for (uint32_t off : holes) {
         test->register_write_32(off, 0xFFFFFFFFu);
         test->register_read_32(off, read_val);
@@ -1042,6 +1042,16 @@ bool testbench::tc_f001_rw_pattern_test_startup_ctrl()
             "TC-F001-128: offset 0x" << std::hex << off
             << " is not in the RTL map but read 0x" << read_val);
     }
+
+    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0xFFFFFFFFu);
+    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, read_val);
+    FUNC001_CHECK(read_val == 0x0000FFFFu,
+        "TC-F001-128: STARTUP_CTRL mask, got 0x" << std::hex << read_val);
+    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0x0000ABCDu);
+    test->register_read_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, read_val);
+    FUNC001_CHECK(read_val == 0x0000ABCDu,
+        "TC-F001-128: STARTUP_CTRL retention failed");
+    test->register_write_32(entropy_src_basetest::STARTUP_CTRL_OFFSET, 0u);
 
     test->register_read_32(entropy_src_basetest::APT_PROPORTION_LO_OFFSET, read_val);
     FUNC001_CHECK(read_val == entropy_src_basetest::APT_PROPORTION_LO_RESET,

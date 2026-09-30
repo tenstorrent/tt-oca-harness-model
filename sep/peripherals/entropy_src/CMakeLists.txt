@@ -73,6 +73,10 @@ if(NOT MSVC)
     add_compile_options(-Wno-unused-parameter)
 endif()
 
+# Find Threads before injecting sanitizer flags into CMAKE_CXX_FLAGS: the
+# AddressSanitizer link line makes FindThreads' -pthread probe fail on RHEL.
+find_package(Threads REQUIRED)
+
 set(WFLAG "-Wall -Wextra")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -105,7 +109,6 @@ endif()
 # -----------------------------------------------------------------------------
 # External Dependencies (SystemC and CCI)
 # -----------------------------------------------------------------------------
-find_package(Threads REQUIRED)
 include(FindCCI)
 include(FindSystemC)
 

@@ -141,7 +141,7 @@ abr_ip::abr_ip(sc_core::sc_module_name n, unsigned int memory_size)
                          << std::endl;
 }
 
-abr_ip::~abr_ip() = default;
+abr_ip::~abr_ip() = default; // LCOV_EXCL_LINE — sc_main uses quick_exit() so this never runs
 
 void abr_ip::set_crypto_backend(std::unique_ptr<abr::abr_crypto_backend> backend)
 {
@@ -368,24 +368,21 @@ void abr_ip::set_mldsa_busy()
     MLDSA_STATUS.MSG_STREAM_READY = 0u;
 }
 
-void abr_ip::finish_mldsa(bool valid, bool error)
+void abr_ip::finish_mldsa()
 {
     // Publish the result at the correct simulated time: an LT model must
     // resynchronize before a side effect becomes visible to other processes.
+    // consume_cycles() already synced when the latency exceeded the quantum;
+    // this catches a sub-quantum operation that only accumulated local time.
     if (m_qk.get_local_time() > SC_ZERO_TIME) {
         m_qk.sync();
     }
 
     // The sequencer parks at the operation's end state, so READY stays low
     // until a zeroize. Firmware relies on this to detect completion via VALID.
-    MLDSA_STATUS.VALID = valid ? 1u : 0u;
-    MLDSA_STATUS.ERROR = error ? 1u : 0u;
-
-    if (error) {
-        raise_error();
-    } else {
-        raise_notif();
-    }
+    MLDSA_STATUS.VALID = 1u;
+    MLDSA_STATUS.ERROR = 0u;
+    raise_notif();
 }
 
 void abr_ip::set_mlkem_busy()
@@ -395,20 +392,15 @@ void abr_ip::set_mlkem_busy()
     MLKEM_STATUS.ERROR = 0u;
 }
 
-void abr_ip::finish_mlkem(bool valid, bool error)
+void abr_ip::finish_mlkem()
 {
     if (m_qk.get_local_time() > SC_ZERO_TIME) {
         m_qk.sync();
     }
 
-    MLKEM_STATUS.VALID = valid ? 1u : 0u;
-    MLKEM_STATUS.ERROR = error ? 1u : 0u;
-
-    if (error) {
-        raise_error();
-    } else {
-        raise_notif();
-    }
+    MLKEM_STATUS.VALID = 1u;
+    MLKEM_STATUS.ERROR = 0u;
+    raise_notif();
 }
 
 // =============================================================================
@@ -737,8 +729,11 @@ void abr_ip::km_share_b_transport(unsigned int lane, tlm::tlm_generic_payload &t
 
 bool abr_ip::kv_fetch(unsigned int entry, abr::bytes &dest, unsigned int bytes_wanted)
 {
+    // read_entry is a 5-bit field and KV_NUM_ENTRIES is 32, so every caller
+    // passes an in-range index. Keep the guard so a future wider field cannot
+    // walk off m_kv_entries.
     if (entry >= abr::KV_NUM_ENTRIES) {
-        return false;
+        return false; // LCOV_EXCL_LINE — read_entry is 5 bits, so this is unreachable
     }
 
     const abr::bytes &src = m_kv_entries[entry];
@@ -957,9 +952,9 @@ void abr_ip::mldsa_engine_thread()
         case abr::MldsaCmd::KEYGEN_SIGN:
             do_mldsa_sign(true);
             break;
-        case abr::MldsaCmd::NONE:
-        default:
-            break;
+        case abr::MldsaCmd::NONE: // LCOV_EXCL_LINE — invalid cmds never wake the engine
+        default:                  // LCOV_EXCL_LINE
+            break;                // LCOV_EXCL_LINE
         }
 
         m_mldsa_cmd = abr::MldsaCmd::NONE;
@@ -985,7 +980,7 @@ void abr_ip::do_mldsa_keygen()
     bytes_to_regs(privkey, MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY);
 
     REG_INFO(2, logger) << "[ABR] ML-DSA keygen complete" << std::endl;
-    finish_mldsa(true, false);
+    finish_mldsa();
 }
 
 void abr_ip::do_mldsa_sign(bool keygen_first)
@@ -1042,7 +1037,7 @@ void abr_ip::do_mldsa_sign(bool keygen_first)
 
     REG_INFO(2, logger) << "[ABR] ML-DSA sign complete (keygen_first=" << keygen_first
                          << ", external_mu=" << m_external_mu << ")" << std::endl;
-    finish_mldsa(true, false);
+    finish_mldsa();
 }
 
 void abr_ip::do_mldsa_verify()
@@ -1083,7 +1078,7 @@ void abr_ip::do_mldsa_verify()
     m_msg_stream.clear();
 
     REG_INFO(2, logger) << "[ABR] ML-DSA verify complete" << std::endl;
-    finish_mldsa(true, false);
+    finish_mldsa();
 }
 
 // =============================================================================
@@ -1125,9 +1120,9 @@ void abr_ip::mlkem_engine_thread()
         case abr::MlkemCmd::KEYGEN_DECAPS:
             do_mlkem_decaps(true);
             break;
-        case abr::MlkemCmd::NONE:
-        default:
-            break;
+        case abr::MlkemCmd::NONE: // LCOV_EXCL_LINE — invalid cmds never wake the engine
+        default:                  // LCOV_EXCL_LINE
+            break;                // LCOV_EXCL_LINE
         }
 
         m_mlkem_cmd = abr::MlkemCmd::NONE;
@@ -1156,7 +1151,7 @@ void abr_ip::do_mlkem_keygen()
     bytes_to_regs(dk, MLKEM_DECAPS_KEY, abr::N_MLKEM_DECAPS_KEY);
 
     REG_INFO(2, logger) << "[ABR] ML-KEM keygen complete" << std::endl;
-    finish_mlkem(true, false);
+    finish_mlkem();
 }
 
 void abr_ip::do_mlkem_encaps()
@@ -1182,7 +1177,7 @@ void abr_ip::do_mlkem_encaps()
     m_last_shared_key = ss;
 
     REG_INFO(2, logger) << "[ABR] ML-KEM encaps complete" << std::endl;
-    finish_mlkem(true, false);
+    finish_mlkem();
 }
 
 void abr_ip::do_mlkem_decaps(bool keygen_first)
@@ -1223,5 +1218,5 @@ void abr_ip::do_mlkem_decaps(bool keygen_first)
 
     REG_INFO(2, logger) << "[ABR] ML-KEM decaps complete (keygen_first=" << keygen_first
                          << ")" << std::endl;
-    finish_mlkem(true, false);
+    finish_mlkem();
 }

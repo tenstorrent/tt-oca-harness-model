@@ -8,12 +8,12 @@
  */
 
 #include "sep_reset_ctrl.h"
+#include "reg_access.h"
 
 // Constructor - follow AES pattern exactly
 sep_reset_ctrl_ip::sep_reset_ctrl_ip(sc_module_name n)
     : sep_reset_ctrl_base(n, "sep_reset_ctrl", 0x8)
     , verbosity("verbosity", REG_DEFAULT_VERBOSITY)
-    , sw_reset_current_value_(SW_RESET_N_RESET)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());
     logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
@@ -36,13 +36,20 @@ sep_reset_ctrl_ip::sep_reset_ctrl_ip(sc_module_name n)
     sensitive << global_rst_ni;
     dont_initialize();
 
-    std::function<bool(uint64_t)> write_cb = [this](uint64_t value) {
-        return this->handle_sw_reset_n_write(value, SW_RESET_N.write_bit_mask);
-    };
-    memory.register_write_callback(write_cb, SW_RESET_N.offset);
+    // Prefer the byte-enable callback so full-width writes with a BE array
+    // merge against the live shadow. The plain write_callback path only merges
+    // for short (len < 8) transfers; a full-length BE write would otherwise
+    // replace the whole word and ignore disabled lanes.
+    std::function<bool(uint64_t, uint8_t)> write_cb =
+        [this](uint64_t value, uint8_t byte_enable) {
+            const uint64_t merged = regmodel::apply_byte_enable(
+                static_cast<uint64_t>(SW_RESET_N), value, byte_enable);
+            return this->handle_sw_reset_n_write(merged, SW_RESET_N.write_bit_mask);
+        };
+    memory.register_write_callback_with_be(write_cb, SW_RESET_N.offset);
 
     std::function<bool(unsigned long long&)> read_cb = [this](unsigned long long& value) {
-        value = sw_reset_current_value_ & SW_RESET_N.read_bit_mask;
+        value = static_cast<uint64_t>(SW_RESET_N) & SW_RESET_N.read_bit_mask;
         return true;
     };
     memory.register_read_callback(read_cb, SW_RESET_N.offset);
@@ -51,12 +58,12 @@ sep_reset_ctrl_ip::sep_reset_ctrl_ip(sc_module_name n)
 // Reset function 
 void sep_reset_ctrl_ip::reset()
 {
-    // Reset base class registers first
+    // reset_all_registers() restores SW_RESET_N to its declared reset value
+    // (0x7e). That register word is the model's only copy of the software
+    // reset state, so there is nothing else to restore here -- re-stating the
+    // default would just be a second place to keep in sync.
     reset_all_registers();
-    
-    // Reset current value to reset state
-    sw_reset_current_value_ = SW_RESET_N_RESET;
-    
+
     // Notify that reset values are applied
     sw_reset_changed_.notify(sc_core::SC_ZERO_TIME);
 }
@@ -71,22 +78,34 @@ void sep_reset_ctrl_ip::reset_handler()
 // SC_METHOD: Update reset output signals (knowledge-base logic)
 void sep_reset_ctrl_ip::update_rst_outputs()
 {
-    bool global_rst = global_rst_ni.read();
-    
-    // Use the current SW reset value for output generation
-    km_rst_ni.write(global_rst   && bool(sw_reset_current_value_ & SW_RESET_N_KM));
-    otbn_rst_n.write(global_rst  && bool(sw_reset_current_value_ & SW_RESET_N_OTBN));
-    aes_rst_ni.write(global_rst  && bool(sw_reset_current_value_ & SW_RESET_N_AES));
-    hmac_rst_ni.write(global_rst && bool(sw_reset_current_value_ & SW_RESET_N_HMAC));
-    kmac_rst_ni.write(global_rst && bool(sw_reset_current_value_ & SW_RESET_N_KMAC));
-    trng_rst_ni.write(global_rst && bool(sw_reset_current_value_ & SW_RESET_N_TRNG));
-    abr_rst_ni.write(global_rst  && bool(sw_reset_current_value_ & SW_RESET_N_ABR));
+    const bool global_rst = global_rst_ni.read();
+
+    // Each output is the global reset ANDed with its per-IP software reset
+    // bit. Read the bits through SW_RESET_N's named bitfields so the wiring
+    // is checked against the register description rather than against a
+    // separate table of hand-written bit positions.
+    auto sw = [](const regmodel::Bitfield<64>& f) {
+        return static_cast<uint64_t>(f) != 0u;
+    };
+
+    km_rst_ni.write(global_rst   && sw(SW_RESET_N.km_sw_rst_n));
+    otbn_rst_n.write(global_rst  && sw(SW_RESET_N.otbn_sw_rst_n));
+    aes_rst_ni.write(global_rst  && sw(SW_RESET_N.aes_sw_rst_n));
+    hmac_rst_ni.write(global_rst && sw(SW_RESET_N.hmac_sw_rst_n));
+    kmac_rst_ni.write(global_rst && sw(SW_RESET_N.kmac_sw_rst_n));
+    trng_rst_ni.write(global_rst && sw(SW_RESET_N.trng_sw_rst_n));
+    abr_rst_ni.write(global_rst  && sw(SW_RESET_N.abr_sw_rst_n));
 }
 
 // Write callback - AES pattern
 bool sep_reset_ctrl_ip::handle_sw_reset_n_write(uint64_t value, uint64_t mask)
 {
-    sw_reset_current_value_ = value & mask;
+    // This callback replaces Reg::handle_write, so the register-file word is
+    // not updated unless we do it here -- and since SW_RESET_N is the model's
+    // only copy of the state, leaving it at the power-on reset value would
+    // make later partial writes combine against a stale 0x7e instead of the
+    // live CSR, and would make reads return the wrong value.
+    SW_RESET_N = value & mask;
     sw_reset_changed_.notify(sc_core::SC_ZERO_TIME);
     // Yield to the SC kernel so update_rst_outputs fires immediately and the
     // downstream peripheral SC_METHODs see the reset signal go low before this
