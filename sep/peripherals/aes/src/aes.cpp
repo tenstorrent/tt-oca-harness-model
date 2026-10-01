@@ -2457,13 +2457,15 @@ void aes_model::register_all_callbacks()
 
     // DATA_IN — honor TLM byte-enables so disabled lanes keep prior bytes.
     for (unsigned int i = 0; i < 4; i++) {
-        std::function<bool(uint32_t, uint8_t)> write_cb =
+std::function<bool(uint32_t, uint8_t)> write_cb =
             [this, i](uint32_t value, uint8_t byte_enable) {
+                if (byte_enable == 0) {
+                    return true;
+                }
                 const uint32_t merged =
                     regmodel::apply_byte_enable(m_data_in[i], value, byte_enable);
                 return this->handle_write_DATA_IN(i, merged, DATA_IN[i].write_bit_mask);
             };
-        memory.register_write_callback_with_be(write_cb, DATA_IN[i].offset);
     }
 
     // DATA_OUT
