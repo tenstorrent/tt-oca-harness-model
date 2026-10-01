@@ -94,14 +94,25 @@
 #define XBAR_SEP_REGION_SIZE_GOLDEN 0x20000000u             /* SEP_REGION_SIZE (32b) */
 #define XBAR_SEP_OUTBOUND_START     0x0000000040000000ULL   /* SEP outbound egress filter */
 #define XBAR_SEP_OUTBOUND_END       0x00000000800000FFULL
-#define XBAR_SEP_OUTBOUND_CFG       0x0000000101000013ULL
+/*
+ * FILTER_CONFIG words (hw/ip/axi_filter/regs/filter_ctrl.rdl): read_allowed[0],
+ * write_allowed[1], entry_enabled[4], allow_ns[8], data_bus_width[14:12] (sw=r,
+ * reset 3), src_id[19:16], allow_burst[24], locked[63]. Bits 32..62 hold no
+ * field. Each word carries data_bus_width at its reset value, so the written
+ * word is also the value a readback returns (tt-oca-harness #2589; the former
+ * goldens carried a stray bit 32 and no data_bus_width).
+ *   OUTBOUND_CFG: read | write | entry_enabled | allow_burst
+ *   INBOUND_CFG0 / SMC_OUTBOUND_CFG: read | write | entry_enabled | src_id=3
+ *   INBOUND_CFG1: INBOUND_CFG0 | allow_ns
+ */
+#define XBAR_SEP_OUTBOUND_CFG       0x0000000001003013ULL
 #define XBAR_SEP_INBOUND_START      0x0000000010802000ULL   /* SEP inbound filter rule0/rule1 */
 #define XBAR_SEP_INBOUND_END        0x000000001080203FULL
-#define XBAR_SEP_INBOUND_CFG0       0x0000000100030013ULL
-#define XBAR_SEP_INBOUND_CFG1       0x0000000100030113ULL
+#define XBAR_SEP_INBOUND_CFG0       0x0000000000033013ULL
+#define XBAR_SEP_INBOUND_CFG1       0x0000000000033113ULL
 #define XBAR_SMC_OUTBOUND_START     0x0000000010802000ULL   /* SMC outbound egress filter */
 #define XBAR_SMC_OUTBOUND_END       0x000000001080203FULL
-#define XBAR_SMC_OUTBOUND_CFG       0x0000000100030013ULL
+#define XBAR_SMC_OUTBOUND_CFG       0x0000000000033013ULL
 /* SMC CPU_CTRL RESET_CTRL post-pulse readback: default value (pulse_start bits self-clear). */
 #define XBAR_SMC_RESET_CTRL_DEFAULT 0x0000010Fu
 
