@@ -218,15 +218,15 @@ bool spi_flash_model::handle_erase(uint32_t address, bool addr_4byte, uint32_t e
     return true;
 }
 
-void spi_flash_model::handle_chip_erase()
+bool spi_flash_model::handle_chip_erase()
 {
     if (!m_write_enabled) {
         std::cout << "[spi_flash] Chip Erase FAILED: WEL not set\n";
-        return;
+        return false;
     }
     if (m_op_suspended) {
         std::cout << "[spi_flash] Chip Erase FAILED: operation suspended\n";
-        return;
+        return false;
     }
 
     std::cout << "[spi_flash] Chip Erase: erasing entire flash\n";
@@ -234,6 +234,7 @@ void spi_flash_model::handle_chip_erase()
 
     m_write_enabled = false;
     sync_sr1_wel();
+    return true;
 }
 
 void spi_flash_model::handle_control(uint8_t opcode, std::vector<uint8_t>& rx_buffer)
@@ -379,8 +380,7 @@ bool spi_flash_model::process_command(uint8_t opcode,
         case ERASE_64KB_4B:
             return handle_erase(address, true, ERASE_BLOCK_SIZE);
         case CHIP_ERASE:
-            handle_chip_erase();
-            return true;
+            return handle_chip_erase();
 
         // --- Control ---
         case WRITE_ENABLE:

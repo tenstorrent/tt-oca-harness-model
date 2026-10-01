@@ -51,8 +51,12 @@ Source: `test/src/local_master_alias_remap_ctrl_testbench.cpp`.
 |T8 |Address restored |Caller payload unchanged |Positive
 |T9 |transport_dbg |Same remap |Positive
 |T10 |Field masks |Reserved bits discarded (entries 0 / 7 / 15) |Mixed
+|T10b |Cacheable field |4-bit `cacheable[59:56]` round-trips; bit 62 reserved;
+RW mask `0x8FFFFFFFFFFFF000` |Positive
 |T11 |rst_ni |Clears the table; former hit becomes passthrough |Positive
-|T12–T17 |cacheable override |Hit / miss / restore / dbg |Positive
+|T12–T17 |cacheable override |Bit-for-bit AxCACHE replacement (0x6 / 0x0 / 0x9)
+on hit; miss passthrough; restore; dbg |Positive
+|T17b |No extension on hit |Remapped with no AxCACHE to override |Positive
 |T18 |get_region guard |Out-of-range index |Negative
 |T19 |Partial CSR writes |32-bit and byte-enable lanes merge, disabled lanes
 kept |Mixed
@@ -60,7 +64,8 @@ kept |Mixed
 data pointer; entry left unchanged |Negative
 |T21 |Range oracle |`start`, `end-1`, `end`; empty and reversed ranges |Mixed
 |T22 |Offset overflow |44-bit wrap with the low 12 bits preserved |Negative
-|T23 |Overlap priority |First match wins across an invalidate cascade |Mixed
+|T23 |Overlap priority |First match wins across an invalidate cascade, proven
+by the winning entry's distinct `cacheable` nibble |Mixed
 |T24 |Extension handling |Absent extension, field preserve, restore on error
 |Mixed
 |T25 |Annotated delay |Downstream +17 ns accumulated, metadata intact |Positive

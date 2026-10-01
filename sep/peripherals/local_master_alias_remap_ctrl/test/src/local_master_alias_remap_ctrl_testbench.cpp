@@ -51,7 +51,7 @@ struct StubTarget : sc_core::sc_module
     unsigned int          last_be_len          = 0;
     sc_core::sc_time      last_delay_in        = sc_core::SC_ZERO_TIME;
     bool                  last_had_ext         = false;
-    bool                  last_cacheable       = false;
+    uint8_t               last_cache           = 0xFF; ///< AxCACHE[3:0] seen downstream; 0xFF = no extension
     uint8_t               last_source_id       = 0;
     uint8_t               last_group_id        = 0;
     bool                  last_is_ns           = false;
@@ -80,7 +80,7 @@ struct StubTarget : sc_core::sc_module
 
         sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>();
         last_had_ext   = (ext != nullptr);
-        last_cacheable = ext ? ext->cacheable : false;
+        last_cache     = ext ? ext->axi_cache : 0xFF;
         last_source_id = ext ? ext->source_id : 0;
         last_group_id  = ext ? ext->group_id  : 0;
         last_is_ns     = ext ? ext->is_ns     : false;
@@ -114,7 +114,10 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
     static constexpr uint32_t IDX_START   = local_alias_remap_ip::IDX_START;
 
     static constexpr uint64_t ADDR_MASK  = 0x00FFFFFFFFFFF000ULL; // [55:12]
-    static constexpr uint64_t ATTRS_MASK = 0xC0FFFFFFFFFFF000ULL; // offset+cacheable+valid
+    // offset[55:12] | cacheable[59:56] | valid[63]. Was 0xC0FF... when cacheable
+    // was a single bit 62; tt-oca-hw #2464 widened it to the 4-bit AxCACHE field
+    // at [59:56] and made [62:60] reserved.
+    static constexpr uint64_t ATTRS_MASK = 0x8FFFFFFFFFFFF000ULL;
 
     sc_core::sc_signal<bool> rst_n_sig;
     local_alias_remap_ip     dut;
@@ -171,15 +174,71 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         return got == expected;
     }
 
+    // -------------------------------------------------------------------------
+    // REGION_ATTRS layout (alias_remap.rdl after tt-oca-hw #2464):
+    //   [11:0] RAZ/WI | offset[55:12] | cacheable[59:56] | [62:60] RAZ/WI | valid[63]
+    //
+    // Spelled out locally rather than reusing the DUT's constants so the
+    // expected encoding is an independent statement of the RDL, not a copy of
+    // the code under test. Bit 62 was the pre-#2464 single cacheable bit and is
+    // now reserved — T10 pins that it is dropped on write.
+    // -------------------------------------------------------------------------
+    static constexpr uint64_t ATTRS_CACHEABLE_SHIFT = 56;
+    static constexpr uint64_t ATTRS_VALID           = 1ULL << 63;
+
+    static uint64_t attrs_word(uint64_t offset, uint8_t cacheable, bool valid = true)
+    {
+        return (offset & 0x00FFFFFFFFFFF000ULL)
+             | (static_cast<uint64_t>(cacheable & 0xFu) << ATTRS_CACHEABLE_SHIFT)
+             | (valid ? ATTRS_VALID : 0ULL);
+    }
+
     void program_region(uint32_t r, uint64_t start, uint64_t end,
-                        uint64_t offset, bool cacheable, bool valid = true)
+                        uint64_t offset, uint8_t cacheable, bool valid = true)
     {
         csr_write64(csr_off(r, 0), start);
         csr_write64(csr_off(r, 1), end);
-        uint64_t attrs = (offset & ADDR_MASK)
-                       | (cacheable ? (1ULL << 62) : 0ULL)
-                       | (valid ? (1ULL << 63) : 0ULL);
-        csr_write64(csr_off(r, 2), attrs);
+        csr_write64(csr_off(r, 2), attrs_word(offset, cacheable, valid));
+    }
+
+    // -------------------------------------------------------------------------
+    // Data-path access carrying a sep_axi_extension, so the tests can drive an
+    // incoming AxCACHE and see what the region override does to it. Returns the
+    // extension's value after the call, which is what the initiator would go on
+    // to observe.
+    //
+    // The extension is stack-allocated and paired with clear_extension() rather
+    // than set_auto_extension(), which would schedule a release of memory the
+    // payload does not own.
+    // -------------------------------------------------------------------------
+    uint8_t data_access_ext(uint64_t addr, uint8_t cache_in, bool use_dbg)
+    {
+        tlm::tlm_generic_payload trans;
+        sep::sep_axi_extension   ext;
+        sc_core::sc_time         delay = sc_core::SC_ZERO_TIME;
+        uint64_t                 buf   = 0;
+
+        ext.axi_cache = cache_in;
+
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(addr);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&buf));
+        trans.set_data_length(8);
+        trans.set_byte_enable_ptr(nullptr);
+        trans.set_streaming_width(8);
+        trans.set_extension(&ext);
+
+        if (use_dbg)
+            data_initiator->transport_dbg(trans);
+        else
+            data_initiator->b_transport(trans, delay);
+
+        assert(trans.get_response_status() == tlm::TLM_OK_RESPONSE);
+
+        const uint8_t cache_after = ext.axi_cache;
+        trans.clear_extension(&ext);
+
+        return cache_after;
     }
 
     void clear_all_via_reset()
@@ -194,12 +253,17 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
 
     // -------------------------------------------------------------------------
     // Data-path helpers
+    //
+    // data_xfer() is the general form used by the protocol / delay / error
+    // cases: it exposes length, streaming width, byte enables, an incoming
+    // annotated delay, and an optional caller-owned extension. data_access_ext()
+    // above is the narrow AxCACHE-only form used by T12-T17b.
     // -------------------------------------------------------------------------
     struct DataResult {
         tlm::tlm_response_status status = tlm::TLM_INCOMPLETE_RESPONSE;
         uint64_t                 addr_after = 0;
         sc_core::sc_time         delay_after = sc_core::SC_ZERO_TIME;
-        bool                     cacheable_after = false;
+        uint8_t                  cache_after = 0xFF; ///< 0xFF when no extension was supplied
         unsigned int             dbg_bytes = 0;
     };
 
@@ -236,13 +300,16 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         r.addr_after = trans.get_address();
         r.delay_after = delay;
         if (ext)
-            r.cacheable_after = ext->cacheable;
+            r.cache_after = ext->axi_cache;
 
         if (ext)
             trans.clear_extension(ext);
         return r;
     }
 
+    // -------------------------------------------------------------------------
+    // Test helper — report test result
+    // -------------------------------------------------------------------------
     void report(const std::string& test_name, bool passed)
     {
         m_tests_run++;
@@ -269,6 +336,8 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         {
             bool pass = true;
             for (uint32_t i = 0; i < NUM_REGIONS; ++i) {
+                // Frontdoor: all three words of every region read back 0, which
+                // also covers cacheable[59:56] and valid[63] being clear.
                 for (unsigned w = 0; w < 3; ++w) {
                     if (!csr_read64_ok(csr_off(i, w), 0)) {
                         pass = false;
@@ -298,7 +367,8 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             // Secondary backdoor check (socket is the primary oracle above).
             auto region = dut.get_region(0);
             pass = pass && (region.start_addr == start) && (region.end_addr == end)
-                       && (region.offset == off) && !region.cacheable && region.valid;
+                       && (region.offset == off) && (region.cacheable == 0)
+                       && region.valid;
             report("T2: Region 0 program and socket readback", pass);
         }
 
@@ -331,7 +401,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         // T5: First-match priority (region 0 over overlapping region 1)
         // ==================================================================
         {
-            program_region(1, 0x10800, 0x10900, 0x3000000, false);
+            program_region(1, 0x10800, 0x10900, 0x3000000, /*cacheable=*/0x0);
             const uint64_t in  = 0x10850;
             const uint64_t exp = expect_translated(in, 0x2000000); // region 0 wins
             uint64_t buf = 0;
@@ -393,8 +463,13 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         }
 
         // ==================================================================
-        // T10: Field masks — all-ones writes; reserved bits discarded
+        // T10: Field masks — all-ones writes; reserved bits discarded.
         //      Sample first (0), middle (7), last (15).
+        //
+        //      Post tt-oca-hw #2464 the attrs word keeps offset[55:12],
+        //      cacheable[59:56] and valid[63]; [62:60] and [11:0] are RAZ/WI,
+        //      so an all-ones write must read back exactly ATTRS_MASK and
+        //      cacheable must read 0xF (not a replicated single bit).
         // ==================================================================
         {
             bool pass = true;
@@ -407,15 +482,49 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
                 pass = pass && csr_read64(csr_off(r, 0), rs) && (rs == ADDR_MASK);
                 pass = pass && csr_read64(csr_off(r, 1), re) && (re == ADDR_MASK);
                 pass = pass && csr_read64(csr_off(r, 2), ra) && (ra == ATTRS_MASK);
-                // Explicitly: bits [11:0] and [63:56] are 0 on address regs;
-                // attrs keep only 62 and 63 above the offset field.
+                // Explicitly: bits [11:0] and [63:56] are 0 on address regs.
                 pass = pass && ((rs & 0xFFFULL) == 0) && ((rs >> 56) == 0);
                 pass = pass && ((re & 0xFFFULL) == 0) && ((re >> 56) == 0);
                 pass = pass && ((ra & 0xFFFULL) == 0);
-                pass = pass && ((ra & ~(ATTRS_MASK)) == 0);
-                pass = pass && ((ra >> 62) == 0x3ULL); // cacheable|valid
+                pass = pass && ((ra & ~ATTRS_MASK) == 0);
+                // valid set, [62:60] dropped, cacheable all four bits set.
+                pass = pass && ((ra >> 63) == 0x1ULL);
+                pass = pass && (((ra >> 60) & 0x7ULL) == 0ULL);
+                pass = pass && (((ra >> ATTRS_CACHEABLE_SHIFT) & 0xFULL) == 0xFULL);
+                auto rr = dut.get_region(r);
+                pass = pass && (rr.cacheable == 0xF) && rr.valid;
             }
             report("T10: Field masks discard reserved bits (entries 0/7/15)", pass);
+
+            // ----------------------------------------------------------------
+            // T10b: bit 62 was the pre-#2464 single cacheable bit. It is now
+            //       reserved, so a write that still sets it must drop it while
+            //       the real 4-bit field (0xA = 0b1010, not all-ones or
+            //       all-zeros) round-trips intact.
+            // ----------------------------------------------------------------
+            const uint64_t attrs_in = (0x1000000ULL & ADDR_MASK)
+                                    | (0xAULL << ATTRS_CACHEABLE_SHIFT)
+                                    | (1ULL << 62)   // reserved — must vanish
+                                    | ATTRS_VALID;
+            bool pass_b = csr_write64(csr_off(2, 0), 0x30000)
+                       && csr_write64(csr_off(2, 1), 0x31000)
+                       && csr_write64(csr_off(2, 2), attrs_in);
+
+            uint64_t raw = 0;
+            pass_b = pass_b && csr_read64(csr_off(2, 2), raw)
+                            && (raw == (attrs_in & ~(1ULL << 62)));
+
+            auto r2 = dut.get_region(2);
+            pass_b = pass_b && (r2.start_addr == 0x30000) && (r2.end_addr == 0x31000)
+                            && (r2.offset == 0x1000000) && (r2.cacheable == 0xA)
+                            && r2.valid;
+            report("T10b: cacheable[59:56] round-trips as 4 bits; reserved bit 62 dropped",
+                   pass_b);
+
+            // Leave the sampled entries invalid so later tests start clean.
+            for (uint32_t r : samples)
+                csr_write64(csr_off(r, 2), 0);
+            csr_write64(csr_off(2, 2), 0);
         }
 
         // ==================================================================
@@ -424,7 +533,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         {
             // Leave a programmed hit address from T2/T10 state, then reset.
             // Reprogram entry 0 to a known hit first so post-reset traffic is meaningful.
-            program_region(0, 0x10000, 0x11000, 0x2000000, false);
+            program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/0x0);
             uint64_t buf = 0;
             data_xfer(tlm::TLM_READ_COMMAND, 0x10100, buf, false, nullptr);
             const bool was_hit = (stub.last_addr == expect_translated(0x10100, 0x2000000));
@@ -433,11 +542,19 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
 
             bool pass = was_hit;
             for (uint32_t i = 0; i < NUM_REGIONS; ++i) {
+                // Frontdoor readback is the oracle; the decoded region is
+                // checked too so a stale cacheable nibble cannot hide behind
+                // the CSR read mask.
                 for (unsigned w = 0; w < 3; ++w) {
                     if (!csr_read64_ok(csr_off(i, w), 0)) {
                         pass = false;
                         break;
                     }
+                }
+                auto region = dut.get_region(i);
+                if (region.start_addr != 0 || region.end_addr != 0 ||
+                    region.offset != 0 || region.cacheable != 0 || region.valid) {
+                    pass = false;
                 }
                 if (!pass) break;
             }
@@ -448,77 +565,111 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         }
 
         // ==================================================================
-        // T12-T17: cacheable override (reprogram after reset)
+        // T12-T17: cacheable override on the data path
+        //
+        // axi_alias_remap.sv (tt-oca-hw #2464) drives aw.cache/ar.cache from
+        // the matched region's 4-bit cacheable[59:56] field — a bit-for-bit
+        // replacement of AxCACHE — and passes the incoming value through on a
+        // miss. T10 only proves the field survives a CSR round-trip; these
+        // check that the exact nibble reaches the fabric.
+        //
+        // Patterns are chosen so a replicated-bit or OR/AND implementation
+        // fails: 0x6 = 0b0110 and 0x9 = 0b1001 are bitwise complements within
+        // the nibble, and neither is 0x0 or 0xF.
+        //
+        // T11 left every region cleared, so reprogram from scratch here:
+        //   region 0: [0x10000, 0x11000) +0x2000000, cacheable = 0x6
+        //   region 1: [0x40000, 0x41000) +0x5000000, cacheable = 0x0
+        //   region 2: [0x50000, 0x51000) +0x7000000, cacheable = 0x9
         // ==================================================================
-        program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/true);
-        program_region(1, 0x40000, 0x41000, 0x5000000, /*cacheable=*/false);
+        program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/0x6);
+        program_region(1, 0x40000, 0x41000, 0x5000000, /*cacheable=*/0x0);
+        program_region(2, 0x50000, 0x51000, 0x7000000, /*cacheable=*/0x9);
 
+        // T12: hit on region 0 replaces an incoming AxCACHE=0 with exactly 0x6
+        //      (not 0xF — the old replicated-bit behaviour).
         {
-            sep::sep_axi_extension ext;
-            ext.cacheable = false;
-            uint64_t buf = 0;
-            auto r = data_xfer(tlm::TLM_READ_COMMAND, 0x10100, buf, false, &ext);
-            report("T12: cacheable region drives outgoing cache attribute high",
-                   r.status == tlm::TLM_OK_RESPONSE &&
-                   stub.last_had_ext && stub.last_cacheable &&
-                   stub.last_addr == expect_translated(0x10100, 0x2000000) &&
-                   !r.cacheable_after);
+            data_access_ext(0x10100, /*cache_in=*/0x0, /*use_dbg=*/false);
+            report("T12: region cacheable=0x6 drives outgoing AxCACHE to exactly 0x6",
+                   stub.last_had_ext && stub.last_cache == 0x6 &&
+                   stub.last_addr == expect_translated(0x10100, 0x2000000));
         }
+
+        // T13: hit on a cacheable=0 region clears every incoming bit — an
+        //      override, not an OR; and region 2 flips every bit of 0x6 to 0x9
+        //      — an override, not an AND.
         {
-            sep::sep_axi_extension ext;
-            ext.cacheable = true;
-            uint64_t buf = 0;
-            auto r = data_xfer(tlm::TLM_READ_COMMAND, 0x40100, buf, false, &ext);
-            report("T13: non-cacheable region overrides an incoming set bit",
-                   r.status == tlm::TLM_OK_RESPONSE &&
-                   stub.last_had_ext && !stub.last_cacheable &&
-                   stub.last_addr == expect_translated(0x40100, 0x5000000) &&
-                   r.cacheable_after);
-        }
-        {
-            sep::sep_axi_extension ext;
-            uint64_t buf = 0;
-            ext.cacheable = true;
-            data_xfer(tlm::TLM_READ_COMMAND, 0x90000, buf, false, &ext);
-            const bool high_ok = stub.last_cacheable && stub.last_addr == 0x90000;
-            ext.cacheable = false;
-            data_xfer(tlm::TLM_READ_COMMAND, 0x90000, buf, false, &ext);
-            const bool low_ok = !stub.last_cacheable && stub.last_addr == 0x90000;
-            report("T14: passthrough on miss leaves cache attribute unchanged",
-                   high_ok && low_ok);
-        }
-        {
-            sep::sep_axi_extension ext;
-            uint64_t buf = 0;
-            ext.cacheable = false;
-            auto hit = data_xfer(tlm::TLM_READ_COMMAND, 0x10100, buf, false, &ext);
-            ext.cacheable = true;
-            auto miss = data_xfer(tlm::TLM_READ_COMMAND, 0x90000, buf, false, &ext);
-            report("T15: initiator's cache attribute restored after forward",
-                   !hit.cacheable_after && miss.cacheable_after);
-        }
-        {
-            sep::sep_axi_extension ext;
-            uint64_t buf = 0;
-            ext.cacheable = false;
-            data_xfer(tlm::TLM_READ_COMMAND, 0x10100, buf, true, &ext);
-            const bool hit_ok = stub.last_had_ext && stub.last_cacheable &&
-                                stub.last_addr == expect_translated(0x10100, 0x2000000);
-            ext.cacheable = true;
-            data_xfer(tlm::TLM_READ_COMMAND, 0x40100, buf, true, &ext);
-            const bool clear_ok = !stub.last_cacheable &&
+            data_access_ext(0x40100, /*cache_in=*/0xF, /*use_dbg=*/false);
+            const bool clear_ok = stub.last_had_ext && stub.last_cache == 0x0 &&
                                   stub.last_addr == expect_translated(0x40100, 0x5000000);
-            report("T16: transport_dbg applies the same cacheable override",
-                   hit_ok && clear_ok);
+
+            data_access_ext(0x50100, /*cache_in=*/0x6, /*use_dbg=*/false);
+            const bool flip_ok = stub.last_had_ext && stub.last_cache == 0x9 &&
+                                 stub.last_addr == expect_translated(0x50100, 0x7000000);
+
+            report("T13: region field replaces AxCACHE bit-for-bit (0xF->0x0, 0x6->0x9)",
+                   clear_ok && flip_ok);
         }
+
+        // T14: on a miss the incoming attribute passes through untouched, for
+        //      several encodings, alongside the unremapped address.
         {
-            sep::sep_axi_extension ext;
-            ext.cacheable = true;
-            uint64_t buf = 0;
-            auto r = data_xfer(tlm::TLM_READ_COMMAND, 0x90000, buf, true, &ext);
+            bool pass = true;
+            for (uint8_t c : {uint8_t{0xF}, uint8_t{0x0}, uint8_t{0x5}, uint8_t{0xA}}) {
+                data_access_ext(0x90000, c, /*use_dbg=*/false);
+                pass = pass && stub.last_cache == c && stub.last_addr == 0x90000;
+            }
+            report("T14: passthrough on miss leaves AxCACHE unchanged (0xF/0x0/0x5/0xA)",
+                   pass);
+        }
+
+        // T15: the override is restored after the forward, for the same reason
+        //      T8 checks the address — in RTL these are downstream wires, not a
+        //      mutation the initiator can observe.
+        {
+            const uint8_t after_hit  = data_access_ext(0x10100, 0x3, false);
+            const uint8_t after_miss = data_access_ext(0x90000, 0xC, false);
+            report("T15: initiator's AxCACHE restored after forward",
+                   after_hit == 0x3 && after_miss == 0xC);
+        }
+
+        // T16: transport_dbg applies the same override as b_transport, so a GDB
+        //      access cannot see a different attribute than the functional path.
+        {
+            data_access_ext(0x10100, /*cache_in=*/0x0, /*use_dbg=*/true);
+            const bool hit_ok = stub.last_had_ext && stub.last_cache == 0x6 &&
+                                stub.last_addr == expect_translated(0x10100, 0x2000000);
+
+            data_access_ext(0x40100, /*cache_in=*/0xF, /*use_dbg=*/true);
+            const bool clear_ok = stub.last_cache == 0x0 &&
+                                  stub.last_addr == expect_translated(0x40100, 0x5000000);
+
+            data_access_ext(0x50100, /*cache_in=*/0x6, /*use_dbg=*/true);
+            const bool flip_ok = stub.last_cache == 0x9 &&
+                                 stub.last_addr == expect_translated(0x50100, 0x7000000);
+
+            report("T16: transport_dbg applies the same 4-bit cacheable override",
+                   hit_ok && clear_ok && flip_ok);
+        }
+
+        // T17: transport_dbg passthrough on a miss — the debug path's own
+        //      no-hit branch, distinct from T4/T14's functional-path miss.
+        {
+            const uint8_t after = data_access_ext(0x90000, /*cache_in=*/0xB,
+                                                  /*use_dbg=*/true);
             report("T17: transport_dbg passthrough on miss",
-                   stub.last_addr == 0x90000 && stub.last_cacheable &&
-                   r.cacheable_after && r.dbg_bytes == 8);
+                   stub.last_addr == 0x90000 && stub.last_cache == 0xB && after == 0xB);
+        }
+
+        // T17b: an un-extended payload on a hit is remapped but carries no
+        //       AxCACHE to override; the stub must see no extension.
+        {
+            uint64_t dummy = 0;
+            auto r = data_xfer(tlm::TLM_READ_COMMAND, 0x10100, dummy, false, nullptr);
+            report("T17b: un-extended payload remapped with no cache attribute to override",
+                   r.status == tlm::TLM_OK_RESPONSE &&
+                   !stub.last_had_ext && stub.last_cache == 0xFF &&
+                   stub.last_addr == expect_translated(0x10100, 0x2000000));
         }
 
         // ==================================================================
@@ -528,7 +679,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             auto region = dut.get_region(NUM_REGIONS);
             report("T18: get_region rejects an out-of-range index",
                    region.start_addr == 0 && region.end_addr == 0 &&
-                   region.offset == 0 && !region.cacheable && !region.valid);
+                   region.offset == 0 && region.cacheable == 0 && !region.valid);
         }
 
         // ==================================================================
@@ -537,7 +688,8 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         {
             clear_all_via_reset();
             // Seed a known pattern via full 64-bit write.
-            const uint64_t seed = 0xC000000012340000ULL; // valid|offset page
+            // valid | reserved bit 62 (dropped on write) | offset page
+            const uint64_t seed = 0xC000000012340000ULL;
             bool pass = csr_write64(csr_off(0, 2), seed);
             // Write only the low 32 bits via length-4 at offset+0.
             uint32_t low = 0x56780000u; // new offset low half within [55:12]
@@ -557,8 +709,10 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
                    ((got & 0xFFFFFFFF00000000ULL) == (expect_high & ATTRS_MASK));
             (void)expect_low;
 
-            // Write only high 32 bits at byte offset +4.
-            uint32_t high = 0xC0000000u; // valid|cacheable in high half
+            // Write only high 32 bits at byte offset +4. Bits [31:24] of this
+            // word are attrs[63:56], so 0x8F sets valid and cacheable = 0xF
+            // while leaving reserved [62:60] clear.
+            uint32_t high = 0x8F000000u;
             st = test_harness.csr_transport(
                 tlm::TLM_WRITE_COMMAND, csr_off(0, 2) + 4,
                 reinterpret_cast<unsigned char*>(&high), 4, 4);
@@ -567,7 +721,9 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             pass = pass && csr_read64(csr_off(0, 2), after_high);
             // Low half from previous write must remain.
             pass = pass && ((after_high & 0xFFFFFFFFULL) == (got & 0xFFFFFFFFULL));
-            pass = pass && ((after_high >> 62) == 0x3ULL);
+            pass = pass && ((after_high >> 63) == 0x1ULL);
+            pass = pass && (((after_high >> ATTRS_CACHEABLE_SHIFT) & 0xFULL) == 0xFULL);
+            pass = pass && (((after_high >> 60) & 0x7ULL) == 0ULL);
 
             // Byte-enable write: only byte 2 of REGION_START[0].
             pass = pass && csr_write64(csr_off(0, 0), 0x00FFFFFFFFFFF000ULL);
@@ -589,7 +745,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         // ==================================================================
         {
             clear_all_via_reset();
-            program_region(3, 0xA0000, 0xB0000, 0x100000, true);
+            program_region(3, 0xA0000, 0xB0000, 0x100000, /*cacheable=*/0xF);
             uint64_t pre_s = 0, pre_e = 0, pre_a = 0;
             bool pass = csr_read64(csr_off(3, 0), pre_s)
                      && csr_read64(csr_off(3, 1), pre_e)
@@ -665,7 +821,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             const uint64_t start = 0x10000;
             const uint64_t end   = 0x12000;
             const uint64_t off   = 0x2000000;
-            program_region(0, start, end, off, false);
+            program_region(0, start, end, off, /*cacheable=*/0x0);
 
             auto check_addr = [&](uint64_t in, uint64_t exp) {
                 uint64_t buf = 0;
@@ -679,11 +835,11 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
                      && check_addr(0x12000, 0x12000);                         // miss exact end
 
             // Empty range start==end → passthrough
-            program_region(1, 0x30000, 0x30000, 0x111000, true);
+            program_region(1, 0x30000, 0x30000, 0x111000, /*cacheable=*/0xF);
             pass = pass && check_addr(0x30000, 0x30000);
 
             // Reversed start>end → passthrough
-            program_region(2, 0x50000, 0x40000, 0x222000, true);
+            program_region(2, 0x50000, 0x40000, 0x222000, /*cacheable=*/0xF);
             pass = pass && check_addr(0x48000, 0x48000);
 
             report("T21: Range oracle start/end-1/end + empty/reversed", pass);
@@ -699,7 +855,8 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             clear_all_via_reset();
             const uint64_t hit_addr = 0x00FFFFFFFFFFEABCULL;
             const uint64_t offset   = 0x2000ULL; // +2 pages
-            program_region(0, 0x00FFFFFFFFFFE000ULL, 0x00FFFFFFFFFFF000ULL, offset, false);
+            program_region(0, 0x00FFFFFFFFFFE000ULL, 0x00FFFFFFFFFFF000ULL, offset,
+                           /*cacheable=*/0x0);
             const uint64_t exp = expect_translated(hit_addr, offset); // 0xABC
             uint64_t buf = 0;
             auto r = data_xfer(tlm::TLM_READ_COMMAND, hit_addr, buf, false, nullptr);
@@ -718,33 +875,30 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             const uint64_t start = 0x20000;
             const uint64_t end   = 0x21000;
             const uint64_t in    = 0x20500;
-            program_region(0, start, end, 0x100000, /*cacheable=*/true);
-            program_region(1, start, end, 0x200000, /*cacheable=*/false);
-            program_region(2, start, end, 0x300000, /*cacheable=*/true);
+            // Distinct cacheable nibbles so each step proves *which* entry won
+            // from the AxCACHE value alone, not just from the address.
+            program_region(0, start, end, 0x100000, /*cacheable=*/0x3);
+            program_region(1, start, end, 0x200000, /*cacheable=*/0xC);
+            program_region(2, start, end, 0x300000, /*cacheable=*/0x5);
 
-            sep::sep_axi_extension ext;
-            uint64_t buf = 0;
             bool pass = true;
 
             // Entry 0 wins
-            ext.cacheable = false;
-            data_xfer(tlm::TLM_READ_COMMAND, in, buf, false, &ext);
+            data_access_ext(in, /*cache_in=*/0x0, /*use_dbg=*/false);
             pass = pass && (stub.last_addr == expect_translated(in, 0x100000))
-                       && stub.last_cacheable;
+                       && (stub.last_cache == 0x3);
 
             // Invalidate entry 0 → entry 1 wins
-            program_region(0, start, end, 0x100000, true, /*valid=*/false);
-            ext.cacheable = true;
-            data_xfer(tlm::TLM_READ_COMMAND, in, buf, false, &ext);
+            program_region(0, start, end, 0x100000, 0x3, /*valid=*/false);
+            data_access_ext(in, /*cache_in=*/0x0, /*use_dbg=*/false);
             pass = pass && (stub.last_addr == expect_translated(in, 0x200000))
-                       && !stub.last_cacheable;
+                       && (stub.last_cache == 0xC);
 
             // Invalidate entry 1 → entry 2 wins
-            program_region(1, start, end, 0x200000, false, /*valid=*/false);
-            ext.cacheable = false;
-            data_xfer(tlm::TLM_READ_COMMAND, in, buf, false, &ext);
+            program_region(1, start, end, 0x200000, 0xC, /*valid=*/false);
+            data_access_ext(in, /*cache_in=*/0x0, /*use_dbg=*/false);
             pass = pass && (stub.last_addr == expect_translated(in, 0x300000))
-                       && stub.last_cacheable;
+                       && (stub.last_cache == 0x5);
 
             report("T23: Overlap priority with invalidate cascade", pass);
         }
@@ -755,7 +909,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         // ==================================================================
         {
             clear_all_via_reset();
-            program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/true);
+            program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/0x6);
 
             // Absent extension — still forwards translated address
             uint64_t buf = 0;
@@ -764,30 +918,32 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
                         (stub.last_addr == expect_translated(0x10100, 0x2000000)) &&
                         !stub.last_had_ext;
 
-            // Unrelated extension fields preserved through hit
+            // Unrelated extension fields preserved through hit: the remap must
+            // touch axi_cache only, leaving source_id / group_id / is_ns alone
+            // (sep_filter_ctrl downstream reads those).
             sep::sep_axi_extension ext;
             ext.source_id = sep::SMC_SOURCE_ID;
             ext.group_id  = 0xA;
             ext.is_ns     = true;
-            ext.cacheable = false;
+            ext.axi_cache = 0x9;
             auto r1 = data_xfer(tlm::TLM_READ_COMMAND, 0x10100, buf, false, &ext);
             pass = pass && stub.last_had_ext
                        && (stub.last_source_id == sep::SMC_SOURCE_ID)
                        && (stub.last_group_id == 0xA)
                        && stub.last_is_ns
-                       && stub.last_cacheable  // overridden to region value during call
+                       && (stub.last_cache == 0x6) // overridden to region value during call
                        && (ext.source_id == sep::SMC_SOURCE_ID)
                        && (ext.group_id == 0xA)
                        && ext.is_ns
-                       && !r1.cacheable_after; // restored
+                       && (r1.cache_after == 0x9); // restored
 
-            // Downstream error — address and cacheable restored
+            // Downstream error — address and AxCACHE still restored
             stub.forced_status = tlm::TLM_ADDRESS_ERROR_RESPONSE;
-            ext.cacheable = false;
+            ext.axi_cache = 0x9;
             auto r2 = data_xfer(tlm::TLM_READ_COMMAND, 0x10100, buf, false, &ext);
             pass = pass && (r2.status == tlm::TLM_ADDRESS_ERROR_RESPONSE)
                        && (r2.addr_after == 0x10100)
-                       && !r2.cacheable_after
+                       && (r2.cache_after == 0x9)
                        && (stub.last_addr == expect_translated(0x10100, 0x2000000));
             stub.forced_status = tlm::TLM_OK_RESPONSE;
 
@@ -799,7 +955,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         // ==================================================================
         {
             clear_all_via_reset();
-            program_region(0, 0x10000, 0x11000, 0x2000000, false);
+            program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/0x0);
             stub.add_delay = sc_core::sc_time(17, sc_core::SC_NS);
 
             uint64_t buf = 0;

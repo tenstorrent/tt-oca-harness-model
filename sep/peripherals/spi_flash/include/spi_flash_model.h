@@ -200,7 +200,7 @@ private:
     void handle_read_sfdp(uint32_t address, std::vector<uint8_t>& rx_buffer);
     bool handle_program(uint32_t address, const std::vector<uint8_t>& tx_buffer, bool addr_4byte);
     bool handle_erase(uint32_t address, bool addr_4byte, uint32_t erase_size);
-    void handle_chip_erase();
+    bool handle_chip_erase();
     void handle_control(uint8_t opcode, std::vector<uint8_t>& rx_buffer);
     void handle_suspend_resume(uint8_t opcode);
 

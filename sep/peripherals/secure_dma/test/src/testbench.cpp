@@ -242,6 +242,9 @@ void testbench::run_tests() {
 
   run_coverage_tests();
 
+  report_test_result("AXI source_id is OTHERS_SOURCE_ID",
+                     m_test->m_sideband_errors == 0);
+
   // Print final summary
   print_test_summary();
 

@@ -151,6 +151,37 @@ int sc_main(int, char**)
     dbg.set_data_ptr(nullptr);
     CHECK(tb.ram_socket->transport_dbg(dbg) == 0);
 
+    std::array<unsigned char, 4> rom_dbg{0xFF, 0xFF, 0xFF, 0xFF};
+    dbg.set_command(tlm::TLM_WRITE_COMMAND);
+    dbg.set_address(0x80);
+    dbg.set_data_ptr(rom_dbg.data());
+    dbg.set_data_length(rom_dbg.size());
+    CHECK(tb.rom_socket->transport_dbg(dbg) == rom_dbg.size());
+    read.fill(0);
+    CHECK(tb.transfer(tb.rom_socket, tlm::TLM_READ_COMMAND, 0x80, read.data(),
+                      read.size()) == tlm::TLM_OK_RESPONSE);
+    CHECK((read == std::array<unsigned char, 4>{1, 2, 3, 4}));
+
+    const uint64_t page = 4096;
+    std::array<unsigned char, 4> cross{0xA1, 0xA2, 0xA3, 0xA4};
+    CHECK(tb.transfer(tb.ram_socket, tlm::TLM_WRITE_COMMAND, page - 2, cross.data(),
+                      cross.size()) == tlm::TLM_OK_RESPONSE);
+    read.fill(0);
+    CHECK(tb.transfer(tb.ram_socket, tlm::TLM_READ_COMMAND, page - 2, read.data(),
+                      read.size()) == tlm::TLM_OK_RESPONSE);
+    CHECK(read == cross);
+
+    std::array<unsigned char, 4> high{0xB1, 0xB2, 0xB3, 0xB4};
+    std::array<unsigned char, 4> low{};
+    CHECK(tb.transfer(tb.ram_socket, tlm::TLM_WRITE_COMMAND, 0x100000000ULL,
+                      high.data(), high.size()) == tlm::TLM_OK_RESPONSE);
+    CHECK(tb.transfer(tb.ram_socket, tlm::TLM_READ_COMMAND, 0, low.data(),
+                      low.size()) == tlm::TLM_OK_RESPONSE);
+    CHECK((low != high));
+    CHECK(tb.transfer(tb.ram_socket, tlm::TLM_READ_COMMAND, 0x100000000ULL,
+                      read.data(), read.size()) == tlm::TLM_OK_RESPONSE);
+    CHECK(read == high);
+
     sc_core::sc_start(sc_core::SC_ZERO_TIME);
     std::cout << (failures == 0 ? "ALL TESTS PASSED\n" : "TESTS FAILED\n");
     return failures == 0 ? 0 : 1;

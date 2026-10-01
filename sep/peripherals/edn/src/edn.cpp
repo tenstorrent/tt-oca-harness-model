@@ -288,7 +288,6 @@ void edn_ip::reset_process()
  * - Once locked, all subsequent writes are blocked (return false)
  * - Writing 1 has no effect on locked state (W0C means write-1 is ignored)
  */
-// LCOV_EXCL_START
 bool edn_ip::regwen_write_callback(uint32_t value)
 {
     // If already locked, block all writes
@@ -309,7 +308,6 @@ bool edn_ip::regwen_write_callback(uint32_t value)
     // Writing 1 has no effect (W0C mechanism - write-1 is ignored)
     return false;
 }
-// LCOV_EXCL_STOP
 
 /**
  * @brief Write callback for CTRL register
@@ -1378,7 +1376,6 @@ bool edn_ip::handle_write_ALERT_TEST(uint32_t value)
     bool force_recov = (value & 0x1) != 0;  // Bit 0: recov_alert
     bool force_fatal = (value & 0x2) != 0;  // Bit 1: fatal_alert
 
-    // LCOV_EXCL_START - regmodel framework WO register callback execution artifact
     if (force_recov || force_fatal)
     {
         // Direct write to alert outputs for test pulse
@@ -1396,7 +1393,6 @@ bool edn_ip::handle_write_ALERT_TEST(uint32_t value)
         // Schedule driver update to restore status-driven alert logic
         m_alert_update_event.notify(SC_ZERO_TIME);
     }
-    // LCOV_EXCL_STOP
 
     return true;  // Accept write (does not store, write-only)
 }
@@ -1467,7 +1463,6 @@ bool edn_ip::handle_write_ERR_CODE_TEST(uint32_t value)
     // Extract bit position from ERR_CODE_TEST field [4:0]
     uint32_t bit_position = value & 0x1F;  // Bits [4:0], range 0-31
 
-    // LCOV_EXCL_START
     // Validate bit position (0-30 valid, 31 is reserved)
     if (bit_position > 30)
     {
@@ -1476,7 +1471,6 @@ bool edn_ip::handle_write_ERR_CODE_TEST(uint32_t value)
                              << std::endl;
         return true;  // Accept write but ignore invalid position
     }
-    // LCOV_EXCL_STOP
 
     // Force corresponding bit in ERR_CODE register
     uint32_t error_mask = (1U << bit_position);

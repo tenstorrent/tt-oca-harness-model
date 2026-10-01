@@ -1801,8 +1801,18 @@ void hmac_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
       trans.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
       return;
    }
+   const unsigned len = trans.get_data_length();
+   unsigned char* ptr = trans.get_data_ptr();
+   if (ptr == nullptr) {
+      trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+      return;
+   }
+   if (len < 4) {
+      trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+      return;
+   }
    uint64_t offset = trans.get_address();
-   uint32_t* data  = reinterpret_cast<uint32_t*>(trans.get_data_ptr());
+   uint32_t* data  = reinterpret_cast<uint32_t*>(ptr);
    if (offset <= 0x1C && (offset % 4) == 0) {
       m_keymgr_share0[offset / 4] = *data;
       REG_DEBUG(2, logger) << "keymgr: share0[" << (offset/4) << "]=0x"  << std::hex << *data << std::dec << std::endl;

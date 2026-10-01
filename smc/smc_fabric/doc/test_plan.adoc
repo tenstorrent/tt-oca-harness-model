@@ -42,8 +42,8 @@ Source: `test/smc_fabric_tb.cpp`. Names are the `[PASS]` titles.
 |2 |local decode routing |Periph, SPM, DMA, DFD, DFT, mailbox |Positive
 |3 |periph_main / AOU park ends |Phase-2 window ends |Positive
 |4 |smc_base_config vs cpu_ctrl |Internal GLOBAL_BASE vs front-port |Positive
-|5 |alias remap |Hit, offset, debug |Positive
-|6 |outbound default-allow |Plain + M-mode identity at reset |Positive
+|5 |alias remap |RDL START/END/ATTRS programming, hit, offset, debug; valid clear → passthrough |Positive
+|6 |outbound default-allow |Plain + M-mode passthrough at reset (`valid[63]`=0) |Positive
 |7 |inbound filter allow/deny |Default deny; programmed allow |Positive
 |8 |inbound NS filtering |`allow_ns` match |Positive
 |9 |sep bypasses inbound filter |`sep_axi_in` not filtered |Positive
@@ -51,21 +51,21 @@ Source: `test/smc_fabric_tb.cpp`. Names are the `[PASS]` titles.
 |11 |unmapped local address |Decode miss → address error |Negative
 |12 |DMI denied |`get_direct_mem_ptr` false |Positive
 |13 |reset clears programmed tables |Alias/filter cleared |Positive
-|14 |M-mode output remap |Bit-exact `offset[55:0]` |Positive
-|15 |Xvisor output remap |Xvisor window |Positive
-|16 |reset clears output-remap |Tables restored |Positive
-|17 |filter CSR image |CONFIG/START/END + `locked` |Positive
+|14 |M-mode output remap |Bit-exact `offset[55:0]`; offset inert until `valid[63]`; clear → passthrough; `[62:56]` RAZ/WI; src-ID retag independent of valid |Positive
+|15 |Xvisor output remap |Xvisor window, valid gate |Positive
+|16 |reset clears output-remap |Offset + valid cleared → identity |Positive
+|17 |filter CSR image |CONFIG/START/END + `locked`; locked entry: every 32/64-bit write to CONFIG/START/END → DECERR (`TLM_ADDRESS_ERROR_RESPONSE`), values unchanged, reads OK, `+0x18/+0x1C` still WI/OK, neighbouring entry unaffected |Mixed
 |18 |alternate internal masters |jtag / data_accel / log |Positive
 |19 |global CSR / testbench API |LOCAL_BASE / REGION_SIZE |Positive
 |20 |M-mode remap via local-base |Local-aperture remap |Positive
 |21 |PERIPH_EXT decode |sys / sep direct |Positive
 |22 |deny-read poison trailing bytes |`0xBADCAB1E` fill |Positive
-|23 |alias-remap CSR read-back |Cacheable + image |Positive
-|24 |output-remap 64-bit CSR write |REGION_ATTRS write |Positive
+|23 |alias-remap CSR image |START/END/ATTRS `[55:12]` masking, `cacheable[59:56]`, `valid[63]`, bit 62 dropped, RW mask `0x8FFF_FFFF_FFFF_F000`, `+0x18/+0x1C` RAZ/WI, IGNORE_COMMAND; AxCACHE replaced on hit (0x0→0x6, 0xF→0x6, 0xF→0x0), preserved on miss, lowest-index priority, empty window, 44-bit modular add |Positive
+|24 |output-remap 64-bit CSR write |REGION_ATTRS write incl. `valid[63]`, reserved dropped |Positive
 |25 |filter CSR edge cases |src_id, R/W-only, burst, OOB |Mixed
 |26 |outbound-filter NS matching |NS on outbound |Positive
 |27 |DMI denied on internal masters |jtag / data_accel / log |Positive
-|28 |no_addr_remap bypass |Output remap skipped |Positive
+|28 |no_addr_remap bypass |Valid programmed region skipped; src-ID and AxCACHE untouched |Positive
 |===
 
 ====== Platform firmware tests

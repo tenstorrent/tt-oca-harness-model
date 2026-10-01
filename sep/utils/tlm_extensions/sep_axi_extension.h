@@ -67,19 +67,20 @@
 //                pass_ns is an exact match under BlockByDefault=1, a CPU access
 //                claiming non-secure would be denied by every allow_ns=0 entry.
 //
-//   cacheable -- AWCACHE/ARCACHE in RTL. hw/ip/axi_alias_remap/rtl/
-//                axi_alias_remap.sv:122,147 overwrites the outgoing cache
-//                field with {CacheWidth{REGION_ATTRS[idx].cacheable}} on a
-//                region hit, and passes the incoming value through
+//   axi_cache -- AWCACHE/ARCACHE in RTL, the full 4-bit field. hw/ip/
+//                axi_alias_remap/rtl/axi_alias_remap.sv overwrites the outgoing
+//                cache field bit-for-bit with REGION_ATTRS[idx].cacheable[59:56]
+//                on a region hit (tt-oca-hw #2464: "A hit replaces AxCACHE with
+//                the field value"), and passes the incoming value through
 //                unchanged on a miss -- the same "compute on hit, passthrough
 //                on miss" shape as source_id's handling in output_remap.sv.
 //                This is the local_master_alias_remap_ctrl SystemC model's
-//                own REGION_ATTRS.cacheable bit; that model applies it on both
+//                own REGION_ATTRS.cacheable field; that model applies it on both
 //                its functional and debug paths, and restores the caller's
 //                value afterwards (see its docs/03_*_Test_Plan.md T12-T17).
-//                RTL replicates the single region bit across all four AxCACHE
-//                bits, so one bool is faithful for this IP -- it cannot express
-//                the finer-grained AXI encodings a different master might drive.
+//                Before #2464 the field was a single bit replicated across
+//                AxCACHE and this member was a bool; it is now a uint8_t whose
+//                low nibble is the AxCACHE encoding (bits [7:4] must be 0).
 //
 // Everything else in the standard AXI4 channel (id, len, size, burst, lock,
 // qos, region) was checked and excluded deliberately, not by omission: every
@@ -105,7 +106,7 @@
 //   re-stamped  sep_output_remap_ctrl, to OTHERS_SOURCE_ID for the AP/STEE
 //               crossing, restoring the caller's value afterwards
 //   read by     sep_filter_ctrl (source_id vs FILTER_CONFIG.src_id, is_ns vs
-//               allow_ns) and local_master_alias_remap_ctrl (cacheable override)
+//               allow_ns) and local_master_alias_remap_ctrl (axi_cache override)
 //
 // Models that read the extension fall back to the field defaults below when a
 // transaction arrives without one, so an un-stamped initiator looks like a
@@ -157,7 +158,10 @@ public:
     uint8_t source_id = SEP_SOURCE_ID; ///< sep_pkg::*_SOURCE_ID; see source_id_t table above.
     uint8_t group_id  = 0;             ///< RTL-present, currently inert (EnGroupIdFilter=0).
     bool    is_ns     = false;         ///< AWPROT[1]/ARPROT[1]; matches FILTER_CONFIG.allow_ns.
-    bool    cacheable = false;         ///< AWCACHE/ARCACHE; matches REGION_ATTRS.cacheable.
+    uint8_t axi_cache = 0;             ///< AWCACHE/ARCACHE[3:0]; matches REGION_ATTRS.cacheable[59:56].
+
+    /// AxCACHE is a 4-bit AXI field; keep the extension in range.
+    static constexpr uint8_t AXI_CACHE_MASK = 0xFu;
 
     sep_axi_extension() = default;
 

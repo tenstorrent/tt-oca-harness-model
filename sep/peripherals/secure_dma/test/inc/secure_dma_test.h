@@ -313,6 +313,9 @@ public:
    */
   void inject_ot_write_bus_error_once();
 
+  /// Beats whose sep_axi_extension is missing or is not OTHERS_SOURCE_ID.
+  unsigned m_sideband_errors = 0;
+
 private:
    /// RegLogger instance for test diagnostics
    RegLogger logger;

@@ -233,7 +233,8 @@ void smc_fabric::bt_internal(tlm::tlm_generic_payload& trans,
                               const char*               ingress)
 {
     const uint64_t orig = trans.get_address();
-    uint64_t addr = apply_alias_remap(orig);
+    uint64_t addr = apply_alias_remap(orig,
+                                      trans.get_extension<smc_axi_extension>());
     trans.set_address(addr);
 
     const bool local = is_local(addr);
@@ -355,13 +356,27 @@ bool smc_fabric::get_direct_mem_ptr(int /*id*/,
 // Routing helpers
 // ---------------------------------------------------------------------------
 
-uint64_t smc_fabric::apply_alias_remap(uint64_t addr)
+// Bit-exact image of axi_alias_remap.sv (via smc_alias_remap_wrap.sv):
+//   hit[r]   = valid[r] && addr >= region_start[r] && addr < region_end[r]
+//   winner   = lowest r with hit (LZC priority)
+//   out.addr = { (addr[55:12] + offset[55:12]) mod 2^44, addr[11:0] }
+//   out.cache= cacheable[59:56]            (tt-oca-hw #2464: bit-for-bit)
+//   miss     : addr and cache pass through unchanged
+uint64_t smc_fabric::apply_alias_remap(uint64_t addr, smc_axi_extension* ext)
 {
     for (unsigned i = 0; i < alias_regions_.size(); ++i) {
         const alias_region& r = alias_regions_[i];
         if (r.valid && addr >= r.start && addr < r.end) {
             remap_debug_ = {true, i};
-            return addr + static_cast<uint64_t>(r.offset);
+            const uint64_t low_mask = (1ULL << ALIAS_REMAP_IDX_START) - 1ULL;
+            const uint64_t upper =
+                ((addr & ALIAS_ADDR_FIELD_MASK) +
+                 (static_cast<uint64_t>(r.offset) & ALIAS_ADDR_FIELD_MASK))
+                & ALIAS_ADDR_FIELD_MASK;                 // carry out of [55] dropped
+            if (ext)
+                ext->axi_cache = static_cast<uint8_t>(
+                    r.cacheable & smc_axi_extension::AXI_CACHE_MASK);
+            return upper | (addr & low_mask);
         }
     }
     remap_debug_ = {false, 0};
@@ -640,13 +655,14 @@ smc_fabric::outbound_path smc_fabric::classify_outbound(uint64_t addr) const
     return outbound_path::plain;
 }
 
-// Bit-exact image of output_remap.sv (lines 67-83):
+// Bit-exact image of output_remap.sv (tt-oca-hw #2572):
 //   adjusted = addr - window_base   (RegionBase)
 //   idx      = adjusted[IdxStart +: clog2(NumRegions)]   ← bits [22:20]
-//   out      = { offset[55:IdxStart], adjusted[IdxStart-1:0] }
-// There is no per-entry valid bit; every region is always active, so the
-// raw REGION_ATTRS.offset[55:0] register simply replaces the upper address
-// bits.  (At reset offset==0, matching the RTL default.)
+//   out      = valid[idx] ? { offset[55:IdxStart], adjusted[IdxStart-1:0] }
+//                         : addr                      (pass through unchanged)
+// REGION_ATTRS.valid[63] resets to 0, so an unprogrammed region is an
+// identity mapping rather than a remap to offset 0.  The UserOverride
+// source-ID re-tag is a separate wire in RTL and applies regardless of valid.
 uint64_t smc_fabric::apply_output_remap(uint64_t                          addr,
                                          const std::array<alias_region, 8>& table,
                                          uint64_t                           window_start,
@@ -668,6 +684,9 @@ uint64_t smc_fabric::apply_output_remap(uint64_t                          addr,
                                                (table.size() - 1));
 
     if (ext) ext->source_id = src_id_override;
+
+    if (!table[idx].valid)
+        return addr;
 
     const uint64_t offset =
         static_cast<uint64_t>(table[idx].offset) & OUTPUT_REMAP_OFFSET_MASK;
@@ -902,8 +921,31 @@ bool smc_fabric::handle_global_csr(tlm::tlm_generic_payload& trans,
     return false; // not a fabric-owned CSR; caller should forward to to_cpu_ctrl
 }
 
-// Shared field handler for alias_region entries.
-// field_off is the byte offset within one entry (0x00 / 0x08 / 0x10 / 0x18).
+// Alias-remap REGION_ATTRS image: offset[55:12] | cacheable[59:56] | valid[63].
+uint64_t smc_fabric::alias_attrs_image(const alias_region& r)
+{
+    return (static_cast<uint64_t>(r.offset) & ALIAS_ADDR_FIELD_MASK)
+         | (static_cast<uint64_t>(r.cacheable & 0xFu) << ALIAS_ATTRS_CACHEABLE_SHIFT)
+         | (r.valid ? ALIAS_ATTRS_VALID : 0ULL);
+}
+
+void smc_fabric::alias_attrs_apply(alias_region& r, uint64_t image)
+{
+    image &= ALIAS_ATTRS_RW_MASK;                       // reserved bits WI
+    r.offset    = static_cast<int64_t>(image & ALIAS_ADDR_FIELD_MASK);
+    r.cacheable = static_cast<uint8_t>((image & ALIAS_ATTRS_CACHEABLE_MASK)
+                                       >> ALIAS_ATTRS_CACHEABLE_SHIFT);
+    r.valid     = (image & ALIAS_ATTRS_VALID) != 0ULL;
+}
+
+// Shared field handler for alias-remap entries — bit-exact alias_remap.rdl:
+//   0x00 REGION_START  start_addr[55:12]   (sw=rw, other bits RAZ/WI)
+//   0x08 REGION_END    end_addr[55:12]     (exclusive)
+//   0x10 REGION_ATTRS  offset[55:12] | cacheable[59:56] | valid[63]
+//   0x18               unmapped inside the 0x20 stride: RAZ/WI
+// field_off is the byte offset within one entry.  A 64-bit access (len>=8)
+// at a register base moves the whole register; a 32-bit access sees the low
+// word at reg+0x00 and the high word at reg+0x04.
 void smc_fabric::handle_remap_entry(alias_region&             r,
                                      uint32_t                  field_off,
                                      tlm::tlm_generic_payload& trans)
@@ -912,33 +954,44 @@ void smc_fabric::handle_remap_entry(alias_region&             r,
         trans.set_response_status(tlm::TLM_COMMAND_ERROR_RESPONSE);
         return;
     }
+
+    const uint32_t reg_off  = field_off & ~0x7u;     // 0x00 / 0x08 / 0x10 / 0x18
+    const uint32_t word_off = field_off & 0x7u;      // 0x00 or 0x04
+    const unsigned len      = std::min(trans.get_data_length(), 8u);
+
+    // Current register image.
+    uint64_t image = 0;
+    switch (reg_off) {
+    case 0x00: image = r.start;                                    break;
+    case 0x08: image = r.end;                                      break;
+    case 0x10: image = alias_attrs_image(r);                       break;
+    default:   image = 0;                                          break;   // RAZ
+    }
+
     if (trans.is_write()) {
-        uint64_t val = 0;
-        std::memcpy(&val, trans.get_data_ptr(),
-                    std::min(trans.get_data_length(), 8u));
-        switch (field_off) {
-        case 0x00: r.start     = val;                        break;
-        case 0x08: r.end       = val;                        break;
-        case 0x10: r.offset    = static_cast<int64_t>(val); break;
-        case 0x18:
-            r.valid     = (val & 1u) != 0u;
-            r.cacheable = (val & 2u) != 0u;
-            break;
-        default: break;
+        if (word_off == 0x00 && len >= 8u) {
+            std::memcpy(&image, trans.get_data_ptr(), 8u);
+        } else {
+            uint32_t val = 0;
+            std::memcpy(&val, trans.get_data_ptr(), std::min(len, 4u));
+            if (word_off == 0x00)
+                image = (image & 0xFFFF'FFFF'0000'0000ULL) | val;
+            else
+                image = (image & 0x0000'0000'FFFF'FFFFULL) |
+                        (static_cast<uint64_t>(val) << 32);
+        }
+        switch (reg_off) {
+        case 0x00: r.start = image & ALIAS_ADDR_FIELD_MASK;      break;
+        case 0x08: r.end   = image & ALIAS_ADDR_FIELD_MASK;      break;
+        case 0x10: alias_attrs_apply(r, image);                  break;
+        default:   break;                                        // WI
         }
     } else {
         uint64_t val = 0;
-        switch (field_off) {
-        case 0x00: val = r.start;                                  break;
-        case 0x08: val = r.end;                                    break;
-        case 0x10: val = static_cast<uint64_t>(r.offset);         break;
-        case 0x18:
-            val = static_cast<uint64_t>(r.valid     ? 1u : 0u)
-                | static_cast<uint64_t>(r.cacheable ? 2u : 0u);
-            break;
-        default: break;
-        }
-        unsigned len = std::min(trans.get_data_length(), 8u);
+        if (word_off == 0x00)
+            val = (len >= 8u) ? image : (image & 0xFFFF'FFFFULL);
+        else
+            val = image >> 32;
         std::memcpy(trans.get_data_ptr(), &val, len);
     }
     trans.set_response_status(tlm::TLM_OK_RESPONSE);
@@ -956,11 +1009,12 @@ void smc_fabric::handle_alias_remap(tlm::tlm_generic_payload& trans,
 }
 
 // Shared field handler for output-remap (M-mode / Xvisor) entries.
-// Bit-exact image of output_remap.rdl: each entry is one 64-bit REGION_ATTRS
-// register holding offset[55:0] at byte offset 0x00.  There is no valid bit.
+// Bit-exact image of output_remap.rdl (tt-oca-hw #2572): each entry is one
+// 64-bit REGION_ATTRS register at byte offset 0x00 holding offset[55:0] and
+// valid[63]; bits [62:56] are reserved (RAZ/WI).
 // A 64-bit access (len>=8) at field 0x00 reads/writes the whole register;
-// 32-bit accesses see offset[31:0] at 0x00 and offset[55:32] at 0x04.
-// The raw register image is stored in alias_region::offset.
+// 32-bit accesses see offset[31:0] at 0x00 and {valid, 7'b0, offset[55:32]}
+// at 0x04.  offset is stored in alias_region::offset, valid in ::valid.
 void smc_fabric::handle_output_remap_entry(alias_region&             r,
                                             uint32_t                  field_off,
                                             tlm::tlm_generic_payload& trans)
@@ -970,7 +1024,8 @@ void smc_fabric::handle_output_remap_entry(alias_region&             r,
         return;
     }
 
-    uint64_t reg = static_cast<uint64_t>(r.offset) & OUTPUT_REMAP_OFFSET_MASK;
+    uint64_t reg = (static_cast<uint64_t>(r.offset) & OUTPUT_REMAP_OFFSET_MASK)
+                 | (r.valid ? OUTPUT_REMAP_VALID : 0ULL);
     unsigned len = std::min(trans.get_data_length(), 8u);
 
     if (trans.is_write()) {
@@ -983,17 +1038,18 @@ void smc_fabric::handle_output_remap_entry(alias_region&             r,
             std::memcpy(&val, trans.get_data_ptr(), std::min(len, 4u));
             if (field_off == 0x00)            // offset[31:0]
                 reg = (reg & 0xFFFF'FFFF'0000'0000ULL) | val;
-            else if (field_off == 0x04)       // offset[55:32]
+            else if (field_off == 0x04)       // {valid, rsvd, offset[55:32]}
                 reg = (reg & 0x0000'0000'FFFF'FFFFULL) |
-                      (static_cast<uint64_t>(val & 0x00FF'FFFFu) << 32);
+                      (static_cast<uint64_t>(val) << 32);
         }
         r.offset = static_cast<int64_t>(reg & OUTPUT_REMAP_OFFSET_MASK);
+        r.valid  = (reg & OUTPUT_REMAP_VALID) != 0ULL;
     } else {
         uint64_t val = 0;
         if (field_off == 0x00)
             val = (len >= 8u) ? reg : (reg & 0xFFFF'FFFFULL);
         else if (field_off == 0x04)
-            val = (reg >> 32) & 0x00FF'FFFFULL;
+            val = reg >> 32;                  // reserved [62:56] already 0
         std::memcpy(trans.get_data_ptr(), &val, len);
     }
     trans.set_response_status(tlm::TLM_OK_RESPONSE);
@@ -1103,8 +1159,15 @@ static void handle_filter_entry_csr(smc_fabric::filter_entry& e,
     const unsigned len = std::min(trans.get_data_length(), 8u);
 
     if (trans.is_write()) {
-        // Once locked, the filter configuration is read-only.
-        if (e.locked) { trans.set_response_status(tlm::TLM_OK_RESPONSE); return; }
+        // Once locked, every write to FILTER_CONFIG / START_ADDR / END_ADDR is
+        // steered to the AXI error subordinate and answered with DECERR
+        // (axi_filter_wrap.sv, RTL #2480). Reads still return the locked
+        // configuration; the reserved tail of the stride stays WI/OK.
+        if (e.locked && which != RSVD) {
+            trans.set_dmi_allowed(false);
+            trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+            return;
+        }
 
         const uint64_t cur = reg_val();
         uint64_t nv;

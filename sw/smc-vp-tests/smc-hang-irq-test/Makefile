@@ -1,7 +1,7 @@
 SRCS = ../common/start.S main.c ../common/printf.c
 OBJS = $(SRCS:.c=.o)
 OBJS := $(OBJS:.S=.o)
-TARGET = smc-hang-irq-test
+TARGET = smc_hang_irq_test
 LDFLAGS += -T ../common/link.ld
 
 include ../Makefile.common

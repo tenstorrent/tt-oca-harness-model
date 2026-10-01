@@ -29,13 +29,19 @@ public:
     using typename regmodel::Reg<N>::memory_type;
     typedef typename regmodel::Word<N>::wordtype DT;
 
+    // Layout (output_remap.rdl, tt-oca-hw #2572):
+    //   offset [55:0]   sw=rw hw=r  reset 0  translation for this region
+    //   [62:56]         reserved (RAZ/WI)
+    //   valid  [63]     sw=rw hw=r  reset 0  if set the region is remapped by
+    //                   offset; if clear the address passes through unchanged
     REGION_ATTRS_type(std::string reg_name, memory_type& memory, unsigned int offset)
         : regmodel::Reg<N>(reg_name, memory, offset,
-                      0xffffffffffffff,   // read_bit_mask  — [55:0]
-                      0xffffffffffffff,   // write_bit_mask — [55:0]
-                      0x0)               // reset value
+                      0x80ffffffffffffff, // read_bit_mask  — [63] + [55:0]
+                      0x80ffffffffffffff, // write_bit_mask — [63] + [55:0]
+                      0x0)                // reset value
         , offset    (reg_name + ".offset",    *this, 0,  56)
-        , Reserved0 (reg_name + ".Reserved0", *this, 56,  8)
+        , Reserved0 (reg_name + ".Reserved0", *this, 56,  7)
+        , valid     (reg_name + ".valid",     *this, 63,  1)
     {
         this->set_read_write_restrictions(memory);
     }
@@ -54,6 +60,7 @@ public:
 
     regmodel::Bitfield<N> offset;
     regmodel::Bitfield<N> Reserved0;
+    regmodel::Bitfield<N> valid;
 };
 
 } // namespace sep_output_remap_ctrl

@@ -7,7 +7,9 @@
  * Suite A — outbound instance (num_instances=32):
  *   A1  reset values
  *   A2  basic register read/write
- *   A3  WOSET locked bit
+ *   A3  WOSET locked bit; locked entry: CONFIG/START/END writes (64-bit,
+ *       32-bit lanes, spilling burst, transport_dbg) → DECERR, values frozen,
+ *       reads OK, reserved word WI/OK, neighbour unaffected
  *   A4  hw-readonly data_bus_width
  *   A5  CSR clears to entry_enabled=0 when unconfigured
  *   A6  comprehensive CSR scenarios
@@ -334,9 +336,16 @@ private:
         // A7: data path — BlockByDefault (RTL: axi_filter_wrap sets
         // BlockByDefault=1'b1 for both SEP filter instances). With no active
         // entries, every transaction is denied, not passed through.
-        // Clear all entries first
-        for (uint32_t i = 0; i < 32; ++i)
+        // Clear all entries first. The entry A3 locked is skipped: it was
+        // locked with entry_enabled=0 so it is already inactive, and a write
+        // to it would (correctly) come back DECERR and be recorded as a CSR
+        // transport failure.
+        for (uint32_t i = 0; i < 32; ++i) {
+            if (i == sep_filter_ctrl_test::LOCKED_ENTRY) continue;
             outbound_harness.csr_write_64(i, 0x00, 0x0ULL);
+        }
+        assert(!outbound_dut.get_filter_entry(sep_filter_ctrl_test::LOCKED_ENTRY).entry_enabled &&
+               "A7: locked entry must have been left disabled by A3");
 
         outbound_stub.reset();
         bool ok = outbound_data_init.write(0xABCD1000ULL, 0xDEADBEEFULL);
@@ -381,8 +390,8 @@ private:
         // A11: the write half of command gating. B2 covers a read denied by a
         // write-only entry; this covers a write denied by a read-only one, so
         // both arms of the permission check are driven through the data path.
-        // Entry 3 rather than 1: A3 sets entry 1's WOSET lock, which silently
-        // discards every later write to it (including A6's).
+        // Entry 3 is free: A3's irreversible lock lives on LOCKED_ENTRY, well
+        // away from the low entries the functional suites program.
         outbound_harness.csr_write_64(3, 0x08, 0x40000ULL);
         outbound_harness.csr_write_64(3, 0x10, 0x50000ULL);
         outbound_harness.csr_write_64(3, 0x00, 0x00000011ULL); // read_allowed=1, entry_enabled=1
@@ -806,6 +815,26 @@ private:
         assert(!ok && "D2: previously permitted range must be denied after reset");
         assert(!outbound_stub.received && "D2: denied transaction must not reach filtered_socket");
         std::cout << "D2: filtering denies after reset PASSED" << std::endl;
+
+        // D3: the only way out of a lock is reset. A3's locked entry must read
+        // back unlocked and accept CSR writes again with an OK response (a
+        // DECERR here would be recorded by csr_write_64 and fail the run).
+        {
+            const uint32_t le = sep_filter_ctrl_test::LOCKED_ENTRY;
+            assert(!outbound_dut.get_filter_entry(le).locked && "D3: reset must clear locked[63]");
+            assert(((outbound_harness.csr_read_64(le, 0x00) >> 63) & 0x1) == 0 &&
+                   "D3: locked[63] must read 0 after reset");
+            outbound_harness.csr_write_64(le, 0x08, 0x77770000ULL);
+            outbound_harness.csr_write_64(le, 0x10, 0x7777FFFFULL);
+            outbound_harness.csr_write_64(le, 0x00, 0x00000003ULL);  // rw, not enabled
+            assert(outbound_harness.csr_read_64(le, 0x08) == 0x77770000ULL &&
+                   "D3: START_ADDR writable again after reset");
+            assert(outbound_harness.csr_read_64(le, 0x10) == 0x7777FFFFULL &&
+                   "D3: END_ADDR writable again after reset");
+            assert((outbound_harness.csr_read_64(le, 0x00) & 0x3ULL) == 0x3ULL &&
+                   "D3: FILTER_CONFIG writable again after reset");
+        }
+        std::cout << "D3: reset releases the filter lock PASSED" << std::endl;
     }
 };
 

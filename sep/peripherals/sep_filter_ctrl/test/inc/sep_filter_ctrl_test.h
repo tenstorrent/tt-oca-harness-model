@@ -40,6 +40,12 @@ public:
     // RV32 firmware path: two 32-bit stores into a 64-bit CSR (wr64).
     void     csr_write_32_pair(uint32_t instance, uint32_t reg_offset, uint64_t value);
 
+    /// Entry locked by test_woset_locked_field(). The lock is irreversible and
+    /// (RTL #2480) every later CSR write to the entry is DECERR'd, so suites
+    /// that run afterwards must stay away from it. Its neighbour
+    /// (LOCKED_ENTRY + 1) is used as the "still writable" witness.
+    static constexpr uint32_t LOCKED_ENTRY = 30;
+
     // Test methods (shared by both outbound and inbound instances)
     void test_reset_values(uint32_t num_instances);
     void test_register_access_basic();

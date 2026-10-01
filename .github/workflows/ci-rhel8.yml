@@ -22,7 +22,9 @@
 #  sep-vp-rhel8          Build sep-vp and run SEP VP firmware tests (needs
 #                        build-deps-rhel8 + RISC-V xpack toolchain). VeeR ISS
 #                        is in-tree; no Whisper required.
-#  sep-unit-tests-rhel8  Run SEP peripheral unit tests
+#  sep-unit-tests-rhel8  Run SEP peripheral unit tests, SEP CPU tests, and the
+#                        host-only SEP platform xbar_policy tests
+#                        (vp/platform/sep/run_tests.sh)
 #  smc-unit-tests-rhel8  Run SMC peripheral unit tests (includes the new DMA
 #                        and PVT wrapper peripheral unit tests, and AOU)
 #  smc-fabric-tests-rhel8  Run SMC Fabric tests
@@ -434,6 +436,16 @@ jobs:
           sep/cpu/run_tests.sh
           sep/cpu/run_tests.sh --asan
           sep/cpu/run_tests.sh --coverage
+
+      # Host-only (no SystemC) unit test of the SEP platform xbar address /
+      # permission policy (vp/platform/sep/inc/xbar_policy.h), incl. the
+      # csr_region trim to 0x10A50000 (tt-oca-hw #2587).  Coverage via lcov +
+      # the toolset gcov ($GCOV).
+      - name: Run SEP platform xbar_policy tests
+        run: |
+          vp/platform/sep/run_tests.sh
+          vp/platform/sep/run_tests.sh --asan
+          vp/platform/sep/run_tests.sh --coverage
 
       - name: Upload test logs
         if: always()

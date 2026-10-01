@@ -1679,6 +1679,15 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
     unsigned char* ptr = trans.get_data_ptr();
     unsigned int len = trans.get_data_length();
 
+    if (ptr == nullptr) {
+        trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
+        return;
+    }
+    if (len == 0) {
+        trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+
     // Only support writes (Key Manager programs keys)
     if (cmd != tlm::TLM_WRITE_COMMAND) {
         REG_ERROR(0, logger) << "[OTBN KeyMgr TLM] Error: Only WRITE commands supported, got " << (cmd == tlm::TLM_READ_COMMAND ? "READ" : "UNKNOWN");
@@ -1693,6 +1702,10 @@ void otbn_ip::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& delay
     //   0x050-0x05F → WDR23 (KEY_S1_H):  share1 bits [383:256] in lower 128b
     //   0x060       → KEY_CTRL: commits key (set key_registered = true)
     if (addr == 0x60) {
+        if (len < 4) {
+            trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+            return;
+        }
         // Bug #4 fix: honour the KEY_VALID bit value — writing 0 must invalidate the key
         uint32_t ctrl_val = *reinterpret_cast<uint32_t*>(ptr);
         key_registered = (ctrl_val & 0x1u) != 0;

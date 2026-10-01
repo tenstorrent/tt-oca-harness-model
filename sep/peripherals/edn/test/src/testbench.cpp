@@ -223,6 +223,11 @@ void testbench::run_tests()
         m_failed_tests.push_back("no test suite ran for the selected suite id");
     }
 
+    // After the suite, so locking REGWEN cannot change the suite's CTRL writes.
+    if (m_suite_id == 1) {
+        test_register_access();
+    }
+
     // Report final results and call sc_stop() to end simulation
     report_results();
 }
@@ -330,12 +335,85 @@ void testbench::test_register_access()
         }
     }
 
-    // Test REGWEN protection
-    // NOTE: This test requires functionality implementation (write callback)
-    // Marking as SKIPPED in stub code phase
+    // The functional suite may already have locked REGWEN. Pulse reset so the
+    // write-1 ignore is reached while the register is still unlocked.
+    rst_ni_sig.write(false);
+    wait(10, SC_NS);
+    rst_ni_sig.write(true);
+    wait(10, SC_NS);
+
+    // Writing 1 is ignored (W0C). The register stays at its reset value.
     {
-        m_tests_skipped++;
-        REG_INFO(1, logger) << "  [SKIP] REGWEN protection (requires write callback implementation)";
+        m_tests_run++;
+        uint32_t regwen = 0;
+        test->register_write_32(0x10, 0x1);
+        test->register_read_32(0x10, regwen);
+        if (regwen == 0x1u) {
+            REG_INFO(1, logger) << "  [PASS] REGWEN write-1 is ignored";
+            m_tests_passed++;
+        } else {
+            REG_ERROR(1, logger) << "  [FAIL] REGWEN write-1 changed the register to 0x"
+                                 << std::hex << regwen << std::dec;
+            m_tests_failed++;
+        }
+    }
+
+    // Bit position 31 is reserved. The write is accepted and ERR_CODE is unchanged.
+    {
+        m_tests_run++;
+        uint32_t err_before = 0;
+        uint32_t err_after = 0;
+        test->register_read_32(0x3C, err_before);
+        test->register_write_32(0x40, 0x1F);
+        test->register_read_32(0x3C, err_after);
+        if (err_after == err_before) {
+            REG_INFO(1, logger) << "  [PASS] ERR_CODE_TEST bit 31 is ignored";
+            m_tests_passed++;
+        } else {
+            REG_ERROR(1, logger) << "  [FAIL] ERR_CODE_TEST bit 31 changed ERR_CODE from 0x"
+                                 << std::hex << err_before << " to 0x" << err_after << std::dec;
+            m_tests_failed++;
+        }
+    }
+
+    // No CSRNG is bound. An empty buffer and an out-of-range endpoint both refuse.
+    {
+        m_tests_run++;
+        uint32_t word = 0xFFFFFFFFu;
+        bool fips = true;
+        const bool empty = dut->try_pop_entropy_word(0, word, fips);
+        const bool bad_id = dut->try_pop_entropy_word(8, word, fips);
+        (void)dut->entropy_available_event();
+        if (!empty && !bad_id && word == 0xFFFFFFFFu) {
+            REG_INFO(1, logger) << "  [PASS] entropy pop refuses an empty buffer and a bad endpoint";
+            m_tests_passed++;
+        } else {
+            REG_ERROR(1, logger) << "  [FAIL] entropy pop empty=" << empty
+                                 << " bad_id=" << bad_id;
+            m_tests_failed++;
+        }
+    }
+
+    // REGWEN is write-0-to-clear. Once bit 0 is 0, CTRL writes are rejected.
+    {
+        m_tests_run++;
+        uint32_t regwen = 0;
+        uint32_t ctrl_before = 0;
+        uint32_t ctrl_after = 0;
+        test->register_read_32(0x14, ctrl_before);
+        test->register_write_32(0x10, 0x0);
+        test->register_read_32(0x10, regwen);
+        test->register_write_32(0x14, ctrl_before ^ 0x6u);
+        test->register_read_32(0x14, ctrl_after);
+        if ((regwen & 0x1u) == 0 && ctrl_after == ctrl_before) {
+            REG_INFO(1, logger) << "  [PASS] REGWEN lock rejects a later CTRL write";
+            m_tests_passed++;
+        } else {
+            REG_ERROR(1, logger) << "  [FAIL] REGWEN lock: REGWEN=0x" << std::hex
+                                 << regwen << " CTRL before=0x" << ctrl_before
+                                 << " after=0x" << ctrl_after << std::dec;
+            m_tests_failed++;
+        }
     }
 }
 

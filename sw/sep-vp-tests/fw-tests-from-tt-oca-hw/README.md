@@ -339,3 +339,18 @@ If a new test pulls in a header from elsewhere in `tt-oca-harness`, add it under
 `dependencies/` and, if it lives in a directory that is not already symlinked at
 the top level, add the symlink. Headers from a sibling firmware tree go in the
 mirrored path instead — see `fw/smc/tests/*/src`.
+
+### Upstream changes folded in so far
+
+The upstream tree is also consumed the other way round: `tt-oca-harness`
+carries this repository as the `virtual_platform/tt-oca-harness-model`
+submodule and its `virtual_platform/` pytest harness builds the production ROM
+(`hw/sys/sep/bootrom/prod`) and the upstream `hw/sys/sep/dv/fw/tests` directly
+against `sep-vp`. ROM changes therefore do not need to be mirrored into
+`fw/sep/bootcode/` for that flow; this copy is the repository's own regression
+set and is kept aligned on the points below.
+
+| Upstream change | What was folded into this copy |
+|---|---|
+| #2589 `dv/sep: Fix checks that could not fail and grade expected values against the RDL and spec` | `common/crt0.s`: MRAC `0xA8AAAAAA` (region 12 = `0xC000_0000` ICCM/DCCM is the normal region; the old `0xAA2AAAAA` cleared region 10). `common/sep_outbound_filter.h`: `FILTER_CONFIG_VALUE` = `0x0000_0000_0100_3013` (RDL-exact: no stray bit 32, `data_bus_width` at its reset value, `allow_ns` clear) plus a `_Static_assert` against the `FILTER_CTRL_FILTER_CONFIG_*` masks. `fw/smc/tests/smc_sep_xbar/src/smc_sep_xbar_protocol.h`: `XBAR_SEP_OUTBOUND_CFG` / `XBAR_SEP_INBOUND_CFG0/1` / `XBAR_SMC_OUTBOUND_CFG` goldens regraded the same way. `common_sep_defines.h` (both copies): `STDOUT` unified with `tb.h` at `0x8000_0000`. Comment corrections in `interrupt.h`, `och_sep_common.h`, `dma_hash_test.c`. |
+| #2464 `cacheable[59:56]` alias-remap attribute, #2572 output-remap `valid[63]` | `dependencies/meta/registers/c/och_sep_top_reg.h` field macros, `fabric_alias_remap_cacheable_default_test`, `sep_smu_remap` (see git history). |

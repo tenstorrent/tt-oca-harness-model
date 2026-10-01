@@ -28,6 +28,11 @@
 //                  `prot[2] = (mstatus.MPRV ? mstatus.MPP : priv) != U`.
 //   prot[3]     -- 1 == locked (atomic).  Set for AMO / LR-SC sequences so
 //                  the fabric treats them as exclusive.
+//   axi_cache   -- AWCACHE/ARCACHE[3:0].  Default 0 (device non-bufferable).
+//                  smc_fabric's alias remap replaces it bit-for-bit with
+//                  REGION_ATTRS.cacheable[59:56] on a region hit
+//                  (hw/ip/axi_alias_remap, tt-oca-hw #2464) and passes it
+//                  through unchanged on a miss.  Bits [7:4] must be 0.
 //
 // Per the §3.10 Modeling notes ("Atomicity: Spike's AMO/LR-SC sequences are
 // issued as a single TLM transaction with prot[3]=1"); the wrapper sets the
@@ -93,6 +98,9 @@ public:
     bool     is_user    = false;    // mirror of !prot[2]
 
     uint8_t  axi_user   = 0;
+    uint8_t  axi_cache  = 0;        // AWCACHE/ARCACHE[3:0]; see header comment
+
+    static constexpr uint8_t AXI_CACHE_MASK = 0xFu;
 
     smc_axi_extension() = default;
 

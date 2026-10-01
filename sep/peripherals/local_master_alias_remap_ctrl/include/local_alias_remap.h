@@ -32,10 +32,11 @@
  *       break   // first match wins (LZC priority)
  *   if no match: passthrough (addr unchanged)
  *
- * On a hit the region's `cacheable` bit also replaces the transaction's cache
- * attribute, mirroring axi_alias_remap.sv:122,147 (`{CacheWidth{cacheable}}`);
- * on a miss the incoming value passes through. Since tlm_generic_payload has no
- * cache field, the bit travels on sep_axi_extension.
+ * On a hit the region's 4-bit `cacheable[59:56]` field also replaces the
+ * transaction's AxCACHE attribute bit-for-bit (axi_alias_remap.sv, tt-oca-hw
+ * #2464 — previously a single bit replicated across AxCACHE); on a miss the
+ * incoming value passes through. Since tlm_generic_payload has no cache field,
+ * the nibble travels on sep_axi_extension::axi_cache.
  *
  * Hardware constants (SEP local master alias remap):
  *   CSR_BASE     = 0x10A10000   (16 × 0x20 B = 0x200 B total CSR span)
@@ -64,7 +65,10 @@ public:
 
     // Field masks
     static constexpr uint64_t ADDR_FIELD_MASK   = 0x00FFFFFFFFFFF000ULL; // [55:12]
-    static constexpr uint64_t ATTRS_MASK        = 0xC0FFFFFFFFFFF000ULL; // offset+cacheable+valid
+    static constexpr uint64_t ATTRS_MASK        = 0x8FFFFFFFFFFFF000ULL; // offset[55:12]+cacheable[59:56]+valid[63]
+    static constexpr uint64_t ATTRS_CACHEABLE_SHIFT = 56;                // REGION_ATTRS.cacheable[59:56]
+    static constexpr uint64_t ATTRS_CACHEABLE_MASK  = 0x0F00000000000000ULL;
+    static constexpr uint64_t ATTRS_VALID           = 1ULL << 63;
 
     // =========================================================================
     // Data-path sockets (CSR access via inherited target_socket from base)
@@ -96,7 +100,7 @@ public:
         uint64_t start_addr = 0;
         uint64_t end_addr   = 0;
         uint64_t offset     = 0;
-        bool     cacheable  = false;
+        uint8_t  cacheable  = 0;      ///< 4-bit AxCACHE value, REGION_ATTRS.cacheable[59:56]
         bool     valid      = false;
     };
     Region get_region(uint32_t idx) const;
@@ -127,11 +131,12 @@ private:
     /// The address translation for a known-matching region.
     uint64_t apply_offset(uint64_t addr, uint32_t idx) const;
 
-    /// Applies REGION_ATTRS[idx].cacheable to the outgoing transaction, returning
-    /// the previous value so the caller can restore it. axi_alias_remap.sv:122,147
-    /// drives aw.cache/ar.cache from the region's bit on a hit and passes the
-    /// incoming value through on a miss; this is the same override, carried on
-    /// sep_axi_extension because tlm_generic_payload has no cache field.
-    bool  override_cacheable(tlm::tlm_generic_payload& trans, uint32_t idx) const;
-    void  restore_cacheable(tlm::tlm_generic_payload& trans, bool previous) const;
+    /// Applies REGION_ATTRS[idx].cacheable[59:56] to the outgoing transaction's
+    /// AxCACHE, returning the previous value so the caller can restore it.
+    /// axi_alias_remap.sv drives aw.cache/ar.cache from the region's 4-bit field
+    /// on a hit and passes the incoming value through on a miss; this is the
+    /// same override, carried on sep_axi_extension::axi_cache because
+    /// tlm_generic_payload has no cache field.
+    uint8_t override_cacheable(tlm::tlm_generic_payload& trans, uint32_t idx) const;
+    void    restore_cacheable(tlm::tlm_generic_payload& trans, uint8_t previous) const;
 };

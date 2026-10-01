@@ -68,6 +68,16 @@ public:
    // sc_main has to consult this separately to return a non-zero exit code.
    uint32_t m_assert_failures = 0;
 
+   // Register helpers that see a non-OK response. The helper used to log and
+   // return, so a failed read kept the caller's old value and the suite still
+   // passed. sc_main adds this into the process exit code.
+   uint32_t m_transport_failures = 0;
+
+   // Status from the most recent key-manager read. The sideload bus is
+   // write-only, so a read is expected to be rejected and must not be counted
+   // as a surprise transport failure.
+   tlm::tlm_response_status m_last_response = tlm::TLM_INCOMPLETE_RESPONSE;
+
    // Logger instance for structured logging
    RegLogger logger;
 

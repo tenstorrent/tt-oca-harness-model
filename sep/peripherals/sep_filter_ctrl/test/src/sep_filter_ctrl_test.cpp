@@ -158,29 +158,138 @@ void sep_filter_ctrl_test::test_woset_locked_field()
 {
     std::cout << "\n=== Testing WOSET Locked Field ===" << std::endl;
 
-    uint32_t instance = 1;
+    const uint32_t instance = LOCKED_ENTRY;
     uint64_t config = csr_read_64(instance, 0x00);
     assert(((config & (1ULL << 63)) == 0) && "Locked should start as 0");
 
     const uint64_t start_before = csr_read_64(instance, 0x08);
     const uint64_t end_before   = csr_read_64(instance, 0x10);
 
-    // Set locked bit
-    csr_write_64(instance, 0x00, 1ULL << 63);
+    // Program a recognisable configuration and lock it in the same store
+    // (locked | src_id=5; entry_enabled stays 0 so the data-path suites that
+    // follow are unaffected). The write that sets the lock is itself still
+    // accepted — the entry is not locked yet when it is decoded.
+    const uint64_t cfg_programmed = (1ULL << 63) | (5ULL << 16);
+    csr_write_64(instance, 0x00, cfg_programmed);
     config = csr_read_64(instance, 0x00);
     assert(((config & (1ULL << 63)) != 0) && "Locked bit should be set");
+    const uint64_t cfg_locked = config;
 
-    // Try to clear — should remain set (WOSET)
-    csr_write_64(instance, 0x00, 0x0ULL);
-    config = csr_read_64(instance, 0x00);
-    assert(((config & (1ULL << 63)) != 0) && "Locked bit should remain set (WOSET)");
+    // RTL #2480 (axi_filter_wrap.sv): once locked, every write to the entry's
+    // FILTER_CONFIG / START_ADDR / END_ADDR is steered to the AXI error
+    // subordinate and terminates with DECERR. The TLM equivalent is
+    // TLM_ADDRESS_ERROR_RESPONSE, the same status a blocked data transaction
+    // gets. Reads still return the locked configuration.
+    const uint64_t base = instance * CSR_STRIDE;
+    auto locked_write = [this, base](uint32_t reg_off, uint64_t v) {
+        return simtlm::write_word<uint64_t>(initiator_socket, base + reg_off, v).status;
+    };
+    auto locked_write32 = [this, base](uint32_t byte_off, uint32_t v) {
+        return simtlm::write_word<uint32_t>(initiator_socket, base + byte_off, v).status;
+    };
 
-    // START/END freeze with the lock (RDL write-once). A locked entry must
-    // ignore later START/END stores — the same path RV32 wr64 would take.
-    csr_write_64(instance, 0x08, 0x11110000ULL);
-    csr_write_64(instance, 0x10, 0x22220000ULL);
+    // Try to clear the lock → DECERR, and the lock (plus the rest of
+    // FILTER_CONFIG) is untouched.
+    assert((locked_write(0x00, 0x0ULL) == tlm::TLM_ADDRESS_ERROR_RESPONSE) &&
+           "FILTER_CONFIG write to a locked entry must return DECERR");
+    assert((csr_read_64(instance, 0x00) == cfg_locked) &&
+           "FILTER_CONFIG must be unchanged after a DECERR'd write");
+
+    // Re-asserting the lock is also a FILTER_CONFIG write → DECERR.
+    assert((locked_write(0x00, 1ULL << 63) == tlm::TLM_ADDRESS_ERROR_RESPONSE) &&
+           "re-locking a locked entry must return DECERR");
+
+    // START/END full-width stores → DECERR, values frozen.
+    assert((locked_write(0x08, 0x11110000ULL) == tlm::TLM_ADDRESS_ERROR_RESPONSE) &&
+           "START_ADDR write to a locked entry must return DECERR");
+    assert((locked_write(0x10, 0x22220000ULL) == tlm::TLM_ADDRESS_ERROR_RESPONSE) &&
+           "END_ADDR write to a locked entry must return DECERR");
     assert((csr_read_64(instance, 0x08) == start_before) && "START_ADDR must freeze when locked");
     assert((csr_read_64(instance, 0x10) == end_before) && "END_ADDR must freeze when locked");
+
+    // The RV32 wr64 path (two 32-bit beats) hits the same steering — every
+    // 32-bit lane of the three registers is DECERR'd, low and high halves.
+    for (uint32_t lane : {0x00u, 0x04u, 0x08u, 0x0Cu, 0x10u, 0x14u}) {
+        assert((locked_write32(lane, 0xDEADBEEFu) == tlm::TLM_ADDRESS_ERROR_RESPONSE) &&
+               "32-bit lane write to a locked entry must return DECERR");
+    }
+    assert((csr_read_64(instance, 0x00) == cfg_locked)   && "FILTER_CONFIG frozen after 32-bit lanes");
+    assert((csr_read_64(instance, 0x08) == start_before) && "START_ADDR frozen after 32-bit lanes");
+    assert((csr_read_64(instance, 0x10) == end_before)   && "END_ADDR frozen after 32-bit lanes");
+
+    // A write that only touches the reserved +0x18 word is not one of the
+    // three locked registers: register-file policy (write-ignored, OK).
+    assert((locked_write(0x18, 0xFFFFFFFFFFFFFFFFULL) == tlm::TLM_OK_RESPONSE) &&
+           "reserved +0x18 word of a locked entry keeps the WI/OK policy");
+    assert((csr_read_64(instance, 0x18) == 0x0ULL) && "reserved word still reads as zero");
+    // ...but a burst that starts in the reserved word of the *previous* entry
+    // and spills into this locked entry's FILTER_CONFIG is steered.
+    if (instance > 0) {
+        unsigned char span[16] = {0};
+        tlm::tlm_generic_payload gp;
+        gp.set_command(tlm::TLM_WRITE_COMMAND);
+        gp.set_address(base - 8);
+        gp.set_data_ptr(span);
+        gp.set_data_length(sizeof span);
+        gp.set_streaming_width(sizeof span);
+        gp.set_byte_enable_ptr(nullptr);
+        gp.set_byte_enable_length(0);
+        gp.set_dmi_allowed(false);
+        const auto r = simtlm::access(initiator_socket, gp);
+        assert((r.status == tlm::TLM_ADDRESS_ERROR_RESPONSE) &&
+               "multi-word write spilling into a locked register must return DECERR");
+        assert((csr_read_64(instance, 0x00) == cfg_locked) && "spill write must not touch FILTER_CONFIG");
+    }
+
+    // Debug transport follows the same steering: 0 bytes transferred.
+    {
+        uint64_t junk = 0x3333000000000000ULL;
+        const unsigned n = simtlm::debug_write(initiator_socket, base + 0x08,
+                                               reinterpret_cast<unsigned char*>(&junk), 8);
+        assert((n == 0u) && "transport_dbg write to a locked register must transfer 0 bytes");
+        assert((csr_read_64(instance, 0x08) == start_before) && "dbg write must not touch START_ADDR");
+
+        uint64_t rd = 0;
+        const unsigned m = simtlm::debug_read(initiator_socket, base + 0x00,
+                                              reinterpret_cast<unsigned char*>(&rd), 8);
+        assert((m == 8u) && (rd == cfg_locked) && "transport_dbg read of a locked entry still works");
+    }
+
+    // Malformed payloads to a locked entry keep the register file's verdict —
+    // the steering is only for well-formed writes the RTL would actually decode.
+    {
+        const simtlm::target_geometry geo{base + 0x08, 8, 8};
+        assert((probe(simtlm::defect::ignore_command, geo, tlm::TLM_WRITE_COMMAND).status
+                    == tlm::TLM_COMMAND_ERROR_RESPONSE) &&
+               "IGNORE_COMMAND to a locked entry stays a command error");
+        assert((probe(simtlm::defect::zero_length, geo, tlm::TLM_WRITE_COMMAND).status
+                    == tlm::TLM_BURST_ERROR_RESPONSE) &&
+               "zero-length write to a locked entry stays a burst error");
+    }
+
+    // The lock is per-entry: the neighbouring unlocked entry still accepts
+    // writes with an OK response (recorded by csr_write_64 if not).
+    const uint32_t other = instance + 1;
+    const uint64_t other_cfg_before   = csr_read_64(other, 0x00);
+    const uint64_t other_start_before = csr_read_64(other, 0x08);
+    const uint64_t other_end_before   = csr_read_64(other, 0x10);
+    csr_write_64(other, 0x08, 0x44440000ULL);
+    csr_write_64(other, 0x10, 0x4444FFFFULL);
+    assert((csr_read_64(other, 0x08) == 0x44440000ULL) && "unlocked neighbour START_ADDR still writable");
+    assert((csr_read_64(other, 0x10) == 0x4444FFFFULL) && "unlocked neighbour END_ADDR still writable");
+    assert((csr_read_64(other, 0x00) == other_cfg_before) && "neighbour FILTER_CONFIG untouched");
+    // ...and on the debug path too: a well-formed dbg write to an unlocked
+    // register is transferred in full and lands in the register file.
+    {
+        uint64_t dbg_val = 0x55550000ULL;
+        const unsigned n = simtlm::debug_write(initiator_socket, other * CSR_STRIDE + 0x08,
+                                               reinterpret_cast<unsigned char*>(&dbg_val), 8);
+        assert((n == 8u) && "transport_dbg write to an unlocked register transfers 8 bytes");
+        assert((csr_read_64(other, 0x08) == 0x55550000ULL) && "dbg write must land in START_ADDR");
+    }
+    // Leave the neighbour as we found it for the suites that follow.
+    csr_write_64(other, 0x08, other_start_before);
+    csr_write_64(other, 0x10, other_end_before);
 
     std::cout << "WOSET locked field test PASSED" << std::endl;
 }
