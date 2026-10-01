@@ -290,6 +290,19 @@ aes_model::~aes_model()
  * KM writes 8 key words at offsets 0x00–0x1C (KEY_SHARE0), 8 words at
  * 0x20–0x3C (KEY_SHARE1), then KEY_CTRL=1 at 0x40 to commit the key.
  *
+ * The only accepted transaction shape is a 4-byte aligned WRITE with
+ * `streaming_width >= 4` and no byte-enable array. Everything else is
+ * rejected before the key shares are touched:
+ *
+ * | Stimulus                         | Response                        |
+ * |----------------------------------|---------------------------------|
+ * | READ / IGNORE command            | `TLM_COMMAND_ERROR_RESPONSE`    |
+ * | null `data_ptr`                  | `TLM_GENERIC_ERROR_RESPONSE`    |
+ * | `data_length != 4` (incl. 0)     | `TLM_BURST_ERROR_RESPONSE`      |
+ * | `streaming_width < data_length`  | `TLM_BURST_ERROR_RESPONSE`      |
+ * | any byte-enable array            | `TLM_BYTE_ENABLE_ERROR_RESPONSE`|
+ * | unaligned or out-of-window addr  | `TLM_ADDRESS_ERROR_RESPONSE`    |
+ *
  * Modelled as zero latency: the push is a register-file write with no datapath
  * behind it, and this model's register socket does not annotate an access
  * delay either. `delay` is therefore passed through untouched rather than
@@ -306,15 +319,38 @@ void aes_model::keymgr_b_transport(tlm::tlm_generic_payload& trans, sc_time& del
         return;
     }
 
-    // Same well-formedness gate as regmodel::Memory::validate, in the same
-    // order: never dereference a null pointer, and this socket is word-only so
-    // any other length is a burst error (that covers length 0).
+    // Well-formedness gate, in regmodel::Memory::validate's order and with its
+    // status codes, but stricter: this socket is a whole-word key push, so it
+    // accepts exactly one shape of transaction and rejects everything else
+    // rather than inventing semantics for it.
     if (trans.get_data_ptr() == nullptr) {
         trans.set_response_status(tlm::TLM_GENERIC_ERROR_RESPONSE);
         return;
     }
-    if (trans.get_data_length() != 4) {
+
+    // Word-only, so any other length is a burst error (that covers length 0).
+    const unsigned int len = trans.get_data_length();
+    if (len != 4) {
         trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+
+    // streaming_width < len is a legal streaming burst that this socket does
+    // not implement; 0 is illegal outright. Accepting either would copy 4
+    // linear bytes while pretending to have honoured a narrower stream.
+    if (trans.get_streaming_width() < len) {
+        trans.set_response_status(tlm::TLM_BURST_ERROR_RESPONSE);
+        return;
+    }
+
+    // Byte enables are rejected outright, which is stricter than validate()
+    // (it only rejects a non-null pointer with length 0). Honouring partial
+    // lanes would mean a read-modify-write of a key share, and silently
+    // ignoring them would write lanes the key manager did not mark -- either
+    // way a malformed push could install a key that is half stale. The real
+    // KM pushes whole words, so refusing is both safe and accurate.
+    if (trans.get_byte_enable_ptr() != nullptr) {
+        trans.set_response_status(tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE);
         return;
     }
 
@@ -2457,8 +2493,12 @@ void aes_model::register_all_callbacks()
 
     // DATA_IN — honor TLM byte-enables so disabled lanes keep prior bytes.
     for (unsigned int i = 0; i < 4; i++) {
-std::function<bool(uint32_t, uint8_t)> write_cb =
+        std::function<bool(uint32_t, uint8_t)> write_cb =
             [this, i](uint32_t value, uint8_t byte_enable) {
+                // An all-lanes-disabled write transfers no bytes, so it must
+                // not reach handle_write_DATA_IN: that would mark the word
+                // written and can auto-start a cipher on a payload the
+                // initiator never supplied.
                 if (byte_enable == 0) {
                     return true;
                 }
@@ -2466,6 +2506,7 @@ std::function<bool(uint32_t, uint8_t)> write_cb =
                     regmodel::apply_byte_enable(m_data_in[i], value, byte_enable);
                 return this->handle_write_DATA_IN(i, merged, DATA_IN[i].write_bit_mask);
             };
+        memory.register_write_callback_with_be(write_cb, DATA_IN[i].offset);
     }
 
     // DATA_OUT

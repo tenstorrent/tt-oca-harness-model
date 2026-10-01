@@ -21,9 +21,15 @@ void nist_key_shares(testbench &tb, uint32_t *share0, uint32_t *share1)
     tb.generate_two_share_key(share0, share1, actual, 4);
 }
 
+/// Drive the KeyMgr sideload socket. `streaming == 0` means "use a legal
+/// width for this length" so the well-formed cases stay terse; pass an
+/// explicit value to exercise a narrower stream. `be` is null for every
+/// well-formed push -- the socket accepts no byte-enable array at all.
 tlm::tlm_response_status keymgr_xact(aes_test &t, tlm::tlm_command cmd,
                                      uint64_t addr, unsigned char *data,
-                                     unsigned int len, unsigned int streaming = 0)
+                                     unsigned int len, unsigned int streaming = 0,
+                                     unsigned char *be = nullptr,
+                                     unsigned int be_len = 0)
 {
     tlm::tlm_generic_payload trans;
     sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
@@ -32,7 +38,8 @@ tlm::tlm_response_status keymgr_xact(aes_test &t, tlm::tlm_command cmd,
     trans.set_data_ptr(data);
     trans.set_data_length(len);
     trans.set_streaming_width(streaming == 0 ? (len == 0 ? 1u : len) : streaming);
-    trans.set_byte_enable_ptr(nullptr);
+    trans.set_byte_enable_ptr(be);
+    trans.set_byte_enable_length(be_len);
     trans.set_dmi_allowed(false);
     trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
     t.keymgr_socket->b_transport(trans, delay);
@@ -445,6 +452,38 @@ void testbench::test_coverage_keymgr_tlm_matrix()
             return;
         }
 
+        // streaming_width < len is a legal streaming burst the socket does not
+        // implement. Checked at width 1 and 3 (both below the 4-byte word) so
+        // a future off-by-one in the comparison cannot slip through.
+        for (unsigned int narrow : {1u, 3u}) {
+            if (keymgr_xact(*m_test, tlm::TLM_WRITE_COMMAND, 0x00u,
+                            reinterpret_cast<unsigned char *>(&sink), 4, narrow) !=
+                tlm::TLM_BURST_ERROR_RESPONSE) {
+                report_test_fail("test_coverage_keymgr_tlm_matrix",
+                                 "KeyMgr streaming_width < len must return BURST_ERROR");
+                return;
+            }
+        }
+
+        // A byte-enable array is rejected whatever it says: honouring partial
+        // lanes would mean a read-modify-write of a key share. Checked with
+        // all lanes set (the case most likely to be waved through) and with a
+        // partial mask.
+        // TLM_BYTE_ENABLED / TLM_BYTE_DISABLED are preprocessor macros (0xff /
+        // 0x0), not namespaced enumerators, so they take no tlm:: prefix.
+        for (unsigned char be_pattern : {static_cast<unsigned char>(TLM_BYTE_ENABLED),
+                                         static_cast<unsigned char>(TLM_BYTE_DISABLED)}) {
+            unsigned char be[4] = {be_pattern, be_pattern, be_pattern, be_pattern};
+            be[1] = static_cast<unsigned char>(TLM_BYTE_DISABLED);
+            if (keymgr_xact(*m_test, tlm::TLM_WRITE_COMMAND, 0x00u,
+                            reinterpret_cast<unsigned char *>(&sink), 4, 0, be,
+                            sizeof(be)) != tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE) {
+                report_test_fail("test_coverage_keymgr_tlm_matrix",
+                                 "KeyMgr byte enables must return BYTE_ENABLE_ERROR");
+                return;
+            }
+        }
+
         if (keymgr_xact(*m_test, tlm::TLM_WRITE_COMMAND, 0x01u,
                         reinterpret_cast<unsigned char *>(&sink), 4) !=
             tlm::TLM_ADDRESS_ERROR_RESPONSE) {
@@ -486,6 +525,34 @@ void testbench::test_coverage_keymgr_tlm_matrix()
             tlm::TLM_OK_RESPONSE) {
             report_test_fail("test_coverage_keymgr_tlm_matrix", "KEY_CTRL=1 failed");
             return;
+        }
+
+        // Replay every reject against the live committed key, aiming a poison
+        // value at KEY_SHARE0 word 0. A reject must leave the shares untouched,
+        // so the encryption below must still produce the NIST ciphertext; if
+        // any of these mutated the share, that comparison fails.
+        {
+            uint32_t poison = 0xDEADBEEFu;
+            unsigned char *pp = reinterpret_cast<unsigned char *>(&poison);
+            unsigned char be_all[4] = {
+                static_cast<unsigned char>(TLM_BYTE_ENABLED),
+                static_cast<unsigned char>(TLM_BYTE_ENABLED),
+                static_cast<unsigned char>(TLM_BYTE_ENABLED),
+                static_cast<unsigned char>(TLM_BYTE_ENABLED)};
+
+            const bool rejected =
+                keymgr_xact(*m_test, tlm::TLM_WRITE_COMMAND, 0x00u, pp, 4, 2) ==
+                    tlm::TLM_BURST_ERROR_RESPONSE &&
+                keymgr_xact(*m_test, tlm::TLM_WRITE_COMMAND, 0x00u, pp, 4, 0,
+                            be_all, sizeof(be_all)) ==
+                    tlm::TLM_BYTE_ENABLE_ERROR_RESPONSE &&
+                keymgr_xact(*m_test, tlm::TLM_WRITE_COMMAND, 0x00u, pp, 3) ==
+                    tlm::TLM_BURST_ERROR_RESPONSE;
+            if (!rejected) {
+                report_test_fail("test_coverage_keymgr_tlm_matrix",
+                                 "malformed push against a live key was not rejected");
+                return;
+            }
         }
 
         const uint32_t block[4] = {0x00112233u, 0x44556677u, 0x8899aabbu, 0xccddeeffu};
@@ -593,6 +660,20 @@ void testbench::test_coverage_byte_enable_data_in()
             tlm::TLM_OK_RESPONSE) {
             report_test_fail("test_coverage_byte_enable_data_in",
                              "partial BE write failed");
+            return;
+        }
+        wait(1, SC_NS);
+
+        // All lanes disabled is a legal TLM write that transfers no bytes: it
+        // must be accepted and must change nothing. The ciphertext comparison
+        // below is the oracle -- it still expects the merged word 0x112233BB,
+        // so a write that leaked this payload through would fail it.
+        const unsigned char be_none[4] = {0x00, 0x00, 0x00, 0x00};
+        if (m_test->register_write_32_with_be(aes_basetest::DATA_IN_OFFSET,
+                                              0xDEADBEEFu, be_none) !=
+            tlm::TLM_OK_RESPONSE) {
+            report_test_fail("test_coverage_byte_enable_data_in",
+                             "all-lanes-disabled BE write must return TLM_OK_RESPONSE");
             return;
         }
         wait(1, SC_NS);

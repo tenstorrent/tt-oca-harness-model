@@ -77,10 +77,16 @@ elif ${RUN_CPPCHECK}; then
 elif [ "${BUILD_TYPE}" = "Coverage" ]; then
   cmake --build "${BUILD_DIR}" --target coverage
   peripheral_enforce_coverage_gate "${BUILD_DIR}"
+elif [ "${BUILD_TYPE}" = "ASAN" ]; then
+  # Ahead of --ctest on purpose, matching the other five SEP runners. If ctest
+  # won this dispatch, `--asan --ctest` would build with sanitizers and then
+  # skip the helper, so no asan.log.* gate would run and the sanitizer phase
+  # would silently pass. ASAN therefore wins and --ctest is ignored: the helper
+  # already runs the testbench, and letting ctest run it again would execute
+  # the whole suite twice under sanitizers.
+  peripheral_enforce_asan_clean "${BUILD_DIR}/bin/adams_bridge_test" "${BUILD_DIR}"
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
-elif [ "${BUILD_TYPE}" = "ASAN" ]; then
-  peripheral_enforce_asan_clean "${BUILD_DIR}/bin/adams_bridge_test" "${BUILD_DIR}"
 else
   "${BUILD_DIR}/bin/adams_bridge_test"
 fi
