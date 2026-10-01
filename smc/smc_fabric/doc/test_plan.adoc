@@ -54,7 +54,7 @@ Source: `test/smc_fabric_tb.cpp`. Names are the `[PASS]` titles.
 |14 |M-mode output remap |Bit-exact `offset[55:0]`; offset inert until `valid[63]`; clear → passthrough; `[62:56]` RAZ/WI; src-ID retag independent of valid |Positive
 |15 |Xvisor output remap |Xvisor window, valid gate |Positive
 |16 |reset clears output-remap |Offset + valid cleared → identity |Positive
-|17 |filter CSR image |CONFIG/START/END + `locked` |Positive
+|17 |filter CSR image |CONFIG/START/END + `locked`; locked entry: every 32/64-bit write to CONFIG/START/END → DECERR (`TLM_ADDRESS_ERROR_RESPONSE`), values unchanged, reads OK, `+0x18/+0x1C` still WI/OK, neighbouring entry unaffected |Mixed
 |18 |alternate internal masters |jtag / data_accel / log |Positive
 |19 |global CSR / testbench API |LOCAL_BASE / REGION_SIZE |Positive
 |20 |M-mode remap via local-base |Local-aperture remap |Positive

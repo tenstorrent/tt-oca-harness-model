@@ -86,11 +86,11 @@ sep_filter_ctrl_ip::sep_filter_ctrl_ip(sc_module_name n, uint32_t num_instances)
             },
             offset);
 
-        // START_ADDR / END_ADDR are frozen once this entry's locked bit is set
-        // ("Write once register to lock filter configurations" — RDL).
+        // START_ADDR / END_ADDR writes to a locked entry never reach these
+        // callbacks: csr_write_steered_to_err_slv() answers them with DECERR
+        // at the socket, so the lock needs no guard here.
         memory.register_write_callback_with_be(
             [this, i](DT value, uint8_t be) -> bool {
-                if (this->get_filter_entry(i).locked) return true;
                 const DT merged = merge_be(static_cast<uint64_t>(START_ADDR[i]),
                                            static_cast<uint64_t>(value), be);
                 bool ok = this->START_ADDR[i].handle_write(merged, this->START_ADDR[i].write_bit_mask);
@@ -101,7 +101,6 @@ sep_filter_ctrl_ip::sep_filter_ctrl_ip(sc_module_name n, uint32_t num_instances)
 
         memory.register_write_callback_with_be(
             [this, i](DT value, uint8_t be) -> bool {
-                if (this->get_filter_entry(i).locked) return true;
                 const DT merged = merge_be(static_cast<uint64_t>(END_ADDR[i]),
                                            static_cast<uint64_t>(value), be);
                 bool ok = this->END_ADDR[i].handle_write(merged, this->END_ADDR[i].write_bit_mask);
@@ -157,6 +156,35 @@ sep_filter_ctrl_ip::FilterEntry sep_filter_ctrl_ip::get_filter_entry(uint32_t id
     entry.end_addr   = static_cast<uint64_t>(END_ADDR[idx])   & ADDR_FIELD_MASK;
 
     return entry;
+}
+
+// =============================================================================
+// csr_write_steered_to_err_slv — locked-entry write policy (RTL #2480)
+//
+// axi_filter_wrap.sv: once FILTER_CONFIG.locked is set, every write to that
+// entry's FILTER_CONFIG, START_ADDR or END_ADDR is steered to the same AXI
+// error subordinate as a blocked transaction and terminates with DECERR; reads
+// still return the locked configuration. The reserved +0x18 word of the 0x20
+// stride is not one of the three registers and keeps the register file's
+// write-ignore behaviour. A multi-word write is steered if any word it touches
+// is a locked register.
+// =============================================================================
+bool sep_filter_ctrl_ip::csr_write_steered_to_err_slv(sc_dt::uint64 addr,
+                                                      unsigned int  len) const
+{
+    const sc_dt::uint64 first_word = addr / SINGLE_BEAT_BYTES;
+    const sc_dt::uint64 last_word  = (addr + len - 1) / SINGLE_BEAT_BYTES;
+
+    for (sc_dt::uint64 w = first_word; w <= last_word; ++w) {
+        const sc_dt::uint64 byte_off = w * SINGLE_BEAT_BYTES;
+        const sc_dt::uint64 entry    = byte_off / CSR_ENTRY_STRIDE;
+        const unsigned      field    = static_cast<unsigned>(byte_off % CSR_ENTRY_STRIDE);
+        if (entry >= num_instances_) continue;      // reserved rows: register-file policy
+        if (field >= CSR_LOCKED_SPAN) continue;     // +0x18 reserved word
+        if (((static_cast<uint64_t>(FILTER_CONFIG[static_cast<uint32_t>(entry)]) >> 63) & 0x1) != 0)
+            return true;
+    }
+    return false;
 }
 
 // =============================================================================
@@ -301,14 +329,8 @@ bool sep_filter_ctrl_ip::handle_filter_config_write(uint32_t idx, DT value)
         return false;
     }
 
-    uint64_t current_val = static_cast<uint64_t>(FILTER_CONFIG[idx]);
-
-    // locked[63] freezes the entire filter configuration (FILTER_CONFIG,
-    // START_ADDR, END_ADDR) — once set it can never be cleared or bypassed.
-    bool current_locked = (current_val >> 63) & 0x1;
-    if (current_locked)
-        return true;
-
+    // A locked entry never gets here: the socket answers such writes with
+    // DECERR (csr_write_steered_to_err_slv) before the register file runs.
     uint64_t new_val = static_cast<uint64_t>(value);
 
     // data_bus_width[14:12] is hw=w — always 3

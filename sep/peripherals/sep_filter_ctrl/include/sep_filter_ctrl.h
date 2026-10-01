@@ -81,6 +81,8 @@ public:
     static constexpr uint64_t ADDR_FIELD_MASK        = 0x00FFFFFFFFFFFFFFULL; // [55:0]
     static constexpr uint8_t  DATA_BUS_WIDTH         = 3; // hw=w, always 3 (64-bit bus)
     static constexpr unsigned SINGLE_BEAT_BYTES      = 8; // one 64-bit AXI beat; larger = burst
+    static constexpr unsigned CSR_ENTRY_STRIDE       = 0x20; // bytes per filter entry in the CSR map
+    static constexpr unsigned CSR_LOCKED_SPAN        = 0x18; // FILTER_CONFIG+START_ADDR+END_ADDR
 
     // =========================================================================
     // Sockets
@@ -131,6 +133,11 @@ public:
 
     bool handle_filter_config_write(uint32_t idx, DT value);
     bool handle_filter_config_read(uint32_t idx, DT& value);
+
+    /// Locked-entry write policy (RTL #2480): a write touching FILTER_CONFIG /
+    /// START_ADDR / END_ADDR of an entry whose locked[63] is set is steered to
+    /// the AXI error subordinate and answered with DECERR by the CSR socket.
+    bool csr_write_steered_to_err_slv(sc_dt::uint64 addr, unsigned int len) const override;
 
 private:
     /// Leaving filter_skip_i open is supported two different ways, because the

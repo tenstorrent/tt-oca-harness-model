@@ -46,6 +46,22 @@ Entry 0 wins. Range compare is page (burst) or 8-byte word, then
 source-id / NS / burst / R-W permission. Miss with BlockByDefault
 denies. `filter_skip_i` forwards everything.
 
+====== CSR lock (RTL #2480)
+
+`FILTER_CONFIG.locked[63]` is write-one-to-set. Once set,
+`axi_filter_wrap.sv` steers every write to that entry's `FILTER_CONFIG`,
+`START_ADDR` and `END_ADDR` to the same AXI error subordinate as a
+blocked transaction, so the write terminates with DECERR; reads still
+return the locked configuration. The model reproduces this at the CSR
+socket: `sep_filter_ctrl_base` owns `target_socket` and, for a
+well-formed write, asks `csr_write_steered_to_err_slv()` before
+delegating to `regmodel::Memory`. A write touching any locked register
+word returns `TLM_ADDRESS_ERROR_RESPONSE` (`transport_dbg` transfers 0
+bytes) and leaves the register file untouched. The reserved `+0x18`
+word of the stride is not one of the three registers and keeps the
+register file's write-ignore/OK policy; malformed payloads keep the
+register file's own status. Only `rst_ni` clears the lock.
+
 ----
   data_socket ──► match_entry ──► filtered_socket   (hit + allowed)
                                └► TLM_ADDRESS_ERROR (miss or deny)
