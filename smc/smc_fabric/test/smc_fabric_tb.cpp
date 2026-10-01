@@ -827,12 +827,51 @@ struct tb : sc_core::sc_module {
         EXPECT_EQ(0x00AB'CDEF'1234'5678ULL,
                   (static_cast<uint64_t>(start_hi) << 32) | start_lo);
 
-        // 13c. locked[63] is write-one-to-set and freezes the entry.
-        d_mmio.write32(e1 + 0x04, CFG_LOCKED);       // set locked (high word, bit31)
+        // 13c. locked[63] is write-one-to-set. Once set, every write to the
+        //      entry's FILTER_CONFIG / START_ADDR / END_ADDR is steered to the
+        //      AXI error subordinate and returns DECERR (RTL #2480,
+        //      axi_filter_wrap.sv); the stored values are untouched and reads
+        //      still return the locked configuration.
+        const uint32_t cfg_lo_before = d_mmio.read32(e1 + 0x00);
+        const uint32_t end_lo_before = d_mmio.read32(e1 + 0x10);
+        d_mmio.write32(e1 + 0x04, CFG_LOCKED);       // set locked (high word, bit31) — still OK
         EXPECT_TRUE((d_mmio.read32(e1 + 0x04) & CFG_LOCKED) != 0u);  // locked reads back
-        d_mmio.write32(e1 + 0x08, 0xDEAD'BEEFu);     // ignored — entry is locked
+        {
+            uint32_t junk = 0xDEAD'BEEFu;
+            // Every 32-bit lane of the three locked registers → DECERR.
+            for (uint32_t off : {0x00u, 0x04u, 0x08u, 0x0Cu, 0x10u, 0x14u}) {
+                EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                          d_mmio.xfer(tlm::TLM_WRITE_COMMAND, e1 + off, &junk));
+            }
+            // A full 64-bit beat to each locked register → DECERR as well.
+            uint64_t junk64 = 0xDEAD'BEEF'CAFE'F00DULL;
+            for (uint32_t off : {0x00u, 0x08u, 0x10u}) {
+                EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                          d_mmio.raw(tlm::TLM_WRITE_COMMAND, e1 + off, 8,
+                                     reinterpret_cast<uint8_t*>(&junk64)));
+            }
+            // Re-asserting the lock is also a FILTER_CONFIG write → DECERR.
+            uint32_t relock = CFG_LOCKED;
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      d_mmio.xfer(tlm::TLM_WRITE_COMMAND, e1 + 0x04, &relock));
+            // The reserved tail of the stride is not one of the three
+            // registers: still write-ignored with an OK response.
+            d_mmio.write32(e1 + 0x18, 0xDEAD'BEEFu);
+            d_mmio.write32(e1 + 0x1C, 0xDEAD'BEEFu);
+        }
+        // Nothing moved: CONFIG (low word + locked), START, END all intact.
+        EXPECT_EQ(cfg_lo_before, d_mmio.read32(e1 + 0x00));
+        EXPECT_TRUE((d_mmio.read32(e1 + 0x04) & CFG_LOCKED) != 0u);
         EXPECT_EQ(0x1234'5678u, d_mmio.read32(e1 + 0x08));  // START_ADDR unchanged
-        std::cout << "  [PASS] filter CSR image (CONFIG/START/END, locked)\n";
+        EXPECT_EQ(0x00AB'CDEFu, d_mmio.read32(e1 + 0x0C));
+        EXPECT_EQ(end_lo_before, d_mmio.read32(e1 + 0x10));
+        EXPECT_EQ(5u, dut.get_inbound_filter_entry(1).src_id);
+        EXPECT_TRUE(dut.get_inbound_filter_entry(1).locked);
+        // The lock is per-entry: a neighbouring unlocked entry still accepts
+        // writes with an OK response.
+        d_mmio.write32(A_IBF + 2 * 0x20 + 0x08, 0x0BAD'0000u);
+        EXPECT_EQ(0x0BAD'0000u, d_mmio.read32(A_IBF + 2 * 0x20 + 0x08));
+        std::cout << "  [PASS] filter CSR image (CONFIG/START/END, locked → DECERR)\n";
 
         // ----------------------------------------------------------------
         // 14. Alternate internal masters (jtag / data_accel / log).
@@ -1184,6 +1223,21 @@ struct tb : sc_core::sc_module {
             EXPECT_EQ(tlm::TLM_COMMAND_ERROR_RESPONSE,
                       d_mmio.raw(tlm::TLM_IGNORE_COMMAND, e2, 4,
                                  reinterpret_cast<uint8_t*>(&ignore)));
+
+            // Outbound bank honours the same lock → DECERR contract.
+            const uint64_t o3 = A_OBF + 3 * 0x20;
+            d_mmio.write64(o3 + 0x08, 0x0000'00AB'0000'0000ULL);
+            d_mmio.write64(o3 + 0x00, CFG_RW_NS | (static_cast<uint64_t>(1) << 63));
+            EXPECT_TRUE(dut.get_outbound_filter_entry(3).locked);
+            uint32_t junk = 0;
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      d_mmio.xfer(tlm::TLM_WRITE_COMMAND, o3 + 0x00, &junk));
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      d_mmio.xfer(tlm::TLM_WRITE_COMMAND, o3 + 0x0C, &junk));
+            EXPECT_EQ(tlm::TLM_ADDRESS_ERROR_RESPONSE,
+                      d_mmio.xfer(tlm::TLM_WRITE_COMMAND, o3 + 0x14, &junk));
+            EXPECT_EQ(0x0000'00ABu, d_mmio.read32(o3 + 0x0C));   // START high word intact
+            EXPECT_TRUE((d_mmio.read32(o3 + 0x00) & CFG_EN) != 0u);
         }
 
         pulse_reset();

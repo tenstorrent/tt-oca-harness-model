@@ -46,7 +46,7 @@ Sources: `test/src/sep_filter_ctrl_test.cpp`,
 |ID |Name |What the model test proves |Type
 |A1 |Reset values |32 outbound entries |Positive
 |A2 |Basic CSR RW |CONFIG / START / END |Positive
-|A3 |WOSET locked |Lock sticks |Positive
+|A3 |WOSET locked |Lock sticks; locked entry: every CONFIG/START/END write (64-bit, 32-bit lanes, spilling burst, `transport_dbg`) → DECERR (`TLM_ADDRESS_ERROR_RESPONSE`), values frozen, reads OK, reserved `+0x18` still WI/OK, malformed payloads keep register-file status, neighbour entry writable |Mixed
 |A4 |data_bus_width RO |Always 3 |Positive
 |A5 |Unconfigured CSR |Entry-side unconfigured state |Positive
 |A6 |CSR scenarios |Range / NS / src / burst fields |Mixed
@@ -60,7 +60,7 @@ Sources: `test/src/sep_filter_ctrl_test.cpp`,
 |B2 |Inbound enforcement |16-entry instance |Positive
 |B3 |Instance isolation |Outbound write does not touch inbound |Positive
 |C1–C3 |filter_skip_i |Bypass miss, permission, and dbg |Positive
-|D1–D2 |rst_ni |Clears table; deny restored |Positive
+|D1–D3 |rst_ni |Clears table; deny restored; lock released and entry writable again |Positive
 |===
 
 ====== Platform firmware tests

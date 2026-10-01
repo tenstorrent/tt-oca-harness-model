@@ -140,6 +140,14 @@ Filter deny, outbound deny, and local decode miss return
 `TLM_ADDRESS_ERROR_RESPONSE`. Denied reads fill `0xBADCAB1E`. Success
 is `TLM_OK_RESPONSE` from the downstream target.
 
+Filter CSR lock (`FILTER_CONFIG.locked[63]`, write-one-to-set): once set,
+every write to that entry's `FILTER_CONFIG`, `START_ADDR` or `END_ADDR` is
+steered to the AXI error subordinate exactly like a blocked data transaction
+and returns DECERR (`TLM_ADDRESS_ERROR_RESPONSE`, tt-oca-hw #2480); the
+stored values are untouched. Reads of a locked entry still return the locked
+configuration, and the reserved `+0x18/+0x1C` tail of the stride stays
+write-ignored with an OK response.
+
 On the outbound path the fabric overwrites `source_id`
 (`SMC_SRC_ID` / `MMODE_SRC_ID` / `OTHERS_SRC_ID`). Alias-remap hits
 overwrite `axi_cache`. Filters read `source_id` and `prot[1]` (NS). Other

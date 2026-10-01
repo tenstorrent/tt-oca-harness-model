@@ -1159,8 +1159,15 @@ static void handle_filter_entry_csr(smc_fabric::filter_entry& e,
     const unsigned len = std::min(trans.get_data_length(), 8u);
 
     if (trans.is_write()) {
-        // Once locked, the filter configuration is read-only.
-        if (e.locked) { trans.set_response_status(tlm::TLM_OK_RESPONSE); return; }
+        // Once locked, every write to FILTER_CONFIG / START_ADDR / END_ADDR is
+        // steered to the AXI error subordinate and answered with DECERR
+        // (axi_filter_wrap.sv, RTL #2480). Reads still return the locked
+        // configuration; the reserved tail of the stride stays WI/OK.
+        if (e.locked && which != RSVD) {
+            trans.set_dmi_allowed(false);
+            trans.set_response_status(tlm::TLM_ADDRESS_ERROR_RESPONSE);
+            return;
+        }
 
         const uint64_t cur = reg_val();
         uint64_t nv;

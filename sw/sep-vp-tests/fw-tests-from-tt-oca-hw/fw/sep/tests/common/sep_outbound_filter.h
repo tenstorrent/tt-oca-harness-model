@@ -43,15 +43,26 @@
 // Filter Configuration Values
 //==============================================================================
 
-// FILTER_CONFIG bitfield values:
+// FILTER_CONFIG bitfield values (hw/ip/axi_filter/regs/filter_ctrl.rdl):
 // [0]      read_allowed = 1    (Allow read transactions)
 // [1]      write_allowed = 1   (Allow write transactions)
 // [4]      entry_enabled = 1   (Enable filter)
-// [8]      allow_ns = 1        (Allow non-secure transactions)
+// [8]      allow_ns = 0        (EnNsFilter=1 and SEP CPU traffic is secure, ns=0)
+// [14:12]  data_bus_width = 3  (sw=r, held at its reset value so the written
+//                               word is also what a readback returns)
 // [24]     allow_burst = 1     (Allow burst transactions)
 // [63]     locked = 0          (Allow reconfiguration)
-// All other fields = 0 (no source/group filtering)
-#define FILTER_CONFIG_VALUE 0x0000000101000013ULL
+// All other fields = 0 (no source/group filtering). No bit is set outside a
+// field: the former value carried a stray bit 32 (tt-oca-harness #2589).
+#define FILTER_CONFIG_VALUE 0x0000000001003013ULL
+
+_Static_assert(FILTER_CONFIG_VALUE ==
+                   (FILTER_CTRL_FILTER_CONFIG_READ_ALLOWED_MASK |
+                    FILTER_CTRL_FILTER_CONFIG_WRITE_ALLOWED_MASK |
+                    FILTER_CTRL_FILTER_CONFIG_ENTRY_ENABLED_MASK |
+                    FILTER_CTRL_FILTER_CONFIG_ALLOW_BURST_MASK |
+                    (unsigned long long)FILTER_CTRL_FILTER_CONFIG_REG_DEFAULT),
+               "FILTER_CONFIG_VALUE does not match the filter_ctrl.rdl field layout");
 
 // Address range for testpass mailbox at 0x8000_0000
 #define FILTER_START_ADDR 0x0000000080000000ULL
@@ -71,10 +82,10 @@
  * to the testpass mailbox address.
  *
  * Filter configuration:
- *   - Address range: 0x8000_0000 to 0x8000_0003 (single 32-bit word)
+ *   - Address range: 0x8000_0000 to 0x8000_00FF
  *   - Read enabled: YES
  *   - Write enabled: YES
- *   - Non-secure access: Allowed
+ *   - Non-secure access: not set (SEP CPU traffic is secure)
  *   - Burst transfers: Allowed
  *   - Locked: NO (can be reconfigured)
  */
