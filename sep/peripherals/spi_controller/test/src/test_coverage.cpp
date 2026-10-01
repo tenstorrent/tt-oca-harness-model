@@ -1110,7 +1110,7 @@ void testbench::test_quality_clk_low_and_delay_formula()
     } else {
         const double elapsed = (sc_time_stamp() - t0).to_seconds();
         const double tol = expect_s * 0.05 + 1e-9; // 5% + 1ns
-        if (elapsed + 1e-12 >= expect_s - tol && elapsed <= expect_s + tol + 50e-6) {
+        if (elapsed + 1e-12 >= expect_s - tol && elapsed <= expect_s + tol + 10e-6) {
             // Upper bound includes wait_for_transaction_complete polling slack.
             REG_INFO(0, test->logger) << "[PASS] segment delay elapsed=" << elapsed
                       << "s expect~=" << expect_s << "s" << std::endl;
