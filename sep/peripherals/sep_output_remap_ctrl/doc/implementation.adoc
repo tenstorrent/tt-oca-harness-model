@@ -60,8 +60,9 @@ and `IDX_START` 19 (512 KiB granules).
 
 ====== Modeling gaps versus RTL
 
-* Always remaps; there is no valid bit and no passthrough on a zero
-  offset — a zero REGION_ATTRS still splices zeros into the upper
-  bits.
+* `REGION_ATTRS.valid[63]` (tt-oca-hw #2572, reset 0) gates the remap:
+  a clear entry passes the address through unchanged, so an
+  unprogrammed region is an identity mapping rather than a remap to
+  offset 0. The source-id re-tag is independent of `valid`.
 * AXI size / burst are unchanged; only address and source-id move.
 * No timeout into `sep_cpu_ctrl`.

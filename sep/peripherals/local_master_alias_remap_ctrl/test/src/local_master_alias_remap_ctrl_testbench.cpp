@@ -40,7 +40,7 @@ struct StubTarget : sc_core::sc_module
 {
     tlm_utils::simple_target_socket<StubTarget> socket;
     uint64_t last_addr      = 0;
-    bool     last_cacheable = false;
+    uint8_t  last_cache     = 0xFF;   ///< AxCACHE[3:0] seen downstream; 0xFF = no extension
     bool     last_had_ext   = false;
 
     SC_CTOR(StubTarget) : socket("socket")
@@ -55,7 +55,7 @@ struct StubTarget : sc_core::sc_module
 
         sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>();
         last_had_ext   = (ext != nullptr);
-        last_cacheable = ext ? ext->cacheable : false;
+        last_cache     = ext ? ext->axi_cache : 0xFF;
     }
 
     void b_transport(tlm::tlm_generic_payload& trans, sc_core::sc_time& delay)
@@ -187,14 +187,14 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
     // than set_auto_extension(), which would schedule a release of memory the
     // payload does not own.
     // =========================================================================
-    bool data_access_ext(uint64_t addr, bool cacheable_in, bool use_dbg)
+    uint8_t data_access_ext(uint64_t addr, uint8_t cache_in, bool use_dbg)
     {
         tlm::tlm_generic_payload trans;
         sep::sep_axi_extension   ext;
         sc_core::sc_time         delay = sc_core::SC_ZERO_TIME;
         uint64_t                 buf   = 0;
 
-        ext.cacheable = cacheable_in;
+        ext.axi_cache = cache_in;
 
         trans.set_command(tlm::TLM_READ_COMMAND);
         trans.set_address(addr);
@@ -211,25 +211,35 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
 
         assert(trans.get_response_status() == tlm::TLM_OK_RESPONSE);
 
-        const bool cacheable_after = ext.cacheable;
+        const uint8_t cache_after = ext.axi_cache;
         trans.clear_extension(&ext);
 
-        return cacheable_after;
+        return cache_after;
     }
 
     // =========================================================================
     // Test helper — program one remap region via the CSR path
     // REGION_START[r] / REGION_END[r] / REGION_ATTRS[r] sit at words r*4 + 0/1/2
+    // REGION_ATTRS = offset[55:12] | cacheable[59:56] | valid[63]
+    // (alias_remap.rdl after tt-oca-hw #2464).
     // =========================================================================
+    static constexpr uint64_t ATTRS_CACHEABLE_SHIFT = 56;
+    static constexpr uint64_t ATTRS_VALID           = 1ULL << 63;
+    static constexpr uint64_t ATTRS_RW_MASK         = 0x8FFFFFFFFFFFF000ULL;
+
+    static uint64_t attrs_word(uint64_t offset, uint8_t cacheable)
+    {
+        return (offset & 0x00FFFFFFFFFFF000ULL)
+             | (static_cast<uint64_t>(cacheable & 0xFu) << ATTRS_CACHEABLE_SHIFT)
+             | ATTRS_VALID;
+    }
+
     void program_region(uint32_t r, uint64_t start, uint64_t end,
-                        uint64_t offset, bool cacheable)
+                        uint64_t offset, uint8_t cacheable)
     {
         test_harness.register_write_64((r*4 + 0) * 8, start);
         test_harness.register_write_64((r*4 + 1) * 8, end);
-        test_harness.register_write_64((r*4 + 2) * 8,
-                                       (offset & 0x00FFFFFFFFFFF000ULL)
-                                     | (cacheable ? (1ULL << 62) : 0ULL)
-                                     | (1ULL << 63));   // valid
+        test_harness.register_write_64((r*4 + 2) * 8, attrs_word(offset, cacheable));
     }
 
     // =========================================================================
@@ -265,7 +275,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             for (uint32_t i = 0; i < NUM_REGIONS; ++i) {
                 auto region = dut.get_region(i);
                 if (region.start_addr != 0 || region.end_addr != 0 || 
-                    region.offset != 0 || region.cacheable || region.valid) {
+                    region.offset != 0 || region.cacheable != 0 || region.valid) {
                     pass = false;
                     break;
                 }
@@ -288,7 +298,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             bool pass = (region.start_addr == 0x10000) &&
                        (region.end_addr == 0x11000) &&
                        (region.offset == 0x2000000) &&
-                       (!region.cacheable) &&
+                       (region.cacheable == 0) &&
                        (region.valid);
             report("T2: Region 0 program and readback", pass);
         }
@@ -401,22 +411,42 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         }
 
         // ------------------------------------------------------------------
-        // T10: Field mask enforcement — test cacheable bit
+        // T10: Field mask enforcement — 4-bit cacheable[59:56] (tt-oca-hw
+        //      #2464). Bit 62, the pre-#2464 single cacheable bit, is now
+        //      reserved and must be dropped on write.
         // ------------------------------------------------------------------
         {
-            // Program region 2 with cacheable bit set
+            // Program region 2 with cacheable = 0xA (0b1010) AND a stale bit 62.
             test_harness.register_write_64((2*4 + 0) * 8, 0x30000);          // REGION_START[2] at word 8
             test_harness.register_write_64((2*4 + 1) * 8, 0x31000);          // REGION_END[2] at word 9
-            // REGION_ATTRS[2]: offset[55:12] | cacheable[62] | valid[63]
-            test_harness.register_write_64((2*4 + 2) * 8, (0x1000000ULL & 0x00FFFFFFFFFFF000ULL) | (1ULL << 62) | (1ULL << 63));
+            const uint64_t attrs_in = (0x1000000ULL & 0x00FFFFFFFFFFF000ULL)
+                                    | (0xAULL << ATTRS_CACHEABLE_SHIFT)
+                                    | (1ULL << 62)                 // reserved — must vanish
+                                    | ATTRS_VALID;
+            test_harness.register_write_64((2*4 + 2) * 8, attrs_in);
 
             auto region = dut.get_region(2);
             bool pass = (region.start_addr == 0x30000) &&
                        (region.end_addr == 0x31000) &&
                        (region.offset == 0x1000000) &&
-                       (region.cacheable) &&
+                       (region.cacheable == 0xA) &&
                        (region.valid);
-            report("T10: Cacheable bit field handling", pass);
+
+            uint64_t raw = 0;
+            test_harness.register_read_64((2*4 + 2) * 8, raw);
+            pass = pass && (raw == (attrs_in & ~(1ULL << 62)));
+            report("T10: cacheable[59:56] round-trips as 4 bits; reserved bit 62 dropped", pass);
+
+            // T10b: every writable bit of REGION_ATTRS is exactly
+            // offset[55:12] + cacheable[59:56] + valid[63]; [62:60] and [11:0]
+            // are RAZ/WI.
+            test_harness.register_write_64((3*4 + 2) * 8, 0xFFFFFFFFFFFFFFFFULL);
+            test_harness.register_read_64((3*4 + 2) * 8, raw);
+            const bool mask_ok = (raw == ATTRS_RW_MASK);
+            auto r3 = dut.get_region(3);
+            report("T10b: REGION_ATTRS RW mask is 0x8FFFFFFFFFFFF000 (cacheable reads 0xF)",
+                   mask_ok && r3.cacheable == 0xF && r3.valid);
+            test_harness.register_write_64((3*4 + 2) * 8, 0);   // leave region 3 invalid
         }
 
         // ------------------------------------------------------------------
@@ -442,7 +472,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             for (uint32_t i = 0; i < NUM_REGIONS; ++i) {
                 auto region = dut.get_region(i);
                 if (region.start_addr != 0 || region.end_addr != 0 ||
-                    region.offset != 0 || region.cacheable || region.valid) {
+                    region.offset != 0 || region.cacheable != 0 || region.valid) {
                     pass = false;
                     break;
                 }
@@ -451,73 +481,89 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         }
 
         // ------------------------------------------------------------------
-        // T12-T16: cacheable override on the data path
+        // T12-T17: cacheable override on the data path
         //
-        // axi_alias_remap.sv:122,147 drives aw.cache/ar.cache from the matched
-        // region's cacheable bit ({CacheWidth{cacheable}}) and passes the
-        // incoming value through on a miss. T10 only proves the bit survives a
-        // CSR round-trip; these check that it reaches the fabric.
+        // axi_alias_remap.sv (tt-oca-hw #2464) drives aw.cache/ar.cache from
+        // the matched region's 4-bit cacheable[59:56] field — a bit-for-bit
+        // replacement of AxCACHE — and passes the incoming value through on a
+        // miss. T10 only proves the field survives a CSR round-trip; these
+        // check that the exact nibble reaches the fabric.
+        //
+        // Patterns are chosen so a replicated-bit or OR/AND implementation
+        // fails: 0x6 = 0b0110 and 0x9 = 0b1001 are bitwise complements within
+        // the nibble, and neither is 0x0 or 0xF.
         //
         // T11 left every region cleared, so reprogram from scratch here:
-        //   region 0: [0x10000, 0x11000) +0x2000000, cacheable = 1
-        //   region 1: [0x40000, 0x41000) +0x5000000, cacheable = 0
+        //   region 0: [0x10000, 0x11000) +0x2000000, cacheable = 0x6
+        //   region 1: [0x40000, 0x41000) +0x5000000, cacheable = 0x0
+        //   region 2: [0x50000, 0x51000) +0x7000000, cacheable = 0x9
         // ------------------------------------------------------------------
-        program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/true);
-        program_region(1, 0x40000, 0x41000, 0x5000000, /*cacheable=*/false);
+        program_region(0, 0x10000, 0x11000, 0x2000000, /*cacheable=*/0x6);
+        program_region(1, 0x40000, 0x41000, 0x5000000, /*cacheable=*/0x0);
+        program_region(2, 0x50000, 0x51000, 0x7000000, /*cacheable=*/0x9);
 
-        // T12: hit on a cacheable region sets the outgoing bit even though the
-        //      initiator sent it clear.
+        // T12: hit on region 0 replaces an incoming AxCACHE=0 with exactly 0x6
+        //      (not 0xF — the old replicated-bit behaviour).
         {
-            data_access_ext(0x10100, /*cacheable_in=*/false, /*use_dbg=*/false);
-            report("T12: cacheable region drives outgoing cache attribute high",
-                   stub.last_had_ext && stub.last_cacheable &&
+            data_access_ext(0x10100, /*cache_in=*/0x0, /*use_dbg=*/false);
+            report("T12: region cacheable=0x6 drives outgoing AxCACHE to exactly 0x6",
+                   stub.last_had_ext && stub.last_cache == 0x6 &&
                    stub.last_addr == 0x2010100);
         }
 
-        // T13: hit on a non-cacheable region clears the outgoing bit even though
-        //      the initiator sent it set — an override, not an OR.
+        // T13: hit on a cacheable=0 region clears every incoming bit — an
+        //      override, not an OR; and region 2 flips every bit of 0x6 to 0x9
+        //      — an override, not an AND.
         {
-            data_access_ext(0x40100, /*cacheable_in=*/true, /*use_dbg=*/false);
-            report("T13: non-cacheable region overrides an incoming set bit",
-                   stub.last_had_ext && !stub.last_cacheable &&
-                   stub.last_addr == 0x5040100);
+            data_access_ext(0x40100, /*cache_in=*/0xF, /*use_dbg=*/false);
+            const bool clear_ok = stub.last_had_ext && stub.last_cache == 0x0 &&
+                                  stub.last_addr == 0x5040100;
+
+            data_access_ext(0x50100, /*cache_in=*/0x6, /*use_dbg=*/false);
+            const bool flip_ok = stub.last_had_ext && stub.last_cache == 0x9 &&
+                                 stub.last_addr == 0x7050100;
+
+            report("T13: region field replaces AxCACHE bit-for-bit (0xF->0x0, 0x6->0x9)",
+                   clear_ok && flip_ok);
         }
 
-        // T14: on a miss the incoming attribute passes through untouched, in
-        //      both polarities, alongside the unremapped address.
+        // T14: on a miss the incoming attribute passes through untouched, for
+        //      several encodings, alongside the unremapped address.
         {
-            data_access_ext(0x90000, /*cacheable_in=*/true, /*use_dbg=*/false);
-            const bool high_passed = stub.last_cacheable && stub.last_addr == 0x90000;
-
-            data_access_ext(0x90000, /*cacheable_in=*/false, /*use_dbg=*/false);
-            const bool low_passed = !stub.last_cacheable && stub.last_addr == 0x90000;
-
-            report("T14: passthrough on miss leaves cache attribute unchanged",
-                   high_passed && low_passed);
+            bool pass = true;
+            for (uint8_t c : {uint8_t{0xF}, uint8_t{0x0}, uint8_t{0x5}, uint8_t{0xA}}) {
+                data_access_ext(0x90000, c, /*use_dbg=*/false);
+                pass = pass && stub.last_cache == c && stub.last_addr == 0x90000;
+            }
+            report("T14: passthrough on miss leaves AxCACHE unchanged (0xF/0x0/0x5/0xA)",
+                   pass);
         }
 
         // T15: the override is restored after the forward, for the same reason
         //      T8 checks the address — in RTL these are downstream wires, not a
         //      mutation the initiator can observe.
         {
-            const bool after_hit  = data_access_ext(0x10100, false, false);
-            const bool after_miss = data_access_ext(0x90000, true,  false);
-            report("T15: initiator's cache attribute restored after forward",
-                   !after_hit && after_miss);
+            const uint8_t after_hit  = data_access_ext(0x10100, 0x3, false);
+            const uint8_t after_miss = data_access_ext(0x90000, 0xC, false);
+            report("T15: initiator's AxCACHE restored after forward",
+                   after_hit == 0x3 && after_miss == 0xC);
         }
 
         // T16: transport_dbg applies the same override as b_transport, so a GDB
         //      access cannot see a different attribute than the functional path.
         {
-            data_access_ext(0x10100, /*cacheable_in=*/false, /*use_dbg=*/true);
-            const bool hit_ok = stub.last_had_ext && stub.last_cacheable &&
+            data_access_ext(0x10100, /*cache_in=*/0x0, /*use_dbg=*/true);
+            const bool hit_ok = stub.last_had_ext && stub.last_cache == 0x6 &&
                                 stub.last_addr == 0x2010100;
 
-            data_access_ext(0x40100, /*cacheable_in=*/true, /*use_dbg=*/true);
-            const bool clear_ok = !stub.last_cacheable && stub.last_addr == 0x5040100;
+            data_access_ext(0x40100, /*cache_in=*/0xF, /*use_dbg=*/true);
+            const bool clear_ok = stub.last_cache == 0x0 && stub.last_addr == 0x5040100;
 
-            report("T16: transport_dbg applies the same cacheable override",
-                   hit_ok && clear_ok);
+            data_access_ext(0x50100, /*cache_in=*/0x6, /*use_dbg=*/true);
+            const bool flip_ok = stub.last_cache == 0x9 && stub.last_addr == 0x7050100;
+
+            report("T16: transport_dbg applies the same 4-bit cacheable override",
+                   hit_ok && clear_ok && flip_ok);
         }
 
         // ------------------------------------------------------------------
@@ -525,10 +571,22 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
         //      no-hit branch, distinct from T4/T14's functional-path miss.
         // ------------------------------------------------------------------
         {
-            const bool after = data_access_ext(0x90000, /*cacheable_in=*/true,
-                                               /*use_dbg=*/true);
+            const uint8_t after = data_access_ext(0x90000, /*cache_in=*/0xB,
+                                                  /*use_dbg=*/true);
             report("T17: transport_dbg passthrough on miss",
-                   stub.last_addr == 0x90000 && stub.last_cacheable && after);
+                   stub.last_addr == 0x90000 && stub.last_cache == 0xB && after == 0xB);
+        }
+
+        // ------------------------------------------------------------------
+        // T17b: an un-extended payload on a hit is remapped but carries no
+        //       AxCACHE to override; the stub must see no extension.
+        // ------------------------------------------------------------------
+        {
+            uint64_t dummy = 0;
+            data_read(0x10100, dummy);
+            report("T17b: un-extended payload remapped with no cache attribute to override",
+                   !stub.last_had_ext && stub.last_cache == 0xFF &&
+                   stub.last_addr == 0x2010100);
         }
 
         // ------------------------------------------------------------------
@@ -539,7 +597,7 @@ SC_MODULE(local_master_alias_remap_ctrl_testbench)
             auto region = dut.get_region(NUM_REGIONS);
             report("T18: get_region rejects an out-of-range index",
                    region.start_addr == 0 && region.end_addr == 0 &&
-                   region.offset == 0 && !region.cacheable && !region.valid);
+                   region.offset == 0 && region.cacheable == 0 && !region.valid);
         }
 
         // ------------------------------------------------------------------

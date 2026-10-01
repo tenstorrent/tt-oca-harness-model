@@ -50,9 +50,9 @@ Source: `test/src/local_master_alias_remap_ctrl_testbench.cpp`.
 |T7 |WRITE remap |Same as READ |Positive
 |T8 |Address restored |Caller payload unchanged |Positive
 |T9 |transport_dbg |Same remap |Positive
-|T10 |Cacheable field |ATTRS bit stores |Positive
+|T10 / T10b |Cacheable field |4-bit cacheable[59:56] round-trips; bit 62 reserved; RW mask 0x8FFFFFFFFFFFF000 |Positive
 |T11 |rst_ni |Clears the table |Positive
-|T12–T17 |cacheable override |Hit / miss / restore / dbg |Positive
+|T12–T17b |cacheable override |Bit-for-bit AxCACHE replacement (0x6 / 0x0 / 0x9) on hit; miss passthrough; restore; dbg; no-extension |Positive
 |T18 |get_region guard |Out-of-range index |Positive
 |===
 

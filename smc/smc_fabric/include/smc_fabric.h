@@ -136,15 +136,26 @@ public:
     void     write_global_base(uint64_t v);
     void     write_region_size(uint64_t v);
 
-    // Alias-remap region descriptor (shared with output remap tables).
+    // Remap region descriptor (shared by the alias-remap and output-remap
+    // tables; each bank uses the subset of fields its RDL defines).
+    //
+    // Alias remap (alias_remap.rdl, tt-oca-hw #2464), 8 entries × 0x20 stride:
+    //   REGION_START @0x00  start_addr[55:12]           -> start (low 12 bits 0)
+    //   REGION_END   @0x08  end_addr[55:12], exclusive  -> end   (low 12 bits 0)
+    //   REGION_ATTRS @0x10  offset[55:12] | cacheable[59:56] | valid[63]
+    //   Translation on a hit: addr[55:12] + offset[55:12] (mod 2^44), low 12
+    //   bits preserved; AxCACHE replaced by cacheable[3:0].
+    //
+    // Output remap (output_remap.rdl, tt-oca-hw #2572), 8 entries × 0x08:
+    //   REGION_ATTRS @0x00  offset[55:0] | valid[63]
+    //   Translation when valid: addr[55:20] replaced by offset[55:20]; when
+    //   clear the address passes through unchanged.  start/end/cacheable
+    //   are unused.
     struct alias_region {
-        uint64_t start     = 0;
-        uint64_t end       = 0;    // exclusive
-        // Alias remap: signed additive offset (addr_out = addr_in + offset).
-        // Output remap (mmode/xvisor): raw REGION_ATTRS.offset[55:0] register
-        // image; translation replaces addr[55:20] with offset[55:20].
-        int64_t  offset    = 0;
-        bool     cacheable = false;
+        uint64_t start     = 0;    // alias: start_addr[55:12] << 12
+        uint64_t end       = 0;    // alias: end_addr[55:12] << 12 (exclusive)
+        int64_t  offset    = 0;    // alias: offset[55:12] << 12; output: offset[55:0]
+        uint8_t  cacheable = 0;    // alias: 4-bit AxCACHE replacement value
         bool     valid     = false;
     };
     alias_region get_alias_region(unsigned n) const { return alias_regions_.at(n); }
@@ -206,7 +217,10 @@ private:
     // -----------------------------------------------------------------------
     // Routing helpers
     // -----------------------------------------------------------------------
-    uint64_t apply_alias_remap(uint64_t addr);
+    // Alias remap (axi_alias_remap.sv): first valid region containing addr wins;
+    // the address is rebased by offset[55:12] and, when `ext` is present, its
+    // AxCACHE is replaced by the region's cacheable[3:0].  Miss: passthrough.
+    uint64_t apply_alias_remap(uint64_t addr, smc_axi_extension* ext);
     bool     is_local(uint64_t addr) const;
     uint32_t to_local_addr(uint64_t addr) const;
 
@@ -263,18 +277,26 @@ private:
     void handle_inbound_filter (tlm::tlm_generic_payload& trans, uint32_t sub_offset);
     void handle_outbound_filter(tlm::tlm_generic_payload& trans, uint32_t sub_offset);
 
-    // Helper shared by handle_alias_remap for the alias-remap field layout.
-    void handle_remap_entry(alias_region& r,
-                            uint32_t      field_off,
-                            tlm::tlm_generic_payload& trans);
+    // Helper for handle_alias_remap: bit-exact alias_remap.rdl image
+    // (REGION_START @0x00, REGION_END @0x08, REGION_ATTRS @0x10; 0x18 is
+    // RAZ/WI).  64-bit accesses at a register base read/write the whole
+    // register; 32-bit accesses see the low word at +0x00 and the high word
+    // at +0x04 of each register.
+    static void handle_remap_entry(alias_region& r,
+                                   uint32_t      field_off,
+                                   tlm::tlm_generic_payload& trans);
 
     // Helper shared by handle_mmode_remap / handle_xvisor_remap.  Each output
-    // remap entry is a single 64-bit REGION_ATTRS register (offset[55:0]);
-    // there is no valid bit (output_remap.rdl / output_remap.sv:52-61).  The
-    // raw register image is stored in alias_region::offset.
+    // remap entry is a single 64-bit REGION_ATTRS register: offset[55:0] plus
+    // valid[63] (output_remap.rdl, tt-oca-hw #2572).  offset is stored in
+    // alias_region::offset and valid in alias_region::valid.
     static void handle_output_remap_entry(alias_region& r,
                                            uint32_t      field_off,
                                            tlm::tlm_generic_payload& trans);
+
+    // Pack / unpack the alias-remap REGION_ATTRS register image.
+    static uint64_t alias_attrs_image(const alias_region& r);
+    static void     alias_attrs_apply(alias_region& r, uint64_t image);
 
     // -----------------------------------------------------------------------
     // SC_METHOD: clear all tables on active-low reset
@@ -413,6 +435,16 @@ private:
     // REGION_ATTRS.offset is a 56-bit field (output_remap.rdl / .sv:52-54).
     static constexpr unsigned OUTPUT_REMAP_IDX_START = 20;
     static constexpr uint64_t OUTPUT_REMAP_OFFSET_MASK = 0x00FF'FFFF'FFFF'FFFFULL;
+    static constexpr uint64_t OUTPUT_REMAP_VALID       = 1ULL << 63;
+
+    // Alias-remap register fields — alias_remap.rdl / smc_pkg.sv:279-282
+    // (NUM_ALIAS_REMAP_REGIONS=8, ALIAS_REMAP_IDX_START=12, 56-bit AXI address).
+    static constexpr unsigned ALIAS_REMAP_IDX_START      = 12;
+    static constexpr uint64_t ALIAS_ADDR_FIELD_MASK      = 0x00FF'FFFF'FFFF'F000ULL; // [55:12]
+    static constexpr uint64_t ALIAS_ATTRS_CACHEABLE_MASK = 0x0F00'0000'0000'0000ULL; // [59:56]
+    static constexpr unsigned ALIAS_ATTRS_CACHEABLE_SHIFT = 56;
+    static constexpr uint64_t ALIAS_ATTRS_VALID          = 1ULL << 63;
+    static constexpr uint64_t ALIAS_ATTRS_RW_MASK        = 0x8FFF'FFFF'FFFF'F000ULL;
 
     // -----------------------------------------------------------------------
     // State

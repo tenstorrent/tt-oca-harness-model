@@ -10,8 +10,10 @@
  *   sep_output_remap_ctrl_ip ap_output_remap  ("ap_output_remap",   0x11000000UL, 16, 19);
  *   sep_output_remap_ctrl_ip stee_output_remap("stee_output_remap", 0x11800000UL, 16, 19);
  *
- * Test suite A (T1–T9): AP instance — full 9-case test covering CSR R/W,
- *   56-bit mask, data-path remap, address restore, and transport_dbg.
+ * Test suite A (T1–T14): AP instance — CSR R/W, field mask (offset[55:0] +
+ *   valid[63], reserved [62:56] dropped), data-path remap gated by valid
+ *   (valid=0 passes the address through unchanged — tt-oca-hw #2572),
+ *   address restore, transport_dbg, source-ID re-tag, and reset.
  *
  * Test suite B (B1–B3): STEE instance — sanity checks using STEE_BASE to
  *   confirm the parameterised constructor produces independent state.
@@ -100,6 +102,11 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
     static constexpr uint32_t AP_NUM_REGIONS   = 16;
     static constexpr uint32_t AP_IDX_START     = 19;
     static constexpr uint32_t CSR_STRIDE       = 8;  // bytes per REGION_ATTRS entry
+
+    // REGION_ATTRS layout (output_remap.rdl, tt-oca-hw #2572):
+    //   offset[55:0], reserved [62:56], valid[63] (reset 0).
+    static constexpr uint64_t ATTRS_VALID      = 1ULL << 63;
+    static constexpr uint64_t ATTRS_RW_MASK    = 0x80FFFFFFFFFFFFFFULL;
 
     // -------------------------------------------------------------------------
     // Hardware constants — STEE instance
@@ -303,7 +310,29 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             uint64_t v = 0;
             harness_ap.register_read_64(0 * CSR_STRIDE, v);
             report("T2: Region 0 offset write/readback",
-                   v == (offset0 & 0x00FFFFFFFFFFFFFFULL));
+                   v == (offset0 & ATTRS_RW_MASK));
+        }
+
+        // ------------------------------------------------------------------
+        // T2b: valid[63] is a real RW bit — set it alone, read it back, and
+        //      confirm it is independent of the offset field.
+        // ------------------------------------------------------------------
+        {
+            harness_ap.register_write_64(1 * CSR_STRIDE, ATTRS_VALID);
+            uint64_t v = 0;
+            harness_ap.register_read_64(1 * CSR_STRIDE, v);
+            const bool valid_only = (v == ATTRS_VALID);
+
+            harness_ap.register_write_64(1 * CSR_STRIDE, ATTRS_VALID | 0x123456789ABCDEULL);
+            harness_ap.register_read_64(1 * CSR_STRIDE, v);
+            const bool valid_and_offset = (v == (ATTRS_VALID | 0x123456789ABCDEULL));
+
+            harness_ap.register_write_64(1 * CSR_STRIDE, 0x123456789ABCDEULL);
+            harness_ap.register_read_64(1 * CSR_STRIDE, v);
+            const bool valid_cleared = (v == 0x123456789ABCDEULL);
+
+            report("T2b: REGION_ATTRS.valid[63] reads back set/clear independently of offset",
+                   valid_only && valid_and_offset && valid_cleared);
         }
 
         // ------------------------------------------------------------------
@@ -317,7 +346,7 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             }
             for (uint32_t i = 0; i < AP_NUM_REGIONS; ++i) {
                 uint64_t expected = (static_cast<uint64_t>(i + 1) << AP_IDX_START)
-                                    & 0x00FFFFFFFFFFFFFFULL;
+                                    & ATTRS_RW_MASK;
                 uint64_t got = 0;
                 harness_ap.register_read_64(i * CSR_STRIDE, got);
                 if (got != expected) { pass = false; break; }
@@ -326,20 +355,41 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
         }
 
         // ------------------------------------------------------------------
-        // T4: 56-bit mask — bits [63:56] discarded on write
+        // T4: Field mask — offset[55:0] and valid[63] are writable, the
+        //     reserved bits [62:56] are discarded on write.
         // ------------------------------------------------------------------
         {
             harness_ap.register_write_64(0 * CSR_STRIDE, 0xFFFFFFFFFFFFFFFFULL);
             uint64_t v = 0;
             harness_ap.register_read_64(0 * CSR_STRIDE, v);
-            report("T4: 56-bit mask enforced on REGION_ATTRS.offset",
-                   v == 0x00FFFFFFFFFFFFFFULL);
+            report("T4: REGION_ATTRS mask keeps offset[55:0]+valid[63], drops [62:56]",
+                   v == ATTRS_RW_MASK);
         }
 
         // ------------------------------------------------------------------
-        // T5: Data-path remap — region 0 READ
+        // T5a: valid clear — a programmed offset is NOT applied; the address
+        //      passes through unchanged (output_remap.sv, tt-oca-hw #2572).
         //
-        //   REGION_ATTRS[0].offset = 0x0040_0000_0000
+        //   REGION_ATTRS[0] = { valid=0, offset=0x0040_0000_0000 }
+        //   incoming = AP_BASE + 0x1234
+        //   expected downstream = AP_BASE + 0x1234 (identity), not 0x4000001234
+        // ------------------------------------------------------------------
+        {
+            const uint64_t offset_t5 = 0x0000004000000000ULL;
+            const uint64_t incoming  = AP_REGION_BASE + 0x00001234ULL;
+
+            harness_ap.register_write_64(0 * CSR_STRIDE, offset_t5);   // valid=0
+            stub_ap.last_addr = 0;
+            uint64_t dummy = 0;
+            data_read(data_init_ap, incoming, dummy);
+            report("T5a: valid=0 passes the address through unchanged (READ)",
+                   stub_ap.last_addr == incoming);
+        }
+
+        // ------------------------------------------------------------------
+        // T5: Data-path remap — region 0 READ (valid set)
+        //
+        //   REGION_ATTRS[0] = { valid=1, offset=0x0040_0000_0000 }
         //   incoming = AP_BASE + 0x1234  (region 0: adjusted[22:19]=0)
         //   lower_mask = (1<<19)-1 = 0x7FFFF
         //   expected = (0x4000000000 & ~0x7FFFF) | (0x1234 & 0x7FFFF)
@@ -352,16 +402,16 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             const uint64_t expected   = (offset_t5 & ~lower_mask)
                                       | (0x00001234ULL & lower_mask);
 
-            harness_ap.register_write_64(0 * CSR_STRIDE, offset_t5);
+            harness_ap.register_write_64(0 * CSR_STRIDE, offset_t5 | ATTRS_VALID);
             uint64_t dummy = 0;
             data_read(data_init_ap, incoming, dummy);
-            report("T5: Data-path remap region 0 (READ)", stub_ap.last_addr == expected);
+            report("T5: Data-path remap region 0 (READ, valid=1)", stub_ap.last_addr == expected);
         }
 
         // ------------------------------------------------------------------
-        // T6: Data-path remap — region 3 WRITE
+        // T6: Data-path remap — region 3 WRITE (valid set)
         //
-        //   REGION_ATTRS[3].offset = 0xF000_0000
+        //   REGION_ATTRS[3] = { valid=1, offset=0xF000_0000 }
         //   incoming = AP_BASE + (3<<19) + 0xABC = 0x11600ABC
         //   idx = bits[22:19] of adjusted = 3
         //   lower = 0x000ABC
@@ -374,10 +424,24 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             const uint64_t expected   = (offset_t6 & ~lower_mask)
                                       | ((incoming - AP_REGION_BASE) & lower_mask);
 
-            harness_ap.register_write_64(3 * CSR_STRIDE, offset_t6);
+            harness_ap.register_write_64(3 * CSR_STRIDE, offset_t6 | ATTRS_VALID);
             uint64_t dummy = 0;
             data_write(data_init_ap, incoming, dummy);
-            report("T6: Data-path remap region 3 (WRITE)", stub_ap.last_addr == expected);
+            report("T6: Data-path remap region 3 (WRITE, valid=1)", stub_ap.last_addr == expected);
+
+            // T6b: clearing valid (offset left programmed) restores identity
+            // for region 3 only — region 0 (valid=1 from T5) still remaps.
+            harness_ap.register_write_64(3 * CSR_STRIDE, offset_t6);   // valid=0
+            data_write(data_init_ap, incoming, dummy);
+            const bool r3_identity = (stub_ap.last_addr == incoming);
+
+            const uint64_t incoming_r0 = AP_REGION_BASE + 0x00001234ULL;
+            data_write(data_init_ap, incoming_r0, dummy);
+            const bool r0_still_remaps =
+                (stub_ap.last_addr == ((0x0000004000000000ULL & ~lower_mask)
+                                       | (0x00001234ULL & lower_mask)));
+            report("T6b: clearing valid on region 3 passes it through; region 0 unaffected",
+                   r3_identity && r0_still_remaps);
         }
 
         // ------------------------------------------------------------------
@@ -427,12 +491,12 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
 
             uint64_t v = 0;
             harness_ap.register_read_64(5 * CSR_STRIDE, v);
-            report("T8: 56-bit field mask enforced (byte enables not honoured by regmodel)",
-                   v == 0x00FFFFFFFFFFFFFFULL);
+            report("T8: field mask enforced (byte enables not honoured by regmodel)",
+                   v == ATTRS_RW_MASK);
         }
 
         // ------------------------------------------------------------------
-        // T9: transport_dbg applies the same remap
+        // T9: transport_dbg applies the same remap (and the same valid gate)
         // ------------------------------------------------------------------
         {
             const uint64_t offset_t5  = 0x0000004000000000ULL;
@@ -441,10 +505,17 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             const uint64_t expected   = (offset_t5 & ~lower_mask)
                                       | (0x00001234ULL & lower_mask);
 
-            harness_ap.register_write_64(0 * CSR_STRIDE, offset_t5);
+            harness_ap.register_write_64(0 * CSR_STRIDE, offset_t5 | ATTRS_VALID);
             uint64_t dummy = 0;
             data_dbg(data_init_ap, incoming, dummy);
             report("T9: transport_dbg applies same remap", stub_ap.last_addr == expected);
+
+            harness_ap.register_write_64(0 * CSR_STRIDE, offset_t5);   // valid=0
+            data_dbg(data_init_ap, incoming, dummy);
+            report("T9b: transport_dbg passes through when valid=0",
+                   stub_ap.last_addr == incoming);
+
+            harness_ap.register_write_64(0 * CSR_STRIDE, offset_t5 | ATTRS_VALID);
         }
 
         // ------------------------------------------------------------------
@@ -480,6 +551,19 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             data_dbg(data_init_ap, incoming, dummy);
             report("T13: un-extended payload passes through the re-tag path",
                    !stub_ap.last_had_ext);
+
+            // T14: UserOverride is independent of REGION_ATTRS.valid — an
+            // invalid entry still re-tags the source ID even though the
+            // address is left untouched (both are separate wires in RTL).
+            harness_ap.register_write_64(0 * CSR_STRIDE, 0x0000004000000000ULL);  // valid=0
+            stub_ap.last_src_id = 0xFF;
+            stub_ap.last_addr   = 0;
+            const uint8_t after_invalid = data_write_ext(data_init_ap, incoming, CALLER_SRC_ID);
+            report("T14: valid=0 entry still re-tags source_id while passing the address through",
+                   stub_ap.last_had_ext
+                   && stub_ap.last_src_id == sep::OTHERS_SOURCE_ID
+                   && stub_ap.last_addr   == incoming
+                   && after_invalid       == CALLER_SRC_ID);
         }
 
         // ------------------------------------------------------------------
@@ -492,9 +576,17 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
         // that T2/T3/T5/T6/T9 deliberately left non-zero.
         // ------------------------------------------------------------------
         {
+            // Make region 0 an active remap so the reset has to clear valid
+            // as well as offset for the data-path check below to pass.
+            const uint64_t incoming = AP_REGION_BASE + 0x00001234ULL;
+            harness_ap.register_write_64(0 * CSR_STRIDE, 0x0000004000000000ULL | ATTRS_VALID);
+            uint64_t dummy = 0;
+            data_read(data_init_ap, incoming, dummy);
+            bool preconditions_ok = (stub_ap.last_addr != incoming);   // remapping now
+
             uint64_t pre = 0;
             harness_ap.register_read_64(0 * CSR_STRIDE, pre);
-            bool preconditions_ok = (pre != 0);
+            preconditions_ok = preconditions_ok && (pre != 0);
 
             rst_n_sig.write(false);   // assert reset
             wait(10, sc_core::SC_NS);
@@ -508,6 +600,13 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
                 if (v != 0) { pass = false; break; }
             }
             report("T10: rst_ni pulse clears previously-programmed regions", pass);
+
+            // T10b: with valid reset to 0 the data path is an identity map —
+            // not a remap to offset 0 as it was before tt-oca-hw #2572.
+            stub_ap.last_addr = 0;
+            data_read(data_init_ap, incoming, dummy);
+            report("T10b: after reset the data path passes addresses through unchanged",
+                   stub_ap.last_addr == incoming);
         }
 
         // ======================================================================
@@ -534,9 +633,21 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
         }
 
         // ------------------------------------------------------------------
+        // B1b: Unprogrammed STEE entry (valid=0 at reset) is an identity map.
+        // ------------------------------------------------------------------
+        {
+            const uint64_t incoming = STEE_REGION_BASE + (7ULL << STEE_IDX_START) + 0x5678ULL;
+            stub_stee.last_addr = 0;
+            uint64_t dummy = 0;
+            data_read(data_init_stee, incoming, dummy);
+            report("B1b: STEE reset-state entry passes the address through unchanged",
+                   stub_stee.last_addr == incoming);
+        }
+
+        // ------------------------------------------------------------------
         // B2: Data-path remap with STEE base address
         //
-        //   REGION_ATTRS[0].offset = 0x0040_0000_0000
+        //   REGION_ATTRS[0] = { valid=1, offset=0x0040_0000_0000 }
         //   incoming = STEE_BASE + 0x1234
         //   expected = same algorithm, different base
         // ------------------------------------------------------------------
@@ -547,10 +658,10 @@ SC_MODULE(sep_output_remap_ctrl_testbench)
             const uint64_t expected   = (offset_b2 & ~lower_mask)
                                       | (0x00001234ULL & lower_mask);
 
-            harness_stee.register_write_64(0 * CSR_STRIDE, offset_b2);
+            harness_stee.register_write_64(0 * CSR_STRIDE, offset_b2 | ATTRS_VALID);
             uint64_t dummy = 0;
             data_read(data_init_stee, incoming, dummy);
-            report("B2: STEE data-path remap region 0 (READ)", stub_stee.last_addr == expected);
+            report("B2: STEE data-path remap region 0 (READ, valid=1)", stub_stee.last_addr == expected);
         }
 
         // ------------------------------------------------------------------

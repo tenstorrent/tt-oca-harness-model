@@ -15,7 +15,10 @@
 #                  Whisper required.
 #
 #  sep-unit-tests  Run every SEP peripheral unit test via
-#                  sep/peripherals/run_all_peripherals.sh (needs build-deps).
+#                  sep/peripherals/run_all_peripherals.sh (needs build-deps),
+#                  the SEP CPU (VeeR-ISS TLM) tests, and the host-only SEP
+#                  platform xbar_policy tests (vp/platform/sep/run_tests.sh,
+#                  Release + ASAN + Coverage).
 #
 #  smc-unit-tests  Run every SMC peripheral unit test via each
 #                  smc/peripherals/<ip>/run_tests.sh (needs build-deps).
@@ -256,6 +259,15 @@ jobs:
           sep/cpu/run_tests.sh
           sep/cpu/run_tests.sh --asan
           sep/cpu/run_tests.sh --coverage
+
+      # Host-only (no SystemC) unit test of the SEP platform xbar address /
+      # permission policy (vp/platform/sep/inc/xbar_policy.h), incl. the
+      # csr_region trim to 0x10A50000 (tt-oca-hw #2587).
+      - name: Run SEP platform xbar_policy tests
+        run: |
+          vp/platform/sep/run_tests.sh
+          vp/platform/sep/run_tests.sh --asan
+          vp/platform/sep/run_tests.sh --coverage
 
       - name: Upload test logs
         if: always()

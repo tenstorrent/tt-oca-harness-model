@@ -71,7 +71,7 @@ local_alias_remap_ip::Region local_alias_remap_ip::get_region(uint32_t idx) cons
     r.start_addr = static_cast<uint64_t>(REGION_START[idx].start_addr) << 12;
     r.end_addr   = static_cast<uint64_t>(REGION_END[idx].end_addr) << 12;
     r.offset     = static_cast<uint64_t>(REGION_ATTRS[idx].offset) << 12;
-    r.cacheable  = static_cast<bool>(REGION_ATTRS[idx].cacheable);
+    r.cacheable  = static_cast<uint8_t>(REGION_ATTRS[idx].cacheable);   // 4-bit [59:56]
     r.valid      = static_cast<bool>(REGION_ATTRS[idx].valid);
 
     return r;
@@ -131,24 +131,30 @@ uint64_t local_alias_remap_ip::apply_offset(uint64_t addr, uint32_t idx) const
 // cacheable override — see header. Saved and restored around the forward for the
 // same reason the address is: the payload belongs to the initiator, and in RTL
 // these are separate downstream wires rather than a mutation visible upstream.
+//
+// axi_alias_remap.sv (tt-oca-hw #2464): on a hit `aw/ar.cache = cacheable`
+// where cacheable is REGION_ATTRS[idx].cacheable[59:56] — a bit-for-bit
+// replacement of AxCACHE, not a single bit replicated across the field.
 // =============================================================================
-bool local_alias_remap_ip::override_cacheable(tlm::tlm_generic_payload& trans,
-                                               uint32_t idx) const
+uint8_t local_alias_remap_ip::override_cacheable(tlm::tlm_generic_payload& trans,
+                                                  uint32_t idx) const
 {
     sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>();
     if (!ext)
-        return false;   // nothing to override; unextended payloads carry no cache attribute
+        return 0;   // nothing to override; unextended payloads carry no cache attribute
 
-    const bool previous = ext->cacheable;
-    ext->cacheable = static_cast<bool>(REGION_ATTRS[idx].cacheable);
+    const uint8_t previous = ext->axi_cache;
+    ext->axi_cache = static_cast<uint8_t>(
+        static_cast<uint64_t>(REGION_ATTRS[idx].cacheable)
+        & sep::sep_axi_extension::AXI_CACHE_MASK);
     return previous;
 }
 
 void local_alias_remap_ip::restore_cacheable(tlm::tlm_generic_payload& trans,
-                                              bool previous) const
+                                              uint8_t previous) const
 {
     if (sep::sep_axi_extension* ext = trans.get_extension<sep::sep_axi_extension>())
-        ext->cacheable = previous;
+        ext->axi_cache = previous;
 }
 
 // =============================================================================
@@ -169,7 +175,7 @@ void local_alias_remap_ip::data_b_transport(tlm::tlm_generic_payload& trans,
         return;
     }
 
-    const bool orig_cacheable = override_cacheable(trans, static_cast<uint32_t>(idx));
+    const uint8_t orig_cacheable = override_cacheable(trans, static_cast<uint32_t>(idx));
     trans.set_address(apply_offset(orig_addr, static_cast<uint32_t>(idx)));
 
     remapped_socket->b_transport(trans, delay);
@@ -192,7 +198,7 @@ unsigned int local_alias_remap_ip::data_transport_dbg(tlm::tlm_generic_payload& 
     if (idx < 0)
         return remapped_socket->transport_dbg(trans);
 
-    const bool orig_cacheable = override_cacheable(trans, static_cast<uint32_t>(idx));
+    const uint8_t orig_cacheable = override_cacheable(trans, static_cast<uint32_t>(idx));
     trans.set_address(apply_offset(orig_addr, static_cast<uint32_t>(idx)));
 
     unsigned int ret = remapped_socket->transport_dbg(trans);

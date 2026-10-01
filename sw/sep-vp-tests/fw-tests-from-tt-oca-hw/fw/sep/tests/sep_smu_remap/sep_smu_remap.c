@@ -28,10 +28,12 @@ static int program_output_remap(void)
     /* Write-only programming; cocotb observes remap_table after pass_loop. */
     ap.val = 0;
     ap.f.offset = AP_REGION0_OFFSET;
+    ap.f.valid = 1;
     WRITE_REG64(AP_OUTPUT_REMAP_CTRL_0__REGION_REGION_ATTRS_REG_ADDR, ap.val);
 
     stee.val = 0;
     stee.f.offset = STEE_REGION0_OFFSET;
+    stee.f.valid = 1;
     WRITE_REG64(STEE_OUTPUT_REMAP_CTRL_0__REGION_REGION_ATTRS_REG_ADDR, stee.val);
 
     return 0;

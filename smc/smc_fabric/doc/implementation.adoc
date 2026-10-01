@@ -103,6 +103,37 @@ completion is progress: it clears the level and rearms any remaining
 outstanding traffic. Annotated delay alone is never a hang. Threshold zero
 disables real timeout, while `irq_test` remains gated by `enable && irq_en`.
 
+====== Remap CSR images
+
+Both remap banks are bit-exact mirrors of the RTL RDL so firmware written
+against the TRM programs them unchanged.
+
+*Alias remap* (`alias_remap.rdl`, 8 regions, 0x20 stride, `IdxStart=12`):
+
+[cols="18%,22%,60%",options="header"]
+|===
+|Offset |Register |Fields
+|`0x00` |`REGION_START` |`start_addr[55:12]` (bits `[11:0]` and `[63:56]` RAZ/WI)
+|`0x08` |`REGION_END` |`end_addr[55:12]`, exclusive
+|`0x10` |`REGION_ATTRS` |`offset[55:12]` \| `cacheable[59:56]` \| `valid[63]` (RW mask `0x8FFF_FFFF_FFFF_F000`)
+|`0x18` |— |RAZ/WI
+|===
+
+Hit rule: `valid && start <= addr < end`, lowest index wins. On a hit the
+output address is `{(addr[55:12] + offset[55:12]) mod 2^44, addr[11:0]}` and
+the transaction's `smc_axi_extension::axi_cache` is *replaced* bit-for-bit
+by `cacheable[3:0]` (tt-oca-hw #2464; the former single "cacheable" bit at
+`[62]` is now reserved). On a miss the address and `axi_cache` pass through.
+A 64-bit access at a register base moves the whole register; 32-bit accesses
+see the low word at `+0x00` and the high word at `+0x04`.
+
+*Output remap* (`output_remap.rdl`, M-mode and Xvisor banks, 8 regions,
+0x08 stride, `IdxStart=20`): one 64-bit `REGION_ATTRS` per region holding
+`offset[55:0]` and `valid[63]` (bits `[62:56]` RAZ/WI). `valid` resets to 0
+(tt-oca-hw #2572), so an unprogrammed region is an identity mapping; when
+set, the output is `{offset[55:20], (addr - window_base)[19:0]}`. The
+source-ID re-tag (`UserOverride`) is applied regardless of `valid`.
+
 ====== Error semantics and sideband
 
 Filter deny, outbound deny, and local decode miss return
@@ -110,8 +141,9 @@ Filter deny, outbound deny, and local decode miss return
 is `TLM_OK_RESPONSE` from the downstream target.
 
 On the outbound path the fabric overwrites `source_id`
-(`SMC_SRC_ID` / `MMODE_SRC_ID` / `OTHERS_SRC_ID`). Filters read
-`source_id` and `prot[1]` (NS). Other extension fields pass through.
+(`SMC_SRC_ID` / `MMODE_SRC_ID` / `OTHERS_SRC_ID`). Alias-remap hits
+overwrite `axi_cache`. Filters read `source_id` and `prot[1]` (NS). Other
+extension fields pass through.
 
 ====== Modeling gaps versus RTL
 
