@@ -369,6 +369,8 @@ CsRegs<URV>::write(CsrNumber number, PrivilegeMode mode, URV value)
       peek(number, prev);
       value = legalizePmpcfgValue(prev, value);
     }
+  else if (number == CsrNumber::MSECCFG)
+    value = legalizeMseccfgValue(csr->read(), value);
   else if (number == CsrNumber::MSTATUS or number == CsrNumber::SSTATUS)
     value = legalizeMstatusValue(value);
 
@@ -1000,6 +1002,12 @@ CsRegs<URV>::defineMachineRegs()
   defineCsr("pmpaddr14", Csrn::PMPADDR14, !mand, imp, 0, pmpMask, pmpMask);
   defineCsr("pmpaddr15", Csrn::PMPADDR15, !mand, imp, 0, pmpMask, pmpMask);
 
+  // Smepmp machine security configuration: MML (bit 0), MMWP (bit 1)
+  // and RLB (bit 2). MSECCFGH has no defined fields and reads zero.
+  URV seccfgMask = 0x7;
+  defineCsr("mseccfg",   Csrn::MSECCFG,   !mand, imp, 0, seccfgMask, seccfgMask);
+  defineCsr("mseccfgh",  Csrn::MSECCFGH,  !mand, rv32_, 0, rom, rom);
+
   // Machine Counter/Timers.
   defineCsr("mcycle",    Csrn::MCYCLE,    mand, imp, 0, wam, wam);
   defineCsr("minstret",  Csrn::MINSTRET,  mand, imp, 0, wam, wam);
@@ -1398,7 +1406,8 @@ CsRegs<URV>::defineNonStandardRegs()
   // sig 2 bis are modifiable.
   defineCsr("meihap", Csrn::MEIHAP,   !mand, imp, 0, rom, ~URV(3));
 
-  defineCsr("mscause",  Csrn::MSCAUSE, !mand, !imp, 0, wam, wam);
+  // VeeR EL2 secondary exception cause: 4 bits.
+  defineCsr("mscause",  Csrn::MSCAUSE, !mand, imp, 0, 0xf, 0xf);
 
 
   defineCsr("dvfflags",  Csrn::DVFFLAGS, !mand, !imp, 0, wam, wam);
@@ -1518,6 +1527,8 @@ CsRegs<URV>::poke(CsrNumber number, URV value)
       peek(number, prev);
       value = legalizePmpcfgValue(prev, value);
     }
+  else if (number == CsrNumber::MSECCFG)
+    value = legalizeMseccfgValue(csr->read(), value);
   else if (number == CsrNumber::MSTATUS or number == CsrNumber::SSTATUS)
     value = legalizeMstatusValue(value);
 
@@ -1709,13 +1720,14 @@ template <typename URV>
 URV
 CsRegs<URV>::legalizePmpcfgValue(URV current, URV value) const
 {
+  bool rlb = isPmpRuleLockBypassed();
   URV legal = 0;
   for (unsigned i = 0; i < sizeof(value); ++i)
     {
       uint8_t cb = (current >> (i*8)) & 0xff;  // Current byte.
       uint8_t nb = (value >> (i*8)) & 0xff;    // New byte.
 
-      if (cb >> 7)
+      if ((cb >> 7) and not rlb)
         nb = cb; // Field is locked. Use byte from current value.
       else if (pmpG_ != 0)
         {
@@ -1760,6 +1772,9 @@ CsRegs<URV>::isPmpaddrLocked(CsrNumber csrn) const
   if (csrn < CsrNumber::PMPADDR0 or csrn > CsrNumber::PMPADDR15)
     return false;   // Not a PMPADDR CSR.
 
+  if (isPmpRuleLockBypassed())
+    return false;
+
   unsigned byte = getPmpConfigByteFromPmpAddr(csrn);
   bool locked = byte & 0x80;
   if (locked)
@@ -1775,6 +1790,45 @@ CsRegs<URV>::isPmpaddrLocked(CsrNumber csrn) const
   locked = byte & 0x80;
   bool tor = ((byte >> 3) & 3) == 1;
   return locked and tor;
+}
+
+
+template <typename URV>
+URV
+CsRegs<URV>::legalizeMseccfgValue(URV current, URV value) const
+{
+  const URV mml = 1, mmwp = 2, rlb = 4;
+
+  URV legal = value & (mml | mmwp | rlb);
+  legal |= current & (mml | mmwp);
+
+  if ((legal & rlb) and not (current & rlb) and anyPmpEntryLocked())
+    legal &= ~rlb;
+
+  return legal;
+}
+
+
+template <typename URV>
+bool
+CsRegs<URV>::isPmpRuleLockBypassed() const
+{
+  URV value = 0;
+  return peek(CsrNumber::MSECCFG, value) and (value & 4);
+}
+
+
+template <typename URV>
+bool
+CsRegs<URV>::anyPmpEntryLocked() const
+{
+  for (unsigned ix = 0; ix < 16; ++ix)
+    {
+      CsrNumber csrn = CsrNumber(unsigned(CsrNumber::PMPADDR0) + ix);
+      if (getPmpConfigByteFromPmpAddr(csrn) & 0x80)
+        return true;
+    }
+  return false;
 }
 
 

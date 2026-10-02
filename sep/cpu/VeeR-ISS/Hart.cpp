@@ -379,6 +379,10 @@ Hart<URV>::updateMemoryProtection()
     }
 
   pmpEnabled_ = impCount > 0;
+
+  URV seccfg = 0;
+  peekCsr(CsrNumber::MSECCFG, seccfg);
+  pmpMmwp_ = (seccfg >> 1) & 1;
 }
 
 
@@ -1911,7 +1915,7 @@ Hart<URV>::determineLoadException(unsigned rs1, URV base, uint64_t& addr,
   if (pmpEnabled_)
     {
       Pmp pmp = pmpManager_.accessPmp(addr);
-      if (not pmp.isRead(privMode_, mstatusMpp_, mstatusMprv_) and
+      if (not pmp.isRead(privMode_, mstatusMpp_, mstatusMprv_, pmpMmwp_) and
     		  mma != MemMappedAcc::internal)
         {
           secCause = SecondaryCause::LOAD_ACC_PMP;
@@ -2562,7 +2566,7 @@ Hart<URV>::fetchInst(URV virtAddr, uint64_t& physAddr, uint32_t& inst)
       if (pmpEnabled_)
         {
           Pmp pmp = pmpManager_.accessPmp(addr);
-          if (not pmp.isExec(privMode_, mstatusMpp_, instMprv))
+          if (not pmp.isExec(privMode_, mstatusMpp_, instMprv, pmpMmwp_))
             {
               if (triggerTripped_)
                 return false;
@@ -2594,7 +2598,7 @@ Hart<URV>::fetchInst(URV virtAddr, uint64_t& physAddr, uint32_t& inst)
   if (pmpEnabled_)
     {
       Pmp pmp = pmpManager_.accessPmp(addr);
-      if (not pmp.isExec(privMode_, mstatusMpp_, instMprv))
+      if (not pmp.isExec(privMode_, mstatusMpp_, instMprv, pmpMmwp_))
         {
           if (triggerTripped_)
             return false;
@@ -2646,7 +2650,7 @@ Hart<URV>::fetchInst(URV virtAddr, uint64_t& physAddr, uint32_t& inst)
   if (pmpEnabled_)
     {
       Pmp pmp = pmpManager_.accessPmp(addr);
-      if (not pmp.isExec(privMode_, mstatusMpp_, instMprv))
+      if (not pmp.isExec(privMode_, mstatusMpp_, instMprv, pmpMmwp_))
         {
           if (triggerTripped_)
             return false;
@@ -3212,7 +3216,8 @@ Hart<URV>::pokeCsr(CsrNumber csr, URV val)
     }
   else if (csr >= CsrNumber::MSPCBA and csr <= CsrNumber::MSPCC)
     updateStackChecker();
-  else if (csr >= CsrNumber::PMPCFG0 and csr <= CsrNumber::PMPCFG3)
+  else if ((csr >= CsrNumber::PMPCFG0 and csr <= CsrNumber::PMPCFG3) or
+           csr == CsrNumber::MSECCFG)
     updateMemoryProtection();
   else if (csr >= CsrNumber::PMPADDR0 and csr <= CsrNumber::PMPADDR15)
     {
@@ -10849,7 +10854,8 @@ Hart<URV>::doCsrWrite(const DecodedInst* di, CsrNumber csr, URV csrVal,
     }
   else if (csr >= CsrNumber::MSPCBA and csr <= CsrNumber::MSPCC)
     updateStackChecker();
-  else if (csr >= CsrNumber::PMPCFG0 and csr <= CsrNumber::PMPCFG3)
+  else if ((csr >= CsrNumber::PMPCFG0 and csr <= CsrNumber::PMPCFG3) or
+           csr == CsrNumber::MSECCFG)
     updateMemoryProtection();
   else if (csr >= CsrNumber::PMPADDR0 and csr <= CsrNumber::PMPADDR15)
     {
@@ -11267,7 +11273,7 @@ Hart<URV>::determineStoreException(uint32_t rs1, URV base, uint64_t& addr,
   if (pmpEnabled_)
     {
       Pmp pmp = pmpManager_.accessPmp(addr);
-      if (not pmp.isWrite(privMode_, mstatusMpp_, mstatusMprv_) and
+      if (not pmp.isWrite(privMode_, mstatusMpp_, mstatusMprv_, pmpMmwp_) and
           mma != MemMappedAcc::internal)
         {
           secCause = SecondaryCause::STORE_ACC_PMP;

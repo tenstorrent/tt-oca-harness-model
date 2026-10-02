@@ -50,4 +50,10 @@ The following files have been changed to integrate this as a SystemC model into 
 5. gdb.cpp
    a. Set/clear `gdbAccessInProgress_` while servicing each GDB remote protocol packet so that debugger memory reads/writes can be routed through `transport_dbg`.
 5. Added CMakeLists.txt file for compilation
+6. VeeR EL2 and Smepmp CSRs (CsRegs.hpp/.cpp, PmpManager.hpp, Hart.hpp/.cpp)
+   a. `mscause` (0x7FF) is implemented with the EL2 4-bit width.
+   b. `mseccfg` (0x747) and, on RV32, `mseccfgh` (0x757, reads zero) are defined. MML and MMWP are sticky until reset; RLB can be set only while it is already set or no PMP entry is locked.
+   c. While `mseccfg.RLB` is set, locked `pmpcfg` bytes and their `pmpaddr` registers remain writable.
+   d. While `mseccfg.MMWP` is set, a machine-mode fetch, load or store that matches no PMP entry raises the corresponding access fault (`mscause` = 8).
+   e. `mseccfg.MML` is stored but its rule reinterpretation is not modelled: PMP checks behave as with MML clear.
 

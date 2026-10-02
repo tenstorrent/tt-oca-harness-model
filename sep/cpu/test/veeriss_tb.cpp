@@ -6,7 +6,8 @@
  * Drives a one-hart RV32IMC core against a TLM SRAM, checks that a
  * smoke hex program stores through the initiator socket, and exercises
  * the PIC intercept, CSR peek/poke, NMI pin, external IRQ, and TLM
- * error paths used by sep-vp.
+ * error paths used by sep-vp. A second program (fixtures/smepmp.S)
+ * covers the boot ROM's Smepmp PMP sequence and mscause.
  */
 
 #include "VeeR-ISSTlm.hpp"
@@ -230,6 +231,74 @@ public:
         }
     }
 
+    static std::string hex32(uint32_t v)
+    {
+        char buf[11];
+        std::snprintf(buf, sizeof(buf), "0x%08x", v);
+        return buf;
+    }
+
+    // Runs test/fixtures/smepmp.S, which documents the SRAM result layout.
+    void run_smepmp_program()
+    {
+        rst_n.write(false);
+        wait(50, sc_core::SC_NS);
+        ram.preload_hex(std::string(FIXTURE_DIR) + "/smepmp.hex");
+        // The decode cache still holds the smoke program at the same PCs.
+        if (auto hart = cpu->system_ ? cpu->system_->ithHart(0) : nullptr)
+            hart->invalidateDecodeCache();
+        rst_n.write(true);
+        wait(50, sc_core::SC_US);
+
+        auto res = [&](unsigned i) { return ram.sram_word(0x100 + 4 * i); };
+        auto trap = [&](unsigned t, unsigned f) { return ram.sram_word(0x200 + 12 * t + 4 * f); };
+        auto traps_are = [&](unsigned t, uint32_t mcause, uint32_t mtval) {
+            return trap(t, 0) == mcause && trap(t, 1) == 8u /*PMP*/ && trap(t, 2) == mtval;
+        };
+        auto trap_why = [&](unsigned t) {
+            return "mcause=" + hex32(trap(t, 0)) + " mscause=" + hex32(trap(t, 1)) +
+                   " mtval=" + hex32(trap(t, 2));
+        };
+
+        check("FUNC-CPU-017: Smepmp program ran to completion",
+              res(14) == 0x600Du, "done=" + hex32(res(14)));
+        check("FUNC-CPU-018: mscause readable, mseccfgh reads zero",
+              res(0) == 0 && res(1) == 0,
+              "mscause=" + hex32(res(0)) + " mseccfgh=" + hex32(res(1)));
+        check("FUNC-CPU-019: boot ROM pmpcfg0/pmpcfg1 read back",
+              res(2) == 0x9b009b9du && res(3) == 0x009b9b9bu,
+              "pmpcfg0=" + hex32(res(2)) + " pmpcfg1=" + hex32(res(3)));
+        check("FUNC-CPU-020: mseccfg RLB|MMWP read back",
+              res(4) == 6u, "mseccfg=" + hex32(res(4)));
+        check("FUNC-CPU-021: RLB=1 csrs X onto locked entries 3 and 5",
+              res(5) == 0x9f009b9du && res(6) == 0x009b9f9bu,
+              "pmpcfg0=" + hex32(res(5)) + " pmpcfg1=" + hex32(res(6)));
+        check("FUNC-CPU-022: RLB=1 locked pmpaddr is writable",
+              res(7) == 0x06005fffu, "pmpaddr1=" + hex32(res(7)));
+        check("FUNC-CPU-023: RLB clears and stays clear while rules are locked",
+              res(8) == 2u && res(9) == 2u,
+              "after clear=" + hex32(res(8)) + " after set=" + hex32(res(9)));
+        check("FUNC-CPU-024: MMWP is sticky",
+              res(10) == 2u, "mseccfg=" + hex32(res(10)));
+        check("FUNC-CPU-025: RLB=0 locked pmpcfg/pmpaddr ignore writes",
+              res(11) == 0x9f009b9du && res(12) == 0x06005fffu,
+              "pmpcfg0=" + hex32(res(11)) + " pmpaddr1=" + hex32(res(12)));
+        check("FUNC-CPU-026: only the three MMWP-denied accesses trap",
+              res(13) == 0x10000200u + 3 * 12, "trap log end=" + hex32(res(13)));
+        check("FUNC-CPU-027: MMWP unmatched load raises load access fault",
+              traps_are(0, 5, 0x60000000u), trap_why(0));
+        check("FUNC-CPU-028: MMWP unmatched store raises store access fault",
+              traps_are(1, 7, 0x60000000u), trap_why(1));
+        check("FUNC-CPU-029: MMWP unmatched fetch raises instruction access fault",
+              traps_are(2, 1, 0x60000000u), trap_why(2));
+
+        uint32_t seccfg = 0;
+        const bool mml_set = cpu->poke_csr(0x747, 1) && cpu->poke_csr(0x747, 0) &&
+                             cpu->peek_csr(0x747, seccfg);
+        check("FUNC-CPU-030: MML is sticky", mml_set && seccfg == 3u,
+              "mseccfg=" + hex32(seccfg));
+    }
+
     void run()
     {
         wait(10, sc_core::SC_NS);
@@ -365,6 +434,8 @@ public:
               !cpu->peek_csr(0xFFFFu, junk));
         check("FUNC-CPU-015d: poke of nonexistent CSR fails",
               !cpu->poke_csr(0xFFFFu, 0));
+
+        run_smepmp_program();
 
         rst_n.write(false);
         wait(50, sc_core::SC_NS);
