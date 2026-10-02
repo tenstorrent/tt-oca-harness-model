@@ -10,6 +10,7 @@
 #   ./run_tests.sh --coverage   # Coverage build + lcov report (≥95% on wrapper)
 #   ./run_tests.sh --ctest      # Run via CTest with verbose output
 #   ./run_tests.sh --clean      # Remove build directory before building
+#   ./run_tests.sh --no-smepmp  # Model a core built without Smepmp (RV_SMEPMP=0)
 
 set -euo pipefail
 
@@ -17,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_TYPE="Release"
 RUN_CTEST=false
 CLEAN=false
+SMEPMP=ON
 COVERAGE_MIN_LINE_PCT="${COVERAGE_MIN_LINE_PCT:-95}"
 
 for arg in "$@"; do
@@ -26,11 +28,15 @@ for arg in "$@"; do
     --coverage) BUILD_TYPE="Coverage" ;;
     --ctest)    RUN_CTEST=true ;;
     --clean)    CLEAN=true ;;
+    --no-smepmp) SMEPMP=OFF ;;
     *) echo "Unknown option: $arg"; exit 1 ;;
   esac
 done
 
 BUILD_DIR="${SCRIPT_DIR}/build/$(echo "${BUILD_TYPE}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${SMEPMP}" == "OFF" ]]; then
+  BUILD_DIR="${BUILD_DIR}-nosmepmp"
+fi
 
 if ${CLEAN}; then
   echo "Cleaning ${BUILD_DIR} ..."
@@ -50,6 +56,7 @@ mkdir -p "${BUILD_DIR}"
 cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
   -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
   -DBUILD_TESTS=ON \
+  -DVEERISS_SMEPMP="${SMEPMP}" \
   "${CMAKE_EXTRA_ARGS[@]}"
 
 cmake --build "${BUILD_DIR}" --parallel "$(peripheral_parallel_jobs)"

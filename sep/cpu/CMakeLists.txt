@@ -44,6 +44,11 @@ endif()
 # -----------------------------------------------------------------------------
 add_compile_definitions(SC_ALLOW_DEPRECATED_IEEE_API)
 
+# Mirrors the core's RV_SMEPMP build parameter. OFF models a VeeR EL2 instance
+# built without Smepmp: mseccfg and mseccfgh do not exist and PMP follows the
+# base privileged-spec rules.
+option(VEERISS_SMEPMP "Model the Smepmp PMP extension (mseccfg) in the VeeR ISS" ON)
+
 # -----------------------------------------------------------------------------
 # Build type & output dirs
 # -----------------------------------------------------------------------------
@@ -200,6 +205,7 @@ target_compile_definitions(veeriss_model PUBLIC
   SOFT_FLOAT
   MEM_CALLBACKS
   ISA=rv32imc
+  VEERISS_SMEPMP=$<BOOL:${VEERISS_SMEPMP}>
 )
 
 target_link_libraries(veeriss_model PRIVATE softfloat Boost::headers Boost::program_options PUBLIC SystemC::systemc Threads::Threads z el2_pic_model)

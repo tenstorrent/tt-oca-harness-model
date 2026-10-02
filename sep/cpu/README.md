@@ -44,7 +44,12 @@ cd sep/cpu
 ./run_tests.sh              # Release
 ./run_tests.sh --asan
 ./run_tests.sh --coverage
+./run_tests.sh --no-smepmp  # core built without Smepmp (RV_SMEPMP=0)
 ```
+
+The ISS models the Smepmp PMP extension (`mseccfg`) by default, as the SEP
+core is built with `RV_SMEPMP 1`. Configure with `-DVEERISS_SMEPMP=OFF` to
+model a VeeR EL2 instance without it.
 
 Platform-level firmware tests remain under `sw/sep-vp-tests/` (`rom_test`,
 `sep-efuse-test`, …).

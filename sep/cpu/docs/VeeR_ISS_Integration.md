@@ -56,4 +56,5 @@ The following files have been changed to integrate this as a SystemC model into 
    c. While `mseccfg.RLB` is set, locked `pmpcfg` bytes and their `pmpaddr` registers remain writable.
    d. While `mseccfg.MMWP` is set, a machine-mode fetch, load or store that matches no PMP entry raises the corresponding access fault (`mscause` = 8).
    e. `mseccfg.MML` is stored but its rule reinterpretation is not modelled: PMP checks behave as with MML clear.
+   f. Items b to e follow the CMake option `VEERISS_SMEPMP` (default `ON`), which mirrors the core's `RV_SMEPMP` build parameter. With `-DVEERISS_SMEPMP=OFF`, `mseccfg` and `mseccfgh` do not exist, accessing them is an illegal instruction, and PMP follows the base privileged-spec rules. `mscause` is present either way.
 

@@ -22,6 +22,10 @@
 #include "VecRegs.hpp"
 #include "VirtMem.hpp"
 
+#ifndef VEERISS_SMEPMP
+#define VEERISS_SMEPMP 1
+#endif
+
 using namespace WdRiscv;
 
 
@@ -1004,9 +1008,12 @@ CsRegs<URV>::defineMachineRegs()
 
   // Smepmp machine security configuration: MML (bit 0), MMWP (bit 1)
   // and RLB (bit 2). MSECCFGH has no defined fields and reads zero.
+  // Without Smepmp neither register exists, so RLB and MMWP read as
+  // clear and PMP follows the base rules.
+  bool smepmp = VEERISS_SMEPMP;
   URV seccfgMask = 0x7;
-  defineCsr("mseccfg",   Csrn::MSECCFG,   !mand, imp, 0, seccfgMask, seccfgMask);
-  defineCsr("mseccfgh",  Csrn::MSECCFGH,  !mand, rv32_, 0, rom, rom);
+  defineCsr("mseccfg",   Csrn::MSECCFG,   !mand, smepmp, 0, seccfgMask, seccfgMask);
+  defineCsr("mseccfgh",  Csrn::MSECCFGH,  !mand, smepmp and rv32_, 0, rom, rom);
 
   // Machine Counter/Timers.
   defineCsr("mcycle",    Csrn::MCYCLE,    mand, imp, 0, wam, wam);

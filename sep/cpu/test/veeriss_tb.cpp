@@ -7,7 +7,8 @@
  * smoke hex program stores through the initiator socket, and exercises
  * the PIC intercept, CSR peek/poke, NMI pin, external IRQ, and TLM
  * error paths used by sep-vp. A second program (fixtures/smepmp.S)
- * covers the boot ROM's Smepmp PMP sequence and mscause.
+ * covers the boot ROM's Smepmp PMP sequence and mscause; a build with
+ * VEERISS_SMEPMP=OFF instead checks that mseccfg is absent.
  */
 
 #include "VeeR-ISSTlm.hpp"
@@ -23,6 +24,10 @@
 #include <memory>
 #include <string>
 #include <vector>
+
+#ifndef VEERISS_SMEPMP
+#define VEERISS_SMEPMP 1
+#endif
 
 #ifdef __GNUC__
 #ifdef __COVERAGE__
@@ -238,6 +243,19 @@ public:
         return buf;
     }
 
+    // Built with VEERISS_SMEPMP=OFF: the core has no Smepmp, as an EL2
+    // instance built with RV_SMEPMP=0.
+    void check_no_smepmp()
+    {
+        uint32_t v = 0;
+        check("FUNC-CPU-031: mseccfg/mseccfgh absent without Smepmp",
+              !cpu->peek_csr(0x747, v) && !cpu->peek_csr(0x757, v) &&
+                  !cpu->poke_csr(0x747, 4));
+        check("FUNC-CPU-032: mscause present without Smepmp",
+              cpu->poke_csr(0x7FF, 8) && cpu->peek_csr(0x7FF, v) && v == 8u,
+              "mscause=" + hex32(v));
+    }
+
     // Runs test/fixtures/smepmp.S, which documents the SRAM result layout.
     void run_smepmp_program()
     {
@@ -435,7 +453,11 @@ public:
         check("FUNC-CPU-015d: poke of nonexistent CSR fails",
               !cpu->poke_csr(0xFFFFu, 0));
 
+#if VEERISS_SMEPMP
         run_smepmp_program();
+#else
+        check_no_smepmp();
+#endif
 
         rst_n.write(false);
         wait(50, sc_core::SC_NS);
