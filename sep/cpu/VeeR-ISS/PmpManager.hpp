@@ -51,28 +51,38 @@ namespace WdRiscv
         pmpIx_(pmpIx), word_(false)
     { }
 
-    /// Return true if read (i.e. load instructions) access allowed 
-    bool isRead(PrivilegeMode mode, PrivilegeMode prevMode, bool mprv) const
+    /// Return true if read (i.e. load instructions) access allowed.
+    /// When mmwp (Smepmp mseccfg.MMWP) is set, a machine-mode access
+    /// that matches no PMP entry is denied.
+    bool isRead(PrivilegeMode mode, PrivilegeMode prevMode, bool mprv,
+                bool mmwp = false) const
     {
       if (mprv)
         mode = prevMode;
-      bool check = (mode != PrivilegeMode::Machine) or locked_ or pmpFree_;
+      bool check = ((mode != PrivilegeMode::Machine) or locked_ or pmpFree_ or
+                    (mmwp and type_ == Type::Off));
       return check ? mode_ & Read : true;
     }
 
     /// Return true if write (i.e. store instructions) access allowed.
-    bool isWrite(PrivilegeMode mode, PrivilegeMode prevMode, bool mprv) const
+    /// See isRead for mmwp.
+    bool isWrite(PrivilegeMode mode, PrivilegeMode prevMode, bool mprv,
+                 bool mmwp = false) const
     {
       bool check = (mode != PrivilegeMode::Machine or locked_ or
-                    (mprv and prevMode != PrivilegeMode::Machine));
+                    (mprv and prevMode != PrivilegeMode::Machine) or
+                    (mmwp and type_ == Type::Off));
       return check ? mode_ & Write : true;
     }
 
-    /// Return true if instruction fecth is allowed.
-    bool isExec(PrivilegeMode mode, PrivilegeMode prevMode, bool mprv) const
+    /// Return true if instruction fecth is allowed. See isRead for
+    /// mmwp.
+    bool isExec(PrivilegeMode mode, PrivilegeMode prevMode, bool mprv,
+                bool mmwp = false) const
     {
       bool check = (mode != PrivilegeMode::Machine or locked_ or
-                    (mprv and prevMode != PrivilegeMode::Machine));
+                    (mprv and prevMode != PrivilegeMode::Machine) or
+                    (mmwp and type_ == Type::Off));
       return check ? mode_ & Exec : true;
     }
 

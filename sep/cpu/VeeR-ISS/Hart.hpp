@@ -4026,6 +4026,7 @@ namespace WdRiscv
 
     // Physical memory protection.
     bool pmpEnabled_ = false; // True if one or more pmp register defined.
+    bool pmpMmwp_ = false;    // Cached mseccfg.MMWP.
     PmpManager pmpManager_;
 
     bool defaultIdempotent_ = false;

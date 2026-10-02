@@ -80,6 +80,8 @@ namespace WdRiscv
       PMPADDR13 = 0x3bd,
       PMPADDR14 = 0x3be,
       PMPADDR15 = 0x3bf,
+      MSECCFG = 0x747,
+      MSECCFGH = 0x757,
 
       // Machine Counter/Timers
       MCYCLE = 0xb00,
@@ -1046,6 +1048,18 @@ namespace WdRiscv
     /// Return true if given CSR number is a PMPADDR register and if
     /// that register is locked.  Return false otherwise.
     bool isPmpaddrLocked(CsrNumber csrn) const;
+
+    /// Legalize an MSECCFG value per Smepmp: MML and MMWP are sticky
+    /// until reset, and RLB can be set only while it is already set
+    /// or no PMP entry is locked. Return the legalized value.
+    URV legalizeMseccfgValue(URV current, URV value) const;
+
+    /// Return true if MSECCFG.RLB is set: locked PMP entries remain
+    /// writable.
+    bool isPmpRuleLockBypassed() const;
+
+    /// Return true if any PMP entry has its L bit set.
+    bool anyPmpEntryLocked() const;
 
     /// Return true if it's SATP with unsupported value
     bool isUnSupportedSatp(CsrNumber csrn, URV val) const;
