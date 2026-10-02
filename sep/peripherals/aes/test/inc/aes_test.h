@@ -48,6 +48,21 @@ public:
    void register_write_8(unsigned int offset, uint8_t write_value);
    void register_read_32(unsigned int offset, uint32_t &read_value);
    void register_write_32(unsigned int offset, uint32_t write_value);
+   /// Partial-lane write via an explicit 4-byte TLM byte-enable mask.
+   tlm::tlm_response_status register_write_32_with_be(unsigned int offset,
+                                                      uint32_t write_value,
+                                                      const unsigned char be[4]);
+   /// Raw initiator b_transport for the register socket (TLM matrix).
+   tlm::tlm_response_status register_b_transport(tlm::tlm_command cmd,
+                                                 uint64_t addr,
+                                                 unsigned char* data,
+                                                 unsigned int len,
+                                                 unsigned int streaming_width,
+                                                 unsigned char* be = nullptr,
+                                                 unsigned int be_len = 0);
+   unsigned int register_transport_dbg(tlm::tlm_command cmd, uint64_t addr,
+                                       unsigned char* data, unsigned int len);
+   bool register_get_direct_mem_ptr(tlm::tlm_command cmd, uint64_t addr);
 
    // =============================================================================
    // Complementary Port Interfaces (Test side)

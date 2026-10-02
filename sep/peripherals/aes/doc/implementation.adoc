@@ -47,6 +47,20 @@ auto-starts unless manual mode is set; TRIGGER then starts, clears, or
 reseeds. Key shares XOR to the OpenSSL key. Sideload loads the KM push
 buffers when that path is enabled.
 
+`sanitise_ctrl_shadowed()` is the single point where illegal CTRL_SHADOWED
+encodings are mapped to their defaults, and it runs *before* the value is
+staged into the shadow register. Every downstream consumer — cipher
+selection, latency, PRNG reseed threshold — therefore only ever sees a
+legal encoding; their `switch` statements stay exhaustive over the enum so
+that adding a mode or key length is a `-Wswitch` build failure rather than
+a silent fallthrough, but their `default:` arms are unreachable and marked
+as such.
+
+The key-manager sideload socket is modelled as zero latency: the incoming
+annotated `delay` is passed through untouched rather than cleared, so a
+temporally decoupled key manager keeps the local-time offset it arrived
+with.
+
 ----
   TLM MMIO ──► aes_base::memory ──► sc_spawn perform_cipher_operation
                                  └► sc_spawn clear / PRNG reseed

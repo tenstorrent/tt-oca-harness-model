@@ -657,23 +657,20 @@ void testbench::test_func002_speed_mode_validation()
     test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CONFIGOPTS: CLKDIV=10, CPOL=0, CPHA=1
-    // CONFIGOPTS: bits [15:0]=CLKDIV, bit 1=CPHA, bit 0=CPOL
-    uint32_t config_mode1 = (10 << 16) | (1 << 1) | 0;  /// CPHA=1, CPOL=0
+    // CONFIGOPTS: CLKDIV[15:0], FULLCYC[29], CPHA[30], CPOL[31]
+    uint32_t config_mode1 = (1u << 30) | 10u;  /// CPHA=1, CPOL=0, CLKDIV=10
     test->write_register_32(CONFIGOPTS_OFFSET, config_mode1);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
-    // Read back and verify
     test->read_register_32(CONFIGOPTS_OFFSET, status_val);
-    uint32_t cpol = status_val & 0x1;
-    uint32_t cpha = (status_val >> 1) & 0x1;
-
-    if (cpol == 0 && cpha == 1) {
-        REG_INFO(2, logger) << "  [PASS] Mode 1 configured: CPOL=0, CPHA=1" << std::endl;
+    uint32_t cpol = (status_val >> 31) & 0x1;
+    uint32_t cpha = (status_val >> 30) & 0x1;
+    if (status_val == config_mode1 && cpol == 0 && cpha == 1) {
+        REG_INFO(2, logger) << "  [PASS] Mode 1 CONFIGOPTS stored: 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Mode 1 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 1 CONFIGOPTS mismatch: got 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -710,6 +707,18 @@ void testbench::test_func002_speed_mode_validation()
         test_passed = false;
     }
 
+    {
+        const auto& cfg = test->get_slave_last_config();
+        if (!cfg.cpol && cfg.cpha && !cfg.fullcyc && cfg.clkdiv == 10) {
+            REG_INFO(2, logger) << "  [PASS] Mode 1 forwarded to spi_if" << std::endl;
+            sub_tests_passed++;
+        } else {
+            REG_ERROR(2, logger) << "  [FAIL] Mode 1 spi_if config mismatch" << std::endl;
+            sub_tests_failed++;
+            test_passed = false;
+        }
+    }
+
     test->clear_slave_state();
     wait(10, SC_NS);
 
@@ -724,22 +733,19 @@ void testbench::test_func002_speed_mode_validation()
     test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CONFIGOPTS: CLKDIV=10, CPOL=1, CPHA=0
-    uint32_t config_mode2 = (10 << 16) | (0 << 1) | 1;  /// CPHA=0, CPOL=1
+    uint32_t config_mode2 = (1u << 31) | 10u;  /// CPOL=1, CPHA=0, CLKDIV=10
     test->write_register_32(CONFIGOPTS_OFFSET, config_mode2);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
-    // Read back and verify
     test->read_register_32(CONFIGOPTS_OFFSET, status_val);
-    cpol = status_val & 0x1;
-    cpha = (status_val >> 1) & 0x1;
-
-    if (cpol == 1 && cpha == 0) {
-        REG_INFO(2, logger) << "  [PASS] Mode 2 configured: CPOL=1, CPHA=0" << std::endl;
+    cpol = (status_val >> 31) & 0x1;
+    cpha = (status_val >> 30) & 0x1;
+    if (status_val == config_mode2 && cpol == 1 && cpha == 0) {
+        REG_INFO(2, logger) << "  [PASS] Mode 2 CONFIGOPTS stored: 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Mode 2 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 2 CONFIGOPTS mismatch: got 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -776,6 +782,18 @@ void testbench::test_func002_speed_mode_validation()
         test_passed = false;
     }
 
+    {
+        const auto& cfg = test->get_slave_last_config();
+        if (cfg.cpol && !cfg.cpha && cfg.clkdiv == 10) {
+            REG_INFO(2, logger) << "  [PASS] Mode 2 forwarded to spi_if" << std::endl;
+            sub_tests_passed++;
+        } else {
+            REG_ERROR(2, logger) << "  [FAIL] Mode 2 spi_if config mismatch" << std::endl;
+            sub_tests_failed++;
+            test_passed = false;
+        }
+    }
+
     test->clear_slave_state();
     wait(10, SC_NS);
 
@@ -790,22 +808,19 @@ void testbench::test_func002_speed_mode_validation()
     test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CONFIGOPTS: CLKDIV=10, CPOL=1, CPHA=1
-    uint32_t config_mode3 = (10 << 16) | (1 << 1) | 1;  /// CPHA=1, CPOL=1
+    uint32_t config_mode3 = (1u << 31) | (1u << 30) | 10u;  /// CPOL=1, CPHA=1, CLKDIV=10
     test->write_register_32(CONFIGOPTS_OFFSET, config_mode3);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
-    // Read back and verify
     test->read_register_32(CONFIGOPTS_OFFSET, status_val);
-    cpol = status_val & 0x1;
-    cpha = (status_val >> 1) & 0x1;
-
-    if (cpol == 1 && cpha == 1) {
-        REG_INFO(2, logger) << "  [PASS] Mode 3 configured: CPOL=1, CPHA=1" << std::endl;
+    cpol = (status_val >> 31) & 0x1;
+    cpha = (status_val >> 30) & 0x1;
+    if (status_val == config_mode3 && cpol == 1 && cpha == 1) {
+        REG_INFO(2, logger) << "  [PASS] Mode 3 CONFIGOPTS stored: 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] Mode 3 config mismatch: CPOL=" << cpol << ", CPHA=" << cpha << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] Mode 3 CONFIGOPTS mismatch: got 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -842,6 +857,18 @@ void testbench::test_func002_speed_mode_validation()
         test_passed = false;
     }
 
+    {
+        const auto& cfg = test->get_slave_last_config();
+        if (cfg.cpol && cfg.cpha && cfg.clkdiv == 10) {
+            REG_INFO(2, logger) << "  [PASS] Mode 3 forwarded to spi_if" << std::endl;
+            sub_tests_passed++;
+        } else {
+            REG_ERROR(2, logger) << "  [FAIL] Mode 3 spi_if config mismatch" << std::endl;
+            sub_tests_failed++;
+            test_passed = false;
+        }
+    }
+
     test->clear_slave_state();
     wait(10, SC_NS);
 
@@ -856,22 +883,18 @@ void testbench::test_func002_speed_mode_validation()
     test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// Release SW_RST, re-enable
     wait(10, SC_NS);
 
-    // Configure CONFIGOPTS: CLKDIV=10, FULLCYC=1, CPOL=0, CPHA=0
-    // CONFIGOPTS: bit 2=FULLCYC
-    uint32_t config_fullcyc = (10 << 16) | (1 << 2) | 0;  /// FULLCYC=1
+    uint32_t config_fullcyc = (1u << 29) | 10u;  /// FULLCYC=1, CLKDIV=10
     test->write_register_32(CONFIGOPTS_OFFSET, config_fullcyc);
     test->write_register_32(CSID_OFFSET, 0x0);
     wait(10, SC_NS);
 
-    // Read back and verify
     test->read_register_32(CONFIGOPTS_OFFSET, status_val);
-    uint32_t fullcyc = (status_val >> 2) & 0x1;
-
-    if (fullcyc == 1) {
-        REG_INFO(2, logger) << "  [PASS] FULLCYC mode configured" << std::endl;
+    uint32_t fullcyc = (status_val >> 29) & 0x1;
+    if (status_val == config_fullcyc && fullcyc == 1) {
+        REG_INFO(2, logger) << "  [PASS] FULLCYC CONFIGOPTS stored: 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_passed++;
     } else {
-        REG_ERROR(2, logger) << "  [FAIL] FULLCYC not set" << std::endl;
+        REG_ERROR(2, logger) << "  [FAIL] FULLCYC CONFIGOPTS mismatch: got 0x" << std::hex << status_val << std::dec << std::endl;
         sub_tests_failed++;
         test_passed = false;
     }
@@ -905,6 +928,18 @@ void testbench::test_func002_speed_mode_validation()
         REG_ERROR(2, logger) << "  [FAIL] FULLCYC transaction failed: ACTIVE=" << active << std::endl;
         sub_tests_failed++;
         test_passed = false;
+    }
+
+    {
+        const auto& cfg = test->get_slave_last_config();
+        if (cfg.fullcyc && !cfg.cpol && !cfg.cpha && cfg.clkdiv == 10) {
+            REG_INFO(2, logger) << "  [PASS] FULLCYC forwarded to spi_if" << std::endl;
+            sub_tests_passed++;
+        } else {
+            REG_ERROR(2, logger) << "  [FAIL] FULLCYC spi_if config mismatch" << std::endl;
+            sub_tests_failed++;
+            test_passed = false;
+        }
     }
 
     test->clear_slave_state();

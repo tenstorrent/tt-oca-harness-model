@@ -117,6 +117,75 @@ void aes_test::register_write_32(unsigned int offset, uint32_t write_value)
     initiator_socket->b_transport(trans, delay);
 }
 
+tlm::tlm_response_status aes_test::register_write_32_with_be(
+    unsigned int offset, uint32_t write_value, const unsigned char be[4])
+{
+    tlm::tlm_generic_payload trans;
+    uint32_t data = write_value;
+    unsigned char be_copy[4] = {be[0], be[1], be[2], be[3]};
+    sc_time delay = SC_ZERO_TIME;
+
+    trans.set_command(tlm::TLM_WRITE_COMMAND);
+    trans.set_address(offset);
+    trans.set_data_ptr(reinterpret_cast<uint8_t*>(&data));
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_byte_enable_ptr(be_copy);
+    trans.set_byte_enable_length(4);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+
+    initiator_socket->b_transport(trans, delay);
+    return trans.get_response_status();
+}
+
+tlm::tlm_response_status aes_test::register_b_transport(
+    tlm::tlm_command cmd, uint64_t addr, unsigned char* data, unsigned int len,
+    unsigned int streaming_width, unsigned char* be, unsigned int be_len)
+{
+    tlm::tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    trans.set_command(cmd);
+    trans.set_address(addr);
+    trans.set_data_ptr(data);
+    trans.set_data_length(len);
+    trans.set_streaming_width(streaming_width);
+    trans.set_byte_enable_ptr(be);
+    trans.set_byte_enable_length(be_len);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    initiator_socket->b_transport(trans, delay);
+    return trans.get_response_status();
+}
+
+unsigned int aes_test::register_transport_dbg(tlm::tlm_command cmd, uint64_t addr,
+                                              unsigned char* data, unsigned int len)
+{
+    tlm::tlm_generic_payload trans;
+    trans.set_command(cmd);
+    trans.set_address(addr);
+    trans.set_data_ptr(data);
+    trans.set_data_length(len);
+    trans.set_streaming_width(len == 0 ? 1 : len);
+    trans.set_byte_enable_ptr(nullptr);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    return initiator_socket->transport_dbg(trans);
+}
+
+bool aes_test::register_get_direct_mem_ptr(tlm::tlm_command cmd, uint64_t addr)
+{
+    tlm::tlm_generic_payload trans;
+    tlm::tlm_dmi dmi;
+    trans.set_command(cmd);
+    trans.set_address(addr);
+    trans.set_data_ptr(nullptr);
+    trans.set_data_length(4);
+    trans.set_streaming_width(4);
+    trans.set_dmi_allowed(false);
+    return initiator_socket->get_direct_mem_ptr(trans, dmi);
+}
+
 void aes_test::wait_for_idle()
 {
     // Poll idle status until AES becomes idle

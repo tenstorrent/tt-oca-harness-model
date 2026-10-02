@@ -78,6 +78,10 @@ endif()
 
 set(WFLAG "-Wall -Wextra")
 
+# Find Threads before ASAN/coverage flags are injected into CMAKE_CXX_FLAGS;
+# otherwise CMake's pthread probe links with -fsanitize=address and fails.
+find_package(Threads REQUIRED)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
   add_compile_definitions(DEBUG REG_DEFAULT_VERBOSITY=3)
@@ -117,7 +121,6 @@ include_directories(
 # -----------------------------------------------------------------------------
 # External Dependencies (SystemC and CCI)
 # -----------------------------------------------------------------------------
-find_package(Threads REQUIRED)
 include(FindCCI)
 include(FindSystemC)
 
@@ -185,14 +188,20 @@ if(BUILD_TESTS)
   # -----------------------------------------------------------------------------
   if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
     # Keep only model/ directory in coverage, exclude everything else
-    peripheral_add_coverage_target(PRIMARY_TARGET spi_controller_test)
+    peripheral_add_coverage_target(
+      PRIMARY_TARGET spi_controller_test
+      TEST_COMMANDS COMMAND $<TARGET_FILE:spi_controller_test>
+                    "${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini"
+    )
   endif()
 
   # -----------------------------------------------------------------------------
   # CTest
   # -----------------------------------------------------------------------------
   enable_testing()
-  add_test(NAME spi_controller_test COMMAND spi_controller_test)
+  add_test(NAME spi_controller_test
+           COMMAND spi_controller_test
+                   "${CMAKE_CURRENT_SOURCE_DIR}/config/accellera_config.ini")
 endif()
 
 # -----------------------------------------------------------------------------

@@ -320,9 +320,13 @@ class abr_ip : public abr_base
     // =========================================================================
 
     void set_mldsa_busy();
-    void finish_mldsa(bool valid, bool error);
+    /// Publish a successful ML-DSA result and the notification interrupt.
+    /// Error completions are reported directly from the CTRL callback; this
+    /// helper is only reached after a backend operation returns.
+    void finish_mldsa();
     void set_mlkem_busy();
-    void finish_mlkem(bool valid, bool error);
+    /// Publish a successful ML-KEM result and the notification interrupt.
+    void finish_mlkem();
 
     /// Raise the sticky notification (command-done) interrupt.
     void raise_notif();

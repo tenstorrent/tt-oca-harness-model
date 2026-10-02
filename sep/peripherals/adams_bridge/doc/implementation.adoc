@@ -85,6 +85,19 @@ Knobs are `regmodel::Param` and are re-read when used. Each operation
 charges its cycle count through `clk_i` into
 `tlm_quantumkeeper::inc()`.
 
+`consume_cycles()` syncs the keeper itself once the charged latency
+exceeds the quantum. A sub-quantum operation only accumulates local time,
+so `finish_mldsa()` / `finish_mlkem()` resync before publishing — an LT
+model must resynchronize before a side effect becomes visible to other
+processes. With the default cycle counts every operation is far larger
+than the quantum, so that branch is reached only by the directed coverage
+case, which shrinks the cycle counts and waits 200 ns (long enough to
+complete, short enough to stay inside the 1 us quantum).
+
+`finish_mldsa()` and `finish_mlkem()` take no arguments: they publish a
+successful result and raise the notification interrupt. Error completions
+never reach them — those are reported directly from the CTRL callback.
+
 [cols="36%,20%,44%",options="header"]
 |===
 |Parameter |Default |Use

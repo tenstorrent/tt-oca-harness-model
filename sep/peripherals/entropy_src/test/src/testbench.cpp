@@ -67,7 +67,7 @@ testbench::testbench(sc_module_name name)
 
     // Coverage builds default REG_DEFAULT_VERBOSITY=1, which skips REG_INFO(3)
     // bodies in the model. Raise both loggers so those paths are exercised.
-    dut->logger.setMaxVerbosity(3);
+    dut->get_logger().setMaxVerbosity(3);
     logger.setMaxVerbosity(3);
 
     REG_INFO(2, logger) << "Constructing entropy_src testbench";
@@ -331,7 +331,7 @@ bool testbench::test_ro()
     test->register_write_32(entropy_src_basetest::FIFO_STATUS_OFFSET, 0xFFFFFFFFu);
     test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, read_val);
 
-    if (false && read_val != fifo_status_reset)
+    if (read_val != fifo_status_reset)
     {
         REG_ERROR(0, logger)
             << "test_ro FIFO_STATUS: expected 0x" << std::hex << fifo_status_reset
@@ -480,7 +480,7 @@ void testbench::run_tests()
     // Coverage builds compile at CSML_DEFAULT_VERBOSITY=1, which skips the
     // CSML_INFO(2/3) bodies in the model. Raise both loggers so callback and
     // thread diagnostics actually execute when those paths run.
-    dut->logger.setMaxVerbosity(3);
+    dut->get_logger().setMaxVerbosity(3);
     logger.setMaxVerbosity(3);
 
     // Coverage: boot rst_n gate + initial STARTUP_DELAY before first SW reset.
@@ -1371,18 +1371,68 @@ void testbench::run_tests()
         tc_cov_verbose_callbacks_and_recovery());
 
     apply_reset();
+    record_result("TC-COV-011: export_repetition_fail",
+        tc_cov_export_repetition_fail());
+
+    apply_reset();
     test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x1u);
-    wait(2, SC_US);
-    uint8_t seed[48] = {};
-    bool fips = true;
-    bool provider_ok = dut->entropy_export->get_seed_384(seed, fips);
-    bool nonzero = false;
-    for (uint8_t byte : seed) {
-        nonzero = nonzero || (byte != 0);
+    bool filled = false;
+    for (int i = 0; i < 800; ++i) {
+        wait(sc_core::sc_time(100.0, sc_core::SC_NS));
+        uint32_t st = 0u;
+        test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, st);
+        if ((st & 0x7Fu) >= 12u) { filled = true; break; }
     }
-    provider_ok = provider_ok && nonzero;
-    provider_ok = provider_ok &&
-                  !dut->entropy_export->get_seed_384(nullptr, fips);
+    test->register_write_32(entropy_src_basetest::FIFO_CTRL_OFFSET, 0x0u);
+    wait(sc_core::sc_time(50.0, sc_core::SC_US));
+    uint32_t st_before = 0u;
+    test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, st_before);
+    uint8_t seed[48] = {};
+    bool fips = false;
+    const bool got_seed = filled && ((st_before & 0x7Fu) >= 12u) &&
+                          dut->entropy_export->get_seed_384(seed, fips);
+    uint32_t st_after = 0u;
+    test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, st_after);
+    const bool level_dropped =
+        got_seed && ((st_after & 0x7Fu) + 12u == (st_before & 0x7Fu));
+    const bool null_rejected = !dut->entropy_export->get_seed_384(nullptr, fips);
+    // Drain any leftovers then confirm empty export fails.
+    for (;;) {
+        uint32_t st = 0u;
+        test->register_read_32(entropy_src_basetest::FIFO_STATUS_OFFSET, st);
+        if ((st & 0x7Fu) == 0u)
+            break;
+        uint32_t sink = 0u;
+        test->register_read_32(entropy_src_basetest::FIFO_RDATA_OFFSET, sink);
+    }
+    const bool empty_rejected = !dut->entropy_export->get_seed_384(seed, fips);
+    uint32_t rep_before = 0xFFu;
+    test->register_read_32(entropy_src_basetest::REPETITION_TEST_COUNT_OFFSET, rep_before);
+    test->register_write_32(entropy_src_basetest::HEALTH_TEST_CTRL_OFFSET, 0x0101u);
+    wait(sc_core::sc_time(1.0, sc_core::SC_US));
+    uint32_t rep_after = 0xFFu;
+    test->register_read_32(entropy_src_basetest::REPETITION_TEST_COUNT_OFFSET, rep_after);
+    uint32_t intr = 0u;
+    test->register_read_32(entropy_src_basetest::INTR_STATUS_OFFSET, intr);
+    // Generation-thread health path is a no-op: enabling must not invent fails/alerts.
+    const bool health_stub_quiet =
+        (rep_after == rep_before) && ((intr & 0x1u) == 0u);
+    const bool provider_ok = level_dropped && null_rejected && empty_rejected &&
+                             health_stub_quiet;
+    if (!provider_ok) {
+        REG_ERROR(0, logger)
+            << "TC-P0 detail: filled=" << filled
+            << " got_seed=" << got_seed
+            << " level_dropped=" << level_dropped
+            << " null_rejected=" << null_rejected
+            << " empty_rejected=" << empty_rejected
+            << " health_stub_quiet=" << health_stub_quiet
+            << " st_before=" << (st_before & 0x7Fu)
+            << " st_after=" << (st_after & 0x7Fu)
+            << " rep_before=0x" << std::hex << rep_before
+            << " rep_after=0x" << rep_after
+            << " intr=0x" << intr;
+    }
     record_result("TC-P0: production entropy client export", provider_ok);
 
     // =========================================================================

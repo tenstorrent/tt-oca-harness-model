@@ -24,11 +24,16 @@ RUN_DOCS=false
 RUN_CPPCHECK=false
 CLEAN=false
 
+BUILD_TYPE_SET=""
+
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../setup_build_env.sh"
+
 for arg in "$@"; do
   case "$arg" in
-    --debug)    BUILD_TYPE="Debug" ;;
-    --asan)     BUILD_TYPE="ASAN" ;;
-    --coverage) BUILD_TYPE="Coverage" ;;
+    --debug)    peripheral_set_build_type "$arg" "Debug" ;;
+    --asan)     peripheral_set_build_type "$arg" "ASAN" ;;
+    --coverage) peripheral_set_build_type "$arg" "Coverage" ;;
     --ctest)    RUN_CTEST=true ;;
     --docs)     RUN_DOCS=true ;;
     --cppcheck) RUN_CPPCHECK=true ;;
@@ -44,8 +49,6 @@ if ${CLEAN}; then
   rm -rf "${BUILD_DIR}"
 fi
 
-# shellcheck disable=SC1091
-source "${SCRIPT_DIR}/../setup_build_env.sh"
 peripheral_setup_build_env || exit 1
 
 if ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
@@ -69,6 +72,9 @@ elif ${RUN_CPPCHECK}; then
 elif [ "${BUILD_TYPE}" = "Coverage" ]; then
   cmake --build "${BUILD_DIR}" --target coverage
   peripheral_enforce_coverage_gate "${BUILD_DIR}"
+elif [ "${BUILD_TYPE}" = "ASAN" ]; then
+  peripheral_enforce_asan_clean \
+    "${BUILD_DIR}/bin/local_master_alias_remap_ctrl_testbench" "${BUILD_DIR}"
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else

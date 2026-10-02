@@ -132,12 +132,23 @@ void mlkem_tests(abr_testbench &tb)
     tb.section("ML-KEM: error and no-op paths");
 
     tb.check(tb.zeroize_mlkem(), "zeroize before invalid ML-KEM command");
+    const uint32_t err_count_before = tb.rd(abr::OFF_ERROR_INTR_COUNT);
     tb.wr(abr::OFF_MLKEM_CTRL, 0x6u);
-    tb.check((tb.rd(abr::OFF_MLKEM_STATUS) & ST_ERROR) != 0u,
-             "an invalid ML-KEM command raises STATUS.ERROR");
+    const uint32_t bad_st = tb.rd(abr::OFF_MLKEM_STATUS);
+    tb.check_eq(bad_st & ST_ERROR, ST_ERROR,
+                "an invalid ML-KEM command raises STATUS.ERROR");
+    tb.check_eq(bad_st & ST_VALID, 0u, "an invalid ML-KEM command leaves VALID clear");
+    tb.check_eq(bad_st & ST_READY, 0u,
+                "an invalid ML-KEM command parks READY low until zeroize");
+    tb.check_eq(tb.rd(abr::OFF_ERROR_INTERNAL_INTR) & 1u, 1u,
+                "an invalid ML-KEM command sets error interrupt status");
+    tb.check_eq(tb.rd(abr::OFF_ERROR_INTR_COUNT), err_count_before + 1u,
+                "an invalid ML-KEM command increments the error counter");
 
     tb.check(tb.zeroize_mlkem(), "zeroize recovers from the invalid ML-KEM command");
     tb.check_eq(tb.rd(abr::OFF_MLKEM_STATUS) & ST_ERROR, 0u, "zeroize cleared ML-KEM ERROR");
+    tb.check_eq(tb.rd(abr::OFF_MLKEM_STATUS) & ST_READY, ST_READY,
+                "zeroize restores ML-KEM READY after an invalid command");
 
     tb.wr(abr::OFF_MLKEM_CTRL, 0u);
     tb.check_eq(tb.rd(abr::OFF_MLKEM_STATUS) & ST_READY, ST_READY,

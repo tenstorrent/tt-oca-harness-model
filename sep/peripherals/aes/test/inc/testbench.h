@@ -285,25 +285,24 @@ public:
     void test_func009_timing_across_modes();
 
     // =============================================================================
-    // Coverage: uncovered model paths (PRNG, sideload, GCM, error-state)
+    // Coverage / protocol: independent-oracle edge and TLM matrix tests
     // =============================================================================
 
-    void test_coverage_prng_reseed_trigger_and_rates();
-    void test_coverage_keymgr_read_rejected();
-    void test_coverage_escalation_aborts_cipher();
+    void test_coverage_prng_reseed_busy_interval();
     void test_coverage_error_state_writes_rejected();
-    void test_coverage_gcm_shadow_and_busy();
-    void test_coverage_sideload_and_gcm_init_guards();
     void test_coverage_gcm_aes192_aes256_init();
-    void test_coverage_auto_start_gcm_and_output_valid();
-
-    // Edge paths from origin/main's coverage gate (unique names).
-    void test_coverage_keymgr_rejects_non_write();
+    void test_coverage_gcm_output_valid_iv_guard();
+    void test_coverage_sideload_manual_openssl();
+    void test_coverage_busy_gcm_write_ignored();
     void test_coverage_escalation_aborts_in_flight_cipher();
-    void test_coverage_sideload_missing_key_and_manual_start();
-    void test_coverage_error_state_and_busy_gcm_writes();
     void test_coverage_gcm_shadow_mismatch_and_init_gates();
-    void test_coverage_trigger_readback_and_gcm_manual_init();
+    void test_coverage_gcm_manual_init_no_iv();
+    void test_coverage_register_tlm_matrix();
+    void test_coverage_keymgr_tlm_matrix();
+    void test_coverage_byte_enable_data_in();
+    void test_coverage_transport_dbg_and_dmi();
+    void test_coverage_clk_i_no_effect_on_latency();
+    void test_coverage_aes_none_rejects_cipher();
 
     // Test helper reporting
     void report_test_start(const std::string& test_name);

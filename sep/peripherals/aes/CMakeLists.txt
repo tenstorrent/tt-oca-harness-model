@@ -73,6 +73,13 @@ if(NOT MSVC)
     add_compile_options(-Wno-unused-parameter)
 endif()
 
+# -----------------------------------------------------------------------------
+# External Dependencies (SystemC, CCI, OpenSSL)
+# -----------------------------------------------------------------------------
+# Find Threads before injecting sanitizer flags into CMAKE_CXX_FLAGS: the
+# AddressSanitizer link line makes FindThreads' -pthread probe fail on RHEL.
+find_package(Threads REQUIRED)
+
 set(WFLAG "-Wall -Wextra")
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g ${WFLAG}")
@@ -101,10 +108,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   message(STATUS "aes: Coverage build enabled")
 endif()
 
-# -----------------------------------------------------------------------------
-# External Dependencies (SystemC, CCI, OpenSSL)
-# -----------------------------------------------------------------------------
-find_package(Threads REQUIRED)
 include(FindCCI)
 include(FindSystemC)
 

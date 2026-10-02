@@ -2264,4 +2264,14 @@ public:
     bool tc_cov_reset_while_fifo_disabled();
     bool tc_cov_verbose_callbacks_and_recovery();
 
+    /**
+     * @brief TC-COV-011: export-path repetition fail via MMIO REPETITION_LIMIT=1
+     *
+     * Exercises get_seed_384's existing repetition check (not the generation-
+     * thread health stub): with HEALTH_TEST_CTRL ENABLE!=0 and REPETITION_LIMIT=1,
+     * a 48-byte draw containing any consecutive equal bytes must reject the
+     * seed, increment REPCNT_TOTAL_FAILS, and set INTR_STATUS.HEALTH_TEST_FAILED.
+     */
+    bool tc_cov_export_repetition_fail();
+
 };

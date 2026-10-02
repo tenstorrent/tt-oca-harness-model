@@ -272,6 +272,11 @@ public:
     void test_coverage_signal_update_during_reset();
     void test_coverage_fifo_overflow_underflow();
 
+    /// Quality / audit-driven cases
+    void test_quality_tlm_protocol_matrix();
+    void test_quality_command_len_boundaries();
+    void test_quality_clk_low_and_delay_formula();
+
     /// Regression reproduction: a second flash read (opcode+address TX + chained
     /// RX) issued after a CONTROL.SW_RST must still process its TX command. Models
     /// the OT-SPI boot pattern where the payload read's opcode+address was

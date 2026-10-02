@@ -24,11 +24,16 @@ RUN_DOCS=false
 RUN_CPPCHECK=false
 CLEAN=false
 
+BUILD_TYPE_SET=""
+
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../setup_build_env.sh"
+
 for arg in "$@"; do
   case "$arg" in
-    --debug)    BUILD_TYPE="Debug" ;;
-    --asan)     BUILD_TYPE="ASAN" ;;
-    --coverage) BUILD_TYPE="Coverage" ;;
+    --debug)    peripheral_set_build_type "$arg" "Debug" ;;
+    --asan)     peripheral_set_build_type "$arg" "ASAN" ;;
+    --coverage) peripheral_set_build_type "$arg" "Coverage" ;;
     --ctest)    RUN_CTEST=true ;;
     --docs)     RUN_DOCS=true ;;
     --cppcheck) RUN_CPPCHECK=true ;;
@@ -44,8 +49,6 @@ if ${CLEAN}; then
   rm -rf "${BUILD_DIR}"
 fi
 
-# shellcheck disable=SC1091
-source "${SCRIPT_DIR}/../setup_build_env.sh"
 peripheral_setup_build_env || exit 1
 
 if ! ${CLEAN} && peripheral_cache_stale "${BUILD_DIR}"; then
@@ -62,6 +65,7 @@ cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" \
 cmake --build "${BUILD_DIR}" --parallel "$(peripheral_parallel_jobs)"
 
 echo ""
+CONFIG_INI="${SCRIPT_DIR}/config/accellera_config.ini"
 if ${RUN_DOCS}; then
   cmake --build "${BUILD_DIR}" --target spi_controller_docs
 elif ${RUN_CPPCHECK}; then
@@ -69,8 +73,12 @@ elif ${RUN_CPPCHECK}; then
 elif [ "${BUILD_TYPE}" = "Coverage" ]; then
   cmake --build "${BUILD_DIR}" --target coverage
   peripheral_enforce_coverage_gate "${BUILD_DIR}"
+elif [ "${BUILD_TYPE}" = "ASAN" ]; then
+  # The testbench takes the CCI config path, which the helper forwards.
+  peripheral_enforce_asan_clean \
+    "${BUILD_DIR}/bin/spi_controller_test" "${BUILD_DIR}" "${CONFIG_INI}"
 elif ${RUN_CTEST}; then
   ctest --test-dir "${BUILD_DIR}" --output-on-failure -V
 else
-  "${BUILD_DIR}/bin/spi_controller_test"
+  "${BUILD_DIR}/bin/spi_controller_test" "${CONFIG_INI}"
 fi
