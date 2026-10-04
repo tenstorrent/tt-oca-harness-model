@@ -402,6 +402,43 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
     }
 
     // =========================================================================
+    // FUNC-SCRATCH-015: Terminal verdict on SCRATCH[0]
+    //
+    // The boot ROM and BL1 end a run by writing TEST_PASS_CODE or
+    // TEST_FAIL_CODE to SCRATCH[0]; any other value, such as the remap
+    // handshake, must not print a verdict.
+    // =========================================================================
+    void test_scratch0_verdict()
+    {
+        const std::string TEST = "FUNC-SCRATCH-015: Terminal verdict on SCRATCH[0]";
+        report_test_start(TEST);
+
+        const std::pair<uint32_t, std::string> cases[] = {
+            {0xACAFACA1u, "\n[VP] SIMULATION OF THE TEST PASSED\n"},
+            {0xDEADBEEFu, "\n[VP] SIMULATION OF THE TEST FAILED\n"},
+            {0x12345678u, ""},
+            {0xACAFACA0u, ""},
+        };
+        for (const auto& [code, expected] : cases) {
+            pin_reset();
+            std::string out;
+            {
+                cout_capture cap;
+                scratch_write(0u, code);
+                out = cap.release();
+            }
+            if (out != expected) {
+                std::ostringstream oss;
+                oss << "SCRATCH[0]=0x" << std::hex << code << " emitted "
+                    << std::quoted(out) << ", expected " << std::quoted(expected);
+                report_test_fail(TEST, oss.str());
+                return;
+            }
+        }
+        report_test_pass(TEST);
+    }
+
+    // =========================================================================
     // FUNC-SCRATCH-006: VP ack — SCRATCH[4]=0x815 sets SCRATCH[5]=0x777
     // =========================================================================
     void test_vp_ack_scratch4()
@@ -541,7 +578,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         // OP_ASCII: 'A' at [15:8], '\n' at [23:16], NUL at [31:24]
         // bits[3:1]=0 → opcode=0; word = 0x000A4100
         // → append_char('A') → cur_line_="A"
-        // → append_char('\n') → emit_line("A") → "[SIM_OUT] A\n" to stdout
+        // → append_char('\n') → emit_line("A") → "[SIM_OUT] - A\n" to stdout
         scratch_write(2u, 0x000A4100u);
 
         // OP_DEC24: bits[3:1]=2 → word bit2 set; 24-bit value=42 at [31:8]
@@ -579,10 +616,10 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
             scratch_write(2u, 0x00000006u);   // unknown opcode -> emits nothing
             const std::string out = cap.release();
 
-            if (out != "A\n42\n") {
+            if (out != "[SIM_OUT] - A\n[SIM_OUT] - 42\n") {
                 std::ostringstream oss;
                 oss << "console emitted " << std::quoted(out)
-                    << ", expected \"A\\n42\\n\"";
+                    << ", expected \"[SIM_OUT] - A\\n[SIM_OUT] - 42\\n\"";
                 report_test_fail(TEST, oss.str());
                 return;
             }
@@ -725,9 +762,10 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
 
         // Lower case and exactly four digits: the hex formatting is the whole
         // behaviour under test, and the register readback cannot see it.
-        if (out != "abcd\n") {
+        if (out != "[SIM_OUT] - abcd\n") {
             std::ostringstream oss;
-            oss << "HEX16 emitted " << std::quoted(out) << ", expected \"abcd\\n\"";
+            oss << "HEX16 emitted " << std::quoted(out)
+                << ", expected \"[SIM_OUT] - abcd\\n\"";
             report_test_fail(TEST, oss.str());
             return;
         }
@@ -1201,6 +1239,7 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         test_register_independence();
         test_reserved_bits();
         test_vp_ack_scratch0();
+        test_scratch0_verdict();
         test_vp_ack_scratch4();
         test_vp_ack_scratch6();
         test_no_spurious_ack();

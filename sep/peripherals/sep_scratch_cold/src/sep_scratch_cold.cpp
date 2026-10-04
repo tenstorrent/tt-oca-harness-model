@@ -8,6 +8,10 @@
 #define SEP_SCRATCH_COLD_STATUS_VALUES_PATH ""
 #endif
 
+// Terminal verdict codes written to SCRATCH[0] by the boot ROM (errors.h) and BL1.
+static constexpr uint32_t TEST_PASS_CODE = 0xACAFACA1U;
+static constexpr uint32_t TEST_FAIL_CODE = 0xDEADBEEFU;
+
 sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     : sep_scratch_cold_base(n, "sep_scratch_cold", 8 * sizeof(unsigned long long))
     , cold_rst_ni("cold_rst_ni")
@@ -34,7 +38,7 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     // bits[31:8]. Line-buffered so partial ASCII sequences print as whole lines.
     vconsole_decoder_.set_enabled(sim_out_enable.get_param_value());
     vconsole_decoder_.set_emit([](const std::string& line) {
-        std::cout << line << '\n';
+        std::cout << "[SIM_OUT] - " << line << '\n';
     });
     memory.register_post_write_callback(
         [this]() -> bool {
@@ -50,7 +54,7 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     // Tapping here captures all types including DEBUG, which the ring buffer drops.
     status_decoder_.set_enabled(sep_status_enable.get_param_value());
     status_decoder_.set_emit([](const std::string& line) {
-        std::cout << line << '\n';
+        std::cout << "[SEP_STATUS] - " << line << '\n';
     });
 
     // Load SEP_MSG_* names from the vendored status_values.h snapshot (see
@@ -82,6 +86,19 @@ sep_scratch_cold_ip::sep_scratch_cold_ip(sc_module_name n)
     // polls an adjacent register waiting for CocoTB to ack. Without CocoTB running,
     // the firmware hangs indefinitely. These callbacks mimic the CocoTB response
     // immediately so standalone VP runs of those tests complete without hanging.
+
+    // Only the two verdict codes print: SCRATCH[0] also carries the remap handshake below.
+    memory.register_post_write_callback(
+        [this]() -> bool {
+            const uint32_t code =
+                static_cast<uint32_t>(memory.memory_block[SCRATCH[0].offset] & 0xFFFFFFFFU);
+            if (code == TEST_PASS_CODE)
+                std::cout << "\n[VP] SIMULATION OF THE TEST PASSED\n" << std::flush;
+            else if (code == TEST_FAIL_CODE)
+                std::cout << "\n[VP] SIMULATION OF THE TEST FAILED\n" << std::flush;
+            return true;
+        },
+        SCRATCH[0].offset);
 
     // global_alias_remap_sanity: FW writes 0x12345678 to SCRATCH[0] ("remap set up,
     // verify it"); CocoTB/VP acks 0x87654321 to SCRATCH[1] ("verified, proceed").

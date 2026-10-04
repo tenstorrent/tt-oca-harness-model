@@ -114,6 +114,7 @@ int sc_main(int argc, char **argv)
     och_sep_ss1.sep_ext_to_smc_axi.bind(sink_smc_win.sock);
     och_sep_ss1.sep_smn_outbound_axi.bind(sink_smn_out.sock);
 
+    och_sep_ss1.apply_init_writes();
     sc_start();
     return 0;
 }

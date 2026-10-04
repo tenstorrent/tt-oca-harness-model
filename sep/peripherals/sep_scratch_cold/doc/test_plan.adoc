@@ -51,6 +51,7 @@ Source: `test/src/sep_scratch_cold_testbench.cpp`.
 |009 |CCI defaults |`sim_out.enable` / `sep_status.enable` |Positive
 |010 |Virt console |Decoder opcode paths |Positive
 |011 |Status decoder |Type / stage labels |Positive
+|015 |Terminal verdict |Pass / fail codes on [0] print the `[VP]` verdict; other values print nothing |Positive
 |===
 
 ====== Platform firmware tests
