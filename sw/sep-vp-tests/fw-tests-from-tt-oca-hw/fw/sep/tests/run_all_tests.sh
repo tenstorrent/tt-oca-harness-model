@@ -241,17 +241,16 @@ run_test() {
     # The VP keeps running after the firmware finishes, so it is killed as soon
     # as the banner appears.  macOS has no timeout(1); the deadline is enforced
     # by the poll loop instead.
+    # The background job opens the log itself, so the poll could otherwise read a previous run's verdict.
+    : >"$logfile"
     "$SEP_VP" "$run_config" "$elf" >"$logfile" 2>&1 &
     CURRENT_VP_PID=$!
 
     SECONDS=0
     while kill -0 "$CURRENT_VP_PID" 2>/dev/null; do
-        if grep -q "\[VP\] SIMULATION OF THE TEST PASSED" "$logfile" 2>/dev/null; then
-            TEST_RESULT="PASSED"
-            break
-        fi
-        if grep -q "\[VP\] SIMULATION OF THE TEST FAILED" "$logfile" 2>/dev/null; then
-            TEST_RESULT="FAILED"
+        verdict="$(vp_log_verdict "$logfile")"
+        if [[ -n "$verdict" ]]; then
+            TEST_RESULT="$verdict"
             break
         fi
         if [[ "$SECONDS" -ge "$TIMEOUT" ]]; then
@@ -275,10 +274,9 @@ run_test() {
 
     # One final grep in case the result line appeared right at exit
     if [[ "$TEST_RESULT" == "STUCK" ]]; then
-        if grep -q "\[VP\] SIMULATION OF THE TEST PASSED" "$logfile" 2>/dev/null; then
-            TEST_RESULT="PASSED"
-        elif grep -q "\[VP\] SIMULATION OF THE TEST FAILED" "$logfile" 2>/dev/null; then
-            TEST_RESULT="FAILED"
+        verdict="$(vp_log_verdict "$logfile")"
+        if [[ -n "$verdict" ]]; then
+            TEST_RESULT="$verdict"
         elif ! grep -q "." "$logfile" 2>/dev/null; then
             TEST_RESULT="CRASH"   # process died immediately with no output
         fi

@@ -27,15 +27,15 @@
 #define EFUSE_FW_READ_LOCK_BIT(field)  (((field) * 2u) + 1u)
 
 /*
- * Bit offsets from sep_efuse_defines.sv cumulative field map:
- * LOCKS(64), LC_STATE(32), SBOOT_DIS(32), TRANSIENT_RMA_EN(32),
- * SIP_DIS(64), SYS_DIS(64), RMA_SIP_TOKEN(256), RMA_CHIPLET_TOKEN(256),
- * CLASS(256), CHIPLET_PUBK_REVOKE(32), BL1_VER(256), BL2_VER(256),
- * then CHIPLET_UID.
+ * OTP bit offset of an eFuse field: the register header gives each field a byte
+ * offset in the eFuse MAP window, and the array is addressed by bit. Literals are
+ * not used: these offsets are cumulative, and a stale literal does not fail to compile.
  */
-#define EFUSE_FW_CLASS_KEY_BIT0   800u
-#define EFUSE_FW_BL1_VERSION_BIT0 1088u
-#define EFUSE_FW_CHIPLET_UID_BIT0 1600u
+#define EFUSE_FW_BIT0(field_offset) ((uint32_t)(field_offset) * 8u)
+
+#define EFUSE_FW_CLASS_KEY_BIT0   EFUSE_FW_BIT0(SEP_EFUSE_MAP_CLASS_KEY_REG_OFFSET)
+#define EFUSE_FW_BL1_VERSION_BIT0 EFUSE_FW_BIT0(SEP_EFUSE_MAP_BL1_VERSION_REG_OFFSET)
+#define EFUSE_FW_CHIPLET_UID_BIT0 EFUSE_FW_BIT0(SEP_EFUSE_MAP_CHIPLET_UID_REG_OFFSET)
 
 typedef struct {
     uint32_t completed;

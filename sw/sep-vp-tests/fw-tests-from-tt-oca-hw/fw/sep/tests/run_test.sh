@@ -160,16 +160,16 @@ VP_PID=""
 # substitution keeps $! pointing at sep-vp itself (with a pipe it would be tee,
 # and killing tee would leave the VP running).  macOS has no timeout(1), so the
 # deadline is enforced here rather than by coreutils.
+# tee opens the log only once it starts, so the poll could otherwise read a previous run's verdict.
+: > "$LOGFILE"
 "$SEP_VP" "$RUN_CONFIG" "$ELF" > >(tee "$LOGFILE") 2>&1 &
 VP_PID=$!
 
 SECONDS=0
 while kill -0 "$VP_PID" 2>/dev/null; do
-    if grep -q "\[VP\] SIMULATION OF THE TEST PASSED" "$LOGFILE" 2>/dev/null; then
-        RESULT="PASSED"; break
-    fi
-    if grep -q "\[VP\] SIMULATION OF THE TEST FAILED" "$LOGFILE" 2>/dev/null; then
-        RESULT="FAILED"; break
+    VERDICT="$(vp_log_verdict "$LOGFILE")"
+    if [[ -n "$VERDICT" ]]; then
+        RESULT="$VERDICT"; break
     fi
     if [[ "$SECONDS" -ge "$TIMEOUT" ]]; then
         break
@@ -191,10 +191,9 @@ done
 
 # Final check after process exits
 if [[ "$RESULT" == "STUCK" ]]; then
-    if grep -q "\[VP\] SIMULATION OF THE TEST PASSED" "$LOGFILE" 2>/dev/null; then
-        RESULT="PASSED"
-    elif grep -q "\[VP\] SIMULATION OF THE TEST FAILED" "$LOGFILE" 2>/dev/null; then
-        RESULT="FAILED"
+    VERDICT="$(vp_log_verdict "$LOGFILE")"
+    if [[ -n "$VERDICT" ]]; then
+        RESULT="$VERDICT"
     elif ! grep -q "." "$LOGFILE" 2>/dev/null; then
         RESULT="CRASH"
     fi
