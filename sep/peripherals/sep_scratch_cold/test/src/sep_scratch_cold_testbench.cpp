@@ -260,11 +260,12 @@ struct sep_scratch_cold_testbench : sc_core::sc_module
         const std::string TEST = "FUNC-SCRATCH-001b: cold_rst_ni clears state";
         report_test_start(TEST);
 
+        // Not a verdict code, which on scratch 0 would print a verdict line.
         for (unsigned i = 0u; i < 8u; ++i)
-            scratch_write(i, 0xDEADBEEFu);
+            scratch_write(i, 0x5A5AA5A5u);
 
         for (unsigned i = 0u; i < 8u; ++i) {
-            if (scratch_read(i) != 0xDEADBEEFu) {
+            if (scratch_read(i) != 0x5A5AA5A5u) {
                 report_test_fail(TEST, "entries did not hold programmed values");
                 return;
             }

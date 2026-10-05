@@ -153,8 +153,8 @@ static int test_scratch_alias(void)
 {
     printf("\n--- Test: Scratch Register Alias Access ---\n");
 
-    // Test pattern
-    uint32_t test_pattern = 0xDEADBEEF;
+    // Not 0xDEADBEEF or 0xACAFACA1: sep-vp reads either written to scratch 0 as the verdict.
+    uint32_t test_pattern = 0x5A5AA5A5;
     uint32_t read_alias;
 
     // Step 1: Write via DIRECT path, read via ALIAS path

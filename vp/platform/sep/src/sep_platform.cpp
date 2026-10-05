@@ -156,12 +156,28 @@ void och_sep_ss::apply_init_writes() {
         trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
 
         constexpr int CPU_INITIATOR_ID = 0;
-        const unsigned written = bus->transport_dbg(CPU_INITIATOR_ID, trans);
-        if (written != bytes.size() ||
-            trans.get_response_status() < tlm::TLM_INCOMPLETE_RESPONSE) {
+        bus->transport_dbg(CPU_INITIATOR_ID, trans);
+        if (trans.get_response_status() < tlm::TLM_INCOMPLETE_RESPONSE) {
             std::ostringstream message;
             message << "[init_writes] write rejected at 0x" << std::hex << address
                     << " (" << trans.get_response_string() << ')';
+            throw std::runtime_error(message.str());
+        }
+
+        // SimpleBus reports the full length whatever the target did, so only a
+        // read-back shows that the deposit landed.
+        std::array<unsigned char, 4> held{};
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(address);
+        trans.set_data_ptr(held.data());
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        bus->transport_dbg(CPU_INITIATOR_ID, trans);
+        if (held != bytes) {
+            std::ostringstream message;
+            message << "[init_writes] 0x" << std::hex << address << " reads back 0x"
+                    << (held[0] | held[1] << 8 | held[2] << 16 | uint32_t(held[3]) << 24)
+                    << " after a debug write of 0x" << value
+                    << "; the target does not take debug writes there";
             throw std::runtime_error(message.str());
         }
 
