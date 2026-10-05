@@ -213,6 +213,16 @@ vp_extra_elfs() {
     esac
 }
 
+# The verdict a run's log carries, from whole VP verdict lines only. A failed line
+# wins over a passed one: test_fail() returns, so the firmware runs on to its pass path.
+vp_log_verdict() {
+    if grep -qE '^\[VP\] SIMULATION OF THE TEST FAILED\r?$' "$1" 2>/dev/null; then
+        echo FAILED
+    elif grep -qE '^\[VP\] SIMULATION OF THE TEST PASSED\r?$' "$1" 2>/dev/null; then
+        echo PASSED
+    fi
+}
+
 # Reverse of the above: which directory holds a variant ELF.
 vp_test_dir_for() {
     case "$1" in

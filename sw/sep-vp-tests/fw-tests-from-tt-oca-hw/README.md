@@ -142,7 +142,10 @@ that header blindly: the generated names are not source-compatible.
   arrays and GNU `timeout(1)`, neither of which macOS has, with a polling loop
   that also stops the VP once the firmware prints its banner. Without that the
   scripts hang forever, because `sc_start()` keeps the SystemC kernel running
-  after the firmware finishes.
+  after the firmware finishes. The verdict comes from whole
+  `[VP] SIMULATION OF THE TEST ...` lines, and a FAILED line wins over a PASSED
+  one: `test_fail()` returns, so a test that reports a failure can still run on
+  to `test_pass()`.
 - **`common/common.mk`** — probe whether the assembler accepts CSR instructions
   with the effective `-march` and re-add `_zicsr_zifencei` when it does not.
   Toolchains from 2022 on split Zicsr out of the base ISA, so the several tests
@@ -177,6 +180,7 @@ it turns each of these back into a failure or a hang.
 |---|---|
 | `kmac_prefix_test` | Upstream's `PREFIX` does not start with `encode_string("KMAC")`, which NIST SP 800-185 requires. The RTL feeds raw `PREFIX` bytes into `bytepad` without checking, so upstream gets a different digest by accident; the VP model raises `IncorrectFunctionName` (ERR 0x07) and the result is undefined. The local value is the conforming encoding. |
 | `kmac_key_length_test` | Upstream configures `mode = 0x2`. Per `kmac.hjson` a KMAC operation needs cSHAKE (`0x3`) with `kmac_en = 1`; with `0x2` the key length is not consumed and every key length yields the same digest. |
+| `common/efuse_fw_test_common.h` | Upstream hard-codes the eFuse bit offsets of the tt-oca-hw map (`CHIPLET_UID` at bit 1600). This tree's map has a 96-bit lock field, so `CHIPLET_UID` is at byte `0xCC`, bit 1632. The offsets are derived from `och_sep_top_reg.h` instead; with the literals, `sep_efuse_fw_otp_rw_test` programs and locks the wrong fields and its read-lock check reads an unlocked one. |
 | `local_alias_sanity` | Upstream still assumes the pre-#3711 alias base of `0xC000_0000` with `target_base = 0`. This copy uses the post-#3711 pair `0xD000_0000` / `0x1000_0000` that the register header and `sep-vp` adapter both implement, and it checks the alias on the **read** side only: alias stores hang because the remapped write is re-injected onto SimpleBus as a nested `b_transport` while the CPU store is still in flight. Re-syncing the upstream source hangs the test. Its scratch pattern is `0x5A5AA5A5` rather than upstream's `0xDEADBEEF`, because `sep-vp` reads `0xDEADBEEF` or `0xACAFACA1` written to cold scratch 0 as the test verdict and the runner stops at that line. |
 | `wdt_count_overflow_test` | Step 6 needs NMI and reset to arrive at distinguishable times. The VP fires both in one delta cycle because the power-manager latency that separates them on silicon is not modelled, so the upstream step waits forever. The local step 6 tests near-max counter preload plus bark and pet, with `BARK_THOLD < BITE_THOLD`. |
 | `wdt_cfg_lock_test` | Uses the mailbox `nmi_set_vector()` rather than `nmi_set_vector_reg()` / `nmi_lock_vector_reg()`, and a `0x1000` bark threshold. With the upstream pair the test hangs rather than reaching its assertions. |
@@ -258,14 +262,22 @@ Adams Bridge (`sep_abr_*`) is modeled: `abr_ip` is bound at `0x1094_0000` (PIC 3
 with a FIPS 204/203 backend and key-manager DEST `0x10`/`0x20`/`0x40`/`0x80`
 sideload. The six firmware tests are in the `run_all_tests.sh` discovery set.
 
-The remaining model gaps in detail. The three eFuse tests that used to be here
-now pass: the shim moved to `0x2000_0000` in `SEP_EXTERNAL` where the register
-header puts it, a real fuse array sits behind program and read with the locks
-and token matching enforced against it, and the array is preloaded from the
-RTL's own `default_efuse.preload` — with the three `sep_efuse_fw_*` tests
-running on a blank array, as their `+SEP_EFUSE_NO_PRELOAD` asks for.
-`sep_aes_reset_clear_test` and `sep_reset_ctrl_csr_test` also pass on current
-`sep-vp`.
+The remaining model gaps in detail. The eFuse shim moved to `0x2000_0000` in
+`SEP_EXTERNAL` where the register header puts it, a real fuse array sits behind
+program and read with the locks and token matching enforced against it, and the
+array is preloaded from the RTL's own `default_efuse.preload` — with the three
+`sep_efuse_fw_*` tests running on a blank array, as their
+`+SEP_EFUSE_NO_PRELOAD` asks for. `sep_efuse_fw_otp_rw_test`,
+`sep_efuse_fw_token_match_test` and `sep_aes_reset_clear_test` pass on current
+`sep-vp`. Two tests report a failure and stay in the run:
+
+- **`sep_efuse_fw_shadow_rw_test`.** The model makes the `CHIPLET_UID`,
+  `CLASS_KEY` and `RMA_SIP_TOKEN` shadows read-only, following the RDL. The RTL
+  lets software write them while their write lock is clear.
+- **`sep_reset_ctrl_csr_test`.** The model has no per-domain isolation in front
+  of OTBN, AES, HMAC and KMAC (see `sep_reset_ctrl` implementation notes). An
+  access while a domain is held in reset reaches the IP, where the RTL returns an
+  error and raises an NMI.
 
 - **OTBN.** `ERR_BITS` stays zero after a `BAD_DATA_ADDR`; software errors are
   not reported. The test is excluded from the runnable set.
