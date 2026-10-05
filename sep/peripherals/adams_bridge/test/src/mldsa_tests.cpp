@@ -229,27 +229,45 @@ void mldsa_tests(abr_testbench &tb)
     tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & (1u << 2), (1u << 2),
                 "MSG_STREAM_READY set while idle");
 
+    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 0u); // match the empty-context `signature` above
     tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
     tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
     tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0xFu);
-    // Stream 8 words through the first MSG port.
-    for (unsigned int i = 0; i < 8u; ++i) {
-        tb.wr(abr::OFF_MLDSA_MSG, 0x01020304u + i);
+    // Same byte stream as the fixed MSG block used for `signature` above.
+    for (uint32_t word : k_msg) {
+        tb.wr(abr::OFF_MLDSA_MSG, word);
     }
 
     tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG), "SIGN with STREAM_MSG completes");
-    tb.check(any_nonzero(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE)),
-             "streamed SIGN produced a signature");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) == signature,
+             "STREAM_MSG of the fixed MSG bytes matches the non-streamed signature");
 
     tb.section("ML-DSA: partial-word strobe");
 
     tb.check(tb.zeroize_mldsa(), "zeroize before partial-strobe sign");
+    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 0u);
     tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
     tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0x3u); // only two bytes of the word are live
+    // Two equivalent streams: strobe 0x3 keeps only the low half-word, and two
+    // strobe-0x1 writes push the same two bytes in order.
+    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0x3u);
     tb.wr(abr::OFF_MLDSA_MSG, 0xAABBCCDDu);
     tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG),
              "SIGN with a partial MSG_STROBE completes");
+    const std::vector<uint32_t> partial_sig =
+        tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE);
+
+    tb.check(tb.zeroize_mldsa(), "zeroize before equivalent strobe-lane stream");
+    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 0u);
+    tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
+    tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
+    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0x1u);
+    tb.wr(abr::OFF_MLDSA_MSG, 0x000000DDu); // byte0 of 0xAABBCCDD
+    tb.wr(abr::OFF_MLDSA_MSG, 0x000000CCu); // byte1 of 0xAABBCCDD
+    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG),
+             "SIGN with two strobe-0x1 writes completes");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) == partial_sig,
+             "disabled strobe lanes are excluded (equivalent byte streams match)");
 
     tb.section("ML-DSA: PCR_SIGN modifier");
 
@@ -285,12 +303,24 @@ void mldsa_tests(abr_testbench &tb)
     tb.section("ML-DSA: error and no-op paths");
 
     tb.check(tb.zeroize_mldsa(), "zeroize before invalid command");
+    const uint32_t err_count_before = tb.rd(abr::OFF_ERROR_INTR_COUNT);
     tb.wr(abr::OFF_MLDSA_CTRL, 0x5u); // 5..7 are not valid commands
-    tb.check(tb.wait_mldsa_valid() == false || (tb.rd(abr::OFF_MLDSA_STATUS) & ST_ERROR) != 0u,
-             "an invalid command raises STATUS.ERROR");
+    // Invalid commands fail synchronously in the CTRL write callback — do not
+    // treat a VALID poll timeout as success.
+    const uint32_t bad_st = tb.rd(abr::OFF_MLDSA_STATUS);
+    tb.check_eq(bad_st & ST_ERROR, ST_ERROR, "an invalid command raises STATUS.ERROR");
+    tb.check_eq(bad_st & ST_VALID, 0u, "an invalid command leaves VALID clear");
+    tb.check_eq(bad_st & ST_READY, 0u,
+                "an invalid command parks READY low until zeroize");
+    tb.check_eq(tb.rd(abr::OFF_ERROR_INTERNAL_INTR) & 1u, 1u,
+                "an invalid command sets error interrupt status");
+    tb.check_eq(tb.rd(abr::OFF_ERROR_INTR_COUNT), err_count_before + 1u,
+                "an invalid command increments the error counter");
 
     tb.check(tb.zeroize_mldsa(), "zeroize recovers from the invalid command");
     tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & ST_ERROR, 0u, "zeroize cleared ERROR");
+    tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & ST_READY, ST_READY,
+                "zeroize restores READY after an invalid command");
 
     // CTRL=0 is a no-op: the engine must stay ready and idle.
     tb.wr(abr::OFF_MLDSA_CTRL, 0u);

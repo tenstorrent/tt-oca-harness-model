@@ -97,7 +97,12 @@ if(CMAKE_BUILD_TYPE STREQUAL "Coverage")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${WFLAG} -g --coverage -fprofile-arcs -ftest-coverage")
   include(PeripheralCoverage)
   peripheral_coverage_link_flags()
-  add_compile_definitions(REG_DEFAULT_VERBOSITY=1 __COVERAGE__)
+  # Verbosity 3 so INFO/DEBUG statements in the model actually run under
+  # coverage. Level 1 (the Release/ASAN default) skips those lines, which
+  # leaves them uncovered without saying anything about the datapath.
+  # kmac/CMakeLists.txt does the same for the same reason; the other
+  # peripherals stay at 1 because they have far fewer guarded log sites.
+  add_compile_definitions(REG_DEFAULT_VERBOSITY=3 __COVERAGE__)
   message(STATUS "Adams Bridge: Coverage build enabled")
 endif()
 

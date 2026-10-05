@@ -160,9 +160,21 @@ void testbench::run_tests()
     test_coverage_signal_update_during_reset();
     test_coverage_fifo_overflow_underflow();
 
+    test_quality_tlm_protocol_matrix();
+    test_quality_command_len_boundaries();
+    test_quality_clk_low_and_delay_formula();
+
     // Regression reproduction for the OT-SPI second-read TX-command drop.
     test_repro_second_read_tx_drop();
 
+    // Fold helper-level failures (TLM response errors, register mismatches)
+    // into the suite result. The helpers only count; this is where the suite
+    // fails closed.
+    if (test->m_assert_failures != 0) {
+        REG_ERROR(1, logger) << "[OVERALL RESULT: FAILED - "
+                              << test->m_assert_failures << " assertion helper failure(s)]" << std::endl;
+        m_tests_failed += test->m_assert_failures;
+    }
 
     // Print final test summary
     REG_INFO(1, logger) << "\n========================================" << std::endl
@@ -192,6 +204,13 @@ void testbench::run_tests()
     // Stop simulation
     sc_stop();
     wait(SC_ZERO_TIME);
+
+    if (m_tests_failed > 0) {
+#ifdef __COVERAGE__
+        __gcov_dump();
+#endif
+        std::quick_exit(1);
+    }
 }
 
 /// =============================================================================

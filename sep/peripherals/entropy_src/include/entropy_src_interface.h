@@ -40,8 +40,8 @@
 class entropy_src_if
 {
 public:
-    /// @brief Virtual destructor for safe polymorphic deletion
-    virtual ~entropy_src_if() = default;
+    /// Virtual destructor. The testbench never deletes through this base.
+    virtual ~entropy_src_if() = default; // LCOV_EXCL_LINE
 
     // =========================================================================
     // Write Callbacks
@@ -120,6 +120,17 @@ public:
      * @return true on successful callback execution
      */
     virtual bool handle_write_HEALTH_TEST_CTRL(uint32_t value) = 0;
+
+    /**
+     * @brief Write callback for STARTUP_CTRL register (offset 0xB0)
+     *
+     * Captures DELAY_CYCLES[15:0] into the generation-thread startup hold-off
+     * (modelled as nanoseconds at LT abstraction).
+     *
+     * @param value 32-bit value written to STARTUP_CTRL
+     * @return true on successful callback execution
+     */
+    virtual bool handle_write_STARTUP_CTRL(uint32_t value) = 0;
 
     // =========================================================================
     // Read Callbacks

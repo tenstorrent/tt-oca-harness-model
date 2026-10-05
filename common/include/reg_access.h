@@ -98,6 +98,30 @@ constexpr Word apply_write_mask(Word reg, Data data, Mask write_mask) {
     return (detail::to_word<Word>(data) & m) | (reg & ~m);
 }
 
+/// Expand a TLM byte-enable bitmap into a `Word` bit mask: bit `b` of
+/// @p byte_enable enables byte lane `b` (bits `[8b+7 : 8b]`).
+template <typename Word>
+constexpr Word byte_enable_mask(uint8_t byte_enable) {
+    static_assert(std::is_unsigned<Word>::value, "Word must be an unsigned integer");
+    Word m = 0;
+    for (unsigned b = 0; b < sizeof(Word); ++b) {
+        if (byte_enable & (1u << b)) {
+            m |= static_cast<Word>(0xFFu) << (b * 8);
+        }
+    }
+    return m;
+}
+
+/// Byte-lane merge for a `register_write_callback_with_be` handler: enabled
+/// lanes of @p incoming replace @p current, disabled lanes keep @p current.
+/// A model must never store the raw payload word on a partial-lane write --
+/// the disabled lanes carry whatever the initiator left in its buffer.
+template <typename Word, typename Data = Word>
+constexpr Word apply_byte_enable(Word current, Data incoming, uint8_t byte_enable) {
+    const Word m = byte_enable_mask<Word>(byte_enable);
+    return (detail::to_word<Word>(incoming) & m) | (current & ~m);
+}
+
 // ---------------------------------------------------------------------------
 // Register<Word>: a register whose access contract (read_mask, write_mask,
 // reset_value) is fixed at construction and enforced on every access.

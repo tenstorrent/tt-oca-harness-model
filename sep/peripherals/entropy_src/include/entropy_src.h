@@ -93,11 +93,13 @@
  ******************************************************************************/
 class entropy_src_ip : public entropy_src_base, public entropy_src_if
 {
-    friend class testbench;
 public:
-    SC_HAS_PROCESS(entropy_src_ip);
+    /// Access the model's RegLogger so a testbench can tune verbosity.
+    /// Exists so the harness does not need `friend class testbench`, which
+    /// would also hand it write access to every private member.
+    RegLogger& get_logger() { return logger; }
 
-    friend class testbench;
+    SC_HAS_PROCESS(entropy_src_ip);
 
     // =========================================================================
     // Port declarations
@@ -167,7 +169,6 @@ public:
         , m_rptr(0u)
         , m_fifo_enabled(true)
         , m_health_test_enabled(false)
-        , m_reset_in_progress(false)
         , m_hw_reset_in_progress(false)
         , m_startup_delay_ns(0u)
         , m_fifo_fill_event("m_fifo_fill_event")
@@ -221,6 +222,10 @@ public:
             HEALTH_TEST_CTRL.offset);
 
         memory.register_write_callback(
+            [this](DT v) { return this->handle_write_STARTUP_CTRL(v); },
+            STARTUP_CTRL.offset);
+
+        memory.register_write_callback(
             [this](DT v) { return this->handle_write_RING_OSC_ENABLE(v); },
             RING_OSC_ENABLE.offset);
 
@@ -254,8 +259,8 @@ public:
         REG_INFO(2, logger) << "entropy_src model constructed";
     }
 
-    /// @brief Destructor
-    ~entropy_src_ip() override = default;
+    /// Destructor. sc_main uses quick_exit(), so this is never invoked.
+    ~entropy_src_ip() override = default; // LCOV_EXCL_LINE
 
     // =========================================================================
     // entropy_src_if — write callback implementations
@@ -326,6 +331,14 @@ public:
      * @return true always
      */
     bool handle_write_HEALTH_TEST_CTRL(uint32_t value) override;
+
+    /**
+     * @brief Write callback for STARTUP_CTRL (offset 0xB0)
+     *
+     * Stores DELAY_CYCLES[15:0] and updates m_startup_delay_ns used by the
+     * generation thread on the next WAITING_FOR_ENABLE → RUNNING transition.
+     */
+    bool handle_write_STARTUP_CTRL(uint32_t value) override;
 
     /**
      * @brief Write callback for RING_OSC_ENABLE (offset 0x90)
@@ -402,7 +415,7 @@ private:
      *   The thread is blocked on `wait(m_fifo_fill_event | m_reset_event)`.
      *   Entered when m_fifo_enabled is false.  Exited when either:
      *   - m_fifo_fill_event fires (FIFO_CTRL[0] written to 1) → STARTUP_DELAY
-     *   - m_reset_event fires (software reset) → RESET_PENDING
+     *   - m_reset_event fires (rst_ni asserted) → RESET_PENDING
      *
      * **STARTUP_DELAY** (post-enable or post-reset hold-off):
      *   The thread honours the programmable startup delay captured from
@@ -424,13 +437,19 @@ private:
      *      If m_reset_event fires during the wait, exit RUNNING immediately.
      *
      * **RESET_PENDING** (reset recovery path):
-     *   The thread detects m_reset_in_progress == true (set by handle_write_CTRL
-     *   synchronously before notifying m_reset_event).  Because handle_write_CTRL
-     *   runs inside b_transport and updates all register state and internal mirrors
-     *   (m_fifo_enabled, m_startup_delay_ns) BEFORE returning, all post-reset
-     *   state is already consistent when the thread enters this state.  The thread
-     *   clears m_reset_in_progress, optionally waits the post-reset startup delay,
-     *   then transitions to WAITING_FOR_ENABLE or RUNNING.
+     *   Entered when rst_ni is low or m_hw_reset_in_progress is set.  Both are
+     *   driven by reset_process(), which runs synchronously on the rst_ni edge
+     *   and calls reset_all_registers() before notifying m_reset_event, so all
+     *   register state and internal mirrors are already consistent by the time
+     *   the thread observes the reset.  The thread clears
+     *   m_hw_reset_in_progress, resets the quantum keeper, blocks until rst_ni
+     *   is released, re-derives its mirrors (m_fifo_enabled,
+     *   m_health_test_enabled, m_startup_delay_ns) from the post-reset register
+     *   values, then re-enters WAITING_FOR_ENABLE or RUNNING.
+     *
+     *   There is no separate software-reset path: CTRL bit 0 is RSVD0 in this
+     *   model and the coordinated TRNG reset arrives as rst_ni from
+     *   sep_reset_ctrl SW_RESET_N.trng_sw_rst_n.
      *
      * Functional references:
      *   - BackgroundEntropyProcess (IDLE / RUNNING)
@@ -442,15 +461,6 @@ private:
      * m_interrupt_update_event → interrupt_output_method().
      */
     void entropy_generation_thread();
-
-    /**
-     * @brief Reset recovery helper — called when m_reset_in_progress is detected.
-     *
-     * Waits for m_reset_complete_event from handle_write_CTRL, then re-derives
-     * m_fifo_enabled, m_health_test_enabled, and m_startup_delay_ns from
-     * post-reset regmodel register values. Resets the quantum keeper.
-     */
-    void handle_reset_recovery();
 
     /**
      * @brief Advance the quantum keeper, but return early on rst_ni or
@@ -498,7 +508,7 @@ private:
     /// atomic FIFO_STATUS update in update_fifo_status_full().
     ///
     /// Initialized to 0 at construction and reset to 0 on every software
-    /// reset (handle_write_CTRL) and on handle_reset_recovery().
+    /// reset (handle_write_CTRL) and on rst_ni reset.
     ///
     /// Functional references:
     ///   - registers.FIFO_STATUS.fields.WPTR: bits [12:8], updated on push
@@ -512,7 +522,7 @@ private:
     /// sync with the regmodel register storage via the atomic FIFO_STATUS update.
     ///
     /// Initialized to 0 at construction and reset to 0 on every software
-    /// reset (handle_write_CTRL) and on handle_reset_recovery().
+    /// reset (handle_write_CTRL) and on rst_ni reset.
     ///
     /// Functional references:
     ///   - registers.FIFO_STATUS.fields.RPTR: bits [20:16], updated on pop
@@ -525,25 +535,17 @@ private:
     /// Mirrors HEALTH_TEST_CTRL health-test-enable field; updated by callback
     bool m_health_test_enabled;
 
-    /// Set to true by handle_write_CTRL immediately before notifying m_reset_event,
-    /// and cleared to false by the background thread after it receives
-    /// m_reset_complete_event and completes reset recovery.
+    /// Set to true by reset_process() when rst_ni goes low (hardware reset),
+    /// cleared by the background thread when it enters its reset branch.
     ///
-    /// Used as a reliable out-of-band signal so that the background thread can
-    /// distinguish between a timed wait that expired normally and one that was
-    /// interrupted by m_reset_event.  Without this flag there is no SystemC API
-    /// call that reliably reports which reason caused an early return from a
-    /// `wait(sc_time, sc_event)` call.
-    bool m_reset_in_progress;
-
-    /// Set to true by reset_process() when rst_ni goes low (hardware reset).
-    /// The background thread checks this flag alongside m_reset_in_progress
-    /// to detect and handle asynchronous hardware resets.
+    /// reset_process() is an SC_METHOD, so it can run while the thread is
+    /// parked in a timed wait. This flag is what lets the thread recognise, on
+    /// its next scheduling, that a reset happened during the wait even if
+    /// rst_ni has already been released again.
     bool m_hw_reset_in_progress;
 
     /// Startup delay captured from STARTUP_CTRL register (nanoseconds)
     uint32_t m_startup_delay_ns;
-
 
     /// Event used to wake the entropy generation thread when FIFO is re-enabled.
     ///
@@ -552,23 +554,17 @@ private:
     /// m_reset_event via sc_event_or_list) in the WAITING_FOR_ENABLE state.
     sc_core::sc_event m_fifo_fill_event;
 
-    /// Event used to interrupt the background entropy generation thread during a
-    /// software reset (FUNC-007 / FUNC-004 coordination).
+    /// Event used to interrupt the background entropy generation thread on a
+    /// TRNG-domain reset (FUNC-007 / FUNC-004 coordination).
     ///
-    /// Notified by handle_write_CTRL immediately after the register and FIFO
-    /// clearing actions are complete (before CTRL.RESET self-clears).  The
-    /// background thread monitors this event through all timed and event-based
-    /// wait calls so that it can break out of any wait state — WAITING_FOR_ENABLE,
-    /// RUNNING iteration delay, or STARTUP_DELAY — in response to a reset.
+    /// Notified by reset_process() once the register and FIFO clearing actions
+    /// are complete.  The background thread monitors this event through all
+    /// timed and event-based wait calls so that it can break out of any wait
+    /// state — WAITING_FOR_ENABLE, RUNNING iteration delay, or STARTUP_DELAY —
+    /// in response to a reset.
     ///
-    /// Architecture: transition RUNNING → IDLE triggered by "Software reset"
+    /// Architecture: transition RUNNING → IDLE triggered by the TRNG reset
     sc_core::sc_event m_reset_event;
-
-    /** Notified by handle_write_CTRL after Action 8 (CTRL self-clear) to signal
-     *  full reset sequence completion. The background thread waits on this event
-     *  in RESET_PENDING before re-deriving post-reset state.
-     */
-    sc_core::sc_event m_reset_complete_event;
 
     /// Event used to request re-evaluation of all four interrupt output ports.
     /// Notified by any context (callback or SC_THREAD) that modifies INTR_STATUS

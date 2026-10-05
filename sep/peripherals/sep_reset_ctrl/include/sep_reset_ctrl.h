@@ -62,8 +62,6 @@ public:
 private:
     sc_core::sc_event sw_reset_changed_;
 
-    uint64_t sw_reset_current_value_;
-
     void update_rst_outputs();
 
     // SC_METHOD sensitive to global_rst_ni — calls reset() so SW_RESET_N's

@@ -51,8 +51,8 @@ void shake256(bytes &out, std::size_t outlen, const bytes &in)
     }
 
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-    if (ctx == nullptr) { // GCOV_EXCL_LINE
-        throw std::runtime_error("abr: EVP_MD_CTX_new failed"); // GCOV_EXCL_LINE
+    if (ctx == nullptr) { // LCOV_EXCL_BR_LINE — OpenSSL alloc failure
+        throw std::runtime_error("abr: EVP_MD_CTX_new failed"); // LCOV_EXCL_LINE
     }
 
     // Any failure here would silently produce a zero digest, which would then
@@ -63,8 +63,8 @@ void shake256(bytes &out, std::size_t outlen, const bytes &in)
 
     EVP_MD_CTX_free(ctx);
 
-    if (!ok) { // GCOV_EXCL_LINE
-        throw std::runtime_error("abr: SHAKE256 evaluation failed"); // GCOV_EXCL_LINE
+    if (!ok) { // LCOV_EXCL_BR_LINE — OpenSSL digest failure
+        throw std::runtime_error("abr: SHAKE256 evaluation failed"); // LCOV_EXCL_LINE
     }
 }
 
@@ -303,8 +303,8 @@ constexpr std::size_t MLDSA_FIPS_SIG_BYTES = 4627u;
 
 void require_ok(int rc, const char *what)
 {
-    if (rc != 0) {
-        throw std::runtime_error(std::string("abr fips backend: ") + what + " failed");
+    if (rc != 0) { // LCOV_EXCL_BR_LINE — PQClean returns 0 for every seeded API we call
+        throw std::runtime_error(std::string("abr fips backend: ") + what + " failed"); // LCOV_EXCL_LINE
     }
 }
 
@@ -349,8 +349,8 @@ void abr_fips_backend::mldsa_sign(const bytes &privkey, const bytes &mu,
     require_ok(abr_mldsa87_sign_mu(privkey.data(), mu.data(), rnd.data(),
                                    signature.data(), &siglen),
                "ML-DSA-87 sign");
-    if (siglen > MLDSA_SIG_BYTES) { // GCOV_EXCL_LINE
-        throw std::runtime_error("abr fips backend: signature longer than ABR window"); // GCOV_EXCL_LINE
+    if (siglen > MLDSA_SIG_BYTES) { // LCOV_EXCL_BR_LINE — FIPS signature length is fixed
+        throw std::runtime_error("abr fips backend: signature longer than ABR window"); // LCOV_EXCL_LINE
     }
 }
 

@@ -51,7 +51,20 @@ Sources: `test/src/func001_tests.cpp` … `func008_tests.cpp`,
 |FUNC-006 |FIFO queue |Push / pop / overflow / underflow |Mixed
 |FUNC-007 |Reset |rst_ni (TRNG domain) sequence |Positive
 |FUNC-008 |Added RDL regs |Reset and access on extra words |Positive
+|COV |Directed coverage (`test_coverage.cpp`) |Error and boundary paths the
+FUNC suites do not reach: TLM protocol matrix (bad length / streaming width /
+byte enables / `transport_dbg` / DMI), `STARTUP_CTRL` reserved-field RAZ/WI,
+`entropy_export` with a short FIFO and during reset, and reset while the
+generation thread is mid-wait |Negative
+
 |===
+
+A handful of lines stay outside the suite's reach and are marked
+`LCOV_EXCL_BR_LINE` / `LCOV_EXCL_LINE` with a comment naming the invariant:
+the `RAND_bytes()` failure path (an OpenSSL CSPRNG failure cannot be forced
+from a bench) and the `entropy_generation_thread` epilogue it guards. Those
+are the only exclusions; the defensive checks themselves are kept, not
+deleted.
 
 ====== Platform firmware tests
 

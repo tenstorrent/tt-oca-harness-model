@@ -51,6 +51,19 @@ validate CSID / speed / direction, capture CFG into the CSID shadow
 slot, and enqueue. TXDATA / RXDATA are 32-bit FIFO ports. W1C error
 and interrupt registers recompute the pins.
 
+The two FIFOs are not symmetric. RX holds `RxDepth` words, but TX holds
+`TxDepth + 1`: RTL's `byte_select` stage greedily pops the FIFO and so
+counts as one extra word of storage (`tx_full_o = (tx_qd >= TxDepth + 1)`).
+`is_tx_fifo_full()` / `is_rx_fifo_full()` are the only places that bound is
+expressed; `tx_fifo_push()` and `rx_fifo_pop()` call them rather than
+restating the comparison, so the two cannot drift apart. Those accessor
+guards are unreachable through the CSR path — `handle_write_TXDATA` already
+rejects a full FIFO with `ERROR_STATUS.OVERFLOW`, and `handle_read_RXDATA`
+already rejects an empty one with `ERROR_STATUS.UNDERFLOW` — but they are
+kept, and marked `LCOV_EXCL_BR_LINE`, because the depth bound and the
+`front()`-on-empty precondition belong to the accessor rather than to one
+of its callers.
+
 ----
   TLM MMIO ──► spi_controller_base::memory ──► spi_transaction_thread
                                                       │

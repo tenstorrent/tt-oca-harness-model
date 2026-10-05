@@ -10,16 +10,33 @@
 
 #include "testbench.h"
 #include "spi_controller_interface.h"
+#include <cci_configuration>
+#include <tlm.h>
+#include <cstring>
+#include <vector>
 
 using namespace spi_controller_regs;
 
+namespace {
+
+bool set_dut_byte_order(spi_controller_ip* dut, bool little_endian)
+{
+    // Inside the SystemC hierarchy use the process-local broker (no named originator).
+    auto broker = cci::cci_get_broker();
+    const std::string name = std::string(dut->name()) + ".ByteOrder";
+    auto h = broker.get_param_handle(name);
+    if (!h.is_valid()) {
+        return false;
+    }
+    h.set_cci_value(cci::cci_value(little_endian));
+    return dut->get_byte_order() == little_endian;
+}
+
+} // namespace
+
 /**
- * @brief Test 1: Big-Endian byte ordering
- *
- * Coverage target: Lines 398-399 (pack_word Big-Endian), 418-419 (unpack_word Big-Endian)
- *
- * This test creates a second SPI controller instance with Big-Endian byte ordering
- * and performs TX/RX transactions to exercise byte packing/unpacking.
+ * @brief Big-endian byte packing via CCI ByteOrder (no DUT Set_param backdoor).
+ * Asserts exact TX bytes for length mod 4 = 1,2,3 and matching RX words.
  */
 void testbench::test_coverage_big_endian_byte_order()
 {
@@ -32,59 +49,85 @@ void testbench::test_coverage_big_endian_byte_order()
     software_reset();
     wait(100, SC_NS);
 
-    // Set ByteOrder to Big-Endian (false)
-    dut->ByteOrder.Set_param(dut->ByteOrder.get_Name(), false);
-    wait(10, SC_NS);
+    if (!set_dut_byte_order(dut, false)) {
+        REG_ERROR(0, test->logger) << "[FAIL] CCI ByteOrder set to big-endian failed" << std::endl;
+        report_test_result("Big-Endian Byte Order", false);
+        return;
+    }
 
-    // Configure SPI controller basic (sets SPIEN=1, OUTPUT_EN=1, etc.)
     configure_spi_controller_basic();
 
-    // Verify ByteOrder is now false
-    if (!dut->get_byte_order()) {
-        REG_INFO(0, test->logger) << "[PASS] ByteOrder successfully changed to Big-Endian" << std::endl;
-    } else {
-        REG_ERROR(0, test->logger) << "[FAIL] Failed to change ByteOrder to Big-Endian" << std::endl;
-        report_test_result("Big-Endian Byte Order", false);
-        return;
+    // Lengths mod 4 = 1,2,3: exact TX unpack + RX pack in big-endian.
+    struct Case { uint32_t len_field; std::vector<uint32_t> tx_words; std::vector<uint8_t> expect_tx; };
+    // BE unpack of word 0x11223344 -> bytes 11 22 33 44
+    const std::vector<Case> cases = {
+        {0, {0x11223344u}, {0x11}},                         // 1 byte
+        {1, {0x11223344u}, {0x11, 0x22}},                    // 2 bytes
+        {2, {0x11223344u}, {0x11, 0x22, 0x33}},              // 3 bytes
+    };
+
+    for (const auto& c : cases) {
+        test->clear_slave_state();
+        std::vector<uint8_t> rx_preload = c.expect_tx;
+        for (auto& b : rx_preload) b = static_cast<uint8_t>(b ^ 0x5A);
+        test->load_slave_rx_data(rx_preload);
+
+        for (uint32_t w : c.tx_words) {
+            test->write_register_32(TXDATA_OFFSET, w);
+        }
+        wait(10, SC_NS);
+
+        test->write_register_32(COMMAND_OFFSET, BUILD_CMD(c.len_field, 3, 0, 0)); // BIDIR
+        if (!wait_for_transaction_complete(2000)) {
+            REG_ERROR(0, test->logger) << "[FAIL] BE len=" << (c.len_field + 1) << " timed out" << std::endl;
+            test_passed = false;
+            break;
+        }
+
+        const auto& capt = test->get_slave_captured_tx_data();
+        if (capt != c.expect_tx) {
+            REG_ERROR(0, test->logger) << "[FAIL] BE TX bytes mismatch for len=" << (c.len_field + 1) << std::endl;
+            test_passed = false;
+        } else {
+            REG_INFO(0, test->logger) << "[PASS] BE TX bytes match for len=" << (c.len_field + 1) << std::endl;
+        }
+
+        uint32_t rx_word = 0;
+        test->read_register_32(RXDATA_OFFSET, rx_word);
+        // BE pack of rx_preload into word
+        uint32_t expect_rx = 0;
+        for (size_t i = 0; i < rx_preload.size() && i < 4; ++i) {
+            expect_rx |= (static_cast<uint32_t>(rx_preload[i]) << ((3 - i) * 8));
+        }
+        if (rx_word != expect_rx) {
+            REG_ERROR(0, test->logger) << "[FAIL] BE RX word=0x" << std::hex << rx_word
+                      << " expected 0x" << expect_rx << std::dec << std::endl;
+            test_passed = false;
+        } else {
+            REG_INFO(0, test->logger) << "[PASS] BE RX word for len=" << (c.len_field + 1) << std::endl;
+        }
     }
 
-    // Load TX FIFO with data: 0x11223344
-    test->write_register_32(TXDATA_OFFSET, 0x11223344);
-    wait(10, SC_NS);
-
-    // Queue a 4-byte TX/RX Bidir command (Standard speed, CSAAT=0)
-    test->write_register_32(COMMAND_OFFSET, BUILD_CMD(3, 3, 0, 0));
-    wait(10, SC_NS);
-
-    // Wait for transaction to complete
-    bool completed = wait_for_transaction_complete();
-    if (!completed) {
-        REG_ERROR(0, test->logger) << "[FAIL] Big-Endian transaction timed out" << std::endl;
-        report_test_result("Big-Endian Byte Order", false);
-        return;
-    }
-
-    // Verify STATUS shows transaction completed (ACTIVE=0, READY=1)
-    uint32_t status;
-    test->read_register_32(STATUS_OFFSET, status);
-    bool ready = (status >> 31) & 0x1;
-    bool active = (status >> 30) & 0x1;
-    if (ready && !active) {
-        REG_INFO(0, test->logger) << "[PASS] Big-Endian transaction completed: READY=1, ACTIVE=0" << std::endl;
-    } else {
-        REG_ERROR(0, test->logger) << "[FAIL] Unexpected status after Big-Endian transaction: READY=" << ready << ", ACTIVE=" << active << std::endl;
+    // Restore little-endian via CCI and spot-check mod4=1
+    if (!set_dut_byte_order(dut, true)) {
+        REG_ERROR(0, test->logger) << "[FAIL] CCI ByteOrder restore to little-endian failed" << std::endl;
         test_passed = false;
+    } else {
+        test->clear_slave_state();
+        software_reset();
+        configure_spi_controller_basic();
+        test->write_register_32(TXDATA_OFFSET, 0x11223344u);
+        test->write_register_32(COMMAND_OFFSET, BUILD_CMD(0, 2, 0, 0));
+        wait_for_transaction_complete(500);
+        const auto& capt = test->get_slave_captured_tx_data();
+        std::vector<uint8_t> expect_le{0x44};
+        if (capt != expect_le) {
+            REG_ERROR(0, test->logger) << "[FAIL] LE TX byte mismatch" << std::endl;
+            test_passed = false;
+        } else {
+            REG_INFO(0, test->logger) << "[PASS] LE TX byte for len=1" << std::endl;
+        }
     }
-
-    // Read RX FIFO - verify data was received
-    uint32_t rx_data;
-    test->read_register_32(RXDATA_OFFSET, rx_data);
-    wait(10, SC_NS);
-    REG_INFO(0, test->logger) << "[INFO] Big-Endian read RXDATA = 0x" << std::hex << rx_data << std::dec << std::endl;
-
-    // Restore ByteOrder to Little-Endian (true)
-    dut->ByteOrder.Set_param(dut->ByteOrder.get_Name(), true);
-    wait(10, SC_NS);
 
     report_test_result("Big-Endian Byte Order", test_passed);
 }
@@ -284,11 +327,24 @@ void testbench::test_coverage_event_enable_immediate_trigger()
     test->write_register_32(INTR_STATE_OFFSET, 0x2);
     wait(10, SC_NS);
 
-    // Enable RXWM event (line 1036) - RX empty, so condition NOT met
+    // Enable RXWM event — with RX_WATERMARK=0, RXQD>=0 is always true, so
+    // INTR_STATE.spi_event, spi_event_irq, and irq_o must all assert.
     test->write_register_32(EVENT_ENABLE_OFFSET, (1 << 2));
     wait(10, SC_NS);
 
-    REG_INFO(0, test->logger) << "[INFO] RXWM event enable code path tested\n" << std::endl;
+    test->read_register_32(INTR_STATE_OFFSET, intr_status);
+    const bool spi_event_bit = (intr_status >> 1) & 0x1;
+    const bool spi_event_pin = sig_spi_event_irq.read();
+    const bool irq_combined = sig_irq.read();
+    if (spi_event_bit && spi_event_pin && irq_combined) {
+        REG_INFO(0, test->logger) << "[PASS] RXWM event asserted INTR_STATE, spi_event_irq, irq_o" << std::endl;
+    } else {
+        REG_ERROR(0, test->logger) << "[FAIL] RXWM interrupt incomplete"
+                  << " INTR_STATE.spi_event=" << spi_event_bit
+                  << " spi_event_irq=" << spi_event_pin
+                  << " irq_o=" << irq_combined << std::endl;
+        test_passed = false;
+    }
 
     report_test_result("EVENT_ENABLE Immediate Trigger", test_passed);
 }
@@ -464,22 +520,42 @@ void testbench::test_coverage_signal_update_during_reset()
     test->read_register_32(INTR_STATE_OFFSET, intr_status);
     REG_INFO(0, test->logger) << "[INFO] Interrupt status before reset: 0x" << std::hex << intr_status << std::dec << std::endl;
 
-    // Trigger reset while interrupts are active (lines 702-703)
-    // The update_output_signals_method() will be called but should skip during reset
-    REG_INFO(0, test->logger) << "[INFO] Asserting reset..." << std::endl;
-    apply_reset();
+    // Ensure IRQ pins start low, then hold reset and force an update path.
+    // If update_output_signals_method did not skip during reset, INTR_TEST would
+    // drive error_irq/spi_event_irq/irq_o high.
+    test->write_register_32(INTR_TEST_OFFSET, 0x0);
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x0);
+    test->write_register_32(EVENT_ENABLE_OFFSET, 0x0);
+    wait(10, SC_NS);
+    if (sig_error_irq.read() || sig_spi_event_irq.read() || sig_irq.read()) {
+        REG_ERROR(0, test->logger) << "[FAIL] IRQ pins not quiescent before reset hold" << std::endl;
+        test_passed = false;
+    }
+
+    REG_INFO(0, test->logger) << "[INFO] Asserting reset and forcing signal update..." << std::endl;
+    test->rst_ni.write(false);
+    wait(10, SC_NS);
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x3);
+    test->write_register_32(INTR_TEST_OFFSET, 0x3);
+    wait(10, SC_NS);
+    if (!sig_error_irq.read() && !sig_spi_event_irq.read() && !sig_irq.read()) {
+        REG_INFO(0, test->logger) << "[PASS] IRQ pins stayed low during reset hold (update skipped)" << std::endl;
+    } else {
+        REG_ERROR(0, test->logger) << "[FAIL] IRQ pins changed while rst_ni=0" << std::endl;
+        test_passed = false;
+    }
+    test->rst_ni.write(true);
     wait(50, SC_NS);
 
-    // Check that interrupts are properly reset
+    apply_reset();
+    wait(50, SC_NS);
     test->read_register_32(INTR_STATE_OFFSET, intr_status);
     if (intr_status == 0) {
-        REG_INFO(0, test->logger) << "[PASS] Interrupts cleared after reset (0x" << std::hex << intr_status << std::dec << ")" << std::endl;
+        REG_INFO(0, test->logger) << "[PASS] Interrupts cleared after reset" << std::endl;
     } else {
         REG_ERROR(0, test->logger) << "[FAIL] Interrupts not cleared after reset (0x" << std::hex << intr_status << std::dec << ")" << std::endl;
         test_passed = false;
     }
-
-    REG_INFO(0, test->logger) << "[PASS] Signal update during reset handled gracefully\n" << std::endl;
 
     report_test_result("Signal Update During Reset", test_passed);
 }
@@ -692,4 +768,383 @@ void testbench::test_coverage_fifo_overflow_underflow()
     wait(100, SC_NS);
 
     report_test_result("FIFO Overflow, Underflow & Stalls", test_passed);
+}
+
+namespace {
+
+tlm::tlm_response_status raw_b_transport(spi_controller_test* test,
+                                         tlm::tlm_command cmd,
+                                         uint64_t addr,
+                                         unsigned char* data,
+                                         unsigned int len,
+                                         unsigned int streaming_width,
+                                         unsigned char* be,
+                                         unsigned int be_len)
+{
+    tlm::tlm_generic_payload trans;
+    sc_time delay = SC_ZERO_TIME;
+    trans.set_command(cmd);
+    trans.set_address(addr);
+    trans.set_data_ptr(data);
+    trans.set_data_length(len);
+    trans.set_streaming_width(streaming_width);
+    if (be != nullptr) {
+        trans.set_byte_enable_ptr(be);
+        trans.set_byte_enable_length(be_len);
+    } else {
+        trans.set_byte_enable_ptr(nullptr);
+    }
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+    test->initiator_socket->b_transport(trans, delay);
+    return trans.get_response_status();
+}
+
+} // namespace
+
+void testbench::test_quality_tlm_protocol_matrix()
+{
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[QUALITY] TLM protocol matrix on register socket" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
+
+    bool test_passed = true;
+    software_reset();
+    configure_spi_controller_basic();
+
+    uint32_t control_before = 0;
+    test->read_register_32(CONTROL_OFFSET, control_before);
+
+    auto expect_status = [&](const char* name, tlm::tlm_response_status got,
+                             tlm::tlm_response_status want) {
+        if (got != want) {
+            REG_ERROR(0, test->logger) << "[FAIL] " << name << " status=" << static_cast<int>(got)
+                      << " expected=" << static_cast<int>(want) << std::endl;
+            test_passed = false;
+        } else {
+            REG_INFO(0, test->logger) << "[PASS] " << name << std::endl;
+        }
+    };
+
+    auto expect_control_unchanged = [&](const char* name) {
+        uint32_t control_after = 0;
+        test->read_register_32(CONTROL_OFFSET, control_after);
+        if (control_after != control_before) {
+            REG_ERROR(0, test->logger) << "[FAIL] " << name << " mutated CONTROL" << std::endl;
+            test_passed = false;
+        }
+    };
+
+    uint32_t word = 0xA5A5A5A5u;
+    unsigned char buf8[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+
+    // Bad/hole offset inside window: model returns TLM_OK, reads as 0 / drops write.
+    {
+        uint32_t rd = 0xFFFFFFFFu;
+        auto st = raw_b_transport(test, tlm::TLM_READ_COMMAND, 0x38, reinterpret_cast<unsigned char*>(&rd), 4, 4, nullptr, 0);
+        expect_status("hole offset read", st, tlm::TLM_OK_RESPONSE);
+        if (rd != 0) {
+            REG_ERROR(0, test->logger) << "[FAIL] hole read returned 0x" << std::hex << rd << std::dec << std::endl;
+            test_passed = false;
+        } else {
+            REG_INFO(0, test->logger) << "[PASS] hole offset reads as 0" << std::endl;
+        }
+    }
+
+    // Unaligned address (still serviced by regmodel as OK)
+    {
+        unsigned char b = 0;
+        auto st = raw_b_transport(test, tlm::TLM_READ_COMMAND, CONTROL_OFFSET + 1, &b, 1, 1, nullptr, 0);
+        expect_status("unaligned byte read", st, tlm::TLM_OK_RESPONSE);
+    }
+
+    // length 0
+    expect_status("len=0",
+        raw_b_transport(test, tlm::TLM_READ_COMMAND, CONTROL_OFFSET, buf8, 0, 0, nullptr, 0),
+        tlm::TLM_BURST_ERROR_RESPONSE);
+    expect_control_unchanged("len=0");
+
+    // length 1 (supported)
+    {
+        unsigned char b = 0;
+        expect_status("len=1",
+            raw_b_transport(test, tlm::TLM_READ_COMMAND, CONTROL_OFFSET, &b, 1, 1, nullptr, 0),
+            tlm::TLM_OK_RESPONSE);
+    }
+
+    // length width-1 / width+1
+    expect_status("len=3",
+        raw_b_transport(test, tlm::TLM_READ_COMMAND, CONTROL_OFFSET, buf8, 3, 3, nullptr, 0),
+        tlm::TLM_OK_RESPONSE);
+    expect_status("len=5",
+        raw_b_transport(test, tlm::TLM_READ_COMMAND, CONTROL_OFFSET, buf8, 5, 5, nullptr, 0),
+        tlm::TLM_OK_RESPONSE);
+
+    // null data_ptr
+    expect_status("null data_ptr",
+        raw_b_transport(test, tlm::TLM_READ_COMMAND, CONTROL_OFFSET, nullptr, 4, 4, nullptr, 0),
+        tlm::TLM_GENERIC_ERROR_RESPONSE);
+    expect_control_unchanged("null data_ptr");
+
+    // IGNORE command
+    expect_status("IGNORE",
+        raw_b_transport(test, tlm::TLM_IGNORE_COMMAND, CONTROL_OFFSET, buf8, 4, 4, nullptr, 0),
+        tlm::TLM_COMMAND_ERROR_RESPONSE);
+    expect_control_unchanged("IGNORE");
+
+    // streaming_width 0 and < len
+    expect_status("streaming_width=0",
+        raw_b_transport(test, tlm::TLM_WRITE_COMMAND, CONTROL_OFFSET, reinterpret_cast<unsigned char*>(&word), 4, 0, nullptr, 0),
+        tlm::TLM_BURST_ERROR_RESPONSE);
+    expect_control_unchanged("streaming_width=0");
+    expect_status("streaming_width<len",
+        raw_b_transport(test, tlm::TLM_WRITE_COMMAND, CONTROL_OFFSET, reinterpret_cast<unsigned char*>(&word), 4, 2, nullptr, 0),
+        tlm::TLM_BURST_ERROR_RESPONSE);
+    expect_control_unchanged("streaming_width<len");
+
+    // transport_dbg
+    {
+        tlm::tlm_generic_payload trans;
+        uint32_t dbg_word = 0;
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(CONTROL_OFFSET);
+        trans.set_data_ptr(reinterpret_cast<unsigned char*>(&dbg_word));
+        trans.set_data_length(4);
+        trans.set_streaming_width(4);
+        trans.set_byte_enable_ptr(nullptr);
+        trans.set_dmi_allowed(false);
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        unsigned int n = test->initiator_socket->transport_dbg(trans);
+        if (n == 4 && trans.is_response_ok() && dbg_word == control_before) {
+            REG_INFO(0, test->logger) << "[PASS] transport_dbg read CONTROL" << std::endl;
+        } else {
+            REG_ERROR(0, test->logger) << "[FAIL] transport_dbg n=" << n
+                      << " status=" << static_cast<int>(trans.get_response_status())
+                      << " data=0x" << std::hex << dbg_word << std::dec << std::endl;
+            test_passed = false;
+        }
+    }
+
+    // DMI: socket has no get_direct_mem_ptr registered -> returns false
+    {
+        tlm::tlm_generic_payload trans;
+        tlm::tlm_dmi dmi;
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(CONTROL_OFFSET);
+        bool granted = test->initiator_socket->get_direct_mem_ptr(trans, dmi);
+        if (!granted) {
+            REG_INFO(0, test->logger) << "[PASS] DMI refused" << std::endl;
+        } else {
+            REG_ERROR(0, test->logger) << "[FAIL] DMI unexpectedly granted" << std::endl;
+            test_passed = false;
+        }
+    }
+
+    // ALERT_TEST: WO mask 0x1, read mask 0x0 -> writes accepted, reads as 0
+    {
+        test->write_register_32(ALERT_TEST_OFFSET, 0xFFFFFFFFu);
+        uint32_t alert_rd = 0xA5A5A5A5u;
+        test->read_register_32(ALERT_TEST_OFFSET, alert_rd);
+        if (alert_rd == 0) {
+            REG_INFO(0, test->logger) << "[PASS] ALERT_TEST is WO (read returns 0)" << std::endl;
+        } else {
+            REG_ERROR(0, test->logger) << "[FAIL] ALERT_TEST read 0x" << std::hex << alert_rd << std::dec << std::endl;
+            test_passed = false;
+        }
+    }
+
+    report_test_result("TLM protocol matrix + ALERT_TEST", test_passed);
+}
+
+void testbench::test_quality_command_len_boundaries()
+{
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[QUALITY] COMMAND LEN boundaries + reject >=512" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
+
+    bool test_passed = true;
+    const uint32_t legal[] = {0, 3, 255, 511}; // byte counts 1,4,256,512
+
+    for (uint32_t len : legal) {
+        software_reset();
+        configure_spi_controller_basic();
+        test->clear_slave_state();
+
+        const uint32_t nbytes = len + 1;
+        // DUMMY avoids needing a full TX FIFO for 512-byte segments (TxDepth=72).
+        const uint8_t direction = (nbytes > 32) ? 0 /*DUMMY*/ : 2 /*TX_ONLY*/;
+        if (direction == 2) {
+            const uint32_t nwords = (nbytes + 3) / 4;
+            for (uint32_t i = 0; i < nwords; ++i) {
+                test->write_register_32(TXDATA_OFFSET, 0xA5000000u + i);
+            }
+            wait(10, SC_NS);
+        }
+
+        const uint32_t tx_before = test->get_slave_transaction_count();
+        test->write_register_32(COMMAND_OFFSET, BUILD_CMD(len, direction, 0, 0));
+        if (!wait_for_transaction_complete(5000)) {
+            REG_ERROR(0, test->logger) << "[FAIL] LEN=" << len << " timed out" << std::endl;
+            test_passed = false;
+            continue;
+        }
+        if (test->get_slave_transaction_count() != tx_before + 1) {
+            REG_ERROR(0, test->logger) << "[FAIL] LEN=" << len << " transaction not issued" << std::endl;
+            test_passed = false;
+        } else if (direction == 2) {
+            const auto& capt = test->get_slave_captured_tx_data();
+            if (capt.size() != nbytes) {
+                REG_ERROR(0, test->logger) << "[FAIL] LEN=" << len << " captured " << capt.size()
+                          << " expected " << nbytes << std::endl;
+                test_passed = false;
+            } else {
+                REG_INFO(0, test->logger) << "[PASS] LEN=" << len << " TX transferred " << nbytes << " bytes" << std::endl;
+            }
+        } else {
+            REG_INFO(0, test->logger) << "[PASS] LEN=" << len << " DUMMY segment completed (" << nbytes << " bytes)" << std::endl;
+        }
+
+        uint32_t err = 0;
+        test->read_register_32(ERROR_STATUS_OFFSET, err);
+        if (err != 0) {
+            REG_ERROR(0, test->logger) << "[FAIL] LEN=" << len << " unexpected ERROR_STATUS=0x" << std::hex << err << std::dec << std::endl;
+            test_passed = false;
+        }
+    }
+
+    // Reject LEN>=512 (byte count would be >512) — CMDINVAL, no enqueue, no smash.
+    for (uint32_t len : {512u, 0xFFFFFu}) {
+        software_reset();
+        configure_spi_controller_basic();
+        test->clear_slave_state();
+        test->write_register_32(TXDATA_OFFSET, 0xDEADBEEFu);
+        wait(10, SC_NS);
+
+        const uint32_t tx_before = test->get_slave_transaction_count();
+        uint32_t status_before = 0;
+        test->read_register_32(STATUS_OFFSET, status_before);
+        const uint32_t cmdqd_before = (status_before >> 16) & 0xF;
+
+        test->write_register_32(COMMAND_OFFSET, BUILD_CMD(len, 2, 0, 0));
+        wait(50, SC_NS);
+
+        uint32_t err = 0;
+        test->read_register_32(ERROR_STATUS_OFFSET, err);
+        uint32_t status_after = 0;
+        test->read_register_32(STATUS_OFFSET, status_after);
+        const uint32_t cmdqd_after = (status_after >> 16) & 0xF;
+        const bool cmdinval = ((err >> 3) & 0x1) != 0;
+
+        if (cmdinval && cmdqd_after == cmdqd_before &&
+            test->get_slave_transaction_count() == tx_before) {
+            REG_INFO(0, test->logger) << "[PASS] LEN=" << len << " rejected with CMDINVAL, not enqueued" << std::endl;
+        } else {
+            REG_ERROR(0, test->logger) << "[FAIL] LEN=" << len << " reject: ERROR=0x" << std::hex << err
+                      << std::dec << " CMDQD " << cmdqd_before << "->" << cmdqd_after
+                      << " tx_count delta=" << (test->get_slave_transaction_count() - tx_before) << std::endl;
+            test_passed = false;
+        }
+    }
+
+    report_test_result("COMMAND LEN boundaries", test_passed);
+}
+
+void testbench::test_quality_clk_low_and_delay_formula()
+{
+    REG_INFO(0, test->logger) << "\n========================================" << std::endl;
+    REG_INFO(0, test->logger) << "[QUALITY] clk_i low reject + segment delay formula" << std::endl;
+    REG_INFO(0, test->logger) << "========================================\n" << std::endl;
+
+    bool test_passed = true;
+
+    // clk_i low while a command is queued -> ACCESSINVAL, no spi_if call.
+    software_reset();
+    configure_spi_controller_basic();
+    test->clear_slave_state();
+    test->write_register_32(TXDATA_OFFSET, 0x11111111u);
+    test->clk_i.write(false);
+    wait(10, SC_NS);
+    const uint32_t tx_before = test->get_slave_transaction_count();
+    test->write_register_32(COMMAND_OFFSET, BUILD_CMD(3, 2, 0, 0));
+    wait(100, SC_NS);
+    uint32_t err = 0;
+    test->read_register_32(ERROR_STATUS_OFFSET, err);
+    const bool accessinval = ((err >> 5) & 0x1) != 0;
+    if (accessinval && test->get_slave_transaction_count() == tx_before) {
+        REG_INFO(0, test->logger) << "[PASS] clk_i=0 sets ACCESSINVAL and does not call spi_if" << std::endl;
+    } else {
+        REG_ERROR(0, test->logger) << "[FAIL] clk_i=0 path ERROR=0x" << std::hex << err << std::dec
+                  << " tx_delta=" << (test->get_slave_transaction_count() - tx_before) << std::endl;
+        test_passed = false;
+    }
+    test->clk_i.write(true);
+    wait(10, SC_NS);
+
+    // Independent delay check against calculate_segment_delay formula in source:
+    // SCK period = 2*(CLKDIV+1)*Tclk; data = len*bits_per_cycle*SCK;
+    // margins = (csnlead+1 + csntrail+1 + csaat?0:csnidle+1) * SCK/2
+    software_reset();
+    clear_errors();
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);
+    // CLKDIV=1, CSNIDLE=1, CSNTRAIL=1, CSNLEAD=1
+    const uint32_t cfg = (1u << 24) | (1u << 20) | (1u << 16) | 1u;
+    test->write_register_32(CONFIGOPTS_OFFSET, cfg);
+    test->write_register_32(CSID_OFFSET, 0);
+    test->write_register_32(TXDATA_OFFSET, 0xAABBCCDDu);
+    wait(10, SC_NS);
+
+    const double tclk_s = dut->ClkPeriodNs.get_param_value() * 1e-9;
+    const uint32_t clkdiv = 1;
+    const uint32_t len_bytes = 4;
+    const uint32_t bits_per_cycle = 8; // STANDARD
+    const double sck = 2.0 * (clkdiv + 1) * tclk_s;
+    const double data_t = len_bytes * bits_per_cycle * sck;
+    const double margin_t = (/*lead*/2 + /*trail*/2 + /*idle*/2) * (sck / 2.0);
+    const double expect_s = data_t + margin_t;
+
+    const sc_time t0 = sc_time_stamp();
+    test->write_register_32(COMMAND_OFFSET, BUILD_CMD(3, 2, 0, 0));
+    if (!wait_for_transaction_complete(2000)) {
+        REG_ERROR(0, test->logger) << "[FAIL] delay formula transaction timed out" << std::endl;
+        test_passed = false;
+    } else {
+        const double elapsed = (sc_time_stamp() - t0).to_seconds();
+        const double tol = expect_s * 0.05 + 1e-9; // 5% + 1ns
+        if (elapsed + 1e-12 >= expect_s - tol && elapsed <= expect_s + tol + 10e-6) {
+            // Upper bound includes wait_for_transaction_complete polling slack.
+            REG_INFO(0, test->logger) << "[PASS] segment delay elapsed=" << elapsed
+                      << "s expect~=" << expect_s << "s" << std::endl;
+        } else {
+            REG_ERROR(0, test->logger) << "[FAIL] segment delay elapsed=" << elapsed
+                      << "s expect=" << expect_s << "s tol=" << tol << std::endl;
+            test_passed = false;
+        }
+    }
+
+    // Zero ClkPeriodNs falls back to 10ns default inside calculate_segment_delay.
+    {
+        cci::cci_broker_handle broker = cci::cci_get_broker();
+        auto h = broker.get_param_handle(std::string(dut->name()) + ".ClkPeriodNs");
+        if (h.is_valid()) {
+            h.set_cci_value(cci::cci_value(0.0));
+            software_reset();
+            clear_errors();
+            test->write_register_32(CONTROL_OFFSET, 0xA0000000);
+            test->write_register_32(CONFIGOPTS_OFFSET, 0x1);
+            test->write_register_32(TXDATA_OFFSET, 0x1);
+            test->write_register_32(COMMAND_OFFSET, BUILD_CMD(0, 2, 0, 0));
+            if (wait_for_transaction_complete(2000)) {
+                REG_INFO(0, test->logger) << "[PASS] ClkPeriodNs=0 used default timing and completed" << std::endl;
+            } else {
+                REG_ERROR(0, test->logger) << "[FAIL] ClkPeriodNs=0 transaction failed" << std::endl;
+                test_passed = false;
+            }
+            h.set_cci_value(cci::cci_value(10.0));
+        } else {
+            REG_ERROR(0, test->logger) << "[FAIL] ClkPeriodNs CCI handle missing" << std::endl;
+            test_passed = false;
+        }
+    }
+
+    report_test_result("clk_i low + delay formula", test_passed);
 }

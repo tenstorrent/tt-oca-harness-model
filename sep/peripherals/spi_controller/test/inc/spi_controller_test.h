@@ -28,6 +28,7 @@ private:
     uint32_t m_total_rx_bytes;
     uint8_t m_last_csid;
     bool m_last_csaat;
+    spi_config_t m_last_config;
 
 public:
     /// RegLogger instance
@@ -41,7 +42,8 @@ public:
                      m_total_tx_bytes(0),
                      m_total_rx_bytes(0),
                      m_last_csid(0),
-                     m_last_csaat(false) {
+                     m_last_csaat(false),
+                     m_last_config{} {
         // Initialize logger
         logger.setMaxVerbosity(3);
         logger.setLogFormat("[%TIME%] [%LEVEL% %VERBOSITY%] [%MODULE%::%FUNCTION%] - %MESSAGE%");
@@ -69,12 +71,16 @@ public:
                   << ", csaat=" << segment.csaat << std::endl;
 
         REG_DEBUG(3, logger) << "[SPI_IF_DUMMY] Config: "
-                  << "clkdiv=" << config.clkdiv << std::endl;
+                  << "clkdiv=" << config.clkdiv
+                  << " cpol=" << config.cpol
+                  << " cpha=" << config.cpha
+                  << " fullcyc=" << config.fullcyc << std::endl;
 
         // Update statistics
         m_transaction_count++;
         m_last_csid = segment.csid;
         m_last_csaat = segment.csaat;
+        m_last_config = config;
 
         // Handle TX data (capture from master)
         if (segment.direction == spi_direction_e::TX_ONLY ||
@@ -189,6 +195,11 @@ public:
     bool get_last_csaat() const { return m_last_csaat; }
 
     /**
+     * @brief Get last CONFIGOPTS fields forwarded to spi_if
+     */
+    const spi_config_t& get_last_config() const { return m_last_config; }
+
+    /**
      * @brief Reset all state
      */
     void reset() {
@@ -200,6 +211,7 @@ public:
         m_total_rx_bytes = 0;
         m_last_csid = 0;
         m_last_csaat = false;
+        m_last_config = {};
         REG_DEBUG(2, logger) << "[SPI_IF_DUMMY] Reset complete" << std::endl;
     }
 };
@@ -237,6 +249,15 @@ public:
 
    /// Dummy interface implementation (public for testbench access)
    spi_if_dummy m_spi_if_impl;
+
+   /// Assertion / TLM helper failure counter (must be zero for suite PASS).
+   ///
+   /// The helpers only count; they deliberately do not call sc_stop(). Stopping
+   /// at the first mismatch would discard the remaining ~690 checks, and
+   /// sc_stop() does not return immediately anyway -- the caller would keep
+   /// running on an invalid read value. testbench::run_tests() folds this into
+   /// m_tests_failed and exits non-zero, so the suite still fails closed.
+   uint32_t m_assert_failures = 0;
 
    /// RegLogger instance (mutable to allow logging in const functions)
    mutable RegLogger logger;
@@ -397,6 +418,10 @@ public:
     */
    uint32_t get_slave_rx_bytes() const {
       return m_spi_if_impl.get_total_rx_bytes();
+   }
+
+   const spi_config_t& get_slave_last_config() const {
+      return m_spi_if_impl.get_last_config();
    }
 
    /**

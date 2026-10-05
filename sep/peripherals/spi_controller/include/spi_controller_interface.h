@@ -40,10 +40,13 @@ enum class spi_direction_e {
  * @brief SPI configuration structure
  */
 struct spi_config_t {
-    uint16_t clkdiv;        ///< Clock divider (16-bit)
-    uint8_t csnidle;        ///< CS idle time
-    uint8_t csntrail;       ///< CS trail time
-    uint8_t csnlead;        ///< CS lead time
+    uint16_t clkdiv  = 0;       ///< Clock divider (16-bit)
+    uint8_t  csnidle = 0;       ///< CS idle time
+    uint8_t  csntrail = 0;      ///< CS trail time
+    uint8_t  csnlead = 0;       ///< CS lead time
+    bool     cpol    = false;   ///< Clock polarity (CONFIGOPTS[31])
+    bool     cpha    = false;   ///< Clock phase (CONFIGOPTS[30])
+    bool     fullcyc = false;   ///< Full-cycle sampling (CONFIGOPTS[29])
 };
 
 /**

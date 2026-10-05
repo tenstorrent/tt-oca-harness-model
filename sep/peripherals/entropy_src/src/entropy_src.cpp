@@ -78,18 +78,27 @@ bool entropy_src_ip::entropy_provider_handler::get_seed_384(
     uint8_t seed[48], bool& fips_compliant)
 {
     fips_compliant = false;
-    if (seed == nullptr || owner_.m_reset_in_progress ||
-        owner_.m_hw_reset_in_progress || !owner_.m_fifo_enabled) {
+    // FIFO_CTRL.ENABLE gates entropy *generation*, not draining: a disabled
+    // FIFO keeps its contents readable (see handle_write_FIFO_CTRL), and the
+    // software path handle_read_FIFO_RDATA pops regardless of the enable. The
+    // export deliberately matches that, so CSRNG and software see one FIFO
+    // with one set of rules.
+    if (seed == nullptr || owner_.m_hw_reset_in_progress) {
         return false;
     }
     if (owner_.m_fifo.size() < 12u) {
         return false;
     }
     for (unsigned i = 0; i < 12; ++i) {
-        uint32_t word = 0;
-        if (!owner_.handle_read_FIFO_RDATA(word)) {
-            return false;
+        // handle_read_FIFO_RDATA() reports underflow via INTR_STATUS and
+        // returns true on every path, so its result says nothing here. Re-check
+        // the real invariant instead: never assemble a seed out of zero words
+        // that would then be handed to CSRNG as FIPS entropy.
+        if (owner_.m_fifo.empty()) { // LCOV_EXCL_BR_LINE — size checked above
+            return false;            // LCOV_EXCL_LINE
         }
+        uint32_t word = 0;
+        owner_.handle_read_FIFO_RDATA(word);
         seed[i * 4 + 0] = static_cast<uint8_t>(word);
         seed[i * 4 + 1] = static_cast<uint8_t>(word >> 8);
         seed[i * 4 + 2] = static_cast<uint8_t>(word >> 16);
@@ -497,6 +506,33 @@ bool entropy_src_ip::handle_write_RING_OSC_ENABLE(uint32_t value)
     return true;
 }
 
+/******************************************************************************
+ * @brief Write callback for STARTUP_CTRL register (offset 0xB0)
+ *
+ * Stores DELAY_CYCLES[15:0] and mirrors it into m_startup_delay_ns, the
+ * hold-off the generation thread applies on the next
+ * WAITING_FOR_ENABLE -> RUNNING transition and after rst_ni release. At LT
+ * abstraction the programmed cycle count is consumed as nanoseconds; there is
+ * no ring-oscillator clock to scale it against.
+ *
+ * Bits [31:16] are reserved (RAZ/WI via the register's 0x0000FFFF masks), so
+ * the write mask is applied before storage and before the mirror is taken.
+ *
+ * @param value 32-bit value written to STARTUP_CTRL
+ * @return true (write always accepted)
+ ******************************************************************************/
+bool entropy_src_ip::handle_write_STARTUP_CTRL(uint32_t value)
+{
+    STARTUP_CTRL = value & static_cast<uint32_t>(STARTUP_CTRL.write_bit_mask);
+    m_startup_delay_ns = static_cast<uint32_t>(STARTUP_CTRL.DELAY_CYCLES);
+
+    REG_INFO(3, logger)
+        << "STARTUP_CTRL write: stored 0x" << std::hex
+        << static_cast<uint32_t>(STARTUP_CTRL)
+        << " startup_delay_ns=" << std::dec << m_startup_delay_ns;
+    return true;
+}
+
 bool entropy_src_ip::handle_write_ALERT_THRESHOLD(uint32_t value)
 {
     const uint32_t lock = static_cast<uint32_t>(FIPS_LOCK.LOCK) ? 0xFFFFFFFFu : 0u;
@@ -517,21 +553,41 @@ bool entropy_src_ip::handle_write_MIN_ENTROPY_H(uint32_t value)
     return true;
 }
 
+/******************************************************************************
+ * @brief Re-derive MAIN_SM_STATUS.{BOOT_PHASE_DONE,IDLE} from the enables.
+ *
+ * Called from every write that can move either enable (CTRL, RING_OSC_ENABLE),
+ * so it must be idempotent. Three states, matching the BackgroundEntropyProcess
+ * map in the architecture note:
+ *
+ *   module off                 -> IDLE=1, BOOT_PHASE_DONE=0  (powered down)
+ *   module on, generators off  -> IDLE=0, BOOT_PHASE_DONE=0  (configuring)
+ *   module on, generators on   -> IDLE=0, BOOT_PHASE_DONE=1  (entropy flowing)
+ *
+ * The middle state is the one the SEP boot ROM polls through: it configures
+ * with the generators off, so the model must report "not idle, not boot-done"
+ * rather than leaving behind whatever the previous write set.
+ ******************************************************************************/
 void entropy_src_ip::update_boot_phase_done()
 {
     const bool module_on = (static_cast<uint32_t>(CTRL.MODULE_ENABLE) != 0u);
     const bool generators_on = (static_cast<uint32_t>(RING_OSC_ENABLE.ENABLE) != 0u);
 
     if (module_on && generators_on) {
+        // Log on the 0->1 edge only: this runs on every CTRL/RING_OSC_ENABLE
+        // write and would otherwise repeat the same line indefinitely.
         if (static_cast<uint32_t>(MAIN_SM_STATUS.BOOT_PHASE_DONE) == 0u) {
-            MAIN_SM_STATUS.BOOT_PHASE_DONE = 1;
-            MAIN_SM_STATUS.IDLE = 0;
             REG_INFO(3, logger)
                 << "BOOT_PHASE_DONE asserted (MODULE_ENABLE and generators on)";
         }
+        MAIN_SM_STATUS.BOOT_PHASE_DONE = 1;
+        MAIN_SM_STATUS.IDLE = 0;
     } else if (!module_on) {
         MAIN_SM_STATUS.BOOT_PHASE_DONE = 0;
         MAIN_SM_STATUS.IDLE = 1;
+    } else {
+        MAIN_SM_STATUS.BOOT_PHASE_DONE = 0;
+        MAIN_SM_STATUS.IDLE = 0;
     }
 }
 
@@ -626,19 +682,19 @@ void entropy_src_ip::reset_process()
         // Update FIFO_STATUS to reflect the empty FIFO
         update_fifo_status();
 
-        // Clear internal state mirrors to defaults
-        m_fifo_enabled = true;   // FIFO_CTRL.ENABLE default is 1
-        m_health_test_enabled = false;
-        m_startup_delay_ns = 0u;
+        // Re-derive the internal mirrors from the just-reset register values
+        // rather than restating each reset default here -- reset_all_registers()
+        // above is the single source of truth for what those defaults are.
+        m_fifo_enabled = (static_cast<uint32_t>(FIFO_CTRL.ENABLE) != 0u);
+        m_health_test_enabled =
+            (static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE) != 0u);
+        m_startup_delay_ns = static_cast<uint32_t>(STARTUP_CTRL.DELAY_CYCLES);
 
         // Signal to the background thread
         m_hw_reset_in_progress = true;
-        m_reset_in_progress = false;  // Clear any pending software reset
 
-        // Notify the background thread to break out of any wait, including
-        // leftover handle_reset_recovery (CTRL.RESET no longer posts this).
+        // Notify the background thread to break out of any wait.
         m_reset_event.notify(sc_core::SC_ZERO_TIME);
-        m_reset_complete_event.notify(sc_core::SC_ZERO_TIME);
 
         // Re-evaluate interrupt outputs (all will de-assert since
         // INTR_STATUS is cleared by reset_all_registers)
@@ -767,18 +823,8 @@ void entropy_src_ip::entropy_generation_thread()
             m_fifo_enabled = (static_cast<uint32_t>(FIFO_CTRL.ENABLE) != 0u);
             m_health_test_enabled =
                 (static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE) != 0u);
-            m_startup_delay_ns = 0u;
-            m_reset_in_progress = false;
+            m_startup_delay_ns = static_cast<uint32_t>(STARTUP_CTRL.DELAY_CYCLES);
 
-            continue;
-        }
-
-        // ---------------------------------------------------------------------
-        // Software reset check — top of every loop iteration
-        // ---------------------------------------------------------------------
-        if (m_reset_in_progress)
-        {
-            handle_reset_recovery();
             continue;
         }
 
@@ -804,12 +850,6 @@ void entropy_src_ip::entropy_generation_thread()
                 continue;
             }
 
-            if (m_reset_in_progress)
-            {
-                handle_reset_recovery();
-                continue;
-            }
-
             // FIFO re-enabled — apply startup delay via quantum keeper
             if (m_startup_delay_ns > 0u)
             {
@@ -824,11 +864,6 @@ void entropy_src_ip::entropy_generation_thread()
                 }
                 if (!rst_ni.read() || m_hw_reset_in_progress)
                 {
-                    continue;
-                }
-                if (m_reset_in_progress)
-                {
-                    handle_reset_recovery();
                     continue;
                 }
             }
@@ -846,11 +881,15 @@ void entropy_src_ip::entropy_generation_thread()
         {
             if (m_fifo.size() < FIFO_DEPTH)
             {
-                // Push one high-quality entropy word from OpenSSL into the FIFO
+                // Push one high-quality entropy word from OpenSSL into the FIFO.
+                // A failed draw must never be pushed: entropy_word would still
+                // be 0 and would leave the FIFO as a zero-entropy seed source.
                 uint32_t entropy_word = 0u;
-                if (RAND_bytes(reinterpret_cast<unsigned char*>(&entropy_word), sizeof(entropy_word)) != 1) {
-                    REG_ERROR(0, logger) << "RAND_bytes() failed - entropy generation stalled";
-                    break; 
+                if (RAND_bytes(reinterpret_cast<unsigned char*>(&entropy_word),
+                               sizeof(entropy_word)) != 1) { // LCOV_EXCL_BR_LINE
+                    REG_ERROR(0, logger) // LCOV_EXCL_LINE
+                        << "RAND_bytes() failed - entropy generation stalled"; // LCOV_EXCL_LINE
+                    break; // LCOV_EXCL_LINE
                 }
                 m_fifo.push(entropy_word);
 
@@ -902,60 +941,13 @@ void entropy_src_ip::entropy_generation_thread()
                 qk_sync_interruptible();
             }
         }
-
-        // Check for reset after pacing
-        if (m_reset_in_progress)
-        {
-            handle_reset_recovery();
-            continue;
-        }
     }
+    // LCOV_EXCL_START
+    // Thread epilogue. The main loop is `while (true)`; the only exit is the
+    // `break` on a failed RAND_bytes() draw, which is itself excluded because
+    // an OpenSSL CSPRNG failure cannot be forced from a testbench.
 }
-
-/******************************************************************************
- * @brief Reset recovery helper — handles the RESET_PENDING state cleanly.
- *
- * Waits for the m_reset_complete_event (posted by handle_write_CTRL after
- * Actions 1–8 complete), then re-derives all internal mirrors from the
- * post-reset regmodel register state and resets the quantum keeper.
- *
- * Functional references:
- *   - BackgroundEntropyProcess IDLE→RUNNING transition after reset
- *   - re-derived flags from post-reset regmodel defaults; 
- *     explicit FIFO drain to ensure clean architectural state.
- ******************************************************************************/
-void entropy_src_ip::handle_reset_recovery()
-{
-    // Block until handle_write_CTRL completes stabilization delay and
-    // CTRL self-clear.
-    wait(m_reset_complete_event);
-
-    m_reset_in_progress = false;
- 
-    // Drain FIFO and reset pointers during software reset recovery.
-    while (!m_fifo.empty())
-    {
-        m_fifo.pop();
-    }
-    m_wptr = 0u;
-    m_rptr = 0u;
-    update_fifo_status();
-
-    // Re-derive state from post-reset regmodel register values
-    m_fifo_enabled = (static_cast<uint32_t>(FIFO_CTRL.ENABLE) != 0u);
-    m_health_test_enabled =
-        (static_cast<uint32_t>(HEALTH_TEST_CTRL.ENABLE) != 0u);
-    m_startup_delay_ns = 0u;
-
-    // Reset quantum keeper for clean post-reset timing
-    m_qk.reset();
-
-    REG_INFO(2, logger)
-        << "handle_reset_recovery: resolved — "
-        << "fifo_enabled=" << std::boolalpha << m_fifo_enabled
-        << " health_test_enabled=" << m_health_test_enabled
-        << " startup_delay_ns=" << std::dec << m_startup_delay_ns;
-}
+// LCOV_EXCL_STOP
 
 /******************************************************************************
  * @brief Sync the quantum keeper, returning early on TRNG reset.

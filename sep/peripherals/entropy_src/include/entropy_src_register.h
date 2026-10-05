@@ -481,19 +481,11 @@ class FIPS_LOCK_type : public regmodel::Reg<N>
     using regmodel::Reg<N>::operator>>=;
     using regmodel::Reg<N>::operator<<=;
 
-    /**
-     * Write-one-to-set: OR the incoming set bits in and ignore the zeroes.
-     *
-     * The inherited regmodel::Reg::handle_write is a plain read-modify-write, which
-     * would let a later write of 0 -- a full-word rewrite of the register file,
-     * say -- drop a lock that is architecturally one-way. Only reset() returns
-     * the bit to 0, which matches "stays set until the entropy chain is reset".
-     */
-    bool handle_write(DT value, DT bitmask) override
-    {
-        this->word_ref |= (value & bitmask);
-        return true;
-    }
+    // W1S is enforced by the entropy_src_ip write callback, not by a
+    // handle_write() override here. regmodel::Memory::write_callbacks is a
+    // std::map keyed on word offset, so the callback entropy_src_ip registers
+    // for FIPS_LOCK.offset *replaces* the one Reg<N>'s constructor bound to
+    // Reg<N>::handle_write. An override would therefore never be reached.
 
     regmodel::Bitfield<N> LOCK;
     regmodel::Bitfield<N> reserved0;
@@ -1009,6 +1001,42 @@ class DECORRELATOR_MASK_type : public regmodel::Reg<N>
     regmodel::Bitfield<N> ENTROPY_BYTE_MASK;
     regmodel::Bitfield<N> reserved0;
 };
+/******************************************************************************
+ * @brief STARTUP_CTRL register (offset 0xB0, RW)
+ *
+ * DELAY_CYCLES[15:0] programs the abstract startup hold-off (nanoseconds in
+ * this LT model) applied when the entropy generation thread leaves
+ * WAITING_FOR_ENABLE or boots after rst_ni release.
+ ******************************************************************************/
+template<unsigned int N>
+class STARTUP_CTRL_type : public regmodel::Reg<N>
+{
+  public:
+    using typename regmodel::Reg<N>::memory_type;
+    typedef typename regmodel::Word<N>::wordtype DT;
+    STARTUP_CTRL_type(std::string reg_name, memory_type &memory, unsigned int offset):
+      regmodel::Reg<N>(reg_name, memory, offset, 0x0000FFFF, 0x0000FFFF, 0x00000000),
+      DELAY_CYCLES(reg_name + ".DELAY_CYCLES", *this, 0, 16),
+      reserved0(reg_name + ".reserved0", *this, 16, 16)
+    {
+      this->set_read_write_restrictions(memory);
+    }
+
+    using regmodel::Reg<N>::operator=;
+    using regmodel::Reg<N>::operator+=;
+    using regmodel::Reg<N>::operator-=;
+    using regmodel::Reg<N>::operator/=;
+    using regmodel::Reg<N>::operator*=;
+    using regmodel::Reg<N>::operator%=;
+    using regmodel::Reg<N>::operator^=;
+    using regmodel::Reg<N>::operator&=;
+    using regmodel::Reg<N>::operator|=;
+    using regmodel::Reg<N>::operator>>=;
+    using regmodel::Reg<N>::operator<<=;
+    regmodel::Bitfield<N> DELAY_CYCLES;
+    regmodel::Bitfield<N> reserved0;
+};
+
 template<unsigned int N>
 class GENERATOR_0_HEALTH_STATUS_type : public regmodel::Reg<N>
 {

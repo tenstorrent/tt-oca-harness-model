@@ -155,22 +155,24 @@ void testbench::test_func000_comprehensive_reset()
     // =========================================================================
     REG_INFO(1, logger) << "\n[Sub-Test 4] Error Clearing via SW_RST" << std::endl;
 
-    // Trigger CMDBUSY error (write COMMAND when not ready)
-    test->write_register_32(CONTROL_OFFSET, 0x00000000);  /// SPIEN=0
+    // Force a definite error (invalid SPEED=3 -> CMDINVAL), then clear via SW_RST.
+    test->write_register_32(CONTROL_OFFSET, 0xA0000000);  /// SPIEN=1, OUTPUT_EN=1
+    test->write_register_32(ERROR_ENABLE_OFFSET, 0x1F);
+    test->write_register_32(INTR_ENABLE_OFFSET, 0x1);
     wait(10, SC_NS);
-    test->write_register_32(COMMAND_OFFSET, 0x00000006);
+    test->write_register_32(COMMAND_OFFSET, BUILD_CMD(0, 0, 3, 0));  /// SPEED=3 invalid
     wait(50, SC_NS);
 
-    // Verify error is set
     test->read_register_32(ERROR_STATUS_OFFSET, read_val);
-    bool error_set = (read_val != 0);
-
-    if (error_set) {
+    bool cmdinval = ((read_val >> 3) & 0x1) != 0;
+    if (cmdinval) {
         REG_INFO(2, logger) << "  [PASS] Error triggered: ERROR_STATUS=0x" << std::hex << read_val << std::dec << std::endl;
         sub_tests_passed++;
     } else {
-        REG_INFO(2, logger) << "  [INFO] No error triggered (acceptable)" << std::endl;
-        sub_tests_passed++;  // Count as pass - error triggering is optional
+        REG_ERROR(2, logger) << "  [FAIL] Expected CMDINVAL before SW_RST clear, ERROR_STATUS=0x"
+                  << std::hex << read_val << std::dec << std::endl;
+        sub_tests_failed++;
+        test_passed = false;
     }
 
     // Apply SW_RST to clear errors, then release so later tests can run.
