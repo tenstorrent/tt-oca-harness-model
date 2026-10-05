@@ -36,14 +36,20 @@ those consoles live in this model.
 |===
 
 SCRATCH[2] feeds `VirtConsoleDecoder` (opcode/payload protocol,
-line-buffered stdout). SCRATCH[1] feeds `StatusDecoder` (names from
-the vendored `status_values.h` snapshot). Magic writes to SCRATCH[0],
-[4], and [6] ack into [1], [5], and [7] so firmware that polls CocoTB
-does not hang on a standalone VP.
+line-buffered stdout, each line prefixed `[SIM_OUT] - `). SCRATCH[1]
+feeds `StatusDecoder` (names from the vendored `status_values.h`
+snapshot, each line prefixed `[SEP_STATUS] - `), so a log reader can
+tell the two streams apart. Magic writes to SCRATCH[0], [4], and [6]
+ack into [1], [5], and [7] so firmware that polls CocoTB does not hang
+on a standalone VP. The terminal verdict codes the boot ROM and BL1
+write to SCRATCH[0] (`0xACAFACA1` pass, `0xDEADBEEF` fail) print
+`[VP] SIMULATION OF THE TEST PASSED` / `FAILED`; other SCRATCH[0]
+values print nothing.
 
 ----
   TLM MMIO ──► SCRATCH[2] ──► virt console ──► stdout
             ──► SCRATCH[1] ──► SEP_STATUS  ──► stdout
+            ──► SCRATCH[0]     ──► [VP] verdict on pass/fail code
             ──► SCRATCH[0/4/6] ──► handshake ack into [1/5/7]
 ----
 

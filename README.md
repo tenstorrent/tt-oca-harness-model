@@ -992,6 +992,7 @@ SEP (`vp/platform/sep/config/accellera_config.ini`):
 | `och_sep_ss1.gdb` | `true` — GDB server on port 4000 |
 | `och_sep_ss1.smc.primary_chiplet` | `true` for SPI/BL0 boot on standalone `sep-vp` |
 | `och_sep_ss1.spiPreload` / `och_sep_ss1.spiBackdoorFile` | Flash image backdoor |
+| `och_sep_ss1.init_writes` | `"ADDR=VALUE,..."` 32-bit deposits applied through the bus before `sc_start()`, to seed retained pre-boot state; numbers are hex with `0x` or decimal (a leading `0` reads as octal); an unaligned, rejected or unread-back write stops the run; `sep-vp` only, `smu-vp` ignores it |
 | `och_sep_ss1.<model>.verbosity` | Per-model verbosity `0`–`5` |
 | `algorithm_type` | OTBN algorithm (see below) |
 

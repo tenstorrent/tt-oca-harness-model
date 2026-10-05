@@ -5,6 +5,12 @@
 // ===========================================================================
 
 #include "sep_platform.hpp"
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
 #include "tlm_quantum_policy.h"
 
 namespace {
@@ -22,6 +28,37 @@ namespace {
     constexpr uint32_t STATUS_RING_ENTRIES  = 512;      // capacity (real SMC_RING_BUFFER_SIZE)
     constexpr uint64_t STATUS_RING_LOCAL    = static_cast<uint64_t>(SMC_SRAM_WINDOW_OFF) +
                                               STATUS_RING_SRAM_OFF;            // 0x61000 (header)
+
+    std::string trim(std::string value) {
+        const auto first = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
+            return std::isspace(ch);
+        });
+        const auto last = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char ch) {
+            return std::isspace(ch);
+        }).base();
+        return first < last ? std::string(first, last) : std::string();
+    }
+
+    uint32_t parse_init_word(const std::string& text, const char* field,
+                             const std::string& entry) {
+        if (text.empty())
+            throw std::runtime_error("[init_writes] empty " + std::string(field) +
+                                     " in entry: " + entry);
+
+        size_t consumed = 0;
+        unsigned long long parsed = 0;
+        try {
+            parsed = std::stoull(text, &consumed, 0);
+        } catch (const std::exception&) {
+            throw std::runtime_error("[init_writes] invalid " + std::string(field) +
+                                     " in entry: " + entry);
+        }
+        if (consumed != text.size() || parsed > std::numeric_limits<uint32_t>::max()) {
+            throw std::runtime_error("[init_writes] invalid " + std::string(field) +
+                                     " in entry: " + entry);
+        }
+        return static_cast<uint32_t>(parsed);
+    }
 } // namespace
 
 och_sep_ss::och_sep_ss(sc_module_name name)
@@ -81,6 +118,78 @@ och_sep_ss::~och_sep_ss() {
     delete argsReg;
 }
 
+void och_sep_ss::apply_init_writes() {
+    const std::string all = trim(init_writes.get_param_value());
+    if (all.empty())
+        return;
+
+    size_t start = 0;
+    while (start <= all.size()) {
+        const size_t comma = all.find(',', start);
+        const std::string entry = trim(all.substr(
+            start, comma == std::string::npos ? std::string::npos : comma - start));
+        const size_t equal = entry.find('=');
+        if (entry.empty() || equal == std::string::npos ||
+            entry.find('=', equal + 1) != std::string::npos) {
+            throw std::runtime_error(
+                "[init_writes] malformed entry (expected ADDR=VALUE): " + entry);
+        }
+
+        const uint32_t address = parse_init_word(trim(entry.substr(0, equal)), "address", entry);
+        const uint32_t value = parse_init_word(trim(entry.substr(equal + 1)), "value", entry);
+        if ((address & 0x3u) != 0) {
+            throw std::runtime_error("[init_writes] address is not 4-byte aligned: " + entry);
+        }
+
+        std::array<unsigned char, 4> bytes{
+            static_cast<unsigned char>(value),
+            static_cast<unsigned char>(value >> 8),
+            static_cast<unsigned char>(value >> 16),
+            static_cast<unsigned char>(value >> 24),
+        };
+        tlm::tlm_generic_payload trans;
+        trans.set_command(tlm::TLM_WRITE_COMMAND);
+        trans.set_address(address);
+        trans.set_data_ptr(bytes.data());
+        trans.set_data_length(bytes.size());
+        trans.set_streaming_width(bytes.size());
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+
+        constexpr int CPU_INITIATOR_ID = 0;
+        bus->transport_dbg(CPU_INITIATOR_ID, trans);
+        if (trans.get_response_status() < tlm::TLM_INCOMPLETE_RESPONSE) {
+            std::ostringstream message;
+            message << "[init_writes] write rejected at 0x" << std::hex << address
+                    << " (" << trans.get_response_string() << ')';
+            throw std::runtime_error(message.str());
+        }
+
+        // SimpleBus reports the full length whatever the target did, so only a
+        // read-back shows that the deposit landed.
+        std::array<unsigned char, 4> held{};
+        trans.set_command(tlm::TLM_READ_COMMAND);
+        trans.set_address(address);
+        trans.set_data_ptr(held.data());
+        trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+        bus->transport_dbg(CPU_INITIATOR_ID, trans);
+        if (held != bytes) {
+            std::ostringstream message;
+            message << "[init_writes] 0x" << std::hex << address << " reads back 0x"
+                    << (held[0] | held[1] << 8 | held[2] << 16 | uint32_t(held[3]) << 24)
+                    << " after a debug write of 0x" << value
+                    << "; the target does not take debug writes there";
+            throw std::runtime_error(message.str());
+        }
+
+        std::cout << "[init_writes] 0x" << std::hex << address
+                  << " = 0x" << value << std::dec << std::endl;
+
+        if (comma == std::string::npos)
+            break;
+        start = comma + 1;
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Constructor implementation
 // -----------------------------------------------------------------------------
@@ -99,6 +208,7 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
     , spiBackdoorFile("spiBackdoorFile", "")
     , smcSramBackdoorFile("smcSramBackdoorFile", "")
     , smcSramBackdoorOffset("smcSramBackdoorOffset", 0x2000u)
+    , init_writes("init_writes", "")
     , smn_inbound_to_filter("smn_inbound_to_filter")
     , outbound_filter_to_smn("outbound_filter_to_smn")
     , sep_global_base("sep_global_base", 0x0ULL)

@@ -170,6 +170,9 @@ public:
     explicit och_sep_ss(sc_module_name name);
     ~och_sep_ss();
 
+    /// Apply ordered 32-bit ADDR=VALUE deposits before simulation starts.
+    void apply_init_writes();
+
 private:
     BasicOptions opt;
 
@@ -410,6 +413,9 @@ private:
     regmodel::Param<std::string> smcSramBackdoorFile;
     regmodel::Param<uint32_t>    smcSramBackdoorOffset;
     std::string              smcSramBackdoorPath;
+
+    // Ordered comma-separated 32-bit deposits for retained pre-boot state.
+    regmodel::Param<std::string> init_writes;
 
     // Relays sep_smn_inbound_axi (external-facing, 64-bit) into the 32-bit
     // internal inbound chain at inbound_filter->data_socket.
