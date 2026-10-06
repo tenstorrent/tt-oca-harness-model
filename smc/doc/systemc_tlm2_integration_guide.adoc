@@ -422,7 +422,7 @@ interrupts, UART/I2C/I3C pad muxing, cool reset pin, and boot stall.
 at `INSTANCE_SPACING=0x500` behind one aperture.
 
 |PVT
-|`0xC040_3000`
+|`0xC040_5C00`
 |4 KiB
 |`pvt_wrap` stub
 |In `smc_external`, not the local periph window. RTL routes PVT AXI-Lite to the
