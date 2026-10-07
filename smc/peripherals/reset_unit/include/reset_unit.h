@@ -546,7 +546,7 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// straps — PeakRDL `straps` addrmap (SMC_EXTERNAL + 0x5800)
+// straps — PeakRDL `straps` addrmap (SMC_EXTERNAL + 0x3000)
 // ---------------------------------------------------------------------------
 
 struct straps_cfg {
@@ -554,7 +554,7 @@ struct straps_cfg {
     static constexpr uint64_t OFF_STRAPS_HI  = 0x4;
     static constexpr uint64_t WINDOW_SIZE    = 0x8;
     static constexpr uint32_t STRAPS_HI_MASK = 0x1FFFFFFFu; ///< [28:0]
-    static constexpr uint64_t SMC_BASE_ADDR  = 0xC040'5800ULL;
+    static constexpr uint64_t SMC_BASE_ADDR  = 0xC040'3000ULL;
 };
 
 /// Firmware-visible captured GPIO straps. Separate from reset_unit.rdl.

@@ -446,14 +446,14 @@ och_sep_ss::och_sep_ss(sc_module_name name, BasicOptions& opt_in)
         smc_global->load_data(reinterpret_cast<const char*>(&dfx_status),
                               SMC_DFX_CTRL_STATUS, sizeof(dfx_status));
 
-        // SMC_EXTERNAL straps (STRAPS_LO/HI @ +0x5800), composed from CCI params so
+        // SMC_EXTERNAL straps (STRAPS_LO/HI @ +0x3000), composed from CCI params so
         // the ROM boot mode is invocation-selectable. init_straps() reads these:
         // STRAPS_LO[25]=primary_chiplet selects Primary (SPI boot) vs Secondary (wait
         // for SMC manifest). Bit index is the GPIO index; STRAPS_HI[N] is GPIO N+32.
         // Bit positions must match SMC_STRAP_*_BIT in the ROM's sep_smc_interface.h
         // (tt-oca-harness: hw/sys/sep/bootrom/prod/include/).
-        constexpr uint64_t SMC_STRAPS_LO = 0x405800;  // SMC_STRAPS_LO_OFFSET
-        constexpr uint64_t SMC_STRAPS_HI = 0x405804;  // SMC_STRAPS_HI_OFFSET
+        constexpr uint64_t SMC_STRAPS_LO = 0x403000;  // SMC_STRAPS_LO_OFFSET
+        constexpr uint64_t SMC_STRAPS_HI = 0x403004;  // SMC_STRAPS_HI_OFFSET
         constexpr unsigned STRAP_LO_BOOT_RECOVERY_BIT      = 19;
         constexpr unsigned STRAP_LO_BL0_PLLCLK_BIT         = 20;
         constexpr unsigned STRAP_LO_STATUS_RPT_DISABLE_BIT = 21;

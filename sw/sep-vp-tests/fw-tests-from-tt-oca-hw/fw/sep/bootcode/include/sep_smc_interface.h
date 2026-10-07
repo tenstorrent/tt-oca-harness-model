@@ -36,9 +36,9 @@ static inline uint32_t sep_get_smc_base(void) {
 // ---------------------------------------------------------------------------
 
 // Captured GPIO straps (straps.rdl in SMC_EXTERNAL, not reset_unit).
-// Absolute SMC address 0xC040_5800; SEP window base is 0x4000_0000.
-#define SMC_STRAPS_LO_OFFSET        0x405800u
-#define SMC_STRAPS_HI_OFFSET        0x405804u
+// Absolute SMC address 0xC040_3000; SEP window base is 0x4000_0000.
+#define SMC_STRAPS_LO_OFFSET        0x403000u
+#define SMC_STRAPS_HI_OFFSET        0x403004u
 
 // CPU_CTRL scratch registers (64-bit stride: index * 8).
 #define SMC_SCRATCH_BASE_OFFSET     0x39080u

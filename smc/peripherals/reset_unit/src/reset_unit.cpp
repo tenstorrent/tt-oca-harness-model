@@ -645,7 +645,7 @@ straps::straps(sc_core::sc_module_name name)
     access_delay_ns_p_.add_metadata("tlm_phase", cci::cci_value(std::string("annotated_delay")));
     reg_socket.register_b_transport(this, &straps::b_transport);
     reg_socket.register_transport_dbg(this, &straps::transport_dbg);
-    SIM_LOG_INFO(this, "straps instantiated at SMC_EXTERNAL + 0x5800");
+    SIM_LOG_INFO(this, "straps instantiated at SMC_EXTERNAL + 0x3000");
 }
 
 bool straps::reg_read(uint64_t off, uint32_t& data) const

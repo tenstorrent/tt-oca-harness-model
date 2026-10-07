@@ -57,8 +57,8 @@
 .equ DFT_MBIST_DONE,            (1 << 4)
 .equ DFT_MBIST_PASS,            (1 << 8)
 .equ DFT_MBIST_ABORT,           (1 << 12)
-.equ SMC_STRAPS_LO,             SEP_SMC_GLOBAL_BASE + 0x405800
-.equ SMC_STRAPS_HI,             SEP_SMC_GLOBAL_BASE + 0x405804
+.equ SMC_STRAPS_LO,             SEP_SMC_GLOBAL_BASE + 0x403000
+.equ SMC_STRAPS_HI,             SEP_SMC_GLOBAL_BASE + 0x403004
 .equ STRAP_BYPASS_SRAM_REPAIR,  (1 << 13)
 .equ STRAP_MBIST_BYPASS_HI,     (1 << 22)
 .equ SEP_EFUSE_STATUS_RPT,      SEP_EFUSE_MAP_STATUS_RPT_REG_ADDR

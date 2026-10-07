@@ -23,7 +23,7 @@
  *   system_timer_octs @ 0xC000_A000
  *   AOU CSRs          @ 0xC000_C000 (D1=A VP-only park; not in smc_top)
  *   oca_i3c_wrap_0    @ 0xC003_A000
- *   PLL / PVT         @ 0xC040_2000 / 0xC040_3000 (smc_external)
+ *   PLL / PVT         @ 0xC040_2000 / 0xC040_5C00 (smc_external)
  * PLIC/CLINT/BEU remain at VP local-alias bases until Phase 3 (D2=P1). */
 #define SMC_WDT_DEBUG_BASE   0xC0000000ULL
 #define SMC_WDT0_BASE        0xC0000000ULL
@@ -62,7 +62,7 @@
 #define SMC_BOOTROM_BASE     0xC0040000ULL
 #define SMC_SCRATCH_BASE     0xC0060000ULL
 #define SMC_PLL_WRAP_BASE    0xC0402000ULL
-#define SMC_PVT_WRAP_BASE    0xC0403000ULL
+#define SMC_PVT_WRAP_BASE    0xC0405C00ULL
 /* Cluster-internal blocks (smc_addrmap_pkg SMC_TOP_SMC_CLUSTER_*), Phase 3.
  * Above the fabric's 16 MB local-alias window on purpose: the harts reach
  * these over the cluster's own bus, not through the SMC fabric. */

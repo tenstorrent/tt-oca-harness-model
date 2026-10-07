@@ -144,7 +144,7 @@ class BasicOptions : public Args {
         // RTL's smc_global_base_addr_i/smc_region_size_i and are what the bus
         // actually decodes against; a platform with a real SMC attached presets
         // them to the window that SMC declares. 8 MiB covers the SMC regs,
-        // SRAM, and the straps addrmap at SMC_EXTERNAL + 0x5800 (offset 0x405800).
+        // SRAM, and the straps addrmap at SMC_EXTERNAL + 0x3000 (offset 0x403000).
         addr_t smc_global_start_addr      = 0x40000000;  // SEP_SMC_GLOBAL_BASE
         addr_t smc_global_end_addr        = 0x407FFFFF;  // 8 MiB
 
