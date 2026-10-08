@@ -519,10 +519,14 @@ struct tb : sc_core::sc_module {
 }  // namespace
 
 // `--bad-endpoints N`: elaborate one adapter with num_endpoints = N in its own
-// process. Exits 0 only if elaboration raised SC_FATAL with the range message.
+// process. Exits 0 only when elaboration reports SC_FATAL with the range
+// message. The fatal is cached instead of thrown: an SC_THROW from the
+// uninstrumented SystemC library is not catchable in an ASan binary, and
+// abort() then fails CTest as a signal.
 int sc_main(int argc, char** argv)
 {
-    cci::cci_register_broker(new cci_utils::consuming_broker("GlobalBroker"));
+    static cci_utils::consuming_broker cci_global_broker("GlobalBroker");
+    cci::cci_register_broker(cci_global_broker);
     cci::cci_originator cfg("tb_cfg");
     auto broker = cci::cci_get_global_broker(cfg);
 
@@ -530,18 +534,16 @@ int sc_main(int argc, char** argv)
         const unsigned n = static_cast<unsigned>(std::stoul(argv[2]));
         broker.set_preset_cci_value("bad.num_endpoints", cci::cci_value(n));
         sc_core::sc_report_handler::set_actions(
-            sc_core::SC_FATAL, sc_core::SC_DISPLAY | sc_core::SC_THROW);
-        try {
-            sep::drbg_edn_adapter bad("bad");
-        } catch (const sc_core::sc_report& r) {
-            const bool ok = std::string(r.get_msg()).find(
-                                "num_endpoints must be in 1..32") != std::string::npos;
-            std::cout << (ok ? "PASS" : "FAIL") << ": num_endpoints=" << n
-                      << " fatal: " << r.get_msg() << "\n";
-            return ok ? 0 : 1;
-        }
-        std::cout << "FAIL: num_endpoints=" << n << " elaborated\n";
-        return 1;
+            sc_core::SC_FATAL,
+            sc_core::SC_DISPLAY | sc_core::SC_CACHE_REPORT);
+        sep::drbg_edn_adapter bad("bad");
+        const sc_core::sc_report* r = sc_core::sc_report_handler::get_cached_report();
+        const std::string msg = r ? r->get_msg() : "(none)";
+        sc_core::sc_report_handler::clear_cached_report();
+        const bool ok = msg.find("num_endpoints must be in 1..32") != std::string::npos;
+        std::cout << (ok ? "PASS" : "FAIL") << ": num_endpoints=" << n
+                  << " fatal: " << msg << "\n";
+        return ok ? 0 : 1;
     }
 
     broker.set_preset_cci_value("tb.dut2.num_endpoints", cci::cci_value(2u));
