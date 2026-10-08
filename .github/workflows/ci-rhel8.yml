@@ -522,7 +522,7 @@ jobs:
           BOOST_ROOT:   ${{ env.BOOST_HOME }}
         run: |
           smc/run_all_smc_tests.sh \
-            bootrom clint dma i3c_controller plic pvt_wrap reset_unit scratchpad_ram \
+            bootrom clint dma i3c_controller octs_system_timer plic pvt_wrap reset_unit scratchpad_ram \
             telemetry_receiver aou
 
       - name: Upload SMC peripheral test logs

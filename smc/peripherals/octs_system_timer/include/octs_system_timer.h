@@ -29,9 +29,10 @@
  * Off   Name                SW   Reset        Description
  * ─────────────────────────────────────────────────────────────────────────────
  * 0x00  TIMER_START         RW   0x00000000   START[0], singlepulse. Writing 1
- *                                             emits a one-cycle start pulse:
- *                                             loads the preset and (PRIMARY)
- *                                             emits sync_load. Reads back 0.
+ *                                             emits a one-cycle start pulse.
+ *                                             A PRIMARY loads the preset and
+ *                                             emits sync_load. A SECONDARY
+ *                                             ignores the pulse. Reads back 0.
  * 0x04  CTRL                RW   0x0001020A   CREDIT_VAL[7:0]   = 0x0A
  *                                             PULSE_WIDTH[15:8] = 0x02
  *                                             STEP[23:16]       = 0x01
@@ -92,8 +93,9 @@
  *   0..CREDIT_VAL-1; on wrap it emits a credit pulse.  Both `sync_load_o` and
  *   `cnt_credit_o` are asserted for PULSE_WIDTH cycles (0 is treated as 1).
  *   Sync *inputs* are ignored.
- * - **SECONDARY**: idle until a `sync_load` pulse arrives, which loads the
- *   preset and latches `enable`.  Thereafter the counter advances by STEP each
+ * - **SECONDARY**: `reg_start_i` is ignored. The timer stays idle until a
+ *   `sync_load` pulse arrives, which loads the preset and latches `enable`.
+ *   Thereafter the counter advances by STEP each
  *   cycle while `cur_credits < CREDIT_VAL`, accumulating `cur_credits` by STEP.
  *   Once the budget is exhausted the counter *halts* and a 32-bit
  *   credit-expired counter ticks (surfaced as the peak via CREDIT_EXPIRED).  A

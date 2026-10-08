@@ -126,7 +126,11 @@ void octs_system_timer::tick_method()
     const uint64_t preset   = (static_cast<uint64_t>(preset_hi_) << 32) | preset_lo_;
 
     // START is a singlepulse: visible to the datapath for exactly one cycle.
+    // A secondary has no path from reg_start_i: only a primary loads the
+    // preset and latches enable from that pulse (system_timer_octs_core.sv
+    // `primary_start`).
     const bool start = start_req_;
+    const bool primary_start = primary && start;
 
     // Edge-detect pulses are combinational (`q_sync_d & ~q_sync_q`) and are
     // gated off in PRIMARY mode, which ignores its sync inputs.
@@ -140,15 +144,16 @@ void octs_system_timer::tick_method()
 
     // ---- Next state ------------------------------------------------------
 
-    // `enable` is sticky: only reset clears it.
-    const bool enable_d = enable_ || start || sl_pulse;
+    // `enable` is sticky: only reset clears it. A secondary START does not
+    // set it; sync_load does.
+    const bool enable_d = enable_ || primary_start || sl_pulse;
 
     // Main counter.
     uint64_t count_d = timer_count_;
-    if (!enable_ && !start && !sl_pulse) {
+    if (!enable_ && !primary_start && !sl_pulse) {
         count_d = 0;
     } else if (primary) {
-        count_d = start ? preset : (timer_count_ + 1);
+        count_d = primary_start ? preset : (timer_count_ + 1);
     } else {
         if (sl_pulse) {
             count_d = preset;
@@ -164,7 +169,7 @@ void octs_system_timer::tick_method()
     // PRIMARY credit generator (held at 0 in SECONDARY mode).
     uint8_t credit_counter_d = 0;
     if (primary) {
-        if (!enable_ || start) {
+        if (!enable_ || primary_start) {
             credit_counter_d = 0;
         } else if (credit_counter_ >= static_cast<uint8_t>(cv - 1)) {
             credit_counter_d = 0;
@@ -204,7 +209,7 @@ void octs_system_timer::tick_method()
     // is_primary_i — only the outputs — so this is modelled verbatim.
     pulse_state ps_d = pulse_active_;
     uint8_t     pc_d = pulse_counter_;
-    if (start && pulse_active_ == pulse_state::idle) {
+    if (primary_start && pulse_active_ == pulse_state::idle) {
         ps_d = pulse_state::sync_load;
         pc_d = 0;
     } else if (enable_ && credit_gen_pulse &&

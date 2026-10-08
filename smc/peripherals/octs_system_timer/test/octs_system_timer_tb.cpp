@@ -1559,23 +1559,43 @@ void tb::test_start_retrigger()
     CHECK_TRUE("pulse FSM stays on credit (not forced to sync)",
                cc_p2s.read() && !sl_p2s.read());
 
-    // SECONDARY: START sets sticky enable but does not take the preset-load
-    // path (that needs sl_pulse).  With enable set, the STEP path runs from 0.
+    // SECONDARY ignores reg_start_i. Enable stays clear and the count
+    // stays 0; the preset loads only from a later sync_load pulse.
     apply_reset();
     is_primary_x.write(false);
     drv_x.write32(cfg_t::OFF_CTRL, cfg_t::CTRL_RESET);  // STEP=1
     drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x500u);
     drv_x.write32(cfg_t::OFF_TIMER_START, 1u);
     advance();
-    CHECK_TRUE("SECONDARY START sets enable", dut_x.dbg_enabled());
-    CHECK_EQ("SECONDARY START steps from 0 (does not load preset)",
-             count_x.read(), 1u);
+    CHECK_EQ("SECONDARY START: STATUS not RUNNING",
+             drv_x.read32(cfg_t::OFF_STATUS), cfg_t::STATUS_MODE);
+    CHECK_TRUE("SECONDARY START leaves enable clear", !dut_x.dbg_enabled());
+    CHECK_EQ("SECONDARY START leaves count at 0", count_x.read(), 0u);
     CHECK_TRUE("SECONDARY START outputs stay gated off", !sl_x_o.read());
-    advance(5);
-    CHECK_EQ("SECONDARY START keeps stepping without sync_load",
-             count_x.read(), 6u);
-    CHECK_TRUE("COUNT never jumped to the programmed preset",
-               count_x.read() != 0x500u);
+    advance(kDocumentedSyncLatency + 4);
+    CHECK_EQ("SECONDARY START neither loads 0x500 nor steps", count_x.read(), 0u);
+    CHECK_EQ("SECONDARY START: COUNT_LO still 0",
+             drv_x.read32(cfg_t::OFF_TIMER_COUNT_LO), 0u);
+
+    // Positive control: the same programming does start the timer once a
+    // sync_load arrives, so the ignored START above is not a dead timer.
+    pulse(sl_drv, 2);
+    advance(kDocumentedSyncLatency - 2);
+    CHECK_EQ("SECONDARY sync_load loads the preset", count_x.read(), 0x500u);
+    CHECK_EQ("SECONDARY sync_load: STATUS RUNNING",
+             drv_x.read32(cfg_t::OFF_STATUS),
+             cfg_t::STATUS_MODE | cfg_t::STATUS_RUNNING);
+
+    // While running, a new preset + START must not reload (a PRIMARY would).
+    advance();
+    CHECK_EQ("SECONDARY steps after sync", count_x.read(), 0x501u);
+    drv_x.write32(cfg_t::OFF_TIMER_PRESET_LO, 0x600u);
+    drv_x.write32(cfg_t::OFF_TIMER_START, 1u);
+    advance();
+    CHECK_EQ("SECONDARY running START does not reload 0x600",
+             count_x.read(), 0x502u);
+    CHECK_TRUE("SECONDARY running START does not restart the pulse FSM",
+               !sl_x_o.read());
 
     std::cout << "START retrigger OK\n";
 }

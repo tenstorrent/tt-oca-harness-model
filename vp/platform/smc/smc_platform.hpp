@@ -29,6 +29,7 @@
 #include "sim_log.h"
 #include "smc_axi_extension.h"
 #include "smc_fabric.h"
+#include "smc_gpio_irq.h"
 
 #include "bootrom.h"
 // Path-qualified ("clint/include/...", "uart/include/...") because the SEP
@@ -82,11 +83,12 @@ public:
     // SEP mailbox channels feeding peripheral_interrupts_o[7:0] (sep_pkg::NUM_MAILBOXES).
     static constexpr unsigned NUM_SEP_MAILBOX = 8;
     // Peripheral IRQ inputs: SEP mailbox[0..7], telemetry[0..2], i3c[0..5],
-    // uart[0..3], avsbus, i2c[0..2], AXI hang, and wdt[0..3]. AOU is deliberately absent:
-    // RTL does not assign it a peripheral_interrupts_o slot.
+    // uart[0..3], avsbus, i2c[0..2], AXI hang, wdt[0..3], and the two GPIO
+    // half-ORs (wraps [31:0] and [64:32] of NumGpioWraps). AOU is deliberately
+    // absent: RTL does not assign it a peripheral_interrupts_o slot.
     static constexpr unsigned NUM_PERIPH_IRQ =
         NUM_SEP_MAILBOX + NUM_TELEMETRY + NUM_I3C + NUM_UART + 1 + NUM_I2C
-        + 1 + NUM_HARTS;
+        + 1 + NUM_HARTS + 2;
     // RTL packs peripheral_interrupts_i at cpu_interrupts_o[NUM_EXT_INTERRUPTS+:32]
     // and the PLIC's source ID is that bit index + 1, so peripheral bit b is
     // source 256 + b + 1 in the 4-core configuration.
@@ -128,6 +130,9 @@ public:
     /// it false via its .ini to exercise the SECONDARY branch — with no
     /// sync_load source in the SMC VP the timer then stays idle by design.
     cci::cci_param<bool> octs_is_primary_p_;
+    /// Captured GPIO strap word fed to reset_unit and the `straps` addrmap
+    /// (smc_external + 0x3000). Fixed at power-on, so immutable.
+    cci::cci_param<uint64_t, cci::CCI_IMMUTABLE_PARAM> captured_straps_p_;
     // Test-only telemetry ATB inject (elaboration-time).  Firmware cannot drive
     // the ATB byte stream; one message can be pushed into a named receiver
     // before sc_start() so register-visible probe_id / counters are already
@@ -250,6 +255,11 @@ public:
     // the zeroer's 32-bit initiator to the 64-bit fabric target.  Addresses stay
     // absolute until the fabric re-routes them.
     width_adapter<32, 64>       wa_zeroer_dma{"wa_zeroer_dma"};
+    gpio_irq_reduce             gpio_irqs{"gpio_irqs"};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> gpio_wrap_irq{
+        "gpio_wrap_irq", kNumGpioWraps};
+    sc_core::sc_signal<bool>    gpio_irq_lower{"gpio_irq_lower"};
+    sc_core::sc_signal<bool>    gpio_irq_upper{"gpio_irq_upper"};
     interrupt_aggregator        intagg;
 
     // -----------------------------------------------------------------------

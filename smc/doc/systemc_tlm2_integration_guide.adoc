@@ -411,8 +411,10 @@ PLL shim AXI-Lite port. No SystemC SMC PLL model exists.
 |`0xC000_3000`
 |`gpio_intf[65]`, stride `0x10`
 |Named stub
-|RTL connects 64 bonded + 4 unbonded GPIO wrappers, strap capture, GPIO
+|RTL connects 65 GPIO wraps (`NumGpioWraps`), strap capture, GPIO
 interrupts, UART/I2C/I3C pad muxing, cool reset pin, and boot stall.
+Interrupt bit 28 is the OR of wraps `[31:0]` and bit 29 is the OR of
+wraps `[64:32]`.
 
 |I3C controller
 |`0xC003_A000`
@@ -426,7 +428,7 @@ at `INSTANCE_SPACING=0x500` behind one aperture.
 |4 KiB
 |`pvt_wrap` stub
 |In `smc_external`, not the local periph window. RTL routes PVT AXI-Lite to the
-top-level shim and routes `temp_interrupt_i` into peripheral interrupt bit 27.
+top-level shim. `temp_interrupt_o` is not a `peripheral_interrupts_o` bit.
 
 |AVSBus
 |`0xC000_4000`
@@ -991,7 +993,7 @@ registers and expose deterministic lifecycle/chip config values.
 
 |GPIO/padring
 |`smc_padring`, GPIO control, strap capture, protocol muxing
-|GPIO interrupts bits 29 and 30, boot stall, cool reset pin
+|GPIO interrupts bits 28 and 29 (OR of all 65 wraps), boot stall, cool reset pin
 |Provide strap inputs, boot-stall control, and GPIO interrupt forcing APIs.
 
 |PVT
@@ -1097,10 +1099,10 @@ RTL builds the 32-bit `peripheral_interrupts_o` in `smc_peripherals.sv`:
 |22 |`avsbus_irq_smc_clk` |`avsbus_controller.irq_o`
 |25:23 |`i2c_irqs_smc_clk` |`i2c_controller.irq_o[2:0]` (3 instances)
 |26 |Synchronized active-high SEP WDT reset assertion |Top-level SEP WDT input
-|27 |`temp_interrupt_smc_clk` |PVT/temp input or stub
-|28 |`locked_field_access_interrupt` |eFuse/security model
-|29 |OR of lower half GPIO interrupts |GPIO/padring model
-|30 |OR of upper half GPIO interrupts |GPIO/padring model
+|27 |`locked_field_access_interrupt` |eFuse/security model
+|28 |OR of GPIO wraps `[NumGpioWraps/2-1:0]` (65 wraps, lower half) |GPIO/padring model
+|29 |OR of GPIO wraps `[NumGpioWraps-1:NumGpioWraps/2]` |GPIO/padring model
+|30 |OR of the three AXI hang detectors |`smc_fabric.axi_hang_irq_o`
 |31 |Unused in current RTL composition |Tie low unless RTL changes
 |===
 
