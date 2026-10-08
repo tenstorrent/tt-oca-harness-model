@@ -151,10 +151,12 @@ VP_BUILD_DIR="${VP_BUILD_DIR:-${REPO_ROOT}/vp/build_smc}"
 find_vp_binary() {
     local candidates=()
     [ -n "${VP:-}" ] && candidates+=("${VP}")
+    # VP_BUILD_DIR first: it is where build_vp() writes, so a stale binary in
+    # another build tree must not shadow the one --build-vp just produced.
     candidates+=(
-        "${REPO_ROOT}/vp/build/bin/smc-vp"
-        "${REPO_ROOT}/vp/build_smc/bin/smc-vp"
         "${VP_BUILD_DIR}/bin/smc-vp"
+        "${REPO_ROOT}/vp/build_smc/bin/smc-vp"
+        "${REPO_ROOT}/vp/build/bin/smc-vp"
     )
     for c in "${candidates[@]}"; do
         if [ -x "${c}" ]; then

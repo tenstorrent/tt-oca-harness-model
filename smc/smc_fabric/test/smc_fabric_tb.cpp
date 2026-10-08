@@ -37,6 +37,7 @@
 // Convention: prints "ALL TESTS PASSED" on success; non-zero exit on failure.
 
 #include <systemc>
+#include "smc_gpio_irq.h"
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
@@ -296,6 +297,11 @@ struct tb : sc_core::sc_module {
     sc_core::sc_signal<bool> rst_n_nr{"rst_n_nr"};
     sc_core::sc_signal<bool> hang_irq{"hang_irq"};
     sc_core::sc_signal<bool> hang_irq_nr{"hang_irq_nr"};
+    smc::gpio_irq_reduce gpio_irqs{"gpio_irqs"};
+    sc_core::sc_vector<sc_core::sc_signal<bool>> gpio_wrap{
+        "gpio_wrap", smc::kNumGpioWraps};
+    sc_core::sc_signal<bool> gpio_lower{"gpio_lower"};
+    sc_core::sc_signal<bool> gpio_upper{"gpio_upper"};
     sc_core::sc_event start_sys, start_sep, start_sep2, start_daccel;
     bool sys_done = false;
     bool sep_done = false;
@@ -327,6 +333,11 @@ struct tb : sc_core::sc_module {
         , p_nr_aR("p_nr_aR"), p_nr_mR("p_nr_mR"), p_nr_xR("p_nr_xR")
         , p_nr_ibf("p_nr_ibf"), p_nr_obf("p_nr_obf")
     {
+        for (unsigned i = 0; i < smc::kNumGpioWraps; ++i)
+            gpio_irqs.wrap_irq[i].bind(gpio_wrap[i]);
+        gpio_irqs.lower_o.bind(gpio_lower);
+        gpio_irqs.upper_o.bind(gpio_upper);
+
         // Inbound: driver → fabric target sockets.
         d_jtag  .sock.bind(dut.jtag_axi_in);
         d_mmio  .sock.bind(dut.mmio_in);
@@ -437,10 +448,61 @@ struct tb : sc_core::sc_module {
         d_mmio.write32(window + 0x14, static_cast<uint32_t>(end >> 32) & 0x00FF'FFFFu);
     }
 
+    void test_gpio_irq_halves() {
+        // #2950: all 65 wraps contribute. The split is NumGpioWraps/2, so
+        // wraps [31:0] are peripheral bit 28 and wraps [64:32] are bit 29.
+        // Wrap 64 used to sit past the bonded-only OR and was invisible.
+        auto settle = [] {
+            sc_core::wait(SC_ZERO_TIME);
+            sc_core::wait(SC_ZERO_TIME);
+        };
+        auto clear = [&] {
+            for (unsigned i = 0; i < smc::kNumGpioWraps; ++i)
+                gpio_wrap[i].write(false);
+            settle();
+        };
+        EXPECT_EQ(65u, smc::kNumGpioWraps);  // smc_pkg::NumGpioWraps
+        clear();
+        EXPECT_EQ(false, gpio_lower.read());
+        EXPECT_EQ(false, gpio_upper.read());
+
+        // One-hot sweep over every wrap. Oracle: smc_peripherals.sv
+        // [28] = |gpio_interrupt[31:0], [29] = |gpio_interrupt[64:32].
+        for (unsigned i = 0; i < 65u; ++i) {
+            gpio_wrap[i].write(true);
+            settle();
+            EXPECT_EQ(i <= 31u, gpio_lower.read());
+            EXPECT_EQ(i >= 32u, gpio_upper.read());
+            gpio_wrap[i].write(false);
+            settle();
+            EXPECT_EQ(false, gpio_lower.read());
+            EXPECT_EQ(false, gpio_upper.read());
+        }
+
+        // Level OR: the half stays high until its last source drops.
+        gpio_wrap[0].write(true);
+        gpio_wrap[64].write(true);
+        settle();
+        EXPECT_EQ(true, gpio_lower.read());
+        EXPECT_EQ(true, gpio_upper.read());
+        gpio_wrap[31].write(true);
+        gpio_wrap[0].write(false);
+        settle();
+        EXPECT_EQ(true, gpio_lower.read());
+        gpio_wrap[31].write(false);
+        settle();
+        EXPECT_EQ(false, gpio_lower.read());
+        EXPECT_EQ(true, gpio_upper.read());
+        clear();
+        EXPECT_EQ(false, gpio_upper.read());
+        std::cout << "  [PASS] GPIO irq halves over all 65 wraps\n";
+    }
+
     void run() {
         std::cout << "==== SMC Fabric TB ====\n";
         rst_n.write(true);
         sc_core::wait(1, SC_NS);
+        test_gpio_irq_halves();
 
         // ----------------------------------------------------------------
         // 1. Reset / power-on defaults.
@@ -1348,11 +1410,38 @@ struct tb : sc_core::sc_module {
         sc_core::wait(SC_ZERO_TIME);
         sc_core::wait(SC_ZERO_TIME);
         EXPECT_TRUE(hang_irq.read());
+        EXPECT_EQ(0x1111u, d_mmio.read32(A_HANG_SYS_CTRL));
+        EXPECT_EQ(0u, d_mmio.read32(A_HANG_SEP_CTRL) & 0x1000u);
+        EXPECT_EQ(0u, d_mmio.read32(A_HANG_DATA_CTRL) & 0x1000u);
+        d_mmio.write32(A_HANG_SYS_CTRL, 0x1000u);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_EQ(0u, d_mmio.read32(A_HANG_SYS_CTRL));
+        EXPECT_EQ(false, hang_irq.read());
+        d_mmio.write32(A_HANG_SYS_CTRL, 0x111u);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(hang_irq.read());
         d_mmio.write32(A_HANG_SYS_CTRL, 0x101u);
         sc_core::wait(SC_ZERO_TIME);
         sc_core::wait(SC_ZERO_TIME);
         EXPECT_EQ(false, hang_irq.read());
+        EXPECT_EQ(0x101u, d_mmio.read32(A_HANG_SYS_CTRL));  // irq_en gates irq[12]
         d_mmio.write32(A_HANG_SYS_CTRL, 0x110u);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_EQ(false, hang_irq.read());
+        EXPECT_EQ(0x110u, d_mmio.read32(A_HANG_SYS_CTRL));  // enable gates irq[12]
+        // Each detector's status is its own: SEP alone interrupting.
+        d_mmio.write32(A_HANG_SYS_CTRL, 0u);
+        d_mmio.write32(A_HANG_SEP_CTRL, 0x111u);
+        sc_core::wait(SC_ZERO_TIME);
+        sc_core::wait(SC_ZERO_TIME);
+        EXPECT_TRUE(hang_irq.read());
+        EXPECT_EQ(0u, d_mmio.read32(A_HANG_SYS_CTRL));
+        EXPECT_EQ(0x1111u, d_mmio.read32(A_HANG_SEP_CTRL));
+        EXPECT_EQ(0u, d_mmio.read32(A_HANG_DATA_CTRL));
+        d_mmio.write32(A_HANG_SEP_CTRL, 0u);
         sc_core::wait(SC_ZERO_TIME);
         sc_core::wait(SC_ZERO_TIME);
         EXPECT_EQ(false, hang_irq.read());
@@ -1381,10 +1470,15 @@ struct tb : sc_core::sc_module {
         sc_core::wait(SC_ZERO_TIME);
         sc_core::wait(SC_ZERO_TIME);
         EXPECT_TRUE(hang_irq.read());      // T
+        EXPECT_EQ(0x1011u, d_mmio.read32(A_HANG_SYS_CTRL));
+        EXPECT_EQ(0x1011u, d_mmio.read32(A_HANG_SEP_CTRL));
+        EXPECT_EQ(0x1011u, d_mmio.read32(A_HANG_DATA_CTRL));
         sc_core::wait(3, SC_NS);
         sc_core::wait(SC_ZERO_TIME);
         EXPECT_TRUE(sys_done && sep_done);
         EXPECT_TRUE(hang_irq.read());      // data-accelerator leg still hung
+        EXPECT_EQ(0u, d_mmio.read32(A_HANG_SYS_CTRL) & 0x1000u);
+        EXPECT_EQ(0x1011u, d_mmio.read32(A_HANG_DATA_CTRL));
         sc_core::wait(3, SC_NS);
         sc_core::wait(SC_ZERO_TIME);
         sc_core::wait(SC_ZERO_TIME);

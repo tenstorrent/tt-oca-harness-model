@@ -102,6 +102,10 @@ snapshots its threshold when an outstanding window starts. A downstream
 completion is progress: it clears the level and rearms any remaining
 outstanding traffic. Annotated delay alone is never a hang. Threshold zero
 disables real timeout, while `irq_test` remains gated by `enable && irq_en`.
+Each `HANG_DET_*_CTRL` register returns `irq[12]` while that detector's
+interrupt is asserted, so software can see which master hung. The bit
+is a live level: it clears when `enable` or `irq_en` drops or the stall
+completes, and a write to it is ignored.
 
 ====== Remap CSR images
 

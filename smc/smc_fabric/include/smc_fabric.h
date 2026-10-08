@@ -317,6 +317,10 @@ private:
     void hang_timeout_data_accel();
     void update_hang_irq();
     void request_hang_irq_update();
+    /// Live HANG_DET_CTRL.irq[12] for one detector. Software reads this to
+    /// see which master hung. It is a level, not a latch: high only while
+    /// enable, irq_en, and (timeout or irq_test) are all true.
+    bool hang_irq_level(hang_leg leg) const;
     regmodel::Register64& hang_ctrl(hang_leg leg);
     regmodel::Register64& hang_threshold(hang_leg leg);
 

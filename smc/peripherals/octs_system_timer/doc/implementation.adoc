@@ -24,7 +24,9 @@ octs_system_timer   PRIMARY/SECONDARY datapath, pulse FSM   (octs_system_timer.*
 asynchronous assertion on `rst_n_i`. `output_method` is the only
 writer of the output ports (also sensitive to `is_primary_i`).
 `TIMER_START` is a singlepulse: a write of 1 arms `start_req_`,
-consumed for one cycle on the next rising edge.
+consumed for one cycle on the next rising edge. Only a primary timer
+uses it. A secondary ignores the pulse and loads its preset from
+`sync_load`.
 
 Sync inputs go through a four-flop chain
 (`SYNC_LATENCY_CYCLES = 4`) matching `prim_edge_detector`. PRIMARY

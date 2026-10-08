@@ -208,19 +208,25 @@ void smc_fabric::hang_timeout_data_accel()
     hang_timeout(hang_leg::data_accel);
 }
 
+bool smc_fabric::hang_irq_level(hang_leg leg) const
+{
+    const regmodel::Register64* regs[3] = {
+        &hang_sys_ctrl_, &hang_sep_ctrl_, &hang_data_accel_ctrl_};
+    const uint64_t ctrl = regs[static_cast<unsigned>(leg)]->read();
+    const bool enabled = (ctrl & 1u) != 0u;
+    const bool irq_enabled = (ctrl & (1u << 4)) != 0u;
+    const bool irq_test = (ctrl & (1u << 8)) != 0u;
+    const auto& state = hang_states_[static_cast<unsigned>(leg)];
+    return rst_n_i.read() && enabled && irq_enabled &&
+           (irq_test || state.timed_out);
+}
+
 void smc_fabric::update_hang_irq()
 {
     bool irq = false;
-    for (unsigned i = 0; i < hang_states_.size(); ++i) {
-        const auto leg = static_cast<hang_leg>(i);
-        const uint64_t ctrl = hang_ctrl(leg).read();
-        const bool enabled = (ctrl & 1u) != 0u;
-        const bool irq_enabled = (ctrl & (1u << 4)) != 0u;
-        const bool irq_test = (ctrl & (1u << 8)) != 0u;
-        irq = irq || (enabled && irq_enabled &&
-                      (irq_test || hang_states_[i].timed_out));
-    }
-    axi_hang_irq_o.write(rst_n_i.read() && irq);
+    for (unsigned i = 0; i < hang_states_.size(); ++i)
+        irq = irq || hang_irq_level(static_cast<hang_leg>(i));
+    axi_hang_irq_o.write(irq);
 }
 
 // ---------------------------------------------------------------------------
@@ -911,7 +917,13 @@ bool smc_fabric::handle_global_csr(tlm::tlm_generic_payload& trans,
                 request_hang_irq_update();
             }
         } else {
-            const uint64_t value = reg->read();
+            uint64_t value = reg->read();
+            // HANG_DET_CTRL.irq[12] is hw-written and sw-read. The stored
+            // word only keeps the RW fields (mask 0x111); the status bit is
+            // overlaid here so a write of bit 12 cannot stick.
+            if (ctrl_leg >= 0 &&
+                hang_irq_level(static_cast<hang_leg>(ctrl_leg)))
+                value |= (1ull << 12);
             std::memcpy(trans.get_data_ptr(), &value,
                         std::min(trans.get_data_length(), 8u));
         }

@@ -30,8 +30,9 @@ struct pvt_wrap_cfg {
     /// Simulated sensor/tick period in nanoseconds. 0 disables auto-tick.
     double tick_period_ns = 10.0;
 
-    /// Base address in the SMC address map (informational only).
-    static constexpr uint64_t SMC_BASE_ADDR = 0xC040'2000ULL;
+    /// SMC external supplementary window (smc_external + 0x5C00).
+    /// tt-oca-harness #2922 moved PVT here from the old +0x3000 slot.
+    static constexpr uint64_t SMC_BASE_ADDR = 0xC040'5C00ULL;
 
     /// Window size (4 KiB).
     static constexpr uint64_t WINDOW_SIZE = 0x1000ULL;

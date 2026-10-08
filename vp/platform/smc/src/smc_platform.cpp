@@ -109,6 +109,9 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     , octs_is_primary_p_("octs_is_primary", true,
           "Strap for octs_system_timer.is_primary_i: true = SMC is the system "
           "timekeeping PRIMARY (silicon default), false = SECONDARY.")
+    , captured_straps_p_("captured_straps", uint64_t{0},
+          "Captured GPIO strap word driven into reset_unit and the straps "
+          "addrmap at smc_external + 0x3000.")
     , tel_inject_enable_p_("tel_inject_enable", false,
           "Test-only: if true, push one ATB message into a telemetry receiver "
           "at elaboration.")
@@ -144,6 +147,8 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
                  NUM_EXT_INTERRUPTS + 25,
                  // combined AXI hang detector -> PLIC source ID 287 (bit 286)
                  286,
+                 // GPIO half-ORs -> peripheral bits 28 and 29
+                 NUM_EXT_INTERRUPTS + 28, NUM_EXT_INTERRUPTS + 29,
                  // wdt[0..3] -> PLIC source IDs 329..332 (bits 328..331)
                  328, 329, 330, 331})
     , octs_clk("octs_clk",
@@ -161,7 +166,7 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
     sig_isolate.write(false);
     sig_flr.write(false);
     sig_ss_complete.write(0xFFFFFFFFu);
-    sig_straps.write(0);
+    sig_straps.write(captured_straps_p_.get_value());
 
     // As a PRIMARY (the default strap) the OCTS timer sources sync_load /
     // cnt_credit instead of consuming them, so its inputs stay idle.  Strapped
@@ -682,7 +687,13 @@ smc_platform::smc_platform(sc_core::sc_module_name name)
         intagg.src[s++].bind(axi_hang_irq);
         for (unsigned i = 0; i < NUM_HARTS; ++i)
             intagg.src[s++].bind(wdt_irq[i]);
+        intagg.src[s++].bind(gpio_irq_lower);
+        intagg.src[s++].bind(gpio_irq_upper);
     }
+    for (unsigned i = 0; i < kNumGpioWraps; ++i)
+        gpio_irqs.wrap_irq[i].bind(gpio_wrap_irq[i]);
+    gpio_irqs.lower_o.bind(gpio_irq_lower);
+    gpio_irqs.upper_o.bind(gpio_irq_upper);
     for (unsigned i = 0; i < NUM_PLIC_SRC; ++i) {
         plic_.src_in[i].bind(plic_src_sig[i]);
         intagg.plic_src[i].bind(plic_src_sig[i]);
