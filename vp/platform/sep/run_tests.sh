@@ -4,9 +4,11 @@
 # =============================================================================
 # vp/platform/sep/run_tests.sh
 #
-# Build (if needed) and run the SEP platform unit tests
-# (inc/xbar_policy.h — the local-crossbar connectivity policy; test/CMakeLists.txt
-# is standalone and needs only a C++20 compiler — no SystemC/CCI/VeeR).
+# Build (if needed) and run the SEP platform unit tests: xbar_policy_tb
+# (inc/xbar_policy.h — the local-crossbar connectivity policy) and abr_aperture_tb
+# (the crossbar's Adams Bridge window). The latter builds the Adams Bridge model,
+# so SystemC, CCI and OpenSSL are resolved through
+# sep/peripherals/setup_build_env.sh, as for the peripheral benches.
 #
 # Usage:
 #   ./run_tests.sh                # incremental build + run  (Release)
@@ -68,14 +70,14 @@ fi
 # Isolated build directory per instrumented mode (never share CMake caches).
 if (( USE_ASAN )); then
     BUILD_DIR="${SCRIPT_DIR}/build_asan"
-    CMAKE_EXTRA="-DENABLE_ASAN=ON"
+    MODE_CMAKE_ARGS="-DENABLE_ASAN=ON"
 elif (( USE_COVERAGE )); then
     BUILD_DIR="${SCRIPT_DIR}/build_cov"
     BUILD_TYPE="Debug"
-    CMAKE_EXTRA="-DENABLE_COVERAGE=ON"
+    MODE_CMAKE_ARGS="-DENABLE_COVERAGE=ON"
 else
     BUILD_DIR="${SCRIPT_DIR}/build"
-    CMAKE_EXTRA=""
+    MODE_CMAKE_ARGS=""
 fi
 
 # ---------------------------------------------------------------------------
@@ -86,22 +88,37 @@ if (( CLEAN )) && [[ -d "${BUILD_DIR}" ]]; then
     rm -rf "${BUILD_DIR}"
 fi
 
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/../../../sep/peripherals/setup_build_env.sh"
+peripheral_setup_build_env
+
+# A cache from before the aperture bench has no SystemC paths; reconfigure it.
+if [[ -f "${BUILD_DIR}/CMakeCache.txt" ]] &&
+   { peripheral_cache_stale "${BUILD_DIR}" || ! grep -q '^SYSTEMC_HOME:' "${BUILD_DIR}/CMakeCache.txt"; }; then
+    echo ">> Removing stale cmake cache in ${BUILD_DIR}"
+    rm -rf "${BUILD_DIR}"
+fi
+
 if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
     echo ">> Configuring (${BUILD_TYPE}) in ${BUILD_DIR}"
     # shellcheck disable=SC2086
     cmake -S "${SRC_DIR}" -B "${BUILD_DIR}" \
           -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-          ${CMAKE_EXTRA}
+          "${CMAKE_EXTRA_ARGS[@]}" \
+          ${MODE_CMAKE_ARGS}
 fi
 
 echo ">> Building with -j${JOBS}"
 cmake --build "${BUILD_DIR}" -j "${JOBS}"
 
 TB_BIN="${BUILD_DIR}/xbar_policy_tb"
-if [[ ! -x "${TB_BIN}" ]]; then
-    echo "ERROR: test binary not found at ${TB_BIN}" >&2
-    exit 1
-fi
+ABR_TB_BIN="${BUILD_DIR}/abr_aperture_tb"
+for _bin in "${TB_BIN}" "${ABR_TB_BIN}"; do
+    if [[ ! -x "${_bin}" ]]; then
+        echo "ERROR: test binary not found at ${_bin}" >&2
+        exit 1
+    fi
+done
 
 # ---------------------------------------------------------------------------
 # Helper: find a versioned LLVM tool.
@@ -167,8 +184,10 @@ if (( USE_ASAN )); then
         _ASAN_OPTS="halt_on_error=0:log_path=${ASAN_LOG}"
     fi
     TB_EXIT=0
-    ASAN_OPTIONS="${_ASAN_OPTS}" UBSAN_OPTIONS="print_stacktrace=1:log_path=${ASAN_LOG}" \
-        "${TB_BIN}" || TB_EXIT=$?
+    for _bin in "${TB_BIN}" "${ABR_TB_BIN}"; do
+        ASAN_OPTIONS="${_ASAN_OPTS}" UBSAN_OPTIONS="print_stacktrace=1:log_path=${ASAN_LOG}" \
+            "${_bin}" || TB_EXIT=$?
+    done
     echo ""
 
     if compgen -G "${ASAN_LOG}.*" > /dev/null 2>&1; then
@@ -201,6 +220,7 @@ elif (( USE_COVERAGE )); then
         PROFDATA="${BUILD_DIR}/xbar_policy_tb.profdata"
 
         LLVM_PROFILE_FILE="${PROFRAW}" "${TB_BIN}"
+        LLVM_PROFILE_FILE=/dev/null "${ABR_TB_BIN}"
         echo ""
 
         PROFDATA_CMD="$(_find_llvm_tool llvm-profdata)"
@@ -247,6 +267,7 @@ elif (( USE_COVERAGE )); then
     # ---- gcov coverage (GCC) -----------------------------------------------
     else
         "${TB_BIN}"
+        "${ABR_TB_BIN}"
         echo ""
 
         if command -v gcovr &>/dev/null; then
@@ -295,3 +316,4 @@ fi
 
 # Plain Release run.
 "${TB_BIN}"
+"${ABR_TB_BIN}"

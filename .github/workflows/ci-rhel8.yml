@@ -23,8 +23,9 @@
 #                        build-deps-rhel8 + RISC-V xpack toolchain). VeeR ISS
 #                        is in-tree; no Whisper required.
 #  sep-unit-tests-rhel8  Run SEP peripheral unit tests, SEP CPU tests, and the
-#                        host-only SEP platform xbar_policy tests
-#                        (vp/platform/sep/run_tests.sh)
+#                        SEP platform tests (xbar_policy and
+#                        the SystemC Adams Bridge aperture bench;
+#                        vp/platform/sep/run_tests.sh)
 #  smc-unit-tests-rhel8  Run SMC peripheral unit tests (includes the new DMA
 #                        and PVT wrapper peripheral unit tests, and AOU)
 #  smc-fabric-tests-rhel8  Run SMC Fabric tests
@@ -437,11 +438,18 @@ jobs:
           sep/cpu/run_tests.sh --asan
           sep/cpu/run_tests.sh --coverage
 
-      # Host-only (no SystemC) unit test of the SEP platform xbar address /
-      # permission policy (vp/platform/sep/inc/xbar_policy.h), incl. the
-      # csr_region trim to 0x10A50000 (tt-oca-hw #2587).  Coverage via lcov +
-      # the toolset gcov ($GCOV).
-      - name: Run SEP platform xbar_policy tests
+      # SEP platform tests: the host-only xbar address / permission policy
+      # (vp/platform/sep/inc/xbar_policy.h), incl. the csr_region trim to
+      # 0x10A50000 (tt-oca-hw #2587), and the SystemC bench that drives the
+      # Adams Bridge model through the platform's bus at its SEP window.
+      # Coverage via lcov + the toolset gcov ($GCOV).
+      - name: Run SEP platform tests
+        env:
+          SYSTEMC_HOME:     ${{ env.SYSTEMC_HOME }}
+          CCI_HOME:         ${{ env.CCI_HOME }}
+          BOOST_ROOT:       ${{ env.BOOST_HOME }}
+          OPENSSL_ROOT:     ${{ env.OPENSSL3_HOME }}
+          OPENSSL_ROOT_DIR: ${{ env.OPENSSL3_HOME }}
         run: |
           vp/platform/sep/run_tests.sh
           vp/platform/sep/run_tests.sh --asan
