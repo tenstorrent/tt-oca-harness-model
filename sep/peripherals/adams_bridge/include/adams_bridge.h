@@ -27,6 +27,9 @@
  *     counts are regmodel::Param tunables.
  *   - No cycle accuracy is claimed or attempted: only the ready/valid
  *     handshake ordering that firmware observes is guaranteed.
+ *   - The ML-DSA engine waits on an abort event as well as on time, so a zeroize
+ *     or reset ends a running operation at once and nothing it computed is
+ *     published.
  *
  * The ML-DSA and ML-KEM engines are independent sequencers in hardware and are
  * modeled as two threads, so a command on one does not stall the other.
@@ -173,7 +176,7 @@ class abr_ip : public abr_base
     /// Fallback clock frequency (Hz) used when clk_i is unbound or zero.
     regmodel::Param<double> default_clk_freq_hz;
 
-    /// Modeled engine latencies, in core clock cycles.
+    /// Modeled engine latencies, in core clock cycles; zero or negative means no delay.
     /// @{
     regmodel::Param<int> mldsa_keygen_cycles;
     regmodel::Param<int> mldsa_sign_cycles;
@@ -181,9 +184,17 @@ class abr_ip : public abr_base
     regmodel::Param<int> mlkem_keygen_cycles;
     regmodel::Param<int> mlkem_encaps_cycles;
     regmodel::Param<int> mlkem_decaps_cycles;
+    /// The zeroize sweep: the RTL clears 1536 words, about 1538 cycles.
     regmodel::Param<int> zeroize_cycles;
     regmodel::Param<int> kv_access_cycles;
+    /// Cycles from an accepted ML-DSA command to MSG_STREAM_READY (for VERIFY, the
+    /// z range check that precedes it).
+    regmodel::Param<int> mldsa_stream_ready_cycles;
     /// @}
+
+    /// Upper bound on a streamed message, so a runaway producer cannot grow the
+    /// accumulator without limit. Bytes past it are dropped; a negative value is 0.
+    regmodel::Param<int> max_msg_stream_bytes;
 
     // =========================================================================
     // Test / integration hooks
@@ -260,6 +271,18 @@ class abr_ip : public abr_base
     bool mldsa_ctrl_write(DT value);
     bool mlkem_ctrl_write(DT value);
     bool mldsa_msg_write(unsigned int index, DT value);
+    bool mldsa_msg_strobe_write(DT value);
+
+    // =========================================================================
+    // Bus access rules (abr_base hooks)
+    // =========================================================================
+
+    /// ML-DSA inputs are written only while READY (abr_reg.rdl swwe = abr_ready).
+    bool bus_write_allowed(unsigned int word) const override;
+
+    /// PUBKEY and SIGNATURE read as zero until VALID; PRIVKEY_OUT also needs a
+    /// software-seeded KEYGEN (abr_ctrl.sv:872, 1094-1095, 1202).
+    bool bus_read_masked(unsigned int word) const override;
 
     bool kv_mldsa_seed_rd_ctrl_write(DT value);
     bool kv_mlkem_seed_rd_ctrl_write(DT value);
@@ -276,9 +299,28 @@ class abr_ip : public abr_base
     // Engine helpers
     // =========================================================================
 
-    void do_mldsa_keygen();
-    void do_mldsa_sign(bool keygen_first);
-    void do_mldsa_verify();
+    void do_mldsa_keygen(uint64_t epoch);
+    void do_mldsa_sign(bool keygen_first, uint64_t epoch);
+    void do_mldsa_verify(uint64_t epoch);
+
+    /// Zeroize from CTRL: abort whatever ML-DSA is doing and queue the sweep.
+    void request_mldsa_zeroize();
+
+    /**
+     * @brief Charge @p cycles to a running ML-DSA operation.
+     * @return false when a zeroize or reset aborted the operation meanwhile.
+     */
+    bool mldsa_wait(int cycles, uint64_t epoch);
+
+    /**
+     * @brief Fetch the message the ML-DSA operation hashes, with its context.
+     *
+     * Not streaming: the 64-byte MSG block with an empty context. Streaming: raise
+     * MSG_STREAM_READY and collect MSG[0] writes until a strobe other than 0xF,
+     * with the CTX_CONFIG context. PCR_SIGN with a digest installed signs the digest.
+     * @return false when a zeroize or reset aborted the stream.
+     */
+    bool mldsa_acquire_message(uint64_t epoch, abr::bytes &ctx, abr::bytes &msg);
 
     void do_mlkem_keygen();
     void do_mlkem_encaps();
@@ -292,9 +334,6 @@ class abr_ip : public abr_base
 
     /// Reverse little-endian dwords in-place (RTL kv_mldsa_seed_write_offset).
     static void reverse_le_dwords(abr::bytes &v);
-
-    /// MSG / stream / PCR_SIGN digest selection for mu computation.
-    void resolve_sign_message(abr::bytes &msg);
 
     // =========================================================================
     // Timing
@@ -381,8 +420,20 @@ class abr_ip : public abr_base
     /// PCR digest used when PCR_SIGN is set; empty → fall back to MSG.
     abr::bytes m_pcr_digest;
 
-    /// Streaming-message accumulator, filled by MSG writes when STREAM_MSG is set.
+    /// Streaming-message accumulator, filled by MSG[0] writes while the core is
+    /// asking for the message.
     abr::bytes m_msg_stream;
+
+    /// RTL stream_msg FSM, reduced to what software can observe.
+    enum class StreamState { IDLE, RDY, DONE };
+    StreamState m_stream_state;
+
+    /// Bumped by every zeroize and reset; an ML-DSA operation that sees it change
+    /// was aborted and publishes nothing.
+    uint64_t m_mldsa_epoch;
+
+    /// Set once a software-seeded KEYGEN completes; any command or zeroize clears it.
+    bool m_privkey_readable;
 
     /// Key Vault entry storage populated over keymgr_tl_socket / KM share sockets.
     std::array<abr::bytes, abr::KV_NUM_ENTRIES> m_kv_entries;
@@ -399,6 +450,9 @@ class abr_ip : public abr_base
     abr::bytes m_kv_mlkem_seed;
     abr::bytes m_kv_mlkem_msg;
     bool m_kv_mldsa_seed_valid;
+    /// A Key Vault seed read was requested since the last zeroize (abr_ctrl.sv
+    /// kv_mldsa_seed_data_present): MLDSA_SEED and the read control stop taking writes.
+    bool m_kv_mldsa_seed_present;
     bool m_kv_mlkem_seed_valid;
     bool m_kv_mlkem_msg_valid;
 
@@ -409,6 +463,8 @@ class abr_ip : public abr_base
     bool m_in_reset;
 
     sc_core::sc_event m_mldsa_start_ev;
+    sc_core::sc_event m_mldsa_abort_ev;
+    sc_core::sc_event m_stream_done_ev;
     sc_core::sc_event m_mlkem_start_ev;
     sc_core::sc_event m_intr_update_ev;
 

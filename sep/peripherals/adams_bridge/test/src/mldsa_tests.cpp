@@ -9,6 +9,7 @@
 #include "abr_testbench.h"
 
 #include <iostream>
+#include <string>
 
 namespace {
 
@@ -209,118 +210,106 @@ void mldsa_tests(abr_testbench &tb)
     sig_ctilde.assign(extmu_sig.begin(), extmu_sig.begin() + abr::N_VERIFY_RES);
     tb.check(verify_res == sig_ctilde, "EXTERNAL_MU signature verifies");
 
-    tb.section("ML-DSA: signing context");
+    tb.section("ML-DSA: context is ignored without streaming");
 
+    // A non-streamed message is hashed as 0 || 0 || MSG, whatever CTX_CONFIG says
+    // (abr_ctrl.sv msg_p_reg); the context only enters a streamed message.
     tb.check(tb.zeroize_mldsa(), "zeroize before context sign");
     tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
     tb.wr_n(abr::OFF_MLDSA_MSG, k_msg);
     tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 8u); // 8-byte context
+    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 8u);
     tb.wr_n(abr::OFF_MLDSA_CTX, {0xDEADBEEFu, 0xCAFEF00Du});
+    tb.check(tb.run_mldsa(CMD_SIGN), "non-streamed SIGN with CTX_CONFIG set completes");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) == signature,
+             "non-streamed SIGN ignores the context");
 
-    tb.check(tb.run_mldsa(CMD_SIGN), "SIGN with a non-empty context completes");
-    const std::vector<uint32_t> ctx_sig =
-        tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE);
-    tb.check(ctx_sig != signature, "a signing context changes the signature");
+    tb.check(tb.zeroize_mldsa(), "zeroize before context verify");
+    tb.wr_n(abr::OFF_MLDSA_PUBKEY, pubkey);
+    tb.wr_n(abr::OFF_MLDSA_SIGNATURE, signature);
+    tb.wr_n(abr::OFF_MLDSA_MSG, k_msg);
+    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 8u);
+    tb.wr_n(abr::OFF_MLDSA_CTX, {0xDEADBEEFu, 0xCAFEF00Du});
+    tb.check(tb.run_mldsa(CMD_VERIFY), "non-streamed VERIFY with CTX_CONFIG set completes");
+    verify_res = tb.rd_n(abr::OFF_MLDSA_VERIFY_RES, abr::N_VERIFY_RES);
+    sig_ctilde.assign(signature.begin(), signature.begin() + abr::N_VERIFY_RES);
+    tb.check(verify_res == sig_ctilde, "non-streamed VERIFY ignores the context");
 
     tb.section("ML-DSA: streamed message");
 
+    // The 64-byte MSG block streamed through MSG[0] after the command gives the
+    // same signature as the non-streamed block.
     tb.check(tb.zeroize_mldsa(), "zeroize before streamed sign");
-    tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & (1u << 2), (1u << 2),
-                "MSG_STREAM_READY set while idle");
-
-    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 0u); // match the empty-context `signature` above
     tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
     tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0xFu);
-    // Same byte stream as the fixed MSG block used for `signature` above.
+    std::vector<uint8_t> msg_bytes;
     for (uint32_t word : k_msg) {
-        tb.wr(abr::OFF_MLDSA_MSG, word);
+        for (unsigned int lane = 0; lane < 4u; ++lane) {
+            msg_bytes.push_back(static_cast<uint8_t>(word >> (lane * 8u)));
+        }
     }
-
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG), "SIGN with STREAM_MSG completes");
+    tb.check(tb.run_mldsa_stream(CMD_SIGN, msg_bytes), "SIGN with a streamed message completes");
     tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) == signature,
-             "STREAM_MSG of the fixed MSG bytes matches the non-streamed signature");
+             "streamed MSG bytes match the non-streamed signature");
 
     tb.section("ML-DSA: partial-word strobe");
 
+    // Strobe 0x3 ends the stream after two bytes; one strobe-0x1 write followed by
+    // another ends it after one, so the second form needs a full word first.
     tb.check(tb.zeroize_mldsa(), "zeroize before partial-strobe sign");
-    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 0u);
     tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
     tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    // Two equivalent streams: strobe 0x3 keeps only the low half-word, and two
-    // strobe-0x1 writes push the same two bytes in order.
-    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0x3u);
-    tb.wr(abr::OFF_MLDSA_MSG, 0xAABBCCDDu);
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG),
-             "SIGN with a partial MSG_STROBE completes");
+    tb.check(tb.run_mldsa_stream(CMD_SIGN, {0xDDu, 0xCCu}), "SIGN of a 2-byte stream completes");
     const std::vector<uint32_t> partial_sig =
         tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE);
 
-    tb.check(tb.zeroize_mldsa(), "zeroize before equivalent strobe-lane stream");
-    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 0u);
+    tb.check(tb.zeroize_mldsa(), "zeroize before the raw strobe-0x3 stream");
     tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
     tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0x1u);
-    tb.wr(abr::OFF_MLDSA_MSG, 0x000000DDu); // byte0 of 0xAABBCCDD
-    tb.wr(abr::OFF_MLDSA_MSG, 0x000000CCu); // byte1 of 0xAABBCCDD
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG),
-             "SIGN with two strobe-0x1 writes completes");
+    tb.wr(abr::OFF_MLDSA_CTRL, CMD_SIGN | CTRL_STREAM_MSG);
+    tb.check(tb.wait_stream_ready_or_valid(), "the core asks for the message");
+    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0x3u);
+    tb.wr(abr::OFF_MLDSA_MSG, 0xAABBCCDDu);
+    tb.check(tb.wait_mldsa_valid(), "strobe 0x3 ends the stream");
     tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) == partial_sig,
-             "disabled strobe lanes are excluded (equivalent byte streams match)");
+             "disabled strobe lanes are excluded from the message");
 
     tb.section("ML-DSA: PCR_SIGN modifier");
 
-    tb.check(tb.zeroize_mldsa(), "zeroize before PCR sign");
-    tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
-    tb.wr_n(abr::OFF_MLDSA_MSG, k_msg);
-    tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_PCR_SIGN), "SIGN with PCR_SIGN completes");
+    // PCR_SIGN is only legal with KEYGEN+SIGN; with KEYGEN, SIGN or VERIFY the RTL
+    // raises its error flag (mldsa_error_tests). The VP has no PCR bank, so the
+    // fused command signs the installed digest or, without one, MSG.
+    tb.check(tb.zeroize_mldsa(), "zeroize before PCR KEYGEN+SIGN");
+    load_inputs(tb);
+    tb.check(tb.run_mldsa(CMD_KEYGEN_SIGN | CTRL_PCR_SIGN), "KEYGEN+SIGN with PCR_SIGN completes");
     const std::vector<uint32_t> pcr_fallback_sig =
         tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE);
-
-    tb.check(tb.zeroize_mldsa(), "zeroize before PCR digest sign");
-    tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
-    tb.wr_n(abr::OFF_MLDSA_MSG, k_msg);
-    tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    tb.check(tb.run_mldsa(CMD_SIGN), "plain SIGN for PCR comparison");
-    const std::vector<uint32_t> plain_sig =
-        tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE);
-    tb.check(pcr_fallback_sig == plain_sig,
-             "PCR_SIGN without a digest falls back to MSG");
+    tb.check(pcr_fallback_sig == fused_sig, "PCR_SIGN without a digest falls back to MSG");
 
     abr::bytes pcr_digest(abr::N_MLDSA_MSG * 4u, 0x5Au);
     tb.dut.set_pcr_digest(pcr_digest);
     tb.check(tb.zeroize_mldsa(), "zeroize before PCR digest sign");
-    tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
-    tb.wr_n(abr::OFF_MLDSA_MSG, k_msg);
-    tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_PCR_SIGN), "SIGN with PCR digest completes");
-    tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) != plain_sig,
+    load_inputs(tb);
+    tb.check(tb.run_mldsa(CMD_KEYGEN_SIGN | CTRL_PCR_SIGN), "KEYGEN+SIGN with a PCR digest completes");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) != fused_sig,
              "PCR_SIGN with a digest diverges from MSG");
     tb.dut.set_pcr_digest({});
 
-    tb.section("ML-DSA: error and no-op paths");
+    tb.section("ML-DSA: invalid commands are no-ops");
 
-    tb.check(tb.zeroize_mldsa(), "zeroize before invalid command");
-    const uint32_t err_count_before = tb.rd(abr::OFF_ERROR_INTR_COUNT);
-    tb.wr(abr::OFF_MLDSA_CTRL, 0x5u); // 5..7 are not valid commands
-    // Invalid commands fail synchronously in the CTRL write callback — do not
-    // treat a VALID poll timeout as success.
-    const uint32_t bad_st = tb.rd(abr::OFF_MLDSA_STATUS);
-    tb.check_eq(bad_st & ST_ERROR, ST_ERROR, "an invalid command raises STATUS.ERROR");
-    tb.check_eq(bad_st & ST_VALID, 0u, "an invalid command leaves VALID clear");
-    tb.check_eq(bad_st & ST_READY, 0u,
-                "an invalid command parks READY low until zeroize");
-    tb.check_eq(tb.rd(abr::OFF_ERROR_INTERNAL_INTR) & 1u, 1u,
-                "an invalid command sets error interrupt status");
-    tb.check_eq(tb.rd(abr::OFF_ERROR_INTR_COUNT), err_count_before + 1u,
-                "an invalid command increments the error counter");
-
-    tb.check(tb.zeroize_mldsa(), "zeroize recovers from the invalid command");
-    tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & ST_ERROR, 0u, "zeroize cleared ERROR");
-    tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & ST_READY, ST_READY,
-                "zeroize restores READY after an invalid command");
+    for (uint32_t cmd = 5u; cmd <= 7u; ++cmd) {
+        tb.check(tb.zeroize_mldsa(), "zeroize before invalid command " + std::to_string(cmd));
+        const uint32_t err_count_before = tb.rd(abr::OFF_ERROR_INTR_COUNT);
+        const uint32_t done_count_before = tb.rd(abr::OFF_NOTIF_INTR_COUNT);
+        tb.wr(abr::OFF_MLDSA_CTRL, cmd);
+        sc_core::wait(sc_core::sc_time(10, sc_core::SC_US));
+        tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS), ST_READY,
+                    "command " + std::to_string(cmd) + " leaves the core READY and idle");
+        tb.check_eq(tb.rd(abr::OFF_ERROR_INTR_COUNT), err_count_before,
+                    "command " + std::to_string(cmd) + " raises no error event");
+        tb.check_eq(tb.rd(abr::OFF_NOTIF_INTR_COUNT), done_count_before,
+                    "command " + std::to_string(cmd) + " raises no done event");
+    }
 
     // CTRL=0 is a no-op: the engine must stay ready and idle.
     tb.wr(abr::OFF_MLDSA_CTRL, 0u);
@@ -329,18 +318,89 @@ void mldsa_tests(abr_testbench &tb)
     tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & ST_VALID, 0u,
                 "CTRL=NONE does not assert VALID");
 
+    tb.section("ML-DSA: writes are dropped while the core is busy");
+
+    // Every ML-DSA input is written only while READY (abr_reg.rdl swwe = abr_ready).
+    // Each case overwrites an input right after the command is accepted and checks
+    // that the operation still used the value loaded before it.
+    tb.check(tb.zeroize_mldsa(), "zeroize before busy-write KEYGEN");
+    load_inputs(tb);
+    tb.wr(abr::OFF_MLDSA_CTRL, CMD_KEYGEN);
+    tb.wr_n(abr::OFF_MLDSA_SEED, std::vector<uint32_t>(abr::N_MLDSA_SEED, 0x77777777u));
+    tb.wr(abr::OFF_KV_MLDSA_SEED_RD_CTRL, 0x1u);
+    tb.check(tb.wait_mldsa_valid(), "KEYGEN with busy writes completes");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY) == pubkey,
+             "SEED written while busy is dropped");
+    tb.check_eq(tb.rd(abr::OFF_KV_MLDSA_SEED_RD_STATUS) & 0x2u, 0u,
+                "a Key Vault read requested while busy is dropped");
+
+    tb.check(tb.zeroize_mldsa(), "zeroize before busy-write SIGN");
+    tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, privkey);
+    tb.wr_n(abr::OFF_MLDSA_MSG, k_msg);
+    tb.wr_n(abr::OFF_MLDSA_SIGN_RND, k_sign_rnd);
+    tb.wr(abr::OFF_MLDSA_CTRL, CMD_SIGN);
+    tb.wr_n(abr::OFF_MLDSA_PRIVKEY_IN, std::vector<uint32_t>(abr::N_MLDSA_PRIVKEY, 0x11111111u));
+    tb.wr_n(abr::OFF_MLDSA_MSG, std::vector<uint32_t>(abr::N_MLDSA_MSG, 0x22222222u));
+    tb.wr_n(abr::OFF_MLDSA_SIGN_RND, std::vector<uint32_t>(abr::N_SIGN_RND, 0x33333333u));
+    tb.wr_n(abr::OFF_ABR_ENTROPY, std::vector<uint32_t>(abr::N_ENTROPY, 0x44444444u));
+    tb.check(tb.wait_mldsa_valid(), "SIGN with busy writes completes");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) == signature,
+             "PRIVKEY_IN, MSG and SIGN_RND written while busy are dropped");
+
+    tb.check(tb.zeroize_mldsa(), "zeroize before busy-write VERIFY");
+    tb.wr_n(abr::OFF_MLDSA_PUBKEY, pubkey);
+    tb.wr_n(abr::OFF_MLDSA_SIGNATURE, extmu_sig);
+    tb.wr_n(abr::OFF_MLDSA_EXTERNAL_MU, ext_mu);
+    tb.wr(abr::OFF_MLDSA_CTRL, CMD_VERIFY | CTRL_EXTERNAL_MU);
+    tb.wr_n(abr::OFF_MLDSA_PUBKEY, std::vector<uint32_t>(abr::N_MLDSA_PUBKEY, 0x55555555u));
+    tb.wr_n(abr::OFF_MLDSA_SIGNATURE, std::vector<uint32_t>(abr::N_MLDSA_SIGNATURE, 0x66666666u));
+    tb.wr_n(abr::OFF_MLDSA_EXTERNAL_MU, std::vector<uint32_t>(abr::N_EXTERNAL_MU, 0x77777777u));
+    tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 4u);
+    tb.wr(abr::OFF_MLDSA_CTX, 0x88888888u);
+    tb.wr(abr::OFF_MLDSA_CTRL, CMD_KEYGEN);
+    tb.check(tb.wait_mldsa_valid(), "VERIFY with busy writes completes");
+    verify_res = tb.rd_n(abr::OFF_MLDSA_VERIFY_RES, abr::N_VERIFY_RES);
+    sig_ctilde.assign(extmu_sig.begin(), extmu_sig.begin() + abr::N_VERIFY_RES);
+    tb.check(verify_res == sig_ctilde,
+             "PUBKEY, SIGNATURE, EXTERNAL_MU, CTX and a second command written while busy are dropped");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY) == pubkey,
+             "PUBKEY reads back the value loaded before the command");
+
+    tb.section("ML-DSA: PRIVKEY_OUT is readable only after a software-seeded KEYGEN");
+
+    tb.check(tb.zeroize_mldsa(), "zeroize before PRIVKEY_OUT checks");
+    load_inputs(tb);
+    tb.check(tb.run_mldsa(CMD_KEYGEN_SIGN), "KEYGEN+SIGN for the PRIVKEY_OUT check");
+    tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY)),
+             "PRIVKEY_OUT reads zero after KEYGEN+SIGN");
+    tb.check(tb.zeroize_mldsa(), "zeroize before a software-seeded KEYGEN");
+    load_inputs(tb);
+    tb.wr(abr::OFF_MLDSA_CTRL, CMD_KEYGEN);
+    tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_PRIVKEY_OUT, 16u)),
+             "PRIVKEY_OUT reads zero before VALID");
+    tb.check(tb.wait_mldsa_valid(), "software-seeded KEYGEN completes");
+    tb.check(tb.rd_n(abr::OFF_MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY) == privkey,
+             "PRIVKEY_OUT reads the private key after a software-seeded KEYGEN");
+
     tb.section("ML-DSA: zeroize clears key material");
 
+    tb.check(tb.zeroize_mldsa(), "zeroize before the key-material check");
     load_inputs(tb);
     tb.check(tb.run_mldsa(CMD_KEYGEN), "KEYGEN before zeroize check");
     tb.check(any_nonzero(tb.rd_n(abr::OFF_MLDSA_PUBKEY, 16u)), "public key present");
     tb.check(tb.zeroize_mldsa(), "zeroize completes");
-    tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY)),
-             "zeroize cleared MLDSA_PUBKEY");
-    tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY)),
-             "zeroize cleared MLDSA_PRIVKEY_OUT");
     tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_VERIFY_RES, abr::N_VERIFY_RES)),
              "zeroize cleared MLDSA_VERIFY_RES");
+    // PUBKEY and SIGNATURE read as zero until VALID anyway, so complete an
+    // operation that loads nothing and read the storage back.
+    tb.check(tb.run_mldsa(CMD_VERIFY | CTRL_EXTERNAL_MU), "VERIFY over the zeroized storage");
+    tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY)),
+             "zeroize cleared MLDSA_PUBKEY storage");
+    tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE)),
+             "zeroize cleared MLDSA_SIGNATURE storage");
+    tb.check(!any_nonzero(tb.rd_n(abr::OFF_MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY)),
+             "MLDSA_PRIVKEY_OUT reads zero after a VERIFY");
+    tb.check(tb.zeroize_mldsa(), "zeroize after the storage check");
 
     tb.section("ML-DSA: reset");
 

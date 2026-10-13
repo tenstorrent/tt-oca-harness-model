@@ -9,12 +9,15 @@
 `abr_testbench` (`test/inc/abr_testbench.h`) is a TLM initiator into
 the register aperture, a second initiator into `keymgr_tl_socket`, KM
 share initiators into `keymgr_*_socket`, plus `clk_i` / `rst_ni` and
-`run_mldsa` / `run_mlkem` / `zeroize_*` helpers.
+`run_mldsa` / `run_mlkem` / `zeroize_*` helpers. `run_mldsa_stream` and
+`stream_message` drive a streamed message the way firmware does, `xact`
+reports the bus response, and `expected_mu` computes FIPS 204 mu
+independently of the model.
 
 The default backend is `abr_fips_backend`. Tests that only need the
 FSM may install `abr_shake_backend` through `set_crypto_backend()`.
 
-Success: every `tb.check` / `tb.check_eq` in the four suites passes;
+Success: every `tb.check` / `tb.check_eq` in the suites passes;
 `--asan` produces no `asan.log.*`; line coverage on the touched model
 sources meets the repository ≥ 95% gate.
 
@@ -43,29 +46,44 @@ or export them first.
 
 Sources: `test/src/register_tests.cpp`, `mldsa_tests.cpp`,
 `mlkem_tests.cpp`, `interrupt_kv_tests.cpp`, `nist_kat_tests.cpp`,
-`coverage_tests.cpp`.
+`coverage_tests.cpp`, `mldsa_verify_reject_tests.cpp`,
+`mldsa_stream_tests.cpp`, `mldsa_abort_tests.cpp`, `mldsa_error_tests.cpp`,
+`bus_access_tests.cpp`.
+
+Vectors: `test/inc/abr_acvp_sigver_all.h` holds every ML-DSA-87 sigVer case
+the NIST ACVP-Server publishes for pure ML-DSA and external mu, plus its
+deterministic ML-DSA-87 signatures, each classified by an independent decode
+(`test/scripts/gen_abr_acvp_sigver.py`, pinned commit and file digests in the
+header). `test/inc/abr_signer_vectors.h` holds ML-DSA-87 signatures from
+OpenSSL through Python `cryptography`
+(`test/scripts/gen_abr_signer_vectors.py`).
 Names are the `tb.section()` titles.
 
 [cols="8%,36%,40%,16%",options="header"]
 |===
 |ID |Name |What the model test proves |Type
-|1 |Register: identity and reset state |NAME / VERSION / READY reset |Positive
+|1 |Register: identity and reset state |RTL NAME / VERSION values; STATUS resets to READY alone |Positive
 |2 |Register: access-type enforcement |RO ignore writes; WO read as 0 |Positive
 |3 |Register: field masking |CTX_CONFIG and MSG_STROBE are WO |Positive
-|4 |Register: data windows round-trip |Key/signature windows survive write/read |Positive
-|5 |Register: window boundaries |Last dword decoded; zeroize clears windows |Positive
-|6–21 |ML-DSA command / modifier / error / reset |Engine thread, park-on-VALID, zeroize |Mixed
+|4 |Register: data windows round-trip |PUBKEY / SIGNATURE read 0 before VALID, read back after |Positive
+|5 |Register: window boundaries |Last dword decoded; zeroize clears the storage |Positive
+|6–21 |ML-DSA command / modifier / reset |Engine thread, park-on-VALID, ctx ignored without streaming, PCR_SIGN only with KEYGEN+SIGN, commands 5–7 no-ops, writes dropped while busy, PRIVKEY_OUT release |Mixed
 |22–30 |ML-KEM command / implicit reject / independence |Second engine thread |Mixed
 |31–36 |Interrupt mask / W1C / counters / trig |`interrupt_update_thread` |Mixed
 |37–41a |Key Vault + KM dual-share |Sockets, reconstruct, shred |Mixed
 |42 |Crypto backend seam |`set_crypto_backend`; nullptr ignored |Positive
-|43 |NIST ACVP KATs |Default PQClean backend vs `abr_nist_vectors.h` |Positive
+|43 |NIST ACVP KATs |Default PQClean backend vs `abr_nist_vectors.h`; every ACVP ML-DSA-87 sigVer case and deterministic signature; every independent-signer signature; keygen from the signer's seed |Mixed
 |44 |Coverage: clock / zero-cycle |`clk_i=0` fallback; `cycles_to_time(0)` |Positive
 |45 |Coverage: command under reset |Engine threads drop work while `m_in_reset` |Positive
 |46 |Coverage: KV/KM transport rejects |Null pointer, IGNORE command |Negative
 |47 |Coverage: KV fused / MSG lanes |KEYGEN+SIGN, KEYGEN+DECAPS, KV ENCAPS |Positive
-|48 |Coverage: STREAM_MSG edges |Empty stream, strobe 0, cap, verify+ctx |Positive
-|49 |Coverage: short backend + XOF |`bytes_to_regs` pad; `shake256(0)`; empty mu |Positive
+|48 |Coverage: STREAM_MSG edges |Empty stream, verify+ctx, streamed verify (stub backend) |Positive
+|49 |Coverage: short backend + XOF |`bytes_to_regs` pad; `shake256(0)`; empty mu; encoding check wrappers |Positive
+|50 |ML-DSA verify: fail-closed |`~c~` preload; all-zero, all-ones and genuine c~ with z out of range or each malformed hint kind keep `~c~`; z range boundary; zeroize clears VERIFY_RES |Negative
+|51 |ML-DSA stream |Protocol order, MSG[1..15] ignored, MSG_STROBE reset 0xF / zeroize 0 / dropped outside the window, z check before and hint check after the stream, EXTERNAL_MU never streams, lengths 0–5, 63–65, 5900–5903 × contexts 0, 1, 3–5, 255, streamed KEYGEN+SIGN, ACVP pure cases streamed, stream cap |Mixed
+|52 |ML-DSA abort |Zeroize and reset during KEYGEN, before stream-ready, mid-stream and while computing; SIGN and KEYGEN+SIGN phases; zeroize during zeroize; zeroize latency |Negative
+|53 |ML-DSA error path |PCR_SIGN with KEYGEN, SIGN or VERIFY parks with ERROR, error event only, until zeroize |Negative
+|54 |Bus access |Per-word strobes (full, empty, partial → SLVERR), sub-word stores, 64-bit beats, bursts and offsets past `0xC018` → DECERR with `0xBADCAB1E`, narrow reads |Mixed
 |===
 
 ====== Platform firmware tests

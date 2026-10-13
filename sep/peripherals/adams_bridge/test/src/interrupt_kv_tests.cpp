@@ -63,10 +63,11 @@ class stub_backend : public abr::abr_crypto_backend
     {
         signature.assign(abr::MLDSA_SIG_BYTES, 0xEFu);
     }
-    void mldsa_verify(const abr::bytes &, const abr::bytes &, const abr::bytes &,
+    bool mldsa_verify(const abr::bytes &, const abr::bytes &, const abr::bytes &,
                       abr::bytes &ctilde_out) override
     {
         ctilde_out.assign(abr::MLDSA_CTILDE_BYTES, 0x11u);
+        return true;
     }
     void mldsa_compute_mu(const abr::bytes &, const abr::bytes &, const abr::bytes &,
                           abr::bytes &mu_out) override
@@ -226,9 +227,16 @@ void interrupt_kv_tests(abr_testbench &tb)
     tb.check(tb.zeroize_mldsa(), "zeroize between KV seed comparisons");
     tb.kv_push(3u, material);
     tb.wr(abr::OFF_KV_MLDSA_SEED_RD_CTRL, KV_READ_EN | (3u << KV_ENTRY_SHIFT));
+    // Until zeroize, the seed read control ignores writes, so a second read cannot
+    // swap the seed in (abr_ctrl.sv kv_mldsa_seed_data_present).
+    tb.kv_push(4u, kv_material(0x90u));
+    const uint32_t seed_ctrl = tb.rd(abr::OFF_KV_MLDSA_SEED_RD_CTRL);
+    tb.wr(abr::OFF_KV_MLDSA_SEED_RD_CTRL, KV_READ_EN | (4u << KV_ENTRY_SHIFT));
+    tb.check_eq(tb.rd(abr::OFF_KV_MLDSA_SEED_RD_CTRL), seed_ctrl,
+                "a second seed read before zeroize is not accepted");
     tb.check(tb.run_mldsa(CMD_KEYGEN), "repeat KV-seeded KEYGEN completes");
     tb.check(tb.rd_n(abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY) == kv_pubkey,
-             "same KV entry reproduces the same public key");
+             "same KV entry reproduces the same public key; the second read was refused");
 
     tb.check(tb.zeroize_mldsa(), "zeroize before differing KV entry");
     tb.kv_push(4u, kv_material(0x90u));
@@ -240,17 +248,16 @@ void interrupt_kv_tests(abr_testbench &tb)
     tb.section("Key Vault: failure paths");
 
     tb.check(tb.zeroize_mldsa(), "zeroize before KV failure check");
+    // read_en clear is a no-op.
+    tb.wr(abr::OFF_KV_MLDSA_SEED_RD_CTRL, 0u);
+    tb.check_eq(tb.rd(abr::OFF_KV_MLDSA_SEED_RD_CTRL) & KV_READ_EN, 0u,
+                "writing read_en=0 is a no-op");
     // Entry 31 was never populated, so the copy must fail.
     tb.wr(abr::OFF_KV_MLDSA_SEED_RD_CTRL, KV_READ_EN | (31u << KV_ENTRY_SHIFT));
     const uint32_t fail_status = tb.rd(abr::OFF_KV_MLDSA_SEED_RD_STATUS);
     tb.check_eq(fail_status & KV_STATUS_VALID, 0u, "empty KV entry does not report VALID");
     tb.check_eq((fail_status >> KV_ERROR_SHIFT) & KV_ERROR_MASK, abr::KV_READ_FAIL,
                 "empty KV entry reports KV_READ_FAIL");
-
-    // read_en clear is a no-op.
-    tb.wr(abr::OFF_KV_MLDSA_SEED_RD_CTRL, 0u);
-    tb.check_eq(tb.rd(abr::OFF_KV_MLDSA_SEED_RD_CTRL) & KV_READ_EN, 0u,
-                "writing read_en=0 is a no-op");
 
     // Back-door loader rejects an out-of-range entry without mutating state.
     const std::vector<uint8_t> kv0_before = tb.kv_read(0u, abr::KV_ENTRY_BYTES);

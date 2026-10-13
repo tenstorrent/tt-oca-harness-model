@@ -8,7 +8,10 @@
 #include "abr_pqc_wrap.h"
 
 #include "fips202.h"
+#include "packing.h"
 #include "params.h"
+#include "poly.h"
+#include "polyvec.h"
 #include "sign.h"
 
 #include <string.h>
@@ -55,10 +58,37 @@ int abr_mldsa87_sign_mu(const uint8_t *sk, const uint8_t *mu, const uint8_t *rnd
     return PQCLEAN_MLDSA87_CLEAN_crypto_sign_signature_internal(sig, siglen, mu, rnd, sk);
 }
 
-int abr_mldsa87_verify_mu(const uint8_t *pk, const uint8_t *mu, const uint8_t *sig,
-                          size_t siglen, uint8_t *ctilde_out)
+int abr_mldsa87_sig_check(const uint8_t *sig)
 {
-    return PQCLEAN_MLDSA87_CLEAN_crypto_sign_verify_internal(sig, siglen, mu, pk, ctilde_out);
+    uint8_t c[CTILDEBYTES];
+    polyvecl z;
+    polyveck h;
+    unsigned int i;
+
+    for (i = 0; i < L; ++i) {
+        PQCLEAN_MLDSA87_CLEAN_polyz_unpack(&z.vec[i], sig + CTILDEBYTES + i * POLYZ_PACKEDBYTES);
+    }
+    if (PQCLEAN_MLDSA87_CLEAN_polyvecl_chknorm(&z, GAMMA1 - BETA)) {
+        return ABR_MLDSA87_SIG_Z_OUT_OF_RANGE;
+    }
+    if (PQCLEAN_MLDSA87_CLEAN_unpack_sig(c, &z, &h, sig)) {
+        return ABR_MLDSA87_SIG_HINT_MALFORMED;
+    }
+    return ABR_MLDSA87_SIG_OK;
+}
+
+int abr_mldsa87_verify_ctilde(const uint8_t *pk, const uint8_t *mu, const uint8_t *sig,
+                              uint8_t *ctilde_out)
+{
+    if (abr_mldsa87_sig_check(sig) != ABR_MLDSA87_SIG_OK) {
+        memset(ctilde_out, 0, CTILDEBYTES);
+        return -1;
+    }
+    /* A well-formed signature always reaches the c~' squeeze; the return value only
+     * says whether c~' matched, which the caller decides for itself. */
+    (void)PQCLEAN_MLDSA87_CLEAN_crypto_sign_verify_internal(
+        sig, PQCLEAN_MLDSA87_CLEAN_CRYPTO_BYTES, mu, pk, ctilde_out);
+    return 0;
 }
 
 int abr_mldsa87_compute_mu(const uint8_t *pk, const uint8_t *ctx, size_t ctxlen,

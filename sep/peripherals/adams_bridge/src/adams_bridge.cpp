@@ -10,11 +10,12 @@
  *   reset / zeroize : READY=1, VALID=0, ERROR=0
  *   command issued  : READY=0, VALID=0
  *   command done    : VALID=1, READY stays 0
+ *   controller error: ERROR=1, READY and VALID stay 0
  *
- * Adams Bridge parks the sequencer at the operation's end state rather than
- * returning to RESET, so READY does not re-assert on completion. Firmware must
- * issue a zeroize between back-to-back operations, and detects that zeroize by
- * polling for READY=1.
+ * Adams Bridge parks the sequencer at the operation's end state (or its error
+ * state) rather than returning to RESET, so READY does not re-assert on
+ * completion. Firmware must issue a zeroize between back-to-back operations, and
+ * detects that zeroize by polling for READY=1.
  */
 
 #include "adams_bridge.h"
@@ -33,17 +34,26 @@ namespace {
 constexpr unsigned int MLDSA_NAME0_VALUE = 0x44534D4Cu;
 constexpr unsigned int MLDSA_NAME1_VALUE = 0x3837412Du;
 
-/// MLKEM_NAME follows the same encoding for "MLKEM-10". Not checked by any
-/// current firmware test; present so the identity registers are never blank.
-constexpr unsigned int MLKEM_NAME0_VALUE = 0x4B454D4Cu;
-constexpr unsigned int MLKEM_NAME1_VALUE = 0x31304D2Du;
+/// MLKEM_NAME reads back "KEM-1024" in the same layout (abr_params_pkg.sv).
+constexpr unsigned int MLKEM_NAME0_VALUE = 0x4D2D4B45u;
+constexpr unsigned int MLKEM_NAME1_VALUE = 0x32343130u;
 
-constexpr unsigned int VERSION0_VALUE = 0x00000001u;
-constexpr unsigned int VERSION1_VALUE = 0x00000000u;
+/// Both engines report version "2.0.1" (abr_params_pkg.sv MLDSA/MLKEM_CORE_VERSION).
+constexpr unsigned int VERSION0_VALUE = 0x302E322Eu;
+constexpr unsigned int VERSION1_VALUE = 0x00003100u;
 
-/// Upper bound on the streamed-message accumulator, so a runaway producer
-/// cannot grow it without limit.
-constexpr std::size_t MAX_MSG_STREAM_BYTES = 65536u;
+constexpr unsigned int CTRL_CMD_MASK    = 0x7u;
+constexpr unsigned int CTRL_ZEROIZE     = 1u << 3;
+constexpr unsigned int CTRL_PCR_SIGN    = 1u << 4;
+constexpr unsigned int CTRL_EXTERNAL_MU = 1u << 5;
+constexpr unsigned int CTRL_STREAM_MSG  = 1u << 6;
+
+constexpr unsigned int STROBE_ALL = 0xFu;
+
+bool in_window(unsigned int word, unsigned int byte_offset, unsigned int count)
+{
+    return word >= abr::w(byte_offset) && word < abr::w(byte_offset) + count;
+}
 
 } // namespace
 
@@ -72,8 +82,12 @@ abr_ip::abr_ip(sc_core::sc_module_name n, unsigned int memory_size)
       mlkem_keygen_cycles("mlkem_keygen_cycles", 12000),
       mlkem_encaps_cycles("mlkem_encaps_cycles", 15000),
       mlkem_decaps_cycles("mlkem_decaps_cycles", 18000),
-      zeroize_cycles("zeroize_cycles", 64),
+      // ABR_ZEROIZE sweeps ABR_MEM_MAX_DEPTH (1536) memory words and returns to
+      // RESET two cycles later (abr_ctrl.sv:1708-1712, 2198-2212).
+      zeroize_cycles("zeroize_cycles", 1538),
       kv_access_cycles("kv_access_cycles", 32),
+      mldsa_stream_ready_cycles("mldsa_stream_ready_cycles", 2000),
+      max_msg_stream_bytes("max_msg_stream_bytes", 1 << 20),
       m_qk(),
       m_crypto(std::make_unique<abr::abr_fips_backend>()),
       m_mldsa_cmd(abr::MldsaCmd::NONE),
@@ -84,8 +98,12 @@ abr_ip::abr_ip(sc_core::sc_module_name n, unsigned int memory_size)
       m_external_mu(false),
       m_stream_msg(false),
       m_kv_mldsa_seed_valid(false),
+      m_kv_mldsa_seed_present(false),
       m_kv_mlkem_seed_valid(false),
       m_kv_mlkem_msg_valid(false),
+      m_stream_state(StreamState::IDLE),
+      m_mldsa_epoch(0u),
+      m_privkey_readable(false),
       m_in_reset(false)
 {
     logger.setMaxVerbosity(verbosity.get_param_value());
@@ -109,8 +127,8 @@ abr_ip::abr_ip(sc_core::sc_module_name n, unsigned int memory_size)
     MLKEM_VERSION[0].reset_value = VERSION0_VALUE;
     MLKEM_VERSION[1].reset_value = VERSION1_VALUE;
 
-    // READY | MSG_STREAM_READY: an idle engine can accept a streamed message.
-    MLDSA_STATUS.reset_value = 0x5u;
+    // An idle engine is READY and asks for no message.
+    MLDSA_STATUS.reset_value = 0x1u;
 
     reset_all_registers();
 
@@ -175,13 +193,15 @@ void abr_ip::register_callbacks()
     memory.register_write_callback(
         [this](DT v) { return mlkem_ctrl_write(v); }, abr::w(abr::OFF_MLKEM_CTRL));
 
-    // Streaming-message mode appends MSG writes to an accumulator instead of
-    // treating the 16 words as a fixed-size block.
+    // While the core asks for the message, MSG[0] writes feed the stream instead
+    // of the fixed 16-word block.
     for (unsigned int i = 0; i < abr::N_MLDSA_MSG; ++i) {
         memory.register_write_callback(
             [this, i](DT v) { return mldsa_msg_write(i, v); },
             abr::w(abr::OFF_MLDSA_MSG) + i);
     }
+    memory.register_write_callback([this](DT v) { return mldsa_msg_strobe_write(v); },
+                                   abr::w(abr::OFF_MLDSA_MSG_STROBE));
 
     memory.register_write_callback([this](DT v) { return kv_mldsa_seed_rd_ctrl_write(v); },
                                    abr::w(abr::OFF_KV_MLDSA_SEED_RD_CTRL));
@@ -279,6 +299,10 @@ void abr_ip::reset_handler()
 
     reset_all_registers();
 
+    ++m_mldsa_epoch;
+    m_mldsa_abort_ev.notify(SC_ZERO_TIME);
+    m_stream_state = StreamState::IDLE;
+    m_privkey_readable = false;
     m_mldsa_cmd = abr::MldsaCmd::NONE;
     m_mlkem_cmd = abr::MlkemCmd::NONE;
     m_mldsa_zeroize_req = false;
@@ -294,6 +318,7 @@ void abr_ip::reset_handler()
     m_kv_mlkem_msg.clear();
     m_last_shared_key.clear();
     m_kv_mldsa_seed_valid = false;
+    m_kv_mldsa_seed_present = false;
     m_kv_mlkem_seed_valid = false;
     m_kv_mlkem_msg_valid = false;
 
@@ -370,16 +395,10 @@ void abr_ip::set_mldsa_busy()
 
 void abr_ip::finish_mldsa()
 {
-    // Publish the result at the correct simulated time: an LT model must
-    // resynchronize before a side effect becomes visible to other processes.
-    // consume_cycles() already synced when the latency exceeded the quantum;
-    // this catches a sub-quantum operation that only accumulated local time.
-    if (m_qk.get_local_time() > SC_ZERO_TIME) {
-        m_qk.sync();
-    }
-
     // The sequencer parks at the operation's end state, so READY stays low
     // until a zeroize. Firmware relies on this to detect completion via VALID.
+    m_stream_state = StreamState::IDLE;
+    MLDSA_STATUS.MSG_STREAM_READY = 0u;
     MLDSA_STATUS.VALID = 1u;
     MLDSA_STATUS.ERROR = 0u;
     raise_notif();
@@ -503,44 +522,71 @@ bool abr_ip::intr_enable_write(DT)
 
 bool abr_ip::mldsa_ctrl_write(DT value)
 {
-    const unsigned int cmd = value & 0x7u;
-    const bool zeroize_req = (value & (1u << 3)) != 0u;
-
-    m_pcr_sign = (value & (1u << 4)) != 0u;
-    m_external_mu = (value & (1u << 5)) != 0u;
-    m_stream_msg = (value & (1u << 6)) != 0u;
-
     // CTRL is write-only and hardware-cleared once latched, so nothing is
     // retained in the register shadow.
     MLDSA_CTRL = 0u;
 
-    if (zeroize_req) {
-        m_mldsa_zeroize_req = true;
-        set_mldsa_busy();
-        m_mldsa_start_ev.notify(SC_ZERO_TIME);
+    // ZEROIZE is a single-cycle pulse honoured in any state; every other field is
+    // written only while READY (abr_reg.rdl swwe = abr_ready).
+    if (m_in_reset) {
+        return true;
+    }
+    if ((value & CTRL_ZEROIZE) != 0u) {
+        request_mldsa_zeroize();
+        return true;
+    }
+    if (MLDSA_STATUS.READY.get() == 0u) {
         return true;
     }
 
-    if (cmd == static_cast<unsigned int>(abr::MldsaCmd::NONE)) {
+    // CTRL is written whole, so STREAM_MSG takes the written value and holds it
+    // until zeroize.
+    m_stream_msg = (value & CTRL_STREAM_MSG) != 0u;
+
+    // NONE and the unused encodings 5-7 leave the sequencer in RESET
+    // (abr_ctrl.sv ABR_RESET default branch).
+    const unsigned int cmd = value & CTRL_CMD_MASK;
+    if (cmd == static_cast<unsigned int>(abr::MldsaCmd::NONE) ||
+        cmd > static_cast<unsigned int>(abr::MldsaCmd::KEYGEN_SIGN)) {
         return true;
     }
 
-    if (cmd > static_cast<unsigned int>(abr::MldsaCmd::KEYGEN_SIGN)) {
-        REG_DEBUG(3, logger) << "[ABR] MLDSA_CTRL invalid command " << cmd << std::endl;
-        set_mldsa_busy();
+    m_mldsa_cmd = static_cast<abr::MldsaCmd>(cmd);
+    m_pcr_sign = (value & CTRL_PCR_SIGN) != 0u;
+    m_external_mu = (value & CTRL_EXTERNAL_MU) != 0u;
+    m_privkey_readable = false;
+    set_mldsa_busy();
+
+    // VERIFY preloads the inverted challenge, so a verify that stops early can
+    // never leave a result equal to c~ (abr_ctrl.sv:808-811).
+    if (m_mldsa_cmd == abr::MldsaCmd::VERIFYING) {
+        for (unsigned int i = 0; i < abr::N_VERIFY_RES; ++i) {
+            MLDSA_VERIFY_RES[i] = ~static_cast<unsigned int>(MLDSA_SIGNATURE[i]);
+        }
+    }
+
+    // PCR_SIGN is legal only with KEYGEN+SIGN; otherwise the controller error
+    // flag parks the sequencer until zeroize (abr_ctrl.sv pcr_sign_input_invalid).
+    if (m_pcr_sign && m_mldsa_cmd != abr::MldsaCmd::KEYGEN_SIGN) {
         m_mldsa_cmd = abr::MldsaCmd::NONE;
-        // Do not call finish_mldsa(): it may m_qk.sync()/wait(), and this
-        // callback runs inside b_transport.
-        MLDSA_STATUS.VALID = 0u;
         MLDSA_STATUS.ERROR = 1u;
         raise_error();
         return true;
     }
 
-    m_mldsa_cmd = static_cast<abr::MldsaCmd>(cmd);
-    set_mldsa_busy();
     m_mldsa_start_ev.notify(SC_ZERO_TIME);
     return true;
+}
+
+void abr_ip::request_mldsa_zeroize()
+{
+    ++m_mldsa_epoch;
+    m_mldsa_abort_ev.notify(SC_ZERO_TIME);
+    m_mldsa_cmd = abr::MldsaCmd::NONE;
+    m_stream_state = StreamState::IDLE;
+    m_mldsa_zeroize_req = true;
+    set_mldsa_busy();
+    m_mldsa_start_ev.notify(SC_ZERO_TIME);
 }
 
 bool abr_ip::mlkem_ctrl_write(DT value)
@@ -551,6 +597,9 @@ bool abr_ip::mlkem_ctrl_write(DT value)
     MLKEM_CTRL = 0u;
 
     if (zeroize_req) {
+        // The RTL has one zeroize for both engines (abr_ctrl.sv:721), and it clears
+        // the ML-DSA state too, so a running ML-DSA operation must end with it.
+        request_mldsa_zeroize();
         m_mlkem_zeroize_req = true;
         set_mlkem_busy();
         m_mlkem_start_ev.notify(SC_ZERO_TIME);
@@ -580,30 +629,86 @@ bool abr_ip::mlkem_ctrl_write(DT value)
 
 bool abr_ip::mldsa_msg_write(unsigned int index, DT value)
 {
-    MLDSA_MSG[index] = value;
-
-    // Accumulate unconditionally: firmware streams the message *before* issuing
-    // the command that carries CTRL.STREAM_MSG, so the flag is not yet set when
-    // these writes arrive. The command decides whether to consume the stream or
-    // the fixed 16-word MSG block.
-    //
-    // MSG_STROBE selects which bytes of the word are live, which is how a
-    // message that is not a multiple of 4 bytes terminates.
-    if (m_msg_stream.size() < MAX_MSG_STREAM_BYTES) {
-        const unsigned int strobe = MLDSA_MSG_STROBE.STROBE.get();
-        for (unsigned int b = 0; b < 4u; ++b) {
-            if ((strobe & (1u << b)) != 0u) {
-                const unsigned int shift = b * 8u;
-                m_msg_stream.push_back(static_cast<uint8_t>((value >> shift) & 0xFFu));
-            }
+    // MSG is writable while READY or while the core asks for the message
+    // (swwe = abr_ready | stream_msg_rdy); only MSG[0] writes in the latter feed
+    // the stream (abr_ctrl.sv:793, 1838-1840).
+    if (m_stream_state != StreamState::RDY) {
+        if (MLDSA_STATUS.READY.get() != 0u) {
+            MLDSA_MSG[index] = value;
         }
-    } else {
-        REG_WARN(1, logger) << "[ABR] message stream exceeded "
-                             << MAX_MSG_STREAM_BYTES << " B; write dropped"
-                             << std::endl;
+        return true;
     }
 
+    MLDSA_MSG[index] = value;
+    if (index != 0u) {
+        return true;
+    }
+
+    const unsigned int strobe = MLDSA_MSG_STROBE.STROBE.get();
+    const std::size_t cap = static_cast<std::size_t>(std::max(0, max_msg_stream_bytes.get_param_value()));
+    for (unsigned int b = 0; b < 4u; ++b) {
+        if ((strobe & (1u << b)) == 0u) {
+            continue;
+        }
+        if (m_msg_stream.size() < cap) {
+            m_msg_stream.push_back(static_cast<uint8_t>((value >> (b * 8u)) & 0xFFu));
+        } else {
+            REG_WARN(1, logger) << "[ABR] message stream exceeded " << cap
+                                 << " B; byte dropped" << std::endl;
+        }
+    }
+
+    // Any strobe other than all-four ends the stream, including zero.
+    if (strobe != STROBE_ALL) {
+        m_stream_state = StreamState::DONE;
+        MLDSA_STATUS.MSG_STREAM_READY = 0u;
+        m_stream_done_ev.notify(SC_ZERO_TIME);
+    }
     return true;
+}
+
+bool abr_ip::mldsa_msg_strobe_write(DT value)
+{
+    // MSG_STROBE is writable only while the core asks for the message.
+    if (m_stream_state == StreamState::RDY) {
+        MLDSA_MSG_STROBE = value & STROBE_ALL;
+    }
+    return true;
+}
+
+bool abr_ip::bus_write_allowed(unsigned int word) const
+{
+    // abr_ctrl.sv: SEED and the seed read control swwe = abr_ready & ~kv_mldsa_seed_data_present.
+    if (m_kv_mldsa_seed_present && (in_window(word, abr::OFF_MLDSA_SEED, abr::N_MLDSA_SEED) ||
+                                    in_window(word, abr::OFF_KV_MLDSA_SEED_RD_CTRL, 1u))) {
+        return false;
+    }
+    if (MLDSA_STATUS.READY.get() != 0u) {
+        return true;
+    }
+    return !(in_window(word, abr::OFF_ABR_ENTROPY, abr::N_ENTROPY) ||
+             in_window(word, abr::OFF_MLDSA_SEED, abr::N_MLDSA_SEED) ||
+             in_window(word, abr::OFF_MLDSA_SIGN_RND, abr::N_SIGN_RND) ||
+             in_window(word, abr::OFF_MLDSA_EXTERNAL_MU, abr::N_EXTERNAL_MU) ||
+             in_window(word, abr::OFF_MLDSA_CTX_CONFIG, 1u) ||
+             in_window(word, abr::OFF_MLDSA_CTX, abr::N_MLDSA_CTX) ||
+             in_window(word, abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY) ||
+             in_window(word, abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE) ||
+             in_window(word, abr::OFF_MLDSA_PRIVKEY_IN, abr::N_MLDSA_PRIVKEY) ||
+             in_window(word, abr::OFF_KV_MLDSA_SEED_RD_CTRL, 1u));
+}
+
+bool abr_ip::bus_read_masked(unsigned int word) const
+{
+    const bool valid = MLDSA_STATUS.VALID.get() != 0u;
+    if (in_window(word, abr::OFF_MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY) ||
+        in_window(word, abr::OFF_MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE)) {
+        return !valid;
+    }
+    if (in_window(word, abr::OFF_MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY)) {
+        return !(valid && m_privkey_readable);
+    }
+    return false;
 }
 
 // =============================================================================
@@ -758,17 +863,39 @@ void abr_ip::reverse_le_dwords(abr::bytes &v)
     }
 }
 
-void abr_ip::resolve_sign_message(abr::bytes &msg)
+bool abr_ip::mldsa_acquire_message(uint64_t epoch, abr::bytes &ctx, abr::bytes &msg)
 {
+    ctx.clear();
     if (m_pcr_sign && !m_pcr_digest.empty()) {
         msg = m_pcr_digest;
-        return;
+        return true;
     }
-    if (m_stream_msg && !m_msg_stream.empty()) {
-        msg = m_msg_stream;
-        return;
+    if (!m_stream_msg) {
+        // Hashed as 0 || 0 || MSG: a non-streamed message has an empty context
+        // whatever CTX_CONFIG holds (abr_ctrl.sv msg_p_reg).
+        regs_to_bytes(MLDSA_MSG, abr::N_MLDSA_MSG, msg);
+        return true;
     }
-    regs_to_bytes(MLDSA_MSG, abr::N_MLDSA_MSG, msg);
+
+    const unsigned int ctx_len = MLDSA_CTX_CONFIG.CTX_SIZE.get();
+    if (ctx_len > 0u) {
+        abr::bytes ctx_words;
+        regs_to_bytes(MLDSA_CTX, abr::N_MLDSA_CTX, ctx_words);
+        ctx.assign(ctx_words.begin(), ctx_words.begin() + ctx_len);
+    }
+
+    m_msg_stream.clear();
+    m_stream_state = StreamState::RDY;
+    MLDSA_STATUS.MSG_STREAM_READY = 1u;
+    while (m_stream_state == StreamState::RDY && epoch == m_mldsa_epoch) {
+        wait(m_stream_done_ev | m_mldsa_abort_ev);
+    }
+    if (epoch != m_mldsa_epoch) {
+        return false;
+    }
+    msg = m_msg_stream;
+    m_msg_stream.clear();
+    return true;
 }
 
 bool abr_ip::kv_mldsa_seed_rd_ctrl_write(DT value)
@@ -779,6 +906,7 @@ bool abr_ip::kv_mldsa_seed_rd_ctrl_write(DT value)
         return true;
     }
 
+    m_kv_mldsa_seed_present = true;
     const unsigned int entry = (value >> 1) & 0x1Fu;
     const bool ok = kv_fetch(entry, m_kv_mldsa_seed, abr::MLDSA_SEED_BYTES);
     if (ok) {
@@ -888,9 +1016,11 @@ void abr_ip::zeroize()
     clear_regs(MLKEM_CIPHERTEXT, abr::N_MLKEM_CIPHERTEXT);
 
     MLDSA_CTX_CONFIG = 0u;
-    MLDSA_MSG_STROBE.reset();
+    MLDSA_MSG_STROBE = 0u;
 
     m_msg_stream.clear();
+    m_stream_state = StreamState::IDLE;
+    m_privkey_readable = false;
 
     std::fill(m_kv_mldsa_seed.begin(), m_kv_mldsa_seed.end(), 0u);
     std::fill(m_kv_mlkem_seed.begin(), m_kv_mlkem_seed.end(), 0u);
@@ -901,6 +1031,7 @@ void abr_ip::zeroize()
     m_kv_mlkem_msg.clear();
     m_last_shared_key.clear();
     m_kv_mldsa_seed_valid = false;
+    m_kv_mldsa_seed_present = false;
     m_kv_mlkem_seed_valid = false;
     m_kv_mlkem_msg_valid = false;
 
@@ -915,56 +1046,67 @@ void abr_ip::zeroize()
 // ML-DSA engine
 // =============================================================================
 
+bool abr_ip::mldsa_wait(int cycles, uint64_t epoch)
+{
+    const sc_time t = cycles_to_time(cycles);
+    if (t > SC_ZERO_TIME && epoch == m_mldsa_epoch) {
+        wait(t, m_mldsa_abort_ev);
+    }
+    return epoch == m_mldsa_epoch;
+}
+
 void abr_ip::mldsa_engine_thread()
 {
     while (true) {
-        wait(m_mldsa_start_ev);
-
-        if (m_in_reset) {
-            continue;
+        if (!m_mldsa_zeroize_req && m_mldsa_cmd == abr::MldsaCmd::NONE) {
+            wait(m_mldsa_start_ev);
         }
+
+        const uint64_t epoch = m_mldsa_epoch;
+        // An abort notified for an earlier epoch must not cut this one's waits short.
+        m_mldsa_abort_ev.cancel();
 
         if (m_mldsa_zeroize_req) {
             m_mldsa_zeroize_req = false;
             zeroize();
-            consume_cycles(zeroize_cycles.get_param_value());
-            if (m_qk.get_local_time() > SC_ZERO_TIME) {
-                m_qk.sync();
+            if (!mldsa_wait(zeroize_cycles.get_param_value(), epoch)) {
+                continue;
             }
             // Zeroize is the only path that returns the sequencer to RESET.
             MLDSA_STATUS.READY = 1u;
             MLDSA_STATUS.VALID = 0u;
             MLDSA_STATUS.ERROR = 0u;
-            MLDSA_STATUS.MSG_STREAM_READY = 1u;
+            MLDSA_STATUS.MSG_STREAM_READY = 0u;
             continue;
         }
 
-        switch (m_mldsa_cmd) {
+        const abr::MldsaCmd cmd = m_mldsa_cmd;
+        m_mldsa_cmd = abr::MldsaCmd::NONE;
+        switch (cmd) {
         case abr::MldsaCmd::KEYGEN:
-            do_mldsa_keygen();
+            do_mldsa_keygen(epoch);
             break;
         case abr::MldsaCmd::SIGNING:
-            do_mldsa_sign(false);
+            do_mldsa_sign(false, epoch);
             break;
         case abr::MldsaCmd::VERIFYING:
-            do_mldsa_verify();
+            do_mldsa_verify(epoch);
             break;
         case abr::MldsaCmd::KEYGEN_SIGN:
-            do_mldsa_sign(true);
+            do_mldsa_sign(true, epoch);
             break;
-        case abr::MldsaCmd::NONE: // LCOV_EXCL_LINE — invalid cmds never wake the engine
+        case abr::MldsaCmd::NONE: // LCOV_EXCL_LINE — only zeroize wakes the engine with no command
         default:                  // LCOV_EXCL_LINE
             break;                // LCOV_EXCL_LINE
         }
-
-        m_mldsa_cmd = abr::MldsaCmd::NONE;
     }
 }
 
-void abr_ip::do_mldsa_keygen()
+void abr_ip::do_mldsa_keygen(uint64_t epoch)
 {
     abr::bytes seed;
-    if (m_kv_mldsa_seed_valid) {
+    const bool kv_seed = m_kv_mldsa_seed_valid;
+    if (kv_seed) {
         seed = m_kv_mldsa_seed;
     } else {
         regs_to_bytes(MLDSA_SEED, abr::N_MLDSA_SEED, seed);
@@ -974,16 +1116,21 @@ void abr_ip::do_mldsa_keygen()
     abr::bytes privkey;
     m_crypto->mldsa_keygen(seed, pubkey, privkey);
 
-    consume_cycles(mldsa_keygen_cycles.get_param_value());
+    if (!mldsa_wait(mldsa_keygen_cycles.get_param_value(), epoch)) {
+        return;
+    }
 
     bytes_to_regs(pubkey, MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY);
     bytes_to_regs(privkey, MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY);
+    // The private key is released only by a standalone KEYGEN from a software
+    // seed (abr_ctrl.sv mldsa_privkey_lock).
+    m_privkey_readable = !kv_seed;
 
     REG_INFO(2, logger) << "[ABR] ML-DSA keygen complete" << std::endl;
     finish_mldsa();
 }
 
-void abr_ip::do_mldsa_sign(bool keygen_first)
+void abr_ip::do_mldsa_sign(bool keygen_first, uint64_t epoch)
 {
     abr::bytes privkey;
 
@@ -997,7 +1144,9 @@ void abr_ip::do_mldsa_sign(bool keygen_first)
 
         abr::bytes pubkey;
         m_crypto->mldsa_keygen(seed, pubkey, privkey);
-        consume_cycles(mldsa_keygen_cycles.get_param_value());
+        if (!mldsa_wait(mldsa_keygen_cycles.get_param_value(), epoch)) {
+            return;
+        }
 
         bytes_to_regs(pubkey, MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY);
         bytes_to_regs(privkey, MLDSA_PRIVKEY_OUT, abr::N_MLDSA_PRIVKEY);
@@ -1009,18 +1158,12 @@ void abr_ip::do_mldsa_sign(bool keygen_first)
     if (m_external_mu) {
         regs_to_bytes(MLDSA_EXTERNAL_MU, abr::N_EXTERNAL_MU, mu);
     } else {
-        abr::bytes msg;
-        resolve_sign_message(msg);
-
         abr::bytes ctx;
-        const unsigned int ctx_len = MLDSA_CTX_CONFIG.CTX_SIZE.get();
-        if (ctx_len > 0u) {
-            abr::bytes ctx_words;
-            regs_to_bytes(MLDSA_CTX, abr::N_MLDSA_CTX, ctx_words);
-            ctx.assign(ctx_words.begin(),
-                       ctx_words.begin() + std::min<std::size_t>(ctx_len, ctx_words.size()));
+        abr::bytes msg;
+        if (!mldsa_wait(mldsa_stream_ready_cycles.get_param_value(), epoch) ||
+            !mldsa_acquire_message(epoch, ctx, msg)) {
+            return;
         }
-
         m_crypto->mldsa_compute_mu_from_sk(privkey, ctx, msg, mu);
     }
 
@@ -1030,17 +1173,18 @@ void abr_ip::do_mldsa_sign(bool keygen_first)
     abr::bytes signature;
     m_crypto->mldsa_sign(privkey, mu, rnd, signature);
 
-    consume_cycles(mldsa_sign_cycles.get_param_value());
+    if (!mldsa_wait(mldsa_sign_cycles.get_param_value(), epoch)) {
+        return;
+    }
 
     bytes_to_regs(signature, MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE);
-    m_msg_stream.clear();
 
     REG_INFO(2, logger) << "[ABR] ML-DSA sign complete (keygen_first=" << keygen_first
                          << ", external_mu=" << m_external_mu << ")" << std::endl;
     finish_mldsa();
 }
 
-void abr_ip::do_mldsa_verify()
+void abr_ip::do_mldsa_verify(uint64_t epoch)
 {
     abr::bytes pubkey;
     regs_to_bytes(MLDSA_PUBKEY, abr::N_MLDSA_PUBKEY, pubkey);
@@ -1048,34 +1192,44 @@ void abr_ip::do_mldsa_verify()
     abr::bytes signature;
     regs_to_bytes(MLDSA_SIGNATURE, abr::N_MLDSA_SIGNATURE, signature);
 
+    // The RTL decodes the signature and range-checks z before it reaches the
+    // message hash, and decodes the hint only after it (abr_seq.sv:521-537, 649).
+    // Either failure ends the operation with the preloaded ~c~ in VERIFY_RES.
+    if (!mldsa_wait(mldsa_stream_ready_cycles.get_param_value(), epoch)) {
+        return;
+    }
+    const abr::MldsaSigEncoding encoding = m_crypto->mldsa_check_signature(signature);
+    if (encoding == abr::MldsaSigEncoding::Z_OUT_OF_RANGE) {
+        REG_INFO(2, logger) << "[ABR] ML-DSA verify: z out of range" << std::endl;
+        finish_mldsa();
+        return;
+    }
+
     abr::bytes mu;
     if (m_external_mu) {
         regs_to_bytes(MLDSA_EXTERNAL_MU, abr::N_EXTERNAL_MU, mu);
     } else {
-        abr::bytes msg;
-        resolve_sign_message(msg);
-
         abr::bytes ctx;
-        const unsigned int ctx_len = MLDSA_CTX_CONFIG.CTX_SIZE.get();
-        if (ctx_len > 0u) {
-            abr::bytes ctx_words;
-            regs_to_bytes(MLDSA_CTX, abr::N_MLDSA_CTX, ctx_words);
-            ctx.assign(ctx_words.begin(),
-                       ctx_words.begin() + std::min<std::size_t>(ctx_len, ctx_words.size()));
+        abr::bytes msg;
+        if (!mldsa_acquire_message(epoch, ctx, msg)) {
+            return;
         }
-
         m_crypto->mldsa_compute_mu(pubkey, ctx, msg, mu);
     }
 
     abr::bytes ctilde;
-    m_crypto->mldsa_verify(pubkey, mu, signature, ctilde);
+    const bool computed = encoding == abr::MldsaSigEncoding::OK &&
+                          m_crypto->mldsa_verify(pubkey, mu, signature, ctilde);
 
-    consume_cycles(mldsa_verify_cycles.get_param_value());
+    if (!mldsa_wait(mldsa_verify_cycles.get_param_value(), epoch)) {
+        return;
+    }
 
     // Hardware reports the recomputed c-tilde; firmware compares it against the
     // first 64 bytes of the signature. There is no pass/fail status bit.
-    bytes_to_regs(ctilde, MLDSA_VERIFY_RES, abr::N_VERIFY_RES);
-    m_msg_stream.clear();
+    if (computed) {
+        bytes_to_regs(ctilde, MLDSA_VERIFY_RES, abr::N_VERIFY_RES);
+    }
 
     REG_INFO(2, logger) << "[ABR] ML-DSA verify complete" << std::endl;
     finish_mldsa();

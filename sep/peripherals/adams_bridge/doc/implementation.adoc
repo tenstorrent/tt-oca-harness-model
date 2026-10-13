@@ -4,8 +4,10 @@
 [[adams-bridge-implementation]]
 ===== SystemC/TLM-2.0 Implementation
 
-`abr_ip` is a loosely-timed TLM-2.0 model. Timing is quantum-keeper
-cycle counts, not a cycle-accurate datapath. The register file follows
+`abr_ip` is a loosely-timed TLM-2.0 model. Timing is modeled cycle
+counts, not a cycle-accurate datapath. On the ML-DSA path the model follows
+the RTL's software-visible protocol: the order of status changes, which
+writes land, what reads return and what a malformed signature leaves behind. The register file follows
 the HMAC / KMAC pattern: `abr_base` is the regmodel declaration so a map
 change lands in one header.
 
@@ -50,14 +52,12 @@ on the platform; unit tests use it for a flat KV push.
 `clk_i` may be unbound in register-only benches; `clk_freq()` then uses
 `default_clk_freq_hz`.
 
-CTRL writes latch a command and notify the matching engine thread.
-`MLDSA_MSG` writes also append strobed bytes to a stream accumulator
-because firmware streams the message before setting `STREAM_MSG`. KV
+CTRL writes latch a command and notify the matching engine thread. KV
 `rd_ctrl` / `wr_ctrl` copies a slot and hardware-clears the enable.
 W1C / W1S interrupt registers recompute the pins.
 
 ----
-  TLM MMIO ──► abr_base::memory ──► mldsa_engine_thread
+  TLM MMIO ──► abr_base bus front end ──► abr_base::memory ──► mldsa_engine_thread
                                  └► mlkem_engine_thread
                                            │
                                            ▼
@@ -79,20 +79,86 @@ Math is not inlined. `set_crypto_backend()` replaces the provider.
 * `abr_shake_backend`: deterministic stand-in for FSM / interrupt
   tests that do not need ACVP vectors.
 
+====== Bus front end
+
+`abr_base` owns the register target socket and applies the SEP fabric's
+access rules before the register file sees an access:
+
+* An access wider than one 64-bit beat, or reaching at or past the decoded
+  extent `0xC018`, answers DECERR. A DECERR read returns `0xBADCAB1E`, the
+  crypto demux's error data. The rest of the 64 KiB aperture is never
+  forwarded to ABR.
+* Each word of a write is taken by its own byte strobe. A full strobe writes
+  it, an empty strobe skips it with OKAY, and a partial strobe skips it and
+  answers SLVERR, because the AHB slave would zero-extend a narrow write over
+  the whole register.
+* A narrow read returns only the bytes it names.
+* Debug transport goes straight to the register file without these rules.
+
+====== READY gating and VALID read masking
+
+While `MLDSA_STATUS.READY` is clear, writes to `ABR_ENTROPY`, `MLDSA_SEED`,
+`MLDSA_SIGN_RND`, `MLDSA_EXTERNAL_MU`, `MLDSA_CTX_CONFIG`, `MLDSA_CTX`,
+`MLDSA_PUBKEY`, `MLDSA_SIGNATURE`, `MLDSA_PRIVKEY_IN` and
+`kv_mldsa_seed_rd_ctrl` are dropped, as are every `MLDSA_CTRL` field but
+`ZEROIZE`. `MLDSA_MSG` is writable while READY or while the core asks for a
+streamed message; `MLDSA_MSG_STROBE` only in the latter.
+
+`MLDSA_PUBKEY` and `MLDSA_SIGNATURE` read as zero until VALID and then read
+back what was loaded or produced. `MLDSA_PRIVKEY_OUT` reads as zero unless
+VALID follows a standalone KEYGEN from a software seed. `MLDSA_VERIFY_RES` is
+never masked.
+
+The command encodings 5-7 are no-ops: the sequencer stays in RESET with
+READY set and raises no event.
+
+====== Streamed messages
+
+`CTRL.STREAM_MSG` takes the written value with every accepted CTRL write and
+holds it until zeroize. With it set, SIGN, KEYGEN+SIGN and VERIFY reach the
+message hash and then raise `MLDSA_STATUS.MSG_STREAM_READY`; VERIFY does so
+only after its z range check. The message hashed is `0 || |ctx| || ctx`
+followed by the bytes of each `MLDSA_MSG[0]` write that its `MLDSA_MSG_STROBE`
+enables. The first write whose strobe is not `0xF` ends the stream; a message
+whose length is a multiple of four ends with strobe `0x0` and a dummy word.
+`MLDSA_MSG[1..15]` writes are stored but never streamed. `MLDSA_MSG_STROBE`
+resets to `0xF` and zeroize clears it to `0`. Without `STREAM_MSG` the
+message is the 64-byte `MLDSA_MSG` block and the context is empty, whatever
+`CTX_CONFIG` holds. EXTERNAL_MU never streams.
+
+====== Fail-closed verify result
+
+Accepting VERIFY writes the bitwise inverse of the signature's challenge
+(`~c~`, the first 16 `MLDSA_SIGNATURE` words) into `MLDSA_VERIFY_RES`. A
+signature whose z is out of range stops before the message is requested, and
+one whose hint encoding is malformed stops after it; both complete with VALID
+and leave `~c~`. Only a well-formed signature overwrites `MLDSA_VERIFY_RES`
+with the recomputed c~'. A verify that never ran therefore leaves 0 or `~c~`,
+never c~.
+
+====== Error path and command-done events
+
+`PCR_SIGN` with KEYGEN, SIGN or VERIFY sets the controller error flag: ERROR
+is set, READY and VALID stay clear, the error event is raised, and the
+sequencer waits for zeroize. Every VALID rising edge, and only that, sets
+`notif_cmd_done_sts` and increments `notif_cmd_done_intr_count`; neither is
+cleared by zeroize, and both latch whether or not interrupts are enabled.
+
+====== Aborting a running operation
+
+A zeroize or reset bumps an epoch and fires an abort event that every ML-DSA
+wait also listens for, so a running operation ends at once, publishes nothing
+and raises no done event. Zeroize then clears the engine state and returns to
+READY after `zeroize_cycles`. A zeroize during a zeroize restarts the sweep.
+
 ====== CCI parameters
 
-Knobs are `regmodel::Param` and are re-read when used. Each operation
-charges its cycle count through `clk_i` into
-`tlm_quantumkeeper::inc()`.
-
-`consume_cycles()` syncs the keeper itself once the charged latency
-exceeds the quantum. A sub-quantum operation only accumulates local time,
-so `finish_mldsa()` / `finish_mlkem()` resync before publishing — an LT
-model must resynchronize before a side effect becomes visible to other
-processes. With the default cycle counts every operation is far larger
-than the quantum, so that branch is reached only by the directed coverage
-case, which shrinks the cycle counts and waits 200 ns (long enough to
-complete, short enough to stay inside the 1 us quantum).
+Knobs are `regmodel::Param` and are re-read when used. ML-DSA operations wait
+for their cycle count through `clk_i` directly, so an abort can interrupt
+them. ML-KEM charges its cycle count into `tlm_quantumkeeper::inc()`:
+`consume_cycles()` syncs the keeper once the charged latency exceeds the
+quantum, and a sub-quantum operation only accumulates local time, so
+`finish_mlkem()` resyncs before publishing.
 
 `finish_mldsa()` and `finish_mlkem()` take no arguments: they publish a
 successful result and raise the notification interrupt. Error completions
@@ -109,16 +175,30 @@ never reach them — those are reported directly from the CTRL callback.
 |`mlkem_keygen_cycles` |12000 |LT ML-KEM keygen cost
 |`mlkem_encaps_cycles` |15000 |LT encaps cost
 |`mlkem_decaps_cycles` |18000 |LT decaps cost
-|`zeroize_cycles` |64 |LT wipe cost
+|`mldsa_stream_ready_cycles` |2000 |Command (and VERIFY z check) to `MSG_STREAM_READY`
+|`zeroize_cycles` |1538 |RTL memory sweep (`ABR_MEM_MAX_DEPTH` words) plus return to RESET
 |`kv_access_cycles` |32 |Added to sideload `b_transport` delay
+|`max_msg_stream_bytes` |1048576 |Streamed bytes kept; the rest are dropped
 |===
 
 ====== Modeling gaps versus RTL
 
 * No cycle-accurate NTT, sampling, or Keccak rounds.
 * `ABR_ENTROPY` is WO storage; the FIPS backend ignores it.
-* `PCR_SIGN` hashes `set_pcr_digest()` when that buffer is non-empty,
-  otherwise MSG. There is no PCR bank.
+* `PCR_SIGN` with KEYGEN+SIGN hashes `set_pcr_digest()` when that buffer
+  is non-empty, otherwise MSG, and takes the seed from `MLDSA_SEED`. There
+  is no PCR bank.
+* The Caliptra all-zero Key Vault seed error is not modeled.
+* ML-KEM has no READY gating, read masking, streaming or abort; only its
+  identity registers match the RTL.
+* A zeroize from either engine clears both engines' registers, but only an
+  ML-DSA zeroize aborts a running ML-DSA operation.
+* Strobes with gaps (for example `0x5`) are taken byte by byte; the RTL
+  behaviour for them is not characterised.
+* Debug transport bypasses the bus rules.
+* Malformed-hint decoding follows FIPS 204 (PQClean `unpack_sig`); it has
+  not yet been compared with the RTL's `sigdecode_h` on the NIST malformed-hint
+  vectors.
 * KV emptiness is "any non-zero byte". There is no per-entry valid bit.
 * Zeroize of one engine currently wipes shared ABR buffers.
 * KM dual-share reconstruct collapses `abr_wrapper_key_reg` +
@@ -127,3 +207,24 @@ never reach them — those are reported directly from the CTRL callback.
   WO seed register unless firmware also issues a seed read of the Z
   entry.
 * No EDN / `entropy_src` ports on this model.
+
+====== ROM integration checklist
+
+What SEP firmware must do to drive ML-DSA verify the way the RTL requires:
+
+. Zeroize before each operation and wait for STATUS to read exactly READY.
+. Use aligned 32-bit stores only; a byte or half-word store answers SLVERR.
+. Program `CTX_CONFIG` and `CTX` only for a streamed message; otherwise the
+  context is ignored.
+. After the command, poll for `MSG_STREAM_READY` or VALID, checking ERROR on
+  every iteration. VALID first means the signature was rejected before the
+  message was requested.
+. Write `MLDSA_MSG_STROBE` before each `MLDSA_MSG[0]` write. A 5903-byte
+  message ends with strobe `0x7`; a length that is a multiple of four ends
+  with strobe `0x0` and a dummy word.
+. Check that `MLDSA_VERIFY_RES` reads `~c~` right after the command.
+. Clear `notif_cmd_done_sts` and the done counter before the command, and
+  require exactly one done event and no error event at VALID.
+. After VALID, read `MLDSA_PUBKEY` and the first 16 `MLDSA_SIGNATURE` words
+  back and compare them with what was loaded.
+. Reject an all-zero c~ before starting the accelerator.

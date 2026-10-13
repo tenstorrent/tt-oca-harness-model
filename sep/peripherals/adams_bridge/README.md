@@ -10,9 +10,11 @@ This tree has the model, its test plan, and how to run the tests.
 |---|---|
 | Register file + CTRL/STATUS handshake | Implemented |
 | ML-DSA / ML-KEM command engines | Implemented (PQClean FIPS default) |
+| ML-DSA protocol (streaming, READY gating, read masking, fail-closed verify, error path, abort) | Follows the RTL; gaps in `doc/implementation.adoc` |
+| Bus access rules (strobes, beat width, decoded extent) | Implemented |
 | Interrupts, zeroize, Key Vault, KM DEST sockets | Implemented |
 | `PCR_SIGN` | `set_pcr_digest()` back-door (no PCR bank) |
-| Standalone tests | `./run_tests.sh` (includes NIST ACVP KATs) |
+| Standalone tests | `./run_tests.sh` (includes every NIST ACVP ML-DSA-87 sigVer case) |
 | Wired into `sep-vp` | ABR window, PIC error/notif, KM sockets |
 
 ## Files

@@ -4,10 +4,13 @@
  * @file abr_base.h
  * @brief Register block for the Adams Bridge (ABR) PQC engine.
  *
- * Declares every software-visible word in the 64 KiB ABR aperture and binds
- * the backing regmodel::Memory to the TLM target socket. Behaviour lives in
- * adams_bridge.h (abr_ip); this layer is pure register declaration, matching
- * the hmac_base / kmac_base convention used by the other SEP crypto IPs.
+ * Declares every software-visible word in the 64 KiB ABR aperture and owns the
+ * TLM target socket. Its bus front end applies the SEP fabric's access rules
+ * (DECERR past the decoded extent or wider than one beat, SLVERR for a partial
+ * word strobe) and asks the derived class, through bus_write_allowed() and
+ * bus_read_masked(), which words the engine's state gates. Register behaviour
+ * lives in adams_bridge.h (abr_ip), following the hmac_base / kmac_base
+ * convention of the other SEP crypto IPs.
  *
  * Byte offsets come from tt-oca-hw/vendor/adams_bridge/src/abr_top/rtl/abr_reg.rdl.
  * regmodel::Reg takes a WORD index, hence the /sizeof(unsigned int) throughout.
@@ -19,6 +22,7 @@
 
 #include <tlm_utils/simple_target_socket.h>
 
+#include <cstdint>
 #include <string>
 
 namespace abr {
@@ -111,6 +115,17 @@ static constexpr unsigned int N_MLKEM_CIPHERTEXT = 392u;  ///< 1568 B
 
 /// Full aperture size (sep_crypto_pkg: 0x1094_0000..0x1095_0000).
 static constexpr unsigned int ABR_APERTURE_SIZE = 0x10000u;
+
+/// The crypto demux forwards offsets below the end of the register map and answers
+/// everything past it with DECERR itself.
+static constexpr unsigned int ABR_DECODED_EXTENT = OFF_KV_MLKEM_SHAREDKEY_WR_STATUS + 4u;
+static_assert(ABR_DECODED_EXTENT == 0xC018u, "the RTL register map ends at 0xC018");
+
+/// Read data the crypto demux returns with DECERR.
+static constexpr uint32_t ABR_DECERR_DATA = 0xBADCAB1Eu;
+
+/// Widest single access the aperture accepts (one 64-bit beat); a burst is DECERR.
+static constexpr unsigned int ABR_BEAT_BYTES = 8u;
 
 /// Convert a byte offset to the word index regmodel::Reg expects.
 static constexpr unsigned int w(unsigned int byte_offset)
@@ -251,14 +266,15 @@ class abr_base : public sc_core::sc_module
           kv_mlkem_sharedkey_wr_status(std::string(name) + ".kv_mlkem_sharedkey_wr_status",
                                        memory, abr::w(abr::OFF_KV_MLKEM_SHAREDKEY_WR_STATUS))
     {
-        memory.bind_to_socket(target_socket);
+        target_socket.register_b_transport(this, &abr_base::bus_b_transport);
+        target_socket.register_transport_dbg(this, &abr_base::bus_transport_dbg);
     }
 
     /// Restore every register to its RDL reset value.
     void reset_all_registers();
 
     regmodel::Memory<32> memory;
-    tlm_utils::simple_target_socket<regmodel::Memory<32>, 32> target_socket;
+    tlm_utils::simple_target_socket<abr_base, 32> target_socket;
 
     // --- ML-DSA -------------------------------------------------------------
     regmodel::RegVector<abr::RO_DATA_type<32>, abr::N_NAME>            MLDSA_NAME;
@@ -318,4 +334,28 @@ class abr_base : public sc_core::sc_module
     abr::KV_RD_STATUS_type<32> kv_mlkem_msg_rd_status;
     abr::KV_WR_CTRL_type<32>   kv_mlkem_sharedkey_wr_ctrl;
     abr::KV_WR_STATUS_type<32> kv_mlkem_sharedkey_wr_status;
+
+  protected:
+    /// False when a full-word write to word index @p word must be dropped.
+    virtual bool bus_write_allowed(unsigned int word) const = 0;
+
+    /// True when word index @p word must read as zero.
+    virtual bool bus_read_masked(unsigned int word) const = 0;
+
+  private:
+    /**
+     * @brief Bus front end: the SEP fabric's access rules, then the register file.
+     *
+     * DECERR for an access wider than one beat or reaching past the decoded extent.
+     * Each word of a write is then taken by its own strobe: full writes it, empty
+     * skips it, partial skips it and answers SLVERR. A narrow read returns only the
+     * bytes it names.
+     */
+    void bus_b_transport(tlm::tlm_generic_payload &trans, sc_core::sc_time &delay);
+
+    /// Debug access goes straight to the register file, without the bus rules.
+    unsigned int bus_transport_dbg(tlm::tlm_generic_payload &trans);
+
+    /// One full-word access to the register file.
+    void word_access(tlm::tlm_command cmd, unsigned int word, uint32_t &data);
 };
