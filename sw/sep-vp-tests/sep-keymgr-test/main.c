@@ -821,9 +821,9 @@ static void phase8_stubs(void)
     else
         chk(0, "CMD_SRAM_LOAD_EXEC answered");
 
-    /* Adams Bridge has no VP model, so there is no shared key to ingest. */
+    /* The key manager model has no path to read an Adams Bridge shared key. */
     if (!km_cmd(CMD_ABR_SK_TRANSFER, p, 1, &rc, &arg))
-        chk(rc != RET_SUCCESS, "CMD_ABR_SK_TRANSFER refuses (Adams Bridge stubbed)");
+        chk(rc != RET_SUCCESS, "CMD_ABR_SK_TRANSFER refuses (no shared-key path)");
     else
         chk(0, "CMD_ABR_SK_TRANSFER answered");
 }

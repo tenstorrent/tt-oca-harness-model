@@ -213,6 +213,73 @@ bool abr_testbench::km_share_access_ok(unsigned int lane, uint64_t addr, unsigne
     return trans.get_response_status() == tlm::TLM_OK_RESPONSE;
 }
 
+tlm::tlm_response_status abr_testbench::xact(tlm::tlm_command cmd, uint64_t addr,
+                                             unsigned char *data, unsigned int len,
+                                             unsigned char *be, unsigned int be_len)
+{
+    tlm::tlm_generic_payload trans;
+    sc_time delay = sc_core::SC_ZERO_TIME;
+
+    trans.set_command(cmd);
+    trans.set_address(addr);
+    trans.set_data_ptr(data);
+    trans.set_data_length(len);
+    trans.set_streaming_width(len == 0u ? 1u : len);
+    trans.set_byte_enable_ptr(be);
+    trans.set_byte_enable_length(be_len);
+    trans.set_dmi_allowed(false);
+    trans.set_response_status(tlm::TLM_INCOMPLETE_RESPONSE);
+
+    isock->b_transport(trans, delay);
+    return trans.get_response_status();
+}
+
+void abr_testbench::wr_bytes(uint32_t offset, const uint8_t *bytes, std::size_t len)
+{
+    for (std::size_t b = 0; b < len; b += 4u) {
+        uint32_t word = 0u;
+        for (std::size_t lane = 0; lane < 4u && b + lane < len; ++lane) {
+            word |= static_cast<uint32_t>(bytes[b + lane]) << (lane * 8u);
+        }
+        wr(offset + static_cast<uint32_t>(b), word);
+    }
+}
+
+std::vector<uint8_t> abr_testbench::rd_bytes(uint32_t offset, std::size_t len)
+{
+    std::vector<uint8_t> out(len, 0u);
+    for (std::size_t b = 0; b < len; b += 4u) {
+        const uint32_t word = rd(offset + static_cast<uint32_t>(b));
+        for (std::size_t lane = 0; lane < 4u && b + lane < len; ++lane) {
+            out[b + lane] = static_cast<uint8_t>(word >> (lane * 8u));
+        }
+    }
+    return out;
+}
+
+void abr_testbench::load_ctx(const std::vector<uint8_t> &ctx)
+{
+    wr(abr::OFF_MLDSA_CTX_CONFIG, static_cast<uint32_t>(ctx.size()));
+    wr_bytes(abr::OFF_MLDSA_CTX, ctx.data(), ctx.size());
+}
+
+abr::bytes abr_testbench::expected_mu(const abr::bytes &pk, const abr::bytes &ctx,
+                                      const abr::bytes &msg)
+{
+    abr::bytes tr;
+    abr::shake256(tr, 64u, pk);
+
+    abr::bytes in(tr);
+    in.push_back(0u);
+    in.push_back(static_cast<uint8_t>(ctx.size()));
+    in.insert(in.end(), ctx.begin(), ctx.end());
+    in.insert(in.end(), msg.begin(), msg.end());
+
+    abr::bytes mu;
+    abr::shake256(mu, abr::MLDSA_MU_BYTES, in);
+    return mu;
+}
+
 // =============================================================================
 // Sequencing
 // =============================================================================
@@ -260,6 +327,55 @@ bool abr_testbench::zeroize_mldsa()
 {
     wr(abr::OFF_MLDSA_CTRL, 1u << 3);
     return wait_mldsa_ready();
+}
+
+bool abr_testbench::wait_stream_ready_or_valid()
+{
+    for (unsigned int i = 0; i < POLL_ITERATIONS; ++i) {
+        const uint32_t st = rd(abr::OFF_MLDSA_STATUS);
+        if ((st & 0x4u) != 0u) {
+            return true;
+        }
+        if ((st & 0x2u) != 0u) {
+            return false;
+        }
+        wait(sc_time(POLL_STEP_US, SC_US));
+    }
+    return false;
+}
+
+void abr_testbench::stream_message(const std::vector<uint8_t> &msg)
+{
+    const std::size_t full = msg.size() / 4u;
+    for (std::size_t w = 0; w < full; ++w) {
+        uint32_t word = 0u;
+        for (unsigned int lane = 0; lane < 4u; ++lane) {
+            word |= static_cast<uint32_t>(msg[w * 4u + lane]) << (lane * 8u);
+        }
+        wr(abr::OFF_MLDSA_MSG_STROBE, 0xFu);
+        wr(abr::OFF_MLDSA_MSG, word);
+    }
+
+    const std::size_t tail = msg.size() % 4u;
+    uint32_t last = 0u;
+    for (std::size_t lane = 0; lane < tail; ++lane) {
+        last |= static_cast<uint32_t>(msg[full * 4u + lane]) << (lane * 8u);
+    }
+    wr(abr::OFF_MLDSA_MSG_STROBE, (1u << tail) - 1u);
+    wr(abr::OFF_MLDSA_MSG, last);
+}
+
+bool abr_testbench::run_mldsa_stream(uint32_t ctrl, const std::vector<uint8_t> &msg)
+{
+    if (!wait_mldsa_ready()) {
+        return false;
+    }
+    wr(abr::OFF_MLDSA_CTRL, ctrl | (1u << 6));
+    if (!wait_stream_ready_or_valid()) {
+        return false;
+    }
+    stream_message(msg);
+    return wait_mldsa_valid();
 }
 
 bool abr_testbench::wait_mlkem_ready()
@@ -334,6 +450,11 @@ void abr_testbench::main_thread()
     nist_kat_tests(*this);
     interrupt_kv_tests(*this);
     coverage_tests(*this);
+    mldsa_verify_reject_tests(*this);
+    mldsa_stream_tests(*this);
+    mldsa_abort_tests(*this);
+    mldsa_error_tests(*this);
+    bus_access_tests(*this);
 
     std::cout << "\n==========================================" << std::endl;
     std::cout << "Adams Bridge testbench summary" << std::endl;

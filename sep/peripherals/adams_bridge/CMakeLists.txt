@@ -227,6 +227,11 @@ set(TEST_SRCS
   test/src/interrupt_kv_tests.cpp
   test/src/nist_kat_tests.cpp
   test/src/coverage_tests.cpp
+  test/src/mldsa_verify_reject_tests.cpp
+  test/src/mldsa_stream_tests.cpp
+  test/src/mldsa_abort_tests.cpp
+  test/src/mldsa_error_tests.cpp
+  test/src/bus_access_tests.cpp
 )
 
 # -----------------------------------------------------------------------------

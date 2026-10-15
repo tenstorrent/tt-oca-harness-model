@@ -147,7 +147,7 @@ void abr_shake_backend::mldsa_sign(const bytes &privkey, const bytes &mu,
     append(signature, body);
 }
 
-void abr_shake_backend::mldsa_verify(const bytes &pubkey, const bytes &mu,
+bool abr_shake_backend::mldsa_verify(const bytes &pubkey, const bytes &mu,
                                      const bytes &signature, bytes &ctilde_out)
 {
     const bytes ctilde(signature.begin(), signature.begin() + MLDSA_CTILDE_BYTES);
@@ -166,7 +166,7 @@ void abr_shake_backend::mldsa_verify(const bytes &pubkey, const bytes &mu,
 
     if (body_ok) {
         ctilde_out = ctilde;
-        return;
+        return true;
     }
 
     // Hardware reports a bad signature by producing a c-tilde that will not
@@ -177,6 +177,7 @@ void abr_shake_backend::mldsa_verify(const bytes &pubkey, const bytes &mu,
     append(fail_in, pubkey);
     append(fail_in, mu);
     shake256(ctilde_out, MLDSA_CTILDE_BYTES, fail_in);
+    return true;
 }
 
 // =============================================================================
@@ -354,16 +355,30 @@ void abr_fips_backend::mldsa_sign(const bytes &privkey, const bytes &mu,
     }
 }
 
-void abr_fips_backend::mldsa_verify(const bytes &pubkey, const bytes &mu,
+MldsaSigEncoding abr_fips_backend::mldsa_check_signature(const bytes &signature)
+{
+    if (signature.size() < MLDSA_FIPS_SIG_BYTES) {
+        return MldsaSigEncoding::HINT_MALFORMED;
+    }
+    switch (abr_mldsa87_sig_check(signature.data())) {
+    case ABR_MLDSA87_SIG_Z_OUT_OF_RANGE:
+        return MldsaSigEncoding::Z_OUT_OF_RANGE;
+    case ABR_MLDSA87_SIG_HINT_MALFORMED:
+        return MldsaSigEncoding::HINT_MALFORMED;
+    default:
+        return MldsaSigEncoding::OK;
+    }
+}
+
+bool abr_fips_backend::mldsa_verify(const bytes &pubkey, const bytes &mu,
                                     const bytes &signature, bytes &ctilde_out)
 {
     ctilde_out.assign(MLDSA_CTILDE_BYTES, 0u);
-    const size_t siglen = (signature.size() >= MLDSA_FIPS_SIG_BYTES)
-                              ? MLDSA_FIPS_SIG_BYTES
-                              : signature.size();
-    // Always returns the recomputed c-tilde; firmware compares it to sig[0:64].
-    (void)abr_mldsa87_verify_mu(pubkey.data(), mu.data(), signature.data(), siglen,
-                                ctilde_out.data());
+    if (signature.size() < MLDSA_FIPS_SIG_BYTES) {
+        return false;
+    }
+    return abr_mldsa87_verify_ctilde(pubkey.data(), mu.data(), signature.data(),
+                                     ctilde_out.data()) == 0;
 }
 
 void abr_fips_backend::mlkem_keygen(const bytes &d, const bytes &z, bytes &encaps_key,

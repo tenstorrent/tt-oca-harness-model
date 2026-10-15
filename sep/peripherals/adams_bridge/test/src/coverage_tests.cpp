@@ -25,8 +25,6 @@ constexpr uint32_t CMD_KEYGEN_SIGN   = 0x4u;
 constexpr uint32_t CMD_ENCAPS        = 0x2u;
 constexpr uint32_t CMD_KEYGEN_DECAPS = 0x4u;
 
-constexpr uint32_t CTRL_STREAM_MSG = 1u << 6;
-
 constexpr uint32_t KV_READ_EN     = 1u << 0;
 constexpr uint32_t KV_ENTRY_SHIFT = 1u;
 constexpr uint32_t KV_STATUS_VALID = 1u << 1;
@@ -52,10 +50,11 @@ class stub_backend : public abr::abr_crypto_backend
     {
         signature.assign(abr::MLDSA_SIG_BYTES, 0xEFu);
     }
-    void mldsa_verify(const abr::bytes &, const abr::bytes &, const abr::bytes &,
+    bool mldsa_verify(const abr::bytes &, const abr::bytes &, const abr::bytes &,
                       abr::bytes &ctilde_out) override
     {
         ctilde_out.assign(abr::MLDSA_CTILDE_BYTES, 0x11u);
+        return true;
     }
     void mldsa_compute_mu(const abr::bytes &, const abr::bytes &, const abr::bytes &,
                           abr::bytes &mu_out) override
@@ -103,10 +102,11 @@ class short_backend : public abr::abr_crypto_backend
     {
         signature.assign(2u, 0x33u);
     }
-    void mldsa_verify(const abr::bytes &, const abr::bytes &, const abr::bytes &,
+    bool mldsa_verify(const abr::bytes &, const abr::bytes &, const abr::bytes &,
                       abr::bytes &ctilde_out) override
     {
         ctilde_out.assign(1u, 0x44u);
+        return true;
     }
     void mldsa_compute_mu(const abr::bytes &, const abr::bytes &, const abr::bytes &,
                           abr::bytes &mu_out) override
@@ -210,11 +210,11 @@ void coverage_tests(abr_testbench &tb)
     tb.check(tb.zeroize_mldsa(), "zeroize with clk_i=0 uses default_clk_freq_hz");
     tb.clk_sig.write(100000000.0);
 
-    // Exercises the sub-quantum resync branch in finish_mldsa()/finish_mlkem().
-    // 10 cycles at 100 MHz is 100 ns, well under the 1 us quantum, so
-    // consume_cycles() only accumulates local time instead of syncing, and the
-    // `m_qk.get_local_time() > SC_ZERO_TIME` check in finish_* is what makes
-    // the result visible.
+    // Exercises the sub-quantum resync branch in finish_mlkem(). 10 cycles at
+    // 100 MHz is 100 ns, well under the 1 us quantum, so consume_cycles() only
+    // accumulates local time instead of syncing, and the
+    // `m_qk.get_local_time() > SC_ZERO_TIME` check in finish_mlkem() is what
+    // makes the result visible. ML-DSA waits on simulated time directly.
     //
     // The 200 ns waits below are load-bearing: long enough for the 100 ns
     // operation to complete, short enough to stay inside the 1 us quantum.
@@ -322,12 +322,12 @@ void coverage_tests(abr_testbench &tb)
     tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS), status_snap,
                 "zero-length register write leaves STATUS unchanged");
 
-    // Beyond the 64 KiB aperture: reserved / RAZ — must not touch NAME.
+    // Past the decoded extent the crypto demux answers DECERR itself.
     uint32_t oob = 0xDEADBEEFu;
     tb.check(raw_xact(tb.isock, tlm::TLM_WRITE_COMMAND, abr::ABR_APERTURE_SIZE,
                       reinterpret_cast<unsigned char *>(&oob), 4u) ==
-                 tlm::TLM_OK_RESPONSE,
-             "register write past the aperture is accepted as reserved");
+                 tlm::TLM_ADDRESS_ERROR_RESPONSE,
+             "register write past the aperture answers DECERR");
     tb.check_eq(tb.rd(abr::OFF_MLDSA_NAME), name0_snap,
                 "OOB register write does not mutate NAME");
 
@@ -451,19 +451,10 @@ void coverage_tests(abr_testbench &tb)
 
     tb.section("Coverage: STREAM_MSG empty / strobe-0 / verify modifiers");
 
-    tb.check(tb.zeroize_mldsa(), "zeroize before empty STREAM_MSG");
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG),
-             "SIGN with STREAM_MSG and an empty stream falls back to MSG");
+    tb.check(tb.zeroize_mldsa(), "zeroize before an empty stream");
+    tb.check(tb.run_mldsa_stream(CMD_SIGN, {}), "SIGN over an empty stream completes");
     tb.check_eq(tb.rd(abr::OFF_MLDSA_SIGNATURE), 0xEFEFEFEFu,
                 "empty-stream SIGN published the stub signature");
-
-    tb.check(tb.zeroize_mldsa(), "zeroize before strobe-0 stream");
-    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0u);
-    tb.wr(abr::OFF_MLDSA_MSG, 0xAABBCCDDu);
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG),
-             "SIGN with MSG_STROBE=0 adds no stream bytes");
-    tb.check_eq(tb.rd(abr::OFF_MLDSA_SIGNATURE), 0xEFEFEFEFu,
-                "strobe-0 SIGN published the stub signature (disabled lanes excluded)");
 
     tb.check(tb.zeroize_mldsa(), "zeroize before VERIFY with context");
     tb.wr(abr::OFF_MLDSA_CTX_CONFIG, 4u);
@@ -473,28 +464,10 @@ void coverage_tests(abr_testbench &tb)
                 "VERIFY with context published the stub c-tilde");
 
     tb.check(tb.zeroize_mldsa(), "zeroize before streamed VERIFY");
-    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0xFu);
-    tb.wr(abr::OFF_MLDSA_MSG, 0x01020304u);
-    tb.check(tb.run_mldsa(CMD_VERIFY | CTRL_STREAM_MSG),
+    tb.check(tb.run_mldsa_stream(CMD_VERIFY, {0x04u, 0x03u, 0x02u, 0x01u}),
              "VERIFY with STREAM_MSG completes");
     tb.check_eq(tb.rd(abr::OFF_MLDSA_VERIFY_RES), 0x11111111u,
                 "streamed VERIFY published the stub c-tilde");
-
-    tb.section("Coverage: streamed-message cap");
-
-    tb.check(tb.zeroize_mldsa(), "zeroize before stream-cap fill");
-    tb.wr(abr::OFF_MLDSA_MSG_STROBE, 0xFu);
-    // Cap is 65536 B; one write past that takes the drop path. Stub SIGN keeps
-    // this cheap — do not add a second FIPS-cost fill.
-    for (unsigned int i = 0; i < (65536u / 4u) + 1u; ++i) {
-        tb.wr(abr::OFF_MLDSA_MSG, i);
-    }
-    tb.check(tb.run_mldsa(CMD_SIGN | CTRL_STREAM_MSG),
-             "SIGN after the stream cap still completes");
-    tb.check_eq(tb.rd(abr::OFF_MLDSA_SIGNATURE), 0xEFEFEFEFu,
-                "stream-cap SIGN published the stub signature word");
-    tb.check_eq(tb.rd(abr::OFF_MLDSA_STATUS) & ST_READY, 0u,
-                "stream-cap SIGN parks READY low");
 
     tb.section("Coverage: short backend outputs");
 
@@ -569,9 +542,20 @@ void coverage_tests(abr_testbench &tb)
 
     abr::bytes short_sig(16u, 0u);
     abr::bytes ctilde;
-    fips.mldsa_verify(pk, mu, short_sig, ctilde);
-    tb.check(ctilde.size() == abr::MLDSA_CTILDE_BYTES,
-             "FIPS verify of a short signature still writes c-tilde");
+    tb.check(!fips.mldsa_verify(pk, mu, short_sig, ctilde) &&
+                 ctilde.size() == abr::MLDSA_CTILDE_BYTES,
+             "FIPS verify of a short signature computes no c-tilde");
+
+    abr::bytes bad_z_sig(4627u, 0u);
+    uint8_t c_ct[64];
+    tb.check(abr_mldsa87_sig_check(bad_z_sig.data()) == ABR_MLDSA87_SIG_Z_OUT_OF_RANGE,
+             "C wrapper flags an all-zero signature's z as out of range");
+    tb.check(abr_mldsa87_verify_ctilde(pk.data(), mu.data(), bad_z_sig.data(), c_ct) == -1,
+             "C wrapper computes no c-tilde for a malformed signature");
+
+    abr::abr_shake_backend shake_verify;
+    tb.check(shake_verify.mldsa_check_signature(bad_z_sig) == abr::MldsaSigEncoding::OK,
+             "a backend without encoding checks reports OK");
 
     uint8_t c_mu[64]{};
     tb.check(abr_mldsa87_compute_mu(pk.data(), nullptr, 0u, nullptr, 0u, c_mu) == 0,

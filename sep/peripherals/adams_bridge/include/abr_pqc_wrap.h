@@ -23,8 +23,19 @@ int abr_mldsa87_keygen(const uint8_t *seed, uint8_t *pk, uint8_t *sk);
 int abr_mldsa87_sign_mu(const uint8_t *sk, const uint8_t *mu, const uint8_t *rnd,
                         uint8_t *sig, size_t *siglen);
 
-int abr_mldsa87_verify_mu(const uint8_t *pk, const uint8_t *mu, const uint8_t *sig,
-                          size_t siglen, uint8_t *ctilde_out);
+/* Signature encoding checks, in the order the Adams Bridge verify flow applies them. */
+#define ABR_MLDSA87_SIG_OK             0
+#define ABR_MLDSA87_SIG_Z_OUT_OF_RANGE 1
+#define ABR_MLDSA87_SIG_HINT_MALFORMED 2
+
+/* Check ||z|| < gamma1 - beta first, then the hint encoding (FIPS 204 Algorithm 21).
+ * Returns one of ABR_MLDSA87_SIG_*. */
+int abr_mldsa87_sig_check(const uint8_t *sig);
+
+/* Recompute c~' for a signature that passed abr_mldsa87_sig_check. Returns 0 when
+ * c~' was written to ctilde_out, -1 when the signature is not well formed. */
+int abr_mldsa87_verify_ctilde(const uint8_t *pk, const uint8_t *mu, const uint8_t *sig,
+                              uint8_t *ctilde_out);
 
 int abr_mldsa87_compute_mu(const uint8_t *pk, const uint8_t *ctx, size_t ctxlen,
                            const uint8_t *msg, size_t mlen, uint8_t *mu_out);

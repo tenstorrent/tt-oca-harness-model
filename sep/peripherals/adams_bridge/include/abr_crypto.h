@@ -46,6 +46,13 @@ static constexpr std::size_t MLKEM_CIPHERTEXT_BYTES = 1568u;
 /// Byte buffer used across the backend interface.
 using bytes = std::vector<uint8_t>;
 
+/// Result of the signature encoding checks the verify flow applies before c~'.
+enum class MldsaSigEncoding {
+    OK,             ///< well formed; c~' can be computed
+    Z_OUT_OF_RANGE, ///< ||z|| >= gamma1 - beta, checked before the message is read
+    HINT_MALFORMED  ///< hint encoding invalid, checked after the message is read
+};
+
 /**
  * @brief Interface implemented by any ABR math provider.
  *
@@ -73,12 +80,24 @@ class abr_crypto_backend
                             bytes &signature) = 0;
 
     /**
-     * @brief Verify @p signature over @p mu under @p pubkey.
-     * @param ctilde_out Recomputed challenge; firmware compares it against the
-     *                   first 64 bytes of the signature, so a mismatch here is
-     *                   how a bad signature is reported (there is no boolean).
+     * @brief Check the encoding of @p signature: z range first, then the hint.
+     *
+     * Backends that cannot tell report OK, and their verify decides alone.
      */
-    virtual void mldsa_verify(const bytes &pubkey, const bytes &mu,
+    virtual MldsaSigEncoding mldsa_check_signature(const bytes &signature)
+    {
+        (void)signature;
+        return MldsaSigEncoding::OK;
+    }
+
+    /**
+     * @brief Recompute the challenge c~' for @p signature over @p mu under @p pubkey.
+     * @param ctilde_out Recomputed challenge; firmware compares it against the
+     *                   first 64 bytes of the signature.
+     * @return true when c~' was computed. A signature that is not well formed has
+     *         no c~', and the caller leaves its result untouched.
+     */
+    virtual bool mldsa_verify(const bytes &pubkey, const bytes &mu,
                               const bytes &signature, bytes &ctilde_out) = 0;
 
     /// Compute the message representative mu bound to @p pubkey, @p ctx, @p msg.
@@ -135,7 +154,7 @@ class abr_shake_backend : public abr_crypto_backend
     void mldsa_keygen(const bytes &seed, bytes &pubkey, bytes &privkey) override;
     void mldsa_sign(const bytes &privkey, const bytes &mu, const bytes &rnd,
                     bytes &signature) override;
-    void mldsa_verify(const bytes &pubkey, const bytes &mu, const bytes &signature,
+    bool mldsa_verify(const bytes &pubkey, const bytes &mu, const bytes &signature,
                       bytes &ctilde_out) override;
     void mldsa_compute_mu(const bytes &pubkey, const bytes &ctx, const bytes &msg,
                           bytes &mu_out) override;
@@ -176,7 +195,8 @@ class abr_fips_backend : public abr_crypto_backend
     void mldsa_keygen(const bytes &seed, bytes &pubkey, bytes &privkey) override;
     void mldsa_sign(const bytes &privkey, const bytes &mu, const bytes &rnd,
                     bytes &signature) override;
-    void mldsa_verify(const bytes &pubkey, const bytes &mu, const bytes &signature,
+    MldsaSigEncoding mldsa_check_signature(const bytes &signature) override;
+    bool mldsa_verify(const bytes &pubkey, const bytes &mu, const bytes &signature,
                       bytes &ctilde_out) override;
     void mldsa_compute_mu(const bytes &pubkey, const bytes &ctx, const bytes &msg,
                           bytes &mu_out) override;

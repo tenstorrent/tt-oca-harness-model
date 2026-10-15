@@ -16,7 +16,7 @@
  *   005c - CMD_EXEC_ROM (0x10) → RET_SUCCESS
  *   005d - CMD_SRAM_LOAD_EXEC (0x11) → RET_FAILURE (no mutable firmware modelled)
  *   005e - CMD_SRAM_EXEC (0x12) → RET_FAILURE
- *   005f - CMD_ABR_SK_TRANSFER (0x27) → RET_FAILURE (no Adams Bridge model)
+ *   005f - CMD_ABR_SK_TRANSFER (0x27) → RET_FAILURE (no shared-key path from Adams Bridge)
  *   005g - CMD_OTP_READ_LOCK_COLD (0x28) sets lock bits and accumulates them
  *   005h - CMD_OTP_READ_LOCK_COLD with empty payload → RET_INVALID_LEN
  */
@@ -103,7 +103,7 @@ int key_manager_func005_test(key_manager_test* test, key_manager_model* /*dut*/,
     CHECK_EQ(ret_code, -1, "005e: CMD_SRAM_EXEC → RET_FAILURE (-1)");
 
     // ------------------------------------------------------------------
-    // 005f: Adams Bridge shared-key ingest has no engine to read from
+    // 005f: the key manager model has no path to read an Adams Bridge shared key
     // ------------------------------------------------------------------
     ok = send_expect(test, seq, fw::CMD_ABR_SK_TRANSFER, {0u}, ret_code, ret_arg);
     CHECK(ok, "005f: CMD_ABR_SK_TRANSFER produced a response");

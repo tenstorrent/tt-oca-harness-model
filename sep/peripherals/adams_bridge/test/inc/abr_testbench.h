@@ -58,6 +58,21 @@ class abr_testbench : public sc_core::sc_module
     bool km_share_access_ok(unsigned int lane, uint64_t addr, unsigned int len,
                             bool is_write);
 
+    /// Register-aperture transaction that reports the bus response.
+    tlm::tlm_response_status xact(tlm::tlm_command cmd, uint64_t addr, unsigned char *data,
+                                  unsigned int len, unsigned char *be = nullptr,
+                                  unsigned int be_len = 0u);
+
+    /// Write @p bytes little-endian packed into consecutive words at @p offset;
+    /// the final word is zero-padded.
+    void wr_bytes(uint32_t offset, const uint8_t *bytes, std::size_t len);
+
+    /// Read @p len bytes back from consecutive words at @p offset.
+    std::vector<uint8_t> rd_bytes(uint32_t offset, std::size_t len);
+
+    /// Program MLDSA_CTX_CONFIG and MLDSA_CTX with @p ctx (at most 255 bytes).
+    void load_ctx(const std::vector<uint8_t> &ctx);
+
     // --- Sequencing -----------------------------------------------------------
 
     /// Pulse rst_ni low then high, leaving the model in its reset state.
@@ -74,6 +89,28 @@ class abr_testbench : public sc_core::sc_module
 
     /// Write CTRL.ZEROIZE and wait for READY to return.
     bool zeroize_mldsa();
+
+    /// Poll MLDSA_STATUS until MSG_STREAM_READY or VALID is set; true for MSG_STREAM_READY.
+    bool wait_stream_ready_or_valid();
+
+    /**
+     * @brief Stream @p msg through MSG[0], writing MLDSA_MSG_STROBE before each word.
+     *
+     * Full words use strobe 0xF. The final 1-3 bytes use 0x1/0x3/0x7; a message whose
+     * length is a multiple of four (including zero) ends with strobe 0x0 and a dummy
+     * word, which is how the RTL is told the stream is over.
+     */
+    void stream_message(const std::vector<uint8_t> &msg);
+
+    /// Wait READY, write CTRL = @p ctrl | STREAM_MSG, stream @p msg once the core asks
+    /// for it, then wait VALID. Returns false if either wait times out or the core
+    /// completes without asking for the message.
+    bool run_mldsa_stream(uint32_t ctrl, const std::vector<uint8_t> &msg);
+
+    /// FIPS 204 mu = H(H(pk, 64) || 0 || |ctx| || ctx || msg, 64), computed here so
+    /// the tests do not rely on the model's own mu.
+    static abr::bytes expected_mu(const abr::bytes &pk, const abr::bytes &ctx,
+                                  const abr::bytes &msg);
 
     bool wait_mlkem_ready();
     bool wait_mlkem_valid();
@@ -126,3 +163,8 @@ void mlkem_tests(abr_testbench &tb);
 void interrupt_kv_tests(abr_testbench &tb);
 void nist_kat_tests(abr_testbench &tb);
 void coverage_tests(abr_testbench &tb);
+void mldsa_verify_reject_tests(abr_testbench &tb);
+void mldsa_stream_tests(abr_testbench &tb);
+void mldsa_abort_tests(abr_testbench &tb);
+void mldsa_error_tests(abr_testbench &tb);
+void bus_access_tests(abr_testbench &tb);

@@ -8,8 +8,10 @@
  * Packing is little-endian 32-bit words, matching SEP firmware.
  */
 
-#include "abr_testbench.h"
+#include "abr_acvp_sigver_all.h"
 #include "abr_nist_vectors.h"
+#include "abr_signer_vectors.h"
+#include "abr_testbench.h"
 
 #include <string>
 #include <vector>
@@ -42,6 +44,59 @@ int bytes_mismatch(const std::vector<uint32_t> &got, const uint32_t *exp, int nb
         }
     }
     return -1;
+}
+
+abr::bytes from_hex(const char *hex)
+{
+    abr::bytes out;
+    for (const char *p = hex; p[0] != '\0' && p[1] != '\0'; p += 2) {
+        out.push_back(static_cast<uint8_t>(std::stoul(std::string(p, 2), nullptr, 16)));
+    }
+    return out;
+}
+
+std::vector<uint32_t> le_words(const abr::bytes &b, std::size_t n)
+{
+    std::vector<uint32_t> out((n + 3u) / 4u, 0u);
+    for (std::size_t i = 0; i < n; ++i) {
+        out[i / 4u] |= static_cast<uint32_t>(b[i]) << ((i % 4u) * 8u);
+    }
+    return out;
+}
+
+std::vector<uint32_t> inverted(std::vector<uint32_t> v)
+{
+    for (auto &w : v) {
+        w = ~w;
+    }
+    return v;
+}
+
+/// External-mu verify of @p sig; returns VERIFY_RES.
+std::vector<uint32_t> verify_ext_mu(abr_testbench &tb, const abr::bytes &pk,
+                                    const abr::bytes &mu, const abr::bytes &sig,
+                                    const std::string &what)
+{
+    tb.check(tb.zeroize_mldsa(), what + ": zeroize");
+    tb.wr_bytes(abr::OFF_MLDSA_PUBKEY, pk.data(), pk.size());
+    tb.wr_bytes(abr::OFF_MLDSA_SIGNATURE, sig.data(), sig.size());
+    tb.wr_bytes(abr::OFF_MLDSA_EXTERNAL_MU, mu.data(), mu.size());
+    tb.check(tb.run_mldsa(CMD_VERIFY | CTRL_EXTERNAL_MU), what + ": VERIFY completes");
+    return tb.rd_n(abr::OFF_MLDSA_VERIFY_RES, abr::N_VERIFY_RES);
+}
+
+const char *kind_name(abr_acvp_kind k)
+{
+    switch (k) {
+    case ABR_ACVP_ACCEPT:
+        return "accept";
+    case ABR_ACVP_Z_REJECT:
+        return "z reject";
+    case ABR_ACVP_HINT_REJECT:
+        return "hint reject";
+    default:
+        return "mismatch";
+    }
 }
 
 } // namespace
@@ -105,6 +160,52 @@ void nist_kat_tests(abr_testbench &tb)
     }
     tb.check(reject_ok == (NIST_SV_BAD_VERDICT == 0), "invalid signature is rejected");
 
+    tb.section("NIST ACVP: every ML-DSA-87 sigVer case and deterministic signature");
+
+    for (const abr_acvp_case &c : abr_acvp_cases) {
+        const std::string what = std::string(c.origin) + " (" + kind_name(c.kind) + ")";
+        const abr::bytes pk = from_hex(c.pk);
+        const abr::bytes sig = from_hex(c.sig);
+        const abr::bytes mu = c.external_mu
+                                  ? from_hex(c.mu)
+                                  : abr_testbench::expected_mu(pk, from_hex(c.ctx), from_hex(c.msg));
+        const std::vector<uint32_t> res = verify_ext_mu(tb, pk, mu, sig, what);
+        const std::vector<uint32_t> ct = le_words(sig, 64u);
+        switch (c.kind) {
+        case ABR_ACVP_ACCEPT:
+            tb.check(res == ct, what + ": VERIFY_RES equals c~");
+            break;
+        case ABR_ACVP_Z_REJECT:
+        case ABR_ACVP_HINT_REJECT:
+            tb.check(res == inverted(ct), what + ": VERIFY_RES keeps ~c~");
+            break;
+        default:
+            tb.check(res != ct && res != inverted(ct), what + ": VERIFY_RES is a non-matching c~'");
+            break;
+        }
+    }
+
+    tb.section("Independent signer: keygen and every signature");
+
+    tb.check(tb.zeroize_mldsa(), "zeroize before signer keygen");
+    tb.wr_bytes(abr::OFF_MLDSA_SEED, abr_signer_seed, sizeof(abr_signer_seed));
+    tb.check(tb.run_mldsa(CMD_KEYGEN), "keygen from the signer's seed completes");
+    const abr::bytes signer_pk(abr_signer_pk, abr_signer_pk + sizeof(abr_signer_pk));
+    tb.check(tb.rd_bytes(abr::OFF_MLDSA_PUBKEY, signer_pk.size()) == signer_pk,
+             "keygen from the signer's seed reproduces the signer's public key");
+
+    for (std::size_t i = 0; i < sizeof(abr_signer_cases) / sizeof(abr_signer_cases[0]); ++i) {
+        const abr_signer_case &c = abr_signer_cases[i];
+        const std::string what = "signer vector " + std::to_string(i) + " (msg " +
+                                 std::to_string(c.msg_len) + " B, ctx " +
+                                 std::to_string(c.ctx_len) + " B)";
+        const abr::bytes sig(c.sig, c.sig + 4627u);
+        const abr::bytes mu = abr_testbench::expected_mu(
+            signer_pk, abr::bytes(c.ctx, c.ctx + c.ctx_len), abr::bytes(c.msg, c.msg + c.msg_len));
+        tb.check(verify_ext_mu(tb, signer_pk, mu, sig, what) == le_words(sig, 64u),
+                 what + ": verifies");
+    }
+
     tb.section("NIST ACVP: backend helpers");
 
     abr::bytes empty;
@@ -116,8 +217,11 @@ void nist_kat_tests(abr_testbench &tb)
     abr::bytes zero_pk(abr::MLDSA_PUBKEY_BYTES, 0u);
     abr::bytes mu_in(abr::MLDSA_MU_BYTES, 0u);
     abr::bytes ctilde;
-    fips.mldsa_verify(zero_pk, mu_in, short_sig, ctilde);
+    tb.check(!fips.mldsa_verify(zero_pk, mu_in, short_sig, ctilde),
+             "a short signature computes no c-tilde");
     tb.check_eq(static_cast<uint32_t>(ctilde.size()),
                 static_cast<uint32_t>(abr::MLDSA_CTILDE_BYTES),
-                "short-signature verify still fills c-tilde");
+                "a short signature still leaves a zeroed c-tilde buffer");
+    tb.check(fips.mldsa_check_signature(short_sig) == abr::MldsaSigEncoding::HINT_MALFORMED,
+             "a short signature is not well formed");
 }

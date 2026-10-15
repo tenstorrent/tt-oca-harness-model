@@ -3,16 +3,19 @@
 # =============================================================================
 # vp/platform/sep/test/CMakeLists.txt
 #
-# Standalone unit test for the SEP platform's local-crossbar connectivity
-# policy (inc/xbar_policy.h).  The header is plain C++ — no SystemC, CCI,
-# VeeR or OpenSSL — so this project builds with nothing but a C++20 compiler.
+# Unit tests for the SEP platform:
+#   xbar_policy_tb   the local-crossbar connectivity policy (inc/xbar_policy.h).
+#                    Plain C++ — no SystemC, CCI, VeeR or OpenSSL.
+#   abr_aperture_tb  the crossbar's Adams Bridge window against the extent the
+#                    model decodes. Builds the Adams Bridge model, so it needs
+#                    SystemC, CCI and OpenSSL like the peripheral benches.
 #
 # Driven by ../run_tests.sh (Release / --asan / --coverage, isolated build
 # dirs), following the vp/platform/smu convention.
 # =============================================================================
 
 cmake_minimum_required(VERSION 3.16)
-project(sep_platform_tests CXX)
+project(sep_platform_tests C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
@@ -71,3 +74,20 @@ target_compile_options(xbar_policy_tb PRIVATE -Wall -Wextra -Wpedantic)
 
 enable_testing()
 add_test(NAME xbar_policy_tb COMMAND xbar_policy_tb)
+
+# ---------------------------------------------------------------------------
+# Adams Bridge aperture bench
+# ---------------------------------------------------------------------------
+set(_repo_root ${CMAKE_CURRENT_SOURCE_DIR}/../../../..)
+list(APPEND CMAKE_MODULE_PATH ${_repo_root}/cmake)
+include(FindCCI)
+include(FindSystemC)
+add_subdirectory(${_repo_root}/sep/peripherals/adams_bridge adams_bridge EXCLUDE_FROM_ALL)
+
+add_executable(abr_aperture_tb abr_aperture_tb.cpp)
+target_include_directories(abr_aperture_tb PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../infra)     # bus.h
+target_include_directories(abr_aperture_tb SYSTEM PRIVATE ${CCI_INCLUDE_DIR})
+target_compile_definitions(abr_aperture_tb PRIVATE SC_ALLOW_DEPRECATED_IEEE_API)
+target_link_libraries(abr_aperture_tb PRIVATE adams_bridge_model)
+add_test(NAME abr_aperture_tb COMMAND abr_aperture_tb)
