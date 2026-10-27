@@ -172,6 +172,13 @@ private:
   /// Total bytes remaining in transfer
   uint32_t m_bytes_remaining;
 
+  /// Bytes written since the last start with CONTROL.initial_transfer=1. It
+  /// persists across starts, as the RTL's transfer_byte_q does.
+  uint32_t m_transfer_bytes_done;
+
+  /// The transfer in progress is a zero fill (CONTROL.opcode = 0x4), captured at go
+  bool m_zero_fill;
+
   /// Bytes remaining in current chunk
   uint32_t m_current_chunk_bytes_remaining;
 
@@ -1116,16 +1123,13 @@ private:
   * - 0x1: SHA-256 hash
   * - 0x2: SHA-384 hash
   * - 0x3: SHA-512 hash
-  * - 0x4-0xF: Reserved/invalid
+  * - 0x4: Zero fill (writes zeros, never reads the source)
+  * - 0x5-0xF: Reserved/invalid
   *
   * Sets ERROR_CODE.opcode_error (bit 2) if opcode is invalid.
   *
-  * Per detailed design: "CONTROL.opcode contains an invalid value (not 0x0,
-  * 0x1, 0x2, or 0x3)."
-  *
-  * Per functionality list: "Invalid Opcode Detection: Validates CONTROL.opcode
-  * field against supported values (0x0=COPY, 0x1=SHA256, 0x2=SHA384,
-  * 0x3=SHA512), setting ERROR_CODE.opcode_error for reserved opcode encodings."
+  * A zero fill in hardware-handshake mode is refused separately, when the
+  * first trigger starts the engine.
   */
   bool validate_opcode(uint32_t pending_control_value);
 

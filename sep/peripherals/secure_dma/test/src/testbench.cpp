@@ -240,6 +240,8 @@ void testbench::run_tests() {
   // // Run FUNC-012 comprehensive tests
   run_func012_tests();
 
+  run_func013_tests();
+
   run_coverage_tests();
 
   report_test_result("AXI source_id is OTHERS_SOURCE_ID",

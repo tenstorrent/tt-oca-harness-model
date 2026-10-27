@@ -443,12 +443,13 @@ public:
   // FUNC-006: Error Detection and Reporting Test Cases
   // =========================================================================
 
-  // Opcode Validation Tests (5 tests)
+  // Opcode Validation Tests (6 tests)
   void test_func006_valid_opcode_0x0_copy();
   void test_func006_valid_opcode_0x1_sha256();
   void test_func006_valid_opcode_0x2_sha384();
   void test_func006_valid_opcode_0x3_sha512();
-  void test_func006_invalid_opcode_0x4_to_0xF();
+  void test_func006_valid_opcode_0x4_zero_fill();
+  void test_func006_invalid_opcode_0x5_to_0xF();
 
   // Transfer Size Validation Tests (4 tests)
   void test_func006_valid_transfer_sizes();
@@ -758,6 +759,20 @@ public:
   void test_abort_terminates_transfer_loop();
   void test_hw_handshake_trigger_ignored_when_go_not_set();
   void test_hash_initial_transfer_zero_no_context();
+
+  // =========================================================================
+  // FUNC-013: Zero Fill (CONTROL.opcode = 0x4)
+  // =========================================================================
+
+  void run_func013_tests();
+  void test_func013_zero_fill_writes_zero_without_reading();
+  void test_func013_zero_fill_does_not_feed_sha();
+  void test_func013_zero_fill_handshake_opcode_error();
+  void test_func013_zero_fill_no_bytes_left_size_error();
+  void test_func013_zero_fill_beat_outside_range();
+  void test_func013_zero_fill_iccm_window();
+  void test_func013_zero_fill_source_still_validated();
+  void test_func013_zero_fill_done_clears_on_start();
   void test_hw_handshake_auto_clear_bus_error_halts();
   void test_sha2_requires_four_byte_width_size_error();
   void test_chunk_size_exceeds_total_size_warning();

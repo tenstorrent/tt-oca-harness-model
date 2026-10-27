@@ -6,7 +6,7 @@
  *
  * This file implements comprehensive test cases for DMA Controller error detection
  * and reporting functionality covering:
- * - Opcode validation (valid opcodes 0x0-0x3, invalid opcodes 0x4-0xF)
+ * - Opcode validation (valid opcodes 0x0-0x4, invalid opcodes 0x5-0xF)
  * - Transfer size validation (zero sizes, chunk > total constraints)
  * - Pre-transfer validation (comprehensive 9-check validation)
  * - Bus error handling (TLM response error detection)
@@ -60,7 +60,8 @@ void testbench::run_func006_tests() {
   test_func006_valid_opcode_0x1_sha256();
   test_func006_valid_opcode_0x2_sha384();
   test_func006_valid_opcode_0x3_sha512();
-  test_func006_invalid_opcode_0x4_to_0xF();
+  test_func006_valid_opcode_0x4_zero_fill();
+  test_func006_invalid_opcode_0x5_to_0xF();
 
   // // Transfer Size Validation Tests (4 tests)
   test_func006_valid_transfer_sizes();
@@ -360,56 +361,88 @@ void testbench::test_func006_valid_opcode_0x3_sha512() {
 }
 
 // =============================================================================
-// FUNC-006 TC005: Invalid Opcode 0x4-0xF
+// FUNC-006 TC005: Opcode 0x4 (zero fill) valid, 0x5-0xF invalid
 // =============================================================================
 
+// Programs a 64-byte, 4-byte-wide OT-to-OT transfer that every check other than
+// the opcode accepts, then writes CONTROL with go=1, initial_transfer=1.
+static void func006_start_with_opcode(secure_dma_test *t, uint32_t opcode) {
+  t->register_write_32(secure_dma_basetest::SRC_ADDR_LO_OFFSET, 0x00000000);
+  t->register_write_32(secure_dma_basetest::SRC_ADDR_HI_OFFSET, 0x00000000);
+  t->register_write_32(secure_dma_basetest::DST_ADDR_LO_OFFSET, 0x20004000);
+  t->register_write_32(secure_dma_basetest::DST_ADDR_HI_OFFSET, 0x00000000);
+  t->register_write_32(secure_dma_basetest::ADDR_SPACE_ID_OFFSET, 0x77);
+  t->register_write_32(secure_dma_basetest::ENABLED_MEMORY_RANGE_BASE_OFFSET, 0x20004000);
+  t->register_write_32(secure_dma_basetest::ENABLED_MEMORY_RANGE_LIMIT_OFFSET, 0x2000403F);
+  t->register_write_32(secure_dma_basetest::RANGE_VALID_OFFSET, 0x1);
+  t->register_write_32(secure_dma_basetest::TOTAL_DATA_SIZE_OFFSET, 64);
+  t->register_write_32(secure_dma_basetest::CHUNK_DATA_SIZE_OFFSET, 64);
+  t->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x2);
+  t->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x1);
+  t->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000100 | (opcode & 0xF));
+}
+
 /**
- * @brief Verify CONTROL.opcode=0x4-0xF triggers ERROR_CODE.opcode_error
- *
- * Test Objective:
- * - Confirm opcode values 0x4-0xF are detected as invalid
- * - Verify validate_opcode() returns false
- * - Verify ERROR_CODE.opcode_error (bit 2) is set
- *
- * Pass Criteria:
- * - CONTROL register accepts invalid opcode write (software can write it)
- * - ERROR_CODE.opcode_error is set when validation is performed
- *
- * Architecture Reference: FUNC-006 TC086 (test_error_invalid_opcode)
- * Per detailed-design: "Invalid opcode values trigger opcode_error"
+ * @brief Verify CONTROL.opcode=0x4 (zero fill) passes opcode validation at go
  */
-void testbench::test_func006_invalid_opcode_0x4_to_0xF() {
-  std::string test_name = "FUNC-006 TC005: Invalid Opcode 0x4-0xF";
+void testbench::test_func006_valid_opcode_0x4_zero_fill() {
+  std::string test_name = "FUNC-006 TC005a: Valid Opcode 0x4 (ZERO)";
   REG_INFO(1, logger) << "Running: " << test_name << std::endl;
 
   bool passed = true;
   std::stringstream msg;
 
-  // Test a representative invalid opcode (0x4)
-  // Apply reset
   m_test->apply_reset(sc_time(100, SC_NS));
   wait(20, SC_NS);
 
-  // Write CONTROL register with invalid opcode=0x4
-  uint32_t control_val = 0x00000004; // opcode bits [3:0] = 0x4 (invalid)
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, control_val);
-  wait(5, SC_NS);
+  func006_start_with_opcode(m_test.get(), 0x4);
+  wait(20, SC_NS);
 
-  // Read back CONTROL to verify register accepts the write
-  uint32_t control_readback = 0;
-  m_test->register_read_32(secure_dma_basetest::CONTROL_OFFSET, control_readback);
-
-  if ((control_readback & 0xF) != 0x4) {
+  uint32_t error_code = 0;
+  m_test->register_read_32(secure_dma_basetest::ERROR_CODE_OFFSET, error_code);
+  if ((error_code & 0x4) != 0) {
     passed = false;
-    msg << "CONTROL register did not accept invalid opcode 0x4 write; ";
+    msg << "ERROR_CODE.opcode_error set for opcode 0x4 (ERROR_CODE=0x" << std::hex << error_code
+        << "); ";
   }
 
-  // NOTE: Actual validation will occur when CONTROL.go is written (transfer initiation)
-  // For now, we verify the register can be written with an invalid value
-  // The validation logic is tested when integrated with FUNC-008 (go bit handling)
+  if (passed) {
+    msg << "Opcode 0x4 (ZERO) correctly passes validation";
+  }
+
+  report_test_result(test_name, passed, msg.str());
+}
+
+/**
+ * @brief Verify CONTROL.opcode=0x5-0xF sets ERROR_CODE.opcode_error at go
+ */
+void testbench::test_func006_invalid_opcode_0x5_to_0xF() {
+  std::string test_name = "FUNC-006 TC005b: Invalid Opcode 0x5-0xF";
+  REG_INFO(1, logger) << "Running: " << test_name << std::endl;
+
+  bool passed = true;
+  std::stringstream msg;
+
+  for (uint32_t opcode = 0x5; opcode <= 0xF; ++opcode) {
+    m_test->apply_reset(sc_time(100, SC_NS));
+    wait(20, SC_NS);
+
+    func006_start_with_opcode(m_test.get(), opcode);
+    wait(20, SC_NS);
+
+    uint32_t error_code = 0;
+    uint32_t status = 0;
+    m_test->register_read_32(secure_dma_basetest::ERROR_CODE_OFFSET, error_code);
+    m_test->register_read_32(secure_dma_basetest::STATUS_OFFSET, status);
+    if ((error_code & 0x4) == 0 || (status & (1U << 3)) == 0) {
+      passed = false;
+      msg << "opcode 0x" << std::hex << opcode << ": ERROR_CODE=0x" << error_code
+          << " STATUS=0x" << status << "; ";
+    }
+  }
 
   if (passed) {
-    msg << "CONTROL register accepts invalid opcode 0x4 write (validation occurs at transfer start)";
+    msg << "Opcodes 0x5-0xF all set ERROR_CODE.opcode_error and STATUS.error";
   }
 
   report_test_result(test_name, passed, msg.str());

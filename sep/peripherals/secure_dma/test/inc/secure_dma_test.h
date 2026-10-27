@@ -316,6 +316,10 @@ public:
   /// Beats whose sep_axi_extension is missing or is not OTHERS_SOURCE_ID.
   unsigned m_sideband_errors = 0;
 
+  /// OT-port read and write transactions received, including fault-injected ones.
+  unsigned m_ot_reads = 0;
+  unsigned m_ot_writes = 0;
+
 private:
    /// RegLogger instance for test diagnostics
    RegLogger logger;

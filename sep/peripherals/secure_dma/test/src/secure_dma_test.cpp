@@ -283,6 +283,11 @@ void secure_dma_test::ot_b_transport(tlm::tlm_generic_payload &trans, sc_time &d
   unsigned char *ptr = trans.get_data_ptr();
   unsigned int len = trans.get_data_length();
 
+  if (cmd == tlm::TLM_READ_COMMAND)
+    ++m_ot_reads;
+  else if (cmd == tlm::TLM_WRITE_COMMAND)
+    ++m_ot_writes;
+
   // One-shot fault injection for bus-error path testing.
   if (cmd == tlm::TLM_READ_COMMAND && m_inject_ot_read_bus_error_once) {
     m_inject_ot_read_bus_error_once = false;

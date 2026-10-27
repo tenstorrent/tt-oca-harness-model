@@ -42,7 +42,7 @@ cd sep/peripherals
 ====== Standalone cases
 
 Sources: `test/src/test_dma_func_001.cpp` …
-`test_dma_func_012.cpp` plus `secure_dma_test.cpp`. The suite
+`test_dma_func_013.cpp` plus `secure_dma_test.cpp`. The suite
 is large; rows below group it.
 
 [cols="8%,36%,40%,16%",options="header"]
@@ -60,6 +60,7 @@ is large; rows below group it.
 |010 |Inline SHA-2 |SHA-256/384/512, swap, abort, digest valid |Positive
 |011 |Handshake |All 11 triggers, auto-clear, no drain before trigger |Positive
 |012 |Edges |Trigger off, hash without context, clear-bus error |Mixed
+|013 |Zero fill |Opcode 0x4: zeros written with no read, no digest, handshake and no-bytes-left refusals, per-beat range bound, source still validated |Mixed
 |===
 
 ====== Platform firmware tests

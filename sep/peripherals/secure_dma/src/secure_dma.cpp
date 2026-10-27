@@ -41,6 +41,7 @@ secure_dma_model::secure_dma_model(sc_module_name n)
       m_error_code(0x0), m_error_code_next(0x0), m_current_src_addr(0x0),
       m_current_dst_addr(0x0), m_chunk_start_src_addr(0x0),
       m_chunk_start_dst_addr(0x0), m_bytes_remaining(0),
+      m_transfer_bytes_done(0), m_zero_fill(false),
       m_current_chunk_bytes_remaining(0), m_hash_ctx(nullptr),
       m_hash_algorithm(0), m_hashing_active(false),
       m_last_asserted_trigger_index(-1) {
@@ -131,6 +132,8 @@ void secure_dma_model::reset_thread() {
       m_chunk_start_src_addr = 0x0;
       m_chunk_start_dst_addr = 0x0;
       m_bytes_remaining = 0;
+      m_transfer_bytes_done = 0;
+      m_zero_fill = false;
       m_current_chunk_bytes_remaining = 0;
       std::memset(m_transfer_data_buffer, 0, sizeof(m_transfer_data_buffer));
 
@@ -387,6 +390,18 @@ bool secure_dma_model::handle_write_CONTROL(uint32_t value, uint32_t write_mask)
     uint32_t opcode = value & 0xF;                    // Bits 3:0
     bool initial_transfer = (value & (1U << 8)) != 0; // Bit 8
     bool is_hash_opcode = (opcode >= 0x1 && opcode <= 0x3);
+    m_zero_fill = (opcode == 0x4);
+
+    // Every start with initial_transfer=1 clears sha2_digest_valid and the
+    // digest registers, whatever the opcode.
+    if (initial_transfer) {
+      current_status = static_cast<uint32_t>(STATUS);
+      current_status &= ~(1U << 4);
+      STATUS = current_status;
+      for (unsigned int i = 0; i < 16; i++) {
+        SHA2_DIGEST[i] = 0;
+      }
+    }
 
     if (is_hash_opcode && initial_transfer) {
       // Initialize hash engine for new hash computation
@@ -2059,17 +2074,17 @@ bool secure_dma_model::validate_opcode(uint32_t pending_control_value) {
   uint32_t opcode =
       pending_control_value & 0xF; // Extract opcode field (bits [3:0])
 
-  // Valid opcodes: 0x0 (COPY), 0x1 (SHA256), 0x2 (SHA384), 0x3 (SHA512)
-  if (opcode <= 0x3) {
+  // Valid opcodes: 0x0 (COPY), 0x1 (SHA256), 0x2 (SHA384), 0x3 (SHA512), 0x4 (ZERO)
+  if (opcode <= 0x4) {
     REG_INFO(3, logger) << "Opcode validation passed - opcode: 0x" << std::hex << opcode << std::dec << std::endl;
     return true;
   }
 
-  // Invalid opcode detected (0x4-0xF)
+  // Invalid opcode detected (0x5-0xF)
   m_error_code |= (1U << 2); // Set ERROR_CODE.opcode_error (bit 2)
   ERROR_CODE = m_error_code;
 
-  REG_INFO(1, logger) << "Invalid opcode detected - opcode: 0x" << std::hex << opcode << std::dec << " (valid range: 0x0-0x3)" << " (ERROR_CODE.opcode_error set)" << std::endl;
+  REG_INFO(1, logger) << "Invalid opcode detected - opcode: 0x" << std::hex << opcode << std::dec << " (valid range: 0x0-0x4)" << " (ERROR_CODE.opcode_error set)" << std::endl;
   return false;
 }
 
@@ -2179,6 +2194,18 @@ bool secure_dma_model::validate_transfer_configuration(
   if (!validate_transfer_size()) {
     all_valid = false;
   REG_INFO(1, logger) << "Transfer size validation failed" << std::endl;
+  }
+
+  // A zero fill writes no byte past TOTAL_DATA_SIZE: a start with no bytes left
+  // fails without a write.
+  const bool zero_fill = (pending_control_value & 0xF) == 0x4;
+  const bool initial_transfer = (pending_control_value & (1U << 8)) != 0;
+  if (zero_fill && !initial_transfer &&
+      m_transfer_bytes_done >= static_cast<uint32_t>(TOTAL_DATA_SIZE)) {
+    all_valid = false;
+    m_error_code |= (1U << 3); // ERROR_CODE.size_error
+    ERROR_CODE = m_error_code;
+    REG_INFO(1, logger) << "Zero fill started with no bytes left" << std::endl;
   }
 
   // Get transfer width for alignment checks
@@ -2656,6 +2683,27 @@ bool secure_dma_model::execute_transfer() {
   uint32_t control_reg = static_cast<uint32_t>(CONTROL);
   bool hardware_handshake_enable = (control_reg & (1U << 4)) != 0;
 
+  if ((control_reg & (1U << 8)) != 0) {
+    m_transfer_bytes_done = 0;
+  }
+
+  // A zero fill is a memory operation, not paced by handshake triggers. The
+  // RTL refuses it once the first trigger starts the engine.
+  if (m_zero_fill && hardware_handshake_enable) {
+    REG_INFO(1, logger) << "Zero fill in handshake mode - OPCODE_ERROR" << std::endl;
+    m_error_code |= (1U << 2);
+    ERROR_CODE = m_error_code;
+    m_dma_busy = false;
+    m_dma_busy_next = false;
+    uint32_t status_reg = static_cast<uint32_t>(STATUS);
+    status_reg &= ~0x1;
+    status_reg |= (1U << 3);
+    STATUS = status_reg;
+    CONTROL = control_reg & ~(1U << 31);
+    set_interrupt_state(false, false, true);
+    return false;
+  }
+
   REG_INFO(2, logger) << "Transfer setup complete - " << "SRC=0x" << std::hex << m_current_src_addr << " DST=0x" << m_current_dst_addr << " TOTAL=" << std::dec << total_size << " CHUNK=" << chunk_size << " WIDTH=" << width_bytes << " bytes" << std::endl;
 
   // -------------------------------------------------------------------------
@@ -2743,6 +2791,7 @@ bool secure_dma_model::execute_transfer() {
 
     m_bytes_remaining -= width_bytes;
     m_current_chunk_bytes_remaining -= width_bytes;
+    m_transfer_bytes_done += width_bytes;
 
     REG_INFO(3, logger) << "Transaction complete - bytes_remaining=" << m_bytes_remaining << ", chunk_bytes_remaining=" << m_current_chunk_bytes_remaining << std::endl;
 
@@ -2912,17 +2961,6 @@ bool secure_dma_model::execute_transfer() {
 bool secure_dma_model::execute_single_transaction() {
   uint32_t width_bytes = get_transfer_width_bytes();
 
-  // -------------------------------------------------------------------------
-  // SOURCE READ TRANSACTION
-  // -------------------------------------------------------------------------
-
-  // Select source bus interface
-  BusInterface src_bus = select_bus_for_transaction(true);
-
-  // Generate byte enable mask for sub-word transfers
-  uint8_t byte_enable_mask = generate_byte_enable_mask(
-      static_cast<uint32_t>(m_current_src_addr), width_bytes);
-
   // Extension is declared first so it outlives the payload. The guard clears
   // it before the payload destructor. set_extension does not take ownership,
   // and set_auto_extension requires a payload memory manager this path does
@@ -2936,66 +2974,75 @@ bool secure_dma_model::execute_single_transaction() {
     ~extension_detach() { payload.clear_extension<sep::sep_axi_extension>(); }
   } detach{trans};
 
-  // Create TLM payload for read transaction
-  create_tlm_transaction(trans, tlm::TLM_READ_COMMAND, m_current_src_addr,
-                         m_transfer_data_buffer, width_bytes, byte_enable_mask);
-
   sc_time delay = SC_ZERO_TIME;
+  uint8_t byte_enable_mask = 0;
 
-  // Issue read transaction on appropriate bus socket
-  switch (src_bus) {
-  case BusInterface::OT_INTERNAL:
-    ot_initiator_socket->b_transport(trans, delay);
-    break;
+  if (m_zero_fill) {
+    // A zero fill writes only inside the enabled memory range, whatever the
+    // address spaces. Each beat is checked against the programmed destination;
+    // a beat that would leave the range is not issued.
+    const uint64_t base = static_cast<uint32_t>(ENABLED_MEMORY_RANGE_BASE);
+    const uint64_t limit = static_cast<uint32_t>(ENABLED_MEMORY_RANGE_LIMIT);
+    const uint32_t beat_bytes = (m_bytes_remaining < width_bytes) ? m_bytes_remaining : width_bytes;
+    const uint64_t beat_end = m_current_dst_addr + beat_bytes - 1;
+    if (m_current_dst_addr < base || beat_end > limit) {
+      REG_INFO(1, logger) << "Zero fill beat outside the enabled range at 0x" << std::hex << m_current_dst_addr << std::dec << std::endl;
+      m_error_code |= (1U << 1); // Set dst_addr_error (bit 1)
+      ERROR_CODE = m_error_code;
 
-  case BusInterface::CTN_BUS:
-    ctn_initiator_socket->b_transport(trans, delay);
-    break;
+      uint32_t status_reg = static_cast<uint32_t>(STATUS);
+      status_reg |= (1U << 3); // Set STATUS.error
+      STATUS = status_reg;
 
-  case BusInterface::SYSTEM_BUS:
-    sys_initiator_socket->b_transport(trans, delay);
-    break;
+      set_interrupt_state(false, false, true);
+      return false;
+    }
+    std::memset(m_transfer_data_buffer, 0, sizeof(m_transfer_data_buffer));
+  } else {
+    // -------------------------------------------------------------------------
+    // SOURCE READ TRANSACTION
+    // -------------------------------------------------------------------------
 
-  case BusInterface::INVALID:
-  default:
-    REG_INFO(1, logger) << "Invalid source bus interface" << std::endl;
-    m_error_code |= (1U << 7); // Set asid_error
-    ERROR_CODE = m_error_code;
-    set_interrupt_state(false, false, true); // Trigger error interrupt
-    return false;
-  }
+    // Select source bus interface
+    BusInterface src_bus = select_bus_for_transaction(true);
 
-  // Check source read response
-  if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
-    REG_INFO(1, logger) << "Source read bus error at address 0x" << std::hex << m_current_src_addr << std::dec << std::endl;
-    m_error_code |= (1U << 4); // Set bus_error (bit 4)
-    ERROR_CODE = m_error_code;
+    // Generate byte enable mask for sub-word transfers
+    byte_enable_mask = generate_byte_enable_mask(
+        static_cast<uint32_t>(m_current_src_addr), width_bytes);
 
-    uint32_t status_reg = static_cast<uint32_t>(STATUS);
-    status_reg |= (1U << 3); // Set STATUS.error
-    STATUS = status_reg;
+    // Create TLM payload for read transaction
+    create_tlm_transaction(trans, tlm::TLM_READ_COMMAND, m_current_src_addr,
+                           m_transfer_data_buffer, width_bytes, byte_enable_mask);
 
-    set_interrupt_state(false, false, true); // Trigger error interrupt
-    return false;
-  }
+    delay = SC_ZERO_TIME;
 
-  wait(delay); // Apply annotated timing
+    // Issue read transaction on appropriate bus socket
+    switch (src_bus) {
+    case BusInterface::OT_INTERNAL:
+      ot_initiator_socket->b_transport(trans, delay);
+      break;
 
-  REG_INFO(3, logger) << "Source read successful - SRC=0x" << std::hex << m_current_src_addr << " DATA=0x";
-  for (unsigned int i = 0; i < width_bytes; i++) {
-  REG_INFO(3, logger) << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(m_transfer_data_buffer[i]);
-  }
-  REG_INFO(3, logger) << std::dec << std::endl;
+    case BusInterface::CTN_BUS:
+      ctn_initiator_socket->b_transport(trans, delay);
+      break;
 
-  // -------------------------------------------------------------------------
-  // HASH UPDATE (if hashing active)
-  // -------------------------------------------------------------------------
+    case BusInterface::SYSTEM_BUS:
+      sys_initiator_socket->b_transport(trans, delay);
+      break;
 
-  if (m_hashing_active) {
-    // Feed transferred data to hash engine
-    if (!hash_update_data(m_transfer_data_buffer, width_bytes)) {
-      REG_INFO(1, logger) << "Hash update failed during transfer" << std::endl;
-      m_error_code |= (1U << 2); // Set opcode_error (hash operation failed)
+    case BusInterface::INVALID:
+    default:
+      REG_INFO(1, logger) << "Invalid source bus interface" << std::endl;
+      m_error_code |= (1U << 7); // Set asid_error
+      ERROR_CODE = m_error_code;
+      set_interrupt_state(false, false, true); // Trigger error interrupt
+      return false;
+    }
+
+    // Check source read response
+    if (trans.get_response_status() != tlm::TLM_OK_RESPONSE) {
+      REG_INFO(1, logger) << "Source read bus error at address 0x" << std::hex << m_current_src_addr << std::dec << std::endl;
+      m_error_code |= (1U << 4); // Set bus_error (bit 4)
       ERROR_CODE = m_error_code;
 
       uint32_t status_reg = static_cast<uint32_t>(STATUS);
@@ -3005,7 +3052,35 @@ bool secure_dma_model::execute_single_transaction() {
       set_interrupt_state(false, false, true); // Trigger error interrupt
       return false;
     }
-  REG_INFO(3, logger) << "Hash updated with " << width_bytes << " bytes" << std::endl;
+
+    wait(delay); // Apply annotated timing
+
+    REG_INFO(3, logger) << "Source read successful - SRC=0x" << std::hex << m_current_src_addr << " DATA=0x";
+    for (unsigned int i = 0; i < width_bytes; i++) {
+    REG_INFO(3, logger) << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(m_transfer_data_buffer[i]);
+    }
+    REG_INFO(3, logger) << std::dec << std::endl;
+
+    // -------------------------------------------------------------------------
+    // HASH UPDATE (if hashing active)
+    // -------------------------------------------------------------------------
+
+    if (m_hashing_active) {
+      // Feed transferred data to hash engine
+      if (!hash_update_data(m_transfer_data_buffer, width_bytes)) {
+        REG_INFO(1, logger) << "Hash update failed during transfer" << std::endl;
+        m_error_code |= (1U << 2); // Set opcode_error (hash operation failed)
+        ERROR_CODE = m_error_code;
+
+        uint32_t status_reg = static_cast<uint32_t>(STATUS);
+        status_reg |= (1U << 3); // Set STATUS.error
+        STATUS = status_reg;
+
+        set_interrupt_state(false, false, true); // Trigger error interrupt
+        return false;
+      }
+    REG_INFO(3, logger) << "Hash updated with " << width_bytes << " bytes" << std::endl;
+    }
   }
 
   // -------------------------------------------------------------------------

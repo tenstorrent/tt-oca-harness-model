@@ -1553,8 +1553,8 @@ void testbench::test_dma_error_interrupt_assert() {
   wait(10, SC_NS);
 
   // Trigger real error condition: invalid opcode with go=1
-  // CONTROL[3:0]=0x4 (invalid), CONTROL[8]=1 initial_transfer, CONTROL[31]=1 go
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000104);
+  // CONTROL[3:0]=0x5 (invalid), CONTROL[8]=1 initial_transfer, CONTROL[31]=1 go
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000105);
 
   uint32_t status = 0, intr_state = 0, error_code = 0;
   bool err_seen = false;
@@ -1631,7 +1631,7 @@ void testbench::test_dma_error_interrupt_clear() {
   m_test->register_write_32(secure_dma_basetest::TRANSFER_WIDTH_OFFSET, 0x00000002);
   m_test->register_write_32(secure_dma_basetest::SRC_CONFIG_OFFSET, 0x00000001);
   m_test->register_write_32(secure_dma_basetest::DST_CONFIG_OFFSET, 0x00000001);
-  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000104); // invalid opcode=0x4 + go
+  m_test->register_write_32(secure_dma_basetest::CONTROL_OFFSET, 0x80000105); // invalid opcode=0x5 + go
   wait(20, SC_NS);
 
   uint32_t status = 0, intr_state = 0, error_code = 0;

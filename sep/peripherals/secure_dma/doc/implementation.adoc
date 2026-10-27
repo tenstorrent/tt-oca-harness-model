@@ -6,7 +6,8 @@
 
 `secure_dma_model` is a loosely-timed TLM-2.0 model. The transfer
 engine issues blocking read-then-write pairs on the ASID-selected
-initiator socket. SHA-2 is OpenSSL. Timing uses
+initiator socket; a zero fill (opcode `0x4`) issues the writes only,
+each checked against `ENABLED_MEMORY_RANGE`. SHA-2 is OpenSSL. Timing uses
 `tlm_quantumkeeper` against `clk_i`.
 
 [source,cpp]
@@ -86,4 +87,14 @@ comes from `clk_i`, not a cycle-count parameter.
 * Handshake interrupt-clear writes to SoC buses have no
   completion guarantee, as in the TRM.
 * RACL on the system bus is not modelled as a separate port.
+* Without hardware handshake every chunk runs back to back: the model
+  sets `chunk_done` but neither clears `go` nor waits for firmware at a
+  chunk boundary.
+* The range, handshake mode and opcode are read live rather than
+  captured at each start.
+* There is no short final beat: transfer sizes that are not a multiple
+  of the width are not modelled, and byte enables follow the address
+  only.
+* ICCM/DCCM narrow or misaligned writes are not refused, and
+  `DMA_BUS_ERR_STATUS` is never set.
 * Not suitable for performance measurement.

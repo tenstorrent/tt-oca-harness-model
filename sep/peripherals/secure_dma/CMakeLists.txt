@@ -172,6 +172,7 @@ if(BUILD_TESTS)
     test/src/test_dma_func_010.cpp
     test/src/test_dma_func_011.cpp
     test/src/test_dma_func_012.cpp
+    test/src/test_dma_func_013.cpp
     test/src/test_dma_coverage.cpp
     test/src/coverage_tests.cpp
     ${TEST_BASE_SRCS}
