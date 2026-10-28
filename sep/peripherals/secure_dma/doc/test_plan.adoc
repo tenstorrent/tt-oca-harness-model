@@ -12,7 +12,7 @@ the OT / CTN / SYS initiator sockets, `lsio_trigger[11]`
 drivers, and monitors for the three interrupt pins plus
 `alert_fatal_fault`.
 
-Success: every check in the 12 func files passes; `--asan`
+Success: every check in the 14 func files passes; `--asan`
 produces no `asan.log.*`; line coverage on the touched model
 sources meets the repository ≥ 95% gate.
 
@@ -42,7 +42,7 @@ cd sep/peripherals
 ====== Standalone cases
 
 Sources: `test/src/test_dma_func_001.cpp` …
-`test_dma_func_013.cpp` plus `secure_dma_test.cpp`. The suite
+`test_dma_func_014.cpp` plus `secure_dma_test.cpp`. The suite
 is large; rows below group it.
 
 [cols="8%,36%,40%,16%",options="header"]
@@ -56,11 +56,12 @@ is large; rows below group it.
 |006 |Errors |Opcode, size, bus, eight `ERROR_CODE` bits |Negative
 |007 |Security range |Allowed vs blocked OT-private ↔ SoC |Mixed
 |008 |Go / abort |Validation on `go`, CFG_REGWEN, abort drain |Mixed
-|009 |Transfer engine |Mem-to-mem, sizes, wrap, chunk_done |Positive
+|009 |Transfer engine |Mem-to-mem, sizes, wrap, chunk_done and the restart of each chunk |Positive
 |010 |Inline SHA-2 |SHA-256/384/512, swap, abort, digest valid |Positive
-|011 |Handshake |All 11 triggers, auto-clear, no drain before trigger |Positive
-|012 |Edges |Trigger off, hash without context, clear-bus error |Mixed
+|011 |Handshake |All 11 triggers, auto-clear, no drain before trigger, final chunk clears go |Positive
+|012 |Edges |Trigger off, hash opcode without initial transfer, clear-bus error |Mixed
 |013 |Zero fill |Opcode 0x4: zeros written with no read, no digest, handshake and no-bytes-left refusals, per-beat range bound, source still validated |Mixed
+|014 |State machine |Beat shape and byte enables, chunk pause and continue, fixed-address writeback, error state, abort, status-type interrupts, handshake levels and clear order, initial_transfer, range and address-width checks, SHA partial word, captured digest swap, two-chunk zero fill, RANGE_REGWEN MuBi4 AND |Mixed
 |===
 
 ====== Platform firmware tests
